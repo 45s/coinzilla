@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { createStrictESLint, getChangedFiles, lintChangedFiles } from "./lint-changed.js";
 
-// These integration tests deliberately use the root canonical ESLint configuration.
+// Strict-lint fixtures use an isolated workspace with the exact canonical root ESLint configuration.
 
 const repositoryRoot = resolve(new URL("..", import.meta.url).pathname);
 
@@ -66,7 +66,30 @@ async function withRepository({ callback }) {
 }
 
 async function createStrictLintWorkspace() {
-  return repositoryRoot;
+  const cwd = await mkdtemp(join(tmpdir(), "coinzilla-eslint-strict-"));
+
+  try {
+    await copyFile(
+      join(repositoryRoot, "eslint.config.js"),
+      join(cwd, "eslint.config.js"),
+    );
+    await writeFile(
+      join(cwd, "package.json"),
+      JSON.stringify({ type: "module" }) + "\n",
+    );
+    await symlink(
+      join(repositoryRoot, "node_modules"),
+      join(cwd, "node_modules"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    return cwd;
+  } catch (error) {
+    await rm(cwd, {
+      recursive: true,
+      force: true,
+    });
+    throw error;
+  }
 }
 
 async function lintStrict({ source, fileName = "scripts/strict-fixture.js" }) {
@@ -81,7 +104,10 @@ async function lintStrict({ source, fileName = "scripts/strict-fixture.js" }) {
     });
     return results[0].messages;
   } finally {
-    await rm(absolutePath, { force: true });
+    await rm(cwd, {
+      recursive: true,
+      force: true,
+    });
   }
 }
 
@@ -95,14 +121,26 @@ function createSwitchCases() {
     .join("\n");
 }
 
-test("strict lint fixtures use a workspace isolated from full-workspace scans", async () => {
+test("strict lint fixtures use an isolated workspace with the canonical ESLint configuration", async () => {
   const cwd = await createStrictLintWorkspace();
 
-  assert.notEqual(
-    cwd,
-    repositoryRoot,
-    "Strict-lint fixtures must not be created inside the workspace-wide ESLint audit tree.",
-  );
+  try {
+    assert.notEqual(
+      cwd,
+      repositoryRoot,
+      "Strict-lint fixtures must not be created inside the workspace-wide ESLint audit tree.",
+    );
+    assert.equal(
+      await readFile(join(cwd, "eslint.config.js"), "utf8"),
+      await readFile(join(repositoryRoot, "eslint.config.js"), "utf8"),
+      "The isolated workspace must use an exact copy of the canonical root ESLint configuration.",
+    );
+  } finally {
+    await rm(cwd, {
+      recursive: true,
+      force: true,
+    });
+  }
 });
 
 test("strict policy inherits the canonical workspace rules and overrides only approved thresholds", async () => {
