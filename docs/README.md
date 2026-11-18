@@ -12,7 +12,7 @@ This index is the entry point for maintained repository documentation. The gover
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
 - [Markdown style standard](MARKDOWN_STYLE.md) — consistent formatting and authoring conventions
-- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (157 tracked Markdown/MDX files on `develop` at `ea6110f`; 86 under Harvester and 71 elsewhere)
+- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (last complete recursive inventory: 157 tracked Markdown/MDX files at `007f631`; 86 under Harvester and 71 elsewhere; later tree changes are not yet recounted)
 
 ## Repository-wide engineering
 
