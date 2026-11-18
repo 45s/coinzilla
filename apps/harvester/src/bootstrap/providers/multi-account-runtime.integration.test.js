@@ -722,7 +722,11 @@ test("routes order submission, user-data fills, cancellation, and candle data to
   const [primaryRuntime, secondaryRuntime] = runtime.accountRuntimes
 
   try {
-    assertMultiAccountMarketDataRouting({ primaryCalls, secondaryCalls, primaryRuntime })
+    assertMultiAccountMarketDataRouting({
+      primaryCalls,
+      secondaryCalls,
+      primaryRuntime,
+    })
     const registeredOrder = await submitAndResolveRoutedOrder({
       primaryCalls,
       secondaryCalls,
