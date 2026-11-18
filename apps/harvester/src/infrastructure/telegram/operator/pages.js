@@ -125,7 +125,13 @@ async function readOperatorQuery({
     interaction,
   })
   if (outcome.threw) {
-    return { ok: false, page: createQueryFailurePage({ queryPage, buildNavigationKeyboard }) }
+    return {
+      ok: false,
+      page: createQueryFailurePage({
+        queryPage,
+        buildNavigationKeyboard,
+      }),
+    }
   }
   if (outcome.result?.ok !== true) {
     reportQueryResultFailure({
@@ -142,7 +148,10 @@ async function readOperatorQuery({
     stage: "QUERY_COMPLETED",
     fields: { durationMs: Date.now() - startedAt },
   })
-  return { ok: true, result: outcome.result }
+  return {
+    ok: true,
+    result: outcome.result,
+  }
 }
 
 function createQueryFailurePage({ queryPage,
