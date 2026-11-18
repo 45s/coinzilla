@@ -402,11 +402,8 @@ test("rejected migration promises are consumed while the migration transaction r
 })
 
 
-test("independent worker connections serialize simultaneous migration attempts", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-migration-workers-"))
-  const filename = join(directory, "shared.sqlite")
-  const gate = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
-  const workerSource = `
+function createMigrationWorker({ filename, gate }) {
+  const source = `
     const { parentPort, workerData } = require("node:worker_threads")
     parentPort.postMessage({ ready: true })
     Atomics.wait(new Int32Array(workerData.gate), 0, 0)
@@ -440,13 +437,38 @@ test("independent worker connections serialize simultaneous migration attempts",
       })
     })
   `
-  const workers = Array.from({ length: 2 }, () => new Worker(workerSource, {
+
+  return new Worker(source, {
     eval: true,
     workerData: {
       filename,
       gate,
       moduleUrl: new URL("../src/index.js", import.meta.url).href,
     },
+  })
+}
+
+async function readMigrationWorkerResult(worker) {
+  const [message] = await once(worker, "message")
+  if (message.error) {
+    throw new Error(message.error, {
+      cause: message.stack,
+    })
+  }
+  return message.applied
+}
+
+function compareMigrationResults(left, right) {
+  return left.length - right.length
+}
+
+test("independent worker connections serialize simultaneous migration attempts", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-migration-workers-"))
+  const filename = join(directory, "shared.sqlite")
+  const gate = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+  const workers = Array.from({ length: 2 }, () => createMigrationWorker({
+    filename,
+    gate,
   }))
 
   try {
@@ -454,18 +476,9 @@ test("independent worker connections serialize simultaneous migration attempts",
     Atomics.store(new Int32Array(gate), 0, 1)
     Atomics.notify(new Int32Array(gate), 0, workers.length)
 
-    const results = await Promise.all(workers.map(async (worker) => {
-      const [message] = await once(worker, "message")
-      if (message.error) {
-        throw new Error(message.error, {
-          cause: message.stack,
-        })
-      }
-      return message.applied
-    }))
-
+    const results = await Promise.all(workers.map(readMigrationWorkerResult))
     assert.deepEqual(
-      results.sort((left, right) => left.length - right.length),
+      results.sort(compareMigrationResults),
       [[], [1]],
       "Exactly one independent worker must apply the migration while the other observes it as already applied",
     )
