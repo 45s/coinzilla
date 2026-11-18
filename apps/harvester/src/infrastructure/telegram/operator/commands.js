@@ -1,6 +1,10 @@
+import {
+  TELEGRAM_OPERATOR_ACTIONS,
+  TELEGRAM_OPERATOR_QUERY_STAGES,
+} from "./constants.js"
 const KEYBOARD_ACTIONS = Object.freeze({
-  pause: Object.freeze({ type: "PAUSE_MENU" }),
-  resume: Object.freeze({ type: "RESUME_MENU" }),
+  pause: Object.freeze({ type: TELEGRAM_OPERATOR_ACTIONS.PAUSE_MENU }),
+  resume: Object.freeze({ type: TELEGRAM_OPERATOR_ACTIONS.RESUME_MENU }),
   status: Object.freeze({ type: "STATUS" }),
   markets: Object.freeze({ type: "MARKETS" }),
   portfolio: Object.freeze({ type: "POSITIONS" }),
@@ -20,8 +24,8 @@ const READ_ONLY_COMMAND_TYPES = Object.freeze({
   "/balances": "BALANCES",
 })
 const GLOBAL_BUY_COMMAND_TYPES = Object.freeze({
-  "/pauseallbuys": "PAUSE_ALL_BUYS",
-  "/resumeallbuys": "RESUME_ALL_BUYS",
+  "/pauseallbuys": TELEGRAM_OPERATOR_ACTIONS.PAUSE_ALL_BUYS,
+  "/resumeallbuys": TELEGRAM_OPERATOR_ACTIONS.RESUME_ALL_BUYS,
 })
 const MARKET_SYMBOL_PATTERN = /^[A-Za-z0-9]{2,30}$/
 
@@ -68,7 +72,7 @@ function parseEmergencyBuyCommand({ command, argumentsList } = {}) {
     })
   }
   return Object.freeze({
-    type: command === "/pausebuys" ? "PAUSE_BUYS" : "RESUME_BUYS",
+    type: command === "/pausebuys" ? TELEGRAM_OPERATOR_ACTIONS.PAUSE_BUYS : TELEGRAM_OPERATOR_ACTIONS.RESUME_BUYS,
     symbol: argumentsList[0].toUpperCase(),
   })
 }
@@ -84,14 +88,14 @@ function parseMarketPauseCommand({ command, argumentsList } = {}) {
     })
   }
   return Object.freeze({
-    type: command === "/pause" ? "PAUSE" : "RESUME",
+    type: command === "/pause" ? TELEGRAM_OPERATOR_ACTIONS.PAUSE : TELEGRAM_OPERATOR_ACTIONS.RESUME,
     symbol: argumentsList[0].toUpperCase(),
   })
 }
 
 export function getInvalidCommandUsage(command) {
   const normalizedCommand = String(command ?? "command").toLowerCase()
-  if (["PAUSEBUYS", "RESUMEBUYS", "PAUSE", "RESUME"].includes(command)) {
+  if (["PAUSEBUYS", "RESUMEBUYS", TELEGRAM_OPERATOR_ACTIONS.PAUSE, TELEGRAM_OPERATOR_ACTIONS.RESUME].includes(command)) {
     return `Usage: /${normalizedCommand} <SYMBOL>. Use /help for commands.`
   }
   return `Usage: /${normalizedCommand} with no arguments. Use /help for commands.`
