@@ -6,7 +6,7 @@ import { join } from "node:path"
 import test from "node:test"
 
 import { DatabaseProviderError } from "./domain/errors/database-errors.js"
-import { publishRestoreArtifact, publishRestoredDatabase, restoreSqliteDatabase } from "./infrastructure/sqlite/sqlite-restore.js"
+import { assertRestoreDestinationIsNew, publishRestoreArtifact, publishRestoredDatabase, restoreSqliteDatabase } from "./infrastructure/sqlite/sqlite-restore.js"
 
 test("SQLite restore preserves a source connection close failure and removes the staged artifact", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-restore-close-"))
@@ -144,6 +144,69 @@ test("SQLite restore classifies a missing backup source and publishes no destina
       "A restore with a missing source must not create or publish a destination",
     )
   } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+
+test("restore destination checks propagate non-ENOENT filesystem failures", async () => {
+  const filesystemFailure = Object.assign(
+    new Error("destination metadata is inaccessible"),
+    { code: "EACCES" },
+  )
+
+  await assert.rejects(
+    assertRestoreDestinationIsNew({
+      filename: "/destination/records.sqlite",
+      realpathOperation: async () => {
+        throw filesystemFailure
+      },
+    }),
+    (error) => error === filesystemFailure,
+    "A destination metadata error must not be mistaken for a missing destination",
+  )
+})
+
+test("SQLite restore aggregates integrity and source-close failures", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-restore-integrity-close-"))
+  const backupFilename = join(directory, "foreign-key-violation.sqlite")
+  const destinationFilename = join(directory, "restored.sqlite")
+  const backup = new DatabaseSync(backupFilename)
+  backup.exec("PRAGMA foreign_keys = OFF")
+  backup.exec("CREATE TABLE parents (id INTEGER PRIMARY KEY)")
+  backup.exec("CREATE TABLE children (parent_id INTEGER REFERENCES parents(id))")
+  backup.prepare("INSERT INTO children (parent_id) VALUES (?)").run(999)
+  backup.close()
+
+  const originalClose = DatabaseSync.prototype.close
+  const closeFailure = new Error("source connection close failed after integrity failure")
+  let failedConnection
+
+  context.mock.method(DatabaseSync.prototype, "close", function close() {
+    failedConnection = this
+    throw closeFailure
+  })
+
+  try {
+    await assert.rejects(
+      restoreSqliteDatabase({
+        backupFilename,
+        filename: destinationFilename,
+      }),
+      (error) => error instanceof DatabaseProviderError
+        && error.cause instanceof AggregateError
+        && error.cause.errors[0] instanceof TypeError
+        && error.cause.errors[1] === closeFailure,
+      "Restore must preserve both the integrity failure and the subsequent source-close failure",
+    )
+  } finally {
+    context.mock.restoreAll()
+    if (failedConnection?.isOpen) {
+      originalClose.call(failedConnection)
+    }
     await rm(directory, {
       recursive: true,
       force: true,
