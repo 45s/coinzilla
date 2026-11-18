@@ -203,3 +203,50 @@ content: historicalNoHeading },
     assert.ok(report.findings[name].some(({ path }) => path === "docs/audits/legacy-no-heading.md"))
   }
 })
+
+
+test("excludes indented code blocks from prose, list, and table style metrics", () => {
+  const content = [
+    "# Architecture",
+    "",
+    "Intro paragraph.",
+    "",
+    "    Binance WebSocket API",
+    "                     |",
+    "    - validate / sort / deduplicate  ",
+    "",
+    "",
+    "    | Name | Value |",
+    "    | --- | -- |",
+    "    | one | two | extra |",
+    "",
+    "After the diagram.",
+    "",
+    "10. Ordered parent",
+    "    - nested list item",
+    "",
+  ].join("\n")
+  const report = collectMarkdownStyleBaseline([
+    {
+      path: "apps/harvester/docs/diagram.md",
+      content,
+    },
+  ])
+
+  for (const name of [
+    "trailingWhitespace",
+    "repeatedBlankLines",
+    "unorderedListMarkers",
+    "nestedListIndentation",
+    "listSpacing",
+    "malformedTableDelimiters",
+    "tableColumnMismatches",
+    "tableSpacing",
+  ]) {
+    assert.deepEqual(
+      report.findings[name],
+      [],
+      `${name} must ignore indented code while retaining valid nested-list handling`,
+    )
+  }
+})
