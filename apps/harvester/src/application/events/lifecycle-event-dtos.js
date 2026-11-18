@@ -58,8 +58,17 @@ const requireConfigurationFingerprint = ({ value }) => {
   return value
 }
 
+const PROVIDER_PROVENANCE_FIELDS = Object.freeze([
+  "providerInstanceId",
+  "providerType",
+  "accountId",
+])
+
 const mapProviderProvenance = ({ value, field = "provider" } = {}) => {
-  if (value?.providerInstanceId === undefined) {
+  const hasAnyProviderIdentity = PROVIDER_PROVENANCE_FIELDS.some(
+    (identityField) => value?.[identityField] !== undefined,
+  )
+  if (!hasAnyProviderIdentity) {
     return {}
   }
   return {
