@@ -183,6 +183,61 @@ function validateTimestamps({ createdAt, acknowledgedAt, updatedAt, completedAt 
   }
 }
 
+function normalizeCanonicalOrder({
+  clientOrderId,
+  brokerOrderId,
+  providerInstanceId,
+  providerType,
+  accountId,
+  market,
+  side,
+  type,
+  limitPrice,
+  originalQuantity,
+  executedQuantity,
+  status = "PENDING",
+  createdAt,
+  acknowledgedAt,
+  updatedAt,
+  completedAt,
+} = {}) {
+  validateOrderIdentity({ clientOrderId, brokerOrderId })
+  validateProviderProvenance({ providerInstanceId, providerType, accountId })
+  validateOrderType({ market, side, type, status })
+  const normalizedLimitPrice = normalizeLimitPrice({ type, limitPrice, market })
+  const remainingQuantity = deriveRemainingQuantity({
+    market,
+    originalQuantity,
+    executedQuantity,
+  })
+  validateOrderLifecycle({
+    status,
+    brokerOrderId,
+    executedQuantity,
+    remainingQuantity,
+  })
+  validateTimestamps({ createdAt, acknowledgedAt, updatedAt, completedAt })
+  return {
+    clientOrderId: clientOrderId.trim(),
+    brokerOrderId: brokerOrderId == null ? undefined : brokerOrderId.trim(),
+    providerInstanceId,
+    providerType,
+    accountId,
+    market,
+    side,
+    type,
+    limitPrice: normalizedLimitPrice,
+    originalQuantity,
+    executedQuantity,
+    remainingQuantity,
+    status,
+    createdAt,
+    acknowledgedAt,
+    updatedAt,
+    completedAt,
+  }
+}
+
 export class CanonicalOrder {
   #clientOrderId
   #brokerOrderId
@@ -202,82 +257,25 @@ export class CanonicalOrder {
   #updatedAt
   #completedAt
 
-  constructor({
-    clientOrderId,
-    brokerOrderId,
-    providerInstanceId,
-    providerType,
-    accountId,
-    market,
-    side,
-    type,
-    limitPrice,
-    originalQuantity,
-    executedQuantity,
-    status = "PENDING",
-    createdAt,
-    acknowledgedAt,
-    updatedAt,
-    completedAt,
-  } = {}) {
-    validateOrderIdentity({
-      clientOrderId,
-      brokerOrderId,
-    })
-    validateProviderProvenance({
-      providerInstanceId,
-      providerType,
-      accountId,
-    })
-    validateOrderType({
-      market,
-      side,
-      type,
-      status,
-    })
-
-    const normalizedLimitPrice = normalizeLimitPrice({
-      type,
-      limitPrice,
-      market,
-    })
-    const remainingQuantity = deriveRemainingQuantity({
-      market,
-      originalQuantity,
-      executedQuantity,
-    })
-
-    validateOrderLifecycle({
-      status,
-      brokerOrderId,
-      executedQuantity,
-      remainingQuantity,
-    })
-    validateTimestamps({
-      createdAt,
-      acknowledgedAt,
-      updatedAt,
-      completedAt,
-    })
-
-    this.#clientOrderId = clientOrderId.trim()
-    this.#brokerOrderId = brokerOrderId == null ? undefined : brokerOrderId.trim()
-    this.#providerInstanceId = providerInstanceId
-    this.#providerType = providerType
-    this.#accountId = accountId
-    this.#market = market
-    this.#side = side
-    this.#type = type
-    this.#limitPrice = normalizedLimitPrice
-    this.#originalQuantity = originalQuantity
-    this.#executedQuantity = executedQuantity
-    this.#remainingQuantity = remainingQuantity
-    this.#status = status
-    this.#createdAt = createdAt
-    this.#acknowledgedAt = acknowledgedAt
-    this.#updatedAt = updatedAt
-    this.#completedAt = completedAt
-
+  constructor(options = {}) {
+    const normalized = normalizeCanonicalOrder(options)
+    this.#clientOrderId = normalized.clientOrderId
+    this.#brokerOrderId = normalized.brokerOrderId
+    this.#providerInstanceId = normalized.providerInstanceId
+    this.#providerType = normalized.providerType
+    this.#accountId = normalized.accountId
+    this.#market = normalized.market
+    this.#side = normalized.side
+    this.#type = normalized.type
+    this.#limitPrice = normalized.limitPrice
+    this.#originalQuantity = normalized.originalQuantity
+    this.#executedQuantity = normalized.executedQuantity
+    this.#remainingQuantity = normalized.remainingQuantity
+    this.#status = normalized.status
+    this.#createdAt = normalized.createdAt
+    this.#acknowledgedAt = normalized.acknowledgedAt
+    this.#updatedAt = normalized.updatedAt
+    this.#completedAt = normalized.completedAt
     Object.freeze(this)
   }
 
