@@ -119,11 +119,11 @@ function createMarketTradingRules({
 function createMarketMetadata(symbol) {
   const baseCode = symbol.startsWith("ETH") ? "ETH" : "BTC"
   const baseAsset = new Asset({
-    id: `asset:${baseCode}`,
+    id: baseCode.toLowerCase(),
     code: baseCode,
   })
   const quoteAsset = new Asset({
-    id: "asset:USDT",
+    id: "usdt",
     code: "USDT",
   })
   const market = new Market({
@@ -161,10 +161,10 @@ function createBinanceCapabilities({
   })
 }
 
-function createAccountSnapshot({ useCanonicalBinanceAssetIds = false } = {}) {
+function createAccountSnapshot() {
   const balances = ["BTC", "ETH", "USDT"].map((code) => {
     const asset = new Asset({
-      id: useCanonicalBinanceAssetIds ? code.toLowerCase() : `asset:${code}`,
+      id: code.toLowerCase(),
       code,
     })
     return new Balance({
@@ -186,14 +186,13 @@ function createAccountSnapshot({ useCanonicalBinanceAssetIds = false } = {}) {
 
 function createBrokerAccountPorts({
   calls,
-  useCanonicalBinanceAssetIds = false,
 }) {
   return {
     getAccountSnapshot: async () => {
       calls.push("account:snapshot")
       return {
         ok: true,
-        data: createAccountSnapshot({ useCanonicalBinanceAssetIds }),
+        data: createAccountSnapshot(),
       }
     },
     getExchangeMarkets: async () => ({
@@ -215,7 +214,7 @@ function createBrokerAccountPorts({
 }
 
 function createAcknowledgedCanonicalOrder({ order, calls }) {
-  const market = order.market ?? createMarketMetadata(order.symbol).market
+  const market = createMarketMetadata(order.market?.symbol ?? order.symbol).market
   const now = Date.now()
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
@@ -519,10 +518,7 @@ function createProductionBinanceBrokerClient({ calls, tradingMode }) {
     capabilities,
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
-    ...createBrokerAccountPorts({
-      calls,
-      useCanonicalBinanceAssetIds: true,
-    }),
+    ...createBrokerAccountPorts({ calls }),
     createOrder: (order) => orderMutationPorts.placeOrder({ order }),
     cancelOrder: async ({ symbol, orderId }) => {
       const order = findCanonicalOrder({
