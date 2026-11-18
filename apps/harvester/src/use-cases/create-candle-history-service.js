@@ -45,11 +45,9 @@ function logUnavailable({ logger, state, reason, error }) {
   })
 }
 
-function createMarketState(symbol, { broker, sourceMetadata } = {}) {
+function createMarketState(symbol) {
   return {
     symbol,
-    broker,
-    sourceMetadata,
     candles: [],
     metrics: null,
     reason: "HISTORY_NOT_LOADED",
@@ -158,7 +156,6 @@ function createSnapshot({ context, symbol }) {
   return toResult({
     data: Object.freeze({
       symbol,
-      ...state.sourceMetadata,
       interval: CANDLE_INTERVAL,
       candles: Object.freeze([...state.candles]),
       metrics: isReady ? state.metrics : null,
@@ -228,7 +225,7 @@ async function backfillGap({ context, state, incomingCandle, nextCandleOpenTime 
 
   let result
   try {
-    result = await state.broker.getCandles({
+    result = await context.broker.getCandles({
       symbol: state.symbol,
       interval: CANDLE_INTERVAL,
       limit: missingCount,
@@ -426,7 +423,7 @@ function stopFreshnessMonitorIfIdle({ context }) {
 async function subscribeMarket({ context, state, subscriptions }) {
   let result
   try {
-    result = await state.broker.subscribeForCandles({
+    result = await context.broker.subscribeForCandles({
       symbol: state.symbol,
       interval: CANDLE_INTERVAL,
       onCandle: (candle) => receiveCandle({ context, 
@@ -485,7 +482,7 @@ async function subscribeMarket({ context, state, subscriptions }) {
 async function loadInitialHistory({ context, state }) {
   let result
   try {
-    result = await state.broker.getCandles({
+    result = await context.broker.getCandles({
       symbol: state.symbol,
       interval: CANDLE_INTERVAL,
       limit: HISTORY_REQUEST_LIMIT,
@@ -560,38 +557,6 @@ async function loadInitialHistory({ context, state }) {
   await state.observerQueue
 }
 
-function resolveCandleBroker({ context, symbol }) {
-  const broker = typeof context.getBroker === "function"
-    ? context.getBroker({ symbol })
-    : context.broker
-  if (
-    !broker ||
-    typeof broker.getCandles !== "function" ||
-    typeof broker.subscribeForCandles !== "function"
-  ) {
-    throw new TypeError(`Candle history source for ${symbol} must expose getCandles and subscribeForCandles`)
-  }
-  return broker
-}
-
-function resolveCandleSourceMetadata({ context, symbol, broker }) {
-  const sourceMetadata = typeof context.getSourceMetadata === "function"
-    ? context.getSourceMetadata({ symbol, broker })
-    : {
-      providerInstanceId: broker.providerInstanceId,
-      providerType: broker.providerType,
-      accountId: broker.accountId,
-      environment: broker.environment,
-    }
-  if (!sourceMetadata || typeof sourceMetadata !== "object" || Array.isArray(sourceMetadata)) {
-    throw new TypeError(`Candle history source metadata for ${symbol} must be an object`)
-  }
-  const fields = ["providerInstanceId", "providerType", "accountId", "environment"]
-  return Object.freeze(Object.fromEntries(fields
-    .filter((field) => sourceMetadata[field] !== undefined)
-    .map((field) => [field, sourceMetadata[field]])))
-}
-
 function startCandleHistoryService({ context, pairs, subscriptions = [] } = {}) {
   if (context.startPromise) {
     return context.startPromise
@@ -607,16 +572,7 @@ function startCandleHistoryService({ context, pairs, subscriptions = [] } = {}) 
     .filter(([, pairConfig]) => pairConfig?.enabled === true && pairConfig?.enableVolatilityProtection !== false)
     .map(([symbol]) => symbol)
   for (const symbol of enabledSymbols) {
-    const broker = resolveCandleBroker({ context, symbol })
-    const sourceMetadata = resolveCandleSourceMetadata({
-      context,
-      symbol,
-      broker,
-    })
-    context.markets.set(symbol, createMarketState(symbol, {
-      broker,
-      sourceMetadata,
-    }))
+    context.markets.set(symbol, createMarketState(symbol))
   }
 
   context.startPromise = (async () => {
@@ -658,8 +614,6 @@ function startCandleHistoryService({ context, pairs, subscriptions = [] } = {}) 
  */
 export function createCandleHistoryService({
   broker,
-  getBroker,
-  getSourceMetadata,
   logger = {},
   now = Date.now,
   onSnapshot,
@@ -673,12 +627,6 @@ export function createCandleHistoryService({
   if (typeof broker.subscribeForCandles !== "function") {
     throw new TypeError("candle history service requires broker.subscribeForCandles")
   }
-  if (getBroker !== undefined && typeof getBroker !== "function") {
-    throw new TypeError("candle history service getBroker must be a function when provided")
-  }
-  if (getSourceMetadata !== undefined && typeof getSourceMetadata !== "function") {
-    throw new TypeError("candle history service getSourceMetadata must be a function when provided")
-  }
   if (typeof now !== "function") {
     throw new TypeError("candle history service now must be a function")
   }
@@ -687,8 +635,6 @@ export function createCandleHistoryService({
   }
   const context = {
     broker,
-    getBroker,
-    getSourceMetadata,
     logger,
     now,
     snapshotObserver: onSnapshot ?? (async () => {}),

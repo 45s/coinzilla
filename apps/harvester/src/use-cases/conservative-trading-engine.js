@@ -74,20 +74,12 @@ right: "0" }) <= 0) {throw new RangeError(`${field  } must be positive`)}
 right: bestAskPrice }) >= 0) {
     throw new RangeError("Market book best bid must be below best ask")
   }
-  const sourceIdentity = Object.fromEntries(
-    ["providerInstanceId", "providerType", "accountId", "environment"]
-      .filter((field) => bookTicker[field] !== undefined)
-      .map((field) => [field, bookTicker[field]]),
-  )
-  return Object.freeze({
-    symbol,
-    bestBidPrice,
-    bestBidQuantity,
-    bestAskPrice,
-    bestAskQuantity,
-    timestamp,
-    ...sourceIdentity,
-  })
+  return Object.freeze({ symbol,
+bestBidPrice,
+bestBidQuantity,
+bestAskPrice,
+bestAskQuantity,
+timestamp })
 }
 
 export function isPostOnlyOrderCrossing({ order, marketBook } = {}) {

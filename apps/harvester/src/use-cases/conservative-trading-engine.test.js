@@ -11491,26 +11491,3 @@ test("failed owned BUY cancellation leaves the emergency BUY gate active and rep
   assert.equal(harness.engine.getActiveOrders().some((order) => order.side === "BUY"), true, "The unresolved owned BUY must remain visible for reconciliation.")
   assert.equal(harness.pauses.length, 0, "The emergency BUY-only pause must not convert an unresolved cancellation into a broad strategy pause.")
 })
-
-
-test("preserves provider/account identity on normalized market books", () => {
-  const marketBook = createMarketBook({
-    bookTicker: {
-      symbol: "BTCUSDT",
-      bestBidPrice: "99",
-      bestBidQuantity: "2",
-      bestAskPrice: "101",
-      bestAskQuantity: "3",
-      timestamp: 123,
-      providerInstanceId: "binance-testnet-primary",
-      providerType: "binance",
-      accountId: "account-primary",
-      environment: "testnet",
-    },
-  })
-  assert.equal(marketBook.providerInstanceId, "binance-testnet-primary")
-  assert.equal(marketBook.providerType, "binance")
-  assert.equal(marketBook.accountId, "account-primary")
-  assert.equal(marketBook.environment, "testnet")
-  assert.equal(Object.isFrozen(marketBook), true)
-})
