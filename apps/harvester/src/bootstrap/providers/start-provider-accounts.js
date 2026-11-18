@@ -527,8 +527,14 @@ async function handleProviderAccountStartFailure({
   providerBrokers.delete(provider.providerInstanceId)
   const cleanupConfirmed = error?.startupCleanupConfirmed === true
   const cleanupErrors = cleanupConfirmed
-    ? await releaseFailedAccountLock({ provider, releaseProviderLock })
-    : await retainFailedAccountLock({ provider, retainProviderLock })
+    ? await releaseFailedAccountLock({
+      provider,
+      releaseProviderLock,
+    })
+    : await retainFailedAccountLock({
+      provider,
+      retainProviderLock,
+    })
   return {
     runtime: undefined,
     error,
@@ -643,8 +649,15 @@ async function startOneProviderAccount({
       requiredCapabilitiesByProvider,
       deferMarketDataStart,
     }))
-    validateStartedProviderRuntime({ runtime, provider, requireStop })
-    return { runtime, error: undefined }
+    validateStartedProviderRuntime({
+      runtime,
+      provider,
+      requireStop,
+    })
+    return {
+      runtime,
+      error: undefined,
+    }
   } catch (error) {
     return handleProviderAccountStartFailure({
       provider,
@@ -704,7 +717,11 @@ async function startConfiguredProviderAccounts({
       failedErrors,
     })
   }
-  return { startedAccounts, failedAccounts, failedErrors }
+  return {
+    startedAccounts,
+    failedAccounts,
+    failedErrors,
+  }
 }
 
 async function startProviderAccountRuntimes({
@@ -788,7 +805,10 @@ export async function startProviderAccounts({
   if (typeof start !== "function") {
     throw new TypeError("Harvester provider-account startup requires a start function")
   }
-  const routing = resolveProviderAccountRouting({ appConfig, providers })
+  const routing = resolveProviderAccountRouting({
+    appConfig,
+    providers,
+  })
   return startProviderAccountRuntimes({
     providers,
     start,
