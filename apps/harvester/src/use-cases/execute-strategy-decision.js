@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { createPendingCanonicalOrder } from "../domain/orders/create-pending-canonical-order.js"
-import { hasProviderIdentity } from "../domain/orders/provider-provenance.js"
+import { assertProviderIdentityMatches, hasProviderIdentity } from "../domain/orders/provider-provenance.js"
 import { validateOrderAgainstTradingRules } from "../domain/orders/validate-order-against-trading-rules.js"
 
 function getOwnershipMetadata({ ownership } = {}) {
@@ -528,6 +528,14 @@ async function handleMismatchedAcknowledgement({ context, candidate } = {}) {
 
 async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrder: brokerAcknowledgedOrder } = {}) {
   const { pendingOrder, purpose, ownership } = candidate
+  if (pendingOrder.providerInstanceId !== undefined) {
+    assertProviderIdentityMatches({
+      expected: pendingOrder,
+      actual: brokerAcknowledgedOrder,
+      allowMissingActual: true,
+      context: "Broker acknowledgement provider identity",
+    })
+  }
   const acknowledgedOrder = pendingOrder.providerInstanceId === undefined
     ? brokerAcknowledgedOrder
     : new CanonicalOrder({
