@@ -8,7 +8,7 @@
 - [ADR-0003 — Process-lifetime operator pause](decisions/0003-process-lifetime-operator-pause.md) — initial pause scope; restart restoration is explicitly deferred to ADR-0001 / issue #654.
 - [Volatility Protection](../volatility-protection.md) — market-data collection, per-market protection policy and central order gate are implemented in merged PR #1041; historical threshold calibration remains open.
 - [ADR-0004 — Startup open orders are external](decisions/0004-startup-open-orders-are-external.md) — accepted and implemented ownership boundary for startup-snapshot orders; see merged PR #1166.
-- [ADR-0005 — Emergency BUY pause](decisions/0005-emergency-buy-pause.md) — distinct global/market BUY-only halt, owned-BUY cancellation and recovery SELL continuity.
+- [ADR-0005 — Emergency BUY pause](decisions/0005-emergency-buy-pause.md) — engine-owned BUY cancellation workflow and recovery SELL continuity; market command semantics are updated by ADR-0006.
 - [ADR-0006 — Market Pause cancels owned BUYs](decisions/0006-market-pause-cancels-owned-buys.md) — current market Pause/Resume command and keyboard contract; uses the existing BUY cancellation/reconciliation workflow.
 - [ADR-0001 — Application-owned durable facts for process-restart recovery](decisions/0001-application-owned-recovery-facts.md) — accepted contract, durable fact producers/barriers and offline candidate Portfolio/RecoveryLedger/OrderRegistry projection are merged in PR #1055; candidate restoration remains disabled pending projection/invariant parity, account-wide reconciliation readiness and Step 9 crash/restart proof.
 - [Broker–Harvester trading flow](BROKER_HARVESTER_TRADING_FLOW.md) — visual interaction and startup paths.
