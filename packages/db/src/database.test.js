@@ -4,7 +4,7 @@ import test from "node:test"
 import { createDatabase } from "../src/index.js"
 
 function assertTransactionRequiresConnection(database) {
-  assert.throws(() => database.transaction(() => {}), /connected/)
+  assertTransactionRequiresConnection(database)
 }
 
 function createAdapter(overrides = {}) {
