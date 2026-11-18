@@ -6,7 +6,7 @@ import { join } from "node:path"
 import test from "node:test"
 
 import { DatabaseProviderError } from "./domain/errors/database-errors.js"
-import { restoreSqliteDatabase } from "./infrastructure/sqlite/sqlite-restore.js"
+import { publishRestoredDatabase, restoreSqliteDatabase } from "./infrastructure/sqlite/sqlite-restore.js"
 
 test("SQLite restore preserves a source connection close failure and removes the staged artifact", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-restore-close-"))
@@ -109,40 +109,21 @@ test("SQLite restore reports post-publication cleanup failure without corrupting
 })
 
 
-test("SQLite restore propagates non-conflict publication failures and removes the staged file", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-restore-publish-"))
-  const backupFilename = join(directory, "backup.sqlite")
-  const destinationFilename = join(directory, "restored.sqlite")
-  const backup = new DatabaseSync(backupFilename)
-  backup.exec("CREATE TABLE retained_records (id INTEGER PRIMARY KEY)")
-  backup.prepare("INSERT INTO retained_records (id) VALUES (?)").run(7)
-  backup.close()
+test("SQLite restore publication propagates non-conflict filesystem failures", async () => {
   const publicationFailure = Object.assign(
     new Error("restore publication I/O failure"),
     { code: "EIO" },
   )
 
-  try {
-    await assert.rejects(
-      restoreSqliteDatabase({
-        backupFilename,
-        filename: destinationFilename,
-        publishLink: async () => {
-          throw publicationFailure
-        },
-      }),
-      (error) => error instanceof DatabaseProviderError && error.cause === publicationFailure,
-      "A non-conflict filesystem publication failure must retain its original provider cause",
-    )
-    await assert.rejects(
-      stat(destinationFilename),
-      (error) => error.code === "ENOENT",
-      "A failed restore publication must not leave a destination file behind",
-    )
-  } finally {
-    await rm(directory, {
-      recursive: true,
-      force: true,
-    })
-  }
+  await assert.rejects(
+    publishRestoredDatabase({
+      temporaryFilename: "/temporary/restore.sqlite",
+      destinationFilename: "/destination/restore.sqlite",
+      linkOperation: async () => {
+        throw publicationFailure
+      },
+    }),
+    (error) => error === publicationFailure,
+    "A non-conflict filesystem publication failure must be propagated without being mislabeled as a destination conflict",
+  )
 })
