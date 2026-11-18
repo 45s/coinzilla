@@ -200,8 +200,14 @@ test("concurrent SQLite backups to one destination publish one complete validate
 
   try {
     const copiedPages = await Promise.all([
-      first.backup({ destination, rate: 1 }),
-      second.backup({ destination, rate: 1 }),
+      first.backup({
+        destination,
+        rate: 1,
+      }),
+      second.backup({
+        destination,
+        rate: 1,
+      }),
     ])
     assert.ok(
       copiedPages.every((pages) => Number.isSafeInteger(pages) && pages > 0),
