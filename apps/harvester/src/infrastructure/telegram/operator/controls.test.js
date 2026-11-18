@@ -79,13 +79,13 @@ test("reports unresolved owned-BUY cancellation without claiming full cancellati
   const interaction = { failed: false }
   const diagnostics = createDiagnostics()
   const reply = buildControlReply({
-    action: "PAUSE_BUYS",
+    action: "PAUSE",
     symbol: "LINKUSDT",
     result: {
       ok: false,
       errors: [{ code: "OPERATOR_BUY_CANCELLATION_INCOMPLETE" }],
     },
-    method: "pauseBuys",
+    method: "pauseMarket",
     interaction,
     diagnostics,
   })
@@ -99,6 +99,54 @@ test("reports unresolved owned-BUY cancellation without claiming full cancellati
     true,
     "The emergency BUY gate must remain reported as active when cancellation is incomplete.",
   )
+})
+
+test("dispatches normal market Pause through the operator facade and reports cancellation", async () => {
+  const calls = []
+  const sentMessages = []
+  const diagnostics = createDiagnostics()
+  const interaction = {
+    failed: false,
+    applicationOperationInvoked: false,
+    applicationOperationCompleted: false,
+    stateChanged: false,
+  }
+
+  await executeTelegramOperatorControl({
+    action: "PAUSE",
+    symbol: "LINKUSDT",
+    userId: "123",
+    requestId: "telegram:502",
+    chatId: 123,
+    interaction,
+    operator: {
+      pauseMarket: async request => {
+        calls.push(request)
+        return {
+          ok: true,
+          data: {
+            symbol: "LINKUSDT",
+            paused: true,
+            alreadyPaused: false,
+            canceled: 2,
+            reconciled: 1,
+          },
+        }
+      },
+    },
+    diagnostics,
+    logStage: () => {},
+    sendMessage: async request => sentMessages.push(request),
+    editMessage: async () => {},
+    buildNavigationKeyboard: () => ({ inline_keyboard: [] }),
+  })
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].symbol, "LINKUSDT")
+  assert.equal(calls[0].actor.id, "telegram-user:123")
+  assert.match(sentMessages[0].text, /Cancelled 2 Harvester-owned BUY order/)
+  assert.match(sentMessages[0].text, /reconciled 1 fill/)
+  assert.equal(interaction.stateChanged, true)
 })
 
 test("reports owned BUY cancellation and recovery SELL continuity for the normal market Pause command", () => {
