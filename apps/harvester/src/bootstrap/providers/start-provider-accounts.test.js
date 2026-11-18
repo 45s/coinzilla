@@ -189,50 +189,70 @@ test("starts one independent runtime per configured provider account", async () 
   ])
 })
 
+function createThreeAccountProviders() {
+  return [
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+    }),
+    createProvider({
+      providerInstanceId: "third",
+      providerType: "binance",
+      accountId: "account-three",
+    }),
+  ]
+}
+
+function createSecondAccountFailureStarter({
+  stopCalls,
+}) {
+  let startCount = 0
+  return async () => {
+    startCount += 1
+    if (startCount === 2) {
+      throw new Error("second account connection failed")
+    }
+    const account = startCount === 1 ? "first" : "third"
+    return {
+      stop: async () => {
+        stopCalls.push(account)
+        return {
+          ok: true,
+        }
+      },
+    }
+  }
+}
+
+function createSuccessfulLockReleaser({
+  releasedLocks,
+}) {
+  return async (providerInstanceId) => {
+    releasedLocks.push(providerInstanceId)
+    return {
+      ok: true,
+      released: true,
+    }
+  }
+}
+
 test("keeps healthy account runtimes running when another account fails to start", async () => {
   const stopCalls = []
   const releasedLocks = []
-  let startCount = 0
   const runtime = await startProviderAccounts({
-    providers: [
-      createProvider({
-        providerInstanceId: "first",
-        providerType: "binance",
-        accountId: "account-one",
-      }),
-      createProvider({
-        providerInstanceId: "second",
-        providerType: "binance",
-        accountId: "account-two",
-      }),
-      createProvider({
-        providerInstanceId: "third",
-        providerType: "binance",
-        accountId: "account-three",
-      }),
-    ],
-    start: async () => {
-      startCount += 1
-      if (startCount === 2) {
-        throw new Error("second account connection failed")
-      }
-      const account = startCount === 1 ? "first" : "third"
-      return {
-        stop: async () => {
-          stopCalls.push(account)
-          return {
-            ok: true,
-          }
-        },
-      }
-    },
-    releaseProviderLock: async (providerInstanceId) => {
-      releasedLocks.push(providerInstanceId)
-      return {
-        ok: true,
-        released: true,
-      }
-    },
+    providers: createThreeAccountProviders(),
+    start: createSecondAccountFailureStarter({
+      stopCalls,
+    }),
+    releaseProviderLock: createSuccessfulLockReleaser({
+      releasedLocks,
+    }),
     appConfig,
     env: {
       TRADING_MODE: "testnet",
@@ -248,9 +268,7 @@ test("keeps healthy account runtimes running when another account fails to start
   assert.match(runtime.failedAccounts[0].errorMessage, /second account connection failed/)
   assert.deepEqual(releasedLocks, ["second"])
   assert.deepEqual(stopCalls, [])
-
-  const stopped = await runtime.stop()
-  assert.equal(stopped.ok, true)
+  assert.equal((await runtime.stop()).ok, true)
   assert.deepEqual(stopCalls, ["third", "first"])
 })
 
