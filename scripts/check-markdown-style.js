@@ -119,13 +119,7 @@ function parseMarkdownDiffLine({ line, state }) {
     return
   }
 
-  if (line.startsWith("+")) {
-    state.currentChange.lines.add(state.newLineNumber)
-    state.newLineNumber += 1
-    return
-  }
-
-  if (line.startsWith(" ")) {
+  if (line.startsWith("+") || line.startsWith(" ")) {
     state.currentChange.lines.add(state.newLineNumber)
     state.newLineNumber += 1
     return
