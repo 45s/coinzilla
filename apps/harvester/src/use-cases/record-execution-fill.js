@@ -2,7 +2,10 @@ import { Fill } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { requireProviderIdentity } from "../domain/orders/provider-provenance.js"
 
-function validateExecutionFillInput({ operationalStateStore, fill }) {
+function validateExecutionFillInput({
+      operationalStateStore,
+      fill,
+    }) {
   if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("recordExecutionFill requires a Operational State Store append capability")
   }
@@ -12,7 +15,10 @@ function validateExecutionFillInput({ operationalStateStore, fill }) {
   if (typeof fill.clientOrderId !== "string" || !fill.clientOrderId.trim()) {
     throw new TypeError("Execution-fill fact requires its original Harvester clientOrderId")
   }
-  requireProviderIdentity({ value: fill, context: "Execution-fill fact" })
+  requireProviderIdentity({
+    value: fill,
+    context: "Execution-fill fact",
+  })
   return fill.market
 }
 
