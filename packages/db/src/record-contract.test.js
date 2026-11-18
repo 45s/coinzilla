@@ -217,6 +217,7 @@ test("read query validation rejects unsupported filters, sorts, and pagination",
     { unknown: true },
     { filter: [] },
     { filter: { "nested.field": "value" } },
+    { filter: { "name) OR 1=1 --": "value" } },
     { filter: { value: { gt: 1 } } },
     { filter: { value: Number.POSITIVE_INFINITY } },
     { sort: {} },
@@ -224,6 +225,14 @@ test("read query validation rejects unsupported filters, sorts, and pagination",
       sort: [
         {
           field: "nested.field",
+          direction: "asc",
+        },
+      ],
+    },
+    {
+      sort: [
+        {
+          field: "name; DROP TABLE people; --",
           direction: "asc",
         },
       ],
