@@ -501,40 +501,8 @@ function validateAcknowledgementCanAttach({
   }
 }
 
-function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order }) {
-  if (!(order instanceof CanonicalOrder) || order.status === "PENDING" ||
-      typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
-    throw new TypeError("OrderRegistry.attachAcknowledgedBrokerOrderId requires an acknowledged order with brokerOrderId")
-  }
-  const index = orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
-  if (index < 0) { throw new Error("Acknowledged order is not registered by clientOrderId") }
-  const current = orders[index]
-  validateProviderIdentityUnchanged({
-    current,
-    next: order,
-  })
-  if (!sameOrderIntent({
-    current,
-    next: order,
-  })) {
-    throw new Error("Broker acknowledgement changed immutable order intent")
-  }
-  if (isDuplicateAcknowledgement({
-    current,
-    order,
-  })) {
-    return Object.freeze({
-      registry,
-      applied: false,
-      duplicate: true,
-    })
-  }
-  validateAcknowledgementCanAttach({
-    current,
-    orders,
-    order,
-  })
-  const attached = new CanonicalOrder({
+function createAcknowledgedCanonicalOrder({ current, order }) {
+  return new CanonicalOrder({
     clientOrderId: current.clientOrderId,
     brokerOrderId: order.brokerOrderId,
     providerInstanceId: current.providerInstanceId ?? order.providerInstanceId,
@@ -551,6 +519,9 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
     acknowledgedAt: order.acknowledgedAt,
     updatedAt: order.updatedAt,
   })
+}
+
+function createAcknowledgedRegistryResult({ registry, orders, ownerships, index, current, order, attached }) {
   const nextOrders = [...orders]
   nextOrders[index] = attached
   return Object.freeze({
@@ -567,13 +538,37 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
   })
 }
 
-function unchangedOrderUpdate({ registry, stale = false, duplicate = false } = {}) {
-  return Object.freeze({
+function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order }) {
+  if (!(order instanceof CanonicalOrder) || order.status === "PENDING" ||
+      typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
+    throw new TypeError("OrderRegistry.attachAcknowledgedBrokerOrderId requires an acknowledged order with brokerOrderId")
+  }
+  const index = orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
+  if (index < 0) {
+    throw new Error("Acknowledged order is not registered by clientOrderId")
+  }
+  const current = orders[index]
+  validateProviderIdentityUnchanged({ current, next: order })
+  if (!sameOrderIntent({ current, next: order })) {
+    throw new Error("Broker acknowledgement changed immutable order intent")
+  }
+  if (isDuplicateAcknowledgement({ current, order })) {
+    return Object.freeze({
+      registry,
+      applied: false,
+      duplicate: true,
+    })
+  }
+  validateAcknowledgementCanAttach({ current, orders, order })
+  const attached = createAcknowledgedCanonicalOrder({ current, order })
+  return createAcknowledgedRegistryResult({
     registry,
-    applied: false,
-    duplicate,
-    stale,
-    unknown: false,
+    orders,
+    ownerships,
+    index,
+    current,
+    order,
+    attached,
   })
 }
 
