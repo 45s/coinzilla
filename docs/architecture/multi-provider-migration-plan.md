@@ -28,7 +28,6 @@ last_verified: 2026-11-18
 
 This revalidation was a read-only source and GitHub delivery-state inspection. It did not execute tests or CI; do not transfer historical CI results to this checkpoint.
 
-
 ## 1. Executive decision
 
 The repository has useful foundations for a gradual migration: Harvester owns its application-facing `BrokerPort`, exchange-specific behavior is behind infrastructure adapters, Binance has a substantial normalized order/user-data lifecycle, and ADR-0003 defines explicit execution and market-data routing.
