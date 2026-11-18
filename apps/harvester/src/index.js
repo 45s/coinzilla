@@ -380,6 +380,7 @@ function retainProviderProcessLock({
 async function releaseProviderProcessLock({
   entries,
   providerInstanceId,
+  force = false,
 }) {
   const entry = entries.find((item) => item.providerInstanceId === providerInstanceId)
   if (!entry) {
@@ -394,17 +395,18 @@ async function releaseProviderProcessLock({
       alreadyReleased: true,
     }
   }
-  if (entry.retained) {
+  if (entry.retained && !force) {
     return {
       ok: false,
       retained: true,
-      errors: [new Error(`Provider account process lock ${providerInstanceId} is intentionally retained after uncertain startup cleanup`)],
+      errors: [new Error(`Provider account process lock ${providerInstanceId} is retained until process shutdown cleanup`)],
     }
   }
   try {
     const result = await entry.lock.release()
     if (result?.ok === true) {
       entry.released = true
+      entry.retained = false
     }
     return result
   } catch (error) {
@@ -417,17 +419,20 @@ async function releaseProviderProcessLock({
 
 async function releaseAllProviderProcessLocks({
   entries,
-  releaseProvider,
 }) {
   const errors = []
-  const retainedProviderInstanceIds = entries
+  const previouslyRetainedProviderInstanceIds = entries
     .filter((entry) => entry.retained && !entry.released)
     .map(({ providerInstanceId }) => providerInstanceId)
   for (const entry of [...entries].reverse()) {
-    if (entry.released || entry.retained) {
+    if (entry.released) {
       continue
     }
-    const result = await releaseProvider(entry.providerInstanceId)
+    const result = await releaseProviderProcessLock({
+      entries,
+      providerInstanceId: entry.providerInstanceId,
+      force: true,
+    })
     if (result?.ok !== true) {
       errors.push(...getCleanupErrors({
         result,
@@ -435,23 +440,20 @@ async function releaseAllProviderProcessLocks({
       }))
     }
   }
-  if (retainedProviderInstanceIds.length > 0) {
-    errors.push(...retainedProviderInstanceIds.map((providerInstanceId) =>
-      new Error(`Provider account process lock ${providerInstanceId} remains retained after uncertain startup cleanup`)))
-  }
   if (errors.length > 0) {
     return {
       ok: false,
       errors,
-      retainedProviderInstanceIds,
+      previouslyRetainedProviderInstanceIds,
     }
   }
   return {
     ok: true,
     released: true,
-    retainedProviderInstanceIds,
+    previouslyRetainedProviderInstanceIds,
   }
 }
+
 
 function createProviderProcessLockGroup({
   providers,
@@ -471,7 +473,6 @@ function createProviderProcessLockGroup({
   })
   const release = () => releaseAllProviderProcessLocks({
     entries,
-    releaseProvider,
   })
   const lockMetadata = locks.length === 1
     ? locks[0]
