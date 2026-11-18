@@ -342,12 +342,19 @@ async function releaseProviderProcessLocks({ locks }) {
   return errors
 }
 
-function createProviderProcessLockGroup({ providers, locks }) {
-  const entries = providers.map((provider, index) => ({
-    providerInstanceId: provider.providerInstanceId,
-    lock: locks[index],
-    released: false,
-  }))
+function createProviderProcessLockGroup({
+  providers,
+  locks,
+}) {
+  const entries = []
+  for (let index = 0; index < providers.length; index += 1) {
+    const provider = providers[index]
+    entries.push({
+      providerInstanceId: provider.providerInstanceId,
+      lock: locks[index],
+      released: false,
+    })
+  }
   const releaseProvider = async (providerInstanceId) => {
     const entry = entries.find((item) => item.providerInstanceId === providerInstanceId)
     if (!entry) {
@@ -357,7 +364,10 @@ function createProviderProcessLockGroup({ providers, locks }) {
       }
     }
     if (entry.released) {
-      return { ok: true, alreadyReleased: true }
+      return {
+        ok: true,
+        alreadyReleased: true,
+      }
     }
     try {
       const result = await entry.lock.release()
@@ -366,7 +376,10 @@ function createProviderProcessLockGroup({ providers, locks }) {
       }
       return result
     } catch (error) {
-      return { ok: false, errors: [error] }
+      return {
+        ok: false,
+        errors: [error],
+      }
     }
   }
   const release = async () => {
@@ -383,13 +396,22 @@ function createProviderProcessLockGroup({ providers, locks }) {
         }))
       }
     }
-    return errors.length > 0
-      ? { ok: false, errors }
-      : { ok: true, released: true }
+    if (errors.length > 0) {
+      return {
+        ok: false,
+        errors,
+      }
+    }
+    return {
+      ok: true,
+      released: true,
+    }
   }
   const lockMetadata = locks.length === 1
     ? locks[0]
-    : { lockScopes: locks.map(({ lockScope }) => lockScope) }
+    : {
+      lockScopes: locks.map(({ lockScope }) => lockScope),
+    }
   return {
     ...lockMetadata,
     releaseProvider,
@@ -572,7 +594,73 @@ async function ensureProcessJournalReady({ journalService } = {}) {
   }
 }
 
-function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger } = {}) {
+function logDisconnectedRuntime({ logger }) {
+  logSystem({
+    logger,
+    message: "Binance connection was not established.",
+  })
+}
+
+function logMultipleAccountRuntime({
+  runtime,
+  logger,
+}) {
+  const failedCount = runtime.failedAccounts?.length ?? 0
+  logSystem({
+    logger,
+    message: `Connected ${runtime.providerAccounts.length} independent provider account(s); ${failedCount} account(s) failed to start; subscribed to ${runtime.subscriptions.length} distinct market(s).`,
+  })
+}
+
+function logSingleAccountRuntime({
+  runtime,
+  runtimeConfig,
+  logger,
+}) {
+  if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
+    logSystem({
+      logger,
+      message: `Connected; subscribed to ${runtime.subscriptions.length} enabled market(s). Conservative ${runtimeConfig.tradingMode.toUpperCase()} trading is enabled; waiting for validated market prices and user-data readiness.`,
+    })
+    return
+  }
+  logSystem({
+    logger,
+    message: `Connected; Binance trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`,
+  })
+}
+
+function logRuntimeStartedStatus({
+  runtime,
+  runtimeConfig,
+  logger,
+}) {
+  if (!runtime.connected) {
+    logDisconnectedRuntime({
+      logger,
+    })
+    return
+  }
+  if (runtime.providerAccounts?.length > 1 || runtime.failedAccounts?.length > 0) {
+    logMultipleAccountRuntime({
+      runtime,
+      logger,
+    })
+    return
+  }
+  logSingleAccountRuntime({
+    runtime,
+    runtimeConfig,
+    logger,
+  })
+}
+
+function publishRuntimeStarted({
+  runtime,
+  runtimeConfig,
+  eventPublisher,
+  logger,
+} = {}) {
   const configuredPairs = runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
   const enabledMarkets = configuredPairs
     ? Object.entries(configuredPairs)
@@ -589,26 +677,11 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
       tradingEnabled: runtime.tradingEnabled === true,
     }),
   })
-  if (!runtime.connected) {
-    logSystem({ logger,
-      message: "Binance connection was not established." })
-  } else if (runtime.providerAccounts?.length > 1 || runtime.failedAccounts?.length > 0) {
-    const failedCount = runtime.failedAccounts?.length ?? 0
-    logSystem({
-      logger,
-      message: `Connected ${runtime.providerAccounts.length} independent provider account(s); ${failedCount} account(s) failed to start; subscribed to ${runtime.subscriptions.length} distinct market(s).`,
-    })
-  } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
-    logSystem({
-      logger,
-      message: `Connected; subscribed to ${runtime.subscriptions.length} enabled market(s). Conservative ${runtimeConfig.tradingMode.toUpperCase()} trading is enabled; waiting for validated market prices and user-data readiness.`,
-    })
-  } else {
-    logSystem({
-      logger,
-      message: `Connected; Binance trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`,
-    })
-  }
+  logRuntimeStartedStatus({
+    runtime,
+    runtimeConfig,
+    logger,
+  })
 }
 
 async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } = {}) {
