@@ -442,7 +442,15 @@ test("rejects duplicate provider instance IDs and account scopes", () => {
       apiSecretEnv: "BINANCE_API_SECRET_KEY",
     },
   }
-  config.brokers = { instances: [provider, { ...provider, accountId: "another-account" }] }
+  config.brokers = {
+    instances: [
+      provider,
+      {
+        ...provider,
+        accountId: "another-account",
+      },
+    ],
+  }
   assert.throws(() => validateAppConfig(config), (error) =>
     error instanceof ConfigValidationError && error.path === "brokers.instances")
 
