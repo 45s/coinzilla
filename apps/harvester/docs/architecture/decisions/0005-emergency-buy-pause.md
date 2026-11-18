@@ -41,7 +41,6 @@ The controls are process-lifetime only. They are not replayed or restored after 
 - The operator must reissue the required pause after process restart.
 - Automated tests must cover overlapping scopes, recovery SELL continuity, cancellation-racing fills, unresolved cancellation and external-order isolation. Live Telegram and exchange verification remain operator-controlled and are not implied by offline CI.
 
-
 ## 2026-11-18 command-contract update — superseded in part by ADR-0006
 
 The emergency BUY gate and its owned-order cancellation/reconciliation workflow remain the accepted implementation. The separation of public command names is superseded: `/pause SYMBOL`, `/resume SYMBOL`, and the confirmed market Pause/Resume buttons now use this same market-scoped BUY workflow. `/pausebuys SYMBOL` and `/resumebuys SYMBOL` remain compatibility aliases. The global commands remain unchanged. The market facade methods `pauseMarket` / `resumeMarket` delegate to `pauseBuys({ symbol })` / `resumeBuys({ symbol })`. See [ADR-0006](./0006-market-pause-cancels-owned-buys.md).
