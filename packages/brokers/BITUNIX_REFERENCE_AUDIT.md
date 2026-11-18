@@ -387,7 +387,7 @@ The existing `getOrderHistory()` and `getMatchingOrderDetails()` contracts remai
 
 ## 12. Bitunix Spot deposit-address lookup (2026-11-18)
 
-**Decision:** implement `BitunixSpotBroker.getDepositAddress({ coin, network })` as a Bitunix-only, signed, read-only extension in [issue #1398](https://github.com/45s/coinzilla/issues/1398) / [PR #1399](https://github.com/45s/coinzilla/pull/1399). This retrieves existing deposit details; it does not generate an address or move funds. It does not change the read-only / not-Harvester-ready boundary in #1185.
+**Decision:** `BitunixSpotBroker.getDepositAddress({ coin, network })` is implemented and merged as a Bitunix-only, signed, read-only extension in [PR #1399](https://github.com/45s/coinzilla/pull/1399) at `5c517f677232ea3aa2ec72053087307693f97919` (tracked by [issue #1398](https://github.com/45s/coinzilla/issues/1398)). This retrieves existing deposit details; it does not generate an address or move funds. It does not change the read-only / not-Harvester-ready boundary in #1185.
 
 | Evidence | Finding |
 |---|---|
@@ -400,4 +400,4 @@ The existing `getOrderHistory()` and `getMatchingOrderDetails()` contracts remai
 | Other references | The inspected [StockSharp/Connectors](https://github.com/StockSharp/Connectors) search did not surface this Spot user endpoint. [Cachy](https://github.com/mydcc/cachy-app) is Futures-only and does not corroborate Spot deposit-address behavior. |
 | Coinzilla contract | Send one authenticated POST with only the caller-supplied `coin` and `network`; reject missing/invalid inputs before I/O. Require an array response and validate every row before returning any result. Preserve every address and memo exactly (memo may be omitted, null, or any string including empty); require returned coin/network identity to match the request. Freeze the array and records. Use stable input/response error codes with safe operation/field context only. Do not retry, paginate, select a network, log, or persist address/memo data. |
 
-The endpoint has no documented pagination or address-generation behavior. An explicit empty array is accepted; missing/null/non-array data is rejected rather than being silently treated as no address. The method is not Binance parity, does not enable a funds mutation, and does not resolve any #1185 blocker.
+The endpoint has no documented pagination or address-generation behavior. An explicit empty array is accepted; missing/null/non-array data is rejected rather than being silently treated as no address. PR #1399 passed the required exact-head broker/workspace tests and coverage, strict ESLint, JavaScript quality/syntax, actionlint, Utils tests, dependency audit, and Harvester regression checks before merge. The optional External Documentation Links workflow was still running at merge and is not a required branch-protection context. The method is not Binance parity, does not enable a funds mutation, and does not resolve any #1185 blocker.
