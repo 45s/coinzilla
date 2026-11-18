@@ -28,12 +28,18 @@ export function assertProviderIdentityMatches({
   allowMissingActual = false,
   context = "Provider identity",
 } = {}) {
-  const expectedIdentity = requireProviderIdentity({ value: expected, context })
+  const expectedIdentity = requireProviderIdentity({
+    value: expected,
+    context,
+  })
   const actualHasAny = PROVIDER_IDENTITY_FIELDS.some((field) => actual?.[field] !== undefined)
   if (!actualHasAny && allowMissingActual) {
     return true
   }
-  const actualIdentity = requireProviderIdentity({ value: actual, context })
+  const actualIdentity = requireProviderIdentity({
+    value: actual,
+    context,
+  })
   if (!PROVIDER_IDENTITY_FIELDS.every((field) =>
     actualIdentity[field] === expectedIdentity[field])) {
     throw new TypeError(`${context} does not match the original provider instance and account`)
