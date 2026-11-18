@@ -217,6 +217,9 @@ function createAcknowledgedCanonicalOrder({ order, calls }) {
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: `${order.symbol}-${calls.orders.size + 1}`,
+    providerInstanceId: order.providerInstanceId,
+    providerType: order.providerType,
+    accountId: order.accountId,
     market,
     side: order.side,
     type: order.type,
@@ -260,6 +263,7 @@ function createBrokerOrderPorts({ calls }) {
   return {
     placeOrder: async ({ order }) => {
       calls.push(`place:${order.symbol}`)
+      calls.submittedOrders.push(order)
       const acknowledgedOrder = createAcknowledgedCanonicalOrder({
         order,
         calls,
@@ -272,6 +276,7 @@ function createBrokerOrderPorts({ calls }) {
     },
     cancelOrder: async ({ order }) => {
       calls.push(`cancel:${order.market.symbol}`)
+      calls.cancelledOrders.push(order)
       const canceledOrder = createCanceledCanonicalOrder(order)
       calls.orders.set(order.clientOrderId, canceledOrder)
       return {
@@ -564,6 +569,8 @@ function assertIndependentAccountRuntimes({
 function createBrokerCalls() {
   const calls = []
   calls.orders = new Map()
+  calls.submittedOrders = []
+  calls.cancelledOrders = []
   calls.fills = []
   calls.priceHandlers = new Map()
   calls.userDataHandler = undefined
@@ -633,7 +640,6 @@ function assertMultiAccountMarketDataRouting({
 async function submitAndResolveRoutedOrder({
   primaryCalls,
   secondaryCalls,
-  secondaryRuntime,
 }) {
   await primaryCalls.priceHandlers.get("BTCUSDT")({
     symbol: "BTCUSDT",
@@ -644,12 +650,14 @@ async function submitAndResolveRoutedOrder({
   assert.equal(primaryCalls.filter((call) => call === "place:BTCUSDT").length, 0)
   const [acknowledgedOrder] = [...secondaryCalls.orders.values()]
   assert.ok(acknowledgedOrder)
-  const registeredOrder = secondaryRuntime.recoveredState.orderRegistry.getOrder({
-    clientOrderId: acknowledgedOrder.clientOrderId,
-  })
-  assert.equal(registeredOrder.providerInstanceId, "binance-testnet-secondary")
-  assert.equal(registeredOrder.accountId, "account-secondary")
-  return registeredOrder
+  const [submittedOrder] = secondaryCalls.submittedOrders
+  assert.ok(submittedOrder)
+  assert.equal(submittedOrder.providerInstanceId, "binance-testnet-secondary")
+  assert.equal(submittedOrder.providerType, "binance")
+  assert.equal(submittedOrder.accountId, "account-secondary")
+  assert.equal(acknowledgedOrder.providerInstanceId, "binance-testnet-secondary")
+  assert.equal(acknowledgedOrder.accountId, "account-secondary")
+  return acknowledgedOrder
 }
 
 function createPartialFill({ registeredOrder }) {
@@ -742,7 +750,6 @@ test("routes order submission, user-data fills, cancellation, and candle data to
     const registeredOrder = await submitAndResolveRoutedOrder({
       primaryCalls,
       secondaryCalls,
-      secondaryRuntime,
     })
     await processRoutedUserDataFill({
       secondaryCalls,
