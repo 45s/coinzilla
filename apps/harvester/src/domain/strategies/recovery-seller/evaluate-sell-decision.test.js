@@ -5,8 +5,14 @@ import { createRecoverySellerCycleState } from "./cycle-state.js"
 import { evaluateRecoverySellerSellDecision } from "./evaluate-sell-decision.js"
 import { createRecoverySellerStopState } from "./stop-decision.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const baseAsset = new Asset({
+  id: "doge",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "usdt",
+  code: "USDT",
+})
 const market = new Market({
   venue: "binance",
   symbol: "DOGEUSDT",
@@ -14,30 +20,77 @@ const market = new Market({
   quoteAsset,
 })
 
-function createTradingRules({ minimumPrice = "0.01", maximumPrice = "100", minimumQuantity = "0.01", maximumQuantity = "100", minimumNotional = "5", maximumNotional = "1000", missingFilter, supportedOrderTypes = ["LIMIT_MAKER", "LIMIT"] } = {}) {
+function createTradingRules({
+  minimumPrice = "0.01",
+  maximumPrice = "100",
+  minimumQuantity = "0.01",
+  maximumQuantity = "100",
+  minimumNotional = "5",
+  maximumNotional = "1000",
+  missingFilter,
+  supportedOrderTypes = ["LIMIT_MAKER", "LIMIT"],
+} = {}) {
   return {
     market,
     supportedOrderTypes,
     tradingRules: new TradingRules({
       market,
       constraints: [
-        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
-        { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
-        { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: minimumQuantity, asset: baseAsset }) },
-        { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: minimumNotional, asset: quoteAsset }) },
-        { type: "MAX_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: maximumQuantity, asset: baseAsset }) },
-        { type: "MAX_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: maximumNotional, asset: quoteAsset }) },
-        { type: "MIN_PRICE", status: "SUPPORTED", value: new Money({ amount: minimumPrice, asset: quoteAsset }) },
-        { type: "MAX_PRICE", status: "SUPPORTED", value: new Money({ amount: maximumPrice, asset: quoteAsset }) },
+        {
+          type: "PRICE_INCREMENT",
+          status: "SUPPORTED",
+          value: new Money({ amount: "0.01", asset: quoteAsset }),
+        },
+        {
+          type: "QUANTITY_INCREMENT",
+          status: "SUPPORTED",
+          value: new Quantity({ amount: "0.01", asset: baseAsset }),
+        },
+        {
+          type: "MIN_QUANTITY",
+          status: "SUPPORTED",
+          value: new Quantity({ amount: minimumQuantity, asset: baseAsset }),
+        },
+        {
+          type: "MIN_NOTIONAL",
+          status: "SUPPORTED",
+          value: new Money({ amount: minimumNotional, asset: quoteAsset }),
+        },
+        {
+          type: "MAX_QUANTITY",
+          status: "SUPPORTED",
+          value: new Quantity({ amount: maximumQuantity, asset: baseAsset }),
+        },
+        {
+          type: "MAX_NOTIONAL",
+          status: "SUPPORTED",
+          value: new Money({ amount: maximumNotional, asset: quoteAsset }),
+        },
+        {
+          type: "MIN_PRICE",
+          status: "SUPPORTED",
+          value: new Money({ amount: minimumPrice, asset: quoteAsset }),
+        },
+        {
+          type: "MAX_PRICE",
+          status: "SUPPORTED",
+          value: new Money({ amount: maximumPrice, asset: quoteAsset }),
+        },
       ].filter(({ type }) => type !== missingFilter),
     }),
   }
 }
 
 const validInput = {
-  pairConfig: { makerPercent: 0, takerPercent: 0.075 },
+  pairConfig: {
+    makerPercent: 0,
+    takerPercent: 0.075,
+  },
   marketMetadata: createTradingRules(),
-  cycleState: createRecoverySellerCycleState({ cycleId: "cycle-1", positionId: "position-1" }),
+  cycleState: createRecoverySellerCycleState({
+    cycleId: "cycle-1",
+    positionId: "position-1",
+  }),
   stopState: createRecoverySellerStopState(),
   planInput: {
     recoveryQuantity: "1",
@@ -67,7 +120,10 @@ test("selects post-only SELL and maker fee reserve when makerPercent is zero", (
 test("selects ordinary LIMIT and the higher configured fee when makerPercent is non-zero", () => {
   const result = evaluateRecoverySellerSellDecision({
     ...validInput,
-    pairConfig: { makerPercent: 0.075, takerPercent: 0.2 },
+    pairConfig: {
+      makerPercent: 0.075,
+      takerPercent: 0.2,
+    },
     planInput: {
       ...validInput.planInput,
       recoveryQuantity: "1.002",
@@ -132,12 +188,30 @@ test("blocks a second SELL lifecycle without creating another order intent", () 
 
 test("latches STOP for every supported minimum and maximum SELL filter violation", () => {
   const scenarios = [
-    { filter: "MIN_PRICE", metadata: createTradingRules({ minimumPrice: "11" }) },
-    { filter: "MAX_PRICE", metadata: createTradingRules({ maximumPrice: "10" }) },
-    { filter: "MIN_QUANTITY", metadata: createTradingRules({ minimumQuantity: "2" }) },
-    { filter: "MAX_QUANTITY", metadata: createTradingRules({ maximumQuantity: "0.5" }) },
-    { filter: "MIN_NOTIONAL", metadata: createTradingRules({ minimumNotional: "20" }) },
-    { filter: "MAX_NOTIONAL", metadata: createTradingRules({ maximumNotional: "5" }) },
+    {
+      filter: "MIN_PRICE",
+      metadata: createTradingRules({ minimumPrice: "11" }),
+    },
+    {
+      filter: "MAX_PRICE",
+      metadata: createTradingRules({ maximumPrice: "10" }),
+    },
+    {
+      filter: "MIN_QUANTITY",
+      metadata: createTradingRules({ minimumQuantity: "2" }),
+    },
+    {
+      filter: "MAX_QUANTITY",
+      metadata: createTradingRules({ maximumQuantity: "0.5" }),
+    },
+    {
+      filter: "MIN_NOTIONAL",
+      metadata: createTradingRules({ minimumNotional: "20" }),
+    },
+    {
+      filter: "MAX_NOTIONAL",
+      metadata: createTradingRules({ maximumNotional: "5" }),
+    },
   ]
 
   for (const scenario of scenarios) {
@@ -147,11 +221,11 @@ test("latches STOP for every supported minimum and maximum SELL filter violation
     })
 
     assert.equal(result.decision.outcome, "BLOCK",
-      "A " + scenario.filter + " violation must block the SELL without adjusting its quantity or price.")
+      `A ${scenario.filter} violation must block the SELL without adjusting its quantity or price.`)
     assert.equal(result.stopState.status, "STOPPED",
-      "A " + scenario.filter + " violation must latch the global sticky STOP.")
+      `A ${scenario.filter} violation must latch the global sticky STOP.`)
     assert.equal(result.orderIntent, undefined,
-      "A " + scenario.filter + " violation must not return an executable SELL intent.")
+      `A ${scenario.filter} violation must not return an executable SELL intent.`)
   }
 })
 

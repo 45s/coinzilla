@@ -69,7 +69,10 @@ function resolveExchangeFilters({ marketMetadata }) {
 function resolveSellFeePolicy({ pairConfig }) {
   const makerPercent = String(pairConfig.makerPercent)
   const takerPercent = String(pairConfig.takerPercent)
-  for (const [field, value] of Object.entries({ makerPercent, takerPercent })) {
+  for (const [field, value] of Object.entries({
+    makerPercent,
+    takerPercent,
+  })) {
     assertDecimalString({
       value,
       field,
@@ -159,8 +162,8 @@ function findFilterViolation({ plan, filters }) {
 
 function getFailureExplanation({ error, operation }) {
   return error instanceof Error && error.message
-    ? "Recovery Seller " + operation + " failed: " + error.message
-    : "Recovery Seller " + operation + " failed with an unsupported condition"
+    ? `Recovery Seller ${operation} failed: ${error.message}`
+    : `Recovery Seller ${operation} failed with an unsupported condition`"
 }
 
 function createStoppedResult({ stopState, explanation }) {
@@ -233,7 +236,7 @@ function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stop
   if (!marketMetadata.supportedOrderTypes.includes(feePolicy.orderType)) {
     return createStoppedResult({
       stopState,
-      explanation: "Exchange does not support required Recovery Seller " + feePolicy.orderType + " SELL orders",
+      explanation: `Exchange does not support required Recovery Seller ${feePolicy.orderType} SELL orders`",
     })
   }
   try {
@@ -276,8 +279,7 @@ function createSellPlanResult({ stopState, planInput, filters, feePolicy }) {
   if (filterViolation) {
     return createStoppedResult({
       stopState,
-      explanation: "Recovery Seller SELL violates exchange " + filterViolation +
-        "; no quantity or price adjustment is permitted",
+      explanation: `Recovery Seller SELL violates exchange ${filterViolation}; no quantity or price adjustment is permitted`,
     })
   }
   return Object.freeze({
