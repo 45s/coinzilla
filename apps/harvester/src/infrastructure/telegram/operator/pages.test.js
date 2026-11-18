@@ -140,6 +140,6 @@ test("Pause and Resume market selection follow the BUY pause state, not the lega
   const resumeButtons = createNavigationKeyboard({ page: "markets", markets, marketAction: "RESUME" })
     .inline_keyboard.flat().filter(button => button.callback_data?.startsWith("cc:ask:"))
 
-  assert.deepEqual(pauseButtons.map(({ callback_data }) => callback_data), ["cc:ask:LINKUSDT"])
+  assert.deepEqual(pauseButtons.map(({ callback_data }) => callback_data), ["cc:ask:PAUSE:LINKUSDT"])
   assert.deepEqual(resumeButtons.map(({ callback_data }) => callback_data), ["cc:ask:RESUME:BTCUSDT"])
 })
