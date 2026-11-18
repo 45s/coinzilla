@@ -462,7 +462,7 @@ test("transfers process-wide ownership to the first successfully started optiona
     operationalStateStore,
     releaseProviderLock: async () => ({ ok: true }),
     start: async (input) => {
-      const providerInstanceId = input.providerIdentity.providerInstanceId
+      const { providerInstanceId } = input.providerIdentity
       starts.push({
         providerInstanceId,
         operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
@@ -680,7 +680,7 @@ test("isolates an optional provider market-data startup failure", async () => {
     appConfig: appConfigForProviderSubset(providers),
     env: { TRADING_MODE: "testnet" },
     start: async (input) => {
-      const providerInstanceId = input.providerIdentity.providerInstanceId
+      const { providerInstanceId } = input.providerIdentity
       return {
         executionSymbols: [...input.executionSymbols],
         marketDataSources: input.marketDataSources,
