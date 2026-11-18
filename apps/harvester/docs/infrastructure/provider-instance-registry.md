@@ -47,7 +47,7 @@ Errors preserve the original connection/cleanup causes. Credentials are never pa
 The runtime supports two configuration paths:
 
 - **Compatibility path:** when `brokers.instances` is absent, the existing `TRADING_MODE`, `BINANCE_API_KEY`, `BINANCE_API_SECRET_KEY`, `BINANCE_PROVIDER_INSTANCE_ID` and `BINANCE_ACCOUNT_ID` settings construct the same single Binance account as before.
-- **Configured path:** `brokers.instances` contains one or more explicit provider accounts. Each entry declares `providerInstanceId`, `providerType`, `accountId`, `environment` (`testnet` or `live`) and credential environment-variable names. Secret values stay in the process environment and are captured only by the adapter factory closure.
+- **Configured path:** `brokers.instances` contains one or more explicit provider accounts. Each entry declares `providerInstanceId`, `providerType`, `accountId`, `environment` (`testnet` or `live`) and credential environment-variable names. Secret values stay in the process environment and are captured only by the adapter factory closure. Each account's child runtime receives only the credential environment variables referenced by that account; references belonging to other configured accounts are removed before startup.
 
 Example application configuration:
 

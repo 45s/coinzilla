@@ -60,7 +60,7 @@ The declaration's `environment.selectedMode` is the instance's validated `tradin
 
 #### Remaining work outside this declaration-only slice
 
-- Harvester's configuration-driven provider-instance construction, independent account runtime lifecycle and account-scoped process locks are implemented in draft [PR #1445](https://github.com/45s/coinzilla/pull/1445), pending exact-head verification. These are Harvester composition responsibilities; this package remains responsible for provider-specific adapters and immutable capability declarations. The default Harvester production factory currently registers Binance only.
+- Harvester's configuration-driven provider-instance construction, independent account runtime lifecycle and account-scoped process locks are implemented in [PR #1445](https://github.com/45s/coinzilla/pull/1445), pending exact-head verification. These are Harvester composition responsibilities; this package remains responsible for provider-specific adapters and immutable capability declarations. The default Harvester production factory currently registers Binance only.
 - No Bitunix capability descriptor is added. Bitunix remains read-only; any future audit must first follow the mandatory JKorf/Bitunix.Net, bitunix-mcp, and official Spot API reference audit in [AGENTS.md](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit).
 - Complete fill-history guarantees, broker-owned order reconciliation, missed-event replay, and process-restart recovery remain unsupported or unverified as declared above.
 - No Phase 2 provider selection, Harvester composition, strategy/market routing, or trading behavior change is included.

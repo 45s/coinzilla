@@ -4,7 +4,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Current Harvester priority
 
-**Multi-provider execution and independent market-data routing (#1339) is the primary Harvester architecture/delivery workstream.** Phase 4 production account isolation is implemented in draft [PR #1445](https://github.com/45s/coinzilla/pull/1445), pending exact-head CI verification. The runtime can construct configured Binance accounts independently; additional provider types require a registered production adapter factory. Phase 5 market-data routing and Phase 6 execution routes remain out of scope. The separate opt-in Bitunix read-only observer is implemented in merged [PR #1423](https://github.com/45s/coinzilla/pull/1423) and documented in [PR #1424](https://github.com/45s/coinzilla/pull/1424) under [#1422](https://github.com/45s/coinzilla/issues/1422); it is not a trading provider or route.
+**Multi-provider execution and independent market-data routing (#1339) is the primary Harvester architecture/delivery workstream.** Phase 4 production account isolation is implemented in [PR #1445](https://github.com/45s/coinzilla/pull/1445), pending exact-head CI verification. The runtime can construct configured Binance accounts independently; additional provider types require a registered production adapter factory. Phase 5 market-data routing and Phase 6 execution routes remain out of scope. The separate opt-in Bitunix read-only observer is implemented in merged [PR #1423](https://github.com/45s/coinzilla/pull/1423) and documented in [PR #1424](https://github.com/45s/coinzilla/pull/1424) under [#1422](https://github.com/45s/coinzilla/issues/1422); it is not a trading provider or route.
 
 ## Start here
 

@@ -127,7 +127,7 @@ brokers: {
 }
 ```
 
-Credential values are never stored in application configuration or provider identity. Each account starts a separate Harvester runtime with its own BrokerPort connection, Portfolio, OrderRegistry, account snapshot, market metadata, user-data readiness, strategy engine, market subscriptions and shutdown lifecycle. The current Conservative strategy configuration is applied independently to each account; Phase 4 does not add strategy/symbol execution routes or independent market-data routes.
+Credential values are never stored in application configuration or provider identity. Before an account starts, its runtime environment retains only that account's referenced API key/secret variables; credential variables referenced by other configured accounts are removed. Each account starts a separate Harvester runtime with its own BrokerPort connection, Portfolio, OrderRegistry, account snapshot, market metadata, user-data readiness, strategy engine, market subscriptions and shutdown lifecycle. The current Conservative strategy configuration is applied independently to each account; Phase 4 does not add strategy/symbol execution routes or independent market-data routes.
 
 The first configured account owns the process-wide Telegram Command Center; secondary accounts do not create duplicate command handlers. If one account fails during startup, healthy accounts continue. Its process lock is released only when cleanup is confirmed.
 
