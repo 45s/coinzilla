@@ -333,3 +333,36 @@ test("latches STOP when the existing pair minProfit is below the Conservative mi
   assert.equal(result.orderIntent, undefined,
     "An invalid configured pair minProfit must never produce a SELL intent.")
 })
+
+test("latches STOP when the recovery cycle state is malformed", () => {
+  const result = evaluateRecoverySellerSellDecision({
+    ...validInput,
+    cycleState: Object.freeze({
+      status: "ACCUMULATING",
+    }),
+  })
+
+  assert.equal(result.decision.outcome, "BLOCK",
+    "Malformed cycle state must fail closed instead of escaping the policy boundary.")
+  assert.equal(result.stopState.status, "STOPPED",
+    "Malformed cycle state must latch the global RS STOP.")
+  assert.equal(result.orderIntent, undefined,
+    "Malformed cycle state must never produce an executable SELL intent.")
+})
+
+test("latches STOP when configured maker or taker percentages are invalid", () => {
+  const result = evaluateRecoverySellerSellDecision({
+    ...validInput,
+    pairConfig: {
+      ...validInput.pairConfig,
+      makerPercent: -0.1,
+    },
+  })
+
+  assert.equal(result.decision.outcome, "BLOCK",
+    "Invalid configured fee percentages must fail closed at the SELL policy boundary.")
+  assert.equal(result.stopState.status, "STOPPED",
+    "Invalid configured fee percentages must latch the global RS STOP.")
+  assert.equal(result.orderIntent, undefined,
+    "Invalid configured fee percentages must never produce a SELL intent.")
+})
