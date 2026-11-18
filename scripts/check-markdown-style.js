@@ -186,7 +186,7 @@ function isChangedMarkdownFindingRelevant({ name, entry, change, document }) {
   if (name === "missingH1") {
     const lines = document.content.split(/\r?\n/)
     const changedHeading = [...change.lines].some((lineNumber) =>
-      /^ {0,3}#{1,6}(?:[ \\t]+|$)/.test(lines[lineNumber - 1] ?? ""),
+      /^ {0,3}#{1,6}(?:[ \t]+|$)/.test(lines[lineNumber - 1] ?? ""),
     )
     return Boolean(change.removedHeading || changedHeading)
   }
