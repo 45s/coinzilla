@@ -27,8 +27,12 @@ function createHarnessEngine({ calls }) {
           symbol,
           action: "PAUSE_BUYS",
         })
-        : { ok: true,
-          data: { durable: false } }
+        : {
+          ok: true,
+          data: {
+            durable: false,
+          },
+        }
       if (!committed?.ok) { return committed }
       calls.push({
         type: "pause-buys-applied",
@@ -55,8 +59,12 @@ function createHarnessEngine({ calls }) {
           symbol,
           action: "RESUME_BUYS",
         })
-        : { ok: true,
-          data: { durable: false } }
+        : {
+          ok: true,
+          data: {
+            durable: false,
+          },
+        }
       if (!committed?.ok) { return committed }
       calls.push({
         type: "resume-buys-applied",
@@ -77,7 +85,10 @@ function createHarnessEngine({ calls }) {
 
 function createHarness({ appendResult = {
   ok: true,
-  data: { durable: true, duplicate: false },
+  data: {
+    durable: true,
+    duplicate: false,
+  },
 } } = {}) {
   const calls = []
   const operationalStateStore = {
