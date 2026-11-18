@@ -82,7 +82,7 @@ PR #1411's merged scope is complete: TESTNET pair configuration is aligned to 0.
 
 ## Verification and handoff
 
-- [ ] PR #1411 merged to `develop`.
+- [x] PR #1411 merged to `develop` as `88b89995a4f9e62a6fe4b0451ea675ce0495b539`.
 - [x] Exact-head Harvester unit tests pass.
 - [x] Exact-head configured Harvester targeted tests pass.
 - [x] Exact-head Harvester coverage and workspace coverage pass.
@@ -90,7 +90,7 @@ PR #1411's merged scope is complete: TESTNET pair configuration is aligned to 0.
 - [x] Offline ADA replay passes without exchange access.
 - [ ] Human review of the final PR diff and acceptance map.
 
-Latest verified PR head at the time of this audit update: `b87f5b4bc5de351a20a303093aa9d3d9e8ba9385`. CI status is tied to that exact commit; any later commit requires fresh exact-head verification.
+Latest exact PR head with all 29 applicable checks reported passing: `a8a2de1f24d19c0b68d714f342920687e02ce1ba` (read-only TESTNET integration skipped by workflow configuration). PR #1411 subsequently merged as `88b89995a4f9e62a6fe4b0451ea675ce0495b539`. This CI evidence is tied to the PR head, not a claim that the merge commit itself was separately rerun. The recovery-SELL filter-freshness acceptance gap remains open as documented above.
 
 ## Handoff notes
 
