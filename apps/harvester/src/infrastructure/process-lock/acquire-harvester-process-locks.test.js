@@ -148,3 +148,108 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
 force: true })
   }
 })
+
+
+test("allows different provider accounts to hold independent process locks", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "harvester-account-locks-"))
+  const globalDirectory = path.join(root, "host-locks")
+  const firstJournalDirectory = path.join(root, "account-one-journal")
+  const secondJournalDirectory = path.join(root, "account-two-journal")
+
+  try {
+    const firstAccountLock = await acquireHarvesterProcessLocks({
+      globalDirectory,
+      journalDirectory: firstJournalDirectory,
+      broker: "binance",
+      providerInstanceId: "binance-testnet-one",
+      accountId: "account-one",
+      tradingMode: "testnet",
+    })
+    assert.equal(
+      firstAccountLock.ok,
+      true,
+      "The first account must acquire its own provider/account/environment lock.",
+    )
+
+    const secondAccountLock = await acquireHarvesterProcessLocks({
+      globalDirectory,
+      journalDirectory: secondJournalDirectory,
+      broker: "binance",
+      providerInstanceId: "binance-testnet-two",
+      accountId: "account-two",
+      tradingMode: "testnet",
+    })
+    assert.equal(
+      secondAccountLock.ok,
+      true,
+      "A different Binance account must not be blocked by the first account's process lock.",
+    )
+    assert.notEqual(
+      firstAccountLock.lockPath,
+      secondAccountLock.lockPath,
+      "Different account identities must resolve to different application lock files.",
+    )
+
+    assert.equal(
+      (await secondAccountLock.release()).ok,
+      true,
+      "The second account must release only its own process lock.",
+    )
+    assert.equal(
+      (await firstAccountLock.release()).ok,
+      true,
+      "The first account must release only its own process lock.",
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test("blocks a second provider instance for the same account and environment", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "harvester-same-account-lock-"))
+  const globalDirectory = path.join(root, "host-locks")
+  const firstJournalDirectory = path.join(root, "first-instance-journal")
+  const secondJournalDirectory = path.join(root, "second-instance-journal")
+
+  try {
+    const firstInstanceLock = await acquireHarvesterProcessLocks({
+      globalDirectory,
+      journalDirectory: firstJournalDirectory,
+      broker: "binance",
+      providerInstanceId: "binance-primary",
+      accountId: "shared-account",
+      tradingMode: "testnet",
+    })
+    assert.equal(
+      firstInstanceLock.ok,
+      true,
+      "The first provider instance must acquire the shared account's writer lock.",
+    )
+
+    const secondInstanceLock = await acquireHarvesterProcessLocks({
+      globalDirectory,
+      journalDirectory: secondJournalDirectory,
+      broker: "binance",
+      providerInstanceId: "binance-secondary",
+      accountId: "shared-account",
+      tradingMode: "testnet",
+    })
+    assert.equal(
+      secondInstanceLock.ok,
+      false,
+      "Two provider instances must not create concurrent writers for the same exchange account.",
+    )
+    assert.equal(
+      secondInstanceLock.errors[0].code,
+      "HARVESTER_PROCESS_LOCK_EXISTS",
+      "A duplicate account writer must fail with the established process-lock conflict code.",
+    )
+    assert.equal(
+      (await firstInstanceLock.release()).ok,
+      true,
+      "The account writer lock must remain releasable after a duplicate acquisition is rejected.",
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
