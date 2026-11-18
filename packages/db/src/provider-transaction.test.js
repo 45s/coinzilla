@@ -70,3 +70,19 @@ test("provider-neutral SQLite transactions block deferred CRUD after rejecting a
     await database.close()
   }
 })
+
+
+test("provider-neutral transactions reject missing callbacks before entering the provider", async () => {
+  const database = createConnectedDatabase()
+  await database.connect()
+
+  try {
+    assert.throws(
+      () => database.transaction(null),
+      /callback is required/,
+      "The provider-neutral facade must reject a missing transaction callback before provider execution",
+    )
+  } finally {
+    await database.close()
+  }
+})
