@@ -87,20 +87,22 @@ async function executeOperatorQuery({ method, userId, operator, diagnostics, int
   }
 }
 
-function logOperatorQueryStarted({
+function logOperatorQueryStarted({ interaction, queryPage, logStage }) {
+  logStage({
     interaction,
-    queryPage,
-    logStage,
-  }) {
-  logOperatorQueryStarted({ interaction, queryPage, logStage })
+    message: "Telegram query STARTED",
+    stage: "QUERY_STARTED",
+    fields: { queryPage },
+  })
 }
 
-function logOperatorQueryCompleted({
+function logOperatorQueryCompleted({ interaction, startedAt, logStage }) {
+  logStage({
     interaction,
-    startedAt,
-    logStage,
-  }) {
-  logOperatorQueryCompleted({ interaction, startedAt, logStage })
+    message: "Telegram query COMPLETED",
+    stage: "QUERY_COMPLETED",
+    fields: { durationMs: Date.now() - startedAt },
+  })
 }
 
 async function readOperatorQuery({
@@ -127,11 +129,10 @@ async function readOperatorQuery({
   }
   interaction.operation = method
   const startedAt = Date.now()
-  logStage({
+  logOperatorQueryStarted({
     interaction,
-    message: "Telegram query STARTED",
-    stage: "QUERY_STARTED",
-    fields: { queryPage },
+    queryPage,
+    logStage,
   })
   const outcome = await executeOperatorQuery({
     method,
@@ -164,11 +165,10 @@ async function readOperatorQuery({
       }),
     }
   }
-  logStage({
+  logOperatorQueryCompleted({
     interaction,
-    message: "Telegram query COMPLETED",
-    stage: "QUERY_COMPLETED",
-    fields: { durationMs: Date.now() - startedAt },
+    startedAt,
+    logStage,
   })
   return {
     ok: true,
