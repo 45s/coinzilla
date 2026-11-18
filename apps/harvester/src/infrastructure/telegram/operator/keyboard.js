@@ -1,3 +1,9 @@
+function isMarketBuyPaused(market) {
+  return typeof market?.operatorBuysPaused === "boolean"
+    ? market.operatorBuysPaused
+    : market?.operatorPaused === true
+}
+
 export function createNavigationKeyboard({ page = "home", markets = [], marketAction } = {}) {
   const rows = [
     [{ text: "Status",
@@ -14,9 +20,9 @@ callback_data: "cc:nav:balances" }],
     for (const market of markets) {
       if (actionCount >= 20) { break }
       if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
-      if (marketAction === "PAUSE" && market.operatorBuysPaused === true) { continue }
-      if (marketAction === "RESUME" && market.operatorBuysPaused !== true) { continue }
-      const action = market.operatorBuysPaused === true ? "RESUME" : "PAUSE"
+      if (marketAction === "PAUSE" && isMarketBuyPaused(market)) { continue }
+      if (marketAction === "RESUME" && !isMarketBuyPaused(market)) { continue }
+      const action = isMarketBuyPaused(market) ? "RESUME" : "PAUSE"
       rows.push([{
         text: `${action === "PAUSE" ? "Pause" : "Resume"} ${market.symbol}`,
         callback_data: `cc:ask:${action}:${market.symbol}`,
