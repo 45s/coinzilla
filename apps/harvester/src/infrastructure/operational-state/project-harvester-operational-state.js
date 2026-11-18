@@ -697,9 +697,15 @@ function emitSessionPreflight({ session, emit }) {
     const name = record.factType === "ACCOUNT_SNAPSHOT_CAPTURED"
       ? EVENT.ACCOUNT_SNAPSHOT
       : EVENT.ACCOUNT_OPEN_ORDERS
-    emit({ name, data: record.data })
+    emit({
+      name,
+      data: record.data,
+    })
   }
-  emit({ name: EVENT.STARTED, data: { tradingEnabled: session.tradingEnabled } })
+  emit({
+    name: EVENT.STARTED,
+    data: { tradingEnabled: session.tradingEnabled },
+  })
   return remaining
 }
 
@@ -708,7 +714,10 @@ function emitLatestSessionState({ session, latestSession, state, emit }) {
     return
   }
   for (const [symbol, pause] of state.strategyPauses) {
-    emit({ name: EVENT.STRATEGY_PAUSED, data: { symbol, reason: pause.reason } })
+    emit({
+      name: EVENT.STRATEGY_PAUSED,
+      data: { symbol, reason: pause.reason },
+    })
   }
   for (const blocker of state.activeBlockers.values()) {
     emit({
@@ -734,7 +743,12 @@ function createSessionSyntheticRecords({ session, latestSession, state }) {
     lineNumber += 1
   }
   const remaining = emitSessionPreflight({ session, emit })
-  emitLatestSessionState({ session, latestSession, state, emit })
+  emitLatestSessionState({
+    session,
+    latestSession,
+    state,
+    emit,
+  })
   for (const record of remaining) {
     const events = mapFact({
       record,
@@ -742,7 +756,10 @@ function createSessionSyntheticRecords({ session, latestSession, state }) {
       cancellationIntents: state.cancellationIntents,
     })
     for (const event of events) {
-      emit({ name: event.name, data: event.data })
+      emit({
+        name: event.name,
+        data: event.data,
+      })
     }
   }
   if (session.stop) {
