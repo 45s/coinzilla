@@ -2,6 +2,10 @@
 
 This is the entry point for Harvester-specific documentation. Repository-wide rules remain authoritative where applicable; see [Coinzilla Documentation Governance](../../../docs/DOCUMENTATION_GOVERNANCE.md).
 
+## Current Harvester priority
+
+**Multi-provider execution and independent market-data routing (#1339) is the primary Harvester architecture/delivery workstream.** See the [Harvester roadmap](../ROADMAP.md#top-harvester-priority--multi-provider-execution-and-market-data-routing-1339), [accepted ADR-0003](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md), and [source-verified migration plan](../../../docs/architecture/multi-provider-migration-plan.md). The merged provider registry is a Binance-only foundation; the runtime is not yet multi-provider.
+
 ## Start here
 
 - [Application configuration and Telegram notification profiles](../README.md#configuration) — the named `appConfig` export composed from named modules, including `config/operator-control.js` and `config/notifications-tg-profiles.js`; profile behavior, event overrides, and environment-only credentials.
