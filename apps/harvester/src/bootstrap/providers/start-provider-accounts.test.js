@@ -78,52 +78,96 @@ test("starts one independent runtime per configured provider account", async () 
   ])
 })
 
-test("rolls back already-started account runtimes when a later account fails", async () => {
+test("keeps healthy account runtimes running when another account fails to start", async () => {
   const stopCalls = []
+  const releasedLocks = []
   let startCount = 0
-  await assert.rejects(
-    startProviderAccounts({
-      providers: [
-        createProvider("first", "binance", "account-one"),
-        createProvider("second", "binance", "account-two"),
-      ],
-      start: async () => {
-        startCount += 1
-        if (startCount === 2) {
-          throw new Error("second account connection failed")
-        }
-        return {
-          stop: async () => { stopCalls.push("first"); return { ok: true } },
-        }
-      },
-      appConfig,
-      env: { TRADING_MODE: "testnet" },
-    }),
-    /second account connection failed/,
-  )
-  assert.deepEqual(stopCalls, ["first"])
+  const runtime = await startProviderAccounts({
+    providers: [
+      createProvider("first", "binance", "account-one"),
+      createProvider("second", "binance", "account-two"),
+      createProvider("third", "binance", "account-three"),
+    ],
+    start: async () => {
+      startCount += 1
+      if (startCount === 2) {
+        throw new Error("second account connection failed")
+      }
+      const account = startCount === 1 ? "first" : "third"
+      return {
+        stop: async () => { stopCalls.push(account); return { ok: true } },
+      }
+    },
+    releaseProviderLock: async (providerInstanceId) => {
+      releasedLocks.push(providerInstanceId)
+      return { ok: true, released: true }
+    },
+    appConfig,
+    env: { TRADING_MODE: "testnet" },
+  })
+
+  assert.deepEqual(runtime.providerAccounts.map(({ providerInstanceId }) => providerInstanceId), [
+    "first",
+    "third",
+  ])
+  assert.equal(runtime.failedAccounts.length, 1)
+  assert.equal(runtime.failedAccounts[0].providerInstanceId, "second")
+  assert.match(runtime.failedAccounts[0].errorMessage, /second account connection failed/)
+  assert.deepEqual(releasedLocks, ["second"])
+  assert.deepEqual(stopCalls, [])
+
+  const stopped = await runtime.stop()
+  assert.equal(stopped.ok, true)
+  assert.deepEqual(stopCalls, ["third", "first"])
 })
 
-test("reports startup and account cleanup failures without hiding the original error", async () => {
+
+test("reports failed-account lock cleanup errors without stopping healthy accounts", async () => {
   const startupError = new Error("second account failed")
-  const cleanupError = new Error("first account cleanup failed")
+  const cleanupError = new Error("second account lock cleanup failed")
+  const stopped = []
   let startCount = 0
+  const runtime = await startProviderAccounts({
+    providers: [
+      createProvider("first", "binance", "account-one"),
+      createProvider("second", "binance", "account-two"),
+      createProvider("third", "binance", "account-three"),
+    ],
+    start: async () => {
+      startCount += 1
+      if (startCount === 2) {
+        throw startupError
+      }
+      const account = startCount === 1 ? "first" : "third"
+      return { stop: async () => { stopped.push(account); return { ok: true } } }
+    },
+    releaseProviderLock: async (providerInstanceId) => providerInstanceId === "second"
+      ? { ok: false, errors: [cleanupError] }
+      : { ok: true },
+    appConfig,
+    env: { TRADING_MODE: "testnet" },
+  })
+
+  assert.equal(runtime.failedAccounts.length, 1)
+  assert.equal(runtime.failedAccounts[0].errorMessage, startupError.message)
+  assert.equal(runtime.failedAccounts[0].cleanupErrors[0], cleanupError)
+  assert.deepEqual(stopped, [])
+  assert.equal((await runtime.stop()).ok, true)
+  assert.deepEqual(stopped, ["third", "first"])
+})
+
+test("fails startup when no configured account can start", async () => {
   await assert.rejects(
     startProviderAccounts({
-      providers: [
-        createProvider("first", "binance", "account-one"),
-        createProvider("second", "binance", "account-two"),
-      ],
-      start: async () => {
-        startCount += 1
-        if (startCount === 2) {
-          throw startupError
-        }
-        return { stop: async () => { throw cleanupError } }
-      },
+      providers: [createProvider("first", "binance", "account-one")],
+      start: async () => { throw new Error("account unavailable") },
+      releaseProviderLock: async () => ({ ok: true }),
       appConfig,
       env: { TRADING_MODE: "testnet" },
     }),
+    /account unavailable/,
+  )
+})
     (error) => {
       assert.ok(error instanceof AggregateError)
       assert.equal(error.errors[0], startupError)
