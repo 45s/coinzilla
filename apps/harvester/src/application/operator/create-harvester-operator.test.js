@@ -16,7 +16,10 @@ function createEngineControl({ calls, action, prefix, resultData }) {
       symbol,
     })
     const committed = typeof beforeApply === "function"
-      ? await beforeApply({ symbol, action })
+      ? await beforeApply({
+        symbol,
+        action,
+      })
       : {
         ok: true,
         data: { durable: false },
