@@ -43,12 +43,17 @@ function createAddress(overrides = {}) {
 }
 
 test("Bitunix Spot broker retrieves every requested-network deposit address without changing account state", async () => {
+  const addressWithoutMemo = createAddress({
+    address: "TNoMemoAddress",
+  })
+  delete addressWithoutMemo.memo
   const addresses = [
     createAddress(),
     createAddress({
       address: "TAnotherAddress",
       memo: "deposit-tag",
     }),
+    addressWithoutMemo,
   ]
   const { broker, calls } = createBroker({ response: addresses })
 
@@ -63,6 +68,7 @@ test("Bitunix Spot broker retrieves every requested-network deposit address with
     stateChanging: false,
   }], "the lookup must send one signed, read-only POST with only coin and network")
   assert.deepEqual(result.data, addresses, "all returned addresses and memo values must remain exact")
+  assert.equal(Object.hasOwn(result.data[2], "memo"), false, "an omitted memo must remain omitted")
   assert.ok(Object.isFrozen(result.data), "the returned address list must be immutable")
   assert.ok(result.data.every((address) => Object.isFrozen(address)), "every returned address record must be immutable")
 })
@@ -105,6 +111,7 @@ test("Bitunix Spot broker rejects missing or invalid deposit-address inputs befo
   }
 
   assert.ok(results.every((result) => result.ok === false), "invalid inputs must return unsuccessful results")
+  assert.ok(results.every((result) => result.errors[0].code === "BITUNIX_DEPOSIT_ADDRESS_INPUT_INVALID"), "input failures must use the stable broker-owned error code")
   assert.equal(calls.length, 0, "invalid coin/network inputs must be rejected before REST I/O")
 })
 
@@ -119,6 +126,7 @@ test("Bitunix Spot broker rejects missing, malformed, or mismatched deposit-addr
     [createAddress({ address: "" })],
     [createAddress({ address: " " })],
     [createAddress({ memo: 12 })],
+    [createAddress({ memo: "" })],
   ]
   const results = []
 
@@ -128,6 +136,7 @@ test("Bitunix Spot broker rejects missing, malformed, or mismatched deposit-addr
   }
 
   assert.ok(results.every((result) => result.ok === false), "malformed or mismatched address data must fail closed")
+  assert.ok(results.every((result) => result.errors[0].code === "BITUNIX_DEPOSIT_ADDRESS_RESPONSE_INVALID"), "response failures must use the stable broker-owned error code")
   assert.ok(results.every((result) => result.errors?.length > 0), "each rejected response must expose a validation error")
 })
 
