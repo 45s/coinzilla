@@ -724,6 +724,12 @@ next: intent })
   order.requiresExchangeReconciliation = data.outcome !== "REJECTED"
 }
 
+function assertJournalOrderFieldsMatch({ data, order, fields, message }) {
+  if (fields.some((field) => data[field] !== order[field])) {
+    throw new Error(message)
+  }
+}
+
 function handleCancelRequestedEvent({ data, name, sequence, state }) {
   const clientOrderId = requireString({ value: data.clientOrderId,
 field: "clientOrderId" })
@@ -751,18 +757,12 @@ field: "brokerOrderId" })
   } else if (order.brokerOrderId !== brokerOrderId) {
     throw new Error("Cancellation intent brokerOrderId conflicts with submission acknowledgement")
   }
-  if (
-    data.providerInstanceId !== order.providerInstanceId ||
-    data.providerType !== order.providerType ||
-    data.accountId !== order.accountId ||
-    data.symbol !== order.symbol ||
-    data.side !== order.side ||
-    data.type !== order.type ||
-    data.price !== order.price ||
-    data.quantity !== order.quantity
-  ) {
-    throw new Error("Cancellation intent changed immutable order facts")
-  }
+  assertJournalOrderFieldsMatch({
+    data,
+    order,
+    fields: ["providerInstanceId", "providerType", "accountId", "symbol", "side", "type", "price", "quantity"],
+    message: "Cancellation intent changed immutable order facts",
+  })
   if (!["OPEN", "PARTIALLY_FILLED"].includes(data.status)) {
     throw new Error("Cancellation intent must record an active order status")
   }
@@ -793,18 +793,13 @@ eventName: name })
   if (order.cancellationState !== "REQUESTED") {
     throw new Error("Confirmed cancellation has no preceding durable cancellation intent")
   }
-  if (
-    data.providerInstanceId !== order.providerInstanceId ||
-    data.providerType !== order.providerType ||
-    data.accountId !== order.accountId ||
-    data.brokerOrderId !== order.brokerOrderId ||
-    data.symbol !== order.symbol ||
-    data.side !== order.side ||
-    data.type !== order.type ||
-    data.price !== order.price ||
-    data.quantity !== order.quantity ||
-    data.status !== "CANCELED"
-  ) {
+  assertJournalOrderFieldsMatch({
+    data,
+    order,
+    fields: ["providerInstanceId", "providerType", "accountId", "brokerOrderId", "symbol", "side", "type", "price", "quantity"],
+    message: "Confirmed cancellation conflicts with the owned order identity",
+  })
+  if (data.status !== "CANCELED") {
     throw new Error("Confirmed cancellation conflicts with the owned order identity")
   }
   const executedQuantity = requireDecimal({ value: data.executedQuantity,
@@ -840,12 +835,12 @@ eventName: name })
   if (!CANCEL_OUTCOMES.has(data.outcome)) {
     throw new TypeError("Invalid order cancellation outcome")
   }
-  if (data.providerInstanceId !== order.providerInstanceId ||
-      data.providerType !== order.providerType ||
-      data.accountId !== order.accountId ||
-      data.symbol !== order.symbol || data.side !== order.side) {
-    throw new Error("Cancellation failure conflicts with the owned order identity")
-  }
+  assertJournalOrderFieldsMatch({
+    data,
+    order,
+    fields: ["providerInstanceId", "providerType", "accountId", "symbol", "side"],
+    message: "Cancellation failure conflicts with the owned order identity",
+  })
   if (data.brokerOrderId !== undefined) {
     const brokerOrderId = requireString({ value: data.brokerOrderId,
 field: "brokerOrderId" })
@@ -878,11 +873,13 @@ function resolveFillOrder({ fill, state }) {
     clientOrderId,
     eventName: EVENT.FILL_APPLIED,
   })
-  if (fill.providerInstanceId !== undefined &&
-      (fill.providerInstanceId !== order.providerInstanceId ||
-       fill.providerType !== order.providerType ||
-       fill.accountId !== order.accountId)) {
-    throw new Error("Applied fill provider provenance conflicts with its journaled order")
+  if (fill.providerInstanceId !== undefined) {
+    assertJournalOrderFieldsMatch({
+      data: fill,
+      order,
+      fields: ["providerInstanceId", "providerType", "accountId"],
+      message: "Applied fill provider provenance conflicts with its journaled order",
+    })
   }
   if (order.submissionOutcome === "REJECTED") {
     throw new Error(`Applied fill references a definitively rejected submission: ${fill.fillId}`)
