@@ -99,7 +99,6 @@ function calculateRecoveryAllocation({
     netQuoteProceeds: recoveryNetQuoteProceeds,
     netProfit,
     minProfit,
-    // Allocation diagnostics only. This is not an independent SELL gate.
     eligible: compareDecimal({
       left: netProfit,
       right: minProfit,
@@ -130,7 +129,6 @@ function calculateLegacyAllocation({
     costBasis,
     netQuoteProceeds: legacyNetQuoteProceeds,
     netProfit,
-    // Allocation diagnostics only. A legacy loss may be offset by recovery profit.
     eligible: !legacyApplicable || compareDecimal({
       left: netProfit,
       right: "0",
@@ -164,11 +162,12 @@ function calculateCombinedCycle({ recovery, legacy, minProfit }) {
 }
 
 /**
- * Evaluate one combined Recovery Seller cycle SELL.
+ * Evaluate the independent recovery, legacy and combined profitability gates
+ * for one Recovery Seller cycle SELL.
  *
- * Recovery and legacy remain separately attributed for accounting diagnostics,
- * but only the combined net result determines eligibility:
- * recovery BUY cost + legacy historical cost + minProfit must be recovered.
+ * Recovery must earn at least minProfit, legacy must not realize a loss against
+ * its fixed historical cost basis, and the combined cycle must earn at least
+ * minProfit. Overall eligibility requires every applicable gate to pass.
  * All proceeds must already be net of actual quote fees and reliably valued
  * third-asset fees. legacyBaseDebit includes allocated base-asset commissions.
  */
@@ -204,11 +203,12 @@ export function calculateRecoverySellerProfitability({
     legacy,
     minProfit,
   })
+  const eligible = recovery.eligible && legacy.eligible && cycle.eligible
 
   return Object.freeze({
     recovery,
     legacy,
     cycle,
-    eligible: cycle.eligible,
+    eligible,
   })
 }

@@ -338,7 +338,7 @@ test("treats a repeated terminal RS accounting event as an exact no-op", async (
     "A replay must not release or recreate the terminal order reservation a second time.")
 })
 
-test("accepts a loss-making legacy allocation when the combined cycle meets minProfit", async () => {
+test("accounts a loss-making legacy allocation but marks the mixed SELL ineligible", async () => {
   const context = makeContext()
   const legacyPosition = createLegacyPosition({
     invested: "150",
@@ -368,15 +368,15 @@ test("accepts a loss-making legacy allocation when the combined cycle meets minP
   assert.equal(result.data.profitability.recovery.eligible, true,
     "The recovery allocation remains profitable.")
   assert.equal(result.data.profitability.legacy.eligible, false,
-    "Legacy allocation diagnostics must remain available for accounting.")
+    "The legacy allocation must independently fail its non-loss profitability gate.")
   assert.equal(result.data.profitability.cycle.eligible, true,
-    "The combined cycle passes because recovery profit offsets the legacy loss.")
-  assert.equal(result.data.profitability.eligible, true,
-    "Public eligibility follows the combined cycle, not either allocation alone.")
+    "The combined cycle result remains visible even though one allocation gate fails.")
+  assert.equal(result.data.profitability.eligible, false,
+    "Public eligibility must reject the mixed SELL when the legacy allocation loses money.")
   assert.equal(workflow.getLegacyPosition({ marketId: market.id }).remainingQuantity, "49.99",
     "Actual legacy base debit must still be recorded after a loss-making execution.")
   assert.equal(workflow.getActiveOrders().length, 0,
-    "A fully reconciled terminal order releases its reservation after the combined accounting transition.")
+    "A fully reconciled terminal order releases its reservation after actual fills are committed, even when profitability is ineligible.")
 })
 
 
@@ -408,13 +408,13 @@ test("commits actual fills when the combined cycle misses minProfit", async () =
   assert.equal(result.data.applied, true,
     "Confirmed exchange executions must always be accounted even when the combined profitability target is missed.")
   assert.equal(result.data.profitability.recovery.eligible, false,
-    "Recovery allocation diagnostics must not replace the combined cycle gate.")
+    "Recovery allocation must independently fail when it does not meet minProfit.")
   assert.equal(result.data.profitability.legacy.eligible, false,
-    "Legacy allocation diagnostics must remain available for accounting.")
+    "Legacy allocation eligibility must remain independently visible.")
   assert.equal(result.data.profitability.cycle.eligible, false,
     "The combined cycle must fail when total net profit is below minProfit.")
   assert.equal(result.data.profitability.eligible, false,
-    "The public eligibility result must be the combined cycle result.")
+    "The public eligibility result must require every applicable profitability gate.")
   assert.equal(workflow.getLegacyPosition({ marketId: market.id }).remainingQuantity, "49.99",
     "Actual legacy base debit must still be recorded after a loss-making execution.")
   assert.equal(workflow.getActiveOrders().length, 0,

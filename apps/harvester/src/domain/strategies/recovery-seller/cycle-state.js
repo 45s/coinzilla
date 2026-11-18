@@ -192,7 +192,7 @@ export function markRecoverySellerCycleSellUnknown({ state } = {}) {
 
 /**
  * Reconcile the one SELL and close the cycle only for a fully reconciled,
- * FILLED order whose actual combined profitability gate passed.
+ * FILLED order whose actual recovery, legacy (when applicable), and combined profitability gates all passed.
  *
  * A terminal partial/canceled/rejected/expired SELL remains UNRESOLVED. A
  * FILLED SELL whose realized profitability misses minProfit also remains
@@ -203,7 +203,7 @@ export function markRecoverySellerCycleSellUnknown({ state } = {}) {
  * @param {object} input.orderIdentity Canonical identity of the terminal SELL.
  * @param {string} input.terminalOrderStatus Canonical terminal status.
  * @param {boolean} input.reconciliationComplete Whether all canonical fills, fees, reservations and projections reconciled.
- * @param {boolean} input.profitabilityEligible Actual combined cycle profitability result.
+ * @param {boolean} input.profitabilityEligible Overall result of recovery, legacy (when applicable) and combined profitability gates.
  * @returns {object} Immutable reconciled cycle state.
  */
 export function reconcileRecoverySellerCycleSell({
@@ -261,7 +261,7 @@ export function reconcileRecoverySellerCycleSell({
 
 /**
  * Start a distinct cycle only after the prior sole SELL was FILLED, fully
- * reconciled and passed the actual combined cycle profitability gate.
+ * reconciled and passed all applicable recovery, legacy and combined profitability gates.
  * This function does not clear the global sticky STOP latch.
  *
  * @param {object} input

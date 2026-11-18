@@ -141,11 +141,9 @@ The low-level public API remains available:
 - `state`
 - Legacy `createDatabase({ adapter })` lifecycle composition
 
-## Consumer integration status — Harvester trading-session slice merged
+## Consumer ownership boundary
 
-The first application-owned consumer integration is delivered by Harvester in [PR #1369](https://github.com/45s/coinzilla/pull/1369), merged into `develop` as `c2116fd647d942c11947e556e71a0e8e578cc192`. It demonstrates the intended boundary: Harvester owns the trading-session model, repository port, lifecycle policy and SQLite adapter; the adapter uses only this package's public provider-neutral API. No Harvester concepts or schemas belong in `packages/db`.
-
-Further consumer persistence work remains owned and tracked by the relevant application. For Harvester, see [issue #1327](https://github.com/45s/coinzilla/issues/1327) and the [Harvester persistence roadmap](../../apps/harvester/ROADMAP.md#persistence--provider-agnostic-database-integration-1327).
+Application domains own their business entities, schemas, repository interfaces, persistence workflows, and operational policies. This package supplies generic database APIs and concrete provider infrastructure only. No application-specific repositories, schemas, or operational workflows belong here.
 
 ## Deferred — evidence-driven
 
@@ -154,9 +152,9 @@ Further consumer persistence work remains owned and tracked by the relevant appl
    - Keep consumer integrations outside `packages/db`; add generic database capabilities here only when a concrete consumer requirement exposes a provider-neutral contract gap.
    - Verify restart persistence, transaction behavior, concurrency, migration compatibility and deterministic cleanup in the owning consumer's tests.
 
-2. **Backup and restore operations**
-   - Document database location, permissions, consistent backup, restore validation, schema version and retention for the first persistent consumer.
-   - Test backup/restore against an isolated temporary database before persistent deployment.
+2. **Application-owned backup and restore policy**
+   - **Generic primitive implementation is in progress** in [PR #1382](https://github.com/45s/coinzilla/pull/1382), tracked by [#1381](https://github.com/45s/coinzilla/issues/1381). The package item is complete only after that PR is merged and its exact-head checks pass.
+   - Applications decide schedules, retention/rotation, encryption, off-site storage, deployment paths, version compatibility, permissions, restore drills, and operational runbooks. Do not move those policies into this package.
 
 3. **Additional providers**
    - Reassess PostgreSQL or MongoDB only when measured deployment topology, concurrent writers, availability, dataset size or query requirements justify them.

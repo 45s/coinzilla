@@ -294,3 +294,76 @@ A package's README is a discovery aid, not source proof. If the reference has no
 - [vgeyer/bitunix-client](https://github.com/vgeyer/bitunix-client)
 
 **Safety invariant:** Bitunix Spot remains read-only and not Harvester-ready while [issue #1185](https://github.com/45s/coinzilla/issues/1185) remains unresolved. Reference coverage is not authorization to enable a mutation.
+
+## 8. Bitunix Spot deposit-history read (2026-11-17)
+
+**Decision:** Implemented as a Bitunix-only, signed, read-only REST extension in issue [#1384](https://github.com/45s/coinzilla/issues/1384) / PR [#1385](https://github.com/45s/coinzilla/pull/1385). It is not a Binance-parity method and does not change the read-only/Harvester-readiness gate in #1185.
+
+| Evidence | Finding |
+|---|---|
+| Official endpoint | `POST /api/spot/v1/deposit/page`; signed Spot user endpoint. |
+| Request filters | `id`, `coin`, `type`, `transactionHash`, `startTime`, `endTime`, `limit`. Type filters are `deposit` and `inside_transfer_in`; transaction-hash filtering applies only to `deposit`. Time values are Unix milliseconds. Limit is at most 100 (default 100); documented rate limit is 10 requests/second per IP. |
+| Pagination | No cursor, page number, or total-count contract is documented. The implementation issues one request only and makes no completeness claim. |
+| Response shape | The official schema labels `data` as an object, but the official example is an array. JKorf's method returns `BitunixDeposit[]` and its fixture is an array. Coinzilla accepts either a single object or array and normalizes to an immutable array; missing/null data is rejected. |
+| Identifier | The official schema labels `id` as a string, while the official example and JKorf fixture encode large values as JSON numbers; JKorf models the field as signed 64-bit `long`. The REST parser stringifies raw numeric ID tokens before `JSON.parse`; returned IDs are strings. Unsafe numeric IDs injected after parsing are rejected. |
+| Amount/time | Amount is documented as decimal and the fixture uses a decimal string; raw numeric amount tokens are also stringified before parsing to avoid precision loss. `ctime` is an int64 millisecond timestamp; safe numeric values and integer strings are preserved. Unsafe numeric timestamps fail closed. |
+| Identity fields | `fromAddress` and `toAddress` may be chain addresses or internal-transfer account identifiers; both remain opaque strings. Nullable `transactionHash` and `network` remain nullable. |
+| Status/type | Known status examples include pending/cancelled/success/fail; type examples include deposit/inside_transfer_in. The adapter preserves non-empty strings without inventing a new enum mapping, so future exchange values remain visible. |
+
+**Reference audit**
+
+- Official docs: [Get deposit records (on-chain deposit/internal transfer)](https://www.bitunix.com/api-docs/spots/en_us/user/#9-get-deposit-records-on-chain-deposit-internal-transfer).
+- JKorf interface: [IBitunixRestClientSpotApiAccount.GetDepositsAsync](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Interfaces/Clients/SpotApi/IBitunixRestClientSpotApiAccount.cs).
+- JKorf implementation: [BitunixRestClientSpotApiAccount.GetDepositsAsync](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiAccount.cs).
+- JKorf model: [BitunixDeposit](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Objects/Models/BitunixDeposit.cs).
+- JKorf response fixture: [GetDeposits.txt](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net.UnitTests/Endpoints/Spot/Account/GetDeposits.txt).
+- TypeScript MCP: no matching deposit-history tool found in the inspected Spot tool source.
+- StockSharp/Connectors: no matching `/api/spot/v1/deposit/page` implementation found in the inspected source search.
+
+The Coinzilla method validates all supplied filters before I/O, sends only supplied filters, validates the entire response before returning it, preserves exact identifier/amount text, and never mutates account state. It does not fetch deposit addresses, withdrawals, transfers, or any order operation.
+
+## 9. Bitunix Spot withdrawal-history read (2026-11-17)
+
+**Decision:** Implemented as a Bitunix-only, signed, read-only extension in issue/PR [#1387](https://github.com/45s/coinzilla/pull/1387). It does not close or weaken issue #1185 and is not Binance parity.
+
+| Evidence | Finding |
+|---|---|
+| Official endpoint | `POST /api/spot/v1/withdraw_transfer/page`; signed Spot user endpoint. It includes both on-chain withdrawals and internal-transfer-out records. |
+| Request filters | `id`, `outBizId`, `coin`, `transactionHash`, `type`, `startTime`, `endTime`, `remark`, `limit`. Type filters are `withdraw` and `inside_transfer_out`; transaction-hash filtering applies only to explicit `type: "withdraw"`. Time values are Unix milliseconds. Limit is 1–100 (default 100); rate limit is 10 requests/second per IP. |
+| Pagination | No cursor, page number or total-count contract is documented. The implementation issues one request only and makes no completeness claim. |
+| Response shape | Official schema labels `data` as an object, but its example is an array. JKorf returns `BitunixWithdrawal[]` and its fixture is an array. Coinzilla accepts either shape and normalizes to an immutable array; missing/null data is rejected. |
+| Destination field | Official schema says `toAddress`; example and JKorf model use `address`. Coinzilla preserves raw `address` and exposes an exact-value `toAddress` alias when only `address` is supplied. If both non-null fields are supplied and disagree, the row fails closed. |
+| Fee fields | Official schema marks `feeCoin` and `fee` required, but the official example and JKorf model allow null. Coinzilla preserves null and rejects malformed non-null decimal text. |
+| Identity and amount | `id` is a string in the schema; `toUid` is int64. The REST parser stringifies raw numeric `id`, `toUid`, `amount` and `fee` tokens before `JSON.parse`, avoiding JavaScript precision loss. Returned IDs/UIDs/amounts/fees are strings. `ctime` remains a safe integer or integer string; unsafe numeric timestamps fail closed. |
+| Recipient fields | `toAddress`/`address`, `toUid`, `toPhoneCountryCode`, `toPhoneNumber`, `toEmail`, `toType`, `remark`, and `memo` are returned as opaque caller-visible values. They are not logged, persisted, redacted or transformed. |
+| Type/status | Known types include `withdraw` and `inside_transfer_out`; status examples include `verification`, `pending`, `cancelled`, `success`, and `fail`. The adapter preserves unfamiliar non-empty strings without inventing enum mappings. |
+
+**Reference audit**
+
+- Official docs: [Request withdrawal history (withdrawal and internal transfer included)](https://www.bitunix.com/api-docs/spots/en_us/user/#7-request-withdrawal-historywithdrawal-and-internal-transfer-included).
+- JKorf interface: [IBitunixRestClientSpotApiAccount.GetWithdrawalHistoryAsync](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Interfaces/Clients/SpotApi/IBitunixRestClientSpotApiAccount.cs).
+- JKorf implementation: [BitunixRestClientSpotApiAccount.GetWithdrawalHistoryAsync](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiAccount.cs).
+- JKorf model: [BitunixWithdrawal](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Objects/Models/BitunixWithdrawal.cs).
+- JKorf response fixture: [GetWithdrawalHistory.txt](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net.UnitTests/Endpoints/Spot/Account/GetWithdrawalHistory.txt).
+- TypeScript MCP Spot source: no matching withdrawal-history tool or endpoint found.
+- StockSharp/Connectors: no matching `/api/spot/v1/withdraw_transfer/page` implementation found in the inspected source search.
+
+The method validates all filters before I/O, sends only supplied filters, validates the entire response before returning it, preserves exact numeric identifiers/amounts, and performs no withdrawal or transfer mutation. Sensitive recipient fields are returned only to the caller; they are not logged or stored.
+
+## 10. Bitunix Spot raw matching-order detail read (2026-11-18)
+
+**Decision:** expose a narrow Bitunix-only, signed, read-only `BitunixSpotBroker.getMatchingOrderDetails({ orderId, symbol })` lookup in [issue #1388](https://github.com/45s/coinzilla/issues/1388) / [PR #1389](https://github.com/45s/coinzilla/pull/1389). This returns raw exchange-native detail for one known order; it is not canonical fill history or Binance parity. Keep issue [#1185](https://github.com/45s/coinzilla/issues/1185) open.
+
+| Evidence | Finding |
+|---|---|
+| Official REST contract | [Query matching orders](https://www.bitunix.com/api-docs/spots/en_us/order/#4-query-matching-orders) specifies signed `POST /api/spot/v1/order/deal/list` with required `orderId` and `symbol`. The response documents optional `data` as one object with required string fields `volume`, `price`, `fee`, `feeCoin`, `role`, `ctime` (ISO-8601) and `id` (Matching Order ID). It documents no cursor, pagination, total count, or account-wide trade-history query. |
+| Official WebSocket contract | The Spot order WebSocket page exposes matching-order lookup as a request/response method; it is not a continuous execution subscription and does not supply replay/completeness guarantees. The REST method remains the Coinzilla transport selected here. |
+| JKorf interface | At `JKorf/Bitunix.Net` commit `4b081116c652784fca4ee3af346013f230be7e1e`, `IBitunixRestClientSpotApiTrading.GetUserTradesAsync(symbol, orderId)` documents `GET /api/spot/v1/order/deal/list`. The interface is in the Trading namespace, not the Account interface; its documented HTTP verb conflicts with the official REST `POST`. |
+| JKorf implementation | At the same commit, `BitunixRestClientSpotApiTrading.GetUserTradesAsync` sends `POST /api/spot/v1/order/pending/list` with `symbol` and `orderId`. This conflicts with both its own interface path and the official `POST /api/spot/v1/order/deal/list`; do not port this method. |
+| JKorf model and tests | `BitunixUserTrade` contains `id`, `price`, `volume`, `ctime`, `fee`, `feeCoin` and `role`, but its decimal fields do not identify quantity denomination. The current recursive tree contains a Futures `GetUserTrades.txt` fixture only; no Spot matching-order fixture or test was found. |
+| TypeScript MCP | At `samanzamani/bitunix-mcp` commit `6bf5d9f915bdf865394ac02f97c50b689ab9e8e7`, `src/tools/spot.ts` has no matching-order/fill-history tool. It provides no Spot implementation or fixture for this endpoint. |
+| Independent Python client | At `0xCherryBlueZu/bitunix` commit `28cefd924b6580a0ef46618ad0b7c387488526bb`, `bitunix/client.py:query_matching_orders` sends the correct signed `POST /api/spot/v1/order/deal/list` with `orderId` and `symbol`, but returns the raw response and does not resolve amount units, completeness, or ID guarantees. Its shared authenticated POST helper prints request headers, including credentials/signature; that logging behavior is unsafe and is not reused. No endpoint-specific test/fixture was found in the inspected client. |
+| Coinzilla mapping | One signed REST request, explicitly `stateChanging: false`, no retry. Validate required request strings before I/O. Preserve the exact seven documented fields in a frozen object; preserve raw numeric JSON tokens for `id`, `volume`, `price`, `fee` and `role` as strings before `JSON.parse`. Accept explicit `data: null`; reject missing data, arrays, incomplete objects, malformed decimals and invalid timestamps. Do not synthesize order identity fields. |
+| Remaining unknowns | The official docs call `volume` only “Amount” and do not define base/quote denomination; they do not prove one object contains every partial execution or that `id` is stable/unique. No page/cursor/completeness guarantee exists. Do not map these fields into canonical `Fill`, `execId`, `tradeId`, or account-wide `getMyTrades()`. |
+
+The implementation and tests are deliberately narrower than the exchange's unresolved fill contract. `getFills()` and `getMyTrades()` remain unsupported, no execution completeness is inferred, and no order mutation or live API call is part of this capability.

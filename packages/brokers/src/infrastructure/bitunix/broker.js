@@ -5,6 +5,9 @@ import { adaptAssets } from "./adapters/adapt-assets.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
 import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, createBitunixKlineHistoryQuery, normalizeBitunixKlineInterval } from "./adapters/adapt-market-data.js"
 import { adaptExchangeRates } from "./adapters/adapt-exchange-rates.js"
+import { adaptDeposits } from "./adapters/adapt-deposits.js"
+import { adaptWithdrawalHistory } from "./adapters/adapt-withdrawal-history.js"
+import { adaptMatchingOrderDetails } from "./adapters/adapt-matching-order-details.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
@@ -20,6 +23,9 @@ const API = Object.freeze({
   depth: "/api/spot/v1/market/depth",
   kline: "/api/spot/v1/market/kline",
   klineHistory: "/api/spot/v1/market/kline/history",
+  deposits: "/api/spot/v1/deposit/page",
+  withdrawalHistory: "/api/spot/v1/withdraw_transfer/page",
+  matchingOrderDetails: "/api/spot/v1/order/deal/list",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -103,6 +109,168 @@ function applyHistoryFilters({ body, status, side, type }) {
       throw new TypeError(`Bitunix Spot order history ${field} filter is unsupported`)
     }
     body[field] = codes[value]
+  }
+}
+
+function addDepositStringFilters({ input, body }) {
+  for (const field of ["id", "coin", "transactionHash"]) {
+    if (input[field] === undefined) {
+      continue
+    }
+    if (typeof input[field] !== "string" || !input[field].trim()) {
+      throw new TypeError(`Bitunix Spot deposit ${field} filter must be a non-empty string`)
+    }
+    body[field] = input[field]
+  }
+}
+
+function addDepositTypeFilter({ input, body }) {
+  if (input.transactionHash !== undefined && input.type !== "deposit") {
+    throw new TypeError("Bitunix Spot transactionHash filter requires type=deposit")
+  }
+  if (input.type === undefined) {
+    return
+  }
+  if (input.type !== "deposit" && input.type !== "inside_transfer_in") {
+    throw new TypeError("Bitunix Spot deposit type filter is unsupported")
+  }
+  body.type = input.type
+}
+
+function addDepositTimeFilters({ input, body }) {
+  validateHistoryTimeRange({
+    startTime: input.startTime,
+    endTime: input.endTime,
+  })
+  if (input.startTime !== undefined) {
+    body.startTime = input.startTime
+  }
+  if (input.endTime !== undefined) {
+    body.endTime = input.endTime
+  }
+}
+
+function addDepositLimitFilter({ input, body }) {
+  if (input.limit === undefined) {
+    return
+  }
+  if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100) {
+    throw new RangeError("Bitunix Spot deposit limit must be an integer between 1 and 100")
+  }
+  body.limit = input.limit
+}
+
+function createDepositRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot getDeposits() input must be an object")
+  }
+  const body = {}
+  addDepositStringFilters({
+    input,
+    body,
+  })
+  addDepositTypeFilter({
+    input,
+    body,
+  })
+  addDepositTimeFilters({
+    input,
+    body,
+  })
+  addDepositLimitFilter({
+    input,
+    body,
+  })
+  return { body }
+}
+
+function addWithdrawalStringFilters({ input, body }) {
+  for (const field of ["id", "outBizId", "coin", "transactionHash", "remark"]) {
+    if (input[field] === undefined) {
+      continue
+    }
+    if (typeof input[field] !== "string" || !input[field].trim()) {
+      throw new TypeError(`Bitunix Spot withdrawal ${field} filter must be a non-empty string`)
+    }
+    body[field] = input[field]
+  }
+}
+
+function addWithdrawalTypeFilter({ input, body }) {
+  if (input.transactionHash !== undefined && input.type !== "withdraw") {
+    throw new TypeError("Bitunix Spot withdrawal transactionHash filter requires type=withdraw")
+  }
+  if (input.type === undefined) {
+    return
+  }
+  if (input.type !== "withdraw" && input.type !== "inside_transfer_out") {
+    throw new TypeError("Bitunix Spot withdrawal type filter is unsupported")
+  }
+  body.type = input.type
+}
+
+function addWithdrawalTimeFilters({ input, body }) {
+  validateHistoryTimeRange({
+    startTime: input.startTime,
+    endTime: input.endTime,
+  })
+  if (input.startTime !== undefined) {
+    body.startTime = input.startTime
+  }
+  if (input.endTime !== undefined) {
+    body.endTime = input.endTime
+  }
+}
+
+function addWithdrawalLimitFilter({ input, body }) {
+  if (input.limit === undefined) {
+    return
+  }
+  if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100) {
+    throw new RangeError("Bitunix Spot withdrawal limit must be an integer between 1 and 100")
+  }
+  body.limit = input.limit
+}
+
+function createWithdrawalHistoryRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot getWithdrawalHistory() input must be an object")
+  }
+  const body = {}
+  addWithdrawalStringFilters({
+    input,
+    body,
+  })
+  addWithdrawalTypeFilter({
+    input,
+    body,
+  })
+  addWithdrawalTimeFilters({
+    input,
+    body,
+  })
+  addWithdrawalLimitFilter({
+    input,
+    body,
+  })
+  return { body }
+}
+
+function createMatchingOrderDetailsRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot getMatchingOrderDetails() input must be an object")
+  }
+  if (typeof input.orderId !== "string" || !input.orderId.trim()) {
+    throw new TypeError("Bitunix Spot matching-order orderId must be a non-empty string")
+  }
+  if (typeof input.symbol !== "string" || !input.symbol.trim()) {
+    throw new TypeError("Bitunix Spot matching-order symbol must be a non-empty string")
+  }
+  return {
+    body: {
+      orderId: input.orderId,
+      symbol: input.symbol,
+    },
   }
 }
 
@@ -451,6 +619,100 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getPrices()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read one page of Bitunix Spot on-chain deposit and internal-transfer records.
+   * The endpoint documents a maximum limit of 100 but no cursor or page parameter.
+   *
+   * @param {{id?: string, coin?: string, type?: "deposit"|"inside_transfer_in", transactionHash?: string, startTime?: number, endTime?: number, limit?: number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getDeposits(input = {}) {
+    try {
+      const { body } = createDepositRequest({ input })
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.deposits,
+        body,
+      })
+      return toResult({
+        data: adaptDeposits({
+          value: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getDeposits()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read one exchange-native matching-order detail for a known Spot order.
+   * This is not a canonical Fill: volume denomination, execution-ID uniqueness,
+   * and multi-execution completeness are not established by the API contract.
+   *
+   * @param {{orderId: string, symbol: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getMatchingOrderDetails(input = {}) {
+    try {
+      const { body } = createMatchingOrderDetailsRequest({ input })
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.matchingOrderDetails,
+        body,
+        authenticated: true,
+        stateChanging: false,
+      })
+      return toResult({
+        data: adaptMatchingOrderDetails({
+          value: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getMatchingOrderDetails()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read one page of Bitunix Spot withdrawals and internal-transfer-out records.
+   * The endpoint documents a maximum limit of 100 but no cursor or page parameter.
+   * Recipient identifiers and contact/address fields are returned unchanged and are
+   * never logged or persisted by this adapter.
+   *
+   * @param {{id?: string, outBizId?: string, coin?: string, type?: "withdraw"|"inside_transfer_out", transactionHash?: string, startTime?: number, endTime?: number, remark?: string, limit?: number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getWithdrawalHistory(input = {}) {
+    try {
+      const { body } = createWithdrawalHistoryRequest({ input })
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.withdrawalHistory,
+        body,
+        authenticated: true,
+        stateChanging: false,
+      })
+      return toResult({
+        data: adaptWithdrawalHistory({
+          value: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getWithdrawalHistory()",
         error,
       })
       return toResult({ errors: [error] })
