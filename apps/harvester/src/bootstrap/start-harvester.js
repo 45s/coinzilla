@@ -897,7 +897,15 @@ function createHarvesterMarketDataLifecycle({ startup, portfolio, resources, fre
     return stopPromise
   }
 
-  return Object.freeze({ start, stop })
+  function markStopped() {
+    stopped = true
+  }
+
+  return Object.freeze({
+    start,
+    stop,
+    markStopped,
+  })
 }
 
 async function cleanupFailedHarvesterStartup({ error, startup, resources } = {}) {
@@ -1023,16 +1031,9 @@ function createHarvesterRuntimeStop({ startup, resources, accountSnapshots, user
     now: () => globalThis.performance.now(),
     runtimeSessionId: startup.runtimeSessionId,
   })
-  const stopRuntimeWithMarketData = async (...args) => {
-    const marketDataResult = await marketDataLifecycle.stop()
+  const stopRuntimeAndMarkMarketDataStopped = async (...args) => {
     const runtimeResult = await stopRuntime(...args)
-    if (marketDataResult.ok !== true) {
-      return {
-        ...runtimeResult,
-        ok: false,
-        errors: [...(runtimeResult.errors ?? []), ...(marketDataResult.errors ?? [])],
-      }
-    }
+    marketDataLifecycle.markStopped()
     return runtimeResult
   }
   return createHarvesterStop({
@@ -1040,7 +1041,7 @@ function createHarvesterRuntimeStop({ startup, resources, accountSnapshots, user
     logger: startup.logger,
     runtimeSessionId: startup.runtimeSessionId,
     operatorControlLifecycle: startup.operatorControlLifecycle,
-    stopRuntime: stopRuntimeWithMarketData,
+    stopRuntime: stopRuntimeAndMarkMarketDataStopped,
     operationalStateStore: startup.operationalStateStore,
     recordProcessStopped,
   })

@@ -117,7 +117,7 @@ function resolveProviderDescriptorIdentity({
     accountId,
     environment,
     credentials: configuredCredentials,
-    required: descriptor.required ?? true,
+    required = true,
   } = descriptor
   for (const [field, value] of Object.entries({
     providerInstanceId,

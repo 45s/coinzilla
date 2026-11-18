@@ -88,7 +88,11 @@ async function disconnectProviderAfterStartupFailure({ providerRegistry, error, 
   try {
     await providerRegistry.disconnectAll()
   } catch (cleanupError) {
-    throw new AggregateError([error, cleanupError], message, { cause: error })
+    throw new AggregateError(
+      [error, cleanupError],
+      message,
+      { cause: cleanupError },
+    )
   }
   throw error
 }
@@ -175,7 +179,10 @@ export async function connectBroker({
   })
   const provider = providerRegistry.get(identity.providerInstanceId)
   try {
-    assertRequiredCapabilities({ provider, requiredCapabilities })
+    assertRequiredCapabilities({
+      provider,
+      requiredCapabilities,
+    })
   } catch (error) {
     await disconnectProviderAfterStartupFailure({
       providerRegistry,

@@ -24,7 +24,17 @@ function resolveMarketDataSourceIdentity({
   const providerInstanceId = broker.providerInstanceId ?? expectedProviderInstanceId
   const providerType = broker.providerType ?? expectedProviderType
   const environment = broker.environment ?? expectedEnvironment
-  const hasIdentity = providerInstanceId !== undefined || providerType !== undefined || environment !== undefined
+  const hasExpectedIdentity = Boolean(
+    expectedProviderInstanceId &&
+    expectedProviderType &&
+    expectedEnvironment,
+  )
+  const hasBrokerIdentity = Boolean(
+    broker.providerInstanceId &&
+    broker.providerType &&
+    broker.environment,
+  )
+  const hasIdentity = hasExpectedIdentity || hasBrokerIdentity
   if (!hasIdentity) {
     return undefined
   }
