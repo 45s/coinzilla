@@ -6,18 +6,38 @@ import { Money } from "../money/money.js"
 import { Quantity } from "../quantity/quantity.js"
 import { Fill } from "./fill.js"
 
-const baseAsset = new Asset({ id: "DOGE", code: "DOGE" })
-const quoteAsset = new Asset({ id: "USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({
+  id: "DOGE",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "USDT",
+  code: "USDT",
+})
+const market = new Market({
+  venue: "binance",
+  symbol: "DOGEUSDT",
+  baseAsset,
+  quoteAsset,
+})
 const baseFill = {
   tradeId: "trade-1",
   brokerOrderId: "broker-1",
   clientOrderId: "client-1",
   market,
   side: "BUY",
-  price: new Money({ amount: "0.1", asset: quoteAsset }),
-  quantity: new Quantity({ amount: "1", asset: baseAsset }),
-  quoteQuantity: new Money({ amount: "0.1", asset: quoteAsset }),
+  price: new Money({
+    amount: "0.1",
+    asset: quoteAsset,
+  }),
+  quantity: new Quantity({
+    amount: "1",
+    asset: baseAsset,
+  }),
+  quoteQuantity: new Money({
+    amount: "0.1",
+    asset: quoteAsset,
+  }),
   liquidityRole: "MAKER",
   commissionStatus: "UNKNOWN",
   commissions: [],
