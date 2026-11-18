@@ -971,16 +971,20 @@ test("retains provider provenance across exchange updates and rejects provider i
   assert.deepEqual([tracked.providerInstanceId, tracked.providerType, tracked.accountId], [
     "binanceTestnet", "binance", "binance-primary",
   ])
-  assert.throws(() => acknowledged.registry.applyUpdate({ order: makeOrder({
-    brokerOrderId: "provider-order-1",
-    providerInstanceId: "binanceLive",
-    providerType: "binance",
-    accountId: "binance-primary",
-    status: "CANCELED",
-    createdAt: 100,
-    acknowledgedAt: 101,
-    updatedAt: 102,
-    completedAt: 102,
-  }) }), /changed immutable providerInstanceId/)
+  const conflictingUpdate = acknowledged.registry.applyUpdate({
+    order: makeOrder({
+      brokerOrderId: "provider-order-1",
+      providerInstanceId: "binanceLive",
+      providerType: "binance",
+      accountId: "binance-primary",
+      status: "CANCELED",
+      createdAt: 100,
+      acknowledgedAt: 101,
+      updatedAt: 102,
+      completedAt: 102,
+    }),
+  })
+  assert.equal(conflictingUpdate.ok, false)
+  assert.match(conflictingUpdate.errors[0].message, /changed immutable providerInstanceId/)
   assert.equal(tracked.status, "OPEN", "A conflicting provider update must not mutate the accepted order.")
 })
