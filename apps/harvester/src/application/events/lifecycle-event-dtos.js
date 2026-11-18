@@ -1497,48 +1497,114 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
     },
   })
 
+function copyBrokerEvidenceStringFields({ evidence, data }) {
+  const fields = [
+    "symbol",
+    "clientOrderId",
+    "originalClientOrderId",
+    "side",
+    "orderType",
+    "timeInForce",
+    "executionType",
+    "orderStatus",
+    "rejectReason",
+    "selfTradePreventionMode",
+    "matchType",
+  ]
+  for (const field of fields) {
+    if (evidence[field] === undefined) {
+      continue
+    }
+    if (typeof evidence[field] !== "string") {
+      throw new TypeError(`evidence.${field} must be a string`)
+    }
+    data[field] = evidence[field].slice(0, 256)
+  }
+  if (evidence.commissionAsset !== undefined) {
+    if (evidence.commissionAsset !== null && typeof evidence.commissionAsset !== "string") {
+      throw new TypeError("evidence.commissionAsset must be a string or null")
+    }
+    data.commissionAsset = evidence.commissionAsset
+  }
+}
+
+function copyBrokerEvidenceIdentifierFields({ evidence, data }) {
+  for (const field of ["orderId", "orderListId", "tradeId", "executionId", "tradeGroupId"]) {
+    if (evidence[field] !== undefined) {
+      data[field] = String(evidence[field])
+    }
+  }
+}
+
+function copyBrokerEvidenceDecimalFields({ evidence, data }) {
+  const fields = [
+    "orderQuantity",
+    "orderPrice",
+    "stopPrice",
+    "icebergQuantity",
+    "quoteOrderQuantity",
+    "lastExecutedQuantity",
+    "cumulativeExecutedQuantity",
+    "lastExecutedPrice",
+    "commissionAmount",
+    "cumulativeQuoteQuantity",
+    "lastQuoteQuantity",
+  ]
+  for (const field of fields) {
+    if (evidence[field] !== undefined) {
+      data[field] = requireDecimalString({
+        value: evidence[field],
+        field: `evidence.${field}`,
+      })
+    }
+  }
+}
+
+function copyBrokerEvidenceTimestampFields({ evidence, data }) {
+  for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
+    if (evidence[field] !== undefined) {
+      data[field] = requireNonNegativeSafeInteger({
+        value: evidence[field],
+        field: `evidence.${field}`,
+      })
+    }
+  }
+}
+
+function copyBrokerEvidenceBooleanFields({ evidence, data }) {
+  for (const field of ["isMaker", "working"]) {
+    if (evidence[field] !== undefined) {
+      data[field] = requireBoolean({
+        value: evidence[field],
+        field: `evidence.${field}`,
+      })
+    }
+  }
+}
+
+function mapBrokerExecutionReportEvidence({ evidence }) {
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
+      evidence.schemaVersion !== 1 || evidence.source !== "binance.spot.userData.executionReport") {
+    throw new TypeError("evidence must be a version 1 Binance Spot executionReport")
+  }
+  const data = {
+    schemaVersion: 1,
+    source: "binance.spot.userData.executionReport",
+  }
+  copyBrokerEvidenceStringFields({ evidence, data })
+  copyBrokerEvidenceIdentifierFields({ evidence, data })
+  copyBrokerEvidenceDecimalFields({ evidence, data })
+  copyBrokerEvidenceTimestampFields({ evidence, data })
+  copyBrokerEvidenceBooleanFields({ evidence, data })
+  return data
+}
+
 /** Preserve versioned, allowlisted Binance executionReport facts separately from normalized events. */
-// eslint-disable-next-line complexity -- The allowlist and type checks are security-sensitive and remain explicit.
 export const mapBrokerExecutionReportData = (input = {}) =>
   mapData({
     input,
     operation: "Broker execution-report evidence mapping",
-    mapper: ({ evidence }) => {
-      if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
-          evidence.schemaVersion !== 1 || evidence.source !== "binance.spot.userData.executionReport") {
-        throw new TypeError("evidence must be a version 1 Binance Spot executionReport")
-      }
-      const data = { schemaVersion: 1,
-        source: "binance.spot.userData.executionReport" }
-      for (const field of ["symbol", "clientOrderId", "originalClientOrderId", "side", "orderType", "timeInForce", "executionType", "orderStatus", "rejectReason", "selfTradePreventionMode", "matchType"]) {
-        if (evidence[field] !== undefined) {
-          if (typeof evidence[field] !== "string") {throw new TypeError(`evidence.${field} must be a string`)}
-          data[field] = evidence[field].slice(0, 256)
-        }
-      }
-      if (evidence.commissionAsset !== undefined) {
-        if (evidence.commissionAsset !== null && typeof evidence.commissionAsset !== "string") {throw new TypeError("evidence.commissionAsset must be a string or null")}
-        data.commissionAsset = evidence.commissionAsset
-      }
-      for (const field of ["orderId", "orderListId", "tradeId", "executionId", "tradeGroupId"]) {
-        if (evidence[field] !== undefined) {data[field] = String(evidence[field])}
-      }
-      for (const field of ["orderQuantity", "orderPrice", "stopPrice", "icebergQuantity", "quoteOrderQuantity", "lastExecutedQuantity", "cumulativeExecutedQuantity", "lastExecutedPrice", "commissionAmount", "cumulativeQuoteQuantity", "lastQuoteQuantity"]) {
-        if (evidence[field] !== undefined) {data[field] = requireDecimalString({ value: evidence[field],
-          field: `evidence.${field}` })}
-      }
-      for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
-        if (evidence[field] !== undefined) {
-          data[field] = requireNonNegativeSafeInteger({ value: evidence[field],
-            field: `evidence.${field}` })
-        }
-      }
-      for (const field of ["isMaker", "working"]) {
-        if (evidence[field] !== undefined) {data[field] = requireBoolean({ value: evidence[field],
-          field: `evidence.${field}` })}
-      }
-      return data
-    },
+    mapper: ({ evidence }) => mapBrokerExecutionReportEvidence({ evidence }),
   })
 
 /** Record an applied canonical order-state transition with exact cumulative quantities. */
