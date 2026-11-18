@@ -49,7 +49,7 @@ export function createTelegramInteraction({ update, botUsername }) {
 }
 
 export function resolveCallbackAction(data) {
-  const control = /^cc:(?:ask|confirm):(PAUSE|RESUME):([A-Z0-9]{2,30})(?::\d+)?$/.exec(data ?? "")
+  const control = CONTROL_CALLBACK_PATTERN.exec(data ?? "")
   if (control) {
     return { action: control[1],
 symbol: control[2] }
