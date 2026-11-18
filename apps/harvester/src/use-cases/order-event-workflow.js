@@ -338,7 +338,10 @@ function validateExecutionFill({ order, fill, eventPublisher, requireProviderPro
         fill,
       })
     : null
-  const identityMatches = executionFillMatchesOrder({ order, fill })
+  const identityMatches = executionFillMatchesOrder({
+    order,
+    fill,
+  })
   if (providerFailure || !identityMatches) {
     const failure = providerFailure ?? {
       error: new Error("Canonical Fill identity does not match its registered order"),
