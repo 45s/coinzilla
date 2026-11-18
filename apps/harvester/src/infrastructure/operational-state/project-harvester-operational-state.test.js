@@ -374,6 +374,7 @@ function createCompletedRecoveryCycleProjectionRecords() {
 cycle }
 }
 
+// eslint-disable-next-line max-lines-per-function -- Existing projection scenario is intentionally cohesive.
 test("projects a durable completed recovery cycle only after its full SELL execution fact", () => {
   const { records, cycle } = createCompletedRecoveryCycleProjectionRecords()
   const result = projectHarvesterOperationalState({ records })
@@ -417,6 +418,7 @@ verifiedBy: "operator:trader",
 
 
 // eslint-disable-next-line max-lines-per-function -- Existing recovery projection scenario remains cohesive.
+// eslint-disable-next-line max-lines-per-function -- Existing projection scenario is intentionally cohesive.
 test("projects an explicit durable NOT_COMPLETED outcome for a fully filled recovery SELL", () => {
   const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
     clientOrderId: "harvester-recovery-sell-continue",
@@ -500,6 +502,7 @@ test("projects an explicit durable NOT_COMPLETED outcome for a fully filled reco
 })
 
 // eslint-disable-next-line max-lines-per-function -- Existing recovery projection scenario remains cohesive.
+// eslint-disable-next-line max-lines-per-function -- Existing projection scenario is intentionally cohesive.
 test("rejects a completed-cycle fact that names a different terminal SELL order", () => {
   const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
     clientOrderId: "harvester-recovery-sell-identity",
