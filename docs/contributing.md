@@ -49,7 +49,6 @@ GitHub Actions includes the JavaScript Syntax, Unit Tests, Utils Unit Tests, Tes
 
 A successful workflow run is evidence for that run and commit only. Whether GitHub blocks merging on required checks depends on the repository's branch-protection or ruleset configuration.
 
-
 ## Branch and pull-request workflow
 
 Follow the single [mandatory AI-agent workflow](../AI_AGENT_WORKFLOW.md) for branch naming, domain ownership, cross-domain requests, synchronization, merge gates, task-branch cleanup, and releases. This guide intentionally does not duplicate those rules.
