@@ -7,7 +7,7 @@ function assertTransactionRequiresConnection(database) {
   assert.throws(() => database.transaction(() => {}), /connected/)
 }
 
-(overrides = {}) {
+function createAdapter(overrides = {}) {
   const calls = {
     connect: 0,
     close: 0,
