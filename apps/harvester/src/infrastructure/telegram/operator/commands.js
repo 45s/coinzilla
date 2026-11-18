@@ -1,7 +1,4 @@
-import {
-  TELEGRAM_OPERATOR_ACTIONS,
-  TELEGRAM_OPERATOR_QUERY_STAGES,
-} from "./constants.js"
+import { TELEGRAM_OPERATOR_ACTIONS } from "./constants.js"
 const KEYBOARD_ACTIONS = Object.freeze({
   pause: Object.freeze({ type: TELEGRAM_OPERATOR_ACTIONS.PAUSE_MENU }),
   resume: Object.freeze({ type: TELEGRAM_OPERATOR_ACTIONS.RESUME_MENU }),
