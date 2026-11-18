@@ -16,7 +16,7 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 - `@coinzilla/brokers` owns the general Broker API, broker-domain contracts, normalized results/errors, capability declarations, and exchange-specific implementations.
 - Each consuming application owns its own application ports, adapters, provider registry, routing, bootstrap/composition, and application workflows.
-- The Brokers package must not import Harvester, define Harvester's application port, or own strategy/market routing or application-specific provider registries.
+- The Brokers package must not import consuming applications or define their application ports; it does not own strategy/market routing or application-specific provider registries.
 - Exchange-specific REST/WS transport, signing, request/response DTOs, and protocol mapping stay inside each provider implementation. A common API does not require a common wire protocol.
 
 ### Contract rules
