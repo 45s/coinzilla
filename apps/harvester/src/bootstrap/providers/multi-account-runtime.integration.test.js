@@ -818,9 +818,20 @@ function createPartialFill({ registeredOrder }) {
     asset: registeredOrder.market.baseAsset,
   })
   const partiallyFilledOrder = new CanonicalOrder({
-    ...registeredOrder,
+    clientOrderId: registeredOrder.clientOrderId,
+    brokerOrderId: registeredOrder.brokerOrderId,
+    providerInstanceId: registeredOrder.providerInstanceId,
+    providerType: registeredOrder.providerType,
+    accountId: registeredOrder.accountId,
+    market: registeredOrder.market,
+    side: registeredOrder.side,
+    type: registeredOrder.type,
+    limitPrice: registeredOrder.limitPrice,
+    originalQuantity: registeredOrder.originalQuantity,
     executedQuantity: filledQuantity,
     status: "PARTIALLY_FILLED",
+    createdAt: registeredOrder.createdAt,
+    acknowledgedAt: registeredOrder.acknowledgedAt,
     updatedAt: Date.now() + 1,
   })
   const fill = new Fill({
