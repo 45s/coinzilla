@@ -130,8 +130,10 @@ export function makeOrderEventWorkflow({
   isStopping,
   logger,
   onUnownedExternalOrderObserved,
+  requireProviderProvenance: requireProviderProvenanceOverride,
 } = {}) {
-  const requireProviderProvenance = updateTradingAccounting?.requiresProviderProvenance === true
+  const requireProviderProvenance = requireProviderProvenanceOverride ??
+    (updateTradingAccounting?.requiresProviderProvenance === true || hasProviderIdentity({ value: broker }))
   const processExecutionFillTransition = createProcessExecutionFillTransition({
     state,
     eventPublisher,
