@@ -5,8 +5,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { DatabaseProviderError } from "./domain/errors/database-errors.js"
-import { createSqliteProvider } from "./index.js"
+import { DatabaseProviderError } from "../../domain/errors/database-errors.js"
+import { createSqliteProvider } from "../../index.js"
 
 test("SQLite provider close failures retain their cause and allow a safe retry", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-provider-close-"))

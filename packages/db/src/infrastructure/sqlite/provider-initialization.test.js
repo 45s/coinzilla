@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { DatabaseProviderError, createSqliteProvider } from "./index.js"
+import { DatabaseProviderError, createSqliteProvider } from "../../index.js"
 
 test("SQLite provider aggregates schema initialization and close failures, then can retry", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-provider-schema-failure-"))

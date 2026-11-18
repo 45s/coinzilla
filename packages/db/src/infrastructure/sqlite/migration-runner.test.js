@@ -6,7 +6,7 @@ import { once } from "node:events"
 import { Worker } from "node:worker_threads"
 import test from "node:test"
 
-import { createSqliteDatabase } from "../src/index.js"
+import { createSqliteDatabase } from "../../index.js"
 
 test("migrations run in ascending version order and are recorded", async () => {
   const database = createSqliteDatabase({ filename: ":memory:" })
@@ -448,7 +448,7 @@ function createMigrationWorker({ filename, gate }) {
     workerData: {
       filename,
       gate,
-      moduleUrl: new URL("../src/index.js", import.meta.url).href,
+      moduleUrl: new URL("../../index.js", import.meta.url).href,
     },
   })
 }

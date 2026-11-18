@@ -7,7 +7,7 @@ import {
   serializeRecord,
   validateCollectionName,
   validateRecordIdentifier,
-} from "./domain/contracts/record.js"
+} from "./record.js"
 
 test("collection names and record identifiers require trimmed non-empty strings", () => {
   assert.equal(

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createSqliteDatabase } from "../src/index.js"
-import { createGuardedIterator } from "./infrastructure/sqlite/database.js"
+import { createSqliteDatabase } from "../../index.js"
+import { createGuardedIterator } from "./database.js"
 
 async function createConnectedDatabase() {
   const database = createSqliteDatabase({ filename: ":memory:" })

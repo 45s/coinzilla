@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { DatabaseProviderError, createDatabase, createSqliteProvider } from "./index.js"
+import { DatabaseProviderError, createDatabase, createSqliteProvider } from "../../index.js"
 
 async function createConcurrencyFixture() {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-concurrency-"))

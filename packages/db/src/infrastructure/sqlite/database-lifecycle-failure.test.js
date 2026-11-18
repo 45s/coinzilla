@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { createSqliteDatabase } from "../src/index.js"
+import { createSqliteDatabase } from "../../index.js"
 
 test("SQLite connection initialization preserves both setup and cleanup failures", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-connect-cleanup-"))

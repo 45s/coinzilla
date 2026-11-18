@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { DatabaseSync } from "node:sqlite"
 import test from "node:test"
 
-import { createSqliteDatabase } from "../src/index.js"
+import { createSqliteDatabase } from "../../index.js"
 
 async function createConnectedDatabase() {
   const database = createSqliteDatabase({ filename: ":memory:" })

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { createSqliteDatabase } from "../src/index.js"
+import { createSqliteDatabase } from "../../index.js"
 
 function createDeferredStatementRun(statement) {
   return () => statement.run("late")

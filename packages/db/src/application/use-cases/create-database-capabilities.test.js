@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createDatabase } from "./index.js"
+import { createDatabase } from "../../index.js"
 
 function createProvider({ capabilities }) {
   return {

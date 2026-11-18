@@ -4,7 +4,7 @@ import test from "node:test"
 import {
   normalizeReadQuery,
   serializeRecord,
-} from "./domain/contracts/record.js"
+} from "./record.js"
 
 test("record arrays reject accessors instead of executing user code", () => {
   const values = []

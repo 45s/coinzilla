@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { createSqliteDatabase } from "../src/index.js"
+import { createSqliteDatabase } from "../../index.js"
 
 async function createTemporaryDirectory() {
   return mkdtemp(join(tmpdir(), "coinzilla-db-backup-"))
@@ -64,7 +64,7 @@ test("file-backed SQLite backup includes committed WAL data and restores into a 
   }
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     const restoredPath = await restoreSqliteDatabase({
       backupFilename,
       filename: restoredFilename,
@@ -117,7 +117,7 @@ test("in-memory SQLite databases can be backed up to a restorable file", async (
   }
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     const restoredFilename = join(directory, "memory-restored.sqlite")
     await restoreSqliteDatabase({
       backupFilename,
@@ -295,7 +295,7 @@ test("SQLite restore refuses to overwrite an existing destination", async () => 
   }
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     await assert.rejects(
       restoreSqliteDatabase({
         backupFilename,
@@ -328,7 +328,7 @@ test("SQLite restore rejects corrupt backup files and does not publish a destina
   await writeFile(backupFilename, "not a SQLite database")
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     await assert.rejects(
       restoreSqliteDatabase({
         backupFilename,
@@ -368,7 +368,7 @@ test("SQLite restore rejects a backup with foreign-key violations", async () => 
   }
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     await assert.rejects(
       restoreSqliteDatabase({
         backupFilename,
@@ -398,7 +398,7 @@ test("SQLite restore validates its timeout, rate, and destination options", asyn
   await database.close()
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     await assert.rejects(
       restoreSqliteDatabase({
         backupFilename,

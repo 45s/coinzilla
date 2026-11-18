@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { DatabaseConflictError, createDatabase, createSqliteProvider } from "./index.js"
+import { DatabaseConflictError, createDatabase, createSqliteProvider } from "../../index.js"
 
 test("SQLite maps primary-key, unique-index, and unique-message constraint failures to conflicts", async () => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-conflict-classification-"))

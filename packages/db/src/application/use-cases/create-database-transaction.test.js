@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createDatabase, createSqliteProvider } from "./index.js"
+import { createDatabase, createSqliteProvider } from "../../index.js"
 
 function createConnectedDatabase() {
   return createDatabase({

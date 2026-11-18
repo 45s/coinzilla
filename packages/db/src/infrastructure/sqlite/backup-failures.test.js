@@ -5,9 +5,9 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { DatabaseProviderError } from "./domain/errors/database-errors.js"
-import { removeTemporaryDirectory } from "./infrastructure/sqlite/file-operations.js"
-import { backupSqliteDatabase } from "./infrastructure/sqlite/backup.js"
+import { DatabaseProviderError } from "../../domain/errors/database-errors.js"
+import { removeTemporaryDirectory } from "./file-operations.js"
+import { backupSqliteDatabase } from "./backup.js"
 
 async function createTemporaryDirectory() {
   return mkdtemp(join(tmpdir(), "coinzilla-db-backup-failure-"))

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { createDatabase, createSqliteProvider, createSqliteDatabase } from "../src/index.js"
+import { createDatabase, createSqliteProvider, createSqliteDatabase } from "../../index.js"
 
 async function createTemporaryDirectory() {
   return mkdtemp(join(tmpdir(), "coinzilla-db-runtime-"))
