@@ -21,7 +21,7 @@ function collectRuntimeStopErrors({
   result,
   providerInstanceId,
 }) {
-  if (result?.ok !== false) {
+  if (result?.ok === true) {
     return []
   }
   if (Array.isArray(result.errors) && result.errors.length > 0) {
@@ -40,7 +40,7 @@ async function releaseStoppedAccountLock({
   }
   try {
     const result = await releaseProviderLock(entry.provider.providerInstanceId)
-    if (result?.ok !== false) {
+    if (result?.ok === true) {
       entry.lockReleased = true
       return []
     }
@@ -145,13 +145,13 @@ async function releaseFailedAccountLock({
   }
   try {
     const result = await releaseProviderLock(provider.providerInstanceId)
-    if (result?.ok !== false) {
+    if (result?.ok === true) {
       return []
     }
-    if (Array.isArray(result.errors) && result.errors.length > 0) {
-      return result.errors
-    }
-    return [new Error(`Provider account ${provider.providerInstanceId} process-lock release failed`)]
+    return collectRuntimeStopErrors({
+      result,
+      providerInstanceId: provider.providerInstanceId,
+    })
   } catch (error) {
     return [error]
   }
