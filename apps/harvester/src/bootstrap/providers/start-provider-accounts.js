@@ -205,6 +205,7 @@ async function startOneProviderAccount({
   runtimeSessionId,
   operationalStateStore,
   releaseProviderLock,
+  requireStop,
 }) {
   try {
     const runtime = await start({
@@ -224,6 +225,9 @@ async function startOneProviderAccount({
     })
     if (runtime === null || typeof runtime !== "object" || Array.isArray(runtime)) {
       throw new TypeError(`Provider account ${provider.providerInstanceId} startup must return a runtime object`)
+    }
+    if (requireStop && typeof runtime.stop !== "function") {
+      throw new TypeError(`Provider account ${provider.providerInstanceId} runtime must expose stop()`)
     }
     return {
       runtime,
@@ -283,6 +287,7 @@ export async function startProviderAccounts({
       runtimeSessionId,
       operationalStateStore,
       releaseProviderLock,
+      requireStop: providers.length > 1,
     })
     if (result.error === undefined) {
       startedAccounts.push({

@@ -276,3 +276,60 @@ test("fails startup when no configured account can start", async () => {
     /account unavailable/,
   )
 })
+
+
+test("releases only accounts whose runtime shutdown is confirmed", async () => {
+  const stopCalls = []
+  const releasedLocks = []
+  let firstStopAttempts = 0
+  const runtime = await startProviderAccounts({
+    providers: [
+      createProvider({
+        providerInstanceId: "first",
+        providerType: "binance",
+        accountId: "account-one",
+      }),
+      createProvider({
+        providerInstanceId: "second",
+        providerType: "binance",
+        accountId: "account-two",
+      }),
+    ],
+    start: async (input) => ({
+      stop: async () => {
+        const providerInstanceId = input.providerIdentity.providerInstanceId
+        stopCalls.push(providerInstanceId)
+        if (providerInstanceId === "first") {
+          firstStopAttempts += 1
+          if (firstStopAttempts === 1) {
+            return {
+              ok: false,
+              errors: [new Error("first account still stopping")],
+            }
+          }
+        }
+        return {
+          ok: true,
+        }
+      },
+    }),
+    releaseProviderLock: async (providerInstanceId) => {
+      releasedLocks.push(providerInstanceId)
+      return {
+        ok: true,
+      }
+    },
+    appConfig,
+    env: {
+      TRADING_MODE: "testnet",
+    },
+  })
+
+  const firstStop = await runtime.stop()
+  assert.equal(firstStop.ok, false)
+  assert.deepEqual(releasedLocks, ["second"])
+  const secondStop = await runtime.stop()
+  assert.equal(secondStop.ok, true)
+  assert.deepEqual(stopCalls, ["second", "first", "first"])
+  assert.deepEqual(releasedLocks, ["second", "first"])
+})
