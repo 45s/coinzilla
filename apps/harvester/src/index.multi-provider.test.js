@@ -220,6 +220,7 @@ function createMainMultiProviderFixture({
   const lockScopes = []
   const releasedLocks = []
   const signalHandlers = new Map()
+  const errors = []
   const config = createMainMultiProviderAppConfig(providerInstances)
   const run = () => main({
     loadConfig: async () => config,
@@ -239,8 +240,11 @@ function createMainMultiProviderFixture({
     logger: {
       info() {},
       system() {},
-      error() {},
+      error(entry) {
+        errors.push(entry)
+      },
     },
+  }
   })
   return {
     run,
@@ -249,6 +253,7 @@ function createMainMultiProviderFixture({
     lockScopes,
     releasedLocks,
     signalHandlers,
+    errors,
   }
 }
 
@@ -377,7 +382,7 @@ test("retains an account process lock when startup cleanup is unconfirmed", asyn
   process.exitCode = 0
   try {
     const result = await fixture.run()
-    assert.ok(result, "The account startup result must remain available after isolating a startup failure")
+    assert.ok(result, `The account startup result must remain available after isolating a startup failure: ${fixture.errors.map(({ errorMessage, error }) => errorMessage ?? error?.message ?? "unknown").join("; ")}`)
     assert.equal(result.runtime.failedAccounts[0].lockRetained, true, "An account lock must remain held when startup cleanup is unconfirmed")
     assert.deepEqual(fixture.releasedLocks, [], "No account lock may be released before uncertain startup cleanup is confirmed")
     await fixture.signalHandlers.get("SIGINT")()
@@ -408,7 +413,7 @@ test("keeps healthy accounts running and releases only a failed account's proces
   process.exitCode = 0
   try {
     const result = await fixture.run()
-    assert.ok(result)
+    assert.ok(result, `Expected isolated account startup to return a runtime: ${fixture.errors.map(({ errorMessage, error }) => errorMessage ?? error?.message ?? "unknown").join("; ")}`)
     assert.deepEqual(fixture.started.map(({ identity }) => identity.providerInstanceId), [
       "binanceTestnetPrimary",
       "binanceTestnetSecondary",
