@@ -271,14 +271,10 @@ activeOrders })
     isStopping,
     accountingResult,
   })
-  if (requireProviderProvenance) {
-    Object.defineProperty(dependencies.updateTradingAccounting, "requiresProviderProvenance", {
-      value: true,
-    })
-  }
   const workflow = makeOrderEventWorkflow({
     ...dependencies,
     logger,
+    requireProviderProvenance,
   })
   return { workflow,
 state,
