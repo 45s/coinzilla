@@ -825,7 +825,10 @@ function createHarvesterMarketDataLifecycleStarter({ state, startServices }) {
       state.startPromise = (async () => {
         await startServices()
         state.started = true
-        return { ok: true, started: true }
+        return {
+        ok: true,
+        started: true,
+      }
       })()
     }
     try {
@@ -865,7 +868,10 @@ function createHarvesterMarketDataLifecycleStopper({ state, resources }) {
         }
       }
       state.stopped = true
-      return { ok: true, stopped: true }
+      return {
+        ok: true,
+        stopped: true,
+      }
     })()
     return state.stopPromise
   }
