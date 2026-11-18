@@ -996,7 +996,7 @@ This work is in an open task PR targeting `develop`; do not mark it complete unt
 
 ## 2026-11-17 — Bitunix Spot WebSocket RPC
 
-**Status: Implemented in test-first PR [#1374](https://github.com/45s/coinzilla/pull/1374); exact-head CI verification pending.**
+**Status: Merged into `develop` by [PR #1374](https://github.com/45s/coinzilla/pull/1374) on 2026-11-17 (merge commit `434d77756dc0662e090d8c8bda0271e908356f0e`).**
 
 - Added a separately managed `BitunixSpotWebSocketClient` and native WHATWG WebSocket transport at the official Spot endpoint. It does not change the REST-backed `BitunixSpotBroker` lifecycle or silently switch existing methods to another transport.
 - Implemented documented read-only RPCs: latest price, depth, current K-line, trading-pair catalog, exchange rates, token/network metadata, account balances, and user identity. All requests are authenticated as required by the official Spot WS documentation.
@@ -1026,7 +1026,7 @@ See the [Bitunix WebSocket RPC contract](../../docs/brokers-websocket-contract.m
 
 ## 2026-11-17 — Bitunix Spot public market-data reads
 
-**Status: Implemented in the open test-first PR [#1324](https://github.com/45s/coinzilla/pull/1324); exact-head CI verification pending.**
+**Status: Merged into `develop` by [PR #1324](https://github.com/45s/coinzilla/pull/1324) on 2026-11-17 (merge commit `5d707d17114d524ef3cd7c6d35387dde61338976`).**
 
 - Added one-shot `getOrderBook({ symbol, precision })` using the documented Spot depth endpoint. The required precision is supplied by the caller and forwarded unchanged; the adapter does not infer aggregation semantics. Level prices and volumes remain exact decimal strings, and the optional source timestamp is preserved without assigning undocumented units.
 - Added Bitunix-specific `getKlines({ symbol, interval })` and `getKlineHistory({ symbol, interval, endTime, limit })` reads. The history endpoint accepts `endTime` in seconds and a 1–500 row limit; it does not document `startTime` or cursor pagination. The official page describes a single data object while the .NET wrapper expects an array, so the adapter accepts either outer shape and returns rows without sorting or claiming completeness.
