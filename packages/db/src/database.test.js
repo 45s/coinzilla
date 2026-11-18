@@ -3,6 +3,10 @@ import test from "node:test"
 
 import { createDatabase } from "../src/index.js"
 
+function assertTransactionRequiresConnection(database) {
+  assert.throws(() => database.transaction(() => {}), /connected/)
+}
+
 function createAdapter(overrides = {}) {
   const calls = {
     connect: 0,
