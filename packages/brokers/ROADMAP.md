@@ -1167,7 +1167,7 @@ The following comparison resolves what the references actually implement; it doe
 - [x] Require any optional Bitunix pair `symbol` to match the canonical concatenation of documented `base` and `quote` fields; reject contradictory market identity metadata instead of preferring an inconsistent symbol field — [PR #1304](https://github.com/45s/coinzilla/pull/1304), merged as `27d75d28124844ff23f7ca2812308edfda53b91a`.
 - [x] Harden the REST error boundary: preserve transport/parse causes; distinguish transport, HTTP, exchange, and malformed-response failures; require the documented success `msg`; reject coercible non-scalar error codes; and adopt the shared `SystemCustomError` base with stable broker-owned codes. Keep unknown Spot API codes opaque and do not infer retryability because no comprehensive authoritative Spot-specific mapping was verified — implemented and test-first verified in [PR #1315](https://github.com/45s/coinzilla/pull/1315), merged as `47250f3ec97cff141f939abe9683a975698840a6`.
 - [x] Require non-empty string `ctime` and `utime` fields on adapted Bitunix order rows, preserving the source strings without assuming an undocumented timestamp format — implemented and test-first verified in [PR #1318](https://github.com/45s/coinzilla/pull/1318), merged as `dbf4bbe9af46e300e7ac4369e941299e2fed54ad`.
-- [ ] Preserve unfamiliar Bitunix order status codes as normalized `UNKNOWN` while retaining the raw exchange status; malformed/missing status values still fail closed. Test-first regression is in progress on `fix/bitunix-unknown-order-status`.
+- [x] Preserve unfamiliar Bitunix order status codes as normalized `UNKNOWN` while retaining the raw exchange status; malformed/missing status values still fail closed — implemented and merged in [PR #1375](https://github.com/45s/coinzilla/pull/1375) as `7a2d95caa7a78a8656d339d5d83c830ad74a605b`; focused broker tests, broker coverage, full workspace tests, lint, syntax, documentation links, and required CI passed on exact PR head `13585c86e6f21adf1915cca013499e4002d833db`.
 - [ ] Resolve per-order fill completeness, execution-ID guarantees, and the unit of deal `volume`; only add fail-closed checks where the exchange contract makes the inconsistency unambiguous.
 
 ### Recommended implementation order
@@ -1200,6 +1200,29 @@ The purpose is to translate an already implemented and tested Spot behavior into
 - [x] Identified Bitunix-specific public read-only extensions. Exchange rates are implemented in PR #1370 and the WebSocket RPC client; token/network metadata is now exposed as a documented WebSocket RPC read. Neither is Binance parity or a new broker-port method.
 - [x] The read-only market-data expansion is merged in [PR #1324](https://github.com/45s/coinzilla/pull/1324) at `5d707d17114d524ef3cd7c6d35387dde61338976`; it adds one-shot depth and current/history K-line reads while leaving canonical OHLCV candles unsupported because the Spot schema omits volume.
 - [x] The Bitunix-only exchange-rate extension is merged in [PR #1370](https://github.com/45s/coinzilla/pull/1370) as `55694b837c869878d22346dfd6b0f12c9b0f3269`. It uses the unsigned public `GET /api/spot/v1/common/rate/list`, preserves exact positive decimal strings, freezes returned records, accepts an explicit empty array, and rejects missing or incomplete data. All six required `develop-core` checks passed on exact PR head `0f7fbaa332eea5b45a176a25eae4ba529495893a`.
-- [ ] Token/network metadata remains a separate public extension candidate. Define its consumer contract before implementation; do not combine it with exchange rates or weaken issue #1185 blockers.
+- [x] Token/network metadata is already exposed through the Bitunix Spot WebSocket RPC client (merged in PR #1374); a duplicate REST token/network extension remains deferred until a consumer contract requires it. Do not combine it with exchange rates or weaken issue #1185 blockers.
 
 The audit is the detailed evidence source; this roadmap records status and next actions. Future agents must search additional GitHub packages when the primary .NET/TypeScript references do not cover a capability or disagree. The source-discovery rule is in [Brokers AGENTS.md](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit).
+
+## 2026-11-17 — Bitunix Spot deposit-history extension (#1384 / PR #1385)
+
+- [x] Audit the official `POST /api/spot/v1/deposit/page` contract against JKorf interface, implementation, model and response fixture.
+- [x] Record the schema/example contradiction (`data` object vs array) and support both documented shapes.
+- [x] Add signed, read-only `BitunixSpotBroker.getDeposits()` with validated filters and one-page-only behavior.
+- [x] Preserve large numeric IDs and decimal amount tokens exactly as strings; retain raw status/type and opaque address/UID fields.
+- [x] Add offline success, empty, malformed-row, invalid-filter, response-shape, unknown-status and numeric-precision regression tests.
+- [x] Keep the method Bitunix-specific; do not alter Binance/CoreBroker contracts or issue #1185 lifecycle/mutation blockers.
+
+**Next candidate:** audit Spot order/deal history against #1185. Do not expose canonical fills until quantity denomination, execution identity and completeness are supported by authoritative evidence.
+
+## 2026-11-17 — Bitunix Spot withdrawal-history extension (#1387 / PR #1387)
+
+- [x] Audited official `POST /api/spot/v1/withdraw_transfer/page` against JKorf interface, implementation, model and fixture.
+- [x] Recorded the schema/example discrepancies: `data` object vs array; `toAddress` vs `address`; nullable `fee`/`feeCoin`.
+- [x] Added signed read-only `BitunixSpotBroker.getWithdrawalHistory()` for on-chain withdrawals and internal-transfer-out records.
+- [x] Validated all filters before I/O; require explicit `type: "withdraw"` for transaction-hash filtering; one request only.
+- [x] Preserved large IDs/recipient UIDs and exact amount/fee tokens as strings; preserved unknown type/status values and nullable/absent fields.
+- [x] Kept recipient address/UID/contact/remark data opaque and out of logs/persistent storage.
+- [x] Added offline tests for filters, response shapes, aliases, precision, malformed rows, unknown statuses, empty history and no retry.
+
+**Next candidate:** audit Spot order/deal history against #1185. Keep canonical `getFills()` blocked until quantity denomination, execution identity, and completeness are proven by authoritative evidence.
