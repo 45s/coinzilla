@@ -70,7 +70,10 @@ test("blocks unresolved anchors from maintained sources and reports historical s
   try {
     const documents = createAnchorDocuments(root)
     const allGaps = findMissingLocalAnchors(root, documents)
-    const maintainedGaps = findMissingMaintainedLocalAnchors({ root, documents })
+    const maintainedGaps = findMissingMaintainedLocalAnchors({
+      root,
+      documents,
+    })
 
     assert.equal(allGaps.length, 4, "the fixture must include all four unresolved local references")
     assert.equal(maintainedGaps.length, 3, "only references originating in maintained documents must block")
