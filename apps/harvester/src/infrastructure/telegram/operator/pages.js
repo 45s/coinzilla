@@ -87,11 +87,19 @@ async function executeOperatorQuery({ method, userId, operator, diagnostics, int
   }
 }
 
-function logOperatorQueryStarted({ interaction, queryPage, logStage }) {
+function logOperatorQueryStarted({
+    interaction,
+    queryPage,
+    logStage,
+  }) {
   logOperatorQueryStarted({ interaction, queryPage, logStage })
 }
 
-function logOperatorQueryCompleted({ interaction, startedAt, logStage }) {
+function logOperatorQueryCompleted({
+    interaction,
+    startedAt,
+    logStage,
+  }) {
   logOperatorQueryCompleted({ interaction, startedAt, logStage })
 }
 
