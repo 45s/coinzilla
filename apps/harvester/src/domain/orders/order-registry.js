@@ -501,7 +501,10 @@ function validateAcknowledgementCanAttach({
   }
 }
 
-function createAcknowledgedCanonicalOrder({ current, order }) {
+function createAcknowledgedCanonicalOrder({
+    current,
+    order,
+  }) {
   return new CanonicalOrder({
     clientOrderId: current.clientOrderId,
     brokerOrderId: order.brokerOrderId,
@@ -548,18 +551,31 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
     throw new Error("Acknowledged order is not registered by clientOrderId")
   }
   const current = orders[index]
-  validateProviderIdentityUnchanged({ current, next: order })
-  if (!sameOrderIntent({ current, next: order })) {
+  validateProviderIdentityUnchanged({
+    current,
+    next: order,
+  })
+  if (!sameOrderIntent({
+    current,
+    next: order,
+  })) {
     throw new Error("Broker acknowledgement changed immutable order intent")
   }
-  if (isDuplicateAcknowledgement({ current, order })) {
+  if (isDuplicateAcknowledgement({
+    current,
+    order,
+  })) {
     return Object.freeze({
       registry,
       applied: false,
       duplicate: true,
     })
   }
-  validateAcknowledgementCanAttach({ current, orders, order })
+  validateAcknowledgementCanAttach({
+    current,
+    orders,
+    order,
+  })
   const attached = createAcknowledgedCanonicalOrder({ current, order })
   return createAcknowledgedRegistryResult({
     registry,
@@ -607,7 +623,10 @@ function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
       current,
       next: nextOrder,
     })) {
-    return unchangedOrderUpdate({ registry, stale: true })
+    return unchangedOrderUpdate({
+      registry,
+      stale: true,
+    })
   }
   validateOrderUpdate({
     current,
@@ -617,7 +636,10 @@ function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
     current,
     next: nextOrder,
   })) {
-    return unchangedOrderUpdate({ registry, duplicate: true })
+    return unchangedOrderUpdate({
+      registry,
+      duplicate: true,
+    })
   }
   const nextOrders = [...orders]
   nextOrders[index] = nextOrder
