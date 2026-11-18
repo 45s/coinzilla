@@ -19,7 +19,7 @@ test("SQLite rejects nested transactions without damaging the outer connection",
 
   try {
     await database.transaction(() => {
-      nestedTransaction = database.transaction(() => "must-not-run")
+      nestedTransaction = startNestedTransaction(database)
     })
 
     await assert.rejects(
