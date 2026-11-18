@@ -83,6 +83,13 @@ async function prepareHarnessPlaceOrder({ order, placeOrderGate, deferOrderSide,
 }
 
 function createPlaceOrderHandler(options = {}) {
+  return ({ order }) => executeHarnessPlaceOrder({
+    order,
+    options,
+  })
+}
+
+async function executeHarnessPlaceOrder({ order, options }) {
   const {
     orders,
     acknowledgedOrdersById,
@@ -103,48 +110,46 @@ function createPlaceOrderHandler(options = {}) {
     baseAsset,
     quoteAsset,
   } = options
-  return async ({ order }) => {
-    placeOrderCallCount.value += 1
-    orders.push(order)
-    await prepareHarnessPlaceOrder({
-      order,
-      placeOrderGate,
-      deferOrderSide,
-      onPlaceOrder,
-      onPlaceOrderStarted,
-    })
-    const failure = resolvePlaceOrderFailure({
-      placeOrderThrow,
-      placeOrderFailureAfterCount,
-      placeOrderCallCount,
-      placeOrderFailureError,
-      placeOrderFailureAfterFirst,
-      remainingPlaceOrderFailures,
-    })
-    if (failure) {
-      return {
-        ok: false,
-        errors: [failure],
-      }
-    }
-    const acknowledgedOrder = createHarnessAcknowledgedOrder({
-      order,
-      immediateFilledAcknowledgement,
-      market,
-      baseAsset,
-      quoteAsset,
-    })
-    rememberImmediateHarnessFill({
-      immediateFilledAcknowledgement,
-      acknowledgedOrder,
-      acknowledgedOrdersById,
-      acknowledgedFillsByOrder,
-      getAcknowledgedFills,
-    })
+  placeOrderCallCount.value += 1
+  orders.push(order)
+  await prepareHarnessPlaceOrder({
+    order,
+    placeOrderGate,
+    deferOrderSide,
+    onPlaceOrder,
+    onPlaceOrderStarted,
+  })
+  const failure = resolvePlaceOrderFailure({
+    placeOrderThrow,
+    placeOrderFailureAfterCount,
+    placeOrderCallCount,
+    placeOrderFailureError,
+    placeOrderFailureAfterFirst,
+    remainingPlaceOrderFailures,
+  })
+  if (failure) {
     return {
-      ok: true,
-      data: acknowledgedOrder,
+      ok: false,
+      errors: [failure],
     }
+  }
+  const acknowledgedOrder = createHarnessAcknowledgedOrder({
+    order,
+    immediateFilledAcknowledgement,
+    market,
+    baseAsset,
+    quoteAsset,
+  })
+  rememberImmediateHarnessFill({
+    immediateFilledAcknowledgement,
+    acknowledgedOrder,
+    acknowledgedOrdersById,
+    acknowledgedFillsByOrder,
+    getAcknowledgedFills,
+  })
+  return {
+    ok: true,
+    data: acknowledgedOrder,
   }
 }
 
