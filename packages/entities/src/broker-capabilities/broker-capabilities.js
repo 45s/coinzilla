@@ -187,7 +187,9 @@ function normalizeCapabilityMetadata({ capability }) {
 }
 
 function validateCapabilityEvidence({ normalized, requiresEvidence }) {
-  if (!requiresEvidence) return
+  if (!requiresEvidence) {
+    return
+  }
   if (normalized.status === "SUPPORTED" &&
       (normalized.method === undefined || normalized.guarantee === undefined)) {
     throw new TypeError(brokerCapabilitiesErrMsgs.guarantee)
@@ -210,8 +212,14 @@ function normalizeCapabilityConditions({ capability, normalized }) {
 function normalizeCapability({ capability, requiresEvidence }) {
   validateCapabilityShape(capability)
   const normalized = normalizeCapabilityMetadata({ capability })
-  validateCapabilityEvidence({ normalized, requiresEvidence })
-  normalizeCapabilityConditions({ capability, normalized })
+  validateCapabilityEvidence({
+    normalized,
+    requiresEvidence,
+  })
+  normalizeCapabilityConditions({
+    capability,
+    normalized,
+  })
   return deepFreeze({ value: normalized })
 }
 
@@ -246,7 +254,10 @@ function normalizeCapabilities({ capabilities, requiresEvidence }) {
     throw new TypeError(brokerCapabilitiesErrMsgs.capabilities)
   }
   const normalized = (capabilities ?? []).map((capability) =>
-    normalizeCapability({ capability, requiresEvidence }))
+    normalizeCapability({
+      capability,
+      requiresEvidence,
+    }))
   const types = normalized.map(({ type }) => type)
   if (new Set(types).size !== types.length) {
     throw new TypeError(brokerCapabilitiesErrMsgs.duplicate)
