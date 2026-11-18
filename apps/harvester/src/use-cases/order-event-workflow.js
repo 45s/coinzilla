@@ -14,6 +14,28 @@ import { failureResult } from "./recovery-failure.js"
 import { createUserDataEventTransition } from "./create-user-data-event-transition.js"
 
 
+function createProcessExecutionFillTransition({
+  state,
+  eventPublisher,
+  updateTradingAccounting,
+  recordBuyExecutionFill,
+  recordSellExecutionFill,
+  pause,
+}) {
+  const dependencies = {
+    state,
+    eventPublisher,
+    updateTradingAccounting,
+    recordBuyExecutionFill,
+    recordSellExecutionFill,
+    pause,
+  }
+  return (options = {}) => processExecutionFill({
+    dependencies,
+    ...options,
+  })
+}
+
 export function makeOrderEventWorkflow({
   state,
   broker,
@@ -34,16 +56,13 @@ export function makeOrderEventWorkflow({
   logger,
   onUnownedExternalOrderObserved,
 } = {}) {
-  const processExecutionFillTransition = (options = {}) => processExecutionFill({
-    dependencies: {
-      state,
-      eventPublisher,
-      updateTradingAccounting,
-      recordBuyExecutionFill,
-      recordSellExecutionFill,
-      pause,
-    },
-    ...options,
+  const processExecutionFillTransition = createProcessExecutionFillTransition({
+    state,
+    eventPublisher,
+    updateTradingAccounting,
+    recordBuyExecutionFill,
+    recordSellExecutionFill,
+    pause,
   })
   const reconcileTerminalOrderFills = makeReconcileTerminalOrderFills({
     broker,
@@ -110,24 +129,32 @@ function getProviderAttributionFailure({
   }
 }
 
-function validateExecutionFill({ order, fill, eventPublisher }) {
-  if (!(fill instanceof Fill)) {
-    const error = new TypeError("TRADE event requires a canonical Fill")
-    publishInvalidExecutionFill({
-      eventPublisher,
-      order,
-      reason: "MISSING_FILL",
+function validateMissingExecutionFill({ order, fill, eventPublisher }) {
+  if (fill instanceof Fill) {
+    return null
+  }
+  const error = new TypeError("TRADE event requires a canonical Fill")
+  publishInvalidExecutionFill({
+    eventPublisher,
+    order,
+    reason: "MISSING_FILL",
+    error,
+  })
+  return {
+    ok: false,
+    result: failureResult({
       error,
-    })
-    return {
-      ok: false,
-      result: failureResult({
-        error,
-        category: "REST_RECONCILIATION",
-        stage: "STREAM_FILL_MISSING",
-        retryable: true,
-      }),
-    }
+      category: "REST_RECONCILIATION",
+      stage: "STREAM_FILL_MISSING",
+      retryable: true,
+    }),
+  }
+}
+
+function validateExecutionFill({ order, fill, eventPublisher }) {
+  const missingFill = validateMissingExecutionFill({ order, fill, eventPublisher })
+  if (missingFill) {
+    return missingFill
   }
   if (!(order instanceof CanonicalOrder)) {
     return {
@@ -168,11 +195,9 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
       },
     }
   }
-  return {
-    ok: true,
-    symbol: order.market.symbol,
-  }
+  return { ok: true, symbol: order.market.symbol }
 }
+
 async function pauseForInvalidExecutionFill({
         pause,
         validation,
