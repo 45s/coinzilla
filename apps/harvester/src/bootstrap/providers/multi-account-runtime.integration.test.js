@@ -688,7 +688,7 @@ async function submitAndResolveRoutedOrder({
   const [acknowledgedOrder] = [...secondaryCalls.orders.values()]
   assert.ok(acknowledgedOrder)
   const registeredOrder = new CanonicalOrder({
-    ...acknowledgedOrder,
+    ...acknowledgedOrder.value,
     providerInstanceId: secondaryRuntime.providerInstanceId,
     providerType: secondaryRuntime.providerType,
     accountId: secondaryRuntime.accountId,
