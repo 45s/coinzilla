@@ -1,6 +1,6 @@
 # Harvester multi-provider execution routing
 
-**Status:** Phase 6 implementation contract under test in PR #1455. Do not treat execution routing as production-ready until the integrated tests and required CI checks pass.
+**Status:** Route-table schema validation and provider startup policy are being implemented in the Phase 6 branch. Production bootstrap wiring and integrated verification remain in progress; do not treat the feature as production-ready until the integrated tests and required CI checks pass.
 
 ## Ownership model
 
@@ -30,7 +30,7 @@ marketDataRouting: {
 
 The example deliberately routes BTC execution to the secondary account while sourcing its market data from the primary account, and routes ETH execution to the primary account while sourcing its market data from the secondary account.
 
-Every enabled executable strategy/market must have one execution route and one market-data route. Duplicate, missing, disabled-market, unsupported-strategy, unknown-provider, and environment-incompatible routes fail closed. A strategy/market cannot be routed to multiple accounts. Market-data and execution routing are not interchangeable.
+Every enabled executable strategy/market must have one execution route and one market-data route. Every configured provider instance must own at least one execution route; data-only provider instances are explicitly unsupported in this runtime. Duplicate, missing, disabled-market, unsupported-strategy, unknown-provider, and environment-incompatible routes fail closed. A strategy/market cannot be routed to multiple accounts. Market-data and execution routing are not interchangeable.
 
 ## Account and provider failure policy
 

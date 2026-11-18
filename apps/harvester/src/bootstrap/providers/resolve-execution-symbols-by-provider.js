@@ -1,4 +1,5 @@
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { ReadonlyMap } from "./readonly-map.js"
 
 const EXECUTABLE_STRATEGY_IDS = new Set([StrategyId.COIN_GRABBER])
 const TRADING_ENVIRONMENTS = new Set(["testnet", "live"])
@@ -70,6 +71,12 @@ function addConfiguredRoute({ route, index, pairs, providerById, routeByStrategy
   if (pairs[route.symbol]?.enabled !== true) {
     throw new TypeError(`Execution route references disabled market ${route.symbol}`)
   }
+  const key = createRouteKey(route)
+  if (routeByStrategyMarket.has(key)) {
+    throw new TypeError(
+      `Execution routing contains a duplicate route for ${route.strategyId}/${route.symbol}`,
+    )
+  }
   const provider = providerById.get(route.providerInstanceId)
   if (!provider) {
     throw new TypeError(
@@ -84,12 +91,6 @@ function addConfiguredRoute({ route, index, pairs, providerById, routeByStrategy
   ) {
     throw new TypeError(
       `Execution route for ${route.symbol} uses ${provider.environment}, but the market is configured for ${pairEnvironment}`,
-    )
-  }
-  const key = createRouteKey(route)
-  if (routeByStrategyMarket.has(key)) {
-    throw new TypeError(
-      `Execution routing contains a duplicate route for ${route.strategyId}/${route.symbol}`,
     )
   }
   routeByStrategyMarket.set(key, route.providerInstanceId)
@@ -139,7 +140,7 @@ function groupSymbolsByProvider({ providers, routeByStrategyMarket }) {
     const [, symbol] = JSON.parse(key)
     symbolsByProvider.get(providerInstanceId).push(symbol)
   }
-  return new Map([...symbolsByProvider].map(([providerInstanceId, symbols]) => [
+  return new ReadonlyMap([...symbolsByProvider].map(([providerInstanceId, symbols]) => [
     providerInstanceId,
     Object.freeze(symbols),
   ]))
@@ -166,12 +167,12 @@ export function resolveExecutionSymbolsByProvider({ appConfig, providers } = {})
     }
     const [provider] = providers
     const symbols = Object.entries(pairs)
-      .filter(([symbol, pair]) => pair?.enabled === true &&
+      .filter(([, pair]) => pair?.enabled === true &&
         (!pair.tradingEnvironment ||
           pair.tradingEnvironment === "both" ||
           pair.tradingEnvironment === provider.environment))
       .map(([symbol]) => symbol)
-    return new Map([[provider.providerInstanceId, Object.freeze(symbols)]])
+    return new ReadonlyMap([[provider.providerInstanceId, Object.freeze(symbols)]])
   }
 
   const routeByStrategyMarket = resolveConfiguredRoutes({
@@ -183,8 +184,14 @@ export function resolveExecutionSymbolsByProvider({ appConfig, providers } = {})
     pairs,
     routeByStrategyMarket,
   })
-  return groupSymbolsByProvider({
+  const symbolsByProvider = groupSymbolsByProvider({
     providers,
     routeByStrategyMarket,
   })
+  for (const provider of providers) {
+    if (symbolsByProvider.get(provider.providerInstanceId)?.length === 0) {
+      throw new TypeError(`Provider instance ${provider.providerInstanceId} has no execution routes; data-only provider instances are not supported`)
+    }
+  }
+  return symbolsByProvider
 }

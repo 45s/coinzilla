@@ -276,6 +276,7 @@ function validateProviderIdentityFields({ provider, path }) {
     "accountId",
     "environment",
     "credentials",
+    "required",
   ])
   for (const key of Object.keys(provider)) {
     if (!supportedKeys.has(key)) {
@@ -303,6 +304,12 @@ function validateProviderIdentityFields({ provider, path }) {
     fail({
       path: `${path}.environment`,
       expectation: "testnet or live",
+    })
+  }
+  if (provider.required !== undefined) {
+    requireBoolean({
+      value: provider.required,
+      path: `${path}.required`,
     })
   }
 }
@@ -438,6 +445,41 @@ function validateBrokerProviderInstances(config) {
 }
 
 /** Validate Harvester's application-wide configuration, including strategy and notification settings. */
+function validateExecutionRouting(config) {
+  if (config.executionRouting === undefined) return
+  const path = "executionRouting"
+  requireRecord({ value: config.executionRouting, path })
+  for (const key of Object.keys(config.executionRouting)) {
+    if (key !== "routes") {
+      fail({ path: `${path}.${key}`, expectation: "a supported execution-routing configuration field" })
+    }
+  }
+  const { routes } = config.executionRouting
+  if (!Array.isArray(routes) || routes.length === 0) {
+    fail({ path: `${path}.routes`, expectation: "a non-empty array of explicit strategy/market execution routes" })
+  }
+  const seen = new Set()
+  for (const [index, route] of routes.entries()) {
+    const routePath = `${path}.routes[${index}]`
+    requireRecord({ value: route, path: routePath })
+    for (const key of Object.keys(route)) {
+      if (!["strategyId", "symbol", "providerInstanceId"].includes(key)) {
+        fail({ path: `${routePath}.${key}`, expectation: "only strategyId, symbol, and providerInstanceId" })
+      }
+    }
+    for (const field of ["strategyId", "symbol", "providerInstanceId"]) {
+      if (typeof route[field] !== "string" || !route[field].trim() || route[field] !== route[field].trim()) {
+        fail({ path: `${routePath}.${field}`, expectation: "a non-empty trimmed string" })
+      }
+    }
+    const key = JSON.stringify([route.strategyId, route.symbol])
+    if (seen.has(key)) {
+      fail({ path: `${path}.routes`, expectation: "unique strategyId/symbol execution routes" })
+    }
+    seen.add(key)
+  }
+}
+
 export function validateAppConfig(config) {
   requireRecord({ value: config,
 path: "root" })
@@ -445,6 +487,7 @@ path: "root" })
   validateTelegramNotificationConfig(config)
   validateTelegramOperatorControlConfig(config)
   validateBrokerProviderInstances(config)
+  validateExecutionRouting(config)
   if (config.runtime !== undefined) {fail({ path: "runtime",
 expectation: "must not be present; exchange mode is selected by TRADING_MODE" })}
   requireRecord({ value: config.strategies,
