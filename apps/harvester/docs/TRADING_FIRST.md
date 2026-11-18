@@ -205,6 +205,10 @@ reconciliation, regression checks, and the incident gate are complete.
 
 ### TESTNET commission setting — 2026-11-04
 
+### Harvester pair fee configuration alignment — 2026-11-18
+
+The operator authorized aligning the static Harvester pair configuration with the documented TESTNET account setting: every pair with `tradingEnvironment: TESTNET` must use `makerPercent: 0.1` and `takerPercent: 0.1`, including disabled pairs. Pairs configured for LIVE must retain their existing rates. This is a configuration correction, not a new fee policy. Historical ADA executions retain their actual recorded commission amount/asset and the 0.075% configuration used during the 2026-11-17 session; do not recalculate historical fills from the corrected settings. The regression test must enumerate all configured pairs so new TESTNET entries cannot silently use inconsistent rates.
+
 Binance Spot TESTNET account settings previously showed **Commissions: None**. The operator changed the setting to **0.1% maker & taker**; the supplied follow-up screenshot shows that selection. The historical incident trade records still report zero commission and must be reconciled as historical zero-fee executions, not retroactively charged at 0.1%. Before the next controlled TESTNET run, verify the new setting is effective and record the timestamp. For each new execution, use the actual commission amount and asset returned by Binance trade history; never infer the realized fee solely from the UI setting. The setting is account-level and applies across the API keys shown on the page, not only Harvester's key. The new fee configuration changes expected economics and must be included in strategy profit/recovery calculations and regression fixtures before resuming trading.
 
 ### 2026-11-04 latest PR #513 review gates
