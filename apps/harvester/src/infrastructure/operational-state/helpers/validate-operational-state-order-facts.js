@@ -5,6 +5,17 @@ import {
   isPositiveCanonicalDecimalString,
 } from "./operational-state-decimal-validation.js"
 
+function validateProviderIdentity({ canonicalData }) {
+  const fields = ["providerInstanceId", "providerType", "accountId"]
+  const supplied = fields.filter((field) => canonicalData[field] !== undefined)
+  if (supplied.length === 0) { return }
+  if (supplied.length !== fields.length || fields.some((field) =>
+    typeof canonicalData[field] !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(canonicalData[field])
+  )) {
+    throw new TypeError("Order provider provenance must contain all three stable identifiers")
+  }
+}
+
 function factIdForOrderIntent(clientOrderId) {
   return `order-submission-intent:${  clientOrderId}`
 }
@@ -27,6 +38,9 @@ function factIdForOrderOutcome(...parameters) {
 function validateOrderSubmissionIntentFields({ canonicalData }) {
   const allowedFields = new Set([
     "clientOrderId",
+    "providerInstanceId",
+    "providerType",
+    "accountId",
     "marketId",
     "venue",
     "symbol",
@@ -41,6 +55,7 @@ function validateOrderSubmissionIntentFields({ canonicalData }) {
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Order-submission intent fact contains unsupported fields")
   }
+  validateProviderIdentity({ canonicalData })
   const clientOrderId = requireNonEmptyString({
     value: canonicalData.clientOrderId,
     field: "data.clientOrderId",
@@ -170,6 +185,9 @@ maxLength: 32 })
 function validateOrderSubmissionOutcomeFields({ canonicalData }) {
   const allowedFields = new Set([
     "clientOrderId",
+    "providerInstanceId",
+    "providerType",
+    "accountId",
     "marketId",
     "venue",
     "symbol",
@@ -188,6 +206,7 @@ function validateOrderSubmissionOutcomeFields({ canonicalData }) {
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Order-submission outcome fact contains unsupported fields")
   }
+  validateProviderIdentity({ canonicalData })
   const clientOrderId = requireNonEmptyString({
     value: canonicalData.clientOrderId,
     field: "data.clientOrderId",
@@ -293,13 +312,14 @@ function validateCancellationOutcomeState({ canonicalData }) {
 
 function validateOrderCancellationFields({ canonicalData, outcome }) {
   const allowedFields = outcome === undefined
-    ? new Set(["clientOrderId", "brokerOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "executedQuantity", "reason", "status"])
-    : new Set(["clientOrderId", "brokerOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "reason", "outcome", "status", "executedQuantity"])
+    ? new Set(["clientOrderId", "providerInstanceId", "providerType", "accountId", "brokerOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "executedQuantity", "reason", "status"])
+    : new Set(["clientOrderId", "providerInstanceId", "providerType", "accountId", "brokerOrderId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "reason", "outcome", "status", "executedQuantity"])
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError(outcome === undefined
       ? "Order-cancellation intent fact contains unsupported fields"
       : "Order-cancellation outcome fact contains unsupported fields")
   }
+  validateProviderIdentity({ canonicalData })
   const clientOrderId = requireNonEmptyString({
     value: canonicalData.clientOrderId,
     field: "data.clientOrderId",

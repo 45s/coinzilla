@@ -71,6 +71,11 @@ function validateSubmissionOutcome(options) {
     outcome,
   })
   const { market } = order
+  for (const field of ["providerInstanceId", "providerType", "accountId"]) {
+    if (typeof order[field] !== "string" || !order[field].trim()) {
+      throw new TypeError(`Order-submission outcome requires immutable ${field} provenance`)
+    }
+  }
   validateSubmissionMarket({
     market,
   })
@@ -104,6 +109,9 @@ export async function recordOrderSubmissionOutcome(options = {}) {
       factType: "ORDER_SUBMISSION_OUTCOME",
       data: {
         clientOrderId,
+        providerInstanceId: order.providerInstanceId,
+        providerType: order.providerType,
+        accountId: order.accountId,
         marketId: market.id,
         venue: market.venue,
         symbol: market.symbol,

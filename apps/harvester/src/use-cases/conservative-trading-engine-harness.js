@@ -1,76 +1,207 @@
 import { CanonicalOrder, Fill, Money, Quantity } from "@coinzilla/entities"
 import { multiplyDecimal } from "@coinzilla/utils"
 
-function createPlaceOrderHandler({
-  orders,
-  acknowledgedOrdersById,
-  acknowledgedFillsByOrder,
-  getAcknowledgedFills,
-  onPlaceOrder,
-  onPlaceOrderStarted,
-  placeOrderGate,
-  deferOrderSide,
+function resolvePlaceOrderFailure({
   placeOrderThrow,
   placeOrderFailureAfterCount,
+  placeOrderCallCount,
   placeOrderFailureError,
   placeOrderFailureAfterFirst,
   remainingPlaceOrderFailures,
-  placeOrderCallCount,
-  immediateFilledAcknowledgement,
-  market,
-  baseAsset,
-  quoteAsset,
-} = {}) {
-  return async ({ order }) => {
-    placeOrderCallCount.value += 1
-    orders.push(order)
-    onPlaceOrder?.({ order })
-    onPlaceOrderStarted?.({ order })
-    if (placeOrderGate && order.side === deferOrderSide) {await placeOrderGate.promise}
-    if (placeOrderThrow) {throw new Error("socket closed")}
-    if (placeOrderFailureAfterCount !== undefined && placeOrderCallCount.value > placeOrderFailureAfterCount) {
-      return { ok: false,
-        errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
-    }
-    if (placeOrderFailureAfterFirst && placeOrderCallCount.value > 1) {
-      return { ok: false,
-        errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
-    }
-    if (remainingPlaceOrderFailures.value > 0) {
-      if (Number.isFinite(remainingPlaceOrderFailures.value)) {remainingPlaceOrderFailures.value -= 1}
-      return { ok: false,
-        errors: [placeOrderFailureError ?? new Error("broker rejected order")] }
-    }
-    const acknowledgedOrder = new CanonicalOrder({
-      clientOrderId: order.clientOrderId,
-      brokerOrderId: `broker-${order.clientOrderId}`,
-      market,
-      side: order.side,
-      type: order.type,
-      limitPrice: new Money({ amount: order.price,
-        asset: quoteAsset }),
-      originalQuantity: new Quantity({ amount: order.quantity,
-        asset: baseAsset }),
-      executedQuantity: new Quantity({
-        amount: immediateFilledAcknowledgement ? order.quantity : "0",
-        asset: baseAsset,
-      }),
-      status: immediateFilledAcknowledgement ? "FILLED" : "OPEN",
-      createdAt: 1,
-      acknowledgedAt: 1,
-      updatedAt: 1,
-      ...(immediateFilledAcknowledgement ? { completedAt: 2 } : {}),
-    })
-    if (immediateFilledAcknowledgement) {
-      acknowledgedOrdersById.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
-      acknowledgedFillsByOrder.set(
-        acknowledgedOrder.brokerOrderId,
-        getAcknowledgedFills({ order: acknowledgedOrder }),
-      )
-    }
-    return { ok: true,
-      data: acknowledgedOrder }
+}) {
+  if (placeOrderThrow) {
+    throw new Error("socket closed")
   }
+  if (placeOrderFailureAfterCount !== undefined && placeOrderCallCount.value > placeOrderFailureAfterCount) {
+    return placeOrderFailureError ?? new Error("replacement rejected")
+  }
+  if (placeOrderFailureAfterFirst && placeOrderCallCount.value > 1) {
+    return placeOrderFailureError ?? new Error("replacement rejected")
+  }
+  if (remainingPlaceOrderFailures.value > 0) {
+    if (Number.isFinite(remainingPlaceOrderFailures.value)) {
+      remainingPlaceOrderFailures.value -= 1
+    }
+    return placeOrderFailureError ?? new Error("broker rejected order")
+  }
+  return null
+}
+
+function createHarnessAcknowledgedOrder({ order, immediateFilledAcknowledgement, market, baseAsset, quoteAsset }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: `broker-${order.clientOrderId}`,
+    providerInstanceId: order.providerInstanceId,
+    providerType: order.providerType,
+    accountId: order.accountId,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: new Money({
+      amount: order.price,
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: order.quantity,
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: immediateFilledAcknowledgement ? order.quantity : "0",
+      asset: baseAsset,
+    }),
+    status: immediateFilledAcknowledgement ? "FILLED" : "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+    ...(immediateFilledAcknowledgement ? { completedAt: 2 } : {}),
+  })
+}
+
+function rememberImmediateHarnessFill({
+  immediateFilledAcknowledgement,
+  acknowledgedOrder,
+  acknowledgedOrdersById,
+  acknowledgedFillsByOrder,
+  getAcknowledgedFills,
+}) {
+  if (!immediateFilledAcknowledgement) {
+    return
+  }
+  acknowledgedOrdersById.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
+  acknowledgedFillsByOrder.set(
+    acknowledgedOrder.brokerOrderId,
+    getAcknowledgedFills({ order: acknowledgedOrder }),
+  )
+}
+
+async function prepareHarnessPlaceOrder({ order, placeOrderGate, deferOrderSide, onPlaceOrder, onPlaceOrderStarted }) {
+  onPlaceOrder?.({ order })
+  onPlaceOrderStarted?.({ order })
+  if (placeOrderGate && order.side === deferOrderSide) {
+    await placeOrderGate.promise
+  }
+}
+
+function createPlaceOrderHandler(options = {}) {
+  return ({ order }) => executeHarnessPlaceOrder({
+    order,
+    options,
+  })
+}
+
+async function executeHarnessPlaceOrder({ order, options }) {
+  const {
+    orders,
+    placeOrderCallCount,
+    placeOrderGate,
+    deferOrderSide,
+    onPlaceOrder,
+    onPlaceOrderStarted,
+  } = options
+  placeOrderCallCount.value += 1
+  orders.push(order)
+  await prepareHarnessPlaceOrder({
+    order,
+    placeOrderGate,
+    deferOrderSide,
+    onPlaceOrder,
+    onPlaceOrderStarted,
+  })
+  return resolveHarnessPlaceOrderOutcome({
+    order,
+    options,
+  })
+}
+
+function resolveHarnessPlaceOrderOutcome({ order, options }) {
+  const failure = resolvePlaceOrderFailure({
+    placeOrderThrow: options.placeOrderThrow,
+    placeOrderFailureAfterCount: options.placeOrderFailureAfterCount,
+    placeOrderCallCount: options.placeOrderCallCount,
+    placeOrderFailureError: options.placeOrderFailureError,
+    placeOrderFailureAfterFirst: options.placeOrderFailureAfterFirst,
+    remainingPlaceOrderFailures: options.remainingPlaceOrderFailures,
+  })
+  if (failure) {
+    return {
+      ok: false,
+      errors: [failure],
+    }
+  }
+  const acknowledgedOrder = createHarnessAcknowledgedOrder({
+    order,
+    immediateFilledAcknowledgement: options.immediateFilledAcknowledgement,
+    market: options.market,
+    baseAsset: options.baseAsset,
+    quoteAsset: options.quoteAsset,
+  })
+  rememberImmediateHarnessFill({
+    immediateFilledAcknowledgement: options.immediateFilledAcknowledgement,
+    acknowledgedOrder,
+    acknowledgedOrdersById: options.acknowledgedOrdersById,
+    acknowledgedFillsByOrder: options.acknowledgedFillsByOrder,
+    getAcknowledgedFills: options.getAcknowledgedFills,
+  })
+  return {
+    ok: true,
+    data: acknowledgedOrder,
+  }
+}
+
+function resolveCancelOrderFailure({
+  cancelThrow,
+  cancelNotSent,
+  cancelNotSentOnSuccess,
+  cancelFailure,
+}) {
+  if (cancelThrow) {
+    throw new Error("cancel socket closed")
+  }
+  if (cancelNotSent) {
+    return {
+      ok: false,
+      cancellationOutcome: "NOT_SENT",
+      errors: [new Error("user-data stream unavailable")],
+    }
+  }
+  if (cancelNotSentOnSuccess) {
+    return {
+      ok: true,
+      cancellationOutcome: "NOT_SENT",
+      errors: [new Error("contradictory cancellation result")],
+    }
+  }
+  if (cancelFailure) {
+    return {
+      ok: false,
+      errors: [new Error("cancel denied")],
+    }
+  }
+  return null
+}
+
+function createHarnessCanceledOrder({ order, executedQuantity, status, updatedAt, market, baseAsset }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    providerInstanceId: order.providerInstanceId,
+    providerType: order.providerType,
+    accountId: order.accountId,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: new Quantity({
+      amount: executedQuantity,
+      asset: baseAsset,
+    }),
+    status,
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt,
+    completedAt: 2,
+  })
 }
 
 function createCancelOrderHandler({
@@ -91,24 +222,18 @@ function createCancelOrderHandler({
   return async ({ order }) => {
     cancellationIds.push(order.brokerOrderId)
     onCancelOrderStarted?.({ order })
-    if (cancelOrderGate) {await cancelOrderGate.promise}
-    if (cancelThrow) {throw new Error("cancel socket closed")}
-    if (cancelNotSent) {
-      return {
-        ok: false,
-        cancellationOutcome: "NOT_SENT",
-        errors: [new Error("user-data stream unavailable")],
-      }
+    if (cancelOrderGate) {
+      await cancelOrderGate.promise
     }
-    if (cancelNotSentOnSuccess) {
-      return {
-        ok: true,
-        cancellationOutcome: "NOT_SENT",
-        errors: [new Error("contradictory cancellation result")],
-      }
+    const failure = resolveCancelOrderFailure({
+      cancelThrow,
+      cancelNotSent,
+      cancelNotSentOnSuccess,
+      cancelFailure,
+    })
+    if (failure) {
+      return failure
     }
-    if (cancelFailure) {return { ok: false,
-      errors: [new Error("cancel denied")] }}
     canceledOrders.set(order.brokerOrderId, order)
     const executedQuantity = typeof cancelExecutedQuantity === "function"
       ? cancelExecutedQuantity({ order })
@@ -121,21 +246,13 @@ function createCancelOrderHandler({
       : cancelUpdatedAt ?? Math.max(order.updatedAt ?? 0, 2) + 1
     return {
       ok: true,
-      data: new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
-        market,
-        side: order.side,
-        type: order.type,
-        limitPrice: order.limitPrice,
-        originalQuantity: order.originalQuantity,
-        executedQuantity: new Quantity({ amount: executedQuantity,
-          asset: baseAsset }),
+      data: createHarnessCanceledOrder({
+        order,
+        executedQuantity,
         status: resolvedStatus,
-        createdAt: order.createdAt,
-        acknowledgedAt: order.acknowledgedAt,
         updatedAt: resolvedUpdatedAt,
-        completedAt: 2,
+        market,
+        baseAsset,
       }),
     }
   }

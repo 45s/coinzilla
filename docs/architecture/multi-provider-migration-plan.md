@@ -23,7 +23,8 @@ last_verified: 2026-11-18
 - **Phase 2 — foundation merged, routing not delivered:** [PR #1383](https://github.com/45s/coinzilla/pull/1383) adds stable Binance provider-instance/account identity, an exchange-neutral provider registry, capability validation, and deterministic connection/rollback lifecycle. It preserves the legacy single-Binance runtime. This is a foundation slice, not multi-provider execution or market-data routing.
 - **Superseded parallel work:** [PR #1386](https://github.com/45s/coinzilla/pull/1386) was closed unmerged as superseded by PR #1383. The final closure review confirmed that #1383 already contains the in-flight connect/disconnect lifecycle serialization and deterministic regression coverage added during the #1386 review. No code from the old #1386 branch is on `develop`; do not reopen or reuse it unchanged.
 - **Current runtime remains one Binance instance:** `apps/harvester/src/domain/provider-identity.js` resolves stable non-secret Binance provider/account identifiers; `apps/harvester/src/application/providers/provider-registry.js` validates and owns registered provider lifecycle; `apps/harvester/src/bootstrap/broker/connect-broker.js` currently registers/connects the Binance broker. `apps/harvester/src/bootstrap/start-harvester.js` still defaults to `createBinanceBrokerAdapter`. There is no strategy/market execution route table, independent market-data route table, or second exchange instance on this checkpoint.
-- **Phases 3–6 remain planned:** durable provider/account order provenance, account isolation/reconciliation, independent market-data routing, execution routing/parity, and operational acceptance are not delivered. Process-restart recovery remains a related safety prerequisite under [issue #654](https://github.com/45s/coinzilla/issues/654).
+- **Phase 3 — implementation in review:** [PR #1416](https://github.com/45s/coinzilla/pull/1416) implements durable provider/account provenance across canonical orders/fills, submission and cancellation barriers, user-data/REST reconciliation, Journal and Operational State. Exact-head CI has passed; review and merge remain pending, so this is not yet a claim of acceptance.
+- **Phases 4–6 remain planned:** account isolation/reconciliation, independent market-data routing, execution routing/parity and operational acceptance are not delivered. Process-restart recovery remains a separate safety prerequisite under [issue #654](https://github.com/45s/coinzilla/issues/654).
 - **Safety gates unchanged:** Bitunix remains read-only / not Harvester-ready under [issue #1185](https://github.com/45s/coinzilla/issues/1185); Recovery Seller remains non-executable under [issue #1127](https://github.com/45s/coinzilla/issues/1127). No exchange operations were performed for this revalidation.
 
 This revalidation was a read-only source and GitHub delivery-state inspection. It did not execute tests or CI; do not transfer historical CI results to this checkpoint.
@@ -43,6 +44,14 @@ This revalidation was a read-only source and GitHub delivery-state inspection. I
 5. Only then consider another provider. Bitunix remains read-only until #1185 is closed with verified capability and lifecycle evidence; RS remains disabled until #1127 is complete.
 
 The Harvester roadmap now records #1339 as its top architecture/delivery priority. The ADA recovery lifecycle (#1359/#1362) remains a separate safety obligation and must continue to receive its own focused work; prioritization does not waive trading-safety gates.
+
+## Phase 3 implementation checkpoint — 2026-11-18
+
+**Implementation PR:** [#1416](https://github.com/45s/coinzilla/pull/1416), ready for review against the current develop baseline ea6110fb39c1c86acfbf9673910965e7f698d511.
+
+The implementation adds immutable provider-instance, provider-type and stable account identity to canonical orders and fills; records submission intent before broker placement; propagates identity through acknowledgement, cancellation, stream/REST fill attribution, lifecycle DTOs, Journal replay and Operational State facts/projections; and rejects partial or conflicting identity. Historical records without provenance remain readable and are not assigned today's route identity. Focused tests cover entities, registry immutability, pre-I/O durability, cancellation/fill attribution, Journal and Operational State compatibility, and crash boundaries.
+
+The PR intentionally does not implement account isolation, process-restart restoration, execution or market-data routing, a second provider, or any exchange operation. Issue #654 remains out of scope. Treat Phase 3 as delivered only after exact-head checks and review pass and the PR is merged.
 
 ## 1. Executive decision
 
