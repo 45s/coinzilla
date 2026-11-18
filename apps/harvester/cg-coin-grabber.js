@@ -18,8 +18,8 @@ export const tradingPairs = {
     keepQuantity: 0.01,
     minProfit: 0.1,
     priceStepPercent: 0.3,
-    makerPercent: 0.075,
-    takerPercent: 0.075,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
   },
   LINKFDUSD: {
     enabled: true,
@@ -83,7 +83,7 @@ export const tradingPairs = {
     keepQuantity: 0,
     minProfit: 0.1,
     priceStepPercent: 0.05,
-    makerPercent: 0,
+    makerPercent: 0.1,
     takerPercent: 0.1,
   },
   ADAUSDT: {
@@ -96,8 +96,8 @@ export const tradingPairs = {
     keepQuantity: 0,
     minProfit: 0.05,
     priceStepPercent: 0.3,
-    makerPercent: 0.075,
-    takerPercent: 0.075,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
   },
   ADAFDUSD: {
     enabled: false,

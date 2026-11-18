@@ -98,6 +98,10 @@ Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`
 
 The runtime is currently Binance-only. The accepted target architecture adds named provider instances, explicit strategy/market execution routes, and independent market-data routes; it is not yet implemented and does not change today's environment setup. See [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339).
 
+### Bitunix read-only observer (opt-in)
+
+The opt-in Bitunix Spot observer was merged in [PR #1423](https://github.com/45s/coinzilla/pull/1423) under [issue #1422](https://github.com/45s/coinzilla/issues/1422). It is disabled by default. Its configuration is `BITUNIX_READ_ONLY_ENABLED=true` with `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` from a read-only API key. It is exposed separately from the Binance trading broker; it does not route orders or strategy market data, and it does not affect `TRADING_MODE`. See the [Bitunix read-only observer contract](docs/infrastructure/bitunix-read-only-observer.md).
+
 ### Generate or refresh market metadata
 
 Use the interactive generator to retrieve Binance precision metadata instead of guessing it:
@@ -182,7 +186,7 @@ export const appConfig = {
 };
 ```
 
-`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The committed pair configuration has enabled TESTNET markets `LINKUSDT`, `ZROUSDT`, `DOGEUSDT`, and `ADAUSDT`, plus enabled LIVE markets `LINKFDUSD`, `ZROFDUSD`, and `WLDFDUSD`; `SOLFDUSD` and `ADAFDUSD` remain disabled. This configuration is not authorization for a TESTNET or LIVE session. The controlled runbook still contains the earlier DOGEUSDT/ZROUSDT plan and remains CLOSED / PAUSED until the pair scope is reconciled. Configured maker/taker assumptions are 0.075% / 0.075% for `LINKUSDT` and `ADAUSDT`, 0.1% / 0.1% for `ZROUSDT` and `DOGEUSDT`, 0% / 0.075% for `LINKFDUSD` and `WLDFDUSD`, and 0% / 0.1% for `ZROFDUSD`. These are configuration assumptions, not exchange-side fee evidence. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
+`makerPercent` and `takerPercent` are percentage values in the range 0 inclusive to 100 exclusive (for example, `0.1` means 0.1%). Startup validation rejects negative, non-finite, and 100-or-higher values. The current pair entries are maintained in `cg-coin-grabber.js`: enabled TESTNET markets are `LINKUSDT`, `ZROUSDT`, `DOGEUSDT`, and `ADAUSDT`; disabled TESTNET market `SOLFDUSD` remains disabled. Enabled LIVE markets are `LINKFDUSD`, `ZROFDUSD`, and `WLDFDUSD`; LIVE `ADAFDUSD` remains disabled. Every TESTNET entry, including disabled `SOLFDUSD`, uses 0.1% maker / 0.1% taker. LIVE rates remain unchanged: 0% maker / 0.075% taker for `LINKFDUSD`, `ADAFDUSD`, and `WLDFDUSD`, and 0% maker / 0.1% taker for `ZROFDUSD`. These are configuration assumptions, not exchange-side fee evidence, and this configuration is not authorization for a TESTNET or LIVE session. The controlled runbook remains CLOSED / PAUSED until the pair scope is reconciled. Conservative SELL planning reserves the higher configured maker/taker rate because maker execution is not guaranteed.
 
 The named `appConfig` export in `config/index.js` contains strategy configuration under `strategies`; exchange selection is separate and comes from `TRADING_MODE`. `testnet` selects Binance Spot TESTNET and `live` selects Binance Spot LIVE. Trading is enabled in either mode. The runtime resolver reads only `TRADING_MODE`; `NODE_ENV` does not select the exchange.
 

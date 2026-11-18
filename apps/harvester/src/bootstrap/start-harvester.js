@@ -9,9 +9,11 @@ import { createCandleHistoryService } from "../use-cases/create-candle-history-s
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
+import { createBitunixReadOnlyAdapter } from "../infrastructure/brokers/bitunix-read-only-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
+import { resolveBitunixReadOnlyConfig } from "./config/resolve-bitunix-read-only-config.js"
 import { EffectiveConfigurationError } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
 import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
@@ -62,19 +64,29 @@ async function verifyOperationalStateStoreDurability({ operationalStateStore } =
   }
 }
 
+function assertVerifiedOperationalStateHistory({ existingFacts } = {}) {
+  if (existingFacts?.ok === true &&
+      existingFacts.data?.durableWriteSupported === true &&
+      Array.isArray(existingFacts.data.records)) {
+    return
+  }
+  const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
+  throw new Error(`Harvester cannot connect to the broker without verified Operational State Store history: ${cause.message ?? String(cause)}`, { cause })
+}
+
+function assertOperationalStateProjection({ existingProjection } = {}) {
+  if (existingProjection?.ok === true) {
+    return
+  }
+  const cause = existingProjection?.errors?.[0] ?? new Error("Operational State Store history projection failed")
+  throw new Error(`Harvester cannot restart from an unprojectable Operational State Store history: ${cause.message ?? String(cause)}`, { cause })
+}
+
 async function readVerifiedOperationalStateHistory({ operationalStateStore } = {}) {
   const existingFacts = await operationalStateStore.readAll()
-  if (existingFacts?.ok !== true ||
-      existingFacts.data?.durableWriteSupported !== true ||
-      !Array.isArray(existingFacts.data.records)) {
-    const cause = existingFacts?.errors?.[0] ?? new Error("Operational State Store history could not be read and verified")
-    throw new Error(`Harvester cannot connect to the broker without verified Operational State Store history: ${  cause.message ?? String(cause)}`, { cause })
-  }
+  assertVerifiedOperationalStateHistory({ existingFacts })
   const existingProjection = projectHarvesterOperationalState({ records: existingFacts.data.records })
-  if (existingProjection?.ok !== true) {
-    const cause = existingProjection?.errors?.[0] ?? new Error("Operational State Store history projection failed")
-    throw new Error(`Harvester cannot restart from an unprojectable Operational State Store history: ${  cause.message ?? String(cause)}`, { cause })
-  }
+  assertOperationalStateProjection({ existingProjection })
   return existingProjection
 }
 
@@ -121,6 +133,38 @@ function assertConfigurationBaselineMatchesRuntime({ baseline, configurationFing
   }
 }
 
+function assertDurableOperationalStateWrite({ result, failureMessage } = {}) {
+  if (result?.ok === true && result.data?.durable === true) {
+    return
+  }
+  throw new Error(`${failureMessage}: ${result?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
+}
+
+async function recordDurableConfigurationBaseline({ operationalStateStore, appConfig } = {}) {
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore,
+    appConfig,
+  })
+  assertDurableOperationalStateWrite({
+    result: baseline,
+    failureMessage: "Harvester cannot connect to the broker without a durable configuration baseline",
+  })
+  return baseline
+}
+
+async function recordDurableProcessStart({ operationalStateStore, baseline, tradingEnabled } = {}) {
+  await recordProcessStarted({
+    operationalStateStore,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled,
+  }).then((started) => assertDurableOperationalStateWrite({
+    result: started,
+    failureMessage: "Harvester cannot connect to the broker without a durable process-start boundary",
+  }))
+}
+
 async function persistHarvesterProcessStart({
   operationalStateStore,
   appConfig,
@@ -131,26 +175,20 @@ async function persistHarvesterProcessStart({
   if (!operationalStateStore) {
     return
   }
-  const baseline = await recordConfigurationBaseline({ operationalStateStore,
-appConfig })
-  if (baseline?.ok !== true || baseline.data?.durable !== true) {
-    throw new Error(`Harvester cannot connect to the broker without a durable configuration baseline: ${ 
-      baseline?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
-  }
-  assertConfigurationBaselineMatchesRuntime({ baseline,
-configurationFingerprint,
-enabledMarkets })
-  const started = await recordProcessStarted({
+  const baseline = await recordDurableConfigurationBaseline({
     operationalStateStore,
-    configurationFingerprint: baseline.data.fingerprint,
-    strategyName: baseline.data.strategyName,
-    markets: baseline.data.markets,
+    appConfig,
+  })
+  assertConfigurationBaselineMatchesRuntime({
+    baseline,
+    configurationFingerprint,
+    enabledMarkets,
+  })
+  await recordDurableProcessStart({
+    operationalStateStore,
+    baseline,
     tradingEnabled,
   })
-  if (started?.ok !== true || started.data?.durable !== true) {
-    throw new Error(`Harvester cannot connect to the broker without a durable process-start boundary: ${ 
-      started?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
-  }
 }
 
 function throwIfStartupCleanupFailed({ error, cleanupErrors } = {}) {
@@ -246,13 +284,14 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
   }
 }
 
-async function createHarvesterStartupContext({ options } = {}) {
+function resolveHarvesterStartupDependencies({ options = {} } = {}) {
   const {
     configSource,
     appConfig: suppliedAppConfig,
     loadConfig = loadAppConfig,
     env = process.env,
     brokerAdapterFactory = createBinanceBrokerAdapter,
+    bitunixReadOnlyAdapterFactory = createBitunixReadOnlyAdapter,
     evaluateStrategy = conservativeStrategyPolicy.evaluate,
     logger = defaultLogger,
     eventPublisher,
@@ -267,15 +306,57 @@ async function createHarvesterStartupContext({ options } = {}) {
     telegramOperatorFetchImpl,
     strategyShutdownParticipants = [],
   } = options
-  const runtimeStartedAt = now()
-  const resolved = await resolveHarvesterOptions({
+  return {
     configSource,
-    appConfig: suppliedAppConfig,
+    suppliedAppConfig,
     loadConfig,
     env,
+    brokerAdapterFactory,
+    bitunixReadOnlyAdapterFactory,
+    evaluateStrategy,
+    logger,
     eventPublisher,
+    onMarketPriceError,
+    onUserDataEvent,
+    onUserDataStatus,
+    now,
+    suppliedOperationalStateStore,
+    runtimeSessionId,
+    createOperationalStateStore,
+    createTelegramOperatorAdapterFactory,
+    telegramOperatorFetchImpl,
+    strategyShutdownParticipants,
+  }
+}
+
+async function createBitunixReadOnlyObserver({ env, adapterFactory, logger } = {}) {
+  const config = resolveBitunixReadOnlyConfig({ env })
+  if (!config) {
+    return null
+  }
+  const observer = await adapterFactory({
+    config,
     logger,
   })
+  if (!observer ||
+      typeof observer !== "object" ||
+      observer.accessMode !== "read-only" ||
+      !Object.isFrozen(observer)) {
+    throw new TypeError("bitunixReadOnlyAdapterFactory must return an immutable read-only observer")
+  }
+  return observer
+}
+
+async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
+  const {
+    env,
+    runtimeSessionId,
+    suppliedOperationalStateStore,
+    createOperationalStateStore,
+    createTelegramOperatorAdapterFactory,
+    telegramOperatorFetchImpl,
+    logger,
+  } = dependencies
   const operatorControlLifecycle = await prepareTelegramOperatorControl({
     telegramConfig: resolved.appConfig.operatorControl?.telegram,
     env,
@@ -299,25 +380,55 @@ async function createHarvesterStartupContext({ options } = {}) {
     configurationFingerprint: startupOptions.configurationFingerprint,
     enabledMarkets: startupOptions.enabledSymbols,
   })
-  const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({ operationalStateStore })
+  return {
+    operatorControlLifecycle,
+    operationalStateStore,
+    startupOptions,
+  }
+}
+
+async function createHarvesterStartupContext({ options } = {}) {
+  const dependencies = resolveHarvesterStartupDependencies({ options })
+  const runtimeStartedAt = dependencies.now()
+  const resolved = await resolveHarvesterOptions({
+    configSource: dependencies.configSource,
+    appConfig: dependencies.suppliedAppConfig,
+    loadConfig: dependencies.loadConfig,
+    env: dependencies.env,
+    eventPublisher: dependencies.eventPublisher,
+    logger: dependencies.logger,
+  })
+  const bitunixReadOnly = await createBitunixReadOnlyObserver({
+    env: dependencies.env,
+    adapterFactory: dependencies.bitunixReadOnlyAdapterFactory,
+    logger: dependencies.logger,
+  })
+  const startupState = await prepareHarvesterStartupState({
+    dependencies,
+    resolved,
+  })
+  const operationalStateCallbacks = createHarvesterOperationalStateCallbacks({
+    operationalStateStore: startupState.operationalStateStore,
+  })
   const accountSnapshotManagerRef = { current: null }
   const onCommissionAsset = createCommissionAssetPublisher({ accountSnapshotManagerRef })
   return {
-    ...startupOptions,
-    env,
-    brokerAdapterFactory,
-    evaluateStrategy,
-    logger,
-    eventPublisher,
-    onMarketPriceError,
-    onUserDataEvent,
-    onUserDataStatus,
-    now,
+    ...startupState.startupOptions,
+    env: dependencies.env,
+    brokerAdapterFactory: dependencies.brokerAdapterFactory,
+    bitunixReadOnly,
+    evaluateStrategy: dependencies.evaluateStrategy,
+    logger: dependencies.logger,
+    eventPublisher: dependencies.eventPublisher,
+    onMarketPriceError: dependencies.onMarketPriceError,
+    onUserDataEvent: dependencies.onUserDataEvent,
+    onUserDataStatus: dependencies.onUserDataStatus,
+    now: dependencies.now,
     runtimeStartedAt,
-    runtimeSessionId,
-    strategyShutdownParticipants,
-    operatorControlLifecycle,
-    operationalStateStore,
+    runtimeSessionId: dependencies.runtimeSessionId,
+    strategyShutdownParticipants: dependencies.strategyShutdownParticipants,
+    operatorControlLifecycle: startupState.operatorControlLifecycle,
+    operationalStateStore: startupState.operationalStateStore,
     accountSnapshotManagerRef,
     onCommissionAsset,
     ...operationalStateCallbacks,
@@ -379,6 +490,9 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
   })
   const resources = {
     broker,
+    readOnlyProviders: Object.freeze({
+      bitunix: startup.bitunixReadOnly,
+    }),
     subscriptions: [],
     marketPriceIntake: new Map(),
     bookSubscriptions: [],
@@ -772,6 +886,7 @@ function createHarvesterRuntimeResult({ startup, portfolio, resources, stop } = 
     brokerName: startup.brokerName,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled,
+    readOnlyProviders: resources.readOnlyProviders,
     strategyMode: "conservative",
     get userDataReady() { return resources.userDataState.ready },
     get userDataStatus() { return resources.userDataState.status },

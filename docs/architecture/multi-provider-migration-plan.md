@@ -25,6 +25,7 @@ last_verified: 2026-11-18
 - **Current runtime remains one Binance instance:** `apps/harvester/src/domain/provider-identity.js` resolves stable non-secret Binance provider/account identifiers; `apps/harvester/src/application/providers/provider-registry.js` validates and owns registered provider lifecycle; `apps/harvester/src/bootstrap/broker/connect-broker.js` currently registers/connects the Binance broker. `apps/harvester/src/bootstrap/start-harvester.js` still defaults to `createBinanceBrokerAdapter`. There is no strategy/market execution route table, independent market-data route table, or second exchange instance on this checkpoint.
 - **Phases 3–6 remain planned:** durable provider/account order provenance, account isolation/reconciliation, independent market-data routing, execution routing/parity, and operational acceptance are not delivered. Process-restart recovery remains a related safety prerequisite under [issue #654](https://github.com/45s/coinzilla/issues/654).
 - **Safety gates unchanged:** Bitunix remains read-only / not Harvester-ready under [issue #1185](https://github.com/45s/coinzilla/issues/1185); Recovery Seller remains non-executable under [issue #1127](https://github.com/45s/coinzilla/issues/1127). No exchange operations were performed for this revalidation.
+- **Read-only observer exception (2026-11-18):** an opt-in Bitunix Spot read-only observer is authorized under [#1422](https://github.com/45s/coinzilla/issues/1422). It is separate from the provider registry, execution routes and strategy market-data routes; it does not satisfy Phase 7, resolve #1185, or establish Harvester execution readiness.
 
 This revalidation was a read-only source and GitHub delivery-state inspection. It did not execute tests or CI; do not transfer historical CI results to this checkpoint.
 
@@ -166,7 +167,7 @@ Source: `apps/harvester/src/infrastructure/process-lock/acquire-harvester-proces
 
 The current lock fingerprint is derived from `[broker.toLowerCase(), tradingMode]`. It preserves broker/environment isolation, atomic acquisition and ownership safeguards, but does not include account or provider-instance identity.
 
-Issue #1307 is closed as completed: TESTNET and LIVE can coexist while duplicate writers within one broker/environment remain excluded. The roadmap's prior `[~]` status is stale and should be corrected. Do not weaken the existing atomic acquisition, owner-token verification, conservative stale-owner recovery or uncertain-shutdown lock retention when introducing account-scoped locks.
+Issue #1307 is closed as completed: TESTNET and LIVE can coexist while duplicate writers within one broker/environment remain excluded. The Harvester roadmap's prior `[~]` status has since been corrected to `[x]` (Complete — #1307 closed); this audit note records the status at the earlier audit baseline. Do not weaken the existing atomic acquisition, owner-token verification, conservative stale-owner recovery or uncertain-shutdown lock retention when introducing account-scoped locks.
 
 An account-lock migration must prevent old and new lock protocols from granting concurrent writer authority to the same account. A coordinated transition/dual-lock or deployment barrier is required before legacy lock identity is retired.
 
@@ -239,7 +240,7 @@ Relevant implementation: `packages/brokers/src/infrastructure/binance/broker-web
 
 **Binance is the first provider in the implementation sequence, not the permanent or exclusive provider.** Bitunix development is temporarily paused while Binance capability contracts and Harvester integration progress.
 
-Existing Bitunix source, completed read-only work, and capability research remain part of the project. Bitunix implementation continues under [issue #1185](https://github.com/45s/coinzilla/issues/1185). Its current partial/read-only functionality must not be treated as Harvester execution readiness.
+Existing Bitunix source, completed read-only work, and capability research remain part of the project. Bitunix implementation continues under [issue #1185](https://github.com/45s/coinzilla/issues/1185). Its current partial/read-only functionality must not be treated as Harvester execution readiness. The separate #1422 observer is a non-routing read interface only and does not alter this Phase 7 execution gate.
 
 When Bitunix implements and verifies the capabilities required by the shared broker contracts—including reliable account snapshots, stable order identity, safe placement and cancellation outcomes, complete order/fill reconciliation, private execution events, environment isolation, and lifecycle/recovery guarantees—it can be added to the provider registry and routed by Harvester under the same provider-neutral architecture.
 
@@ -589,4 +590,4 @@ This sequence closes the most important safety gap before routing can become ope
 - Tests were inspected but not executed in this audit.
 - No live or TESTNET exchange calls were made.
 - No multi-provider runtime exists to reproduce route-change misrouting or cross-account collisions; these are source-derived risks.
-- The Harvester roadmap's #1307 lock status was stale at the audit baseline: the issue is closed completed and the lock source implements broker/environment scoping. Correct the roadmap status without changing lock code.
+- At this audit baseline the Harvester roadmap's #1307 lock status was stale; it has since been corrected to `[x]` (Complete — #1307 closed). The issue is closed completed and the lock source implements broker/environment scoping. No lock code change was required.
