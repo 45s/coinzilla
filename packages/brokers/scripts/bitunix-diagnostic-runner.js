@@ -473,6 +473,22 @@ function recordRestFailure({ endpoint, startedAt, now, results, request, error, 
   }))
 }
 
+function getRestSkipReason({ endpoint, depthPrecision, credentialsConfigured }) {
+  if (endpoint.requiresDepthPrecision && depthPrecision === null) {
+    return {
+      authenticated: false,
+      reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is required for the documented depth endpoint",
+    }
+  }
+  if (endpoint.privateResponse && !credentialsConfigured) {
+    return {
+      authenticated: true,
+      reason: "BITUNIX_API_KEY and BITUNIX_API_SECRET are required for private REST diagnostics",
+    }
+  }
+  return null
+}
+
 async function runRestOperation({
   client,
   endpoint,
@@ -486,27 +502,19 @@ async function runRestOperation({
   credentialsConfigured,
 }) {
   const startedAt = now()
-  if (endpoint.requiresDepthPrecision && depthPrecision === null) {
+  const skipReason = getRestSkipReason({
+    endpoint,
+    depthPrecision,
+    credentialsConfigured,
+  })
+  if (skipReason) {
     recordRestSkipped({
       endpoint,
       startedAt,
       now,
       results,
       secrets,
-      authenticated: false,
-      reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is required for the documented depth endpoint",
-    })
-    return
-  }
-  if (endpoint.privateResponse && !credentialsConfigured) {
-    recordRestSkipped({
-      endpoint,
-      startedAt,
-      now,
-      results,
-      secrets,
-      authenticated: true,
-      reason: "BITUNIX_API_KEY and BITUNIX_API_SECRET are required for private REST diagnostics",
+      ...skipReason,
     })
     return
   }
