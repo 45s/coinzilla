@@ -182,6 +182,9 @@ export async function startProviderAccounts({
         brokerAdapterFactory: provider.brokerAdapterFactory,
         providerIdentity: provider.identity,
       })
+      if (runtime === null || typeof runtime !== "object" || Array.isArray(runtime)) {
+        throw new TypeError(`Provider account ${provider.providerInstanceId} startup must return a runtime object`)
+      }
       startedAccounts.push({
         provider,
         runtime,

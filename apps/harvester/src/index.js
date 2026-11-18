@@ -592,10 +592,11 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
   if (!runtime.connected) {
     logSystem({ logger,
       message: "Binance connection was not established." })
-  } else if (runtime.providerAccounts?.length > 1) {
+  } else if (runtime.providerAccounts?.length > 1 || runtime.failedAccounts?.length > 0) {
+    const failedCount = runtime.failedAccounts?.length ?? 0
     logSystem({
       logger,
-      message: `Connected ${runtime.providerAccounts.length} independent provider account(s); subscribed to ${runtime.subscriptions.length} distinct market(s).`,
+      message: `Connected ${runtime.providerAccounts.length} independent provider account(s); ${failedCount} account(s) failed to start; subscribed to ${runtime.subscriptions.length} distinct market(s).`,
     })
   } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
     logSystem({
