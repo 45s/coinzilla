@@ -65,13 +65,18 @@ async function withRepository({ callback }) {
   }
 }
 
+async function createStrictLintWorkspace() {
+  return repositoryRoot;
+}
+
 async function lintStrict({ source, fileName = "scripts/strict-fixture.js" }) {
-  const absolutePath = join(repositoryRoot, fileName);
+  const cwd = await createStrictLintWorkspace();
+  const absolutePath = join(cwd, fileName);
   await mkdir(dirname(absolutePath), { recursive: true });
   await writeFile(absolutePath, source);
   try {
     const { results } = await lintChangedFiles({
-      cwd: repositoryRoot,
+      cwd,
       files: [fileName],
     });
     return results[0].messages;
@@ -89,6 +94,16 @@ function createSwitchCases() {
     .map((index) => `case ${index}: return ${index};`)
     .join("\n");
 }
+
+test("strict lint fixtures use a workspace isolated from full-workspace scans", async () => {
+  const cwd = await createStrictLintWorkspace();
+
+  assert.notEqual(
+    cwd,
+    repositoryRoot,
+    "Strict-lint fixtures must not be created inside the workspace-wide ESLint audit tree.",
+  );
+});
 
 test("strict policy inherits the canonical workspace rules and overrides only approved thresholds", async () => {
   const { ESLint } = await import("eslint");
