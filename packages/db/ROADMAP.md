@@ -12,6 +12,12 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 `@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
+## SQLite infrastructure audit and hardening — #1395
+
+**Status: Implementation in progress in [PR #1396](https://github.com/45s/coinzilla/pull/1396), targeting `develop`.** Audit the existing SQLite connection/lifecycle, transactions, CRUD/query safety, migrations, WAL/locking, backup/restore and error paths, then harden only confirmed defects with deterministic real-SQLite RED → GREEN → REFACTOR tests. Keep all implementation inside `packages/db/**`; preserve the provider-neutral public API and existing compatibility unless a reproduced defect requires a documented change. Treat merged backup/restore PR #1382 as existing functionality to audit, not a feature to duplicate. Follow the exact coverage and CI gates in [issue #1395](https://github.com/45s/coinzilla/issues/1395); do not lower current thresholds or claim acceptance before exact-head verification.
+
+**Confirmed defects reproduced and fixed in the audit branch:** transaction contexts remained usable after successful COMMIT; failed SQLite initialization could have its original error masked by a close failure; backup progress/cleanup aggregation duplicated the original progress error. Regression tests cover each defect. Exact-head coverage and required CI remain the completion gates.
+
 ## Provider-neutral CRUD API — core implementation and hardening merged
 
 **Core implementation:** [PR #1353](https://github.com/45s/coinzilla/pull/1353) merged into `develop` as `70f1345054bf619dca01896817967eeba6ad1141`; it delivered the provider-neutral CRUD facade, built-in SQLite provider, reusable conformance suite, and public documentation.
@@ -120,9 +126,9 @@ See the [README](./README.md) for the current detailed contract, examples and SQ
 
 ## Generic SQLite backup and restore primitives — merged
 
-**Implementation:** [PR #1382](https://github.com/45s/coinzilla/pull/1382) merged into `develop`; tracking issue [#1381](https://github.com/45s/coinzilla/issues/1381). The package now provides native online backup, integrity/foreign-key validation, temporary-file staging, atomic backup publication, and no-overwrite restore publication. These are SQLite infrastructure primitives only; retention, encryption, off-site storage, scheduling, compatibility policy and restore runbooks remain application-owned.
+**Implementation:** [PR #1382](https://github.com/45s/coinzilla/pull/1382) merged into `develop`; tracking issue [#1381](https://github.com/45s/coinzilla/issues/1381). The package provides native online backup, integrity/foreign-key validation, temporary-file staging, atomic backup publication, and no-overwrite restore publication. These are SQLite infrastructure primitives only; retention, encryption, off-site storage, scheduling, compatibility policy and restore runbooks remain application-owned.
 
-**Follow-up reliability audit:** [Issue #1395](https://github.com/45s/coinzilla/issues/1395), [PR #1396](https://github.com/45s/coinzilla/pull/1396), audits the complete SQLite implementation and adds regression coverage for lifecycle, transaction-handle lifetime, WAL backup concurrency, restore races, cleanup failures and recovery. Do not mark this follow-up complete until its exact-head CI passes and its final PR is reviewed.
+**Follow-up reliability audit:** [Issue #1395](https://github.com/45s/coinzilla/issues/1395) and [PR #1396](https://github.com/45s/coinzilla/pull/1396) audit the complete SQLite implementation, including the merged backup/restore primitives. Do not mark this follow-up complete until its exact-head CI passes and the final PR is reviewed.
 
 ## Existing SQLite functionality — preserved
 
