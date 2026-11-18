@@ -450,6 +450,50 @@ function createSuccessfulLockReleaser({
   }
 }
 
+test("transfers process-wide ownership to the first successfully started optional account", async () => {
+  const providers = createThreeAccountProviders()
+  providers[0].required = false
+  const operationalStateStore = {}
+  const starts = []
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    operationalStateStore,
+    releaseProviderLock: async () => ({ ok: true }),
+    start: async (input) => {
+      const providerInstanceId = input.providerIdentity.providerInstanceId
+      starts.push({
+        providerInstanceId,
+        operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
+        hasOperationalStateStore: input.operationalStateStore === operationalStateStore,
+      })
+      if (providerInstanceId === "first") {
+        const error = new Error("optional primary account failed")
+        error.startupCleanupConfirmed = true
+        throw error
+      }
+      return {
+        executionSymbols: [...input.executionSymbols],
+        marketDataSources: input.marketDataSources,
+        marketDataProviderTypes: input.marketDataProviderTypes,
+        tradingEnabled: true,
+        startMarketData: async () => ({ ok: true }),
+        stopMarketData: async () => ({ ok: true }),
+        stop: async () => ({ ok: true }),
+      }
+    },
+  })
+
+  assert.deepEqual(starts, [
+    { providerInstanceId: "first", operatorControlEnabled: true, hasOperationalStateStore: true },
+    { providerInstanceId: "second", operatorControlEnabled: true, hasOperationalStateStore: true },
+    { providerInstanceId: "third", operatorControlEnabled: false, hasOperationalStateStore: false },
+  ])
+  assert.equal(runtime.account.providerInstanceId, "second")
+  assert.equal(runtime.failedAccounts[0].providerInstanceId, "first")
+})
+
 test("keeps healthy account runtimes running when another account fails to start", async () => {
   const stopCalls = []
   const releasedLocks = []
