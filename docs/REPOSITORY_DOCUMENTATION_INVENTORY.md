@@ -282,7 +282,6 @@ PR #1166 added two maintained Harvester documents outside the frozen 97-file bas
 | `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted and implemented startup order ownership decision. |
 | `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Completed design and implementation record for #1157. |
 
-
 ## Latest recursive inventory checkpoint — develop `88b89995a4f9e62a6fe4b0451ea675ce0495b539`
 
 The complete recursive Git tree at this checkpoint returned `truncated: false` and contains **159 tracked Markdown/MDX files**: **88 under `apps/harvester/` and 71 elsewhere**. A direct path comparison against the previous 157-file checkpoint `ea6110fb39c1c86acfbf9673910965e7f698d511` found exactly two additions and zero removals. The frozen 97-file baseline and all intervening historical checkpoints above remain unchanged.
