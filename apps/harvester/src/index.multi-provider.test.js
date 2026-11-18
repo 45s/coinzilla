@@ -294,6 +294,7 @@ function createTwoBinanceAccountInstances() {
       providerType: "binance",
       accountId: "binance-secondary",
       environment: "testnet",
+      required: false,
       credentials: {
         apiKeyEnv: "BINANCE_SECONDARY_API_KEY",
         apiSecretEnv: "BINANCE_SECONDARY_API_SECRET",
