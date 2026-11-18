@@ -30,28 +30,56 @@ function collectRuntimeStopErrors({
   return [new Error(`Provider account ${providerInstanceId} did not confirm shutdown`)]
 }
 
+async function releaseStoppedAccountLock({
+  entry,
+  releaseProviderLock,
+}) {
+  if (entry.lockReleased || typeof releaseProviderLock !== "function") {
+    entry.lockReleased = true
+    return []
+  }
+  try {
+    const result = await releaseProviderLock(entry.provider.providerInstanceId)
+    if (result?.ok !== false) {
+      entry.lockReleased = true
+      return []
+    }
+    return collectRuntimeStopErrors({
+      result,
+      providerInstanceId: entry.provider.providerInstanceId,
+    })
+  } catch (error) {
+    return [error]
+  }
+}
+
 async function stopStartedAccounts({
   startedAccounts,
+  releaseProviderLock,
 }) {
   const errors = []
   for (const entry of [...startedAccounts].reverse()) {
-    if (entry.stopped) {
-      continue
-    }
-    try {
-      const result = await entry.runtime.stop?.()
-      const stopErrors = collectRuntimeStopErrors({
-        result,
-        providerInstanceId: entry.provider.providerInstanceId,
-      })
-      if (stopErrors.length === 0) {
-        entry.stopped = true
-      } else {
-        errors.push(...stopErrors)
+    if (!entry.runtimeStopped) {
+      try {
+        const result = await entry.runtime.stop?.()
+        const stopErrors = collectRuntimeStopErrors({
+          result,
+          providerInstanceId: entry.provider.providerInstanceId,
+        })
+        if (stopErrors.length > 0) {
+          errors.push(...stopErrors)
+          continue
+        }
+        entry.runtimeStopped = true
+      } catch (error) {
+        errors.push(error)
+        continue
       }
-    } catch (error) {
-      errors.push(error)
     }
+    errors.push(...await releaseStoppedAccountLock({
+      entry,
+      releaseProviderLock,
+    }))
   }
   return errors
 }
@@ -60,10 +88,12 @@ function createMultiAccountRuntime({
   appConfig,
   startedAccounts,
   failedAccounts,
+  releaseProviderLock,
 }) {
   const stop = async () => {
     const errors = await stopStartedAccounts({
       startedAccounts,
+      releaseProviderLock,
     })
     if (errors.length > 0) {
       return {
@@ -258,7 +288,8 @@ export async function startProviderAccounts({
       startedAccounts.push({
         provider,
         runtime: result.runtime,
-        stopped: false,
+        runtimeStopped: false,
+        lockReleased: false,
       })
       continue
     }
@@ -280,5 +311,6 @@ export async function startProviderAccounts({
     appConfig,
     startedAccounts,
     failedAccounts,
+    releaseProviderLock,
   })
 }
