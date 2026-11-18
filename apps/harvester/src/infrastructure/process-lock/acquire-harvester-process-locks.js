@@ -102,6 +102,8 @@ function validateProcessLockOptions({
   journalDirectory,
   globalDirectory,
   broker,
+  providerInstanceId,
+  accountId,
   tradingMode,
   acquireLock,
 }) {
@@ -114,6 +116,17 @@ function validateProcessLockOptions({
   if (typeof broker !== "string" || !/^[a-z0-9-]+$/i.test(broker)) {
     throw new TypeError("Harvester trading lock broker must be a simple broker identifier")
   }
+  if (providerInstanceId !== undefined &&
+      (typeof providerInstanceId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(providerInstanceId))) {
+    throw new TypeError("Harvester process lock providerInstanceId must be a stable non-secret identifier")
+  }
+  if (accountId !== undefined &&
+      (typeof accountId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(accountId))) {
+    throw new TypeError("Harvester process lock accountId must be a stable non-secret identifier")
+  }
+  if ((providerInstanceId === undefined) !== (accountId === undefined)) {
+    throw new TypeError("Harvester process lock providerInstanceId and accountId must be supplied together")
+  }
   if (tradingMode !== "testnet" && tradingMode !== "live") {
     throw new TypeError('Harvester Binance process lock tradingMode must be "testnet" or "live"')
   }
@@ -125,9 +138,13 @@ function validateProcessLockOptions({
 /**
  * Derive a stable fingerprint from the broker and explicit trading environment.
  */
-function createLockScopeFingerprint({ broker, tradingMode }) {
+function createLockScopeFingerprint({ broker, accountId, tradingMode }) {
+  const normalizedBroker = broker.toLowerCase()
+  const identity = normalizedBroker === "binance" && accountId === "binance-primary"
+    ? [normalizedBroker, tradingMode]
+    : [normalizedBroker, accountId, tradingMode]
   return createHash("sha256")
-    .update(JSON.stringify([broker.toLowerCase(), tradingMode]))
+    .update(JSON.stringify(identity))
     .digest("hex")
 }
 
@@ -139,6 +156,8 @@ export async function acquireHarvesterProcessLocks({
   journalDirectory,
   globalDirectory,
   broker = "binance",
+  providerInstanceId,
+  accountId = "binance-primary",
   tradingMode,
   acquireLock = acquireHarvesterProcessLock,
 } = {}) {
@@ -146,11 +165,14 @@ export async function acquireHarvesterProcessLocks({
     validateProcessLockOptions({ journalDirectory,
 globalDirectory,
 broker,
+providerInstanceId,
+accountId: providerInstanceId === undefined ? undefined : accountId,
 tradingMode,
 acquireLock })
 
     const environmentFingerprint = createLockScopeFingerprint({
       broker,
+      accountId,
       tradingMode,
     })
     const hostLock = await acquireLock({
@@ -178,6 +200,8 @@ hostLock })
       owner: hostLock.owner,
       lockScope: Object.freeze({
         broker: broker.toLowerCase(),
+        providerInstanceId: providerInstanceId ?? broker.toLowerCase(),
+        accountId,
         tradingMode,
         environmentFingerprint,
       }),
