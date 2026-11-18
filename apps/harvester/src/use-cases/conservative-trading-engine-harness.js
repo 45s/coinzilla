@@ -1,56 +1,83 @@
 import { CanonicalOrder, Fill, Money, Quantity } from "@coinzilla/entities"
 import { multiplyDecimal } from "@coinzilla/utils"
 
-function createPlaceOrderHandler({
-  orders,
-  acknowledgedOrdersById,
-  acknowledgedFillsByOrder,
-  getAcknowledgedFills,
-  onPlaceOrder,
-  onPlaceOrderStarted,
-  placeOrderGate,
-  deferOrderSide,
+function resolvePlaceOrderFailure({
   placeOrderThrow,
   placeOrderFailureAfterCount,
+  placeOrderCallCount,
   placeOrderFailureError,
   placeOrderFailureAfterFirst,
   remainingPlaceOrderFailures,
-  placeOrderCallCount,
-  immediateFilledAcknowledgement,
-  market,
-  baseAsset,
-  quoteAsset,
-} = {}) {
+}) {
+  if (placeOrderThrow) {
+    throw new Error("socket closed")
+  }
+  if (placeOrderFailureAfterCount !== undefined && placeOrderCallCount.value > placeOrderFailureAfterCount) {
+    return placeOrderFailureError ?? new Error("replacement rejected")
+  }
+  if (placeOrderFailureAfterFirst && placeOrderCallCount.value > 1) {
+    return placeOrderFailureError ?? new Error("replacement rejected")
+  }
+  if (remainingPlaceOrderFailures.value > 0) {
+    if (Number.isFinite(remainingPlaceOrderFailures.value)) {
+      remainingPlaceOrderFailures.value -= 1
+    }
+    return placeOrderFailureError ?? new Error("broker rejected order")
+  }
+  return null
+}
+
+function createPlaceOrderHandler(options = {}) {
+  const {
+    orders,
+    acknowledgedOrdersById,
+    acknowledgedFillsByOrder,
+    getAcknowledgedFills,
+    onPlaceOrder,
+    onPlaceOrderStarted,
+    placeOrderGate,
+    deferOrderSide,
+    placeOrderThrow,
+    placeOrderFailureAfterCount,
+    placeOrderFailureError,
+    placeOrderFailureAfterFirst,
+    remainingPlaceOrderFailures,
+    placeOrderCallCount,
+    immediateFilledAcknowledgement,
+    market,
+    baseAsset,
+    quoteAsset,
+  } = options
   return async ({ order }) => {
     placeOrderCallCount.value += 1
     orders.push(order)
     onPlaceOrder?.({ order })
     onPlaceOrderStarted?.({ order })
-    if (placeOrderGate && order.side === deferOrderSide) {await placeOrderGate.promise}
-    if (placeOrderThrow) {throw new Error("socket closed")}
-    if (placeOrderFailureAfterCount !== undefined && placeOrderCallCount.value > placeOrderFailureAfterCount) {
-      return { ok: false,
-        errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
+    if (placeOrderGate && order.side === deferOrderSide) {
+      await placeOrderGate.promise
     }
-    if (placeOrderFailureAfterFirst && placeOrderCallCount.value > 1) {
-      return { ok: false,
-        errors: [placeOrderFailureError ?? new Error("replacement rejected")] }
-    }
-    if (remainingPlaceOrderFailures.value > 0) {
-      if (Number.isFinite(remainingPlaceOrderFailures.value)) {remainingPlaceOrderFailures.value -= 1}
-      return { ok: false,
-        errors: [placeOrderFailureError ?? new Error("broker rejected order")] }
+    const failure = resolvePlaceOrderFailure({
+      placeOrderThrow,
+      placeOrderFailureAfterCount,
+      placeOrderCallCount,
+      placeOrderFailureError,
+      placeOrderFailureAfterFirst,
+      remainingPlaceOrderFailures,
+    })
+    if (failure) {
+      return { ok: false, errors: [failure] }
     }
     const acknowledgedOrder = new CanonicalOrder({
       clientOrderId: order.clientOrderId,
       brokerOrderId: `broker-${order.clientOrderId}`,
+      providerInstanceId: order.providerInstanceId,
+      providerType: order.providerType,
+      accountId: order.accountId,
       market,
       side: order.side,
       type: order.type,
-      limitPrice: new Money({ amount: order.price,
-        asset: quoteAsset }),
-      originalQuantity: new Quantity({ amount: order.quantity,
-        asset: baseAsset }),
+      limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
+      originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
       executedQuantity: new Quantity({
         amount: immediateFilledAcknowledgement ? order.quantity : "0",
         asset: baseAsset,
@@ -68,9 +95,37 @@ function createPlaceOrderHandler({
         getAcknowledgedFills({ order: acknowledgedOrder }),
       )
     }
-    return { ok: true,
-      data: acknowledgedOrder }
+    return { ok: true, data: acknowledgedOrder }
   }
+}
+
+function resolveCancelOrderFailure({
+  cancelThrow,
+  cancelNotSent,
+  cancelNotSentOnSuccess,
+  cancelFailure,
+}) {
+  if (cancelThrow) {
+    throw new Error("cancel socket closed")
+  }
+  if (cancelNotSent) {
+    return {
+      ok: false,
+      cancellationOutcome: "NOT_SENT",
+      errors: [new Error("user-data stream unavailable")],
+    }
+  }
+  if (cancelNotSentOnSuccess) {
+    return {
+      ok: true,
+      cancellationOutcome: "NOT_SENT",
+      errors: [new Error("contradictory cancellation result")],
+    }
+  }
+  if (cancelFailure) {
+    return { ok: false, errors: [new Error("cancel denied")] }
+  }
+  return null
 }
 
 function createCancelOrderHandler({
@@ -91,24 +146,18 @@ function createCancelOrderHandler({
   return async ({ order }) => {
     cancellationIds.push(order.brokerOrderId)
     onCancelOrderStarted?.({ order })
-    if (cancelOrderGate) {await cancelOrderGate.promise}
-    if (cancelThrow) {throw new Error("cancel socket closed")}
-    if (cancelNotSent) {
-      return {
-        ok: false,
-        cancellationOutcome: "NOT_SENT",
-        errors: [new Error("user-data stream unavailable")],
-      }
+    if (cancelOrderGate) {
+      await cancelOrderGate.promise
     }
-    if (cancelNotSentOnSuccess) {
-      return {
-        ok: true,
-        cancellationOutcome: "NOT_SENT",
-        errors: [new Error("contradictory cancellation result")],
-      }
+    const failure = resolveCancelOrderFailure({
+      cancelThrow,
+      cancelNotSent,
+      cancelNotSentOnSuccess,
+      cancelFailure,
+    })
+    if (failure) {
+      return failure
     }
-    if (cancelFailure) {return { ok: false,
-      errors: [new Error("cancel denied")] }}
     canceledOrders.set(order.brokerOrderId, order)
     const executedQuantity = typeof cancelExecutedQuantity === "function"
       ? cancelExecutedQuantity({ order })
@@ -124,13 +173,15 @@ function createCancelOrderHandler({
       data: new CanonicalOrder({
         clientOrderId: order.clientOrderId,
         brokerOrderId: order.brokerOrderId,
+        providerInstanceId: order.providerInstanceId,
+        providerType: order.providerType,
+        accountId: order.accountId,
         market,
         side: order.side,
         type: order.type,
         limitPrice: order.limitPrice,
         originalQuantity: order.originalQuantity,
-        executedQuantity: new Quantity({ amount: executedQuantity,
-          asset: baseAsset }),
+        executedQuantity: new Quantity({ amount: executedQuantity, asset: baseAsset }),
         status: resolvedStatus,
         createdAt: order.createdAt,
         acknowledgedAt: order.acknowledgedAt,
