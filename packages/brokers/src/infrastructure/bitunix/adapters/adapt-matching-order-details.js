@@ -8,12 +8,39 @@ function requireNonEmptyString({ value, field }) {
 }
 
 function requireIso8601String({ value }) {
+  const match = typeof value === "string"
+    ? /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.exec(value)
+    : null
+  if (!match) {
+    throw new TypeError("Bitunix Spot matching-order ctime must be a timezone-qualified ISO-8601 string")
+  }
+  const [, yearText, monthText, dayText] = match
+  const year = Number(yearText)
+  const month = Number(monthText)
+  const day = Number(dayText)
+  const isLeapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)
+  const daysInMonth = [
+    31,
+    isLeapYear ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ]
   if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > daysInMonth[month - 1] ||
     !Number.isFinite(Date.parse(value))
   ) {
-    throw new TypeError("Bitunix Spot matching-order ctime must be a timezone-qualified ISO-8601 string")
+    throw new TypeError("Bitunix Spot matching-order ctime must be a valid timezone-qualified ISO-8601 timestamp")
   }
   return value
 }
