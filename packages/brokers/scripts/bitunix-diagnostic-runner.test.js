@@ -8,8 +8,6 @@ import {
 const validEnvironment = Object.freeze({
   BITUNIX_API_KEY: "diagnostic-api-key",
   BITUNIX_API_SECRET: "diagnostic-api-secret",
-  BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS: "YES",
-  BITUNIX_DIAGNOSTICS_SYMBOL: "BTCUSDT",
 })
 
 function createFakeRestClientFactory({ restCalls, options }) {
@@ -129,6 +127,7 @@ function createFakeWebSocketClientFactory({ websocketCalls, options }) {
     }
   }
 }
+
 function createFakeClients({ restCalls, websocketCalls, options = {} }) {
   return {
     restClientFactory: createFakeRestClientFactory({
@@ -142,24 +141,33 @@ function createFakeClients({ restCalls, websocketCalls, options = {} }) {
   }
 }
 
-test("diagnostics fail closed before constructing clients without explicit live-read confirmation", async () => {
-  let clientFactoryCalls = 0
-  const env = {
-    ...validEnvironment,
-    BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS: "NO",
-  }
+test("diagnostics use code defaults without diagnostic environment variables", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+  })
   const report = await runBitunixDiagnostics({
-    env,
-    restClientFactory: () => {
-      clientFactoryCalls += 1
+    env: validEnvironment,
+    restClientFactory(configuration) {
+      assert.equal(configuration.requestTimeout, 10_000, "The REST timeout must come from the diagnostic constants")
+      return factories.restClientFactory(configuration)
     },
-    websocketClientFactory: () => {
-      clientFactoryCalls += 1
+    websocketClientFactory(configuration) {
+      assert.equal(configuration.requestTimeout, 10_000, "The WebSocket RPC timeout must come from the diagnostic constants")
+      assert.equal(configuration.connectTimeout, 10_000, "The WebSocket connect timeout must come from the diagnostic constants")
+      assert.equal(configuration.closeTimeout, 10_000, "The WebSocket close timeout must come from the diagnostic constants")
+      return factories.websocketClientFactory(configuration)
     },
   })
 
-  assert.equal(report.summary.failed, 1, "Missing live-read confirmation must fail the diagnostic before any API client is constructed")
-  assert.equal(clientFactoryCalls, 0, "The diagnostic must not contact Bitunix until the operator explicitly confirms read-only LIVE requests")
+  assert.equal(report.summary.failed, 0, "Credentials alone must be sufficient; diagnostic options must not require environment variables")
+  assert.equal(report.runtime.symbol, "BTCUSDT", "The default diagnostic symbol must come from the diagnostic constants")
+  assert.deepEqual(restCalls.find((request) => request.path.endsWith("/market/last_price")).queryParams, { symbol: "BTCUSDT" }, "REST market requests must use the constant symbol")
+  assert.equal(websocketCalls.find((call) => call?.method === "market.last_price").args.symbol, "BTCUSDT", "WebSocket market requests must use the constant symbol")
+  assert.equal(websocketCalls.find((call) => call?.method === "market.kline").args.interval, "1min", "K-line requests must use the constant interval")
+  assert.equal(report.results.find((entry) => entry.operation === "REST public market catalog").response.type, "array", "Public response bodies must remain omitted by the constant default")
 })
 
 test("diagnostics continue after independent REST failures and always disconnect the WebSocket client", async () => {
@@ -227,7 +235,6 @@ test("diagnostics report connection failure and skip all dependent RPC calls whi
   assert.equal(report.results.find((entry) => entry.operation === "market.last_price").status, "skipped", "RPC calls must not be sent after a failed connection")
   assert.equal(websocketCalls.includes("disconnect"), true, "The client cleanup path must run even after a failed connection attempt")
 })
-
 
 function createFakeObservedTransportFactory({ handlers, sentMessages }) {
   return () => ({
@@ -312,7 +319,6 @@ test("observed WebSocket transport captures sanitized request, response, errors 
   assert.equal(events[3].close.reason, "closed [REDACTED]", "Close diagnostics must be sanitized")
   assert.equal(JSON.stringify(events).includes("123.45"), false, "Private account values must never enter the event report")
 })
-
 
 test("a failed WebSocket RPC does not suppress later independent RPC checks", async () => {
   const restCalls = []
