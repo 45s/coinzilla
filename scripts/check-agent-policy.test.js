@@ -403,6 +403,9 @@ test("resolves GitHub-style heading fragments and local Markdown paths encoded i
       'docs/source.md links to missing heading anchor "#missing section" in docs/guide with spaces.md',
     ], 'URL-encoded local paths and fragments must resolve before comparing GitHub-style heading IDs; non-Markdown and external targets remain out of scope')
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
