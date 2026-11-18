@@ -74,3 +74,62 @@ test("SQLite backup aggregates a progress callback failure with a temporary clea
     })
   }
 })
+
+
+test("SQLite backup validates closed source connections and invalid timeouts", async () => {
+  const source = new DatabaseSync(":memory:")
+  const closedSource = new DatabaseSync(":memory:")
+  closedSource.close()
+
+  try {
+    await assert.rejects(
+      backupSqliteDatabase({
+        sourceConnection: closedSource,
+        sourceFilename: ":memory:",
+        destination: "/tmp/closed-source-backup.sqlite",
+      }),
+      /open source connection/,
+      "A backup must reject a closed native source connection before allocating temporary files",
+    )
+    await assert.rejects(
+      backupSqliteDatabase({
+        sourceConnection: source,
+        sourceFilename: ":memory:",
+        destination: "/tmp/invalid-timeout-backup.sqlite",
+        timeout: -1,
+      }),
+      /timeout/,
+      "A backup must reject a negative or unsafe native SQLite timeout",
+    )
+  } finally {
+    source.close()
+  }
+})
+
+test("SQLite backup reports temporary directory creation failure without attempting cleanup", async () => {
+  const directory = await createTemporaryDirectory()
+  const source = new DatabaseSync(":memory:")
+  const temporaryDirectoryFailure = new Error("backup temporary directory creation failed")
+
+  try {
+    await assert.rejects(
+      backupSqliteDatabase({
+        sourceConnection: source,
+        sourceFilename: ":memory:",
+        destination: join(directory, "backup.sqlite"),
+        createTemporaryDirectory: async () => {
+          throw temporaryDirectoryFailure
+        },
+      }),
+      (error) => error instanceof DatabaseProviderError
+        && error.cause === temporaryDirectoryFailure,
+      "A temporary directory creation failure must be preserved without attempting cleanup of a directory that does not exist",
+    )
+  } finally {
+    source.close()
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
