@@ -361,6 +361,13 @@ test("public-only diagnostics run unsigned REST checks when credentials are miss
   })
 
   assert.equal(report.summary.failed, 0, "missing optional credentials must not prevent the required public-only diagnostic checks")
+  const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
+  assert.equal(configuration.response.credentialsConfigured, false, "the report must preserve public-only credential state")
+  assert.deepEqual(
+    configuration.response.missingCredentialVariables,
+    ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"],
+    "the report must identify the exact credential variables required to enable private diagnostics",
+  )
   assert.deepEqual(
     restCalls.map(({ path, authenticated, method }) => ({
       path,
