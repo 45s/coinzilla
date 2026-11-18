@@ -21,7 +21,7 @@ Run the checks relevant to your change from the repository root:
 | --- | --- |
 | `pnpm test` | Run all workspace tests that define a `test` script |
 | `pnpm run check:syntax` | Parse JavaScript files under `apps/` and `packages/` with Node.js |
-| `pnpm run quality` | Run workspace tests, syntax checks, and agent-policy checks |
+| `pnpm run quality` | Run workspace tests, full-workspace ESLint, JavaScript syntax, agent-policy checks, and mocked external-link tests |
 | `pnpm run test:coverage` | Run workspace tests with Node.js coverage reporting |
 | `pnpm --filter @coinzilla/utils test` | Run the shared utilities package tests |
 
