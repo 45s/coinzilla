@@ -461,40 +461,77 @@ const requireOrderFacts = ({ order }) => {
 
 // eslint-disable-next-line complexity -- Existing schema normalization branches are intentionally kept cohesive.
 // eslint-disable-next-line complexity -- Existing strategy input normalization remains a cohesive validation boundary.
-const mapStrategyDecisionInputs = (inputs) => {
-  if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
-    throw new TypeError("inputs must be an object")
-  }
+const STRATEGY_DECIMAL_INPUT_FIELDS = Object.freeze([
+  "lastBuyPrice",
+  "activeBaseQuantity",
+  "activeBaseBalance",
+  "freeQuoteBalance",
+  "freeBaseBalance",
+  "quoteCashFlow",
+  "committedQuote",
+  "committedQuoteBalance",
+  "committedBase",
+  "committedBaseBalance",
+  "outstandingRecoveryAmount",
+  "investmentLimit",
+  "orderQuantity",
+  "keepQuantity",
+  "priceStepPercent",
+  "makerPercent",
+  "takerPercent",
+  "minProfit",
+])
+
+function mapStrategyDecimalInputs({ inputs }) {
   const mapped = {}
-  for (const field of [
-    "lastBuyPrice", "activeBaseQuantity", "activeBaseBalance", "freeQuoteBalance",
-    "freeBaseBalance", "quoteCashFlow", "committedQuote", "committedQuoteBalance",
-    "committedBase", "committedBaseBalance", "outstandingRecoveryAmount",
-    "investmentLimit", "orderQuantity", "keepQuantity", "priceStepPercent",
-    "makerPercent", "takerPercent", "minProfit",
-  ]) {
+  for (const field of STRATEGY_DECIMAL_INPUT_FIELDS) {
     const value = inputs[field]
-    if (value === undefined) {continue}
+    if (value === undefined) {
+      continue
+    }
     if (field === "lastBuyPrice" && value === null) {
       mapped[field] = null
       continue
     }
-    if (typeof value === "number" && (!Number.isFinite(value) || Object.is(value, -0))) {continue}
+    if (typeof value === "number" && (!Number.isFinite(value) || Object.is(value, -0))) {
+      continue
+    }
     const decimal = typeof value === "number" ? String(value) : value
-    if (typeof decimal !== "string") {continue}
+    if (typeof decimal !== "string") {
+      continue
+    }
     try {
-      assertDecimalString({ value: decimal,
-        field: `inputs.${field}` })
+      assertDecimalString({
+        value: decimal,
+        field: `inputs.${field}`,
+      })
       mapped[field] = decimal
     } catch {
       // Preserve valid decision inputs without letting malformed optional diagnostics hide the decision.
     }
   }
+  return mapped
+}
+
+function mapStrategyCountInputs({ inputs }) {
+  const mapped = {}
   for (const field of ["activeOrderCount", "activeBuyCount", "activeSellCount"]) {
     const value = inputs[field]
-    if (isNonNegativeSafeInteger(value)) {mapped[field] = value}
+    if (isNonNegativeSafeInteger(value)) {
+      mapped[field] = value
+    }
   }
   return mapped
+}
+
+const mapStrategyDecisionInputs = (inputs) => {
+  if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
+    throw new TypeError("inputs must be an object")
+  }
+  return {
+    ...mapStrategyDecimalInputs({ inputs }),
+    ...mapStrategyCountInputs({ inputs }),
+  }
 }
 
 /** Map an actionable strategy decision; NO_ACTION evaluations are not journal events. */
