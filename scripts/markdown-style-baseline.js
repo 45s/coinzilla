@@ -359,7 +359,7 @@ function collectTableFormattingFindings({ lines, codeLineIndexes }) {
 /**
  * Collect objective Markdown style metrics without enforcing or rewriting files.
  *
- * Fenced code content is excluded from prose/list/table analysis. A fence is
+ * Fenced and indented code content is excluded from prose/list/table analysis. A fence is
  * considered unlabeled when its opening delimiter has no info string. Findings
  * are grouped by file and include affected line numbers where applicable.
  *
@@ -525,7 +525,7 @@ function collectDocumentFindings({ document, findings }) {
 /**
  * Collect objective Markdown style metrics without enforcing or rewriting files.
  *
- * Fenced code content is excluded from prose/list/table analysis. A fence is
+ * Fenced and indented code content is excluded from prose/list/table analysis. A fence is
  * considered unlabeled when its opening delimiter has no info string. Findings
  * are grouped by file and include affected line numbers where applicable.
  *
