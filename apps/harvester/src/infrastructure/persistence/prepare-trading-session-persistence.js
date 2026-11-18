@@ -1,5 +1,4 @@
 import { createDatabase, createSqliteProvider } from "@coinzilla/db"
-import { createTradingSessionRepository } from "./trading-session-repository.js"
 import { assertTradingSessionDatabaseIsolation } from "./resolve-trading-session-database-filename.js"
 
 const SQLITE_TIMEOUT_MS = 5_000
@@ -62,10 +61,7 @@ export async function prepareTradingSessionPersistence({
         },
       })
     }
-    return {
-      database,
-      repository: createTradingSessionRepository({ database }),
-    }
+    return { database }
   } catch (error) {
     reportPersistenceFailure({
       logger,

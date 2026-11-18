@@ -18,17 +18,12 @@ test("prepares a real provider-neutral SQLite session database and closes it", a
   const { database } = result ?? {}
 
   try {
-    assert.ok(result, "A valid isolated database directory must compose the real SQLite provider and session repository.")
+    assert.ok(result, "A valid isolated database directory must compose the real SQLite provider.")
     assert.equal(database.state, "connected", "The provider-neutral database must be connected before the repository is exposed.")
     assert.deepEqual(
       await database.readOne({ collection: "harvester_processes", id: "12345" }),
       { id: "12345", processId: 12345 },
       "Harvester must persist the operating-system process ID as a minimal temporary SQLite smoke-test record.",
-    )
-    assert.equal(
-      await result.repository.findById("missing-session"),
-      null,
-      "The prepared repository must support a provider-neutral read against the connected SQLite database.",
     )
 
     const errors = await closeTradingSessionPersistence({

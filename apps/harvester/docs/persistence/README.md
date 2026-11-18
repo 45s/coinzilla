@@ -274,3 +274,14 @@ Harvester currently writes one deliberately temporary `harvester_processes` reco
 ```
 
 The record exists only to verify that the application can connect through `@coinzilla/db` and persist/read a value. It is not trading-session history, trading state, or a production persistence contract; remove this smoke-test write when real Harvester persistence is implemented. The existing LIVE/TESTNET database-file isolation remains unchanged.
+
+
+## Temporary SQLite connectivity check
+
+For the current integration smoke test, Harvester opens the existing environment-selected SQLite database and writes one temporary record to the `harvester_processes` collection:
+
+```json
+{ "id": "12345", "processId": 12345 }
+```
+
+The ID is only the string form required by the generic database record contract. The runtime does not attach the trading-session history observer in this temporary test path, so it does not create a trading-session row. Remove this temporary process-ID write and restore the normal history projection when real Harvester persistence work begins. LIVE/TESTNET file isolation is unchanged.
