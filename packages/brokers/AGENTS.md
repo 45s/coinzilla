@@ -24,7 +24,7 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 
 ## DDD responsibility boundaries
 
-`@coinzilla/brokers` owns a **broker domain**: the exchange-neutral concepts, invariants, capability contracts, and broker application workflows needed to interact with exchanges. It also owns the infrastructure adapters that implement those contracts. It does not own portfolio/position policy, trading strategy, or bot product decisions.
+`@coinzilla/brokers` owns the exchange integration domain: provider-specific capability declarations/evidence, broker application workflows, and infrastructure adapters. The shared exchange-neutral `BrokerCapabilities` value, capability vocabulary, three-state status semantics, validation, and serialization are owned by `@coinzilla/entities`; Brokers must use and may re-export that contract, never maintain a competing model. Brokers does not own portfolio/position policy, trading strategy, or bot product decisions.
 
 - **Domain:** own broker-specific, exchange-neutral capability concepts, value objects, invariants, domain errors, and policies. Do not duplicate canonical shared entities or import Binance protocol/transport code.
 - **Application:** own broker use cases and orchestration. Coordinate domain behavior through ports; keep socket management, signing, wire formats, and protocol retry mechanics in infrastructure.
