@@ -32,11 +32,11 @@ This revalidation was a read-only source and GitHub delivery-state inspection an
 
 ## Priority and next delivery decision — 2026-11-18
 
-**Owner priority:** #1339 remains the primary Harvester architecture/delivery workstream. The merged #1366 and #1383 work is a foundation only; the application still composes one Binance trading instance and has no independent execution or strategy market-data route tables. The isolated Bitunix observer is read-only and is not part of the provider-routing architecture.
+**Owner priority:** #1339 remains the primary Harvester architecture/delivery workstream. Phase 4 now supports multiple configured Binance account runtimes in one process; the application still has no independent execution or strategy market-data route tables, and no second production exchange adapter is registered. The isolated Bitunix observer is read-only and is not part of the provider-routing architecture.
 
 **Current implementation priority: Phase 5 — independent market-data routing.** Phase 4 basic in-process account isolation is complete in merged [PR #1445](https://github.com/45s/coinzilla/pull/1445). Keep runtime state in memory; do not introduce restart restoration or recovery gates.
 
-**Process-restart recovery (#654) is explicitly the lowest-priority separate workstream.** It must not block Phase 4 or receive further implementation effort until the basic multi-provider runtime is working and the user reprioritizes it.
+**Process-restart recovery (#654) is explicitly the lowest-priority separate workstream.** It must not block Phase 5/6 or receive further implementation effort unless the user explicitly reprioritizes it.
 
 **Phase 4 implementation complete:** [PR #1445](https://github.com/45s/coinzilla/pull/1445) merged with independent configured account runtimes, account-specific credential isolation, scoped process locks and partial startup failure isolation.
 
