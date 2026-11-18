@@ -15,7 +15,7 @@ const TEMPLATE_HEADING_EXEMPTIONS = [
   /^\.github\/PULL_REQUEST_TEMPLATE\.md$/,
 ]
 
-function matchesAny(path, patterns) {
+function matchesAny({ path, patterns }) {
   return patterns.some((pattern) => pattern.test(path))
 }
 
@@ -29,10 +29,10 @@ export function classifyMarkdownPath(path) {
   if (typeof path !== "string" || path.length === 0) {
     return "unknown"
   }
-  if (matchesAny(path, HISTORICAL_PATHS)) {
+  if (matchesAny({ path, patterns: HISTORICAL_PATHS })) {
     return "historical"
   }
-  if (matchesAny(path, TEMPLATE_HEADING_EXEMPTIONS)) {
+  if (matchesAny({ path, patterns: TEMPLATE_HEADING_EXEMPTIONS })) {
     return "github-template"
   }
   return "maintained"
