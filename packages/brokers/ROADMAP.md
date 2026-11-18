@@ -12,15 +12,16 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
-**Status: in progress; Phase 0 capability ownership decision completed 2026-11-18.** PR #1449 is merged. The source-backed ownership decision, canonical three-state capability model, provider declarations, explicit unsupported error, structural method contract, and first shared offline conformance tests are being implemented in [PR #1451](https://github.com/45s/coinzilla/pull/1451). The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md).
+**Status: in progress.** PR #1449 is merged; the common method/result/error contract and provider conformance work continue in [PR #1451](https://github.com/45s/coinzilla/pull/1451). Capability-model duplication was reconciled in [PR #1455](https://github.com/45s/coinzilla/pull/1455): Entities owns the shared value contract, while Brokers owns provider-specific declaration evidence. The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md).
 
 ### Ownership boundary
 
-- `@coinzilla/brokers` owns the general Broker API, broker-domain contracts, normalized results/errors, truthful capability declarations, and exchange-specific implementations.
+- `@coinzilla/entities` owns the shared exchange-neutral `BrokerCapabilities` value, vocabulary, three-state status semantics, validation, lookup, immutability, and serialization.
+- `@coinzilla/brokers` owns the general Broker API, normalized results/errors, provider-specific capability declarations/evidence, and exchange-specific implementations. Its public capability exports re-export the Entities contract for compatibility.
 - Each consuming application owns its own application ports, adapters, provider registry, routing, bootstrap/composition, and application workflows.
 - The Brokers package must not import consuming applications or define their application ports; it does not own strategy/market routing or application-specific provider registries.
 - Exchange-specific REST/WS transport, signing, request/response DTOs, and protocol mapping stay inside each provider implementation. A common API does not require a common wire protocol.
-- `@coinzilla/entities` is a separate package boundary. Its existing `BrokerCapabilities` model must be evaluated as part of this task; its presence does not by itself prove that Entities is the correct owner of the broker capability contract.
+- The shared capability contract is a dependency-neutral entity; provider implementation evidence is supplied by Brokers. Entities must not depend on Brokers.
 
 ### Contract rules
 
@@ -31,26 +32,21 @@ Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 - Capability status is metadata about a provider's implementation/guarantees, not a substitute for checking account permissions, selected environment, market availability, runtime readiness, or current connectivity. Conditions and evidence must be represented without collapsing distinct concepts into one status.
 - Normalize shared operation arguments, result envelopes, error identity, and canonical data at the Brokers boundary while preserving provider-specific extensions where they are genuinely provider-specific.
 - Preserve exact decimal strings, source timestamps, stable identifiers, and unknown outcomes. Never weaken a provider's safety contract to make its method look supported.
-- Do not create a second capability model, duplicate capability vocabulary, or parallel status enum. There must be one canonical capability contract and one authoritative implementation of its validation/lookup semantics.
+- Do not create a second capability model, duplicate capability vocabulary, or parallel status enum. Entities owns the sole shared capability contract; Brokers owns provider-specific declaration content.
 
-### Capability-model ownership decision — Phase 0 complete (2026-11-18)
+### Capability-model ownership reconciliation — PR #1455 (2026-11-18)
 
-The audit is complete. The canonical provider capability model is owned by `@coinzilla/brokers`.
+The earlier Phase 0 audit selected Brokers as the owner because its provider declaration contained evidence metadata not represented by the then-current Entities snapshot. The project owner subsequently clarified that the already-public Entities `BrokerCapabilities` must remain the single canonical contract rather than preserving two competing classes.
 
-Source-backed evidence:
-
-- Entities' `BrokerCapabilities` originated in PR #308 / FR-015 and is publicly exported, but repository-wide runtime-use tracing found no provider implementation consumer outside its own package implementation/tests/exports and documentation.
-- Binance's provider declaration originated in Brokers PR #1366 and carries broker-specific method/guarantee/limitation/reason/conditions evidence.
-- Harvester's provider registry consumes the Binance declaration directly. Its existing metadata boundary is preserved by the new model: `contractVersion`, `provider`, `environment.selectedMode`, and `environment.supportedModes`. No Harvester port/adapter/registry is imported into Brokers or moved.
-- The two previous declarations overlapped in purpose; retaining them as independent canonical models would create competing sources of truth.
+The reconciliation in PR #1455 extends the existing Entities contract to support the provider metadata/evidence required by Brokers while preserving the original capability-only constructor and serialized value shape for existing consumers. Brokers now imports and re-exports that exact class; Binance provider declarations use the same class instance. No duplicate capability class, vocabulary, status enum, validation, lookup, immutability, or serialization implementation remains.
 
 Decision:
 
-- `@coinzilla/brokers` owns the canonical `BrokerCapabilities` value, capability vocabulary, validation, lookup, immutability, and serialization.
-- The only statuses are `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`. Omitted entries are `UNKNOWN`; unknown means insufficient evidence, not unsupported.
-- `environment-dependent` is removed as a status. An implemented operation is `SUPPORTED` with explicit method, guarantee, limitation, and conditions. Selected environment, account permission, runtime readiness, and connectivity remain separate facts.
-- Supported entries require a method and guarantee; unsupported/unknown entries require a reason. Declarations are deeply immutable and expose detached `value`/`toJSON()` snapshots.
-- The Entities public export is not silently removed or changed. Its owner-coordinated compatibility/deprecation disposition is tracked in [Entities issue #1450](https://github.com/45s/coinzilla). Brokers does not import the legacy Entities capability class, and Entities must not depend on Brokers.
+- Entities owns the one canonical `BrokerCapabilities` value and its exchange-neutral capability vocabulary, `SUPPORTED` / `UNSUPPORTED` / `UNKNOWN` statuses, omitted-entry `UNKNOWN` semantics, validation, lookup, immutability, and serialization.
+- Brokers owns the truthfulness and provider-specific evidence for each declaration, including provider/product/environment identity and method/guarantee/limitation/reason/condition metadata.
+- Provider declarations with provider identity require evidence: supported entries require method and guarantee; unsupported/unknown entries require a reason. Legacy capability-only Entities snapshots retain their existing accepted shape.
+- Environment selection, account permissions, connectivity, recovery readiness, and other prerequisites are represented separately as metadata/conditions, never as a fourth status.
+- The Brokers public API re-exports the Entities class/constants for compatibility. Entities does not import or depend on Brokers.
 
 The implementation and current provider matrix are specified in [BROKER_API.md](./BROKER_API.md).
 
