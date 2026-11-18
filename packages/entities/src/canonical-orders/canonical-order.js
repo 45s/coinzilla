@@ -224,7 +224,11 @@ export class CanonicalOrder {
       clientOrderId,
       brokerOrderId,
     })
-    validateProviderProvenance({ providerInstanceId, providerType, accountId })
+    validateProviderProvenance({
+      providerInstanceId,
+      providerType,
+      accountId,
+    })
     validateOrderType({
       market,
       side,
