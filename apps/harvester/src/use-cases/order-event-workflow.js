@@ -111,7 +111,12 @@ function getProviderAttributionFailure({ order, fill }) {
 function validateExecutionFill({ order, fill, eventPublisher }) {
   if (!(fill instanceof Fill)) {
     const error = new TypeError("TRADE event requires a canonical Fill")
-    publishInvalidExecutionFill({ eventPublisher, order, reason: "MISSING_FILL", error })
+    publishInvalidExecutionFill({
+      eventPublisher,
+      order,
+      reason: "MISSING_FILL",
+      error,
+    })
     return {
       ok: false,
       result: failureResult({
@@ -161,7 +166,10 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
       },
     }
   }
-  return { ok: true, symbol: order.market.symbol }
+  return {
+    ok: true,
+    symbol: order.market.symbol,
+  }
 }
 async function pauseForInvalidExecutionFill({ pause, validation }) {
   if (!["FILL_ORDER_IDENTITY", "FILL_PROVIDER_PROVENANCE_MISSING"].includes(validation.failure?.stage)) {
