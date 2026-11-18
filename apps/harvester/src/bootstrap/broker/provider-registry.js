@@ -354,10 +354,16 @@ function createEntryLifecycle({ entry, eventPublisher, logger, registryState }) 
   let disconnectPromise
   const disconnect = async function disconnectEntry() {
     if (!disconnectPromise) {
-      disconnectPromise = disconnectEntries({
-        entries: [entry],
-        logger,
-      })
+      const pendingConnect = connectPromise
+      disconnectPromise = (async () => {
+        if (pendingConnect) {
+          await pendingConnect.catch(() => {})
+        }
+        return disconnectEntries({
+          entries: [entry],
+          logger,
+        })
+      })()
     }
     const errors = await disconnectPromise
     if (errors.length > 0) {
@@ -385,15 +391,20 @@ function createEntryLifecycle({ entry, eventPublisher, logger, registryState }) 
             error,
             logger,
           })
-          try {
-            await disconnect()
-          } catch (cleanupError) {
-            throw new AggregateError([
-              error,
-              cleanupError,
-            ], "Provider connection and cleanup both failed", {
-              cause: cleanupError,
+          if (!disconnectPromise) {
+            disconnectPromise = disconnectEntries({
+              entries: [entry],
+              logger,
             })
+            const cleanupErrors = await disconnectPromise
+            if (cleanupErrors.length > 0) {
+              throw new AggregateError([
+                error,
+                new AggregateError(cleanupErrors, `Provider instance "${entry.descriptor.id}" failed to disconnect`),
+              ], "Provider connection and cleanup both failed", {
+                cause: cleanupErrors[0],
+              })
+            }
           }
           throw error
         }
