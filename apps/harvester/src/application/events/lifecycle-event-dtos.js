@@ -58,6 +58,26 @@ const requireConfigurationFingerprint = ({ value }) => {
   return value
 }
 
+const mapProviderProvenance = ({ value, field = "provider" } = {}) => {
+  if (value?.providerInstanceId === undefined) {
+    return {}
+  }
+  return {
+    providerInstanceId: requireString({
+      value: value.providerInstanceId,
+      field: `${field}.providerInstanceId`,
+    }),
+    providerType: requireString({
+      value: value.providerType,
+      field: `${field}.providerType`,
+    }),
+    accountId: requireString({
+      value: value.accountId,
+      field: `${field}.accountId`,
+    }),
+  }
+}
+
 const mapArrayWithIndex = ({ values, mapper }) =>
   values.map((...args) => mapper({
     value: args[0],
@@ -421,20 +441,7 @@ const requireOrderFacts = ({ order }) => {
   return {
     clientOrderId: requireString({ value: order.clientOrderId,
       field: "clientOrderId" }),
-    ...(order.providerInstanceId === undefined ? {} : {
-      providerInstanceId: requireString({
-            value: order.providerInstanceId,
-            field: "order.providerInstanceId",
-          }),
-      providerType: requireString({
-            value: order.providerType,
-            field: "order.providerType",
-          }),
-      accountId: requireString({
-            value: order.accountId,
-            field: "order.accountId",
-          }),
-    }),
+    ...mapProviderProvenance({ value: order, field: "order" }),
     symbol: requireString({ value: order.market.symbol,
       field: "symbol" }),
     side: order.side === "BUY" || order.side === "SELL"
@@ -581,20 +588,7 @@ export const mapOrderSubmissionFailedData = (input = {}) =>
       return {
         clientOrderId: requireString({ value: order?.clientOrderId,
           field: "clientOrderId" }),
-        ...(order?.providerInstanceId === undefined ? {} : {
-          providerInstanceId: requireString({
-            value: order.providerInstanceId,
-            field: "order.providerInstanceId",
-          }),
-          providerType: requireString({
-            value: order.providerType,
-            field: "order.providerType",
-          }),
-          accountId: requireString({
-            value: order.accountId,
-            field: "order.accountId",
-          }),
-        }),
+        ...mapProviderProvenance({ value: order, field: "order" }),
         symbol: requireString({ value: order?.market?.symbol,
           field: "symbol" }),
         side: order?.side === "BUY" || order?.side === "SELL"
@@ -680,20 +674,7 @@ export const mapOrderCancelFailedData = (input = {}) =>
       return {
         clientOrderId: requireString({ value: order?.clientOrderId,
           field: "clientOrderId" }),
-        ...(order?.providerInstanceId === undefined ? {} : {
-          providerInstanceId: requireString({
-            value: order.providerInstanceId,
-            field: "order.providerInstanceId",
-          }),
-          providerType: requireString({
-            value: order.providerType,
-            field: "order.providerType",
-          }),
-          accountId: requireString({
-            value: order.accountId,
-            field: "order.accountId",
-          }),
-        }),
+        ...mapProviderProvenance({ value: order, field: "order" }),
         symbol: requireString({ value: order?.market?.symbol,
           field: "symbol" }),
         side: order?.side === "BUY" || order?.side === "SELL"
@@ -864,20 +845,7 @@ export const mapFillAppliedData = (input = {}) =>
             field: "clientOrderId",
           }),
         }),
-        ...(fill.providerInstanceId === undefined ? {} : {
-          providerInstanceId: requireString({
-            value: fill.providerInstanceId,
-            field: "fill.providerInstanceId",
-          }),
-          providerType: requireString({
-            value: fill.providerType,
-            field: "fill.providerType",
-          }),
-          accountId: requireString({
-            value: fill.accountId,
-            field: "fill.accountId",
-          }),
-        }),
+        ...mapProviderProvenance({ value: fill, field: "fill" }),
         symbol: requireString({
           value: fill.market.symbol,
           field: "symbol",
@@ -929,20 +897,7 @@ const requireExecutionOrderFacts = ({ order }) => {
   return {
     clientOrderId: requireString({ value: order.clientOrderId,
       field: "clientOrderId" }),
-    ...(order.providerInstanceId === undefined ? {} : {
-      providerInstanceId: requireString({
-            value: order.providerInstanceId,
-            field: "order.providerInstanceId",
-          }),
-      providerType: requireString({
-            value: order.providerType,
-            field: "order.providerType",
-          }),
-      accountId: requireString({
-            value: order.accountId,
-            field: "order.accountId",
-          }),
-    }),
+    ...mapProviderProvenance({ value: order, field: "order" }),
     ...(typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()
       ? { brokerOrderId: order.brokerOrderId.trim() }
       : {}),
@@ -959,20 +914,7 @@ const requireExecutionFillFacts = ({ fill }) => {
   return {
     fillId: requireString({ value: fill.id,
       field: "fillId" }),
-    ...(fill.providerInstanceId === undefined ? {} : {
-      providerInstanceId: requireString({
-            value: fill.providerInstanceId,
-            field: "fill.providerInstanceId",
-          }),
-      providerType: requireString({
-            value: fill.providerType,
-            field: "fill.providerType",
-          }),
-      accountId: requireString({
-            value: fill.accountId,
-            field: "fill.accountId",
-          }),
-    }),
+    ...mapProviderProvenance({ value: fill, field: "fill" }),
     fillBrokerOrderId: requireString({ value: fill.brokerOrderId,
       field: "fillBrokerOrderId" }),
     fillSymbol: requireString({ value: fill.market?.symbol,
