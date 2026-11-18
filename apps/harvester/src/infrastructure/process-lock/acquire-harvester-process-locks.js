@@ -129,7 +129,7 @@ function validateAccountLockIdentity({ providerInstanceId, accountId }) {
 
 function validateTradingMode({ tradingMode }) {
   if (tradingMode !== "testnet" && tradingMode !== "live") {
-    throw new TypeError('Harvester Binance process lock tradingMode must be "testnet" or "live"')
+    throw new TypeError('Harvester process lock tradingMode must be "testnet" or "live"')
   }
 }
 
@@ -148,7 +148,7 @@ function validateProcessLockOptions(options) {
 }
 
 /**
- * Derive a stable fingerprint from the broker and explicit trading environment.
+ * Derive a stable fingerprint from the broker, account identity and explicit environment.
  */
 function createLockScopeFingerprint({ broker, accountId, tradingMode }) {
   const normalizedBroker = broker.toLowerCase()
@@ -248,9 +248,9 @@ export async function acquireHarvesterProcessLocks({
         environmentFingerprint,
       }),
       release: createLockRelease({
-          journalLock,
-          hostLock,
-        }),
+        journalLock,
+        hostLock,
+      }),
     })
   } catch (error) {
     return toResult({ error })

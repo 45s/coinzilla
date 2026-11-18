@@ -153,7 +153,6 @@ test("retains the host lock when Journal-lock release is uncertain and retries i
   }
 })
 
-
 test("allows different provider accounts to hold independent process locks", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "harvester-account-locks-"))
   const globalDirectory = path.join(root, "host-locks")
@@ -246,7 +245,6 @@ test("blocks a second provider instance for the same account and environment", a
   }
 })
 
-
 test("rejects incomplete provider/account lock identity", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "harvester-incomplete-account-lock-"))
   const globalDirectory = path.join(root, "host-locks")
@@ -288,6 +286,41 @@ test("rejects incomplete provider/account lock identity", async () => {
       /providerInstanceId and accountId must be supplied together/,
       "Incomplete account/provider identity must fail with an actionable validation message.",
     )
+  } finally {
+    await rm(root, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+
+test("preserves the legacy Binance primary lock for mixed-version exclusion", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "harvester-legacy-primary-lock-"))
+  const globalDirectory = path.join(root, "host-locks")
+  const legacyJournalDirectory = path.join(root, "legacy-journal")
+  const accountJournalDirectory = path.join(root, "account-journal")
+
+  try {
+    const legacyLock = await acquireHarvesterProcessLocks({
+      globalDirectory,
+      journalDirectory: legacyJournalDirectory,
+      broker: "binance",
+      tradingMode: "testnet",
+    })
+    assert.equal(legacyLock.ok, true, "The legacy single-Binance process must acquire its existing primary lock.")
+
+    const accountAwareLock = await acquireHarvesterProcessLocks({
+      globalDirectory,
+      journalDirectory: accountJournalDirectory,
+      broker: "binance",
+      providerInstanceId: "binance-testnet-primary",
+      accountId: "binance-primary",
+      tradingMode: "testnet",
+    })
+    assert.equal(accountAwareLock.ok, false, "The account-aware primary runtime must conflict with a legacy primary writer.")
+    assert.equal(accountAwareLock.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS", "Mixed-version primary writers must fail with the established lock-conflict code.")
+    assert.equal((await legacyLock.release()).ok, true, "The legacy primary lock must remain releasable after the conflict.")
   } finally {
     await rm(root, {
       recursive: true,

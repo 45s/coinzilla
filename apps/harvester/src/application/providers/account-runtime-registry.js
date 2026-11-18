@@ -57,10 +57,10 @@ function createAccountRuntime({ identity }) {
 }
 
 function addAccountRuntime({
-      provider,
-      accounts,
-      accountScopes,
-    }) {
+  provider,
+  accounts,
+  accountScopes,
+}) {
   const identity = validateProviderIdentity({ provider })
   if (accounts.has(identity.providerInstanceId)) {
     throw new TypeError("Account runtime registry contains a duplicate providerInstanceId")
