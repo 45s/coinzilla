@@ -459,7 +459,7 @@ test("rejects duplicate provider instance IDs and account scopes", () => {
     providerInstanceId: "binanceTestnetAlias",
   }
   assert.throws(() => validateAppConfig(config), (error) =>
-    error instanceof ConfigValidationError && error.path === "brokers.instances")
+    error instanceof ConfigValidationError && error.path === "brokers.instances[1].credentials")
 })
 
 test("rejects provider credentials stored directly in application configuration", () => {
@@ -509,5 +509,5 @@ test("rejects credential environment variable reuse across provider accounts", (
     ],
   }
   assert.throws(() => validateAppConfig(config), (error) =>
-    error instanceof ConfigValidationError && error.path === "brokers.instances")
+    error instanceof ConfigValidationError && error.path === "brokers.instances[1].credentials")
 })
