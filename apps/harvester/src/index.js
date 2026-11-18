@@ -353,9 +353,28 @@ function createProviderProcessLockEntries({
       providerInstanceId: provider.providerInstanceId,
       lock: locks[index],
       released: false,
+      retained: false,
     })
   }
   return entries
+}
+
+function retainProviderProcessLock({
+  entries,
+  providerInstanceId,
+}) {
+  const entry = entries.find((item) => item.providerInstanceId === providerInstanceId)
+  if (!entry || entry.released) {
+    return {
+      ok: false,
+      errors: [new Error(`Provider account process lock ${providerInstanceId} cannot be retained`)],
+    }
+  }
+  entry.retained = true
+  return {
+    ok: true,
+    retained: true,
+  }
 }
 
 async function releaseProviderProcessLock({
@@ -373,6 +392,13 @@ async function releaseProviderProcessLock({
     return {
       ok: true,
       alreadyReleased: true,
+    }
+  }
+  if (entry.retained) {
+    return {
+      ok: false,
+      retained: true,
+      errors: [new Error(`Provider account process lock ${providerInstanceId} is intentionally retained after uncertain startup cleanup`)],
     }
   }
   try {
@@ -394,8 +420,11 @@ async function releaseAllProviderProcessLocks({
   releaseProvider,
 }) {
   const errors = []
+  const retainedProviderInstanceIds = entries
+    .filter((entry) => entry.retained && !entry.released)
+    .map(({ providerInstanceId }) => providerInstanceId)
   for (const entry of [...entries].reverse()) {
-    if (entry.released) {
+    if (entry.released || entry.retained) {
       continue
     }
     const result = await releaseProvider(entry.providerInstanceId)
@@ -406,15 +435,21 @@ async function releaseAllProviderProcessLocks({
       }))
     }
   }
+  if (retainedProviderInstanceIds.length > 0) {
+    errors.push(...retainedProviderInstanceIds.map((providerInstanceId) =>
+      new Error(`Provider account process lock ${providerInstanceId} remains retained after uncertain startup cleanup`)))
+  }
   if (errors.length > 0) {
     return {
       ok: false,
       errors,
+      retainedProviderInstanceIds,
     }
   }
   return {
     ok: true,
     released: true,
+    retainedProviderInstanceIds,
   }
 }
 
@@ -425,6 +460,10 @@ function createProviderProcessLockGroup({
   const entries = createProviderProcessLockEntries({
     providers,
     locks,
+  })
+  const retainProvider = (providerInstanceId) => retainProviderProcessLock({
+    entries,
+    providerInstanceId,
   })
   const releaseProvider = (providerInstanceId) => releaseProviderProcessLock({
     entries,
@@ -441,6 +480,7 @@ function createProviderProcessLockGroup({
     }
   return {
     ...lockMetadata,
+    retainProvider,
     releaseProvider,
     release,
   }
@@ -741,6 +781,8 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
     eventPublisher: resources.eventPublisher,
     runtimeSessionId: options.processIdentity.runtimeSessionId,
     operationalStateStore: resources.operationalStateStore,
+    retainProviderLock: (providerInstanceId) =>
+      resources.processLock.retainProvider(providerInstanceId),
     releaseProviderLock: (providerInstanceId) =>
       resources.processLock.releaseProvider(providerInstanceId),
   })
