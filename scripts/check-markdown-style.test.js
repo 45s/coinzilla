@@ -83,48 +83,51 @@ test("enforces whitespace and heading rules when the affected lines change", () 
   ])
 })
 
+function createStyleExceptionFixture() {
+  const documents = [
+    {
+      path: "docs/new.md",
+      content: "# New  \n\n\n### Skipped",
+    },
+    {
+      path: "apps/harvester/AUDIT_2026-11-09.md",
+      content: "# Historical  \n\n\nEvidence",
+    },
+    {
+      path: "docs/ai-agent/repository-engineering-audit.md",
+      content: "# Historical task brief  \n\n\nEvidence",
+    },
+    {
+      path: "apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md",
+      content: "# Superseded plan  \n\n\nEvidence",
+    },
+    {
+      path: ".github/PULL_REQUEST_TEMPLATE.md",
+      content: "## Summary\n\nDescription  \n",
+    },
+    {
+      path: ".github/ISSUE_TEMPLATE/cross-domain-request.md",
+      content: "## Summary\n\nDescription.\n- item\n\n## Context\n\nDescription.\n",
+    },
+  ]
+  const changesByPath = new Map(documents.map(({ path, content }) => [
+    path,
+    {
+      lines: new Set(getLineNumbers(content)),
+      isNewFile: true,
+    },
+  ]))
+  return {
+    documents,
+    changesByPath,
+  }
+}
+
 test("checks new files fully while preserving historical, superseded and GitHub template exceptions", () => {
+  const { documents, changesByPath } = createStyleExceptionFixture()
   const result = analyzeMarkdownStyleDocuments({
-    documents: [
-      {
-        path: "docs/new.md",
-        content: "# New  \n\n\n### Skipped",
-      },
-      {
-        path: "apps/harvester/AUDIT_2026-11-09.md",
-        content: "# Historical  \n\n\nEvidence",
-      },
-      {
-        path: "docs/ai-agent/repository-engineering-audit.md",
-        content: "# Historical task brief  \n\n\nEvidence",
-      },
-      {
-        path: "apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md",
-        content: "# Superseded plan  \n\n\nEvidence",
-      },
-      {
-        path: ".github/PULL_REQUEST_TEMPLATE.md",
-        content: "## Summary\n\nDescription  \n",
-      },
-      {
-        path: ".github/ISSUE_TEMPLATE/cross-domain-request.md",
-        content: "## Summary\n\nDescription.\n- item\n\n## Context\n\nDescription.\n",
-      },
-    ],
-    changesByPath: new Map([
-      ["docs/new.md", { lines: new Set([1, 2, 3, 4]),
-        isNewFile: true }],
-      ["apps/harvester/AUDIT_2026-11-09.md", { lines: new Set([1, 2, 3, 4]),
-        isNewFile: true }],
-      ["docs/ai-agent/repository-engineering-audit.md", { lines: new Set([1, 2, 3, 4]),
-        isNewFile: true }],
-      ["apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md", { lines: new Set([1, 2, 3, 4]),
-        isNewFile: true }],
-      [".github/PULL_REQUEST_TEMPLATE.md", { lines: new Set([1, 2, 3]),
-        isNewFile: true }],
-      [".github/ISSUE_TEMPLATE/cross-domain-request.md", { lines: new Set([1, 2, 3, 4, 5]),
-        isNewFile: true }],
-    ]),
+    documents,
+    changesByPath,
   })
 
   assert.equal(result.scannedFiles, 3, 'only maintained documents and GitHub templates should be scanned')
@@ -305,4 +308,40 @@ content }],
   assert.equal(result.scannedFiles, 0)
   assert.equal(result.skippedHistorical, 1)
   assert.deepEqual(Object.values(result.violations).flat(), [])
+})
+
+
+test("ignores indented code blocks in changed-file Markdown enforcement", () => {
+  const content = [
+    "# Architecture",
+    "",
+    "Intro paragraph.",
+    "",
+    "    Binance WebSocket API",
+    "    - list-looking code with trailing whitespace  ",
+    "",
+    "",
+    "    | Name | Value |",
+    "    | --- | -- |",
+    "    | one | two | extra |",
+    "",
+    "After the diagram.",
+    "",
+  ].join("\n")
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{
+      path: "docs/indented-code.md",
+      content,
+    }],
+    changesByPath: new Map([["docs/indented-code.md", {
+      lines: new Set(getLineNumbers(content)),
+      isNewFile: true,
+    }]]),
+  })
+
+  assert.deepEqual(
+    Object.values(result.violations).flat(),
+    [],
+    "indented code must not trigger blocking changed-file style rules",
+  )
 })

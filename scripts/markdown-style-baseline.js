@@ -29,7 +29,101 @@ marker: match[2],
 separator: match[3] }
 }
 
-function splitTableCells(line) {
+function getIndentationWidth(line) {
+  const indentation = line.match(/^([ \t]*)/)?.[1] ?? ""
+  return indentation.replace(/\t/g, "    ").length
+}
+
+function isIndentedCodeLine(line) {
+  return /^(?: {4,}|\t)\S/.test(line)
+}
+
+function isNestedListContent({ lines, index, indentation }) {
+  let previousIndex = index - 1
+  while (previousIndex >= 0 && lines[previousIndex].trim() === "") {
+    previousIndex -= 1
+  }
+
+  if (previousIndex < 0) {return false}
+
+  const parentItem = parseListItem(lines[previousIndex])
+  if (!parentItem) {return false}
+
+  const parentContentColumn = getIndentationWidth(parentItem.indent) +
+    parentItem.marker.length +
+    parentItem.separator.length
+  return indentation === parentContentColumn
+}
+
+function hasIndentedCodeAfterBlankLines({
+          lines,
+          index,
+        }) {
+  let nextContentIndex = index + 1
+  while (
+    nextContentIndex < lines.length &&
+    lines[nextContentIndex].trim() === ""
+  ) {
+    nextContentIndex += 1
+  }
+
+  return nextContentIndex < lines.length &&
+    isIndentedCodeLine(lines[nextContentIndex])
+}
+
+function collectIndentedCodeLineIndexes({ lines }) {
+  const codeLineIndexes = new Set()
+  let isInsideIndentedCodeBlock = false
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (line.trim() === "") {
+      if (
+        isInsideIndentedCodeBlock &&
+        hasIndentedCodeAfterBlankLines({
+          lines,
+          index,
+        })
+      ) {
+        codeLineIndexes.add(index)
+      } else if (isInsideIndentedCodeBlock) {
+        isInsideIndentedCodeBlock = false
+      }
+      continue
+    }
+
+    if (isInsideIndentedCodeBlock && isIndentedCodeLine(line)) {
+      codeLineIndexes.add(index)
+      continue
+    }
+    if (isInsideIndentedCodeBlock) {
+      isInsideIndentedCodeBlock = false
+    }
+
+    if (!isIndentedCodeLine(line)) {continue}
+
+    const hasRequiredBlockSeparation = index === 0 ||
+      lines[index - 1].trim() === ""
+    if (!hasRequiredBlockSeparation) {continue}
+
+    if (
+      isNestedListContent({
+        lines,
+        index,
+        indentation: getIndentationWidth(line),
+      })
+    ) {
+      continue
+    }
+
+    codeLineIndexes.add(index)
+    isInsideIndentedCodeBlock = true
+  }
+
+  return codeLineIndexes
+}
+
+function normalizeTableSource(line) {
   const trimmed = line.trim()
   if (!trimmed.includes("|")) {return null}
 
@@ -38,7 +132,28 @@ function splitTableCells(line) {
   if (source.endsWith("|") && !source.endsWith("\\|")) {
     source = source.slice(0, -1)
   }
+  return source
+}
 
+function getCodeSpanDelimiterLength({
+      source,
+      index,
+    }) {
+  if (source[index] !== INLINE_CODE_DELIMITER) {return 0}
+
+  let delimiterLength = 1
+  while (source[index + delimiterLength] === INLINE_CODE_DELIMITER) {
+    delimiterLength += 1
+  }
+  return delimiterLength
+}
+
+function updateCodeSpanDelimiterLength({ activeLength, delimiterLength }) {
+  if (activeLength === 0) {return delimiterLength}
+  return activeLength === delimiterLength ? 0 : activeLength
+}
+
+function collectTableCells({ source }) {
   const cells = []
   let current = ""
   let activeCodeDelimiterLength = 0
@@ -52,16 +167,15 @@ function splitTableCells(line) {
       continue
     }
 
-    if (character === INLINE_CODE_DELIMITER) {
-      let delimiterLength = 1
-      while (source[index + delimiterLength] === INLINE_CODE_DELIMITER) {
-        delimiterLength += 1
-      }
-      if (activeCodeDelimiterLength === 0) {
-        activeCodeDelimiterLength = delimiterLength
-      } else if (activeCodeDelimiterLength === delimiterLength) {
-        activeCodeDelimiterLength = 0
-      }
+    const delimiterLength = getCodeSpanDelimiterLength({
+      source,
+      index,
+    })
+    if (delimiterLength > 0) {
+      activeCodeDelimiterLength = updateCodeSpanDelimiterLength({
+        activeLength: activeCodeDelimiterLength,
+        delimiterLength,
+      })
       current += INLINE_CODE_DELIMITER.repeat(delimiterLength)
       index += delimiterLength - 1
       continue
@@ -77,7 +191,57 @@ function splitTableCells(line) {
   }
 
   cells.push(current.trim())
+  return cells
+}
+
+function splitTableCells(line) {
+  const source = normalizeTableSource(line)
+  if (source === null) {return null}
+
+  const cells = collectTableCells({ source })
   return cells.length >= 2 ? cells : null
+}
+
+function resetListParentStack({ line, parentStack }) {
+  if (line.trim() === "") {return}
+
+  const indentation = getIndentationWidth(line)
+  const parent = parentStack[parentStack.length - 1]
+  if (parent && indentation >= parent.contentColumn) {return}
+
+  parentStack.length = 0
+}
+
+function recordListItem({
+  item,
+  lineNumber,
+  parentStack,
+  unorderedListMarkers,
+  nestedListIndentation,
+}) {
+  if (item.marker === "*" || item.marker === "+") {
+    unorderedListMarkers.push(lineNumber)
+  }
+
+  const indentWidth = getIndentationWidth(item.indent)
+  while (
+    parentStack.length > 0 &&
+    parentStack[parentStack.length - 1].indent >= indentWidth
+  ) {
+    parentStack.pop()
+  }
+
+  const parent = parentStack[parentStack.length - 1]
+  const hasUnexpectedIndentation = item.indent.includes("\t") ||
+    (indentWidth > 0 && (!parent || indentWidth !== parent.contentColumn))
+  if (hasUnexpectedIndentation) {
+    nestedListIndentation.push(lineNumber)
+  }
+
+  parentStack.push({
+    indent: indentWidth,
+    contentColumn: indentWidth + item.marker.length + item.separator.length,
+  })
 }
 
 function collectListMarkerFindings({ lines, codeLineIndexes }) {
@@ -90,44 +254,76 @@ function collectListMarkerFindings({ lines, codeLineIndexes }) {
 
     const item = parseListItem(lines[index])
     if (!item) {
-      if (lines[index].trim() === "") {continue}
-      const indentation = (lines[index].match(/^([ \t]*)/)?.[1] ?? "")
-        .replace(/\t/g, "    ").length
-      const parent = parentStack[parentStack.length - 1]
-      if (parent && indentation >= parent.contentColumn) {continue}
-      parentStack.length = 0
+      resetListParentStack({
+        line: lines[index],
+        parentStack,
+      })
       continue
     }
 
-    const lineNumber = index + 1
-    if (item.marker === "*" || item.marker === "+") {
-      unorderedListMarkers.push(lineNumber)
-    }
-
-    const indentWidth = item.indent.replace(/\t/g, "    ").length
-    while (
-      parentStack.length > 0 &&
-      parentStack[parentStack.length - 1].indent >= indentWidth
-    ) {
-      parentStack.pop()
-    }
-
-    const parent = parentStack[parentStack.length - 1]
-    const hasUnexpectedIndentation = item.indent.includes("\t") ||
-      (indentWidth > 0 && (!parent || indentWidth !== parent.contentColumn))
-    if (hasUnexpectedIndentation) {
-      nestedListIndentation.push(lineNumber)
-    }
-
-    parentStack.push({
-      indent: indentWidth,
-      contentColumn: indentWidth + item.marker.length + item.separator.length,
+    recordListItem({
+      item,
+      lineNumber: index + 1,
+      parentStack,
+      unorderedListMarkers,
+      nestedListIndentation,
     })
   }
 
   return {
     unorderedListMarkers,
     nestedListIndentation,
+  }
+}
+
+function isListContinuationAfterBlank({
+        lines,
+        cursor,
+        codeLineIndexes,
+      }) {
+  const nextIndex = cursor + 1
+  const nextLine = lines[nextIndex] ?? ""
+  return !codeLineIndexes.has(nextIndex) &&
+    Boolean(parseListItem(nextLine) || /^[ \t]{2,}\S/.test(nextLine))
+}
+
+function findListBlockEnd({ lines, startIndex, codeLineIndexes }) {
+  let end = startIndex
+  let cursor = startIndex + 1
+
+  while (cursor < lines.length) {
+    if (codeLineIndexes.has(cursor)) {break}
+
+    if (parseListItem(lines[cursor])) {
+      end = cursor
+      cursor += 1
+      continue
+    }
+
+    if (lines[cursor].trim() === "") {
+      if (isListContinuationAfterBlank({
+          lines,
+          cursor,
+          codeLineIndexes,
+        })) {
+        cursor += 1
+        continue
+      }
+      break
+    }
+
+    if (/^[ \t]{2,}\S/.test(lines[cursor])) {
+      end = cursor
+      cursor += 1
+      continue
+    }
+
+    break
+  }
+
+  return {
+    end,
+    cursor,
   }
 }
 
@@ -140,41 +336,14 @@ function collectListSpacingFindings({ lines, codeLineIndexes }) {
     const item = parseListItem(lines[index])
     if (!item || item.indent !== "") {continue}
 
-    const lineNumber = index + 1
-    let end = index
-    let cursor = index + 1
-
-    while (cursor < lines.length) {
-      if (codeLineIndexes.has(cursor)) {break}
-
-      if (parseListItem(lines[cursor])) {
-        end = cursor
-        cursor += 1
-        continue
-      }
-
-      if (lines[cursor].trim() === "") {
-        const nextLine = lines[cursor + 1] ?? ""
-        const nextLineContinuesList = !codeLineIndexes.has(cursor + 1) &&
-          (parseListItem(nextLine) || /^[ \t]{2,}\S/.test(nextLine))
-        if (nextLineContinuesList) {
-          cursor += 1
-          continue
-        }
-        break
-      }
-
-      if (/^[ \t]{2,}\S/.test(lines[cursor])) {
-        end = cursor
-        cursor += 1
-        continue
-      }
-
-      break
-    }
+    const { end, cursor } = findListBlockEnd({
+      lines,
+      startIndex: index,
+      codeLineIndexes,
+    })
 
     if (index > 0 && lines[index - 1].trim() !== "") {
-      listSpacing.push(lineNumber)
+      listSpacing.push(index + 1)
     }
     if (end < lines.length - 1 && lines[end + 1].trim() !== "") {
       listSpacing.push(end + 2)
@@ -207,6 +376,85 @@ function isTableDelimiterCandidate({ line, cells }) {
   )
 }
 
+function collectTableRowFindings({
+  lines,
+  startIndex,
+  expectedColumnCount,
+  codeLineIndexes,
+}) {
+  const tableColumnMismatches = []
+  let end = startIndex + 1
+  let cursor = startIndex + 2
+
+  while (
+    cursor < lines.length &&
+    !codeLineIndexes.has(cursor) &&
+    lines[cursor].trim() !== ""
+  ) {
+    const rowCells = splitTableCells(lines[cursor])
+    if (!rowCells) {break}
+    if (rowCells.length !== expectedColumnCount) {
+      tableColumnMismatches.push(cursor + 1)
+    }
+    end = cursor
+    cursor += 1
+  }
+
+  return {
+    end,
+    tableColumnMismatches,
+  }
+}
+
+function collectTableBlockFindings({ lines, index, codeLineIndexes }) {
+  const headerCells = splitTableCells(lines[index])
+  if (!headerCells) {return null}
+
+  const delimiterCells = splitTableCells(lines[index + 1])
+  if (
+    !delimiterCells ||
+    !isTableDelimiterCandidate({
+      line: lines[index + 1],
+      cells: delimiterCells,
+    })
+  ) {
+    return null
+  }
+
+  const expectedColumnCount = headerCells.length
+  const rowFindings = collectTableRowFindings({
+    lines,
+    startIndex: index,
+    expectedColumnCount,
+    codeLineIndexes,
+  })
+  const tableColumnMismatches = [...rowFindings.tableColumnMismatches]
+  if (delimiterCells.length !== expectedColumnCount) {
+    tableColumnMismatches.unshift(index + 2)
+  }
+
+  const malformedTableDelimiters = delimiterCells.some(
+    (cell) => !/^:?-{3,}:?$/.test(cell),
+  ) ? [index + 2] : []
+  const tableSpacing = []
+  if (index > 0 && lines[index - 1].trim() !== "") {
+    tableSpacing.push(index + 1)
+  }
+  if (
+    rowFindings.end < lines.length - 1 &&
+    lines[rowFindings.end + 1].trim() !== ""
+  ) {
+    tableSpacing.push(rowFindings.end + 2)
+  }
+
+  return {
+    end: rowFindings.end,
+    malformedTableDelimiters,
+    tableColumnMismatches,
+    tableSpacing,
+  }
+}
+
 function collectTableFormattingFindings({ lines, codeLineIndexes }) {
   const malformedTableDelimiters = []
   const tableColumnMismatches = []
@@ -215,53 +463,17 @@ function collectTableFormattingFindings({ lines, codeLineIndexes }) {
   for (let index = 0; index < lines.length - 1; index += 1) {
     if (codeLineIndexes.has(index) || codeLineIndexes.has(index + 1)) {continue}
 
-    const headerCells = splitTableCells(lines[index])
-    const delimiterCells = splitTableCells(lines[index + 1])
-    if (
-      !headerCells ||
-      !delimiterCells ||
-      !isTableDelimiterCandidate({
-        line: lines[index + 1],
-        cells: delimiterCells,
-      })
-    ) {
-      continue
-    }
+    const tableFindings = collectTableBlockFindings({
+      lines,
+      index,
+      codeLineIndexes,
+    })
+    if (!tableFindings) {continue}
 
-    const expectedColumnCount = headerCells.length
-    const delimiterLine = index + 2
-
-    if (delimiterCells.length !== expectedColumnCount) {
-      tableColumnMismatches.push(delimiterLine)
-    }
-    if (delimiterCells.some((cell) => !/^:?-{3,}:?$/.test(cell))) {
-      malformedTableDelimiters.push(delimiterLine)
-    }
-
-    let end = index + 1
-    let cursor = index + 2
-    while (
-      cursor < lines.length &&
-      !codeLineIndexes.has(cursor) &&
-      lines[cursor].trim() !== ""
-    ) {
-      const rowCells = splitTableCells(lines[cursor])
-      if (!rowCells) {break}
-      if (rowCells.length !== expectedColumnCount) {
-        tableColumnMismatches.push(cursor + 1)
-      }
-      end = cursor
-      cursor += 1
-    }
-
-    if (index > 0 && lines[index - 1].trim() !== "") {
-      tableSpacing.push(index + 1)
-    }
-    if (end < lines.length - 1 && lines[end + 1].trim() !== "") {
-      tableSpacing.push(end + 2)
-    }
-
-    index = end
+    malformedTableDelimiters.push(...tableFindings.malformedTableDelimiters)
+    tableColumnMismatches.push(...tableFindings.tableColumnMismatches)
+    tableSpacing.push(...tableFindings.tableSpacing)
+    index = tableFindings.end
   }
 
   return {
@@ -271,19 +483,85 @@ function collectTableFormattingFindings({ lines, codeLineIndexes }) {
   }
 }
 
+function getFenceTransition({ fenceMatch, activeFence }) {
+  if (activeFence) {
+    const closesFence = Boolean(
+      fenceMatch &&
+      fenceMatch[1][0] === activeFence.character &&
+      fenceMatch[1].length >= activeFence.length &&
+      /^[ \t]*$/.test(fenceMatch[2]),
+    )
+    return {
+      isCode: true,
+      isUnlabelled: false,
+      activeFence: closesFence ? null : activeFence,
+    }
+  }
+
+  if (!fenceMatch) {
+    return {
+      isCode: false,
+      isUnlabelled: false,
+      activeFence: null,
+    }
+  }
+
+  return {
+    isCode: true,
+    isUnlabelled: fenceMatch[2].trim() === "",
+    activeFence: {
+      character: fenceMatch[1][0],
+      length: fenceMatch[1].length,
+    },
+  }
+}
+
+function collectLineFormattingFindings({
+  line,
+  index,
+  lines,
+  lineNumber,
+  previousHeadingLevel,
+  trailingWhitespaceLines,
+  repeatedBlankLines,
+  headingLevelSkips,
+  h1Lines,
+}) {
+  if (/[ \t]+$/.test(line)) {trailingWhitespaceLines.push(lineNumber)}
+  if (
+    index > 0 &&
+    line.trim() === "" &&
+    lines[index - 1].trim() === ""
+  ) {
+    repeatedBlankLines.push(lineNumber)
+  }
+
+  const headingMatch = line.match(/^ {0,3}(#{1,6})(?:[ \t]+|$)/)
+  if (!headingMatch) {return previousHeadingLevel}
+
+  const level = headingMatch[1].length
+  if (level === 1) {h1Lines.push(lineNumber)}
+  if (level > previousHeadingLevel + 1) {
+    headingLevelSkips.push(lineNumber)
+  }
+  return level
+}
+
 /**
  * Collect objective Markdown style metrics without enforcing or rewriting files.
  *
- * Fenced code content is excluded from prose/list/table analysis. A fence is
+ * Fenced and indented code content is excluded from prose/list/table analysis. A fence is
  * considered unlabeled when its opening delimiter has no info string. Findings
  * are grouped by file and include affected line numbers where applicable.
  *
- * @param {{path: string, content: string}[]} documents
+ * @param {{content: string}} input
  * @returns {{fileCount: number, findings: Record<string, Array<{path: string, count: number, lines: number[]}>>}}
  */
-function scanMarkdownDocumentLines({ content }) {
+function scanMarkdownDocumentLines({
+    content,
+  }) {
   const lines = content.split(/\r?\n/)
-  const codeLineIndexes = new Set()
+  const codeLineIndexes = collectIndentedCodeLineIndexes({ lines })
   const trailingWhitespaceLines = []
   const repeatedBlankLines = []
   const headingLevelSkips = []
@@ -295,47 +573,37 @@ function scanMarkdownDocumentLines({ content }) {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]
     const lineNumber = index + 1
-    const fencePattern = new RegExp(
-      `^ {0,3}(${INLINE_CODE_DELIMITER}{3,}|~{3,})(.*)$`,
+    const fenceMatch = line.match(
+      new RegExp(`^ {0,3}(${INLINE_CODE_DELIMITER}{3,}|~{3,})(.*)$`),
     )
-    const fenceMatch = line.match(fencePattern)
+    const fenceTransition = getFenceTransition({
+      fenceMatch,
+      activeFence,
+    })
+    const { activeFence: nextActiveFence } = fenceTransition
+    activeFence = nextActiveFence
 
-    if (activeFence) {
+    if (fenceTransition.isCode) {
       codeLineIndexes.add(index)
-      const closesFence = fenceMatch &&
-        fenceMatch[1][0] === activeFence.character &&
-        fenceMatch[1].length >= activeFence.length &&
-        /^[ \t]*$/.test(fenceMatch[2])
-      if (closesFence) {activeFence = null}
-      continue
-    }
-
-    if (fenceMatch) {
-      codeLineIndexes.add(index)
-      if (fenceMatch[2].trim() === "") {
+      if (fenceTransition.isUnlabelled) {
         unlabelledCodeFenceLines.push(lineNumber)
       }
-      activeFence = {
-        character: fenceMatch[1][0],
-        length: fenceMatch[1].length,
-      }
       continue
     }
 
-    if (/[ \t]+$/.test(line)) {trailingWhitespaceLines.push(lineNumber)}
-    if (index > 0 && line.trim() === "" && lines[index - 1].trim() === "") {
-      repeatedBlankLines.push(lineNumber)
-    }
+    if (codeLineIndexes.has(index)) {continue}
 
-    const headingMatch = line.match(/^ {0,3}(#{1,6})(?:[ \t]+|$)/)
-    if (!headingMatch) {continue}
-
-    const level = headingMatch[1].length
-    if (level === 1) {h1Lines.push(lineNumber)}
-    if (level > previousHeadingLevel + 1) {
-      headingLevelSkips.push(lineNumber)
-    }
-    previousHeadingLevel = level
+    previousHeadingLevel = collectLineFormattingFindings({
+      line,
+      index,
+      lines,
+      lineNumber,
+      previousHeadingLevel,
+      trailingWhitespaceLines,
+      repeatedBlankLines,
+      headingLevelSkips,
+      h1Lines,
+    })
   }
 
   return {
@@ -351,13 +619,83 @@ function scanMarkdownDocumentLines({ content }) {
   }
 }
 
-function createFindingRecorder({ findings, path }) {
+function createFindingRecorder({
+    findings,
+    path,
+  }) {
   return ({ name, affectedLines = [] }) => {
     findings[name].push({
       path,
       count: Math.max(1, affectedLines.length),
       lines: affectedLines,
     })
+  }
+}
+
+function addLineFindings({
+    scannedDocument,
+    addFinding,
+  }) {
+  const lineFindings = [
+    ["trailingWhitespace", scannedDocument.trailingWhitespaceLines],
+    ["repeatedBlankLines", scannedDocument.repeatedBlankLines],
+    ["headingLevelSkips", scannedDocument.headingLevelSkips],
+    ["unlabelledCodeFences", scannedDocument.unlabelledCodeFenceLines],
+  ]
+
+  for (const [name, affectedLines] of lineFindings) {
+    if (affectedLines.length > 0) {
+      addFinding({
+        name,
+        affectedLines,
+      })
+    }
+  }
+}
+
+function addDocumentMetadataFindings({
+    scannedDocument,
+    addFinding,
+  }) {
+  if (!scannedDocument.hasFinalNewline) {
+    addFinding({ name: "missingFinalNewline" })
+  }
+  if (scannedDocument.hasCrlfLineEndings) {
+    addFinding({ name: "crlfLineEndings" })
+  }
+  if (scannedDocument.h1Lines.length === 0) {
+    addFinding({ name: "missingH1" })
+  }
+  if (scannedDocument.h1Lines.length > 1) {
+    addFinding({
+      name: "multipleH1",
+      affectedLines: scannedDocument.h1Lines,
+    })
+  }
+}
+
+function addStructureFindings({
+    scannedDocument,
+    addFinding,
+  }) {
+  const listFindings = collectListFormattingFindings({
+    lines: scannedDocument.lines,
+    codeLineIndexes: scannedDocument.codeLineIndexes,
+  })
+  const tableFindings = collectTableFormattingFindings({
+    lines: scannedDocument.lines,
+    codeLineIndexes: scannedDocument.codeLineIndexes,
+  })
+
+  for (const findings of [listFindings, tableFindings]) {
+    for (const [name, affectedLines] of Object.entries(findings)) {
+      if (affectedLines.length > 0) {
+        addFinding({
+          name,
+          affectedLines,
+        })
+      }
+    }
   }
 }
 
@@ -375,70 +713,28 @@ function collectDocumentFindings({ document, findings }) {
     findings,
     path,
   })
-  const scannedDocument = scanMarkdownDocumentLines({ content })
-  const lineFindings = [
-    ["trailingWhitespace", scannedDocument.trailingWhitespaceLines],
-    ["repeatedBlankLines", scannedDocument.repeatedBlankLines],
-    ["headingLevelSkips", scannedDocument.headingLevelSkips],
-    ["unlabelledCodeFences", scannedDocument.unlabelledCodeFenceLines],
-  ]
-
-  for (const [name, affectedLines] of lineFindings) {
-    if (affectedLines.length > 0) {
-      addFinding({
-        name,
-        affectedLines,
-      })
-    }
-  }
-
-  if (!scannedDocument.hasFinalNewline) {
-    addFinding({ name: "missingFinalNewline" })
-  }
-  if (scannedDocument.hasCrlfLineEndings) {
-    addFinding({ name: "crlfLineEndings" })
-  }
-  if (scannedDocument.h1Lines.length === 0) {
-    addFinding({ name: "missingH1" })
-  }
-  if (scannedDocument.h1Lines.length > 1) {
-    addFinding({
-      name: "multipleH1",
-      affectedLines: scannedDocument.h1Lines,
-    })
-  }
-
-  const listFindings = collectListFormattingFindings({
-    lines: scannedDocument.lines,
-    codeLineIndexes: scannedDocument.codeLineIndexes,
+  const scannedDocument = scanMarkdownDocumentLines({
+    content,
   })
-  for (const [name, affectedLines] of Object.entries(listFindings)) {
-    if (affectedLines.length > 0) {
-      addFinding({
-        name,
-        affectedLines,
-      })
-    }
-  }
 
-  const tableFindings = collectTableFormattingFindings({
-    lines: scannedDocument.lines,
-    codeLineIndexes: scannedDocument.codeLineIndexes,
+  addLineFindings({
+    scannedDocument,
+    addFinding,
   })
-  for (const [name, affectedLines] of Object.entries(tableFindings)) {
-    if (affectedLines.length > 0) {
-      addFinding({
-        name,
-        affectedLines,
-      })
-    }
-  }
+  addDocumentMetadataFindings({
+    scannedDocument,
+    addFinding,
+  })
+  addStructureFindings({
+    scannedDocument,
+    addFinding,
+  })
 }
 
 /**
  * Collect objective Markdown style metrics without enforcing or rewriting files.
  *
- * Fenced code content is excluded from prose/list/table analysis. A fence is
+ * Fenced and indented code content is excluded from prose/list/table analysis. A fence is
  * considered unlabeled when its opening delimiter has no info string. Findings
  * are grouped by file and include affected line numbers where applicable.
  *
