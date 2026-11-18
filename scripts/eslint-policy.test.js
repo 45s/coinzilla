@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { ESLint } from "eslint";
-import { readFile } from "node:fs/promises";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -392,6 +393,27 @@ function createFunctionQualityAuditReport({ metrics }) {
   };
 }
 
+async function getTrackedJavaScriptFiles({ eslint }) {
+  const output = execFileSync(
+    "git",
+    ["ls-files", "-z", "--", "*.js", "*.mjs", "*.cjs"],
+    {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+    },
+  );
+  const trackedPaths = output.split("\0").filter(Boolean);
+  const includedPaths = [];
+
+  for (const path of trackedPaths) {
+    if (!await eslint.isPathIgnored(resolve(repositoryRoot, path))) {
+      includedPaths.push(path);
+    }
+  }
+
+  return includedPaths;
+}
+
 async function auditFunctionQualityThresholds() {
   const eslint = createFunctionQualityAuditEslint();
   const results = await eslint.lintFiles(["."]);
@@ -406,6 +428,31 @@ async function auditFunctionQualityThresholds() {
     report: createFunctionQualityAuditReport({ metrics }),
   };
 }
+
+test("function-quality workspace audit excludes untracked temporary lint fixtures", async () => {
+  const fixturePath = resolve(
+    repositoryRoot,
+    "scripts/workspace-audit-untracked-fixture.js",
+  );
+  await writeFile(
+    fixturePath,
+    "export function transientFixture(value) { return value; }\n",
+  );
+
+  try {
+    const eslint = createFunctionQualityAuditEslint();
+    const trackedPaths = await getTrackedJavaScriptFiles({ eslint });
+    const audit = await auditFunctionQualityThresholds();
+
+    assert.equal(
+      audit.inspectedFiles,
+      trackedPaths.length,
+      "The full-workspace audit must inspect every tracked JavaScript file but exclude untracked temporary fixtures.",
+    );
+  } finally {
+    await rm(fixturePath, { force: true });
+  }
+});
 
 test("audits candidate function-quality thresholds across the complete workspace", async () => {
   const audit = await auditFunctionQualityThresholds();
