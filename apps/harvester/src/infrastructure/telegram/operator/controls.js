@@ -102,28 +102,9 @@ export function buildBuyControlSuccessReply({ action,
 
 export function buildLegacyControlSuccessReply({ action,
  symbol,
- result,
  method,
  interaction,
  diagnostics }) {
-  if (action === "RESUME" && result.data?.resumed === true) {
-    interaction.applicationOperationCompleted = true
-    interaction.stateChanged = true
-    return `Resumed ${symbol}: the operator-owned pause was removed. Safety, recovery, and volatility controls remain in force.`
-  }
-  if (action === "RESUME" && result.data?.resumed === false) {
-    interaction.applicationOperationCompleted = true
-    interaction.stateChanged = false
-    return `${symbol} is not operator-paused. No state change was made.`
-  }
-  if (action === "PAUSE" && result.data?.paused === true) {
-    interaction.applicationOperationCompleted = true
-    interaction.stateChanged = result.data.alreadyPaused !== true
-    if (result.data.alreadyPaused === true) {
-      return `Already paused ${symbol}. New strategy BUYs remain blocked.`
-    }
-    return `Paused ${symbol}: new strategy BUYs and trailing-BUY replacements are blocked. Existing exchange orders remain open and may still fill. This pause is process-local and is not restored after restart.`
-  }
   diagnostics.report({
     interaction,
     stage: "APPLICATION_OPERATION_RESULT",
@@ -132,7 +113,7 @@ export function buildLegacyControlSuccessReply({ action,
     classification: "OPERATOR_CONTROL_RESULT_INVALID",
     message: `Operator control use case returned an invalid success result: ${method}`,
   })
-  return `${action === "RESUME" ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
+  return `${action.startsWith("RESUME") ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
 }
 
 export function buildControlSuccessReply(options) {
