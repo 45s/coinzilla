@@ -41,12 +41,13 @@ The current session-history integration is implemented in:
 - ../../src/infrastructure/persistence/prepare-trading-session-persistence.js — creates the provider-neutral facade and SQLite provider in the Harvester infrastructure composition.
 - ../../src/infrastructure/persistence/resolve-trading-session-database-filename.js — resolves the file from validated TRADING_MODE and the optional base-directory override.
 - ../../src/infrastructure/persistence/trading-session-repository.js — implements the narrow repository object using create, readOne, update, and transaction.
+- ../../src/application/ports/trading-session-repository.js — defines the application-facing repository port and validates its required methods.
 - ../../src/infrastructure/persistence/create-trading-session-history-observer.js — queues lifecycle-event projections without awaiting database work in the EventBus handler.
 - ../../src/infrastructure/persistence/close-trading-session-persistence.js — drains/closes the observer and database.
 - ../../src/domain/trading-session/trading-session.js — owns the session record validation, identity comparison, and lifecycle transition rules.
 - ../../src/index.js — owns process composition and startup/shutdown resource ordering.
 
-The repository contract is currently an injected object returned by the infrastructure factory; there is no separate application/ports/trading-session-repository.js file. Keep that seam consistent unless a later concrete consumer justifies a separate port module.
+The existing port is explicitly defined in ../../src/application/ports/trading-session-repository.js. Its assertTradingSessionRepository guard requires create(record), findById(runtimeSessionId), and transition({ id, status, endedAt }). The infrastructure factory returns an adapter implementing that port. Follow this explicit Harvester-owned port + infrastructure adapter pattern for later repositories.
 
 The collection is harvester_trading_sessions. One record represents one process/session UUID. Its versioned JSON record contains validated environment, broker and strategy identity, configuration fingerprint, enabled markets, sanitized build provenance, lifecycle timestamps/status, and bounded non-secret metadata.
 
@@ -632,7 +633,7 @@ The order-event SQLite projection remains conditional on a demonstrated query ne
 - [Database package roadmap](../../../../packages/db/ROADMAP.md)
 - [Harvester ADR-0001 — Application-owned recovery facts](../architecture/decisions/0001-application-owned-recovery-facts.md)
 - [Harvester persistence entry point / current session contract](README.md)
-- [Harvester roadmap](../../ROADMAP.md#persistence--provider-agnostic-database-integration-1327)
+- [Harvester roadmap](../../ROADMAP.md)
 - [Harvester documentation index](../README.md)
 - [Multi-provider ADR-0003](../../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md)
 - [Multi-provider migration plan](../../../../docs/architecture/multi-provider-migration-plan.md)
