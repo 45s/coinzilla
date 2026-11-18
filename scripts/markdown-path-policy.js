@@ -1,18 +1,18 @@
 const HISTORICAL_PATHS = [
-  /^apps\\/harvester\\/AUDIT(?:_|\\.|$)/,
-  /^apps\\/harvester\\/docs\\/audits\\/(?:README_HISTORY|ROADMAP_HISTORY)\\.md$/,
-  /^apps\\/harvester\\/docs\\/audits\\/(?:evidence|reports|sessions)\\/(?!README\\.md$).+/,
-  /^apps\\/harvester\\/docs\\/incidents\\/(?!README\\.md$).+/,
-  /^apps\\/harvester\\/docs\\/tasks\\/(?!README\\.md$).+/,
-  /^apps\\/harvester\\/docs\\/DDD_CLEAN_ARCHITECTURE_AUDIT\\.md$/,
-  /^apps\\/harvester\\/docs\\/DOMAIN_FIRST_DELIVERY_PLAN\\.md$/,
-  /^docs\\/audits\\/(?!README\\.md$).+/,
-  /^docs\\/ai-agent\\/repository-engineering-audit\\.md$/,
+  /^apps\/harvester\/AUDIT(?:_|\.|$)/,
+  /^apps\/harvester\/docs\/audits\/(?:README_HISTORY|ROADMAP_HISTORY)\.md$/,
+  /^apps\/harvester\/docs\/audits\/(?:evidence|reports|sessions)\/(?!README\.md$).+/,
+  /^apps\/harvester\/docs\/incidents\/(?!README\.md$).+/,
+  /^apps\/harvester\/docs\/tasks\/(?!README\.md$).+/,
+  /^apps\/harvester\/docs\/DDD_CLEAN_ARCHITECTURE_AUDIT\.md$/,
+  /^apps\/harvester\/docs\/DOMAIN_FIRST_DELIVERY_PLAN\.md$/,
+  /^docs\/audits\/(?!README\.md$).+/,
+  /^docs\/ai-agent\/repository-engineering-audit\.md$/,
 ]
 
 const TEMPLATE_HEADING_EXEMPTIONS = [
-  /^\\.github\\/ISSUE_TEMPLATE\\//,
-  /^\\.github\\/PULL_REQUEST_TEMPLATE\\.md$/,
+  /^\.github\/ISSUE_TEMPLATE\//,
+  /^\.github\/PULL_REQUEST_TEMPLATE\.md$/,
 ]
 
 function matchesAny(path, patterns) {
