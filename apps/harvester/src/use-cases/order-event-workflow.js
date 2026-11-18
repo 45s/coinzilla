@@ -91,7 +91,10 @@ function publishInvalidExecutionFill({ eventPublisher, order, fill, reason, erro
   })
 }
 
-function getProviderAttributionFailure({ order, fill }) {
+function getProviderAttributionFailure({
+    order,
+    fill,
+  }) {
   if (!hasProviderIdentity({ value: order })) {
     return {
       error: new Error("Execution fill cannot be attributed to a provider instance: legacy order provenance is missing"),
@@ -170,7 +173,10 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
     symbol: order.market.symbol,
   }
 }
-async function pauseForInvalidExecutionFill({ pause, validation }) {
+async function pauseForInvalidExecutionFill({
+        pause,
+        validation,
+      }) {
   if (!["FILL_ORDER_IDENTITY", "FILL_PROVIDER_PROVENANCE_MISSING"].includes(validation.failure?.stage)) {
     return
   }
@@ -241,7 +247,10 @@ function publishExecutionFillOutcome({ accounting, fill, eventPublisher }) {
   }
 }
 
-function attachOrderProviderIdentity({ order, fill }) {
+function attachOrderProviderIdentity({
+    order,
+    fill,
+  }) {
   if (!(order instanceof CanonicalOrder) || order.providerInstanceId === undefined ||
       !(fill instanceof Fill) || fill.providerInstanceId !== undefined) {
     return fill
