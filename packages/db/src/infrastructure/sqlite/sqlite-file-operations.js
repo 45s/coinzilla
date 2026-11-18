@@ -100,7 +100,7 @@ export async function verifyDatabaseFile({ filename, timeout }) {
       throw new AggregateError(
         [verificationError, closeError],
         "SQLite database verification failed and its connection could not close",
-        { cause: verificationError },
+        { cause: closeError },
       )
     }
 
