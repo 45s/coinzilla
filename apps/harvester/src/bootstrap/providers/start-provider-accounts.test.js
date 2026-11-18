@@ -25,6 +25,9 @@ function createProvider({
 }
 
 const appConfig = {
+  marketDataRouting: {
+    routes: [{ symbol: "BTCUSDT", providerInstanceId: "first" }],
+  },
   operatorControl: {
     telegram: {
       enabled: true,
@@ -40,6 +43,15 @@ const appConfig = {
       },
     },
   },
+}
+
+function appConfigForMarketDataProvider(providerInstanceId) {
+  return {
+    ...appConfig,
+    marketDataRouting: {
+      routes: [{ symbol: "BTCUSDT", providerInstanceId }],
+    },
+  }
 }
 
 function createCredentialedProviderFixtures() {
@@ -106,6 +118,8 @@ function createAccountRuntimeStarter({
       tradingMode: input.env.TRADING_MODE,
       operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
       hasOperationalStateStore: input.operationalStateStore !== undefined,
+      marketDataProviderInstanceId: input.marketDataProviderInstanceId,
+      marketDataSymbols: input.marketDataSymbols,
       credentialValues: [
         input.env.PRIMARY_KEY,
         input.env.SECONDARY_KEY,
@@ -137,6 +151,16 @@ function assertAccountStartupInputs({
     false,
     false,
   ])
+  assert.deepEqual(inputs.map((entry) => entry.marketDataProviderInstanceId), [
+    "binance-one",
+    "binance-two",
+    "other-live",
+  ])
+  assert.deepEqual(inputs.map((entry) => entry.marketDataSymbols), [
+    ["BTCUSDT"],
+    [],
+    [],
+  ], "only the selected source provider may subscribe to this market")
   assert.deepEqual(inputs.map((entry) => entry.credentialValues), [
     ["primary-key", undefined, undefined],
     [undefined, "secondary-key", undefined],
@@ -157,7 +181,7 @@ test("starts one independent runtime per configured provider account", async () 
       starts,
       runtimes,
     }),
-    appConfig,
+    appConfig: appConfigForMarketDataProvider(providers[0].providerInstanceId),
     env: {
       TRADING_MODE: "testnet",
       PRIMARY_KEY: "primary-key",
@@ -466,4 +490,25 @@ test("releases only accounts whose runtime shutdown is confirmed", async () => {
   assert.equal(secondStop.ok, true)
   assert.deepEqual(stopCalls, ["second", "first", "first"])
   assert.deepEqual(releasedLocks, ["second", "first"])
+})
+
+test("rejects multi-provider startup without explicit market-data ownership before starting accounts", async () => {
+  let startCalls = 0
+  await assert.rejects(
+    startProviderAccounts({
+      providers: createThreeAccountProviders(),
+      start: async () => {
+        startCalls += 1
+        return { stop: async () => ({ ok: true }) }
+      },
+      appConfig: {
+        ...appConfig,
+        marketDataRouting: undefined,
+      },
+      env: { TRADING_MODE: "testnet" },
+    }),
+    /requires explicit marketDataRouting\.routes/,
+    "multi-provider startup must fail before connecting any account when market ownership is ambiguous",
+  )
+  assert.equal(startCalls, 0, "invalid market-data routes must be rejected before account startup")
 })

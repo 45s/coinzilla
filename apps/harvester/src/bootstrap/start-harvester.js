@@ -305,6 +305,8 @@ function resolveHarvesterStartupDependencies({ options = {} } = {}) {
     telegramOperatorFetchImpl,
     strategyShutdownParticipants = [],
     providerIdentity,
+    marketDataProviderInstanceId,
+    marketDataSymbols,
   } = options
   return {
     configSource,
@@ -327,6 +329,8 @@ function resolveHarvesterStartupDependencies({ options = {} } = {}) {
     telegramOperatorFetchImpl,
     strategyShutdownParticipants,
     providerIdentity,
+    marketDataProviderInstanceId,
+    marketDataSymbols,
   }
 }
 
@@ -424,6 +428,8 @@ async function createHarvesterStartupContext({ options } = {}) {
     env: dependencies.env,
     brokerAdapterFactory: dependencies.brokerAdapterFactory,
     providerIdentity: dependencies.providerIdentity,
+    marketDataProviderInstanceId: dependencies.marketDataProviderInstanceId,
+    marketDataSymbols: dependencies.marketDataSymbols,
     bitunixReadOnly,
     evaluateStrategy: dependencies.evaluateStrategy,
     logger: dependencies.logger,
@@ -739,14 +745,18 @@ async function startHarvesterPreflightServices({ startup, portfolio, resources, 
 }
 
 async function startHarvesterMarketServices({ startup, portfolio, resources, freshness } = {}) {
+  const marketDataPairs = startup.marketDataSymbols === undefined
+    ? startup.pairs
+    : Object.fromEntries(Object.entries(startup.pairs).filter(([symbol]) => startup.marketDataSymbols.includes(symbol)))
   await subscribeToMarketData({
     broker: resources.broker,
+    providerInstanceId: startup.marketDataProviderInstanceId ?? startup.providerIdentity?.providerInstanceId,
     brokerName: startup.brokerName,
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
     tradingEnabled: startup.tradingEnabled,
     pairs: resolveStrategyMarketDataPairs({
-      pairs: startup.pairs,
+      pairs: marketDataPairs,
       strategyPolicy: conservativeStrategyPolicy,
       hasUnownedOpenOrdersForSymbol: startup.accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
       logger: startup.logger,
@@ -764,7 +774,7 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
   })
   await resources.candleHistoryService.start({
     pairs: resolveStrategyMarketDataPairs({
-      pairs: startup.pairs,
+      pairs: marketDataPairs,
       strategyPolicy: conservativeStrategyPolicy,
       hasUnownedOpenOrdersForSymbol: startup.accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
     }),
@@ -903,6 +913,7 @@ function createHarvesterRuntimeResult({ startup, portfolio, resources, stop } = 
     environment: startup.environment,
     brokerName: startup.brokerName,
     account: portfolio.accountRuntime.identity,
+    marketDataProviderInstanceId: startup.marketDataProviderInstanceId ?? startup.providerIdentity?.providerInstanceId ?? null,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled,
     readOnlyProviders: resources.readOnlyProviders,

@@ -1,3 +1,5 @@
+import { resolveMarketDataSymbolsByProvider } from "./resolve-market-data-symbols-by-provider.js"
+
 function createAccountEnvironment({
   env,
   provider,
@@ -269,6 +271,7 @@ function createProviderAccountStartInput({
   eventPublisher,
   runtimeSessionId,
   operationalStateStore,
+  marketDataSymbolsByProvider,
 }) {
   return {
     appConfig: createAccountAppConfig({
@@ -285,6 +288,8 @@ function createProviderAccountStartInput({
     operationalStateStore: index === 0 ? operationalStateStore : undefined,
     brokerAdapterFactory: provider.brokerAdapterFactory,
     providerIdentity: provider.identity,
+    marketDataProviderInstanceId: provider.providerInstanceId,
+    marketDataSymbols: marketDataSymbolsByProvider.get(provider.providerInstanceId),
   }
 }
 
@@ -314,6 +319,7 @@ async function startOneProviderAccount({
   releaseProviderLock,
   retainProviderLock,
   requireStop,
+  marketDataSymbolsByProvider,
 }) {
   try {
     const runtime = await start(createProviderAccountStartInput({
@@ -325,6 +331,7 @@ async function startOneProviderAccount({
       eventPublisher,
       runtimeSessionId,
       operationalStateStore,
+      marketDataSymbolsByProvider,
     }))
     validateStartedProviderRuntime({
       runtime,
@@ -366,6 +373,7 @@ async function startConfiguredProviderAccounts({
   operationalStateStore,
   releaseProviderLock,
   retainProviderLock,
+  marketDataSymbolsByProvider,
 }) {
   const startedAccounts = []
   const failedAccounts = []
@@ -384,6 +392,7 @@ async function startConfiguredProviderAccounts({
       releaseProviderLock,
       retainProviderLock,
       requireStop: providers.length > 1,
+      marketDataSymbolsByProvider,
     })
     if (result.error === undefined) {
       startedAccounts.push({
@@ -427,6 +436,10 @@ export async function startProviderAccounts({
   if (typeof start !== "function") {
     throw new TypeError("Harvester provider-account startup requires a start function")
   }
+  const marketDataSymbolsByProvider = resolveMarketDataSymbolsByProvider({
+    appConfig,
+    providers,
+  })
   const startup = await startConfiguredProviderAccounts({
     providers,
     start,
@@ -437,6 +450,7 @@ export async function startProviderAccounts({
     operationalStateStore,
     releaseProviderLock,
     retainProviderLock,
+    marketDataSymbolsByProvider,
   })
   throwIfNoAccountStarted({
     providers,

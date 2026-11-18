@@ -163,6 +163,7 @@ function getSubscriptionFailure({ result, symbol, streamLabel }) {
 
 async function subscribeToBookTicker({
   broker,
+  providerInstanceId,
   symbol,
   logger,
   isStopped,
@@ -198,6 +199,7 @@ async function subscribeToBookTicker({
   logSystem({
     logger,
     message: "Book ticker subscribed",
+    providerInstanceId: providerInstanceId ?? null,
     symbol,
     stream: result.data.stream ?? null,
   })
@@ -251,6 +253,7 @@ function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }
   logSystem({
     logger,
     message: "Market data subscribed",
+    providerInstanceId: data.providerInstanceId ?? null,
     symbol,
     stream: data.stream ?? null,
   })
@@ -258,6 +261,7 @@ function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }
 
 async function subscribeToMarketPrice({
   broker,
+  providerInstanceId,
   brokerName,
   eventPublisher,
   logger,
@@ -304,6 +308,7 @@ async function subscribeToMarketPrice({
       ...data,
       eventPublisher,
       brokerName,
+      providerInstanceId,
     },
     logger,
     symbol,
@@ -320,6 +325,7 @@ async function subscribeToEnabledMarkets({ context, reportPriceError }) {
     if (tradingEnabled) {
       await subscribeToBookTicker({
         broker,
+        providerInstanceId: context.providerInstanceId,
         symbol,
         logger: context.logger,
         isStopped: context.isStopped,
@@ -424,6 +430,7 @@ async function seedMissingInitialPrices({ context, reportPriceError }) {
  */
 export async function subscribeToMarketData({
   broker,
+  providerInstanceId,
   brokerName,
   eventPublisher,
   logger,
@@ -445,6 +452,7 @@ export async function subscribeToMarketData({
     .map(([symbol]) => symbol)
   const context = {
     broker,
+    providerInstanceId,
     brokerName,
     eventPublisher,
     logger,
@@ -473,6 +481,7 @@ subscriptions })
   logSystem({
     logger,
     message: "Market data subscriptions ready",
+    providerInstanceId: providerInstanceId ?? null,
     enabledSymbols,
     subscribedSymbols,
   })
