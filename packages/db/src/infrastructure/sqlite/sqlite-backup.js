@@ -52,6 +52,33 @@ function createProgressReporter({ progress, onFailure }) {
   }
 }
 
+async function cleanupBackupTemporaryDirectory({
+  temporaryDirectory,
+  operationError,
+  cleanupTemporaryDirectory,
+}) {
+  if (!temporaryDirectory) {
+    return operationError
+  }
+
+  try {
+    await cleanupTemporaryDirectory({
+      directory: temporaryDirectory,
+      operationError,
+    })
+    return operationError
+  } catch (error) {
+    return error
+  }
+}
+
+function validateBackupSource({ sourceConnection, timeout }) {
+  validateBackupSource({
+    sourceConnection,
+    timeout,
+  })
+}
+
 async function runBackup({ sourceConnection, destinationFilename, rate, progress, timeout, onProgressFailure, cleanupTemporaryDirectory }) {
   let progressError = null
   let temporaryDirectory
@@ -87,16 +114,11 @@ async function runBackup({ sourceConnection, destinationFilename, rate, progress
     operationError = error
   }
 
-  if (temporaryDirectory) {
-    try {
-      await cleanupTemporaryDirectory({
-        directory: temporaryDirectory,
-        operationError,
-      })
-    } catch (error) {
-      operationError = error
-    }
-  }
+  operationError = await cleanupBackupTemporaryDirectory({
+    temporaryDirectory,
+    operationError,
+    cleanupTemporaryDirectory,
+  })
 
   if (operationError) {
     if (progressError) {
