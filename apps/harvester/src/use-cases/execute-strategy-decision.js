@@ -534,6 +534,26 @@ async function handleMismatchedAcknowledgement({ context, candidate } = {}) {
 
 async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrder } = {}) {
   const { pendingOrder, purpose, ownership } = candidate
+  if (pendingOrder.providerInstanceId !== undefined) {
+    acknowledgedOrder = new CanonicalOrder({
+      clientOrderId: acknowledgedOrder.clientOrderId,
+      brokerOrderId: acknowledgedOrder.brokerOrderId,
+      providerInstanceId: pendingOrder.providerInstanceId,
+      providerType: pendingOrder.providerType,
+      accountId: pendingOrder.accountId,
+      market: acknowledgedOrder.market,
+      side: acknowledgedOrder.side,
+      type: acknowledgedOrder.type,
+      limitPrice: acknowledgedOrder.limitPrice,
+      originalQuantity: acknowledgedOrder.originalQuantity,
+      executedQuantity: acknowledgedOrder.executedQuantity,
+      status: acknowledgedOrder.status,
+      createdAt: acknowledgedOrder.createdAt,
+      acknowledgedAt: acknowledgedOrder.acknowledgedAt,
+      updatedAt: acknowledgedOrder.updatedAt,
+      completedAt: acknowledgedOrder.completedAt,
+    })
+  }
   const durableOutcome = await persistDurableSubmissionOutcome({
     context,
     order: acknowledgedOrder,
