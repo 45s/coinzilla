@@ -381,7 +381,8 @@ test("resolves GitHub-style heading fragments and local Markdown paths encoded i
   const root = mkdtempSync(join(tmpdir(), 'coinzilla-encoded-heading-'))
   try {
     mkdirSync(join(root, 'docs'), { recursive: true })
-    writeFileSync(join(root, 'docs', 'guide with spaces.md'), '## Café &amp; tea!\\n\\n## Existing section')
+    writeFileSync(join(root, 'docs', 'asset.svg'), '')
+    writeFileSync(join(root, 'docs', 'guide with spaces.md'), '## Café &amp; tea!\n\n## Existing section')
     const gaps = findMissingLocalAnchors(root, [
       {
         path: 'docs/source.md',
@@ -390,11 +391,11 @@ test("resolves GitHub-style heading fragments and local Markdown paths encoded i
           '[missing encoded fragment](guide%20with%20spaces.md#missing%20section)',
           '[non-Markdown fragment](asset.svg#not-a-heading)',
           '[external fragment](https://example.com/guide#not-a-local-heading)',
-        ].join('\\n'),
+        ].join('\n'),
       },
       {
         path: 'docs/guide with spaces.md',
-        content: '## Café &amp; tea!\\n\\n## Existing section',
+        content: '## Café &amp; tea!\n\n## Existing section',
       },
     ])
 
