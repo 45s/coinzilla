@@ -1210,6 +1210,45 @@ function evaluateAdaResidualState({ state, metadata }) {
   })
 }
 
+function assertAdaRecoveryCompletionProfitBoundaries({ state, position, inventoryDisposition }) {
+  const completionInput = {
+    sellOrderFullyFilled: true,
+    spent: position.spent.amount,
+    activeQuantity: position.quantity.amount,
+    keepQuantity: "0",
+    minProfit: "0.05",
+    inventoryDisposition,
+  }
+  const belowMinimumProfit = evaluateRecoveryCompletion({
+    ...completionInput,
+    netSellProceeds: state.recoveryLedger.netSellProceeds,
+  })
+  assert.equal(belowMinimumProfit.realizedNetProfit, "0.04910062")
+  assert.equal(belowMinimumProfit.eligible, false)
+  assert.equal(belowMinimumProfit.pause, true)
+  assert.equal(belowMinimumProfit.reason, "RECOVERY_SELL_FAILED_MIN_PROFIT")
+  assert.equal(belowMinimumProfit.freeQuantity, "0")
+  assert.equal(belowMinimumProfit.dust?.reason, "MIN_NOTIONAL")
+
+  const atMinimumProfit = evaluateRecoveryCompletion({
+    ...completionInput,
+    netSellProceeds: "15.265",
+  })
+  assert.equal(atMinimumProfit.realizedNetProfit, "0.05")
+  assert.equal(atMinimumProfit.eligible, true)
+  assert.equal(atMinimumProfit.pause, false)
+  assert.equal(atMinimumProfit.freeQuantity, "0.1")
+
+  const aboveMinimumProfit = evaluateRecoveryCompletion({
+    ...completionInput,
+    netSellProceeds: "15.26500001",
+  })
+  assert.equal(aboveMinimumProfit.realizedNetProfit, "0.05000001")
+  assert.equal(aboveMinimumProfit.eligible, true)
+  assert.equal(aboveMinimumProfit.pause, false)
+  assert.equal(aboveMinimumProfit.freeQuantity, "0.1")
+}
+
 test("classifies the ADA 0.1 residual as MIN_NOTIONAL when one fee-reserved step cannot be sold", () => {
   const adaBaseAsset = new Asset({
     id: "asset:ADA",
@@ -1252,5 +1291,11 @@ test("classifies the ADA 0.1 residual as MIN_NOTIONAL when one fee-reserved step
     minimumNotional: "5",
     evaluatedQuantity: "0.1",
     evaluatedNotional: "0.01531",
+  })
+
+  assertAdaRecoveryCompletionProfitBoundaries({
+    state,
+    position,
+    inventoryDisposition: decision.inventoryDisposition,
   })
 })
