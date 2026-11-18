@@ -112,18 +112,19 @@ function createFailedAccount({ provider, error, cleanupErrors }) {
     errorName: error?.name ?? "Error",
     errorCode: error?.code,
     errorMessage: error?.message ?? String(error),
-    cleanupErrors: Object.freeze(cleanupErrors),
+    cleanupErrors: Object.freeze(cleanupErrors.map((cleanupError) => Object.freeze({
+      name: cleanupError?.name ?? "Error",
+      code: cleanupError?.code,
+      message: cleanupError?.message ?? String(cleanupError),
+    }))),
   })
 }
 
-function throwIfNoAccountStarted({ providers, failedAccounts }) {
-  if (failedAccounts.length !== providers.length) {
+function throwIfNoAccountStarted({ providers, failedErrors }) {
+  if (failedErrors.length === 0) {
     return
   }
-  const failures = failedAccounts.flatMap(({ error, cleanupErrors }) => [
-    error,
-    ...cleanupErrors,
-  ])
+  const failures = failedErrors
   if (providers.length === 1 && failures.length === 1) {
     throw failures[0]
   }
@@ -163,6 +164,7 @@ export async function startProviderAccounts({
   }
   const startedAccounts = []
   const failedAccounts = []
+  const failedErrors = []
   for (const [index, provider] of providers.entries()) {
     try {
       const runtime = await start({
@@ -190,17 +192,15 @@ export async function startProviderAccounts({
         provider,
         releaseProviderLock,
       })
-      failedAccounts.push({
-        ...createFailedAccount({
-          provider,
-          error,
-          cleanupErrors,
-        }),
+      failedAccounts.push(createFailedAccount({
+        provider,
         error,
-      })
+        cleanupErrors,
+      }))
+      failedErrors.push(error, ...cleanupErrors)
     }
   }
-  throwIfNoAccountStarted({ providers, failedAccounts })
+  throwIfNoAccountStarted({ providers, failedErrors })
   if (providers.length === 1) {
     return startedAccounts[0].runtime
   }
