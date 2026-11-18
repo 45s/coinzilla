@@ -366,3 +366,34 @@ test("latches STOP when configured maker or taker percentages are invalid", () =
   assert.equal(result.orderIntent, undefined,
     "Invalid configured fee percentages must never produce a SELL intent.")
 })
+
+test("latches STOP when pair percentages or minProfit are not finite numbers", () => {
+  const invalidPairConfigs = [
+    {
+      ...validInput.pairConfig,
+      makerPercent: "0",
+    },
+    {
+      ...validInput.pairConfig,
+      takerPercent: "0.075",
+    },
+    {
+      ...validInput.pairConfig,
+      minProfit: "0.01",
+    },
+  ]
+
+  for (const pairConfig of invalidPairConfigs) {
+    const result = evaluateRecoverySellerSellDecision({
+      ...validInput,
+      pairConfig,
+    })
+
+    assert.equal(result.decision.outcome, "BLOCK",
+      "Pair policy values must be finite numbers from the validated app configuration.")
+    assert.equal(result.stopState.status, "STOPPED",
+      "A non-numeric pair policy value must latch the global RS STOP.")
+    assert.equal(result.orderIntent, undefined,
+      "A non-numeric pair policy value must never produce a SELL intent.")
+  }
+})
