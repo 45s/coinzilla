@@ -128,36 +128,42 @@ function createMainProviderAccountStarter({
   }
 }
 
-function createMainMultiProviderFixture({
-  providerInstances,
-  env,
-  failAccountId,
-  startupCleanupConfirmed = true,
-  providerAdapterFactories = {},
-}) {
-  const started = []
-  const stopped = []
-  const lockScopes = []
-  const releasedLocks = []
-  const signalHandlers = new Map()
+function resolveMarketDataSourceProvider({
+        pair,
+        providerInstances,
+      }) {
+  return providerInstances.find(({ environment }) =>
+    pair.tradingEnvironment === "both" || pair.tradingEnvironment === environment)
+}
+
+function createMarketDataTestConfiguration(providerInstances) {
   const configuredPairs = Object.fromEntries(
     Object.entries(defaultAppConfig.strategies.CG_coinGrabber.pairs).map(([symbol, pair]) => {
-      const sourceProvider = providerInstances.find(({ environment }) =>
-        pair.tradingEnvironment === "both" || pair.tradingEnvironment === environment)
-      return [symbol, sourceProvider ? pair : { ...pair, enabled: false }]
+      const sourceProvider = resolveMarketDataSourceProvider({ pair, providerInstances })
+      return [symbol, sourceProvider ? pair : {
+        ...pair,
+        enabled: false,
+      }]
     }),
   )
-  const marketDataRoutes = Object.entries(configuredPairs)
+  const routes = Object.entries(configuredPairs)
     .filter(([, pair]) => pair.enabled)
     .map(([symbol, pair]) => {
-      const sourceProvider = providerInstances.find(({ environment }) =>
-        pair.tradingEnvironment === "both" || pair.tradingEnvironment === environment)
+      const sourceProvider = resolveMarketDataSourceProvider({ pair, providerInstances })
       return {
         symbol,
         providerInstanceId: sourceProvider.providerInstanceId,
       }
     })
-  const config = {
+  return {
+    configuredPairs,
+    routes,
+  }
+}
+
+function createMainMultiProviderAppConfig(providerInstances) {
+  const { configuredPairs, routes } = createMarketDataTestConfiguration(providerInstances)
+  return {
     ...defaultAppConfig,
     operatorControl: {
       telegram: {
@@ -173,12 +179,27 @@ function createMainMultiProviderFixture({
       },
     },
     marketDataRouting: {
-      routes: marketDataRoutes,
+      routes,
     },
     brokers: {
       instances: providerInstances,
     },
   }
+}
+
+function createMainMultiProviderFixture({
+  providerInstances,
+  env,
+  failAccountId,
+  startupCleanupConfirmed = true,
+  providerAdapterFactories = {},
+}) {
+  const started = []
+  const stopped = []
+  const lockScopes = []
+  const releasedLocks = []
+  const signalHandlers = new Map()
+  const config = createMainMultiProviderAppConfig(providerInstances)
   const run = () => main({
     loadConfig: async () => config,
     env,
