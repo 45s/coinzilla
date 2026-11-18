@@ -1238,3 +1238,30 @@ The audit is the detailed evidence source; this roadmap records status and next 
 - Documentation impact: updated the [Bitunix reference audit](./BITUNIX_REFERENCE_AUDIT.md), [capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract), and [package README](./README.md#bitunix-spot-integration).
 
 Merge verification: the final PR head was synchronized with `develop`; package tests, workspace coverage, JavaScript syntax, Utils tests, dependency audit, and `actionlint` all passed on the exact head. No live API calls or order mutations were performed.
+
+## 2026-11-18 — Bitunix Spot order/deal-history re-audit (#1185)
+
+- [x] Rechecked the official symbol-scoped order-history page and matching-order lookup contracts against current documentation.
+- [x] Recorded the official order-history schema's duplicate `volume` field with conflicting quote/base descriptions; do not infer which duplicate label is authoritative.
+- [x] Rechecked JKorf's Spot Trading interface/implementation: `GetUserTradesAsync` still documents GET but sends POST to the wrong pending-orders path; the Spot history fixture remains an empty `data` object and does not establish quantity units.
+- [x] Rechecked the TypeScript MCP, independent Python client, StockSharp search and Futures-only Cachy reference; none resolves execution denomination, complete partial-fill coverage, or stable execution identity.
+- [x] Keep `getFills()` and `getMyTrades()` unsupported; leave #1185 open and unchanged.
+
+**Decision:** no safe canonical fill/account-wide trade-history implementation is supported by the available authoritative evidence. The next useful independently verifiable read-side capability is deposit-address lookup.
+
+## 2026-11-18 — Bitunix Spot deposit-address lookup (#1398 / PR #1399)
+
+**Status: Complete — PR #1399 merged into `develop` as `5c517f677232ea3aa2ec72053087307693f97919`.**
+
+- [x] Audited the official signed `POST /api/spot/v1/deposit/address` contract, required `coin`/`network` inputs, address-array response, optional memo, and 10 requests/second/IP limit.
+- [x] Cross-checked JKorf's interface, implementation, model and Spot response fixture. The TypeScript MCP and independent Python client do not implement this endpoint; Cachy is Futures-only.
+- [x] Added `BitunixSpotBroker.getDepositAddress({ coin, network })` as a Bitunix-only signed, read-only one-request lookup. The network is caller-selected; no automatic selection or address generation is performed.
+- [x] Validate inputs before I/O; validate every response row and exact requested coin/network identity; preserve all addresses and memo values; freeze the complete result; reject missing/null/non-array data.
+- [x] Add stable input/response error codes with safe operation/field context. Do not log or persist addresses/memos; do not retry or paginate.
+- [x] Add offline tests for request flags/body, REST signing, multiple addresses, empty response, memo null/empty/omitted values, malformed rows, mismatched identity, validation-before-I/O, and transport failure without retry.
+- [x] Pass broker package tests and coverage, full workspace tests and coverage, strict changed-file ESLint, workspace JavaScript quality/syntax, actionlint, Utils tests, dependency audit, and Harvester regression tests on exact PR head `63111cc26f70f41130b41629ecbf59608f94b46b`.
+- [x] Merge PR #1399 using the repository merge-commit method; verify the PR merge SHA and resulting `develop` HEAD both equal `5c517f677232ea3aa2ec72053087307693f97919`.
+- [x] Confirm the optional read-only Binance TESTNET integration was skipped and no live Bitunix API calls were made.
+- [x] Confirm issue #1185 remains open and unchanged. The advisory External Documentation Links workflow was still running at merge; it is not a required branch-protection context.
+
+**Next candidate:** revisit #1185 only if official Bitunix Spot documentation or verifiable Spot response fixtures resolve stable order identity, complete execution history, quantity denomination, account snapshot freshness, and the TESTNET/mutation-safety requirements. Do not implement speculative fills or mutations.

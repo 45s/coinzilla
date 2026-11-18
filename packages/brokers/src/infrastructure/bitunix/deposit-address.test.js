@@ -1,0 +1,191 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+import { BitunixSpotBroker } from "./broker.js"
+import { BitunixDepositAddressError } from "./errors/bitunix-deposit-address-error.js"
+import { BitunixRestError } from "./api/rest-client.js"
+
+const DEPOSIT_ADDRESS_PATH = "/api/spot/v1/deposit/address"
+const REQUEST = {
+  coin: "USDT",
+  network: "Tron (TRC-20)",
+}
+
+function createBroker({ response, failure } = {}) {
+  const calls = []
+  const broker = new BitunixSpotBroker({
+    apiKey: "key",
+    apiSecret: "secret",
+    tradingMode: "live",
+    dependencies: {
+      restClientFactory: () => ({
+        async request(input) {
+          calls.push(input)
+          if (failure) {
+            throw failure
+          }
+          return { data: response }
+        },
+      }),
+    },
+  })
+  return {
+    broker,
+    calls,
+  }
+}
+
+function createAddress(overrides = {}) {
+  return {
+    coin: REQUEST.coin,
+    network: REQUEST.network,
+    address: "TPKhSAEy84qvpomF5wF7h5ih1WmbmupXor",
+    memo: null,
+    ...overrides,
+  }
+}
+
+test("Bitunix Spot broker retrieves every requested-network deposit address without changing account state", async () => {
+  const addressWithoutMemo = createAddress({
+    address: "TNoMemoAddress",
+  })
+  delete addressWithoutMemo.memo
+  const addresses = [
+    createAddress(),
+    createAddress({
+      address: "TAnotherAddress",
+      memo: "deposit-tag",
+    }),
+    addressWithoutMemo,
+    createAddress({
+      address: "TEmptyMemoAddress",
+      memo: "",
+    }),
+  ]
+  const { broker, calls } = createBroker({ response: addresses })
+
+  const result = await broker.getDepositAddress(REQUEST)
+
+  assert.equal(result.ok, true, "a documented deposit-address response must produce a successful result")
+  assert.deepEqual(calls, [{
+    method: "POST",
+    path: DEPOSIT_ADDRESS_PATH,
+    body: REQUEST,
+    authenticated: true,
+    stateChanging: false,
+  }], "the lookup must send one signed, read-only POST with only coin and network")
+  assert.deepEqual(result.data, addresses, "all returned addresses and memo values must remain exact")
+  assert.equal(Object.hasOwn(result.data[2], "memo"), false, "an omitted memo must remain omitted")
+  assert.equal(result.data[3].memo, "", "an explicitly empty memo must remain exact")
+  assert.ok(Object.isFrozen(result.data), "the returned address list must be immutable")
+  assert.ok(result.data.every((address) => Object.isFrozen(address)), "every returned address record must be immutable")
+})
+
+test("Bitunix Spot broker rejects missing or invalid deposit-address inputs before network I/O", async () => {
+  const invalidInputs = [
+    undefined,
+    null,
+    [],
+    {},
+    {
+      coin: "",
+      network: REQUEST.network,
+    },
+    {
+      coin: " ",
+      network: REQUEST.network,
+    },
+    {
+      coin: REQUEST.coin,
+    },
+    {
+      coin: REQUEST.coin,
+      network: "",
+    },
+    {
+      coin: REQUEST.coin,
+      network: " ",
+    },
+    {
+      coin: REQUEST.coin,
+      network: 12,
+    },
+  ]
+  const { broker, calls } = createBroker({ response: [] })
+  const results = []
+
+  for (const input of invalidInputs) {
+    results.push(await broker.getDepositAddress(input))
+  }
+
+  assert.ok(results.every((result) => result.ok === false), "invalid inputs must return unsuccessful results")
+  assert.ok(results.every((result) => result.errors[0] instanceof BitunixDepositAddressError), "input failures must use the broker-owned error type")
+  assert.ok(results.every((result) => result.errors[0].code === "BITUNIX_DEPOSIT_ADDRESS_INPUT_INVALID"), "input failures must use the stable broker-owned error code")
+  assert.deepEqual(results[4].errors[0].context, {
+    operation: "getDepositAddress",
+    field: "coin",
+  }, "input diagnostics must contain only safe operation/field context")
+  assert.equal(calls.length, 0, "invalid coin/network inputs must be rejected before REST I/O")
+})
+
+test("Bitunix Spot broker rejects missing, malformed, or mismatched deposit-address response rows", async () => {
+  const malformedResponses = [
+    undefined,
+    null,
+    {},
+    [null],
+    [createAddress({ coin: "BTC" })],
+    [createAddress({ network: "Ethereum" })],
+    [createAddress({ address: "" })],
+    [createAddress({ address: " " })],
+    [createAddress({ memo: 12 })],
+  ]
+  const results = []
+
+  for (const response of malformedResponses) {
+    const { broker } = createBroker({ response })
+    results.push(await broker.getDepositAddress(REQUEST))
+  }
+
+  assert.ok(results.every((result) => result.ok === false), "malformed or mismatched address data must fail closed")
+  assert.ok(results.every((result) => result.errors[0] instanceof BitunixDepositAddressError), "response failures must use the broker-owned error type")
+  assert.ok(results.every((result) => result.errors[0].code === "BITUNIX_DEPOSIT_ADDRESS_RESPONSE_INVALID"), "response failures must use the stable broker-owned error code")
+  assert.ok(results.every((result) => result.errors?.length > 0), "each rejected response must expose a validation error")
+})
+
+test("Bitunix Spot broker accepts an explicit empty deposit-address list", async () => {
+  const { broker, calls } = createBroker({ response: [] })
+
+  const result = await broker.getDepositAddress(REQUEST)
+
+  assert.equal(result.ok, true, "an explicit empty array is a valid empty address list")
+  assert.deepEqual(result.data, [], "an empty response must not be replaced with a fabricated address")
+  assert.equal(calls.length, 1, "an empty list still represents one successful read request")
+})
+
+test("Bitunix Spot broker preserves exchange rejections without retrying", async () => {
+  const failure = new BitunixRestError({
+    message: "Bitunix rejected the deposit-address request",
+    kind: "exchange",
+    exchangeCode: "90001",
+    path: DEPOSIT_ADDRESS_PATH,
+  })
+  const { broker, calls } = createBroker({ failure })
+
+  const result = await broker.getDepositAddress(REQUEST)
+
+  assert.equal(result.ok, false, "exchange rejections must remain unsuccessful results")
+  assert.equal(result.errors[0].kind, "exchange", "the REST failure category must remain unchanged")
+  assert.equal(result.errors[0].exchangeCode, "90001", "unknown exchange codes must remain opaque and exact")
+  assert.equal(calls.length, 1, "exchange rejections must not trigger an automatic retry")
+})
+
+test("Bitunix Spot broker reports transport failures without retrying or exposing address data", async () => {
+  const failure = new Error("socket closed")
+  const { broker, calls } = createBroker({ failure })
+
+  const result = await broker.getDepositAddress(REQUEST)
+
+  assert.equal(result.ok, false, "transport failures must remain unsuccessful results")
+  assert.equal(calls.length, 1, "the read request must not be retried automatically")
+  assert.doesNotMatch(result.errors[0].message, /TPKhSA|deposit-tag/i, "errors must not include returned address or memo data")
+})
