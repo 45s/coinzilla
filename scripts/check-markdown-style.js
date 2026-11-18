@@ -3,29 +3,22 @@ import { fileURLToPath } from "node:url"
 import process from "node:process"
 
 import { findMarkdownDocuments } from "./check-agent-policy.js"
+import {
+  isHistoricalPath,
+  isTemplateHeadingExempt as isTemplateHeadingPathExempt,
+} from "./markdown-path-policy.js"
 import { collectMarkdownStyleBaseline } from "./markdown-style-baseline.js"
+
+export {
+  classifyMarkdownPath,
+  isHistoricalPath,
+  isTemplateHeadingExempt,
+} from "./markdown-path-policy.js"
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url))
 
 // Large release-branch diffs can exceed Node's 1 MiB execFileSync default.
 export const GIT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024
-
-const HISTORICAL_PATHS = [
-  /^apps\/harvester\/AUDIT(?:_|\.|$)/,
-  /^apps\/harvester\/docs\/audits\/(?:README_HISTORY|ROADMAP_HISTORY)\.md$/,
-  /^apps\/harvester\/docs\/audits\/(?:evidence|reports|sessions)\/(?!README\.md$).+/,
-  /^apps\/harvester\/docs\/incidents\/(?!README\.md$).+/,
-  /^apps\/harvester\/docs\/tasks\/(?!README\.md$).+/,
-  /^apps\/harvester\/docs\/DDD_CLEAN_ARCHITECTURE_AUDIT\.md$/,
-  /^apps\/harvester\/docs\/DOMAIN_FIRST_DELIVERY_PLAN\.md$/,
-  /^docs\/audits\/(?!README\.md$).+/,
-  /^docs\/ai-agent\/repository-engineering-audit\.md$/,
-]
-
-const TEMPLATE_HEADING_EXEMPTIONS = [
-  /^\.github\/ISSUE_TEMPLATE\//,
-  /^\.github\/PULL_REQUEST_TEMPLATE\.md$/,
-]
 
 const HEADING_FINDINGS = new Set([
   "missingH1",
@@ -38,14 +31,6 @@ const FILE_LEVEL_FINDINGS = new Set([
   "crlfLineEndings",
 ])
 
-const REPORT_ONLY_FINDINGS = new Set([
-  "unorderedListMarkers",
-  "nestedListIndentation",
-  "malformedTableDelimiters",
-  "tableColumnMismatches",
-  "tableSpacing",
-])
-
 const FINDING_LABELS = Object.freeze({
   trailingWhitespace: "trailing whitespace",
   missingFinalNewline: "missing final newline",
@@ -56,23 +41,12 @@ const FINDING_LABELS = Object.freeze({
   headingLevelSkips: "skipped heading levels",
   unlabelledCodeFences: "unlabeled fenced-code blocks",
   listSpacing: "list blocks without blank-line separation",
+  unorderedListMarkers: "non-hyphen unordered-list markers",
+  nestedListIndentation: "misaligned nested-list indentation",
+  malformedTableDelimiters: "malformed table delimiters",
+  tableColumnMismatches: "table column-count mismatches",
+  tableSpacing: "tables without blank-line separation",
 })
-
-function matchesAny({ path, patterns }) {
-  return patterns.some((pattern) => pattern.test(path))
-}
-
-/**
- * Whether a document is historical evidence excluded from changed-file enforcement.
- * @param {string} path Repository-relative path.
- * @returns {boolean}
- */
-export function isHistoricalPath(path) {
-  return typeof path === "string" && matchesAny({
-    path,
-    patterns: HISTORICAL_PATHS,
-  })
-}
 
 function createMarkdownDiffChange() {
   return {
@@ -160,15 +134,12 @@ export function parseChangedMarkdownDiff(diffText) {
   return state.changes
 }
 
-function isTemplateHeadingExempt({ name, path }) {
-  return HEADING_FINDINGS.has(name) && matchesAny({
-    path,
-    patterns: TEMPLATE_HEADING_EXEMPTIONS,
-  })
+function isHeadingFindingExempt({ name, path }) {
+  return HEADING_FINDINGS.has(name) && isTemplateHeadingPathExempt(path)
 }
 
 function isChangedMarkdownFindingRelevant({ name, entry, change, document }) {
-  if (isTemplateHeadingExempt({
+  if (isHeadingFindingExempt({
     name,
     path: entry.path,
   })) {
@@ -209,9 +180,6 @@ function collectChangedMarkdownStyleViolations({ baseline, changesByPath, docume
     Object.keys(baseline.findings).map((name) => [name, []]),
   )
   for (const [name, entries] of Object.entries(baseline.findings)) {
-    if (REPORT_ONLY_FINDINGS.has(name)) {
-      continue
-    }
     for (const entry of entries) {
       const change = changesByPath.get(entry.path)
       const document = documentsByPath.get(entry.path)
@@ -229,6 +197,36 @@ function collectChangedMarkdownStyleViolations({ baseline, changesByPath, docume
     }
   }
   return violations
+}
+
+/**
+ * Analyze every maintained Markdown/MDX document as a complete file.
+ *
+ * Historical evidence is excluded and GitHub templates retain heading-only
+ * exemptions; all other style findings are blocking.
+ *
+ * @param {{path: string, content: string}[]} documents
+ * @returns {{scannedFiles: number, skippedHistorical: number, violations: Record<string, Array<{path: string, count: number, lines: number[]}>>}}
+ */
+export function analyzeFullTreeMarkdownStyle({ documents }) {
+  if (!Array.isArray(documents)) {
+    throw new TypeError("Markdown documents must be an array")
+  }
+
+  const changesByPath = new Map(
+    documents.map(({ path }) => [
+      path,
+      {
+        lines: new Set(),
+        isNewFile: true,
+        removedHeading: false,
+      },
+    ]),
+  )
+  return analyzeMarkdownStyleDocuments({
+    documents,
+    changesByPath,
+  })
 }
 
 /**
@@ -267,6 +265,41 @@ export function analyzeMarkdownStyleDocuments({ documents, changesByPath }) {
     skippedHistorical: selectedDocuments.length - maintainedDocuments.length,
     violations,
   }
+}
+
+/**
+ * Enforce the complete maintained Markdown/MDX tree.
+ *
+ * @returns {ReturnType<typeof analyzeFullTreeMarkdownStyle>}
+ */
+export function checkFullTreeMarkdownStyle() {
+  const documents = findMarkdownDocuments(repositoryRoot)
+  const result = analyzeFullTreeMarkdownStyle({ documents })
+  const violationEntries = Object.entries(result.violations).filter(
+    ([, entries]) => entries.length > 0,
+  )
+
+  process.stdout.write(
+    `Full-tree Markdown style: scanned ${result.scannedFiles} maintained files; skipped ${result.skippedHistorical} historical files.\n`,
+  )
+
+  if (violationEntries.length === 0) {
+    process.stdout.write("All maintained Markdown files satisfy the style standard.\n")
+    return result
+  }
+
+  for (const [name, entries] of violationEntries) {
+    for (const entry of entries) {
+      const lineDetail = entry.lines.length > 0
+        ? ` (lines ${entry.lines.join(", ")})`
+        : ""
+      process.stderr.write(
+        `- ${entry.path}: ${FINDING_LABELS[name]}${lineDetail}\n`,
+      )
+    }
+  }
+
+  throw new Error("Full-tree maintained Markdown files violate the style standard")
 }
 
 /**
@@ -338,7 +371,11 @@ export function checkChangedMarkdownStyle(baseSha) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
-    checkChangedMarkdownStyle(process.argv[2])
+    if (process.argv[2] === "--all-maintained") {
+      checkFullTreeMarkdownStyle()
+    } else {
+      checkChangedMarkdownStyle(process.argv[2])
+    }
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     process.exitCode = 1

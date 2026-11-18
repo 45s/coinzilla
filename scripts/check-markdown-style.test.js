@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
+  analyzeFullTreeMarkdownStyle,
   analyzeMarkdownStyleDocuments,
   parseChangedMarkdownDiff,
   GIT_DIFF_MAX_BUFFER_BYTES,
@@ -217,7 +218,7 @@ test("enforces every existing style rule for new maintained documents", () => {
   }
 })
 
-test("keeps non-spacing list and table structure metrics report-only after list-spacing migration", () => {
+test("enforces list and table structure metrics on changed maintained documents", () => {
   const content = [
     "# Title",
     "Paragraph",
@@ -231,8 +232,10 @@ test("keeps non-spacing list and table structure metrics report-only after list-
     "",
   ].join("\n")
   const result = analyzeMarkdownStyleDocuments({
-    documents: [{ path: "docs/new-list-table.md",
-content }],
+    documents: [{
+      path: "docs/new-list-table.md",
+      content,
+    }],
     changesByPath: new Map([["docs/new-list-table.md", {
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
@@ -246,8 +249,93 @@ content }],
     "tableColumnMismatches",
     "tableSpacing",
   ]) {
-    assert.deepEqual(result.violations[rule], [], `${rule} remains report-only`)
+    assert.ok(
+      result.violations[rule].some((entry) => entry.path === "docs/new-list-table.md"),
+      `${rule} must be enforced`,
+    )
   }
+})
+
+function createFullTreeStyleResult() {
+  const maintainedContent = [
+    "# Guide",
+    "* item",
+    "   - nested",
+    "| A | B |",
+    "| -- | --- |",
+    "| one | two | extra |",
+  ].join("\n")
+  const templateContent = [
+    "## Pull request",
+    "#### Details",
+    "* item",
+  ].join("\n")
+  const historicalContent = "## Old report  \n* historical marker"
+
+  return analyzeFullTreeMarkdownStyle({
+    documents: [
+      {
+        path: "docs/guide.md",
+        content: maintainedContent,
+      },
+      {
+        path: ".github/PULL_REQUEST_TEMPLATE.md",
+        content: templateContent,
+      },
+      {
+        path: "apps/harvester/docs/audits/reports/legacy.md",
+        content: historicalContent,
+      },
+    ],
+  })
+}
+
+function assertFullTreeStyleFindings(result) {
+  assert.equal(result.scannedFiles, 2, "maintained documents and templates must be included in full-tree enforcement")
+  assert.equal(result.skippedHistorical, 1, "historical evidence must be excluded from blocking style enforcement")
+
+  for (const rule of [
+    "unorderedListMarkers",
+    "nestedListIndentation",
+    "malformedTableDelimiters",
+    "tableColumnMismatches",
+  ]) {
+    assert.ok(
+      result.violations[rule].some((entry) => entry.path === "docs/guide.md"),
+      `${rule} must be enforced in the full-tree analysis`,
+    )
+  }
+
+  assert.ok(
+    result.violations.unorderedListMarkers.some(
+      (entry) => entry.path === ".github/PULL_REQUEST_TEMPLATE.md",
+    ),
+    "GitHub templates retain non-heading style enforcement",
+  )
+  assert.equal(
+    result.violations.missingH1.some(
+      (entry) => entry.path === ".github/PULL_REQUEST_TEMPLATE.md",
+    ),
+    false,
+    "GitHub templates must remain exempt from the H1 requirement",
+  )
+  assert.equal(
+    result.violations.headingLevelSkips.some(
+      (entry) => entry.path === ".github/PULL_REQUEST_TEMPLATE.md",
+    ),
+    false,
+    "GitHub templates must remain exempt from heading hierarchy checks",
+  )
+  assert.equal(
+    Object.values(result.violations).flat().some((entry) => entry.path.includes("legacy.md")),
+    false,
+    "historical evidence must not produce blocking full-tree style findings",
+  )
+}
+
+test("full-tree analysis skips historical evidence but keeps template style checks", () => {
+  const result = createFullTreeStyleResult()
+  assertFullTreeStyleFindings(result)
 })
 
 test("enforces blank lines before and after list blocks in changed maintained documents", () => {
