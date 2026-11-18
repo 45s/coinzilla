@@ -83,14 +83,14 @@ export function buildBuyControlSuccessReply({ action,
  result,
  interaction } = {}) {
   const buyScope = symbol ? `for ${symbol}` : "across all markets"
-  if (action === "PAUSE_BUYS" || action === "PAUSE_ALL_BUYS") {
+  if (action === "PAUSE" || action === "PAUSE_BUYS" || action === "PAUSE_ALL_BUYS") {
     return buildPauseBuySuccessReply({
       buyScope,
       result,
       interaction,
     })
   }
-  if (action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS") {
+  if (action === "RESUME" || action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS") {
     return buildResumeBuySuccessReply({
       buyScope,
       result,
