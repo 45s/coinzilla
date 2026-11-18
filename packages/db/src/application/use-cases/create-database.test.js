@@ -1,7 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createDatabase } from "../src/index.js"
+import { createDatabase } from "../../index.js"
+
+function assertTransactionRequiresConnection(database) {
+  assert.throws(() => database.transaction(() => {}), /connected/)
+}
 
 function createAdapter(overrides = {}) {
   const calls = {
@@ -96,7 +100,7 @@ test("transactions require a connected database and a callback", async () => {
   const { adapter } = createAdapter()
   const database = createDatabase({ adapter })
 
-  assert.throws(() => database.transaction(() => {}), /connected/)
+  assertTransactionRequiresConnection(database)
   await database.connect()
   assert.throws(() => database.transaction(null), /callback/)
 })
@@ -155,7 +159,7 @@ test("close waits for active transactions and rejects new transactions", async (
   const closingAgain = database.close()
 
   assert.equal(database.state, "closing")
-  assert.throws(() => database.transaction(() => {}), /connected/)
+  assertTransactionRequiresConnection(database)
   assert.equal(calls.close, 0)
 
   finishTransaction("committed")
@@ -164,6 +168,7 @@ test("close waits for active transactions and rejects new transactions", async (
 
   assert.equal(database.state, "closed")
   assert.equal(calls.close, 1)
+  await database.close()
 })
 
 test("a closed database cannot reconnect", async () => {
@@ -237,9 +242,95 @@ test("a failed close remains retryable without reopening transactions", async ()
 
   await assert.rejects(database.close(), /close failed/)
   assert.equal(database.state, "closing")
-  assert.throws(() => database.transaction(() => {}), /connected/)
+  assertTransactionRequiresConnection(database)
 
   await database.close()
   assert.equal(database.state, "closed")
   assert.equal(attempts, 2)
+})
+
+
+test("connect is idempotent after the provider has connected", async () => {
+  const { adapter, calls } = createAdapter()
+  const database = createDatabase({ adapter })
+  await database.connect()
+
+  const repeatedResult = await database.connect()
+
+  assert.equal(
+    repeatedResult,
+    undefined,
+    "A repeated connect on an already connected database must resolve without returning a second connection result",
+  )
+  assert.equal(
+    calls.connect,
+    1,
+    "An already connected provider must not receive a duplicate connection attempt",
+  )
+  await database.close()
+})
+
+test("read transactions use the provider read path when available", async () => {
+  const calls = {
+    writes: 0,
+    reads: 0,
+  }
+  const adapter = {
+    connect() {},
+    close() {},
+    withTransaction(work) {
+      calls.writes += 1
+      return work("write-context")
+    },
+    withReadTransaction(work) {
+      calls.reads += 1
+      return work("read-context")
+    },
+  }
+  const database = createDatabase({ adapter })
+  await database.connect()
+
+  try {
+    assert.equal(
+      await database.readTransaction((transaction) => transaction),
+      "read-context",
+      "A provider read transaction must receive its dedicated read context",
+    )
+    assert.equal(
+      await database.transaction((transaction) => transaction),
+      "write-context",
+      "A write transaction must continue using the provider write context",
+    )
+    assert.deepEqual(
+      calls,
+      {
+        writes: 1,
+        reads: 1,
+      },
+      "Read and write transaction calls must be routed to their matching provider methods",
+    )
+  } finally {
+    await database.close()
+  }
+})
+
+test("read transactions fall back to the required write transaction port for legacy adapters", async () => {
+  const { adapter, calls } = createAdapter()
+  const database = createDatabase({ adapter })
+  await database.connect()
+
+  try {
+    assert.deepEqual(
+      await database.readTransaction((transaction) => transaction),
+      { transactionId: "transaction-1" },
+      "A legacy adapter without a dedicated read transaction port must retain its existing transaction behavior",
+    )
+    assert.equal(
+      calls.transactions,
+      1,
+      "The legacy fallback must invoke the adapter's required transaction method exactly once",
+    )
+  } finally {
+    await database.close()
+  }
 })

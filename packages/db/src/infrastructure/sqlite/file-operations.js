@@ -59,9 +59,9 @@ export async function createTemporaryDirectory({ destinationFilename, prefix }) 
   return mkdtemp(join(dirname(destinationFilename), `.${prefix}-`))
 }
 
-export async function removeTemporaryDirectory({ directory, operationError }) {
+export async function removeTemporaryDirectory({ directory, operationError, remove = rm }) {
   try {
-    await rm(directory, {
+    await remove(directory, {
       recursive: true,
       force: true,
     })
@@ -83,10 +83,31 @@ export async function verifyDatabaseFile({ filename, timeout }) {
     readOnly: true,
     timeout,
   })
+  let verificationFailed = false
+  let verificationError
 
   try {
     validateIntegrity(database)
-  } finally {
+  } catch (error) {
+    verificationFailed = true
+    verificationError = error
+  }
+
+  try {
     database.close()
+  } catch (closeError) {
+    if (verificationFailed) {
+      throw new AggregateError(
+        [verificationError, closeError],
+        "SQLite database verification failed and its connection could not close",
+        { cause: closeError },
+      )
+    }
+
+    throw closeError
+  }
+
+  if (verificationFailed) {
+    throw verificationError
   }
 }

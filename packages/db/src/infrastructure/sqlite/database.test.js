@@ -4,10 +4,18 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { createSqliteDatabase } from "../src/index.js"
+import { createSqliteDatabase } from "../../index.js"
 
 function createDeferredStatementRun(statement) {
   return () => statement.run("late")
+}
+
+function assertSqliteTransactionRequiresConnection(database) {
+  assert.throws(() => database.transaction(() => {}), /connected/)
+}
+
+function assertSqliteReadTransactionRequiresConnection(database) {
+  assert.throws(() => database.readTransaction(() => {}), /connected/)
 }
 
 test("SQLite connects and executes parameterized SQL", async () => {
@@ -186,9 +194,12 @@ test("SQLite operations require an open connection", async () => {
 
   await database.connect()
   await database.close()
+  await database.close()
 
   assert.throws(() => database.exec("SELECT 1"), /connected/)
   assert.throws(() => database.prepare("SELECT 1"), /connected/)
+  assertSqliteTransactionRequiresConnection(database)
+  assertSqliteReadTransactionRequiresConnection(database)
 })
 
 test("SQLite invalidates transaction statements before a rejected promise callback can continue", async () => {

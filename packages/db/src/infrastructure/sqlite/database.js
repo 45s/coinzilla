@@ -1,10 +1,11 @@
 import { mkdirSync } from "node:fs"
 import { dirname, resolve } from "node:path"
+import { setTimeout as delay } from "node:timers/promises"
 import { DatabaseSync } from "node:sqlite"
 
 import { createDatabase } from "../../database.js"
-import { backupSqliteDatabase } from "./sqlite-backup.js"
-import { migrateSqliteDatabase } from "./sqlite-migration-runner.js"
+import { backupSqliteDatabase } from "./backup.js"
+import { migrateSqliteDatabase } from "./migration-runner.js"
 
 const DEFAULT_TIMEOUT_MS = 5_000
 
@@ -28,7 +29,40 @@ function isAsyncFunction(callback) {
   return callback.constructor?.name === "AsyncFunction"
 }
 
-function createGuardedIterator({ iterator, assertActive }) {
+function isSqliteLockError(error) {
+  return error?.errcode === 5
+    || error?.errcode === 6
+    || /database (?:is locked|table is locked)/i.test(error?.message ?? "")
+}
+
+async function enableWalMode({ connection, timeout }) {
+  const deadline = Date.now() + timeout
+
+  while (true) {
+    try {
+      const { journal_mode: currentMode } = connection.prepare("PRAGMA journal_mode").get()
+      if (currentMode === "wal") {
+        return
+      }
+
+      connection.exec("PRAGMA journal_mode = WAL")
+      const { journal_mode: enabledMode } = connection.prepare("PRAGMA journal_mode").get()
+      if (enabledMode !== "wal") {
+        throw new Error("SQLite failed to enable WAL journal mode")
+      }
+      return
+    } catch (error) {
+      const remaining = deadline - Date.now()
+      if (!isSqliteLockError(error) || remaining <= 0) {
+        throw error
+      }
+
+      await delay(Math.min(10, remaining))
+    }
+  }
+}
+
+export function createGuardedIterator({ iterator, assertActive }) {
   return Object.freeze({
     next(...args) {
       assertActive()
@@ -121,6 +155,7 @@ function createSqliteTransactionHandler({ requireConnection, intent }) {
       }
 
       activeConnection.exec("COMMIT")
+      transactionActive = false
       return result
     } catch (error) {
       transactionActive = false
@@ -149,52 +184,93 @@ function createSqliteTransactionHandler({ requireConnection, intent }) {
   }
 }
 
+function createConnectionSetupFailure({ openedConnection, initializationError, onClosed }) {
+  try {
+    openedConnection.close()
+    onClosed()
+    return initializationError
+  } catch (closeError) {
+    return new AggregateError(
+      [initializationError, closeError],
+      "SQLite connection initialization failed and cleanup also failed",
+      { cause: initializationError },
+    )
+  }
+}
+
+async function openSqliteConnection({
+  connectionState,
+  databaseFilename,
+  isMemoryDatabase,
+  timeout,
+}) {
+  if (connectionState.connection) {
+    if (connectionState.connection.isOpen) {
+      connectionState.connection.close()
+    }
+    connectionState.connection = null
+  }
+
+  if (!isMemoryDatabase) {
+    mkdirSync(dirname(databaseFilename), { recursive: true })
+  }
+
+  const openedConnection = new DatabaseSync(databaseFilename, { timeout })
+  connectionState.connection = openedConnection
+
+  try {
+    openedConnection.exec("PRAGMA foreign_keys = ON")
+    if (!isMemoryDatabase) {
+      await enableWalMode({
+        connection: openedConnection,
+        timeout,
+      })
+    }
+  } catch (error) {
+    throw createConnectionSetupFailure({
+      openedConnection,
+      initializationError: error,
+      onClosed: () => {
+        connectionState.connection = null
+      },
+    })
+  }
+}
+
 function createSqliteAdapter({
   databaseFilename,
   isMemoryDatabase,
   timeout,
   getDatabaseState,
 }) {
-  let connection = null
+  const connectionState = {
+    connection: null,
+  }
 
   function requireConnection() {
     const state = getDatabaseState()
-    if (state !== "connected" || !connection?.isOpen) {
+    if (state !== "connected" || !connectionState.connection?.isOpen) {
       throw new Error(
         `SQLite database must be connected to execute SQL (state: ${state})`,
       )
     }
 
-    return connection
+    return connectionState.connection
   }
 
   const adapter = {
-    connect() {
-      if (!isMemoryDatabase) {
-        mkdirSync(dirname(databaseFilename), { recursive: true })
-      }
-
-      const openedConnection = new DatabaseSync(databaseFilename, { timeout })
-
-      try {
-        openedConnection.exec("PRAGMA foreign_keys = ON")
-        if (!isMemoryDatabase) {
-          openedConnection.exec("PRAGMA journal_mode = WAL")
-        }
-        connection = openedConnection
-      } catch (error) {
-        openedConnection.close()
-        throw error
-      }
-    },
-
+    connect: () => openSqliteConnection({
+      connectionState,
+      databaseFilename,
+      isMemoryDatabase,
+      timeout,
+    }),
     close() {
-      if (connection?.isOpen) {
-        connection.close()
+      if (connectionState.connection?.isOpen) {
+        connectionState.connection.close()
       }
-      connection = null
+      connectionState.connection = null
     },
-
     withTransaction: createSqliteTransactionHandler({
       requireConnection,
       intent: "write",
@@ -208,6 +284,7 @@ function createSqliteAdapter({
   return {
     adapter,
     requireConnection,
+    closeConnection: adapter.close,
   }
 }
 
@@ -242,13 +319,13 @@ function createBackupOperation({ state, requireOpenConnection, databaseFilename,
   }
 }
 
-function createCloseOperation({ database, state }) {
+function createCloseOperation({ database, state, closeConnection }) {
   return function close() {
-    if (database.state === "closed") {
-      return database.close()
-    }
     if (state.closePromise) {
       return state.closePromise
+    }
+    if (database.state === "closed") {
+      return closeConnection()
     }
 
     state.closingRequested = true
@@ -257,6 +334,7 @@ function createCloseOperation({ database, state }) {
         await Promise.allSettled([...state.activeBackups])
       }
       await database.close()
+      await closeConnection()
     })().finally(() => {
       state.closePromise = null
     })
@@ -285,7 +363,7 @@ function createTransactionOperation({ state, database }) {
   }
 }
 
-function createSqliteDatabaseFacade({ database, requireConnection, databaseFilename, timeout }) {
+function createSqliteDatabaseFacade({ database, requireConnection, closeConnection, databaseFilename, timeout }) {
   const state = {
     closingRequested: false,
     closePromise: null,
@@ -311,6 +389,7 @@ function createSqliteDatabaseFacade({ database, requireConnection, databaseFilen
   const close = createCloseOperation({
     database,
     state,
+    closeConnection,
   })
 
   const sqliteDatabase = Object.freeze({
@@ -385,7 +464,7 @@ export function createSqliteDatabase({
     current: null,
   }
 
-  const { adapter, requireConnection } = createSqliteAdapter({
+  const { adapter, requireConnection, closeConnection } = createSqliteAdapter({
     databaseFilename,
     isMemoryDatabase,
     timeout,
@@ -397,6 +476,7 @@ export function createSqliteDatabase({
   return createSqliteDatabaseFacade({
     database,
     requireConnection,
+    closeConnection,
     databaseFilename,
     timeout,
   })

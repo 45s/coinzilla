@@ -4,10 +4,26 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { createSqliteDatabase } from "../src/index.js"
+import { createSqliteDatabase } from "../../index.js"
 
 async function createTemporaryDirectory() {
   return mkdtemp(join(tmpdir(), "coinzilla-db-backup-"))
+}
+
+function assertSqliteTransactionRejectedDuringClose(database) {
+  assert.throws(
+    () => database.transaction(() => {}),
+    /closing/,
+    "A transaction must not start after SQLite shutdown has begun",
+  )
+}
+
+function assertSqliteSqlRejectedDuringClose(database) {
+  assert.throws(
+    () => database.exec("SELECT 1"),
+    /closing/,
+    "New SQL statements must be rejected after SQLite shutdown has begun",
+  )
 }
 
 async function readDatabaseValue({ filename, query, parameters = [] }) {
@@ -48,7 +64,7 @@ test("file-backed SQLite backup includes committed WAL data and restores into a 
   }
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     const restoredPath = await restoreSqliteDatabase({
       backupFilename,
       filename: restoredFilename,
@@ -101,7 +117,7 @@ test("in-memory SQLite databases can be backed up to a restorable file", async (
   }
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     const restoredFilename = join(directory, "memory-restored.sqlite")
     await restoreSqliteDatabase({
       backupFilename,
@@ -276,11 +292,10 @@ test("SQLite restore refuses to overwrite an existing destination", async () => 
     destination.prepare("INSERT INTO existing_values (value) VALUES (?)").run("keep")
   } finally {
     await source.close()
-    await destination.close()
   }
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     await assert.rejects(
       restoreSqliteDatabase({
         backupFilename,
@@ -290,17 +305,15 @@ test("SQLite restore refuses to overwrite an existing destination", async () => 
       "Restore must refuse to replace an existing database file by default",
     )
 
-    const retainedValue = await readDatabaseValue({
-      filename: destinationFilename,
-      query: "SELECT value FROM existing_values",
-    })
+    const retainedValue = destination.prepare("SELECT value FROM existing_values").get()
 
     assert.equal(
       retainedValue.value,
       "keep",
-      "A rejected restore must leave the pre-existing destination database unchanged",
+      "A rejected restore must leave the pre-existing destination database and its active connection unchanged",
     )
   } finally {
+    await destination.close()
     await rm(directory, {
       recursive: true,
       force: true,
@@ -315,7 +328,7 @@ test("SQLite restore rejects corrupt backup files and does not publish a destina
   await writeFile(backupFilename, "not a SQLite database")
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     await assert.rejects(
       restoreSqliteDatabase({
         backupFilename,
@@ -355,7 +368,7 @@ test("SQLite restore rejects a backup with foreign-key violations", async () => 
   }
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     await assert.rejects(
       restoreSqliteDatabase({
         backupFilename,
@@ -385,7 +398,7 @@ test("SQLite restore validates its timeout, rate, and destination options", asyn
   await database.close()
 
   try {
-    const { restoreSqliteDatabase } = await import("../src/index.js")
+    const { restoreSqliteDatabase } = await import("../../index.js")
     await assert.rejects(
       restoreSqliteDatabase({
         backupFilename,
@@ -420,6 +433,49 @@ test("SQLite restore validates its timeout, rate, and destination options", asyn
   }
 })
 
+function startBackupAndCloseOnProgress({ database, backupFilename, rejectedBackupFilename }) {
+  let closePromise
+  let backupAfterClosePromise
+  const backupPromise = database.backup({
+    destination: backupFilename,
+    rate: 1,
+    progress() {
+      if (!closePromise) {
+        closePromise = database.close()
+        assert.equal(
+          database.close(),
+          closePromise,
+          "Concurrent close calls must share the active shutdown operation",
+        )
+        assert.equal(
+          database.state,
+          "closing",
+          "The low-level facade must expose its closing state while an active backup drains",
+        )
+        assertSqliteTransactionRejectedDuringClose(database)
+        assertSqliteSqlRejectedDuringClose(database)
+        backupAfterClosePromise = assert.rejects(
+          database.backup({
+            destination: rejectedBackupFilename,
+          }),
+          /closing|closed/i,
+          "The database must reject a new backup after shutdown has started",
+        )
+      }
+    },
+  })
+
+  return {
+    backupPromise,
+    get closePromise() {
+      return closePromise
+    },
+    get backupAfterClosePromise() {
+      return backupAfterClosePromise
+    },
+  }
+}
+
 test("SQLite close drains an active backup and rejects new backup requests", async () => {
   const directory = await createTemporaryDirectory()
   const sourceFilename = join(directory, "source.sqlite")
@@ -427,8 +483,6 @@ test("SQLite close drains an active backup and rejects new backup requests", asy
   const rejectedBackupFilename = join(directory, "rejected.sqlite")
   const database = createSqliteDatabase({ filename: sourceFilename })
   await database.connect()
-  let closePromise
-  let backupAfterClosePromise
 
   try {
     database.exec("CREATE TABLE large_records (payload BLOB NOT NULL)")
@@ -436,35 +490,24 @@ test("SQLite close drains an active backup and rejects new backup requests", asy
       Buffer.alloc(2 * 1024 * 1024, 7),
     )
 
-    const backupPromise = database.backup({
-      destination: backupFilename,
-      rate: 1,
-      progress() {
-        if (!closePromise) {
-          closePromise = database.close()
-          backupAfterClosePromise = assert.rejects(
-            database.backup({
-              destination: rejectedBackupFilename,
-            }),
-            /closing|closed/i,
-            "The database must reject a new backup after shutdown has started",
-          )
-        }
-      },
+    const operation = startBackupAndCloseOnProgress({
+      database,
+      backupFilename,
+      rejectedBackupFilename,
     })
+    const copiedPages = await operation.backupPromise
 
-    const copiedPages = await backupPromise
     assert.ok(
-      closePromise instanceof Promise,
+      operation.closePromise instanceof Promise,
       "The backup progress callback must be able to begin closing while backup work is active",
     )
-    await closePromise
+    await operation.closePromise
 
     assert.ok(
       copiedPages > 0,
       "The in-flight backup must finish successfully before database shutdown completes",
     )
-    await backupAfterClosePromise
+    await operation.backupAfterClosePromise
     assert.equal(
       database.state,
       "closed",

@@ -150,7 +150,7 @@ await database.transaction((transaction) => {
 })
 ```
 
-A thrown error rolls back the complete transaction. SQLite transaction callbacks must be synchronous because Node's built-in SQLite API is synchronous; an async callback or a returned Promise is rejected. Do not use `await`, network calls, timers, or unrelated asynchronous work inside a SQLite transaction.
+A thrown error rolls back the complete transaction. SQLite transaction callbacks must be synchronous because Node's built-in SQLite API is synchronous; an async callback or a returned Promise is rejected. Transaction handles, prepared statements and iterators are invalidated immediately after either COMMIT or ROLLBACK; do not retain them or use them after the callback returns. Do not use `await`, network calls, timers, or unrelated asynchronous work inside a SQLite transaction.
 
 For the provider-neutral SQLite facade, an async-function callback is rejected before its body runs. If a non-async callback returns a Promise or thenable, SQLite rolls back and invalidates the transaction handle and prepared statements before deferred continuations can use them. Such a continuation cannot perform work outside the failed transaction. The low-level `createSqliteDatabase` transaction handle follows the same rollback rule.
 
@@ -183,8 +183,10 @@ assert.equal(
 - `DatabaseProviderError` identifies an underlying provider operation failure. Its stable code is `DB_PROVIDER_OPERATION_FAILED`; the original provider failure is preserved as `cause`.
 - Invalid collection names, identifiers, records and queries throw `TypeError`.
 - Missing records are ordinary results (`null` or `false`), not exceptions.
+- If transaction work fails and SQLite rollback also fails, the low-level transaction rejects with an `AggregateError` whose `errors` preserve the work error first and rollback error second; its `cause` is the original work error. A failed rollback can leave the connection inside a native transaction; do not continue using it until the underlying transaction state has been recovered or the connection has been closed.
+- If connection initialization fails and closing the partially initialized native connection also fails, the low-level connection attempt rejects with an `AggregateError` containing both failures. The facade retains ownership of the native handle: a subsequent `close()` retries cleanup, and a subsequent `connect()` first closes the retained handle before opening a replacement. The provider facade wraps the aggregate in `DatabaseProviderError` as its `cause`.
 
-Consumers should branch on the public error class or stable code, not provider error messages or SQLite error codes.
+Consumers should branch on the public error class or stable code, not provider error messages or SQLite error codes. Inspect nested `cause` and `AggregateError.errors` when operational recovery requires the underlying SQLite or filesystem failure.
 
 ### Provider capabilities
 
@@ -300,14 +302,19 @@ SQLite uses prepared statements and bound parameters. Never interpolate untruste
 - Node's built-in `node:sqlite` module; no package installation is required.
 - SQLite operations are synchronous and block the event loop while running.
 - File-backed databases use WAL journal mode. Foreign-key enforcement is enabled for every connection.
-- The lock timeout defaults to 5,000 milliseconds and must be a non-negative safe integer.
+- The lock timeout defaults to 5,000 milliseconds and must be a non-negative safe integer. It is applied to the native SQLite connection as its busy timeout; lock contention beyond that timeout is surfaced as an operation failure, not silently retried forever.
 - The filename is required; use the explicit value `:memory:` for an ephemeral database.
 - Parent directories are created for file-backed databases.
-- SQLite is appropriate for embedded/local persistence. Workloads requiring many concurrent writers or multi-host access may justify a server provider later.
+- File-backed databases use WAL. Concurrent connection initialization retries transient SQLite `BUSY`/`LOCKED` failures while enabling WAL, bounded by the configured connection timeout. Timeout exhaustion is surfaced as a connection failure; if cleanup also fails, the partially opened handle remains owned by the facade and can be released by a later `close()` or `connect()` retry. A read transaction starts with `BEGIN DEFERRED`; a write transaction starts with `BEGIN IMMEDIATE`. WAL allows readers to continue while a writer holds a write reservation, but SQLite still serializes writers across independent connections/processes.
+- SQLite calls on one `DatabaseSync` connection are synchronous and run serially on the Node.js event loop. WAL coordination uses shared memory and requires processes to access the database on the same host; do not place WAL databases on network filesystems such as NFS or SMB. WAL is not a substitute for a server database when many concurrent writers or multi-host access are required.
+- A database facade coalesces concurrent connection attempts and treats `close()` as terminal. Create a new facade to establish a new lifecycle after shutdown. A failed close remains retryable; callers must not treat a failed close as successful resource release.
+- Provider-neutral `close()` waits for active transactions. The low-level SQLite facade also waits for active online backups before closing and rejects new SQL, transaction and backup work after shutdown begins.
 
 ### SQLite backup and restore
 
 Backup and restore are SQLite-specific infrastructure operations on the low-level facade. They are intentionally not methods on the provider-neutral `createDatabase({ provider })` CRUD API because backup guarantees and mechanisms differ between providers.
+
+The read-only connection used to validate a staged backup or restore artifact is explicitly closed after validation. If integrity/foreign-key validation and closing that verification connection both fail, the operation preserves both failures in an `AggregateError` (as the `cause` of `DatabaseProviderError` when the backup/restore boundary wraps it).
 
 **Create a backup from an open SQLite database:**
 
@@ -339,7 +346,8 @@ try {
 - The backup uses Node.js' native SQLite online-backup API. It includes committed data held in WAL; do not copy a live SQLite main file directly.
 - The destination parent directory is created when needed. The backup is written to a temporary file in that directory, checked with `PRAGMA integrity_check` and `PRAGMA foreign_key_check`, then atomically renamed into place. A previous destination backup is preserved if backup creation or validation fails.
 - The source and destination must resolve to different files. The source must be connected and outside an active transaction.
-- The optional progress callback receives a frozen `{ remainingPages, totalPages }` snapshot. If the callback throws, the backup rejects with that callback error and the previous destination remains untouched.
+- The optional progress callback receives a frozen `{ remainingPages, totalPages }` snapshot. The API does not accept an `AbortSignal`; callers can stop an in-progress backup by throwing from the progress callback. If the callback throws and cleanup succeeds, the backup rejects with that callback error and the previous destination remains untouched. If cleanup also fails, the provider error's `cause` is an `AggregateError` containing the callback and cleanup failures exactly once each.
+- The backup uses a temporary directory beside the destination so final rename stays on the same filesystem. Creation/validation failures do not replace the previous backup. The destination must not be open or in use by another SQLite connection/process while it is being replaced; stop consumers of an existing backup before publishing a replacement. A cleanup failure after the final rename can still make the operation reject even though the newly validated backup has already been published; inspect the destination before retrying.
 - `close()` waits for an active backup to finish. Once closing begins, new backup requests and new SQL/transaction operations are rejected.
 
 **Restore a validated backup into a new database file:**
@@ -359,8 +367,9 @@ const restoredFilename = await restoreSqliteDatabase({
 
 - `restoreSqliteDatabase({ backupFilename, filename, timeout?, rate? })` returns the absolute path of the restored database.
 - The source backup is opened read-only and checked for SQLite integrity and foreign-key violations before it is copied and validated again.
-- Restore never overwrites an existing destination. It stages the restored database in the destination directory and publishes it with an atomic no-overwrite hard link. The destination filesystem must support hard links; failures are reported without replacing an existing file.
+- Restore never overwrites an existing destination. It stages the restored database in the destination directory and publishes it with an atomic no-overwrite hard link. The destination filesystem must support hard links; failures are reported without replacing an existing file. Competing restore attempts to one destination cannot overwrite each other: one can publish, and the other receives an existing-destination conflict. Destination preflight treats only `ENOENT` as absence; every other filesystem lookup failure is propagated rather than being mistaken for an existing-destination conflict.
 - The caller must stop every process that could be using the destination path before restoring. The operation creates a new file; it does not replace or switch an already-open database connection.
+- A cleanup failure after successful publication can make restore reject even though the complete validated destination already exists. Check the destination's integrity before retrying a restore after such an error.
 - Restore does not run application migrations or check application-version compatibility. The caller owns those decisions and must validate compatibility before using the restored database.
 - Invalid arguments and invalid backup integrity raise `TypeError`; SQLite/filesystem provider failures raise `DatabaseProviderError` with the original cause.
 
@@ -389,7 +398,7 @@ await database.migrate([
 ])
 ```
 
-Migrations are identified by positive integer version. Applied versions must remain in the migration list with the same names; removing or renaming an applied migration causes a history-mismatch error. Never edit a migration after it has been applied; add a new version instead. Migration callbacks must be synchronous.
+Migrations are identified by positive integer version and unique name, and are applied in ascending version order regardless of input order. The `schema_migrations` history table is initialized before the migration transaction; each migration's schema/data changes and its history row are then committed together in one transaction. If a migration fails, all changes made in that migration batch roll back; the empty history table may remain. Re-running an already applied migration list is idempotent. Applied versions must remain in the migration list with the same names; removing or renaming an applied migration causes a history-mismatch error. Never edit a migration after it has been applied; add a new version instead. Migration callbacks must be synchronous. Concurrent migration attempts from independent connections serialize under SQLite write locking: one applies and commits each version, and the others observe that version as already applied.
 
 ## Architecture and DDD boundaries
 
@@ -412,3 +421,5 @@ The legacy `createDatabase({ adapter })` lifecycle facade and `createSqliteDatab
 pnpm --filter @coinzilla/db test
 pnpm --filter @coinzilla/db test:coverage
 ```
+
+Coverage thresholds are enforced for all production modules matched by `src/**/*.js`; package test files are excluded. Node's diagnostic coverage table can also show imported test-support and workspace dependency files, but those files are not part of the `@coinzilla/db` threshold. The provider-conformance harness is exercised by the SQLite and asynchronous fake-provider conformance suites; `@coinzilla/utils` is owned and tested by its own package. No `@coinzilla/db` production implementation file is excluded.

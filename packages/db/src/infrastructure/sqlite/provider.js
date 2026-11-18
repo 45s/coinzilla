@@ -6,7 +6,7 @@ import {
   validateCollectionName,
   validateRecordIdentifier,
 } from "../../domain/contracts/record.js"
-import { createSqliteDatabase } from "./sqlite-database.js"
+import { createSqliteDatabase } from "./database.js"
 
 const CREATE_RECORDS_TABLE = `
   CREATE TABLE IF NOT EXISTS db_records (
