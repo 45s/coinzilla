@@ -11,7 +11,7 @@ The package entry point is `src/index.js`. It exports:
 - **Canonical order lifecycle:** `CanonicalOrder`
 - **Execution/accounting facts:** `Fill`, `Commission`, `Balance`
 - **Trading constraints:** `TradingRules`
-- **Broker-neutral capabilities and outcomes:** `BrokerCapabilities`, `BrokerResult`
+- **Broker-neutral capabilities and outcomes:** `BrokerCapabilities` (the shared three-state capability value, including evidence-backed provider declarations), `BrokerResult`
 - **Legacy compatibility contracts:** `Coin`, `Order`, `ExecutedOrder`
 - Associated error messages, status values and enumerations explicitly exported by the entry point.
 
