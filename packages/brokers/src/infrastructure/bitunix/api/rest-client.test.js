@@ -376,3 +376,39 @@ test("Bitunix REST client rejects unauthenticated mutations before network I/O",
 
   assert.equal(callCount, 0, "no unauthenticated mutation may reach the exchange transport")
 })
+
+
+test("Bitunix REST client classifies HTTP 429 rate limits without retrying", async () => {
+  let requestCount = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      requestCount += 1
+      return {
+        ok: false,
+        status: 429,
+        async text() {
+          return JSON.stringify({
+            code: "429",
+            msg: "too many requests",
+          })
+        },
+      }
+    },
+  })
+
+  await assert.rejects(client.request({
+    method: "GET",
+    path: "/api/spot/v1/common/coin_pair/list",
+    authenticated: false,
+  }), (error) => {
+    assert.ok(error instanceof BitunixRestError, "HTTP rate limits must use the Bitunix REST error contract")
+    assert.equal(error.code, "BITUNIX_REST_HTTP_FAILED", "HTTP rate limits must retain the stable HTTP failure code")
+    assert.equal(error.kind, "http", "HTTP 429 must not be misclassified as an exchange-envelope rejection")
+    assert.equal(error.status, 429, "the exact rate-limit status must remain available for diagnosis")
+    return true
+  })
+
+  assert.equal(requestCount, 1, "a rate-limited public catalog request must not be retried implicitly")
+})
