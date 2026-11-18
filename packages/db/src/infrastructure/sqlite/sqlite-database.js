@@ -219,6 +219,13 @@ function createSqliteAdapter({
 
   const adapter = {
     async connect() {
+      if (connection) {
+        if (connection.isOpen) {
+          connection.close()
+        }
+        connection = null
+      }
+
       if (!isMemoryDatabase) {
         mkdirSync(dirname(databaseFilename), { recursive: true })
       }
