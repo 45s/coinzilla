@@ -185,7 +185,6 @@ The following maintained documents were added for #1157 and completed in PR #116
 | `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted and implemented ownership decision for all orders in the startup snapshot. |
 | `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Completed design, original acceptance criteria, TDD sequence and implementation closeout. |
 
-
 ## Latest recursive addition — develop checkpoint 88b89995
 
 The complete recursive tree at `88b89995a4f9e62a6fe4b0451ea675ce0495b539` contains **88 Harvester Markdown/MDX paths**. A direct path comparison against `ea6110fb39c1c86acfbf9673910965e7f698d511` found two additions and zero removals.
