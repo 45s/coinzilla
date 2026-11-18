@@ -624,7 +624,7 @@ async function ensureProcessJournalReady({ journalService } = {}) {
 function logDisconnectedRuntime({ logger }) {
   logSystem({
     logger,
-    message: "Binance connection was not established.",
+    message: "Provider connection was not established.",
   })
 }
 
@@ -644,6 +644,7 @@ function logSingleAccountRuntime({
   runtimeConfig,
   logger,
 }) {
+  const providerName = runtime.brokerName ?? runtimeConfig.brokerName ?? "provider"
   if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
     logSystem({
       logger,
@@ -653,7 +654,7 @@ function logSingleAccountRuntime({
   }
   logSystem({
     logger,
-    message: `Connected; Binance trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`,
+    message: `Connected; ${providerName} trading mode is ${runtimeConfig.tradingMode.toUpperCase()}.`,
   })
 }
 
@@ -688,7 +689,11 @@ function publishRuntimeStarted({
   eventPublisher,
   logger,
 } = {}) {
-  const configuredPairs = runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
+  const hasMultipleAccountRuntime = runtime.providerAccounts?.length > 1
+    || runtime.failedAccounts?.length > 0
+  const configuredPairs = hasMultipleAccountRuntime
+    ? undefined
+    : runtime.appConfig?.strategies?.CG_coinGrabber?.pairs
   const enabledMarkets = configuredPairs
     ? Object.entries(configuredPairs)
       .filter(([, pairConfig]) => pairConfig.enabled)
