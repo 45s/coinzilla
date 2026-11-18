@@ -517,6 +517,97 @@ function validateStartedProviderRuntime({
   }
 }
 
+async function handleProviderAccountStartFailure({
+  provider,
+  error,
+  providerBrokers,
+  releaseProviderLock,
+  retainProviderLock,
+}) {
+  providerBrokers.delete(provider.providerInstanceId)
+  const cleanupConfirmed = error?.startupCleanupConfirmed === true
+  const cleanupErrors = cleanupConfirmed
+    ? await releaseFailedAccountLock({ provider, releaseProviderLock })
+    : await retainFailedAccountLock({ provider, retainProviderLock })
+  return {
+    runtime: undefined,
+    error,
+    cleanupErrors,
+    lockRetained: !cleanupConfirmed,
+    lockReleasePending: cleanupConfirmed && cleanupErrors.length > 0,
+  }
+}
+
+function recordProviderAccountStartResult({
+  provider,
+  result,
+  executionSymbolsByProvider,
+  startedAccounts,
+  failedAccounts,
+  failedErrors,
+}) {
+  if (result.error === undefined) {
+    startedAccounts.push({
+      provider,
+      runtime: result.runtime,
+      runtimeStopped: false,
+      lockReleased: false,
+    })
+    return
+  }
+  failedAccounts.push(createFailedAccount({
+    provider,
+    error: result.error,
+    cleanupErrors: result.cleanupErrors ?? [],
+    lockRetained: result.lockRetained === true,
+    lockReleasePending: result.lockReleasePending === true,
+    executionSymbols: executionSymbolsByProvider.get(provider.providerInstanceId),
+  }))
+  failedErrors.push(result.error, ...(result.cleanupErrors ?? []))
+}
+
+function resolveProviderAccountRouting({ appConfig, providers }) {
+  const executionSymbolsByProvider = resolveExecutionSymbolsByProvider({
+    appConfig,
+    providers,
+  })
+  const marketDataSymbolsByProvider = resolveMarketDataSymbolsByProvider({
+    appConfig,
+    providers,
+  })
+  const marketDataProviderBySymbol = createMarketDataProviderBySymbol({
+    marketDataSymbolsByProvider,
+  })
+  assertExecutionAndMarketDataEnvironments({
+    providers,
+    executionSymbolsByProvider,
+    marketDataProviderBySymbol,
+  })
+  return {
+    executionSymbolsByProvider,
+    marketDataSymbolsByProvider,
+    marketDataProviderBySymbol,
+  }
+}
+
+async function startDeferredProviderMarketData({ startedAccounts, releaseProviderLock }) {
+  try {
+    for (const entry of startedAccounts) {
+      await entry.runtime.startMarketData()
+    }
+  } catch (error) {
+    const cleanupErrors = await stopStartedAccounts({
+      startedAccounts,
+      releaseProviderLock,
+    })
+    throw new AggregateError(
+      [error, ...cleanupErrors],
+      "Deferred Harvester market-data startup failed",
+      { cause: error },
+    )
+  }
+}
+
 async function startOneProviderAccount({
   provider,
   providers,
@@ -552,34 +643,16 @@ async function startOneProviderAccount({
       requiredCapabilitiesByProvider,
       deferMarketDataStart,
     }))
-    validateStartedProviderRuntime({
-      runtime,
-      provider,
-      requireStop,
-    })
-    return {
-      runtime,
-      error: undefined,
-    }
+    validateStartedProviderRuntime({ runtime, provider, requireStop })
+    return { runtime, error: undefined }
   } catch (error) {
-    providerBrokers.delete(provider.providerInstanceId)
-    const cleanupConfirmed = error?.startupCleanupConfirmed === true
-    const cleanupErrors = cleanupConfirmed
-      ? await releaseFailedAccountLock({
-        provider,
-        releaseProviderLock,
-      })
-      : await retainFailedAccountLock({
-        provider,
-        retainProviderLock,
-      })
-    return {
-      runtime: undefined,
+    return handleProviderAccountStartFailure({
+      provider,
       error,
-      cleanupErrors,
-      lockRetained: !cleanupConfirmed,
-      lockReleasePending: cleanupConfirmed && cleanupErrors.length > 0,
-    }
+      providerBrokers,
+      releaseProviderLock,
+      retainProviderLock,
+    })
   }
 }
 
@@ -622,30 +695,80 @@ async function startConfiguredProviderAccounts({
       requiredCapabilitiesByProvider,
       deferMarketDataStart,
     })
-    if (result.error === undefined) {
-      startedAccounts.push({
-        provider,
-        runtime: result.runtime,
-        runtimeStopped: false,
-        lockReleased: false,
-      })
-      continue
-    }
-    failedAccounts.push(createFailedAccount({
+    recordProviderAccountStartResult({
       provider,
-      error: result.error,
-      cleanupErrors: result.cleanupErrors ?? [],
-      lockRetained: result.lockRetained === true,
-      lockReleasePending: result.lockReleasePending === true,
-      executionSymbols: executionSymbolsByProvider.get(provider.providerInstanceId),
-    }))
-    failedErrors.push(result.error, ...(result.cleanupErrors ?? []))
+      result,
+      executionSymbolsByProvider,
+      startedAccounts,
+      failedAccounts,
+      failedErrors,
+    })
   }
-  return {
-    startedAccounts,
-    failedAccounts,
-    failedErrors,
+  return { startedAccounts, failedAccounts, failedErrors }
+}
+
+async function startProviderAccountRuntimes({
+  providers,
+  start,
+  appConfig,
+  env,
+  eventPublisher,
+  runtimeSessionId,
+  operationalStateStore,
+  releaseProviderLock,
+  retainProviderLock,
+  routing,
+}) {
+  const { executionSymbolsByProvider, marketDataSymbolsByProvider, marketDataProviderBySymbol } = routing
+  const providerBrokers = new Map()
+  const requiredCapabilitiesByProvider = createRequiredCapabilitiesByProvider({
+    providers,
+    executionSymbolsByProvider,
+    marketDataSymbolsByProvider,
+  })
+  const deferMarketDataStart = providers.length > 1
+  const startup = await startConfiguredProviderAccounts({
+    providers,
+    start,
+    appConfig,
+    env,
+    eventPublisher,
+    runtimeSessionId,
+    operationalStateStore,
+    releaseProviderLock,
+    retainProviderLock,
+    executionSymbolsByProvider,
+    marketDataProviderBySymbol,
+    providerBrokers,
+    requiredCapabilitiesByProvider,
+    deferMarketDataStart,
+  })
+  throwIfNoAccountStarted({
+    providers,
+    startedAccounts: startup.startedAccounts,
+    failedErrors: startup.failedErrors,
+  })
+  await throwIfRequiredProviderFailed({
+    startedAccounts: startup.startedAccounts,
+    failedAccounts: startup.failedAccounts,
+    failedErrors: startup.failedErrors,
+    releaseProviderLock,
+  })
+  if (deferMarketDataStart) {
+    await startDeferredProviderMarketData({
+      startedAccounts: startup.startedAccounts,
+      releaseProviderLock,
+    })
   }
+  if (providers.length === 1) {
+    return startup.startedAccounts[0].runtime
+  }
+  return createMultiAccountRuntime({
+    appConfig,
+    startedAccounts: startup.startedAccounts,
+    failedAccounts: startup.failedAccounts,
+    releaseProviderLock,
+  })
 }
 
 export async function startProviderAccounts({
@@ -665,30 +788,8 @@ export async function startProviderAccounts({
   if (typeof start !== "function") {
     throw new TypeError("Harvester provider-account startup requires a start function")
   }
-  const executionSymbolsByProvider = resolveExecutionSymbolsByProvider({
-    appConfig,
-    providers,
-  })
-  const marketDataSymbolsByProvider = resolveMarketDataSymbolsByProvider({
-    appConfig,
-    providers,
-  })
-  const marketDataProviderBySymbol = createMarketDataProviderBySymbol({
-    marketDataSymbolsByProvider,
-  })
-  assertExecutionAndMarketDataEnvironments({
-    providers,
-    executionSymbolsByProvider,
-    marketDataProviderBySymbol,
-  })
-  const providerBrokers = new Map()
-  const requiredCapabilitiesByProvider = createRequiredCapabilitiesByProvider({
-    providers,
-    executionSymbolsByProvider,
-    marketDataSymbolsByProvider,
-  })
-  const deferMarketDataStart = providers.length > 1
-  const startup = await startConfiguredProviderAccounts({
+  const routing = resolveProviderAccountRouting({ appConfig, providers })
+  return startProviderAccountRuntimes({
     providers,
     start,
     appConfig,
@@ -698,48 +799,6 @@ export async function startProviderAccounts({
     operationalStateStore,
     releaseProviderLock,
     retainProviderLock,
-    marketDataSymbolsByProvider,
-    executionSymbolsByProvider,
-    marketDataProviderBySymbol,
-    providerBrokers,
-    requiredCapabilitiesByProvider,
-    deferMarketDataStart,
-  })
-  throwIfNoAccountStarted({
-    providers,
-    startedAccounts: startup.startedAccounts,
-    failedErrors: startup.failedErrors,
-  })
-  await throwIfRequiredProviderFailed({
-    startedAccounts: startup.startedAccounts,
-    failedAccounts: startup.failedAccounts,
-    failedErrors: startup.failedErrors,
-    releaseProviderLock,
-  })
-  if (deferMarketDataStart) {
-    try {
-      for (const entry of startup.startedAccounts) {
-        await entry.runtime.startMarketData()
-      }
-    } catch (error) {
-      const cleanupErrors = await stopStartedAccounts({
-        startedAccounts: startup.startedAccounts,
-        releaseProviderLock,
-      })
-      throw new AggregateError(
-        [error, ...cleanupErrors],
-        "Deferred Harvester market-data startup failed",
-        { cause: error },
-      )
-    }
-  }
-  if (providers.length === 1) {
-    return startup.startedAccounts[0].runtime
-  }
-  return createMultiAccountRuntime({
-    appConfig,
-    startedAccounts: startup.startedAccounts,
-    failedAccounts: startup.failedAccounts,
-    releaseProviderLock,
+    routing,
   })
 }
