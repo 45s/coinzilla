@@ -86,7 +86,7 @@ test("SQLite backup validates closed source connections and invalid timeouts", a
       backupSqliteDatabase({
         sourceConnection: closedSource,
         sourceFilename: ":memory:",
-        destination: "/tmp/closed-source-backup.sqlite",
+        destination: join(tmpdir(), "closed-source-backup.sqlite"),
       }),
       /open source connection/,
       "A backup must reject a closed native source connection before allocating temporary files",
@@ -95,7 +95,7 @@ test("SQLite backup validates closed source connections and invalid timeouts", a
       backupSqliteDatabase({
         sourceConnection: source,
         sourceFilename: ":memory:",
-        destination: "/tmp/invalid-timeout-backup.sqlite",
+        destination: join(tmpdir(), "invalid-timeout-backup.sqlite"),
         timeout: -1,
       }),
       /timeout/,
