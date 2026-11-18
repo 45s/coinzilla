@@ -47,6 +47,8 @@
       "src/use-cases/create-market-price-transition-handler.test.js",
       "test/replays/doge-zro-conservative-replay.test.js",
       "src/bootstrap/start-harvester.test.js",
+      "src/bootstrap/config/resolve-bitunix-read-only-config.test.js",
+      "src/infrastructure/brokers/bitunix-read-only-adapter.test.js",
       "src/infrastructure/telegram/telegram-operator-keyboard.test.js",
       "test/bootstrap/start-harvester.test.js",
       "test/recovery/operational-state-crash-matrix.test.js",

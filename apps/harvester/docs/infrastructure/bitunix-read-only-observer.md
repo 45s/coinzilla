@@ -65,4 +65,4 @@ The facade must not expose order creation/cancellation, canonical fills, account
 
 ## Verification
 
-Default tests remain offline and credential-free. Tests must prove the disabled-by-default behavior, strict configuration validation, read-method allowlist, absence of mutation/stream/fill/snapshot methods, metadata mapping, and separation from every Binance trading path. No live/TESTNET exchange operation is part of this task.
+Default tests remain offline and credential-free. The configuration, adapter, and Harvester startup tests are included in the targeted-test manifest. Tests must prove the disabled-by-default behavior, strict configuration validation, read-method allowlist, absence of mutation/stream/fill/snapshot methods, metadata mapping, and separation from every Binance trading path. No live/TESTNET exchange operation is part of this task.
