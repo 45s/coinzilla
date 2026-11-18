@@ -105,7 +105,7 @@ formatTimeRelatively({ value: -5, unit: 'minute' }) // '5 minutes ago'
 
 GitHub Actions runs the repository's checks on Node.js 24.x (the supported Node.js line):
 
-- **JavaScript Syntax** runs actionlint, JavaScript syntax checks, and agent-policy checks.
+- **JavaScript Syntax** runs workspace ESLint, JavaScript syntax, agent-policy and documentation checks; pull requests to `develop` also run strict changed-file ESLint. **actionlint** is a separate required status context in the same workflow.
 - **Unit Tests** installs dependencies with `pnpm install --frozen-lockfile` and runs `pnpm test`.
 - **Utils Unit Tests** independently runs `node --test packages/utils/src/*.test.js`.
 - **Test Coverage** runs workspace coverage and enforces package-specific coverage thresholds.
