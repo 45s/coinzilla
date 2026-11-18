@@ -971,7 +971,7 @@ test("retains provider provenance across exchange updates and rejects provider i
   assert.deepEqual([tracked.providerInstanceId, tracked.providerType, tracked.accountId], [
     "binanceTestnet", "binance", "binance-primary",
   ])
-  const conflictingUpdate = acknowledged.registry.applyUpdate({
+  assert.throws(() => acknowledged.registry.applyUpdate({
     order: makeOrder({
       brokerOrderId: "provider-order-1",
       providerInstanceId: "binanceLive",
@@ -983,9 +983,7 @@ test("retains provider provenance across exchange updates and rejects provider i
       updatedAt: 102,
       completedAt: 102,
     }),
-  })
-  assert.equal(conflictingUpdate.ok, false)
-  assert.match(conflictingUpdate.errors[0].message, /changed immutable providerInstanceId/)
+  }), /changed immutable providerInstanceId/)
   assert.equal(tracked.status, "OPEN", "A conflicting provider update must not mutate the accepted order.")
 })
 
@@ -993,7 +991,7 @@ test("retains provider provenance across exchange updates and rejects provider i
 test("does not infer provider provenance for a legacy order from a later exchange update", () => {
   const legacy = makeOrder()
   const registry = OrderRegistry.empty().registerPending({ order: legacy }).registry
-  const update = registry.applyUpdate({
+  assert.throws(() => registry.applyUpdate({
     order: makeOrder({
       brokerOrderId: "legacy-broker-order",
       providerInstanceId: "binanceTestnet",
@@ -1004,7 +1002,5 @@ test("does not infer provider provenance for a legacy order from a later exchang
       acknowledgedAt: 101,
       updatedAt: 101,
     }),
-  })
-  assert.equal(update.ok, false)
-  assert.match(update.errors[0].message, /Cannot assign provider provenance to a legacy/)
+  }), /Cannot assign provider provenance to a legacy/)
 })
