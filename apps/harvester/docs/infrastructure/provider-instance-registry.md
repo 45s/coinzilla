@@ -29,7 +29,7 @@ Each entry supplies:
 
 - `providerInstanceId`, `providerType`, `accountId`, and `environment`;
 - a BrokerPort implementation; and
-- its deeply immutable version-1 capability declaration from [Brokers capability contract #1366](https://github.com/45s/coinzilla/pull/1366).
+- its deeply immutable provider declaration, built with the canonical `BrokerCapabilities` value from `@coinzilla/entities` and populated with evidence by the Brokers provider implementation (first delivered for Binance in [PR #1366](https://github.com/45s/coinzilla/pull/1366)).
 
 Registration fails closed for an empty registry, duplicate or malformed identities, an invalid BrokerPort, a missing/unsupported capability declaration, a provider-type mismatch, or a missing/mismatched selected environment. Registry lookup requires the exact `providerInstanceId`; there is no implicit default, fallback, or provider selection by brand. The metadata listing is immutable and does not expose broker objects.
 
