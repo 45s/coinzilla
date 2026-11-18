@@ -17,9 +17,12 @@ const providers = [
 ]
 
 const pairs = {
-  BTCUSDT: { enabled: true, tradingEnvironment: "testnet" },
-  ETHUSDT: { enabled: true, tradingEnvironment: "live" },
-  SOLUSDT: { enabled: false, tradingEnvironment: "both" },
+  BTCUSDT: { enabled: true,
+  tradingEnvironment: "testnet" },
+  ETHUSDT: { enabled: true,
+  tradingEnvironment: "live" },
+  SOLUSDT: { enabled: false,
+  tradingEnvironment: "both" },
 }
 
 function createAppConfig(overrides = {}) {
@@ -101,7 +104,8 @@ test("rejects an enabled strategy-market pair without an execution route", () =>
 
 test("rejects duplicate strategy-market routes", () => {
   const routes = createRoutes()
-  routes.push({ ...routes[0], providerInstanceId: "binance-live-secondary" })
+  routes.push({ ...routes[0],
+  providerInstanceId: "binance-live-secondary" })
 
   assert.throws(
     () => resolveExecutionSymbolsByProvider({
@@ -119,7 +123,8 @@ test("rejects unknown provider instances and environment-incompatible routes", (
       appConfig: createAppConfig({
         executionRouting: {
           routes: [
-            { ...createRoutes()[0], providerInstanceId: "missing-account" },
+            { ...createRoutes()[0],
+  providerInstanceId: "missing-account" },
             createRoutes()[1],
           ],
         },
@@ -135,7 +140,8 @@ test("rejects unknown provider instances and environment-incompatible routes", (
       appConfig: createAppConfig({
         executionRouting: {
           routes: [
-            { ...createRoutes()[0], providerInstanceId: "binance-live-secondary" },
+            { ...createRoutes()[0],
+  providerInstanceId: "binance-live-secondary" },
             createRoutes()[1],
           ],
         },
@@ -149,9 +155,13 @@ test("rejects unknown provider instances and environment-incompatible routes", (
 
 test("rejects routes for disabled or unconfigured markets and unknown strategy IDs", () => {
   const invalidRoutes = [
-    { ...createRoutes()[0], symbol: "UNKNOWNUSDT" },
-    { ...createRoutes()[0], symbol: "SOLUSDT" },
-    { ...createRoutes()[0], strategyId: StrategyId.RECOVERY_SELLER, symbol: "BTCUSDT" },
+    { ...createRoutes()[0],
+  symbol: "UNKNOWNUSDT" },
+    { ...createRoutes()[0],
+  symbol: "SOLUSDT" },
+    { ...createRoutes()[0],
+  strategyId: StrategyId.RECOVERY_SELLER,
+  symbol: "BTCUSDT" },
   ]
 
   for (const route of invalidRoutes) {
@@ -174,7 +184,8 @@ test("rejects malformed route tables and duplicate provider identities", () => {
       appConfig: createAppConfig({
         executionRouting: {
           routes: [
-            { ...createRoutes()[0], fallbackProviderInstanceId: "binance-live-secondary" },
+            { ...createRoutes()[0],
+  fallbackProviderInstanceId: "binance-live-secondary" },
             createRoutes()[1],
           ],
         },

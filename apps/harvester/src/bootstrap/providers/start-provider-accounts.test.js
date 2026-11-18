@@ -29,16 +29,25 @@ function createProvider({
 const appConfig = {
   marketDataRouting: {
     routes: [
-      { symbol: "BTCUSDT", providerInstanceId: "first" },
-      { symbol: "ETHUSDT", providerInstanceId: "second" },
-      { symbol: "SOLUSDT", providerInstanceId: "third" },
+      { symbol: "BTCUSDT",
+  providerInstanceId: "first" },
+      { symbol: "ETHUSDT",
+  providerInstanceId: "second" },
+      { symbol: "SOLUSDT",
+  providerInstanceId: "third" },
     ],
   },
   executionRouting: {
     routes: [
-      { strategyId: "CG_coinGrabber", symbol: "BTCUSDT", providerInstanceId: "first" },
-      { strategyId: "CG_coinGrabber", symbol: "ETHUSDT", providerInstanceId: "second" },
-      { strategyId: "CG_coinGrabber", symbol: "SOLUSDT", providerInstanceId: "third" },
+      { strategyId: "CG_coinGrabber",
+  symbol: "BTCUSDT",
+  providerInstanceId: "first" },
+      { strategyId: "CG_coinGrabber",
+  symbol: "ETHUSDT",
+  providerInstanceId: "second" },
+      { strategyId: "CG_coinGrabber",
+  symbol: "SOLUSDT",
+  providerInstanceId: "third" },
     ],
   },
   operatorControl: {
@@ -63,16 +72,25 @@ function appConfigForMarketDataProvider(providerInstanceId) {
     ...appConfig,
     marketDataRouting: {
       routes: [
-        { symbol: "BTCUSDT", providerInstanceId },
-        { symbol: "ETHUSDT", providerInstanceId: "binance-two" },
-        { symbol: "SOLUSDT", providerInstanceId: "other-live" },
+        { symbol: "BTCUSDT",
+  providerInstanceId },
+        { symbol: "ETHUSDT",
+  providerInstanceId: "binance-two" },
+        { symbol: "SOLUSDT",
+  providerInstanceId: "other-live" },
       ],
     },
     executionRouting: {
       routes: [
-        { strategyId: "CG_coinGrabber", symbol: "BTCUSDT", providerInstanceId: "binance-one" },
-        { strategyId: "CG_coinGrabber", symbol: "ETHUSDT", providerInstanceId: "binance-two" },
-        { strategyId: "CG_coinGrabber", symbol: "SOLUSDT", providerInstanceId: "other-live" },
+        { strategyId: "CG_coinGrabber",
+  symbol: "BTCUSDT",
+  providerInstanceId: "binance-one" },
+        { strategyId: "CG_coinGrabber",
+  symbol: "ETHUSDT",
+  providerInstanceId: "binance-two" },
+        { strategyId: "CG_coinGrabber",
+  symbol: "SOLUSDT",
+  providerInstanceId: "other-live" },
       ],
     },
   }
@@ -93,7 +111,8 @@ function appConfigForProviderSubset(providers) {
   return {
     ...appConfig,
     marketDataRouting: {
-      routes: routes.map(({ symbol, providerInstanceId }) => ({
+      routes: routes.map(({ symbol,
+  providerInstanceId }) => ({
         symbol,
         providerInstanceId,
       })),
@@ -541,8 +560,13 @@ test("retains a failed account lock when startup cleanup is not confirmed", asyn
       releasedLocks,
     }),
     appConfig: appConfigForProviderSubset([
-      createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
-      createProvider({ providerInstanceId: "second", providerType: "binance", accountId: "account-two", required: false }),
+      createProvider({ providerInstanceId: "first",
+  providerType: "binance",
+  accountId: "account-one" }),
+      createProvider({ providerInstanceId: "second",
+  providerType: "binance",
+  accountId: "account-two",
+  required: false }),
     ]),
     env: {
       TRADING_MODE: "testnet",
@@ -573,7 +597,9 @@ test("fails startup when no configured account can start", async () => {
         ok: true,
       }),
       appConfig: appConfigForProviderSubset([
-        createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
+        createProvider({ providerInstanceId: "first",
+  providerType: "binance",
+  accountId: "account-one" }),
       ]),
       env: {
         TRADING_MODE: "testnet",
@@ -629,8 +655,12 @@ test("releases only accounts whose runtime shutdown is confirmed", async () => {
       }
     },
     appConfig: appConfigForProviderSubset([
-      createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
-      createProvider({ providerInstanceId: "second", providerType: "binance", accountId: "account-two" }),
+      createProvider({ providerInstanceId: "first",
+  providerType: "binance",
+  accountId: "account-one" }),
+      createProvider({ providerInstanceId: "second",
+  providerType: "binance",
+  accountId: "account-two" }),
     ]),
     env: {
       TRADING_MODE: "testnet",

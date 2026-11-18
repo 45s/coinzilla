@@ -229,9 +229,12 @@ test("rejects disabled market routes and protects resolved source maps from muta
         ...appConfig,
         marketDataRouting: {
           routes: [
-            { symbol: "BTCUSDT", providerInstanceId: "binance-one" },
-            { symbol: "ETHUSDT", providerInstanceId: "binance-two" },
-            { symbol: "XRPUSDT", providerInstanceId: "binance-one" },
+            { symbol: "BTCUSDT",
+  providerInstanceId: "binance-one" },
+            { symbol: "ETHUSDT",
+  providerInstanceId: "binance-two" },
+            { symbol: "XRPUSDT",
+  providerInstanceId: "binance-one" },
           ],
         },
       },
@@ -244,8 +247,10 @@ test("rejects disabled market routes and protects resolved source maps from muta
       ...appConfig,
       marketDataRouting: {
         routes: [
-          { symbol: "BTCUSDT", providerInstanceId: "binance-one" },
-          { symbol: "ETHUSDT", providerInstanceId: "binance-two" },
+          { symbol: "BTCUSDT",
+  providerInstanceId: "binance-one" },
+          { symbol: "ETHUSDT",
+  providerInstanceId: "binance-two" },
         ],
       },
     },

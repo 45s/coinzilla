@@ -222,16 +222,20 @@ function createBrokerOrderPorts({ calls }) {
         market,
         side: order.side,
         type: order.type,
-        limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
-        executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+        limitPrice: new Money({ amount: order.price,
+  asset: market.quoteAsset }),
+        originalQuantity: new Quantity({ amount: order.quantity,
+  asset: market.baseAsset }),
+        executedQuantity: new Quantity({ amount: "0",
+  asset: market.baseAsset }),
         status: "OPEN",
         createdAt: Date.now(),
         acknowledgedAt: Date.now(),
         updatedAt: Date.now(),
       })
       calls.orders.set(order.clientOrderId, acknowledgedOrder)
-      return { ok: true, data: acknowledgedOrder }
+      return { ok: true,
+  data: acknowledgedOrder }
     },
     cancelOrder: async ({ order }) => {
       calls.push(`cancel:${order.market.symbol}`)
@@ -242,7 +246,8 @@ function createBrokerOrderPorts({ calls }) {
         completedAt: Date.now(),
       })
       calls.orders.set(order.clientOrderId, canceledOrder)
-      return { ok: true, data: canceledOrder }
+      return { ok: true,
+  data: canceledOrder }
     },
     getOpenOrders: async () => ({
       ok: true,
@@ -260,14 +265,17 @@ function createBrokerOrderPorts({ calls }) {
         !symbol || order.market.symbol === symbol
       ),
     }),
-    getCanonicalOrder: async ({ clientOrderId, orderId } = {}) => {
+    getCanonicalOrder: async ({ clientOrderId,
+  orderId } = {}) => {
       const order = [...calls.orders.values()].find((candidate) =>
         (clientOrderId && candidate.clientOrderId === clientOrderId) ||
         (orderId && candidate.brokerOrderId === orderId)
       )
       return order
-        ? { ok: true, data: order }
-        : { ok: false, errors: [new Error("order not found")] }
+        ? { ok: true,
+  data: order }
+        : { ok: false,
+  errors: [new Error("order not found")] }
     },
   }
 }
@@ -278,7 +286,8 @@ function createBrokerMarketDataPorts({
   return {
     getCandles: async ({ symbol }) => {
       calls.push(`candles:${symbol}`)
-      return { ok: true, data: [] }
+      return { ok: true,
+  data: [] }
     },
     subscribeForCandles: async ({ symbol }) => {
       calls.push(`subscribe:candles:${symbol}`)
@@ -289,7 +298,8 @@ function createBrokerMarketDataPorts({
         },
       }
     },
-    subscribeForPrices: async ({ symbol, onPrice }) => {
+    subscribeForPrices: async ({ symbol,
+  onPrice }) => {
       calls.push(`subscribe:${symbol}`)
       calls.priceHandlers.set(symbol, onPrice)
       return {
@@ -299,7 +309,8 @@ function createBrokerMarketDataPorts({
         },
       }
     },
-    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+    subscribeForBookTicker: async ({ symbol,
+  onBookTicker }) => {
       calls.push(`subscribe:book:${symbol}`)
       await onBookTicker({
         symbol,
@@ -364,14 +375,20 @@ function createMultiAccountHarvesterConfig() {
     ...appConfig,
     marketDataRouting: {
       routes: [
-        { symbol: "BTCUSDT", providerInstanceId: "binance-testnet-primary" },
-        { symbol: "ETHUSDT", providerInstanceId: "binance-testnet-secondary" },
+        { symbol: "BTCUSDT",
+  providerInstanceId: "binance-testnet-primary" },
+        { symbol: "ETHUSDT",
+  providerInstanceId: "binance-testnet-secondary" },
       ],
     },
     executionRouting: {
       routes: [
-        { strategyId: "CG_coinGrabber", symbol: "BTCUSDT", providerInstanceId: "binance-testnet-secondary" },
-        { strategyId: "CG_coinGrabber", symbol: "ETHUSDT", providerInstanceId: "binance-testnet-primary" },
+        { strategyId: "CG_coinGrabber",
+  symbol: "BTCUSDT",
+  providerInstanceId: "binance-testnet-secondary" },
+        { strategyId: "CG_coinGrabber",
+  symbol: "ETHUSDT",
+  providerInstanceId: "binance-testnet-primary" },
       ],
     },
     brokers: {

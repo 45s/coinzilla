@@ -108,12 +108,16 @@ export function handleHarvesterUserDataStatus({
   return result
 }
 
-export function isHarvesterMarketPriceFresh({ marketPrice, isMarketDataFresh, now } = {}) {
+export function isHarvesterMarketPriceFresh({ marketPrice,
+  isMarketDataFresh,
+  now } = {}) {
   return isMarketDataFresh({ timestamp: marketPrice.timestamp,
     now: now() })
 }
 
-export function isHarvesterMarketBookFresh({ marketBook, isMarketDataFresh, now } = {}) {
+export function isHarvesterMarketBookFresh({ marketBook,
+  isMarketDataFresh,
+  now } = {}) {
   return isMarketDataFresh({ timestamp: marketBook.timestamp,
     now: now() })
 }
@@ -136,7 +140,8 @@ function resolveCandleHistoryBroker({
   return sourceBroker
 }
 
-function createCandleHistoryBroker({ broker, getMarketDataBroker }) {
+function createCandleHistoryBroker({ broker,
+  getMarketDataBroker }) {
   return Object.freeze({
     getCandles: (input = {}) => resolveCandleHistoryBroker({
       broker,
@@ -179,10 +184,12 @@ export function createHarvesterCandleHistoryService({
   marketDataProviderIdentities = {},
 } = {}) {
   const service = createCandleHistoryService({
-    broker: createCandleHistoryBroker({ broker, getMarketDataBroker }),
+    broker: createCandleHistoryBroker({ broker,
+  getMarketDataBroker }),
     logger,
     now,
-    onSnapshot: async ({ symbol, snapshot } = {}) => {
+    onSnapshot: async ({ symbol,
+  snapshot } = {}) => {
       const sourceAwareSnapshot = attachMarketDataIdentityToSnapshot({
         snapshot,
         symbol,
@@ -280,7 +287,9 @@ export function createHarvesterTradingEngine({
       trailingBuySymbols: recoveredState.trailingBuySymbols,
     },
     isStopping: () => userDataState.stopped || userDataState.shutdownRequested,
-    onPause: async ({ symbol, reason, error } = {}) => {
+    onPause: async ({ symbol,
+  reason,
+  error } = {}) => {
       logger.error?.({ message: "paused a trading pair",
         symbol,
         reason,
@@ -290,14 +299,21 @@ export function createHarvesterTradingEngine({
 }
 
 
-function createExecutionFillCallback({ store, recordExecutionFill } = {}) {
+function createExecutionFillCallback({ store,
+  recordExecutionFill } = {}) {
   return store ? ({ fill }) => recordExecutionFill({ operationalStateStore: store,
     fill }) : undefined
 }
 
-function createRecoveryCycleCompletedCallback({ store, recordRecoveryCycleCompleted } = {}) {
+function createRecoveryCycleCompletedCallback({ store,
+  recordRecoveryCycleCompleted } = {}) {
   return store
-    ? ({ recoveryLedger, position, sellOrder, completion, minProfit, inventoryDisposition }) =>
+    ? ({ recoveryLedger,
+  position,
+  sellOrder,
+  completion,
+  minProfit,
+  inventoryDisposition }) =>
       recordRecoveryCycleCompleted({
         operationalStateStore: store,
         recoveryLedger,
@@ -310,9 +326,14 @@ function createRecoveryCycleCompletedCallback({ store, recordRecoveryCycleComple
     : undefined
 }
 
-function createRecoveryCycleNotCompletedCallback({ store, recordRecoveryCycleNotCompleted } = {}) {
+function createRecoveryCycleNotCompletedCallback({ store,
+  recordRecoveryCycleNotCompleted } = {}) {
   return store
-    ? ({ recoveryLedger, position, sellOrder, completion, minProfit }) =>
+    ? ({ recoveryLedger,
+  position,
+  sellOrder,
+  completion,
+  minProfit }) =>
       recordRecoveryCycleNotCompleted({
         operationalStateStore: store,
         recoveryLedger,
@@ -324,30 +345,40 @@ function createRecoveryCycleNotCompletedCallback({ store, recordRecoveryCycleNot
     : undefined
 }
 
-function createSubmissionIntentCallback({ store, recordOrderSubmissionIntent } = {}) {
-  return store ? ({ order, purpose }) => recordOrderSubmissionIntent({ operationalStateStore: store,
+function createSubmissionIntentCallback({ store,
+  recordOrderSubmissionIntent } = {}) {
+  return store ? ({ order,
+  purpose }) => recordOrderSubmissionIntent({ operationalStateStore: store,
     order,
     purpose }) : undefined
 }
 
-function createSubmissionOutcomeCallback({ store, recordOrderSubmissionOutcome } = {}) {
+function createSubmissionOutcomeCallback({ store,
+  recordOrderSubmissionOutcome } = {}) {
   return store
-    ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
+    ? ({ order,
+  outcome,
+  purpose }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
       order,
       outcome,
       purpose })
     : undefined
 }
 
-function createCancellationIntentCallback({ store, recordOrderCancellationIntent } = {}) {
-  return store ? ({ order, reason }) => recordOrderCancellationIntent({ operationalStateStore: store,
+function createCancellationIntentCallback({ store,
+  recordOrderCancellationIntent } = {}) {
+  return store ? ({ order,
+  reason }) => recordOrderCancellationIntent({ operationalStateStore: store,
     order,
     reason }) : undefined
 }
 
-function createStrategyMarketPausedCallback({ store, recordStrategyMarketControl, sequence } = {}) {
+function createStrategyMarketPausedCallback({ store,
+  recordStrategyMarketControl,
+  sequence } = {}) {
   return store
-    ? ({ symbol, reason }) => recordStrategyMarketControl({
+    ? ({ symbol,
+  reason }) => recordStrategyMarketControl({
       operationalStateStore: store,
       action: "PAUSE",
       transitionId: `${store.runtimeSessionId}:${++sequence.value}`,
@@ -357,9 +388,14 @@ function createStrategyMarketPausedCallback({ store, recordStrategyMarketControl
     : undefined
 }
 
-function createSafetyBlockerCallback({ store, recordSafetyBlockerRaised, createHash: hashFactory } = {}) {
+function createSafetyBlockerCallback({ store,
+  recordSafetyBlockerRaised,
+  createHash: hashFactory } = {}) {
   return store
-    ? ({ scope, symbol, reason, evidence }) => {
+    ? ({ scope,
+  symbol,
+  reason,
+  evidence }) => {
       const canonicalEvidence = Object.fromEntries(
         Object.keys(evidence).sort().map((key) => [key, evidence[key]]),
       )
@@ -375,9 +411,13 @@ function createSafetyBlockerCallback({ store, recordSafetyBlockerRaised, createH
     : undefined
 }
 
-function createCancellationOutcomeCallback({ store, recordOrderCancellationOutcome } = {}) {
+function createCancellationOutcomeCallback({ store,
+  recordOrderCancellationOutcome } = {}) {
   return store
-    ? ({ order, canceledOrder, reason, outcome }) =>
+    ? ({ order,
+  canceledOrder,
+  reason,
+  outcome }) =>
       recordOrderCancellationOutcome({ operationalStateStore: store,
         order,
         canceledOrder,

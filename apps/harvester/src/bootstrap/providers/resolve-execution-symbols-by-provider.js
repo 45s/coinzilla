@@ -39,7 +39,8 @@ function getStrategyPairs(appConfig, { allowMissing = false } = {}) {
   return pairs
 }
 
-function assertRouteShape({ route, index }) {
+function assertRouteShape({ route,
+  index }) {
   const allowedKeys = new Set(["strategyId", "symbol", "providerInstanceId"])
   if (
     !isRecord(route) ||
@@ -57,12 +58,18 @@ function assertRouteShape({ route, index }) {
   }
 }
 
-function createRouteKey({ strategyId, symbol }) {
+function createRouteKey({ strategyId,
+  symbol }) {
   return JSON.stringify([strategyId, symbol])
 }
 
-function addConfiguredRoute({ route, index, pairs, providerById, routeByStrategyMarket }) {
-  assertRouteShape({ route, index })
+function addConfiguredRoute({ route,
+  index,
+  pairs,
+  providerById,
+  routeByStrategyMarket }) {
+  assertRouteShape({ route,
+  index })
   if (!EXECUTABLE_STRATEGY_IDS.has(route.strategyId)) {
     throw new TypeError(
       `Execution routing contains unsupported strategy ${route.strategyId}; only CG_coinGrabber is executable`,
@@ -99,7 +106,9 @@ function addConfiguredRoute({ route, index, pairs, providerById, routeByStrategy
   routeByStrategyMarket.set(key, route.providerInstanceId)
 }
 
-function resolveConfiguredRoutes({ configuredRouting, pairs, providerById }) {
+function resolveConfiguredRoutes({ configuredRouting,
+  pairs,
+  providerById }) {
   if (
     !isRecord(configuredRouting) ||
     Object.keys(configuredRouting).some((key) => key !== "routes") ||
@@ -120,7 +129,8 @@ function resolveConfiguredRoutes({ configuredRouting, pairs, providerById }) {
   return routeByStrategyMarket
 }
 
-function assertEnabledMarketsAreRouted({ pairs, routeByStrategyMarket }) {
+function assertEnabledMarketsAreRouted({ pairs,
+  routeByStrategyMarket }) {
   const missingMarkets = Object.entries(pairs)
     .filter(([symbol, pair]) => pair?.enabled === true &&
       !routeByStrategyMarket.has(createRouteKey({
@@ -135,7 +145,8 @@ function assertEnabledMarketsAreRouted({ pairs, routeByStrategyMarket }) {
   }
 }
 
-function groupSymbolsByProvider({ providers, routeByStrategyMarket }) {
+function groupSymbolsByProvider({ providers,
+  routeByStrategyMarket }) {
   const symbolsByProvider = new Map(
     providers.map(({ providerInstanceId }) => [providerInstanceId, []]),
   )
@@ -159,7 +170,8 @@ function groupSymbolsByProvider({ providers, routeByStrategyMarket }) {
  * @param {{appConfig: object, providers: object[]}} input
  * @returns {ReadonlyMap<string, ReadonlyArray<string>>} Provider instance to execution symbols.
  */
-export function resolveExecutionSymbolsByProvider({ appConfig, providers } = {}) {
+export function resolveExecutionSymbolsByProvider({ appConfig,
+  providers } = {}) {
   const providerById = assertProviderInstances(providers)
   const isLegacySingleProvider = appConfig.executionRouting === undefined && providers.length === 1
   const pairs = getStrategyPairs(appConfig, {
