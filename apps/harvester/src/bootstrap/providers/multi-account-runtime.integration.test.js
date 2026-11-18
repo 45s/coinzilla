@@ -648,10 +648,10 @@ function createUserDataProcessedSignal() {
 }
 
 function assertMultiAccountMarketDataRouting({
-      primaryCalls,
-      secondaryCalls,
-      primaryRuntime,
-    }) {
+  primaryCalls,
+  secondaryCalls,
+  primaryRuntime,
+}) {
   assert.equal(typeof primaryCalls.priceHandlers.get("BTCUSDT"), "function")
   assert.equal(typeof secondaryCalls.priceHandlers.get("ETHUSDT"), "function")
   assert.equal(secondaryCalls.includes("candles:ETHUSDT"), true)
