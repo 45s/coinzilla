@@ -10,6 +10,14 @@ async function createTemporaryDirectory() {
   return mkdtemp(join(tmpdir(), "coinzilla-db-backup-"))
 }
 
+function assertSqliteTransactionRejectedDuringClose(database) {
+  assert.throws(
+    () => database.transaction(() => {}),
+    /closing/,
+    "A transaction must not start after SQLite shutdown has begun",
+  )
+}
+
 async function readDatabaseValue({ filename, query, parameters = [] }) {
   const database = createSqliteDatabase({ filename })
   await database.connect()
@@ -442,6 +450,12 @@ test("SQLite close drains an active backup and rejects new backup requests", asy
       progress() {
         if (!closePromise) {
           closePromise = database.close()
+          assert.equal(
+            database.state,
+            "closing",
+            "The low-level facade must expose its closing state while an active backup drains",
+          )
+          assertSqliteTransactionRejectedDuringClose(database)
           backupAfterClosePromise = assert.rejects(
             database.backup({
               destination: rejectedBackupFilename,
