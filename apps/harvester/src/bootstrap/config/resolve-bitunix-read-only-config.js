@@ -64,8 +64,14 @@ export function resolveBitunixReadOnlyConfig({ env = process.env } = {}) {
   }
 
   return Object.freeze({
-    apiKey: readRequiredCredential({ env, setting: "BITUNIX_API_KEY" }),
-    apiSecret: readRequiredCredential({ env, setting: "BITUNIX_API_SECRET" }),
+    apiKey: readRequiredCredential({
+      env,
+      setting: "BITUNIX_API_KEY",
+    }),
+    apiSecret: readRequiredCredential({
+      env,
+      setting: "BITUNIX_API_SECRET",
+    }),
     tradingMode: "live",
     providerInstanceId: readStableIdentity({
       env,

@@ -6085,7 +6085,10 @@ test("exposes enabled Bitunix only through the isolated read-only runtime surfac
     accessMode: "read-only",
     getBalances: async () => {
       observerReadCalls.push("getBalances")
-      return { ok: true, data: [] }
+      return {
+        ok: true,
+        data: [],
+      }
     },
   })
   let receivedBitunixConfig
@@ -6105,7 +6108,11 @@ test("exposes enabled Bitunix only through the isolated read-only runtime surfac
       receivedBitunixConfig = config
       return bitunixObserver
     },
-    logger: { info() {}, debug() {}, error() {} },
+    logger: {
+      info() {},
+      debug() {},
+      error() {},
+    },
   })
   try {
     assert.equal(runtime.readOnlyProviders.bitunix, bitunixObserver,
@@ -6157,7 +6164,7 @@ test("default Bitunix runtime facade exposes read methods but no trading or stre
     logger: { info() {}, debug() {}, error() {} },
   })
   try {
-    const bitunix = runtime.readOnlyProviders.bitunix
+    const { bitunix } = runtime.readOnlyProviders
     assert.ok(bitunix, "Explicitly enabled Bitunix must be available as a read-only observer.")
     for (const method of ["getBalances", "getExchangeMarkets", "getSymbolFilters", "getMarketMetadata", "getPrices", "getOrderBook", "getKlines", "getKlineHistory", "getOpenOrders", "getOrderHistory", "getOrder", "getDeposits", "getDepositAddress", "getWithdrawalHistory", "getExchangeRates", "getMatchingOrderDetails"]) {
       assert.equal(typeof bitunix[method], "function", `Read-only method ${method} must be exposed.`)

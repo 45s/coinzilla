@@ -4,7 +4,10 @@ import { resolveBitunixReadOnlyConfig } from "./resolve-bitunix-read-only-config
 
 test("keeps Bitunix disabled by default even when credentials are present", () => {
   const config = resolveBitunixReadOnlyConfig({
-    env: { BITUNIX_API_KEY: "read-only-key", BITUNIX_API_SECRET: "read-only-secret" },
+    env: {
+      BITUNIX_API_KEY: "read-only-key",
+      BITUNIX_API_SECRET: "read-only-secret",
+    },
   })
   assert.equal(config, null, "Credentials alone must not enable a production Bitunix connection.")
 })
@@ -37,8 +40,14 @@ test("rejects unsupported enable-flag values", () => {
 
 test("rejects missing API credentials without including secret values in diagnostics", () => {
   for (const env of [
-    { BITUNIX_READ_ONLY_ENABLED: "true", BITUNIX_API_SECRET: "secret-must-not-appear" },
-    { BITUNIX_READ_ONLY_ENABLED: "true", BITUNIX_API_KEY: "read-only-key" },
+    {
+      BITUNIX_READ_ONLY_ENABLED: "true",
+      BITUNIX_API_SECRET: "secret-must-not-appear",
+    },
+    {
+      BITUNIX_READ_ONLY_ENABLED: "true",
+      BITUNIX_API_KEY: "read-only-key",
+    },
   ]) {
     assert.throws(
       () => resolveBitunixReadOnlyConfig({ env }),

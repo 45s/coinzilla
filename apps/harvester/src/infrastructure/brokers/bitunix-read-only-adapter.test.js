@@ -9,10 +9,18 @@ const READ_METHODS = Object.freeze([
   "getOrderBook", "getKlines", "getKlineHistory",
 ])
 const symbolFilters = Object.freeze({
-  symbol: "BTCUSDT", base: "BTC", quote: "USDT", isOpen: "1",
-  minPrice: "0.01", minVolume: "0.001", basePrecision: "8", quotePrecision: "2",
-  precisions: ["0.01", "0.001"], maxAmount: "500000",
-  maxLimitOrderAmount: "1500000", maxMarketOrderAmount: "2000000",
+  symbol: "BTCUSDT",
+  base: "BTC",
+  quote: "USDT",
+  isOpen: "1",
+  minPrice: "0.01",
+  minVolume: "0.001",
+  basePrecision: "8",
+  quotePrecision: "2",
+  precisions: ["0.01", "0.001"],
+  maxAmount: "500000",
+  maxLimitOrderAmount: "1500000",
+  maxMarketOrderAmount: "2000000",
 })
 
 function createFakeBroker() {
@@ -20,12 +28,18 @@ function createFakeBroker() {
   const broker = Object.fromEntries(READ_METHODS.map((method) => [
     method,
     async (...args) => {
-      calls.push({ method, args })
+      calls.push({
+        method,
+        args,
+      })
       return { ok: true, data: method }
     },
   ]))
   broker.getSymbolFilters = async ({ symbol } = {}) => {
-    calls.push({ method: "getSymbolFilters", args: [{ symbol }] })
+    calls.push({
+      method: "getSymbolFilters",
+      args: [{ symbol }],
+    })
     return { ok: true, data: symbolFilters }
   }
   return { broker, calls }
