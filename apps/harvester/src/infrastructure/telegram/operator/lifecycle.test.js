@@ -23,7 +23,7 @@ test("starts the poller after bot identity and command-menu registration", async
   const result = await startTelegramOperatorAdapter({
     state,
     callApi: async request => {
-      calls.push(request.method)
+      calls.push(request)
       if (request.method === "getMe") {
         return { username: "coinzilla_bot" }
       }
@@ -37,9 +37,23 @@ test("starts the poller after bot identity and command-menu registration", async
     },
   })
   assert.deepEqual(
-    calls,
+    calls.map(({ method }) => method),
     ["getMe", "setMyCommands"],
     "The adapter must verify its Telegram identity and register commands before polling begins.",
+  )
+  const registeredCommands = calls.find(({ method }) => method === "setMyCommands")
+    .payload.commands
+  assert.equal(
+    registeredCommands.find(({ command }) => command === "pause").description,
+    "Block market BUYs and cancel Harvester-owned BUY orders",
+  )
+  assert.equal(
+    registeredCommands.find(({ command }) => command === "resume").description,
+    "Remove the market BUY pause",
+  )
+  assert.equal(
+    registeredCommands.find(({ command }) => command === "pausebuys").description,
+    "Compatibility alias for market Pause",
   )
   assert.equal(
     state.botUsername,
