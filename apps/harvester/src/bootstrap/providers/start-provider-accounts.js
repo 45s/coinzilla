@@ -178,6 +178,27 @@ function createMultiAccountRuntime({
   })
 }
 
+async function retainFailedAccountLock({
+  provider,
+  retainProviderLock,
+}) {
+  if (typeof retainProviderLock !== "function") {
+    return []
+  }
+  try {
+    const result = await retainProviderLock(provider.providerInstanceId)
+    if (result?.ok === true) {
+      return []
+    }
+    if (Array.isArray(result?.errors) && result.errors.length > 0) {
+      return result.errors
+    }
+    return [new Error(`Provider account ${provider.providerInstanceId} process-lock retention was not confirmed`)]
+  } catch (error) {
+    return [error]
+  }
+}
+
 async function releaseFailedAccountLock({
   provider,
   releaseProviderLock,
@@ -200,6 +221,8 @@ function createFailedAccount({
   provider,
   error,
   cleanupErrors,
+  lockRetained,
+  lockReleasePending,
 }) {
   return Object.freeze({
     providerInstanceId: provider.providerInstanceId,
@@ -209,6 +232,8 @@ function createFailedAccount({
     errorName: error?.name ?? "Error",
     errorCode: error?.code,
     errorMessage: error?.message ?? String(error),
+    lockRetained,
+    lockReleasePending,
     cleanupErrors: Object.freeze(cleanupErrors.map((cleanupError) => Object.freeze({
       name: cleanupError?.name ?? "Error",
       code: cleanupError?.code,
@@ -287,6 +312,7 @@ async function startOneProviderAccount({
   runtimeSessionId,
   operationalStateStore,
   releaseProviderLock,
+  retainProviderLock,
   requireStop,
 }) {
   try {
@@ -310,14 +336,22 @@ async function startOneProviderAccount({
       error: undefined,
     }
   } catch (error) {
-    const cleanupErrors = await releaseFailedAccountLock({
-      provider,
-      releaseProviderLock,
-    })
+    const cleanupConfirmed = error?.startupCleanupConfirmed === true
+    const cleanupErrors = cleanupConfirmed
+      ? await releaseFailedAccountLock({
+        provider,
+        releaseProviderLock,
+      })
+      : await retainFailedAccountLock({
+        provider,
+        retainProviderLock,
+      })
     return {
       runtime: undefined,
       error,
       cleanupErrors,
+      lockRetained: !cleanupConfirmed,
+      lockReleasePending: cleanupConfirmed && cleanupErrors.length > 0,
     }
   }
 }
@@ -331,6 +365,7 @@ async function startConfiguredProviderAccounts({
   runtimeSessionId,
   operationalStateStore,
   releaseProviderLock,
+  retainProviderLock,
 }) {
   const startedAccounts = []
   const failedAccounts = []
@@ -347,6 +382,7 @@ async function startConfiguredProviderAccounts({
       runtimeSessionId,
       operationalStateStore,
       releaseProviderLock,
+      retainProviderLock,
       requireStop: providers.length > 1,
     })
     if (result.error === undefined) {
@@ -362,6 +398,8 @@ async function startConfiguredProviderAccounts({
       provider,
       error: result.error,
       cleanupErrors: result.cleanupErrors ?? [],
+      lockRetained: result.lockRetained === true,
+      lockReleasePending: result.lockReleasePending === true,
     }))
     failedErrors.push(result.error, ...(result.cleanupErrors ?? []))
   }
@@ -381,6 +419,7 @@ export async function startProviderAccounts({
   runtimeSessionId,
   operationalStateStore,
   releaseProviderLock,
+  retainProviderLock,
 } = {}) {
   if (!Array.isArray(providers) || providers.length === 0) {
     throw new TypeError("Harvester requires at least one configured provider account")
@@ -397,6 +436,7 @@ export async function startProviderAccounts({
     runtimeSessionId,
     operationalStateStore,
     releaseProviderLock,
+    retainProviderLock,
   })
   throwIfNoAccountStarted({
     providers,
