@@ -14,10 +14,10 @@ import { failureResult } from "./recovery-failure.js"
 import { createUserDataEventTransition } from "./create-user-data-event-transition.js"
 
 
-function resolveRegisteredOrder({
-      state,
-      order,
-    }) {
+function resolveRegisteredOrder({ state, order }) {
+  if (!(order instanceof CanonicalOrder)) {
+    return order
+  }
   return state.registry?.getOrder?.({
     clientOrderId: order.clientOrderId,
   }) ?? order
