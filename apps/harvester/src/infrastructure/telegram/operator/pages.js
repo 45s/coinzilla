@@ -87,6 +87,14 @@ async function executeOperatorQuery({ method, userId, operator, diagnostics, int
   }
 }
 
+function logOperatorQueryStarted({ interaction, queryPage, logStage }) {
+  logOperatorQueryStarted({ interaction, queryPage, logStage })
+}
+
+function logOperatorQueryCompleted({ interaction, startedAt, logStage }) {
+  logOperatorQueryCompleted({ interaction, startedAt, logStage })
+}
+
 async function readOperatorQuery({
   queryPage,
   userId,
@@ -140,7 +148,13 @@ async function readOperatorQuery({
       diagnostics,
       interaction,
     })
-    return { ok: false, page: createQueryFailurePage({ queryPage, buildNavigationKeyboard }) }
+    return {
+      ok: false,
+      page: createQueryFailurePage({
+        queryPage,
+        buildNavigationKeyboard,
+      }),
+    }
   }
   logStage({
     interaction,
