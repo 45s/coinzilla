@@ -435,3 +435,23 @@ test("Bitunix Spot WebSocket client preserves exact account decimals and unsafe 
   assert.deepEqual(await defaultKline, { symbol: "BTCUSDT" }, "the default K-line RPC must resolve its response data")
   await client.disconnect()
 })
+
+
+test("Bitunix Spot WebSocket client sends the documented authenticated ping RPC", async () => {
+  const { client, transport } = createClient()
+  await client.connect()
+
+  const pending = client.ping()
+  assert.equal(transport.sent[0].method, "ping", "the connection test must use Bitunix's documented ping RPC method")
+  assert.equal(transport.sent[0].params.apiKey, "key", "the ping RPC must include the configured API key")
+  assert.equal(typeof transport.sent[0].params.sign, "string", "the ping RPC must be signed like every other Spot WebSocket request")
+  transport.receive({
+    id: "request-1",
+    code: "0",
+    msg: "success",
+    data: "pong",
+  })
+
+  assert.equal(await pending, "pong", "the matching ping response must resolve the connection test")
+  await client.disconnect()
+})
