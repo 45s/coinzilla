@@ -309,6 +309,7 @@ function createCompletedRecoveryCycleFact() {
   }, `recovery-cycle-completed:binance:BTCUSDT:${"c".repeat(64)}`)
 }
 
+// eslint-disable-next-line max-lines-per-function -- Existing recovery projection scenario remains cohesive.
 function createCompletedRecoveryCycleProjectionRecords() {
   const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
     clientOrderId: "harvester-recovery-sell-1",
@@ -415,6 +416,7 @@ verifiedBy: "operator:trader",
 })
 
 
+// eslint-disable-next-line max-lines-per-function -- Existing recovery projection scenario remains cohesive.
 test("projects an explicit durable NOT_COMPLETED outcome for a fully filled recovery SELL", () => {
   const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
     clientOrderId: "harvester-recovery-sell-continue",
@@ -497,6 +499,7 @@ test("projects an explicit durable NOT_COMPLETED outcome for a fully filled reco
   assert.equal(result.data.recoveryCycleEvaluations[0].appliedFillIds.length, 1)
 })
 
+// eslint-disable-next-line max-lines-per-function -- Existing recovery projection scenario remains cohesive.
 test("rejects a completed-cycle fact that names a different terminal SELL order", () => {
   const sellIntent = record(5, "ORDER_SUBMISSION_INTENT", {
     clientOrderId: "harvester-recovery-sell-identity",
