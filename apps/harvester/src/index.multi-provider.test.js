@@ -225,12 +225,21 @@ function createMainMultiProviderFixture({
   const config = createMainMultiProviderAppConfig(providerInstances)
   if (providerInstances.length > 1) {
     const [, secondaryProvider] = providerInstances
-    const [firstSymbol] = Object.keys(config.strategies.CG_coinGrabber.pairs)
-    config.executionRouting.routes = config.executionRouting.routes.map((route) =>
-      route.symbol === firstSymbol
-        ? { ...route, providerInstanceId: secondaryProvider.providerInstanceId }
-        : route
+    const secondaryRoute = Object.entries(config.strategies.CG_coinGrabber.pairs).find(
+      ([, pair]) => pair.tradingEnvironment === secondaryProvider.environment ||
+        pair.tradingEnvironment === "both"
     )
+    if (secondaryRoute) {
+      const [secondarySymbol] = secondaryRoute
+      config.executionRouting.routes = config.executionRouting.routes.map((route) =>
+        route.symbol === secondarySymbol
+          ? {
+            ...route,
+            providerInstanceId: secondaryProvider.providerInstanceId,
+          }
+          : route
+      )
+    }
   }
   const run = () => main({
     loadConfig: async () => config,
@@ -335,7 +344,7 @@ test("starts configured provider accounts and acquires one process lock per acco
   process.exitCode = 0
   try {
     const result = await fixture.run()
-    assert.ok(result, "The configured account startup must return a runtime result")
+    assert.ok(result, `The configured account startup must return a runtime result: ${fixture.errors.map(({ errorMessage, error }) => errorMessage ?? error?.message ?? "unknown").join("; ")}`)
     assert.equal(result.runtime.providerAccounts.length, 2, "Both configured provider accounts must start in independent runtimes")
     assert.deepEqual(fixture.started.map(({ identity }) => identity.providerInstanceId), [
       "binanceTestnetPrimary",
