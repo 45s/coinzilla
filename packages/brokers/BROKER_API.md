@@ -1,7 +1,7 @@
 # Broker API and capability contract
 
-**Package owner:** `@coinzilla/brokers`  
-**Contract version:** 1  
+**Package owner:** `@coinzilla/brokers`
+**Contract version:** 1
 **Primary implementation issue:** [#1446](https://github.com/45s/coinzilla/issues/1446)
 
 This document defines the exchange-neutral public Broker contract, the compatibility surface retained for existing consumers, and the provider capability declaration model. Provider protocols and DTOs remain private to each provider implementation.
