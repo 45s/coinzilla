@@ -224,7 +224,10 @@ function assertAdaBelowTargetOutcome({ replay, replacementSell }) {
     "0.1",
     JSON.stringify({
       runtimeErrors: replay.harvesterRuntimeErrors.map((error) => error.message ?? String(error)),
-      lifecycleEvents: replay.receivedLifecycleEvents.map(({ name, data }) => ({ name, data })),
+      lifecycleEvents: replay.receivedLifecycleEvents.map(({ name, data }) => ({
+        name,
+        data,
+      })),
       lastExecutionReport: replay.receivedExecutionReports.at(-1),
     }),
   )
