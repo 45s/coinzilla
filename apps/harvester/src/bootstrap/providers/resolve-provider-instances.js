@@ -81,13 +81,15 @@ function createProviderInstance({ descriptor, env, adapterFactories }) {
   } = descriptor
   for (const [field, value] of Object.entries({
     providerInstanceId,
-    providerType,
     accountId,
   })) {
     assertIdentifier({ value, field })
   }
+  if (typeof providerType !== "string" || !/^[a-z0-9-]+$/i.test(providerType)) {
+    throw new TypeError(`Provider configuration providerType for ${providerInstanceId} must be a simple provider identifier`)
+  }
   assertEnvironment({ environment, providerInstanceId })
-  const adapterFactory = adapterFactories[providerType]
+  const adapterFactory = Object.hasOwn(adapterFactories, providerType) ? adapterFactories[providerType] : undefined
   if (typeof adapterFactory !== "function") {
     throw new TypeError(`Provider ${providerInstanceId} uses unsupported provider type ${providerType}`)
   }

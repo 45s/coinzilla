@@ -149,6 +149,9 @@ export async function startProviderAccounts({
       startedAccounts,
     })
   }
+  if (startedAccounts.length === 1) {
+    return startedAccounts[0].runtime
+  }
   return createMultiAccountRuntime({
     appConfig,
     startedAccounts,
