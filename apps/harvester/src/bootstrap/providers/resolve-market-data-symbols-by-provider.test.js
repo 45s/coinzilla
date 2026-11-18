@@ -54,7 +54,10 @@ test("assigns each market only to its explicitly configured source provider", ()
 
 test("requires explicit market-data routes for multi-provider deployments", () => {
   assert.throws(
-    () => resolveMarketDataSymbolsByProvider({ appConfig, providers }),
+    () => resolveMarketDataSymbolsByProvider({
+      appConfig,
+      providers,
+    }),
     /requires explicit marketDataRouting.routes/,
     "multi-provider startup must not infer market-data ownership",
   )
@@ -87,17 +90,17 @@ test("rejects duplicate market-data routes", () => {
         marketDataRouting: {
           routes: [
             {
-            symbol: "BTCUSDT",
-            providerInstanceId: "binance-one",
-          },
+              symbol: "BTCUSDT",
+              providerInstanceId: "binance-one",
+            },
             {
-            symbol: "BTCUSDT",
-            providerInstanceId: "binance-two",
-          },
+              symbol: "BTCUSDT",
+              providerInstanceId: "binance-two",
+            },
             {
-            symbol: "ETHUSDT",
-            providerInstanceId: "binance-one",
-          },
+              symbol: "ETHUSDT",
+              providerInstanceId: "binance-one",
+            },
           ],
         },
       },

@@ -424,6 +424,54 @@ async function seedMissingInitialPrices({ context, reportPriceError }) {
   }
 }
 
+function createMarketDataSubscriptionContext(options) {
+  const {
+    broker,
+    providerInstanceId,
+    brokerName,
+    eventPublisher,
+    logger,
+    tradingEnabled,
+    pairs,
+    settings,
+    processMarketPrice,
+    processMarketBook,
+    isMarketPriceFresh,
+    now,
+    isStopped,
+    subscriptions,
+    bookSubscriptions,
+    marketPriceIntake,
+  } = options
+  return {
+    broker,
+    providerInstanceId,
+    brokerName,
+    eventPublisher,
+    logger,
+    tradingEnabled,
+    pairs,
+    settings,
+    processMarketPrice,
+    processMarketBook,
+    isMarketPriceFresh,
+    now,
+    isStopped,
+    subscriptions,
+    bookSubscriptions,
+    marketPriceIntake,
+  }
+}
+
+function logMarketDataSubscriptionsReady({ logger, providerInstanceId, enabledSymbols, subscribedSymbols }) {
+  logMarketDataSubscriptionsReady({
+    logger,
+    providerInstanceId,
+    enabledSymbols,
+    subscribedSymbols,
+  })
+}
+
 /**
  * Establish market/book subscriptions for every enabled pair, then seed missing
  * first prices only after all WebSocket streams are active.
@@ -450,7 +498,7 @@ export async function subscribeToMarketData({
   const enabledSymbols = Object.entries(pairs)
     .filter(([, pairConfig]) => pairConfig.enabled)
     .map(([symbol]) => symbol)
-  const context = {
+  const context = createMarketDataSubscriptionContext({
     broker,
     providerInstanceId,
     brokerName,
@@ -467,7 +515,7 @@ export async function subscribeToMarketData({
     subscriptions,
     bookSubscriptions,
     marketPriceIntake,
-  }
+  })
   const reportPriceError = createMarketPriceErrorReporter({ logger,
 onMarketPriceError })
 

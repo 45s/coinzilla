@@ -25,7 +25,7 @@ function assertPairMap(appConfig) {
   return pairs
 }
 
-function assertRouteShape(route, index) {
+function assertRouteShape({ route, index }) {
   if (!isRecord(route) ||
       Object.keys(route).some((key) => key !== "symbol" && key !== "providerInstanceId") ||
       typeof route.symbol !== "string" || !route.symbol.trim() ||
@@ -35,7 +35,7 @@ function assertRouteShape(route, index) {
 }
 
 function addConfiguredRoute({ route, index, pairs, providerIds, routeBySymbol }) {
-  assertRouteShape(route, index)
+  assertRouteShape({ route, index })
   if (!Object.hasOwn(pairs, route.symbol)) {
     throw new TypeError(`Market-data route references unconfigured symbol ${route.symbol}`)
   }
@@ -109,6 +109,12 @@ export function resolveMarketDataSymbolsByProvider({ appConfig, providers } = {}
     pairs,
     providerIds,
   })
-  assertEnabledMarketsAreRouted({ pairs, routeBySymbol })
-  return groupSymbolsByProvider({ providers, routeBySymbol })
+  assertEnabledMarketsAreRouted({
+    pairs,
+    routeBySymbol,
+  })
+  return groupSymbolsByProvider({
+    providers,
+    routeBySymbol,
+  })
 }
