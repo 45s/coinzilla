@@ -220,6 +220,88 @@ max: 100,
 exclusiveMax: true } })
   }
 }
+const PROVIDER_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+const PROVIDER_TYPE_PATTERN = /^[a-z0-9-]+$/i
+const CREDENTIAL_ENVIRONMENT_PATTERN = /^[A-Z][A-Z0-9_]*$/
+
+function validateProviderInstanceConfig({ provider, index, instanceIds, accountScopes }) {
+  const path = `brokers.instances[${index}]`
+  requireRecord({ value: provider, path })
+  const supportedKeys = new Set([
+    "providerInstanceId",
+    "providerType",
+    "accountId",
+    "environment",
+    "credentials",
+  ])
+  for (const key of Object.keys(provider)) {
+    if (!supportedKeys.has(key)) {
+      fail({ path: `${path}.${key}`, expectation: "a supported provider-instance configuration field" })
+    }
+  }
+  for (const field of ["providerInstanceId", "accountId"]) {
+    if (typeof provider[field] !== "string" || !PROVIDER_IDENTIFIER_PATTERN.test(provider[field])) {
+      fail({ path: `${path}.${field}`, expectation: "a stable non-secret identifier" })
+    }
+  }
+  if (typeof provider.providerType !== "string" || !PROVIDER_TYPE_PATTERN.test(provider.providerType)) {
+    fail({ path: `${path}.providerType`, expectation: "a simple provider identifier such as binance" })
+  }
+  if (provider.environment !== TRADING_ENVIRONMENTS.TESTNET && provider.environment !== TRADING_ENVIRONMENTS.LIVE) {
+    fail({ path: `${path}.environment`, expectation: "testnet or live" })
+  }
+  if (instanceIds.has(provider.providerInstanceId)) {
+    fail({ path: "brokers.instances", expectation: "unique providerInstanceId values" })
+  }
+  instanceIds.add(provider.providerInstanceId)
+  const accountScope = JSON.stringify([provider.providerType, provider.accountId, provider.environment])
+  if (accountScopes.has(accountScope)) {
+    fail({ path: "brokers.instances", expectation: "unique providerType/accountId/environment identities" })
+  }
+  accountScopes.add(accountScope)
+  const credentialsPath = `${path}.credentials`
+  requireRecord({ value: provider.credentials, path: credentialsPath })
+  for (const key of Object.keys(provider.credentials)) {
+    if (key !== "apiKeyEnv" && key !== "apiSecretEnv") {
+      fail({ path: `${credentialsPath}.${key}`, expectation: "apiKeyEnv or apiSecretEnv; secret values must stay in the process environment" })
+    }
+  }
+  for (const field of ["apiKeyEnv", "apiSecretEnv"]) {
+    const value = provider.credentials[field]
+    if (typeof value !== "string" || !CREDENTIAL_ENVIRONMENT_PATTERN.test(value)) {
+      fail({ path: `${credentialsPath}.${field}`, expectation: "an uppercase environment-variable name" })
+    }
+  }
+  if (provider.credentials.apiKeyEnv === provider.credentials.apiSecretEnv) {
+    fail({ path: credentialsPath, expectation: "different API key and API secret environment-variable names" })
+  }
+}
+
+function validateBrokerProviderInstances(config) {
+  if (config.brokers === undefined) {
+    return
+  }
+  requireRecord({ value: config.brokers, path: "brokers" })
+  for (const key of Object.keys(config.brokers)) {
+    if (key !== "instances") {
+      fail({ path: `brokers.${key}`, expectation: "the supported instances configuration field" })
+    }
+  }
+  if (!Array.isArray(config.brokers.instances) || config.brokers.instances.length === 0) {
+    fail({ path: "brokers.instances", expectation: "a non-empty array of provider instances" })
+  }
+  const instanceIds = new Set()
+  const accountScopes = new Set()
+  config.brokers.instances.forEach((provider, index) => {
+    validateProviderInstanceConfig({
+      provider,
+      index,
+      instanceIds,
+      accountScopes,
+    })
+  })
+}
+
 /** Validate Harvester's application-wide configuration, including strategy and notification settings. */
 export function validateAppConfig(config) {
   requireRecord({ value: config,
@@ -227,6 +309,7 @@ path: "root" })
 
   validateTelegramNotificationConfig(config)
   validateTelegramOperatorControlConfig(config)
+  validateBrokerProviderInstances(config)
   if (config.runtime !== undefined) {fail({ path: "runtime",
 expectation: "must not be present; exchange mode is selected by TRADING_MODE" })}
   requireRecord({ value: config.strategies,
