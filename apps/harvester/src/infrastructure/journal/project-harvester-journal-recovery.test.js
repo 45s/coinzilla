@@ -279,6 +279,7 @@ test("rejects an applied fill with no durable owned-order intent", () => {
   assert.match(result.errors[0].message, /unknown clientOrderId/)
 })
 
+// eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
 test("projects recovery-cycle completions and paused strategy state", () => {
   const result = projectHarvesterJournalRecovery({
     records: [
@@ -997,6 +998,7 @@ test("restores third-asset commission facts and historical quote valuation into 
   assert.equal(ledger.netSellProceeds, "0")
 })
 
+// eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
 const completedCycleRecords = () => [
   record("order.submission_requested", {
     clientOrderId: "h-BTCUSDT-buy-1",
@@ -1307,6 +1309,7 @@ test("restores a replacement intent after confirmed cancellation but before the 
   assert.deepEqual([...restored.data.replacementIntents], ["BTCUSDT"])
 })
 
+// eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
 test("does not restore a replacement intent after the replacement submission is journaled", () => {
   const projection = projectHarvesterJournalRecovery({
     records: [
@@ -1831,6 +1834,7 @@ data: { symbol: "BTCUSDT" } },
   assert.deepEqual(result.data.stickySafetyBlockers, [])
 })
 
+// eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
 test("accepts RECOVERY account and open-order snapshots between PREFLIGHT and CLOSING", () => {
   const balances = [{ asset: "BTC",
 free: "0.5",
@@ -1976,6 +1980,7 @@ test("fails closed when an unknown recovery event has no source classification",
   assert.match(result.errors[0].message, /unknown Harvester recovery event/)
 })
 
+// eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
 test("preserves execution safety DTOs through projection and restoration", () => {
   const baseAsset = new Asset({ id: "asset:DOGE",
 code: "DOGE" })
@@ -2057,6 +2062,7 @@ test("fails closed when a fully filled SELL has no explicit recovery-cycle outco
   assert.match(result.errors[0].message, /fully filled SELL has no explicit recovery-cycle outcome/)
 })
 
+// eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
 test("preserves an explicitly evaluated residual sell-through without resetting the recovery basis", () => {
   const records = completedCycleRecords().slice(0, 6)
   records[3] = record("order.submission_requested", {
