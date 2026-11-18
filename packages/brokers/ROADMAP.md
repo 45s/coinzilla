@@ -1285,7 +1285,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 ## 2026-11-18 — Issue #1446 capability ownership and API checkpoint
 
 - [x] Documentation PR [#1449](https://github.com/45s/coinzilla/pull/1449) merged into `develop` as `433a5300c884a39771939082c4a25d78ff6d5d9c`.
-- [x] Capability ownership audit completed: Brokers owns the canonical provider declaration; only three statuses remain; `environment-dependent` is represented as supported-with-conditions.
+- [x] Original capability ownership audit completed: it initially selected Brokers as the provider-declaration owner and retained three statuses. **Ownership was subsequently reconciled by PR #1455:** Entities owns the single shared `BrokerCapabilities` value contract; Brokers owns provider-specific evidence and re-exports the Entities class. The three statuses remain unchanged.
 - [x] Open Entities coordination issue [#1450](https://github.com/45s/coinzilla/issues/1450) for the legacy public export's compatibility/deprecation decision.
 - [x] Preserve Harvester registry metadata compatibility without importing or moving Harvester application code.
 - [x] Add the Brokers-owned capability value, typed unsupported error, structural method catalog, compatibility method catalog, mutation outcome classification, and initial shared conformance suite.
