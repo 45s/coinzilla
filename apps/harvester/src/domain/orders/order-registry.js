@@ -610,6 +610,16 @@ function createUpdatedOrderRegistryResult({ registry, orders, ownerships, index,
   })
 }
 
+function unknownOrderUpdateResult({ registry }) {
+  return Object.freeze({
+    registry,
+    applied: false,
+    duplicate: false,
+    stale: false,
+    unknown: true,
+  })
+}
+
 function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
   if (!(order instanceof CanonicalOrder) || order.status === "PENDING") {
     throw new TypeError("OrderRegistry.applyUpdate requires a broker-acknowledged CanonicalOrder")
@@ -619,13 +629,7 @@ function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
     order,
   })
   if (index < 0) {
-    return Object.freeze({
-      registry,
-      applied: false,
-      duplicate: false,
-      stale: false,
-      unknown: true,
-    })
+    return unknownOrderUpdateResult({ registry })
   }
   const current = orders[index]
   if (current.brokerOrderId !== undefined && current.brokerOrderId !== order.brokerOrderId) {
