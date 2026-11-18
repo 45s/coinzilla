@@ -12,6 +12,7 @@ This index groups substantial historical audit reports and findings registers. T
 - [2026-11-14/15 TESTNET session audit](../sessions/AUDIT_SESSION_2026-11-14_23-41-12Z.md) — full artifact hashes/parse counts, order/fill evidence, exact account deltas, confirmed order-event defect and unresolved shutdown replacement failure.
 
 Related current authorities:
+
 - [Conservative domain specification](../../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md)
 - [Harvester roadmap](../../../ROADMAP.md)
 - [Audit process index](../README.md)

@@ -1,8 +1,8 @@
 # Shared utilities: reuse before implementation
 
-**Status:** Mandatory repository-wide engineering policy  
-**Owner:** Utilities domain (packages/utils)  
-**Applies to:** Every application, package, contributor, and AI coding agent
+- **Status:** Mandatory repository-wide engineering policy
+- **Owner:** Utilities domain (packages/utils)
+- **Applies to:** Every application, package, contributor, and AI coding agent
 
 ## Purpose
 
