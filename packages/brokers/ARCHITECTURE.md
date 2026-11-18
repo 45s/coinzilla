@@ -16,6 +16,18 @@ The architectural reference is repository-level [ADR-0001: Clean and Hexagonal A
 
 The package already contains valuable boundaries (RPC, Streams, transport, user-data session, canonical adapters, and deterministic tests). DDD modernization should clarify ownership and dependency direction around those capabilities—not replace working WebSocket code or reorganize files merely for appearance.
 
+## Public Broker contract and capability ownership
+
+The exchange-neutral public contract is owned by `@coinzilla/brokers` and lives in `src/broker/`. It is structural: provider facades must satisfy the method catalog, but they are not required to inherit from `CoreBroker`.
+
+The canonical `BrokerCapabilities` value is a provider declaration, not an application workflow, permission system, connectivity check, or runtime readiness latch. It has one vocabulary and three statuses: `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`. Supported entries require method/guarantee evidence; unsupported and unknown entries require a reason. Environment selection and prerequisites live in metadata/conditions. See [BROKER_API.md](./BROKER_API.md) for the full public contract and provider matrix.
+
+The capability model preserves the existing Harvester registry metadata boundary (`contractVersion`, `provider`, `environment.selectedMode`, `environment.supportedModes`) without importing Harvester code. Harvester continues to own its application port, provider adapter, registry, and workflow orchestration.
+
+The legacy Entities `BrokerCapabilities` export is not a dependency of Brokers. Its public compatibility/deprecation disposition is coordinated separately in [Entities issue #1450](https://github.com/45s/coinzilla/issues/1450); do not introduce new provider declarations using that legacy model.
+
+`CoreBroker` remains a temporary public compatibility extension point because existing provider and Market Simulator consumers rely on it. The new structural contract does not make it mandatory. Any future change to its state, inherited methods, or exports requires consumer-backed characterization tests and an explicit migration.
+
 ## Exchange infrastructure boundaries
 
 Each exchange owns its protocol and infrastructure adapter:
@@ -73,6 +85,10 @@ This is the desired direction, not a mandate to create empty directories or move
 
 ```text
 packages/brokers/src/
+├── broker/
+│   ├── broker-contract.js
+│   ├── broker-capabilities.js
+│   └── errors/
 ├── domain/
 │   ├── orders/
 │   ├── market/
@@ -82,12 +98,17 @@ packages/brokers/src/
 │   ├── ports/
 │   └── use-cases/
 ├── infrastructure/
-│   └── binance/
-│       ├── adapters/
+│   ├── binance/
+│   │   ├── adapters/
+│   │   ├── api/
+│   │   ├── streams/
+│   │   ├── transport/
+│   │   └── sessions/
+│   └── bitunix/
 │       ├── api/
-│       ├── streams/
 │       ├── transport/
-│       └── sessions/
+│       └── adapters/
+├── broker.core.js (compatibility)
 ├── bootstrap/
 │   └── create-binance-broker.js
 └── index.js
@@ -110,7 +131,7 @@ Use classes only when an object owns state and protects lifecycle invariants. Pr
 
 ### Application
 
-Owns the broker capabilities as seen by callers and the workflows that coordinate them:
+Owns application-owned ports and the workflows that coordinate required broker operations. It consumes the package-owned capability declaration as descriptive metadata; it does not redefine provider capability semantics:
 
 - narrow application-owned ports/contracts for required external capabilities;
 - focused injected use cases for meaningful broker operations or workflows;

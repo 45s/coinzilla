@@ -2,7 +2,7 @@
 
 For every Bitunix Spot capability, follow the [mandatory reference-first workflow](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit) and consult the maintained [Bitunix external implementation reference audit](./BITUNIX_REFERENCE_AUDIT.md). Start with [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) and [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp); search additional C#, TypeScript, Python, Go and Ruby implementations when coverage is missing or references disagree. The audit records source paths, fixtures, known defects, parity status and safe implementation picks. Official Bitunix Spot documentation remains authoritative.
 
-For the package's target DDD structure, dependency rules, responsibility map, and migration phases, see [Architecture](./ARCHITECTURE.md) and the execution status in [Roadmap](./ROADMAP.md#14-mandatory-autonomous-ddd-refactoring-execution).
+For the package's target DDD structure and ownership boundaries, see [Architecture](./ARCHITECTURE.md). The exchange-neutral public method, result, error, capability, and compatibility contracts are specified in [BROKER_API.md](./BROKER_API.md); execution status is in [Roadmap](./ROADMAP.md).
 
 The active Binance implementation is `BinanceWebSocketBroker`. It uses two independent native Node.js WebSocket connections:
 
@@ -33,23 +33,21 @@ The `@coinzilla/brokers` entry point exports:
 - `BitunixSpotWebSocketClient` and `BitunixWebSocketError` — a separately managed, authenticated Spot WebSocket request/response RPC client; it does not add subscriptions or order mutations.
 - `CoreBroker` — the existing compatibility base class; it is not a formal application-owned broker port.
 - `normalizeBinanceId` — exact non-negative Binance identifier normalization, exported for package consumers that need the same identifier contract.
+- `BrokerCapabilities`, `BROKER_CAPABILITY_TYPES`, `BROKER_CAPABILITY_STATUSES` — the canonical immutable provider capability declaration contract.
+- `BrokerUnsupportedOperationError` — stable typed error for explicitly unsupported operations.
+- `BROKER_METHODS`, `BROKER_COMPATIBILITY_METHODS`, `BROKER_MUTATION_OUTCOMES`, `assertBrokerContract`, `getBrokerMutationOutcome` — structural API, compatibility, and mutation-outcome contract helpers.
 
-## Broker capability declarations
+## Exchange-neutral Broker API
 
-`BinanceWebSocketBroker` exposes an additive, read-only `capabilities` instance property. It is a versioned declaration of broker guarantees, not a list of method names and not a routing or authorization mechanism. It does not change constructor arguments, existing methods, results, errors, or package exports.
+Both `BinanceWebSocketBroker` and `BitunixSpotBroker` expose the same structural method surface. The public contract does not require `CoreBroker` inheritance; `CoreBroker` remains a compatibility base for existing consumers, including Market Simulator.
 
-Each capability declaration has a `status` and may include `method`, `guarantee`, `limitation`, `reason`, and `conditions`:
+Both providers expose an immutable `BrokerCapabilities` declaration. The canonical three statuses are `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; environment selection and runtime readiness are metadata/conditions, never a fourth status. Supported declarations require method and guarantee evidence; unsupported/unknown declarations require reasons.
 
-- `supported` — the implementation and stated guarantee are backed by source inspection and deterministic offline tests, subject to any listed conditions.
-- `unsupported` — the broker explicitly does not provide the capability; inherited methods that throw are not treated as support.
-- `unknown` — available evidence does not establish the guarantee. Consumers must not assume it is supported.
-- `environment-dependent` — implementation exists, but availability depends on explicit environment or account conditions stated in the declaration.
+Unsupported methods remain present and return a typed `BrokerUnsupportedOperationError` inside a failed result. They never silently no-op or fabricate successful empty data. State-changing methods expose `mutationOutcome` so callers can distinguish `NOT_SENT`, `REJECTED`, `CONFIRMED`, and `OUTCOME_UNKNOWN`.
 
-The declaration and all nested objects and arrays are frozen. The `capabilities` property itself is non-writable and non-configurable. Its `environment.selectedMode` reports the instance's validated Binance `tradingMode`; `NODE_ENV` never selects exchange endpoints. These declarations describe the broker implementation and its verified boundaries, not live exchange connectivity or account permissions.
+The declaration retains the Harvester registry's version/provider/environment metadata contract without importing Harvester ports or adapters. The legacy Entities capability export is not used by Brokers; its owner-coordinated compatibility disposition is tracked in [Entities issue #1450](https://github.com/45s/coinzilla/issues/1450).
 
-Only Binance currently exposes a broker capability declaration. The REST-backed BitunixSpotBroker remains read-only; the separate BitunixSpotWebSocketClient exposes authenticated Spot RPC reads but does not itself establish broker capabilities or trading support.
-
-For the source-mapped Binance capability matrix and the common Binance/Bitunix API plan, see [the Brokers roadmap](./ROADMAP.md#common-exchange-neutral-broker-api).
+See [BROKER_API.md](./BROKER_API.md) for the full method-by-method Binance/Bitunix matrix, canonical and compatibility operations, result/error semantics, decimal/timestamp guarantees, pagination, lifecycle, and safety boundaries.
 
 ### Provider instances and routing ownership
 

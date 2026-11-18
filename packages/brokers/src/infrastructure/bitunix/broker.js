@@ -1,5 +1,7 @@
 import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../broker.core.js"
+import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
+import { createBitunixBrokerCapabilities } from "./capabilities.js"
 import { BitunixRestClient } from "./api/rest-client.js"
 import { adaptAssets } from "./adapters/adapt-assets.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
@@ -49,7 +51,11 @@ const HISTORY_TYPE_CODES = Object.freeze({
 })
 
 function unsupported({ operation, reason }) {
-  return new Error(`Bitunix Spot ${operation} is not supported safely: ${reason}`)
+  return new BrokerUnsupportedOperationError({
+    provider: "bitunix",
+    operation: operation.replace(/\(\)$/, ""),
+    reason,
+  })
 }
 
 function requireSymbol({ symbol, operation }) {
@@ -410,6 +416,50 @@ function createHistoryRequest({ input }) {
 }
 
 /** Bitunix Spot adapter. Capabilities are intentionally read-only until its order lifecycle can be reconciled safely. */
+function unsupportedMutationResult({ operation, reason }) {
+  return {
+    ...toResult({
+      errors: [unsupported({
+        operation,
+        reason,
+      })],
+    }),
+    mutationOutcome: "NOT_SENT",
+  }
+}
+
+function createClientOrderIdUnsupportedResult({ clientOrderId }) {
+  if (clientOrderId === undefined || clientOrderId === null) {
+    return null
+  }
+  return toResult({
+    errors: [unsupported({
+      operation: "getOrder",
+      reason: "Bitunix Spot does not expose clientOrderId; use a broker orderId.",
+    })],
+  })
+}
+
+function validateOrderId({ orderId }) {
+  if ((typeof orderId !== "string" && typeof orderId !== "number") ||
+      (typeof orderId === "string" && !orderId.trim()) ||
+      (typeof orderId === "number" && !Number.isSafeInteger(orderId))) {
+    throw new TypeError("Bitunix Spot getOrder() requires a non-empty string or safe integer orderId")
+  }
+  return String(orderId)
+}
+
+function validateOrderDetailResponse({ response, orderId, symbol }) {
+  if (!response.data || typeof response.data !== "object" || Array.isArray(response.data)) {
+    throw new TypeError("Bitunix Spot order detail response must be an object")
+  }
+  if (String(response.data.orderId) !== orderId ||
+      String(response.data.symbol).toUpperCase() !== symbol) {
+    throw new TypeError("Bitunix Spot order detail does not match the requested order identity")
+  }
+  return response.data
+}
+
 export class BitunixSpotBroker extends CoreBroker {
   /**
    * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, logger?: object, dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient}}} input
@@ -422,6 +472,10 @@ export class BitunixSpotBroker extends CoreBroker {
     const { restClientFactory = createRestClient } = dependencies
     super(configInput)
     this.config = new BitunixSpotConfig(configInput)
+    Object.defineProperty(this, "capabilities", {
+      enumerable: true,
+      value: createBitunixBrokerCapabilities(),
+    })
     this.restClient = restClientFactory(this.config)
     this.connected = false
     this.canonicalMarkets = new Map()
@@ -595,30 +649,28 @@ export class BitunixSpotBroker extends CoreBroker {
     }
   }
 
-  async getOrder({ symbol, orderId } = {}) {
+  async getOrder({ symbol, orderId, clientOrderId } = {}) {
     try {
+      const unsupportedResult = createClientOrderIdUnsupportedResult({ clientOrderId })
+      if (unsupportedResult) {
+        return unsupportedResult
+      }
       const normalizedSymbol = requireSymbol({
         symbol,
         operation: "getOrder()",
       })
-      if ((typeof orderId !== "string" && typeof orderId !== "number") ||
-          (typeof orderId === "string" && !orderId.trim()) ||
-          (typeof orderId === "number" && !Number.isSafeInteger(orderId))) {
-        throw new TypeError("Bitunix Spot getOrder() requires a non-empty string or safe integer orderId")
-      }
+      const normalizedOrderId = validateOrderId({ orderId })
       const response = await this.restClient.request({
         method: "GET",
         path: API.orderDetail,
-        queryParams: { orderId: String(orderId) },
+        queryParams: { orderId: normalizedOrderId },
       })
-      if (!response.data || typeof response.data !== "object" || Array.isArray(response.data)) {
-        throw new TypeError("Bitunix Spot order detail response must be an object")
-      }
-      if (String(response.data.orderId) !== String(orderId) ||
-          String(response.data.symbol).toUpperCase() !== normalizedSymbol) {
-        throw new TypeError("Bitunix Spot order detail does not match the requested order identity")
-      }
-      return toResult({ data: adaptOrder(response.data) })
+      const order = validateOrderDetailResponse({
+        response,
+        orderId: normalizedOrderId,
+        symbol: normalizedSymbol,
+      })
+      return toResult({ data: adaptOrder(order) })
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getOrder()",
@@ -973,51 +1025,60 @@ export class BitunixSpotBroker extends CoreBroker {
   }
 
   async createOrder() {
-    const error = unsupported({
-      operation: "createOrder()",
+    return unsupportedMutationResult({
+      operation: "createOrder",
       reason: "Bitunix Spot lacks exchange-side client order identity, so a lost placement response cannot be reconciled idempotently",
     })
-    return toResult({ errors: [error] })
   }
 
   async createCanonicalOrder() {
-    const error = unsupported({
-      operation: "createCanonicalOrder()",
+    return unsupportedMutationResult({
+      operation: "createCanonicalOrder",
       reason: "Bitunix Spot does not expose clientOrderId and placement is disabled until order reconciliation is reliable",
     })
-    return toResult({ errors: [error] })
   }
 
   async cancelOrder() {
-    const error = unsupported({
-      operation: "cancelOrder()",
-      reason: "the adapter has no private order/execution push stream or verified cancellation-outcome reconciliation",
-    })
     return {
-      ...toResult({ errors: [error] }),
+      ...unsupportedMutationResult({
+        operation: "cancelOrder",
+        reason: "the adapter has no private order/execution push stream or verified cancellation-outcome reconciliation",
+      }),
       cancellationOutcome: "NOT_SENT",
     }
   }
 
   async cancelAllOpenOrders() {
-    const error = unsupported({
-      operation: "cancelAllOpenOrders()",
+    return unsupportedMutationResult({
+      operation: "cancelAllOpenOrders",
       reason: "no safe order-mutation reconciliation contract is available",
     })
-    return toResult({ errors: [error] })
   }
 
   async subscribeForUserData() {
-    throw unsupported({
-      operation: "subscribeForUserData()",
-      reason: "the documented private Spot WebSocket API does not define a continuous order/execution event stream",
+    return toResult({
+      errors: [unsupported({
+        operation: "subscribeForUserData",
+        reason: "the documented private Spot WebSocket API does not define a continuous order/execution event stream",
+      })],
     })
   }
 
   async subscribeForBookTicker() {
-    throw unsupported({
-      operation: "subscribeForBookTicker()",
-      reason: "the documented Spot WebSocket API does not define a continuous order-book subscription",
+    return toResult({
+      errors: [unsupported({
+        operation: "subscribeForBookTicker",
+        reason: "the documented Spot WebSocket API does not define a continuous order-book subscription",
+      })],
+    })
+  }
+
+  async subscribeForCandles() {
+    return toResult({
+      errors: [unsupported({
+        operation: "subscribeForCandles",
+        reason: "the documented Spot WebSocket API does not define a continuous candle subscription",
+      })],
     })
   }
 
@@ -1030,9 +1091,11 @@ export class BitunixSpotBroker extends CoreBroker {
   }
 
   async subscribeForPrices() {
-    throw unsupported({
-      operation: "subscribeForPrices()",
-      reason: "the documented Spot WebSocket API exposes request/response market calls, not a continuous price subscription",
+    return toResult({
+      errors: [unsupported({
+        operation: "subscribeForPrices",
+        reason: "the documented Spot WebSocket API exposes request/response market calls, not a continuous price subscription",
+      })],
     })
   }
 

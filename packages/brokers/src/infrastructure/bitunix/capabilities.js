@@ -1,0 +1,250 @@
+import { BrokerCapabilities } from "../../broker/broker-capabilities.js"
+
+const BITUNIX_SPOT_CAPABILITIES = [
+  {
+    type: "READ_ASSETS",
+    status: "SUPPORTED",
+    method: "getAssets",
+    guarantee: "Returns legacy non-zero Coin projections from the Spot account.",
+    limitation: "Coin quantities use JavaScript Number for compatibility; use getBalances for exact decimal values.",
+  },
+  {
+    type: "READ_BALANCES",
+    status: "SUPPORTED",
+    method: "getBalances",
+    guarantee: "Returns canonical balances with exact decimal strings and preserves free/locked amounts.",
+  },
+  {
+    type: "READ_ACCOUNT_SNAPSHOT",
+    status: "UNSUPPORTED",
+    method: "getAccountSnapshot",
+    reason: "The Spot account endpoint does not provide a source timestamp or version for an authoritative snapshot.",
+  },
+  {
+    type: "READ_SERVER_TIME",
+    status: "UNSUPPORTED",
+    method: "getServerTime",
+    reason: "No documented Bitunix Spot server-time endpoint is available.",
+  },
+  {
+    type: "READ_EXCHANGE_MARKETS",
+    status: "SUPPORTED",
+    method: "getExchangeMarkets",
+    guarantee: "Returns the validated active Spot pair catalog and excludes pairs without explicit open status.",
+  },
+  {
+    type: "READ_SYMBOL_FILTERS",
+    status: "SUPPORTED",
+    method: "getSymbolFilters",
+    guarantee: "Returns the unique matching raw Spot pair metadata with validated documented fields.",
+    limitation: "The result does not establish exact price/quantity increments or undocumented maximum constraints.",
+  },
+  {
+    type: "READ_TRADING_RULES",
+    status: "UNKNOWN",
+    reason: "The official Spot pair catalog does not establish exact tick size, quantity step, or authoritative maximum constraints.",
+  },
+  {
+    type: "READ_OPEN_ORDERS",
+    status: "SUPPORTED",
+    method: "getOpenOrders",
+    guarantee: "Returns validated current orders for one explicitly requested symbol.",
+    conditions: ["A non-empty symbol is required; account-wide open-order coverage is not documented."],
+  },
+  {
+    type: "READ_ORDER",
+    status: "SUPPORTED",
+    method: "getOrder",
+    guarantee: "Reads one order by broker order ID and validates the returned symbol and order identity.",
+    limitation: "The Spot API does not expose clientOrderId.",
+  },
+  {
+    type: "READ_ORDER_HISTORY",
+    status: "SUPPORTED",
+    method: "getOrderHistory",
+    guarantee: "Returns one validated symbol-scoped page and verifies the response page identity.",
+    limitation: "The broker does not automatically paginate, infer ordering, or claim a complete history snapshot.",
+  },
+  {
+    type: "READ_CANONICAL_ORDER",
+    status: "UNSUPPORTED",
+    method: "getCanonicalOrder",
+    reason: "Bitunix Spot does not expose clientOrderId, which is required by the canonical order identity contract.",
+  },
+  {
+    type: "READ_CANONICAL_ORDER_HISTORY",
+    status: "UNSUPPORTED",
+    method: "getCanonicalOrderHistory",
+    reason: "Bitunix Spot order history does not expose clientOrderId required by the canonical order contract.",
+  },
+  {
+    type: "READ_TRADE_HISTORY",
+    status: "UNSUPPORTED",
+    method: "getMyTrades",
+    reason: "The documented Spot API does not provide an account-wide trade-history endpoint.",
+  },
+  {
+    type: "READ_FILLS",
+    status: "UNSUPPORTED",
+    method: "getFills",
+    reason: "The matching-order response does not establish quantity denomination, partial-fill completeness, or stable execution identity required for canonical fills.",
+  },
+  {
+    type: "READ_COMPLETE_FILL_HISTORY",
+    status: "UNKNOWN",
+    reason: "The official Spot contract does not establish exhaustive execution history, pagination, or stable per-execution identity.",
+  },
+  {
+    type: "READ_MARKET_PRICE",
+    status: "SUPPORTED",
+    method: "getPrices",
+    guarantee: "Returns a positive one-shot price as an exact decimal string.",
+    limitation: "The endpoint does not provide a source timestamp.",
+  },
+  {
+    type: "READ_CANDLES",
+    status: "UNSUPPORTED",
+    method: "getCandles",
+    reason: "The documented Spot kline response omits volume required by the canonical OHLCV candle contract.",
+  },
+  {
+    type: "READ_ORDER_BOOK",
+    status: "SUPPORTED",
+    method: "getOrderBook",
+    guarantee: "Returns validated one-shot Spot depth with exact decimal price and volume strings.",
+    conditions: ["The caller must supply the documented precision parameter; Coinzilla does not infer it."],
+  },
+  {
+    type: "READ_KLINES",
+    status: "SUPPORTED",
+    method: "getKlines",
+    guarantee: "Returns the documented current Spot OHLC row without inventing volume.",
+  },
+  {
+    type: "READ_KLINE_HISTORY",
+    status: "SUPPORTED",
+    method: "getKlineHistory",
+    guarantee: "Returns one validated historical OHLC page with the source timestamp preserved.",
+    limitation: "No cursor or automatic pagination is documented.",
+  },
+  {
+    type: "READ_EXCHANGE_RATES",
+    status: "SUPPORTED",
+    method: "getExchangeRates",
+    guarantee: "Returns an immutable exchange-rate catalog with positive exact decimal strings.",
+  },
+  {
+    type: "READ_DEPOSITS",
+    status: "SUPPORTED",
+    method: "getDeposits",
+    guarantee: "Returns one validated signed read-only deposit/internal-transfer-in history page.",
+    limitation: "The endpoint has no documented cursor or automatic pagination.",
+  },
+  {
+    type: "READ_DEPOSIT_ADDRESS",
+    status: "SUPPORTED",
+    method: "getDepositAddress",
+    guarantee: "Reads existing addresses for an explicitly supplied coin and network without generating or selecting an address.",
+  },
+  {
+    type: "READ_WITHDRAWAL_HISTORY",
+    status: "SUPPORTED",
+    method: "getWithdrawalHistory",
+    guarantee: "Returns one validated signed read-only withdrawal/internal-transfer-out history page.",
+    limitation: "The endpoint has no documented cursor or automatic pagination.",
+  },
+  {
+    type: "READ_MATCHING_ORDER_DETAILS",
+    status: "SUPPORTED",
+    method: "getMatchingOrderDetails",
+    guarantee: "Returns one validated exchange-native matching-order detail record without reinterpreting its fields.",
+    limitation: "The response does not prove fill completeness, quantity denomination, or stable execution identity.",
+  },
+  {
+    type: "PLACE_LIMIT_ORDER",
+    status: "UNSUPPORTED",
+    method: "createOrder",
+    reason: "Placement remains blocked because the Spot API does not provide a verified client order identity for safe unknown-outcome reconciliation.",
+  },
+  {
+    type: "PLACE_MARKET_ORDER",
+    status: "UNSUPPORTED",
+    method: "createOrder",
+    reason: "Placement remains blocked by unresolved order identity, quantity semantics, and safe mutation-outcome reconciliation.",
+  },
+  {
+    type: "CANCEL_ORDER",
+    status: "UNSUPPORTED",
+    method: "cancelOrder",
+    reason: "Cancellation remains blocked because no private execution stream or verified cancellation-outcome reconciliation contract exists.",
+  },
+  {
+    type: "CANCEL_ALL_ORDERS",
+    status: "UNSUPPORTED",
+    method: "cancelAllOpenOrders",
+    reason: "No safe Spot order-mutation and reconciliation contract is available.",
+  },
+  {
+    type: "SUBSCRIBE_MARKET_PRICES",
+    status: "UNSUPPORTED",
+    method: "subscribeForPrices",
+    reason: "The documented Spot WebSocket API exposes request/response RPCs, not a continuous price subscription.",
+  },
+  {
+    type: "SUBSCRIBE_CANDLES",
+    status: "UNSUPPORTED",
+    method: "subscribeForCandles",
+    reason: "The documented Spot WebSocket API does not define a continuous candle subscription.",
+  },
+  {
+    type: "SUBSCRIBE_BOOK_TICKER",
+    status: "UNSUPPORTED",
+    method: "subscribeForBookTicker",
+    reason: "The documented Spot WebSocket API does not define a continuous order-book subscription.",
+  },
+  {
+    type: "SUBSCRIBE_USER_DATA",
+    status: "UNSUPPORTED",
+    method: "subscribeForUserData",
+    reason: "The documented private Spot WebSocket API does not define a continuous order/execution event stream.",
+  },
+  {
+    type: "RECONCILE_ORDERS",
+    status: "UNSUPPORTED",
+    reason: "The broker has no verified canonical order identity, complete execution history, or source-timestamped account snapshot for reconciliation.",
+  },
+  {
+    type: "REPLAY_USER_DATA_EVENTS",
+    status: "UNSUPPORTED",
+    reason: "No continuous private Spot event stream or event replay cursor is documented.",
+  },
+  {
+    type: "RECOVER_USER_DATA_SESSION",
+    status: "UNSUPPORTED",
+    reason: "No continuous private Spot user-data subscription or resubscription contract is documented.",
+  },
+  {
+    type: "RECOVER_PROCESS_RESTART",
+    status: "UNSUPPORTED",
+    reason: "The broker has no durable session or process-restart recovery contract.",
+  },
+]
+
+/**
+ * Create the immutable, evidence-backed Bitunix Spot capability declaration.
+ *
+ * @returns {BrokerCapabilities}
+ */
+export function createBitunixBrokerCapabilities() {
+  return new BrokerCapabilities({
+    provider: "bitunix",
+    product: "spot",
+    environment: {
+      selector: "tradingMode",
+      selectedMode: "live",
+      supportedModes: ["live"],
+      notes: "No Bitunix Spot TESTNET is documented; capability evidence covers read-only LIVE API behavior.",
+    },
+    capabilities: BITUNIX_SPOT_CAPABILITIES,
+  })
+}

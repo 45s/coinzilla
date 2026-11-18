@@ -1,5 +1,6 @@
 import { handleErr, toResult } from "@coinzilla/utils"
 import { CoreBroker } from "../../../broker.core.js"
+import { getBrokerMutationOutcome } from "../../../broker/broker-contract.js"
 import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../adapters/index.js"
 import { adaptOrderRequestParams } from "./helpers/adapters/order-request-params.js"
 import { BinanceWebSocketConfig } from "./config/binance-websocket-config.js"
@@ -681,29 +682,45 @@ error })
 
   /** @param {Record<string, unknown>} input - Legacy broker order request. @returns {Promise<BrokerResult<import("@coinzilla/entities").Order>>} */
   async createOrder(input) {
+    let mutationOutcome = "NOT_SENT"
+    let requestDispatched = false
     try {
       if (this.userDataUnavailable) {
         throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
       }
 
       const params = adaptOrderRequestParams({ input })
-
+      requestDispatched = true
       const response = await this.tradingConnection.request(
         "order.place",
         params,
         { signed: true,
 stateChanging: true },
       )
-      return toResult({ data: adaptOrder(response.data) })
+      mutationOutcome = "CONFIRMED"
+      return {
+        ...toResult({ data: adaptOrder(response.data) }),
+        mutationOutcome,
+      }
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.createOrder()",
 error })
-      return toResult({ errors: [error] })
+      return {
+        ...toResult({ errors: [error] }),
+        mutationOutcome: mutationOutcome === "CONFIRMED"
+          ? mutationOutcome
+          : getBrokerMutationOutcome({
+            error,
+            requestDispatched,
+          }),
+      }
     }
   }
 
   /** @param {Record<string, unknown> & {symbol: string, clientOrderId: string}} [input] @returns {Promise<BrokerResult<import("@coinzilla/entities").CanonicalOrder>>} */
   async createCanonicalOrder(input = {}) {
+    let mutationOutcome = "NOT_SENT"
+    let requestDispatched = false
     try {
       if (this.userDataUnavailable) {
         throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
@@ -727,24 +744,37 @@ error })
         newOrderRespType: "RESULT",
       }
 
+      requestDispatched = true
       const response = await this.tradingConnection.request(
         "order.place",
         params,
         { signed: true,
 stateChanging: true },
       )
+      mutationOutcome = "CONFIRMED"
       const market = await getCanonicalMarket({ broker: this,
 symbol })
-      return toResult({
-        data: adaptCanonicalOrder({
-          order: response.data,
-          market,
+      return {
+        ...toResult({
+          data: adaptCanonicalOrder({
+            order: response.data,
+            market,
+          }),
         }),
-      })
+        mutationOutcome,
+      }
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.createCanonicalOrder()",
 error })
-      return toResult({ errors: [error] })
+      return {
+        ...toResult({ errors: [error] }),
+        mutationOutcome: mutationOutcome === "CONFIRMED"
+          ? mutationOutcome
+          : getBrokerMutationOutcome({
+          error,
+          requestDispatched,
+        }),
+      }
     }
   }
 
@@ -759,10 +789,14 @@ error })
 error })
       return {
         ...toResult({ errors: [error] }),
+        mutationOutcome: "NOT_SENT",
         cancellationOutcome: "NOT_SENT",
       }
     }
+    let mutationOutcome = "NOT_SENT"
+    let requestDispatched = false
     try {
+      requestDispatched = true
       const response = await this.tradingConnection.request(
         "order.cancel",
         { symbol,
@@ -770,34 +804,62 @@ orderId },
         { signed: true,
 stateChanging: true },
       )
-      return toResult({ data: adaptOrder(response.data) })
+      mutationOutcome = "CONFIRMED"
+      return {
+        ...toResult({ data: adaptOrder(response.data) }),
+        mutationOutcome,
+      }
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.cancelOrder()",
 error })
+      const outcome = mutationOutcome === "CONFIRMED"
+        ? mutationOutcome
+        : getBrokerMutationOutcome({
+          error,
+          requestDispatched,
+        })
       return {
         ...toResult({ errors: [error] }),
-        cancellationOutcome: "OUTCOME_UNKNOWN",
+        mutationOutcome: outcome,
+        cancellationOutcome: requestDispatched && outcome !== "NOT_SENT"
+          ? "OUTCOME_UNKNOWN"
+          : "NOT_SENT",
       }
     }
   }
 
   /** @param {{symbol: string}} options @returns {Promise<BrokerResult<import("@coinzilla/entities").Order[]>>} */
   async cancelAllOpenOrders({ symbol }) {
+    let mutationOutcome = "NOT_SENT"
+    let requestDispatched = false
     try {
       if (this.userDataUnavailable) {
         throw new Error("Cannot change Binance orders while the user-data stream is unavailable")
       }
+      requestDispatched = true
       const response = await this.tradingConnection.request(
         "openOrders.cancelAll",
         { symbol },
         { signed: true,
 stateChanging: true },
       )
-      return toResult({ data: response.data.map(adaptOrder) })
+      mutationOutcome = "CONFIRMED"
+      return {
+        ...toResult({ data: response.data.map(adaptOrder) }),
+        mutationOutcome,
+      }
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.cancelAllOpenOrders()",
 error })
-      return toResult({ errors: [error] })
+      return {
+        ...toResult({ errors: [error] }),
+        mutationOutcome: mutationOutcome === "CONFIRMED"
+          ? mutationOutcome
+          : getBrokerMutationOutcome({
+          error,
+          requestDispatched,
+        }),
+      }
     }
   }
 
@@ -811,6 +873,11 @@ error })
 error })
       return toResult({ errors: [error] })
     }
+  }
+
+  /** @deprecated Use getPrices() for the canonical one-shot market-price operation. */
+  async getPrice(input = {}) {
+    return this.getPrices(input)
   }
 
   /**
