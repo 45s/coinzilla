@@ -136,6 +136,7 @@ function findOrderUpdateIndex({ orders, order } = {}) {
 }
 
 function createNextCanonicalOrder({ current, order } = {}) {
+  validateProviderIdentityUnchanged({ current, next: order })
   if (current.clientOrderId === order.clientOrderId &&
       current.providerInstanceId === order.providerInstanceId &&
       current.providerType === order.providerType &&
@@ -178,6 +179,7 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
   const index = orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
   if (index < 0) { throw new Error("Acknowledged order is not registered by clientOrderId") }
   const current = orders[index]
+  validateProviderIdentityUnchanged({ current, next: order })
   if (!sameOrderIntent({ current, next: order })) {
     throw new Error("Broker acknowledgement changed immutable order intent")
   }
