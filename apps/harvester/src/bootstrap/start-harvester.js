@@ -9,9 +9,11 @@ import { createCandleHistoryService } from "../use-cases/create-candle-history-s
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
+import { createBitunixReadOnlyAdapter } from "../infrastructure/brokers/bitunix-read-only-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
+import { resolveBitunixReadOnlyConfig } from "./config/resolve-bitunix-read-only-config.js"
 import { EffectiveConfigurationError } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
 import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
@@ -253,6 +255,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     loadConfig = loadAppConfig,
     env = process.env,
     brokerAdapterFactory = createBinanceBrokerAdapter,
+    bitunixReadOnlyAdapterFactory = createBitunixReadOnlyAdapter,
     evaluateStrategy = conservativeStrategyPolicy.evaluate,
     logger = defaultLogger,
     eventPublisher,
@@ -276,6 +279,21 @@ async function createHarvesterStartupContext({ options } = {}) {
     eventPublisher,
     logger,
   })
+  const bitunixReadOnlyConfig = resolveBitunixReadOnlyConfig({ env })
+  const bitunixReadOnly = bitunixReadOnlyConfig
+    ? await bitunixReadOnlyAdapterFactory({
+      config: bitunixReadOnlyConfig,
+      logger,
+    })
+    : null
+  if (bitunixReadOnlyConfig && (
+    !bitunixReadOnly ||
+    typeof bitunixReadOnly !== "object" ||
+    bitunixReadOnly.accessMode !== "read-only" ||
+    !Object.isFrozen(bitunixReadOnly)
+  )) {
+    throw new TypeError("bitunixReadOnlyAdapterFactory must return an immutable read-only observer")
+  }
   const operatorControlLifecycle = await prepareTelegramOperatorControl({
     telegramConfig: resolved.appConfig.operatorControl?.telegram,
     env,
@@ -306,6 +324,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     ...startupOptions,
     env,
     brokerAdapterFactory,
+    bitunixReadOnly,
     evaluateStrategy,
     logger,
     eventPublisher,
@@ -379,6 +398,9 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
   })
   const resources = {
     broker,
+    readOnlyProviders: Object.freeze({
+      bitunix: startup.bitunixReadOnly,
+    }),
     subscriptions: [],
     marketPriceIntake: new Map(),
     bookSubscriptions: [],
@@ -772,6 +794,7 @@ function createHarvesterRuntimeResult({ startup, portfolio, resources, stop } = 
     brokerName: startup.brokerName,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled,
+    readOnlyProviders: resources.readOnlyProviders,
     strategyMode: "conservative",
     get userDataReady() { return resources.userDataState.ready },
     get userDataStatus() { return resources.userDataState.status },

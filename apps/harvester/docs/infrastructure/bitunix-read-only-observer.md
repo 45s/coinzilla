@@ -1,6 +1,6 @@
 # Bitunix Spot read-only observer
 
-- **Status:** Implementation in progress under [issue #1422](https://github.com/45s/coinzilla/issues/1422).
+- **Status:** Implemented in [PR #1423](https://github.com/45s/coinzilla/pull/1423); merge and exact-head verification pending.
 - **Owner:** Harvester.
 - **Parent architecture:** [multi-provider workstream #1339](https://github.com/45s/coinzilla/issues/1339).
 - **Trading-readiness blockers:** [Bitunix capability issue #1185](https://github.com/45s/coinzilla/issues/1185).
@@ -9,7 +9,7 @@
 
 Harvester will expose the existing Bitunix Spot read capabilities through a separate, opt-in read-only observer. This is not a Harvester BrokerPort, a provider-registry entry, an execution provider, or a strategy market-data source.
 
-Until issue #1422 is implemented and merged, the current runtime does not expose this observer.
+The implementation is present on PR #1423. It is not part of develop until that PR merges.
 
 ## Configuration
 
@@ -30,7 +30,7 @@ Bitunix Spot currently uses its documented production REST endpoint. The broker 
 
 ## Runtime boundary
 
-The planned interface is `runtime.readOnlyProviders.bitunix`. It is constructed only when `BITUNIX_READ_ONLY_ENABLED=true` and both credentials are present. No Bitunix request is made during Harvester startup; calls are explicit and on-demand.
+The runtime interface is `runtime.readOnlyProviders.bitunix`. It is constructed only when `BITUNIX_READ_ONLY_ENABLED=true` and both credentials are present. No Bitunix request is made during Harvester startup; calls are explicit and on-demand.
 
 The observer must not be passed to:
 
@@ -41,7 +41,7 @@ The observer must not be passed to:
 
 ## Supported read-only surface
 
-The facade will expose the existing broker methods for:
+The facade exposes the existing broker methods for:
 
 - exact Spot balances;
 - Spot market catalog and symbol filters, plus the existing Harvester canonical metadata mapping;
@@ -51,7 +51,7 @@ The facade will expose the existing broker methods for:
 - deposit history, withdrawal history, and explicit coin/network deposit-address lookup;
 - raw matching-order detail.
 
-The facade must not expose order creation/cancellation, canonical fills, account snapshots, private user-data streams, continuous price/depth/candle subscriptions, or unsupported OHLCV candles.
+The facade does not expose order creation/cancellation, canonical fills, account snapshots, private user-data streams, continuous price/depth/candle subscriptions, or unsupported OHLCV candles.
 
 ## Source limitations that remain
 
