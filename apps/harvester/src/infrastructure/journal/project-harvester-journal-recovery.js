@@ -785,6 +785,9 @@ eventName: name })
     throw new Error("Confirmed cancellation has no preceding durable cancellation intent")
   }
   if (
+    data.providerInstanceId !== order.providerInstanceId ||
+    data.providerType !== order.providerType ||
+    data.accountId !== order.accountId ||
     data.brokerOrderId !== order.brokerOrderId ||
     data.symbol !== order.symbol ||
     data.side !== order.side ||
@@ -828,7 +831,10 @@ eventName: name })
   if (!CANCEL_OUTCOMES.has(data.outcome)) {
     throw new TypeError("Invalid order cancellation outcome")
   }
-  if (data.symbol !== order.symbol || data.side !== order.side) {
+  if (data.providerInstanceId !== order.providerInstanceId ||
+      data.providerType !== order.providerType ||
+      data.accountId !== order.accountId ||
+      data.symbol !== order.symbol || data.side !== order.side) {
     throw new Error("Cancellation failure conflicts with the owned order identity")
   }
   if (data.brokerOrderId !== undefined) {
