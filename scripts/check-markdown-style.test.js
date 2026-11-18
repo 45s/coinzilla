@@ -232,7 +232,10 @@ test("enforces list and table structure metrics on changed maintained documents"
     "",
   ].join("\n")
   const result = analyzeMarkdownStyleDocuments({
-    documents: [{ path: "docs/new-list-table.md", content }],
+    documents: [{
+      path: "docs/new-list-table.md",
+      content,
+    }],
     changesByPath: new Map([["docs/new-list-table.md", {
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
@@ -271,8 +274,14 @@ test("full-tree analysis skips historical evidence but keeps template style chec
 
   const result = analyzeFullTreeMarkdownStyle({
     documents: [
-      { path: "docs/guide.md", content: maintainedContent },
-      { path: ".github/PULL_REQUEST_TEMPLATE.md", content: templateContent },
+      {
+        path: "docs/guide.md",
+        content: maintainedContent,
+      },
+      {
+        path: ".github/PULL_REQUEST_TEMPLATE.md",
+        content: templateContent,
+      },
       {
         path: "apps/harvester/docs/audits/reports/legacy.md",
         content: historicalContent,
