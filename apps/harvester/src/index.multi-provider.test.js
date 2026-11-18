@@ -244,7 +244,6 @@ function createMainMultiProviderFixture({
         errors.push(entry)
       },
     },
-  }
   })
   return {
     run,
