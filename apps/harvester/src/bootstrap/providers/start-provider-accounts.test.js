@@ -216,7 +216,9 @@ function createSecondAccountFailureStarter({
   return async () => {
     startCount += 1
     if (startCount === 2) {
-      throw new Error("second account connection failed")
+      const error = new Error("second account connection failed")
+      error.startupCleanupConfirmed = true
+      throw error
     }
     const account = startCount === 1 ? "first" : "third"
     return {
@@ -274,6 +276,7 @@ test("keeps healthy account runtimes running when another account fails to start
 
 test("reports failed-account lock cleanup errors without stopping healthy accounts", async () => {
   const startupError = new Error("second account failed")
+  startupError.startupCleanupConfirmed = true
   const cleanupError = new Error("second account lock cleanup failed")
   const stopped = []
   let startCount = 0
@@ -330,6 +333,57 @@ test("reports failed-account lock cleanup errors without stopping healthy accoun
   assert.deepEqual(stopped, [])
   assert.equal((await runtime.stop()).ok, true)
   assert.deepEqual(stopped, ["third", "first"])
+})
+
+
+test("retains a failed account lock when startup cleanup is not confirmed", async () => {
+  const retainedLocks = []
+  const releasedLocks = []
+  const runtime = await startProviderAccounts({
+    providers: [
+      createProvider({
+        providerInstanceId: "first",
+        providerType: "binance",
+        accountId: "account-one",
+      }),
+      createProvider({
+        providerInstanceId: "second",
+        providerType: "binance",
+        accountId: "account-two",
+      }),
+    ],
+    start: async (input) => {
+      const { providerInstanceId } = input.providerIdentity
+      if (providerInstanceId === "second") {
+        throw new Error("second account cleanup is uncertain")
+      }
+      return {
+        stop: async () => ({
+          ok: true,
+        }),
+      }
+    },
+    retainProviderLock: async (providerInstanceId) => {
+      retainedLocks.push(providerInstanceId)
+      return {
+        ok: true,
+        retained: true,
+      }
+    },
+    releaseProviderLock: createSuccessfulLockReleaser({
+      releasedLocks,
+    }),
+    appConfig,
+    env: {
+      TRADING_MODE: "testnet",
+    },
+  })
+
+  assert.equal(runtime.failedAccounts[0].lockRetained, true)
+  assert.deepEqual(retainedLocks, ["second"])
+  assert.deepEqual(releasedLocks, [])
+  assert.equal((await runtime.stop()).ok, true)
+  assert.deepEqual(releasedLocks, ["first"])
 })
 
 test("fails startup when no configured account can start", async () => {
