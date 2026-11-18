@@ -168,7 +168,7 @@ Provider-specific bootstrap/factory boundaries construct concrete exchange infra
 
 ### Multiple provider instances and consumer-owned routing
 
-The package may expose multiple concrete provider implementations (currently Binance and a read-only Bitunix Spot surface), and a consumer may construct more than one instance of the same provider with different accounts or supported environments.
+The package may expose multiple concrete provider implementations (currently Binance and a partial Bitunix Spot broker integration). A consuming application must not register Bitunix until its complete broker and lifecycle acceptance criteria are met; a consumer may construct more than one supported instance of a provider with different accounts or environments.
 
 The Brokers package owns the public Broker API, exchange-specific configuration, clients, transport, normalization, capability truth, and broker lifecycle. It does **not** own consuming-application ports, adapters, provider registries, strategy/market routing, account policy, or order provenance. Each consuming application defines and composes those concerns independently. Do not add consumer-application imports or application-specific routing to `@coinzilla/brokers`.
 
