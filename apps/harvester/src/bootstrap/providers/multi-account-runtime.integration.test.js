@@ -297,6 +297,12 @@ function createBroker({
 function createMultiAccountHarvesterConfig() {
   return {
     ...appConfig,
+    marketDataRouting: {
+      routes: [{
+        symbol: "BTCUSDT",
+        providerInstanceId: "binance-testnet-primary",
+      }],
+    },
     brokers: {
       instances: [
         {
@@ -394,6 +400,10 @@ function assertIndependentAccountRuntimes({
   assert.notEqual(runtime.accountRuntimes[0].recoveredState.orderRegistry, runtime.accountRuntimes[1].recoveredState.orderRegistry)
   assert.notEqual(runtime.accountRuntimes[0].getMarketMetadata({ symbol: "BTCUSDT" }), runtime.accountRuntimes[1].getMarketMetadata({ symbol: "BTCUSDT" }))
   assert.equal(runtime.accountRuntimes.every((accountRuntime) => accountRuntime.userDataReady), true)
+  assert.equal(primaryCalls.includes("subscribe:BTCUSDT"), true)
+  assert.equal(primaryCalls.includes("subscribe:book:BTCUSDT"), true)
+  assert.equal(secondaryCalls.includes("subscribe:BTCUSDT"), false)
+  assert.equal(secondaryCalls.includes("subscribe:book:BTCUSDT"), false)
   assert.equal(primaryCalls.includes("subscribe:user-data"), true)
   assert.equal(secondaryCalls.includes("subscribe:user-data"), true)
 }

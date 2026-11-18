@@ -163,6 +163,7 @@ function getSubscriptionFailure({ result, symbol, streamLabel }) {
 
 async function subscribeToBookTicker({
   broker,
+  providerInstanceId,
   symbol,
   logger,
   isStopped,
@@ -198,6 +199,7 @@ async function subscribeToBookTicker({
   logSystem({
     logger,
     message: "Book ticker subscribed",
+    providerInstanceId: providerInstanceId ?? null,
     symbol,
     stream: result.data.stream ?? null,
   })
@@ -251,6 +253,7 @@ function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }
   logSystem({
     logger,
     message: "Market data subscribed",
+    providerInstanceId: data.providerInstanceId ?? null,
     symbol,
     stream: data.stream ?? null,
   })
@@ -258,6 +261,7 @@ function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }
 
 async function subscribeToMarketPrice({
   broker,
+  providerInstanceId,
   brokerName,
   eventPublisher,
   logger,
@@ -304,6 +308,7 @@ async function subscribeToMarketPrice({
       ...data,
       eventPublisher,
       brokerName,
+      providerInstanceId,
     },
     logger,
     symbol,
@@ -320,6 +325,7 @@ async function subscribeToEnabledMarkets({ context, reportPriceError }) {
     if (tradingEnabled) {
       await subscribeToBookTicker({
         broker,
+        providerInstanceId: context.providerInstanceId,
         symbol,
         logger: context.logger,
         isStopped: context.isStopped,
@@ -418,33 +424,28 @@ async function seedMissingInitialPrices({ context, reportPriceError }) {
   }
 }
 
-/**
- * Establish market/book subscriptions for every enabled pair, then seed missing
- * first prices only after all WebSocket streams are active.
- */
-export async function subscribeToMarketData({
-  broker,
-  brokerName,
-  eventPublisher,
-  logger,
-  tradingEnabled,
-  pairs,
-  settings,
-  processMarketPrice,
-  processMarketBook,
-  isMarketPriceFresh,
-  now,
-  isStopped,
-  onMarketPriceError,
-  subscriptions,
-  bookSubscriptions,
-  marketPriceIntake,
-} = {}) {
-  const enabledSymbols = Object.entries(pairs)
-    .filter(([, pairConfig]) => pairConfig.enabled)
-    .map(([symbol]) => symbol)
-  const context = {
+function createMarketDataSubscriptionContext(options) {
+  const {
     broker,
+    providerInstanceId,
+    brokerName,
+    eventPublisher,
+    logger,
+    tradingEnabled,
+    pairs,
+    settings,
+    processMarketPrice,
+    processMarketBook,
+    isMarketPriceFresh,
+    now,
+    isStopped,
+    subscriptions,
+    bookSubscriptions,
+    marketPriceIntake,
+  } = options
+  return {
+    broker,
+    providerInstanceId,
     brokerName,
     eventPublisher,
     logger,
@@ -460,32 +461,73 @@ export async function subscribeToMarketData({
     bookSubscriptions,
     marketPriceIntake,
   }
-  const reportPriceError = createMarketPriceErrorReporter({ logger,
-onMarketPriceError })
+}
 
-  // Establish every enabled market stream before requesting any missing
-  // initial ticker snapshot through Binance WebSocket API `ticker.price`.
-  // A slow first request must never prevent later markets receiving prices.
-  await subscribeToEnabledMarkets({ context,
-reportPriceError })
-  const subscribedSymbols = assertAllMarketSubscriptions({ enabledSymbols,
-subscriptions })
+function logMarketDataSubscriptionsReady({
+  logger,
+  providerInstanceId,
+  enabledSymbols,
+  subscribedSymbols,
+}) {
   logSystem({
     logger,
     message: "Market data subscriptions ready",
+    providerInstanceId: providerInstanceId ?? null,
+    enabledSymbols,
+    subscribedSymbols,
+  })
+}
+
+async function establishMarketDataSubscriptions({ context, reportPriceError }) {
+  const enabledSymbols = Object.entries(context.pairs)
+    .filter(([, pairConfig]) => pairConfig.enabled)
+    .map(([symbol]) => symbol)
+
+  // Establish every enabled market stream before requesting any missing
+  // initial ticker snapshot through Binance WebSocket API ticker.price.
+  // A slow first request must never prevent later markets receiving prices.
+  await subscribeToEnabledMarkets({
+    context,
+    reportPriceError,
+  })
+  const subscribedSymbols = assertAllMarketSubscriptions({
+    enabledSymbols,
+    subscriptions: context.subscriptions,
+  })
+  logMarketDataSubscriptionsReady({
+    logger: context.logger,
+    providerInstanceId: context.providerInstanceId,
     enabledSymbols,
     subscribedSymbols,
   })
 
   // Only after all enabled symbols have active WebSocket Streams may startup
-  // request missing ticker snapshots through WebSocket API `ticker.price`.
-  if (tradingEnabled) {
-    await seedMissingInitialPrices({ context,
-reportPriceError })
+  // request missing ticker snapshots through WebSocket API ticker.price.
+  if (context.tradingEnabled) {
+    await seedMissingInitialPrices({
+      context,
+      reportPriceError,
+    })
   }
   return Object.freeze({
-    subscriptions,
-    bookSubscriptions,
-    marketPriceIntake,
+    subscriptions: context.subscriptions,
+    bookSubscriptions: context.bookSubscriptions,
+    marketPriceIntake: context.marketPriceIntake,
+  })
+}
+
+/**
+ * Establish market/book subscriptions for every enabled pair, then seed missing
+ * first prices only after all WebSocket streams are active.
+ */
+export async function subscribeToMarketData(options = {}) {
+  const context = createMarketDataSubscriptionContext(options)
+  const reportPriceError = createMarketPriceErrorReporter({
+    logger: context.logger,
+    onMarketPriceError: options.onMarketPriceError,
+  })
+  return establishMarketDataSubscriptions({
+    context,
+    reportPriceError,
   })
 }

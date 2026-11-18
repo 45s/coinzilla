@@ -101,6 +101,8 @@ function createMainProviderAccountStarter({
       identity: input.providerIdentity,
       tradingMode: input.env.TRADING_MODE,
       operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
+      marketDataProviderInstanceId: input.marketDataProviderInstanceId,
+      marketDataSymbols: input.marketDataSymbols,
     })
     if (input.providerIdentity.accountId === failAccountId) {
       const error = new Error("secondary account connection failed")
@@ -126,6 +128,71 @@ function createMainProviderAccountStarter({
   }
 }
 
+function resolveMarketDataSourceProvider({
+  pair,
+  providerInstances,
+}) {
+  return providerInstances.find(({ environment }) =>
+    pair.tradingEnvironment === "both" || pair.tradingEnvironment === environment)
+}
+
+function createMarketDataTestConfiguration(providerInstances) {
+  const configuredPairs = Object.fromEntries(
+    Object.entries(defaultAppConfig.strategies.CG_coinGrabber.pairs).map(([symbol, pair]) => {
+      const sourceProvider = resolveMarketDataSourceProvider({
+        pair,
+        providerInstances,
+      })
+      return [symbol, sourceProvider ? pair : {
+        ...pair,
+        enabled: false,
+      }]
+    }),
+  )
+  const routes = Object.entries(configuredPairs)
+    .filter(([, pair]) => pair.enabled)
+    .map(([symbol, pair]) => {
+      const sourceProvider = resolveMarketDataSourceProvider({
+        pair,
+        providerInstances,
+      })
+      return {
+        symbol,
+        providerInstanceId: sourceProvider.providerInstanceId,
+      }
+    })
+  return {
+    configuredPairs,
+    routes,
+  }
+}
+
+function createMainMultiProviderAppConfig(providerInstances) {
+  const { configuredPairs, routes } = createMarketDataTestConfiguration(providerInstances)
+  return {
+    ...defaultAppConfig,
+    operatorControl: {
+      telegram: {
+        enabled: true,
+        allowedUserIds: ["12345"],
+      },
+    },
+    strategies: {
+      ...defaultAppConfig.strategies,
+      CG_coinGrabber: {
+        ...defaultAppConfig.strategies.CG_coinGrabber,
+        pairs: configuredPairs,
+      },
+    },
+    marketDataRouting: {
+      routes,
+    },
+    brokers: {
+      instances: providerInstances,
+    },
+  }
+}
+
 function createMainMultiProviderFixture({
   providerInstances,
   env,
@@ -138,18 +205,7 @@ function createMainMultiProviderFixture({
   const lockScopes = []
   const releasedLocks = []
   const signalHandlers = new Map()
-  const config = {
-    ...defaultAppConfig,
-    operatorControl: {
-      telegram: {
-        enabled: true,
-        allowedUserIds: ["12345"],
-      },
-    },
-    brokers: {
-      instances: providerInstances,
-    },
-  }
+  const config = createMainMultiProviderAppConfig(providerInstances)
   const run = () => main({
     loadConfig: async () => config,
     env,
@@ -259,6 +315,12 @@ test("starts configured provider accounts and acquires one process lock per acco
       "testnet",
       "live",
     ], "Each account must retain its own explicit exchange environment")
+    assert.deepEqual(fixture.started.map(({ marketDataProviderInstanceId }) => marketDataProviderInstanceId), [
+      "binanceTestnetPrimary",
+      "testProviderLiveSecondary",
+    ], "Each runtime must expose its configured market-data source instance")
+    assert.equal(fixture.started[0].marketDataSymbols.includes("DOGEUSDT"), true)
+    assert.equal(fixture.started[1].marketDataSymbols.includes("LINKFDUSD"), true)
     assert.deepEqual(fixture.started.map(({ operatorControlEnabled }) => operatorControlEnabled), [
       true,
       false,
