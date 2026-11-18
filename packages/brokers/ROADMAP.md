@@ -291,6 +291,13 @@ The following modules and test suites are review targets because of state owners
 
 ### Next action
 
+- Implement the common Broker API under [#1446](https://github.com/45s/coinzilla/issues/1446), with Binance and Bitunix aligned against the same method catalog and offline contract suite.
+- Keep unsupported methods explicit and truthful; do not turn unsupported behavior into successful empty data or silent no-ops.
+- Continue Bitunix protocol work only when the official Spot contract and mandatory reference audit establish safe behavior. Preserve the mutation/fill blockers in [#1185](https://github.com/45s/coinzilla/issues/1185).
+- Keep live Binance TESTNET acceptance as a separate operational verification item; it does not change the package API design task.
+
+### Historical migration verification notes (2026-11-10)
+
 1. The source of truth is `develop`; the baseline for PR #527 was merge commit `322a60c0cb1c1f41933539cea5815a601f4a1e25` (PR #525).
 2. The DDD/TDD first tranche is merged through PRs #516–#525: package coverage baseline; user-data client port; RPC/Streams failure tests; symbol-filter, canonical-fill, order-history, and order-request adapters; and explicit architecture boundaries.
 3. Latest package verification on PR #573 synchronized head `22a961bbb4565962ff86021002bbcc674c963f5c`: **387/387 broker tests passed**. The exact package coverage workflow passed on PR #573's synchronized head `22a961bbb4565962ff86021002bbcc674c963f5c`; the targeted 90% lines / 80% branches / 80% functions runtime gate passed. The pure Binance adapters retain direct deterministic coverage.
