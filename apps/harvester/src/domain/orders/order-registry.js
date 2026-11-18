@@ -524,7 +524,7 @@ function createAcknowledgedCanonicalOrder({
   })
 }
 
-function createAcknowledgedRegistryResult({ registry, orders, ownerships, index, current, order, attached }) {
+function createAcknowledgedRegistryResult({ orders, ownerships, index, current, order, attached }) {
   const nextOrders = [...orders]
   nextOrders[index] = attached
   return Object.freeze({
@@ -576,9 +576,11 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
     orders,
     order,
   })
-  const attached = createAcknowledgedCanonicalOrder({ current, order })
+  const attached = createAcknowledgedCanonicalOrder({
+    current,
+    order,
+  })
   return createAcknowledgedRegistryResult({
-    registry,
     orders,
     ownerships,
     index,
@@ -588,7 +590,7 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
   })
 }
 
-function createUpdatedOrderRegistryResult({ registry, orders, ownerships, index, current, nextOrder }) {
+function createUpdatedOrderRegistryResult({ orders, ownerships, index, current, nextOrder }) {
   const nextOrders = [...orders]
   nextOrders[index] = nextOrder
   const nextOwnerships = nextOrder.brokerOrderId === undefined
@@ -678,7 +680,6 @@ function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
     })
   }
   return createUpdatedOrderRegistryResult({
-    registry,
     orders,
     ownerships,
     index,
