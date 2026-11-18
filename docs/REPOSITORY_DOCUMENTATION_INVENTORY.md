@@ -74,14 +74,14 @@ The original 110-file checkpoint above remains a historical snapshot. Complete r
 | `452b19bbb13ee4bbe86df23c3d1da6f4566039d6` | Historical source-verified develop checkpoint after merged PR #1018; complete recursive tree still contains 124 tracked Markdown/MDX paths (61 Harvester, 63 elsewhere) | 124 |
 | `b5fc236987833da4374258da876b412be3c48759` | Current source-verified develop checkpoint after merged PR #1012; complete recursive tree still contains 124 tracked Markdown/MDX paths (61 Harvester, 63 elsewhere) | 124 |
 | `7590d332a307c7ef7bea37f0ba8721b399bd96e8` | Historical source-verified develop checkpoint before merged PR #1269; complete recursive tree contains 147 tracked Markdown/MDX paths (81 Harvester, 66 elsewhere) | 147 |
-| `0a51d6034a6ff6473d9a9005b74744fd048c9135` | Current source-verified develop checkpoint after merged PR #1269; no Markdown/MDX path additions or removals since `7590d33`; 147 tracked Markdown/MDX paths (81 Harvester, 66 elsewhere) | 147 |
+| `0a51d6034a6ff6473d9a9005b74744fd048c9135` | Historical source-verified develop checkpoint after merged PR #1269; no Markdown/MDX path additions or removals since `7590d33`; 147 tracked Markdown/MDX paths (81 Harvester, 66 elsewhere) | 147 |
 | `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` | Current source-verified develop checkpoint after merged PRs #1267, #1353 and #1383; nine Markdown/MDX additions and no removals since `0a51d60`; 156 tracked paths (85 Harvester, 71 elsewhere) | 156 |
 
 The previous source-verified develop checkpoint `b5fc236987833da4374258da876b412be3c48759` (after merged PR #1012) contained 124 tracked Markdown/MDX files: 61 under Harvester and 63 elsewhere. The complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` contained **147 tracked Markdown/MDX files**: 81 under Harvester and 66 elsewhere (97 frozen baseline files plus 50 additions, zero net removals). The subsequent checkpoint `0a51d6034a6ff6473d9a9005b74744fd048c9135`, after merged PR #1269, remained at 147 paths. The latest source-verified `develop` checkpoint `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` contains **156 tracked Markdown/MDX files**: 85 under Harvester and 71 elsewhere. A complete recursive tree comparison found nine added paths and no removals since `0a51d60`: four under Harvester, two under `docs/`, one under Brokers, and two under DB. The PR #1267 ADR is merged and included in this current count. Earlier 110-, 112-, 113-, 114-, 117-, 118-, 119-, 124- and 147-file counts remain valid historical snapshots.
 
-## Subsequent recursive additions — current develop checkpoint 0a51d603
+## Historical recursive additions — develop checkpoint 0a51d603
 
-A complete recursive tree comparison from the 124-file checkpoint `b5fc236987833da4374258da876b412be3c48759` to current `develop` `7590d332a307c7ef7bea37f0ba8721b399bd96e8` found 23 added Markdown/MDX paths and no removed paths:
+A complete recursive tree comparison from the 124-file checkpoint `b5fc236987833da4374258da876b412be3c48759` to historical `develop` checkpoint `7590d332a307c7ef7bea37f0ba8721b399bd96e8` found 23 added Markdown/MDX paths and no removed paths:
 
 | Added path | Purpose |
 | --- | --- |
