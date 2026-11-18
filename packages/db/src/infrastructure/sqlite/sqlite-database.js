@@ -184,9 +184,10 @@ function createSqliteTransactionHandler({ requireConnection, intent }) {
   }
 }
 
-function createConnectionSetupFailure({ openedConnection, initializationError }) {
+function createConnectionSetupFailure({ openedConnection, initializationError, onClosed }) {
   try {
     openedConnection.close()
+    onClosed()
     return initializationError
   } catch (closeError) {
     return new AggregateError(
@@ -223,6 +224,7 @@ function createSqliteAdapter({
       }
 
       const openedConnection = new DatabaseSync(databaseFilename, { timeout })
+      connection = openedConnection
 
       try {
         openedConnection.exec("PRAGMA foreign_keys = ON")
@@ -237,6 +239,9 @@ function createSqliteAdapter({
         throw createConnectionSetupFailure({
           openedConnection,
           initializationError: error,
+          onClosed: () => {
+            connection = null
+          },
         })
       }
     },
@@ -261,6 +266,7 @@ function createSqliteAdapter({
   return {
     adapter,
     requireConnection,
+    closeConnection: adapter.close,
   }
 }
 
@@ -295,13 +301,13 @@ function createBackupOperation({ state, requireOpenConnection, databaseFilename,
   }
 }
 
-function createCloseOperation({ database, state }) {
+function createCloseOperation({ database, state, closeConnection }) {
   return function close() {
-    if (database.state === "closed") {
-      return database.close()
-    }
     if (state.closePromise) {
       return state.closePromise
+    }
+    if (database.state === "closed") {
+      return closeConnection()
     }
 
     state.closingRequested = true
@@ -310,6 +316,7 @@ function createCloseOperation({ database, state }) {
         await Promise.allSettled([...state.activeBackups])
       }
       await database.close()
+      await closeConnection()
     })().finally(() => {
       state.closePromise = null
     })
@@ -338,7 +345,7 @@ function createTransactionOperation({ state, database }) {
   }
 }
 
-function createSqliteDatabaseFacade({ database, requireConnection, databaseFilename, timeout }) {
+function createSqliteDatabaseFacade({ database, requireConnection, closeConnection, databaseFilename, timeout }) {
   const state = {
     closingRequested: false,
     closePromise: null,
@@ -364,6 +371,7 @@ function createSqliteDatabaseFacade({ database, requireConnection, databaseFilen
   const close = createCloseOperation({
     database,
     state,
+    closeConnection,
   })
 
   const sqliteDatabase = Object.freeze({
@@ -438,7 +446,7 @@ export function createSqliteDatabase({
     current: null,
   }
 
-  const { adapter, requireConnection } = createSqliteAdapter({
+  const { adapter, requireConnection, closeConnection } = createSqliteAdapter({
     databaseFilename,
     isMemoryDatabase,
     timeout,
@@ -450,6 +458,7 @@ export function createSqliteDatabase({
   return createSqliteDatabaseFacade({
     database,
     requireConnection,
+    closeConnection,
     databaseFilename,
     timeout,
   })
