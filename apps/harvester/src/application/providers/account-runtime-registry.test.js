@@ -54,7 +54,12 @@ test("rejects duplicate provider/account/environment scopes", () => {
 
 test("rejects incomplete or invalid provider account descriptors", () => {
   assert.throws(
-    () => createAccountRuntimeRegistry({ providers: [{ ...providers[0], accountId: "" }] }),
+    () => createAccountRuntimeRegistry({
+      providers: [{
+        ...providers[0],
+        accountId: "",
+      }],
+    }),
     /accountId must be a stable non-secret identifier/,
     "An empty account identity must fail before any runtime state is created.",
   )
