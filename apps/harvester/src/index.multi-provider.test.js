@@ -4,9 +4,19 @@ import { main as startMain } from "./index.js"
 import { appConfig as defaultAppConfig } from "../config/index.js"
 
 const disabledJournalService = () => ({
-  ready: Promise.resolve({ ok: true, disabled: true }),
-  flush: async () => ({ ok: true, durable: true }),
-  close: async () => ({ ok: true, closed: true, disabled: true }),
+  ready: Promise.resolve({
+    ok: true,
+    disabled: true,
+  }),
+  flush: async () => ({
+    ok: true,
+    durable: true,
+  }),
+  close: async () => ({
+    ok: true,
+    closed: true,
+    disabled: true,
+  }),
 })
 
 const main = (options = {}) => {
@@ -14,23 +24,41 @@ const main = (options = {}) => {
   return startMain({
     acquireProcessLock: async () => ({
       ok: true,
-      release: async () => ({ ok: true, released: true }),
+      release: async () => ({
+        ok: true,
+        released: true,
+      }),
     }),
     createOperationalStateStore: () => ({
-      verify: async () => ({ ok: true, data: { valid: true, durableWriteSupported: true } }),
+      verify: async () => ({
+        ok: true,
+        data: {
+          valid: true,
+          durableWriteSupported: true,
+        },
+      }),
     }),
     ...rest,
-    env: { TRADING_MODE: "testnet", ...env },
+    env: {
+      TRADING_MODE: "testnet",
+      ...env,
+    },
     createJournalService: (...args) => {
       const service = createJournalService(...args) ?? {}
       if (!Object.hasOwn(service, "ready")) {
         service.ready = Promise.resolve({ ok: true })
       }
       if (!Object.hasOwn(service, "flush")) {
-        service.flush = async () => ({ ok: true, durable: true })
+        service.flush = async () => ({
+          ok: true,
+          durable: true,
+        })
       }
       if (!Object.hasOwn(service, "close")) {
-        service.close = async () => ({ ok: true, closed: true })
+        service.close = async () => ({
+          ok: true,
+          closed: true,
+        })
       }
       return service
     },
