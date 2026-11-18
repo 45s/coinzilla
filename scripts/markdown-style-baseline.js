@@ -55,7 +55,10 @@ function isNestedListContent({ lines, index, indentation }) {
   return indentation === parentContentColumn
 }
 
-function hasIndentedCodeAfterBlankLines({ lines, index }) {
+function hasIndentedCodeAfterBlankLines({
+          lines,
+          index,
+        }) {
   let nextContentIndex = index + 1
   while (
     nextContentIndex < lines.length &&
@@ -129,7 +132,10 @@ function normalizeTableSource(line) {
   return source
 }
 
-function getCodeSpanDelimiterLength({ source, index }) {
+function getCodeSpanDelimiterLength({
+      source,
+      index,
+    }) {
   if (source[index] !== INLINE_CODE_DELIMITER) {return 0}
 
   let delimiterLength = 1
@@ -264,7 +270,11 @@ function collectListMarkerFindings({ lines, codeLineIndexes }) {
   }
 }
 
-function isListContinuationAfterBlank({ lines, cursor, codeLineIndexes }) {
+function isListContinuationAfterBlank({
+        lines,
+        cursor,
+        codeLineIndexes,
+      }) {
   const nextIndex = cursor + 1
   const nextLine = lines[nextIndex] ?? ""
   return !codeLineIndexes.has(nextIndex) &&
@@ -301,7 +311,10 @@ function findListBlockEnd({ lines, startIndex, codeLineIndexes }) {
     break
   }
 
-  return { end, cursor }
+  return {
+    end,
+    cursor,
+  }
 }
 
 function collectListSpacingFindings({ lines, codeLineIndexes }) {
@@ -377,7 +390,10 @@ function collectTableRowFindings({
     cursor += 1
   }
 
-  return { end, tableColumnMismatches }
+  return {
+    end,
+    tableColumnMismatches,
+  }
 }
 
 function collectTableBlockFindings({ lines, index, codeLineIndexes }) {
@@ -531,7 +547,9 @@ function collectLineFormattingFindings({
  * @param {{content: string}} input
  * @returns {{fileCount: number, findings: Record<string, Array<{path: string, count: number, lines: number[]}>>}}
  */
-function scanMarkdownDocumentLines({ content }) {
+function scanMarkdownDocumentLines({
+    content,
+  }) {
   const lines = content.split(/\r?\n/)
   const codeLineIndexes = collectIndentedCodeLineIndexes({ lines })
   const trailingWhitespaceLines = []
@@ -552,7 +570,7 @@ function scanMarkdownDocumentLines({ content }) {
       fenceMatch,
       activeFence,
     })
-    activeFence = fenceTransition.activeFence
+    ({ activeFence } = fenceTransition)
 
     if (fenceTransition.isCode) {
       codeLineIndexes.add(index)
@@ -590,7 +608,10 @@ function scanMarkdownDocumentLines({ content }) {
   }
 }
 
-function createFindingRecorder({ findings, path }) {
+function createFindingRecorder({
+    findings,
+    path,
+  }) {
   return ({ name, affectedLines = [] }) => {
     findings[name].push({
       path,
@@ -600,7 +621,10 @@ function createFindingRecorder({ findings, path }) {
   }
 }
 
-function addLineFindings({ scannedDocument, addFinding }) {
+function addLineFindings({
+    scannedDocument,
+    addFinding,
+  }) {
   const lineFindings = [
     ["trailingWhitespace", scannedDocument.trailingWhitespaceLines],
     ["repeatedBlankLines", scannedDocument.repeatedBlankLines],
@@ -618,7 +642,10 @@ function addLineFindings({ scannedDocument, addFinding }) {
   }
 }
 
-function addDocumentMetadataFindings({ scannedDocument, addFinding }) {
+function addDocumentMetadataFindings({
+    scannedDocument,
+    addFinding,
+  }) {
   if (!scannedDocument.hasFinalNewline) {
     addFinding({ name: "missingFinalNewline" })
   }
@@ -636,7 +663,10 @@ function addDocumentMetadataFindings({ scannedDocument, addFinding }) {
   }
 }
 
-function addStructureFindings({ scannedDocument, addFinding }) {
+function addStructureFindings({
+    scannedDocument,
+    addFinding,
+  }) {
   const listFindings = collectListFormattingFindings({
     lines: scannedDocument.lines,
     codeLineIndexes: scannedDocument.codeLineIndexes,
