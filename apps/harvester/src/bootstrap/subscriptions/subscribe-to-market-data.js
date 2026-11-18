@@ -316,31 +316,81 @@ async function subscribeToMarketPrice({
   })
 }
 
+function resolveMarketDataBroker({ context, symbol }) {
+  const broker = typeof context.getMarketDataBroker === "function"
+    ? context.getMarketDataBroker({ symbol })
+    : context.broker
+  if (!broker || typeof broker !== "object") {
+    throw new TypeError(`No market-data broker is available for ${symbol}`)
+  }
+  return broker
+}
+
 async function subscribeToEnabledMarkets({ context, reportPriceError }) {
-  const { pairs, tradingEnabled, broker, bookSubscriptions } = context
+  const { pairs, tradingEnabled, bookSubscriptions } = context
+  const failedSymbols = []
   for (const [symbol, pairConfig] of Object.entries(pairs)) {
     if (!pairConfig.enabled) {
       continue
     }
-    if (tradingEnabled) {
-      await subscribeToBookTicker({
-        broker,
-        providerInstanceId: context.providerInstanceId,
-        symbol,
-        logger: context.logger,
-        isStopped: context.isStopped,
-        processMarketBook: context.processMarketBook,
-        bookSubscriptions,
-        marketPriceIntake: context.marketPriceIntake,
-      })
+    const intakeState = context.marketPriceIntake.get(symbol) ?? {}
+    intakeState.marketPriceSubscriptionReady = false
+    context.marketPriceIntake.set(symbol, intakeState)
+    const providerInstanceId = context.marketDataSources?.[symbol] ?? context.providerInstanceId
+    const brokerName = context.marketDataProviderTypes?.[symbol] ?? context.brokerName
+    let marketDataBroker
+    let symbolError
+    try {
+      marketDataBroker = resolveMarketDataBroker({ context, symbol })
+    } catch (error) {
+      symbolError = error
     }
-    await subscribeToMarketPrice({
-      ...context,
-      symbol,
-      pairConfig,
-      reportPriceError,
-    })
+    if (marketDataBroker && tradingEnabled) {
+      try {
+        await subscribeToBookTicker({
+          broker: marketDataBroker,
+          providerInstanceId,
+          symbol,
+          logger: context.logger,
+          isStopped: context.isStopped,
+          processMarketBook: context.processMarketBook,
+          bookSubscriptions,
+          marketPriceIntake: context.marketPriceIntake,
+        })
+      } catch (error) {
+        symbolError ??= error
+      }
+    }
+    if (marketDataBroker) {
+      try {
+        await subscribeToMarketPrice({
+          ...context,
+          broker: marketDataBroker,
+          providerInstanceId,
+          brokerName,
+          symbol,
+          pairConfig,
+          reportPriceError,
+        })
+      } catch (error) {
+        symbolError ??= error
+      }
+    }
+    if (symbolError) {
+      failedSymbols.push(symbol)
+      context.logger.error?.({
+        message: "Market-data source subscription failed; execution route remains blocked",
+        symbol,
+        providerInstanceId: providerInstanceId ?? null,
+        broker: brokerName ?? null,
+        error: symbolError,
+      })
+      if (!context.allowPartialMarketData) {
+        throw symbolError
+      }
+    }
   }
+  return failedSymbols
 }
 
 function assertAllMarketSubscriptions({ enabledSymbols, subscriptions }) {
