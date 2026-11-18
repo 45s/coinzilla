@@ -1,5 +1,6 @@
 import { TELEGRAM_OPERATOR_ACTIONS } from "./constants.js"
 import { OPERATOR_ACTOR_ROLES } from "../../../application/operator/constants.js"
+
 function recordControlFailure({ result, method, symbol, interaction, diagnostics }) {
   if (interaction.failed) { return }
   const controlError = result?.errors?.[0] ?? result?.error
