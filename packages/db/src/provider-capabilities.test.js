@@ -193,3 +193,79 @@ test("provider composition requires a read transaction operation", () => {
     "A provider-neutral database must expose an explicit read transaction operation",
   )
 })
+
+
+test("provider composition rejects non-JSON capability declarations with their original cause", () => {
+  const capabilities = {
+    transactions: {
+      callbackMode: "synchronous",
+      nestedTransactions: false,
+    },
+    queries: {
+      equalityFilters: true,
+      sorting: true,
+      pagination: true,
+    },
+    storage: {
+      modes: ["file"],
+    },
+    unsupported: 1n,
+  }
+
+  assert.throws(
+    () => createDatabase({
+      provider: createProvider({ capabilities }),
+    }),
+    (error) => error instanceof TypeError
+      && error.message === "Provider capabilities must be JSON-safe"
+      && error.cause instanceof TypeError,
+    "A provider with BigInt capability metadata must fail composition and preserve the JSON serialization cause",
+  )
+})
+
+test("provider transaction facades reject incomplete transaction contexts", async () => {
+  const provider = createProvider({
+    capabilities: {
+      transactions: {
+        callbackMode: "synchronous",
+        nestedTransactions: false,
+      },
+      queries: {
+        equalityFilters: true,
+        sorting: true,
+        pagination: true,
+      },
+      storage: {
+        modes: ["memory"],
+      },
+    },
+  })
+  const incompleteTransaction = {
+    create() {},
+    readMany() {},
+    update() {},
+    delete() {},
+  }
+  provider.withTransaction = (work) => work(incompleteTransaction)
+  provider.withReadTransaction = (work) => work(incompleteTransaction)
+  const database = createDatabase({ provider })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.transaction(() => "unused"),
+      /must implement:.*readOne/,
+      "An explicit transaction must reject a provider context missing any required CRUD operation",
+    )
+    await assert.rejects(
+      database.create({
+        collection: "people",
+        record: { id: "incomplete-context-1" },
+      }),
+      /must implement:.*readOne/,
+      "A standalone CRUD operation must reject an incomplete provider transaction context",
+    )
+  } finally {
+    await database.close()
+  }
+})
