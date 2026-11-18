@@ -42,13 +42,26 @@ function collectRuntimeStopErrors({
   result,
   providerInstanceId,
 }) {
-  if (result?.ok === true) {
+  if (result === undefined || result?.ok === true) {
     return []
   }
   if (Array.isArray(result.errors) && result.errors.length > 0) {
     return result.errors
   }
   return [new Error(`Provider account ${providerInstanceId} did not confirm shutdown`)]
+}
+
+function collectProcessLockReleaseErrors({
+  result,
+  providerInstanceId,
+}) {
+  if (result?.ok === true) {
+    return []
+  }
+  if (Array.isArray(result?.errors) && result.errors.length > 0) {
+    return result.errors
+  }
+  return [new Error(`Provider account ${providerInstanceId} process-lock release was not confirmed`)]
 }
 
 async function releaseStoppedAccountLock({
@@ -61,14 +74,14 @@ async function releaseStoppedAccountLock({
   }
   try {
     const result = await releaseProviderLock(entry.provider.providerInstanceId)
-    if (result?.ok === true) {
-      entry.lockReleased = true
-      return []
-    }
-    return collectRuntimeStopErrors({
+    const errors = collectProcessLockReleaseErrors({
       result,
       providerInstanceId: entry.provider.providerInstanceId,
     })
+    if (errors.length === 0) {
+      entry.lockReleased = true
+    }
+    return errors
   } catch (error) {
     return [error]
   }
@@ -166,10 +179,7 @@ async function releaseFailedAccountLock({
   }
   try {
     const result = await releaseProviderLock(provider.providerInstanceId)
-    if (result?.ok === true) {
-      return []
-    }
-    return collectRuntimeStopErrors({
+    return collectProcessLockReleaseErrors({
       result,
       providerInstanceId: provider.providerInstanceId,
     })
