@@ -473,14 +473,20 @@ function resolveExpectedMarketDataIdentity({ context, symbol, configuredIdentity
   }
 }
 
-function resolveMarketDataBrokerInstance({ context, symbol }) {
+function resolveMarketDataBrokerInstance({
+    context,
+    symbol,
+  }) {
   if (typeof context.getMarketDataBroker === "function") {
     return context.getMarketDataBroker({ symbol })
   }
   return context.broker
 }
 
-function resolveMarketDataBroker({ context, symbol }) {
+function resolveMarketDataBroker({
+      context,
+      symbol,
+    }) {
   const broker = resolveMarketDataBrokerInstance({ context, symbol })
   if (!broker || typeof broker !== "object") {
     throw new TypeError(`No market-data broker is available for ${symbol}`)
@@ -506,7 +512,11 @@ function resolveMarketDataBroker({ context, symbol }) {
   }
 }
 
-function getMarketDataRouteIdentity({ context, symbol, resolvedSource }) {
+function getMarketDataRouteIdentity({
+    context,
+    symbol,
+    resolvedSource,
+  }) {
   return {
     providerInstanceId: resolvedSource?.sourceIdentity?.providerInstanceId
       ?? context.marketDataSources?.[symbol]
