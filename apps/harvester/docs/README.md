@@ -26,6 +26,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — source-verified persistence inventory, target architecture, repository contracts, TESTNET/LIVE isolation, operations and phased migration.
 - [Ordinary persistence and trading-session repository contract](persistence/README.md) — merged trading-session history implementation and lifecycle contract.
 - [ADR-0003: Multi-provider execution and market-data routing](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) — accepted target architecture; implementation is tracked by [#1339](https://github.com/45s/coinzilla/issues/1339).
+- [ADR-0004: Complete Bitunix provider integration](../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md) — Bitunix admission requires a complete Brokers and Harvester provider contract; no interim partial facade.
 - [Multi-provider migration audit and implementation plan](../../../docs/architecture/multi-provider-migration-plan.md) — source-verified Harvester composition, order provenance, account isolation, recovery prerequisites and phased implementation plan.
 - [Operator control](operator-control/README.md) — Telegram Command Center commands, authorized read-only queries, confirmed controls and process-lifetime pause boundary
 - [Telegram Command Center runbook](operations/telegram-command-center.md) — safe menu navigation, refresh, confirmations, authorization and troubleshooting
