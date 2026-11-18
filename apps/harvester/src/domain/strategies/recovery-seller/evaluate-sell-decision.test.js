@@ -124,6 +124,7 @@ function createTradingRules({
 
 const validInput = {
   pairConfig: {
+    minProfit: 0.01,
     makerPercent: 0,
     takerPercent: 0.075,
   },
@@ -162,6 +163,7 @@ test("selects ordinary LIMIT and the higher configured fee when makerPercent is 
   const result = evaluateRecoverySellerSellDecision({
     ...validInput,
     pairConfig: {
+      minProfit: 0.01,
       makerPercent: 0.075,
       takerPercent: 0.2,
     },
@@ -298,4 +300,36 @@ test("latches STOP when third-asset commission quote valuation is missing", () =
     "Missing third-asset quote valuation must latch the global STOP.")
   assert.equal(result.orderIntent, undefined,
     "The evaluator must not treat missing third-asset valuation as zero or submit.")
+})
+
+test("uses the existing per-pair minProfit instead of a separate planner value", () => {
+  const result = evaluateRecoverySellerSellDecision({
+    ...validInput,
+    planInput: {
+      ...validInput.planInput,
+      minProfit: "99",
+    },
+  })
+
+  assert.equal(result.decision.outcome, "SUBMIT",
+    "The existing pair configuration must remain the sole source of the RS profit target.")
+  assert.equal(result.orderIntent.price, "10.01",
+    "The SELL target must use the pair's 0.01 minProfit, not an independent planner threshold.")
+})
+
+test("latches STOP when the existing pair minProfit is below the Conservative minimum", () => {
+  const result = evaluateRecoverySellerSellDecision({
+    ...validInput,
+    pairConfig: {
+      ...validInput.pairConfig,
+      minProfit: 0.009,
+    },
+  })
+
+  assert.equal(result.decision.outcome, "BLOCK",
+    "A pair minProfit below 0.01 must fail closed at the RS policy boundary.")
+  assert.equal(result.stopState.status, "STOPPED",
+    "An invalid configured pair minProfit must latch the global RS STOP.")
+  assert.equal(result.orderIntent, undefined,
+    "An invalid configured pair minProfit must never produce a SELL intent.")
 })

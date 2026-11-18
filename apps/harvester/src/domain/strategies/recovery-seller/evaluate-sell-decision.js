@@ -195,9 +195,10 @@ function validateSellPolicyContext({ pairConfig, marketMetadata, cycleState }) {
   })
 }
 
-function createSellPlan({ planInput, filters, feePolicy }) {
+function createSellPlan({ planInput, filters, feePolicy, minProfit }) {
   const plan = calculateRecoverySellerSellPlan({
     ...planInput,
+    minProfit,
     quoteFeeRate: feePolicy.feeRate,
     baseFeeRate: feePolicy.feeRate,
     priceTickSize: filters.PRICE_INCREMENT,
@@ -243,6 +244,7 @@ function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stop
     return Object.freeze({
       stopState,
       feePolicy,
+      minProfit: String(pairConfig.minProfit),
       filters: resolveExchangeFilters({
         marketMetadata,
       }),
@@ -258,7 +260,7 @@ function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stop
   }
 }
 
-function createSellPlanResult({ stopState, planInput, filters, feePolicy }) {
+function createSellPlanResult({ stopState, planInput, filters, feePolicy, minProfit }) {
   let plan
   let filterViolation
   try {
@@ -266,6 +268,7 @@ function createSellPlanResult({ stopState, planInput, filters, feePolicy }) {
       planInput,
       filters,
       feePolicy,
+      minProfit,
     }))
   } catch (error) {
     return createStoppedResult({
@@ -339,6 +342,7 @@ export function evaluateRecoverySellerSellDecision({
     planInput,
     filters: context.filters,
     feePolicy: context.feePolicy,
+    minProfit: context.minProfit,
   })
   if (result.decision) {
     return result
