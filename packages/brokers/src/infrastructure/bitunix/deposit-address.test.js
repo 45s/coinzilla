@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
 import { BitunixDepositAddressError } from "./errors/bitunix-deposit-address-error.js"
+import { BitunixRestError } from "./api/rest-client.js"
 
 const DEPOSIT_ADDRESS_PATH = "/api/spot/v1/deposit/address"
 const REQUEST = {
@@ -159,6 +160,23 @@ test("Bitunix Spot broker accepts an explicit empty deposit-address list", async
   assert.equal(result.ok, true, "an explicit empty array is a valid empty address list")
   assert.deepEqual(result.data, [], "an empty response must not be replaced with a fabricated address")
   assert.equal(calls.length, 1, "an empty list still represents one successful read request")
+})
+
+test("Bitunix Spot broker preserves exchange rejections without retrying", async () => {
+  const failure = new BitunixRestError({
+    message: "Bitunix rejected the deposit-address request",
+    kind: "exchange",
+    exchangeCode: "90001",
+    path: DEPOSIT_ADDRESS_PATH,
+  })
+  const { broker, calls } = createBroker({ failure })
+
+  const result = await broker.getDepositAddress(REQUEST)
+
+  assert.equal(result.ok, false, "exchange rejections must remain unsuccessful results")
+  assert.equal(result.errors[0].kind, "exchange", "the REST failure category must remain unchanged")
+  assert.equal(result.errors[0].exchangeCode, "90001", "unknown exchange codes must remain opaque and exact")
+  assert.equal(calls.length, 1, "exchange rejections must not trigger an automatic retry")
 })
 
 test("Bitunix Spot broker reports transport failures without retrying or exposing address data", async () => {
