@@ -173,27 +173,17 @@ function resolveProviderProvenanceRequirement({
     (updateTradingAccounting?.requiresProviderProvenance === true || hasProviderIdentity({ value: broker }))
 }
 
-export function makeOrderEventWorkflow({
-  state,
-  broker,
-  eventPublisher,
-  pairs,
-  updateTradingAccounting,
-  recordBuyExecutionFill,
-  recordSellExecutionFill,
-  pause,
-  resolveRecoveryManagedCancellation,
-  cancelAndReconcileRecoverySells,
-  evaluateLatestTransition,
-  getReconciledBuyExecutionPrice,
-  assertReconciledSellExecution,
-  completeRecoveryCycle,
-  publishRecoveryCycleNotCompleted,
-  isStopping,
-  logger,
-  onUnownedExternalOrderObserved,
-  requireProviderProvenance: requireProviderProvenanceOverride,
-} = {}) {
+export function makeOrderEventWorkflow(options = {}) {
+  const {
+    state,
+    broker,
+    eventPublisher,
+    updateTradingAccounting,
+    recordBuyExecutionFill,
+    recordSellExecutionFill,
+    pause,
+    requireProviderProvenance: requireProviderProvenanceOverride,
+  } = options
   const requireProviderProvenance = resolveProviderProvenanceRequirement({
     override: requireProviderProvenanceOverride,
     updateTradingAccounting,
@@ -215,20 +205,7 @@ export function makeOrderEventWorkflow({
     processExecutionFillTransition,
   })
   const processUserDataEventTransition = createWorkflowUserDataEventTransition({
-    state,
-    logger,
-    eventPublisher,
-    pairs,
-    pause,
-    resolveRecoveryManagedCancellation,
-    cancelAndReconcileRecoverySells,
-    evaluateLatestTransition,
-    getReconciledBuyExecutionPrice,
-    assertReconciledSellExecution,
-    completeRecoveryCycle,
-    publishRecoveryCycleNotCompleted,
-    isStopping,
-    onUnownedExternalOrderObserved,
+    ...options,
     processExecutionFillTransition,
     reconcileTerminalOrderFills,
   })
