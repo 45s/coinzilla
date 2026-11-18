@@ -204,6 +204,28 @@ function validateTimestamps({
   }
 }
 
+function validateCanonicalOrderLifecycle({
+  status,
+  brokerOrderId,
+  executedQuantity,
+  remainingQuantity,
+  createdAt,
+  acknowledgedAt,
+  updatedAt,
+  completedAt,
+}) {
+  validateCanonicalOrderLifecycle({
+    status,
+    brokerOrderId,
+    executedQuantity,
+    remainingQuantity,
+    createdAt,
+    acknowledgedAt,
+    updatedAt,
+    completedAt,
+  })
+}
+
 function resolveCanonicalOrderDerivedValues({
   clientOrderId,
   brokerOrderId,
