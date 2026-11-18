@@ -12,7 +12,7 @@ owner: brokers
 
 The Brokers package is an exchange-integration domain. Its responsibility is to expose stable, normalized broker capabilities while hiding exchange-specific protocol details. It is not the owner of trading strategy, portfolio policy, or application workflows.
 
-The architectural reference is [Harvester Architecture](../../apps/harvester/docs/architecture.md), especially its separation of domain behavior, injected use cases, infrastructure adapters, and bootstrap composition. Reuse the principles, not Harvester's business model or every folder name.
+The architectural reference is repository-level [ADR-0001: Clean and Hexagonal Architecture](../../docs/architecture/decisions/ADR-0001-clean-hexagonal-architecture.md), together with this package-owned architecture. Apply dependency inversion and explicit side-effect boundaries without importing a consuming application's ports, adapters, or business model.
 
 The package already contains valuable boundaries (RPC, Streams, transport, user-data session, canonical adapters, and deterministic tests). DDD modernization should clarify ownership and dependency direction around those capabilities—not replace working WebSocket code or reorganize files merely for appearance.
 
@@ -145,17 +145,17 @@ RPC, Streams, transport, and session modules are infrastructure components. They
 
 ### Bootstrap and public API
 
-Provider-specific bootstrap/factory boundaries construct concrete exchange infrastructure, inject it into the package's internal application ports where needed, and expose the public broker facade. A consuming application such as Harvester constructs one or more configured provider instances at its own composition root. The public `index.js` exports intentional contracts and constructors; it should not own implementation logic.
+Provider-specific bootstrap/factory boundaries construct concrete exchange infrastructure, inject it into the package's internal application ports where needed, and expose the public broker facade. Each consuming application constructs and composes configured provider instances at its own composition root. The public `index.js` exports intentional package-owned contracts and constructors; it should not own implementation logic.
 
 ### Multiple provider instances and consumer-owned routing
 
 The package may expose multiple concrete provider implementations (currently Binance and a read-only Bitunix Spot surface), and a consumer may construct more than one instance of the same provider with different accounts or supported environments.
 
-The Brokers package owns exchange-specific configuration, clients, transport, normalization, capability truth, and provider lifecycle. It does **not** own application-specific strategy/market routing. Harvester owns its `BrokerPort`, provider-instance registry, execution route table, independent market-data route table, account isolation, and order provenance. Do not add Harvester imports or a strategy-aware router to `@coinzilla/brokers`.
+The Brokers package owns the public Broker API, exchange-specific configuration, clients, transport, normalization, capability truth, and broker lifecycle. It does **not** own consuming-application ports, adapters, provider registries, strategy/market routing, account policy, or order provenance. Each consuming application defines and composes those concerns independently. Do not add consumer-application imports or application-specific routing to `@coinzilla/brokers`.
 
 A provider factory/constructor must validate its own exchange-specific options. Binance instances retain the explicit `TRADING_MODE=testnet|live` contract from ADR-0002. Do not impose Binance's environment model on other exchanges. A provider's presence in the package or registry is not evidence that it supports order placement, cancellation, fills, private streams, or recovery; capability declarations must reflect verified behavior for that provider and environment.
 
-The consumer composes providers and resolves its own routes. For Harvester's accepted target, see [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md), the source-verified [multi-provider migration audit and implementation plan](../../docs/architecture/multi-provider-migration-plan.md), and [issue #1339](https://github.com/45s/coinzilla/issues/1339). The issue defines the phased factory/capability work and preserves current consumer contracts.
+Consuming applications compose broker instances and resolve their own routes. Provider construction and the public Broker API are package responsibilities; application-specific provider selection and routing are not. This architecture document does not define or track a consuming application's routing implementation.
 
 Keep the current public broker API stable during this internal migration. Any proposed public API change requires a separate compatibility analysis and consumer migration plan.
 
@@ -220,65 +220,16 @@ The coverage gate currently enforces **90% lines, 80% branches, and 80% function
 
 The Phase A source audit was read-only. The subsequent PR #693 final-head CI passed Brokers unit tests/coverage, workspace unit tests/coverage, Harvester targeted regression tests, syntax, and dependency audit. No TESTNET integration was run.
 
-### Verified workspace consumers
+### Consumer compatibility boundary
 
-A manifest scan of the current `develop` workspace found two production consumers of `@coinzilla/brokers`:
+`@coinzilla/brokers` exposes the package-owned public Broker API. A consuming application may wrap that API in a narrower application port and adapter, but those contracts belong to the consuming application and must not be copied into this package.
 
-| Consumer | How it uses Brokers | Compatibility implication |
-| --- | --- | --- |
-| `apps/harvester` | Wraps `BinanceWebSocketBroker` in Harvester's own infrastructure adapter, implementing the application-owned `BrokerPort`. | Preserve the public Binance broker methods, normalized results/events, exact decimal strings, and recovery acknowledgement behavior. |
-| `packages/market-simulator` | Imports `CoreBroker`; `HistoricalMarketBroker` extends it, and `SimulatedExecutionBroker` extends the historical broker. | Preserve `CoreBroker` construction, inherited state/maps, and unsupported-method behavior unless a separate consumer migration is planned. |
-
-This makes `CoreBroker` more than an unused legacy base class: it is a live shared extension point for the simulator. Its ownership and long-term contract need an explicit decision before any redesign. The Brokers refactor must not change the Market Simulator domain or implementation as incidental cleanup; use it as a read-only compatibility consumer and add broker-owned contract tests where appropriate.
-
-### Consumer boundary: Harvester owns the broker application port
-
-The current Harvester implementation confirms an important ownership rule:
-
-- `apps/harvester/src/application/ports/broker.port.js` owns Harvester's application-facing `BrokerPort` contract.
-- `apps/harvester/src/infrastructure/brokers/binance-broker-adapter.js` implements that port by composing `BinanceWebSocketBroker` and translating Harvester's normalized order/workflow contracts to the package's public API.
-- Harvester bootstrap composes the concrete adapter. The broker package must not import Harvester or own Harvester's trading workflow. The separate Market Simulator consumer also proves that `CoreBroker` is a live public extension point, not merely an internal implementation detail.
-
-Therefore, do **not** add a duplicate package-level `application/ports/broker.port.js` that mirrors the entire public Binance broker API. The existing `src/application/ports/user-data-client-port.js` is a different, internal port: it abstracts the RPC/user-data client needed by the Brokers package's own user-data session coordinator.
-
-This is the intended hexagonal boundary: the consuming application owns the port it needs; the package's Binance implementation is an infrastructure detail from the application's perspective. Within the Brokers package, use an Application port only where an internal application workflow (currently user-data session) needs to invert a dependency.
-
-### Existing vertical slice: user-data recovery
-
-This is the strongest existing example of the intended architecture:
-
-- `domain/user-data-recovery-policy.js` exports the pure `canCompleteUserDataRecovery` policy. It has no imports and decides whether recovery is complete from explicit facts.
-- `application/user-data-session.js` owns subscriber lifecycle, remote subscription coordination, reconnect attempts, timers, recovery acknowledgements, and event delivery. It depends on the domain policy and an injected port contract/factory, not directly on Binance RPC classes.
-- `application/ports/user-data-client-port.js` defines and validates the application-facing user-data client capability. It lives under `src/application/ports/`, making its Application ownership explicit.
-- `infrastructure/binance/user-data-client-adapter.js` adapts the Binance RPC client to the exchange-neutral port, including Binance event-envelope normalization, subscription methods, and event identity.
-
-This is a real, working vertical slice—not just empty architectural folders. Preserve it as the pattern to study when extending boundaries. It also shows that application code can own a lifecycle coordinator without importing a concrete Binance client.
-
-### Observed dependency direction
-
-The current import edges for the new vertical slice are already pointing inward:
-
-```text
-application/user-data-session.js
-    ├──> domain/user-data-recovery-policy.js
-    └──> application/ports/user-data-client-port.js
-
-infrastructure/binance/user-data-client-adapter.js
-    └──> Binance protocol helpers (adapt-msg, event identity)
-
-binance/broker-websocket/broker.js
-    ├──> application/user-data-session.js
-    ├──> infrastructure/binance/user-data-client-adapter.js
-    ├──> Binance RPC / Streams / transport / protocol helpers
-    └──> Binance response adapters
-```
-
-The inspected `domain/` policy and `application/ports/` contract have no imports. The Application module imports only the domain policy and port assertion; it does not import Binance infrastructure. The user-data adapter implements the port. Binance DTO/Entity adapters live under `infrastructure/binance/adapters/`; the broker facade imports them as part of its infrastructure composition. The complete former Binance implementation, including the `broker-websocket/` tree, is now physically under `src/infrastructure/binance/` (PR #697); its internal module layout was preserved.
+`CoreBroker` is directly extended by `HistoricalMarketBroker` in `packages/market-simulator`. Preserve its constructor, shared state/maps, and unsupported-method behavior unless a separate compatibility migration is explicitly planned. This is a concrete package consumer and a reason to characterize `CoreBroker` before changing it.
 
 ### Current gaps and boundary pressure
 
 - `infrastructure/binance/broker-websocket/broker.js` imports both `application/user-data-session.js` and the concrete `infrastructure/binance/user-data-client-adapter.js`, as well as RPC, Streams, transport, Binance request builders, and Binance response adapters. It is the public facade and current composition boundary. The existing roadmap justifies keeping simple RPC methods cohesive; extract only a demonstrated composition seam or a cohesive stateful/application responsibility.
-- The user-data client port is now nested under `application/ports/`, matching the application-owned port placement used by Harvester. The infrastructure adapter implements this contract; application session code owns its use.
+- The user-data client port is nested under `application/ports/` because the Brokers package's own user-data session workflow needs an internal injected client contract. It is not a consuming application's public Broker API or application port; the infrastructure adapter implements it and the package session owns its use.
 - There is no `bootstrap/` folder or dedicated `create-binance-broker.js` composition root yet. Client construction currently starts in module-local factories in `broker.js`.
 - There is no general `application/use-cases/` area. Do not assume every public broker method needs a use case; identify real application workflows first.
 - The only current `domain/` module is the user-data recovery completion policy. The package has not yet established broader domain modules for orders, market, account, or events.
@@ -328,7 +279,7 @@ Do not move a file based on its name alone. Inspect imports, callers, state owne
 ## Architectural rules
 
 1. **Dependency rule:** dependencies point inward. Domain never imports application or infrastructure. Application never imports Binance modules or transport. Infrastructure implements inward-facing ports.
-2. **Pure-function default:** meaningful deterministic calculations, validation, normalization, parsing, and decisions are plain pure functions in cohesive modules, consistent with Harvester and repository engineering standards.
+2. **Pure-function default:** meaningful deterministic calculations, validation, normalization, parsing, and decisions are plain pure functions in cohesive modules, consistent with repository engineering standards.
 3. **State ownership:** classes are appropriate for owned state and lifecycle invariants (for example, RPC pending-request correlation or subscription state), not as containers for unrelated logic.
 4. **Injected workflows:** application use cases receive explicit dependencies. Avoid hidden imports of concrete clients, environment, global clocks, or sockets.
 5. **Ports are application-owned:** define a port only when an application workflow needs an external capability. Infrastructure implements it.
@@ -430,7 +381,7 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 
 - Rewriting or replacing the native WebSocket implementation.
 - Adding another transport abstraction without a demonstrated need.
-- Moving trading strategies, Portfolio, Position, or Trading Engine behavior from Harvester into Brokers.
+- Moving consumer-application strategies, portfolio/position policy, or trading-engine behavior into Brokers.
 - Introducing a new domain model where `@coinzilla/entities` already owns the concept.
 - Changing public APIs as incidental cleanup.
 - Adding speculative generic infrastructure or a dependency-injection framework.
