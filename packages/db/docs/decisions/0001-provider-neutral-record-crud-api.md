@@ -63,7 +63,7 @@ Use Node.js built-in `node:sqlite` only.
 
 The SQLite adapter stores collection/id/JSON-record tuples in an internal table, uses prepared statements and bound values, and preserves the existing SQLite lifecycle, WAL, foreign-key, lock-timeout, synchronous transaction and cleanup behavior. It supports file-backed and in-memory databases.
 
-SQLite transaction callbacks remain synchronous. They must reject async callbacks rather than committing before awaited work completes.
+SQLite transaction callbacks remain synchronous. They must reject async callbacks rather than committing before awaited work completes. A transaction context, prepared statements and iterators are valid only for the callback lifetime and are invalidated immediately after commit or rollback; retaining them must never permit SQL execution outside the transaction boundary.
 
 ### 5. DDD ownership
 
