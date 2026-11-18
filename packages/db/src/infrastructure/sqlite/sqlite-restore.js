@@ -57,9 +57,13 @@ async function assertRestoreDestinationIsNew({ filename }) {
   }
 }
 
-async function publishRestoredDatabase({ temporaryFilename, destinationFilename }) {
+export async function publishRestoredDatabase({
+  temporaryFilename,
+  destinationFilename,
+  linkOperation = link,
+}) {
   try {
-    await link(temporaryFilename, destinationFilename)
+    await linkOperation(temporaryFilename, destinationFilename)
   } catch (error) {
     if (error.code === "EEXIST") {
       throw new TypeError("SQLite restore destination already exists", {
