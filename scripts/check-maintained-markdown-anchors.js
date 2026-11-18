@@ -15,11 +15,10 @@ const repositoryRoot = fileURLToPath(new URL("../", import.meta.url))
  * Historical targets remain valid link targets; only the source path determines
  * whether an unresolved reference blocks the repository.
  *
- * @param {string} root Absolute repository root.
- * @param {{path: string, content: string}[]} documents Discovered Markdown/MDX documents.
+ * @param {{root: string, documents: {path: string, content: string}[]}} options Repository root and discovered documents.
  * @returns {string[]} Blocking findings from maintained source documents.
  */
-export function findMissingMaintainedLocalAnchors(root, documents) {
+export function findMissingMaintainedLocalAnchors({ root, documents }) {
   const historicalPrefixes = documents
     .filter(({ path }) => isHistoricalPath(path))
     .map(({ path }) => `${path} `)
@@ -36,7 +35,7 @@ export function findMissingMaintainedLocalAnchors(root, documents) {
 export function checkMaintainedLocalAnchors() {
   const documents = findMarkdownDocuments(repositoryRoot)
   const allGaps = findMissingLocalAnchors(repositoryRoot, documents)
-  const maintainedGaps = findMissingMaintainedLocalAnchors(repositoryRoot, documents)
+  const maintainedGaps = findMissingMaintainedLocalAnchors({ root: repositoryRoot, documents })
   const historicalGaps = allGaps.filter((finding) => !maintainedGaps.includes(finding))
 
   process.stdout.write(
