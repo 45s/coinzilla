@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createSqliteDatabase } from "../src/index.js"
-import { createGuardedIterator } from "./infrastructure/sqlite/sqlite-database.js"
+import { createGuardedIterator } from "./infrastructure/sqlite/database.js"
 
 async function createConnectedDatabase() {
   const database = createSqliteDatabase({ filename: ":memory:" })
