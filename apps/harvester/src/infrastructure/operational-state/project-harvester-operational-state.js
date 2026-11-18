@@ -685,6 +685,42 @@ function sortSessionsByStartedSequence({ sessions }) {
 
 // eslint-disable-next-line max-lines-per-function -- Existing synthetic session projection remains a single recovery boundary.
 // eslint-disable-next-line max-lines-per-function -- Session synthesis remains a single projection boundary.
+function emitSessionPreflight({ session, emit }) {
+  const preflight = session.facts.filter((record) =>
+    (
+      record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" ||
+      record.factType === "ACCOUNT_OPEN_ORDERS_CAPTURED"
+    ) && record.data.phase === "PREFLIGHT"
+  )
+  const remaining = session.facts.filter((record) => !preflight.includes(record))
+  for (const record of preflight) {
+    const name = record.factType === "ACCOUNT_SNAPSHOT_CAPTURED"
+      ? EVENT.ACCOUNT_SNAPSHOT
+      : EVENT.ACCOUNT_OPEN_ORDERS
+    emit({ name, data: record.data })
+  }
+  emit({ name: EVENT.STARTED, data: { tradingEnabled: session.tradingEnabled } })
+  return remaining
+}
+
+function emitLatestSessionState({ session, latestSession, state, emit }) {
+  if (session !== latestSession) {
+    return
+  }
+  for (const [symbol, pause] of state.strategyPauses) {
+    emit({ name: EVENT.STRATEGY_PAUSED, data: { symbol, reason: pause.reason } })
+  }
+  for (const blocker of state.activeBlockers.values()) {
+    emit({
+      name: EVENT.EXECUTION_ACCOUNTING_FAILED,
+      data: {
+        symbol: blocker.scope === "ACCOUNT" ? "ACCOUNT" : blocker.symbol,
+        reason: blocker.reason,
+      },
+    })
+  }
+}
+
 function createSessionSyntheticRecords({ session, latestSession, state }) {
   const syntheticRecords = []
   let lineNumber = 0
@@ -697,40 +733,8 @@ function createSessionSyntheticRecords({ session, latestSession, state }) {
     }))
     lineNumber += 1
   }
-  const preflight = session.facts.filter((record) =>
-    (
-      record.factType === "ACCOUNT_SNAPSHOT_CAPTURED" ||
-      record.factType === "ACCOUNT_OPEN_ORDERS_CAPTURED"
-    ) && record.data.phase === "PREFLIGHT"
-  )
-  const remaining = session.facts.filter((record) => !preflight.includes(record))
-  for (const record of preflight) {
-    const name = record.factType === "ACCOUNT_SNAPSHOT_CAPTURED"
-      ? EVENT.ACCOUNT_SNAPSHOT
-      : EVENT.ACCOUNT_OPEN_ORDERS
-    emit({ name,
-data: record.data })
-  }
-  emit({ name: EVENT.STARTED,
-data: { tradingEnabled: session.tradingEnabled } })
-
-  if (session === latestSession) {
-    for (const [symbol, pause] of state.strategyPauses) {
-      emit({ name: EVENT.STRATEGY_PAUSED,
-data: { symbol,
-reason: pause.reason } })
-    }
-    for (const blocker of state.activeBlockers.values()) {
-      emit({
-        name: EVENT.EXECUTION_ACCOUNTING_FAILED,
-        data: {
-          symbol: blocker.scope === "ACCOUNT" ? "ACCOUNT" : blocker.symbol,
-          reason: blocker.reason,
-        },
-      })
-    }
-  }
-
+  const remaining = emitSessionPreflight({ session, emit })
+  emitLatestSessionState({ session, latestSession, state, emit })
   for (const record of remaining) {
     const events = mapFact({
       record,
@@ -738,8 +742,7 @@ reason: pause.reason } })
       cancellationIntents: state.cancellationIntents,
     })
     for (const event of events) {
-      emit({ name: event.name,
-data: event.data })
+      emit({ name: event.name, data: event.data })
     }
   }
   if (session.stop) {
