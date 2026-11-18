@@ -70,7 +70,6 @@ export function makeOrderEventWorkflow({
     pause,
     processExecutionFillTransition,
   })
-
   const processUserDataEventTransition = createUserDataEventTransition({
     state,
     logger,
