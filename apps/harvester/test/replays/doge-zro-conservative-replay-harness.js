@@ -508,7 +508,7 @@ async function publishDogeReplayMarketPrice({ state, price }) {
   });
 }
 
-async function publishDogeReplayFullOrderFill({ state, order, price, tradeId, commissionAmount, commissionAsset }) {
+async function publishDogeReplayFullOrderFill({ state, order, price, tradeId, commissionAmount, commissionAsset, timestamp = Date.now() }) {
   const executedBaseQuantity = order.originalQuantity.amount;
   const executedQuoteQuantity = multiplyDecimal({ left: price,
 right: executedBaseQuantity });
@@ -525,7 +525,6 @@ right: executedBaseQuantity });
     left: commissionCalculationBasis,
     right: executionCommissionRate,
   });
-  const timestamp = Date.now();
   const fullyFilledCanonicalOrder = new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
