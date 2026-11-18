@@ -221,34 +221,34 @@ test("starts configured provider accounts and acquires one process lock per acco
   process.exitCode = 0
   try {
     const result = await fixture.run()
-    assert.ok(result)
-    assert.equal(result.runtime.providerAccounts.length, 2)
+    assert.ok(result, "The configured account startup must return a runtime result")
+    assert.equal(result.runtime.providerAccounts.length, 2, "Both configured provider accounts must start in independent runtimes")
     assert.deepEqual(fixture.started.map(({ identity }) => identity.providerInstanceId), [
       "binanceTestnetPrimary",
       "testProviderLiveSecondary",
-    ])
+    ], "Each account must start with its explicitly configured provider identity")
     assert.deepEqual(fixture.started.map(({ tradingMode }) => tradingMode), [
       "testnet",
       "live",
-    ])
+    ], "Each account must retain its own explicit exchange environment")
     assert.deepEqual(fixture.started.map(({ operatorControlEnabled }) => operatorControlEnabled), [
       true,
       false,
-    ])
+    ], "Only the first configured account may own process-wide Telegram operator control")
     assert.deepEqual(fixture.lockScopes.map(({ accountId, tradingMode }) => [accountId, tradingMode]), [
       ["binance-primary", "testnet"],
       ["test-provider-secondary", "live"],
-    ])
+    ], "Each configured account must acquire a process lock scoped to its own account and environment")
     await fixture.signalHandlers.get("SIGINT")()
     assert.deepEqual(fixture.stopped, [
       "testProviderLiveSecondary",
       "binanceTestnetPrimary",
-    ])
+    ], "Shutdown must stop each successfully started account runtime independently")
     assert.deepEqual(fixture.releasedLocks, [
       "testProviderLiveSecondary",
       "binanceTestnetPrimary",
-    ])
-    assert.equal(process.exitCode, 0)
+    ], "Shutdown must release every successfully acquired account process lock")
+    assert.equal(process.exitCode, 0, "A clean multi-account shutdown must preserve a successful process exit code")
   } finally {
     process.exitCode = previousExitCode
   }
@@ -272,15 +272,15 @@ test("retains an account process lock when startup cleanup is unconfirmed", asyn
   try {
     const result = await fixture.run()
     assert.ok(result)
-    assert.equal(result.runtime.failedAccounts[0].lockRetained, true)
-    assert.deepEqual(fixture.releasedLocks, [])
+    assert.equal(result.runtime.failedAccounts[0].lockRetained, true, "An account lock must remain held when startup cleanup is unconfirmed")
+    assert.deepEqual(fixture.releasedLocks, [], "No account lock may be released before uncertain startup cleanup is confirmed")
     await fixture.signalHandlers.get("SIGINT")()
-    assert.deepEqual(fixture.stopped, ["binanceTestnetPrimary"])
+    assert.deepEqual(fixture.stopped, ["binanceTestnetPrimary"], "Shutdown must stop the healthy account without stopping the failed account")
     assert.deepEqual(fixture.releasedLocks, [
       "binanceTestnetPrimary",
       "binanceTestnetSecondary",
-    ])
-    assert.equal(process.exitCode, 0)
+    ], "Confirmed process shutdown must release both the retained failed-account lock and the healthy account lock")
+    assert.equal(process.exitCode, 0, "A clean shutdown after an isolated startup failure must exit successfully")
   } finally {
     process.exitCode = previousExitCode
   }
@@ -306,20 +306,20 @@ test("keeps healthy accounts running and releases only a failed account's proces
     assert.deepEqual(fixture.started.map(({ identity }) => identity.providerInstanceId), [
       "binanceTestnetPrimary",
       "binanceTestnetSecondary",
-    ])
+    ], "The failed secondary account must not prevent either account startup attempt")
     assert.deepEqual(result.runtime.providerAccounts.map(({ providerInstanceId }) => providerInstanceId), [
       "binanceTestnetPrimary",
-    ])
-    assert.equal(result.runtime.failedAccounts.length, 1)
-    assert.equal(result.runtime.failedAccounts[0].providerInstanceId, "binanceTestnetSecondary")
-    assert.deepEqual(fixture.releasedLocks, ["binanceTestnetSecondary"])
+    ], "Only the healthy account may appear in the active runtime list")
+    assert.equal(result.runtime.failedAccounts.length, 1, "Exactly one failed account must be reported when the secondary startup fails")
+    assert.equal(result.runtime.failedAccounts[0].providerInstanceId, "binanceTestnetSecondary", "The failed-account report must identify the secondary provider instance")
+    assert.deepEqual(fixture.releasedLocks, ["binanceTestnetSecondary"], "Confirmed cleanup must release only the failed account lock while the healthy account remains active")
     await fixture.signalHandlers.get("SIGINT")()
-    assert.deepEqual(fixture.stopped, ["binanceTestnetPrimary"])
+    assert.deepEqual(fixture.stopped, ["binanceTestnetPrimary"], "Shutdown must stop the healthy account runtime and leave the failed account untouched")
     assert.deepEqual(fixture.releasedLocks, [
       "binanceTestnetSecondary",
       "binanceTestnetPrimary",
-    ])
-    assert.equal(process.exitCode, 0)
+    ], "Final shutdown must release the healthy account lock after the failed account lock was already released")
+    assert.equal(process.exitCode, 0, "The process must exit successfully after isolating one failed account")
   } finally {
     process.exitCode = previousExitCode
   }
