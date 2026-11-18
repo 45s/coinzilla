@@ -191,6 +191,37 @@ async function createBackupSource({ filename, origin }) {
   return database
 }
 
+async function verifyConcurrentBackupDestination({ first, second, destination }) {
+  const copiedPages = await Promise.all([
+    first.backup({
+      destination,
+      rate: 1,
+    }),
+    second.backup({
+      destination,
+      rate: 1,
+    }),
+  ])
+  assert.ok(
+    copiedPages.every((pages) => Number.isSafeInteger(pages) && pages > 0),
+    "Each concurrent backup must report a positive number of copied SQLite pages",
+  )
+
+  const record = await readRestoredValue({
+    filename: destination,
+    query: "SELECT origin, payload FROM backup_origins",
+  })
+  assert.ok(
+    ["first", "second"].includes(record.origin),
+    "The shared destination must contain one complete source snapshot rather than mixed data",
+  )
+  assert.equal(
+    Buffer.from(record.payload).toString(),
+    `${record.origin}-complete-snapshot`,
+    "The final atomically published backup must retain the winning source's complete payload",
+  )
+}
+
 test("concurrent SQLite backups to one destination publish one complete validated snapshot", async () => {
   const directory = await createTemporaryDirectory()
   const first = await createBackupSource({
@@ -204,34 +235,11 @@ test("concurrent SQLite backups to one destination publish one complete validate
   const destination = join(directory, "shared-backup.sqlite")
 
   try {
-    const copiedPages = await Promise.all([
-      first.backup({
-        destination,
-        rate: 1,
-      }),
-      second.backup({
-        destination,
-        rate: 1,
-      }),
-    ])
-    assert.ok(
-      copiedPages.every((pages) => Number.isSafeInteger(pages) && pages > 0),
-      "Each concurrent backup must report a positive number of copied SQLite pages",
-    )
-
-    const record = await readRestoredValue({
-      filename: destination,
-      query: "SELECT origin, payload FROM backup_origins",
+    await verifyConcurrentBackupDestination({
+      first,
+      second,
+      destination,
     })
-    assert.ok(
-      ["first", "second"].includes(record.origin),
-      "The shared destination must contain one complete source snapshot rather than mixed data",
-    )
-    assert.equal(
-      Buffer.from(record.payload).toString(),
-      `${record.origin}-complete-snapshot`,
-      "The final atomically published backup must retain the winning source's complete payload",
-    )
   } finally {
     await Promise.all([first.close(), second.close()])
     await rm(directory, {
