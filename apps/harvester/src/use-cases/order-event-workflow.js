@@ -241,7 +241,7 @@ async function processExecutionFill({ dependencies, order, fill }) {
     fill = new Fill({
       tradeId: fill.tradeId,
       brokerOrderId: fill.brokerOrderId,
-      clientOrderId: fill.clientOrderId,
+      clientOrderId: fill.clientOrderId ?? order.clientOrderId,
       providerInstanceId: order.providerInstanceId,
       providerType: order.providerType,
       accountId: order.accountId,
