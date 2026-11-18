@@ -816,7 +816,10 @@ function createHarvesterMarketDataLifecycleStarter({ state, startServices }) {
       throw new Error("Harvester market-data lifecycle has already stopped")
     }
     if (state.started) {
-      return { ok: true, started: true }
+      return {
+        ok: true,
+        started: true,
+      }
     }
     if (!state.startPromise) {
       state.startPromise = (async () => {
@@ -837,7 +840,10 @@ function createHarvesterMarketDataLifecycleStarter({ state, startServices }) {
 function createHarvesterMarketDataLifecycleStopper({ state, resources }) {
   return async function stop() {
     if (state.stopped) {
-      return { ok: true, stopped: true }
+      return {
+        ok: true,
+        stopped: true,
+      }
     }
     if (state.stopPromise) {
       return state.stopPromise
@@ -853,7 +859,10 @@ function createHarvesterMarketDataLifecycleStopper({ state, resources }) {
       const errors = await stopHarvesterMarketDataSubscriptions({ resources })
       if (errors.length > 0) {
         state.stopPromise = undefined
-        return { ok: false, errors }
+        return {
+          ok: false,
+          errors,
+        }
       }
       state.stopped = true
       return { ok: true, stopped: true }
@@ -878,7 +887,10 @@ function createHarvesterMarketDataLifecycle({ startup, portfolio, resources, fre
       freshness,
     }),
   })
-  const stop = createHarvesterMarketDataLifecycleStopper({ state, resources })
+  const stop = createHarvesterMarketDataLifecycleStopper({
+    state,
+    resources,
+  })
   return Object.freeze({
     start,
     stop,
@@ -1070,7 +1082,7 @@ function createHarvesterRuntimeResult({
   stop,
   marketDataLifecycle,
 } = {}) {
-  const identity = portfolio.accountRuntime.identity
+  const { identity } = portfolio.accountRuntime
   const marketData = resolveHarvesterRuntimeMarketDataMetadata({ startup })
   return Object.freeze({
     appConfig: startup.appConfig,
@@ -1168,8 +1180,14 @@ async function createHarvesterRuntimeComponents({ startup, portfolio }) {
 export async function startHarvester(options = {}) {
   const startup = await createHarvesterStartupContext({ options })
   const portfolio = createHarvesterPortfolioContext({ startup })
-  ensureHarvesterMarketDataProviderIdentities({ startup, portfolio })
-  const components = await createHarvesterRuntimeComponents({ startup, portfolio })
+  ensureHarvesterMarketDataProviderIdentities({
+    startup,
+    portfolio,
+  })
+  const components = await createHarvesterRuntimeComponents({
+    startup,
+    portfolio,
+  })
   await startHarvesterServices({
     startup,
     portfolio,
