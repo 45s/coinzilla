@@ -80,6 +80,12 @@ function createReconcileTerminalOrderFillsTransition({
       state,
       order,
     })
+    if (!(registeredOrder instanceof CanonicalOrder)) {
+      return reconcile({
+        order: registeredOrder,
+        eventFill,
+      })
+    }
     if (typeof registeredOrder.brokerOrderId === "string") {
       ordersByBrokerId.set(registeredOrder.brokerOrderId, registeredOrder)
     }
