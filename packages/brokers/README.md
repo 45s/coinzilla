@@ -49,7 +49,7 @@ The declaration and all nested objects and arrays are frozen. The `capabilities`
 
 Only Binance currently exposes a broker capability declaration. The REST-backed BitunixSpotBroker remains read-only; the separate BitunixSpotWebSocketClient exposes authenticated Spot RPC reads but does not itself establish broker capabilities or trading support.
 
-For the source-mapped Binance capability matrix and the common Binance/Bitunix API plan, see [the Brokers roadmap](./ROADMAP.md#common-exchange-neutral-broker-api-1446).
+For the source-mapped Binance capability matrix and the common Binance/Bitunix API plan, see [the Brokers roadmap](./ROADMAP.md#common-exchange-neutral-broker-api).
 
 ### Provider instances and routing ownership
 
