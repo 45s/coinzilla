@@ -104,10 +104,8 @@ function createBrokerAdapterFactory({
   }
 }
 
-function createProviderInstance({
+function resolveProviderDescriptorIdentity({
   descriptor,
-  env,
-  adapterFactories,
 }) {
   assertRecord({
     value: descriptor,
@@ -136,30 +134,60 @@ function createProviderInstance({
     environment,
     providerInstanceId,
   })
+  return {
+    providerInstanceId,
+    providerType,
+    accountId,
+    environment,
+    configuredCredentials,
+  }
+}
+
+function resolveProviderAdapterFactory({
+  providerInstanceId,
+  providerType,
+  adapterFactories,
+}) {
   const adapterFactory = Object.hasOwn(adapterFactories, providerType)
     ? adapterFactories[providerType]
     : undefined
   if (typeof adapterFactory !== "function") {
     throw new TypeError(`Provider ${providerInstanceId} uses unsupported provider type ${providerType}`)
   }
+  return adapterFactory
+}
+
+function createProviderInstance({
+  descriptor,
+  env,
+  adapterFactories,
+}) {
+  const identity = resolveProviderDescriptorIdentity({
+    descriptor,
+  })
+  const adapterFactory = resolveProviderAdapterFactory({
+    providerInstanceId: identity.providerInstanceId,
+    providerType: identity.providerType,
+    adapterFactories,
+  })
   const credentials = resolveCredentialEnvironmentNames({
-    credentials: configuredCredentials,
-    providerInstanceId,
+    credentials: identity.configuredCredentials,
+    providerInstanceId: identity.providerInstanceId,
   })
   return Object.freeze({
-    providerInstanceId,
-    providerType,
-    accountId,
-    environment,
+    providerInstanceId: identity.providerInstanceId,
+    providerType: identity.providerType,
+    accountId: identity.accountId,
+    environment: identity.environment,
     credentialEnvironmentNames: credentials,
     identity: Object.freeze({
-      providerInstanceId,
-      providerType,
-      accountId,
+      providerInstanceId: identity.providerInstanceId,
+      providerType: identity.providerType,
+      accountId: identity.accountId,
     }),
     brokerAdapterFactory: createBrokerAdapterFactory({
-      providerInstanceId,
-      environment,
+      providerInstanceId: identity.providerInstanceId,
+      environment: identity.environment,
       credentials,
       env,
       adapterFactory,
@@ -245,7 +273,7 @@ export function resolveProviderInstances({
     value: adapterFactories,
     path: "adapterFactories",
   })
-  const brokers = appConfig.brokers
+  const { brokers } = appConfig
   if (brokers === undefined) {
     return resolveLegacyBinanceProvider({
       env,

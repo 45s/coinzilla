@@ -5,12 +5,22 @@ import { resolveProviderInstances } from "./resolve-provider-instances.js"
 function createAdapterFactories(calls = []) {
   return {
     binance: (input) => {
-      calls.push({ provider: "binance", ...input })
-      return Object.freeze({ provider: "binance" })
+      calls.push({
+        provider: "binance",
+        ...input,
+      })
+      return Object.freeze({
+        provider: "binance",
+      })
     },
     "bitunix-spot": (input) => {
-      calls.push({ provider: "bitunix-spot", ...input })
-      return Object.freeze({ provider: "bitunix-spot" })
+      calls.push({
+        provider: "bitunix-spot",
+        ...input,
+      })
+      return Object.freeze({
+        provider: "bitunix-spot",
+      })
     },
   }
 }

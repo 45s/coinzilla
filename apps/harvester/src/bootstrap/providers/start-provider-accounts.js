@@ -211,9 +211,10 @@ function createFailedAccount({
 
 function throwIfNoAccountStarted({
   providers,
+  startedAccounts,
   failedErrors,
 }) {
-  if (failedErrors.length === 0) {
+  if (startedAccounts.length > 0 || failedErrors.length === 0) {
     return
   }
   if (providers.length === 1 && failedErrors.length === 1) {
@@ -341,6 +342,7 @@ export async function startProviderAccounts({
   }
   throwIfNoAccountStarted({
     providers,
+    startedAccounts,
     failedErrors,
   })
   if (providers.length === 1) {
