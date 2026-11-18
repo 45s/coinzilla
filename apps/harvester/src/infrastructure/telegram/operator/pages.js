@@ -66,6 +66,27 @@ function createUnavailablePage({ queryPage,
   }
 }
 
+async function executeOperatorQuery({ method, userId, operator, diagnostics, interaction }) {
+  try {
+    return {
+      result: await operator[method]({
+        actor: {
+          id: `telegram-user:${userId}`,
+          roles: ["trading-operator"],
+        },
+      }),
+    }
+  } catch (error) {
+    diagnostics.fail({
+      interaction,
+      error,
+      stage: "QUERY_EXECUTION",
+      operation: method,
+    })
+    return { threw: true }
+  }
+}
+
 async function readOperatorQuery({
   queryPage,
   userId,
@@ -79,11 +100,13 @@ async function readOperatorQuery({
   if (!method || typeof operator[method] !== "function") {
     return {
       ok: false,
-      page: createUnavailablePage({ queryPage,
- method,
- diagnostics,
- interaction,
- buildNavigationKeyboard }),
+      page: createUnavailablePage({
+        queryPage,
+        method,
+        diagnostics,
+        interaction,
+        buildNavigationKeyboard,
+      }),
     }
   }
   interaction.operation = method
@@ -94,29 +117,24 @@ async function readOperatorQuery({
     stage: "QUERY_STARTED",
     fields: { queryPage },
   })
-  let result
-  try {
-    result = await operator[method]({
-      actor: { id: `telegram-user:${userId}`,
- roles: ["trading-operator"] },
-    })
-  } catch (error) {
-    diagnostics.fail({ interaction,
- error,
- stage: "QUERY_EXECUTION",
- operation: method })
-    return { ok: false,
- page: createQueryFailurePage({ queryPage,
- buildNavigationKeyboard }) }
+  const outcome = await executeOperatorQuery({
+    method,
+    userId,
+    operator,
+    diagnostics,
+    interaction,
+  })
+  if (outcome.threw) {
+    return { ok: false, page: createQueryFailurePage({ queryPage, buildNavigationKeyboard }) }
   }
-  if (result?.ok !== true) {
-    reportQueryResultFailure({ result,
- method,
- diagnostics,
- interaction })
-    return { ok: false,
- page: createQueryFailurePage({ queryPage,
- buildNavigationKeyboard }) }
+  if (outcome.result?.ok !== true) {
+    reportQueryResultFailure({
+      result: outcome.result,
+      method,
+      diagnostics,
+      interaction,
+    })
+    return { ok: false, page: createQueryFailurePage({ queryPage, buildNavigationKeyboard }) }
   }
   logStage({
     interaction,
@@ -124,8 +142,7 @@ async function readOperatorQuery({
     stage: "QUERY_COMPLETED",
     fields: { durationMs: Date.now() - startedAt },
   })
-  return { ok: true,
- result }
+  return { ok: true, result: outcome.result }
 }
 
 function createQueryFailurePage({ queryPage,
