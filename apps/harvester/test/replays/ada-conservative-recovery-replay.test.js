@@ -128,11 +128,12 @@ async function submitAdaSecondBuyAndWait({ replay, firstSell, secondBuy }) {
 }
 
 async function submitAdaBuySequence(replay) {
-  const initialBuy = await waitForAdaOrder({
+  const initialBuySubmission = waitForAdaOrder({
     replay,
     side: "BUY",
   })
   await replay.publishMarketPrice(scenarioExpectations.initialPrice)
+  const initialBuy = await initialBuySubmission
   const { firstSell, secondBuy } = await submitAdaFirstBuyAndWait({
     replay,
     firstBuy: initialBuy,
