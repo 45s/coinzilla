@@ -10,6 +10,7 @@ import {
 } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeOrderEventWorkflow } from "./order-event-workflow.js"
 
 const baseAsset = new Asset({
@@ -658,4 +659,31 @@ test("fails closed and pauses when a legacy order has no recorded provider prove
   assert.equal(result.ok, false)
   assert.deepEqual(calls.accounting, [], "Unattributed legacy fills must not reach accounting.")
   assert.equal(calls.pauses[0]?.reason, "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH")
+})
+
+
+test("uses the registry-enriched provider identity when an exchange update omits adapter metadata", async () => {
+  const pendingOrder = makeOrder({
+    status: "PENDING",
+    executedQuantity: "0",
+    brokerOrderId: undefined,
+  })
+  const registry = OrderRegistry.empty().registerPending({ order: pendingOrder }).registry
+  const eventOrder = makeOrder({ includeProviderProvenance: false })
+  const fill = makeFill({ includeProviderProvenance: false })
+  const { workflow, calls } = makeWorkflow({ registry })
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: eventOrder,
+      fill,
+    },
+  })
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual([
+    calls.accounting[0].providerInstanceId,
+    calls.accounting[0].providerType,
+    calls.accounting[0].accountId,
+  ], ["binanceTestnet", "binance", "binance-primary"])
 })
