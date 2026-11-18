@@ -101,20 +101,42 @@ test("reports unresolved owned-BUY cancellation without claiming full cancellati
   )
 })
 
-test("preserves the existing non-canceling market pause contract", () => {
+test("reports owned BUY cancellation and recovery SELL continuity for the normal market Pause command", () => {
   const reply = buildControlReply({
     action: "PAUSE",
     symbol: "LINKUSDT",
     result: { ok: true,
  data: { paused: true,
- alreadyPaused: false } },
+ alreadyPaused: false,
+ canceled: 2,
+ reconciled: 1 } },
     method: "pauseMarket",
     interaction: { failed: false },
     diagnostics: createDiagnostics(),
   })
   assert.match(
     reply,
+    /Cancelled 2 Harvester-owned BUY order/,
+    "The normal market Pause response must report the confirmed owned-BUY cancellation count.",
+  )
+  assert.match(
+    reply,
+    /reconciled 1 fill/,
+    "The normal market Pause response must report fills reconciled during cancellation.",
+  )
+  assert.match(
+    reply,
+    /Recovery SELLs and accounting continue/,
+    "The normal market Pause response must make recovery SELL continuity explicit.",
+  )
+  assert.match(
+    reply,
+    /External\/manual and prior-process orders are untouched/,
+    "The normal market Pause response must preserve the startup/external-order ownership boundary.",
+  )
+  assert.doesNotMatch(
+    reply,
     /Existing exchange orders remain open and may still fill/,
-    "The legacy market pause response must not imply that existing exchange orders were cancelled.",
+    "The normal market Pause response must not describe owned BUYs as intentionally left open.",
   )
 })
