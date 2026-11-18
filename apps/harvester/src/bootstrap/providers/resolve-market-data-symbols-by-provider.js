@@ -17,14 +17,6 @@ function assertProviderInstances(providers) {
   return providerIds
 }
 
-function assertPairMap(appConfig) {
-  const pairs = appConfig?.strategies?.CG_coinGrabber?.pairs
-  if (!isRecord(pairs)) {
-    throw new TypeError("Market-data routing requires the configured CG_coinGrabber pair map")
-  }
-  return pairs
-}
-
 function assertRouteShape({ route, index }) {
   if (!isRecord(route) ||
       Object.keys(route).some((key) => key !== "symbol" && key !== "providerInstanceId") ||
@@ -105,7 +97,13 @@ function groupSymbolsByProvider({ providers, routeBySymbol }) {
  */
 export function resolveMarketDataSymbolsByProvider({ appConfig, providers } = {}) {
   const providerIds = assertProviderInstances(providers)
-  const pairs = assertPairMap(appConfig)
+  const pairs = appConfig?.strategies?.CG_coinGrabber?.pairs
+  if (!isRecord(pairs) && providers.length === 1 && appConfig?.marketDataRouting === undefined) {
+    return new Map([[providers[0].providerInstanceId, Object.freeze([])]])
+  }
+  if (!isRecord(pairs)) {
+    throw new TypeError("Market-data routing requires the configured CG_coinGrabber pair map")
+  }
   if (appConfig.marketDataRouting === undefined) {
     if (providers.length !== 1) {
       throw new TypeError("Multi-provider Harvester configuration requires explicit marketDataRouting.routes")

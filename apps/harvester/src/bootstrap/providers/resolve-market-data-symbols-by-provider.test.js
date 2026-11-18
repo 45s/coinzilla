@@ -212,3 +212,11 @@ test("rejects a market-data provider with an incompatible trading environment", 
     "market-data source environment must be compatible with the configured market",
   )
 })
+
+test("keeps legacy single-provider bootstrap compatible with minimal test configurations", () => {
+  const resolved = resolveMarketDataSymbolsByProvider({
+    appConfig: {},
+    providers: [providers[0]],
+  })
+  assert.deepEqual([...resolved], [["binance-one", []]])
+})
