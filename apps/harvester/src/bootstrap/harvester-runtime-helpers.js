@@ -124,9 +124,47 @@ export function createHarvesterCandleHistoryService({
   logger,
   now,
   getTradingEngine,
+  getMarketDataBroker,
+  marketDataSources = {},
+  marketDataProviderTypes = {},
+  providerIdentity,
 } = {}) {
   return createCandleHistoryService({
     broker,
+    getBroker: typeof getMarketDataBroker === "function"
+      ? ({ symbol }) => getMarketDataBroker({ symbol })
+      : undefined,
+    getSourceMetadata: ({ symbol, broker: sourceBroker }) => {
+      const expectedProviderInstanceId = marketDataSources[symbol]
+      const expectedProviderType = marketDataProviderTypes[symbol]
+      const providerInstanceId = sourceBroker.providerInstanceId
+        ?? expectedProviderInstanceId
+        ?? providerIdentity?.providerInstanceId
+      const providerType = sourceBroker.providerType
+        ?? expectedProviderType
+        ?? providerIdentity?.providerType
+      const accountId = sourceBroker.accountId
+        ?? (providerInstanceId === providerIdentity?.providerInstanceId
+          ? providerIdentity?.accountId
+          : null)
+      const environment = sourceBroker.environment ?? providerIdentity?.environment
+
+      if (expectedProviderInstanceId && providerInstanceId !== expectedProviderInstanceId) {
+        throw new Error(`Candle source for ${symbol} resolved to unexpected provider instance ${providerInstanceId}`)
+      }
+      if (expectedProviderType && providerType !== expectedProviderType) {
+        throw new Error(`Candle source for ${symbol} resolved to unexpected provider type ${providerType}`)
+      }
+      if (providerIdentity?.environment && environment !== providerIdentity.environment) {
+        throw new Error(`Candle source for ${symbol} uses incompatible environment ${environment}`)
+      }
+      return {
+        providerInstanceId,
+        providerType,
+        accountId,
+        environment,
+      }
+    },
     logger,
     now,
     onSnapshot: async ({ symbol, snapshot } = {}) => {
