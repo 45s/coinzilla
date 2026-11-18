@@ -28,8 +28,11 @@ function assertProviderInstances(providers) {
   return providerById
 }
 
-function getStrategyPairs(appConfig) {
+function getStrategyPairs(appConfig, { allowMissing = false } = {}) {
   const pairs = appConfig?.strategies?.[StrategyId.COIN_GRABBER]?.pairs
+  if (allowMissing && pairs === undefined) {
+    return {}
+  }
   if (!isRecord(pairs)) {
     throw new TypeError("Execution routing requires the configured CG_coinGrabber pair map")
   }
@@ -62,7 +65,7 @@ function addConfiguredRoute({ route, index, pairs, providerById, routeByStrategy
   assertRouteShape({ route, index })
   if (!EXECUTABLE_STRATEGY_IDS.has(route.strategyId)) {
     throw new TypeError(
-      `Execution routing does not support strategy ${route.strategyId}; only CG_coinGrabber is executable`,
+      `Execution routing contains unsupported strategy ${route.strategyId}; only CG_coinGrabber is executable`,
     )
   }
   if (!Object.hasOwn(pairs, route.symbol)) {
@@ -158,7 +161,10 @@ function groupSymbolsByProvider({ providers, routeByStrategyMarket }) {
  */
 export function resolveExecutionSymbolsByProvider({ appConfig, providers } = {}) {
   const providerById = assertProviderInstances(providers)
-  const pairs = getStrategyPairs(appConfig)
+  const isLegacySingleProvider = appConfig.executionRouting === undefined && providers.length === 1
+  const pairs = getStrategyPairs(appConfig, {
+    allowMissing: isLegacySingleProvider,
+  })
   if (appConfig.executionRouting === undefined) {
     if (providers.length !== 1) {
       throw new TypeError(

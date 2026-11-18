@@ -118,6 +118,14 @@ function createMainProviderAccountStarter({
       tradingEnabled: true,
       strategyMode: "conservative",
       subscriptions: ["BTCUSDT"],
+      executionSymbols: input.executionSymbols,
+      marketDataSources: input.marketDataSources,
+      marketDataProviderTypes: input.marketDataProviderTypes,
+      marketDataProviderIdentities: input.marketDataProviderIdentities,
+      marketDataProviderInstanceId: input.marketDataProviderInstanceId,
+      marketDataSymbols: input.marketDataSymbols,
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => ({ ok: true }),
       stop: async () => {
         stopped.push(input.providerIdentity.providerInstanceId)
         return {
@@ -186,6 +194,13 @@ function createMainMultiProviderAppConfig(providerInstances) {
     },
     marketDataRouting: {
       routes,
+    },
+    executionRouting: {
+      routes: routes.map(({ symbol, providerInstanceId }) => ({
+        strategyId: "CG_coinGrabber",
+        symbol,
+        providerInstanceId,
+      })),
     },
     brokers: {
       instances: providerInstances,

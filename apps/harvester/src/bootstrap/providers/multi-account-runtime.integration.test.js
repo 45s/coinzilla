@@ -225,7 +225,7 @@ function createBrokerOrderPorts({ calls }) {
         limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
         originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
         executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
-        status: "NEW",
+        status: "OPEN",
         createdAt: Date.now(),
         acknowledgedAt: Date.now(),
         updatedAt: Date.now(),
@@ -247,7 +247,7 @@ function createBrokerOrderPorts({ calls }) {
     getOpenOrders: async () => ({
       ok: true,
       data: [...calls.orders.values()].filter((order) =>
-        ["NEW", "OPEN", "PARTIALLY_FILLED"].includes(order.status)
+        ["OPEN", "PARTIALLY_FILLED"].includes(order.status)
       ),
     }),
     getFills: async ({ symbol } = {}) => ({
