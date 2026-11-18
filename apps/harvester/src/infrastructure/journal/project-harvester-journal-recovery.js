@@ -1103,26 +1103,7 @@ right: minProfit }) >= 0
   }
 }
 
-function resolveRecoveryNonCompletionDetails({ data }) {
-  const symbol = requireString({
-    value: data.symbol,
-    field: "symbol",
-  })
-  const marketId = requireString({
-    value: data.marketId,
-    field: "marketId",
-  })
-  const sellOrderClientId = requireString({
-    value: data.sellOrderClientId,
-    field: "sellOrderClientId",
-  })
-  const sellOrderBrokerOrderId = requireString({
-    value: data.sellOrderBrokerOrderId,
-    field: "sellOrderBrokerOrderId",
-  })
-  if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(data.outcome)) {
-    throw new TypeError("Recovery-cycle non-completion outcome is invalid")
-  }
+function mapRecoveryNonCompletionMetrics({ data }) {
   const reason = requireString({
     value: data.reason,
     field: "reason",
@@ -1159,16 +1140,38 @@ function resolveRecoveryNonCompletionDetails({ data }) {
     minProfit,
   })
   return {
-    symbol,
-    marketId,
-    sellOrderClientId,
-    sellOrderBrokerOrderId,
-    outcome: data.outcome,
     reason,
     realizedNetProfit,
     activeQuantity,
     keepQuantity,
     minProfit,
+  }
+}
+
+function resolveRecoveryNonCompletionDetails({ data }) {
+  if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(data.outcome)) {
+    throw new TypeError("Recovery-cycle non-completion outcome is invalid")
+  }
+  const metrics = mapRecoveryNonCompletionMetrics({ data })
+  return {
+    symbol: requireString({
+      value: data.symbol,
+      field: "symbol",
+    }),
+    marketId: requireString({
+      value: data.marketId,
+      field: "marketId",
+    }),
+    sellOrderClientId: requireString({
+      value: data.sellOrderClientId,
+      field: "sellOrderClientId",
+    }),
+    sellOrderBrokerOrderId: requireString({
+      value: data.sellOrderBrokerOrderId,
+      field: "sellOrderBrokerOrderId",
+    }),
+    outcome: data.outcome,
+    ...metrics,
   }
 }
 
