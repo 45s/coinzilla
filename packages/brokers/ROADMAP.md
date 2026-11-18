@@ -1281,12 +1281,12 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 ## 2026-11-18 — Bitunix local diagnostics runner (#1426)
 
-**Status: Implementation and offline verification complete in [PR #1427](https://github.com/45s/coinzilla/pull/1427); local live API smoke test remains operator-owned.**
+**Status: Implemented in [PR #1427](https://github.com/45s/coinzilla/pull/1427); diagnostic defaults/configuration cleanup is in [PR #1432](https://github.com/45s/coinzilla/pull/1432). Local live API smoke test remains operator-owned.**
 
 - Add an explicitly invoked local runner over the existing Bitunix Spot REST and authenticated WebSocket RPC clients.
 - Verify public REST catalog/price reads, private account reads, WS connection/authentication, all existing Spot RPC methods, request/response IDs, durations, exchange errors, transport errors, close behavior and cleanup.
 - Capture sanitized outbound WS request envelopes and inbound response summaries. Never persist API credentials, signatures, nonces, UIDs, account balances, addresses, memo values or full private account payloads.
-- Require explicit confirmation before contacting the configured LIVE Spot API. Bitunix Spot TESTNET is not documented; this runner does not claim TESTNET verification.
+- Require the source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` opt-in before contacting the configured LIVE Spot API. Symbol, K-line interval, timeout and public-payload capture are named source constants; API credentials remain environment-only and optional depth precision remains configurable. Bitunix Spot TESTNET is not documented; this runner does not claim TESTNET verification.
 - Keep the tool outside Harvester startup and trading composition. No order placement/cancellation, withdrawals, transfers, retries or automatic reconnects.
 - Preserve #1185 as the trading-readiness blocker. The current read-only integration is a temporary safety state, not the intended end state: the longer-term goal is a complete Bitunix broker/Harvester provider including trading, once order identity, quantity semantics, execution-history completeness, account freshness, market constraints, event/recovery and environment-safety requirements are independently resolved and tested.
 - [x] Pass offline diagnostic-helper/runner tests and all Brokers/workspace required CI on the exact PR head.
