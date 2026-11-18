@@ -155,6 +155,8 @@ function createAccountRuntimeFixtures({
     tradingEnabled: true,
     strategyMode: "conservative",
     subscriptions: [],
+    startMarketData: async () => ({ ok: true }),
+    stopMarketData: async () => ({ ok: true }),
     stop: async () => {
       starts.push(`stop:${provider.providerInstanceId}`)
       return {
@@ -246,6 +248,55 @@ function assertAccountStartupInputs({
   ])
 }
 
+test("stops market-data intake only after each account runtime completes shutdown", async () => {
+  const providers = [
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+    }),
+  ]
+  const shutdownOrder = []
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    start: async (input) => {
+      const { providerInstanceId } = input.providerIdentity
+      return {
+        executionSymbols: [...input.executionSymbols],
+        marketDataSources: input.marketDataSources,
+        marketDataProviderTypes: input.marketDataProviderTypes,
+        tradingEnabled: true,
+        startMarketData: async () => ({ ok: true }),
+        stop: async () => {
+          shutdownOrder.push(`runtime:${providerInstanceId}`)
+          return { ok: true }
+        },
+        stopMarketData: async () => {
+          shutdownOrder.push(`market-data:${providerInstanceId}`)
+          return { ok: true }
+        },
+      }
+    },
+  })
+
+  const result = await runtime.stop()
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(shutdownOrder, [
+    "runtime:second",
+    "market-data:second",
+    "runtime:first",
+    "market-data:first",
+  ], "Market-data intake must remain active until each account's strategy shutdown has completed safely.")
+})
+
 test("starts one independent runtime per configured provider account", async () => {
   const providers = createCredentialedProviderFixtures()
   const starts = []
@@ -330,6 +381,8 @@ function createSecondAccountFailureStarter({
       marketDataProviderTypes: input.marketDataProviderTypes,
       subscriptions: [...input.executionSymbols],
       tradingEnabled: input.executionSymbols.length > 0,
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => ({ ok: true }),
       stop: async () => {
         stopCalls.push(account)
         return {
@@ -414,6 +467,8 @@ test("reports failed-account lock cleanup errors without stopping healthy accoun
       }
       const account = startCount === 1 ? "first" : "third"
       return {
+        startMarketData: async () => ({ ok: true }),
+        stopMarketData: async () => ({ ok: true }),
         stop: async () => {
           stopped.push(account)
           return {
@@ -468,6 +523,8 @@ test("retains a failed account lock when startup cleanup is not confirmed", asyn
         throw new Error("second account cleanup is uncertain")
       }
       return {
+        startMarketData: async () => ({ ok: true }),
+        stopMarketData: async () => ({ ok: true }),
         stop: async () => ({
           ok: true,
         }),
@@ -546,6 +603,8 @@ test("releases only accounts whose runtime shutdown is confirmed", async () => {
       }),
     ],
     start: async (input) => ({
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => ({ ok: true }),
       stop: async () => {
         const { providerInstanceId } = input.providerIdentity
         stopCalls.push(providerInstanceId)

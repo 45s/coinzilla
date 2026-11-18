@@ -802,7 +802,7 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
     getMarketDataBroker: startup.getMarketDataBroker,
     marketDataSources: startup.marketDataSources,
     marketDataProviderTypes: startup.marketDataProviderTypes,
-    marketDataEnvironment: startup.environment,
+    marketDataEnvironment: startup.tradingMode,
     subscriptions: resources.subscriptions,
     bookSubscriptions: resources.bookSubscriptions,
     marketPriceIntake: resources.marketPriceIntake,

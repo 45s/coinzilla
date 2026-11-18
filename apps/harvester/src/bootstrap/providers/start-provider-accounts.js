@@ -207,6 +207,20 @@ async function stopOneStartedAccount({
       return [error]
     }
   }
+  if (typeof entry.runtime.stopMarketData === "function") {
+    try {
+      const result = await entry.runtime.stopMarketData()
+      const stopErrors = collectRuntimeStopErrors({
+        result,
+        providerInstanceId: entry.provider.providerInstanceId,
+      })
+      if (stopErrors.length > 0) {
+        return stopErrors
+      }
+    } catch (error) {
+      return [error]
+    }
+  }
   return releaseStoppedAccountLock({
     entry,
     releaseProviderLock,
@@ -218,21 +232,6 @@ async function stopStartedAccounts({
   releaseProviderLock,
 }) {
   const errors = []
-  for (const entry of [...startedAccounts].reverse()) {
-    if (typeof entry.runtime.stopMarketData === "function") {
-      try {
-        const result = await entry.runtime.stopMarketData()
-        if (result?.ok === false) {
-          errors.push(...collectRuntimeStopErrors({
-            result,
-            providerInstanceId: entry.provider.providerInstanceId,
-          }))
-        }
-      } catch (error) {
-        errors.push(error)
-      }
-    }
-  }
   for (const entry of [...startedAccounts].reverse()) {
     errors.push(...await stopOneStartedAccount({
       entry,

@@ -140,6 +140,7 @@ function resolveProviderDescriptorIdentity({
     providerType,
     accountId,
     environment,
+    required,
     configuredCredentials,
   }
 }
