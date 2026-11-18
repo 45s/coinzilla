@@ -41,7 +41,12 @@ test("SQLite integrity validation rejects foreign-key violations", () => {
         all() {
           return sql === "PRAGMA integrity_check"
             ? [{ integrity_check: "ok" }]
-            : [{ table: "children", rowid: 1, parent: "parents", fkid: 0 }]
+            : [{
+              table: "children",
+              rowid: 1,
+              parent: "parents",
+              fkid: 0,
+            }]
         },
       }
     },
