@@ -69,10 +69,21 @@ function assertCompleteMarketPriceSourceIdentity({
 
 function resolveMarketPriceSourceIdentity(priceEvent) {
   const sourceIdentity = {}
-  addProviderIdentityFields({ priceEvent, sourceIdentity })
-  addAccountIdentity({ priceEvent, sourceIdentity })
-  addEnvironmentIdentity({ priceEvent, sourceIdentity })
-  assertCompleteMarketPriceSourceIdentity({ sourceIdentity })
+  addProviderIdentityFields({
+    priceEvent,
+    sourceIdentity,
+  })
+  addAccountIdentity({
+    priceEvent,
+    sourceIdentity,
+  })
+  addEnvironmentIdentity({
+    priceEvent,
+    sourceIdentity,
+  })
+  assertCompleteMarketPriceSourceIdentity({
+    sourceIdentity,
+  })
   return sourceIdentity
 }
 
