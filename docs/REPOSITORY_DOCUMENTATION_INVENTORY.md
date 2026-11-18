@@ -4,7 +4,7 @@
 - Type: Repository documentation inventory
 - Owner: Repository engineering
 - Baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Date: 2026-11-09 (baseline); latest verification: 2026-11-18 (159-file checkpoint below)
+- Date: 2026-11-09 (baseline); latest verification: 2026-11-18 (160-file checkpoint below)
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](DOCUMENTATION_GOVERNANCE.md)
 - Harvester detail: [Harvester documentation inventory](../apps/harvester/docs/plans/HARVESTER_DOCUMENTATION_INVENTORY.md)
