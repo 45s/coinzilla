@@ -7,7 +7,6 @@ import {
 } from "./format-response.js"
 import {
   TELEGRAM_OPERATOR_ACTIONS,
-  TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN,
   TELEGRAM_OPERATOR_QUERY_STAGES,
 } from "./constants.js"
 import { OPERATOR_ACTOR_ROLES } from "../../../application/operator/constants.js"
