@@ -84,7 +84,7 @@ Each configured account is started through a separate invocation of the existing
 
 The first configured account owns the process-wide Telegram Command Center and optional Operational State Store callbacks. Secondary accounts do not create duplicate Telegram command handlers. A startup failure is isolated to that account: its process lock is released when cleanup is confirmed, and already-started or later accounts continue. If failed-account lock cleanup is uncertain, the failure is exposed in `runtime.failedAccounts` and the lock remains owned until confirmed shutdown cleanup.
 
-The optional Bitunix observer tracked in [#1422](https://github.com/45s/coinzilla/issues/1422) is deliberately not registered here. It exposes a separate read-only facade and cannot be selected by registry lookup, execution routing, or strategy market-data routing. See the [Bitunix read-only observer contract](./bitunix-read-only-observer.md).
+Bitunix is not registered here until the complete broker and lifecycle acceptance in [#1185](https://github.com/45s/coinzilla/issues/1185) is complete. The interim observer runtime from #1422 has been removed; future integration must use the complete provider contract in [ADR-0004](../../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md).
 
 The registry can represent multiple named instances of the same or different provider types when an adapter factory is registered. Phase 4 uses explicit account descriptors and separate runtime instances; it does not turn the registry into a route selector. Explicitly out of scope are:
 
@@ -94,7 +94,7 @@ The registry can represent multiple named instances of the same or different pro
 - cross-account balance aggregation; and
 - process-restart recovery or restoration.
 
-These remain separate delivery slices under #1339 and ADR-0003. The default production adapter map is Binance-only; the Bitunix read-only observer remains outside the registry.
+Phase 5 and Phase 6 are implemented in [PR #1455](https://github.com/45s/coinzilla/pull/1455), pending exact-head CI and merge. The default production adapter map is Binance-only; Bitunix remains outside the registry until #1185 is complete.
 
 ## Verification
 
