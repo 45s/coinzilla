@@ -90,6 +90,54 @@ async function verifyConcurrentRestoreAttempts({ backupFilename, destinationFile
   )
 }
 
+async function verifyWalAwareBackup({ source, writer, backupFilename }) {
+  source.exec("PRAGMA wal_autocheckpoint = 0")
+  source.exec("CREATE TABLE backup_records (id TEXT PRIMARY KEY, payload BLOB)")
+  source.prepare("INSERT INTO backup_records (id, payload) VALUES (?, ?)").run(
+    "initial",
+    Buffer.alloc(2 * 1024 * 1024, 1),
+  )
+  let concurrentWriteCommitted = false
+
+  const copiedPages = await source.backup({
+    destination: backupFilename,
+    rate: 1,
+    progress(state) {
+      assert.ok(
+        Object.isFrozen(state),
+        "SQLite backup progress snapshots must be immutable",
+      )
+      if (state.remainingPages > 0 && !concurrentWriteCommitted) {
+        writer.prepare(
+          "INSERT INTO backup_records (id, payload) VALUES (?, ?)",
+        ).run("concurrent", Buffer.from("committed-during-backup"))
+        concurrentWriteCommitted = true
+      }
+    },
+  })
+
+  assert.ok(
+    copiedPages > 0,
+    "The online backup must copy real SQLite pages from the WAL-backed source database",
+  )
+  assert.equal(
+    concurrentWriteCommitted,
+    true,
+    "The controlled progress callback must commit a second-connection write before the online backup finishes",
+  )
+  const copiedRecord = await readRestoredValue({
+    filename: backupFilename,
+    query: "SELECT id, payload FROM backup_records WHERE id = ?",
+    parameters: ["concurrent"],
+  })
+  assert.equal(copiedRecord.id, "concurrent")
+  assert.equal(
+    Buffer.from(copiedRecord.payload).toString(),
+    "committed-during-backup",
+    "The concurrently committed WAL record must retain its complete payload in the published backup",
+  )
+}
+
 test("SQLite online backup includes a committed WAL write made while backup pages are copied", async () => {
   const directory = await createTemporaryDirectory()
   const sourceFilename = join(directory, "source.sqlite")
@@ -97,59 +145,13 @@ test("SQLite online backup includes a committed WAL write made while backup page
   const source = createSqliteDatabase({ filename: sourceFilename })
   await source.connect()
   const writer = new DatabaseSync(sourceFilename, { timeout: 5_000 })
-  let concurrentWriteCommitted = false
 
   try {
-    source.exec("PRAGMA wal_autocheckpoint = 0")
-    source.exec("CREATE TABLE backup_records (id TEXT PRIMARY KEY, payload BLOB)")
-    source.prepare("INSERT INTO backup_records (id, payload) VALUES (?, ?)").run(
-      "initial",
-      Buffer.alloc(2 * 1024 * 1024, 1),
-    )
-
-    const copiedPages = await source.backup({
-      destination: backupFilename,
-      rate: 1,
-      progress(state) {
-        assert.ok(
-          Object.isFrozen(state),
-          "SQLite backup progress snapshots must be immutable",
-        )
-        const { remainingPages } = state
-        if (remainingPages > 0 && !concurrentWriteCommitted) {
-          writer.prepare(
-            "INSERT INTO backup_records (id, payload) VALUES (?, ?)",
-          ).run("concurrent", Buffer.from("committed-during-backup"))
-          concurrentWriteCommitted = true
-        }
-      },
+    await verifyWalAwareBackup({
+      source,
+      writer,
+      backupFilename,
     })
-
-    assert.ok(
-      copiedPages > 0,
-      "The online backup must copy real SQLite pages from the WAL-backed source database",
-    )
-    assert.equal(
-      concurrentWriteCommitted,
-      true,
-      "The controlled progress callback must commit a second-connection write before the online backup finishes",
-    )
-
-    const copiedRecord = await readRestoredValue({
-      filename: backupFilename,
-      query: "SELECT id, payload FROM backup_records WHERE id = ?",
-      parameters: ["concurrent"],
-    })
-    assert.equal(
-      copiedRecord.id,
-      "concurrent",
-      "A successful online backup must represent a consistent source state that includes a write committed during the backup",
-    )
-    assert.equal(
-      Buffer.from(copiedRecord.payload).toString(),
-      "committed-during-backup",
-      "The concurrently committed WAL record must retain its complete payload in the published backup",
-    )
   } finally {
     writer.close()
     await source.close()
