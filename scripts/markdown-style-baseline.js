@@ -35,7 +35,7 @@ function getIndentationWidth(line) {
 }
 
 function isIndentedCodeLine(line) {
-  return /^(?: {4,}|\t)\\S/.test(line)
+  return /^(?: {4,}|\t)\S/.test(line)
 }
 
 function isNestedListContent({ lines, index, indentation }) {
