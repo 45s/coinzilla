@@ -16,7 +16,7 @@ The Harvester ADR-0001 Operational State Store remains the authoritative recover
 
 The session history observer consumes already-published Harvester lifecycle events and projects them into the database. It is an independent, best-effort read-side observer; it does not write to, replace, replay, or cut over the Operational State Store. The database is never consulted to restore process, order, portfolio, strategy, or exchange state.
 
-Journal remains an observer. This work does not change Journal event ordering, acknowledgement, flush, durability, or failure semantics. The database observer queues its work and returns synchronously to the EventBus; it adds no Journal durability barrier and no trading-readiness gate.
+Journal remains its own process-scoped append-only evidence store/observer. This work does not change Journal event ordering, acknowledgement, flush, durability, or failure semantics. The database observer queues its work and returns synchronously to the EventBus; it adds no Journal durability barrier and no trading-readiness gate.
 
 If database preparation or a history write fails, Harvester logs a sanitized failure and continues without that historical projection. There is no fallback to the Operational State Store, no dual-write from an Operational State Store use case, and no silent provider/path fallback.
 
