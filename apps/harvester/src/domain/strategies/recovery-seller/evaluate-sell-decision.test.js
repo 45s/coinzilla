@@ -39,42 +39,66 @@ function createTradingRules({
         {
           type: "PRICE_INCREMENT",
           status: "SUPPORTED",
-          value: new Money({ amount: "0.01", asset: quoteAsset }),
+          value: new Money({
+            amount: "0.01",
+            asset: quoteAsset,
+          }),
         },
         {
           type: "QUANTITY_INCREMENT",
           status: "SUPPORTED",
-          value: new Quantity({ amount: "0.01", asset: baseAsset }),
+          value: new Quantity({
+            amount: "0.01",
+            asset: baseAsset,
+          }),
         },
         {
           type: "MIN_QUANTITY",
           status: "SUPPORTED",
-          value: new Quantity({ amount: minimumQuantity, asset: baseAsset }),
+          value: new Quantity({
+            amount: minimumQuantity,
+            asset: baseAsset,
+          }),
         },
         {
           type: "MIN_NOTIONAL",
           status: "SUPPORTED",
-          value: new Money({ amount: minimumNotional, asset: quoteAsset }),
+          value: new Money({
+            amount: minimumNotional,
+            asset: quoteAsset,
+          }),
         },
         {
           type: "MAX_QUANTITY",
           status: "SUPPORTED",
-          value: new Quantity({ amount: maximumQuantity, asset: baseAsset }),
+          value: new Quantity({
+            amount: maximumQuantity,
+            asset: baseAsset,
+          }),
         },
         {
           type: "MAX_NOTIONAL",
           status: "SUPPORTED",
-          value: new Money({ amount: maximumNotional, asset: quoteAsset }),
+          value: new Money({
+            amount: maximumNotional,
+            asset: quoteAsset,
+          }),
         },
         {
           type: "MIN_PRICE",
           status: "SUPPORTED",
-          value: new Money({ amount: minimumPrice, asset: quoteAsset }),
+          value: new Money({
+            amount: minimumPrice,
+            asset: quoteAsset,
+          }),
         },
         {
           type: "MAX_PRICE",
           status: "SUPPORTED",
-          value: new Money({ amount: maximumPrice, asset: quoteAsset }),
+          value: new Money({
+            amount: maximumPrice,
+            asset: quoteAsset,
+          }),
         },
       ].filter(({ type }) => type !== missingFilter),
     }),

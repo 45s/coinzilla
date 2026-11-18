@@ -163,7 +163,7 @@ function findFilterViolation({ plan, filters }) {
 function getFailureExplanation({ error, operation }) {
   return error instanceof Error && error.message
     ? `Recovery Seller ${operation} failed: ${error.message}`
-    : `Recovery Seller ${operation} failed with an unsupported condition`"
+    : `Recovery Seller ${operation} failed with an unsupported condition`
 }
 
 function createStoppedResult({ stopState, explanation }) {
