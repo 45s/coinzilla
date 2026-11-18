@@ -84,44 +84,41 @@ function validateProviderIdentityUnchanged({ current, next }) {
   }
 }
 
-function validateOrderUpdate({ current, next }) {
-  validateProviderIdentityUnchanged({ current, next })
-  if (!sameOrderIntent({ current,
-next })) {
-    throw new Error("Canonical order update changed immutable order intent")
-  }
-  if (
-    current.brokerOrderId !== undefined &&
-    current.brokerOrderId !== next.brokerOrderId
-  ) {
-    throw new Error("Canonical order update changed brokerOrderId")
-  }
-  if (
-    compareDecimal({
-      left: next.executedQuantity.amount,
-      right: current.executedQuantity.amount,
-    }) < 0
-  ) {
+function validateOrderProgress({ current, next }) {
+  if (compareDecimal({
+    left: next.executedQuantity.amount,
+    right: current.executedQuantity.amount,
+  }) < 0) {
     throw new Error("Canonical order executed quantity cannot move backwards")
   }
-  if (
-    current.updatedAt !== undefined &&
-    next.updatedAt !== undefined &&
-    next.updatedAt < current.updatedAt
-  ) {
+  if (current.updatedAt !== undefined && next.updatedAt !== undefined &&
+      next.updatedAt < current.updatedAt) {
     throw new Error("Canonical order update timestamp cannot move backwards")
   }
+}
+
+function validateOrderStatusTransition({ current, next }) {
   if (!ALLOWED_TRANSITIONS[current.status]?.has(next.status)) {
     throw new Error(
       `Invalid canonical order status transition: ${current.status} -> ${next.status}`,
     )
   }
-  if (
-    (current.status === "REJECTED" || next.status === "REJECTED") &&
-    next.executedQuantity.amount !== current.executedQuantity.amount
-  ) {
+  if ((current.status === "REJECTED" || next.status === "REJECTED") &&
+      next.executedQuantity.amount !== current.executedQuantity.amount) {
     throw new Error("Rejected orders cannot have changing executed quantity")
   }
+}
+
+function validateOrderUpdate({ current, next }) {
+  validateProviderIdentityUnchanged({ current, next })
+  if (!sameOrderIntent({ current, next })) {
+    throw new Error("Canonical order update changed immutable order intent")
+  }
+  if (current.brokerOrderId !== undefined && current.brokerOrderId !== next.brokerOrderId) {
+    throw new Error("Canonical order update changed brokerOrderId")
+  }
+  validateOrderProgress({ current, next })
+  validateOrderStatusTransition({ current, next })
 }
 
 function findOrderUpdateIndex({ orders, order } = {}) {
