@@ -35,7 +35,10 @@ export function findMissingMaintainedLocalAnchors({ root, documents }) {
 export function checkMaintainedLocalAnchors() {
   const documents = findMarkdownDocuments(repositoryRoot)
   const allGaps = findMissingLocalAnchors(repositoryRoot, documents)
-  const maintainedGaps = findMissingMaintainedLocalAnchors({ root: repositoryRoot, documents })
+  const maintainedGaps = findMissingMaintainedLocalAnchors({
+    root: repositoryRoot,
+    documents,
+  })
   const historicalGaps = allGaps.filter((finding) => !maintainedGaps.includes(finding))
 
   process.stdout.write(
