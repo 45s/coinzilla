@@ -11,13 +11,12 @@ last_verified: 2026-11-18
 
 **Tracking:** [Harvester/Brokers issue #1339](https://github.com/45s/coinzilla/issues/1339)
 **Architecture authority:** [ADR-0003](./decisions/ADR-0003-multi-provider-routing.md)
-**Audit baseline:** `develop` at `5d707d17114d524ef3cd7c6d35387dde61338976` (2026-11-17 09:45:59 UTC)
-**Integration sync:** the documentation branch is synchronized with `develop` at `70f1345054bf619dca01896817967eeba6ad1141`. This does not change the source-audit baseline above; revalidate source-sensitive findings against current `develop` before implementation.
-**Scope:** source-verified preparation and migration sequencing only. This document does not authorize runtime routing, database changes, provider mutations, or trading-behavior changes.
+**Audit baseline:** `develop` at `16a8842fed0407fce67361fb382a6aaa1dab32bd` (2026-11-18 11:12:04 UTC).
+**Scope:** source-verified migration plan and implementation sequencing. Phase 4 is authorized only for basic in-process account isolation; process-restart recovery, restoration and replay are explicitly deferred under #654.
 
 ## Current source revalidation — 2026-11-18
 
-**Revalidation checkpoint:** `develop` at `88b89995a4f9e62a6fe4b0451ea675ce0495b539` (2026-11-18 08:34:53 UTC; includes the merged Bitunix read-only observer runtime PR #1423 and documentation PR #1424). This section supersedes earlier statements about current delivery status where they differ; the original 2026-11-17 audit baseline and evidence remain historical and unchanged.
+**Revalidation checkpoint:** `develop` at `16a8842fed0407fce67361fb382a6aaa1dab32bd` (2026-11-18 11:12:04 UTC; includes PR #1416 and the latest documentation-index synchronization). This section supersedes earlier statements about current delivery status where they differ; historical audit evidence remains unchanged.
 
 - **Phase 1 — complete:** Brokers' immutable Binance capability declaration merged in [PR #1366](https://github.com/45s/coinzilla/pull/1366). This is additive capability metadata; it does not enable another provider.
 - **Phase 2 — foundation merged, routing not delivered:** [PR #1383](https://github.com/45s/coinzilla/pull/1383) adds stable Binance provider-instance/account identity, an exchange-neutral provider registry, capability validation, and deterministic connection/rollback lifecycle. It preserves the legacy single-Binance trading runtime.
@@ -25,7 +24,8 @@ last_verified: 2026-11-18
 - **Current runtime remains one Binance trading instance:** `apps/harvester/src/domain/provider-identity.js` resolves stable non-secret Binance provider/account identifiers; `apps/harvester/src/application/providers/provider-registry.js` validates and owns the registered trading provider lifecycle; `apps/harvester/src/bootstrap/start-harvester.js` still composes the Binance trading adapter. There is no strategy/market execution route table, independent strategy market-data route table, or second execution provider.
 - **Isolated read-only observer exception:** the opt-in Bitunix Spot observer is implemented in [PR #1423](https://github.com/45s/coinzilla/pull/1423), with its documentation update in [PR #1424](https://github.com/45s/coinzilla/pull/1424), under user-authorized [issue #1422](https://github.com/45s/coinzilla/issues/1422). It is exposed only as `runtime.readOnlyProviders.bitunix`, disabled by default, and is not registered as a Harvester BrokerPort/provider-registry entry or used by execution, strategy market-data, Portfolio, account snapshots, recovery, Journal, reservations, or process locks. It does not satisfy Phase 7, resolve [#1185](https://github.com/45s/coinzilla/issues/1185), or establish trading readiness.
 - **Phase 3 — COMPLETE:** [PR #1416](https://github.com/45s/coinzilla/pull/1416) merged as `543753da5938eba2d95ad19d74c3f98a991e6461` from synchronized head `e58569eaebf968f5cfcfd3fbef5b6302eb0f21ee`. Immutable provider-instance/type/account provenance is persisted before broker I/O and retained through order, cancellation, fill, Journal and Operational State lifecycle records. Historical v1 facts and hash chains remain compatible; ambiguous legacy identities fail closed. All six required `develop-core` checks passed on the exact synchronized head.
-- **Phases 4–6 remain planned:** account isolation/reconciliation, independent market-data routing, execution routing/parity and operational acceptance are not delivered. Process-restart recovery remains a separate safety prerequisite under [issue #654](https://github.com/45s/coinzilla/issues/654).
+- **Phase 4 — basic in-process account isolation is the active implementation priority.** It covers separate account runtime state, account-scoped identities/locks and independent provider/account lifecycle. It explicitly excludes process-restart recovery, restoration, replay, crash recovery and #654 release gates. #654 is the lowest-priority separate workstream, not a Phase 4 dependency. The first account-isolation slices are implemented in [PR #1440](https://github.com/45s/coinzilla/pull/1440): account-scoped process locks and a per-provider/account in-memory runtime-state registry are wired into the existing Binance bootstrap. The current production composition still registers one Binance account; multi-account provider construction/lifecycle remains to be completed before Phase 4 acceptance.
+- **Phases 5–6 remain later work:** independent market-data routing, then explicit Binance execution routing/parity. Bitunix execution remains blocked by #1185.
 - **Trading safety gates unchanged:** Bitunix order mutations and Harvester trading readiness remain blocked by [issue #1185](https://github.com/45s/coinzilla/issues/1185); Recovery Seller remains non-executable under [issue #1127](https://github.com/45s/coinzilla/issues/1127). The read-only observer does not relax either gate. No exchange operations were performed for this revalidation.
 
 This revalidation was a read-only source and GitHub delivery-state inspection and did not itself execute tests or CI. The subsequent synchronized PR #1416 head passed all six required `develop-core` checks and was merged as `543753da5938eba2d95ad19d74c3f98a991e6461`; those results are recorded above.
@@ -34,14 +34,16 @@ This revalidation was a read-only source and GitHub delivery-state inspection an
 
 **Owner priority:** #1339 remains the primary Harvester architecture/delivery workstream. The merged #1366 and #1383 work is a foundation only; the application still composes one Binance trading instance and has no independent execution or strategy market-data route tables. The isolated Bitunix observer is read-only and is not part of the provider-routing architecture.
 
-**Current implementation priority: Phase 4 — account isolation and recovery.** With Phase 3 provenance merged in [PR #1416](https://github.com/45s/coinzilla/pull/1416), complete provider/account-scoped Position/Fill/order identities, balances, reservations, readiness, reconciliation and process locks. Satisfy the #654 restart-recovery release gates before enabling unattended multi-provider execution.
+**Current implementation priority: Phase 4 — basic in-process account isolation only.** With Phase 3 provenance merged in [PR #1416](https://github.com/45s/coinzilla/pull/1416), deliver separate account runtime state, account-scoped order/fill identity, balances, reservations, readiness and process locks. Keep the implementation small and in-memory; do not introduce restart restoration or recovery gates.
 
-**Next implementation after Phase 3: Phase 4 — account isolation and recovery.**
+**Process-restart recovery (#654) is explicitly the lowest-priority separate workstream.** It must not block Phase 4 or receive further implementation effort until the basic multi-provider runtime is working and the user reprioritizes it.
+
+**Next implementation after Phase 3: Phase 4 — basic account isolation.**
 
 **Delivery sequence after Phase 3:**
 
 1. Phase 3 is complete in merged PR #1416; preserve its immutable provenance and backward-compatible v1 fact guarantees in all subsequent phases.
-2. Complete Phase 4 account isolation, namespaced identities, account-scoped locks and the #654 restart-recovery release gates. Keep restart restoration and multi-provider execution disabled until parity and crash/restart acceptance are complete.
+2. Complete Phase 4 basic in-process account isolation, namespaced identities, independent account state and account-scoped locks. Do not implement or depend on process-restart recovery; #654 is deferred and lowest priority.
 3. Deliver Phase 5 independent market-data routing with source-aware subscription identity and freshness; no silent fallback or source blending.
 4. Deliver Phase 6 Binance execution routing through explicit routes and prove behavior parity while still using the existing Binance account/instance.
 5. Only then consider another execution provider. Bitunix remains read-only for Harvester trading until #1185 is closed with verified capability and lifecycle evidence; RS remains disabled until #1127 is complete.
@@ -441,39 +443,39 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 
 **Risk/rollback:** dual-read old/new schema; new writes can be disabled while readers remain backward-compatible. Never downgrade by deleting provenance from already-written facts.
 
-### Phase 4 — Account isolation, locks and process-restart recovery
+### Phase 4 — Basic in-process account isolation (recovery deferred)
 
-**Owner:** Harvester; coordinate with Entities for identity contracts.
-**Objective:** ensure each provider/account owns independent balances, reservations, orders, fills, readiness and recovery, and prove restart reconciliation before enabling routed execution.
+**Owner:** Harvester.
+**Objective:** make multiple configured provider accounts usable in one running Harvester process without mixing their trading state. Deliver the smallest working account-isolation boundary first; improve durability and recovery later.
 
-**Likely scope:**
+**In scope:**
 
-- Portfolio/Position identity and account context
-- Fill identity and order registry lookup keys
-- Account snapshot manager and reservation/accounting state
-- Process lock scope and legacy-lock transition
-- User-data recovery state and shutdown resource ownership
-- #654 Step 8 parity and Step 9 crash/restart proof
+- Separate account runtime state for each `(providerInstanceId, accountId, environment)`: Portfolio/Positions, OrderRegistry, account snapshot/balances, open orders, reservations, user-data readiness and account-scoped workflow state.
+- Namespace provider-native order and trade identities by provider instance/account wherever objects share a collection.
+- Scope process locks by provider instance, account and environment. Same-account duplicate writers remain blocked; different accounts can run concurrently.
+- Keep provider connection, user-data subscription, startup and shutdown ownership independent per account. A failure in one account must not corrupt or authorize another account.
+- Preserve immutable Phase 3 order provenance and direct every existing order to its originating provider/account.
+- Preserve legacy single-Binance configuration and behavior.
 
-**Requirements:**
+**Explicitly out of scope:**
 
-- Scope Position and Fill identities to the correct account/provider where needed.
-- Namespace raw exchange order IDs and trade IDs.
-- Scope lock identity by provider/account/environment without allowing old/new protocol overlap.
-- Restore prior durable state and reconcile all required markets/orders/fills before READY.
-- Resolve the market-universe completeness, external-order isolation, commission balance and ambiguity requirements in #654.
-- One account's failure cannot authorize or block another account incorrectly.
+- Process-restart recovery, restoration, replay, historical reconstruction, crash recovery and unattended restart mechanisms.
+- ADR-0001 / issue #654 implementation or release gates. #654 is a separate, lowest-priority workstream and is not a Phase 4 dependency.
+- Independent market-data routing (Phase 5), execution route-table rollout/parity (Phase 6), Bitunix execution (#1185), automatic routing, failover or cross-provider retry.
+- New persistence infrastructure or database-backed trading state.
 
-**Tests and acceptance:**
+**Acceptance criteria:**
 
-- Same symbol/strategy in two accounts yields distinct positions and reservations.
-- Identical raw order/trade IDs in two accounts remain distinct.
-- Same-account writer exclusion and different-account isolation are deterministic across worktrees.
-- Crash/restart at intent, exchange-ack, partial-fill, final-fill and cancellation boundaries.
-- Startup remains blocked for missing/ambiguous provenance or incomplete reconciliation.
-- #654 release gates are satisfied before unattended restart or multi-provider execution is enabled.
+- Two accounts can coexist in one process with distinct Portfolio/Position, order registry, balances and reservations.
+- Identical raw exchange order/trade IDs from different accounts cannot collide or cross-attribute fills.
+- Same-account lock acquisition is exclusive; different account/environment scopes can acquire independently.
+- Provider/account startup, disconnect and shutdown are independently owned; partial startup failure cleans up only resources created for that account and reports cleanup failures.
+- Legacy single-Binance startup remains behaviorally compatible.
+- Deterministic offline tests cover isolation, collisions, lock scope, lifecycle success/failure and cleanup. No exchange credentials or live/TESTNET writes are required.
 
-**Risk/rollback:** do not retire the old lock until coordinated migration prevents mixed-version writers. Keep restart restoration disabled until the complete release gate passes.
+**Verification:** Harvester focused tests and coverage, workspace unit/coverage, strict ESLint, syntax/policy, Markdown/anchor/link checks, dependency audit and all required exact-head GitHub Actions checks.
+
+**Risk/rollback:** keep the legacy single-Binance path as the compatibility fallback. Do not add restart restoration or change #654's existing safety gates.
 
 ### Phase 5 — Independent market-data routing
 
