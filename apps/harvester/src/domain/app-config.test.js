@@ -480,3 +480,34 @@ test("rejects provider credentials stored directly in application configuration"
   assert.throws(() => validateAppConfig(config), (error) =>
     error instanceof ConfigValidationError && error.path === "brokers.instances[0].apiKey")
 })
+
+
+test("rejects credential environment variable reuse across provider accounts", () => {
+  const config = createAppConfig()
+  const primary = {
+    providerInstanceId: "binanceTestnetPrimary",
+    providerType: "binance",
+    accountId: "binance-primary",
+    environment: "testnet",
+    credentials: {
+      apiKeyEnv: "BINANCE_API_KEY",
+      apiSecretEnv: "BINANCE_API_SECRET_KEY",
+    },
+  }
+  config.brokers = {
+    instances: [
+      primary,
+      {
+        ...primary,
+        providerInstanceId: "binanceTestnetSecondary",
+        accountId: "binance-secondary",
+        credentials: {
+          apiKeyEnv: "BINANCE_API_KEY",
+          apiSecretEnv: "BINANCE_SECONDARY_API_SECRET",
+        },
+      },
+    ],
+  }
+  assert.throws(() => validateAppConfig(config), (error) =>
+    error instanceof ConfigValidationError && error.path === "brokers.instances")
+})

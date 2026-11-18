@@ -226,3 +226,26 @@ test("fails clearly when an account credential is missing", () => {
     /binanceTestnetPrimary.*BINANCE_API_SECRET_KEY/,
   )
 })
+
+
+test("rejects credential environment variable reuse across account identities", () => {
+  assert.throws(() => resolveProviderInstances({
+    appConfig: {
+      brokers: {
+        instances: [
+          createProviderConfig(),
+          createProviderConfig({
+            providerInstanceId: "binanceTestnetSecondary",
+            accountId: "binance-secondary",
+            credentials: {
+              apiKeyEnv: "BINANCE_API_KEY",
+              apiSecretEnv: "BINANCE_SECONDARY_API_SECRET",
+            },
+          }),
+        ],
+      },
+    },
+    env: {},
+    adapterFactories: createAdapterFactories(),
+  }), /reuses credential environment variable BINANCE_API_KEY/)
+})

@@ -2,36 +2,58 @@ import { resolveBinanceProviderIdentity } from "../../domain/provider-identity.j
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
 const ENVIRONMENT_VARIABLE_PATTERN = /^[A-Z][A-Z0-9_]*$/
+const PROVIDER_TYPE_PATTERN = /^[a-z0-9-]+$/i
 const TRADING_ENVIRONMENTS = new Set(["testnet", "live"])
 
-function assertRecord({ value, path }) {
+function assertRecord({
+  value,
+  path,
+}) {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(`Provider configuration ${path} must be an object`)
   }
 }
 
-function assertIdentifier({ value, field }) {
+function assertIdentifier({
+  value,
+  field,
+}) {
   if (typeof value !== "string" || !IDENTIFIER_PATTERN.test(value)) {
     throw new TypeError(`Provider configuration ${field} must be a stable non-secret identifier`)
   }
 }
 
-function assertEnvironment({ environment, providerInstanceId }) {
+function assertEnvironment({
+  environment,
+  providerInstanceId,
+}) {
   if (!TRADING_ENVIRONMENTS.has(environment)) {
     throw new TypeError(`Provider ${providerInstanceId} environment must be testnet or live`)
   }
 }
 
-function assertCredentialEnvironmentName({ value, field, providerInstanceId }) {
+function assertCredentialEnvironmentName({
+  value,
+  field,
+  providerInstanceId,
+}) {
   if (typeof value !== "string" || !ENVIRONMENT_VARIABLE_PATTERN.test(value)) {
     throw new TypeError(`Provider ${providerInstanceId} credential environment variable name ${field} is invalid`)
   }
 }
 
-function resolveCredentialEnvironmentNames({ credentials, providerInstanceId }) {
-  assertRecord({ value: credentials, path: `${providerInstanceId}.credentials` })
-  const apiKeyEnv = credentials.apiKeyEnv
-  const apiSecretEnv = credentials.apiSecretEnv
+function resolveCredentialEnvironmentNames({
+  credentials,
+  providerInstanceId,
+}) {
+  assertRecord({
+    value: credentials,
+    path: `${providerInstanceId}.credentials`,
+  })
+  const {
+    apiKeyEnv,
+    apiSecretEnv,
+  } = credentials
   assertCredentialEnvironmentName({
     value: apiKeyEnv,
     field: "apiKeyEnv",
@@ -45,11 +67,23 @@ function resolveCredentialEnvironmentNames({ credentials, providerInstanceId }) 
   if (apiKeyEnv === apiSecretEnv) {
     throw new TypeError(`Provider ${providerInstanceId} must use separate API key and secret environment variables`)
   }
-  return Object.freeze({ apiKeyEnv, apiSecretEnv })
+  return Object.freeze({
+    apiKeyEnv,
+    apiSecretEnv,
+  })
 }
 
-function createBrokerAdapterFactory({ providerInstanceId, environment, credentials, env, adapterFactory }) {
-  return function createConfiguredBrokerAdapter({ config = {}, logger } = {}) {
+function createBrokerAdapterFactory({
+  providerInstanceId,
+  environment,
+  credentials,
+  env,
+  adapterFactory,
+}) {
+  return function createConfiguredBrokerAdapter({
+    config = {},
+    logger,
+  } = {}) {
     const apiKey = env[credentials.apiKeyEnv]
     const apiSecret = env[credentials.apiSecretEnv]
     if (typeof apiKey !== "string" || !apiKey.trim()) {
@@ -70,8 +104,15 @@ function createBrokerAdapterFactory({ providerInstanceId, environment, credentia
   }
 }
 
-function createProviderInstance({ descriptor, env, adapterFactories }) {
-  assertRecord({ value: descriptor, path: "instance" })
+function createProviderInstance({
+  descriptor,
+  env,
+  adapterFactories,
+}) {
+  assertRecord({
+    value: descriptor,
+    path: "instance",
+  })
   const {
     providerInstanceId,
     providerType,
@@ -83,13 +124,21 @@ function createProviderInstance({ descriptor, env, adapterFactories }) {
     providerInstanceId,
     accountId,
   })) {
-    assertIdentifier({ value, field })
+    assertIdentifier({
+      value,
+      field,
+    })
   }
-  if (typeof providerType !== "string" || !/^[a-z0-9-]+$/i.test(providerType)) {
+  if (typeof providerType !== "string" || !PROVIDER_TYPE_PATTERN.test(providerType)) {
     throw new TypeError(`Provider configuration providerType for ${providerInstanceId} must be a simple provider identifier`)
   }
-  assertEnvironment({ environment, providerInstanceId })
-  const adapterFactory = Object.hasOwn(adapterFactories, providerType) ? adapterFactories[providerType] : undefined
+  assertEnvironment({
+    environment,
+    providerInstanceId,
+  })
+  const adapterFactory = Object.hasOwn(adapterFactories, providerType)
+    ? adapterFactories[providerType]
+    : undefined
   if (typeof adapterFactory !== "function") {
     throw new TypeError(`Provider ${providerInstanceId} uses unsupported provider type ${providerType}`)
   }
@@ -102,6 +151,7 @@ function createProviderInstance({ descriptor, env, adapterFactories }) {
     providerType,
     accountId,
     environment,
+    credentialEnvironmentNames: credentials,
     identity: Object.freeze({
       providerInstanceId,
       providerType,
@@ -117,9 +167,12 @@ function createProviderInstance({ descriptor, env, adapterFactories }) {
   })
 }
 
-function validateUniqueProviderIdentities({ providers }) {
+function validateUniqueProviderIdentities({
+  providers,
+}) {
   const instanceIds = new Set()
   const accountScopes = new Set()
+  const credentialNames = new Set()
   for (const provider of providers) {
     if (instanceIds.has(provider.providerInstanceId)) {
       throw new TypeError(`Provider configuration contains duplicate providerInstanceId ${provider.providerInstanceId}`)
@@ -134,10 +187,19 @@ function validateUniqueProviderIdentities({ providers }) {
       throw new TypeError("Provider configuration contains duplicate provider account identity")
     }
     accountScopes.add(accountScope)
+    for (const name of Object.values(provider.credentialEnvironmentNames)) {
+      if (credentialNames.has(name)) {
+        throw new TypeError(`Provider configuration reuses credential environment variable ${name}`)
+      }
+      credentialNames.add(name)
+    }
   }
 }
 
-function resolveLegacyBinanceProvider({ env, adapterFactories }) {
+function resolveLegacyBinanceProvider({
+  env,
+  adapterFactories,
+}) {
   const identity = resolveBinanceProviderIdentity({
     tradingMode: env.TRADING_MODE,
     providerInstanceId: env.BINANCE_PROVIDER_INSTANCE_ID,
@@ -159,22 +221,41 @@ function resolveLegacyBinanceProvider({ env, adapterFactories }) {
 }
 
 /**
- * Resolve the configured provider/account instances at the process composition boundary.
+ * Resolve configured provider/account instances at the process composition boundary.
  * The legacy Binance environment remains the default when brokers.instances is absent.
  * Credential values are captured by factory closures and never exposed in provider metadata.
  *
  * @param {{appConfig: object, env: object, adapterFactories: object}} input
  * @returns {ReadonlyArray<object>}
  */
-export function resolveProviderInstances({ appConfig, env = process.env, adapterFactories = {} } = {}) {
-  assertRecord({ value: appConfig, path: "appConfig" })
-  assertRecord({ value: env, path: "env" })
-  assertRecord({ value: adapterFactories, path: "adapterFactories" })
+export function resolveProviderInstances({
+  appConfig,
+  env = process.env,
+  adapterFactories = {},
+} = {}) {
+  assertRecord({
+    value: appConfig,
+    path: "appConfig",
+  })
+  assertRecord({
+    value: env,
+    path: "env",
+  })
+  assertRecord({
+    value: adapterFactories,
+    path: "adapterFactories",
+  })
   const brokers = appConfig.brokers
   if (brokers === undefined) {
-    return resolveLegacyBinanceProvider({ env, adapterFactories })
+    return resolveLegacyBinanceProvider({
+      env,
+      adapterFactories,
+    })
   }
-  assertRecord({ value: brokers, path: "brokers" })
+  assertRecord({
+    value: brokers,
+    path: "brokers",
+  })
   if (!Array.isArray(brokers.instances) || brokers.instances.length === 0) {
     throw new TypeError("Provider configuration brokers.instances must be a non-empty array")
   }
@@ -183,6 +264,8 @@ export function resolveProviderInstances({ appConfig, env = process.env, adapter
     env,
     adapterFactories,
   }))
-  validateUniqueProviderIdentities({ providers })
+  validateUniqueProviderIdentities({
+    providers,
+  })
   return Object.freeze(providers)
 }
