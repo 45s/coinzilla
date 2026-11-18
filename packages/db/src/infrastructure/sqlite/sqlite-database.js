@@ -150,6 +150,19 @@ function createSqliteTransactionHandler({ requireConnection, intent }) {
   }
 }
 
+function closeAfterConnectionSetupFailure({ openedConnection, initializationError }) {
+  try {
+    openedConnection.close()
+  } catch (closeError) {
+    throw new AggregateError(
+      [initializationError, closeError],
+      "SQLite connection initialization failed and cleanup also failed",
+    )
+  }
+
+  throw initializationError
+}
+
 function createSqliteAdapter({
   databaseFilename,
   isMemoryDatabase,
