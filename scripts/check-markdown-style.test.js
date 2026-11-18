@@ -298,9 +298,9 @@ test("excludes historical documents from every changed-file style rule", () => {
   const fence = String.fromCharCode(96).repeat(3)
   const content = `# Historical  \r\n\n\n### Skipped\r\n# Second H1\r\n${fence}\ncode\n${fence}\nParagraph\n- item\n`
   const result = analyzeMarkdownStyleDocuments({
-    documents: [{ path: "apps/harvester/docs/audits/legacy-style.md",
+    documents: [{ path: "apps/harvester/docs/audits/reports/legacy-style.md",
 content }],
-    changesByPath: new Map([["apps/harvester/docs/audits/legacy-style.md", {
+    changesByPath: new Map([["apps/harvester/docs/audits/reports/legacy-style.md", {
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
