@@ -31,9 +31,15 @@ function createOpenOrderSnapshot({ order }) {
   return openOrder;
 }
 
-function createExchangeMarketMetadata({ marketSymbol, appConfig }) {
+function createExchangeMarketMetadata({ marketSymbol, appConfig, exchangeFilters = {} }) {
   const baseAsset = marketSymbol.slice(0, -4);
   const marketConfiguration = appConfig.strategies.CG_coinGrabber.pairs[marketSymbol];
+  const {
+    tickSize = marketConfiguration.pricePrecision === 5 ? "0.00001" : "0.001",
+    minQty = marketConfiguration.quantityPrecision === 0 ? "1" : "0.01",
+    stepSize = marketConfiguration.quantityPrecision === 0 ? "1" : "0.01",
+    minNotional = "5",
+  } = exchangeFilters;
   return {
     symbol: marketSymbol,
     baseAsset,
@@ -44,17 +50,17 @@ function createExchangeMarketMetadata({ marketSymbol, appConfig }) {
         filterType: "PRICE_FILTER",
         minPrice: "0",
         maxPrice: "100000",
-        tickSize: marketConfiguration.pricePrecision === 5 ? "0.00001" : "0.001",
+        tickSize,
       },
       {
         filterType: "LOT_SIZE",
-        minQty: marketConfiguration.quantityPrecision === 0 ? "1" : "0.01",
+        minQty,
         maxQty: "100000000",
-        stepSize: marketConfiguration.quantityPrecision === 0 ? "1" : "0.01",
+        stepSize,
       },
       {
         filterType: "MIN_NOTIONAL",
-        minNotional: "5",
+        minNotional,
         applyToMarket: true,
         avgPriceMins: 5,
       },
@@ -75,17 +81,19 @@ function createScenarioExpectations() {
   };
 }
 
-function createDogeReplayState({ marketSymbol, appConfig }) {
+function createDogeReplayState({ marketSymbol, appConfig, exchangeFilters, scenarioExpectations }) {
   return {
     marketSymbol,
     marketConfiguration: appConfig.strategies.CG_coinGrabber.pairs[marketSymbol],
     dogeExchangeInfo: createExchangeMarketMetadata({ marketSymbol,
-appConfig }),
-    scenarioExpectations: createScenarioExpectations(),
+appConfig,
+exchangeFilters }),
+    scenarioExpectations: scenarioExpectations ?? createScenarioExpectations(),
     submittedCanonicalOrders: [],
     brokerOrderPlacementRequests: [],
     receivedMarketPriceEvents: [],
     receivedExecutionReports: [],
+    receivedLifecycleEvents: [],
     harvesterRuntimeErrors: [],
     marketPriceEventHandlers: new Map(),
     exchangeOpenOrders: new Map(),
@@ -457,6 +465,7 @@ async function startDogeReplayRuntime({ state, appConfig, brokerFactory }) {
     }),
     eventPublisher: {
       publish: (event) => {
+        state.receivedLifecycleEvents.push(event);
         if (event.name === "recovery.cycle_completed") {
           state.recoveryCycleCompletionResult = event.data;
           state.recoveryCycleCompletionWaiter?.(event.data);
@@ -499,7 +508,7 @@ async function publishDogeReplayMarketPrice({ state, price }) {
   });
 }
 
-async function publishDogeReplayFullOrderFill({ state, order, price, tradeId }) {
+async function publishDogeReplayFullOrderFill({ state, order, price, tradeId, commissionAmount, commissionAsset }) {
   const executedBaseQuantity = order.originalQuantity.amount;
   const executedQuoteQuantity = multiplyDecimal({ left: price,
 right: executedBaseQuantity });
@@ -557,8 +566,8 @@ asset: order.market.baseAsset }),
         id: tradeId,
         orderId: order.brokerOrderId,
         side: order.side,
-        commissionAmount: executionCommissionAmount,
-        commissionAsset: executionCommissionAsset.code,
+        commissionAmount: commissionAmount ?? executionCommissionAmount,
+        commissionAsset: commissionAsset ?? executionCommissionAsset.code,
         isMaker: order.type === "LIMIT_MAKER",
         price,
         quantity: executedBaseQuantity,
@@ -569,9 +578,11 @@ asset: order.market.baseAsset }),
   });
 }
 
-export async function createDogeTradingReplay({ marketSymbol, appConfig }) {
+export async function createDogeTradingReplay({ marketSymbol, appConfig, exchangeFilters, scenarioExpectations }) {
   const state = createDogeReplayState({ marketSymbol,
-appConfig });
+appConfig,
+exchangeFilters,
+scenarioExpectations });
   const brokerFactory = createDogeReplayBrokerFactory(state);
   const runtime = await startDogeReplayRuntime({ state,
 appConfig,
@@ -586,6 +597,7 @@ brokerFactory });
     brokerOrderPlacementRequests: state.brokerOrderPlacementRequests,
     receivedMarketPriceEvents: state.receivedMarketPriceEvents,
     receivedExecutionReports: state.receivedExecutionReports,
+    receivedLifecycleEvents: state.receivedLifecycleEvents,
     harvesterRuntimeErrors: state.harvesterRuntimeErrors,
     waitForSubmittedOrder: (...orderArguments) => {
       const [side, occurrence = 1] = orderArguments;

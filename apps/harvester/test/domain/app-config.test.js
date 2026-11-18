@@ -43,7 +43,7 @@ test('accepts nested CG_coinGrabber config and preserves mode toggles', () => {
   assert.ok(strategy(validConfig).pairs.ZROUSDT);
   assert.equal(strategy(validConfig).pairs.ZROUSDT.makerPercent, 0.1);
   assert.equal(strategy(validConfig).pairs.ZROUSDT.takerPercent, 0.1);
-  assert.equal(strategy(validConfig).pairs.SOLFDUSD.makerPercent, 0);
+  assert.equal(strategy(validConfig).pairs.SOLFDUSD.makerPercent, 0.1);
   assert.equal(strategy(validConfig).pairs.SOLFDUSD.takerPercent, 0.1);
   assert.equal(strategy(validConfig).pairs.ZROFDUSD.makerPercent, 0);
   assert.equal(strategy(validConfig).pairs.ZROFDUSD.takerPercent, 0.1);
