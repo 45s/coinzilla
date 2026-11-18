@@ -430,6 +430,7 @@ async function acquireProcessStartupResources({ options, resources, processStart
     runtimeConfig: resources.runtimeConfig,
     env,
     logger,
+    processId: processStartedDataResult.data.processId,
     prepareTradingSessionPersistence,
   })
   resources.tradingSessionPersistence = tradingSessionHistory.persistence

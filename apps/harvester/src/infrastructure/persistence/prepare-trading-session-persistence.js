@@ -36,6 +36,7 @@ export async function prepareTradingSessionPersistence({
   tradingMode,
   env,
   logger,
+  processId,
   createDatabase: createDatabaseFactory = createDatabase,
   createSqliteProvider: createSqliteProviderFactory = createSqliteProvider,
 } = {}) {
@@ -52,6 +53,15 @@ export async function prepareTradingSessionPersistence({
       }),
     })
     await database.connect()
+    if (Number.isSafeInteger(processId) && processId > 0) {
+      await database.create({
+        collection: "harvester_processes",
+        record: {
+          id: String(processId),
+          processId,
+        },
+      })
+    }
     return {
       database,
       repository: createTradingSessionRepository({ database }),
