@@ -54,6 +54,14 @@ function validateFillIdentity({ tradeId, brokerOrderId, clientOrderId }) {
   }
 }
 
+function validateProviderIdentity({ providerInstanceId, providerType, accountId }) {
+  const values = [providerInstanceId, providerType, accountId]
+  if (values.every((value) => value === undefined)) { return }
+  if (values.some((value) => typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value))) {
+    throw new TypeError("Fill provider provenance requires all three stable identifiers: providerInstanceId, providerType, accountId")
+  }
+}
+
 function validateFillValues({ market, side, price, quantity, quoteQuantity }) {
   if (!(market instanceof Market)) {
     throw new Error(fillErrMsgs.market)
@@ -127,6 +135,9 @@ export class Fill {
   #tradeId
   #brokerOrderId
   #clientOrderId
+  #providerInstanceId
+  #providerType
+  #accountId
   #market
   #side
   #price
@@ -141,6 +152,9 @@ export class Fill {
     tradeId,
     brokerOrderId,
     clientOrderId,
+    providerInstanceId,
+    providerType,
+    accountId,
     market,
     side,
     price,
@@ -156,6 +170,7 @@ export class Fill {
       brokerOrderId,
       clientOrderId,
     })
+    validateProviderIdentity({ providerInstanceId, providerType, accountId })
     validateFillValues({
       market,
       side,
@@ -173,6 +188,9 @@ export class Fill {
     this.#tradeId = tradeId.trim()
     this.#brokerOrderId = brokerOrderId.trim()
     this.#clientOrderId = clientOrderId == null ? undefined : clientOrderId.trim()
+    this.#providerInstanceId = providerInstanceId
+    this.#providerType = providerType
+    this.#accountId = accountId
     this.#market = market
     this.#side = side
     this.#price = price
@@ -202,6 +220,10 @@ export class Fill {
   get clientOrderId() {
     return this.#clientOrderId
   }
+
+  get providerInstanceId() { return this.#providerInstanceId }
+  get providerType() { return this.#providerType }
+  get accountId() { return this.#accountId }
 
   get market() {
     return this.#market
@@ -245,6 +267,11 @@ export class Fill {
       tradeId: this.#tradeId,
       brokerOrderId: this.#brokerOrderId,
       ...(this.#clientOrderId === undefined ? {} : { clientOrderId: this.#clientOrderId }),
+      ...(this.#providerInstanceId === undefined ? {} : {
+        providerInstanceId: this.#providerInstanceId,
+        providerType: this.#providerType,
+        accountId: this.#accountId,
+      }),
       market: this.#market.value,
       side: this.#side,
       price: this.#price.value,
