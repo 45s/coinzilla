@@ -209,29 +209,7 @@ function createSellPlan({ planInput, filters, feePolicy }) {
   })
 }
 
-/**
- * Evaluate one pre-submission RS mixed SELL using the owner-approved
- * Conservative order-type/fee policy and fail-closed exchange-filter behavior.
- * This pure policy never submits, retries, adjusts or splits an exchange order.
- *
- * @param {object} input
- * @param {object} input.pairConfig Existing per-pair makerPercent/takerPercent.
- * @param {object} input.marketMetadata Canonical Market, TradingRules and supported order types.
- * @param {object} input.cycleState Current RS cycle state.
- * @param {object} input.stopState Global sticky RS STOP state.
- * @param {object} input.planInput Explicit mixed-SELL accounting and fee-valuation inputs.
- * @returns {object} Immutable STOP-gated decision and, only when eligible, one SELL intent.
- */
-export function evaluateRecoverySellerSellDecision({
-  pairConfig,
-  marketMetadata,
-  cycleState,
-  stopState,
-  planInput,
-} = {}) {
-  assertRecoverySellerStopState({
-    state: stopState,
-  })
+function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stopState }) {
   validateSellPolicyContext({
     pairConfig,
     marketMetadata,
@@ -255,13 +233,16 @@ export function evaluateRecoverySellerSellDecision({
   if (!marketMetadata.supportedOrderTypes.includes(feePolicy.orderType)) {
     return createStoppedResult({
       stopState,
-      explanation: `Exchange does not support required Recovery Seller ${feePolicy.orderType} SELL orders`,
+      explanation: "Exchange does not support required Recovery Seller " + feePolicy.orderType + " SELL orders",
     })
   }
-  let filters
   try {
-    filters = resolveExchangeFilters({
-      marketMetadata,
+    return Object.freeze({
+      stopState,
+      feePolicy,
+      filters: resolveExchangeFilters({
+        marketMetadata,
+      }),
     })
   } catch (error) {
     return createStoppedResult({
@@ -272,6 +253,9 @@ export function evaluateRecoverySellerSellDecision({
       }),
     })
   }
+}
+
+function createSellPlanResult({ stopState, planInput, filters, feePolicy }) {
   let plan
   let filterViolation
   try {
@@ -292,8 +276,70 @@ export function evaluateRecoverySellerSellDecision({
   if (filterViolation) {
     return createStoppedResult({
       stopState,
-      explanation: `Recovery Seller SELL violates exchange ${filterViolation}; no quantity or price adjustment is permitted`,
+      explanation: "Recovery Seller SELL violates exchange " + filterViolation +
+        "; no quantity or price adjustment is permitted",
     })
+  }
+  return Object.freeze({
+    stopState,
+    plan,
+    feePolicy,
+  })
+}
+
+function createSellOrderIntent({ plan, feePolicy }) {
+  return Object.freeze({
+    side: "SELL",
+    type: feePolicy.orderType,
+    price: plan.price,
+    quantity: plan.quantity,
+    quoteFeeRate: feePolicy.feeRate,
+    baseFeeRate: feePolicy.feeRate,
+    reservedRole: feePolicy.reservedRole,
+    plan,
+  })
+}
+
+/**
+ * Evaluate one pre-submission RS mixed SELL using the owner-approved
+ * Conservative order-type/fee policy and fail-closed exchange-filter behavior.
+ * This pure policy never submits, retries, adjusts or splits an exchange order.
+ *
+ * @param {object} input
+ * @param {object} input.pairConfig Existing per-pair makerPercent/takerPercent.
+ * @param {object} input.marketMetadata Canonical Market, TradingRules and supported order types.
+ * @param {object} input.cycleState Current RS cycle state.
+ * @param {object} input.stopState Global sticky RS STOP state.
+ * @param {object} input.planInput Explicit mixed-SELL accounting and fee-valuation inputs.
+ * @returns {object} Immutable STOP-gated decision and, only when eligible, one SELL intent.
+ */
+export function evaluateRecoverySellerSellDecision({
+  pairConfig,
+  marketMetadata,
+  cycleState,
+  stopState,
+  planInput,
+} = {}) {
+  assertRecoverySellerStopState({
+    state: stopState,
+  })
+  const context = resolveSellPolicyContext({
+    pairConfig,
+    marketMetadata,
+    cycleState,
+    stopState,
+  })
+  if (context.decision) {
+    return context
+  }
+  const result = createSellPlanResult({
+    stopState,
+    planInput,
+    filters: context.filters,
+    feePolicy: context.feePolicy,
+  })
+  if (result.decision) {
+    return result
   }
   const decision = createRecoverySellerLifecycleDecision({
     outcome: "SUBMIT",
@@ -303,15 +349,9 @@ export function evaluateRecoverySellerSellDecision({
   return Object.freeze({
     stopState,
     decision,
-    orderIntent: Object.freeze({
-      side: "SELL",
-      type: feePolicy.orderType,
-      price: plan.price,
-      quantity: plan.quantity,
-      quoteFeeRate: feePolicy.feeRate,
-      baseFeeRate: feePolicy.feeRate,
-      reservedRole: feePolicy.reservedRole,
-      plan,
+    orderIntent: createSellOrderIntent({
+      plan: result.plan,
+      feePolicy: result.feePolicy,
     }),
   })
 }

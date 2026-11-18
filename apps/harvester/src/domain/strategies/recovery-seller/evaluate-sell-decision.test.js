@@ -68,6 +68,10 @@ test("selects ordinary LIMIT and the higher configured fee when makerPercent is 
   const result = evaluateRecoverySellerSellDecision({
     ...validInput,
     pairConfig: { makerPercent: 0.075, takerPercent: 0.2 },
+    planInput: {
+      ...validInput.planInput,
+      recoveryQuantity: "1.002",
+    },
   })
 
   assert.equal(result.decision.outcome, "SUBMIT",
