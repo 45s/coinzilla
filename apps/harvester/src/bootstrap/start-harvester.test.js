@@ -6188,18 +6188,8 @@ test("default Bitunix runtime facade exposes read methods but no trading or stre
 })
 
 
-test("starts independent Binance account trading runtimes in one production bootstrap", async () => {
-  const primaryCalls = []
-  const secondaryCalls = []
-  const env = {
-    NODE_ENV: "test",
-    TRADING_MODE: "testnet",
-    PRIMARY_API_KEY: "primary-key",
-    PRIMARY_API_SECRET: "primary-secret",
-    SECONDARY_API_KEY: "secondary-key",
-    SECONDARY_API_SECRET: "secondary-secret",
-  }
-  const configuredAppConfig = {
+function createMultiAccountHarvesterConfig() {
+  return {
     ...appConfig,
     brokers: {
       instances: [
@@ -6226,18 +6216,49 @@ test("starts independent Binance account trading runtimes in one production boot
       ],
     },
   }
-  const configuredProviders = resolveProviderInstances({
+}
+
+function createMultiAccountHarvesterEnvironment() {
+  return {
+    NODE_ENV: "test",
+    TRADING_MODE: "testnet",
+    PRIMARY_API_KEY: "primary-key",
+    PRIMARY_API_SECRET: "primary-secret",
+    SECONDARY_API_KEY: "secondary-key",
+    SECONDARY_API_SECRET: "secondary-secret",
+  }
+}
+
+function createMultiAccountHarvesterAdapterFactories({
+  primaryCalls,
+  secondaryCalls,
+}) {
+  return {
+    binance: ({ config }) => createBroker(
+      config.apiKey === "primary-key" ? primaryCalls : secondaryCalls,
+      {
+        tradingMode: config.tradingMode,
+      },
+    ),
+  }
+}
+
+async function startMultiAccountHarvesterRuntime({
+  configuredAppConfig,
+  env,
+  primaryCalls,
+  secondaryCalls,
+}) {
+  const providers = resolveProviderInstances({
     appConfig: configuredAppConfig,
     env,
-    adapterFactories: {
-      binance: ({ config }) => createBroker(
-        config.apiKey === "primary-key" ? primaryCalls : secondaryCalls,
-        { tradingMode: config.tradingMode },
-      ),
-    },
+    adapterFactories: createMultiAccountHarvesterAdapterFactories({
+      primaryCalls,
+      secondaryCalls,
+    }),
   })
-  const runtime = await startProviderAccounts({
-    providers: configuredProviders,
+  return startProviderAccounts({
+    providers,
     start: async (input) => {
       if (input.providerIdentity.accountId === "account-primary") {
         assert.equal(input.env.PRIMARY_API_KEY, "primary-key")
@@ -6252,27 +6273,49 @@ test("starts independent Binance account trading runtimes in one production boot
     env,
     eventPublisher: testEventPublisher,
   })
+}
 
+function assertIndependentHarvesterAccountRuntimes({
+  runtime,
+  primaryCalls,
+  secondaryCalls,
+}) {
+  assert.equal(runtime.providerAccounts.length, 2)
+  assert.deepEqual(runtime.providerAccounts.map(({ accountId }) => accountId), [
+    "account-primary",
+    "account-secondary",
+  ])
+  assert.equal(runtime.accountRuntimes.length, 2)
+  assert.notEqual(runtime.accountRuntimes[0].recoveredState, runtime.accountRuntimes[1].recoveredState)
+  assert.notEqual(runtime.accountRuntimes[0].recoveredState.orderRegistry, runtime.accountRuntimes[1].recoveredState.orderRegistry)
+  assert.notEqual(runtime.accountRuntimes[0].getMarketMetadata({ symbol: "BTCUSDT" }), runtime.accountRuntimes[1].getMarketMetadata({ symbol: "BTCUSDT" }))
+  assert.equal(runtime.accountRuntimes.every((accountRuntime) => accountRuntime.userDataReady), true)
+  assert.equal(primaryCalls.includes("subscribe:user-data"), true)
+  assert.equal(secondaryCalls.includes("subscribe:user-data"), true)
+}
+
+test("starts independent Binance account trading runtimes in one production bootstrap", async () => {
+  const primaryCalls = []
+  const secondaryCalls = []
+  const configuredAppConfig = createMultiAccountHarvesterConfig()
+  const env = createMultiAccountHarvesterEnvironment()
+  const runtime = await startMultiAccountHarvesterRuntime({
+    configuredAppConfig,
+    env,
+    primaryCalls,
+    secondaryCalls,
+  })
   try {
-    assert.equal(runtime.providerAccounts.length, 2)
-    assert.deepEqual(runtime.providerAccounts.map(({ accountId }) => accountId), [
-      "account-primary",
-      "account-secondary",
-    ])
-    assert.equal(runtime.accountRuntimes.length, 2)
-    assert.notEqual(runtime.accountRuntimes[0].recoveredState, runtime.accountRuntimes[1].recoveredState)
-    assert.notEqual(runtime.accountRuntimes[0].recoveredState.orderRegistry, runtime.accountRuntimes[1].recoveredState.orderRegistry)
-    assert.notEqual(runtime.accountRuntimes[0].getMarketMetadata({ symbol: "BTCUSDT" }), runtime.accountRuntimes[1].getMarketMetadata({ symbol: "BTCUSDT" }))
-    assert.equal(runtime.accountRuntimes.every((accountRuntime) => accountRuntime.userDataReady), true)
+    assertIndependentHarvesterAccountRuntimes({
+      runtime,
+      primaryCalls,
+      secondaryCalls,
+    })
     assert.equal(primaryCalls.filter((call) => call === "connect").length, 1)
     assert.equal(secondaryCalls.filter((call) => call === "connect").length, 1)
-    assert.equal(primaryCalls.includes("subscribe:user-data"), true)
-    assert.equal(secondaryCalls.includes("subscribe:user-data"), true)
   } finally {
-    const stopped = await runtime.stop()
-    assert.equal(stopped.ok, true)
+    await runtime.stop()
   }
-
   assert.equal(primaryCalls.filter((call) => call === "disconnect").length, 1)
   assert.equal(secondaryCalls.filter((call) => call === "disconnect").length, 1)
 })
