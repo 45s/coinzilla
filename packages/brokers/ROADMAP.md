@@ -1279,7 +1279,6 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - `getSymbolFilters()` remains **partial**: no official exact `tickSize`, `stepSize`, maximum quantity/notional or depth-precision mapping is established. The Harvester adapter remains the sole canonical mapping boundary for `minPrice` → `MIN_NOTIONAL` and `minVolume` → `MIN_QUANTITY`; this helper remains disconnected from runtime bootstrap. No order execution, reconciliation, or live API acceptance is implied.
 - Updated the Brokers README, capability contract and [Bitunix reference audit](BITUNIX_REFERENCE_AUDIT.md). Root `ROADMAP.md` is unchanged because the umbrella Bitunix priority and #1185 status did not change.
 
-
 ## 2026-11-18 — Bitunix local diagnostics runner (#1426)
 
 **Status: In progress in [PR #1427](https://github.com/45s/coinzilla/pull/1427).**
