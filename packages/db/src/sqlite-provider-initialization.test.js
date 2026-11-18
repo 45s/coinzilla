@@ -17,11 +17,11 @@ test("SQLite provider aggregates schema initialization and close failures, then 
   const closeFailure = new Error("provider cleanup close failed")
   let closeAttempts = 0
 
-  context.mock.method(DatabaseSync.prototype, "exec", function exec(sql, ...parameters) {
-    if (sql.startsWith("CREATE TABLE IF NOT EXISTS db_records")) {
+  context.mock.method(DatabaseSync.prototype, "exec", function exec(...args) {
+    if (args[0].includes("CREATE TABLE IF NOT EXISTS db_records")) {
       throw schemaFailure
     }
-    return originalExec.call(this, sql, ...parameters)
+    return originalExec.apply(this, args)
   })
   context.mock.method(DatabaseSync.prototype, "close", function close(...parameters) {
     closeAttempts += 1
