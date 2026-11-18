@@ -280,6 +280,7 @@ test("rejects an applied fill with no durable owned-order intent", () => {
 })
 
 // eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
+// eslint-disable-next-line max-lines-per-function -- Existing recovery fixture and lifecycle scenario are intentionally cohesive.
 test("projects recovery-cycle completions and paused strategy state", () => {
   const result = projectHarvesterJournalRecovery({
     records: [
@@ -999,6 +1000,7 @@ test("restores third-asset commission facts and historical quote valuation into 
 })
 
 // eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
+// eslint-disable-next-line max-lines-per-function -- Existing recovery fixture and lifecycle scenario are intentionally cohesive.
 const completedCycleRecords = () => [
   record("order.submission_requested", {
     clientOrderId: "h-BTCUSDT-buy-1",
@@ -1310,6 +1312,7 @@ test("restores a replacement intent after confirmed cancellation but before the 
 })
 
 // eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
+// eslint-disable-next-line max-lines-per-function -- Existing recovery fixture and lifecycle scenario are intentionally cohesive.
 test("does not restore a replacement intent after the replacement submission is journaled", () => {
   const projection = projectHarvesterJournalRecovery({
     records: [
@@ -1835,6 +1838,7 @@ data: { symbol: "BTCUSDT" } },
 })
 
 // eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
+// eslint-disable-next-line max-lines-per-function -- Existing recovery fixture and lifecycle scenario are intentionally cohesive.
 test("accepts RECOVERY account and open-order snapshots between PREFLIGHT and CLOSING", () => {
   const balances = [{ asset: "BTC",
 free: "0.5",
@@ -1981,6 +1985,7 @@ test("fails closed when an unknown recovery event has no source classification",
 })
 
 // eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
+// eslint-disable-next-line max-lines-per-function -- Existing recovery fixture and lifecycle scenario are intentionally cohesive.
 test("preserves execution safety DTOs through projection and restoration", () => {
   const baseAsset = new Asset({ id: "asset:DOGE",
 code: "DOGE" })
@@ -2063,6 +2068,7 @@ test("fails closed when a fully filled SELL has no explicit recovery-cycle outco
 })
 
 // eslint-disable-next-line max-lines-per-function -- Existing journal recovery fixture/test remains cohesive.
+// eslint-disable-next-line max-lines-per-function -- Existing recovery fixture and lifecycle scenario are intentionally cohesive.
 test("preserves an explicitly evaluated residual sell-through without resetting the recovery basis", () => {
   const records = completedCycleRecords().slice(0, 6)
   records[3] = record("order.submission_requested", {
