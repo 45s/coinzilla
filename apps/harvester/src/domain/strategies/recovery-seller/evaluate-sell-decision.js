@@ -184,6 +184,11 @@ function validateSellPolicyContext({ pairConfig, marketMetadata, cycleState }) {
   if (!pairConfig || typeof pairConfig !== "object" || Array.isArray(pairConfig)) {
     throw new TypeError("Recovery Seller SELL policy requires pairConfig")
   }
+  for (const field of ["minProfit", "makerPercent", "takerPercent"]) {
+    if (typeof pairConfig[field] !== "number" || !Number.isFinite(pairConfig[field])) {
+      throw new TypeError(`pairConfig.${field} must be a finite number`)
+    }
+  }
   if (!marketMetadata?.market ||
       !Array.isArray(marketMetadata.supportedOrderTypes) ||
       !Array.isArray(marketMetadata.tradingRules?.constraints) ||
