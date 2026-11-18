@@ -84,12 +84,6 @@ All nested objects and arrays are recursively frozen. State meanings:
 
 The declaration's `environment.selectedMode` is the instance's validated `tradingMode`; its `supportedModes` are exactly `testnet` and `live`. Order mutations additionally require account trading permission and an open, reconciled user-data session. This metadata describes implementation capability, not a promise that a given account, market, endpoint, or exchange environment is available.
 
-### Separate consumer-owned provider routing — [#1339](https://github.com/45s/coinzilla/issues/1339)
-
-Issue #1339 remains the separate multi-provider application-integration workstream. It owns provider-instance configuration, application registries, execution/market-data routing, account runtime isolation, and order provenance. Those responsibilities belong to the consuming application and must not be implemented in `@coinzilla/brokers`.
-
-The Brokers package contributes concrete provider implementations and truthful broker capabilities only. See [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) for the repository-level consumer-routing decision; this package roadmap does not track the consuming application's implementation phases.
-
 ## Priority execution plan — Brokers package (2026-11-18)
 
 This section contains only work owned by `@coinzilla/brokers`. Consumer application ports, adapters, routing, and runtime composition are tracked by the owning application.
