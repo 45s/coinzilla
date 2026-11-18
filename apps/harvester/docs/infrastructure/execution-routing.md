@@ -4,7 +4,7 @@
 
 ## Ownership model
 
-Harvester owns provider-instance configuration, strategy-to-account association, execution routing, market-data routing, account readiness, and runtime lifecycle. `@coinzilla/brokers` remains the sole owner of the structural Broker API and provider capability declarations.
+Harvester owns provider-instance configuration, strategy-to-account association, execution routing, market-data routing, account readiness, and runtime lifecycle. `@coinzilla/brokers` owns the structural Broker API and provider-specific capability evidence; all providers use the single shared `BrokerCapabilities` value contract from `@coinzilla/entities`.
 
 Each configured provider instance represents one immutable provider/account/environment identity. A separate Harvester runtime owns that account's Portfolio, OrderRegistry, balances, market metadata, user-data stream, strategy engine, and shutdown lifecycle. The runtime receives only the strategy markets explicitly assigned to its execution provider.
 
