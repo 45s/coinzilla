@@ -234,7 +234,6 @@ function createSqliteAdapter({
             timeout,
           })
         }
-        connection = openedConnection
       } catch (error) {
         throw createConnectionSetupFailure({
           openedConnection,
