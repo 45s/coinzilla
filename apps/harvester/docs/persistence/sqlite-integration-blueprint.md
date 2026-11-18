@@ -1,10 +1,10 @@
 # Harvester SQLite integration blueprint
 
-**Status:** preparation/design only; no runtime migration is authorized by this document  
-**Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)  
-**Source baseline:** [develop commit 007f631a3db04b1a2d1ca3d21bb9af65123bd014](https://github.com/45s/coinzilla/commit/007f631a3db04b1a2d1ca3d21bb9af65123bd014) (2026-11-18)  
-**Primary owner:** Harvester (apps/harvester)  
-**Database infrastructure owner:** Database (packages/db)
+- **Status:** preparation/design only; no runtime migration is authorized by this document.
+- **Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
+- **Source baseline:** [develop commit 007f631a3db04b1a2d1ca3d21bb9af65123bd014](https://github.com/45s/coinzilla/commit/007f631a3db04b1a2d1ca3d21bb9af65123bd014) (2026-11-18)
+- **Primary owner:** Harvester (apps/harvester)
+- **Database infrastructure owner:** Database (packages/db)
 
 > This is a source-verified integration plan, not a claim of production readiness. Existing Journal, Operational State Store, trading, broker, and market-data behavior must remain unchanged while this plan is implemented in later, separately reviewed tasks.
 
@@ -520,6 +520,7 @@ Reuse the @coinzilla/db provider conformance suite for generic CRUD/provider beh
 ### Required tests for future repository slices
 
 **Repository/unit**
+
 - create/read/update/delete only where the repository contract needs them;
 - domain-to-record and record-to-domain mapping;
 - invalid and missing fields, schema-version validation, unknown values;
@@ -530,6 +531,7 @@ Reuse the @coinzilla/db provider conformance suite for generic CRUD/provider beh
 - error translation with original cause preserved and no provider-native error leakage.
 
 **SQLite integration**
+
 - actual file-backed SQLite repository, close/reopen persistence, multiple connections;
 - multi-record transaction commit and rollback;
 - lock contention and configured timeout;
@@ -539,6 +541,7 @@ Reuse the @coinzilla/db provider conformance suite for generic CRUD/provider beh
 - realistic load and event-loop-delay measurement.
 
 **Lifecycle**
+
 - provider open failure and migration/setup failure;
 - partial startup cleanup after DB open;
 - observer failure and queue drain;
@@ -549,6 +552,7 @@ Reuse the @coinzilla/db provider conformance suite for generic CRUD/provider beh
 - process lock remains held until DB cleanup is complete.
 
 **Isolation and process behavior**
+
 - TESTNET and LIVE use distinct files even when NODE_ENV values are deliberately inverted;
 - explicit override, invalid relative/root paths, symlink/alias/hard-link collision;
 - tests never open production defaults;
@@ -557,6 +561,7 @@ Reuse the @coinzilla/db provider conformance suite for generic CRUD/provider beh
 - unsupported NFS/SMB deployments are rejected by deployment policy (the current path resolver cannot portably detect every network mount).
 
 **Import**
+
 - deterministic source file discovery and resource limits;
 - record/file digests and source positions;
 - malformed/truncated tail handling;
