@@ -39,7 +39,7 @@ The Unit Tests and Test Coverage package matrices explicitly list workspace pack
 The workspace-quality job in the required JavaScript Syntax workflow runs these documentation checks:
 
 - `check-agent-policy.js` enforces ownership maps, required roadmaps and entry points, balanced Markdown fences, and relative local-path existence for inline links and reference definitions. Code examples and HTML comments are excluded; malformed percent-encoded paths are reported as controlled findings. It also prints unresolved local heading-anchor findings using GitHub-style slugs for inline links and reference definitions; **heading-anchor findings are report-only and do not fail the check**.
-- `markdown-style-baseline.js` reports full-tree formatting/heading/fence metrics without failing on existing findings or rewriting files. Fenced and four-space-indented code blocks are excluded from prose/list/table metrics; valid nested lists remain analyzed.
+- `markdown-style-baseline.js` reports full-tree formatting/heading/fence metrics without failing on existing findings or rewriting files. The shared scanner also powers the changed-file checker; both paths exclude fenced and four-space-indented code blocks from prose/list/table metrics while continuing to analyze valid nested lists.
 - On pull requests, `check-markdown-style.js` enforces the changed-line/file-level Markdown style rules against the exact PR base SHA. This is a blocking check within `Check JavaScript syntax`, not a separate status context.
 - `check-external-links.test.js` exercises the external URL checker with mocked fetch responses. These tests run in required CI but make no network requests.
 
