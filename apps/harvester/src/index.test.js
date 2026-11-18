@@ -2333,8 +2333,8 @@ test("starts configured provider accounts and acquires one process lock per acco
       TRADING_MODE: "testnet",
       BINANCE_API_KEY: "binance-key",
       BINANCE_API_SECRET_KEY: "binance-secret",
-      TEST_PROVIDER_API_KEY: "bitunix-key",
-      TEST_PROVIDER_API_SECRET: "bitunix-secret",
+      TEST_PROVIDER_API_KEY: "test-provider-key",
+      TEST_PROVIDER_API_SECRET: "test-provider-secret",
     },
     providerAdapterFactories: {
       "test-exchange": () => ({}),
