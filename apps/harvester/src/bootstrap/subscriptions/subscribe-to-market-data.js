@@ -486,7 +486,10 @@ async function establishMarketDataSubscriptions({ context, reportPriceError }) {
   // Establish every enabled market stream before requesting any missing
   // initial ticker snapshot through Binance WebSocket API ticker.price.
   // A slow first request must never prevent later markets receiving prices.
-  await subscribeToEnabledMarkets({ context, reportPriceError })
+  await subscribeToEnabledMarkets({
+    context,
+    reportPriceError,
+  })
   const subscribedSymbols = assertAllMarketSubscriptions({
     enabledSymbols,
     subscriptions: context.subscriptions,
@@ -501,7 +504,10 @@ async function establishMarketDataSubscriptions({ context, reportPriceError }) {
   // Only after all enabled symbols have active WebSocket Streams may startup
   // request missing ticker snapshots through WebSocket API ticker.price.
   if (context.tradingEnabled) {
-    await seedMissingInitialPrices({ context, reportPriceError })
+    await seedMissingInitialPrices({
+      context,
+      reportPriceError,
+    })
   }
   return Object.freeze({
     subscriptions: context.subscriptions,
