@@ -898,3 +898,275 @@ test("Bitunix Spot exchange rates preserve REST failures instead of returning an
   assert.match(result.errors[0].message, /exchange unavailable/, "the REST failure must remain visible to the caller")
   assert.equal(calls.length, 1, "a failed exchange-rate request must not trigger retries")
 })
+
+
+function createSymbolMetadata({ overrides = {} } = {}) {
+  return {
+    base: "BTC",
+    quote: "USDT",
+    isOpen: "1",
+    minPrice: "0.01",
+    minVolume: "0.001",
+    basePrecision: "8",
+    quotePrecision: "2",
+    precisions: ["0.01", "0.001"],
+    ...overrides,
+  }
+}
+
+test("Bitunix Spot market catalog reads use unsigned public GET requests", async () => {
+  const symbolMetadata = createSymbolMetadata()
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [symbolMetadata],
+    },
+  })
+
+  const markets = await broker.getExchangeMarkets()
+  const filters = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+  assert.equal(markets.ok, true, "the public market catalog must remain readable without private signing")
+  assert.equal(filters.ok, true, "symbol metadata must remain readable without private signing")
+  assert.equal(calls.length, 2, "each catalog operation must issue exactly one request")
+  for (const call of calls) {
+    assert.equal(call.method, "GET", "the public coin-pair catalog must use GET")
+    assert.deepEqual(call.options, {
+      authenticated: false,
+    }, "the public coin-pair catalog must not request private authentication or signing")
+  }
+})
+
+test("Bitunix Spot symbol metadata selects the matching pair and preserves exact exchange fields", async () => {
+  const expectedMetadata = createSymbolMetadata({
+    overrides: {
+      symbol: "btcusdt",
+      minPrice: "0",
+      minVolume: "0",
+      basePrecision: 8,
+      quotePrecision: "2",
+      precisions: ["0.01", "0.001"],
+      maxAmount: "500000",
+      maxLimitOrderAmount: "1500000",
+    },
+  })
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [
+        createSymbolMetadata({
+          overrides: {
+            base: "ETH",
+          },
+        }),
+        expectedMetadata,
+      ],
+    },
+  })
+
+  const result = await broker.getSymbolFilters({ symbol: "btcusdt" })
+
+  assert.equal(result.ok, true, "a unique valid matching pair must be returned")
+  assert.deepEqual(result.data, {
+    ...expectedMetadata,
+    symbol: "BTCUSDT",
+  }, "the matching raw row must retain exact values while exposing the normalized requested symbol")
+  assert.equal(Object.hasOwn(result.data, "tickSize"), false, "precision metadata must not be invented as a tick size")
+  assert.equal(Object.hasOwn(result.data, "stepSize"), false, "precision metadata must not be invented as a quantity step")
+  assert.equal(Object.hasOwn(result.data, "maxQuantity"), false, "reference-only maximum amount fields must not become canonical maximum quantity")
+  assert.equal(result.data.minPrice, "0", "an explicitly documented zero minimum trading value must remain zero")
+  assert.equal(result.data.minVolume, "0", "an explicitly documented zero minimum trading quantity must remain zero")
+})
+
+test("Bitunix Spot symbol metadata leaves omitted optional trading rules unknown", async () => {
+  const symbolMetadata = createSymbolMetadata({
+    overrides: {
+      minPrice: undefined,
+      minVolume: undefined,
+      basePrecision: undefined,
+      quotePrecision: undefined,
+      precisions: undefined,
+    },
+  })
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [symbolMetadata],
+    },
+  })
+
+  const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, true, "optional Bitunix metadata may be absent without fabricating trading rules")
+  assert.equal(result.data.minPrice, undefined, "an omitted minimum trading value must remain unknown rather than becoming zero")
+  assert.equal(result.data.minVolume, undefined, "an omitted minimum trading quantity must remain unknown rather than becoming zero")
+  assert.equal(result.data.basePrecision, undefined, "an omitted base precision must remain absent")
+  assert.equal(result.data.quotePrecision, undefined, "an omitted quote precision must remain absent")
+})
+
+test("Bitunix Spot symbol metadata preserves a closed pair without advertising it as an active market", async () => {
+  const closedMetadata = createSymbolMetadata({
+    overrides: {
+      isOpen: "0",
+    },
+  })
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [closedMetadata],
+    },
+  })
+
+  const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+  const markets = await broker.getExchangeMarkets()
+
+  assert.equal(result.ok, true, "read-only metadata lookup must preserve a known closed pair")
+  assert.equal(result.data.isOpen, "0", "the source closed-market status must remain unchanged")
+  assert.deepEqual(markets.data, [], "closed pairs must remain excluded from the active market catalog")
+})
+
+test("Bitunix Spot symbol metadata rejects malformed documented numeric fields", async () => {
+  const invalidMetadataCases = [
+    {
+      field: "minPrice",
+      value: "NaN",
+      description: "non-finite minimum trading values must be rejected",
+    },
+    {
+      field: "minPrice",
+      value: "-0.01",
+      description: "negative minimum trading values must be rejected",
+    },
+    {
+      field: "minPrice",
+      value: 0.01,
+      description: "minimum trading values must remain exact decimal strings",
+    },
+    {
+      field: "minVolume",
+      value: "Infinity",
+      description: "non-finite minimum quantities must be rejected",
+    },
+    {
+      field: "minVolume",
+      value: "-0.001",
+      description: "negative minimum quantities must be rejected",
+    },
+    {
+      field: "basePrecision",
+      value: "-1",
+      description: "negative base precision counts must be rejected",
+    },
+    {
+      field: "basePrecision",
+      value: "1.5",
+      description: "fractional base precision counts must be rejected",
+    },
+    {
+      field: "basePrecision",
+      value: Infinity,
+      description: "non-finite base precision numbers must be rejected",
+    },
+    {
+      field: "quotePrecision",
+      value: 9007199254740992,
+      description: "unsafe quote precision integers must be rejected",
+    },
+    {
+      field: "precisions",
+      value: "0.01",
+      description: "the trading precisions field must be an array when present",
+    },
+    {
+      field: "precisions",
+      value: ["0.01", "NaN"],
+      description: "malformed precision entries must be rejected without interpreting them as increments",
+    },
+    {
+      field: "precisions",
+      value: ["0.01", 0.001],
+      description: "precision entries must retain the documented decimal-string representation",
+    },
+    {
+      field: "symbol",
+      value: 42,
+      description: "a supplied non-string compatibility symbol must not bypass pair identity validation",
+    },
+    {
+      field: "symbol",
+      value: "ETHUSDT",
+      description: "a supplied symbol must agree with the documented base and quote identity",
+    },
+    {
+      field: "base",
+      value: undefined,
+      description: "the base asset code is required to identify the trading pair",
+    },
+    {
+      field: "quote",
+      value: undefined,
+      description: "the quote asset code is required to identify the trading pair",
+    },
+  ]
+
+  for (const scenario of invalidMetadataCases) {
+    const { broker } = createBroker({
+      responses: {
+        "/api/spot/v1/common/coin_pair/list": [
+          createSymbolMetadata({
+            overrides: {
+              [scenario.field]: scenario.value,
+            },
+          }),
+        ],
+      },
+    })
+    const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+    assert.equal(result.ok, false, scenario.description)
+    assert.ok(result.errors?.[0] instanceof Error, `Invalid ${scenario.field} metadata must return a diagnostic error`)
+  }
+})
+
+test("Bitunix Spot symbol metadata rejects missing symbols, missing catalog rows and malformed response arrays", async () => {
+  const missingSymbol = createBroker()
+  const invalidInput = await missingSymbol.broker.getSymbolFilters({ symbol: " " })
+
+  assert.equal(invalidInput.ok, false, "an empty requested symbol must be rejected before exchange I/O")
+  assert.equal(missingSymbol.calls.length, 0, "invalid symbol input must not trigger a catalog request")
+
+  const missingRow = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [
+        createSymbolMetadata({
+          overrides: {
+            base: "ETH",
+          },
+        }),
+      ],
+    },
+  })
+  const notFound = await missingRow.broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+  assert.equal(notFound.ok, false, "a catalog without the requested pair must fail closed")
+
+  const malformedEnvelope = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": null,
+    },
+  })
+  const malformed = await malformedEnvelope.broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+  assert.equal(malformed.ok, false, "missing or null catalog data must not be treated as an empty successful response")
+})
+
+test("Bitunix Spot symbol metadata propagates catalog transport failures without retrying", async () => {
+  const transportFailure = new Error("socket closed")
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": transportFailure,
+    },
+  })
+
+  const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, false, "a catalog transport failure must never become successful metadata")
+  assert.equal(result.errors[0], transportFailure, "the original transport failure must remain available to the caller")
+  assert.equal(calls.length, 1, "a failed metadata read must not retry implicitly")
+})
