@@ -1,4 +1,8 @@
 import { parseTelegramOperatorCommand } from "./commands.js"
+import {
+  TELEGRAM_OPERATOR_ACTIONS,
+  TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN,
+} from "./constants.js"
 
 export function normalizeTelegramUserId(value) {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
@@ -13,8 +17,8 @@ export function normalizeTelegramUserId(value) {
 
 
 export function resolveMessageAction(parsed) {
-  if (parsed.type === "PAUSE_MENU") { return "PAUSE" }
-  if (parsed.type === "RESUME_MENU") { return "RESUME" }
+  if (parsed.type === TELEGRAM_OPERATOR_ACTIONS.PAUSE_MENU) { return TELEGRAM_OPERATOR_ACTIONS.PAUSE }
+  if (parsed.type === TELEGRAM_OPERATOR_ACTIONS.RESUME_MENU) { return TELEGRAM_OPERATOR_ACTIONS.RESUME }
   if (parsed.type === "INVALID" && parsed.command) { return parsed.command }
   return parsed.type
 }
