@@ -2244,7 +2244,7 @@ test("starts configured provider accounts and acquires one process lock per acco
           subscriptions: ["BTCUSDT"],
           stop: async () => {
             stopped.push(input.providerIdentity.providerInstanceId)
-            return { ok: true },
+            return { ok: true }
           },
         }
       },

@@ -329,7 +329,11 @@ function validateProviderIdentityUniqueness({ provider, instanceIds, accountScop
   accountScopes.add(accountScope)
 }
 
-function validateProviderCredentials({ credentials, path }) {
+function validateProviderCredentials({
+  credentials,
+  path,
+  credentialNames,
+}) {
   const credentialsPath = `${path}.credentials`
   requireRecord({
     value: credentials,
@@ -358,9 +362,24 @@ function validateProviderCredentials({ credentials, path }) {
       expectation: "different API key and API secret environment-variable names",
     })
   }
+  for (const name of [credentials.apiKeyEnv, credentials.apiSecretEnv]) {
+    if (credentialNames.has(name)) {
+      fail({
+        path: credentialsPath,
+        expectation: "credential environment-variable names unique to each provider account",
+      })
+    }
+    credentialNames.add(name)
+  }
 }
 
-function validateProviderInstanceConfig({ provider, index, instanceIds, accountScopes }) {
+function validateProviderInstanceConfig({
+  provider,
+  index,
+  instanceIds,
+  accountScopes,
+  credentialNames,
+}) {
   const path = `brokers.instances[${index}]`
   requireRecord({
     value: provider,
@@ -378,6 +397,7 @@ function validateProviderInstanceConfig({ provider, index, instanceIds, accountS
   validateProviderCredentials({
     credentials: provider.credentials,
     path,
+    credentialNames,
   })
 }
 
@@ -405,12 +425,14 @@ function validateBrokerProviderInstances(config) {
   }
   const instanceIds = new Set()
   const accountScopes = new Set()
+  const credentialNames = new Set()
   for (const [index, provider] of config.brokers.instances.entries()) {
     validateProviderInstanceConfig({
       provider,
       index,
       instanceIds,
       accountScopes,
+      credentialNames,
     })
   }
 }
