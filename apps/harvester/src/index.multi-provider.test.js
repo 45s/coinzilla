@@ -101,6 +101,7 @@ function createMainProviderAccountStarter({
       identity: input.providerIdentity,
       tradingMode: input.env.TRADING_MODE,
       operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
+      providerRequired: input.providerRequired,
       marketDataProviderInstanceId: input.marketDataProviderInstanceId,
       marketDataSymbols: input.marketDataSymbols,
     })
@@ -118,6 +119,14 @@ function createMainProviderAccountStarter({
       tradingEnabled: true,
       strategyMode: "conservative",
       subscriptions: ["BTCUSDT"],
+      executionSymbols: input.executionSymbols,
+      marketDataSources: input.marketDataSources,
+      marketDataProviderTypes: input.marketDataProviderTypes,
+      marketDataProviderIdentities: input.marketDataProviderIdentities,
+      marketDataProviderInstanceId: input.marketDataProviderInstanceId,
+      marketDataSymbols: input.marketDataSymbols,
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => ({ ok: true }),
       stop: async () => {
         stopped.push(input.providerIdentity.providerInstanceId)
         return {
@@ -187,10 +196,36 @@ function createMainMultiProviderAppConfig(providerInstances) {
     marketDataRouting: {
       routes,
     },
+    executionRouting: {
+      routes: routes.map(({ symbol, providerInstanceId }) => ({
+        strategyId: "CG_coinGrabber",
+        symbol,
+        providerInstanceId,
+      })),
+    },
     brokers: {
       instances: providerInstances,
     },
   }
+}
+
+function assignSecondaryExecutionRoute({ config, secondaryProvider }) {
+  const secondaryRoute = Object.entries(config.strategies.CG_coinGrabber.pairs).find(
+    ([, pair]) => pair.tradingEnvironment === secondaryProvider.environment ||
+      pair.tradingEnvironment === "both"
+  )
+  if (!secondaryRoute) {
+    return
+  }
+  const [secondarySymbol] = secondaryRoute
+  config.executionRouting.routes = config.executionRouting.routes.map((route) =>
+    route.symbol === secondarySymbol
+      ? {
+        ...route,
+        providerInstanceId: secondaryProvider.providerInstanceId,
+      }
+      : route
+  )
 }
 
 function createMainMultiProviderFixture({
@@ -205,7 +240,14 @@ function createMainMultiProviderFixture({
   const lockScopes = []
   const releasedLocks = []
   const signalHandlers = new Map()
+  const errors = []
   const config = createMainMultiProviderAppConfig(providerInstances)
+  if (providerInstances.length > 1) {
+    assignSecondaryExecutionRoute({
+      config,
+      secondaryProvider: providerInstances[1],
+    })
+  }
   const run = () => main({
     loadConfig: async () => config,
     env,
@@ -224,7 +266,9 @@ function createMainMultiProviderFixture({
     logger: {
       info() {},
       system() {},
-      error() {},
+      error(entry) {
+        errors.push(entry)
+      },
     },
   })
   return {
@@ -234,6 +278,7 @@ function createMainMultiProviderFixture({
     lockScopes,
     releasedLocks,
     signalHandlers,
+    errors,
   }
 }
 
@@ -279,6 +324,7 @@ function createTwoBinanceAccountInstances() {
       providerType: "binance",
       accountId: "binance-secondary",
       environment: "testnet",
+      required: false,
       credentials: {
         apiKeyEnv: "BINANCE_SECONDARY_API_KEY",
         apiSecretEnv: "BINANCE_SECONDARY_API_SECRET",
@@ -305,7 +351,7 @@ test("starts configured provider accounts and acquires one process lock per acco
   process.exitCode = 0
   try {
     const result = await fixture.run()
-    assert.ok(result, "The configured account startup must return a runtime result")
+    assert.ok(result, `The configured account startup must return a runtime result: ${fixture.errors.map(({ errorMessage, error }) => errorMessage ?? error?.message ?? "unknown").join("; ")}`)
     assert.equal(result.runtime.providerAccounts.length, 2, "Both configured provider accounts must start in independent runtimes")
     assert.deepEqual(fixture.started.map(({ identity }) => identity.providerInstanceId), [
       "binanceTestnetPrimary",
@@ -361,7 +407,7 @@ test("retains an account process lock when startup cleanup is unconfirmed", asyn
   process.exitCode = 0
   try {
     const result = await fixture.run()
-    assert.ok(result, "The account startup result must remain available after isolating a startup failure")
+    assert.ok(result, `The account startup result must remain available after isolating a startup failure: ${fixture.errors.map(({ errorMessage, error }) => errorMessage ?? error?.message ?? "unknown").join("; ")}`)
     assert.equal(result.runtime.failedAccounts[0].lockRetained, true, "An account lock must remain held when startup cleanup is unconfirmed")
     assert.deepEqual(fixture.releasedLocks, [], "No account lock may be released before uncertain startup cleanup is confirmed")
     await fixture.signalHandlers.get("SIGINT")()
@@ -392,7 +438,7 @@ test("keeps healthy accounts running and releases only a failed account's proces
   process.exitCode = 0
   try {
     const result = await fixture.run()
-    assert.ok(result)
+    assert.ok(result, `Expected isolated account startup to return a runtime: ${fixture.errors.map(({ errorMessage, error }) => errorMessage ?? error?.message ?? "unknown").join("; ")}`)
     assert.deepEqual(fixture.started.map(({ identity }) => identity.providerInstanceId), [
       "binanceTestnetPrimary",
       "binanceTestnetSecondary",

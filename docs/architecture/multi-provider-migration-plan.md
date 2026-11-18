@@ -10,7 +10,7 @@ last_verified: 2026-11-18
 # Multi-provider migration audit and implementation plan
 
 **Tracking:** [Harvester/Brokers issue #1339](https://github.com/45s/coinzilla/issues/1339)
-**Architecture authority:** [ADR-0003](./decisions/ADR-0003-multi-provider-routing.md)
+**Architecture authority:** [ADR-0003](./decisions/ADR-0003-multi-provider-routing.md) and [ADR-0004](./decisions/ADR-0004-complete-bitunix-provider-integration.md)
 **Audit baseline:** `develop` at `16a8842fed0407fce67361fb382a6aaa1dab32bd` (2026-11-18 11:12:04 UTC).
 **Scope:** source-verified migration plan and implementation sequencing. Phase 4 is authorized only for basic in-process account isolation; process-restart recovery, restoration and replay are explicitly deferred under #654.
 
@@ -18,23 +18,23 @@ last_verified: 2026-11-18
 
 **Revalidation checkpoint:** `develop` at `636cbc3c6021a59782fa2517447e373883f1af76` (2026-11-18; includes merged PR #1452 Phase 5 independent market-data routing). This section supersedes earlier statements about current delivery status where they differ; historical audit evidence remains unchanged.
 
-- **Phase 1 — complete:** Brokers' immutable Binance capability declaration merged in [PR #1366](https://github.com/45s/coinzilla/pull/1366). This is additive capability metadata; it does not enable another provider.
+- **Capability contract ownership — reconciled in PR #1455:** `@coinzilla/entities` owns the one shared `BrokerCapabilities` value, vocabulary, statuses, validation, lookup and serialization. `@coinzilla/brokers` owns provider-specific declarations/evidence and re-exports the shared class for compatibility.\n- **Phase 1 — complete:** the immutable Binance provider declaration was delivered in [PR #1366](https://github.com/45s/coinzilla/pull/1366) using the shared capability contract. This is additive capability metadata; it does not enable another provider.
 - **Phase 2 — foundation merged, routing not delivered:** [PR #1383](https://github.com/45s/coinzilla/pull/1383) adds stable Binance provider-instance/account identity, an exchange-neutral provider registry, capability validation, and deterministic connection/rollback lifecycle. It preserves the legacy single-Binance trading runtime.
 - **Superseded parallel work:** [PR #1386](https://github.com/45s/coinzilla/pull/1386) was closed unmerged as superseded by PR #1383. The final closure review confirmed that #1383 already contains the in-flight connect/disconnect lifecycle serialization and deterministic regression coverage added during the #1386 review. No code from the old #1386 branch is needed.
 - **Phase 4 production integration — COMPLETE:** merged in [PR #1445](https://github.com/45s/coinzilla/pull/1445). Exact head `8f1f2b4888edb716b15741bec61afcb0b8d8dcdc` merged as `5eaf38d88591a055e155ab5b8df22326ff76949b`. `brokers.instances` resolves explicit provider/account/environment identities and credential environment-variable references; the process entrypoint acquires account-scoped locks and starts an independent Harvester runtime per account. Credential variables belonging to other configured accounts are removed from each child runtime environment. Confirmed startup cleanup releases the failed account lock; uncertain cleanup retains it until process shutdown cleanup is confirmed. The legacy single-Binance environment remains the compatibility fallback. The default production adapter map currently registers Binance only; unsupported provider types fail clearly.
-- **Isolated read-only observer exception:** the opt-in Bitunix Spot observer is implemented in [PR #1423](https://github.com/45s/coinzilla/pull/1423), with its documentation update in [PR #1424](https://github.com/45s/coinzilla/pull/1424), under user-authorized [issue #1422](https://github.com/45s/coinzilla/issues/1422). It is exposed only as `runtime.readOnlyProviders.bitunix`, disabled by default, and is not registered as a Harvester BrokerPort/provider-registry entry or used by execution, strategy market-data, Portfolio, account snapshots, recovery, Journal, reservations, or process locks. It does not satisfy Phase 7, resolve [#1185](https://github.com/45s/coinzilla/issues/1185), or establish trading readiness.
+- **Bitunix provider boundary:** the interim observer runtime from #1422 has been removed in [PR #1455](https://github.com/45s/coinzilla/pull/1455). Bitunix is not registered as a Harvester provider until [#1185](https://github.com/45s/coinzilla/issues/1185) is complete; future integration must use the complete provider-instance, BrokerPort, capability, account-lifecycle, execution-routing and market-data contracts defined by [ADR-0004](./decisions/ADR-0004-complete-bitunix-provider-integration.md).
 - **Phase 3 — COMPLETE:** [PR #1416](https://github.com/45s/coinzilla/pull/1416) merged as `543753da5938eba2d95ad19d74c3f98a991e6461` from synchronized head `e58569eaebf968f5cfcfd3fbef5b6302eb0f21ee`. Immutable provider-instance/type/account provenance is persisted before broker I/O and retained through order, cancellation, fill, Journal and Operational State lifecycle records. Historical v1 facts and hash chains remain compatible; ambiguous legacy identities fail closed. All six required `develop-core` checks passed on the exact synchronized head.
 - **Phase 4 — COMPLETE:** basic in-process account isolation is merged in [PR #1445](https://github.com/45s/coinzilla/pull/1445) (head `8f1f2b4888edb716b15741bec61afcb0b8d8dcdc`, merge `5eaf38d88591a055e155ab5b8df22326ff76949b`). PR #1440 provides account-scoped process locks and the per-provider/account state registry; PR #1445 wires optional `brokers.instances` configuration into the production entrypoint and starts a separate runtime per configured account. Credential environment variables are isolated per account. Partial provider startup failures are isolated; healthy account runtimes continue. Uncertain startup cleanup retains the failed account lock until confirmed process shutdown cleanup. The default production adapter map currently supports Binance only.
-- **Phase 5 — COMPLETE:** independent market-data routing merged in [PR #1452](https://github.com/45s/coinzilla/pull/1452), merge commit `636cbc3c6021a59782fa2517447e373883f1af76`. **Phase 6 remains later work:** explicit Binance execution routing/parity. Bitunix execution remains blocked by #1185.
-- **Trading safety gates unchanged:** Bitunix order mutations and Harvester trading readiness remain blocked by [issue #1185](https://github.com/45s/coinzilla/issues/1185); Recovery Seller remains non-executable under [issue #1127](https://github.com/45s/coinzilla/issues/1127). The read-only observer does not relax either gate. No exchange operations were performed for this revalidation.
+- **Phase 5 — COMPLETE:** independent market-data routing merged in [PR #1452](https://github.com/45s/coinzilla/pull/1452), merge commit `636cbc3c6021a59782fa2517447e373883f1af76`. **Phase 6 — IMPLEMENTED IN PR #1455:** explicit strategy/market execution routing, provider-account pinning, and independent market-data source selection; exact-head CI and merge remain the release gates. Bitunix provider registration remains blocked by #1185.
+- **Trading safety gates unchanged:** Bitunix remains outside Harvester provider registration and routing until [issue #1185](https://github.com/45s/coinzilla/issues/1185) is complete; Recovery Seller remains non-executable under [issue #1127](https://github.com/45s/coinzilla/issues/1127). No exchange operations were performed for this revalidation.
 
 This revalidation was a read-only source and GitHub delivery-state inspection and did not itself execute tests or CI. The subsequent synchronized PR #1416 head passed all six required `develop-core` checks and was merged as `543753da5938eba2d95ad19d74c3f98a991e6461`; those results are recorded above.
 
 ## Priority and next delivery decision — 2026-11-18
 
-**Owner priority:** #1339 remains the primary Harvester architecture/delivery workstream. Phase 4 now supports multiple configured Binance account runtimes in one process; the application still has no independent execution or strategy market-data route tables, and no second production exchange adapter is registered. The isolated Bitunix observer is read-only and is not part of the provider-routing architecture.
+**Owner priority:** #1339 remains the primary Harvester architecture/delivery workstream. Phase 4 account isolation and Phase 5 independent market-data routing are complete; Phase 6 explicit execution routing is implemented in PR #1455 and pending exact-head CI/merge. Binance remains the only registered production adapter. Bitunix is not registered until #1185 is complete; the interim observer runtime has been removed.
 
-**Current implementation priority: Phase 6 — Binance execution routing and parity.** Phase 4 basic in-process account isolation is complete in [PR #1445](https://github.com/45s/coinzilla/pull/1445), and Phase 5 independent market-data routing is complete in [PR #1452](https://github.com/45s/coinzilla/pull/1452). Keep runtime state in memory; do not introduce restart restoration or recovery gates.
+**Current implementation priority: complete and merge Phase 6 execution routing in PR #1455.** Phase 4 basic in-process account isolation is complete in [PR #1445](https://github.com/45s/coinzilla/pull/1445), and Phase 5 independent market-data routing is complete in [PR #1452](https://github.com/45s/coinzilla/pull/1452). Keep runtime state in memory; do not introduce restart restoration or recovery gates.
 
 **Phase 5 implementation scope:** `marketDataRouting.routes` explicitly maps each configured symbol to one `providerInstanceId`. In a multi-provider process, every enabled market must have exactly one route; duplicate, missing, unknown-provider, unconfigured-symbol and source-environment-incompatible routes fail before any account runtime starts. Each account runtime receives only the symbols assigned to its provider instance, and only that runtime establishes the price/book/candle subscriptions and seeds initial prices for those symbols. The source provider instance is exposed in runtime metadata and market-subscription diagnostics. A legacy single-provider configuration without a route table retains its existing all-markets behavior. No implicit multi-provider default, source fallback, blending, automatic switching, recovery, replay or restoration is introduced. Phase 6 execution routing remains separate.
 
@@ -46,9 +46,9 @@ This revalidation was a read-only source and GitHub delivery-state inspection an
 
 1. Phase 3 is complete in merged PR #1416; preserve its immutable provenance and backward-compatible v1 fact guarantees in all subsequent phases.
 2. Complete Phase 4 basic in-process account isolation, namespaced identities, independent account state and account-scoped locks. Do not implement or depend on process-restart recovery; #654 is deferred and lowest priority.
-3. Phase 5 independent market-data routing is complete in PR #1452; continue with Phase 6 explicit Binance execution routing/parity. No silent fallback or source blending.
-4. Deliver Phase 6 Binance execution routing through explicit routes and prove behavior parity while still using the existing Binance account/instance.
-5. Only then consider another execution provider. Bitunix remains read-only for Harvester trading until #1185 is closed with verified capability and lifecycle evidence; RS remains disabled until #1127 is complete.
+3. Phase 5 independent market-data routing is complete in PR #1452; Phase 6 explicit execution routing is implemented in PR #1455 and pending exact-head CI/merge. No silent fallback or source blending.
+4. Complete exact-head CI, merge Phase 6 execution routing in PR #1455, and update the delivery record.
+5. After Phase 6, complete Bitunix under #1185 as a full broker and Harvester provider integration; do not introduce an observer-only or partial staging facade. RS remains disabled until #1127 is complete.
 
 The Harvester roadmap records #1339 as its top architecture/delivery priority. The ADA recovery lifecycle (#1359/#1362) remains a separate safety obligation and must continue to receive its own focused work; prioritization does not waive trading-safety gates.
 
@@ -72,7 +72,7 @@ The safe direction is incremental:
 2. Add truthful provider capability declarations in `packages/brokers`.
 3. Prepare Harvester provider construction/registry without enabling multi-provider execution.
 4. Establish durable, immutable order provenance and account-scoped identity.
-5. Phase 4 account isolation and Phase 5 market-data routing are complete; keep process-restart recovery under separate lowest-priority #654 and continue with Phase 6 execution routing.
+5. Phase 4 account isolation and Phase 5 market-data routing are complete; Phase 6 execution routing is implemented in PR #1455 and pending exact-head verification/merge. Keep process-restart recovery under separate lowest-priority #654.
 6. Introduce independent market-data routing.
 7. Route existing Binance execution through the new composition and prove parity.
 8. Enable another provider only after its complete required lifecycle is verified.
@@ -255,7 +255,7 @@ Relevant implementation: `packages/brokers/src/infrastructure/binance/broker-web
 
 **Binance is the first provider in the implementation sequence, not the permanent or exclusive provider.** Bitunix development is temporarily paused while Binance capability contracts and Harvester integration progress.
 
-Existing Bitunix source, completed read-only work, and capability research remain part of the project. Bitunix implementation continues under [issue #1185](https://github.com/45s/coinzilla/issues/1185). Its current partial/read-only functionality must not be treated as Harvester execution readiness. The separate #1422 observer is a non-routing read interface only and does not alter this Phase 7 execution gate.
+Existing Bitunix source and capability research remain part of the project. Bitunix implementation continues under [issue #1185](https://github.com/45s/coinzilla/issues/1185). Its current partial query capabilities must not be treated as Harvester execution readiness. The #1422 observer runtime has been removed and is not an interim integration stage. [ADR-0004](./decisions/ADR-0004-complete-bitunix-provider-integration.md) defines the complete-provider admission rule.
 
 When Bitunix implements and verifies the capabilities required by the shared broker contracts—including reliable account snapshots, stable order identity, safe placement and cancellation outcomes, complete order/fill reconciliation, private execution events, environment isolation, and lifecycle/recovery guarantees—it can be added to the provider registry and routed by Harvester under the same provider-neutral architecture.
 
@@ -529,11 +529,11 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 **Owner:** Brokers, then Harvester for integration.
 **Tracking:** [Bitunix capability and lifecycle blockers — issue #1185](https://github.com/45s/coinzilla/issues/1185).
 
-Bitunix work is temporarily paused while Binance is the first provider brought through the shared capability-contract and Harvester integration path. Preserve existing Bitunix functionality and completed read-side work; do not enable incomplete execution capabilities.
+Bitunix work remains deferred until the existing broker implementation satisfies the complete capability and lifecycle contract. Preserve the existing query methods, extend the same broker implementation with supported operations, and do not register an incomplete provider.
 
 Resume Bitunix implementation when the Binance-first integration work provides the stable shared contracts needed by both providers. Complete the source-backed Bitunix capability gaps and prove the required account, order, fill, cancellation, private-event, environment, precision, and recovery guarantees. Then add Bitunix to Harvester through the same provider registry and explicit routing model—without provider-specific strategy logic, implicit fallback, or cross-provider retries.
 
-Bitunix enablement requires its own reviewable implementation and acceptance work under #1185 (or explicitly linked follow-up issues). The pause is sequencing only; it is not a decision to abandon Bitunix or exclude it from the target architecture.
+Bitunix enablement requires its own reviewable implementation and acceptance work under #1185 (or explicitly linked follow-up issues). Do not create a temporary observer-only or query-only Harvester facade; the future provider must satisfy the complete shared contract before registration.
 
 ## 9. Test and verification strategy
 

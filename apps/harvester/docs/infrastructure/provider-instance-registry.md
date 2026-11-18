@@ -29,7 +29,7 @@ Each entry supplies:
 
 - `providerInstanceId`, `providerType`, `accountId`, and `environment`;
 - a BrokerPort implementation; and
-- its deeply immutable version-1 capability declaration from [Brokers capability contract #1366](https://github.com/45s/coinzilla/pull/1366).
+- its deeply immutable provider declaration, built with the canonical `BrokerCapabilities` value from `@coinzilla/entities` and populated with evidence by the Brokers provider implementation (first delivered for Binance in [PR #1366](https://github.com/45s/coinzilla/pull/1366)).
 
 Registration fails closed for an empty registry, duplicate or malformed identities, an invalid BrokerPort, a missing/unsupported capability declaration, a provider-type mismatch, or a missing/mismatched selected environment. Registry lookup requires the exact `providerInstanceId`; there is no implicit default, fallback, or provider selection by brand. The metadata listing is immutable and does not expose broker objects.
 
@@ -39,6 +39,7 @@ The registry owns connection lifecycle:
 - `connectAll()` connects entries in registration order. If a connection fails, it attempts cleanup for every constructed entry in reverse order, including the failing and not-yet-connected entries.
 - `disconnectAll()` attempts every disconnect in reverse order and aggregates cleanup failures.
 - Concurrent connection/disconnection requests for one instance share the in-flight operation. Successful disconnect is idempotent; failed cleanup remains visible and can be retried.
+- Process-wide operator control and Operational State Store ownership are assigned to the first successfully started account, not merely the first configured entry. If an optional first entry fails, the next healthy account receives those process-wide responsibilities.
 
 Errors preserve the original connection/cleanup causes. Credentials are never part of registry identity or diagnostic context.
 
@@ -84,7 +85,7 @@ Each configured account is started through a separate invocation of the existing
 
 The first configured account owns the process-wide Telegram Command Center and optional Operational State Store callbacks. Secondary accounts do not create duplicate Telegram command handlers. A startup failure is isolated to that account: its process lock is released when cleanup is confirmed, and already-started or later accounts continue. If failed-account lock cleanup is uncertain, the failure is exposed in `runtime.failedAccounts` and the lock remains owned until confirmed shutdown cleanup.
 
-The optional Bitunix observer tracked in [#1422](https://github.com/45s/coinzilla/issues/1422) is deliberately not registered here. It exposes a separate read-only facade and cannot be selected by registry lookup, execution routing, or strategy market-data routing. See the [Bitunix read-only observer contract](./bitunix-read-only-observer.md).
+Bitunix is not registered here until the complete broker and lifecycle acceptance in [#1185](https://github.com/45s/coinzilla/issues/1185) is complete. The interim observer runtime from #1422 has been removed; future integration must use the complete provider contract in [ADR-0004](../../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md).
 
 The registry can represent multiple named instances of the same or different provider types when an adapter factory is registered. Phase 4 uses explicit account descriptors and separate runtime instances; it does not turn the registry into a route selector. Explicitly out of scope are:
 
@@ -94,7 +95,7 @@ The registry can represent multiple named instances of the same or different pro
 - cross-account balance aggregation; and
 - process-restart recovery or restoration.
 
-These remain separate delivery slices under #1339 and ADR-0003. The default production adapter map is Binance-only; the Bitunix read-only observer remains outside the registry.
+Phase 5 and Phase 6 are implemented in [PR #1455](https://github.com/45s/coinzilla/pull/1455), pending exact-head CI and merge. The default production adapter map is Binance-only; Bitunix remains outside the registry until #1185 is complete.
 
 ## Verification
 
@@ -120,7 +121,7 @@ Regression coverage exercises CanonicalOrder/Fill immutability, provider metadat
 
 ## Phase 4 — basic in-process account isolation
 
-**Status:** account registry and account-scoped lock foundation merged in [PR #1440](https://github.com/45s/coinzilla/pull/1440). Production bootstrap integration is implemented in [PR #1445](https://github.com/45s/coinzilla/pull/1445) and remains subject to exact-head CI/review.
+**Status:** complete. Account registry and account-scoped lock foundation merged in [PR #1440](https://github.com/45s/coinzilla/pull/1440); production bootstrap integration merged in [PR #1445](https://github.com/45s/coinzilla/pull/1445).
 
 PR #1445 wires optional `brokers.instances` into the production entrypoint. Each configured entry resolves a provider-instance/account/environment identity, a provider-type adapter factory and credential environment-variable references. The legacy single-Binance environment configuration remains the compatibility path when `brokers.instances` is absent.
 
@@ -128,14 +129,24 @@ Each configured account starts a separate Harvester runtime with its own BrokerP
 
 Process locks are scoped by provider type + account alias + environment, not by provider-instance alias. Same-account aliases remain mutually exclusive. A provider startup failure is isolated to that account: when Harvester confirms its startup cleanup, its lock is released immediately; if cleanup is uncertain, the failure and `lockRetained` state are exposed in `runtime.failedAccounts` and the lock remains held while other accounts continue. Global shutdown releases retained account locks only after all started runtimes stop and Journal shutdown is confirmed. If runtime or Journal shutdown is not confirmed, the process lock remains held.
 
-The default production adapter-factory map currently registers Binance only. Multiple configured Binance accounts are supported. Different provider types require a real registered production adapter; the synthetic provider used by offline tests does not enable Bitunix execution. The optional Bitunix observer remains a separate read-only facade and is not registered as a trading provider.
+The default production adapter-factory map currently registers Binance only. Multiple configured Binance accounts are supported. Different provider types require a real registered production adapter; the synthetic provider used by offline tests does not enable Bitunix execution. Bitunix remains outside the provider registry until [#1185](https://github.com/45s/coinzilla/issues/1185) is resolved; do not add a temporary partial facade.
 
 **Deterministic offline verification** covers legacy single-Binance compatibility, multiple accounts using the same provider, provider-type factory selection, account-specific credential isolation, independent account runtime state, account-scoped process locks, confirmed/unconfirmed startup cleanup, partial startup failure, shutdown and lock-release behavior. Tests use in-memory BrokerPort fakes and do not require exchange credentials or network access.
 
 **Explicitly out of scope:**
 
-- Independent market-data routing (Phase 5) and strategy/symbol execution-route tables (Phase 6).
-- Bitunix execution, automatic provider selection, fallback, failover or cross-provider retry.
+- Bitunix execution before the complete broker and account-lifecycle acceptance in [#1185](https://github.com/45s/coinzilla/issues/1185); no temporary observer or partial provider facade.
+- Automatic provider selection, implicit defaults, fallback, failover or cross-provider retry.
 - Cross-account balance aggregation or shared Portfolio/OrderRegistry state.
 - Process-restart recovery, restoration, Journal replay, historical reconstruction, crash recovery or unattended restart mechanisms.
 - ADR-0001 / issue #654 implementation or release gates. **#654 remains LOWEST PRIORITY** and is not a Phase 4 dependency.
+
+## Phase 6 execution-routing contract
+
+**Status:** implementation and offline integration coverage are present in [PR #1455](https://github.com/45s/coinzilla/pull/1455); exact-head CI and merge remain the release gates.
+
+Each enabled `(strategyId, symbol)` resolves to exactly one configured execution provider instance. Each execution runtime contains only its assigned markets. Market-data source selection is independent and may resolve to a different configured provider instance. Missing, duplicate, disabled-market, unknown-provider and environment-incompatible routes fail closed; there is no implicit default, fallback, failover or cross-provider retry.
+
+Production bootstrap resolves provider/account identities and routing before startup, establishes provider connections, and only then starts cross-provider market-data subscriptions. The execution runtime retains its own BrokerPort for snapshots, order submission, user-data, cancellation, fills and reconciliation while the selected market-data BrokerPort supplies prices and candles.
+
+Offline production-bootstrap integration coverage proves order submission through the configured execution account, user-data fill application only to that account's Portfolio, cancellation through the same account's BrokerPort, and candle/price data from the independently configured market-data provider. The legacy single-Binance path remains covered.

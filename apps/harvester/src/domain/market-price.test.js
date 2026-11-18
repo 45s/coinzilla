@@ -46,6 +46,31 @@ timestamp: 1.5 },
   }
 })
 
+test("retains immutable provider source identity on normalized market prices", () => {
+  const marketPrice = createMarketPrice({
+    priceEvent: {
+      symbol: "BTCUSDT",
+      price: "65000.12",
+      timestamp: 123,
+      providerInstanceId: "binance-testnet-primary",
+      providerType: "binance",
+      accountId: "account-primary",
+      environment: "testnet",
+    },
+  })
+
+  assert.deepEqual(marketPrice, {
+    symbol: "BTCUSDT",
+    price: "65000.12",
+    timestamp: 123,
+    providerInstanceId: "binance-testnet-primary",
+    providerType: "binance",
+    accountId: "account-primary",
+    environment: "testnet",
+  })
+  assert.equal(Object.isFrozen(marketPrice), true)
+})
+
 test("accepts very small positive decimal strings without numeric conversion", () => {
   const marketPrice = createMarketPrice({
     priceEvent: {

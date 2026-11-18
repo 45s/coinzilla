@@ -1,5 +1,7 @@
 # ADR-0003: Explicit multi-provider execution and market-data routing
 
+> **Bitunix admission amendment (2026-11-18):** the historical Bitunix observer-only exception and illustrative read-capability description below are superseded by [ADR-0004](./ADR-0004-complete-bitunix-provider-integration.md). Bitunix is not registered as a Harvester provider until #1185 is complete; no partial observer runtime is part of the current architecture. The general provider-instance, account-isolation, execution-routing and market-data-routing decisions in this ADR remain authoritative.
+
 - **Status:** Accepted
 - **Type:** Architecture decision
 - **Owner:** Harvester / Brokers
@@ -12,7 +14,7 @@ Harvester currently composes one Binance broker instance. Its runtime configurat
 
 The accepted use case is explicit operator routing. For example, a future Recovery Seller (RS) strategy on STRKUSDT may use a Bitunix account, while Conservative / `CG_coinGrabber` on LINKUSDT uses Binance. The market-data source may be different from the execution venue.
 
-The current implementation does not yet satisfy this target. RS is not executable, and Bitunix Spot remains read-only and not Harvester-ready while the capability and exchange-contract blockers in [issue #1185](https://github.com/45s/coinzilla/issues/1185) remain open. This ADR records the target architecture; it does not enable either capability.
+The current implementation does not yet satisfy this target. RS is not executable, and the existing partial Bitunix Spot broker implementation does not yet meet the complete broker and lifecycle contract required for Harvester admission while the blockers in [issue #1185](https://github.com/45s/coinzilla/issues/1185) remain open. This ADR records the target architecture; it does not enable either capability.
 
 ## Decision
 
@@ -111,7 +113,7 @@ const brokers = {
 }
 ```
 
-Credentials are resolved from deployment secrets/environment and must never be committed, logged, placed in events, or included in configuration fingerprints. The Bitunix example is illustrative only: current Bitunix Spot support is read-only and must not be configured for execution.
+Credentials are resolved from deployment secrets/environment and must never be committed, logged, placed in events, or included in configuration fingerprints. The Bitunix example is illustrative only and does not authorize provider registration: the existing partial Bitunix broker implementation must first satisfy the complete acceptance criteria in #1185.
 
 ### Execution routes
 
@@ -234,7 +236,8 @@ The diagrams are explanatory; the invariants in the Decision section are authori
 | Execution and market-data route resolution | Harvester application routing capability |
 | Harvester-facing broker contract | Harvester Application port |
 | Exchange-specific clients, signing, transport, DTOs and verified capabilities | Brokers Infrastructure |
-| Exchange-neutral broker capability semantics | Brokers package |
+| Shared exchange-neutral capability value/vocabulary/status semantics | Entities package |
+| Provider-specific capability declarations and implementation evidence | Brokers package |
 | Order provenance, account isolation, fill attribution and recovery | Harvester application/domain contracts, supported by broker facts |
 
 The Brokers package must not own Harvester strategy/market routing or import Harvester. Harvester must not import exchange protocol types into its domain.

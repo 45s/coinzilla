@@ -84,11 +84,7 @@ Account snapshots, balances, open orders, reservations, readiness, user-data rec
 
 A state-changing timeout remains an unknown outcome. Never retry it on another provider. Cross-provider fallback could duplicate an order.
 
-### Current capability boundary
-
-Bitunix Spot remains read-only and is not a valid Harvester execution provider today. Its existing metadata helper is not a full broker adapter. Do not enable Bitunix order placement, cancellation or runtime integration until [issue #1185](https://github.com/45s/coinzilla/issues/1185) and the capability gates in [issue #1339](https://github.com/45s/coinzilla/issues/1339) are resolved. RS is also not executable merely because a future route can name its strategy ID.
-
-The durable target contract is [ADR-0003](../../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md); this file remains the Harvester-specific port/adapter guide.
+The durable routing contract is [ADR-0003](../../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md), and Bitunix admission is governed by [ADR-0004](../../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md); this file remains the Harvester-specific port/adapter guide.
 
 ## Why not depend on CoreBroker directly?
 
@@ -267,10 +263,6 @@ The Harvester broker port exposes `subscribeForBookTicker({ symbol, onBookTicker
 
 For Conservative, order-type selection, POST-ONLY crossing constraints, and fail-closed behavior are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The engine requires fresh same-symbol book data before a LIMIT_MAKER submission; this document records the adapter boundary and implementation only. The Binance adapter only classifies the exact Spot `-2010` POST-ONLY matching-engine response as definite when the response is not marked `outcomeUnknown`; all uncertain outcomes retain the existing fail-closed pause behavior.
 
-## Bitunix Spot metadata boundary
+## Bitunix provider boundary
 
-The current application broker port and runtime composition remain Binance-only. The Bitunix Spot market-metadata helper (`src/infrastructure/brokers/bitunix-market-metadata.js`) is a pure read-side transformation; it is not a broker adapter, does not satisfy the full Harvester broker port, and is not wired into bootstrap. It maps only `minVolume` and `minPrice` into canonical minimum constraints; precision increments remain UNKNOWN. Do not use it to enable Bitunix trading while issue #1185 remains open.
-
-## Bitunix read-only observer boundary
-
-The separately authorized Bitunix integration implemented in [PR #1423](https://github.com/45s/coinzilla/pull/1423) and tracked in [issue #1422](https://github.com/45s/coinzilla/issues/1422) is a read-only observer, not an implementation of this full trading BrokerPort. It is exposed through a separate runtime read-only surface and must not be registered with the execution provider registry, passed to the Trading Engine, selected for strategy market data, or used for account snapshots/recovery. Its source-backed read limitations and opt-in credentials are documented in the [Bitunix read-only observer contract](./bitunix-read-only-observer.md). This does not resolve the trading-readiness blockers in [#1185](https://github.com/45s/coinzilla/issues/1185).
+Bitunix Spot is not a registered Harvester provider. The partial query operations in `@coinzilla/brokers` do not yet satisfy the complete order, fill, account-lifecycle, private-event/reconciliation, market-constraint and environment-safety contract in [issue #1185](https://github.com/45s/coinzilla/issues/1185). Keep Bitunix outside the provider registry and all execution/market-data routes until that work is complete. Do not add a temporary observer or partial provider facade. Future integration must use the same complete provider-instance, BrokerPort, capability, account-lifecycle and routing contracts as every other provider. Exchange-specific Bitunix market normalization belongs in `@coinzilla/brokers`, not in a Harvester-specific metadata helper.

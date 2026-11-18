@@ -7,7 +7,8 @@ import {
   mapBrokerSubscriptionFailedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
-function logSystem({ logger, ...data }) {
+function logSystem({ logger,
+  ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -15,7 +16,95 @@ function logSystem({ logger, ...data }) {
   logger?.info?.(data)
 }
 
-function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
+function resolveMarketDataIdentityField({
+  value,
+  expectedValue,
+  field,
+  allowedValues,
+}) {
+  const resolved = value ?? expectedValue
+  if (typeof resolved !== "string" || !resolved.trim()) {
+    throw new TypeError(`Market-data broker must expose a ${field}`)
+  }
+  if (expectedValue && resolved !== expectedValue) {
+    throw new Error(`Market-data route expected ${field} ${expectedValue}, received ${resolved}`)
+  }
+  if (allowedValues && !allowedValues.includes(resolved)) {
+    throw new TypeError("Market-data broker must expose a LIVE or TESTNET environment")
+  }
+  return resolved
+}
+
+function resolveMarketDataSourceIdentity({
+  broker,
+  expectedProviderInstanceId,
+  expectedProviderType,
+  expectedAccountId,
+  expectedEnvironment,
+}) {
+  const hasExpectedIdentity = Boolean(
+    expectedProviderInstanceId && expectedProviderType && expectedEnvironment,
+  )
+  const hasBrokerIdentity = Boolean(
+    broker.providerInstanceId && broker.providerType && broker.environment,
+  )
+  if (!hasExpectedIdentity && !hasBrokerIdentity) {
+    return undefined
+  }
+  const providerInstanceId = resolveMarketDataIdentityField({
+    value: broker.providerInstanceId,
+    expectedValue: expectedProviderInstanceId,
+    field: "providerInstanceId",
+  })
+  const providerType = resolveMarketDataIdentityField({
+    value: broker.providerType,
+    expectedValue: expectedProviderType,
+    field: "providerType",
+  })
+  const environment = resolveMarketDataIdentityField({
+    value: broker.environment,
+    expectedValue: expectedEnvironment,
+    field: "environment",
+    allowedValues: ["live", "testnet"],
+  })
+  const accountId = broker.accountId ?? expectedAccountId ?? null
+  if (
+    expectedAccountId !== undefined &&
+    accountId !== expectedAccountId
+  ) {
+    throw new Error("Market-data route account identity does not match the selected provider")
+  }
+  if (accountId !== null && (typeof accountId !== "string" || !accountId.trim())) {
+    throw new TypeError("Market-data broker accountId must be a non-empty string or null")
+  }
+  return Object.freeze({
+    providerInstanceId,
+    providerType,
+    accountId,
+    environment,
+  })
+}
+
+function attachMarketDataSourceIdentity({ event, sourceIdentity }) {
+  if (!sourceIdentity) {
+    return event
+  }
+  for (const field of ["providerInstanceId", "providerType", "accountId", "environment"]) {
+    if (event[field] !== undefined && event[field] !== sourceIdentity[field]) {
+      throw new Error(`Market-data event ${field} does not match its subscribed provider source`)
+    }
+  }
+  return Object.freeze({
+    ...event,
+    ...sourceIdentity,
+  })
+}
+
+
+function logMarketPriceEvaluation({ logger,
+  symbol,
+  priceEvent,
+  processed }) {
   if (!processed?.ok) {
     return
   }
@@ -32,7 +121,8 @@ function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
   })
 }
 
-function createMarketPriceErrorReporter({ logger, onMarketPriceError }) {
+function createMarketPriceErrorReporter({ logger,
+  onMarketPriceError }) {
   return (details) => {
     const [rejection] = Array.isArray(details?.errors) ? details.errors : [details?.errors?.[0]]
     const expectedPostOnlyRejection = details?.errors?.length === 1 &&
@@ -58,15 +148,25 @@ function createMarketPriceErrorReporter({ logger, onMarketPriceError }) {
   }
 }
 
-function createBookTickerHandler({ symbol, isStopped, processMarketBook, logger, intakeState }) {
+function createBookTickerHandler({ symbol,
+  sourceIdentity,
+  isStopped,
+  processMarketBook,
+  logger,
+  intakeState }) {
   return (bookTicker) => {
     if (isStopped()) {
       return toResult({ data: { skipped: true,
 reason: "STOPPING" } })
     }
     intakeState.latestWebSocketBookTask = Promise.resolve()
-      .then(() => processMarketBook({ symbol,
-bookTicker }))
+      .then(() => processMarketBook({
+        symbol,
+        bookTicker: attachMarketDataSourceIdentity({
+          event: bookTicker,
+          sourceIdentity,
+        }),
+      }))
       .then((processed) => {
         if (!processed.ok) {
           logger.error?.({
@@ -99,14 +199,19 @@ function createMarketPriceHandler({
   reportPriceError,
   logger,
   intakeState,
+  sourceIdentity,
 }) {
   return (priceEvent) => {
     if (isStopped()) {
       return toResult({ data: { skipped: true,
 reason: "STOPPING" } })
     }
+    const sourcedPriceEvent = attachMarketDataSourceIdentity({
+      event: priceEvent,
+      sourceIdentity,
+    })
     try {
-      if (isMarketPriceFresh(createMarketPrice({ priceEvent }))) {
+      if (isMarketPriceFresh(createMarketPrice({ priceEvent: sourcedPriceEvent }))) {
         intakeState.hasFreshWebSocketPrice = true
       }
     } catch {
@@ -115,7 +220,7 @@ reason: "STOPPING" } })
     intakeState.latestWebSocketPriceTask = Promise.resolve()
       .then(() => processMarketPrice({
         symbol,
-        priceEvent,
+        priceEvent: sourcedPriceEvent,
         pairConfig,
         settings,
       }))
@@ -126,7 +231,7 @@ errors: processed.errors })
         } else {
           logMarketPriceEvaluation({ logger,
 symbol,
-priceEvent,
+priceEvent: sourcedPriceEvent,
 processed })
         }
         return processed
@@ -141,7 +246,10 @@ errors: [error] }
   }
 }
 
-function publishSubscriptionFailure({ eventPublisher, brokerName, symbol, error }) {
+function publishSubscriptionFailure({ eventPublisher,
+  brokerName,
+  symbol,
+  error }) {
   publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
@@ -154,7 +262,9 @@ function publishSubscriptionFailure({ eventPublisher, brokerName, symbol, error 
   })
 }
 
-function getSubscriptionFailure({ result, symbol, streamLabel }) {
+function getSubscriptionFailure({ result,
+  symbol,
+  streamLabel }) {
   const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
   return new Error(
     `Unable to subscribe to ${streamLabel} for ${symbol}${details ? `: ${details}` : ""}`,
@@ -164,6 +274,7 @@ function getSubscriptionFailure({ result, symbol, streamLabel }) {
 async function subscribeToBookTicker({
   broker,
   providerInstanceId,
+  sourceIdentity,
   symbol,
   logger,
   isStopped,
@@ -179,6 +290,7 @@ async function subscribeToBookTicker({
       symbol,
       onBookTicker: createBookTickerHandler({
         symbol,
+        sourceIdentity,
         isStopped,
         processMarketBook,
         logger,
@@ -205,7 +317,11 @@ async function subscribeToBookTicker({
   })
 }
 
-async function requestMarketPriceSubscription({ broker, symbol, handler, eventPublisher, brokerName }) {
+async function requestMarketPriceSubscription({ broker,
+  symbol,
+  handler,
+  eventPublisher,
+  brokerName }) {
   try {
     return await broker.subscribeForPrices({
       symbol,
@@ -220,7 +336,10 @@ async function requestMarketPriceSubscription({ broker, symbol, handler, eventPu
   }
 }
 
-function validateMarketPriceSubscription({ result, eventPublisher, brokerName, symbol }) {
+function validateMarketPriceSubscription({ result,
+  eventPublisher,
+  brokerName,
+  symbol }) {
   if (result?.ok && typeof result.data?.unsubscribe === "function") {
     return result.data
   }
@@ -236,7 +355,11 @@ function validateMarketPriceSubscription({ result, eventPublisher, brokerName, s
   throw error
 }
 
-function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }) {
+function registerMarketPriceSubscription({ data,
+  logger,
+  symbol,
+  subscriptions,
+  intakeState }) {
   publishLifecycleEvent({
     eventPublisher: data.eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
@@ -250,6 +373,7 @@ function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }
     symbol,
     unsubscribe: data.unsubscribe,
   })
+  intakeState.marketPriceSubscriptionReady = true
   logSystem({
     logger,
     message: "Market data subscribed",
@@ -262,6 +386,7 @@ function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }
 async function subscribeToMarketPrice({
   broker,
   providerInstanceId,
+  sourceIdentity,
   brokerName,
   eventPublisher,
   logger,
@@ -289,6 +414,7 @@ async function subscribeToMarketPrice({
     reportPriceError,
     logger,
     intakeState,
+    sourceIdentity,
   })
   const result = await requestMarketPriceSubscription({
     broker,
@@ -313,48 +439,241 @@ async function subscribeToMarketPrice({
     logger,
     symbol,
     subscriptions,
+    intakeState,
   })
 }
 
-async function subscribeToEnabledMarkets({ context, reportPriceError }) {
-  const { pairs, tradingEnabled, broker, bookSubscriptions } = context
-  for (const [symbol, pairConfig] of Object.entries(pairs)) {
-    if (!pairConfig.enabled) {
-      continue
-    }
-    if (tradingEnabled) {
+function assertConfiguredMarketDataSourceIdentity({
+  symbol,
+  sourceIdentity,
+  configuredIdentity,
+}) {
+  if (!configuredIdentity) {
+    return
+  }
+  if (
+    !sourceIdentity ||
+    sourceIdentity.accountId !== configuredIdentity.accountId ||
+    sourceIdentity.environment !== configuredIdentity.environment
+  ) {
+    throw new Error(`Market-data source identity for ${symbol} does not match its configured account/environment`)
+  }
+}
+
+function resolveExpectedMarketDataIdentity({ context, symbol, configuredIdentity }) {
+  return {
+    expectedProviderInstanceId: configuredIdentity?.providerInstanceId
+      ?? context.marketDataSources?.[symbol]
+      ?? context.providerInstanceId,
+    expectedProviderType: configuredIdentity?.providerType
+      ?? context.marketDataProviderTypes?.[symbol]
+      ?? context.brokerName,
+    expectedAccountId: configuredIdentity?.accountId,
+    expectedEnvironment: configuredIdentity?.environment ?? context.marketDataEnvironment,
+  }
+}
+
+function resolveMarketDataBrokerInstance({
+    context,
+    symbol,
+  }) {
+  if (typeof context.getMarketDataBroker === "function") {
+    return context.getMarketDataBroker({ symbol })
+  }
+  return context.broker
+}
+
+function resolveMarketDataBroker({
+      context,
+      symbol,
+    }) {
+  const broker = resolveMarketDataBrokerInstance({
+    context,
+    symbol,
+  })
+  if (!broker || typeof broker !== "object") {
+    throw new TypeError(`No market-data broker is available for ${symbol}`)
+  }
+  const configuredIdentity = context.marketDataProviderIdentities?.[symbol]
+  const expectedIdentity = resolveExpectedMarketDataIdentity({
+    context,
+    symbol,
+    configuredIdentity,
+  })
+  const sourceIdentity = resolveMarketDataSourceIdentity({
+    broker,
+    ...expectedIdentity,
+  })
+  assertConfiguredMarketDataSourceIdentity({
+    symbol,
+    sourceIdentity,
+    configuredIdentity,
+  })
+  return {
+    broker,
+    sourceIdentity,
+  }
+}
+
+function getMarketDataRouteIdentity({
+    context,
+    symbol,
+    resolvedSource,
+  }) {
+  return {
+    providerInstanceId: resolvedSource?.sourceIdentity?.providerInstanceId
+      ?? context.marketDataSources?.[symbol]
+      ?? context.providerInstanceId,
+    brokerName: resolvedSource?.sourceIdentity?.providerType
+      ?? context.marketDataProviderTypes?.[symbol]
+      ?? context.brokerName,
+  }
+}
+
+async function subscribeMarketDataStreams({
+  context,
+  symbol,
+  pairConfig,
+  reportPriceError,
+  resolvedSource,
+  providerInstanceId,
+  brokerName,
+  initialError,
+}) {
+  let symbolError = initialError
+  if (resolvedSource && context.tradingEnabled) {
+    try {
       await subscribeToBookTicker({
-        broker,
-        providerInstanceId: context.providerInstanceId,
+        broker: resolvedSource.broker,
+        providerInstanceId,
+        sourceIdentity: resolvedSource.sourceIdentity,
         symbol,
         logger: context.logger,
         isStopped: context.isStopped,
         processMarketBook: context.processMarketBook,
-        bookSubscriptions,
+        bookSubscriptions: context.bookSubscriptions,
         marketPriceIntake: context.marketPriceIntake,
       })
+    } catch (error) {
+      symbolError ??= error
     }
-    await subscribeToMarketPrice({
-      ...context,
+  }
+  if (resolvedSource) {
+    try {
+      await subscribeToMarketPrice({
+        ...context,
+        broker: resolvedSource.broker,
+        providerInstanceId,
+        sourceIdentity: resolvedSource.sourceIdentity,
+        brokerName,
+        symbol,
+        pairConfig,
+        reportPriceError,
+      })
+    } catch (error) {
+      symbolError ??= error
+    }
+  }
+  return symbolError
+}
+
+function reportMarketDataRouteFailure({ context, symbol, providerInstanceId, brokerName, error }) {
+  if (!error) {
+    return
+  }
+  context.logger.error?.({
+    message: "Market-data source subscription failed; execution route remains blocked",
+    symbol,
+    providerInstanceId: providerInstanceId ?? null,
+    broker: brokerName ?? null,
+    error,
+  })
+}
+
+async function subscribeToEnabledMarket({
+  context,
+  symbol,
+  pairConfig,
+  reportPriceError,
+}) {
+  const intakeState = context.marketPriceIntake.get(symbol) ?? {}
+  intakeState.marketPriceSubscriptionReady = false
+  context.marketPriceIntake.set(symbol, intakeState)
+  let resolvedSource
+  let initialError
+  try {
+    resolvedSource = resolveMarketDataBroker({
+      context,
+      symbol,
+    })
+  } catch (error) {
+    initialError = error
+  }
+  const routeIdentity = getMarketDataRouteIdentity({
+    context,
+    symbol,
+    resolvedSource,
+  })
+  const symbolError = await subscribeMarketDataStreams({
+    context,
+    symbol,
+    pairConfig,
+    reportPriceError,
+    resolvedSource,
+    ...routeIdentity,
+    initialError,
+  })
+  reportMarketDataRouteFailure({
+    context,
+    symbol,
+    ...routeIdentity,
+    error: symbolError,
+  })
+  return symbolError
+}
+
+async function subscribeToEnabledMarkets({ context, reportPriceError }) {
+  const failedSymbols = []
+  for (const [symbol, pairConfig] of Object.entries(context.pairs)) {
+    if (!pairConfig.enabled) {
+      continue
+    }
+    const symbolError = await subscribeToEnabledMarket({
+      context,
       symbol,
       pairConfig,
       reportPriceError,
     })
+    if (!symbolError) {
+      continue
+    }
+    failedSymbols.push(symbol)
+    if (!context.allowPartialMarketData) {
+      throw symbolError
+    }
   }
+  return failedSymbols
 }
 
-function assertAllMarketSubscriptions({ enabledSymbols, subscriptions }) {
+
+function assertAllMarketSubscriptions({ enabledSymbols,
+  subscriptions,
+  allowPartialMarketData }) {
   const subscribedSymbols = subscriptions.map(({ symbol }) => symbol)
   const missingSubscriptions = enabledSymbols.filter((symbol) => !subscribedSymbols.includes(symbol))
-  if (missingSubscriptions.length > 0) {
+  if (missingSubscriptions.length > 0 && !allowPartialMarketData) {
     throw new Error(
       `Harvester startup did not establish market-price subscriptions for every enabled pair: ${missingSubscriptions.join(", ")}`,
     )
   }
-  return subscribedSymbols
+  return { subscribedSymbols,
+  missingSubscriptions }
 }
 
-async function getInitialMarketPriceEvent({ broker, symbol, now }) {
+async function getInitialMarketPriceEvent({ broker,
+  sourceIdentity,
+  symbol,
+  now }) {
   let result
   try {
     result = await broker.getPrices({ symbol })
@@ -365,11 +684,14 @@ async function getInitialMarketPriceEvent({ broker, symbol, now }) {
     const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
     throw new Error(`Unable to load initial market price for ${symbol}${details ? `: ${details}` : ""}`)
   }
-  const priceEvent = {
-    symbol: result.data.symbol,
-    price: result.data.price,
-    timestamp: now(),
-  }
+  const priceEvent = attachMarketDataSourceIdentity({
+    event: {
+      symbol: result.data.symbol,
+      price: result.data.price,
+      timestamp: now(),
+    },
+    sourceIdentity,
+  })
   const marketPrice = createMarketPrice({ priceEvent })
   if (marketPrice.symbol !== symbol) {
     throw new Error(`Initial ticker price symbol does not match enabled market ${symbol}`)
@@ -377,7 +699,11 @@ async function getInitialMarketPriceEvent({ broker, symbol, now }) {
   return priceEvent
 }
 
-async function processInitialMarketPrice({ context, reportPriceError, symbol, pairConfig, priceEvent }) {
+async function processInitialMarketPrice({ context,
+  reportPriceError,
+  symbol,
+  pairConfig,
+  priceEvent }) {
   const processed = await context.processMarketPrice({
     symbol,
     priceEvent,
@@ -397,8 +723,10 @@ async function processInitialMarketPrice({ context, reportPriceError, symbol, pa
   })
 }
 
-async function seedMissingInitialPrices({ context, reportPriceError }) {
-  const { broker, pairs, marketPriceIntake, now } = context
+async function seedMissingInitialPrices({ context,
+  reportPriceError }) {
+  const { pairs, marketPriceIntake, now } = context
+  const failedSymbols = []
   for (const [symbol, pairConfig] of Object.entries(pairs)) {
     if (!pairConfig.enabled) {
       continue
@@ -407,21 +735,44 @@ async function seedMissingInitialPrices({ context, reportPriceError }) {
     if (!intakeState) {
       throw new Error(`Missing market-price intake state for enabled pair ${symbol}`)
     }
+    if (!intakeState.marketPriceSubscriptionReady) {
+      failedSymbols.push(symbol)
+      continue
+    }
     if (intakeState.latestWebSocketPriceTask) {
       await intakeState.latestWebSocketPriceTask
     }
     if (intakeState.hasFreshWebSocketPrice) {
       continue
     }
-    const priceEvent = await getInitialMarketPriceEvent({ broker,
-      symbol,
-      now })
-    await processInitialMarketPrice({ context,
-      reportPriceError,
-      symbol,
-      pairConfig,
-      priceEvent })
+    try {
+      const { broker, sourceIdentity } = resolveMarketDataBroker({ context,
+  symbol })
+      const priceEvent = await getInitialMarketPriceEvent({
+        broker,
+        sourceIdentity,
+        symbol,
+        now,
+      })
+      await processInitialMarketPrice({ context,
+  reportPriceError,
+  symbol,
+  pairConfig,
+  priceEvent })
+    } catch (error) {
+      failedSymbols.push(symbol)
+      context.logger.error?.({
+        message: "Initial market-price seed failed; execution route remains blocked",
+        symbol,
+        providerInstanceId: context.marketDataSources?.[symbol] ?? context.providerInstanceId ?? null,
+        error,
+      })
+      if (!context.allowPartialMarketData) {
+        throw error
+      }
+    }
   }
+  return failedSymbols
 }
 
 function createMarketDataSubscriptionContext(options) {
@@ -442,9 +793,21 @@ function createMarketDataSubscriptionContext(options) {
     subscriptions,
     bookSubscriptions,
     marketPriceIntake,
+    getMarketDataBroker,
+    marketDataSources,
+    marketDataProviderTypes,
+    marketDataProviderIdentities,
+    marketDataEnvironment,
+    allowPartialMarketData = false,
   } = options
   return {
     broker,
+    getMarketDataBroker,
+    marketDataSources,
+    marketDataProviderTypes,
+    marketDataProviderIdentities,
+    marketDataEnvironment,
+    allowPartialMarketData,
     providerInstanceId,
     brokerName,
     eventPublisher,
@@ -468,6 +831,7 @@ function logMarketDataSubscriptionsReady({
   providerInstanceId,
   enabledSymbols,
   subscribedSymbols,
+  failedSymbols = [],
 }) {
   logSystem({
     logger,
@@ -475,10 +839,12 @@ function logMarketDataSubscriptionsReady({
     providerInstanceId: providerInstanceId ?? null,
     enabledSymbols,
     subscribedSymbols,
+    failedSymbols,
   })
 }
 
-async function establishMarketDataSubscriptions({ context, reportPriceError }) {
+async function establishMarketDataSubscriptions({ context,
+  reportPriceError }) {
   const enabledSymbols = Object.entries(context.pairs)
     .filter(([, pairConfig]) => pairConfig.enabled)
     .map(([symbol]) => symbol)
@@ -486,30 +852,35 @@ async function establishMarketDataSubscriptions({ context, reportPriceError }) {
   // Establish every enabled market stream before requesting any missing
   // initial ticker snapshot through Binance WebSocket API ticker.price.
   // A slow first request must never prevent later markets receiving prices.
-  await subscribeToEnabledMarkets({
+  const subscriptionFailures = await subscribeToEnabledMarkets({
     context,
     reportPriceError,
   })
-  const subscribedSymbols = assertAllMarketSubscriptions({
+  const { subscribedSymbols, missingSubscriptions } = assertAllMarketSubscriptions({
     enabledSymbols,
     subscriptions: context.subscriptions,
+    allowPartialMarketData: context.allowPartialMarketData,
   })
+  const initialPriceFailures = context.tradingEnabled
+    ? await seedMissingInitialPrices({ context,
+  reportPriceError })
+    : []
+  const failedSymbols = [...new Set([
+    ...subscriptionFailures,
+    ...missingSubscriptions,
+    ...initialPriceFailures,
+  ])]
   logMarketDataSubscriptionsReady({
     logger: context.logger,
     providerInstanceId: context.providerInstanceId,
     enabledSymbols,
     subscribedSymbols,
+    failedSymbols,
   })
 
-  // Only after all enabled symbols have active WebSocket Streams may startup
-  // request missing ticker snapshots through WebSocket API ticker.price.
-  if (context.tradingEnabled) {
-    await seedMissingInitialPrices({
-      context,
-      reportPriceError,
-    })
-  }
   return Object.freeze({
+    ok: failedSymbols.length === 0,
+    failedSymbols: Object.freeze(failedSymbols),
     subscriptions: context.subscriptions,
     bookSubscriptions: context.bookSubscriptions,
     marketPriceIntake: context.marketPriceIntake,

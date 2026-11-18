@@ -58,7 +58,7 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - [x] **FR-012 — Commission.** Implemented immutable Commission values backed by exact non-negative `Money`, with explicit fee asset identity and zero/one/multiple fee entries on Fill. `COMPLETE`, `PARTIAL`, and `UNKNOWN` collection semantics prevent unknown or incomplete fees from being interpreted as zero. Integrated into `develop` via PR #302.
 - [x] **FR-013 — Balance.** Implemented immutable Balance values with exact free and locked quantities, canonical asset identity, and total derived using decimal-string arithmetic. Integrated into `develop` via PR #306.
 - [x] **FR-014 — TradingRules.** Implemented immutable, exchange-neutral Market-scoped price/quantity/notional constraints with explicit supported, unsupported, dynamic, and unknown states. Integrated into `develop` via PR #307.
-- [x] **FR-015 — Broker capability contracts.** Implemented immutable capability snapshots with explicit supported, unsupported, and unknown states, without exchange-specific assumptions. Integrated into `develop` via PR #308.
+- [x] **FR-015 — Broker capability contracts.** Implemented immutable exchange-neutral capability snapshots with explicit supported, unsupported, and unknown states. Extended in PR #1455 to serve as the sole shared contract for evidence-backed provider declarations (provider/product/environment identity and generic method/guarantee/limitation/reason/condition metadata) while preserving the original capability-only value shape. Brokers re-exports and populates this Entities contract; no parallel capability model remains.
 - [x] **FR-016 — Broker result contracts.** Implemented immutable normalized success, failure, incomplete, and unknown-outcome envelopes. Integrated into `develop` via PR #309.
 
 ### FR-009 contract boundary
@@ -122,7 +122,7 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 
 ### FR-015 contract boundary
 
-- `BrokerCapabilities` is an immutable snapshot of exchange-neutral broker operations; it contains no venue-specific method names or payload fields.
+- `BrokerCapabilities` is the single immutable exchange-neutral capability value used by Entities and Brokers. It owns the capability vocabulary, three statuses, validation, lookup and serialization. Optional provider-declaration metadata identifies the provider/product/environment and documents implementation evidence; it contains no exchange wire payloads or protocol-specific DTOs.
 - The shared vocabulary covers account/market reads, order and trade reads, limit/market placement, cancellation, market-price subscriptions, user-data subscriptions, and trading-rule reads.
 - Each reported capability has an explicit `SUPPORTED`, `UNSUPPORTED`, or `UNKNOWN` status. An omitted capability is `UNKNOWN`, never assumed unsupported or supported.
 - Capability types are unique within a snapshot. The status lookup validates the requested vocabulary and returns `UNKNOWN` for unreported capabilities.

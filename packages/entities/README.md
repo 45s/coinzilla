@@ -11,7 +11,7 @@ The package entry point is `src/index.js`. It exports:
 - **Canonical order lifecycle:** `CanonicalOrder`
 - **Execution/accounting facts:** `Fill`, `Commission`, `Balance`
 - **Trading constraints:** `TradingRules`
-- **Broker-neutral capabilities and outcomes:** `BrokerCapabilities`, `BrokerResult`
+- **Broker-neutral capabilities and outcomes:** `BrokerCapabilities` (the shared three-state capability value, including evidence-backed provider declarations), `BrokerResult`
 - **Legacy compatibility contracts:** `Coin`, `Order`, `ExecutedOrder`
 - Associated error messages, status values and enumerations explicitly exported by the entry point.
 
@@ -25,7 +25,7 @@ import { Money, Quantity, Fill, Commission, CanonicalOrder } from '@coinzilla/en
 
 ## Domain boundaries
 
-- Keep contracts exchange-neutral; do not expose Binance SDK types.
+- Keep contracts exchange-neutral; do not expose Binance SDK types. `BrokerCapabilities` owns the shared capability vocabulary, three-state semantics, validation, lookup, and serialization; provider adapters may supply generic evidence metadata without introducing venue protocol fields.
 - For canonical financial/accounting contracts, represent amounts with exact decimal strings/value objects; do not route them through JavaScript `Number`.
 - Treat `Coin`, `Order`, and `ExecutedOrder` as legacy Number-based compatibility contracts, not as the canonical exact-decimal model. Preserve their existing behavior until consumers are migrated deliberately.
 - Preserve explicit unknown/incomplete states and commission asset identity.

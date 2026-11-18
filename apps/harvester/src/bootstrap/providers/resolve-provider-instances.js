@@ -117,6 +117,7 @@ function resolveProviderDescriptorIdentity({
     accountId,
     environment,
     credentials: configuredCredentials,
+    required = true,
   } = descriptor
   for (const [field, value] of Object.entries({
     providerInstanceId,
@@ -139,6 +140,7 @@ function resolveProviderDescriptorIdentity({
     providerType,
     accountId,
     environment,
+    required,
     configuredCredentials,
   }
 }
@@ -179,6 +181,7 @@ function createProviderInstance({
     providerType: identity.providerType,
     accountId: identity.accountId,
     environment: identity.environment,
+    required: identity.required,
     credentialEnvironmentNames: credentials,
     identity: Object.freeze({
       providerInstanceId: identity.providerInstanceId,

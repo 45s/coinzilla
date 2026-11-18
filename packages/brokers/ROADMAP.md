@@ -12,15 +12,16 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
-**Status: in progress; Phase 0 capability ownership decision completed 2026-11-18.** PR #1449 is merged. The source-backed ownership decision, canonical three-state capability model, provider declarations, explicit unsupported error, structural method contract, and first shared offline conformance tests are being implemented in [PR #1451](https://github.com/45s/coinzilla/pull/1451). The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md).
+**Status: in progress.** PR #1449 is merged; the common method/result/error contract and provider conformance work continue in [PR #1451](https://github.com/45s/coinzilla/pull/1451). Capability-model duplication was reconciled in [PR #1455](https://github.com/45s/coinzilla/pull/1455): Entities owns the shared value contract, while Brokers owns provider-specific declaration evidence. The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md).
 
 ### Ownership boundary
 
-- `@coinzilla/brokers` owns the general Broker API, broker-domain contracts, normalized results/errors, truthful capability declarations, and exchange-specific implementations.
+- `@coinzilla/entities` owns the shared exchange-neutral `BrokerCapabilities` value, vocabulary, three-state status semantics, validation, lookup, immutability, and serialization.
+- `@coinzilla/brokers` owns the general Broker API, normalized results/errors, provider-specific capability declarations/evidence, and exchange-specific implementations. Its public capability exports re-export the Entities contract for compatibility.
 - Each consuming application owns its own application ports, adapters, provider registry, routing, bootstrap/composition, and application workflows.
 - The Brokers package must not import consuming applications or define their application ports; it does not own strategy/market routing or application-specific provider registries.
 - Exchange-specific REST/WS transport, signing, request/response DTOs, and protocol mapping stay inside each provider implementation. A common API does not require a common wire protocol.
-- `@coinzilla/entities` is a separate package boundary. Its existing `BrokerCapabilities` model must be evaluated as part of this task; its presence does not by itself prove that Entities is the correct owner of the broker capability contract.
+- The shared capability contract is a dependency-neutral entity; provider implementation evidence is supplied by Brokers. Entities must not depend on Brokers.
 
 ### Contract rules
 
@@ -31,26 +32,21 @@ Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 - Capability status is metadata about a provider's implementation/guarantees, not a substitute for checking account permissions, selected environment, market availability, runtime readiness, or current connectivity. Conditions and evidence must be represented without collapsing distinct concepts into one status.
 - Normalize shared operation arguments, result envelopes, error identity, and canonical data at the Brokers boundary while preserving provider-specific extensions where they are genuinely provider-specific.
 - Preserve exact decimal strings, source timestamps, stable identifiers, and unknown outcomes. Never weaken a provider's safety contract to make its method look supported.
-- Do not create a second capability model, duplicate capability vocabulary, or parallel status enum. There must be one canonical capability contract and one authoritative implementation of its validation/lookup semantics.
+- Do not create a second capability model, duplicate capability vocabulary, or parallel status enum. Entities owns the sole shared capability contract; Brokers owns provider-specific declaration content.
 
-### Capability-model ownership decision — Phase 0 complete (2026-11-18)
+### Capability-model ownership reconciliation — PR #1455 (2026-11-18)
 
-The audit is complete. The canonical provider capability model is owned by `@coinzilla/brokers`.
+The earlier Phase 0 audit selected Brokers as the owner because its provider declaration contained evidence metadata not represented by the then-current Entities snapshot. The project owner subsequently clarified that the already-public Entities `BrokerCapabilities` must remain the single canonical contract rather than preserving two competing classes.
 
-Source-backed evidence:
-
-- Entities' `BrokerCapabilities` originated in PR #308 / FR-015 and is publicly exported, but repository-wide runtime-use tracing found no provider implementation consumer outside its own package implementation/tests/exports and documentation.
-- Binance's provider declaration originated in Brokers PR #1366 and carries broker-specific method/guarantee/limitation/reason/conditions evidence.
-- Harvester's provider registry consumes the Binance declaration directly. Its existing metadata boundary is preserved by the new model: `contractVersion`, `provider`, `environment.selectedMode`, and `environment.supportedModes`. No Harvester port/adapter/registry is imported into Brokers or moved.
-- The two previous declarations overlapped in purpose; retaining them as independent canonical models would create competing sources of truth.
+The reconciliation in PR #1455 extends the existing Entities contract to support the provider metadata/evidence required by Brokers while preserving the original capability-only constructor and serialized value shape for existing consumers. Brokers now imports and re-exports that exact class; Binance provider declarations use the same class instance. No duplicate capability class, vocabulary, status enum, validation, lookup, immutability, or serialization implementation remains.
 
 Decision:
 
-- `@coinzilla/brokers` owns the canonical `BrokerCapabilities` value, capability vocabulary, validation, lookup, immutability, and serialization.
-- The only statuses are `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`. Omitted entries are `UNKNOWN`; unknown means insufficient evidence, not unsupported.
-- `environment-dependent` is removed as a status. An implemented operation is `SUPPORTED` with explicit method, guarantee, limitation, and conditions. Selected environment, account permission, runtime readiness, and connectivity remain separate facts.
-- Supported entries require a method and guarantee; unsupported/unknown entries require a reason. Declarations are deeply immutable and expose detached `value`/`toJSON()` snapshots.
-- The Entities public export is not silently removed or changed. Its owner-coordinated compatibility/deprecation disposition is tracked in [Entities issue #1450](https://github.com/45s/coinzilla). Brokers does not import the legacy Entities capability class, and Entities must not depend on Brokers.
+- Entities owns the one canonical `BrokerCapabilities` value and its exchange-neutral capability vocabulary, `SUPPORTED` / `UNSUPPORTED` / `UNKNOWN` statuses, omitted-entry `UNKNOWN` semantics, validation, lookup, immutability, and serialization.
+- Brokers owns the truthfulness and provider-specific evidence for each declaration, including provider/product/environment identity and method/guarantee/limitation/reason/condition metadata.
+- Provider declarations with provider identity require evidence: supported entries require method and guarantee; unsupported/unknown entries require a reason. Legacy capability-only Entities snapshots retain their existing accepted shape.
+- Environment selection, account permissions, connectivity, recovery readiness, and other prerequisites are represented separately as metadata/conditions, never as a fourth status.
+- The Brokers public API re-exports the Entities class/constants for compatibility. Entities does not import or depend on Brokers.
 
 The implementation and current provider matrix are specified in [BROKER_API.md](./BROKER_API.md).
 
@@ -61,7 +57,7 @@ The implementation and current provider matrix are specified in [BROKER_API.md](
    - [x] Select Brokers as the canonical owner; preserve the Harvester registry metadata boundary without importing Harvester.
    - [x] Define three statuses and represent environment/account/runtime conditions separately.
    - [x] Open the Entities owner-coordinated compatibility/deprecation request [#1450](https://github.com/45s/coinzilla/issues/1450); no Entities public export is silently removed.
-   - **Exit:** ownership and compatibility decision documented; implementation is underway in PR #1451.
+   - **Exit:** one canonical Entities value contract is extended and reused by Brokers; completed in PR #1455 with legacy capability-only value compatibility.
 
 2. **Public API and compatibility inventory.**
    - Compare Binance and Bitunix public own methods, inherited `CoreBroker` methods, signatures, argument defaults, return shapes, callbacks/events, error behavior, and actual provider support.
@@ -73,7 +69,7 @@ The implementation and current provider matrix are specified in [BROKER_API.md](
    - Define exchange-neutral method names/signatures and normalized argument contracts.
    - Define the existing `toResult` success/failure envelope, standardized unsupported errors, and explicit mutation outcomes (`NOT_SENT`, `REJECTED`, `CONFIRMED`, `OUTCOME_UNKNOWN`) while preserving legacy result compatibility.
    - Define the standardized unsupported-operation error/result with stable identity/code, operation/provider context, and safe diagnostic metadata. It must not be confused with transport, validation, authorization, or exchange rejection.
-   - Define canonical capability declarations using the Brokers-owned three-state model, omitted-entry `UNKNOWN`, immutable evidence metadata, and separate environment/account/runtime conditions.
+   - Use the shared Entities-owned `BrokerCapabilities` value with three-state semantics, omitted-entry `UNKNOWN`, immutable provider evidence metadata, and separate environment/account/runtime conditions. Brokers supplies provider-specific declarations through this shared contract.
    - Define exact decimal, identifier, timestamp/source-time, pagination, callback and lifecycle guarantees.
    - Specify how legacy methods and `CoreBroker` inheritance/state/defaults remain compatible during migration. Do not make `CoreBroker` the foundation of the new contract by default.
    - **Exit:** reviewed contract and compatibility plan, documented before provider implementations are changed.
@@ -96,16 +92,16 @@ The implementation and current provider matrix are specified in [BROKER_API.md](
 
 6. **Documentation, compatibility verification, and closeout.**
    - Update Brokers README/API documentation, architecture, roadmap, and relevant consumer-facing contract docs.
-   - If Phase 1 requires an Entities change, coordinate a separate owner-scoped change/PR and update the Entities roadmap and canonical docs; do not silently broaden the Brokers-only implementation PR.
+   - The shared Entities contract change for provider evidence is coordinated and delivered in PR #1455; future Entities API changes must continue to follow the Entities ownership workflow and update its roadmap/docs.
    - Run Brokers tests/coverage, relevant Entities and consumer compatibility tests when their contracts are affected, and all required workspace CI.
    - Verify all required checks on the exact final PR head and merge only into `develop`.
    - **Exit:** the common API, single capability source of truth, compatibility path, tests, documentation, and required CI are integrated and verified.
 
 ### Canonical capability contract
 
-The current provider declaration is implemented in `src/broker/broker-capabilities.js` and exported from `@coinzilla/brokers`. It uses three statuses only: `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; omitted capabilities resolve to `UNKNOWN`. Supported records require a method and guarantee. Unsupported/unknown records require a reason. Method, guarantee, limitation, reason, and conditions are immutable evidence metadata.
+The shared provider declaration uses the canonical `BrokerCapabilities` class from `@coinzilla/entities`; `src/broker/broker-capabilities.js` is a compatibility re-export from `@coinzilla/brokers`. It uses three statuses only: `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; omitted capabilities resolve to `UNKNOWN`. Provider declarations with identity require evidence: supported records require a method and guarantee, while unsupported/unknown records require a reason. Method, guarantee, limitation, reason, and conditions are immutable evidence metadata.
 
-Environment selection is represented separately as `environment.selectedMode` and `environment.supportedModes`. It does not prove account permission, connectivity, or runtime readiness. The model preserves the Harvester registry's `contractVersion`/`provider`/environment metadata boundary. See [BROKER_API.md](./BROKER_API.md) for the canonical Binance/Bitunix matrix and exact contract.
+Environment selection is represented separately as `environment.selectedMode` and `environment.supportedModes`. It does not prove account permission, connectivity, or runtime readiness. The shared value preserves the Harvester registry's `contractVersion`/`provider`/environment metadata boundary without making Entities depend on Brokers or Harvester. See [BROKER_API.md](./BROKER_API.md) for the canonical Binance/Bitunix matrix and exact contract.
 
 The previous four-state Binance declaration is superseded. The table below is retained as historical source evidence only; its old `environment-dependent` status must not be used as the current vocabulary. The current model maps implemented conditional operations to `SUPPORTED` plus explicit conditions.
 
@@ -192,7 +188,7 @@ The common Broker API is complete only when all of the following are true:
 
 - **Active package task:** [#1446](https://github.com/45s/coinzilla/issues/1446) defines the shared public Broker API for Binance and Bitunix. Phase 0 is complete; method inventory, common contract, provider implementation, and shared conformance tests are in progress in PR #1451.
 - **Binance:** the native WebSocket API/Streams implementation and its recovery lifecycle remain the mature reference implementation, subject to the separately documented live TESTNET acceptance gap.
-- **Bitunix:** Spot currently provides a read-only broker implementation with several provider-specific reads. Its unsupported methods must remain explicit; order mutations and canonical fills remain blocked by [#1185](https://github.com/45s/coinzilla/issues/1185).
+- **Bitunix:** Spot currently provides a partial broker implementation with several provider-specific query operations. Unsupported operations must remain explicit; order mutations and canonical fills remain blocked by [#1185](https://github.com/45s/coinzilla/issues/1185).
 - **Consumer integration:** each consuming application owns its own ports/adapters, provider selection, routing, and runtime lifecycle. Those are not Brokers-package responsibilities.
 
 ### Accepted cross-domain recovery contract — issue #702 (2026-11-08)
@@ -377,9 +373,9 @@ The current `packages/brokers/src/index.js` exports exactly:
 |---|---|---|
 | `BinanceWebSocketBroker` | `infrastructure/binance/broker-websocket/broker.js` | Public Binance Spot WebSocket API/Streams broker facade |
 | `BinanceWebSocketConfig` | `infrastructure/binance/broker-websocket/config/binance-websocket-config.js` | Validated credentials, endpoints, and reconnect configuration |
-| `BitunixSpotBroker` | `infrastructure/bitunix/broker.js` | Read-only Bitunix Spot REST broker facade; order mutations are not implemented |
+| `BitunixSpotBroker` | `infrastructure/bitunix/broker.js` | Partial Bitunix Spot REST broker facade; order mutations are not implemented |
 | `BitunixSpotConfig` | `infrastructure/bitunix/config/bitunix-spot-config.js` | Validated Bitunix Spot REST configuration |
-| `BitunixSpotWebSocketClient` | `infrastructure/bitunix/api/websocket-client.js` | Separately managed, authenticated, read-only Spot WebSocket RPC client |
+| `BitunixSpotWebSocketClient` | `infrastructure/bitunix/api/websocket-client.js` | Separately managed, authenticated Spot WebSocket RPC client for supported request/response queries |
 | `BitunixWebSocketError` | `infrastructure/bitunix/api/websocket-client.js` | Structured Bitunix Spot WebSocket RPC/transport error |
 | `CoreBroker` | `broker.core.js` | Shared base class used by broker implementations, including Market Simulator |
 | `normalizeBinanceId` | `infrastructure/binance/adapters/normalize-binance-id.js` | Exact non-negative Binance identifier normalization |
@@ -989,18 +985,18 @@ This work is in an open task PR targeting `develop`; do not mark it complete unt
 **Status: Merged into `develop` by [PR #1374](https://github.com/45s/coinzilla/pull/1374) on 2026-11-17 (merge commit `434d77756dc0662e090d8c8bda0271e908356f0e`).**
 
 - Added a separately managed `BitunixSpotWebSocketClient` and native WHATWG WebSocket transport at the official Spot endpoint. It does not change the REST-backed `BitunixSpotBroker` lifecycle or silently switch existing methods to another transport.
-- Implemented documented read-only RPCs: latest price, depth, current K-line, trading-pair catalog, exchange rates, token/network metadata, account balances, and user identity. All requests are authenticated as required by the official Spot WS documentation.
+- Implemented documented query RPCs: latest price, depth, current K-line, trading-pair catalog, exchange rates, token/network metadata, account balances, and user identity. All requests are authenticated as required by the official Spot WS documentation.
 - Implemented the Spot-specific double-SHA256 signature separately from REST signing, echoed-ID correlation for concurrent RPCs, strict response-envelope handling, bounded request timeouts, and pending-request cleanup on transport errors/close. Account balance numeric tokens and unsafe int64 user IDs are preserved without JavaScript number rounding. Requests are never automatically replayed.
 - Added no generic arbitrary-method request, order placement/cancellation, public push subscription, private user-data subscription, or automatic reconnect. A terminal connection must be replaced by constructing a new client; Bitunix documents a 24-hour connection lifetime.
 - Test-first RED was reproduced in GitHub Actions on the test-only checkpoint because the package did not export `BitunixSpotWebSocketClient`. Offline coverage now includes the public export, signature vector, all documented read method names, request correlation, exchange/protocol errors, timeout, disconnect and transport lifecycle.
 - The official docs and JKorf Spot socket/authentication implementation agree on the RPC envelope and per-request authentication fields. JKorf's Spot socket methods themselves cover order mutations only; no continuous Spot subscriptions are copied from Futures.
-- Issue [#1185](https://github.com/45s/coinzilla/issues/1185) remains unchanged: this RPC client does not establish source-timestamped account snapshots, fill completeness, order identity, safe mutation semantics, a TESTNET, or continuous push streams. Bitunix remains read-only; trading capability is not established.
+- Issue [#1185](https://github.com/45s/coinzilla/issues/1185) remains unchanged: this RPC client does not establish source-timestamped account snapshots, fill completeness, order identity, safe mutation semantics, a TESTNET, or continuous push streams. Bitunix trading capability is not established; the current broker implementation does not support order mutations or complete execution lifecycle guarantees.
 
 See the [Bitunix WebSocket RPC contract](../../docs/brokers-websocket-contract.md#bitunix-spot-websocket-rpc-client) and [package usage guide](./README.md#bitunix-spot-websocket-rpc).
 
 ## 2026-11-16 — Bitunix Spot broker foundation
 
-**Status: In progress — read-only adapter foundation; trading capability not established.**
+**Status: In progress — partial query adapter foundation; trading capability not established.**
 
 - Added a separate `infrastructure/bitunix/` REST integration, validated live-only configuration, Bitunix REST signing/client, canonical market and balance adapters, and legacy order mapping. No canonical fill adapter is enabled because the matching-order contract is incomplete.
 - Added `BitunixSpotBroker` behind the existing `CoreBroker` compatibility base and exported it from the package entry point. Supported reads cover market catalog/metadata, balances, per-symbol pending orders/history, order detail, and latest-price lookup. `getFills()` remains explicitly unsupported and sends no request. Order-history reads support canonical status/side/type filters, mapped to Bitunix API codes within infrastructure.
@@ -1008,11 +1004,11 @@ See the [Bitunix WebSocket RPC contract](../../docs/brokers-websocket-contract.m
 - Order placement and cancellation are explicitly disabled. Bitunix Spot has no documented client-order ID; a lost placement response therefore cannot be reliably reconciled. Private Spot WebSocket docs do not define continuous order/execution events, and public market WS methods are request/response rather than subscriptions.
 - `getAccountSnapshot()` fails closed because the account response has no source timestamp. Open orders and order history require a symbol. Canonical order methods fail closed because Bitunix does not provide the required client-order identity. The documented `order/deal/list` response is a single matching-order object with no pagination contract; completeness for orders with multiple executions remains unverified.
 - Bitunix's official API repository confirms that no TESTNET environment is currently provided and that there is no clear plan for one ([BitunixOfficial/open-api#4, maintainer response](https://github.com/BitunixOfficial/open-api/issues/4#issuecomment-3434841476)). The single-order REST endpoint says limit `volume` is quote quantity and market `volume` is base quantity, while the REST batch-order and WebSocket order docs say the inverse. No order submission or quantity conversion is attempted until clarified.
-- Offline tests cover signing, REST transport, lossless account-balance parsing, config, adapters, supported reads, unsupported operations, and exact quantity arithmetic. The first PR CI run exposed four export/assertion expectation mismatches; those were corrected and the suite was expanded. PR #1182 was merged as the read-only foundation; PR [#1183](https://github.com/45s/coinzilla/pull/1183) added canonical order-history filters and fail-closed active-market discovery. On exact PR #1183 head `f7ac16d08a00cfdec7b3b54dec8bfc554254f0fa`, broker/workspace tests and coverage thresholds, syntax/changed-file lint, external documentation links, dependency audit, actionlint, and consumer regression checks passed. Binance TESTNET integration was skipped; no Bitunix live API calls or order mutations were performed.
+- Offline tests cover signing, REST transport, lossless account-balance parsing, config, adapters, supported reads, unsupported operations, and exact quantity arithmetic. The first PR CI run exposed four export/assertion expectation mismatches; those were corrected and the suite was expanded. PR #1182 was merged as the initial query-operation foundation; PR [#1183](https://github.com/45s/coinzilla/pull/1183) added canonical order-history filters and fail-closed active-market discovery. On exact PR #1183 head `f7ac16d08a00cfdec7b3b54dec8bfc554254f0fa`, broker/workspace tests and coverage thresholds, syntax/changed-file lint, external documentation links, dependency audit, actionlint, and consumer regression checks passed. Binance TESTNET integration was skipped; no Bitunix live API calls or order mutations were performed.
 - The 2026-11-16 read-side re-audit found no newly documented capability that safely changes the supported surface: order-history pagination/completion semantics, matching-order identity/completeness, depth precision selection, OHLCV volume, source timestamps, and continuous Spot subscriptions remain unresolved. The JKorf Spot `GetUserTradesAsync` implementation also currently targets `order/pending/list` despite its interface documenting `order/deal/list`; it is not valid evidence for fill retrieval. Detailed source findings are tracked in [issue #1185](https://github.com/45s/coinzilla/issues/1185).
 - See the [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) and [package README](./README.md#bitunix-spot-integration).
 
-**Remaining work before any trading use:** obtain written Bitunix clarification of the single-order versus batch-order quantity units; establish a stable exchange-supported client order identity or authoritative race-safe reconciliation; prove complete per-execution history semantics; establish a documented Spot private order/execution stream or source-timestamp-preserving polling/recovery contract; verify Spot TESTNET or another isolated mutation environment; and add canonical order/account lifecycle support only after the exchange supplies the required facts. Other read-only mappings remain blocked where the API omits canonical facts (OHLCV volume) or leaves required parameters undefined (depth precision selection).
+**Remaining work before any trading use:** obtain written Bitunix clarification of the single-order versus batch-order quantity units; establish a stable exchange-supported client order identity or authoritative race-safe reconciliation; prove complete per-execution history semantics; establish a documented Spot private order/execution stream or source-timestamp-preserving polling/recovery contract; verify Spot TESTNET or another isolated mutation environment; and add canonical order/account lifecycle support only after the exchange supplies the required facts. Other query mappings remain blocked where the API omits canonical facts (OHLCV volume) or leaves required parameters undefined (depth precision selection).
 
 ## 2026-11-17 — Bitunix Spot public market-data reads
 
@@ -1028,19 +1024,21 @@ See the [Bitunix WebSocket RPC contract](../../docs/brokers-websocket-contract.m
 
 **Audit baseline:** `develop` at `65cec77b9f0c182c5f506654a7e33df2909b6a67`, after PRs [#1182](https://github.com/45s/coinzilla/pull/1182), [#1183](https://github.com/45s/coinzilla/pull/1183), [#1188](https://github.com/45s/coinzilla/pull/1188), [#1195](https://github.com/45s/coinzilla/pull/1195), and repository workflow PR #1200. The latter changed agent handoff documentation only; the broker source baseline is unchanged. This is a source/API parity inventory, not a claim that every Binance capability is appropriate or available on Bitunix.
 
+**Integration boundary update — 2026-11-18:** the Harvester-side consumer mapping helper delivered historically in PR #1209 was removed in PR #1455. Its source analysis remains useful, but no Harvester-specific Bitunix metadata mapping is active. Any future canonical normalization must live in `@coinzilla/brokers` and be completed under [#1185](https://github.com/45s/coinzilla/issues/1185); do not reintroduce the consumer-side helper.
+
 ### Implemented Bitunix surface
 
 | Capability / method | Current status | Implementation / limitation |
 |---|---|---|
 | `connect()` / `disconnect()` | Implemented | Stateless REST adapter readiness flag; no persistent socket lifecycle. |
-| `getBalances()` | Implemented, read-only | `GET /api/spot/v1/user/account`; raw balance numeric tokens are preserved as decimal strings. |
-| `getAssets()` | Implemented, read-only compatibility | Uses the same account response; combines free and locked amounts exactly before converting to legacy `Coin.value` Numbers and omits exact zero balances. Use `getBalances()` for exact financial values. |
-| `getExchangeMarkets()` | Implemented, read-only | `GET /api/spot/v1/common/coin_pair/list`; only explicitly open pairs are returned; symbol is derived from base + quote. |
-| `getSymbolFilters({ symbol })` | Partial | Returns raw Bitunix pair metadata. The consumer-side mapping helper in [PR #1209](https://github.com/45s/coinzilla/pull/1209) maps documented `minPrice`/`minVolume` to canonical `MIN_NOTIONAL`/`MIN_QUANTITY`; precision increments, depth precision, and undocumented maximum fields remain unresolved. |
-| `getOpenOrders({ symbol })` | Implemented, read-only | `POST /api/spot/v1/order/pending/list`; symbol is mandatory. Accepts documented object/array rows and explicit empty arrays; missing or `null` data is rejected. No account-wide request or complete cross-symbol enumeration is documented. |
-| `getOrderHistory({ symbol, ...filters })` | Implemented, read-only | `POST /api/spot/v1/order/history/page`; canonical status/side/type filters mapped to Bitunix codes; symbol mandatory; no exact order-ID filter. |
-| `getOrder({ symbol, orderId })` | Implemented, read-only | `GET /api/spot/v1/order/detail`; validates returned order ID and symbol. String IDs are canonical; safe-integer numeric compatibility IDs are accepted and unsafe numeric IDs are rejected. No client-order-ID lookup. |
-| `getPrices({ symbol })` / `getPrice()` | Implemented, read-only | `GET /api/spot/v1/market/last_price`; requires a strictly positive decimal string and preserves it exactly; one-shot lookup with no source timestamp. |
+| `getBalances()` | Implemented query | `GET /api/spot/v1/user/account`; raw balance numeric tokens are preserved as decimal strings. |
+| `getAssets()` | Implemented query compatibility | Uses the same account response; combines free and locked amounts exactly before converting to legacy `Coin.value` Numbers and omits exact zero balances. Use `getBalances()` for exact financial values. |
+| `getExchangeMarkets()` | Implemented query | `GET /api/spot/v1/common/coin_pair/list`; only explicitly open pairs are returned; symbol is derived from base + quote. |
+| `getSymbolFilters({ symbol })` | Partial | Returns raw Bitunix pair metadata. The historical consumer-side mapping helper from [PR #1209](https://github.com/45s/coinzilla/pull/1209) was retired in PR #1455; no Harvester-side canonical mapping is active. Future normalization belongs in this package under #1185. Precision increments, depth precision, and undocumented maximum fields remain unresolved. |
+| `getOpenOrders({ symbol })` | Implemented query | `POST /api/spot/v1/order/pending/list`; symbol is mandatory. Accepts documented object/array rows and explicit empty arrays; missing or `null` data is rejected. No account-wide request or complete cross-symbol enumeration is documented. |
+| `getOrderHistory({ symbol, ...filters })` | Implemented query | `POST /api/spot/v1/order/history/page`; canonical status/side/type filters mapped to Bitunix codes; symbol mandatory; no exact order-ID filter. |
+| `getOrder({ symbol, orderId })` | Implemented query | `GET /api/spot/v1/order/detail`; validates returned order ID and symbol. String IDs are canonical; safe-integer numeric compatibility IDs are accepted and unsafe numeric IDs are rejected. No client-order-ID lookup. |
+| `getPrices({ symbol })` / `getPrice()` | Implemented query | `GET /api/spot/v1/market/last_price`; requires a strictly positive decimal string and preserves it exactly; one-shot lookup with no source timestamp. |
 | `getFills({ symbol, orderId })` | Blocked | Deliberately returns unsupported without making a request. The Spot matching-order response does not define whether `volume` is base or quote quantity, whether all partial executions are represented, or whether `id` is stable/unique for deduplication. |
 | REST signing / transport | Implemented | Double-SHA256 signing, bounded request timeout, response/error validation, no automatic retry. No live exchange acceptance is claimed. |
 
@@ -1137,10 +1135,10 @@ The following comparison resolves what the references actually implement; it doe
 - **Secondary TypeScript reference:** the MCP `spot_get_order_book` tool accepts an optional string described as price-aggregation precision and passes it through; it does not validate the value against the pair metadata. This is a third-party interpretation, not an exchange guarantee.
 - **Order types:** the official Spot order API documents `LIMIT` and `MARKET`; no Spot `LIMIT_MAKER` or post-only flag is documented. An explicitly open market may advertise only these two types.
 - **References:** [official Bitunix Spot API documentation](https://www.bitunix.com/api-docs/spots/en_us/); [JKorf BitunixSymbol model](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Objects/Models/BitunixSymbol.cs), [Spot symbol parser](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/SharedApi/BitunixRestClientSpotSharedApi.SpotSymbols.cs), and [Spot order-book method](https://github.com/JKorf/Bitunix.Net/blob/main/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiExchangeData.cs); [TypeScript MCP Spot tools](https://github.com/samanzamani/bitunix-mcp/blob/main/src/tools/spot.ts).
-- **Decision:** map the two minimum constraints only; keep price/quantity increments and all undocumented maximum constraints UNKNOWN; record precision/depth and reference-only maximum field names as unvalidated diagnostics. Do not derive tick size, step size, or depth precision. The consumer-side mapping helper is implemented in [PR #1209](https://github.com/45s/coinzilla/pull/1209) and remains outside this package's runtime.
+- **Decision:** the source evidence supports only the two minimum constraints; keep price/quantity increments and all undocumented maximum constraints UNKNOWN; record precision/depth and reference-only maximum field names as unvalidated diagnostics. Do not derive tick size, step size, or depth precision. The historical consumer-side mapping helper from [PR #1209](https://github.com/45s/coinzilla/pull/1209) was retired in PR #1455; future canonical mapping must be implemented inside this package under #1185.
 - **`getSymbolFilters()` audit (PR #1412):** the Bitunix broker now validates supplied `minPrice`/`minVolume` as exact non-negative decimal strings, precision counts as non-negative safe integers, and `precisions[]` as exact non-negative decimal strings. It preserves raw values, unknown fields, explicit zero and missing/null optional values; no Binance filter DTO or unsupported increment/maximum is created. Both catalog reads use the public unsigned GET. See the dated audit entry and `BITUNIX_REFERENCE_AUDIT.md` for exact source URLs and semantics.
 
-**First safe implementation slice:** order-history response-envelope and requested-page validation is implemented in [PR #1202](https://github.com/45s/coinzilla/pull/1202), preserving the existing one-page result contract. Documented minimum market constraints are mapped by the consumer-side helper in [PR #1209](https://github.com/45s/coinzilla/pull/1209). Account-wide open-order coverage remains unsupported after the audit in [PR #1222](https://github.com/45s/coinzilla/pull/1222). Symbol correlation is validated for pending/history rows by [PR #1223](https://github.com/45s/coinzilla/pull/1223). Matching-order response shape was hardened in PR #1220, but the complete fill contract remains unproven; [PR #1225](https://github.com/45s/coinzilla/pull/1225) disables canonical fill retrieval until Bitunix clarifies quantity denomination, multi-execution completeness, and stable identity.
+**First safe implementation slice:** order-history response-envelope and requested-page validation is implemented in [PR #1202](https://github.com/45s/coinzilla/pull/1202), preserving the existing one-page result contract. The minimum-constraint mapping analysis was delivered in PR #1209, but its Harvester-side helper was retired by PR #1455; implement canonical normalization inside Brokers only after #1185's evidence requirements are met. Account-wide open-order coverage remains unsupported after the audit in [PR #1222](https://github.com/45s/coinzilla/pull/1222). Symbol correlation is validated for pending/history rows by [PR #1223](https://github.com/45s/coinzilla/pull/1223). Matching-order response shape was hardened in PR #1220, but the complete fill contract remains unproven; [PR #1225](https://github.com/45s/coinzilla/pull/1225) disables canonical fill retrieval until Bitunix clarifies quantity denomination, multi-execution completeness, and stable identity.
 
 ### Phase 1 implementation progress
 
@@ -1148,7 +1146,7 @@ The following comparison resolves what the references actually implement; it doe
 - [ ] Establish ordering, snapshot consistency, maximum page size, time-bound inclusivity, and reliable completion semantics before adding automatic pagination.
 - [x] Audit account-wide open-order coverage: the official endpoint and .NET reference require a symbol; per-market fan-out cannot prove exhaustive, atomic account coverage. Keep account-wide retrieval unsupported.
 - [x] Audit `dealVolume` versus matching-order response presence — [PR #1205](https://github.com/45s/coinzilla/pull/1205) added a temporary consistency guard. Subsequent audit found that quantity denomination, multi-execution completeness and stable identity remain unproven; [PR #1225](https://github.com/45s/coinzilla/pull/1225) keeps `getFills()` unsupported until those facts are documented.
-- [x] Map documented Bitunix `minVolume`/`minPrice` into consumer-side canonical `MIN_QUANTITY`/`MIN_NOTIONAL`; leave all unresolved increments/maxima UNKNOWN — [PR #1209](https://github.com/45s/coinzilla/pull/1209).
+- [x] Record source evidence for documented Bitunix `minVolume`/`minPrice` and the proposed canonical `MIN_QUANTITY`/`MIN_NOTIONAL` mapping — [PR #1209](https://github.com/45s/coinzilla/pull/1209). The consumer-side helper was retired in PR #1455; implementing the mapping inside Brokers remains part of #1185. Leave unresolved increments/maxima UNKNOWN.
 - [x] Reject ambiguous duplicate market metadata in `getSymbolFilters()` instead of silently selecting the first matching catalog row; exactly one matching canonical symbol is required — [PR #1271](https://github.com/45s/coinzilla/pull/1271).
 - [x] Implement Binance-compatible legacy `getAssets()` from the existing Spot account endpoint: add free + locked balances exactly, omit exact zero assets, and return the legacy Number-based `Coin.value` shape while retaining `getBalances()` as the exact-decimal API — [PR #1274](https://github.com/45s/coinzilla/pull/1274).
 - [x] Validate Spot latest-price values as strictly positive after exact decimal parsing; preserve the original decimal string without Number conversion — [PR #1279](https://github.com/45s/coinzilla/pull/1279).
@@ -1164,14 +1162,14 @@ The following comparison resolves what the references actually implement; it doe
 
 ### Recommended implementation order
 
-1. **Close safe read-contract gaps first:** order-history page-envelope and requested-page validation is implemented in PR #1202; the fail-closed `dealVolume`/matching-order presence guard is implemented in PR #1205; the documented Bitunix `minPrice`/`minVolume` fields are mapped by PR #1209; strict matching-order response-shape validation is implemented in PR #1220; ambiguous duplicate symbol metadata is rejected in PR #1271; and legacy `getAssets()` compatibility is implemented in PR #1274. Account-wide open-order coverage was audited and remains unsupported because the endpoint requires a symbol and no exhaustive atomic enumeration is documented. Depth precision and full history/fill completeness remain exchange-blocked. Continue with independently verifiable read-side contract improvements.
+1. **Close safe query-contract gaps first:** order-history page-envelope and requested-page validation is implemented in PR #1202; the fail-closed `dealVolume`/matching-order presence guard is implemented in PR #1205; the documented Bitunix `minPrice`/`minVolume` mapping was analyzed in PR #1209 but its Harvester helper was retired in PR #1455; strict matching-order response-shape validation is implemented in PR #1220; ambiguous duplicate symbol metadata is rejected in PR #1271; and legacy `getAssets()` compatibility is implemented in PR #1274. Account-wide open-order coverage was audited and remains unsupported because the endpoint requires a symbol and no exhaustive atomic enumeration is documented. Depth precision and full history/fill completeness remain exchange-blocked. Continue with independently verifiable read-side contract improvements.
 2. **Complete canonical read/reconciliation primitives:** add canonical order mapping by broker ID, account-wide open-order coverage, account snapshot freshness and account-wide trade history only when the API supplies the required facts.
 3. **Implement public WebSocket market data:** currently blocked. The Phase 3 audit found only one-shot public RPC methods in official Spot docs and no Spot market subscription surface in the .NET reference. Revisit only if Bitunix documents real push channels and lifecycle semantics; do not poll over a socket and label it a stream.
 4. **Resolve order lifecycle contracts externally:** quantity units, client identity, execution completeness, cancellation/unknown-outcome recovery and isolated mutation environment. Keep placement/cancellation disabled until all are resolved.
 5. **Implement a private user-data lifecycle only if the Spot contract supports it:** require a documented push stream or rigorously specified timestamped polling/reconciliation alternative. Match the broker package's recovery safety; do not invent a stream or replay guarantee.
 6. **Parity acceptance:** add a shared broker contract suite for every capability Bitunix claims to support; compare result shapes, exact decimal strings, errors, unsupported behavior and cleanup against Binance without weakening Binance contracts.
 
-**Hard safety boundary:** Bitunix Spot remains read-only at the broker-package boundary. No order placement, cancellation, private user-data subscription, or live trading may be enabled while [issue #1185](https://github.com/45s/coinzilla/issues/1185) remains unresolved. A method being present on `CoreBroker` or on the Bitunix class is not evidence that the exchange supports it.
+**Hard safety boundary:** Bitunix Spot does not yet support the complete order and account lifecycle. No order placement, cancellation, private user-data subscription, or live trading may be enabled while [issue #1185](https://github.com/45s/coinzilla/issues/1185) remains unresolved. A method being present on `CoreBroker` or on the Bitunix class is not evidence that the exchange supports it.
 
 ---
 
@@ -1189,8 +1187,8 @@ The purpose is to translate an already implemented and tested Spot behavior into
 - [x] Added the maintained [Bitunix external implementation reference audit](./BITUNIX_REFERENCE_AUDIT.md), including the full Binance method parity inventory, reference source/test links, third-party defects, official documentation contradictions, and recommendations for safe ports.
 - [x] Confirmed JKorf's Spot GetUserTradesAsync implementation calls pending/list despite its interface documenting deal/list; StockSharp and an independent Python client use the documented deal/list endpoint. This does not resolve complete execution-history semantics.
 - [x] Confirmed multiple clients expose Spot order placement, but none resolves the official single-order versus batch-order volume contradiction, missing client-order identity, unknown-outcome reconciliation or lack of TESTNET. Placement/cancellation remain blocked by issue #1185.
-- [x] Identified Bitunix-specific public read-only extensions. Exchange rates are implemented in PR #1370 and the WebSocket RPC client; token/network metadata is now exposed as a documented WebSocket RPC read. Neither is Binance parity or a new broker-port method.
-- [x] The read-only market-data expansion is merged in [PR #1324](https://github.com/45s/coinzilla/pull/1324) at `5d707d17114d524ef3cd7c6d35387dde61338976`; it adds one-shot depth and current/history K-line reads while leaving canonical OHLCV candles unsupported because the Spot schema omits volume.
+- [x] Identified Bitunix-specific public query extensions. Exchange rates are implemented in PR #1370 and the WebSocket RPC client; token/network metadata is now exposed as a documented WebSocket RPC read. Neither is Binance parity or a new broker-port method.
+- [x] The public market-data query expansion is merged in [PR #1324](https://github.com/45s/coinzilla/pull/1324) at `5d707d17114d524ef3cd7c6d35387dde61338976`; it adds one-shot depth and current/history K-line reads while leaving canonical OHLCV candles unsupported because the Spot schema omits volume.
 - [x] The Bitunix-only exchange-rate extension is merged in [PR #1370](https://github.com/45s/coinzilla/pull/1370) as `55694b837c869878d22346dfd6b0f12c9b0f3269`. It uses the unsigned public `GET /api/spot/v1/common/rate/list`, preserves exact positive decimal strings, freezes returned records, accepts an explicit empty array, and rejects missing or incomplete data. All six required `develop-core` checks passed on exact PR head `0f7fbaa332eea5b45a176a25eae4ba529495893a`.
 - [x] Token/network metadata is already exposed through the Bitunix Spot WebSocket RPC client (merged in PR #1374); a duplicate REST token/network extension remains deferred until a consumer contract requires it. Do not combine it with exchange rates or weaken issue #1185 blockers.
 
@@ -1200,7 +1198,7 @@ The audit is the detailed evidence source; this roadmap records status and next 
 
 - [x] Audit the official `POST /api/spot/v1/deposit/page` contract against JKorf interface, implementation, model and response fixture.
 - [x] Record the schema/example contradiction (`data` object vs array) and support both documented shapes.
-- [x] Add signed, read-only `BitunixSpotBroker.getDeposits()` with validated filters and one-page-only behavior.
+- [x] Add signed `BitunixSpotBroker.getDeposits()` query with validated filters and one-page-only behavior.
 - [x] Preserve large numeric IDs and decimal amount tokens exactly as strings; retain raw status/type and opaque address/UID fields.
 - [x] Add offline success, empty, malformed-row, invalid-filter, response-shape, unknown-status and numeric-precision regression tests.
 - [x] Keep the method Bitunix-specific; do not alter Binance/CoreBroker contracts or issue #1185 lifecycle/mutation blockers.
@@ -1211,7 +1209,7 @@ The audit is the detailed evidence source; this roadmap records status and next 
 
 - [x] Audited official `POST /api/spot/v1/withdraw_transfer/page` against JKorf interface, implementation, model and fixture.
 - [x] Recorded the schema/example discrepancies: `data` object vs array; `toAddress` vs `address`; nullable `fee`/`feeCoin`.
-- [x] Added signed read-only `BitunixSpotBroker.getWithdrawalHistory()` for on-chain withdrawals and internal-transfer-out records.
+- [x] Added signed `BitunixSpotBroker.getWithdrawalHistory()` query for on-chain withdrawals and internal-transfer-out records.
 - [x] Validated all filters before I/O; require explicit `type: "withdraw"` for transaction-hash filtering; one request only.
 - [x] Preserved large IDs/recipient UIDs and exact amount/fee tokens as strings; preserved unknown type/status values and nullable/absent fields.
 - [x] Kept recipient address/UID/contact/remark data opaque and out of logs/persistent storage.
@@ -1247,7 +1245,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 - [x] Audited the official signed `POST /api/spot/v1/deposit/address` contract, required `coin`/`network` inputs, address-array response, optional memo, and 10 requests/second/IP limit.
 - [x] Cross-checked JKorf's interface, implementation, model and Spot response fixture. The TypeScript MCP and independent Python client do not implement this endpoint; Cachy is Futures-only.
-- [x] Added `BitunixSpotBroker.getDepositAddress({ coin, network })` as a Bitunix-only signed, read-only one-request lookup. The network is caller-selected; no automatic selection or address generation is performed.
+- [x] Added `BitunixSpotBroker.getDepositAddress({ coin, network })` as a Bitunix-only signed one-request lookup. The network is caller-selected; no automatic selection or address generation is performed.
 - [x] Validate inputs before I/O; validate every response row and exact requested coin/network identity; preserve all addresses and memo values; freeze the complete result; reject missing/null/non-array data.
 - [x] Add stable input/response error codes with safe operation/field context. Do not log or persist addresses/memos; do not retry or paginate.
 - [x] Add offline tests for request flags/body, REST signing, multiple addresses, empty response, memo null/empty/omitted values, malformed rows, mismatched identity, validation-before-I/O, and transport failure without retry.
@@ -1271,23 +1269,23 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 ## 2026-11-18 — Bitunix local diagnostics runner (#1426)
 
-**Status: Base runner and source-constant configuration are implemented in [PR #1427](https://github.com/45s/coinzilla/pull/1427) and [PR #1433](https://github.com/45s/coinzilla/pull/1433). [PR #1439](https://github.com/45s/coinzilla/pull/1439) extends public REST coverage, adds a documented read-only open-orders query, credential-free mode, authenticated ping and one explicit reconnect probe. Actual local LIVE API smoke testing remains operator-owned.**
+**Status: Base runner and source-constant configuration are implemented in [PR #1427](https://github.com/45s/coinzilla/pull/1427) and [PR #1433](https://github.com/45s/coinzilla/pull/1433). [PR #1439](https://github.com/45s/coinzilla/pull/1439) extends public REST coverage, adds a documented public open-orders query, credential-free mode, authenticated ping and one explicit reconnect probe. Actual local LIVE API smoke testing remains operator-owned.**
 
 - Add an explicitly invoked local runner over the existing Bitunix Spot REST and authenticated WebSocket RPC clients.
 - Verify public REST catalog/price reads, private account reads, WS connection/authentication, all existing Spot RPC methods, request/response IDs, durations, exchange errors, transport errors, close behavior and cleanup.
 - Capture sanitized outbound WS request envelopes and inbound response summaries. Never persist API credentials, signatures, nonces, UIDs, account balances, addresses, memo values or full private account payloads.
 - Require the source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` opt-in before contacting the configured LIVE Spot API. Symbol, K-line interval, timeout and public-payload capture are named source constants; API credentials remain environment-only and optional depth precision remains configurable. Bitunix Spot TESTNET is not documented; this runner does not claim TESTNET verification.
 - Keep the tool as an explicitly invoked package diagnostic, outside broker runtime construction. No order placement/cancellation, withdrawals, transfers, retries or automatic reconnects.
-- Preserve #1185 as the trading-readiness blocker. The current read-only implementation is a temporary safety state, not the intended end state: the longer-term goal is a complete Bitunix broker capability set, including trading only after order identity, quantity semantics, execution-history completeness, account freshness, market constraints, event/recovery and environment-safety requirements are independently resolved and tested. Consumer-application integration remains separately owned by each application.
+- Preserve #1185 as the trading-readiness blocker. The current partial query implementation is not the intended end state: the longer-term goal is a complete Bitunix broker capability set, including trading only after order identity, quantity semantics, execution-history completeness, account freshness, market constraints, event/recovery and environment-safety requirements are independently resolved and tested. Consumer-application integration remains separately owned by each application.
 - [x] Pass offline diagnostic-helper/runner tests and all Brokers/workspace required CI for the original runner and source-constant configuration.
-- [x] Verify PR #1439's public-only fallback, private-check skip behavior, credential-free REST authentication boundary, public market endpoint coverage, read-only open-orders POST, documented ping RPC and controlled reconnect probe through offline tests and exact-head CI. Subscription restoration and 24-hour expiry simulation remain unsupported/not run.
+- [x] Verify PR #1439's public-only fallback, private-check skip behavior, credential-free REST authentication boundary, public market endpoint coverage, public open-orders POST, documented ping RPC and controlled reconnect probe through offline tests and exact-head CI. Subscription restoration and 24-hour expiry simulation remain unsupported/not run.
 - [ ] Run the actual local LIVE diagnostics and inspect sanitized REST/WS responses with the operator's environment; this cannot be completed from the remote repository execution context.
-- [ ] Run the local command and inspect its sanitized report. Public-only mode needs no credentials; authenticated checks require both Bitunix credential variables and a dedicated read-only key. This LIVE API smoke test is operator-owned; CI must not receive exchange credentials.
+- [ ] Run the local command and inspect its sanitized report. Public-only mode needs no credentials; authenticated checks require both Bitunix credential variables and a dedicated diagnostic key without trading or withdrawal permissions. This LIVE API smoke test is operator-owned; CI must not receive exchange credentials.
 
 ## 2026-11-18 — Issue #1446 capability ownership and API checkpoint
 
 - [x] Documentation PR [#1449](https://github.com/45s/coinzilla/pull/1449) merged into `develop` as `433a5300c884a39771939082c4a25d78ff6d5d9c`.
-- [x] Capability ownership audit completed: Brokers owns the canonical provider declaration; only three statuses remain; `environment-dependent` is represented as supported-with-conditions.
+- [x] Original capability ownership audit completed: it initially selected Brokers as the provider-declaration owner and retained three statuses. **Ownership was subsequently reconciled by PR #1455:** Entities owns the single shared `BrokerCapabilities` value contract; Brokers owns provider-specific evidence and re-exports the Entities class. The three statuses remain unchanged.
 - [x] Open Entities coordination issue [#1450](https://github.com/45s/coinzilla/issues/1450) for the legacy public export's compatibility/deprecation decision.
 - [x] Preserve Harvester registry metadata compatibility without importing or moving Harvester application code.
 - [x] Add the Brokers-owned capability value, typed unsupported error, structural method catalog, compatibility method catalog, mutation outcome classification, and initial shared conformance suite.

@@ -259,3 +259,34 @@ test("rejects credential environment variable reuse across account identities", 
     adapterFactories: createAdapterFactories(),
   }), /reuses credential environment variable BINANCE_API_KEY/)
 })
+
+
+test("defaults provider instances to required and supports explicit optional startup policy", () => {
+  const providers = resolveProviderInstances({
+    appConfig: {
+      brokers: {
+        instances: [
+          createProviderConfig(),
+          createProviderConfig({
+            providerInstanceId: "binanceTestnetOptional",
+            accountId: "binance-optional",
+            required: false,
+            credentials: {
+              apiKeyEnv: "BINANCE_OPTIONAL_API_KEY",
+              apiSecretEnv: "BINANCE_OPTIONAL_API_SECRET",
+            },
+          }),
+        ],
+      },
+    },
+    env: {
+      BINANCE_API_KEY: "primary-key",
+      BINANCE_API_SECRET_KEY: "primary-secret",
+      BINANCE_OPTIONAL_API_KEY: "optional-key",
+      BINANCE_OPTIONAL_API_SECRET: "optional-secret",
+    },
+    adapterFactories: createAdapterFactories(),
+  })
+  assert.equal(providers[0].required, true)
+  assert.equal(providers[1].required, false)
+})

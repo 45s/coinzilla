@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { BrokerCapabilities as EntityBrokerCapabilities } from "@coinzilla/entities"
 
 import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { createBinanceBrokerCapabilities } from "./capabilities.js"
@@ -8,6 +9,7 @@ test("Binance capability declaration uses the canonical BrokerCapabilities contr
   const capabilities = createBinanceBrokerCapabilities({ tradingMode: "testnet" })
 
   assert.ok(capabilities instanceof BrokerCapabilities)
+  assert.ok(capabilities instanceof EntityBrokerCapabilities)
   assert.equal(capabilities.provider, "binance")
   assert.equal(capabilities.product, "spot")
   assert.deepEqual(capabilities.environment, {
