@@ -74,6 +74,14 @@ function rememberImmediateHarnessFill({
   )
 }
 
+async function prepareHarnessPlaceOrder({ order, placeOrderGate, deferOrderSide, onPlaceOrder, onPlaceOrderStarted }) {
+  onPlaceOrder?.({ order })
+  onPlaceOrderStarted?.({ order })
+  if (placeOrderGate && order.side === deferOrderSide) {
+    await placeOrderGate.promise
+  }
+}
+
 function createPlaceOrderHandler(options = {}) {
   const {
     orders,
@@ -98,11 +106,13 @@ function createPlaceOrderHandler(options = {}) {
   return async ({ order }) => {
     placeOrderCallCount.value += 1
     orders.push(order)
-    onPlaceOrder?.({ order })
-    onPlaceOrderStarted?.({ order })
-    if (placeOrderGate && order.side === deferOrderSide) {
-      await placeOrderGate.promise
-    }
+    await prepareHarnessPlaceOrder({
+      order,
+      placeOrderGate,
+      deferOrderSide,
+      onPlaceOrder,
+      onPlaceOrderStarted,
+    })
     const failure = resolvePlaceOrderFailure({
       placeOrderThrow,
       placeOrderFailureAfterCount,
