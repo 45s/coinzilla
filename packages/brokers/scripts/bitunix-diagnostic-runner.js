@@ -444,7 +444,7 @@ async function runWebSocketOperation({
   }
 }
 
-function createRuntimeMetadata({ env }) {
+function createRuntimeMetadata() {
   return {
     node: process.version,
     platform: process.platform,
@@ -490,17 +490,17 @@ function createConfigurationResult({ env, startedAt, now, secrets }) {
   })
 }
 
-function createReport({ startedAtIso, now, env, results, events }) {
+function createReport({ startedAtIso, now, results, events }) {
   return createDiagnosticReport({
     startedAt: startedAtIso,
     finishedAt: new Date(now()).toISOString(),
-    runtime: createRuntimeMetadata({ env }),
+    runtime: createRuntimeMetadata(),
     results,
     events,
   })
 }
 
-function createOptionFailure({ error, startedAtIso, now, env, results, events, secrets }) {
+function createOptionFailure({ error, startedAtIso, now, results, events, secrets }) {
   results.push(createResult({
     operation: "diagnostic options",
     startedAt: now(),
@@ -512,7 +512,6 @@ function createOptionFailure({ error, startedAtIso, now, env, results, events, s
   return createReport({
     startedAtIso,
     now,
-    env,
     results,
     events,
   })
@@ -571,7 +570,6 @@ function recordWebSocketConnectionFailure({ error, now, results, secrets }) {
 
 async function executeWebSocketOperations({
   client,
-  env,
   symbol,
   depthPrecision,
   now,
@@ -685,7 +683,6 @@ async function runWebSocketSession({
     if (isConnected) {
       await executeWebSocketOperations({
         client,
-        env,
         symbol,
         depthPrecision,
         now,
@@ -814,7 +811,6 @@ async function runConfiguredDiagnostics({
       error,
       startedAtIso,
       now,
-      env,
       results,
       events,
       secrets,
@@ -837,7 +833,6 @@ async function runConfiguredDiagnostics({
   return createReport({
     startedAtIso,
     now,
-    env,
     results,
     events,
   })
@@ -866,7 +861,6 @@ export async function runBitunixDiagnostics({
     return createReport({
       startedAtIso,
       now,
-      env,
       results,
       events,
     })
