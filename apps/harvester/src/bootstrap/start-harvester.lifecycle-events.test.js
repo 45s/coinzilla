@@ -91,6 +91,18 @@ supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
 unvalidatedConstraints: [] }
 }
 
+const createBinanceCapabilities = ({ tradingMode = "testnet" } = {}) => Object.freeze({
+  contractVersion: 1,
+  provider: "binance",
+  product: "spot",
+  environment: Object.freeze({
+    selector: "tradingMode",
+    supportedModes: Object.freeze(["testnet", "live"]),
+    selectedMode: tradingMode,
+    nodeEnvSelectsEndpoint: false,
+  }),
+})
+
 function createBrokerConnectionPorts({ connectError }) {
   return {
     connect: async () => {
@@ -203,6 +215,7 @@ function createBroker(options = {}) {
     priceHandler: null,
   }
   return {
+    capabilities: createBinanceCapabilities({ tradingMode: options.tradingMode }),
     ...createBrokerConnectionPorts(options),
     ...createBrokerAccountPorts(),
     ...createBrokerUserDataPorts({ ...options,
