@@ -689,9 +689,10 @@ function logMultipleAccountRuntime({
   logger,
 }) {
   const failedCount = runtime.failedAccounts?.length ?? 0
+  const retainedCount = runtime.failedAccounts?.filter(({ lockRetained }) => lockRetained).length ?? 0
   logSystem({
     logger,
-    message: `Connected ${runtime.providerAccounts.length} independent provider account(s); ${failedCount} account(s) failed to start; subscribed to ${runtime.subscriptions.length} distinct market(s).`,
+    message: `Connected ${runtime.providerAccounts.length} independent provider account(s); ${failedCount} account(s) failed to start; ${retainedCount} account lock(s) retained pending cleanup; subscribed to ${runtime.subscriptions.length} distinct market(s).`,
   })
 }
 
