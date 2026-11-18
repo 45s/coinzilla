@@ -302,7 +302,10 @@ test("read transactions use the provider read path when available", async () => 
     )
     assert.deepEqual(
       calls,
-      { writes: 1, reads: 1 },
+      {
+        writes: 1,
+        reads: 1,
+      },
       "Read and write transaction calls must be routed to their matching provider methods",
     )
   } finally {
