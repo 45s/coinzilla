@@ -18,6 +18,9 @@ baseAsset,
 quoteAsset })
 const makeOrder = ({ status = "OPEN", executedQuantity = "0" } = {}) => new CanonicalOrder({
   clientOrderId: "h-0123456789abcdef012345-1",
+  providerInstanceId: "binanceTestnet",
+  providerType: "binance",
+  accountId: "binance-primary",
   brokerOrderId: "broker-1",
   market,
   side: "BUY",
@@ -62,6 +65,9 @@ executedQuantity: "12.5" })
   assert.equal(result.data.record.factId, `order-cancellation-intent:${  order.clientOrderId  }:TRAILING_BUY_REPRICE:PARTIALLY_FILLED:12.5`)
   assert.deepEqual(result.data.record.data, {
     clientOrderId: order.clientOrderId,
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
     brokerOrderId: "broker-1",
     marketId: market.id,
     venue: "binance",
@@ -84,6 +90,9 @@ test("records a confirmed cancellation outcome with the canonical terminal state
   const canceledOrder = new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
+    providerInstanceId: order.providerInstanceId,
+    providerType: order.providerType,
+    accountId: order.accountId,
     market,
     side: order.side,
     type: order.type,

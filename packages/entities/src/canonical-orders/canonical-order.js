@@ -167,6 +167,14 @@ function validateOrderLifecycle({
   }
 }
 
+function validateProviderProvenance({ providerInstanceId, providerType, accountId }) {
+  const values = [providerInstanceId, providerType, accountId]
+  if (values.every((value) => value === undefined)) { return }
+  if (values.some((value) => typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value))) {
+    throw new TypeError("CanonicalOrder provider provenance requires all three stable identifiers: providerInstanceId, providerType, accountId")
+  }
+}
+
 function validateTimestamps({ createdAt, acknowledgedAt, updatedAt, completedAt }) {
   for (const timestamp of [createdAt, acknowledgedAt, updatedAt, completedAt]) {
     if (timestamp !== undefined && (!Number.isSafeInteger(timestamp) || timestamp < 0)) {
@@ -178,6 +186,9 @@ function validateTimestamps({ createdAt, acknowledgedAt, updatedAt, completedAt 
 export class CanonicalOrder {
   #clientOrderId
   #brokerOrderId
+  #providerInstanceId
+  #providerType
+  #accountId
   #market
   #side
   #type
@@ -194,6 +205,9 @@ export class CanonicalOrder {
   constructor({
     clientOrderId,
     brokerOrderId,
+    providerInstanceId,
+    providerType,
+    accountId,
     market,
     side,
     type,
@@ -210,6 +224,7 @@ export class CanonicalOrder {
       clientOrderId,
       brokerOrderId,
     })
+    validateProviderProvenance({ providerInstanceId, providerType, accountId })
     validateOrderType({
       market,
       side,
@@ -243,6 +258,9 @@ export class CanonicalOrder {
 
     this.#clientOrderId = clientOrderId.trim()
     this.#brokerOrderId = brokerOrderId == null ? undefined : brokerOrderId.trim()
+    this.#providerInstanceId = providerInstanceId
+    this.#providerType = providerType
+    this.#accountId = accountId
     this.#market = market
     this.#side = side
     this.#type = type
@@ -266,6 +284,10 @@ export class CanonicalOrder {
   get brokerOrderId() {
     return this.#brokerOrderId
   }
+
+  get providerInstanceId() { return this.#providerInstanceId }
+  get providerType() { return this.#providerType }
+  get accountId() { return this.#accountId }
 
   get market() {
     return this.#market
@@ -319,6 +341,11 @@ export class CanonicalOrder {
     return {
       clientOrderId: this.#clientOrderId,
       ...(this.#brokerOrderId === undefined ? {} : { brokerOrderId: this.#brokerOrderId }),
+      ...(this.#providerInstanceId === undefined ? {} : {
+        providerInstanceId: this.#providerInstanceId,
+        providerType: this.#providerType,
+        accountId: this.#accountId,
+      }),
       market: this.#market.value,
       side: this.#side,
       type: this.#type,

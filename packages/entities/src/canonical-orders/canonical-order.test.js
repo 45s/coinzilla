@@ -300,3 +300,31 @@ describe(`${CanonicalOrder.name} identity and timestamps`, () => {
     }, TypeError)
   })
 })
+
+
+describe(`${CanonicalOrder.name} provider provenance`, () => {
+  it("retains the immutable provider instance, provider type and account identity", () => {
+    const order = createOrder({
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    })
+    assert.equal(order.providerInstanceId, "binanceTestnet")
+    assert.equal(order.providerType, "binance")
+    assert.equal(order.accountId, "binance-primary")
+    assert.deepEqual({
+      providerInstanceId: order.value.providerInstanceId,
+      providerType: order.value.providerType,
+      accountId: order.value.accountId,
+    }, {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    })
+    assert.equal(Object.isFrozen(order), true)
+  })
+
+  it("rejects partial provider provenance rather than inventing missing identity", () => {
+    assert.throws(() => createOrder({ providerInstanceId: "binanceTestnet" }), /all three.*providerInstanceId.*providerType.*accountId/i)
+  })
+})

@@ -10,7 +10,10 @@ function validateCanonicalCancellationResponse({ order, canceledOrder, outcome }
       canceledOrder.clientOrderId !== order.clientOrderId ||
       canceledOrder.brokerOrderId !== order.brokerOrderId ||
       canceledOrder.market.id !== order.market.id ||
-      canceledOrder.side !== order.side) {
+      canceledOrder.side !== order.side ||
+      canceledOrder.providerInstanceId !== order.providerInstanceId ||
+      canceledOrder.providerType !== order.providerType ||
+      canceledOrder.accountId !== order.accountId) {
     throw new TypeError("Cancellation outcome response does not match the original canonical order identity")
   }
   if (outcome === "NOT_CANCELED" && !["OPEN", "PARTIALLY_FILLED"].includes(canceledOrder.status)) {
@@ -30,6 +33,11 @@ function validateCancellationInput({ operationalStateStore, order, canceledOrder
   }
   if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
     throw new TypeError("Cancellation outcome requires the original active acknowledged order")
+  }
+  for (const field of ["providerInstanceId", "providerType", "accountId"]) {
+    if (typeof order[field] !== "string" || !order[field].trim()) {
+      throw new TypeError(`Cancellation outcome requires immutable ${field} provenance`)
+    }
   }
   if (!isReason(reason) || !OUTCOMES.has(outcome)) {
     throw new TypeError("Cancellation reason or outcome is unsupported")
@@ -57,6 +65,9 @@ export async function recordOrderCancellationOutcome(options = {}) {
       factType: "ORDER_CANCELLATION_OUTCOME",
       data: {
         clientOrderId: order.clientOrderId,
+        providerInstanceId: order.providerInstanceId,
+        providerType: order.providerType,
+        accountId: order.accountId,
         brokerOrderId: order.brokerOrderId,
         marketId: market.id,
         venue: market.venue,

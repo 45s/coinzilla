@@ -60,3 +60,20 @@ Those are separate decisions and delivery slices under #1339 and the existing AD
 ## Verification
 
 The registry, identity resolver, adapter capability forwarding, and Binance bootstrap lifecycle are covered by deterministic offline tests. The tests use in-memory BrokerPort fakes; they do not connect to Binance TESTNET or LIVE.
+
+
+## Phase 3 — durable order provenance
+
+New Harvester orders now carry the selected registry entry's immutable `providerInstanceId`, `providerType`, and `accountId` from the broker facade into the local PENDING `CanonicalOrder`. The complete triple is validated as stable non-secret identifier tokens; partial identity is rejected. The selected facade exposes identity from the exact registry entry returned by `connectBroker`; no route is inferred from `NODE_ENV`, provider brand, or a fallback default.
+
+The durable order submission intent stores all three values and must be confirmed committed before `placeOrder()` is invoked. The same identity is required on the durable submission outcome and on cancellation intent/outcome facts. Broker acknowledgements are rehydrated with the pending order's provider identity before the outcome is committed, and registry transitions preserve it while rejecting any attempted identity mutation.
+
+For user-data and historical execution fills, Harvester correlates the fill to the already-owned canonical order, attaches that order's provider/account identity to the immutable Fill, and commits it with the execution fact. A fill whose registered order has no provider provenance or whose supplied provenance conflicts is rejected as an ownership-integrity failure; it is not assigned to the currently configured provider by guesswork. Cancellation of an order lacking provider identity likewise fails closed.
+
+Operational State and Journal projections carry the identity across submission, cancellation, fill and replay. The strict v1 fact validators accept the complete identity triple on new records, reject partial/malformed triples, and continue to read historical v1 records with no provenance. Existing append-only fact bytes and digest chains are not rewritten. A legacy order with no recorded identity remains readable for audit, but it is not safe to submit/cancel/reconcile as an owned order until an explicit, separately audited migration establishes provenance; this slice does not fabricate it.
+
+This phase does not add multi-provider routing, a second exchange instance, account aggregation, automatic fallback/failover, or process-restart restoration. The runtime remains on its current explicitly configured Binance instance. The existing restart-recovery release gates in #654 remain separate and out of scope.
+
+## Offline verification scope
+
+Regression coverage exercises CanonicalOrder/Fill immutability, provider metadata propagation from the BrokerPort facade, intent-before-broker ordering, acknowledgement preservation, registry mutation rejection, strict durable-fact validation, and legacy fact compatibility. Tests use deterministic in-memory fakes and temporary local stores; no credentials, Binance API calls, or live/TESTNET order actions are needed.

@@ -67,6 +67,11 @@ function mapFill({ data }) {
     tradeId: data.tradeId,
     brokerOrderId: data.brokerOrderId,
     ...(data.clientOrderId == null ? {} : { clientOrderId: data.clientOrderId }),
+    ...(data.providerInstanceId === undefined ? {} : {
+      providerInstanceId: data.providerInstanceId,
+      providerType: data.providerType,
+      accountId: data.accountId,
+    }),
     symbol: data.symbol,
     side: data.side,
     price: data.price,
@@ -114,6 +119,11 @@ function mapOrderSubmissionIntentFact({ data, orderIntents }) {
     name: EVENT.SUBMISSION_REQUESTED,
     data: {
       clientOrderId: data.clientOrderId,
+      ...(data.providerInstanceId === undefined ? {} : {
+        providerInstanceId: data.providerInstanceId,
+        providerType: data.providerType,
+        accountId: data.accountId,
+      }),
       symbol: data.symbol,
       side: data.side,
       type: data.type,
@@ -132,11 +142,16 @@ function mapOrderSubmissionOutcomeFact({ data, orderIntents }) {
   assertIntentMatches({
     intent,
     data,
-    fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "purpose"],
+    fields: ["providerInstanceId", "providerType", "accountId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "purpose"],
     context: "Durable submission outcome",
   })
   const immutableIntent = {
     clientOrderId: data.clientOrderId,
+    ...(data.providerInstanceId === undefined ? {} : {
+      providerInstanceId: data.providerInstanceId,
+      providerType: data.providerType,
+      accountId: data.accountId,
+    }),
     symbol: data.symbol,
     side: data.side,
     type: data.type,
@@ -170,7 +185,7 @@ function mapOrderCancellationIntentFact({ data, orderIntents, cancellationIntent
   assertIntentMatches({
     intent,
     data,
-    fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity"],
+    fields: ["providerInstanceId", "providerType", "accountId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity"],
     context: "Durable cancellation intent",
   })
   if (cancellationIntents.has(data.clientOrderId)) {
@@ -181,6 +196,11 @@ function mapOrderCancellationIntentFact({ data, orderIntents, cancellationIntent
     name: EVENT.CANCEL_REQUESTED,
     data: {
       clientOrderId: data.clientOrderId,
+      ...(data.providerInstanceId === undefined ? {} : {
+        providerInstanceId: data.providerInstanceId,
+        providerType: data.providerType,
+        accountId: data.accountId,
+      }),
       brokerOrderId: data.brokerOrderId,
       symbol: data.symbol,
       side: data.side,
@@ -203,7 +223,7 @@ function mapOrderCancellationOutcomeFact({ data, orderIntents, cancellationInten
   assertIntentMatches({
     intent,
     data,
-    fields: ["marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side"],
+    fields: ["providerInstanceId", "providerType", "accountId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side"],
     context: "Durable cancellation outcome",
   })
   if (cancellationIntent.reason !== data.reason || cancellationIntent.brokerOrderId !== data.brokerOrderId) {
@@ -234,6 +254,11 @@ function mapOrderCancellationOutcomeFact({ data, orderIntents, cancellationInten
     name: EVENT.CANCEL_FAILED,
     data: {
       clientOrderId: data.clientOrderId,
+      ...(data.providerInstanceId === undefined ? {} : {
+        providerInstanceId: data.providerInstanceId,
+        providerType: data.providerType,
+        accountId: data.accountId,
+      }),
       brokerOrderId: data.brokerOrderId,
       symbol: data.symbol,
       side: data.side,
@@ -242,9 +267,20 @@ function mapOrderCancellationOutcomeFact({ data, orderIntents, cancellationInten
   }]
 }
 
-function mapExecutionFillFact({ data }) {
-  return [{ name: EVENT.FILL_APPLIED,
-data: mapFill({ data }) }]
+function mapExecutionFillFact({ data, orderIntents }) {
+  if (data.providerInstanceId !== undefined) {
+    const intent = orderIntents.get(data.clientOrderId)
+    if (!intent) {
+      throw new Error(`Provider-attributed execution fill has no preceding submission intent: ${data.clientOrderId}`)
+    }
+    assertIntentMatches({
+      intent,
+      data,
+      fields: ["providerInstanceId", "providerType", "accountId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side"],
+      context: "Execution fill",
+    })
+  }
+  return [{ name: EVENT.FILL_APPLIED, data: mapFill({ data }) }]
 }
 
 function mapRecoveryCycleCompletedFact({ data }) {

@@ -107,6 +107,9 @@ function validateExecutionFillFactFields({ canonicalData }) {
     "tradeId",
     "brokerOrderId",
     "clientOrderId",
+    "providerInstanceId",
+    "providerType",
+    "accountId",
     "marketId",
     "venue",
     "symbol",
@@ -127,6 +130,16 @@ function validateExecutionFillFactFields({ canonicalData }) {
 }
 
 function validateExecutionFillIdentityFields({ canonicalData }) {
+  const providerFields = ["providerInstanceId", "providerType", "accountId"]
+  const providerValues = providerFields.map((field) => canonicalData[field])
+  if (providerValues.some((value) => value !== undefined) && providerValues.some((value) =>
+    typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)
+  )) {
+    throw new TypeError("Execution-fill provider provenance must contain all three stable identifiers")
+  }
+  if (providerValues.some((value) => value !== undefined) && canonicalData.clientOrderId == null) {
+    throw new TypeError("Provider-attributed execution fill requires its original clientOrderId")
+  }
   const fillId = requireNonEmptyString({ value: canonicalData.fillId,
     field: "data.fillId",
     maxLength: MAX_FACT_ID_LENGTH })

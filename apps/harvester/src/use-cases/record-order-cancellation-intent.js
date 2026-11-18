@@ -12,6 +12,11 @@ export async function recordOrderCancellationIntent({ operationalStateStore, ord
       throw new TypeError("Cancellation intent requires an active acknowledged canonical order")
     }
     if (!isReason(reason)) { throw new TypeError("Cancellation reason must be a canonical uppercase identifier") }
+    for (const field of ["providerInstanceId", "providerType", "accountId"]) {
+      if (typeof order[field] !== "string" || !order[field].trim()) {
+        throw new TypeError(`Cancellation intent requires immutable ${field} provenance; legacy order cannot be routed safely`)
+      }
+    }
     if (!["BUY", "SELL"].includes(order.side) || !["LIMIT", "LIMIT_MAKER"].includes(order.type)) {
       throw new TypeError("Cancellation intent order side or type is unsupported")
     }
@@ -21,6 +26,9 @@ export async function recordOrderCancellationIntent({ operationalStateStore, ord
       factType: "ORDER_CANCELLATION_INTENT",
       data: {
         clientOrderId: order.clientOrderId,
+        providerInstanceId: order.providerInstanceId,
+        providerType: order.providerType,
+        accountId: order.accountId,
         brokerOrderId: order.brokerOrderId,
         marketId: market.id,
         venue: market.venue,

@@ -305,3 +305,28 @@ describe(`${Fill.name} snapshots`, () => {
     }, TypeError)
   })
 })
+
+
+describe(`${Fill.name} provider provenance`, () => {
+  it("retains the exact provider instance and account identity", () => {
+    const fill = createFill({
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    })
+    assert.deepEqual({
+      providerInstanceId: fill.providerInstanceId,
+      providerType: fill.providerType,
+      accountId: fill.accountId,
+    }, {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    })
+    assert.equal(fill.value.providerInstanceId, "binanceTestnet")
+  })
+
+  it("rejects partial provider provenance", () => {
+    assert.throws(() => createFill({ providerInstanceId: "binanceTestnet" }), /all three.*providerInstanceId.*providerType.*accountId/i)
+  })
+})

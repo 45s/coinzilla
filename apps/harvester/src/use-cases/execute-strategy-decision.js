@@ -68,8 +68,17 @@ function createExecutionContext({ options } = {}) {
   }
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
+  const providerIdentity = {
+    providerInstanceId: broker.providerInstanceId,
+    providerType: broker.providerType,
+    accountId: broker.accountId,
+  }
+  if (onDurableSubmissionIntent && Object.values(providerIdentity).some((value) => typeof value !== "string" || !value.trim())) {
+    throw new TypeError("Durable order submission requires broker providerInstanceId, providerType and accountId metadata")
+  }
   return {
     broker,
+    providerIdentity,
     onPendingOrder,
     onAcknowledgedOrder,
     onSubmissionFailure,
@@ -83,7 +92,7 @@ function createExecutionContext({ options } = {}) {
   }
 }
 
-function createPendingOrderCandidate({ action, marketMetadata, clientOrderId } = {}) {
+function createPendingOrderCandidate({ action, marketMetadata, clientOrderId, providerIdentity } = {}) {
   const orderIntent = {
     symbol: marketMetadata.market.symbol,
     side: action.side,
@@ -95,6 +104,7 @@ function createPendingOrderCandidate({ action, marketMetadata, clientOrderId } =
   const pendingOrder = createPendingCanonicalOrder({
     order: orderIntent,
     market: marketMetadata.market,
+    ...providerIdentity,
     clientOrderId,
     supportedOrderTypes: marketMetadata.supportedOrderTypes,
   })
@@ -147,6 +157,7 @@ async function validateDecision({ context, decision, marketMetadata, notifyValid
         action,
         marketMetadata,
         clientOrderId: `h-${  context.orderIdNamespace  }-preflight-${  index}`,
+        providerIdentity: context.providerIdentity,
       })
       try {
         validateOrderAgainstTradingRules({
@@ -190,6 +201,7 @@ async function createPendingOrderCandidates({ context, decision, marketMetadata 
       action,
       marketMetadata,
       clientOrderId: context.nextClientOrderId(),
+      providerIdentity: context.providerIdentity,
     })
     try {
       validateOrderAgainstTradingRules({
@@ -522,6 +534,26 @@ async function handleMismatchedAcknowledgement({ context, candidate } = {}) {
 
 async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrder } = {}) {
   const { pendingOrder, purpose, ownership } = candidate
+  if (pendingOrder.providerInstanceId !== undefined) {
+    acknowledgedOrder = new CanonicalOrder({
+      clientOrderId: acknowledgedOrder.clientOrderId,
+      brokerOrderId: acknowledgedOrder.brokerOrderId,
+      providerInstanceId: pendingOrder.providerInstanceId,
+      providerType: pendingOrder.providerType,
+      accountId: pendingOrder.accountId,
+      market: acknowledgedOrder.market,
+      side: acknowledgedOrder.side,
+      type: acknowledgedOrder.type,
+      limitPrice: acknowledgedOrder.limitPrice,
+      originalQuantity: acknowledgedOrder.originalQuantity,
+      executedQuantity: acknowledgedOrder.executedQuantity,
+      status: acknowledgedOrder.status,
+      createdAt: acknowledgedOrder.createdAt,
+      acknowledgedAt: acknowledgedOrder.acknowledgedAt,
+      updatedAt: acknowledgedOrder.updatedAt,
+      completedAt: acknowledgedOrder.completedAt,
+    })
+  }
   const durableOutcome = await persistDurableSubmissionOutcome({
     context,
     order: acknowledgedOrder,

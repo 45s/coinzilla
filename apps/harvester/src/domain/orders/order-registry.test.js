@@ -17,6 +17,9 @@ const market = new Market({
 function makeOrder({
   clientOrderId = "harvester-1",
   brokerOrderId,
+  providerInstanceId,
+  providerType,
+  accountId,
   side = "BUY",
   type = "LIMIT_MAKER",
   quantity = "100",
@@ -31,6 +34,9 @@ function makeOrder({
   return new CanonicalOrder({
     clientOrderId,
     ...(brokerOrderId === undefined ? {} : { brokerOrderId }),
+    providerInstanceId,
+    providerType,
+    accountId,
     market,
     side,
     type,
@@ -944,4 +950,37 @@ test("retains RS ownership through pending registration, acknowledgement, fills,
   })
   assert.deepEqual(replayed.getOwnership({ clientOrderId: buy.clientOrderId }), buy.registry.getOwnership({ clientOrderId: buy.clientOrderId }))
   assert.deepEqual(replayed.getOwnership({ clientOrderId: sell.clientOrderId }), sell.registry.getOwnership({ clientOrderId: sell.clientOrderId }))
+})
+
+
+test("retains provider provenance across exchange updates and rejects provider identity mutation", () => {
+  const pending = makeOrder({
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+  })
+  const { registry } = OrderRegistry.empty().registerPending({ order: pending })
+  const acknowledged = registry.applyUpdate({ order: makeOrder({
+    brokerOrderId: "provider-order-1",
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 101,
+  }) })
+  const tracked = acknowledged.registry.getOrder({ clientOrderId: pending.clientOrderId })
+  assert.deepEqual([tracked.providerInstanceId, tracked.providerType, tracked.accountId], [
+    "binanceTestnet", "binance", "binance-primary",
+  ])
+  assert.throws(() => acknowledged.registry.applyUpdate({ order: makeOrder({
+    brokerOrderId: "provider-order-1",
+    providerInstanceId: "binanceLive",
+    providerType: "binance",
+    accountId: "binance-primary",
+    status: "CANCELED",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 102,
+    completedAt: 102,
+  }) }), /changed immutable providerInstanceId/)
+  assert.equal(tracked.status, "OPEN", "A conflicting provider update must not mutate the accepted order.")
 })

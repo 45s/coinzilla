@@ -17,6 +17,9 @@ baseAsset,
 quoteAsset })
 const order = new CanonicalOrder({
   clientOrderId: "h-0123456789abcdef012345-1",
+  providerInstanceId: "binanceTestnet",
+  providerType: "binance",
+  accountId: "binance-primary",
   market,
   side: "BUY",
   type: "LIMIT_MAKER",
@@ -56,6 +59,9 @@ test("records the canonical immutable order intent and requires a durable append
   assert.equal(result.data.record.factType, "ORDER_SUBMISSION_INTENT")
   assert.deepEqual(result.data.record.data, {
     clientOrderId: order.clientOrderId,
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
     marketId: market.id,
     venue: "binance",
     symbol: "DOGEUSDT",

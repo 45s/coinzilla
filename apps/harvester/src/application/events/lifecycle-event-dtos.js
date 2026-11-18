@@ -421,6 +421,11 @@ const requireOrderFacts = ({ order }) => {
   return {
     clientOrderId: requireString({ value: order.clientOrderId,
       field: "clientOrderId" }),
+    ...(order.providerInstanceId === undefined ? {} : {
+      providerInstanceId: requireString({ value: order.providerInstanceId, field: "order.providerInstanceId" }),
+      providerType: requireString({ value: order.providerType, field: "order.providerType" }),
+      accountId: requireString({ value: order.accountId, field: "order.accountId" }),
+    }),
     symbol: requireString({ value: order.market.symbol,
       field: "symbol" }),
     side: order.side === "BUY" || order.side === "SELL"
@@ -563,6 +568,11 @@ export const mapOrderSubmissionFailedData = (input = {}) =>
       return {
         clientOrderId: requireString({ value: order?.clientOrderId,
           field: "clientOrderId" }),
+        ...(order?.providerInstanceId === undefined ? {} : {
+          providerInstanceId: requireString({ value: order.providerInstanceId, field: "order.providerInstanceId" }),
+          providerType: requireString({ value: order.providerType, field: "order.providerType" }),
+          accountId: requireString({ value: order.accountId, field: "order.accountId" }),
+        }),
         symbol: requireString({ value: order?.market?.symbol,
           field: "symbol" }),
         side: order?.side === "BUY" || order?.side === "SELL"
