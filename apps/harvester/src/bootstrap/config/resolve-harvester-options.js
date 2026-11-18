@@ -47,6 +47,87 @@ function selectExecutionPairs({ pairs, executionSymbols }) {
   return selectedPairs
 }
 
+function resolveEffectivePairs({ strategyConfig, tradingMode, executionSymbols }) {
+  if (Object.keys(strategyConfig.pairs ?? {}).length === 0) {
+    throw new Error("Conservative trading requires at least one enabled pair")
+  }
+  const environmentPairs = selectPairsForTradingMode({
+    pairs: strategyConfig.pairs,
+    tradingMode,
+  })
+  const pairs = selectExecutionPairs({
+    pairs: environmentPairs,
+    executionSymbols,
+  })
+  if (Object.keys(pairs).length === 0) {
+    throw new Error(`No CG_coinGrabber pairs configured for TRADING_MODE=${tradingMode}`)
+  }
+  return pairs
+}
+
+function createEffectiveAppConfig({ configuredAppConfig, strategyConfig, pairs }) {
+  return {
+    ...configuredAppConfig,
+    strategies: {
+      ...configuredAppConfig.strategies,
+      CG_coinGrabber: {
+        ...strategyConfig,
+        pairs,
+      },
+    },
+  }
+}
+
+function createConfigurationEvidence({ appConfig, tradingMode, tradingEnabled }) {
+  const effectiveConfiguration = createEffectiveStrategyConfigurationFingerprint({
+    strategyName: "CG_coinGrabber",
+    strategy: appConfig.strategies.CG_coinGrabber,
+  })
+  const enabledSymbols = [...effectiveConfiguration.enabledMarkets]
+  const validatedConfigurationData = mapConfigValidatedData({
+    enabledMarkets: enabledSymbols,
+    strategyMode: "conservative",
+    tradingMode,
+    configurationFingerprint: effectiveConfiguration.fingerprint,
+    tradingEnabled: tradingEnabled && enabledSymbols.length > 0,
+  })
+  if (validatedConfigurationData?.ok !== true) {
+    throw new EffectiveConfigurationError({
+      path: "config.validated",
+      expected: "a complete effective-configuration evidence DTO",
+    })
+  }
+  return {
+    effectiveConfiguration,
+    enabledSymbols,
+    validatedConfigurationData,
+  }
+}
+
+function publishValidatedConfiguration({ eventPublisher, validatedConfigurationData }) {
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
+    dataResult: validatedConfigurationData,
+  })
+}
+
+function logValidatedConfiguration({ logger, environment, brokerName, tradingMode, enabledSymbols }) {
+  const log = {
+    message: "App configuration validated",
+    environment,
+    broker: brokerName,
+    tradingMode,
+    enabledSymbols,
+    strategyMode: `conservative-${tradingMode}`,
+  }
+  if (typeof logger?.system === "function") {
+    logger.system(log)
+  } else {
+    logger?.info?.(log)
+  }
+}
+
 export async function resolveHarvesterOptions({
   configSource,
   appConfig: suppliedAppConfig,
@@ -68,91 +149,43 @@ export async function resolveHarvesterOptions({
     tradingMode: env.TRADING_MODE,
     environment: env.NODE_ENV,
   })
-  const {
-    environment,
-    brokerName,
-    tradingMode,
-    tradingEnabled,
-  } = runtime
-
-  if (Object.keys(strategyConfig.pairs ?? {}).length === 0) {
-    throw new Error("Conservative trading requires at least one enabled pair")
-  }
-
-  const environmentPairs = selectPairsForTradingMode({
-    pairs: strategyConfig.pairs,
-    tradingMode,
-  })
-  const pairs = selectExecutionPairs({
-    pairs: environmentPairs,
+  const pairs = resolveEffectivePairs({
+    strategyConfig,
+    tradingMode: runtime.tradingMode,
     executionSymbols,
   })
-  if (Object.keys(pairs).length === 0) {
-    throw new Error(
-      `No CG_coinGrabber execution markets configured for TRADING_MODE=${tradingMode}`,
-    )
-  }
-
-  const { settings } = strategyConfig
-  const appConfig = {
-    ...configuredAppConfig,
-    strategies: {
-      ...configuredAppConfig.strategies,
-      CG_coinGrabber: {
-        ...strategyConfig,
-        pairs,
-      },
-    },
-  }
-  const effectiveConfiguration = createEffectiveStrategyConfigurationFingerprint({
-    strategyName: "CG_coinGrabber",
-    strategy: appConfig.strategies.CG_coinGrabber,
+  const appConfig = createEffectiveAppConfig({
+    configuredAppConfig,
+    strategyConfig,
+    pairs,
   })
-  const enabledSymbols = [...effectiveConfiguration.enabledMarkets]
-  const validatedConfigurationData = mapConfigValidatedData({
-    enabledMarkets: enabledSymbols,
-    strategyMode: "conservative",
-    tradingMode,
-    configurationFingerprint: effectiveConfiguration.fingerprint,
-    tradingEnabled: tradingEnabled && enabledSymbols.length > 0,
+  const evidence = createConfigurationEvidence({
+    appConfig,
+    tradingMode: runtime.tradingMode,
+    tradingEnabled: runtime.tradingEnabled,
   })
-  if (validatedConfigurationData?.ok !== true) {
-    throw new EffectiveConfigurationError({
-      path: "config.validated",
-      expected: "a complete effective-configuration evidence DTO",
-    })
-  }
-
-  publishLifecycleEvent({
+  publishValidatedConfiguration({
     eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
-    dataResult: validatedConfigurationData,
+    validatedConfigurationData: evidence.validatedConfigurationData,
   })
-
-  const log = {
-    message: "App configuration validated",
-    environment,
-    broker: brokerName,
-    tradingMode,
-    enabledSymbols,
-    strategyMode: `conservative-${tradingMode}`,
-  }
-  if (typeof logger?.system === "function") {
-    logger.system(log)
-  } else {
-    logger?.info?.(log)
-  }
+  logValidatedConfiguration({
+    logger,
+    environment: runtime.environment,
+    brokerName: runtime.brokerName,
+    tradingMode: runtime.tradingMode,
+    enabledSymbols: evidence.enabledSymbols,
+  })
 
   return Object.freeze({
     appConfig,
-    settings,
+    settings: strategyConfig.settings,
     pairs,
-    enabledSymbols: Object.freeze(enabledSymbols),
-    executionSymbols: Object.freeze(enabledSymbols),
-    configurationFingerprint: effectiveConfiguration.fingerprint,
-    environment,
-    brokerName,
-    tradingMode,
-    tradingEnabled: tradingEnabled && enabledSymbols.length > 0,
+    enabledSymbols: Object.freeze(evidence.enabledSymbols),
+    executionSymbols: Object.freeze(evidence.enabledSymbols),
+    configurationFingerprint: evidence.effectiveConfiguration.fingerprint,
+    environment: runtime.environment,
+    brokerName: runtime.brokerName,
+    tradingMode: runtime.tradingMode,
+    tradingEnabled: runtime.tradingEnabled && evidence.enabledSymbols.length > 0,
   })
 }
