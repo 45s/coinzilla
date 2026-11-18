@@ -328,7 +328,10 @@ function createBrokerMarketDataPorts({
       return {
         ok: true,
         data: {
-          unsubscribe: async () => calls.push(`unsubscribe:candles:${symbol}`),
+          unsubscribe: async () => {
+            calls.push(`unsubscribe:candles:${symbol}`)
+            return { ok: true }
+          },
         },
       }
     },
@@ -339,7 +342,10 @@ function createBrokerMarketDataPorts({
       return {
         ok: true,
         data: {
-          unsubscribe: async () => calls.push(`unsubscribe:${symbol}`),
+          unsubscribe: async () => {
+            calls.push(`unsubscribe:${symbol}`)
+            return { ok: true }
+          },
         },
       }
     },
@@ -357,7 +363,10 @@ function createBrokerMarketDataPorts({
       return {
         ok: true,
         data: {
-          unsubscribe: async () => calls.push(`unsubscribe:book:${symbol}`),
+          unsubscribe: async () => {
+            calls.push(`unsubscribe:book:${symbol}`)
+            return { ok: true }
+          },
         },
       }
     },
@@ -374,7 +383,10 @@ function createBrokerUserDataPorts({
       return {
         ok: true,
         data: {
-          disconnect: async () => calls.push("unsubscribe:user-data"),
+          disconnect: async () => {
+            calls.push("unsubscribe:user-data")
+            return { ok: true }
+          },
         },
       }
     },
