@@ -13,7 +13,6 @@ test("SQLite connection initialization preserves both setup and cleanup failures
     filename: join(directory, "records.sqlite"),
   })
   const originalExec = DatabaseSync.prototype.exec
-  const originalClose = DatabaseSync.prototype.close
   const initializationFailure = new Error("WAL initialization failed")
   const cleanupFailure = new Error("partial connection cleanup failed")
   let failedConnection
