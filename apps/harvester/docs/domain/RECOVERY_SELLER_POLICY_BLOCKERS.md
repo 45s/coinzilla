@@ -198,3 +198,13 @@ The remaining cases are deliberately fail-closed rather than assigned speculativ
 ### Implementation handoff
 
 Continue with the exact-head verification and remaining RS-3 fail-closed regression cases. Read the mandatory repository and Harvester documents first; use CG as the behavioral reference, but do not change CG. Keep RS non-executable until RS-3 policy is verified, RS-4 shared-engine integration is implemented safely, and RS-5 offline lifecycle proof passes. No TESTNET/LIVE orders or exchange actions are authorized by this audit or handoff.
+
+## 10. Post-audit implementation update — 2026-11-18
+
+This dated addendum supersedes the pre-merge handoff in §9; it does not rewrite the original source-audit baseline or historical findings.
+
+- The owner-approved pure pre-submission SELL evaluator was merged in PR #1127 as `3fde5cdc0b1ed39bffeb5e21a67f44e0f653e8c3`. The evaluator implements the existing per-pair `minProfit` and 0.01 quote-asset floor, Conservative-compatible order type/fee reserve, supported min/max exchange-filter validation, and sticky STOP for missing required inputs, planning failures or filter violations.
+- Exact implementation head `96315757e74a4851770716b04d8dae5cf9580ece` passed 13/13 focused evaluator tests, 2,101/2,101 Harvester tests, workspace Unit Tests and Test Coverage, strict ESLint, JavaScript quality/syntax, actionlint, Utils tests and dependency audit. The read-only Binance TESTNET integration was skipped; no exchange operations were performed.
+- **RS-3 pure policy is complete.** The remaining blockers are post-fill adverse-result resolution, terminal partial/canceled/rejected/expired SELL resolution, an approved third-asset fee valuation source/freshness contract, and STOP reset/resume semantics. These remain fail-closed; do not invent defaults or authorize a second SELL.
+- **RS-4 shared Trading Engine integration and RS-5 offline lifecycle acceptance remain incomplete.** RS remains unregistered, unconfigured and non-executable. No TESTNET/LIVE order or exchange action is authorized.
+- The implementation handoff above that asks to continue RS-3 implementation is historical and superseded by this update. Future work starts with the unresolved fail-closed decisions and RS-4/RS-5 acceptance, not by reimplementing the merged evaluator.
