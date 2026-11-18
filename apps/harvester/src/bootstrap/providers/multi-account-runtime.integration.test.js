@@ -214,7 +214,7 @@ function createBrokerAccountPorts({
 }
 
 function createAcknowledgedCanonicalOrder({ order, calls }) {
-  const market = createMarketMetadata(order.market?.symbol ?? order.symbol).market
+  const { market } = createMarketMetadata(order.market?.symbol ?? order.symbol)
   const now = Date.now()
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
@@ -791,10 +791,21 @@ async function submitAndResolveRoutedOrder({
   const [acknowledgedOrder] = [...secondaryCalls.orders.values()]
   assert.ok(acknowledgedOrder)
   const registeredOrder = new CanonicalOrder({
-    ...acknowledgedOrder.value,
+    clientOrderId: acknowledgedOrder.clientOrderId,
+    brokerOrderId: acknowledgedOrder.brokerOrderId,
     providerInstanceId: secondaryRuntime.providerInstanceId,
     providerType: secondaryRuntime.providerType,
     accountId: secondaryRuntime.accountId,
+    market: acknowledgedOrder.market,
+    side: acknowledgedOrder.side,
+    type: acknowledgedOrder.type,
+    limitPrice: acknowledgedOrder.limitPrice,
+    originalQuantity: acknowledgedOrder.originalQuantity,
+    executedQuantity: acknowledgedOrder.executedQuantity,
+    status: acknowledgedOrder.status,
+    createdAt: acknowledgedOrder.createdAt,
+    acknowledgedAt: acknowledgedOrder.acknowledgedAt,
+    updatedAt: acknowledgedOrder.updatedAt,
   })
   assert.equal(registeredOrder.providerInstanceId, "binance-testnet-secondary")
   assert.equal(registeredOrder.accountId, "account-secondary")
