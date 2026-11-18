@@ -105,6 +105,39 @@ function logOperatorQueryCompleted({ interaction, startedAt, logStage }) {
   })
 }
 
+function createQueryFailureOutcome({
+  outcome,
+  queryPage,
+  method,
+  diagnostics,
+  interaction,
+  buildNavigationKeyboard,
+}) {
+  if (outcome.threw) {
+    return {
+      ok: false,
+      page: createQueryFailurePage({
+        queryPage,
+        buildNavigationKeyboard,
+      }),
+    }
+  }
+  if (outcome.result?.ok === true) { return undefined }
+  reportQueryResultFailure({
+    result: outcome.result,
+    method,
+    diagnostics,
+    interaction,
+  })
+  return {
+    ok: false,
+    page: createQueryFailurePage({
+      queryPage,
+      buildNavigationKeyboard,
+    }),
+  }
+}
+
 async function readOperatorQuery({
   queryPage,
   userId,
@@ -141,30 +174,15 @@ async function readOperatorQuery({
     diagnostics,
     interaction,
   })
-  if (outcome.threw) {
-    return {
-      ok: false,
-      page: createQueryFailurePage({
-        queryPage,
-        buildNavigationKeyboard,
-      }),
-    }
-  }
-  if (outcome.result?.ok !== true) {
-    reportQueryResultFailure({
-      result: outcome.result,
-      method,
-      diagnostics,
-      interaction,
-    })
-    return {
-      ok: false,
-      page: createQueryFailurePage({
-        queryPage,
-        buildNavigationKeyboard,
-      }),
-    }
-  }
+  const failure = createQueryFailureOutcome({
+    outcome,
+    queryPage,
+    method,
+    diagnostics,
+    interaction,
+    buildNavigationKeyboard,
+  })
+  if (failure) { return failure }
   logOperatorQueryCompleted({
     interaction,
     startedAt,
