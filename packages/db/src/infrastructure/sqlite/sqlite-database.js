@@ -121,6 +121,7 @@ function createSqliteTransactionHandler({ requireConnection, intent }) {
       }
 
       activeConnection.exec("COMMIT")
+      transactionActive = false
       return result
     } catch (error) {
       transactionActive = false
