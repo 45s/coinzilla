@@ -119,6 +119,8 @@ function createPauseAcknowledgementOperator({ calls }) {
           symbol: request.symbol,
           paused: true,
           alreadyPaused: false,
+          canceled: 1,
+          reconciled: 0,
           durable: true,
         },
         errors: [],
@@ -212,7 +214,9 @@ test("polls serially, maps an allowlisted private sender to an actor, and acknow
   assert.equal(sentMessages.length, 1)
   assert.equal(sentMessages[0].chat_id, 12345)
   assert.match(sentMessages[0].text, /Paused LINKUSDT/)
-  assert.match(sentMessages[0].text, /Existing exchange orders remain open and may still fill/)
+  assert.match(sentMessages[0].text, /Cancelled 1 Harvester-owned BUY order/)
+  assert.match(sentMessages[0].text, /Recovery SELLs and accounting continue/)
+  assert.match(sentMessages[0].text, /External\/manual and prior-process orders are untouched/)
   assert.equal(
     pollRequests[1].offset,
     101,
@@ -1882,7 +1886,7 @@ loggedAtLevel: "info" }),
       error: entry => entries.push(entry),
     },
   })
-  assert.match(result.sentMessages[0].text, /is not operator-paused/)
+  assert.match(result.sentMessages[0].text, /No BUY pause was active for LINKUSDT/)
   assert.match(result.sentMessages[0].text, /No state change/)
   assert.doesNotMatch(result.sentMessages[0].text, /^Resumed LINKUSDT/)
   const updateReceived = entries.find(entry => entry.message === "Telegram update RECEIVED")
