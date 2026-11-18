@@ -25,10 +25,13 @@ function readMemo({ record }) {
   if (record.memo === null) {
     return null
   }
-  return requireResponseString({
-    value: record.memo,
-    field: "memo",
-  })
+  if (typeof record.memo !== "string") {
+    throw invalidResponse({
+      message: "Bitunix deposit-address response memo must be a string or null",
+      field: "memo",
+    })
+  }
+  return record.memo
 }
 
 function adaptDepositAddressRecord({ record, coin, network }) {
