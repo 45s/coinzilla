@@ -91,7 +91,7 @@ Focused CG evidence files include `helpers.test.js`, `initial-buy-price.test.js`
 - [STOP tests](../../src/domain/strategies/recovery-seller/stop-decision.test.js)
 - [Canonical RS specification](./recovery-seller-domain-specification.md)
 - [RS implementation roadmap](./recovery-seller-implementation-roadmap.md)
-- [RS tracking issue #1127](https://github.com/45s/coinzilla/issues/1127)
+- [merged RS-3 policy PR #1127](https://github.com/45s/coinzilla/pull/1127)
 - [Merged RS profitability PR #1379](https://github.com/45s/coinzilla/pull/1379)
 
 ## 2. RS implementation compared with CG
@@ -146,7 +146,7 @@ The RS BUY evaluator currently uses Conservative initial/next tranche pricing bu
 
 ## 5. Decisions already settled — do not reopen
 
-The current canonical RS specification and issue #1127 supersede older comments/draft policy. These decisions are not blockers:
+The current canonical RS specification and merged PR #1127 supersede older comments/draft policy. These decisions are not blockers:
 
 - `sellQuantity` is an additive legacy quantity.
 - Legacy average cost is derived once from original quote investment / original base quantity and remains fixed.
@@ -176,15 +176,15 @@ Missing acceptance coverage/work before execution:
 
 ## 7. Recommended implementation sequence
 
-1. The owner-approved per-pair `minProfit`, Conservative order-type/fee-reserve and exchange-filter STOP decisions are recorded in the canonical RS specification and implemented in draft PR #1127.
-2. **Verified on exact PR head `96315757e74a4851770716b04d8dae5cf9580ece`:** 13/13 focused RS evaluator tests and 2,101/2,101 full Harvester tests, full workspace Unit Tests, Test Coverage, strict changed-file ESLint, workspace JavaScript quality/syntax, actionlint, Utils tests and dependency audit passed. Coverage includes all profitability gates, min/max filters, missing required filters, missing third-asset valuation, unsupported order types and one-SELL-per-cycle behavior.
+1. The owner-approved per-pair `minProfit`, Conservative order-type/fee-reserve and exchange-filter STOP decisions are recorded in the canonical RS specification and implemented and merged in PR #1127 (`3fde5cdc0b1ed39bffeb5e21a67f44e0f653e8c3`).
+2. **Verified on exact PR head `96315757e74a4851770716b04d8dae5cf9580ece`:** 13/13 focused RS evaluator tests and 2,101/2,101 full Harvester tests, full workspace Unit Tests, Test Coverage, strict changed-file ESLint, workspace JavaScript quality/syntax, actionlint, Utils tests and dependency audit passed. The optional External Documentation Links workflow was still running at merge and is not claimed as passed. Coverage includes all profitability gates, min/max filters, missing required filters, missing third-asset valuation, unsupported order types and one-SELL-per-cycle behavior.
 3. Keep post-fill adverse results, terminal partial/canceled/rejected/expired SELLs, third-asset valuation source and STOP reset/resume fail-closed. Do not add automatic recovery or a second SELL.
 4. RS-4 integration and RS-5 offline lifecycle proof remain separate required phases. Do not register or enable RS until the remaining safety contract and offline proof are complete; preserve CG behavior.
 
 ## 8. Current disposition
 
 - CG remains the reference and its behavior must not change as part of RS policy work.
-- RS accounting, BUY policy, independent profitability gates and the owner-approved pre-submission SELL evaluator are implemented and verified on exact PR head `96315757e74a4851770716b04d8dae5cf9580ece`.
+- RS accounting, BUY policy, independent profitability gates and the owner-approved pre-submission SELL evaluator are implemented and verified on PR head `96315757e74a4851770716b04d8dae5cf9580ece`, merged as `3fde5cdc0b1ed39bffeb5e21a67f44e0f653e8c3`.
 - Owner-approved `minProfit`, order type/fee reserve and exchange-filter STOP decisions are no longer blockers.
 - Post-fill adverse outcomes, terminal partial/canceled/rejected/expired SELLs, third-asset valuation source and STOP reset/resume remain fail-closed. RS-4 and RS-5 remain mandatory separate phases.
 - This follow-up implementation used offline tests only. The read-only Binance TESTNET integration workflow was skipped. No TESTNET/LIVE exchange operation or order was performed.

@@ -250,7 +250,7 @@ The SELL planner must price the entire mixed order high enough that each allocat
 - `combinedTarget = Cr + Cl + P`;
 - `requiredNetQuoteProceeds = max(recoveryTarget, legacyTarget, combinedTarget)`.
 
-The order price is then derived from `(requiredNetQuoteProceeds + thirdAssetFeeQuoteValue) / (1 - quoteFeeRate)`, divided by `Q` and rounded upward to the market price tick. Base-asset commission affects the gross base quantity and each allocation's base debit; the allocation split must never exceed either Position's verified available quantity. Recovery receives any division-precision remainder so rounding cannot inflate the authorized legacy debit. If no legacy quantity is allocated, the legacy target is zero and recovery/combined targets still apply. Apply only explicit maker/taker and third-asset valuation assumptions supplied to the pure planner; configured rates are planning allowances, not actual fee facts. The owner-approved order type, fee-role selection and supported min/max exchange-filter disposition are implemented by the pure evaluator in draft PR #1127. Actual confirmed commission amounts always replace estimates in final accounting.
+The order price is then derived from `(requiredNetQuoteProceeds + thirdAssetFeeQuoteValue) / (1 - quoteFeeRate)`, divided by `Q` and rounded upward to the market price tick. Base-asset commission affects the gross base quantity and each allocation's base debit; the allocation split must never exceed either Position's verified available quantity. Recovery receives any division-precision remainder so rounding cannot inflate the authorized legacy debit. If no legacy quantity is allocated, the legacy target is zero and recovery/combined targets still apply. Apply only explicit maker/taker and third-asset valuation assumptions supplied to the pure planner; configured rates are planning allowances, not actual fee facts. The owner-approved order type, fee-role selection and supported min/max exchange-filter disposition are implemented by the pure evaluator merged in PR #1127. Actual confirmed commission amounts always replace estimates in final accounting.
 
 Recovery-tranche cost must include gross executed BUY quote notional, actual quote-asset BUY commissions, and reliable quote valuation of actual third-asset BUY commissions. Base-asset BUY commissions reduce net acquired recovery quantity.
 
@@ -282,7 +282,7 @@ Illustration: recovery cost is 10 USDT and its allocated net proceeds are 10.15 
 
 ## 6. BUY tranche accumulation and eligibility
 
-**Owner-approved BUY contract (issue #1127):** reuse Conservative's established BUY cadence, tranche sizing/configuration, and pending-order safeguards. orderQuantity is therefore the size of each RS BUY tranche, subject to current exchange quantity filters and actual fills. Use the current Conservative source as the behavioral reference for initial and next-BUY pricing; an order acknowledgement never counts as acquired inventory. At the RS investment limit, stop new BUYs but keep an existing SELL live and reconcile it to terminal filled state before considering another cycle. Do not add RS-specific trailing or replacement behavior beyond the inherited contract.
+**Owner-approved BUY contract (PR #1127):** reuse Conservative's established BUY cadence, tranche sizing/configuration, and pending-order safeguards. orderQuantity is therefore the size of each RS BUY tranche, subject to current exchange quantity filters and actual fills. Use the current Conservative source as the behavioral reference for initial and next-BUY pricing; an order acknowledgement never counts as acquired inventory. At the RS investment limit, stop new BUYs but keep an existing SELL live and reconcile it to terminal filled state before considering another cycle. Do not add RS-specific trailing or replacement behavior beyond the inherited contract.
 
 Hard invariants:
 
@@ -462,7 +462,7 @@ flowchart TD
   M -- Yes --> N[Close reconciled cycle; continue recovery-only when legacy is exhausted]
 ~~~
 
-The prose is authoritative. BUY cadence and tranche sizing follow the owner-approved Conservative reuse decision in issue #1127. The diagram does not authorize an order type, cancellation policy, residual policy, or lifecycle transition.
+The prose is authoritative. BUY cadence and tranche sizing follow the owner-approved Conservative reuse decision recorded in PR #1127. The diagram does not authorize an order type, cancellation policy, residual policy, or lifecycle transition.
 
 ## 15. Implementation boundary
 
