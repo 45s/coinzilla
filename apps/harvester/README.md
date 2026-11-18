@@ -94,9 +94,44 @@ Each pair must explicitly use `TRADING_ENVIRONMENTS.TESTNET`, `.LIVE`, or `.BOTH
 
 Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`, `enableVolatilityProtection`, `externalOrdersPolicy`, `investment`, `orderQuantity`, `keepQuantity`, `minProfit`, and fee settings. Precision is not operator-owned pair configuration: it is resolved from `token-specification.json` by exact market symbol when `loadAppConfig` builds the effective runtime config. The external pair module uses `externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE` (or `.BLOCK`) from `src/domain/external-orders-policy.js`; the serialized values remain `"ignore"` and `"block"`. Validation still allows the policy to be omitted and defaults it to ignore. Every unmatched startup order follows this policy regardless of client-order ID prefix: IGNORE leaves the order external without blocking strategy evaluation, while BLOCK restricts only that symbol. Unmatched execution reports with reserved `h-` IDs remain fail-closed and are never attributed to the current process. Every unmatched startup order follows this policy regardless of client-order ID prefix: IGNORE leaves the order external without blocking strategy evaluation, while BLOCK restricts only that symbol. Unmatched execution reports with reserved `h-` IDs remain fail-closed and are never attributed to the current process.
 
-**Runtime environment contract:** `TRADING_MODE` accepts exactly `testnet` or `live` and selects both Binance API/stream endpoints and the eligible pair subset. `NODE_ENV` does not select the exchange environment. The intended files are `.env.development` with `TRADING_MODE=testnet` and `.env` with `TRADING_MODE=live`. Host-shared writer locks are scoped by broker and trading mode, so Testnet and production can run concurrently while duplicate writers in the same environment remain blocked across worktrees.
+**Runtime environment contract:** `TRADING_MODE` accepts exactly `testnet` or `live` and remains the compatibility selector for the legacy single-Binance configuration. `NODE_ENV` never selects an exchange environment. When `brokers.instances` is configured, each account entry selects its own explicit `environment`; the runtime passes that value into the provider adapter and account-scoped process lock.
 
-The runtime is currently Binance-only. The accepted target architecture adds named provider instances, explicit strategy/market execution routes, and independent market-data routes; it is not yet implemented and does not change today's environment setup. See [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339).
+### Multiple provider accounts
+
+The optional `brokers.instances` array is part of the named `appConfig` export. If it is absent, Harvester preserves the legacy `BINANCE_API_KEY`, `BINANCE_API_SECRET_KEY`, `BINANCE_PROVIDER_INSTANCE_ID` and `BINANCE_ACCOUNT_ID` configuration. If present, every entry must declare a unique `providerInstanceId`, `providerType`, `accountId`, `environment` and credential environment-variable references.
+
+```js
+brokers: {
+  instances: [
+    {
+      providerInstanceId: "binanceTestnetPrimary",
+      providerType: "binance",
+      accountId: "binance-primary",
+      environment: "testnet",
+      credentials: {
+        apiKeyEnv: "BINANCE_API_KEY",
+        apiSecretEnv: "BINANCE_API_SECRET_KEY",
+      },
+    },
+    {
+      providerInstanceId: "binanceTestnetSecondary",
+      providerType: "binance",
+      accountId: "binance-secondary",
+      environment: "testnet",
+      credentials: {
+        apiKeyEnv: "BINANCE_SECONDARY_API_KEY",
+        apiSecretEnv: "BINANCE_SECONDARY_API_SECRET",
+      },
+    },
+  ],
+}
+```
+
+Credential values are never stored in application configuration or provider identity. Each account starts a separate Harvester runtime with its own BrokerPort connection, Portfolio, OrderRegistry, account snapshot, market metadata, user-data readiness, strategy engine, market subscriptions and shutdown lifecycle. The current Conservative strategy configuration is applied independently to each account; Phase 4 does not add strategy/symbol execution routes or independent market-data routes.
+
+The first configured account owns the process-wide Telegram Command Center; secondary accounts do not create duplicate command handlers. If one account fails during startup, healthy accounts continue. Its process lock is released only when cleanup is confirmed.
+
+The default production provider-adapter factory map currently supports Binance. Unsupported provider types fail clearly until their real adapter factory is registered. The Bitunix read-only observer remains separate and does not enable Bitunix trading. Phase 5 market-data routing and Phase 6 execution routing remain later work under [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339).
 
 ### Bitunix read-only observer (opt-in)
 

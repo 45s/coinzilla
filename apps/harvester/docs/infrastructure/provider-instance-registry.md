@@ -1,8 +1,8 @@
-# Binance provider-instance identity and registry
+# Provider-instance identity, construction and account runtime
 
 ## Scope
 
-The Harvester composition boundary now resolves the legacy single-Binance configuration into an explicit provider-instance identity and registers its BrokerPort in an exchange-neutral application registry. This is the identity/lifecycle foundation for [issue #1339](https://github.com/45s/coinzilla/issues/1339); it does not introduce provider routing.
+The Harvester composition boundary resolves either the legacy single-Binance environment or an explicit `brokers.instances` list into stable provider-instance/account identities. Each configured account receives its own BrokerPort connection and independent Harvester runtime. The application-owned provider registry remains provider-neutral; this Phase 4 integration does not introduce execution or market-data route tables.
 
 ## Binance identity
 
@@ -44,23 +44,61 @@ Errors preserve the original connection/cleanup causes. Credentials are never pa
 
 ## Current bootstrap boundary
 
-The existing runtime still constructs and registers exactly one Binance instance from the legacy `TRADING_MODE` and Binance credentials. The registered BrokerPort facade is passed to the existing Harvester services; trading strategy, order semantics, market-data subscriptions, and shutdown ownership are unchanged.
+The runtime supports two configuration paths:
+
+- **Compatibility path:** when `brokers.instances` is absent, the existing `TRADING_MODE`, `BINANCE_API_KEY`, `BINANCE_API_SECRET_KEY`, `BINANCE_PROVIDER_INSTANCE_ID` and `BINANCE_ACCOUNT_ID` settings construct the same single Binance account as before.
+- **Configured path:** `brokers.instances` contains one or more explicit provider accounts. Each entry declares `providerInstanceId`, `providerType`, `accountId`, `environment` (`testnet` or `live`) and credential environment-variable names. Secret values stay in the process environment and are captured only by the adapter factory closure.
+
+Example application configuration:
+
+```js
+brokers: {
+  instances: [
+    {
+      providerInstanceId: "binanceTestnetPrimary",
+      providerType: "binance",
+      accountId: "binance-primary",
+      environment: "testnet",
+      credentials: {
+        apiKeyEnv: "BINANCE_API_KEY",
+        apiSecretEnv: "BINANCE_API_SECRET_KEY",
+      },
+    },
+    {
+      providerInstanceId: "binanceTestnetSecondary",
+      providerType: "binance",
+      accountId: "binance-secondary",
+      environment: "testnet",
+      credentials: {
+        apiKeyEnv: "BINANCE_SECONDARY_API_KEY",
+        apiSecretEnv: "BINANCE_SECONDARY_API_SECRET",
+      },
+    },
+  ],
+}
+```
+
+The default production adapter-factory map currently registers Binance only. A configured provider type without a registered adapter factory fails before connection. The factory map is injectable for deterministic tests and for future provider adapters; this does not make Bitunix execution available.
+
+Each configured account is started through a separate invocation of the existing Harvester bootstrap. That gives it its own BrokerPort, Portfolio, OrderRegistry, account snapshot/balances, market metadata, user-data state/readiness, market subscriptions, strategy engine and shutdown lifecycle. Every account receives the current Conservative strategy configuration filtered by its own environment; no strategy/symbol execution route table or independent market-data route table exists yet.
+
+The first configured account owns the process-wide Telegram Command Center and optional Operational State Store callbacks. Secondary accounts do not create duplicate Telegram command handlers. A startup failure is isolated to that account: its process lock is released when cleanup is confirmed, and already-started or later accounts continue. If failed-account lock cleanup is uncertain, the failure is exposed in `runtime.failedAccounts` and the lock remains owned until confirmed shutdown cleanup.
 
 The optional Bitunix observer tracked in [#1422](https://github.com/45s/coinzilla/issues/1422) is deliberately not registered here. It exposes a separate read-only facade and cannot be selected by registry lookup, execution routing, or strategy market-data routing. See the [Bitunix read-only observer contract](./bitunix-read-only-observer.md).
 
-The registry can represent multiple named instances of the same provider type. The next delivery under Phase 4 adds only basic in-process account isolation; it does not make this registry itself an execution or market-data router. Explicitly out of scope for the registry foundation are:
+The registry can represent multiple named instances of the same or different provider types when an adapter factory is registered. Phase 4 uses explicit account descriptors and separate runtime instances; it does not turn the registry into a route selector. Explicitly out of scope are:
 
-- strategy/symbol execution-route tables;
-- independent market-data routing;
-- automatic selection, fallback, or failover;
-- independent account runtime state (Portfolio, orders, balances and reservations); and
+- strategy/symbol execution-route tables (Phase 6);
+- independent market-data routing (Phase 5);
+- automatic selection, fallback, failover or cross-provider retry;
+- cross-account balance aggregation; and
 - process-restart recovery or restoration.
 
-Those are separate decisions and delivery slices under #1339 and the existing ADRs. No exchange requests are made by the registry tests.
+These remain separate delivery slices under #1339 and ADR-0003. The default production adapter map is Binance-only; the Bitunix read-only observer remains outside the registry.
 
 ## Verification
 
-The registry, identity resolver, adapter capability forwarding, and Binance bootstrap lifecycle are covered by deterministic offline tests. The tests use in-memory BrokerPort fakes; they do not connect to Binance TESTNET or LIVE.
+Deterministic offline tests cover provider configuration validation, legacy single-Binance compatibility, multiple same-provider accounts, provider-type factory selection, independent account runtime state, account-specific process locks, startup failure isolation and shutdown. The integration tests use in-memory BrokerPort fakes; they do not require credentials or connect to Binance TESTNET/LIVE.
 
 ## Phase 3 — durable order provenance
 
