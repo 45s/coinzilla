@@ -411,122 +411,106 @@ runDogeTradingReplayTest("combines four completed BUY fills into one profitable 
   });
 });
 
+function assertSingleCycleCompletionResult({ dogeTradingReplay, recoveryCycleResult }) {
+  assert.equal(
+    recoveryCycleResult.freeQuantity,
+    dogeTradingReplay.scenarioExpectations.expectedFreeQuantity,
+    "the recovery completion event must report the exact retained free DOGE quantity after the SELL fill",
+  );
+  assert.equal(
+    recoveryCycleResult.realizedNetProfit,
+    dogeTradingReplay.scenarioExpectations.expectedProfit,
+    "the recovery completion event must report the exact realized net profit from the confirmed SELL fill",
+  );
+}
+
+function assertSingleCyclePosition(dogeTradingReplay) {
+  const position = dogeTradingReplay.runtime.portfolio.getPosition({ symbol: MARKET_SYMBOL });
+  assert.equal(position.baseQuantity.amount, "0");
+  assert.equal(
+    position.freeBaseQuantity.amount,
+    dogeTradingReplay.scenarioExpectations.expectedFreeQuantity,
+    "the completed recovery cycle must preserve the exact configured free DOGE inventory",
+  );
+}
+
+function assertSingleCycleExecutionReports(dogeTradingReplay) {
+  const reports = dogeTradingReplay.receivedExecutionReports.map(({ executedOrder, fill }) => ({
+    marketSymbol: executedOrder.symbol,
+    side: executedOrder.side,
+    orderPrice: executedOrder.price,
+    executedQuantity: executedOrder.executedQuantity,
+    fillPrice: fill.price,
+    fillQuantity: fill.quantity,
+    quoteQuantity: fill.quoteQuantity,
+    commissionAmount: fill.commissionAmount,
+    commissionAsset: fill.commissionAsset,
+  }));
+  assert.deepEqual(reports, [
+    {
+      marketSymbol: MARKET_SYMBOL,
+      side: "BUY",
+      orderPrice: dogeTradingReplay.scenarioExpectations.buyPrice,
+      executedQuantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
+      fillPrice: dogeTradingReplay.scenarioExpectations.buyPrice,
+      fillQuantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
+      quoteQuantity: "28.628",
+      commissionAmount: "0.4",
+      commissionAsset: "DOGE",
+    },
+    {
+      marketSymbol: MARKET_SYMBOL,
+      side: "SELL",
+      orderPrice: dogeTradingReplay.scenarioExpectations.sellPrice,
+      executedQuantity: dogeTradingReplay.scenarioExpectations.expectedSellQuantity,
+      fillPrice: dogeTradingReplay.scenarioExpectations.sellFillPrice,
+      fillQuantity: dogeTradingReplay.scenarioExpectations.expectedSellQuantity,
+      quoteQuantity: "28.67192",
+      commissionAmount: "0.02867192",
+      commissionAsset: "USDT",
+    },
+  ], "the completed recovery cycle must reconcile actual BUY and SELL execution facts");
+}
+
+async function assertSingleCycleDuplicateFillIsIdempotent({ dogeTradingReplay, recoverySellOrder }) {
+  assert.equal(
+    dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
+    1,
+    "the reconciled SELL must publish exactly one completed-cycle outcome",
+  );
+  const before = dogeTradingReplay.runtime.portfolio.getPosition({ symbol: MARKET_SYMBOL });
+  await dogeTradingReplay.publishFullOrderFill({
+    order: recoverySellOrder,
+    price: dogeTradingReplay.scenarioExpectations.sellFillPrice,
+    tradeId: SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID,
+    timestamp: 1700000000000,
+  });
+  const after = dogeTradingReplay.runtime.portfolio.getPosition({ symbol: MARKET_SYMBOL });
+  assert.equal(
+    dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
+    1,
+    "replaying the same SELL execution must not publish a second completed-cycle outcome",
+  );
+  assert.equal(after.baseQuantity.amount, before.baseQuantity.amount);
+  assert.equal(after.freeBaseQuantity.amount, before.freeBaseQuantity.amount);
+}
+
 runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill report is received and reconciled", async (dogeTradingReplay) => {
-    const { recoverySellOrder } =
-      await submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay)
-    const recoveryCycleCompletion = dogeTradingReplay.waitForRecoveryCycleCompletion()
-
-    await dogeTradingReplay.publishMarketPrice(
-      dogeTradingReplay.scenarioExpectations.sellFillPrice,
-    )
-    await dogeTradingReplay.publishFullOrderFill({
-      order: recoverySellOrder,
-      price: dogeTradingReplay.scenarioExpectations.sellFillPrice,
-      tradeId: SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID,
-      timestamp: 1700000000000,
-    })
-
-    const recoveryCycleResult = await recoveryCycleCompletion
-    assert.equal(
-      recoveryCycleResult.freeQuantity,
-      dogeTradingReplay.scenarioExpectations.expectedFreeQuantity,
-      "the recovery completion event must report the exact retained free DOGE quantity after the SELL fill",
-    )
-    assert.equal(
-      recoveryCycleResult.realizedNetProfit,
-      dogeTradingReplay.scenarioExpectations.expectedProfit,
-      "the recovery completion event must report the exact realized net profit from the confirmed SELL fill",
-    )
-
-    const finalStrategyPosition = dogeTradingReplay.runtime.portfolio.getPosition({
-      symbol: MARKET_SYMBOL,
-    })
-    assert.equal(
-      finalStrategyPosition.baseQuantity.amount,
-      "0",
-      "the fully reconciled SELL fill must leave zero active DOGE position quantity",
-    )
-    assert.equal(
-      finalStrategyPosition.freeBaseQuantity.amount,
-      dogeTradingReplay.scenarioExpectations.expectedFreeQuantity,
-      "the completed recovery cycle must preserve the exact configured free DOGE inventory",
-    )
-
-    const actualExecutionReports = dogeTradingReplay.receivedExecutionReports.map(
-      ({ executedOrder, fill }) => ({
-        marketSymbol: executedOrder.symbol,
-        side: executedOrder.side,
-        orderPrice: executedOrder.price,
-        executedQuantity: executedOrder.executedQuantity,
-        fillPrice: fill.price,
-        fillQuantity: fill.quantity,
-        quoteQuantity: fill.quoteQuantity,
-        commissionAmount: fill.commissionAmount,
-        commissionAsset: fill.commissionAsset,
-      }),
-    )
-    assert.deepEqual(
-      actualExecutionReports,
-      [
-        {
-          marketSymbol: MARKET_SYMBOL,
-          side: "BUY",
-          orderPrice: dogeTradingReplay.scenarioExpectations.buyPrice,
-          executedQuantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
-          fillPrice: dogeTradingReplay.scenarioExpectations.buyPrice,
-          fillQuantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
-          quoteQuantity: "28.628",
-          commissionAmount: "0.4",
-          commissionAsset: "DOGE",
-        },
-        {
-          marketSymbol: MARKET_SYMBOL,
-          side: "SELL",
-          orderPrice: dogeTradingReplay.scenarioExpectations.sellPrice,
-          executedQuantity: dogeTradingReplay.scenarioExpectations.expectedSellQuantity,
-          fillPrice: dogeTradingReplay.scenarioExpectations.sellFillPrice,
-          fillQuantity: dogeTradingReplay.scenarioExpectations.expectedSellQuantity,
-          quoteQuantity: "28.67192",
-          commissionAmount: "0.02867192",
-          commissionAsset: "USDT",
-        },
-      ],
-      "the completed recovery cycle must reconcile the BUY and SELL reports with their actual quantities, proceeds, and commission assets",
-    )
-
-    assert.equal(
-      dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
-      1,
-      "the reconciled SELL must publish exactly one completed-cycle outcome",
-    )
-    const completedPositionBeforeDuplicate = dogeTradingReplay.runtime.portfolio.getPosition({
-      symbol: MARKET_SYMBOL,
-    })
-    await dogeTradingReplay.publishFullOrderFill({
-      order: recoverySellOrder,
-      price: dogeTradingReplay.scenarioExpectations.sellFillPrice,
-      tradeId: SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID,
-      timestamp: 1700000000000,
-    })
-    const completedPositionAfterDuplicate = dogeTradingReplay.runtime.portfolio.getPosition({
-      symbol: MARKET_SYMBOL,
-    })
-    assert.equal(
-      dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
-      1,
-      "replaying the same SELL execution must not publish a second completed-cycle outcome",
-    )
-    assert.equal(
-      completedPositionAfterDuplicate.baseQuantity.amount,
-      completedPositionBeforeDuplicate.baseQuantity.amount,
-      "duplicate terminal SELL evidence must not change active inventory",
-    )
-    assert.equal(
-      completedPositionAfterDuplicate.freeBaseQuantity.amount,
-      completedPositionBeforeDuplicate.freeBaseQuantity.amount,
-      "duplicate terminal SELL evidence must not change retained inventory",
-    )
-  })
+  const { recoverySellOrder } = await submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay);
+  const completion = dogeTradingReplay.waitForRecoveryCycleCompletion();
+  await dogeTradingReplay.publishMarketPrice(dogeTradingReplay.scenarioExpectations.sellFillPrice);
+  await dogeTradingReplay.publishFullOrderFill({
+    order: recoverySellOrder,
+    price: dogeTradingReplay.scenarioExpectations.sellFillPrice,
+    tradeId: SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID,
+    timestamp: 1700000000000,
+  });
+  const recoveryCycleResult = await completion;
+  assertSingleCycleCompletionResult({ dogeTradingReplay, recoveryCycleResult });
+  assertSingleCyclePosition(dogeTradingReplay);
+  assertSingleCycleExecutionReports(dogeTradingReplay);
+  await assertSingleCycleDuplicateFillIsIdempotent({ dogeTradingReplay, recoverySellOrder });
+});
 
 async function submitInitialBuyOrder(dogeTradingReplay) {
   const initialBuyOrderSubmitted = dogeTradingReplay.waitForSubmittedOrder("BUY")
