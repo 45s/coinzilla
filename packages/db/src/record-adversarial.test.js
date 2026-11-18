@@ -179,3 +179,32 @@ test("record objects reject class instances nested inside otherwise plain record
     "Nested class instances must be rejected instead of being persisted as provider-dependent objects",
   )
 })
+
+
+test("record validation safely preserves null-prototype objects and an own __proto__ data field", () => {
+  const record = Object.create(null)
+  const details = Object.create(null)
+  details.enabled = true
+  record.id = "null-prototype-1"
+  record.details = details
+  Object.defineProperty(record, "__proto__", {
+    value: {
+      retained: "ordinary JSON data",
+    },
+    enumerable: true,
+  })
+
+  assert.deepEqual(
+    JSON.parse(serializeRecord(record)),
+    {
+      id: "null-prototype-1",
+      details: {
+        enabled: true,
+      },
+      __proto__: {
+        retained: "ordinary JSON data",
+      },
+    },
+    "Null-prototype records must remain valid JSON objects and own __proto__ data must not mutate the clone prototype",
+  )
+})
