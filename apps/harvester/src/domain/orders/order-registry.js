@@ -122,15 +122,27 @@ function validateOrderStatusTransition({
 }
 
 function validateOrderUpdate({ current, next }) {
-  validateProviderIdentityUnchanged({ current, next })
-  if (!sameOrderIntent({ current, next })) {
+  validateProviderIdentityUnchanged({
+    current,
+    next,
+  })
+  if (!sameOrderIntent({
+    current,
+    next,
+  })) {
     throw new Error("Canonical order update changed immutable order intent")
   }
   if (current.brokerOrderId !== undefined && current.brokerOrderId !== next.brokerOrderId) {
     throw new Error("Canonical order update changed brokerOrderId")
   }
-  validateOrderProgress({ current, next })
-  validateOrderStatusTransition({ current, next })
+  validateOrderProgress({
+    current,
+    next,
+  })
+  validateOrderStatusTransition({
+    current,
+    next,
+  })
 }
 
 function findOrderUpdateIndex({ orders, order } = {}) {
@@ -501,14 +513,21 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
   })) {
     throw new Error("Broker acknowledgement changed immutable order intent")
   }
-  if (isDuplicateAcknowledgement({ current, order })) {
+  if (isDuplicateAcknowledgement({
+    current,
+    order,
+  })) {
     return Object.freeze({
       registry,
       applied: false,
       duplicate: true,
     })
   }
-  validateAcknowledgementCanAttach({ current, orders, order })
+  validateAcknowledgementCanAttach({
+    current,
+    orders,
+    order,
+  })
   const attached = new CanonicalOrder({
     clientOrderId: current.clientOrderId,
     brokerOrderId: order.brokerOrderId,
@@ -542,6 +561,16 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
   })
 }
 
+function unchangedOrderUpdate({ registry, stale = false, duplicate = false } = {}) {
+  return Object.freeze({
+    registry,
+    applied: false,
+    duplicate,
+    stale,
+    unknown: false,
+  })
+}
+
 function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
   if (!(order instanceof CanonicalOrder) || order.status === "PENDING") {
     throw new TypeError("OrderRegistry.applyUpdate requires a broker-acknowledged CanonicalOrder")
@@ -555,6 +584,7 @@ function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
       registry,
       applied: false,
       duplicate: false,
+      stale: false,
       unknown: true,
     })
   }
@@ -576,13 +606,7 @@ function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
       current,
       next: nextOrder,
     })) {
-    return Object.freeze({
-      registry,
-      applied: false,
-      duplicate: false,
-      stale: true,
-      unknown: false,
-    })
+    return unchangedOrderUpdate({ registry, stale: true })
   }
   validateOrderUpdate({
     current,
@@ -592,13 +616,7 @@ function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
     current,
     next: nextOrder,
   })) {
-    return Object.freeze({
-      registry,
-      applied: false,
-      duplicate: true,
-      stale: false,
-      unknown: false,
-    })
+    return unchangedOrderUpdate({ registry, duplicate: true })
   }
   const nextOrders = [...orders]
   nextOrders[index] = nextOrder
