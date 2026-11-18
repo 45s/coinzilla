@@ -201,7 +201,7 @@ test("record validation safely preserves null-prototype objects and an own __pro
     "An own __proto__ data field must remain present after JSON serialization",
   )
   assert.deepEqual(
-    restored["__proto__"],
+    Object.getOwnPropertyDescriptor(restored, "__proto__").value,
     {
       retained: "ordinary JSON data",
     },
