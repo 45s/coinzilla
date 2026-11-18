@@ -176,34 +176,25 @@ Missing acceptance coverage/work before execution:
 
 ## 7. Recommended implementation sequence
 
-1. Resolve the six P1 policy decisions above (order type, fee role, filters, adverse result, terminal underfill, third-asset valuation) and STOP resolution semantics. Record the approved contract in the canonical RS specification/issue #1127.
-2. Complete RS-3: compose a pure SELL evaluator with explicit SUBMIT/WAIT/BLOCK/RECONCILE outcomes, stable reasons, current exchange filters and all profitability gates. Reuse CG-neutral helpers only when their contracts fit; preserve CG behavior.
-3. Add the missing RS policy boundary guard for `minProfit >= 0.01` and clarify trailing BUY semantics.
-4. Complete RS-4 integration through the existing shared Trading Engine, OrderRegistry, FillLedger, Portfolio and reservation gates. Do not register or enable RS before policy is complete.
-5. Complete RS-5 offline end-to-end lifecycle proof and exact-head required CI. Keep all exchange activity outside this audit and separately authorized.
+1. The owner-approved per-pair `minProfit`, Conservative order-type/fee-reserve and exchange-filter STOP decisions are recorded in the canonical RS specification and implemented in draft PR #1127.
+2. Verify the pure evaluator on the exact PR head, including all profitability gates, min/max filters, missing required filters, missing third-asset valuation, unsupported order types and one-SELL-per-cycle behavior.
+3. Keep post-fill adverse results, terminal partial/canceled/rejected/expired SELLs, third-asset valuation source and STOP reset/resume fail-closed. Do not add automatic recovery or a second SELL.
+4. RS-4 integration and RS-5 offline lifecycle proof remain separate required phases. Do not register or enable RS until the remaining safety contract and offline proof are complete; preserve CG behavior.
 
 ## 8. Current disposition
 
 - CG remains the reference and its behavior must not change as part of RS policy work.
-- RS accounting, BUY policy and profitability foundations are implemented; the complete SELL policy is not.
-- The P1 decisions above block complete RS-3 SELL policy. RS-4 and RS-5 remain mandatory execution gates, not policy decisions.
-- No implementation or exchange operation was performed by this audit.
+- RS accounting, BUY policy, independent profitability gates and the owner-approved pre-submission SELL evaluator are implemented in the current draft PR; exact-head required checks are still being verified.
+- Owner-approved `minProfit`, order type/fee reserve and exchange-filter STOP decisions are no longer blockers.
+- Post-fill adverse outcomes, terminal partial/canceled/rejected/expired SELLs, third-asset valuation source and STOP reset/resume remain fail-closed. RS-4 and RS-5 remain mandatory separate phases.
+- This follow-up implementation used offline tests only. No TESTNET/LIVE exchange operation or order was performed.
 
 ## 9. Blocker clarification and implementation handoff
 
-Resolve policy decisions with the strategy owner **one blocker at a time** before implementation. For each blocker, present the current CG behavior, RS alternatives, a simple concrete example, risks, and a recommended default. Record the approved decision and rationale in this report and the canonical RS specification/issue #1127. Do not silently choose a policy.
+Three decisions were confirmed by the strategy owner on 2026-11-18 and are implemented in the current draft PR: per-pair `minProfit` only, Conservative-compatible order type/fee reserve, and sticky STOP on exchange-filter violations. Do not reopen them.
 
-### Owner clarification order
-
-1. SELL order type (LIMIT_MAKER vs LIMIT).
-2. Fee role/reserve (maker-only vs worst-case maker/taker).
-3. Exchange filters and invalid/adjusted quantity/price behavior.
-4. Underfilled terminal order/cancel/reject handling.
-5. Loss or insufficient-profit SELL outcomes.
-6. Third-asset commission valuation and price freshness.
-7. STOP resolution and safe restart/resume semantics.
-8. P2 minimum-profit floor and trailing-BUY semantics.
+The remaining cases are deliberately fail-closed rather than assigned speculative defaults: adverse post-fill results, terminal underfill/cancel/reject/expiry, third-asset valuation source/freshness, and STOP reset/resume. Trailing-BUY repricing remains unchanged and outside this SELL-policy slice.
 
 ### Implementation handoff
 
-Once decisions are approved, implement RS SELL policy in focused steps using TDD. Read the mandatory repository and Harvester documents first; use CG as the behavioral reference, but do not change CG. Reuse existing pure domain helpers where their contracts fit. Keep RS non-executable until RS-3 policy is complete, RS-4 shared-engine integration is verified, and RS-5 offline lifecycle proof passes. No TESTNET/LIVE orders or exchange actions are authorized by this audit or handoff.
+Continue with the exact-head verification and remaining RS-3 fail-closed regression cases. Read the mandatory repository and Harvester documents first; use CG as the behavioral reference, but do not change CG. Keep RS non-executable until RS-3 policy is verified, RS-4 shared-engine integration is implemented safely, and RS-5 offline lifecycle proof passes. No TESTNET/LIVE orders or exchange actions are authorized by this audit or handoff.
