@@ -253,3 +253,50 @@ test("blocks a second provider instance for the same account and environment", a
     await rm(root, { recursive: true, force: true })
   }
 })
+
+
+test("rejects incomplete provider/account lock identity", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "harvester-incomplete-account-lock-"))
+  const globalDirectory = path.join(root, "host-locks")
+  const journalDirectory = path.join(root, "journal")
+
+  try {
+    const missingAccount = await acquireHarvesterProcessLocks({
+      globalDirectory,
+      journalDirectory,
+      broker: "binance",
+      providerInstanceId: "binance-testnet-one",
+      tradingMode: "testnet",
+    })
+    assert.equal(
+      missingAccount.ok,
+      false,
+      "A provider instance must not be accepted without its stable account identity.",
+    )
+    assert.match(
+      missingAccount.errors[0].message,
+      /providerInstanceId and accountId must be supplied together/,
+      "Incomplete provider/account identity must fail with an actionable validation message.",
+    )
+
+    const missingProvider = await acquireHarvesterProcessLocks({
+      globalDirectory,
+      journalDirectory,
+      broker: "binance",
+      accountId: "account-one",
+      tradingMode: "testnet",
+    })
+    assert.equal(
+      missingProvider.ok,
+      false,
+      "An account identity must not be accepted without its provider instance identity.",
+    )
+    assert.match(
+      missingProvider.errors[0].message,
+      /providerInstanceId and accountId must be supplied together/,
+      "Incomplete account/provider identity must fail with an actionable validation message.",
+    )
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
