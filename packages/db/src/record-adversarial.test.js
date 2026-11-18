@@ -121,3 +121,61 @@ test("record arrays reject numeric-looking custom properties that JSON serializa
     "Record validation must reject numeric-looking custom array properties instead of silently dropping them",
   )
 })
+
+
+test("record validation preserves descriptor-trap failures as TypeError causes", () => {
+  const proxyFailure = new Error("descriptor trap failed")
+  const record = new Proxy({ id: "descriptor-trap-1" }, {
+    getOwnPropertyDescriptor() {
+      throw proxyFailure
+    },
+  })
+
+  assert.throws(
+    () => serializeRecord(record),
+    (error) => error instanceof TypeError && error.cause === proxyFailure,
+    "A hostile proxy descriptor trap must be rejected without losing the original diagnostic cause",
+  )
+})
+
+test("record arrays reject subclasses and custom string properties", () => {
+  class CustomArray extends Array {}
+
+  assert.throws(
+    () => serializeRecord({
+      id: "array-subclass-1",
+      values: new CustomArray("value"),
+    }),
+    /plain arrays/,
+    "Array subclasses must be rejected because their prototype is outside the JSON record contract",
+  )
+
+  const values = ["valid"]
+  values.metadata = "not a JSON array element"
+
+  assert.throws(
+    () => serializeRecord({
+      id: "array-property-1",
+      values,
+    }),
+    /custom properties/,
+    "Custom string properties on arrays must not be silently discarded during JSON serialization",
+  )
+})
+
+test("record objects reject class instances nested inside otherwise plain records", () => {
+  class DomainObject {
+    constructor() {
+      this.value = "not a plain JSON object"
+    }
+  }
+
+  assert.throws(
+    () => serializeRecord({
+      id: "nested-class-1",
+      details: new DomainObject(),
+    }),
+    /plain objects/,
+    "Nested class instances must be rejected instead of being persisted as provider-dependent objects",
+  )
+})
