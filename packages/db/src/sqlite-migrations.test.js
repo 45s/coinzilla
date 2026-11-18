@@ -242,3 +242,73 @@ test("promise-returning migration functions roll back the migration", async () =
     await database.close()
   }
 })
+
+
+test("migrations reject duplicate names even when their versions differ", async () => {
+  const database = createSqliteDatabase({ filename: ":memory:" })
+  await database.connect()
+
+  try {
+    await assert.rejects(
+      database.migrate([
+        {
+          version: 1,
+          name: "duplicate-name",
+          up() {},
+        },
+        {
+          version: 2,
+          name: "duplicate-name",
+          up() {},
+        },
+      ]),
+      /names must be non-empty and unique/,
+      "Distinct migration versions must not reuse one migration identity name",
+    )
+    assert.throws(
+      () => database.prepare("SELECT * FROM schema_migrations"),
+      /no such table/,
+      "Invalid duplicate migration definitions must fail before creating the migration history table",
+    )
+  } finally {
+    await database.close()
+  }
+})
+
+test("migration thenable inspection failures roll back schema changes", async () => {
+  const database = createSqliteDatabase({ filename: ":memory:" })
+  await database.connect()
+  const thenFailure = new Error("migration then getter failed")
+  const thenable = Object.defineProperty({}, "then", {
+    get() {
+      throw thenFailure
+    },
+  })
+
+  try {
+    await assert.rejects(
+      database.migrate([{
+        version: 1,
+        name: "thenable-inspection",
+        up(transaction) {
+          transaction.exec("CREATE TABLE temporary_records (id INTEGER PRIMARY KEY)")
+          return thenable
+        },
+      }]),
+      (error) => error === thenFailure,
+      "A throwing migration then getter must preserve its cause and abort migration execution",
+    )
+    assert.deepEqual(
+      database.prepare("SELECT version FROM schema_migrations").all(),
+      [],
+      "A migration that fails thenable inspection must not be recorded as applied",
+    )
+    assert.throws(
+      () => database.prepare("SELECT * FROM temporary_records").all(),
+      /no such table/,
+      "Schema changes from a migration with a throwing then getter must roll back",
+    )
+  } finally {
+    await database.close()
+  }
+})
