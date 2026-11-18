@@ -186,7 +186,7 @@ Never fabricate BUY fills or seed Portfolio from unverified wallet snapshots.
 
 **Deliverable:** deterministic policy functions producing explicit decisions/order intents from validated domain facts. RS-3 must not submit orders, call a broker, mutate Portfolio/accounting, or register runtime configuration.
 
-Implement:
+**Implemented pure policy in merged PRs #1325, #1379 and #1127:**
 
 - a global fail-closed decision primitive: any missing, contradictory, unexpected, or unmodeled condition produces a stable BLOCK/STOP decision, prevents all new trading actions, preserves accounting and reservations, and requires reconciliation plus operator review before any resumption;
 - recovery-tranche and eligible legacy quantity decisions from actual net fills, fixed legacy basis, verified Spot availability and shared reservations;
@@ -196,7 +196,7 @@ Implement:
 - explicit SUBMIT, WAIT, BLOCK, and RECONCILE outcomes with stable reason codes;
 - state transitions for pending/open/partial/unknown/terminal orders without releasing reservations or starting another cycle on uncertain evidence.
 
-### RS-3 policy contract gate — remaining implementation details
+### RS-3 policy contract — implemented decisions and fail-closed boundaries
 
 The current owner contract requires three independent profitability gates: recovery net profit >= minProfit, legacy net profit >= 0, and combined net profit >= minProfit. The mixed-SELL planner calculates the total net quote proceeds needed by each allocation and uses the maximum target. The owner-confirmed order-type, fee-reserve and exchange-filter disposition are implemented by the pure evaluator: `makerPercent === 0` selects `LIMIT_MAKER` with maker reserve; non-zero selects `LIMIT` with the higher configured maker/taker reserve; any supported min/max price, quantity or notional violation latches global STOP. Do not change or infer a different policy.
 
@@ -205,8 +205,8 @@ The current owner contract requires three independent profitability gates: recov
 | Policy area | Owner-approved contract / remaining implementation work | Status |
 |---|---|---|
 
-| Mixed SELL price, quantity, order type and filters | For total gross quantity Q, recovery quantity Qr, legacy quantity Ql, recovery cost Cr, legacy cost Cl and minProfit P, calculate recovery target `(Cr + P) * Q / Qr`, legacy target `Cl * Q / Ql` when Ql > 0, and combined target `Cr + Cl + P`; use `max(recoveryTarget, legacyTarget, combinedTarget)`. Add explicit third-asset quote valuation, gross up quote fees by `1 / (1 - r)`, gross up base quantity for base fees, and round price upward to the price tick. Fail closed if quantity precision would omit or overdraw either Position. Apply the owner-confirmed order type/fee reserve; STOP on supported filter violations without adjustment or splitting. Actual fill commissions govern final accounting. | **IMPLEMENTED IN PR #1379 + this PR:** profitability/price planning and pre-submission order-type/fee/filter policy have deterministic offline tests. |
-| Independent profitability gates | Recovery and legacy allocations remain separately attributed for accounting and must each pass their own gate; the combined cycle must also pass. | **IMPLEMENTED IN PR #1379; exact-head verification pending:** recovery net profit `>= minProfit`; legacy net profit `>= 0`; combined net profit `>= minProfit`. Overall eligibility requires every applicable gate. Recovery-only cycles omit the legacy gate. |
+| Mixed SELL price, quantity, order type and filters | For total gross quantity Q, recovery quantity Qr, legacy quantity Ql, recovery cost Cr, legacy cost Cl and minProfit P, calculate recovery target `(Cr + P) * Q / Qr`, legacy target `Cl * Q / Ql` when Ql > 0, and combined target `Cr + Cl + P`; use `max(recoveryTarget, legacyTarget, combinedTarget)`. Add explicit third-asset quote valuation, gross up quote fees by `1 / (1 - r)`, gross up base quantity for base fees, and round price upward to the price tick. Fail closed if quantity precision would omit or overdraw either Position. Apply the owner-confirmed order type/fee reserve; STOP on supported filter violations without adjustment or splitting. Actual fill commissions govern final accounting. | **IMPLEMENTED in PR #1379 + PR #1127:** profitability/price planning and pre-submission order-type/fee/filter policy have deterministic offline tests. |
+| Independent profitability gates | Recovery and legacy allocations remain separately attributed for accounting and must each pass their own gate; the combined cycle must also pass. | **IMPLEMENTED in PR #1379; exact-head tests passed:** recovery net profit `>= minProfit`; legacy net profit `>= 0`; combined net profit `>= minProfit`. Overall eligibility requires every applicable gate. Recovery-only cycles omit the legacy gate. |
 | Unexpected or unmodeled condition (formerly Question 4) | **OWNER-APPROVED GLOBAL STOP:** if reality does not match an explicitly approved RS scenario, stop all new trading actions. Preserve and exactly-once account confirmed fills/actual fees; retain order ownership, inventory and reservations; reconcile already-submitted orders; emit a stable BLOCK reason and require operator review. No guessing, workaround, blind retry, or automatic resume. | **DECIDED — GLOBAL INVARIANT.** Applies across the complete RS lifecycle, not only SELL profitability. |
 | Terminal partial / canceled SELL and cycle-level proceeds | The owner chose one terminal SELL lifecycle per recovery cycle; there is no second/continuation SELL and no cumulative proceeds ledger in this phase. A terminal partial/canceled result leaves the cycle unresolved. | **DECIDED (Question 5):** one SELL order lifecycle per cycle. No second SELL and no new BUY after a terminal underfill/cancel until the separate unresolved-cycle policy is approved. |
 
@@ -267,7 +267,7 @@ Update the canonical RS specification, architecture, runtime config docs only wh
 | RS-1 | CG source audit and reuse map | Evidence-backed inventory and reuse decisions |
 | RS-2a | Shared Portfolio/multi-Position accounting foundation | **COMPLETE** — merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118); exact-head required CI passed |
 | RS-2b | RS-specific domain accounting, custody and profitability | **COMPLETE** — PR #1276 merged as `9276b6c01bec62b743727548786c5af4a04b7908` from exact head `19448d63d117f563c31d8ab9422ac73623974782`; full Harvester suite 1,847/1,847 and all required checks passed. No exchange operations. |
-| RS-3 | RS pure policy | PR #1213 adds the pure profitability foundation; the current RS-3 slice implements independent recovery, legacy and combined-cycle eligibility and fee-aware mixed-SELL price/quantity planning with direct domain tests; order-type selection and broader deterministic policy outcomes remain pending |
+| RS-3 | RS pure policy | **COMPLETE** — merged PR #1127 adds the pure pre-submission SELL evaluator: independent profitability gates, pair-configured `minProfit`, Conservative-compatible order type/fee reserve, supported min/max filter validation and sticky fail-closed STOP; exact-head evaluator and Harvester tests passed |
 | RS-4 | Concurrent Trading Engine integration | Existing execution and safety infrastructure reused |
 | RS-5 | Offline lifecycle and docs | Full lifecycle and exact-head CI green |
 
@@ -326,4 +326,4 @@ flowchart TD
   J -->|"Yes"| K["Shared Trading Engine safety and order gates"]
 ~~~
 
-The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged in PR #1276; PR #1379 adds independent profitability gates and allocation-safe SELL price planning; RS remains non-executable. RS-3 policy must first resolve the contract gaps above; RS-4 then wires the policy into the shared engine, and RS-5 proves the offline lifecycle. Advanced lifecycle functionality remains deferred under FITDIB.
+The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged in PR #1276; PR #1379 adds independent profitability gates and allocation-safe SELL price planning; PR #1127 completes the pure pre-submission SELL evaluator and owner-approved filter/order-type/fee policy. RS remains non-executable. RS-4 must wire the policy into the shared engine, and RS-5 must prove the offline lifecycle before runtime registration or exchange operations. Advanced lifecycle functionality remains deferred under FITDIB.

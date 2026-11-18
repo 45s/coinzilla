@@ -1,10 +1,10 @@
 # Harvester documentation inventory
 
-- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 43 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
+- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 44 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest verified checkpoint: `develop` at `8843bd1e42dea7b47a7af5c464b921e54dd16c0d`; 85 Harvester Markdown/MDX paths (zero path changes since the 37aa07e checkpoint)
+- Latest verified checkpoint: `develop` at `81669ce2be6794b9bd03067f89b57f8fdb55f957`; 86 Harvester Markdown/MDX paths (one addition, zero removals since the 37aa07e checkpoint)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-18
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
@@ -137,6 +137,14 @@ The complete recursive tree at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` contai
 | `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-17_08-48-56Z.md` | Preserved 2026-11-17 session audit evidence. |
 | `apps/harvester/docs/infrastructure/provider-instance-registry.md` | Provider identity/registry architecture and lifecycle contract (merged PR #1383). |
 | `apps/harvester/docs/persistence/README.md` | Harvester-owned persistence architecture and database integration boundary. |
+
+## Latest recursive addition — develop checkpoint 81669ce2
+
+The complete recursive tree at `81669ce2be6794b9bd03067f89b57f8fdb55f957` contains **86 Harvester Markdown/MDX paths**: one path was added since the 85-file checkpoint at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c`; no paths were removed.
+
+| Added path | Purpose |
+| --- | --- |
+| `apps/harvester/docs/domain/RECOVERY_SELLER_POLICY_BLOCKERS.md` | Dated source/test audit of Conservative behavior, Recovery Seller policy implementation, owner decisions and remaining fail-closed RS-4/RS-5 boundaries. |
 
 ## Content-based findings
 
