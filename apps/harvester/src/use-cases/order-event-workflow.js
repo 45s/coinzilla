@@ -1,4 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
+import { hasProviderIdentity } from "../domain/orders/provider-provenance.js"
 import { toResult } from "@coinzilla/utils"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
@@ -91,15 +92,26 @@ function publishInvalidExecutionFill({ eventPublisher, order, fill, reason, erro
   })
 }
 
+function getProviderAttributionFailure({ order, fill }) {
+  if (!hasProviderIdentity({ value: order })) {
+    return {
+      error: new Error("Execution fill cannot be attributed to a provider instance: legacy order provenance is missing"),
+      stage: "FILL_PROVIDER_PROVENANCE_MISSING",
+    }
+  }
+  const matches = fill.providerInstanceId === order.providerInstanceId &&
+    fill.providerType === order.providerType &&
+    fill.accountId === order.accountId
+  return matches ? null : {
+    error: new Error("Canonical Fill provider identity does not match its registered order"),
+    stage: "FILL_ORDER_IDENTITY",
+  }
+}
+
 function validateExecutionFill({ order, fill, eventPublisher }) {
   if (!(fill instanceof Fill)) {
     const error = new TypeError("TRADE event requires a canonical Fill")
-    publishInvalidExecutionFill({
-      eventPublisher,
-      order,
-      reason: "MISSING_FILL",
-      error,
-    })
+    publishInvalidExecutionFill({ eventPublisher, order, reason: "MISSING_FILL", error })
     return {
       ok: false,
       result: failureResult({
@@ -121,61 +133,36 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
       }),
     }
   }
-  const hasProviderIdentity = ["providerInstanceId", "providerType", "accountId"].every((field) =>
-    typeof order[field] === "string" && order[field].trim())
-  if (!hasProviderIdentity) {
-    const error = new Error("Execution fill cannot be attributed to a provider instance: legacy order provenance is missing")
-    publishInvalidExecutionFill({
-      order,
-      fill,
-      reason: "IDENTITY_MISMATCH",
-      error,
-      eventPublisher,
-    })
-    return {
-      ok: false,
-      error,
-      symbol: order.market.symbol,
-      failure: {
-        category: "OWNERSHIP_INTEGRITY",
-        stage: "FILL_PROVIDER_PROVENANCE_MISSING",
-        retryable: false,
-      },
-    }
-  }
+  const providerFailure = getProviderAttributionFailure({ order, fill })
   const identityMatches = fill.market.id === order.market.id &&
     fill.side === order.side &&
     fill.brokerOrderId === order.brokerOrderId &&
-    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId) &&
-    fill.providerInstanceId === order.providerInstanceId &&
-    fill.providerType === order.providerType &&
-    fill.accountId === order.accountId
-  if (!identityMatches) {
-    const error = new Error("Canonical Fill identity does not match its registered order")
+    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+  if (providerFailure || !identityMatches) {
+    const failure = providerFailure ?? {
+      error: new Error("Canonical Fill identity does not match its registered order"),
+      stage: "FILL_ORDER_IDENTITY",
+    }
     publishInvalidExecutionFill({
       eventPublisher,
       order,
       fill,
       reason: "IDENTITY_MISMATCH",
-      error,
+      error: failure.error,
     })
     return {
       ok: false,
-      error,
+      error: failure.error,
       symbol: order.market.symbol,
       failure: {
         category: "OWNERSHIP_INTEGRITY",
-        stage: "FILL_ORDER_IDENTITY",
+        stage: failure.stage,
         retryable: false,
       },
     }
   }
-  return {
-    ok: true,
-    symbol: order.market.symbol,
-  }
+  return { ok: true, symbol: order.market.symbol }
 }
-
 async function pauseForInvalidExecutionFill({ pause, validation }) {
   if (!["FILL_ORDER_IDENTITY", "FILL_PROVIDER_PROVENANCE_MISSING"].includes(validation.failure?.stage)) {
     return
@@ -247,27 +234,32 @@ function publishExecutionFillOutcome({ accounting, fill, eventPublisher }) {
   }
 }
 
-async function processExecutionFill({ dependencies, order, fill }) {
-  if (order instanceof CanonicalOrder && order.providerInstanceId !== undefined &&
-      fill instanceof Fill && fill.providerInstanceId === undefined) {
-    fill = new Fill({
-      tradeId: fill.tradeId,
-      brokerOrderId: fill.brokerOrderId,
-      clientOrderId: fill.clientOrderId ?? order.clientOrderId,
-      providerInstanceId: order.providerInstanceId,
-      providerType: order.providerType,
-      accountId: order.accountId,
-      market: fill.market,
-      side: fill.side,
-      price: fill.price,
-      quantity: fill.quantity,
-      quoteQuantity: fill.quoteQuantity,
-      liquidityRole: fill.liquidityRole,
-      executedAt: fill.executedAt,
-      commissions: fill.commissions,
-      commissionStatus: fill.commissionStatus,
-    })
+function attachOrderProviderIdentity({ order, fill }) {
+  if (!(order instanceof CanonicalOrder) || order.providerInstanceId === undefined ||
+      !(fill instanceof Fill) || fill.providerInstanceId !== undefined) {
+    return fill
   }
+  return new Fill({
+    tradeId: fill.tradeId,
+    brokerOrderId: fill.brokerOrderId,
+    clientOrderId: fill.clientOrderId ?? order.clientOrderId,
+    providerInstanceId: order.providerInstanceId,
+    providerType: order.providerType,
+    accountId: order.accountId,
+    market: fill.market,
+    side: fill.side,
+    price: fill.price,
+    quantity: fill.quantity,
+    quoteQuantity: fill.quoteQuantity,
+    liquidityRole: fill.liquidityRole,
+    executedAt: fill.executedAt,
+    commissions: fill.commissions,
+    commissionStatus: fill.commissionStatus,
+  })
+}
+
+async function processExecutionFill({ dependencies, order, fill }) {
+  const attributedFill = attachOrderProviderIdentity({ order, fill })
   const {
     state,
     eventPublisher,
@@ -279,14 +271,11 @@ async function processExecutionFill({ dependencies, order, fill }) {
   try {
     const validation = validateExecutionFill({
       order,
-      fill,
+      fill: attributedFill,
       eventPublisher,
     })
     if (!validation.ok) {
-      await pauseForInvalidExecutionFill({
-        pause,
-        validation,
-      })
+      await pauseForInvalidExecutionFill({ pause, validation })
       if (validation.result) {
         return validation.result
       }
@@ -297,14 +286,12 @@ async function processExecutionFill({ dependencies, order, fill }) {
         retryable: validation.failure.retryable,
       })
     }
-    const accounting = await updateTradingAccounting({
-      fill,
-    })
+    const accounting = await updateTradingAccounting({ fill: attributedFill })
     if (!accounting?.ok) {
       return handleExecutionAccountingFailure({
         accounting,
         order,
-        fill,
+        fill: attributedFill,
         pause,
         eventPublisher,
       })
@@ -312,13 +299,13 @@ async function processExecutionFill({ dependencies, order, fill }) {
     recordExecutionFillIdentity({
       state,
       order,
-      fill,
+      fill: attributedFill,
       recordBuyExecutionFill,
       recordSellExecutionFill,
     })
     publishExecutionFillOutcome({
       accounting,
-      fill,
+      fill: attributedFill,
       eventPublisher,
     })
     return toResult({
@@ -336,7 +323,6 @@ async function processExecutionFill({ dependencies, order, fill }) {
     })
   }
 }
-
 /**
  * Coordinate canonical user-data order events and execution-fill application.
  * The caller owns serialization and supplies accounting, cancellation,
