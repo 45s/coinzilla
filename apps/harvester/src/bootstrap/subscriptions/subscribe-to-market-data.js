@@ -487,7 +487,10 @@ function resolveMarketDataBroker({
       context,
       symbol,
     }) {
-  const broker = resolveMarketDataBrokerInstance({ context, symbol })
+  const broker = resolveMarketDataBrokerInstance({
+    context,
+    symbol,
+  })
   if (!broker || typeof broker !== "object") {
     throw new TypeError(`No market-data broker is available for ${symbol}`)
   }
@@ -599,11 +602,18 @@ async function subscribeToEnabledMarket({
   let resolvedSource
   let initialError
   try {
-    resolvedSource = resolveMarketDataBroker({ context, symbol })
+    resolvedSource = resolveMarketDataBroker({
+      context,
+      symbol,
+    })
   } catch (error) {
     initialError = error
   }
-  const routeIdentity = getMarketDataRouteIdentity({ context, symbol, resolvedSource })
+  const routeIdentity = getMarketDataRouteIdentity({
+    context,
+    symbol,
+    resolvedSource,
+  })
   const symbolError = await subscribeMarketDataStreams({
     context,
     symbol,
