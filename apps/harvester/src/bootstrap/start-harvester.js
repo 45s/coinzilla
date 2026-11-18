@@ -334,7 +334,10 @@ async function createBitunixReadOnlyObserver({ env, adapterFactory, logger } = {
   if (!config) {
     return null
   }
-  const observer = await adapterFactory({ config, logger })
+  const observer = await adapterFactory({
+    config,
+    logger,
+  })
   if (!observer ||
       typeof observer !== "object" ||
       observer.accessMode !== "read-only" ||

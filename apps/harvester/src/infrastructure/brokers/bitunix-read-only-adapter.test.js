@@ -32,7 +32,10 @@ function createFakeBroker() {
         method,
         args,
       })
-      return { ok: true, data: method }
+      return {
+        ok: true,
+        data: method,
+      }
     },
   ]))
   broker.getSymbolFilters = async ({ symbol } = {}) => {
@@ -40,9 +43,15 @@ function createFakeBroker() {
       method: "getSymbolFilters",
       args: [{ symbol }],
     })
-    return { ok: true, data: symbolFilters }
+    return {
+      ok: true,
+      data: symbolFilters,
+    }
   }
-  return { broker, calls }
+  return {
+    broker,
+    calls,
+  }
 }
 
 function createAdapter({ broker, brokerFactory } = {}) {
@@ -84,9 +93,13 @@ test("forwards read requests and preserves broker result envelopes", async () =>
   const { broker, calls } = createFakeBroker()
   const adapter = createAdapter({ broker })
   const result = await adapter.getOpenOrders({ symbol: "BTCUSDT" })
-  assert.deepEqual(result, { ok: true, data: "getOpenOrders" },
+  assert.deepEqual(result, {
+    ok: true,
+    data: "getOpenOrders",
+  },
     "Read results must be forwarded without reinterpreting exchange data.")
   assert.deepEqual(calls, [{
+    
     method: "getOpenOrders",
     args: [{ symbol: "BTCUSDT" }],
   }], "Symbol-scoped open-order requests must be forwarded unchanged.")

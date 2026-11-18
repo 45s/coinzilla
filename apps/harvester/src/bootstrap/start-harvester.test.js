@@ -6161,7 +6161,11 @@ test("default Bitunix runtime facade exposes read methods but no trading or stre
       BITUNIX_API_SECRET: "read-only-secret",
     },
     brokerAdapterFactory: () => createBroker(),
-    logger: { info() {}, debug() {}, error() {} },
+    logger: {
+      info() {},
+      debug() {},
+      error() {},
+    },
   })
   try {
     const { bitunix } = runtime.readOnlyProviders

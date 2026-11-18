@@ -90,7 +90,10 @@ function assertReadMethods({ broker } = {}) {
  */
 export function createBitunixReadOnlyAdapter({ config, brokerFactory } = {}) {
   assertReadOnlyConfig({ config })
-  const broker = createBroker({ config, brokerFactory })
+  const broker = createBroker({
+    config,
+    brokerFactory,
+  })
   if (broker === null || typeof broker !== "object") {
     throw new TypeError("Bitunix read-only broker factory must return a broker object")
   }
