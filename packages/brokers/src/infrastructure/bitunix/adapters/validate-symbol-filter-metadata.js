@@ -12,7 +12,10 @@ function validateOptionalMinimum({ value, field }) {
     value,
     field: `Bitunix Spot ${field}`,
   })
-  if (compareDecimal({ left: value, right: "0" }) < 0) {
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) < 0) {
     throw new RangeError(`Bitunix Spot ${field} must be non-negative`)
   }
 }
@@ -48,8 +51,14 @@ function validateOptionalPrecisionList({ value }) {
     if (typeof precision !== "string") {
       throw new TypeError(`${field} must be an exact decimal string`)
     }
-    assertDecimalString({ value: precision, field })
-    if (compareDecimal({ left: precision, right: "0" }) < 0) {
+    assertDecimalString({
+      value: precision,
+      field,
+    })
+    if (compareDecimal({
+      left: precision,
+      right: "0",
+    }) < 0) {
       throw new RangeError(`${field} must be non-negative`)
     }
   }
