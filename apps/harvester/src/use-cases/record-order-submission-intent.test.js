@@ -176,26 +176,25 @@ data: {} },
 })
 
 
+const makeLegacyOrder = () => new CanonicalOrder({
+  clientOrderId: "legacy-client-order",
+  market,
+  side: "BUY",
+  type: "LIMIT_MAKER",
+  limitPrice: order.limitPrice,
+  originalQuantity: order.originalQuantity,
+  executedQuantity: order.executedQuantity,
+  status: "PENDING",
+})
+
 test("fails closed for legacy pending orders without recorded provider provenance", async () => {
   let appendCalls = 0
-  const legacyOrder = new CanonicalOrder({
-    clientOrderId: "legacy-client-order",
-    market,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: order.limitPrice,
-    originalQuantity: order.originalQuantity,
-    executedQuantity: order.executedQuantity,
-    status: "PENDING",
-  })
+  const legacyOrder = makeLegacyOrder()
   const result = await recordOrderSubmissionIntent({
     operationalStateStore: {
       append: async () => {
         appendCalls += 1
-        return {
-          ok: true,
-          data: { durable: true },
-        }
+        return { ok: true, data: { durable: true } }
       },
     },
     order: legacyOrder,
