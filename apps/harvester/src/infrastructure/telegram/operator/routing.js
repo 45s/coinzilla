@@ -96,7 +96,7 @@ async function routeTelegramCallbackData({ callback,
  update })
     return
   }
-  const confirm = /^cc:confirm:(PAUSE|RESUME):([A-Z0-9]{2,30}):(\d+)$/.exec(callback.data)
+  const confirm = new RegExp("^cc:confirm:(" + TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN + "):([A-Z0-9]{2,30}):(\\d+)$").exec(callback.data)
   if (confirm) {
     await handleConfirmationCallback({ ...common,
  confirm })
