@@ -1138,9 +1138,6 @@ test("persists selected provider provenance before broker I/O and carries it ont
       providerInstanceId: "binanceTestnet",
       providerType: "binance",
       accountId: "binance-primary",
-      providerInstanceId: "binanceTestnet",
-      providerType: "binance",
-      accountId: "binance-primary",
       placeOrder: async ({ order }) => {
         calls.push("broker")
         return {
