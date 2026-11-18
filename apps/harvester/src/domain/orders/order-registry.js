@@ -588,6 +588,17 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
   })
 }
 
+function createUpdatedOrderRegistryResult({ registry, orders, ownerships, index, current, nextOrder }) {
+  return createUpdatedOrderRegistryResult({
+    registry,
+    orders,
+    ownerships,
+    index,
+    current,
+    nextOrder,
+  })
+}
+
 function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
   if (!(order instanceof CanonicalOrder) || order.status === "PENDING") {
     throw new TypeError("OrderRegistry.applyUpdate requires a broker-acknowledged CanonicalOrder")
