@@ -279,7 +279,7 @@ Protocol references: [Binance Spot WebSocket API — Klines](https://github.com/
 
 The Bitunix diagnostic runner is an explicitly invoked, **read-only** local tool for checking REST connectivity/authentication, authenticated Spot WebSocket RPC, request/response correlation, latency, exchange errors, transport failures, and cleanup. It uses the existing Bitunix clients; it does not change Harvester composition or enable trading.
 
-Bitunix currently documents the Spot WebSocket API as authenticated request/response RPC. It does **not** document continuous public market subscriptions or private order/execution event streams. A successful RPC is not proof of a live stream.
+Bitunix documents Spot WebSocket as authenticated request/response RPC: every request, including methods listed under the Public Interface, carries API key, timestamp, nonce and signature. The connection is documented as valid for 24 hours, and the API exposes a `ping` RPC connection test. It does **not** document continuous market subscriptions or private order/execution event streams. A successful RPC is not proof of a live stream. See the [official WebSocket introduction](https://www.bitunix.com/api-docs/spots/en_us/ws/) and [public RPC methods](https://www.bitunix.com/api-docs/spots/en_us/public-ws/).
 
 ### Configure and run
 
@@ -312,15 +312,18 @@ The runner checks these REST operations:
 
 It then connects to the authenticated Spot WebSocket RPC endpoint and checks:
 
-- market.last_price, market.depth, and market.kline.
-- common.coin_pair.list, common.rate.list, and common.coin.coin_network.list.
-- user.account and user.info.
+- `ping` (the documented authenticated connection-test RPC).
+- `market.last_price`, `market.depth`, and `market.kline`.
+- `common.coin_pair.list`, `common.rate.list`, and `common.coin.coin_network.list`.
+- `user.account` and `user.info`.
+
+After a successful initial RPC session, it makes one explicit fresh-client reconnect probe and verifies it with another `ping`. This is not an automatic retry loop and does not simulate the documented 24-hour server expiry. Subscription restoration is explicitly skipped because the official Spot API reference defines one-shot request/response methods and no subscription channels.
 
 Depth RPC is skipped unless BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is explicitly supplied; the runner does not infer depth aggregation precision from basePrecision, quotePrecision, or precisions[].
 
 Each operation receives its own pass/fail/skip result and duration. The named `DIAGNOSTIC_CONFIG` constants in `scripts/bitunix-diagnostic-runner.js` set the symbol (`BTCUSDT`), K-line interval (`1min`), request/connect/close timeout (`10_000` ms), and public-payload capture policy (`false`). Change these values in code when needed; they are not environment settings. Public response payloads are omitted by default. The optional depth precision remains an environment setting because its value must be explicitly chosen rather than inferred. The report is written to packages/brokers/.diagnostics/ (ignored by Git) with restrictive file permissions. Outbound WS messages are captured only after credential/signature/nonce redaction. Private account responses are summarized by shape and field names; private balances, UIDs and other sensitive values are never persisted.
 
-This is an operator diagnostic, not a trading test, exchange acceptance certificate, TESTNET substitute, or proof of Harvester readiness. It never places/cancels orders, withdraws/transfers funds, retries failed requests, or reconnects automatically. Default unit tests remain offline and do not execute this command.
+This is an operator diagnostic, not a trading test, exchange acceptance certificate, TESTNET substitute, or proof of Harvester readiness. It never places/cancels orders, withdraws/transfers funds, retries failed requests, or automatically reconnects after a failure. Its single reconnect probe runs only after the first session completes successfully. It does not test protocol-level control-frame heartbeats or simulate 24-hour expiry. Default unit tests remain offline and do not execute this command.
 
 ## Offline tests and coverage
 
