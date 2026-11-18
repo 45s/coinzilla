@@ -241,7 +241,7 @@ The Brokers package must not own Harvester strategy/market routing or import Har
 
 ## Consequences
 
-- A single-provider configuration remains a valid composition of one provider instance and explicit routes.
+- A legacy single-provider configuration without `marketDataRouting` remains compatible and assigns its configured markets to its sole provider instance. Every multi-provider configuration must declare exactly one `marketDataRouting.routes` entry for each enabled market; no implicit multi-provider default is permitted.
 - Startup becomes more deliberate: all configured instances, routes, capabilities and required lifecycle resources must be validated before affected strategies become executable.
 - Provider-specific lifecycle and recovery state must remain isolated; one provider's outage must not mark unrelated providers reconciled or ready.
 - Order and account schemas may need a compatibility-preserving provider/account identity extension. This must be implemented test-first and coordinated with durable facts, event contracts and Journal readers.
