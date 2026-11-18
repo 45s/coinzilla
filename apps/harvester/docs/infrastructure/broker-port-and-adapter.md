@@ -86,7 +86,7 @@ A state-changing timeout remains an unknown outcome. Never retry it on another p
 
 ### Current capability boundary
 
-Bitunix Spot remains read-only and is not a valid Harvester execution provider today. Its existing metadata helper is not a full broker adapter. Do not enable Bitunix order placement, cancellation or runtime integration until [issue #1185](https://github.com/45s/coinzilla/issues/1185) and the capability gates in [issue #1339](https://github.com/45s/coinzilla/issues/1339) are resolved. RS is also not executable merely because a future route can name its strategy ID.
+Bitunix Spot is not a registered Harvester provider today. The partial query operations in `@coinzilla/brokers` do not yet satisfy the complete order, fill, account-lifecycle, private-event/reconciliation, market-constraint and environment-safety contract in [issue #1185](https://github.com/45s/coinzilla/issues/1185). Keep Bitunix outside the provider registry and all execution/market-data routes until that work is complete. Do not add a temporary observer or partial provider facade. Future integration must use the same complete provider-instance, BrokerPort, capability, account-lifecycle and routing contracts as every other provider. Exchange-specific Bitunix market normalization belongs in `@coinzilla/brokers`, not in a Harvester-specific metadata helper. RS is also not executable merely because a future route can name its strategy ID.
 
 The durable target contract is [ADR-0003](../../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md); this file remains the Harvester-specific port/adapter guide.
 
