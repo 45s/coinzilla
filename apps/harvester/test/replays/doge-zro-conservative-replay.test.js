@@ -507,7 +507,10 @@ runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill 
     timestamp: executionTimestamp,
   });
   const recoveryCycleResult = await completion;
-  assertSingleCycleCompletionResult({ dogeTradingReplay, recoveryCycleResult });
+  assertSingleCycleCompletionResult({
+    dogeTradingReplay,
+    recoveryCycleResult,
+  });
   assertSingleCyclePosition(dogeTradingReplay);
   assertSingleCycleExecutionReports(dogeTradingReplay);
   await assertSingleCycleDuplicateFillIsIdempotent({

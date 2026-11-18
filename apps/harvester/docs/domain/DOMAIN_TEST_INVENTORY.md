@@ -66,6 +66,8 @@ This service collects data and exposes snapshots only. It does not activate vola
 
 `src/use-cases/create-recovery-seller-accounting-workflow.test.js` covers atomic terminal OrderRegistry/Portfolio/legacy projection commits, reservation retention on failed reconciliation, release after successful commit, verified external Spot and quote-cash-flow providers, duplicate terminal replay, commission allocation, and the rule that confirmed fills are committed even when any applicable profitability gate fails. The profitability tests reject recovery-profit/legacy-loss and legacy-profit/recovery-loss cross-subsidies. This is accounting orchestration coverage, not executable RS policy or runtime integration.
 
+`test/replays/ada-conservative-recovery-replay.test.js` replays the 2026-11-17 ADA lifecycle with exact decimal inputs, explicit actual commission amounts/assets, exchange filters, recovery SELL replacement, below-minProfit outcome, duplicate SELL evidence and shutdown. The incident record does not contain Binance trade IDs, so the replay uses deterministic numeric synthetic IDs while preserving the actual broker order IDs in the separate audit evidence. `test/replays/doge-zro-conservative-replay.test.js` proves successful recovery completion is emitted exactly once when the same terminal SELL execution is replayed.
+
 `src/use-cases/conservative-trading-engine.test.js` contains **163 deterministic test declarations** at the reviewed baseline. The suite covers:
 
 - Trailing BUY activation/repricing, active-Position suppression, retained free-inventory exclusion and cancellation/fill races.
