@@ -9,7 +9,9 @@ import { TelegramNotifier } from "@coinzilla/notifiers"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { acquireHarvesterProcessLocks } from "./infrastructure/process-lock/acquire-harvester-process-locks.js"
-import { resolveBinanceProviderIdentity } from "./domain/provider-identity.js"
+import { createBinanceBrokerAdapter } from "./infrastructure/brokers/binance-broker-adapter.js"
+import { resolveProviderInstances } from "./bootstrap/providers/resolve-provider-instances.js"
+import { startProviderAccounts } from "./bootstrap/providers/start-provider-accounts.js"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
 import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData } from "./application/events/lifecycle-event-dtos.js"
@@ -304,27 +306,75 @@ async function prepareProcessIdDatabase({
   return persistence?.database ?? null
 }
 
-async function acquireEnvironmentProcessLock({ runtimeConfig, env, acquireProcessLock, logger }) {
+async function acquireEnvironmentProcessLock({ provider, acquireProcessLock, logger }) {
   const processLockDirectory = resolveHostProcessLockDirectory()
-  const providerIdentity = resolveBinanceProviderIdentity({
-    tradingMode: runtimeConfig.tradingMode,
-    providerInstanceId: env.BINANCE_PROVIDER_INSTANCE_ID,
-    accountId: env.BINANCE_ACCOUNT_ID,
-  })
   const lockResult = await acquireProcessLock({
     journalDirectory: processLockDirectory,
     globalDirectory: processLockDirectory,
-    broker: runtimeConfig.brokerName,
-    providerInstanceId: providerIdentity.providerInstanceId,
-    accountId: providerIdentity.accountId,
-    tradingMode: runtimeConfig.tradingMode,
+    broker: provider.providerType,
+    providerInstanceId: provider.providerInstanceId,
+    accountId: provider.accountId,
+    tradingMode: provider.environment,
     logger,
   })
   if (lockResult?.ok !== true || typeof lockResult.release !== "function") {
     const details = lockResult?.errors?.map((error) => error?.message ?? String(error)).join("; ")
-    throw new Error(`Harvester cannot start without the Binance ${runtimeConfig.tradingMode} environment-scoped single-writer process lock${details ? `: ${details}` : ""}`)
+    throw new Error(`Harvester cannot start without the ${provider.providerType} ${provider.environment} environment-scoped single-writer process lock${details ? `: ${details}` : ""}`)
   }
   return lockResult
+}
+
+async function releaseProviderProcessLocks({ locks }) {
+  const errors = []
+  for (const lock of [...locks].reverse()) {
+    try {
+      const result = await lock.release()
+      if (result?.ok !== true) {
+        errors.push(...getCleanupErrors({
+          result,
+          fallbackError: new Error("Provider account process-lock release failed"),
+        }))
+      }
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  return errors
+}
+
+async function acquireEnvironmentProcessLocks({ providers, acquireProcessLock, logger }) {
+  const locks = []
+  try {
+    for (const provider of providers) {
+      locks.push(await acquireEnvironmentProcessLock({
+        provider,
+        acquireProcessLock,
+        logger,
+      }))
+    }
+  } catch (error) {
+    const cleanupErrors = await releaseProviderProcessLocks({ locks })
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanupErrors],
+        "Harvester provider-account process-lock acquisition failed and rollback cleanup was incomplete",
+        { cause: error },
+      )
+    }
+    throw error
+  }
+  if (locks.length === 1) {
+    return locks[0]
+  }
+  return {
+    lockScopes: locks.map(({ lockScope }) => lockScope),
+    release: async () => {
+      const errors = await releaseProviderProcessLocks({ locks })
+      return errors.length > 0
+        ? { ok: false, errors }
+        : { ok: true, released: true }
+    },
+  }
 }
 
 async function acquireProcessStartupResources({ options, resources, processStartedDataResult } = {}) {
@@ -339,16 +389,21 @@ async function acquireProcessStartupResources({ options, resources, processStart
     createOperationalStateStore,
     createJournalService,
     prepareTradingSessionPersistence,
+    providerAdapterFactories,
   } = options
   resources.eventBus = createEventBus({ logger })
   resources.appConfig = await loadConfig(configSource)
+  resources.providerInstances = resolveProviderInstances({
+    appConfig: resources.appConfig,
+    env,
+    adapterFactories: providerAdapterFactories,
+  })
   resources.runtimeConfig = resolveRuntimeConfig({
-    tradingMode: env.TRADING_MODE,
+    tradingMode: resources.providerInstances[0].environment,
     environment: env.NODE_ENV,
   })
-  resources.processLock = await acquireEnvironmentProcessLock({
-    runtimeConfig: resources.runtimeConfig,
-    env,
+  resources.processLock = await acquireEnvironmentProcessLocks({
+    providers: resources.providerInstances,
     acquireProcessLock,
     logger,
   })
@@ -490,6 +545,11 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
   if (!runtime.connected) {
     logSystem({ logger,
       message: "Binance connection was not established." })
+  } else if (runtime.providerAccounts?.length > 1) {
+    logSystem({
+      logger,
+      message: `Connected ${runtime.providerAccounts.length} independent provider account(s); subscribed to ${runtime.subscriptions.length} distinct market(s).`,
+    })
   } else if (runtime.tradingEnabled && runtime.strategyMode === "conservative") {
     logSystem({
       logger,
@@ -504,10 +564,12 @@ function publishRuntimeStarted({ runtime, runtimeConfig, eventPublisher, logger 
 }
 
 async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } = {}) {
-  const runtime = await options.start({
-    eventPublisher: resources.eventPublisher,
+  const runtime = await startProviderAccounts({
+    providers: resources.providerInstances,
+    start: options.start,
     appConfig: resources.appConfig,
     env: options.env,
+    eventPublisher: resources.eventPublisher,
     runtimeSessionId: options.processIdentity.runtimeSessionId,
     operationalStateStore: resources.operationalStateStore,
   })
@@ -692,6 +754,10 @@ function createMainDependencies({ options }) {
       override: prepareOverride,
       logger,
     }),
+    providerAdapterFactories: {
+      binance: createBinanceBrokerAdapter,
+      ...(options.providerAdapterFactories ?? {}),
+    },
     processIdentity,
   }
 }
