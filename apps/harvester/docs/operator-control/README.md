@@ -8,13 +8,14 @@ The engine/application foundation is implemented in [PR #1045](https://github.co
 
 The Telegram Command Center exposes `/start`, `/menu`, `/help`, `/status`, `/markets`, `/positions`, `/orders`, `/balances`, `/pause <SYMBOL>`, `/resume <SYMBOL>`, `/pauseallbuys`, `/resumeallbuys`, `/pausebuys <SYMBOL>`, and `/resumebuys <SYMBOL>`. The read-only query set and first commands shipped in PRs #1079, #1081 and #1086. Inline navigation, refresh and confirmation shipped in PR #1088. The persistent six-button keyboard shipped in PR #1194. Global and per-market emergency BUY commands shipped in merged [PR #1267](https://github.com/45s/coinzilla/pull/1267). Correlated interaction diagnostics, callback acknowledgement handling and the `/orders` account-wide query fix shipped in merged [PR #1215](https://github.com/45s/coinzilla/pull/1215). The Command Center feature roadmap is complete; exact command behavior is listed below. See the [Telegram operator runbook](../operations/telegram-command-center.md) for the interaction flow and troubleshooting.
 
-Pause state is process-lifetime only. Do not promise that a pause survives a process restart. The Command Center does not decide whether a command is safe or permitted: it sends the authorized request to the Harvester application and displays the actual result. Existing exchange orders are not canceled by the ordinary `/pause` command; a resting BUY may still fill.
+Pause state is process-lifetime only. Do not promise that a pause survives a process restart. The Command Center does not decide whether a command is safe or permitted: it sends the authorized request to the Harvester application and displays the actual result. The normal market `/pause` command and keyboard Pause now activate the market BUY gate and cancel current-process-owned BUY orders through the existing cancellation/reconciliation workflow.
 
 ## Architecture
 
 - [ADR-0002 — Transport-independent operator control](../architecture/decisions/0002-transport-independent-operator-control.md) — accepted DDD ownership, actor contract, pause semantics, authorization, transport and failure decisions.
 - [ADR-0003 — Process-lifetime operator pause](../architecture/decisions/0003-process-lifetime-operator-pause.md) — accepted initial rollout boundary.
 - [ADR-0005 — Emergency BUY pause](../architecture/decisions/0005-emergency-buy-pause.md) — global/market BUY gate and owned-BUY cancellation contract.
+- [ADR-0006 — Market Pause cancels owned BUYs](../architecture/decisions/0006-market-pause-cancels-owned-buys.md) — current market Pause/Resume command and keyboard contract; supersedes the old non-canceling market command semantics.
 - [Implementation contract and diagrams](../architecture/OPERATOR_CONTROL_DESIGN.md) — current source layout, request/record schemas and delivery sequence.
 - [Harvester roadmap](../../ROADMAP.md) — current implementation status and dependencies.
 
@@ -28,15 +29,15 @@ Pause state is process-lifetime only. Do not promise that a pause survives a pro
 - `/positions` — read-only Portfolio inventory and invested-quote summary.
 - `/orders` — active Harvester registry orders plus unmatched account-wide exchange orders explicitly labelled `EXTERNAL`; external orders are never adopted.
 - `/balances` — latest canonical exchange free/locked/total balances with source timestamp and age; these are account balances, not strategy-owned inventory.
-- `/pause <SYMBOL>` — suppress new strategy BUY intents and trailing-BUY repricing for one configured market.
-- `/resume <SYMBOL>` — submit a request to remove the operator-owned pause; the application returns the actual outcome.
+- `/pause <SYMBOL>` — activate the market BUY gate, cancel active current-process-owned BUY orders, and reconcile cancellation-racing fills.
+- `/resume <SYMBOL>` — remove only that market's operator BUY gate; other global/market/safety gates remain effective.
 - `/pauseallbuys` — block all new BUYs and cancel active current-process-owned BUY orders across configured markets.
 - `/resumeallbuys` — remove only the global emergency BUY pause.
-- `/pausebuys <SYMBOL>` — block new BUYs and cancel active current-process-owned BUYs for one configured market.
-- Emergency BUY slash commands execute immediately after the existing private-chat authorization checks; they do not use the inline market-button confirmation flow.
-- `/resumebuys <SYMBOL>` — remove only that market emergency BUY pause.
+- `/pausebuys <SYMBOL>` and `/resumebuys <SYMBOL>` — compatibility aliases for the market-scoped `/pause` and `/resume` commands.
+- `/pauseallbuys` and `/resumeallbuys` retain their separate global BUY-gate behavior.
+- Market Pause/Resume slash commands execute after the existing private-chat authorization checks. Inline market buttons use the same application use cases but require confirmation.
 
-The existing `/pause SYMBOL` blocks new BUY decisions for one market but does not cancel already-open orders. Emergency BUY pause is separate: it blocks new BUYs first, then cancels only active BUY orders owned by the current Harvester process. Startup-snapshot/manual/external orders are not canceled. If cancellation is unresolved, the BUY gate remains active and the command reports the incomplete outcome; the Command Center does not attempt its own retry or reconciliation. Global and per-market scopes are independent. The application owns all state transitions and safety decisions. `/status` and `/markets` use application snapshots; `/orders` performs the account-wide open-orders read; `/balances` reads the latest captured account snapshot. These queries are read-only and do not adopt or modify exchange orders.
+Market Pause first blocks new BUY decisions, replacements/repricing and final BUY submissions, then cancels active BUY orders owned by the current Harvester process. Cancellation-racing fills are reconciled and accounted before success is acknowledged. Recovery SELL decisions/submissions, fill accounting and reconciliation continue. Startup-snapshot, manual, external and prior-process orders are not canceled under ADR-0004. If cancellation is unresolved, the BUY gate remains active and the command reports the incomplete outcome; the Command Center does not attempt its own retry or reconciliation. Global and market scopes are independent. The application owns all state transitions and safety decisions. `/status` and `/markets` use application snapshots; `/orders` performs the account-wide open-orders read; `/balances` reads the latest captured account snapshot. These queries are read-only and do not adopt or modify exchange orders.
 
 ## Separate capability: outbound Telegram notifications
 
@@ -75,6 +76,7 @@ The operator facade and use cases belong to `apps/harvester`. Do not create a sh
 | Inline navigation, refresh and confirmation-gated Pause/Resume | Merged in PR #1088 |
 | Persistent six-button keyboard | Merged in PR #1194 |
 | Emergency global/per-market BUY commands | Merged in PR #1267 |
+| Normal market Pause/Resume now use the same owned-BUY cancellation workflow | Implemented in PR #1436 (pending review) |
 | Correlated interaction diagnostics and callback acknowledgement handling | Merged in PR #1215 |
 
 **Command Center roadmap: COMPLETE.** No trading-policy, persistence, or notification-delivery work is owned by the Telegram adapter. Future commands should be added only as thin mappings to an existing or explicitly approved Harvester application capability.
