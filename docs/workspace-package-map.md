@@ -15,7 +15,7 @@ This page describes the current `develop` workspace. Package manifests, source t
 
 ### `apps/harvester/` — `@coinzilla/harvester`
 
-Event-driven spot-trading application. Owns Conservative strategy workflows, Portfolio/RecoveryLedger state, order lifecycle coordination, startup/shutdown and composition of Brokers, Event Bus, Journal and Notifiers.
+Event-driven spot-trading application. Owns Conservative strategy workflows, Portfolio/RecoveryLedger state, order lifecycle coordination, startup/shutdown, and composition of Brokers, DB, Event Bus, Indicators, Journal and Notifiers. It consumes canonical Entities and domain-neutral Utils; DB owns persistence mechanics while Harvester owns its repository contracts and business meaning.
 
 - Roadmap: [apps/harvester/ROADMAP.md](../apps/harvester/ROADMAP.md)
 - Operational guide: [apps/harvester/README.md](../apps/harvester/README.md)
@@ -24,7 +24,7 @@ Event-driven spot-trading application. Owns Conservative strategy workflows, Por
 
 ### `packages/brokers/` — `@coinzilla/brokers`
 
-Exchange-facing broker implementation and normalized exchange adapters. Current Binance integration uses native WebSocket API and Streams clients.
+Exchange-facing broker implementations and normalized exchange adapters. Binance uses native WebSocket API and Streams clients; Bitunix is an additive read-only Spot REST broker plus a separately managed read-only WebSocket RPC client. Bitunix is not a Harvester execution provider, and the package does not own application routing.
 
 - Roadmap: [packages/brokers/ROADMAP.md](../packages/brokers/ROADMAP.md)
 - Unit tests: `pnpm --filter @coinzilla/brokers test`
