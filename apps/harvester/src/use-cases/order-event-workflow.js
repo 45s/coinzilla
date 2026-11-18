@@ -292,7 +292,10 @@ function validateMissingExecutionFill({
   }
 }
 
-function executionFillMatchesOrder({ order, fill }) {
+function executionFillMatchesOrder({
+    order,
+    fill,
+  }) {
   return fill.market.id === order.market.id &&
     fill.side === order.side &&
     fill.brokerOrderId === order.brokerOrderId &&
