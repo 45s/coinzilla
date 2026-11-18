@@ -506,6 +506,7 @@ runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill 
       order: recoverySellOrder,
       price: dogeTradingReplay.scenarioExpectations.sellFillPrice,
       tradeId: SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID,
+      timestamp: 1700000000000,
     })
     const completedPositionAfterDuplicate = dogeTradingReplay.runtime.portfolio.getPosition({
       symbol: MARKET_SYMBOL,

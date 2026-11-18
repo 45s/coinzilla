@@ -187,6 +187,7 @@ test("replays the 2026-11-17 ADA cycle and preserves the below-target outcome th
     order: replacementRecoverySell,
     price: scenarioExpectations.sellFillPrice,
     tradeId: "ADA-SELL-738736",
+    timestamp: 1794909224000,
     commissionAmount: "0.01527938",
     commissionAsset: "USDT",
   })
