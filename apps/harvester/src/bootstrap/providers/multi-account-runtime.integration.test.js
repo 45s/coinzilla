@@ -239,7 +239,7 @@ function createAcknowledgedCanonicalOrder({ order, calls }) {
   })
 }
 
-function createCanceledCanonicalOrder(order, identity = {}) {
+function createCanceledCanonicalOrder({ order, providerIdentity = {} }) {
   const now = Date.now()
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
@@ -255,9 +255,9 @@ function createCanceledCanonicalOrder(order, identity = {}) {
     acknowledgedAt: order.acknowledgedAt,
     updatedAt: now,
     completedAt: now,
-    providerInstanceId: identity.providerInstanceId ?? order.providerInstanceId,
-    providerType: identity.providerType ?? order.providerType,
-    accountId: identity.accountId ?? order.accountId,
+    providerInstanceId: providerIdentity.providerInstanceId ?? order.providerInstanceId,
+    providerType: providerIdentity.providerType ?? order.providerType,
+    accountId: providerIdentity.accountId ?? order.accountId,
   })
 }
 
@@ -296,10 +296,13 @@ function createBrokerOrderMutationPorts({ calls }) {
         }
       }
       calls.cancelledOrders.push(order)
-      const canceledOrder = createCanceledCanonicalOrder(canonicalOrder, {
-        providerInstanceId: order.providerInstanceId,
-        providerType: order.providerType,
-        accountId: order.accountId,
+      const canceledOrder = createCanceledCanonicalOrder({
+        order: canonicalOrder,
+        providerIdentity: {
+          providerInstanceId: order.providerInstanceId,
+          providerType: order.providerType,
+          accountId: order.accountId,
+        },
       })
       calls.orders.set(canonicalOrder.clientOrderId, canceledOrder)
       return {
