@@ -2345,12 +2345,16 @@ test("keeps healthy accounts running and releases only a failed account's proces
           subscriptions: ["BTCUSDT"],
           stop: async () => {
             stopped.push(input.providerIdentity.providerInstanceId)
-            return { ok: true },
+            return { ok: true }
           },
         }
       },
-      registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
-      logger: { info() {}, system() {}, error() {} },
+      registerSignalHandler: (...args) => signalHandlers.set(...args),
+      logger: {
+        info() {},
+        system() {},
+        error() {},
+      },
     })
 
     assert.ok(result)

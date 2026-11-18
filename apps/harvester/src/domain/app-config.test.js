@@ -452,7 +452,7 @@ test("rejects duplicate provider instance IDs and account scopes", () => {
     ],
   }
   assert.throws(() => validateAppConfig(config), (error) =>
-    error instanceof ConfigValidationError && error.path === "brokers.instances")
+    error instanceof ConfigValidationError && error.path === "brokers.instances[1].credentials")
 
   config.brokers.instances[1] = {
     ...provider,
