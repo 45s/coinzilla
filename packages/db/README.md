@@ -344,7 +344,7 @@ try {
 - The backup uses Node.js' native SQLite online-backup API. It includes committed data held in WAL; do not copy a live SQLite main file directly.
 - The destination parent directory is created when needed. The backup is written to a temporary file in that directory, checked with `PRAGMA integrity_check` and `PRAGMA foreign_key_check`, then atomically renamed into place. A previous destination backup is preserved if backup creation or validation fails.
 - The source and destination must resolve to different files. The source must be connected and outside an active transaction.
-- The optional progress callback receives a frozen `{ remainingPages, totalPages }` snapshot. If the callback throws and cleanup succeeds, the backup rejects with that callback error and the previous destination remains untouched. If cleanup also fails, the provider error's `cause` is an `AggregateError` containing the callback and cleanup failures exactly once each.
+- The optional progress callback receives a frozen `{ remainingPages, totalPages }` snapshot. The API does not accept an `AbortSignal`; callers can stop an in-progress backup by throwing from the progress callback. If the callback throws and cleanup succeeds, the backup rejects with that callback error and the previous destination remains untouched. If cleanup also fails, the provider error's `cause` is an `AggregateError` containing the callback and cleanup failures exactly once each.
 - The backup uses a temporary directory beside the destination so final rename stays on the same filesystem. Creation/validation failures do not replace the previous backup. The destination must not be open or in use by another SQLite connection/process while it is being replaced; stop consumers of an existing backup before publishing a replacement. A cleanup failure after the final rename can still make the operation reject even though the newly validated backup has already been published; inspect the destination before retrying.
 - `close()` waits for an active backup to finish. Once closing begins, new backup requests and new SQL/transaction operations are rejected.
 
@@ -419,3 +419,5 @@ The legacy `createDatabase({ adapter })` lifecycle facade and `createSqliteDatab
 pnpm --filter @coinzilla/db test
 pnpm --filter @coinzilla/db test:coverage
 ```
+
+The package coverage run includes `src/**/*.js` production modules and the provider-conformance test-support implementation. It excludes test files and imported `@coinzilla/utils` source because that dependency is owned and tested by its own package; no `@coinzilla/db` production module is excluded.
