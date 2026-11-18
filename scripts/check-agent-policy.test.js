@@ -376,3 +376,32 @@ test('discovers application and package production JavaScript but excludes tests
 force: true });
   }
 });
+
+test("resolves GitHub-style heading fragments and local Markdown paths encoded in URLs", () => {
+  const root = mkdtempSync(join(tmpdir(), 'coinzilla-encoded-heading-'))
+  try {
+    mkdirSync(join(root, 'docs'), { recursive: true })
+    writeFileSync(join(root, 'docs', 'guide with spaces.md'), '## Café &amp; tea!\\n\\n## Existing section')
+    const gaps = findMissingLocalAnchors(root, [
+      {
+        path: 'docs/source.md',
+        content: [
+          '[encoded path and Unicode fragment](guide%20with%20spaces.md#caf%C3%A9--tea)',
+          '[missing encoded fragment](guide%20with%20spaces.md#missing%20section)',
+          '[non-Markdown fragment](asset.svg#not-a-heading)',
+          '[external fragment](https://example.com/guide#not-a-local-heading)',
+        ].join('\\n'),
+      },
+      {
+        path: 'docs/guide with spaces.md',
+        content: '## Café &amp; tea!\\n\\n## Existing section',
+      },
+    ])
+
+    assert.deepEqual(gaps, [
+      'docs/source.md links to missing heading anchor "#missing section" in docs/guide with spaces.md',
+    ], 'URL-encoded local paths and fragments must resolve before comparing GitHub-style heading IDs; non-Markdown and external targets remain out of scope')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
