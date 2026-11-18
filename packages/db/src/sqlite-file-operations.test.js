@@ -165,8 +165,11 @@ test("SQLite verification preserves integrity and close failures", async (contex
   })
 
   try {
-    assert.throws(
-      () => verifyDatabaseFile({ filename, timeout: 100 }),
+    await assert.rejects(
+      verifyDatabaseFile({
+        filename,
+        timeout: 100,
+      }),
       (error) => error instanceof AggregateError
         && error.errors[0] === integrityFailure
         && error.errors[1] === closeFailure
