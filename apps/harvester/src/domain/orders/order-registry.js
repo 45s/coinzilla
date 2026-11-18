@@ -610,6 +610,16 @@ function createUpdatedOrderRegistryResult({ registry, orders, ownerships, index,
   })
 }
 
+function unchangedOrderUpdate({ registry, stale = false, duplicate = false } = {}) {
+  return Object.freeze({
+    registry,
+    applied: false,
+    duplicate,
+    stale,
+    unknown: false,
+  })
+}
+
 function unknownOrderUpdateResult({ registry }) {
   return Object.freeze({
     registry,
