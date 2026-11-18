@@ -116,3 +116,36 @@ test("SQLite consumes a rejected promise returned by a transaction callback afte
     await database.close()
   }
 })
+
+
+test("SQLite distinguishes null transaction results from function thenables", async () => {
+  const database = await createConnectedDatabase()
+  const functionThenable = Object.assign(
+    () => {},
+    {
+      then(resolve) {
+        resolve()
+      },
+    },
+  )
+
+  try {
+    assert.equal(
+      await database.transaction(() => null),
+      null,
+      "A null callback result is a valid synchronous transaction result",
+    )
+    await assert.rejects(
+      database.transaction(() => functionThenable),
+      /must be synchronous/,
+      "A function object with a then method must be rejected as asynchronous work",
+    )
+    assert.equal(
+      database.prepare("SELECT 1 AS value").get().value,
+      1,
+      "Rejecting a function thenable must leave the SQLite connection usable",
+    )
+  } finally {
+    await database.close()
+  }
+})
