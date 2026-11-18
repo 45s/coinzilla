@@ -5,6 +5,7 @@ import {
   analyzeMarkdownStyleDocuments,
   parseChangedMarkdownDiff,
   GIT_DIFF_MAX_BUFFER_BYTES,
+  isHistoricalPath,
 } from "./check-markdown-style.js"
 
 function getLineNumbers(content) {
@@ -297,9 +298,9 @@ test("excludes historical documents from every changed-file style rule", () => {
   const fence = String.fromCharCode(96).repeat(3)
   const content = `# Historical  \r\n\n\n### Skipped\r\n# Second H1\r\n${fence}\ncode\n${fence}\nParagraph\n- item\n`
   const result = analyzeMarkdownStyleDocuments({
-    documents: [{ path: "apps/harvester/docs/audits/legacy-style.md",
+    documents: [{ path: "apps/harvester/docs/audits/reports/legacy-style.md",
 content }],
-    changesByPath: new Map([["apps/harvester/docs/audits/legacy-style.md", {
+    changesByPath: new Map([["apps/harvester/docs/audits/reports/legacy-style.md", {
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
@@ -344,4 +345,46 @@ test("ignores indented code blocks in changed-file Markdown enforcement", () => 
     [],
     "indented code must not trigger blocking changed-file style rules",
   )
+})
+
+test("classifies every historical path family without excluding adjacent living documents", () => {
+  const historicalPaths = [
+    "apps/harvester/AUDIT.md",
+    "apps/harvester/AUDIT_2026-11-06.md",
+    "apps/harvester/docs/audits/reports/AUDIT.md",
+    "apps/harvester/docs/incidents/2026-11-05-user-data-stream-recovery.md",
+    "apps/harvester/docs/tasks/AI_TASK_JOURNAL_INTEGRATION.md",
+    "apps/harvester/docs/DDD_CLEAN_ARCHITECTURE_AUDIT.md",
+    "apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md",
+    "docs/audits/repository-engineering-audit.md",
+    "docs/ai-agent/repository-engineering-audit.md",
+  ]
+
+  for (const path of historicalPaths) {
+    assert.equal(isHistoricalPath(path), true, `${path} is preserved historical evidence and must not be forced through changed-file cleanup`)
+  }
+
+  const maintainedPaths = [
+    "README.md",
+    "apps/harvester/README.md",
+    "apps/harvester/ROADMAP.md",
+    "apps/harvester/docs/CONSERVATIVE_SESSION_AUDIT.md",
+    "apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md",
+    "apps/harvester/docs/plans/HARVESTER_DOCUMENTATION_INVENTORY.md",
+    "apps/harvester/docs/audits/README.md",
+    "apps/harvester/docs/audits/INVESTIGATION_TEMPLATE.md",
+    "apps/harvester/docs/audits/reports/README.md",
+    "apps/harvester/docs/audits/sessions/README.md",
+    "apps/harvester/docs/audits/evidence/README.md",
+    "apps/harvester/docs/incidents/README.md",
+    "apps/harvester/docs/tasks/README.md",
+    "docs/README.md",
+    "docs/audits/README.md",
+    "docs/ai-agent/README.md",
+    "docs/architecture/README.md",
+  ]
+
+  for (const path of maintainedPaths) {
+    assert.equal(isHistoricalPath(path), false, `${path} is maintained guidance or an index and must remain subject to changed-file enforcement`)
+  }
 })
