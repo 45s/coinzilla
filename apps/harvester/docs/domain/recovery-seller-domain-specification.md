@@ -8,7 +8,7 @@ created: 2026-11-14
 
 # Recovery Seller (RS) — Domain Specification
 
-**Status: DRAFT — first-implementation owner decisions are recorded; remaining work is implementation and verification.**
+**Status: DRAFT — first-implementation owner decisions are recorded; RS-3 SELL policy implementation and verification are in progress.**
 
 **Authority:** This draft becomes the canonical RS contract after formal acceptance. Until then it records the agreed direction, hard safety invariants, accounting boundaries, and remaining implementation requirements. It does not amend the [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
@@ -221,6 +221,17 @@ flowchart TD
 Merged PRs #1144, #1152, #1153, #1203 and #1212 provide immutable order ownership, verified legacy Spot allocation, canonical-Fill-bound mixed allocation, partial-fill staging, terminal reconciliation and atomic dual-projection accounting. [PR #1276](https://github.com/45s/coinzilla/pull/1276) completes the application workflow: it stages the terminal OrderRegistry update, commits the recovery Portfolio and legacy projections, calculates separate recovery/legacy allocation results, and only then publishes the terminal registry state. PR #1379 corrects the pure profitability result so recovery, legacy and combined-cycle eligibility are independently required. A failed reconciliation or projection leaves the prior state and reservation intact. A confirmed execution is always accounted even if a profitability gate fails; profitability results do not authorize discarding actual fills. The verified Spot and signed quote-cash-flow providers remain empty by default. The workflow is not registered in bootstrap and RS remains non-executable.
 
 ## 5. Profitability — independent allocations and combined SELL target
+
+### 5.0 Owner-approved pre-submission SELL policy — 2026-11-18
+
+The strategy owner confirmed the following policy for the first RS SELL implementation. These decisions resolve the matching alternatives in the blocker audit and supersede older undecided draft wording:
+
+- **Profit target:** use only the existing per-pair `minProfit`. Do not add a global minimum, percentage, additional threshold, or new configuration field. Preserve the independent recovery, legacy non-loss, and combined-cycle profitability gates already implemented by PR #1379. The value must follow the existing Conservative floor of at least `0.01` quote-asset units.
+- **Order type:** follow the existing Conservative pair configuration. `makerPercent === 0` selects `LIMIT_MAKER` (post-only); a non-zero `makerPercent` selects ordinary `LIMIT`.
+- **Fee reserve:** for `LIMIT_MAKER`, reserve the configured maker percentage. For ordinary `LIMIT`, reserve the higher of the configured maker and taker percentages. Apply the resulting configured fee reserve to the existing quote- and base-fee planning inputs. Actual fill commission amount and asset remain authoritative for accounting.
+- **Exchange filters:** any SELL price/quantity increment, minimum/maximum price, minimum/maximum quantity, or minimum/maximum notional violation is a global sticky STOP. Do not adjust price or quantity, increase legacy allocation, split the SELL, classify the condition as dust, or retry automatically.
+
+The policy is a pure pre-submission decision only. It does not perform broker I/O, register RS in bootstrap, clear STOP, or authorize runtime execution. Missing or unreliable third-asset fee valuation remains fail-closed; this decision does not approve a valuation source or treating an unknown fee as zero.
 
 **SELL ONLY IN PROFIT** is a hard pre-submission safety requirement with three independent checks. The recovery allocation must earn at least pair-level `minProfit`; the legacy allocation must not realize a loss against its fixed historical cost; and the combined cycle must recover both cost bases, cover all applicable BUY/SELL commissions, and earn at least pair-level `minProfit`. Overall eligibility requires all applicable checks. Actual confirmed fills are always accounted, even when any realized allocation or cycle result fails; a failed gate cannot reverse or suppress an exchange fill.
 

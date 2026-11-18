@@ -110,70 +110,39 @@ Focused CG evidence files include `helpers.test.js`, `initial-buy-price.test.js`
 | Accounting and ownership | Canonical fill accounting, Portfolio and RecoveryLedger | RS legacy/recovery allocation, canonical-fill binding, staged partials, terminal reconciliation and atomic dual projections | Foundation implemented; integration proof remains |
 | Same-market concurrency | Shared engine/account reservations | Shared-Portfolio architecture contract exists; RS not wired | RS-4 integration and tests required |
 
-## 3. Confirmed policy blockers
+## 3. Owner decisions confirmed — 2026-11-18
 
-These are implementation gaps or decisions required before a complete RS SELL policy can be composed. The labels describe severity for safe completion, not a code defect in the existing planner.
+The strategy owner explicitly resolved three pre-submission SELL policy questions. These are implementation requirements, not remaining blockers:
 
-### P1 — SELL order type and post-only policy
+1. **Profit target:** use only the existing per-pair `minProfit`. Do not add a global setting, percentage, extra threshold or other configuration. Keep the independent recovery, legacy non-loss and combined-cycle gates from PR #1379. Enforce the existing Conservative minimum of `0.01` quote-asset units.
+2. **Order type and fee reserve:** `makerPercent === 0` selects `LIMIT_MAKER` and maker fee reserve. A non-zero `makerPercent` selects ordinary `LIMIT` and reserves the higher configured maker/taker percentage. Actual fill commissions remain authoritative.
+3. **Exchange filters:** any price/quantity increment, minimum/maximum price, minimum/maximum quantity or minimum/maximum notional violation latches global STOP. Do not adjust, split, increase authorized legacy quantity, retry or classify it as dust.
 
-- Evidence: RS SELL planner `calculateRecoverySellerSellPlan` returns a quantity/economics/price plan; it does not select an order type or create a SELL intent. CG selects its order behavior from the configured order type and has explicit post-only preflight.
-- Decision: `LIMIT_MAKER` (post-only, reject if it would take) or `LIMIT` (may execute maker or taker).
-- Example: if a calculated price crosses the book, a post-only order may reject. A regular LIMIT can execute immediately and incur taker fees. The policy must specify which behavior RS expects.
-- Until decided: no SELL authorization or submission.
+These rules do not change CG behavior. The RS evaluator is pure and offline; it does not submit orders or enable RS.
 
-### P1 — Maker/taker fee role for RS SELL
+## 4. Remaining policy boundaries — fail closed
 
-- Evidence: RS planner requires explicit `quoteFeeRate` and `baseFeeRate`; it does not choose them from order type/execution role. CG's `calculateSellFeeRate` already defines its reserve selection.
-- Decision: guaranteed maker rate, worst-case `max(maker,taker)`, or order-type-specific reserve only where execution role is guaranteed.
-- Example: reserving 0.1% when a SELL can execute at 0.2% may underprice the order and miss recovery/profit.
-- Until decided: fee inputs remain explicit; do not infer a role.
+### Post-fill adverse result
 
-### P1 — Full SELL exchange-filter disposition
+A confirmed SELL fill that fails recovery, applicable legacy or combined profitability is still committed exactly once with actual fees. The cycle remains unresolved and global STOP blocks new trading actions. No follow-up SELL, replacement, additional BUY, cycle reset or automatic recovery is authorized.
 
-- Evidence: RS planner rounds price to tick and quantity to step, then checks allocation/debit precision against recovery and authorized legacy inventory. It does not evaluate the full min/max quantity, notional or price filter set and does not decide how to react to filter rejection.
-- Decision: block/wait; adjust price/quantity within both Position limits; or another approved rule. Any adjustment must re-run all applicable profitability gates. The one-SELL-per-cycle contract prevents silently splitting the order into multiple SELLs.
-- Example: a 5.01 ZRO target may exceed `maxQuantity`; a capped quantity may no longer pass the recovery, legacy and combined profit targets. Never increase the legacy allocation or overdraw either Position to make an order pass.
-- Until decided: block the affected SELL and retain inventory; do not classify price-filter or ordinary sellable residual as dust.
+### Terminal partial, canceled, rejected or expired SELL
 
-### P1 — Terminal partial/canceled SELL resolution
+The one-SELL-per-cycle rule remains. A terminal underfill/cancel/reject/expiry leaves the cycle unresolved. Preserve order identity, fills and reservations through canonical reconciliation. Do not create a second SELL or a new BUY cycle.
 
-- Evidence: `cycle-state.js` allows one SELL lifecycle. A fully reconciled `FILLED` SELL closes only if profitability is eligible. A terminal partial/canceled/rejected/expired order becomes `UNRESOLVED`; BUY evaluation blocks the cycle. No second SELL lifecycle or next cycle is authorized from that state.
-- Decision: operator resolution; replan remainder in a separately defined later cycle; or a continuation/replacement within the same cycle (which conflicts with the one-SELL contract).
-- Example: a SELL fills 3.0 ZRO and is canceled with 2.01 ZRO remaining. The fills are accounted, but the current policy intentionally cannot decide what to do with the remainder.
-- Until decided: keep the cycle unresolved and block new BUY/SELL intents.
+### Third-asset commission valuation
 
-### P1 — Adverse actual SELL result
+The planner requires an explicit quote-currency value. A missing value is not zero. No valuation source, timestamp or freshness policy has been approved; until one is available and reliable, fail closed before accounting projections or SELL authorization.
 
-- Evidence: confirmed fills are committed even when profitability is false; cycle reconciliation leaves the result unresolved. The sticky STOP blocks new trading actions but no approved post-loss resolution is composed.
-- Decision: sticky STOP/operator review, or a separately approved recovery action after complete accounting.
-- Example: an order fills but actual commissions cause recovery net profit to fall below `minProfit`. The exchange facts must be committed exactly once; the next trading action must not be guessed.
-- Until decided: reconcile and account; block next cycle and require operator review.
+### Sticky STOP resolution
 
-### P1 — Third-asset commission valuation source
-
-- Evidence: the planner accepts explicit `thirdAssetFeeQuoteValue`; accounting rejects incomplete/unreliable valuation, but the SELL policy has no approved source, timestamp or freshness rule for that quote valuation.
-- Decision: authoritative broker valuation, or an approved conversion price source at execution timestamp with defined freshness/availability.
-- Example: a BNB commission cannot be treated as zero USDT cost if its quote value is missing or stale.
-- Until decided: fail closed before accounting projections or SELL authorization.
-
-### P1 — Sticky STOP resolution / operator workflow
-
-- Evidence: `stop-decision.js` latches the first STOP, allows only non-trading WAIT/RECONCILE while stopped and exposes no clear/reset transition. This preserves safety but does not define how a reconciled operator-approved issue can resume RS.
-- Decision: a documented, audited operator resolution/reset boundary (or explicitly permanent process-stop semantics) before runtime integration. It must not silently clear on a normal market event or restart.
-- Until decided: STOP is permanent for that policy instance; no automatic resume.
-
-## 4. P2 policy-input and behavior clarification
-
-### Enforce CG minimum-profit floor at the RS policy boundary
-
-- CG's canonical contract requires `minProfit >= 0.01` quote currency. RS SELL-plan input validation currently requires only a positive `minProfit`, so a direct policy caller can pass a value below 0.01. RS runtime configuration/validation does not yet exist to demonstrate that every caller will reject it.
-- Recommendation: validate the same floor in the RS policy/config boundary and add exact-boundary tests (`0.01` accepted; below rejected) before integration. This is a confirmed guard gap; whether the future config boundary supplies it is not yet verified.
+The existing global STOP latch is permanent for its policy instance. Only non-trading WAIT/RECONCILE may proceed while stopped. There is no automatic clear on a later market event or process restart; a reset/resume mechanism is not part of this task.
 
 ### Trailing BUY behavior
 
-- CG trailing repricing is a separate pure decision and application workflow. RS BUY evaluation currently calculates initial/next tranche prices but does not invoke CG trailing repricing.
-- RS-1/RS-3 contract says to reuse CG BUY cadence and initial/next pricing; it does not clearly authorize trailing/repricing during recovery-tranche accumulation.
-- Recommendation: confirm whether RS BUY tranches are fixed at the initial/next BUY price until terminal state (as currently modeled), or whether a trailing replacement is required. Do not add repricing by assumption.
+The RS BUY evaluator currently uses Conservative initial/next tranche pricing but does not invoke trailing repricing. No additional RS trailing behavior is added without an explicit owner decision.
+
+`minProfit` validation is no longer an open policy question: it must follow the existing Conservative `0.01` quote-asset minimum and remains pair-level.
 
 ## 5. Decisions already settled — do not reopen
 

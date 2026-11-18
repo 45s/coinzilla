@@ -261,3 +261,14 @@ test("rejects invalid fee rates and missing third-asset quote valuation input", 
     "Missing third-asset valuation must not be treated as a zero fee.",
   )
 })
+
+test("rejects minProfit below the existing Conservative quote-asset minimum", () => {
+  assert.throws(
+    () => calculateRecoverySellerSellPlan({
+      ...validInput,
+      minProfit: "0.009",
+    }),
+    /minProfit must be at least 0.01/,
+    "Recovery Seller must enforce the existing per-pair minimum profit floor rather than accepting a smaller positive amount.",
+  )
+})
