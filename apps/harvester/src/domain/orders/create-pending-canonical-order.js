@@ -1,16 +1,25 @@
 import { CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
 import { assertDecimalString } from "@coinzilla/utils"
 
-function validatePendingOrderIntent({ order, market, clientOrderId, supportedOrderTypes }) {
+function validatePendingOrderObject({ order }) {
   if (!order || typeof order !== "object" || Array.isArray(order)) {
     throw new TypeError("createPendingCanonicalOrder requires an order object")
   }
+}
+
+function validatePendingOrderMarket({ market }) {
   if (!(market instanceof Market)) {
     throw new TypeError("createPendingCanonicalOrder requires a canonical Market")
   }
+}
+
+function validatePendingOrderClientId({ clientOrderId }) {
   if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
     throw new TypeError("createPendingCanonicalOrder requires clientOrderId")
   }
+}
+
+function resolvePendingOrderType({ order, market, supportedOrderTypes }) {
   if (typeof order.symbol !== "string" || order.symbol.trim().toUpperCase() !== market.symbol) {
     throw new TypeError("Order symbol does not match the selected Market")
   }
@@ -27,6 +36,13 @@ function validatePendingOrderIntent({ order, market, clientOrderId, supportedOrd
   assertDecimalString({ value: order.quantity, field: "order.quantity" })
   assertDecimalString({ value: order.price, field: "order.price" })
   return type
+}
+
+function validatePendingOrderIntent({ order, market, clientOrderId, supportedOrderTypes }) {
+  validatePendingOrderObject({ order })
+  validatePendingOrderMarket({ market })
+  validatePendingOrderClientId({ clientOrderId })
+  return resolvePendingOrderType({ order, market, supportedOrderTypes })
 }
 
 /**
