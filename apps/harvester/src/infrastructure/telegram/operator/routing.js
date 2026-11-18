@@ -6,6 +6,10 @@ import {
   messageAuthorizationFailure,
 } from "./interaction.js"
 import { parseTelegramOperatorCommand } from "./commands.js"
+import {
+  TELEGRAM_OPERATOR_ACTIONS,
+  TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN,
+} from "./constants.js"
 import { helpText, mainMenuKeyboard, PAGE_METHODS } from "./keyboard.js"
 import {
   handleNavigationCallback,
@@ -85,7 +89,98 @@ async function routeTelegramCallbackData({ callback,
  navigation })
     return
   }
-  const ask = /^cc:ask:(PAUSE|RESUME):([A-Z0-9]{2,30})$/.exec(callback.data)
+  const ask = new RegExp(`^cc:ask:(${TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN}):([A-Z0-9]{2,30})import {
+  normalizeTelegramUserId,
+  resolveMessageAction,
+  resolveCallbackAction,
+  callbackAuthorizationFailure,
+  messageAuthorizationFailure,
+} from "./interaction.js"
+import { parseTelegramOperatorCommand } from "./commands.js"
+import {
+  TELEGRAM_OPERATOR_ACTIONS,
+  TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN,
+} from "./constants.js"
+import { helpText, mainMenuKeyboard, PAGE_METHODS } from "./keyboard.js"
+import {
+  handleNavigationCallback,
+  handleMarketSelectionCallback,
+  handleConfirmationCallback,
+  handleCancelCallback,
+} from "./callbacks.js"
+import { respondToAuthorizedMessage } from "./messages.js"
+
+async function authorizeTelegramCallback({
+  callback,
+  chat,
+  userId,
+  chatId,
+  signal,
+  interaction,
+  allowedUsers,
+  logStage,
+  answerCallback,
+}) {
+  if (typeof callback?.id !== "string" || callback.id.trim() === "") {
+    logStage({
+      interaction,
+      message: "Telegram interaction REJECTED",
+      stage: "AUTHORIZATION",
+      level: "warn",
+      fields: { reason: "INVALID_CALLBACK_ID" },
+    })
+    return undefined
+  }
+  const rejectionReason = callbackAuthorizationFailure({ callback,
+ chat,
+ userId,
+ chatId,
+ allowedUsers })
+  if (rejectionReason) {
+    logStage({
+      interaction,
+      message: "Telegram interaction REJECTED",
+      stage: "AUTHORIZATION",
+      level: "warn",
+      fields: { reason: rejectionReason },
+    })
+    await answerCallback({ callbackId: callback.id,
+ text: "Not authorized.",
+ signal,
+ interaction })
+    return undefined
+  }
+  logStage({ interaction,
+ message: "Telegram interaction AUTHORIZED",
+ stage: "AUTHORIZED" })
+  const messageId = callback.message?.message_id
+  if (!Number.isSafeInteger(messageId) || messageId <= 0 || typeof callback.data !== "string") {
+    logStage({
+      interaction,
+      message: "Telegram interaction REJECTED",
+      stage: "CALLBACK_VALIDATION",
+      level: "warn",
+      fields: { reason: "INVALID_OR_EXPIRED_CALLBACK" },
+    })
+    await answerCallback({ callbackId: callback.id,
+ text: "Invalid or expired control.",
+ signal,
+ interaction })
+    return undefined
+  }
+  return { messageId }
+}
+
+async function routeTelegramCallbackData({ callback,
+ update,
+ common }) {
+  const navigation = /^cc:(nav|refresh):(home|status|markets|pause|resume|positions|orders|balances)$/.exec(callback.data)
+  if (navigation) {
+    await handleNavigationCallback({ ...common,
+ navigation })
+    return
+  }
+  ).exec(callback.data)
   if (ask) {
     await handleMarketSelectionCallback({ ...common,
  ask,
@@ -178,11 +273,11 @@ async function respondToMenuCommand({ parsed,
     })
     return true
   }
-  if (parsed.type !== "PAUSE_MENU" && parsed.type !== "RESUME_MENU") {
+  if (parsed.type !== TELEGRAM_OPERATOR_ACTIONS.PAUSE_MENU && parsed.type !== TELEGRAM_OPERATOR_ACTIONS.RESUME_MENU) {
     return false
   }
-  const page = parsed.type === "PAUSE_MENU" ? "pause" : "resume"
-  interaction.action = page.toUpperCase()
+  const page = parsed.type === TELEGRAM_OPERATOR_ACTIONS.PAUSE_MENU ? "pause" : "resume"
+  interaction.action = page === "pause" ? TELEGRAM_OPERATOR_ACTIONS.PAUSE : TELEGRAM_OPERATOR_ACTIONS.RESUME
   context.logStage({ interaction,
  message: "Telegram command STARTED",
  stage: "COMMAND_STARTED" })
