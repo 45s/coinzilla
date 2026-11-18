@@ -29,7 +29,7 @@ async function createRegisteredProvider({ broker, identity, tradingMode }) {
     } catch (disconnectError) {
       throw new AggregateError(
         [error, disconnectError],
-        "Binance provider validation failed and constructed-client cleanup also failed",
+        `Provider ${identity.providerType} validation failed and constructed-client cleanup also failed`,
         { cause: disconnectError },
       )
     }
@@ -105,7 +105,7 @@ async function connectRegisteredProviders({ providerRegistry, brokerName, provid
 }
 
 /**
- * Construct the configured Binance instance at the composition boundary and connect it through the registry.
+ * Construct the configured provider instance at the composition boundary and connect it through the registry.
  * @returns {Promise<object>} The registered Harvester BrokerPort facade.
  */
 export async function connectBroker({
