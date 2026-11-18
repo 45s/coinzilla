@@ -286,6 +286,8 @@ PR #1166 added two maintained Harvester documents outside the frozen 97-file bas
 
 The complete recursive Git tree at this checkpoint returned `truncated: false` and contains **160 tracked Markdown/MDX files**: **89 under `apps/harvester/` and 71 elsewhere**. A direct path comparison against the previous 159-file checkpoint `88b89995a4f9e62a6fe4b0451ea675ce0495b539` found exactly one addition and zero removals. The frozen 97-file baseline and all intervening historical checkpoints above remain unchanged.
 
+The current checker classifies **132 paths as maintained** and **28 as historical evidence/archive records**. GitHub templates and maintained README indexes remain in the maintained set; exclusions are limited to explicit historical audit, evidence, incident, session, task and dated-audit path families. PR #1429 adds regression tests proving that adjacent living indexes and reusable templates are not swept into historical exclusions.
+
 | Added path | Purpose and disposition |
 | --- | --- |
 | `apps/harvester/docs/persistence/sqlite-integration-blueprint.md` | Source-verified Harvester persistence inventory, ownership boundaries, Production/Testnet isolation, operational constraints and phased migration plan; KEEP as the design/audit authority, with current implementation status delegated to the persistence README and #1327. |
