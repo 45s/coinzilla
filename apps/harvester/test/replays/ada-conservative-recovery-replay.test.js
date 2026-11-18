@@ -157,6 +157,7 @@ async function submitAdaBuySequence(replay) {
 
 async function fillAdaRecoverySell({ replay, replacementSell }) {
   const timestamp = Math.max(Date.now(), replacementSell.createdAt + 1)
+  await replay.publishMarketPrice(scenarioExpectations.sellPrice)
   await replay.publishFullOrderFill({
     order: replacementSell,
     price: scenarioExpectations.sellPrice,
@@ -218,7 +219,15 @@ function assertAdaExecutionReports(replay) {
 
 function assertAdaBelowTargetOutcome({ replay, replacementSell }) {
   const position = replay.runtime.portfolio.getPosition({ symbol: MARKET_SYMBOL })
-  assert.equal(position.baseQuantity.amount, "0.1")
+  assert.equal(
+    position.baseQuantity.amount,
+    "0.1",
+    JSON.stringify({
+      runtimeErrors: replay.harvesterRuntimeErrors.map((error) => error.message ?? String(error)),
+      lifecycleEvents: replay.receivedLifecycleEvents.map(({ name, data }) => ({ name, data })),
+      lastExecutionReport: replay.receivedExecutionReports.at(-1),
+    }),
+  )
   assert.equal(position.freeBaseQuantity.amount, "0")
   assert.equal(position.spent.amount, "15.215")
   assert.equal(position.quoteNetCashFlow.amount, scenarioExpectations.expectedProfit)
