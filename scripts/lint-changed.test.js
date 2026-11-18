@@ -75,7 +75,7 @@ async function createStrictLintWorkspace() {
     );
     await writeFile(
       join(cwd, "package.json"),
-      JSON.stringify({ type: "module" }) + "\n",
+      `${JSON.stringify({ type: "module" })}\n`,
     );
     await symlink(
       join(repositoryRoot, "node_modules"),
