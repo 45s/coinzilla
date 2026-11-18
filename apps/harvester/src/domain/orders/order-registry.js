@@ -83,7 +83,13 @@ function validateProviderIdentityUnchanged({
     current,
     next,
   }) {
-  for (const field of ["providerInstanceId", "providerType", "accountId"]) {
+  const fields = ["providerInstanceId", "providerType", "accountId"]
+  const currentHasIdentity = fields.some((field) => current[field] !== undefined)
+  const nextHasIdentity = fields.some((field) => next[field] !== undefined)
+  if (!currentHasIdentity && nextHasIdentity) {
+    throw new Error("Cannot assign provider provenance to a legacy canonical order from an exchange update")
+  }
+  for (const field of fields) {
     if (next[field] !== undefined && current[field] !== undefined && next[field] !== current[field]) {
       throw new Error(`Canonical order update changed immutable ${field}`)
     }
