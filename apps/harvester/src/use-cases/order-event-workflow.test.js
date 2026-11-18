@@ -124,9 +124,9 @@ function createWorkflowCalls() {
   }
 }
 
-function createWorkflowState({ updateResult, activeOrders } = {}) {
+function createWorkflowState({ updateResult, activeOrders, registry } = {}) {
   const state = {
-    registry: {
+    registry: registry ?? {
       orders: [],
       applyUpdate: () => ({
         ...updateResult,
