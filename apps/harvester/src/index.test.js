@@ -2157,8 +2157,3 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
     process.exitCode = previousExitCode
   }
 })
-
-
-function createMainProcessLockAcquirer({
-  lockScopes,
-  released
