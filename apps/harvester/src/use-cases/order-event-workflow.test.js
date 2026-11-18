@@ -254,6 +254,7 @@ duplicate: false } }),
   activeOrders = [],
   logger,
   registry,
+  requireProviderProvenance = false,
 } = {}) {
   const calls = createWorkflowCalls()
   const state = createWorkflowState({ updateResult,
@@ -270,6 +271,11 @@ activeOrders })
     isStopping,
     accountingResult,
   })
+  if (requireProviderProvenance) {
+    Object.defineProperty(dependencies.updateTradingAccounting, "requiresProviderProvenance", {
+      value: true,
+    })
+  }
   const workflow = makeOrderEventWorkflow({
     ...dependencies,
     logger,
@@ -647,7 +653,7 @@ test("enriches a provider-less exchange fill from its already registered canonic
 test("fails closed and pauses when a legacy order has no recorded provider provenance", async () => {
   const order = makeOrder({ includeProviderProvenance: false })
   const fill = makeFill({ includeProviderProvenance: false })
-  const { workflow, calls } = makeWorkflow()
+  const { workflow, calls } = makeWorkflow({ requireProviderProvenance: true })
   const result = await workflow.processUserDataEventTransition({
     event: {
       eventType: "executionReport",
