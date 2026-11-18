@@ -270,8 +270,10 @@ function createMultiAccountRuntime({
     providerType: provider.providerType,
     accountId: provider.accountId,
     environment: provider.environment,
+    required: provider.required !== false,
     executionSymbols: Object.freeze([...(runtime.executionSymbols ?? [])]),
     marketDataSources: Object.freeze({ ...(runtime.marketDataSources ?? {}) }),
+    marketDataProviderTypes: Object.freeze({ ...(runtime.marketDataProviderTypes ?? {}) }),
   })))
   const subscriptions = Object.freeze([...new Set(
     startedAccounts.flatMap(({ runtime }) => runtime.subscriptions ?? []),
@@ -342,12 +344,15 @@ function createFailedAccount({
   cleanupErrors,
   lockRetained,
   lockReleasePending,
+  executionSymbols,
 }) {
   return Object.freeze({
     providerInstanceId: provider.providerInstanceId,
     providerType: provider.providerType,
     accountId: provider.accountId,
     environment: provider.environment,
+    required: provider.required !== false,
+    executionSymbols: Object.freeze([...(executionSymbols ?? [])]),
     errorName: error?.name ?? "Error",
     errorCode: error?.code,
     errorMessage: error?.message ?? String(error),
@@ -379,6 +384,27 @@ function throwIfNoAccountStarted({
   )
 }
 
+async function throwIfRequiredProviderFailed({
+  startedAccounts,
+  failedAccounts,
+  failedErrors,
+  releaseProviderLock,
+}) {
+  const requiredFailures = failedAccounts.filter(({ required }) => required !== false)
+  if (requiredFailures.length === 0) {
+    return
+  }
+  const cleanupErrors = await stopStartedAccounts({
+    startedAccounts,
+    releaseProviderLock,
+  })
+  throw new AggregateError(
+    [...failedErrors, ...cleanupErrors],
+    "A required provider account failed to start; all started provider accounts were rolled back",
+    { cause: failedErrors[0] },
+  )
+}
+
 function createProviderAccountStartInput({
   provider,
   providers,
@@ -399,7 +425,11 @@ function createProviderAccountStartInput({
     symbol,
     marketDataProviderBySymbol.get(symbol),
   ]))
-  const useExplicitExecutionRouting = deferMarketDataStart || appConfig.executionRouting !== undefined
+  const providerById = new Map(providers.map((entry) => [entry.providerInstanceId, entry]))
+  const marketDataProviderTypes = Object.fromEntries(executionSymbols.map((symbol) => {
+    const sourceProvider = providerById.get(marketDataProviderBySymbol.get(symbol))
+    return [symbol, sourceProvider?.providerType]
+  }))
   return {
     appConfig: createAccountAppConfig({
       appConfig,
@@ -415,13 +445,12 @@ function createProviderAccountStartInput({
     operationalStateStore: index === 0 ? operationalStateStore : undefined,
     brokerAdapterFactory: provider.brokerAdapterFactory,
     providerIdentity: provider.identity,
-    ...(useExplicitExecutionRouting ? {
-      executionSymbols: Object.freeze([...executionSymbols]),
-      marketDataSources: Object.freeze(marketDataSources),
-    } : {}),
-    requiredCapabilities: useExplicitExecutionRouting
-      ? requiredCapabilitiesByProvider.get(provider.providerInstanceId) ?? Object.freeze([])
-      : Object.freeze([]),
+    providerRequired: provider.required !== false,
+    executionSymbols: Object.freeze([...executionSymbols]),
+    marketDataSymbols: Object.freeze([...executionSymbols]),
+    marketDataSources: Object.freeze(marketDataSources),
+    marketDataProviderTypes: Object.freeze(marketDataProviderTypes),
+    requiredCapabilities: requiredCapabilitiesByProvider.get(provider.providerInstanceId) ?? Object.freeze([]),
     deferMarketDataStart,
     ...(deferMarketDataStart ? {
       onBrokerConnected: ({ providerInstanceId, broker } = {}) => {
@@ -579,6 +608,7 @@ async function startConfiguredProviderAccounts({
       cleanupErrors: result.cleanupErrors ?? [],
       lockRetained: result.lockRetained === true,
       lockReleasePending: result.lockReleasePending === true,
+      executionSymbols: executionSymbolsByProvider.get(provider.providerInstanceId),
     }))
     failedErrors.push(result.error, ...(result.cleanupErrors ?? []))
   }
@@ -650,6 +680,12 @@ export async function startProviderAccounts({
     providers,
     startedAccounts: startup.startedAccounts,
     failedErrors: startup.failedErrors,
+  })
+  await throwIfRequiredProviderFailed({
+    startedAccounts: startup.startedAccounts,
+    failedAccounts: startup.failedAccounts,
+    failedErrors: startup.failedErrors,
+    releaseProviderLock,
   })
   if (deferMarketDataStart) {
     try {

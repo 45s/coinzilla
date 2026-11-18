@@ -16,33 +16,92 @@ function assertSupportedStrategyConfig(strategyConfig) {
     throw new Error("Conservative strategy must remain enabled in CG_coinGrabber settings")
   }
   if (strategyConfig.settings?.aggressive?.enabled === true) {
-    throw new Error("Aggressive strategy is disabled and deferred; set strategies.CG_coinGrabber.settings.aggressive.enabled=false")
+    throw new Error(
+      "Aggressive strategy is disabled and deferred; set strategies.CG_coinGrabber.settings.aggressive.enabled=false",
+    )
   }
 }
-export async function resolveHarvesterOptions({ configSource, appConfig: suppliedAppConfig, loadConfig, env = process.env, eventPublisher, logger } = {}) {
+
+function selectExecutionPairs({ pairs, executionSymbols }) {
+  if (executionSymbols === undefined) {
+    return pairs
+  }
+  if (!Array.isArray(executionSymbols) || executionSymbols.length === 0) {
+    throw new TypeError("executionSymbols must be a non-empty array when supplied")
+  }
+  const selectedPairs = {}
+  for (const symbol of executionSymbols) {
+    if (typeof symbol !== "string" || !symbol.trim()) {
+      throw new TypeError("executionSymbols must contain non-empty market symbols")
+    }
+    if (!Object.hasOwn(pairs, symbol)) {
+      throw new TypeError(
+        `Execution route references market ${symbol}, which is not enabled for the selected environment`,
+      )
+    }
+    if (Object.hasOwn(selectedPairs, symbol)) {
+      throw new TypeError(`Execution symbols contain duplicate market ${symbol}`)
+    }
+    selectedPairs[symbol] = pairs[symbol]
+  }
+  return selectedPairs
+}
+
+export async function resolveHarvesterOptions({
+  configSource,
+  appConfig: suppliedAppConfig,
+  loadConfig,
+  env = process.env,
+  eventPublisher,
+  logger,
+  executionSymbols,
+} = {}) {
   const loadedAppConfig = suppliedAppConfig ?? await loadConfig(configSource)
-  const configuredAppConfig = resolveTelegramOperatorConfig({ appConfig: loadedAppConfig,
-env })
+  const configuredAppConfig = resolveTelegramOperatorConfig({
+    appConfig: loadedAppConfig,
+    env,
+  })
   const strategyConfig = configuredAppConfig.strategies?.CG_coinGrabber
   assertSupportedStrategyConfig(strategyConfig)
-  const runtime = resolveRuntimeConfig({ tradingMode: env.TRADING_MODE,
-environment: env.NODE_ENV })
-  const { environment, brokerName, tradingMode, tradingEnabled } = runtime
+
+  const runtime = resolveRuntimeConfig({
+    tradingMode: env.TRADING_MODE,
+    environment: env.NODE_ENV,
+  })
+  const {
+    environment,
+    brokerName,
+    tradingMode,
+    tradingEnabled,
+  } = runtime
+
   if (Object.keys(strategyConfig.pairs ?? {}).length === 0) {
     throw new Error("Conservative trading requires at least one enabled pair")
   }
-  const pairs = selectPairsForTradingMode({ pairs: strategyConfig.pairs,
-tradingMode })
+
+  const environmentPairs = selectPairsForTradingMode({
+    pairs: strategyConfig.pairs,
+    tradingMode,
+  })
+  const pairs = selectExecutionPairs({
+    pairs: environmentPairs,
+    executionSymbols,
+  })
   if (Object.keys(pairs).length === 0) {
-    throw new Error(`No CG_coinGrabber pairs configured for TRADING_MODE=${tradingMode}; configure a pair with tradingEnvironment="${tradingMode}" or "both"`)
+    throw new Error(
+      `No CG_coinGrabber execution markets configured for TRADING_MODE=${tradingMode}`,
+    )
   }
+
   const { settings } = strategyConfig
   const appConfig = {
     ...configuredAppConfig,
     strategies: {
       ...configuredAppConfig.strategies,
-      CG_coinGrabber: { ...strategyConfig,
-pairs },
+      CG_coinGrabber: {
+        ...strategyConfig,
+        pairs,
+      },
     },
   }
   const effectiveConfiguration = createEffectiveStrategyConfigurationFingerprint({
@@ -55,7 +114,7 @@ pairs },
     strategyMode: "conservative",
     tradingMode,
     configurationFingerprint: effectiveConfiguration.fingerprint,
-    tradingEnabled,
+    tradingEnabled: tradingEnabled && enabledSymbols.length > 0,
   })
   if (validatedConfigurationData?.ok !== true) {
     throw new EffectiveConfigurationError({
@@ -63,31 +122,37 @@ pairs },
       expected: "a complete effective-configuration evidence DTO",
     })
   }
+
   publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.CONFIG_VALIDATED,
     dataResult: validatedConfigurationData,
   })
-  const log = { message: "App configuration validated",
-environment,
-broker: brokerName,
-tradingMode,
-enabledSymbols,
-strategyMode: `conservative-${tradingMode}` }
+
+  const log = {
+    message: "App configuration validated",
+    environment,
+    broker: brokerName,
+    tradingMode,
+    enabledSymbols,
+    strategyMode: `conservative-${tradingMode}`,
+  }
   if (typeof logger?.system === "function") {
     logger.system(log)
   } else {
     logger?.info?.(log)
   }
+
   return Object.freeze({
     appConfig,
     settings,
     pairs,
     enabledSymbols: Object.freeze(enabledSymbols),
+    executionSymbols: Object.freeze(enabledSymbols),
     configurationFingerprint: effectiveConfiguration.fingerprint,
     environment,
     brokerName,
     tradingMode,
-    tradingEnabled,
+    tradingEnabled: tradingEnabled && enabledSymbols.length > 0,
   })
 }

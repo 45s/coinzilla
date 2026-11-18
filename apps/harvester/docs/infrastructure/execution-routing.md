@@ -34,7 +34,7 @@ Every enabled executable strategy/market must have one execution route and one m
 
 ## Account and provider failure policy
 
-Provider identity is immutable and includes provider instance, provider type, account identity, and LIVE/TESTNET environment. All configured providers are required by default. An explicitly optional provider may fail startup without redirecting its execution markets; those markets remain unavailable. If an active execution runtime depends on a failed provider for market data, startup fails closed rather than selecting another source.
+Provider identity is immutable and includes provider instance, provider type, account identity, and LIVE/TESTNET environment. All configured providers are required by default. An explicitly optional provider may fail startup without redirecting its execution markets; those markets remain unavailable. A required-provider failure rolls back every account that already started. If an active execution runtime depends on a failed provider for market data, startup fails closed rather than selecting another source.
 
 No order is retried or redirected after an uncertain mutation outcome. A market-data source failure never changes the execution destination. UNKNOWN capability is not support for a safety-critical operation.
 
