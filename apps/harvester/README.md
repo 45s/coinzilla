@@ -82,7 +82,7 @@ The initial provider is SQLite, with independent files selected only by validate
 
 `NODE_ENV` never selects the trading environment or database file. An optional `HARVESTER_DATABASE_DIRECTORY` must be an absolute base directory; Harvester creates separate `production/` and `testnet/` children. Runtime database files are Git-ignored.
 
-The database is an ordinary lifecycle-event projection, not the Operational State Store. ADR-0001 remains authoritative recovery evidence; restart restoration remains disabled. The session observer does not change Journal ordering, acknowledgement, flush, durability, or failure behavior. Database/history failures are logged and isolated; they do not add a trading-readiness gate or fallback to another persistence system.
+The database is an ordinary lifecycle-event projection, not the Operational State Store. ADR-0001 remains a separate recovery contract when a store is explicitly constructed/injected; the current `recovery.enabled: false` default means the normal `main()` path does not construct it. Restart restoration remains disabled. The session observer does not change Journal ordering, acknowledgement, flush, durability, or failure behavior. Database/history failures are logged and isolated; they do not add a trading-readiness gate or fallback to another persistence system.
 
 See the [SQLite integration blueprint](./docs/persistence/sqlite-integration-blueprint.md) for the source-verified inventory, target architecture, repository contracts, TESTNET/LIVE isolation, operational constraints, migration phases, and unresolved decisions; see the [trading-session repository contract](./docs/persistence/README.md) for the existing implementation.
 
