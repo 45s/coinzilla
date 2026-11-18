@@ -174,7 +174,7 @@ HTTP/RPC conflicts and server failures, timeouts, connection loss after dispatch
 
 ## 6. Safety and ownership boundaries
 
-- Bitunix Spot remains read-only for trading purposes. This API work does not authorize speculative placement, cancellation, or fill support; preserve all blockers in [#1185](https://github.com/45s/coinzilla).
+- Bitunix Spot does not yet implement the complete order, fill, and account lifecycle required for trading. This API work does not authorize speculative placement, cancellation, or fill support; preserve all blockers in [#1185](https://github.com/45s/coinzilla).
 - REST/WS clients, authentication/signing, DTOs, protocol mapping, and provider-specific errors remain inside each provider infrastructure folder.
 - Harvester owns its application ports, adapters, registries, orchestration, and trading workflows. Brokers must not import or absorb them.
 - Providers may use different internal REST/WebSocket architectures while satisfying the same structural public contract.
