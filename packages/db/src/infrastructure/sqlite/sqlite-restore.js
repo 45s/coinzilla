@@ -49,15 +49,15 @@ export async function assertRestoreDestinationIsNew({
 }) {
   try {
     await realpathOperation(filename)
-    throw new TypeError("SQLite restore destination already exists")
   } catch (error) {
-    if (error instanceof TypeError) {
-      throw error
+    if (error.code === "ENOENT") {
+      return
     }
-    if (error.code !== "ENOENT") {
-      throw error
-    }
+
+    throw error
   }
+
+  throw new TypeError("SQLite restore destination already exists")
 }
 
 export async function publishRestoredDatabase({
