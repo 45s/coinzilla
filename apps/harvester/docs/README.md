@@ -38,7 +38,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Portfolio domain](domain/portfolio.md)
 - [Broker port and adapter](infrastructure/broker-port-and-adapter.md)
 - [Bitunix Spot read-only observer](infrastructure/bitunix-read-only-observer.md) — opt-in read-only facade, configuration and source limitations; not a trading provider.
-- [Binance provider-instance identity and registry](infrastructure/provider-instance-registry.md) — explicit non-secret identity, capability validation and deterministic lifecycle; current bootstrap remains single-instance and unrouted.
+- [Binance provider-instance identity and registry](infrastructure/provider-instance-registry.md) — explicit non-secret identity, capability validation, deterministic lifecycle, and Phase 3 durable order/fill provenance (PR #1416 in review); current trading bootstrap remains single-instance and unrouted.
 - [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive material is exploratory discussion, not an approved executable contract
 - [Recovery Seller Domain Specification](domain/recovery-seller-domain-specification.md) — draft RS accounting, legacy authorization, independent profitability gates, and concurrent CG/RS invariants
 - [Recovery Seller Implementation Roadmap](domain/recovery-seller-implementation-roadmap.md) — six delivery phases from Conservative source audit to concurrent integration and offline lifecycle proof

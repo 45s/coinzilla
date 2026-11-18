@@ -10,6 +10,7 @@ import {
 } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeOrderEventWorkflow } from "./order-event-workflow.js"
 
 const baseAsset = new Asset({
@@ -34,10 +35,16 @@ function makeOrder({
   executedQuantity = "0.5",
   brokerOrderId = "broker-order-1",
   clientOrderId = "h-dogeusdt-order-1",
+  includeProviderProvenance = true,
 } = {}) {
   return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
+    ...(includeProviderProvenance ? {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    } : {}),
     market,
     side,
     type: "LIMIT",
@@ -70,11 +77,17 @@ function makeFill({
   quoteQuantity = "50",
   brokerOrderId = "broker-order-1",
   clientOrderId = "h-dogeusdt-order-1",
+  includeProviderProvenance = true,
 } = {}) {
   return new Fill({
     tradeId,
     brokerOrderId,
     clientOrderId,
+    ...(includeProviderProvenance ? {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    } : {}),
     market,
     side,
     price: new Money({
@@ -111,9 +124,9 @@ function createWorkflowCalls() {
   }
 }
 
-function createWorkflowState({ updateResult, activeOrders } = {}) {
+function createWorkflowState({ updateResult, activeOrders, registry } = {}) {
   const state = {
-    registry: {
+    registry: registry ?? {
       orders: [],
       applyUpdate: () => ({
         ...updateResult,
@@ -241,6 +254,7 @@ duplicate: false } }),
   activeOrders = [],
   logger,
   registry,
+  requireProviderProvenance = false,
 } = {}) {
   const calls = createWorkflowCalls()
   const state = createWorkflowState({ updateResult,
@@ -260,6 +274,7 @@ activeOrders })
   const workflow = makeOrderEventWorkflow({
     ...dependencies,
     logger,
+    requireProviderProvenance,
   })
   return { workflow,
 state,
@@ -606,4 +621,71 @@ test("reports a stale cancellation after FILLED as an informational ignored even
   assert.equal(systemLogs[0].lifecycleStatus, "STALE_CANCEL_IGNORED")
   assert.equal(systemLogs[0].orderStatus, "FILLED", "The diagnostic must name the current reconciled state.")
   assert.equal(systemLogs[0].strategyId, undefined, "A system diagnostic must not impersonate a strategy event.")
+})
+
+
+test("enriches a provider-less exchange fill from its already registered canonical order", async () => {
+  const order = makeOrder()
+  const rawFill = makeFill({ includeProviderProvenance: false })
+  const { workflow, calls } = makeWorkflow()
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: order,
+      fill: rawFill,
+    },
+  })
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(calls.accounting.length, 1)
+  assert.deepEqual([
+    calls.accounting[0].providerInstanceId,
+    calls.accounting[0].providerType,
+    calls.accounting[0].accountId,
+    calls.accounting[0].clientOrderId,
+  ], ["binanceTestnet", "binance", "binance-primary", order.clientOrderId])
+})
+
+test("fails closed and pauses when a legacy order has no recorded provider provenance", async () => {
+  const order = makeOrder({ includeProviderProvenance: false })
+  const fill = makeFill({ includeProviderProvenance: false })
+  const { workflow, calls } = makeWorkflow({ requireProviderProvenance: true })
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: order,
+      fill,
+    },
+  })
+  assert.equal(result.ok, false)
+  assert.deepEqual(calls.accounting, [], "Unattributed legacy fills must not reach accounting.")
+  assert.equal(calls.pauses[0]?.reason, "EXECUTION_FILL_ORDER_IDENTITY_MISMATCH")
+})
+
+
+test("uses the registry-enriched provider identity when an exchange update omits adapter metadata", async () => {
+  const pendingOrder = makeOrder({
+    status: "PENDING",
+    executedQuantity: "0",
+    brokerOrderId: null,
+  })
+  const { registry } = OrderRegistry.empty().registerPending({ order: pendingOrder })
+  const eventOrder = makeOrder({ includeProviderProvenance: false })
+  const fill = makeFill({ includeProviderProvenance: false })
+  const { workflow, calls } = makeWorkflow({ registry })
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: eventOrder,
+      fill,
+    },
+  })
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual([
+    calls.accounting[0].providerInstanceId,
+    calls.accounting[0].providerType,
+    calls.accounting[0].accountId,
+  ], ["binanceTestnet", "binance", "binance-primary"])
 })
