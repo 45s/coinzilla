@@ -2160,6 +2160,62 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
 })
 
 
+function createMainProcessLockAcquirer({
+  lockScopes,
+  releasedLocks,
+}) {
+  return async (input) => {
+    lockScopes.push({
+      broker: input.broker,
+      providerInstanceId: input.providerInstanceId,
+      accountId: input.accountId,
+      tradingMode: input.tradingMode,
+    })
+    return {
+      ok: true,
+      lockScope: input,
+      release: async () => {
+        releasedLocks.push(input.providerInstanceId)
+        return {
+          ok: true,
+          released: true,
+        }
+      },
+    }
+  }
+}
+
+function createMainProviderAccountStarter({
+  started,
+  stopped,
+  failAccountId,
+}) {
+  return async (input) => {
+    started.push({
+      identity: input.providerIdentity,
+      tradingMode: input.env.TRADING_MODE,
+      operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
+    })
+    if (input.providerIdentity.accountId === failAccountId) {
+      throw new Error("secondary account connection failed")
+    }
+    return {
+      account: input.providerIdentity,
+      brokerName: input.providerIdentity.providerType,
+      connected: true,
+      tradingEnabled: true,
+      strategyMode: "conservative",
+      subscriptions: ["BTCUSDT"],
+      stop: async () => {
+        stopped.push(input.providerIdentity.providerInstanceId)
+        return {
+          ok: true,
+        }
+      },
+    }
+  }
+}
+
 function createMainMultiProviderFixture({
   providerInstances,
   env,
@@ -2187,49 +2243,15 @@ function createMainMultiProviderFixture({
     loadConfig: async () => config,
     env,
     providerAdapterFactories,
-    acquireProcessLock: async (input) => {
-      lockScopes.push({
-        broker: input.broker,
-        providerInstanceId: input.providerInstanceId,
-        accountId: input.accountId,
-        tradingMode: input.tradingMode,
-      })
-      return {
-        ok: true,
-        lockScope: input,
-        release: async () => {
-          releasedLocks.push(input.providerInstanceId)
-          return {
-            ok: true,
-            released: true,
-          }
-        },
-      }
-    },
-    start: async (input) => {
-      started.push({
-        identity: input.providerIdentity,
-        tradingMode: input.env.TRADING_MODE,
-        operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
-      })
-      if (input.providerIdentity.accountId === failAccountId) {
-        throw new Error("secondary account connection failed")
-      }
-      return {
-        account: input.providerIdentity,
-        brokerName: input.providerIdentity.providerType,
-        connected: true,
-        tradingEnabled: true,
-        strategyMode: "conservative",
-        subscriptions: ["BTCUSDT"],
-        stop: async () => {
-          stopped.push(input.providerIdentity.providerInstanceId)
-          return {
-            ok: true,
-          }
-        },
-      }
-    },
+    acquireProcessLock: createMainProcessLockAcquirer({
+      lockScopes,
+      releasedLocks,
+    }),
+    start: createMainProviderAccountStarter({
+      started,
+      stopped,
+      failAccountId,
+    }),
     registerSignalHandler: (...args) => signalHandlers.set(...args),
     logger: {
       info() {},
