@@ -1,31 +1,27 @@
-export function buildControlFailureReply({ action,
- symbol,
- result,
- method,
- interaction,
- diagnostics }) {
-  if (!interaction.failed) {
-    const controlError = result?.errors?.[0] ?? result?.error
-    if (controlError !== undefined) {
-      diagnostics.fail({
-        interaction,
-        error: controlError,
-        stage: "APPLICATION_OPERATION_RESULT",
-        operation: method,
-        symbol,
-      })
-    } else {
-      diagnostics.report({
-        interaction,
-        stage: "APPLICATION_OPERATION_RESULT",
-        operation: method,
-        symbol,
-        classification: "APPLICATION_OPERATION_REJECTED",
-        message: `Operator control use case returned ok:false without error details: ${method}`,
-      })
-    }
+function recordControlFailure({ result, method, symbol, interaction, diagnostics }) {
+  if (interaction.failed) { return }
+  const controlError = result?.errors?.[0] ?? result?.error
+  if (controlError !== undefined) {
+    diagnostics.fail({
+      interaction,
+      error: controlError,
+      stage: "APPLICATION_OPERATION_RESULT",
+      operation: method,
+      symbol,
+    })
+    return
   }
-  const code = result?.errors?.[0]?.code ?? result?.error?.code
+  diagnostics.report({
+    interaction,
+    stage: "APPLICATION_OPERATION_RESULT",
+    operation: method,
+    symbol,
+    classification: "APPLICATION_OPERATION_REJECTED",
+    message: `Operator control use case returned ok:false without error details: ${method}`,
+  })
+}
+
+function buildControlFailureMessage({ code, action, symbol, interaction }) {
   if (code === "INVALID_OPERATOR_MARKET") {
     return `Unknown configured market: ${symbol}.`
   }
@@ -44,7 +40,19 @@ export function buildControlFailureReply({ action,
   return `${action.startsWith("RESUME") ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
 }
 
+export function buildControlFailureReply(options) {
+  recordControlFailure(options)
+  const code = options.result?.errors?.[0]?.code ?? options.result?.error?.code
+  return buildControlFailureMessage({
+    code,
+    action: options.action,
+    symbol: options.symbol,
+    interaction: options.interaction,
+  })
+}
+
 export function buildPauseBuySuccessReply({ buyScope,
+ symbol,
  result,
  interaction }) {
   if (result.data?.paused !== true) {
@@ -52,11 +60,14 @@ export function buildPauseBuySuccessReply({ buyScope,
   }
   interaction.applicationOperationCompleted = true
   interaction.stateChanged = result.data.alreadyPaused !== true || result.data.canceled > 0
-  const prefix = result.data.alreadyPaused === true ? "BUY pause remains active" : "BUY pause activated"
-  return `${prefix} ${buyScope}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched; check /orders. This pause is process-local and is not restored after restart.`
+  const prefix = result.data.alreadyPaused === true
+    ? `BUY pause remains active ${buyScope}`
+    : symbol ? `Paused ${symbol}: BUY pause activated` : "BUY pause activated across all markets"
+  return `${prefix}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched; check /orders. This pause is process-local and is not restored after restart.`
 }
 
 export function buildResumeBuySuccessReply({ buyScope,
+ symbol,
  result,
  interaction }) {
   if (result.data?.resumed === true) {
@@ -73,7 +84,10 @@ export function buildResumeBuySuccessReply({ buyScope,
     const remaining = result.data.stillPaused === true
       ? " Another BUY pause scope remains active."
       : ""
-    return `No BUY pause was active ${buyScope}.${remaining}`
+    const inactiveMessage = symbol
+      ? `${symbol} is not operator-paused for BUYs. No state change was made.`
+      : "No global BUY pause was active. No state change was made."
+    return `${inactiveMessage}${remaining}`
   }
   return undefined
 }
@@ -86,6 +100,7 @@ export function buildBuyControlSuccessReply({ action,
   if (action === "PAUSE" || action === "PAUSE_BUYS" || action === "PAUSE_ALL_BUYS") {
     return buildPauseBuySuccessReply({
       buyScope,
+      symbol,
       result,
       interaction,
     })
@@ -93,6 +108,7 @@ export function buildBuyControlSuccessReply({ action,
   if (action === "RESUME" || action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS") {
     return buildResumeBuySuccessReply({
       buyScope,
+      symbol,
       result,
       interaction,
     })
