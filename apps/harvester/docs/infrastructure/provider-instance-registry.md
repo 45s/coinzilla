@@ -46,7 +46,7 @@ Errors preserve the original connection/cleanup causes. Credentials are never pa
 
 The existing runtime still constructs and registers exactly one Binance instance from the legacy `TRADING_MODE` and Binance credentials. The registered BrokerPort facade is passed to the existing Harvester services; trading strategy, order semantics, market-data subscriptions, and shutdown ownership are unchanged.
 
-The optional Bitunix observer implemented in [PR #1423](https://github.com/45s/coinzilla/pull/1423) and tracked in [#1422](https://github.com/45s/coinzilla/issues/1422) is deliberately not registered here. It exposes a separate read-only facade and cannot be selected by registry lookup, execution routing, or strategy market-data routing. See the [Bitunix read-only observer contract](./bitunix-read-only-observer.md).
+The optional Bitunix observer tracked in [#1422](https://github.com/45s/coinzilla/issues/1422) is deliberately not registered here. It exposes a separate read-only facade and cannot be selected by registry lookup, execution routing, or strategy market-data routing. See the [Bitunix read-only observer contract](./bitunix-read-only-observer.md).
 
 The registry can represent multiple named instances of the same provider type, but this slice does not add multi-instance runtime configuration or routing. Explicitly out of scope are:
 
