@@ -285,6 +285,21 @@ function executionFillMatchesOrder({
     (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
 }
 
+function resolveExecutionFillProviderFailure({
+  order,
+  fill,
+  requireProviderProvenance,
+}) {
+  const fillHasProviderIdentity = hasProviderIdentity({ value: fill }) ||
+    ["providerInstanceId", "providerType", "accountId"].some((field) => fill[field] !== undefined)
+  if (!requireProviderProvenance &&
+      !hasProviderIdentity({ value: order }) &&
+      !fillHasProviderIdentity) {
+    return null
+  }
+  return getProviderAttributionFailure({ order, fill })
+}
+
 function validateExecutionFill({ order, fill, eventPublisher, requireProviderProvenance }) {
   const missingFill = validateMissingExecutionFill({
     order,
@@ -305,16 +320,11 @@ function validateExecutionFill({ order, fill, eventPublisher, requireProviderPro
       }),
     }
   }
-  const fillHasProviderIdentity = hasProviderIdentity({ value: fill }) ||
-    ["providerInstanceId", "providerType", "accountId"].some((field) => fill[field] !== undefined)
-  const providerFailure = requireProviderProvenance ||
-    hasProviderIdentity({ value: order }) ||
-    fillHasProviderIdentity
-    ? getProviderAttributionFailure({
-        order,
-        fill,
-      })
-    : null
+  const providerFailure = resolveExecutionFillProviderFailure({
+    order,
+    fill,
+    requireProviderProvenance,
+  })
   const identityMatches = executionFillMatchesOrder({
     order,
     fill,
