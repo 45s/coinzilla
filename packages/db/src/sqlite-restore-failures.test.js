@@ -56,3 +56,54 @@ test("SQLite restore preserves a source connection close failure and removes the
     })
   }
 })
+
+
+test("SQLite restore reports post-publication cleanup failure without corrupting the published database", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-restore-cleanup-"))
+  const backupFilename = join(directory, "backup.sqlite")
+  const destinationFilename = join(directory, "restored.sqlite")
+  const backup = new DatabaseSync(backupFilename)
+  backup.exec("CREATE TABLE retained_records (id INTEGER PRIMARY KEY)")
+  backup.prepare("INSERT INTO retained_records (id) VALUES (?)").run(42)
+  backup.close()
+
+  const cleanupFailure = new Error("restore temporary cleanup failed")
+  let temporaryDirectory
+
+  try {
+    await assert.rejects(
+      restoreSqliteDatabase({
+        backupFilename,
+        filename: destinationFilename,
+        cleanupTemporaryDirectory: async ({ directory: temporaryPath }) => {
+          temporaryDirectory = temporaryPath
+          throw cleanupFailure
+        },
+      }),
+      (error) => error instanceof DatabaseProviderError && error.cause === cleanupFailure,
+      "A cleanup failure after atomic publication must be reported with its original cause",
+    )
+
+    const restored = new DatabaseSync(destinationFilename, { readOnly: true })
+    try {
+      assert.equal(
+        restored.prepare("SELECT id FROM retained_records").get().id,
+        42,
+        "A post-publication cleanup failure must not damage the already validated restored database",
+      )
+    } finally {
+      restored.close()
+    }
+  } finally {
+    if (temporaryDirectory) {
+      await rm(temporaryDirectory, {
+        recursive: true,
+        force: true,
+      })
+    }
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
