@@ -61,6 +61,40 @@ function createTransactionContext(store) {
   })
 }
 
+function createAsyncTransactionRunner({ state, nestedTransactions, stores }) {
+  return async function runTransaction(work) {
+    if (!state.connected) {
+      throw new DatabaseProviderError({
+        operation: "transaction",
+        cause: new Error("Provider is not connected"),
+      })
+    }
+
+    if (state.activeTransaction) {
+      if (!nestedTransactions) {
+        throw new DatabaseProviderError({
+          operation: "transaction",
+          cause: new Error("Nested transactions are not supported"),
+        })
+      }
+      return work(state.activeTransaction.context)
+    }
+
+    const workingStore = cloneStore(state.store)
+    const context = createTransactionContext(workingStore)
+    state.activeTransaction = { context }
+
+    try {
+      const result = await work(context)
+      state.store = workingStore
+      stores.set(state.storageKey, state.store)
+      return result
+    } finally {
+      state.activeTransaction = undefined
+    }
+  }
+}
+
 function createAsyncProviderFactory({ nestedTransactions, stores }) {
   const capabilities = {
     transactions: {
@@ -78,51 +112,27 @@ function createAsyncProviderFactory({ nestedTransactions, stores }) {
   }
 
   return ({ storageKey }) => {
-    let store = stores.get(storageKey) ?? new Map()
-    stores.set(storageKey, store)
-    let connected = false
-    let activeTransaction
-
-    async function runTransaction(work) {
-      if (!connected) {
-        throw new DatabaseProviderError({
-          operation: "transaction",
-          cause: new Error("Provider is not connected"),
-        })
-      }
-
-      if (activeTransaction) {
-        if (!nestedTransactions) {
-          throw new DatabaseProviderError({
-            operation: "transaction",
-            cause: new Error("Nested transactions are not supported"),
-          })
-        }
-        return work(activeTransaction.context)
-      }
-
-      const workingStore = cloneStore(store)
-      const context = createTransactionContext(workingStore)
-      activeTransaction = { context }
-
-      try {
-        const result = await work(context)
-        store = workingStore
-        stores.set(storageKey, store)
-        return result
-      } finally {
-        activeTransaction = undefined
-      }
+    const state = {
+      storageKey,
+      store: stores.get(storageKey) ?? new Map(),
+      connected: false,
+      activeTransaction: undefined,
     }
+    stores.set(storageKey, state.store)
+    const runTransaction = createAsyncTransactionRunner({
+      state,
+      nestedTransactions,
+      stores,
+    })
 
     return createDatabase({
       provider: {
         capabilities,
         async connect() {
-          connected = true
+          state.connected = true
         },
         async close() {
-          connected = false
+          state.connected = false
         },
         withTransaction: runTransaction,
         withReadTransaction: runTransaction,
