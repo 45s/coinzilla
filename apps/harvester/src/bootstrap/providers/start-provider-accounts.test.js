@@ -42,8 +42,8 @@ const appConfig = {
   },
 }
 
-test("starts one independent runtime per configured provider account", async () => {
-  const providers = [
+function createCredentialedProviderFixtures() {
+  return [
     createProvider({
       providerInstanceId: "binance-one",
       providerType: "binance",
@@ -73,8 +73,13 @@ test("starts one independent runtime per configured provider account", async () 
       },
     }),
   ]
-  const starts = []
-  const runtimes = providers.map((provider) => ({
+}
+
+function createAccountRuntimeFixtures({
+  providers,
+  starts,
+}) {
+  return providers.map((provider) => ({
     account: provider.identity,
     brokerName: provider.providerType,
     connected: true,
@@ -88,23 +93,70 @@ test("starts one independent runtime per configured provider account", async () 
       }
     },
   }))
+}
 
+function createAccountRuntimeStarter({
+  starts,
+  runtimes,
+}) {
+  let runtimeIndex = 0
+  return async (input) => {
+    starts.push({
+      identity: input.providerIdentity,
+      tradingMode: input.env.TRADING_MODE,
+      operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
+      hasOperationalStateStore: input.operationalStateStore !== undefined,
+      credentialValues: [
+        input.env.PRIMARY_KEY,
+        input.env.SECONDARY_KEY,
+        input.env.OTHER_KEY,
+      ],
+    })
+    const runtime = runtimes[runtimeIndex]
+    runtimeIndex += 1
+    return runtime
+  }
+}
+
+function assertAccountStartupInputs({
+  starts,
+}) {
+  const inputs = starts.filter((entry) => typeof entry === "object")
+  assert.deepEqual(inputs.map((entry) => entry.tradingMode), [
+    "testnet",
+    "testnet",
+    "live",
+  ])
+  assert.deepEqual(inputs.map((entry) => entry.operatorControlEnabled), [
+    true,
+    false,
+    false,
+  ])
+  assert.deepEqual(inputs.map((entry) => entry.hasOperationalStateStore), [
+    true,
+    false,
+    false,
+  ])
+  assert.deepEqual(inputs.map((entry) => entry.credentialValues), [
+    ["primary-key", undefined, undefined],
+    [undefined, "secondary-key", undefined],
+    [undefined, undefined, "other-key"],
+  ])
+}
+
+test("starts one independent runtime per configured provider account", async () => {
+  const providers = createCredentialedProviderFixtures()
+  const starts = []
+  const runtimes = createAccountRuntimeFixtures({
+    providers,
+    starts,
+  })
   const runtime = await startProviderAccounts({
     providers,
-    start: async (input) => {
-      starts.push({
-        identity: input.providerIdentity,
-        tradingMode: input.env.TRADING_MODE,
-        operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
-        hasOperationalStateStore: input.operationalStateStore !== undefined,
-        credentialValues: [
-          input.env.PRIMARY_KEY,
-          input.env.SECONDARY_KEY,
-          input.env.OTHER_KEY,
-        ],
-      })
-      return runtimes[starts.filter((entry) => typeof entry === "object").length - 1]
-    },
+    start: createAccountRuntimeStarter({
+      starts,
+      runtimes,
+    }),
     appConfig,
     env: {
       TRADING_MODE: "testnet",
@@ -123,32 +175,13 @@ test("starts one independent runtime per configured provider account", async () 
   })
 
   assert.equal(starts.filter((entry) => typeof entry === "object").length, 3)
-  assert.deepEqual(starts.filter((entry) => typeof entry === "object").map((entry) => entry.tradingMode), [
-    "testnet",
-    "testnet",
-    "live",
-  ])
-  assert.deepEqual(starts.filter((entry) => typeof entry === "object").map((entry) => entry.operatorControlEnabled), [
-    true,
-    false,
-    false,
-  ])
-  assert.deepEqual(starts.filter((entry) => typeof entry === "object").map((entry) => entry.hasOperationalStateStore), [
-    true,
-    false,
-    false,
-  ])
-  assert.deepEqual(starts.filter((entry) => typeof entry === "object").map((entry) => entry.credentialValues), [
-    ["primary-key", undefined, undefined],
-    [undefined, "secondary-key", undefined],
-    [undefined, undefined, "other-key"],
-  ])
+  assertAccountStartupInputs({
+    starts,
+  })
   assert.equal(runtime.providerAccounts.length, 3)
   assert.deepEqual(runtime.subscriptions, ["BTCUSDT"])
   assert.equal(runtime.connected, true)
-
-  const stopped = await runtime.stop()
-  assert.equal(stopped.ok, true)
+  assert.equal((await runtime.stop()).ok, true)
   assert.deepEqual(starts.slice(-3), [
     "stop:other-live",
     "stop:binance-two",
@@ -326,7 +359,7 @@ test("releases only accounts whose runtime shutdown is confirmed", async () => {
     ],
     start: async (input) => ({
       stop: async () => {
-        const providerInstanceId = input.providerIdentity.providerInstanceId
+        const { providerInstanceId } = input.providerIdentity
         stopCalls.push(providerInstanceId)
         if (providerInstanceId === "first") {
           firstStopAttempts += 1
