@@ -450,6 +450,7 @@ const requireOrderFacts = ({ order }) => {
 }
 
 // eslint-disable-next-line complexity -- Existing schema normalization branches are intentionally kept cohesive.
+// eslint-disable-next-line complexity -- Existing strategy input normalization remains a cohesive validation boundary.
 const mapStrategyDecisionInputs = (inputs) => {
   if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
     throw new TypeError("inputs must be an object")
@@ -568,6 +569,7 @@ export const mapOrderSubmittedData = (input = {}) =>
 
 /** Map a rejected or unknown submission without retaining raw errors or SDK data. */
 // eslint-disable-next-line complexity -- Existing failure DTO validation is retained without broad schema refactoring.
+// eslint-disable-next-line complexity -- Existing submission-failure DTO checks are retained without unrelated refactoring.
 export const mapOrderSubmissionFailedData = (input = {}) =>
   mapData({
     input,
@@ -1109,6 +1111,7 @@ export const mapRecoveryCycleCompletedData = (input = {}) =>
 
 /** Map an explicit non-completion evaluation for a fully filled recovery SELL. */
 // eslint-disable-next-line max-lines-per-function -- Existing recovery evidence contract is intentionally validated as one unit.
+// eslint-disable-next-line max-lines-per-function -- Recovery completion evidence remains one auditable DTO boundary.
 export const mapRecoveryCycleNotCompletedData = (input = {}) =>
   mapData({
     input,
@@ -1371,6 +1374,7 @@ const assertAccountSnapshotAuditStatus = ({ auditStatus, auditReasons }) => {
 }
 
 // eslint-disable-next-line max-lines-per-function -- Snapshot validation is intentionally kept at the DTO boundary.
+// eslint-disable-next-line max-lines-per-function -- Snapshot validation remains at the DTO boundary.
 export const mapAccountSnapshotCapturedData = (input = {}) =>
   mapData({
     input,
