@@ -1118,7 +1118,10 @@ export const mapRecoveryCycleCompletedData = (input = {}) =>
 
 
 
-function validateRecoveryCycleNonCompletionReason({ outcome, reason }) {
+function validateRecoveryCycleNonCompletionReason({
+    outcome,
+    reason,
+  }) {
   const continueReasons = [
     "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
     "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
@@ -1315,7 +1318,10 @@ function mapOpenOrderIdentity({ order, index, symbol, brokerOrderId }) {
       value: symbol,
       field: `orders[${index}].symbol`,
     }),
-    side: requireOpenOrderSide({ order, index }),
+    side: requireOpenOrderSide({
+      order,
+      index,
+    }),
     type: requireString({
       value: order.type,
       field: `orders[${index}].type`,
@@ -1558,7 +1564,10 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
     },
   })
 
-function copyBrokerEvidenceStringFields({ evidence, data }) {
+function copyBrokerEvidenceStringFields({
+    evidence,
+    data,
+  }) {
   const fields = [
     "symbol",
     "clientOrderId",
@@ -1589,7 +1598,10 @@ function copyBrokerEvidenceStringFields({ evidence, data }) {
   }
 }
 
-function copyBrokerEvidenceIdentifierFields({ evidence, data }) {
+function copyBrokerEvidenceIdentifierFields({
+    evidence,
+    data,
+  }) {
   for (const field of ["orderId", "orderListId", "tradeId", "executionId", "tradeGroupId"]) {
     if (evidence[field] !== undefined) {
       data[field] = String(evidence[field])
@@ -1597,7 +1609,10 @@ function copyBrokerEvidenceIdentifierFields({ evidence, data }) {
   }
 }
 
-function copyBrokerEvidenceDecimalFields({ evidence, data }) {
+function copyBrokerEvidenceDecimalFields({
+    evidence,
+    data,
+  }) {
   const fields = [
     "orderQuantity",
     "orderPrice",
@@ -1621,7 +1636,10 @@ function copyBrokerEvidenceDecimalFields({ evidence, data }) {
   }
 }
 
-function copyBrokerEvidenceTimestampFields({ evidence, data }) {
+function copyBrokerEvidenceTimestampFields({
+    evidence,
+    data,
+  }) {
   for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
     if (evidence[field] !== undefined) {
       data[field] = requireNonNegativeSafeInteger({
@@ -1632,7 +1650,10 @@ function copyBrokerEvidenceTimestampFields({ evidence, data }) {
   }
 }
 
-function copyBrokerEvidenceBooleanFields({ evidence, data }) {
+function copyBrokerEvidenceBooleanFields({
+    evidence,
+    data,
+  }) {
   for (const field of ["isMaker", "working"]) {
     if (evidence[field] !== undefined) {
       data[field] = requireBoolean({
