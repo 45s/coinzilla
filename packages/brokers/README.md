@@ -275,6 +275,51 @@ The implementation uses the existing native WebSocket API klines request and pub
 
 Protocol references: [Binance Spot WebSocket API — Klines](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-api.md#klines) and [Binance Spot Kline Streams](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#klinecandlestick-streams-for-utc).
 
+## Bitunix Spot local diagnostics
+
+The Bitunix diagnostic runner is an explicitly invoked, **read-only** local tool for checking REST connectivity/authentication, authenticated Spot WebSocket RPC, request/response correlation, latency, exchange errors, transport failures, and cleanup. It uses the existing Bitunix clients; it does not change Harvester composition or enable trading.
+
+Bitunix currently documents the Spot WebSocket API as authenticated request/response RPC. It does **not** document continuous public market subscriptions or private order/execution event streams. A successful RPC is not proof of a live stream.
+
+### Configure and run
+
+Create packages/brokers/.env.development locally (never commit it):
+
+~~~dotenv
+BITUNIX_API_KEY=your_read_only_api_key
+BITUNIX_API_SECRET=your_api_secret
+BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS=YES
+BITUNIX_DIAGNOSTICS_SYMBOL=BTCUSDT
+# Optional: leave unset to skip depth RPC; choose only a value you have verified for your market.
+BITUNIX_DIAGNOSTICS_DEPTH_PRECISION=
+BITUNIX_DIAGNOSTICS_KLINE_INTERVAL=1min
+BITUNIX_DIAGNOSTICS_TIMEOUT_MS=10000
+BITUNIX_DIAGNOSTICS_INCLUDE_PUBLIC_PAYLOADS=false
+~~~
+
+From the repository root:
+
+~~~sh
+pnpm --filter @coinzilla/brokers diagnose:bitunix
+~~~
+
+The explicit BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS=YES gate is required because Bitunix Spot has no documented TESTNET environment. The runner contacts the configured LIVE Spot endpoint and performs read-only requests only. Use an API key with account-read permission and **without** trading or withdrawal permission. Do not use production mutation-enabled keys for diagnostics.
+
+The runner checks these REST operations:
+- Public market catalog and latest price.
+- Private account balances.
+
+It then connects to the authenticated Spot WebSocket RPC endpoint and checks:
+- market.last_price, market.depth, and market.kline.
+- common.coin_pair.list, common.rate.list, and common.coin.coin_network.list.
+- user.account and user.info.
+
+Depth RPC is skipped unless BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is explicitly supplied; the runner does not infer depth aggregation precision from basePrecision, quotePrecision, or precisions[].
+
+Each operation receives its own pass/fail/skip result and duration. BITUNIX_DIAGNOSTICS_TIMEOUT_MS bounds REST/WS RPC requests and the WebSocket connect/close operations. The report is written to packages/brokers/.diagnostics/ (ignored by Git) with restrictive file permissions. Outbound WS messages are captured only after credential/signature/nonce redaction. Private account responses are summarized by shape and field names; private balances, UIDs and other sensitive values are never persisted. Public response payloads are omitted by default and may be included, after redaction, only with BITUNIX_DIAGNOSTICS_INCLUDE_PUBLIC_PAYLOADS=true.
+
+This is an operator diagnostic, not a trading test, exchange acceptance certificate, TESTNET substitute, or proof of Harvester readiness. It never places/cancels orders, withdraws/transfers funds, retries failed requests, or reconnects automatically. Default unit tests remain offline and do not execute this command.
+
 ## Offline tests and coverage
 
 The default broker test suite is deterministic and offline:

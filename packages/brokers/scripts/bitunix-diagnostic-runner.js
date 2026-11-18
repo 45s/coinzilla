@@ -1,0 +1,879 @@
+import { BitunixRestClient } from "../src/infrastructure/bitunix/api/rest-client.js"
+import { BitunixSpotWebSocketClient } from "../src/infrastructure/bitunix/api/websocket-client.js"
+import { BitunixWebSocketTransport } from "../src/infrastructure/bitunix/api/websocket-transport.js"
+import {
+  createDiagnosticReport,
+  createDiagnosticResult,
+  sanitizeDiagnosticError,
+  sanitizeDiagnosticValue,
+  summarizePrivatePayload,
+} from "./bitunix-diagnostics.js"
+
+const REST_ENDPOINTS = Object.freeze([
+  {
+    operation: "REST public market catalog",
+    path: "/api/spot/v1/common/coin_pair/list",
+    privateResponse: false,
+    queryParams: {},
+  },
+  {
+    operation: "REST public last price",
+    path: "/api/spot/v1/market/last_price",
+    privateResponse: false,
+    queryParams: null,
+  },
+  {
+    operation: "REST private account balances",
+    path: "/api/spot/v1/user/account",
+    privateResponse: true,
+    queryParams: {},
+  },
+])
+
+const WEBSOCKET_OPERATIONS = Object.freeze([
+  {
+    operation: "market.last_price",
+    method: "getLastPrice",
+    privateResponse: false,
+    getArguments: ({ symbol }) => ({ symbol }),
+  },
+  {
+    operation: "market.depth",
+    method: "getDepth",
+    privateResponse: false,
+    getArguments: ({ symbol, depthPrecision }) => ({
+      symbol,
+      precision: depthPrecision,
+    }),
+    requiresDepthPrecision: true,
+  },
+  {
+    operation: "market.kline",
+    method: "getKline",
+    privateResponse: false,
+    getArguments: ({ symbol, klineInterval }) => ({
+      symbol,
+      interval: klineInterval,
+    }),
+  },
+  {
+    operation: "common.coin_pair.list",
+    method: "getTradingPairs",
+    privateResponse: false,
+    getArguments: () => ({}),
+  },
+  {
+    operation: "common.rate.list",
+    method: "getExchangeRates",
+    privateResponse: false,
+    getArguments: () => ({}),
+  },
+  {
+    operation: "common.coin.coin_network.list",
+    method: "getTokenNetworks",
+    privateResponse: false,
+    getArguments: () => ({}),
+  },
+  {
+    operation: "user.account",
+    method: "getAccount",
+    privateResponse: true,
+    getArguments: () => ({}),
+  },
+  {
+    operation: "user.info",
+    method: "getUserInfo",
+    privateResponse: true,
+    getArguments: () => ({}),
+  },
+])
+
+function getSecrets({ env }) {
+  return [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
+}
+
+function normalizeMessageText({ message }) {
+  if (typeof message === "string") {
+    return message
+  }
+  if (message instanceof ArrayBuffer || ArrayBuffer.isView(message)) {
+    return new TextDecoder().decode(message)
+  }
+  throw new TypeError("Bitunix diagnostic received a non-text WebSocket message")
+}
+
+function createObservedConnect({ transport, events, secrets, now }) {
+  return async () => {
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      type: "connect_started",
+    })
+    try {
+      await transport.connect()
+      events.push({
+        timestamp: new Date(now()).toISOString(),
+        type: "connected",
+      })
+    } catch (error) {
+      events.push({
+        timestamp: new Date(now()).toISOString(),
+        type: "connect_error",
+        error: sanitizeDiagnosticError({
+          error,
+          secrets,
+        }),
+      })
+      throw error
+    }
+  }
+}
+
+function createObservedSend({ transport, events, secrets, now, methodsByRequestId }) {
+  return (message) => {
+    let request
+    try {
+      request = JSON.parse(message)
+    } catch (error) {
+      events.push({
+        timestamp: new Date(now()).toISOString(),
+        type: "outbound_parse_error",
+        error: sanitizeDiagnosticError({
+          error,
+          secrets,
+        }),
+      })
+      throw error
+    }
+    methodsByRequestId.set(String(request.id), request.method)
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      direction: "outbound",
+      method: request.method,
+      requestId: request.id,
+      payload: sanitizeDiagnosticValue({
+        value: request,
+        secrets,
+      }),
+    })
+    transport.send(message)
+  }
+}
+
+function createInboundPayload({ response, method, secrets, includePublicPayloads }) {
+  const isPrivate = method === "user.account" || method === "user.info"
+  let data
+  if (isPrivate || !includePublicPayloads) {
+    data = summarizePrivatePayload(response.data)
+  } else {
+    data = sanitizeDiagnosticValue({
+      value: response.data,
+      secrets,
+    })
+  }
+  return {
+    id: response.id,
+    code: response.code,
+    msg: sanitizeDiagnosticValue({
+      value: response.msg,
+      secrets,
+    }),
+    data,
+  }
+}
+
+function createObservedMessageHandler({ transport, events, secrets, now, methodsByRequestId, includePublicPayloads }) {
+  return (listener) => transport.onMessage((message) => {
+    let response
+    try {
+      response = JSON.parse(normalizeMessageText({ message }))
+    } catch (error) {
+      events.push({
+        timestamp: new Date(now()).toISOString(),
+        direction: "inbound",
+        type: "invalid_json",
+        error: sanitizeDiagnosticError({
+          error,
+          secrets,
+        }),
+      })
+      listener(message)
+      return
+    }
+    const method = methodsByRequestId.get(String(response.id)) ?? "unknown"
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      direction: "inbound",
+      method,
+      requestId: response.id,
+      payload: createInboundPayload({
+        response,
+        method,
+        secrets,
+        includePublicPayloads,
+      }),
+    })
+    listener(message)
+  })
+}
+
+function createObservedErrorHandler({ transport, events, secrets, now }) {
+  return (listener) => transport.onError((error) => {
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      type: "transport_error",
+      error: sanitizeDiagnosticError({
+          error,
+          secrets,
+        }),
+    })
+    listener(error)
+  })
+}
+
+function createObservedCloseHandler({ transport, events, secrets, now }) {
+  return (listener) => transport.onClose((event) => {
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      type: "closed",
+      close: sanitizeDiagnosticValue({
+        value: {
+          code: event?.code,
+          reason: event?.reason,
+          wasClean: event?.wasClean,
+        },
+        secrets,
+      }),
+    })
+    listener(event)
+  })
+}
+
+export function createObservedTransportFactory({
+  events,
+  secrets,
+  includePublicPayloads,
+  now,
+  transportFactory = (options) => new BitunixWebSocketTransport(options),
+}) {
+  return (options) => {
+    const transport = transportFactory(options)
+    const methodsByRequestId = new Map()
+    return {
+      connect: createObservedConnect({
+        transport,
+        events,
+        secrets,
+        now,
+      }),
+      send: createObservedSend({
+        transport,
+        events,
+        secrets,
+        now,
+        methodsByRequestId,
+      }),
+      onMessage: createObservedMessageHandler({
+        transport,
+        events,
+        secrets,
+        now,
+        methodsByRequestId,
+        includePublicPayloads,
+      }),
+      onError: createObservedErrorHandler({
+        transport,
+        events,
+        secrets,
+        now,
+      }),
+      onClose: createObservedCloseHandler({
+        transport,
+        events,
+        secrets,
+        now,
+      }),
+      close: () => transport.close(),
+    }
+  }
+}
+
+function parseDepthPrecision({ value }) {
+  if (typeof value !== "string" || !value.trim()) {
+    return null
+  }
+  const precision = Number(value)
+  if (!Number.isFinite(precision) || precision < 0) {
+    throw new RangeError("BITUNIX_DIAGNOSTICS_DEPTH_PRECISION must be a non-negative number")
+  }
+  return precision
+}
+
+function createResult({
+  operation,
+  startedAt,
+  now,
+  status,
+  request,
+  response,
+  error,
+  privateResponse,
+  includePublicPayloads,
+  secrets,
+}) {
+  return createDiagnosticResult({
+    operation,
+    status,
+    durationMs: now() - startedAt,
+    request,
+    response,
+    error,
+    privateResponse,
+    includePublicPayload: includePublicPayloads,
+    secrets,
+  })
+}
+
+async function runRestOperation({
+  client,
+  endpoint,
+  symbol,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+}) {
+  const startedAt = now()
+  const queryParams = endpoint.queryParams === null ? { symbol } : endpoint.queryParams
+  const request = {
+    method: "GET",
+    path: endpoint.path,
+    queryParams,
+    authenticated: endpoint.privateResponse,
+  }
+  try {
+    const response = await client.request(request)
+    results.push(createResult({
+      operation: endpoint.operation,
+      startedAt,
+      now,
+      status: "passed",
+      request,
+      response: response.data,
+      privateResponse: endpoint.privateResponse,
+      includePublicPayloads,
+      secrets,
+    }))
+  } catch (error) {
+    results.push(createResult({
+      operation: endpoint.operation,
+      startedAt,
+      now,
+      status: "failed",
+      request,
+      error,
+      includePublicPayloads,
+      secrets,
+    }))
+  }
+}
+
+async function runWebSocketOperation({
+  client,
+  definition,
+  context,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+}) {
+  const startedAt = now()
+  if (definition.requiresDepthPrecision && context.depthPrecision === null) {
+    results.push(createResult({
+      operation: definition.operation,
+      startedAt,
+      now,
+      status: "skipped",
+      request: {
+        method: definition.operation,
+        reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is not configured",
+      },
+      includePublicPayloads,
+      secrets,
+    }))
+    return
+  }
+  const args = definition.getArguments(context)
+  try {
+    const response = await client[definition.method](args)
+    results.push(createResult({
+      operation: definition.operation,
+      startedAt,
+      now,
+      status: "passed",
+      request: {
+        method: definition.operation,
+        params: args,
+      },
+      response,
+      privateResponse: definition.privateResponse,
+      includePublicPayloads,
+      secrets,
+    }))
+  } catch (error) {
+    results.push(createResult({
+      operation: definition.operation,
+      startedAt,
+      now,
+      status: "failed",
+      request: {
+        method: definition.operation,
+        params: args,
+      },
+      error,
+      includePublicPayloads,
+      secrets,
+    }))
+  }
+}
+
+function createRuntimeMetadata({ env }) {
+  return {
+    node: process.version,
+    platform: process.platform,
+    symbol: env.BITUNIX_DIAGNOSTICS_SYMBOL || "BTCUSDT",
+    restEndpoint: "https://openapi.bitunix.com",
+    websocketEndpoint: "wss://openapi.bitunix.com:443/ws-api/v1",
+    websocketMode: "authenticated request/response RPC; no documented continuous Spot subscription",
+  }
+}
+
+function createConfigurationResult({ env, startedAt, now, secrets }) {
+  const missing = ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"].filter((key) => typeof env[key] !== "string" || !env[key].trim())
+  if (missing.length > 0) {
+    return createResult({
+      operation: "diagnostic configuration",
+      startedAt,
+      now,
+      status: "failed",
+      error: new Error(`Missing required environment variables: ${missing.join(", ")}`),
+      secrets,
+    })
+  }
+  if (env.BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS !== "YES") {
+    return createResult({
+      operation: "diagnostic safety confirmation",
+      startedAt,
+      now,
+      status: "failed",
+      error: new Error("Set BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS=YES to confirm read-only requests against the configured LIVE Spot API account"),
+      secrets,
+    })
+  }
+  return createResult({
+    operation: "diagnostic configuration",
+    startedAt,
+    now,
+    status: "passed",
+    response: {
+      credentialsConfigured: true,
+      liveReadConfirmation: true,
+    },
+    secrets,
+  })
+}
+
+function createReport({ startedAtIso, now, env, results, events }) {
+  return createDiagnosticReport({
+    startedAt: startedAtIso,
+    finishedAt: new Date(now()).toISOString(),
+    runtime: createRuntimeMetadata({ env }),
+    results,
+    events,
+  })
+}
+
+function createOptionFailure({ error, startedAtIso, now, env, results, events, secrets }) {
+  results.push(createResult({
+    operation: "diagnostic options",
+    startedAt: now(),
+    now,
+    status: "failed",
+    error,
+    secrets,
+  }))
+  return createReport({
+    startedAtIso,
+    now,
+    env,
+    results,
+    events,
+  })
+}
+
+async function runRestChecks({ env, requestTimeout, symbol, now, results, secrets, includePublicPayloads, restClientFactory }) {
+  const client = restClientFactory({
+    apiKey: env.BITUNIX_API_KEY,
+    apiSecret: env.BITUNIX_API_SECRET,
+    requestTimeout,
+  })
+  for (const endpoint of REST_ENDPOINTS) {
+    await runRestOperation({
+      client,
+      endpoint,
+      symbol,
+      now,
+      results,
+      secrets,
+      includePublicPayloads,
+    })
+  }
+}
+
+function createWebSocketClient({ env, requestTimeout, transportFactory, websocketClientFactory }) {
+  return websocketClientFactory({
+    apiKey: env.BITUNIX_API_KEY,
+    apiSecret: env.BITUNIX_API_SECRET,
+    requestTimeout,
+    connectTimeout: requestTimeout,
+    closeTimeout: requestTimeout,
+    transportFactory,
+  })
+}
+
+function recordWebSocketConnectionFailure({ error, now, results, secrets }) {
+  results.push(createResult({
+    operation: "WebSocket connection",
+    startedAt: now(),
+    now,
+    status: "failed",
+    error,
+    secrets,
+  }))
+  for (const definition of WEBSOCKET_OPERATIONS) {
+    results.push(createResult({
+      operation: definition.operation,
+      startedAt: now(),
+      now,
+      status: "skipped",
+      error: new Error("WebSocket RPC skipped because connection setup failed"),
+      secrets,
+    }))
+  }
+}
+
+async function executeWebSocketOperations({
+  client,
+  env,
+  symbol,
+  depthPrecision,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+}) {
+  const context = {
+    symbol,
+    depthPrecision,
+    klineInterval: env.BITUNIX_DIAGNOSTICS_KLINE_INTERVAL || "1min",
+  }
+  for (const definition of WEBSOCKET_OPERATIONS) {
+    await runWebSocketOperation({
+      client,
+      definition,
+      context,
+      now,
+      results,
+      secrets,
+      includePublicPayloads,
+    })
+  }
+}
+
+async function cleanupWebSocket({ client, isConnected, now, results, events, secrets }) {
+  try {
+    await client.disconnect()
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      type: "client_disconnected",
+      wasConnected: isConnected,
+    })
+  } catch (error) {
+    results.push(createResult({
+      operation: "WebSocket cleanup",
+      startedAt: now(),
+      now,
+      status: "failed",
+      error,
+      secrets,
+    }))
+  }
+}
+
+async function connectWebSocket({ client, now, results, secrets }) {
+  const startedAt = now()
+  try {
+    await client.connect()
+    results.push(createResult({
+      operation: "WebSocket connection",
+      startedAt,
+      now,
+      status: "passed",
+      response: { state: client.state },
+      secrets,
+    }))
+    return true
+  } catch (error) {
+    recordWebSocketConnectionFailure({
+      error,
+      now,
+      results,
+      secrets,
+    })
+    return false
+  }
+}
+
+function createConfiguredWebSocketClient({
+  env,
+  requestTimeout,
+  events,
+  secrets,
+  includePublicPayloads,
+  now,
+  websocketClientFactory,
+}) {
+  const transportFactory = createObservedTransportFactory({
+    events,
+    secrets,
+    includePublicPayloads,
+    now,
+  })
+  return createWebSocketClient({
+    env,
+    requestTimeout,
+    transportFactory,
+    websocketClientFactory,
+  })
+}
+
+async function runWebSocketSession({
+  client,
+  env,
+  symbol,
+  depthPrecision,
+  now,
+  results,
+  events,
+  secrets,
+  includePublicPayloads,
+}) {
+  const isConnected = await connectWebSocket({
+    client,
+    now,
+    results,
+    secrets,
+  })
+  try {
+    if (isConnected) {
+      await executeWebSocketOperations({
+        client,
+        env,
+        symbol,
+        depthPrecision,
+        now,
+        results,
+        secrets,
+        includePublicPayloads,
+      })
+    }
+  } finally {
+    await cleanupWebSocket({
+      client,
+      isConnected,
+      now,
+      results,
+      events,
+      secrets,
+    })
+  }
+}
+
+async function runWebSocketChecks({
+  env,
+  requestTimeout,
+  symbol,
+  depthPrecision,
+  now,
+  results,
+  events,
+  secrets,
+  includePublicPayloads,
+  websocketClientFactory,
+}) {
+  let client
+  try {
+    client = createConfiguredWebSocketClient({
+      env,
+      requestTimeout,
+      events,
+      secrets,
+      includePublicPayloads,
+      now,
+      websocketClientFactory,
+    })
+  } catch (error) {
+    recordWebSocketConnectionFailure({
+      error,
+      now,
+      results,
+      secrets,
+    })
+    return
+  }
+  await runWebSocketSession({
+    client,
+    env,
+    symbol,
+    depthPrecision,
+    now,
+    results,
+    events,
+    secrets,
+    includePublicPayloads,
+  })
+}
+
+async function runConfiguredProbes({
+  env,
+  requestTimeout,
+  symbol,
+  depthPrecision,
+  now,
+  results,
+  events,
+  secrets,
+  includePublicPayloads,
+  restClientFactory,
+  websocketClientFactory,
+}) {
+  await runRestChecks({
+    env,
+    requestTimeout,
+    symbol,
+    now,
+    results,
+    secrets,
+    includePublicPayloads,
+    restClientFactory,
+  })
+  await runWebSocketChecks({
+    env,
+    requestTimeout,
+    symbol,
+    depthPrecision,
+    now,
+    results,
+    events,
+    secrets,
+    includePublicPayloads,
+    websocketClientFactory,
+  })
+}
+
+async function runConfiguredDiagnostics({
+  env,
+  now,
+  startedAtIso,
+  results,
+  events,
+  secrets,
+  includePublicPayloads,
+  restClientFactory,
+  websocketClientFactory,
+}) {
+  const symbol = env.BITUNIX_DIAGNOSTICS_SYMBOL || "BTCUSDT"
+  const requestTimeout = Number(env.BITUNIX_DIAGNOSTICS_TIMEOUT_MS || 10_000)
+  let depthPrecision
+  try {
+    if (!Number.isInteger(requestTimeout) || requestTimeout < 1 || requestTimeout > 60_000) {
+      throw new RangeError("BITUNIX_DIAGNOSTICS_TIMEOUT_MS must be an integer between 1 and 60000")
+    }
+    depthPrecision = parseDepthPrecision({
+      value: env.BITUNIX_DIAGNOSTICS_DEPTH_PRECISION,
+    })
+  } catch (error) {
+    return createOptionFailure({
+      error,
+      startedAtIso,
+      now,
+      env,
+      results,
+      events,
+      secrets,
+    })
+  }
+
+  await runConfiguredProbes({
+    env,
+    requestTimeout,
+    symbol,
+    depthPrecision,
+    now,
+    results,
+    events,
+    secrets,
+    includePublicPayloads,
+    restClientFactory,
+    websocketClientFactory,
+  })
+  return createReport({
+    startedAtIso,
+    now,
+    env,
+    results,
+    events,
+  })
+}
+
+export async function runBitunixDiagnostics({
+  env = process.env,
+  now = Date.now,
+  restClientFactory = (options) => new BitunixRestClient(options),
+  websocketClientFactory = (options) => new BitunixSpotWebSocketClient(options),
+} = {}) {
+  const startedAt = now()
+  const startedAtIso = new Date(startedAt).toISOString()
+  const secrets = getSecrets({ env })
+  const results = []
+  const events = []
+  const includePublicPayloads = env.BITUNIX_DIAGNOSTICS_INCLUDE_PUBLIC_PAYLOADS === "true"
+  const configuration = createConfigurationResult({
+    env,
+    startedAt,
+    now,
+    secrets,
+  })
+  results.push(configuration)
+  if (configuration.status !== "passed") {
+    return createReport({
+      startedAtIso,
+      now,
+      env,
+      results,
+      events,
+    })
+  }
+  return runConfiguredDiagnostics({
+    env,
+    now,
+    startedAtIso,
+    results,
+    events,
+    secrets,
+    includePublicPayloads,
+    restClientFactory,
+    websocketClientFactory,
+  })
+}
+
+export { WEBSOCKET_OPERATIONS }
