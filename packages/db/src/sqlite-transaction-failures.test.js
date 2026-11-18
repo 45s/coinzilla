@@ -91,3 +91,28 @@ test("SQLite aggregates the work and rollback errors when rollback itself fails"
     await database.close()
   }
 })
+
+
+test("SQLite consumes a rejected promise returned by a transaction callback after rollback", async () => {
+  const database = await createConnectedDatabase()
+  const rejectedCallback = Promise.reject(new Error("deferred transaction rejection"))
+
+  try {
+    await assert.rejects(
+      database.transaction((transaction) => {
+        transaction.exec("INSERT INTO transaction_records (id) VALUES (2)")
+        return rejectedCallback
+      }),
+      /must be synchronous/,
+      "A rejected promise returned by a synchronous callback must be rejected as unsupported asynchronous work",
+    )
+    await Promise.resolve()
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM transaction_records").get().count,
+      0,
+      "A rejected asynchronous continuation must not leave writes from its transaction committed",
+    )
+  } finally {
+    await database.close()
+  }
+})
