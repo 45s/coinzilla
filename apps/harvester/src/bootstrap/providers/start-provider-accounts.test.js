@@ -168,11 +168,3 @@ test("fails startup when no configured account can start", async () => {
     /account unavailable/,
   )
 })
-    (error) => {
-      assert.ok(error instanceof AggregateError)
-      assert.equal(error.errors[0], startupError)
-      assert.equal(error.errors[1], cleanupError)
-      return true
-    },
-  )
-})
