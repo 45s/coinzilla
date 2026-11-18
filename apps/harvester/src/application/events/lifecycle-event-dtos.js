@@ -59,7 +59,10 @@ const requireConfigurationFingerprint = ({ value }) => {
 }
 
 const requireProviderIdentifier = ({ value, field }) => {
-  const identifier = requireString({ value, field })
+  const identifier = requireString({
+    value,
+    field,
+  })
   if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(identifier)) {
     throw new TypeError(`${field} must be a stable provider identifier token`)
   }
