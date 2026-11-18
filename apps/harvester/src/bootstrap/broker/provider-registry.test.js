@@ -116,6 +116,17 @@ async function createRegistry({ brokers = [], instances = [createDescriptor()], 
   }
 }
 
+function createDeferred() {
+  let resolve
+  const promise = new Promise((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return {
+    promise,
+    resolve,
+  }
+}
+
 function containsConnectionAndCleanupFailures({ error, connectError, disconnectError }) {
   return error instanceof AggregateError &&
     error.errors.includes(connectError) &&
@@ -208,6 +219,35 @@ test("connects and disconnects each instance once", async () => {
   await broker.disconnect()
   await registry.disconnectAll()
   assert.deepEqual(calls, ["connect", "disconnect"], "Registry lifecycle operations must be idempotent.")
+})
+
+test("shutdown waits for an in-flight provider connection before disconnecting", async () => {
+  const calls = []
+  const connection = createDeferred()
+  const registry = await createProviderRegistry({
+    providerInstances: [createDescriptor()],
+    selections,
+    adapterFactories: {
+      binance: () => createBroker({
+        calls,
+        connect: () => connection.promise,
+      }),
+    },
+    env: {
+      BINANCE_API_KEY: "key",
+      BINANCE_API_SECRET_KEY: "secret",
+    },
+  })
+
+  const connecting = registry.connectAll()
+  await Promise.resolve()
+  const disconnecting = registry.disconnectAll()
+  await Promise.resolve()
+  assert.deepEqual(calls, ["connect"], "Shutdown must not disconnect while connect is still pending.")
+
+  connection.resolve()
+  await Promise.all([connecting, disconnecting])
+  assert.deepEqual(calls, ["connect", "disconnect"], "A successful in-flight connection must be disconnected before shutdown completes.")
 })
 
 test("preserves connection and cleanup failures", async () => {
