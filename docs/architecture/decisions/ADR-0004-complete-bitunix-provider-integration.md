@@ -10,7 +10,7 @@
 
 The multi-provider architecture in ADR-0003 defines provider instances, account isolation, explicit execution routes, independent market-data routes, immutable provenance, and fail-closed capability checks. Bitunix has a partial Spot broker surface in `@coinzilla/brokers`, but it does not yet satisfy the complete order, fill, account-lifecycle, private-event/reconciliation, market-constraint, and environment-safety contract tracked by [issue #1185](https://github.com/45s/coinzilla/issues/1185).
 
-A separate Harvester observer runtime was introduced as an interim integration. It created an additional Bitunix-specific runtime/configuration boundary that would have to be replaced or substantially reworked when the complete broker capabilities were ready. The project owner has explicitly rejected that temporary architecture and requires Bitunix to be completed without a read-only staging facade or a second Harvester integration.
+A separate Harvester observer runtime was introduced as an interim integration. It created an additional Bitunix-specific runtime/configuration boundary that would have to be replaced or substantially reworked when the complete broker capabilities were ready. The project owner has explicitly rejected that temporary architecture and requires Bitunix to be completed without a partial query staging facade or a second Harvester integration.
 
 ## Decision
 
