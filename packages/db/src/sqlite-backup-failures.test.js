@@ -6,6 +6,7 @@ import { join } from "node:path"
 import test from "node:test"
 
 import { DatabaseProviderError } from "./domain/errors/database-errors.js"
+import { removeTemporaryDirectory } from "./infrastructure/sqlite/sqlite-file-operations.js"
 import { backupSqliteDatabase } from "./infrastructure/sqlite/sqlite-backup.js"
 
 async function createTemporaryDirectory() {
@@ -41,9 +42,15 @@ test("SQLite backup aggregates a progress callback failure with a temporary clea
         progress() {
           throw progressFailure
         },
-        cleanupTemporaryDirectory: async ({ directory: temporaryPath }) => {
+        cleanupTemporaryDirectory: async ({ directory: temporaryPath, operationError }) => {
           temporaryDirectory = temporaryPath
-          throw cleanupFailure
+          return removeTemporaryDirectory({
+            directory: temporaryPath,
+            operationError,
+            remove: async () => {
+              throw cleanupFailure
+            },
+          })
         },
       }),
       (error) => error instanceof DatabaseProviderError
