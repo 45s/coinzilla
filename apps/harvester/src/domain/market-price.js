@@ -12,7 +12,10 @@ const isPositiveDecimal = (value) =>
  * Convert a normalized broker price event into a technology-independent
  * domain value. Decimal prices remain strings to avoid floating-point loss.
  */
-function addProviderIdentityFields({ priceEvent, sourceIdentity }) {
+function addProviderIdentityFields({
+    priceEvent,
+    sourceIdentity,
+  }) {
   for (const field of ["providerInstanceId", "providerType"]) {
     const value = priceEvent[field]
     if (value === undefined) {
@@ -25,7 +28,10 @@ function addProviderIdentityFields({ priceEvent, sourceIdentity }) {
   }
 }
 
-function addAccountIdentity({ priceEvent, sourceIdentity }) {
+function addAccountIdentity({
+    priceEvent,
+    sourceIdentity,
+  }) {
   const { accountId } = priceEvent
   if (accountId === undefined) {
     return
@@ -36,7 +42,10 @@ function addAccountIdentity({ priceEvent, sourceIdentity }) {
   sourceIdentity.accountId = accountId
 }
 
-function addEnvironmentIdentity({ priceEvent, sourceIdentity }) {
+function addEnvironmentIdentity({
+    priceEvent,
+    sourceIdentity,
+  }) {
   const { environment } = priceEvent
   if (environment === undefined) {
     return
@@ -47,7 +56,9 @@ function addEnvironmentIdentity({ priceEvent, sourceIdentity }) {
   sourceIdentity.environment = environment
 }
 
-function assertCompleteMarketPriceSourceIdentity({ sourceIdentity }) {
+function assertCompleteMarketPriceSourceIdentity({
+    sourceIdentity,
+  }) {
   if (
     Object.keys(sourceIdentity).length > 0 &&
     (!sourceIdentity.providerInstanceId || !sourceIdentity.providerType || !sourceIdentity.environment)
