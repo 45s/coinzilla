@@ -64,6 +64,14 @@ const PROVIDER_PROVENANCE_FIELDS = Object.freeze([
   "accountId",
 ])
 
+const requireProviderIdentifier = ({ value, field }) => {
+  const identifier = requireString({ value, field })
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(identifier)) {
+    throw new TypeError(`${field} must be a stable provider identifier token`)
+  }
+  return identifier
+}
+
 const mapProviderProvenance = ({ value, field = "provider" } = {}) => {
   const hasAnyProviderIdentity = PROVIDER_PROVENANCE_FIELDS.some(
     (identityField) => value?.[identityField] !== undefined,
@@ -72,15 +80,15 @@ const mapProviderProvenance = ({ value, field = "provider" } = {}) => {
     return {}
   }
   return {
-    providerInstanceId: requireString({
+    providerInstanceId: requireProviderIdentifier({
       value: value.providerInstanceId,
       field: `${field}.providerInstanceId`,
     }),
-    providerType: requireString({
+    providerType: requireProviderIdentifier({
       value: value.providerType,
       field: `${field}.providerType`,
     }),
-    accountId: requireString({
+    accountId: requireProviderIdentifier({
       value: value.accountId,
       field: `${field}.accountId`,
     }),
