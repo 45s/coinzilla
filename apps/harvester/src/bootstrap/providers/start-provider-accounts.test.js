@@ -637,7 +637,11 @@ test("fails startup when no configured account can start", async () => {
 
 test("releases only accounts whose runtime shutdown is confirmed", async () => {
   const providers = [
-    createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
     createProvider({
       providerInstanceId: "second",
       providerType: "binance",
