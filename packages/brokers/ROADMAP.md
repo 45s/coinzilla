@@ -1251,7 +1251,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 ## 2026-11-18 — Bitunix Spot deposit-address lookup (#1398 / PR #1399)
 
-**Status: In progress — implementation and offline regression tests are committed; exact-head CI verification and merge remain.**
+**Status: Complete — PR #1399 merged into `develop` as `5c517f677232ea3aa2ec72053087307693f97919`.**
 
 - [x] Audited the official signed `POST /api/spot/v1/deposit/address` contract, required `coin`/`network` inputs, address-array response, optional memo, and 10 requests/second/IP limit.
 - [x] Cross-checked JKorf's interface, implementation, model and Spot response fixture. The TypeScript MCP and independent Python client do not implement this endpoint; Cachy is Futures-only.
@@ -1259,7 +1259,9 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Validate inputs before I/O; validate every response row and exact requested coin/network identity; preserve all addresses and memo values; freeze the complete result; reject missing/null/non-array data.
 - [x] Add stable input/response error codes with safe operation/field context. Do not log or persist addresses/memos; do not retry or paginate.
 - [x] Add offline tests for request flags/body, REST signing, multiple addresses, empty response, memo null/empty/omitted values, malformed rows, mismatched identity, validation-before-I/O, and transport failure without retry.
-- [ ] Pass broker package tests, broker coverage, strict changed-file lint, workspace checks, and all required branch-protection checks on the exact final PR head.
-- [ ] Merge PR #1399 into `develop`, verify the merge commit and resulting branch HEAD, then close issue #1398.
+- [x] Pass broker package tests and coverage, full workspace tests and coverage, strict changed-file ESLint, workspace JavaScript quality/syntax, actionlint, Utils tests, dependency audit, and Harvester regression tests on exact PR head `63111cc26f70f41130b41629ecbf59608f94b46b`.
+- [x] Merge PR #1399 using the repository merge-commit method; verify the PR merge SHA and resulting `develop` HEAD both equal `5c517f677232ea3aa2ec72053087307693f97919`.
+- [x] Confirm the optional read-only Binance TESTNET integration was skipped and no live Bitunix API calls were made.
+- [x] Confirm issue #1185 remains open and unchanged. The advisory External Documentation Links workflow was still running at merge; it is not a required branch-protection context.
 
 **Next candidate:** revisit #1185 only if official Bitunix Spot documentation or verifiable Spot response fixtures resolve stable order identity, complete execution history, quantity denomination, account snapshot freshness, and the TESTNET/mutation-safety requirements. Do not implement speculative fills or mutations.
