@@ -121,25 +121,58 @@ test("does not hide a failed application query behind a successful page", async 
 
 test("Pause and Resume market selection follow the BUY pause state, not the legacy market pause", () => {
   const markets = [
-    { symbol: "LINKUSDT", enabled: true, operatorPaused: true, operatorBuysPaused: false },
-    { symbol: "BTCUSDT", enabled: true, operatorPaused: false, operatorBuysPaused: true },
-    { symbol: "ADAUSDT", enabled: false, operatorPaused: false, operatorBuysPaused: true },
+    {
+      symbol: "LINKUSDT",
+      enabled: true,
+      operatorPaused: true,
+      operatorBuysPaused: false,
+    },
+    {
+      symbol: "BTCUSDT",
+      enabled: true,
+      operatorPaused: false,
+      operatorBuysPaused: true,
+    },
+    {
+      symbol: "ADAUSDT",
+      enabled: false,
+      operatorPaused: false,
+      operatorBuysPaused: true,
+    },
   ]
 
   assert.deepEqual(
-    selectMarketsForAction({ markets, action: "PAUSE" }).map(({ symbol }) => symbol),
+    selectMarketsForAction({
+      markets,
+      action: "PAUSE",
+    }).map(({ symbol }) => symbol),
     ["LINKUSDT"],
   )
   assert.deepEqual(
-    selectMarketsForAction({ markets, action: "RESUME" }).map(({ symbol }) => symbol),
+    selectMarketsForAction({
+      markets,
+      action: "RESUME",
+    }).map(({ symbol }) => symbol),
     ["BTCUSDT"],
   )
 
-  const pauseButtons = createNavigationKeyboard({ page: "markets", markets, marketAction: "PAUSE" })
-    .inline_keyboard.flat().filter(button => button.callback_data?.startsWith("cc:ask:"))
-  const resumeButtons = createNavigationKeyboard({ page: "markets", markets, marketAction: "RESUME" })
-    .inline_keyboard.flat().filter(button => button.callback_data?.startsWith("cc:ask:"))
+  const pauseButtons = createNavigationKeyboard({
+    page: "markets",
+    markets,
+    marketAction: "PAUSE",
+  }).inline_keyboard.flat().filter(button => button.callback_data?.startsWith("cc:ask:"))
+  const resumeButtons = createNavigationKeyboard({
+    page: "markets",
+    markets,
+    marketAction: "RESUME",
+  }).inline_keyboard.flat().filter(button => button.callback_data?.startsWith("cc:ask:"))
 
-  assert.deepEqual(pauseButtons.map(({ callback_data }) => callback_data), ["cc:ask:PAUSE:LINKUSDT"])
-  assert.deepEqual(resumeButtons.map(({ callback_data }) => callback_data), ["cc:ask:RESUME:BTCUSDT"])
+  assert.deepEqual(
+    pauseButtons.map(({ callback_data }) => callback_data),
+    ["cc:ask:PAUSE:LINKUSDT"],
+  )
+  assert.deepEqual(
+    resumeButtons.map(({ callback_data }) => callback_data),
+    ["cc:ask:RESUME:BTCUSDT"],
+  )
 })
