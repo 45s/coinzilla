@@ -54,6 +54,10 @@ test("Bitunix Spot broker retrieves every requested-network deposit address with
       memo: "deposit-tag",
     }),
     addressWithoutMemo,
+    createAddress({
+      address: "TEmptyMemoAddress",
+      memo: "",
+    }),
   ]
   const { broker, calls } = createBroker({ response: addresses })
 
@@ -69,6 +73,7 @@ test("Bitunix Spot broker retrieves every requested-network deposit address with
   }], "the lookup must send one signed, read-only POST with only coin and network")
   assert.deepEqual(result.data, addresses, "all returned addresses and memo values must remain exact")
   assert.equal(Object.hasOwn(result.data[2], "memo"), false, "an omitted memo must remain omitted")
+  assert.equal(result.data[3].memo, "", "an explicitly empty memo must remain exact")
   assert.ok(Object.isFrozen(result.data), "the returned address list must be immutable")
   assert.ok(result.data.every((address) => Object.isFrozen(address)), "every returned address record must be immutable")
 })
@@ -126,7 +131,6 @@ test("Bitunix Spot broker rejects missing, malformed, or mismatched deposit-addr
     [createAddress({ address: "" })],
     [createAddress({ address: " " })],
     [createAddress({ memo: 12 })],
-    [createAddress({ memo: "" })],
   ]
   const results = []
 
