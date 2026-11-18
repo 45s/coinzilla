@@ -128,7 +128,11 @@ function getProviderAttributionFailure({
   }
 }
 
-function validateMissingExecutionFill({ order, fill, eventPublisher }) {
+function validateMissingExecutionFill({
+    order,
+    fill,
+    eventPublisher,
+  }) {
   if (fill instanceof Fill) {
     return null
   }
@@ -166,7 +170,10 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
       }),
     }
   }
-  const providerFailure = getProviderAttributionFailure({ order, fill })
+  const providerFailure = getProviderAttributionFailure({
+    order,
+    fill,
+  })
   const identityMatches = fill.market.id === order.market.id &&
     fill.side === order.side &&
     fill.brokerOrderId === order.brokerOrderId &&
@@ -194,7 +201,10 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
       },
     }
   }
-  return { ok: true, symbol: order.market.symbol }
+  return {
+    ok: true,
+    symbol: order.market.symbol,
+  }
 }
 
 async function pauseForInvalidExecutionFill({
@@ -251,7 +261,11 @@ function recordExecutionFillIdentity({ state, order, fill, recordBuyExecutionFil
   }
 }
 
-function publishExecutionFillOutcome({ accounting, fill, eventPublisher }) {
+function publishExecutionFillOutcome({
+    accounting,
+    fill,
+    eventPublisher,
+  }) {
   if (accounting.data?.applied === true) {
     publishLifecycleEvent({
       eventPublisher,
@@ -349,7 +363,10 @@ async function processExecutionFill({ dependencies, order, fill }) {
       eventPublisher,
     })
     if (!validation.ok) {
-      await pauseForInvalidExecutionFill({ pause, validation })
+      await pauseForInvalidExecutionFill({
+        pause,
+        validation,
+      })
       if (validation.result) {
         return validation.result
       }
