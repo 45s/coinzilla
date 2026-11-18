@@ -6,17 +6,37 @@ import { Money } from "../money/money.js"
 import { Quantity } from "../quantity/quantity.js"
 import { CanonicalOrder } from "./canonical-order.js"
 
-const baseAsset = new Asset({ id: "DOGE", code: "DOGE" })
-const quoteAsset = new Asset({ id: "USDT", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({
+  id: "DOGE",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "USDT",
+  code: "USDT",
+})
+const market = new Market({
+  venue: "binance",
+  symbol: "DOGEUSDT",
+  baseAsset,
+  quoteAsset,
+})
 const baseOrder = {
   clientOrderId: "client-1",
   market,
   side: "BUY",
   type: "LIMIT",
-  limitPrice: new Money({ amount: "0.1", asset: quoteAsset }),
-  originalQuantity: new Quantity({ amount: "10", asset: baseAsset }),
-  executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+  limitPrice: new Money({
+    amount: "0.1",
+    asset: quoteAsset,
+  }),
+  originalQuantity: new Quantity({
+    amount: "10",
+    asset: baseAsset,
+  }),
+  executedQuantity: new Quantity({
+    amount: "0",
+    asset: baseAsset,
+  }),
   status: "PENDING",
 }
 
