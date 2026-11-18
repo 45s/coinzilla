@@ -90,9 +90,6 @@ function createCloseOperation({ provider, lifecycle }) {
         }
       }
 
-      if (lifecycle.state === "closed") {
-        return
-      }
       if (lifecycle.state === "disconnected") {
         lifecycle.state = "closed"
         return
