@@ -486,9 +486,21 @@ test("transfers process-wide ownership to the first successfully started optiona
   })
 
   assert.deepEqual(starts, [
-    { providerInstanceId: "first", operatorControlEnabled: true, hasOperationalStateStore: true },
-    { providerInstanceId: "second", operatorControlEnabled: true, hasOperationalStateStore: true },
-    { providerInstanceId: "third", operatorControlEnabled: false, hasOperationalStateStore: false },
+    {
+      providerInstanceId: "first",
+      operatorControlEnabled: true,
+      hasOperationalStateStore: true,
+    },
+    {
+      providerInstanceId: "second",
+      operatorControlEnabled: true,
+      hasOperationalStateStore: true,
+    },
+    {
+      providerInstanceId: "third",
+      operatorControlEnabled: false,
+      hasOperationalStateStore: false,
+    },
   ])
   assert.equal(runtime.account.providerInstanceId, "second")
   assert.equal(runtime.failedAccounts[0].providerInstanceId, "first")
