@@ -107,3 +107,42 @@ test("SQLite restore reports post-publication cleanup failure without corrupting
     })
   }
 })
+
+
+test("SQLite restore propagates non-conflict publication failures and removes the staged file", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-restore-publish-"))
+  const backupFilename = join(directory, "backup.sqlite")
+  const destinationFilename = join(directory, "restored.sqlite")
+  const backup = new DatabaseSync(backupFilename)
+  backup.exec("CREATE TABLE retained_records (id INTEGER PRIMARY KEY)")
+  backup.prepare("INSERT INTO retained_records (id) VALUES (?)").run(7)
+  backup.close()
+  const publicationFailure = Object.assign(
+    new Error("restore publication I/O failure"),
+    { code: "EIO" },
+  )
+
+  try {
+    await assert.rejects(
+      restoreSqliteDatabase({
+        backupFilename,
+        filename: destinationFilename,
+        publishLink: async () => {
+          throw publicationFailure
+        },
+      }),
+      (error) => error instanceof DatabaseProviderError && error.cause === publicationFailure,
+      "A non-conflict filesystem publication failure must retain its original provider cause",
+    )
+    await assert.rejects(
+      stat(destinationFilename),
+      (error) => error.code === "ENOENT",
+      "A failed restore publication must not leave a destination file behind",
+    )
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
