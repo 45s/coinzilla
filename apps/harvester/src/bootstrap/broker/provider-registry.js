@@ -402,7 +402,7 @@ function createEntryLifecycle({ entry, eventPublisher, logger, registryState }) 
                 error,
                 new AggregateError(cleanupErrors, `Provider instance "${entry.descriptor.id}" failed to disconnect`),
               ], "Provider connection and cleanup both failed", {
-                cause: cleanupErrors[0],
+                cause: error,
               })
             }
           }
