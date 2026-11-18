@@ -14,9 +14,9 @@ callback_data: "cc:nav:balances" }],
     for (const market of markets) {
       if (actionCount >= 20) { break }
       if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
-      if (marketAction === "PAUSE" && market.operatorPaused === true) { continue }
-      if (marketAction === "RESUME" && market.operatorPaused !== true) { continue }
-      const action = market.operatorPaused === true ? "RESUME" : "PAUSE"
+      if (marketAction === "PAUSE" && market.operatorBuysPaused === true) { continue }
+      if (marketAction === "RESUME" && market.operatorBuysPaused !== true) { continue }
+      const action = market.operatorBuysPaused === true ? "RESUME" : "PAUSE"
       rows.push([{
         text: `${action === "PAUSE" ? "Pause" : "Resume"} ${market.symbol}`,
         callback_data: `cc:ask:${action}:${market.symbol}`,
@@ -59,19 +59,20 @@ export function helpText() {
     "/positions — canonical active and retained inventory with recovery accounting",
     "/orders — Harvester-owned and external open orders",
     "/balances — latest exchange free and locked balances with snapshot age",
-    "/pause SYMBOL — request a market-scoped operator pause",
-    "/resume SYMBOL — request removal of the operator-owned pause",
+    "/pause SYMBOL — block new BUYs and cancel active Harvester-owned BUY orders for one market",
+    "/resume SYMBOL — remove that market's BUY pause; other safety gates still apply",
     "/pauseallbuys — stop all BUY submissions and cancel active Harvester-owned BUY orders",
     "/resumeallbuys — remove the global emergency BUY pause",
-    "/pausebuys SYMBOL — stop BUYs and cancel active Harvester-owned BUYs for one market",
-    "/resumebuys SYMBOL — remove one market emergency BUY pause",
+    "/pausebuys SYMBOL — compatibility alias for /pause SYMBOL",
+    "/resumebuys SYMBOL — compatibility alias for /resume SYMBOL",
     "/help — show this help",
     "",
     "Inline pause/resume buttons always require confirmation. Text control commands are explicit requests.",
-    "Operator pause does not cancel existing orders. Existing orders may still fill; accounting and recovery SELLs continue.",
-    "Emergency BUY pause cancels only current-process-owned BUYs. Recovery SELLs and accounting continue; manual/external orders are untouched.",
-    "Emergency BUY commands execute immediately after private-chat authorization; they do not use the market-button confirmation flow.",
-    "Operator pause lasts only for this process and is not restored after restart.",
+    "Market Pause blocks new BUYs, cancels active current-process-owned BUYs, and reconciles fills that race cancellation.",
+    "Recovery SELLs, fill accounting and reconciliation continue. Manual, external and prior-process orders are never canceled.",
+    "If owned-BUY cancellation is unresolved, the BUY gate stays active; inspect /orders and Harvester diagnostics.",
+    "Inline Pause/Resume buttons require confirmation; slash commands execute after private-chat authorization.",
+    "BUY pause state lasts only for this process and is not restored after restart.",
   ].join("\n")
 }
 
