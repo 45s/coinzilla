@@ -73,7 +73,7 @@ test("SQLite online backup includes a committed WAL write made while backup page
       "A successful online backup must represent a consistent source state that includes a write committed during the backup",
     )
     assert.equal(
-      copiedRecord.payload.toString(),
+      Buffer.from(copiedRecord.payload).toString(),
       "committed-during-backup",
       "The concurrently committed WAL record must retain its complete payload in the published backup",
     )
