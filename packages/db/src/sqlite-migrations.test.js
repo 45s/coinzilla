@@ -2,6 +2,8 @@ import assert from "node:assert/strict"
 import { mkdtemp, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { once } from "node:events"
+import { Worker } from "node:worker_threads"
 import test from "node:test"
 
 import { createSqliteDatabase } from "../src/index.js"
@@ -396,5 +398,99 @@ test("rejected migration promises are consumed while the migration transaction r
     )
   } finally {
     await database.close()
+  }
+})
+
+
+test("independent worker connections serialize simultaneous migration attempts", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-migration-workers-"))
+  const filename = join(directory, "shared.sqlite")
+  const gate = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+  const workerSource = `
+    const { parentPort, workerData } = require("node:worker_threads")
+    parentPort.postMessage({ ready: true })
+    Atomics.wait(new Int32Array(workerData.gate), 0, 0)
+
+    async function applyMigrations() {
+      const { createSqliteDatabase } = await import(workerData.moduleUrl)
+      const database = createSqliteDatabase({
+        filename: workerData.filename,
+        timeout: 5_000,
+      })
+
+      try {
+        await database.connect()
+        const applied = await database.migrate([{
+          version: 1,
+          name: "create-worker-shared-records",
+          up(transaction) {
+            transaction.exec("CREATE TABLE worker_shared_records (id INTEGER PRIMARY KEY)")
+          },
+        }])
+        parentPort.postMessage({ applied })
+      } finally {
+        await database.close()
+      }
+    }
+
+    applyMigrations().catch((error) => {
+      parentPort.postMessage({
+        error: error.message,
+        stack: error.stack,
+      })
+    })
+  `
+  const workers = Array.from({ length: 2 }, () => new Worker(workerSource, {
+    eval: true,
+    workerData: {
+      filename,
+      gate,
+      moduleUrl: new URL("../src/index.js", import.meta.url).href,
+    },
+  }))
+
+  try {
+    await Promise.all(workers.map((worker) => once(worker, "message")))
+    Atomics.store(new Int32Array(gate), 0, 1)
+    Atomics.notify(new Int32Array(gate), 0, workers.length)
+
+    const results = await Promise.all(workers.map(async (worker) => {
+      const [message] = await once(worker, "message")
+      if (message.error) {
+        throw new Error(message.error, {
+          cause: message.stack,
+        })
+      }
+      return message.applied
+    }))
+
+    assert.deepEqual(
+      results.sort((left, right) => left.length - right.length),
+      [[], [1]],
+      "Exactly one independent worker must apply the migration while the other observes it as already applied",
+    )
+
+    const verification = createSqliteDatabase({ filename })
+    await verification.connect()
+    try {
+      assert.equal(
+        verification.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count,
+        1,
+        "Concurrent worker migrations must leave exactly one durable history row",
+      )
+      assert.equal(
+        verification.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'worker_shared_records'").get().count,
+        1,
+        "Concurrent worker migrations must create the schema exactly once",
+      )
+    } finally {
+      await verification.close()
+    }
+  } finally {
+    await Promise.all(workers.map((worker) => worker.terminate()))
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
