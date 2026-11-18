@@ -198,67 +198,79 @@ function createConnectionSetupFailure({ openedConnection, initializationError, o
   }
 }
 
+async function openSqliteConnection({
+  connectionState,
+  databaseFilename,
+  isMemoryDatabase,
+  timeout,
+}) {
+  if (connectionState.connection) {
+    if (connectionState.connection.isOpen) {
+      connectionState.connection.close()
+    }
+    connectionState.connection = null
+  }
+
+  if (!isMemoryDatabase) {
+    mkdirSync(dirname(databaseFilename), { recursive: true })
+  }
+
+  const openedConnection = new DatabaseSync(databaseFilename, { timeout })
+  connectionState.connection = openedConnection
+
+  try {
+    openedConnection.exec("PRAGMA foreign_keys = ON")
+    if (!isMemoryDatabase) {
+      await enableWalMode({
+        connection: openedConnection,
+        timeout,
+      })
+    }
+  } catch (error) {
+    throw createConnectionSetupFailure({
+      openedConnection,
+      initializationError: error,
+      onClosed: () => {
+        connectionState.connection = null
+      },
+    })
+  }
+}
+
 function createSqliteAdapter({
   databaseFilename,
   isMemoryDatabase,
   timeout,
   getDatabaseState,
 }) {
-  let connection = null
+  const connectionState = {
+    connection: null,
+  }
 
   function requireConnection() {
     const state = getDatabaseState()
-    if (state !== "connected" || !connection?.isOpen) {
+    if (state !== "connected" || !connectionState.connection?.isOpen) {
       throw new Error(
         `SQLite database must be connected to execute SQL (state: ${state})`,
       )
     }
 
-    return connection
+    return connectionState.connection
   }
 
   const adapter = {
-    async connect() {
-      if (connection) {
-        if (connection.isOpen) {
-          connection.close()
-        }
-        connection = null
-      }
-
-      if (!isMemoryDatabase) {
-        mkdirSync(dirname(databaseFilename), { recursive: true })
-      }
-
-      const openedConnection = new DatabaseSync(databaseFilename, { timeout })
-      connection = openedConnection
-
-      try {
-        openedConnection.exec("PRAGMA foreign_keys = ON")
-        if (!isMemoryDatabase) {
-          await enableWalMode({
-            connection: openedConnection,
-            timeout,
-          })
-        }
-      } catch (error) {
-        throw createConnectionSetupFailure({
-          openedConnection,
-          initializationError: error,
-          onClosed: () => {
-            connection = null
-          },
-        })
-      }
-    },
-
+    connect: () => openSqliteConnection({
+      connectionState,
+      databaseFilename,
+      isMemoryDatabase,
+      timeout,
+    }),
     close() {
-      if (connection?.isOpen) {
-        connection.close()
+      if (connectionState.connection?.isOpen) {
+        connectionState.connection.close()
       }
-      connection = null
+      connectionState.connection = null
     },
-
     withTransaction: createSqliteTransactionHandler({
       requireConnection,
       intent: "write",
