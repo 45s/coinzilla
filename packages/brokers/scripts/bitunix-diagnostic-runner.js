@@ -31,10 +31,60 @@ const REST_ENDPOINTS = Object.freeze([
     queryParams: null,
   },
   {
+    operation: "REST public order book depth",
+    path: "/api/spot/v1/market/depth",
+    privateResponse: false,
+    requiresDepthPrecision: true,
+    getQueryParams: ({ symbol, depthPrecision }) => ({
+      symbol,
+      precision: depthPrecision,
+    }),
+  },
+  {
+    operation: "REST public K-line",
+    path: "/api/spot/v1/market/kline",
+    privateResponse: false,
+    getQueryParams: ({ symbol, klineInterval }) => ({
+      symbol,
+      interval: klineInterval,
+    }),
+  },
+  {
+    operation: "REST public K-line history",
+    path: "/api/spot/v1/market/kline/history",
+    privateResponse: false,
+    getQueryParams: ({ symbol, klineInterval }) => ({
+      symbol,
+      interval: klineInterval,
+      limit: "1",
+    }),
+  },
+  {
+    operation: "REST public exchange rates",
+    path: "/api/spot/v1/common/rate/list",
+    privateResponse: false,
+    queryParams: {},
+  },
+  {
+    operation: "REST public token networks",
+    path: "/api/spot/v1/common/coin/coin_network/list",
+    privateResponse: false,
+    queryParams: {},
+  },
+  {
     operation: "REST private account balances",
     path: "/api/spot/v1/user/account",
     privateResponse: true,
     queryParams: {},
+  },
+  {
+    operation: "REST private open orders",
+    path: "/api/spot/v1/order/pending/list",
+    method: "POST",
+    privateResponse: true,
+    getBody: ({ symbol }) => ({
+      symbol,
+    }),
   },
 ])
 
@@ -356,10 +406,33 @@ function createResult({
   })
 }
 
+function createRestDiagnosticRequest({ endpoint, symbol, depthPrecision, klineInterval }) {
+  const context = {
+    symbol,
+    depthPrecision,
+    klineInterval,
+  }
+  const queryParams = endpoint.getQueryParams
+    ? endpoint.getQueryParams(context)
+    : endpoint.queryParams === null
+      ? { symbol }
+      : endpoint.queryParams ?? {}
+  const body = endpoint.getBody?.(context)
+  return {
+    method: endpoint.method ?? "GET",
+    path: endpoint.path,
+    ...(body === undefined ? { queryParams } : { body }),
+    authenticated: endpoint.privateResponse,
+    stateChanging: false,
+  }
+}
+
 async function runRestOperation({
   client,
   endpoint,
   symbol,
+  depthPrecision,
+  klineInterval,
   now,
   results,
   secrets,
@@ -367,7 +440,23 @@ async function runRestOperation({
   credentialsConfigured,
 }) {
   const startedAt = now()
-  const queryParams = endpoint.queryParams === null ? { symbol } : endpoint.queryParams
+  if (endpoint.requiresDepthPrecision && depthPrecision === null) {
+    results.push(createResult({
+      operation: endpoint.operation,
+      startedAt,
+      now,
+      status: "skipped",
+      request: {
+        method: endpoint.method ?? "GET",
+        path: endpoint.path,
+        authenticated: false,
+        stateChanging: false,
+        reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is required for the documented depth endpoint",
+      },
+      secrets,
+    }))
+    return
+  }
   if (endpoint.privateResponse && !credentialsConfigured) {
     results.push(createResult({
       operation: endpoint.operation,
@@ -375,21 +464,22 @@ async function runRestOperation({
       now,
       status: "skipped",
       request: {
-        method: "GET",
+        method: endpoint.method ?? "GET",
         path: endpoint.path,
         authenticated: true,
+        stateChanging: false,
         reason: "BITUNIX_API_KEY and BITUNIX_API_SECRET are required for private REST diagnostics",
       },
       secrets,
     }))
     return
   }
-  const request = {
-    method: "GET",
-    path: endpoint.path,
-    queryParams,
-    authenticated: endpoint.privateResponse,
-  }
+  const request = createRestDiagnosticRequest({
+    endpoint,
+    symbol,
+    depthPrecision,
+    klineInterval,
+  })
   try {
     const response = await client.request(request)
     results.push(createResult({
@@ -543,7 +633,19 @@ function createOptionFailure({ error, startedAtIso, now, results, events, secret
   })
 }
 
-async function runRestChecks({ env, requestTimeout, symbol, now, results, secrets, includePublicPayloads, credentialsConfigured, restClientFactory }) {
+async function runRestChecks({
+  env,
+  requestTimeout,
+  symbol,
+  depthPrecision,
+  klineInterval,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+  credentialsConfigured,
+  restClientFactory,
+}) {
   const client = restClientFactory({
     apiKey: credentialsConfigured ? env.BITUNIX_API_KEY : undefined,
     apiSecret: credentialsConfigured ? env.BITUNIX_API_SECRET : undefined,
@@ -554,6 +656,8 @@ async function runRestChecks({ env, requestTimeout, symbol, now, results, secret
       client,
       endpoint,
       symbol,
+      depthPrecision,
+      klineInterval,
       now,
       results,
       secrets,
@@ -1022,6 +1126,7 @@ async function runConfiguredProbes({
   requestTimeout,
   symbol,
   depthPrecision,
+  klineInterval,
   now,
   results,
   events,
@@ -1035,6 +1140,8 @@ async function runConfiguredProbes({
     env,
     requestTimeout,
     symbol,
+    depthPrecision,
+    klineInterval,
     now,
     results,
     secrets,
@@ -1068,7 +1175,7 @@ async function runConfiguredDiagnostics({
   restClientFactory,
   websocketClientFactory,
 }) {
-  const { symbol, timeoutMs: requestTimeout } = DIAGNOSTIC_CONFIG
+  const { symbol, klineInterval, timeoutMs: requestTimeout } = DIAGNOSTIC_CONFIG
   let depthPrecision
   try {
     if (!Number.isInteger(requestTimeout) || requestTimeout < 1 || requestTimeout > 60_000) {
@@ -1094,6 +1201,7 @@ async function runConfiguredDiagnostics({
     requestTimeout,
     symbol,
     depthPrecision,
+    klineInterval,
     now,
     results,
     events,
