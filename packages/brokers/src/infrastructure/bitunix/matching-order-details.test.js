@@ -148,6 +148,14 @@ test("Bitunix Spot broker rejects malformed matching-order responses", async () 
     },
     {
       ...createMatchingOrder(),
+      ctime: "2026-02-30T20:00:00Z",
+    },
+    {
+      ...createMatchingOrder(),
+      ctime: "2026-11-17T20:00:00",
+    },
+    {
+      ...createMatchingOrder(),
       id: "",
     },
   ]
