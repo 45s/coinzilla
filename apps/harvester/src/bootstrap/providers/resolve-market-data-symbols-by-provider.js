@@ -6,13 +6,13 @@ function assertProviderInstances(providers) {
   if (!Array.isArray(providers) || providers.length === 0) {
     throw new TypeError("Market-data routing requires at least one configured provider instance")
   }
-  const providerIds = new Set()
+  const providerIds = new Map()
   for (const provider of providers) {
     const id = provider?.providerInstanceId
     if (typeof id !== "string" || !id.trim() || providerIds.has(id)) {
       throw new TypeError("Market-data routing requires unique configured provider instance IDs")
     }
-    providerIds.add(id)
+    providerIds.set(id, provider)
   }
   return providerIds
 }
@@ -42,8 +42,13 @@ function addConfiguredRoute({ route, index, pairs, providerIds, routeBySymbol })
   if (!Object.hasOwn(pairs, route.symbol)) {
     throw new TypeError(`Market-data route references unconfigured symbol ${route.symbol}`)
   }
-  if (!providerIds.has(route.providerInstanceId)) {
+  const provider = providerIds.get(route.providerInstanceId)
+  if (!provider) {
     throw new TypeError(`Market-data route for ${route.symbol} references unknown provider instance ${route.providerInstanceId}`)
+  }
+  const pairTradingEnvironment = pairs[route.symbol].tradingEnvironment
+  if (pairTradingEnvironment && pairTradingEnvironment !== "both" && pairTradingEnvironment !== provider.environment) {
+    throw new TypeError(`Market-data route for ${route.symbol} uses ${provider.environment}, but the market is configured for ${pairTradingEnvironment}`)
   }
   if (routeBySymbol.has(route.symbol)) {
     throw new TypeError(`Market-data routing contains duplicate route for ${route.symbol}`)

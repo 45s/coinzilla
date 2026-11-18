@@ -6,16 +6,31 @@ const appConfig = {
   strategies: {
     CG_coinGrabber: {
       pairs: {
-        BTCUSDT: { enabled: true },
-        ETHUSDT: { enabled: true },
-        XRPUSDT: { enabled: false },
+        BTCUSDT: {
+          enabled: true,
+          tradingEnvironment: "both",
+        },
+        ETHUSDT: {
+          enabled: true,
+          tradingEnvironment: "both",
+        },
+        XRPUSDT: {
+          enabled: false,
+          tradingEnvironment: "both",
+        },
       },
     },
   },
 }
 const providers = [
-  { providerInstanceId: "binance-one" },
-  { providerInstanceId: "binance-two" },
+  {
+    providerInstanceId: "binance-one",
+    environment: "testnet",
+  },
+  {
+    providerInstanceId: "binance-two",
+    environment: "live",
+  },
 ]
 
 test("keeps the legacy single-provider market-data ownership", () => {
@@ -159,5 +174,41 @@ test("rejects routes to unknown providers and unconfigured markets", () => {
     }),
     /unconfigured symbol DOGEUSDT/,
     "a route must not introduce a market outside the strategy configuration",
+  )
+})
+
+test("rejects a market-data provider with an incompatible trading environment", () => {
+  assert.throws(
+    () => resolveMarketDataSymbolsByProvider({
+      appConfig: {
+        ...appConfig,
+        strategies: {
+          CG_coinGrabber: {
+            pairs: {
+              ...appConfig.strategies.CG_coinGrabber.pairs,
+              BTCUSDT: {
+                enabled: true,
+                tradingEnvironment: "testnet",
+              },
+            },
+          },
+        },
+        marketDataRouting: {
+          routes: [
+            {
+              symbol: "BTCUSDT",
+              providerInstanceId: "binance-two",
+            },
+            {
+              symbol: "ETHUSDT",
+              providerInstanceId: "binance-one",
+            },
+          ],
+        },
+      },
+      providers,
+    }),
+    /uses live, but the market is configured for testnet/,
+    "market-data source environment must be compatible with the configured market",
   )
 })
