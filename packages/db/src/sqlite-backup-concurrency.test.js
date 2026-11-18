@@ -110,7 +110,12 @@ test("SQLite online backup includes a committed WAL write made while backup page
     const copiedPages = await source.backup({
       destination: backupFilename,
       rate: 1,
-      progress({ remainingPages }) {
+      progress(state) {
+        assert.ok(
+          Object.isFrozen(state),
+          "SQLite backup progress snapshots must be immutable",
+        )
+        const { remainingPages } = state
         if (remainingPages > 0 && !concurrentWriteCommitted) {
           writer.prepare(
             "INSERT INTO backup_records (id, payload) VALUES (?, ?)",
