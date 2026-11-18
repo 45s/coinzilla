@@ -49,16 +49,13 @@ test("SQLite connection initialization preserves both setup and cleanup failures
       true,
       "The failed native close must leave the connection handle available for a cleanup retry",
     )
-    await database.connect()
+    await database.close()
     assert.equal(closeAttempts, 2)
     assert.equal(
       failedConnection.isOpen,
       false,
-      "Retrying connection must first release the retained partially initialized native handle",
+      "Calling close after failed initialization must retry and release the retained native connection",
     )
-    assert.equal(database.state, "connected")
-    await database.close()
-    assert.equal(closeAttempts, 3)
   } finally {
     context.mock.restoreAll()
     await database.close()
@@ -175,6 +172,57 @@ test("SQLite WAL initialization does not retry a lock after a zero-millisecond t
       "A zero timeout must surface the first SQLite WAL lock failure without retrying",
     )
     assert.equal(walAttempts, 1)
+  } finally {
+    context.mock.restoreAll()
+    await database.close()
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+
+test("SQLite reconnect releases a retained partial connection before opening a replacement", async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-connect-retry-"))
+  const database = createSqliteDatabase({
+    filename: join(directory, "records.sqlite"),
+  })
+  const originalExec = DatabaseSync.prototype.exec
+  const originalClose = DatabaseSync.prototype.close
+  const initializationFailure = new Error("initial WAL setup failed")
+  const cleanupFailure = new Error("first partial connection close failed")
+  let initializationAttempts = 0
+  let closeAttempts = 0
+  let partialConnection
+
+  context.mock.method(DatabaseSync.prototype, "exec", function exec(sql) {
+    if (sql === "PRAGMA journal_mode = WAL" && initializationAttempts === 0) {
+      initializationAttempts += 1
+      throw initializationFailure
+    }
+    return originalExec.call(this, sql)
+  })
+  context.mock.method(DatabaseSync.prototype, "close", function close(...args) {
+    partialConnection ??= this
+    closeAttempts += 1
+    if (closeAttempts === 1) {
+      throw cleanupFailure
+    }
+    return originalClose.apply(this, args)
+  })
+
+  try {
+    await assert.rejects(
+      database.connect(),
+      (error) => error instanceof AggregateError
+        && error.errors[0] === initializationFailure
+        && error.errors[1] === cleanupFailure,
+    )
+    await database.connect()
+    assert.equal(closeAttempts, 2)
+    assert.equal(partialConnection.isOpen, false)
+    assert.equal(database.state, "connected")
   } finally {
     context.mock.restoreAll()
     await database.close()
