@@ -863,6 +863,12 @@ function resolveFillOrder({ fill, state }) {
     clientOrderId,
     eventName: EVENT.FILL_APPLIED,
   })
+  if (fill.providerInstanceId !== undefined &&
+      (fill.providerInstanceId !== order.providerInstanceId ||
+       fill.providerType !== order.providerType ||
+       fill.accountId !== order.accountId)) {
+    throw new Error("Applied fill provider provenance conflicts with its journaled order")
+  }
   if (order.submissionOutcome === "REJECTED") {
     throw new Error(`Applied fill references a definitively rejected submission: ${fill.fillId}`)
   }
