@@ -1226,3 +1226,15 @@ The audit is the detailed evidence source; this roadmap records status and next 
 - [x] Added offline tests for filters, response shapes, aliases, precision, malformed rows, unknown statuses, empty history and no retry.
 
 **Next candidate:** audit Spot order/deal history against #1185. Keep canonical `getFills()` blocked until quantity denomination, execution identity, and completeness are proven by authoritative evidence.
+
+## 2026-11-18 — Bitunix Spot raw matching-order detail read (#1388 / PR #1389)
+
+**Status: In progress — implementation, offline tests and documentation are complete in PR #1389; exact-head CI and merge are pending.**
+
+- Audited official `POST /api/spot/v1/order/deal/list` and cross-checked JKorf, the TypeScript MCP and the independent Python client. The JKorf Trading interface documents the correct path but says GET; its implementation sends POST to the wrong `order/pending/list` path. The Python client uses the official POST path but has unsafe request-header printing and no endpoint test fixture.
+- Added the Bitunix-only `getMatchingOrderDetails({ orderId, symbol })` read. It sends one signed POST with `stateChanging: false`, validates inputs before I/O, preserves the seven raw fields and decimal/identifier tokens, returns immutable data, and never retries.
+- Explicitly accepts only one object or `data: null`; malformed/missing data, arrays, invalid decimals and invalid timestamps fail closed. No synthetic order identity or semantic normalization is added.
+- This method does not prove fill completeness, quantity denomination or stable/unique execution identity. Keep `getFills()` and `getMyTrades()` unsupported and issue #1185 open; no mutation or Harvester-readiness status changes.
+- Documentation impact: updated the [Bitunix reference audit](./BITUNIX_REFERENCE_AUDIT.md), [capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract), and [package README](./README.md#bitunix-spot-integration).
+
+After PR #1389 is merged, update this status from in-progress to merged and record the exact merge/head verification.
