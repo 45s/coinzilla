@@ -2333,8 +2333,8 @@ test("starts configured provider accounts and acquires one process lock per acco
       TRADING_MODE: "testnet",
       BINANCE_API_KEY: "binance-key",
       BINANCE_API_SECRET_KEY: "binance-secret",
-      BITUNIX_API_KEY: "bitunix-key",
-      BITUNIX_API_SECRET: "bitunix-secret",
+      TEST_PROVIDER_API_KEY: "bitunix-key",
+      TEST_PROVIDER_API_SECRET: "bitunix-secret",
     },
     providerAdapterFactories: {
       "test-exchange": () => ({}),
@@ -2364,11 +2364,11 @@ test("starts configured provider accounts and acquires one process lock per acco
     ])
     await fixture.signalHandlers.get("SIGINT")()
     assert.deepEqual(fixture.stopped, [
-      "bitunixLiveSecondary",
+      "testProviderLiveSecondary",
       "binanceTestnetPrimary",
     ])
     assert.deepEqual(fixture.releasedLocks, [
-      "bitunixLiveSecondary",
+      "testProviderLiveSecondary",
       "binanceTestnetPrimary",
     ])
     assert.equal(process.exitCode, 0)

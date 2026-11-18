@@ -13,13 +13,13 @@ function createAdapterFactories(calls = []) {
         provider: "binance",
       })
     },
-    "bitunix-spot": (input) => {
+    "test-exchange": (input) => {
       calls.push({
-        provider: "bitunix-spot",
+        provider: "test-exchange",
         ...input,
       })
       return Object.freeze({
-        provider: "bitunix-spot",
+        provider: "test-exchange",
       })
     },
   }
@@ -117,7 +117,7 @@ test("constructs accounts from different registered provider types", () => {
           createProviderConfig(),
           createProviderConfig({
             providerInstanceId: "bitunixSpotPrimary",
-            providerType: "bitunix-spot",
+            providerType: "test-exchange",
             accountId: "bitunix-primary",
             environment: "live",
             credentials: {
@@ -139,13 +139,13 @@ test("constructs accounts from different registered provider types", () => {
 
   assert.deepEqual(providers.map(({ providerType, environment }) => [providerType, environment]), [
     ["binance", "testnet"],
-    ["bitunix-spot", "live"],
+    ["test-exchange", "live"],
   ])
   providers[0].brokerAdapterFactory({ config: {} })
   providers[1].brokerAdapterFactory({ config: {} })
   assert.deepEqual(calls.map(({ provider, config }) => [provider, config.apiKey]), [
     ["binance", "binance-key"],
-    ["bitunix-spot", "bitunix-key"],
+    ["test-exchange", "bitunix-key"],
   ])
 })
 
