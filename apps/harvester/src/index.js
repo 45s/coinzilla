@@ -473,6 +473,29 @@ async function acquireEnvironmentProcessLocks({ providers, acquireProcessLock, l
   })
 }
 
+async function resolveConfiguredProviderResources({
+  resources,
+  env,
+  providerAdapterFactories,
+  acquireProcessLock,
+  logger,
+}) {
+  resources.providerInstances = resolveProviderInstances({
+    appConfig: resources.appConfig,
+    env,
+    adapterFactories: providerAdapterFactories,
+  })
+  resources.runtimeConfig = resolveRuntimeConfig({
+    tradingMode: resources.providerInstances[0].environment,
+    environment: env.NODE_ENV,
+  })
+  resources.processLock = await acquireEnvironmentProcessLocks({
+    providers: resources.providerInstances,
+    acquireProcessLock,
+    logger,
+  })
+}
+
 async function acquireProcessStartupResources({ options, resources, processStartedDataResult } = {}) {
   const {
     createEventBus,
@@ -489,17 +512,10 @@ async function acquireProcessStartupResources({ options, resources, processStart
   } = options
   resources.eventBus = createEventBus({ logger })
   resources.appConfig = await loadConfig(configSource)
-  resources.providerInstances = resolveProviderInstances({
-    appConfig: resources.appConfig,
+  await resolveConfiguredProviderResources({
+    resources,
     env,
-    adapterFactories: providerAdapterFactories,
-  })
-  resources.runtimeConfig = resolveRuntimeConfig({
-    tradingMode: resources.providerInstances[0].environment,
-    environment: env.NODE_ENV,
-  })
-  resources.processLock = await acquireEnvironmentProcessLocks({
-    providers: resources.providerInstances,
+    providerAdapterFactories,
     acquireProcessLock,
     logger,
   })
