@@ -14,7 +14,7 @@ const market = new Market({
   quoteAsset,
 })
 
-function createTradingRules({ minimumNotional = "5", maximumQuantity = "100", supportedOrderTypes = ["LIMIT_MAKER", "LIMIT"] } = {}) {
+function createTradingRules({ minimumPrice = "0.01", maximumPrice = "100", minimumQuantity = "0.01", maximumQuantity = "100", minimumNotional = "5", maximumNotional = "1000", missingFilter, supportedOrderTypes = ["LIMIT_MAKER", "LIMIT"] } = {}) {
   return {
     market,
     supportedOrderTypes,
@@ -23,13 +23,13 @@ function createTradingRules({ minimumNotional = "5", maximumQuantity = "100", su
       constraints: [
         { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
         { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
-        { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.01", asset: baseAsset }) },
+        { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: minimumQuantity, asset: baseAsset }) },
         { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: minimumNotional, asset: quoteAsset }) },
         { type: "MAX_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: maximumQuantity, asset: baseAsset }) },
-        { type: "MAX_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "1000", asset: quoteAsset }) },
-        { type: "MIN_PRICE", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
-        { type: "MAX_PRICE", status: "SUPPORTED", value: new Money({ amount: "100", asset: quoteAsset }) },
-      ],
+        { type: "MAX_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: maximumNotional, asset: quoteAsset }) },
+        { type: "MIN_PRICE", status: "SUPPORTED", value: new Money({ amount: minimumPrice, asset: quoteAsset }) },
+        { type: "MAX_PRICE", status: "SUPPORTED", value: new Money({ amount: maximumPrice, asset: quoteAsset }) },
+      ].filter(({ type }) => type !== missingFilter),
     }),
   }
 }
@@ -124,4 +124,59 @@ test("blocks a second SELL lifecycle without creating another order intent", () 
     "A second SELL attempt is an unsupported lifecycle transition and must latch STOP.")
   assert.equal(result.orderIntent, undefined,
     "A second SELL intent must never be returned for the same recovery cycle.")
+})
+
+test("latches STOP for every supported minimum and maximum SELL filter violation", () => {
+  const scenarios = [
+    { filter: "MIN_PRICE", metadata: createTradingRules({ minimumPrice: "11" }) },
+    { filter: "MAX_PRICE", metadata: createTradingRules({ maximumPrice: "10" }) },
+    { filter: "MIN_QUANTITY", metadata: createTradingRules({ minimumQuantity: "2" }) },
+    { filter: "MAX_QUANTITY", metadata: createTradingRules({ maximumQuantity: "0.5" }) },
+    { filter: "MIN_NOTIONAL", metadata: createTradingRules({ minimumNotional: "20" }) },
+    { filter: "MAX_NOTIONAL", metadata: createTradingRules({ maximumNotional: "5" }) },
+  ]
+
+  for (const scenario of scenarios) {
+    const result = evaluateRecoverySellerSellDecision({
+      ...validInput,
+      marketMetadata: scenario.metadata,
+    })
+
+    assert.equal(result.decision.outcome, "BLOCK",
+      "A " + scenario.filter + " violation must block the SELL without adjusting its quantity or price.")
+    assert.equal(result.stopState.status, "STOPPED",
+      "A " + scenario.filter + " violation must latch the global sticky STOP.")
+    assert.equal(result.orderIntent, undefined,
+      "A " + scenario.filter + " violation must not return an executable SELL intent.")
+  }
+})
+
+test("latches STOP when a required exchange filter is unavailable", () => {
+  const result = evaluateRecoverySellerSellDecision({
+    ...validInput,
+    marketMetadata: createTradingRules({ missingFilter: "MIN_NOTIONAL" }),
+  })
+
+  assert.equal(result.decision.outcome, "BLOCK",
+    "A missing required exchange filter must block SELL planning.")
+  assert.equal(result.stopState.status, "STOPPED",
+    "Missing authoritative exchange constraints must latch the global STOP.")
+  assert.equal(result.orderIntent, undefined,
+    "The evaluator must not return an order intent without every required filter.")
+})
+
+test("latches STOP when third-asset commission quote valuation is missing", () => {
+  const planInput = { ...validInput.planInput }
+  delete planInput.thirdAssetFeeQuoteValue
+  const result = evaluateRecoverySellerSellDecision({
+    ...validInput,
+    planInput,
+  })
+
+  assert.equal(result.decision.outcome, "BLOCK",
+    "An unvalued third-asset commission must fail closed before SELL authorization.")
+  assert.equal(result.stopState.status, "STOPPED",
+    "Missing third-asset quote valuation must latch the global STOP.")
+  assert.equal(result.orderIntent, undefined,
+    "The evaluator must not treat missing third-asset valuation as zero or submit.")
 })

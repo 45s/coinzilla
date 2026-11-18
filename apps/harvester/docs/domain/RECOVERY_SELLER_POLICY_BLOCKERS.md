@@ -142,7 +142,7 @@ The existing global STOP latch is permanent for its policy instance. Only non-tr
 
 The RS BUY evaluator currently uses Conservative initial/next tranche pricing but does not invoke trailing repricing. No additional RS trailing behavior is added without an explicit owner decision.
 
-`minProfit` validation is no longer an open policy question: it must follow the existing Conservative `0.01` quote-asset minimum and remains pair-level.
+`minProfit` validation follows the existing Conservative `0.01` quote-asset minimum and remains pair-level. The pure pre-submission evaluator now enforces the confirmed order-type, fee-reserve and exchange-filter STOP decisions; verify on the exact PR head before treating this implementation slice as complete.
 
 ## 5. Decisions already settled — do not reopen
 

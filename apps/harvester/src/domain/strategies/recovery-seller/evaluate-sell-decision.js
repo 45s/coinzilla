@@ -157,6 +157,12 @@ function findFilterViolation({ plan, filters }) {
   return undefined
 }
 
+function getFailureExplanation({ error, operation }) {
+  return error instanceof Error && error.message
+    ? "Recovery Seller " + operation + " failed: " + error.message
+    : "Recovery Seller " + operation + " failed with an unsupported condition"
+}
+
 function createStoppedResult({ stopState, explanation }) {
   const stopDecision = createRecoverySellerStopDecision({
     explanation,
@@ -252,14 +258,37 @@ export function evaluateRecoverySellerSellDecision({
       explanation: `Exchange does not support required Recovery Seller ${feePolicy.orderType} SELL orders`,
     })
   }
-  const filters = resolveExchangeFilters({
-    marketMetadata,
-  })
-  const { plan, filterViolation } = createSellPlan({
-    planInput,
-    filters,
-    feePolicy,
-  })
+  let filters
+  try {
+    filters = resolveExchangeFilters({
+      marketMetadata,
+    })
+  } catch (error) {
+    return createStoppedResult({
+      stopState,
+      explanation: getFailureExplanation({
+        error,
+        operation: "exchange-filter validation",
+      }),
+    })
+  }
+  let plan
+  let filterViolation
+  try {
+    ({ plan, filterViolation } = createSellPlan({
+      planInput,
+      filters,
+      feePolicy,
+    }))
+  } catch (error) {
+    return createStoppedResult({
+      stopState,
+      explanation: getFailureExplanation({
+        error,
+        operation: "SELL planning",
+      }),
+    })
+  }
   if (filterViolation) {
     return createStoppedResult({
       stopState,
