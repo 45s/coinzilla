@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createSqliteDatabase } from "../src/index.js"
+import { createGuardedIterator } from "./infrastructure/sqlite/sqlite-database.js"
 
 async function createConnectedDatabase() {
   const database = createSqliteDatabase({ filename: ":memory:" })
@@ -115,4 +116,56 @@ test("SQLite rolls back when a returned thenable throws while its then property 
   } finally {
     await database.close()
   }
+})
+
+
+test("guarded iterators forward optional native methods and provide a return fallback", () => {
+  const failure = new Error("native iterator failure")
+  let active = true
+  const iterator = {
+    next() {
+      return {
+        done: false,
+        value: "next",
+      }
+    },
+    return() {
+      return undefined
+    },
+    throw(error) {
+      return {
+        done: true,
+        value: error,
+      }
+    },
+  }
+  const guarded = createGuardedIterator({
+    iterator,
+    assertActive() {
+      if (!active) {
+        throw new Error("SQLite transaction context is no longer active")
+      }
+    },
+  })
+
+  assert.deepEqual(
+    guarded.return(),
+    { done: true },
+    "An undefined native return result must produce the standard completed-iterator fallback",
+  )
+  assert.deepEqual(
+    guarded.throw(failure),
+    {
+      done: true,
+      value: failure,
+    },
+    "A native iterator throw method must be forwarded when available",
+  )
+
+  active = false
+  assert.throws(
+    () => guarded.throw(failure),
+    /no longer active/,
+    "Optional iterator methods must remain guarded by transaction lifetime",
+  )
 })
