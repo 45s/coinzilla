@@ -298,6 +298,7 @@ test("replays the 2026-11-17 ADA cycle and preserves the below-target outcome th
     replay,
     replacementSell,
   })
+  await replay.waitForLifecycleEvent("recovery.cycle_not_completed")
   assertAdaExecutionReports(replay)
   const eventCount = assertAdaBelowTargetOutcome({
     replay,

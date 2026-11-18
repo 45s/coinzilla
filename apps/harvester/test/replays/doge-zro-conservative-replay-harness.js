@@ -94,6 +94,7 @@ exchangeFilters }),
     receivedMarketPriceEvents: [],
     receivedExecutionReports: [],
     receivedLifecycleEvents: [],
+    lifecycleEventWaiters: [],
     harvesterRuntimeErrors: [],
     marketPriceEventHandlers: new Map(),
     exchangeOpenOrders: new Map(),
@@ -168,6 +169,36 @@ function waitForRecoveryCycleCompletion(state) {
       reject(new Error(`Timed out waiting for recovery.cycle_completed for ${state.marketSymbol}`));
     }, 5000);
     state.recoveryCycleCompletionWaiter = resolveCycle;
+  });
+}
+
+function notifyLifecycleEventWaiters({ state, event }) {
+  const matchingWaiters = state.lifecycleEventWaiters.filter(({ eventName }) => eventName === event.name);
+  state.lifecycleEventWaiters = state.lifecycleEventWaiters.filter(({ eventName }) => eventName !== event.name);
+  for (const waiter of matchingWaiters) {
+    clearTimeout(waiter.timeout);
+    waiter.resolve(event);
+  }
+}
+
+function waitForLifecycleEvent({ state, eventName }) {
+  const existing = state.receivedLifecycleEvents.find(({ name }) => name === eventName);
+  if (existing) {
+    return Promise.resolve(existing);
+  }
+  return new Promise((resolve, reject) => {
+    const waiter = {
+      eventName,
+      resolve,
+      timeout: undefined,
+    };
+    waiter.timeout = setTimeout(() => {
+      state.lifecycleEventWaiters = state.lifecycleEventWaiters.filter((candidate) => candidate !== waiter);
+      reject(new Error(
+        `Timed out waiting for ${eventName} for ${state.marketSymbol}; observed events: ${state.receivedLifecycleEvents.map(({ name }) => name).join(", ")}; runtime errors: ${state.harvesterRuntimeErrors.map((error) => error.message ?? String(error)).join("; ")} `,
+      ));
+    }, 5000);
+    state.lifecycleEventWaiters.push(waiter);
   });
 }
 
@@ -495,6 +526,10 @@ async function startDogeReplayRuntime({ state, appConfig, brokerFactory }) {
     eventPublisher: {
       publish: (event) => {
         state.receivedLifecycleEvents.push(event);
+        notifyLifecycleEventWaiters({
+          state,
+          event,
+        });
         if (event.name === "recovery.cycle_completed") {
           state.recoveryCycleCompletionResult = event.data;
           state.recoveryCycleCompletionWaiter?.(event.data);
@@ -697,6 +732,10 @@ side,
 occurrence });
     },
     waitForRecoveryCycleCompletion: () => waitForRecoveryCycleCompletion(state),
+    waitForLifecycleEvent: (eventName) => waitForLifecycleEvent({
+      state,
+      eventName,
+    }),
     publishMarketPrice: (price) => publishDogeReplayMarketPrice({
       state,
       price,
