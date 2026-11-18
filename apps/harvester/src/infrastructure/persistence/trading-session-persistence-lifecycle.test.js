@@ -6,10 +6,11 @@ import test from "node:test"
 import { closeTradingSessionPersistence } from "./close-trading-session-persistence.js"
 import { prepareTradingSessionPersistence } from "./prepare-trading-session-persistence.js"
 
-test("prepares a real provider-neutral SQLite session database and closes it", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-session-persistence-"))
+test("connects to SQLite, persists the process ID, and closes the database", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-id-persistence-"))
   const result = await prepareTradingSessionPersistence({
     tradingMode: "testnet",
+    processId: 12345,
     env: {
       HARVESTER_DATABASE_DIRECTORY: directory,
     },
@@ -17,12 +18,18 @@ test("prepares a real provider-neutral SQLite session database and closes it", a
   const { database } = result ?? {}
 
   try {
-    assert.ok(result, "A valid isolated database directory must compose the real SQLite provider and session repository.")
-    assert.equal(database.state, "connected", "The provider-neutral database must be connected before the repository is exposed.")
-    assert.equal(
-      await result.repository.findById("missing-session"),
-      null,
-      "The prepared repository must support a provider-neutral read against the connected SQLite database.",
+    assert.ok(result, "A valid isolated database directory must compose the real SQLite provider.")
+    assert.equal(database.state, "connected", "The provider-neutral database must be connected before the process-ID record is read.")
+    assert.deepEqual(
+      await database.readOne({
+        collection: "harvester_processes",
+        id: "12345",
+      }),
+      {
+        id: "12345",
+        processId: 12345,
+      },
+      "Harvester must persist the operating-system process ID as a minimal temporary SQLite smoke-test record.",
     )
 
     const errors = await closeTradingSessionPersistence({

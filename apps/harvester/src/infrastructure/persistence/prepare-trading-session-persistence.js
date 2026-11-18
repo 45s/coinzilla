@@ -1,5 +1,4 @@
 import { createDatabase, createSqliteProvider } from "@coinzilla/db"
-import { createTradingSessionRepository } from "./trading-session-repository.js"
 import { assertTradingSessionDatabaseIsolation } from "./resolve-trading-session-database-filename.js"
 
 const SQLITE_TIMEOUT_MS = 5_000
@@ -36,6 +35,7 @@ export async function prepareTradingSessionPersistence({
   tradingMode,
   env,
   logger,
+  processId,
   createDatabase: createDatabaseFactory = createDatabase,
   createSqliteProvider: createSqliteProviderFactory = createSqliteProvider,
 } = {}) {
@@ -52,10 +52,16 @@ export async function prepareTradingSessionPersistence({
       }),
     })
     await database.connect()
-    return {
-      database,
-      repository: createTradingSessionRepository({ database }),
+    if (Number.isSafeInteger(processId) && processId > 0) {
+      await database.create({
+        collection: "harvester_processes",
+        record: {
+          id: String(processId),
+          processId,
+        },
+      })
     }
+    return { database }
   } catch (error) {
     reportPersistenceFailure({
       logger,

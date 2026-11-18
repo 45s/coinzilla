@@ -21,7 +21,6 @@ import { createLogCommandInterface } from "./infrastructure/logging/create-log-c
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
 import { prepareProcessOperationalStateStore } from "./bootstrap/operational-state/prepare-process-operational-state-store.js"
 import { prepareTradingSessionPersistence as prepareTradingSessionPersistenceDefault } from "./infrastructure/persistence/prepare-trading-session-persistence.js"
-import { createTradingSessionHistoryObserver } from "./infrastructure/persistence/create-trading-session-history-observer.js"
 import { closeTradingSessionPersistence } from "./infrastructure/persistence/close-trading-session-persistence.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
@@ -182,16 +181,14 @@ async function closeObservability({
   journalService,
   eventBus,
   processLock,
-  tradingSessionObserver,
-  tradingSessionDatabase,
+  processIdDatabase,
   allowProcessLockRelease = true,
   logger,
 } = {}) {
   const journalResult = await closeJournalService({ journalService })
   const eventBusErrors = await closeEventBus({ eventBus })
-  const tradingSessionErrors = await closeTradingSessionPersistence({
-    observer: tradingSessionObserver,
-    database: tradingSessionDatabase,
+  const databaseErrors = await closeTradingSessionPersistence({
+    database: processIdDatabase,
   })
   const processLockErrors = await releaseProcessLock({
     processLock,
@@ -201,7 +198,7 @@ async function closeObservability({
   const errors = [
     ...journalResult.errors,
     ...eventBusErrors,
-    ...tradingSessionErrors,
+    ...databaseErrors,
     ...processLockErrors,
   ]
 
@@ -290,81 +287,20 @@ function publishProcessStartedEvidence({ processStartedDataResult, resources, lo
     })
 }
 
-function createEmptyTradingSessionHistoryResources() {
-  return {
-    persistence: null,
-    observer: null,
-  }
-}
-
-async function closeUnusedTradingSessionPersistence({ persistence, logger }) {
-  const errors = await closeTradingSessionPersistence({
-    database: persistence.database,
-  })
-  reportObservabilityCleanupErrors({
-    errors,
-    logger,
-  })
-}
-
-function reportSessionObserverSetupFailure({ logger, error }) {
-  try {
-    logger?.error?.({
-      message: "Ordinary trading-session history observer could not be attached; Harvester continues without this non-authoritative history store.",
-      errorName: error?.name ?? "Error",
-      errorCode: typeof error?.code === "string" ? error.code : "UNKNOWN",
-    })
-  } catch {
-    // Optional historical reporting diagnostics must not affect startup.
-  }
-}
-
-async function prepareTradingSessionHistoryResources({
-  eventBus,
-  processStartedDataResult,
+async function prepareProcessIdDatabase({
   runtimeConfig,
   env,
   logger,
+  processId,
   prepareTradingSessionPersistence,
 }) {
   const persistence = await prepareTradingSessionPersistence({
     tradingMode: runtimeConfig.tradingMode,
     env,
     logger,
+    processId,
   })
-  if (!persistence) {
-    return createEmptyTradingSessionHistoryResources()
-  }
-  if (!processStartedDataResult.ok) {
-    await closeUnusedTradingSessionPersistence({
-      persistence,
-      logger,
-    })
-    return createEmptyTradingSessionHistoryResources()
-  }
-  try {
-    const observer = createTradingSessionHistoryObserver({
-      eventBus,
-      repository: persistence.repository,
-      processIdentity: processStartedDataResult.data,
-      runtimeConfig,
-      logger,
-    })
-    return {
-      persistence,
-      observer,
-    }
-  } catch (error) {
-    reportSessionObserverSetupFailure({
-      logger,
-      error,
-    })
-    await closeUnusedTradingSessionPersistence({
-      persistence,
-      logger,
-    })
-    return createEmptyTradingSessionHistoryResources()
-  }
+  return persistence?.database ?? null
 }
 
 async function acquireEnvironmentProcessLock({ runtimeConfig, acquireProcessLock, logger }) {
@@ -424,16 +360,13 @@ async function acquireProcessStartupResources({ options, resources, processStart
     journalService: resources.journalService,
     resources,
   })
-  const tradingSessionHistory = await prepareTradingSessionHistoryResources({
-    eventBus: resources.eventBus,
-    processStartedDataResult,
+  resources.processIdDatabase = await prepareProcessIdDatabase({
     runtimeConfig: resources.runtimeConfig,
     env,
     logger,
+    processId: processStartedDataResult.data?.processId,
     prepareTradingSessionPersistence,
   })
-  resources.tradingSessionPersistence = tradingSessionHistory.persistence
-  resources.tradingSessionObserver = tradingSessionHistory.observer
   resources.processStartedPublication = publishProcessStartedEvidence({
     processStartedDataResult,
     resources,
@@ -587,8 +520,7 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
       closeLogger: options.closeLogger,
       closeObservability: (cleanupOptions) => closeObservability({
         ...cleanupOptions,
-        tradingSessionObserver: resources.tradingSessionObserver,
-        tradingSessionDatabase: resources.tradingSessionPersistence?.database,
+        processIdDatabase: resources.processIdDatabase,
       }),
       logTelegramNotificationSummary,
     })
@@ -681,8 +613,7 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
     journalService: resources.journalService,
     eventBus: resources.eventBus,
     processLock: resources.processLock,
-    tradingSessionObserver: resources.tradingSessionObserver,
-    tradingSessionDatabase: resources.tradingSessionPersistence?.database,
+    processIdDatabase: resources.processIdDatabase,
     allowProcessLockRelease: !resources.runtimeStartAttempted,
     logger,
   })
@@ -763,8 +694,7 @@ function createInitialProcessResources() {
       skipped: true,
     }),
     runtimeStartAttempted: false,
-    tradingSessionPersistence: null,
-    tradingSessionObserver: null,
+    processIdDatabase: null,
   }
 }
 

@@ -263,3 +263,13 @@ Financial quantities in later slices must remain exact decimal strings or explic
 No Operational State Store adapter or migration is part of this slice. Restart restoration remains disabled. Issue [#654](https://github.com/45s/coinzilla/issues/654) and ADR-0001 remain authoritative for any future recovery decision.
 
 A database-backed Operational State adapter requires a separate gated decision, complete ADR-0001 parity evidence, crash/torn-write and durability tests, backup/restore proof, a rollback plan, and explicit #654 owner approval.
+
+## Temporary SQLite connectivity check
+
+For the current integration smoke test, Harvester opens the existing environment-selected SQLite database and writes one temporary record to the `harvester_processes` collection:
+
+```json
+{ "id": "12345", "processId": 12345 }
+```
+
+The ID is only the string form required by the generic database record contract. The runtime does not attach the trading-session history observer in this temporary test path, so it does not create a trading-session row. Remove this temporary process-ID write and restore the normal history projection when real Harvester persistence work begins. LIVE/TESTNET file isolation is unchanged.
