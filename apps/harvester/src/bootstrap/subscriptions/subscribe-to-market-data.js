@@ -162,7 +162,10 @@ reason: "STOPPING" } })
     intakeState.latestWebSocketBookTask = Promise.resolve()
       .then(() => processMarketBook({
         symbol,
-        bookTicker: attachMarketDataSourceIdentity({ event: bookTicker, sourceIdentity }),
+        bookTicker: attachMarketDataSourceIdentity({
+          event: bookTicker,
+          sourceIdentity,
+        }),
       }))
       .then((processed) => {
         if (!processed.ok) {
@@ -203,7 +206,10 @@ function createMarketPriceHandler({
       return toResult({ data: { skipped: true,
 reason: "STOPPING" } })
     }
-    const sourcedPriceEvent = attachMarketDataSourceIdentity({ event: priceEvent, sourceIdentity })
+    const sourcedPriceEvent = attachMarketDataSourceIdentity({
+      event: priceEvent,
+      sourceIdentity,
+    })
     try {
       if (isMarketPriceFresh(createMarketPrice({ priceEvent: sourcedPriceEvent }))) {
         intakeState.hasFreshWebSocketPrice = true
@@ -454,16 +460,8 @@ function assertConfiguredMarketDataSourceIdentity({
   }
 }
 
-function resolveMarketDataBroker({ context, symbol }) {
-  const broker = typeof context.getMarketDataBroker === "function"
-    ? context.getMarketDataBroker({ symbol })
-    : context.broker
-  if (!broker || typeof broker !== "object") {
-    throw new TypeError(`No market-data broker is available for ${symbol}`)
-  }
-  const configuredIdentity = context.marketDataProviderIdentities?.[symbol]
-  const sourceIdentity = resolveMarketDataSourceIdentity({
-    broker,
+function resolveExpectedMarketDataIdentity({ context, symbol, configuredIdentity }) {
+  return {
     expectedProviderInstanceId: configuredIdentity?.providerInstanceId
       ?? context.marketDataSources?.[symbol]
       ?? context.providerInstanceId,
@@ -472,37 +470,64 @@ function resolveMarketDataBroker({ context, symbol }) {
       ?? context.brokerName,
     expectedAccountId: configuredIdentity?.accountId,
     expectedEnvironment: configuredIdentity?.environment ?? context.marketDataEnvironment,
+  }
+}
+
+function resolveMarketDataBrokerInstance({ context, symbol }) {
+  if (typeof context.getMarketDataBroker === "function") {
+    return context.getMarketDataBroker({ symbol })
+  }
+  return context.broker
+}
+
+function resolveMarketDataBroker({ context, symbol }) {
+  const broker = resolveMarketDataBrokerInstance({ context, symbol })
+  if (!broker || typeof broker !== "object") {
+    throw new TypeError(`No market-data broker is available for ${symbol}`)
+  }
+  const configuredIdentity = context.marketDataProviderIdentities?.[symbol]
+  const expectedIdentity = resolveExpectedMarketDataIdentity({
+    context,
+    symbol,
+    configuredIdentity,
+  })
+  const sourceIdentity = resolveMarketDataSourceIdentity({
+    broker,
+    ...expectedIdentity,
   })
   assertConfiguredMarketDataSourceIdentity({
     symbol,
     sourceIdentity,
     configuredIdentity,
   })
-  return { broker, sourceIdentity }
+  return {
+    broker,
+    sourceIdentity,
+  }
 }
 
-async function subscribeToEnabledMarket({
+function getMarketDataRouteIdentity({ context, symbol, resolvedSource }) {
+  return {
+    providerInstanceId: resolvedSource?.sourceIdentity?.providerInstanceId
+      ?? context.marketDataSources?.[symbol]
+      ?? context.providerInstanceId,
+    brokerName: resolvedSource?.sourceIdentity?.providerType
+      ?? context.marketDataProviderTypes?.[symbol]
+      ?? context.brokerName,
+  }
+}
+
+async function subscribeMarketDataStreams({
   context,
   symbol,
   pairConfig,
   reportPriceError,
+  resolvedSource,
+  providerInstanceId,
+  brokerName,
+  initialError,
 }) {
-  const intakeState = context.marketPriceIntake.get(symbol) ?? {}
-  intakeState.marketPriceSubscriptionReady = false
-  context.marketPriceIntake.set(symbol, intakeState)
-  let resolvedSource
-  let symbolError
-  try {
-    resolvedSource = resolveMarketDataBroker({ context, symbol })
-  } catch (error) {
-    symbolError = error
-  }
-  const providerInstanceId = resolvedSource?.sourceIdentity?.providerInstanceId
-    ?? context.marketDataSources?.[symbol]
-    ?? context.providerInstanceId
-  const brokerName = resolvedSource?.sourceIdentity?.providerType
-    ?? context.marketDataProviderTypes?.[symbol]
-    ?? context.brokerName
+  let symbolError = initialError
   if (resolvedSource && context.tradingEnabled) {
     try {
       await subscribeToBookTicker({
@@ -536,15 +561,54 @@ async function subscribeToEnabledMarket({
       symbolError ??= error
     }
   }
-  if (symbolError) {
-    context.logger.error?.({
-      message: "Market-data source subscription failed; execution route remains blocked",
-      symbol,
-      providerInstanceId: providerInstanceId ?? null,
-      broker: brokerName ?? null,
-      error: symbolError,
-    })
+  return symbolError
+}
+
+function reportMarketDataRouteFailure({ context, symbol, providerInstanceId, brokerName, error }) {
+  if (!error) {
+    return
   }
+  context.logger.error?.({
+    message: "Market-data source subscription failed; execution route remains blocked",
+    symbol,
+    providerInstanceId: providerInstanceId ?? null,
+    broker: brokerName ?? null,
+    error,
+  })
+}
+
+async function subscribeToEnabledMarket({
+  context,
+  symbol,
+  pairConfig,
+  reportPriceError,
+}) {
+  const intakeState = context.marketPriceIntake.get(symbol) ?? {}
+  intakeState.marketPriceSubscriptionReady = false
+  context.marketPriceIntake.set(symbol, intakeState)
+  let resolvedSource
+  let initialError
+  try {
+    resolvedSource = resolveMarketDataBroker({ context, symbol })
+  } catch (error) {
+    initialError = error
+  }
+  const routeIdentity = getMarketDataRouteIdentity({ context, symbol, resolvedSource })
+  const symbolError = await subscribeMarketDataStreams({
+    context,
+    symbol,
+    pairConfig,
+    reportPriceError,
+    resolvedSource,
+    ...routeIdentity,
+    initialError,
+  })
+  reportMarketDataRouteFailure({
+    context,
+    symbol,
+    ...routeIdentity,
+    error: symbolError,
+  })
   return symbolError
 }
 
