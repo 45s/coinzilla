@@ -4,7 +4,7 @@
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest verified checkpoint: `develop` at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c`; 85 Harvester Markdown/MDX paths (four additions since the historical 81-file checkpoint)
+- Latest verified checkpoint: `develop` at `8843bd1e42dea7b47a7af5c464b921e54dd16c0d`; 85 Harvester Markdown/MDX paths (zero path changes since the 37aa07e checkpoint)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-18
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
@@ -127,7 +127,7 @@ The complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` contai
 | `apps/harvester/docs/plans/WORKFLOW_PIPELINE_MIGRATION.md` | Workflow-pipeline migration plan. |
 | `apps/harvester/docs/recovery/README.md` | Recovery documentation index. |
 
-## Current recursive additions — develop checkpoint 37aa07ec
+## Historical recursive additions — develop checkpoint 37aa07ec
 
 The complete recursive tree at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` contains **85 Harvester Markdown/MDX paths**. Four paths were added since the historical 81-file checkpoint at `0a51d6034a6ff6473d9a9005b74744fd048c9135`; no Harvester Markdown/MDX paths were removed:
 
