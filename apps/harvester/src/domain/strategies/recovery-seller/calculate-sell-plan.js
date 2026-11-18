@@ -5,6 +5,7 @@ import {
   assertDecimalString,
   compareDecimal,
   divideDecimal,
+  maxDecimal,
   multiplyDecimal,
   roundDecimalToIncrement,
   subtractDecimal,
@@ -72,7 +73,7 @@ function validateFeeRates({ quoteFeeRate, baseFeeRate }) {
   }
 }
 
-function validateInput(input) {
+function validateRequiredDecimalFields(input) {
   const fields = [
     "recoveryQuantity",
     "configuredLegacyQuantity",
@@ -93,6 +94,9 @@ function validateInput(input) {
       field,
     })
   }
+}
+
+function validateQuantityAndCostInputs(input) {
   assertPositive({
     value: input.recoveryQuantity,
     field: "recoveryQuantity",
@@ -121,6 +125,9 @@ function validateInput(input) {
     value: input.minProfit,
     field: "minProfit",
   })
+}
+
+function validateFeeAndMarketInputs(input) {
   assertNonNegative({
     value: input.quoteFeeRate,
     field: "quoteFeeRate",
@@ -141,14 +148,19 @@ function validateInput(input) {
     value: input.quantityStepSize,
     field: "quantityStepSize",
   })
-
-  validateLegacyAvailability({
-    legacyRemainingQuantity: input.legacyRemainingQuantity,
-    verifiedUnreservedLegacyQuantity: input.verifiedUnreservedLegacyQuantity,
-  })
   validateFeeRates({
     quoteFeeRate: input.quoteFeeRate,
     baseFeeRate: input.baseFeeRate,
+  })
+}
+
+function validateInput(input) {
+  validateRequiredDecimalFields(input)
+  validateQuantityAndCostInputs(input)
+  validateFeeAndMarketInputs(input)
+  validateLegacyAvailability({
+    legacyRemainingQuantity: input.legacyRemainingQuantity,
+    verifiedUnreservedLegacyQuantity: input.verifiedUnreservedLegacyQuantity,
   })
 }
 
@@ -191,20 +203,81 @@ function validateLegacyCost({ legacyQuantity, legacyAverageCost }) {
   }
 }
 
-function calculateQuoteTarget({
+function calculateAllocationRequiredTotalProceeds({
+  allocationCostBasis,
+  allocationMinProfit = "0",
+  allocationSellQuantity,
+  totalSellQuantity,
+}) {
+  if (compareDecimal({
+    left: allocationSellQuantity,
+    right: "0",
+  }) === 0) {
+    return "0"
+  }
+
+  const allocationTarget = addDecimal({
+    left: allocationCostBasis,
+    right: allocationMinProfit,
+  })
+  return divideDecimal({
+    left: multiplyDecimal({
+      left: allocationTarget,
+      right: totalSellQuantity,
+    }),
+    right: allocationSellQuantity,
+    scale: DEFAULT_DECIMAL_DIVISION_SCALE,
+    rounding: DECIMAL_ROUNDING_MODES.AWAY_FROM_ZERO,
+  })
+}
+
+function calculateProfitabilityTargets({
   recoveryCostBasis,
   legacyCostBasis,
   minProfit,
-  thirdAssetFeeQuoteValue,
-  quoteFeeRate,
+  recoverySellQuantity,
+  legacySellQuantity,
+  totalSellQuantity,
 }) {
-  const requiredNetQuoteProceeds = addDecimal({
+  const recoveryRequiredNetQuoteProceeds = calculateAllocationRequiredTotalProceeds({
+    allocationCostBasis: recoveryCostBasis,
+    allocationMinProfit: minProfit,
+    allocationSellQuantity: recoverySellQuantity,
+    totalSellQuantity,
+  })
+  const legacyRequiredNetQuoteProceeds = calculateAllocationRequiredTotalProceeds({
+    allocationCostBasis: legacyCostBasis,
+    allocationSellQuantity: legacySellQuantity,
+    totalSellQuantity,
+  })
+  const combinedRequiredNetQuoteProceeds = addDecimal({
     left: addDecimal({
       left: recoveryCostBasis,
       right: legacyCostBasis,
     }),
     right: minProfit,
   })
+  const requiredNetQuoteProceeds = maxDecimal({
+    left: maxDecimal({
+      left: recoveryRequiredNetQuoteProceeds,
+      right: legacyRequiredNetQuoteProceeds,
+    }),
+    right: combinedRequiredNetQuoteProceeds,
+  })
+
+  return Object.freeze({
+    recoveryRequiredNetQuoteProceeds,
+    legacyRequiredNetQuoteProceeds,
+    combinedRequiredNetQuoteProceeds,
+    requiredNetQuoteProceeds,
+  })
+}
+
+function calculateQuoteTarget({
+  requiredNetQuoteProceeds,
+  thirdAssetFeeQuoteValue,
+  quoteFeeRate,
+}) {
   const grossQuoteTarget = addDecimal({
     left: requiredNetQuoteProceeds,
     right: thirdAssetFeeQuoteValue,
@@ -219,13 +292,11 @@ function calculateQuoteTarget({
     rounding: DECIMAL_ROUNDING_MODES.AWAY_FROM_ZERO,
   })
   return Object.freeze({
-    requiredNetQuoteProceeds,
     grossQuoteProceeds,
   })
 }
 
-function calculateOrderQuantities({
-  recoveryQuantity,
+function calculateGrossSellQuantity({
   availableBaseQuantity,
   baseFeeRate,
   quantityStepSize,
@@ -260,7 +331,22 @@ function calculateOrderQuantities({
       "Exchange quantity step cannot include the full recovery and authorized legacy quantities after base-fee gross-up",
     )
   }
+  return Object.freeze({
+    quantity,
+    baseFeeQuantity,
+    baseDebitQuantity,
+  })
+}
 
+function calculateAllocationQuantities({
+  quantity,
+  baseFeeQuantity,
+  recoveryQuantity,
+  availableBaseQuantity,
+}) {
+  // Assign division-precision remainder to recovery, not legacy. The legacy
+  // allocation is operator-authorized inventory; rounding its residual upward
+  // could make its base debit exceed verified custody after base commission.
   const recoverySellQuantity = divideDecimal({
     left: multiplyDecimal({
       left: quantity,
@@ -268,7 +354,7 @@ function calculateOrderQuantities({
     }),
     right: availableBaseQuantity,
     scale: DEFAULT_DECIMAL_DIVISION_SCALE,
-    rounding: DECIMAL_ROUNDING_MODES.TOWARD_ZERO,
+    rounding: DECIMAL_ROUNDING_MODES.AWAY_FROM_ZERO,
   })
   const legacySellQuantity = subtractDecimal({
     left: quantity,
@@ -287,22 +373,76 @@ function calculateOrderQuantities({
     left: baseFeeQuantity,
     right: recoveryBaseFeeQuantity,
   })
-
   return Object.freeze({
-    quantity,
-    baseFeeQuantity,
-    baseDebitQuantity,
     recoverySellQuantity,
     legacySellQuantity,
+    recoveryBaseFeeQuantity,
+    legacyBaseFeeQuantity,
+  })
+}
+
+function calculateOrderQuantities({
+  recoveryQuantity,
+  availableBaseQuantity,
+  baseFeeRate,
+  quantityStepSize,
+}) {
+  const gross = calculateGrossSellQuantity({
+    availableBaseQuantity,
+    baseFeeRate,
+    quantityStepSize,
+  })
+  const allocations = calculateAllocationQuantities({
+    ...gross,
+    recoveryQuantity,
+    availableBaseQuantity,
+  })
+  return Object.freeze({
+    ...gross,
+    ...allocations,
     recoveryBaseDebitQuantity: addDecimal({
-      left: recoverySellQuantity,
-      right: recoveryBaseFeeQuantity,
+      left: allocations.recoverySellQuantity,
+      right: allocations.recoveryBaseFeeQuantity,
     }),
     legacyBaseDebitQuantity: addDecimal({
-      left: legacySellQuantity,
-      right: legacyBaseFeeQuantity,
+      left: allocations.legacySellQuantity,
+      right: allocations.legacyBaseFeeQuantity,
     }),
   })
+}
+
+function validateQuantityAllocations({
+  recoveryQuantity,
+  legacyQuantity,
+  quantities,
+}) {
+  if (compareDecimal({
+    left: quantities.recoverySellQuantity,
+    right: "0",
+  }) <= 0 || compareDecimal({
+    left: quantities.recoveryBaseDebitQuantity,
+    right: recoveryQuantity,
+  }) > 0) {
+    throw new RangeError(
+      "SELL allocation precision cannot represent the recovery allocation without exceeding the recovery Position quantity",
+    )
+  }
+  if (compareDecimal({
+    left: legacyQuantity,
+    right: "0",
+  }) > 0 && (
+    compareDecimal({
+      left: quantities.legacySellQuantity,
+      right: "0",
+    }) <= 0 || compareDecimal({
+      left: quantities.legacyBaseDebitQuantity,
+      right: legacyQuantity,
+    }) > 0
+  )) {
+    throw new RangeError(
+      "SELL allocation precision cannot represent the authorized legacy allocation without exceeding the verified authorized legacy quantity",
+    )
+  }
 }
 
 function calculateMinimumPrice({ grossQuoteProceeds, quantity, priceTickSize }) {
@@ -319,8 +459,47 @@ function calculateMinimumPrice({ grossQuoteProceeds, quantity, priceTickSize }) 
   })
 }
 
+function prepareSellPlanQuantities({
+  recoveryQuantity,
+  configuredLegacyQuantity,
+  legacyRemainingQuantity,
+  verifiedUnreservedLegacyQuantity,
+  legacyAverageCost,
+  baseFeeRate,
+  quantityStepSize,
+}) {
+  const legacyQuantity = calculateEligibleLegacyQuantity({
+    configuredLegacyQuantity,
+    legacyRemainingQuantity,
+    verifiedUnreservedLegacyQuantity,
+  })
+  validateLegacyCost({
+    legacyQuantity,
+    legacyAverageCost,
+  })
+  const availableBaseQuantity = addDecimal({
+    left: recoveryQuantity,
+    right: legacyQuantity,
+  })
+  const quantities = calculateOrderQuantities({
+    recoveryQuantity,
+    availableBaseQuantity,
+    baseFeeRate,
+    quantityStepSize,
+  })
+  validateQuantityAllocations({
+    recoveryQuantity,
+    legacyQuantity,
+    quantities,
+  })
+  return Object.freeze({
+    legacyQuantity,
+    quantities,
+  })
+}
+
 /**
- * Plan one combined RS SELL from recovery inventory and the eligible legacy slice.
+ * Plan one RS SELL whose recovery, legacy and combined proceeds targets pass independently.
  *
  * configuredLegacyQuantity is the per-cycle slice. legacyRemainingQuantity is
  * the authorized remainder. verifiedUnreservedLegacyQuantity must be supplied
@@ -329,8 +508,63 @@ function calculateMinimumPrice({ grossQuoteProceeds, quantity, priceTickSize }) 
  *
  * thirdAssetFeeQuoteValue is a required explicit quote-currency estimate. Pass
  * "0" only when no third-asset fee applies; missing/unvalued fees are not zero.
- * Configured fee rates/valuations are planning assumptions; actual fill
+ * The highest total-net-proceeds target required by recovery, legacy and combined
+ * profitability is used. Quote/base/third-asset fee assumptions are planning
+ * inputs; actual fill
  * commissions remain authoritative for final accounting.
+ */
+function calculateSellPlanEconomics({
+  quantities,
+  recoveryCostBasis,
+  legacyAverageCost,
+  minProfit,
+  quoteFeeRate,
+  thirdAssetFeeQuoteValue,
+  priceTickSize,
+}) {
+  const legacyCostBasis = multiplyDecimal({
+    left: legacyAverageCost,
+    right: quantities.legacyBaseDebitQuantity,
+  })
+  const profitabilityTargets = calculateProfitabilityTargets({
+    recoveryCostBasis,
+    legacyCostBasis,
+    minProfit,
+    recoverySellQuantity: quantities.recoverySellQuantity,
+    legacySellQuantity: quantities.legacySellQuantity,
+    totalSellQuantity: quantities.quantity,
+  })
+  const quoteTarget = calculateQuoteTarget({
+    requiredNetQuoteProceeds: profitabilityTargets.requiredNetQuoteProceeds,
+    thirdAssetFeeQuoteValue,
+    quoteFeeRate,
+  })
+  const price = calculateMinimumPrice({
+    grossQuoteProceeds: quoteTarget.grossQuoteProceeds,
+    quantity: quantities.quantity,
+    priceTickSize,
+  })
+  return Object.freeze({
+    ...profitabilityTargets,
+    legacyCostBasis,
+    grossQuoteProceeds: quoteTarget.grossQuoteProceeds,
+    price,
+  })
+}
+
+/**
+ * Plan one RS SELL whose recovery, legacy and combined proceeds targets pass independently.
+ *
+ * configuredLegacyQuantity is the per-cycle slice. legacyRemainingQuantity is
+ * the authorized remainder. verifiedUnreservedLegacyQuantity must be supplied
+ * from authoritative Spot custody after active reservations are deducted. If
+ * legacy remains but no such quantity is available, planning fails closed.
+ *
+ * thirdAssetFeeQuoteValue is a required explicit quote-currency estimate. Pass
+ * "0" only when no third-asset fee applies; missing/unvalued fees are not zero.
+ * The highest total-net-proceeds target required by recovery, legacy and combined
+ * profitability is used. Quote/base/third-asset fee assumptions are planning
+ * inputs; actual fill commissions remain authoritative for final accounting.
  */
 export function calculateRecoverySellerSellPlan({
   recoveryQuantity,
@@ -361,50 +595,28 @@ export function calculateRecoverySellerSellPlan({
     quantityStepSize,
   }
   validateInput(input)
-
-  const legacyQuantity = calculateEligibleLegacyQuantity({
+  const { legacyQuantity, quantities } = prepareSellPlanQuantities({
+    recoveryQuantity,
     configuredLegacyQuantity,
     legacyRemainingQuantity,
     verifiedUnreservedLegacyQuantity,
-  })
-  validateLegacyCost({
-    legacyQuantity,
     legacyAverageCost,
-  })
-  const availableBaseQuantity = addDecimal({
-    left: recoveryQuantity,
-    right: legacyQuantity,
-  })
-  const quantities = calculateOrderQuantities({
-    recoveryQuantity,
-    availableBaseQuantity,
     baseFeeRate,
     quantityStepSize,
   })
-  const legacyCostBasis = multiplyDecimal({
-    left: legacyAverageCost,
-    right: quantities.legacyBaseDebitQuantity,
-  })
-  const quoteTarget = calculateQuoteTarget({
+  const economics = calculateSellPlanEconomics({
+    quantities,
     recoveryCostBasis,
-    legacyCostBasis,
+    legacyAverageCost,
     minProfit,
-    thirdAssetFeeQuoteValue,
     quoteFeeRate,
-  })
-  const price = calculateMinimumPrice({
-    grossQuoteProceeds: quoteTarget.grossQuoteProceeds,
-    quantity: quantities.quantity,
+    thirdAssetFeeQuoteValue,
     priceTickSize,
   })
-
   return Object.freeze({
     ...quantities,
-    price,
+    ...economics,
     recoveryQuantity,
     legacyQuantity,
-    legacyCostBasis,
-    requiredNetQuoteProceeds: quoteTarget.requiredNetQuoteProceeds,
-    grossQuoteProceeds: quoteTarget.grossQuoteProceeds,
   })
 }
