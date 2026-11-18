@@ -4,10 +4,10 @@ import test from "node:test"
 import { createDatabase } from "../src/index.js"
 
 function assertTransactionRequiresConnection(database) {
-  assertTransactionRequiresConnection(database)
+  assert.throws(() => database.transaction(() => {}), /connected/)
 }
 
-function createAdapter(overrides = {}) {
+(overrides = {}) {
   const calls = {
     connect: 0,
     close: 0,
@@ -100,7 +100,7 @@ test("transactions require a connected database and a callback", async () => {
   const { adapter } = createAdapter()
   const database = createDatabase({ adapter })
 
-  assert.throws(() => database.transaction(() => {}), /connected/)
+  assertTransactionRequiresConnection(database)
   await database.connect()
   assert.throws(() => database.transaction(null), /callback/)
 })
@@ -159,7 +159,7 @@ test("close waits for active transactions and rejects new transactions", async (
   const closingAgain = database.close()
 
   assert.equal(database.state, "closing")
-  assert.throws(() => database.transaction(() => {}), /connected/)
+  assertTransactionRequiresConnection(database)
   assert.equal(calls.close, 0)
 
   finishTransaction("committed")
@@ -241,7 +241,7 @@ test("a failed close remains retryable without reopening transactions", async ()
 
   await assert.rejects(database.close(), /close failed/)
   assert.equal(database.state, "closing")
-  assert.throws(() => database.transaction(() => {}), /connected/)
+  assertTransactionRequiresConnection(database)
 
   await database.close()
   assert.equal(database.state, "closed")
