@@ -2157,3 +2157,119 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
     process.exitCode = previousExitCode
   }
 })
+
+
+test("starts configured provider accounts and acquires one process lock per account", async () => {
+  const started = []
+  const stopped = []
+  const lockScopes = []
+  const releasedLocks = []
+  const signalHandlers = new Map()
+  const config = {
+    ...appConfig,
+    operatorControl: {
+      telegram: {
+        enabled: true,
+        allowedUserIds: ["12345"],
+      },
+    },
+    brokers: {
+      instances: [
+        {
+          providerInstanceId: "binanceTestnetPrimary",
+          providerType: "binance",
+          accountId: "binance-primary",
+          environment: "testnet",
+          credentials: {
+            apiKeyEnv: "BINANCE_API_KEY",
+            apiSecretEnv: "BINANCE_API_SECRET_KEY",
+          },
+        },
+        {
+          providerInstanceId: "bitunixLiveSecondary",
+          providerType: "bitunix-spot",
+          accountId: "bitunix-secondary",
+          environment: "live",
+          credentials: {
+            apiKeyEnv: "BITUNIX_API_KEY",
+            apiSecretEnv: "BITUNIX_API_SECRET",
+          },
+        },
+      ],
+    },
+  }
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    const result = await main({
+      loadConfig: async () => config,
+      env: {
+        TRADING_MODE: "testnet",
+        BINANCE_API_KEY: "binance-key",
+        BINANCE_API_SECRET_KEY: "binance-secret",
+        BITUNIX_API_KEY: "bitunix-key",
+        BITUNIX_API_SECRET: "bitunix-secret",
+      },
+      providerAdapterFactories: {
+        "bitunix-spot": () => ({}),
+      },
+      acquireProcessLock: async (input) => {
+        lockScopes.push({
+          broker: input.broker,
+          providerInstanceId: input.providerInstanceId,
+          accountId: input.accountId,
+          tradingMode: input.tradingMode,
+        })
+        return {
+          ok: true,
+          lockScope: input,
+          release: async () => {
+            releasedLocks.push(input.providerInstanceId)
+            return { ok: true, released: true }
+          },
+        }
+      },
+      start: async (input) => {
+        started.push({
+          identity: input.providerIdentity,
+          tradingMode: input.env.TRADING_MODE,
+          operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
+        })
+        return {
+          account: input.providerIdentity,
+          brokerName: input.providerIdentity.providerType,
+          connected: true,
+          tradingEnabled: true,
+          strategyMode: "conservative",
+          subscriptions: ["BTCUSDT"],
+          stop: async () => {
+            stopped.push(input.providerIdentity.providerInstanceId)
+            return { ok: true },
+          },
+        }
+      },
+      registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+      logger: { info() {}, system() {}, error() {} },
+    })
+
+    assert.ok(result)
+    assert.equal(result.runtime.providerAccounts.length, 2)
+    assert.deepEqual(started.map(({ identity }) => identity.providerInstanceId), [
+      "binanceTestnetPrimary",
+      "bitunixLiveSecondary",
+    ])
+    assert.deepEqual(started.map(({ tradingMode }) => tradingMode), ["testnet", "live"])
+    assert.deepEqual(started.map(({ operatorControlEnabled }) => operatorControlEnabled), [true, false])
+    assert.deepEqual(lockScopes.map(({ accountId, tradingMode }) => [accountId, tradingMode]), [
+      ["binance-primary", "testnet"],
+      ["bitunix-secondary", "live"],
+    ])
+    assert.equal(signalHandlers.has("SIGINT"), true)
+    await signalHandlers.get("SIGINT")()
+    assert.deepEqual(stopped, ["bitunixLiveSecondary", "binanceTestnetPrimary"])
+    assert.deepEqual(releasedLocks, ["bitunixLiveSecondary", "binanceTestnetPrimary"])
+    assert.equal(process.exitCode, 0)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
