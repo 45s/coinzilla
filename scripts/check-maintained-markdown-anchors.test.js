@@ -65,7 +65,7 @@ test("blocks unresolved anchors from maintained sources and reports historical s
     }
 
     const allGaps = findMissingLocalAnchors(root, documents)
-    const maintainedGaps = findMissingMaintainedLocalAnchors(root, documents)
+    const maintainedGaps = findMissingMaintainedLocalAnchors({ root, documents })
 
     assert.equal(allGaps.length, 4)
     assert.equal(maintainedGaps.length, 3)
@@ -77,6 +77,9 @@ test("blocks unresolved anchors from maintained sources and reports historical s
       false,
     )
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
