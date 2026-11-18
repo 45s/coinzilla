@@ -4,7 +4,7 @@ import { createDogeTradingReplay } from "./doge-zro-conservative-replay-harness.
 
 const test = (...testArguments) => {
   const [name, ...options] = testArguments;
-  return nodeTest(`[doge-zro-conservative-replay.test.js] ${name}`, ...options);
+  return nodeTest(`[doge-zro-conservative-dogeTradingReplay.test.js] ${name}`, ...options);
 };
 
 const MARKET_SYMBOL = "DOGEUSDT"
@@ -427,23 +427,23 @@ runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill 
 
     const recoveryCycleResult = await recoveryCycleCompletion
     assert.equal(
-      replay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
+      dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
       1,
       "the reconciled SELL must publish exactly one completed-cycle outcome",
     )
-    const completedPositionBeforeDuplicate = replay.runtime.portfolio.getPosition({
+    const completedPositionBeforeDuplicate = dogeTradingReplay.runtime.portfolio.getPosition({
       symbol: MARKET_SYMBOL,
     })
-    await replay.publishFullOrderFill({
+    await dogeTradingReplay.publishFullOrderFill({
       order: recoverySellOrder,
-      price: replay.scenarioExpectations.sellFillPrice,
+      price: dogeTradingReplay.scenarioExpectations.sellFillPrice,
       tradeId: SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID,
     })
-    const completedPositionAfterDuplicate = replay.runtime.portfolio.getPosition({
+    const completedPositionAfterDuplicate = dogeTradingReplay.runtime.portfolio.getPosition({
       symbol: MARKET_SYMBOL,
     })
     assert.equal(
-      replay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
+      dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
       1,
       "replaying the same SELL execution must not publish a second completed-cycle outcome",
     )

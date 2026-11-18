@@ -40,6 +40,7 @@ const appConfig = {
           priceStepPercent: 0.3,
           pricePrecision: 4,
           quantityPrecision: 1,
+          // Historical 2026-11-17 pair configuration; actual fill commissions are supplied explicitly below.
           makerPercent: 0.075,
           takerPercent: 0.075,
         },
