@@ -743,7 +743,10 @@ function createSessionSyntheticRecords({ session, latestSession, state }) {
     }))
     lineNumber += 1
   }
-  const remaining = emitSessionPreflight({ session, emit })
+  const remaining = emitSessionPreflight({
+    session,
+    emit,
+  })
   emitLatestSessionState({
     session,
     latestSession,
