@@ -3,6 +3,7 @@ import { SystemCustomError } from "@coinzilla/utils"
 const CONFIGURATION_ERROR_CODE = "HARVESTER_BITUNIX_READ_ONLY_CONFIGURATION_INVALID"
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
 
+/** Stable, credential-safe configuration failure for the optional Bitunix observer. */
 export class BitunixReadOnlyConfigurationError extends SystemCustomError {}
 
 function throwConfigurationError({ setting, reason } = {}) {

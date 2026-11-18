@@ -85,10 +85,10 @@ function assertReadMethods({ broker } = {}) {
  * The wrapped broker remains private to this closure. No mutation, streaming,
  * canonical-fill, or timestamped-account-snapshot method is exposed.
  *
- * @param {{config: object, logger?: object, brokerFactory?: Function}} input
+ * @param {{config: object, brokerFactory?: ({config: object}) => object}} input
  * @returns {Readonly<object>}
  */
-export function createBitunixReadOnlyAdapter({ config, logger, brokerFactory } = {}) {
+export function createBitunixReadOnlyAdapter({ config, brokerFactory } = {}) {
   assertReadOnlyConfig({ config })
   const broker = createBroker({ config, brokerFactory })
   if (broker === null || typeof broker !== "object") {
