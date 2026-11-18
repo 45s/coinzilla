@@ -351,9 +351,6 @@ function createEmptyOpenOrdersHandler() {
 
 function createHarnessBrokerPort({ options, state } = {}) {
   return {
-    providerInstanceId: "binanceTestnet",
-    providerType: "binance",
-    accountId: "binance-primary",
     getSymbolFilters: createSymbolFiltersHandler(options),
     placeOrder: createPlaceOrderHandler({ ...options,
       ...state }),
