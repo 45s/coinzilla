@@ -187,3 +187,102 @@ test("SQLite verification preserves integrity and close failures", async (contex
     })
   }
 })
+
+
+test("SQLite verification preserves an integrity failure when closing succeeds", async (context) => {
+  const directory = await createTemporaryDirectory()
+  const filename = join(directory, "verification-integrity.sqlite")
+  const source = new DatabaseSync(filename)
+  source.exec("CREATE TABLE records (id INTEGER PRIMARY KEY)")
+  source.close()
+
+  const originalPrepare = DatabaseSync.prototype.prepare
+  const originalClose = DatabaseSync.prototype.close
+  const integrityFailure = new Error("SQLite integrity verification failed")
+  let verificationConnection
+
+  context.mock.method(DatabaseSync.prototype, "prepare", function prepare(sql) {
+    if (sql === "PRAGMA integrity_check") {
+      verificationConnection = this
+      throw integrityFailure
+    }
+    return originalPrepare.call(this, sql)
+  })
+
+  try {
+    await assert.rejects(
+      verifyDatabaseFile({
+        filename,
+        timeout: 100,
+      }),
+      (error) => error === integrityFailure,
+      "A successful verification-connection close must not replace the original integrity failure",
+    )
+    assert.equal(
+      verificationConnection.isOpen,
+      false,
+      "The verification connection must close even when integrity validation fails",
+    )
+  } finally {
+    context.mock.restoreAll()
+    if (verificationConnection?.isOpen) {
+      originalClose.call(verificationConnection)
+    }
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("SQLite verification propagates a close failure after successful integrity validation", async (context) => {
+  const directory = await createTemporaryDirectory()
+  const filename = join(directory, "verification-close.sqlite")
+  const source = new DatabaseSync(filename)
+  source.exec("CREATE TABLE records (id INTEGER PRIMARY KEY)")
+  source.close()
+
+  const originalClose = DatabaseSync.prototype.close
+  const closeFailure = new Error("SQLite verification connection close failed")
+  let verificationConnection
+
+  context.mock.method(DatabaseSync.prototype, "close", function close() {
+    if (this !== verificationConnection) {
+      return originalClose.call(this)
+    }
+    throw closeFailure
+  })
+  const originalPrepare = DatabaseSync.prototype.prepare
+  context.mock.method(DatabaseSync.prototype, "prepare", function prepare(sql) {
+    const statement = originalPrepare.call(this, sql)
+    if (sql === "PRAGMA integrity_check") {
+      verificationConnection = this
+    }
+    return statement
+  })
+
+  try {
+    await assert.rejects(
+      verifyDatabaseFile({
+        filename,
+        timeout: 100,
+      }),
+      (error) => error === closeFailure,
+      "A close failure after successful integrity validation must remain the reported failure",
+    )
+    assert.equal(
+      verificationConnection.isOpen,
+      true,
+      "A failed native close must remain observable as an unreleased verification connection",
+    )
+  } finally {
+    context.mock.restoreAll()
+    if (verificationConnection?.isOpen) {
+      originalClose.call(verificationConnection)
+    }
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
