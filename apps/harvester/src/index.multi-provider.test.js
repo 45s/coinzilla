@@ -271,7 +271,7 @@ test("retains an account process lock when startup cleanup is unconfirmed", asyn
   process.exitCode = 0
   try {
     const result = await fixture.run()
-    assert.ok(result)
+    assert.ok(result, "The account startup result must remain available after isolating a startup failure")
     assert.equal(result.runtime.failedAccounts[0].lockRetained, true, "An account lock must remain held when startup cleanup is unconfirmed")
     assert.deepEqual(fixture.releasedLocks, [], "No account lock may be released before uncertain startup cleanup is confirmed")
     await fixture.signalHandlers.get("SIGINT")()
