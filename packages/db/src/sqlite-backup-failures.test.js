@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
+import { DatabaseProviderError } from "./domain/errors/database-errors.js"
 import { backupSqliteDatabase } from "./infrastructure/sqlite/sqlite-backup.js"
 
 async function createTemporaryDirectory() {
@@ -45,10 +46,11 @@ test("SQLite backup aggregates a progress callback failure with a temporary clea
           throw cleanupFailure
         },
       }),
-      (error) => error instanceof AggregateError
-        && error.errors.length === 2
-        && error.errors[0] === progressFailure
-        && error.errors[1] === cleanupFailure,
+      (error) => error instanceof DatabaseProviderError
+        && error.cause instanceof AggregateError
+        && error.cause.errors.length === 2
+        && error.cause.errors[0] === progressFailure
+        && error.cause.errors[1] === cleanupFailure,
       "The aggregate failure must preserve the progress and cleanup errors once each in causal order",
     )
   } finally {
