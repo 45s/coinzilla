@@ -22,6 +22,74 @@ async function readRestoredValue({ filename, query, parameters = [] }) {
   }
 }
 
+async function createRestoreBackup({ backupFilename }) {
+  const source = createSqliteDatabase({ filename: backupFilename })
+  await source.connect()
+
+  try {
+    source.exec("CREATE TABLE restore_records (id TEXT PRIMARY KEY, value TEXT NOT NULL)")
+    source.prepare("INSERT INTO restore_records (id, value) VALUES (?, ?)").run(
+      "retained",
+      "complete-backup",
+    )
+  } finally {
+    await source.close()
+  }
+}
+
+async function verifyConcurrentRestoreAttempts({ backupFilename, destinationFilename }) {
+  const restoreAttempts = await Promise.allSettled([
+    restoreSqliteDatabase({
+      backupFilename,
+      filename: destinationFilename,
+      rate: 1,
+    }),
+    restoreSqliteDatabase({
+      backupFilename,
+      filename: destinationFilename,
+      rate: 1,
+    }),
+  ])
+  const successfulRestores = restoreAttempts.filter(
+    (attempt) => attempt.status === "fulfilled",
+  )
+  const rejectedRestores = restoreAttempts.filter(
+    (attempt) => attempt.status === "rejected",
+  )
+
+  assert.equal(
+    successfulRestores.length,
+    1,
+    "Concurrent no-overwrite restore attempts targeting one path must publish exactly one winner",
+  )
+  assert.equal(
+    rejectedRestores.length,
+    1,
+    "The losing concurrent restore must reject instead of replacing the published database",
+  )
+  assert.ok(
+    rejectedRestores[0].reason instanceof TypeError,
+    "A destination race must be reported as an explicit existing-destination conflict",
+  )
+
+  const restoredRecord = await readRestoredValue({
+    filename: destinationFilename,
+    query: "SELECT id, value FROM restore_records WHERE id = ?",
+    parameters: ["retained"],
+  })
+  assert.deepEqual(
+    {
+      id: restoredRecord.id,
+      value: restoredRecord.value,
+    },
+    {
+      id: "retained",
+      value: "complete-backup",
+    },
+    "The winning restore must publish the complete validated backup without partial or mixed contents",
+  )
+}
+
 test("SQLite online backup includes a committed WAL write made while backup pages are copied", async () => {
   const directory = await createTemporaryDirectory()
   const sourceFilename = join(directory, "source.sqlite")
@@ -91,64 +159,13 @@ test("concurrent SQLite restores publish exactly one complete database without o
   const directory = await createTemporaryDirectory()
   const backupFilename = join(directory, "backup.sqlite")
   const destinationFilename = join(directory, "restored.sqlite")
-  const source = createSqliteDatabase({ filename: backupFilename })
-  await source.connect()
 
   try {
-    source.exec("CREATE TABLE restore_records (id TEXT PRIMARY KEY, value TEXT NOT NULL)")
-    source.prepare("INSERT INTO restore_records (id, value) VALUES (?, ?)").run(
-      "retained",
-      "complete-backup",
-    )
-  } finally {
-    await source.close()
-  }
-
-  try {
-    const restoreAttempts = await Promise.allSettled([
-      restoreSqliteDatabase({
-        backupFilename,
-        filename: destinationFilename,
-        rate: 1,
-      }),
-      restoreSqliteDatabase({
-        backupFilename,
-        filename: destinationFilename,
-        rate: 1,
-      }),
-    ])
-    const successfulRestores = restoreAttempts.filter(
-      (attempt) => attempt.status === "fulfilled",
-    )
-    const rejectedRestores = restoreAttempts.filter(
-      (attempt) => attempt.status === "rejected",
-    )
-
-    assert.equal(
-      successfulRestores.length,
-      1,
-      "Concurrent no-overwrite restore attempts targeting one path must publish exactly one winner",
-    )
-    assert.equal(
-      rejectedRestores.length,
-      1,
-      "The losing concurrent restore must reject instead of replacing the published database",
-    )
-    assert.ok(
-      rejectedRestores[0].reason instanceof TypeError,
-      "A destination race must be reported as an explicit existing-destination conflict",
-    )
-
-    const restoredRecord = await readRestoredValue({
-      filename: destinationFilename,
-      query: "SELECT id, value FROM restore_records WHERE id = ?",
-      parameters: ["retained"],
+    await createRestoreBackup({ backupFilename })
+    await verifyConcurrentRestoreAttempts({
+      backupFilename,
+      destinationFilename,
     })
-    assert.deepEqual(
-      { id: restoredRecord.id, value: restoredRecord.value },
-      { id: "retained", value: "complete-backup" },
-      "The winning restore must publish the complete validated backup without partial or mixed contents",
-    )
   } finally {
     await rm(directory, {
       recursive: true,
