@@ -127,7 +127,10 @@ function findOrderUpdateIndex({ orders, order } = {}) {
 }
 
 function createNextCanonicalOrder({ current, order } = {}) {
-  if (current.clientOrderId === order.clientOrderId) {
+  if (current.clientOrderId === order.clientOrderId &&
+      current.providerInstanceId === order.providerInstanceId &&
+      current.providerType === order.providerType &&
+      current.accountId === order.accountId) {
     return order
   }
   return new CanonicalOrder({
