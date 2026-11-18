@@ -34,6 +34,18 @@ test("file-backed SQLite enables WAL and foreign keys with the configured busy t
       1_234,
       "SQLite must apply the configured lock wait timeout to the native connection",
     )
+    database.exec("CREATE TABLE foreign_key_parents (id INTEGER PRIMARY KEY)")
+    database.exec("CREATE TABLE foreign_key_children (parent_id INTEGER REFERENCES foreign_key_parents(id))")
+    assert.throws(
+      () => database.prepare("INSERT INTO foreign_key_children (parent_id) VALUES (?)").run(42),
+      /FOREIGN KEY constraint failed/,
+      "SQLite must reject a row that violates an enabled foreign-key constraint",
+    )
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM foreign_key_children").get().count,
+      0,
+      "A rejected foreign-key write must not leave a partial row",
+    )
   } finally {
     await database.close()
     await rm(directory, {
