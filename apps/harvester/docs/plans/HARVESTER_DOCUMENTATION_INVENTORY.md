@@ -1,11 +1,11 @@
 # Harvester documentation inventory
 
-- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 39 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
+- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 43 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest verified checkpoint: `develop` at `0a51d6034a6ff6473d9a9005b74744fd048c9135`; 81 Harvester Markdown/MDX paths, unchanged from the complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8`
-- Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-16
+- Latest verified checkpoint: `develop` at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c`; 85 Harvester Markdown/MDX paths (four additions since the historical 81-file checkpoint)
+- Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-18
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
 
@@ -100,9 +100,9 @@ The 42-file table above remains a frozen baseline. A complete recursive Git tree
 
 PR #1021 updates existing Harvester README, roadmap, Volatility Protection, architecture flow and BrokerPort/adapter guidance to match the implemented candle-history service, freshness handling, gap backfill and shutdown-drain guarantees. It adds no Markdown/MDX paths. Candle measurement collection is implemented; the high-volatility trading policy, central order gate and owned-BUY cancellation remain separate unimplemented work.
 
-## Subsequent recursive additions — current develop checkpoint 0a51d603
+## Historical recursive additions — develop checkpoint 0a51d603
 
-The complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` contains 81 Harvester Markdown/MDX files; the changed-path comparison through current `develop` `0a51d6034a6ff6473d9a9005b74744fd048c9135` confirms that count and path set are unchanged. The following 20 Harvester paths were added since the prior 61-file checkpoint; no Harvester Markdown/MDX paths were removed:
+The complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` contains 81 Harvester Markdown/MDX files; the historical changed-path comparison through `develop` `0a51d6034a6ff6473d9a9005b74744fd048c9135` confirms that 81-file path set. The following 20 Harvester paths were added since the prior 61-file checkpoint; no Harvester Markdown/MDX paths were removed:
 
 | Added path | Purpose |
 | --- | --- |
@@ -127,11 +127,16 @@ The complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` contai
 | `apps/harvester/docs/plans/WORKFLOW_PIPELINE_MIGRATION.md` | Workflow-pipeline migration plan. |
 | `apps/harvester/docs/recovery/README.md` | Recovery documentation index. |
 
-### Pending addition — PR #1267
+## Current recursive additions — develop checkpoint 37aa07ec
 
-| Added path | Purpose | Expected post-merge Harvester total |
-| --- | --- | ---: |
-| `apps/harvester/docs/architecture/decisions/0005-emergency-buy-pause.md` | Accepted emergency BUY pause and owned-order cancellation decision. | 82 |
+The complete recursive tree at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` contains **85 Harvester Markdown/MDX paths**. Four paths were added since the historical 81-file checkpoint at `0a51d6034a6ff6473d9a9005b74744fd048c9135`; no Harvester Markdown/MDX paths were removed:
+
+| Added path | Purpose |
+| --- | --- |
+| `apps/harvester/docs/architecture/decisions/0005-emergency-buy-pause.md` | Accepted emergency BUY pause and owned-order cancellation decision (merged PR #1267). |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-17_08-48-56Z.md` | Preserved 2026-11-17 session audit evidence. |
+| `apps/harvester/docs/infrastructure/provider-instance-registry.md` | Provider identity/registry architecture and lifecycle contract (merged PR #1383). |
+| `apps/harvester/docs/persistence/README.md` | Harvester-owned persistence architecture and database integration boundary. |
 
 ## Content-based findings
 

@@ -4,7 +4,7 @@ status: active
 type: plan
 owner: harvester-and-brokers
 created: 2026-11-17
-last_verified: 2026-11-17
+last_verified: 2026-11-18
 ---
 
 # Multi-provider migration audit and implementation plan
@@ -14,6 +14,19 @@ last_verified: 2026-11-17
 **Audit baseline:** `develop` at `5d707d17114d524ef3cd7c6d35387dde61338976` (2026-11-17 09:45:59 UTC)
 **Integration sync:** the documentation branch is synchronized with `develop` at `70f1345054bf619dca01896817967eeba6ad1141`. This does not change the source-audit baseline above; revalidate source-sensitive findings against current `develop` before implementation.
 **Scope:** source-verified preparation and migration sequencing only. This document does not authorize runtime routing, database changes, provider mutations, or trading-behavior changes.
+
+## Current source revalidation — 2026-11-18
+
+**Revalidation checkpoint:** `develop` at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` (merged PR #1383). This section supersedes earlier statements about current delivery status where they differ; the original 2026-11-17 audit baseline and evidence remain historical and unchanged.
+
+- **Phase 1 — complete:** Brokers' immutable Binance capability declaration merged in [PR #1366](https://github.com/45s/coinzilla/pull/1366). This is additive capability metadata; it does not enable another provider.
+- **Phase 2 — foundation merged, routing not delivered:** [PR #1383](https://github.com/45s/coinzilla/pull/1383) adds stable Binance provider-instance/account identity, an exchange-neutral provider registry, capability validation, and deterministic connection/rollback lifecycle. It preserves the legacy single-Binance runtime. This is a foundation slice, not multi-provider execution or market-data routing.
+- **Overlapping stale work:** [PR #1386](https://github.com/45s/coinzilla/pull/1386) remains open on base `91403a5c055121687b7c1cf0b02807544bce8e48`, predating the merged PR #1383. Its registry changes must be reviewed against the merged implementation and either reconciled as a distinct follow-up or closed as superseded; do not merge it unchanged or claim its branch code is on `develop`.
+- **Current runtime remains one Binance instance:** `apps/harvester/src/domain/provider-identity.js` resolves stable non-secret Binance provider/account identifiers; `apps/harvester/src/application/providers/provider-registry.js` validates and owns registered provider lifecycle; `apps/harvester/src/bootstrap/broker/connect-broker.js` currently registers/connects the Binance broker. `apps/harvester/src/bootstrap/start-harvester.js` still defaults to `createBinanceBrokerAdapter`. There is no strategy/market execution route table, independent market-data route table, or second exchange instance on this checkpoint.
+- **Phases 3–6 remain planned:** durable provider/account order provenance, account isolation/reconciliation, independent market-data routing, execution routing/parity, and operational acceptance are not delivered. Process-restart recovery remains a related safety prerequisite under [issue #654](https://github.com/45s/coinzilla/issues/654).
+- **Safety gates unchanged:** Bitunix remains read-only / not Harvester-ready under [issue #1185](https://github.com/45s/coinzilla/issues/1185); Recovery Seller remains non-executable under [issue #1127](https://github.com/45s/coinzilla/issues/1127). No exchange operations were performed for this revalidation.
+
+This revalidation was a read-only source and GitHub delivery-state inspection. It did not execute tests or CI; do not transfer historical CI results to this checkpoint.
 
 ## 1. Executive decision
 
