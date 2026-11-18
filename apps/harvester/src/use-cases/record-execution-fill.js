@@ -15,6 +15,9 @@ export async function recordExecutionFill({ operationalStateStore, fill } = {}) 
     if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordExecutionFill requires a Operational State Store append capability") }
     if (!(fill instanceof Fill)) { throw new TypeError("recordExecutionFill requires a canonical Fill") }
     const {market} = fill
+    if (typeof fill.clientOrderId !== "string" || !fill.clientOrderId.trim()) {
+      throw new TypeError("Execution-fill fact requires its original Harvester clientOrderId")
+    }
     for (const field of ["providerInstanceId", "providerType", "accountId"]) {
       if (typeof fill[field] !== "string" || !fill[field].trim()) {
         throw new TypeError(`Execution-fill fact requires immutable ${field} provenance`)
