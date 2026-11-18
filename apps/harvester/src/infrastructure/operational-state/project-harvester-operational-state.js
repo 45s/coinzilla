@@ -191,6 +191,11 @@ function mapOrderCancellationIntentFact({ data, orderIntents, cancellationIntent
     name: EVENT.CANCEL_REQUESTED,
     data: {
       clientOrderId: data.clientOrderId,
+      ...(data.providerInstanceId === undefined ? {} : {
+        providerInstanceId: data.providerInstanceId,
+        providerType: data.providerType,
+        accountId: data.accountId,
+      }),
       brokerOrderId: data.brokerOrderId,
       symbol: data.symbol,
       side: data.side,
@@ -244,6 +249,11 @@ function mapOrderCancellationOutcomeFact({ data, orderIntents, cancellationInten
     name: EVENT.CANCEL_FAILED,
     data: {
       clientOrderId: data.clientOrderId,
+      ...(data.providerInstanceId === undefined ? {} : {
+        providerInstanceId: data.providerInstanceId,
+        providerType: data.providerType,
+        accountId: data.accountId,
+      }),
       brokerOrderId: data.brokerOrderId,
       symbol: data.symbol,
       side: data.side,
