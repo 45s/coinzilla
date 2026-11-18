@@ -198,7 +198,10 @@ export async function connectBroker({
   requiredCapabilities = [],
   onBrokerConnected,
 } = {}) {
-  assertBrokerConnectionOptions({ requiredCapabilities, onBrokerConnected })
+  assertBrokerConnectionOptions({
+    requiredCapabilities,
+    onBrokerConnected,
+  })
   const identity = resolveConnectedProviderIdentity({
     configuredProviderIdentity,
     tradingMode,
