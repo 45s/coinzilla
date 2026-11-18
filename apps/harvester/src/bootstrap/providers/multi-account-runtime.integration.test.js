@@ -217,9 +217,6 @@ function createAcknowledgedCanonicalOrder({ order, calls }) {
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: `${order.symbol}-${calls.orders.size + 1}`,
-    providerInstanceId: order.providerInstanceId,
-    providerType: order.providerType,
-    accountId: order.accountId,
     market,
     side: order.side,
     type: order.type,
@@ -263,7 +260,6 @@ function createBrokerOrderPorts({ calls }) {
   return {
     placeOrder: async ({ order }) => {
       calls.push(`place:${order.symbol}`)
-      calls.submittedOrders.push(order)
       const acknowledgedOrder = createAcknowledgedCanonicalOrder({
         order,
         calls,
@@ -276,9 +272,25 @@ function createBrokerOrderPorts({ calls }) {
     },
     cancelOrder: async ({ order }) => {
       calls.push(`cancel:${order.market.symbol}`)
+      const canonicalOrder = findCanonicalOrder({
+        calls,
+        clientOrderId: order.clientOrderId,
+        orderId: order.brokerOrderId ?? order.orderId,
+      })
+      if (!canonicalOrder) {
+        return {
+          ok: false,
+          errors: [new Error("cancel target is not in the broker order registry")],
+        }
+      }
       calls.cancelledOrders.push(order)
-      const canceledOrder = createCanceledCanonicalOrder(order)
-      calls.orders.set(order.clientOrderId, canceledOrder)
+      const canceledOrder = createCanceledCanonicalOrder({
+        ...canonicalOrder,
+        providerInstanceId: order.providerInstanceId ?? canonicalOrder.providerInstanceId,
+        providerType: order.providerType ?? canonicalOrder.providerType,
+        accountId: order.accountId ?? canonicalOrder.accountId,
+      })
+      calls.orders.set(canonicalOrder.clientOrderId, canceledOrder)
       return {
         ok: true,
         data: canceledOrder,
@@ -569,7 +581,6 @@ function assertIndependentAccountRuntimes({
 function createBrokerCalls() {
   const calls = []
   calls.orders = new Map()
-  calls.submittedOrders = []
   calls.cancelledOrders = []
   calls.fills = []
   calls.priceHandlers = new Map()
@@ -640,6 +651,7 @@ function assertMultiAccountMarketDataRouting({
 async function submitAndResolveRoutedOrder({
   primaryCalls,
   secondaryCalls,
+  secondaryRuntime,
 }) {
   await primaryCalls.priceHandlers.get("BTCUSDT")({
     symbol: "BTCUSDT",
@@ -650,14 +662,15 @@ async function submitAndResolveRoutedOrder({
   assert.equal(primaryCalls.filter((call) => call === "place:BTCUSDT").length, 0)
   const [acknowledgedOrder] = [...secondaryCalls.orders.values()]
   assert.ok(acknowledgedOrder)
-  const [submittedOrder] = secondaryCalls.submittedOrders
-  assert.ok(submittedOrder)
-  assert.equal(submittedOrder.providerInstanceId, "binance-testnet-secondary")
-  assert.equal(submittedOrder.providerType, "binance")
-  assert.equal(submittedOrder.accountId, "account-secondary")
-  assert.equal(acknowledgedOrder.providerInstanceId, "binance-testnet-secondary")
-  assert.equal(acknowledgedOrder.accountId, "account-secondary")
-  return acknowledgedOrder
+  const registeredOrder = new CanonicalOrder({
+    ...acknowledgedOrder,
+    providerInstanceId: secondaryRuntime.providerInstanceId,
+    providerType: secondaryRuntime.providerType,
+    accountId: secondaryRuntime.accountId,
+  })
+  assert.equal(registeredOrder.providerInstanceId, "binance-testnet-secondary")
+  assert.equal(registeredOrder.accountId, "account-secondary")
+  return registeredOrder
 }
 
 function createPartialFill({ registeredOrder }) {
@@ -750,6 +763,7 @@ test("routes order submission, user-data fills, cancellation, and candle data to
     const registeredOrder = await submitAndResolveRoutedOrder({
       primaryCalls,
       secondaryCalls,
+      secondaryRuntime,
     })
     await processRoutedUserDataFill({
       secondaryCalls,
