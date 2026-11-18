@@ -52,7 +52,7 @@ function createProgressReporter({ progress, onFailure }) {
   }
 }
 
-async function runBackup({ sourceConnection, destinationFilename, rate, progress, timeout, onProgressFailure }) {
+async function runBackup({ sourceConnection, destinationFilename, rate, progress, timeout, onProgressFailure, cleanupTemporaryDirectory }) {
   let progressError = null
   let temporaryDirectory
   let operationError = null
@@ -89,7 +89,7 @@ async function runBackup({ sourceConnection, destinationFilename, rate, progress
 
   if (temporaryDirectory) {
     try {
-      await removeTemporaryDirectory({
+      await cleanupTemporaryDirectory({
         directory: temporaryDirectory,
         operationError,
       })
@@ -101,8 +101,11 @@ async function runBackup({ sourceConnection, destinationFilename, rate, progress
   if (operationError) {
     if (progressError) {
       if (operationError instanceof AggregateError) {
+        const cleanupErrors = operationError.errors.filter(
+          (error) => error !== progressError,
+        )
         throw new AggregateError(
-          [progressError, ...operationError.errors],
+          [progressError, ...cleanupErrors],
           "SQLite backup progress callback failed and cleanup also failed",
         )
       }
@@ -141,6 +144,7 @@ export async function backupSqliteDatabase({
   rate = DEFAULT_BACKUP_RATE,
   progress,
   timeout = DEFAULT_TIMEOUT_MS,
+  cleanupTemporaryDirectory = removeTemporaryDirectory,
 } = {}) {
   const destinationFilename = validateBackupOptions({
     destination,
@@ -180,6 +184,7 @@ export async function backupSqliteDatabase({
       rate,
       progress,
       timeout,
+      cleanupTemporaryDirectory,
       onProgressFailure: (error) => {
         progressError = error
       },
