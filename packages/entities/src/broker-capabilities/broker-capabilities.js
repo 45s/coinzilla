@@ -153,7 +153,7 @@ function normalizeEnvironment({ environment }) {
   return deepFreeze({ value: normalized })
 }
 
-function normalizeCapability({ capability, requiresEvidence }) {
+function validateCapabilityShape(capability) {
   if (!isRecord(capability)) {
     throw new TypeError(brokerCapabilitiesErrMsgs.capability)
   }
@@ -162,16 +162,19 @@ function normalizeCapability({ capability, requiresEvidence }) {
       throw new TypeError(brokerCapabilitiesErrMsgs.capability)
     }
   }
-
-  const { type, status } = capability
-  if (!BROKER_CAPABILITY_TYPES.includes(type)) {
+  if (!BROKER_CAPABILITY_TYPES.includes(capability.type)) {
     throw new TypeError(brokerCapabilitiesErrMsgs.type)
   }
-  if (!BROKER_CAPABILITY_STATUSES.includes(status)) {
+  if (!BROKER_CAPABILITY_STATUSES.includes(capability.status)) {
     throw new TypeError(brokerCapabilitiesErrMsgs.status)
   }
+}
 
-  const normalized = { type, status }
+function normalizeCapabilityMetadata({ capability }) {
+  const normalized = {
+    type: capability.type,
+    status: capability.status,
+  }
   for (const key of ["method", "guarantee", "limitation", "reason"]) {
     if (capability[key] !== undefined) {
       normalized[key] = requireNonEmptyString({
@@ -180,21 +183,94 @@ function normalizeCapability({ capability, requiresEvidence }) {
       })
     }
   }
-  if (requiresEvidence && status === "SUPPORTED" &&
+  return normalized
+}
+
+function validateCapabilityEvidence({ normalized, requiresEvidence }) {
+  if (!requiresEvidence) return
+  if (normalized.status === "SUPPORTED" &&
       (normalized.method === undefined || normalized.guarantee === undefined)) {
     throw new TypeError(brokerCapabilitiesErrMsgs.guarantee)
   }
-  if (requiresEvidence && (status === "UNSUPPORTED" || status === "UNKNOWN") &&
+  if ((normalized.status === "UNSUPPORTED" || normalized.status === "UNKNOWN") &&
       normalized.reason === undefined) {
     throw new TypeError(brokerCapabilitiesErrMsgs.reason)
   }
+}
+
+function normalizeCapabilityConditions({ capability, normalized }) {
   if (capability.conditions !== undefined) {
     normalized.conditions = normalizeStringArray({
       value: capability.conditions,
       message: brokerCapabilitiesErrMsgs.conditions,
     })
   }
+}
+
+function normalizeCapability({ capability, requiresEvidence }) {
+  validateCapabilityShape(capability)
+  const normalized = normalizeCapabilityMetadata({ capability })
+  validateCapabilityEvidence({ normalized, requiresEvidence })
+  normalizeCapabilityConditions({ capability, normalized })
   return deepFreeze({ value: normalized })
+}
+
+function normalizeProviderIdentity(input) {
+  const hasProvider = input.provider !== undefined
+  const hasProduct = input.product !== undefined
+  if (hasProvider && !hasProduct) {
+    throw new TypeError(brokerCapabilitiesErrMsgs.product)
+  }
+  if (hasProduct && !hasProvider) {
+    throw new TypeError(brokerCapabilitiesErrMsgs.provider)
+  }
+  return {
+    hasProvider,
+    provider: hasProvider
+      ? requireNonEmptyString({
+        value: input.provider,
+        message: brokerCapabilitiesErrMsgs.provider,
+      })
+      : undefined,
+    product: hasProduct
+      ? requireNonEmptyString({
+        value: input.product,
+        message: brokerCapabilitiesErrMsgs.product,
+      })
+      : undefined,
+  }
+}
+
+function normalizeCapabilities({ capabilities, requiresEvidence }) {
+  if (capabilities !== undefined && !Array.isArray(capabilities)) {
+    throw new TypeError(brokerCapabilitiesErrMsgs.capabilities)
+  }
+  const normalized = (capabilities ?? []).map((capability) =>
+    normalizeCapability({ capability, requiresEvidence }))
+  const types = normalized.map(({ type }) => type)
+  if (new Set(types).size !== types.length) {
+    throw new TypeError(brokerCapabilitiesErrMsgs.duplicate)
+  }
+  return Object.freeze(normalized)
+}
+
+function normalizeBrokerCapabilitiesInput(input) {
+  if (!isRecord(input)) {
+    throw new TypeError(brokerCapabilitiesErrMsgs.input)
+  }
+  const identity = normalizeProviderIdentity(input)
+  const environment = normalizeEnvironment({ environment: input.environment })
+  if (input.environment !== undefined && !identity.hasProvider) {
+    throw new TypeError(brokerCapabilitiesErrMsgs.environment)
+  }
+  return {
+    ...identity,
+    environment,
+    capabilities: normalizeCapabilities({
+      capabilities: input.capabilities,
+      requiresEvidence: identity.hasProvider,
+    }),
+  }
 }
 
 /**
@@ -208,53 +284,13 @@ export class BrokerCapabilities {
   #capabilitiesByType
 
   constructor(input = {}) {
-    if (!isRecord(input)) {
-      throw new TypeError(brokerCapabilitiesErrMsgs.input)
-    }
-    const hasProvider = input.provider !== undefined
-    const hasProduct = input.product !== undefined
-    if (hasProvider && !hasProduct) {
-      throw new TypeError(brokerCapabilitiesErrMsgs.product)
-    }
-    if (hasProduct && !hasProvider) {
-      throw new TypeError(brokerCapabilitiesErrMsgs.provider)
-    }
-    const provider = hasProvider
-      ? requireNonEmptyString({
-        value: input.provider,
-        message: brokerCapabilitiesErrMsgs.provider,
-      })
-      : undefined
-    const product = hasProduct
-      ? requireNonEmptyString({
-        value: input.product,
-        message: brokerCapabilitiesErrMsgs.product,
-      })
-      : undefined
-    if (input.capabilities !== undefined && !Array.isArray(input.capabilities)) {
-      throw new TypeError(brokerCapabilitiesErrMsgs.capabilities)
-    }
-
-    const environment = normalizeEnvironment({ environment: input.environment })
-    const capabilities = (input.capabilities ?? []).map((capability) =>
-      normalizeCapability({
-        capability,
-        requiresEvidence: hasProvider,
-      }))
-    const types = capabilities.map(({ type }) => type)
-    if (new Set(types).size !== types.length) {
-      throw new TypeError(brokerCapabilitiesErrMsgs.duplicate)
-    }
-
-    if (input.environment !== undefined && !hasProvider) {
-      throw new TypeError(brokerCapabilitiesErrMsgs.environment)
-    }
-    this.contractVersion = hasProvider ? 1 : undefined
-    this.provider = provider
-    this.product = product
-    this.environment = environment
-    this.capabilities = Object.freeze(capabilities)
-    this.#capabilitiesByType = new Map(capabilities.map((capability) => [
+    const normalized = normalizeBrokerCapabilitiesInput(input)
+    this.contractVersion = normalized.hasProvider ? 1 : undefined
+    this.provider = normalized.provider
+    this.product = normalized.product
+    this.environment = normalized.environment
+    this.capabilities = normalized.capabilities
+    this.#capabilitiesByType = new Map(this.capabilities.map((capability) => [
       capability.type,
       capability,
     ]))
