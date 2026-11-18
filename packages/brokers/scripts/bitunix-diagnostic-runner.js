@@ -40,6 +40,12 @@ const REST_ENDPOINTS = Object.freeze([
 
 const WEBSOCKET_OPERATIONS = Object.freeze([
   {
+    operation: "ping",
+    method: "ping",
+    privateResponse: false,
+    getArguments: () => ({}),
+  },
+  {
     operation: "market.last_price",
     method: "getLastPrice",
     privateResponse: false,
@@ -721,6 +727,105 @@ async function runWebSocketSession({
       secrets,
     })
   }
+  return isConnected
+}
+
+async function runWebSocketReconnectCheck({
+  env,
+  requestTimeout,
+  events,
+  secrets,
+  includePublicPayloads,
+  now,
+  results,
+  websocketClientFactory,
+}) {
+  const startedAt = now()
+  let client
+  let isConnected = false
+  try {
+    client = createConfiguredWebSocketClient({
+      env,
+      requestTimeout,
+      events,
+      secrets,
+      includePublicPayloads,
+      now,
+      websocketClientFactory,
+    })
+    await client.connect()
+    isConnected = true
+    const pingResponse = await client.ping()
+    results.push(createResult({
+      operation: "WebSocket reconnect",
+      startedAt,
+      now,
+      status: "passed",
+      request: {
+        method: "ping",
+        attempt: 1,
+      },
+      response: {
+        state: client.state,
+        pingResponse,
+      },
+      includePublicPayloads,
+      secrets,
+    }))
+  } catch (error) {
+    results.push(createResult({
+      operation: "WebSocket reconnect",
+      startedAt,
+      now,
+      status: "failed",
+      request: {
+        method: "ping",
+        attempt: 1,
+      },
+      error,
+      secrets,
+    }))
+  } finally {
+    if (client) {
+      await cleanupWebSocket({
+        client,
+        isConnected,
+        now,
+        results,
+        events,
+        secrets,
+      })
+    }
+  }
+  recordWebSocketSubscriptionSkipped({
+    now,
+    results,
+    secrets,
+  })
+}
+
+function recordWebSocketReconnectSkipped({ now, results, secrets, reason }) {
+  results.push(createResult({
+    operation: "WebSocket reconnect",
+    startedAt: now(),
+    now,
+    status: "skipped",
+    request: { reason },
+    secrets,
+  }))
+}
+
+function recordWebSocketSubscriptionSkipped({ now, results, secrets }) {
+  results.push(createResult({
+    operation: "WebSocket subscription restoration",
+    startedAt: now(),
+    now,
+    status: "skipped",
+    request: {
+      reason: "Bitunix Spot documents authenticated request/response RPC methods, not subscriptions; there is no subscription state to restore",
+    },
+    secrets,
+  }))
 }
 
 function recordWebSocketSkipped({ now, results, secrets }) {
@@ -746,6 +851,17 @@ function recordWebSocketSkipped({ now, results, secrets }) {
       secrets,
     }))
   }
+  recordWebSocketReconnectSkipped({
+    now,
+    results,
+    secrets,
+    reason: "Authenticated credentials are unavailable; no initial connection was attempted",
+  })
+  recordWebSocketSubscriptionSkipped({
+    now,
+    results,
+    secrets,
+  })
 }
 
 async function runWebSocketChecks({
@@ -787,9 +903,20 @@ async function runWebSocketChecks({
       results,
       secrets,
     })
+    recordWebSocketReconnectSkipped({
+      now,
+      results,
+      secrets,
+      reason: "The initial WebSocket client could not be created; no reconnect attempt was made",
+    })
+    recordWebSocketSubscriptionSkipped({
+      now,
+      results,
+      secrets,
+    })
     return
   }
-  await runWebSocketSession({
+  const initialConnectionEstablished = await runWebSocketSession({
     client,
     symbol,
     depthPrecision,
@@ -799,6 +926,30 @@ async function runWebSocketChecks({
     secrets,
     includePublicPayloads,
   })
+  if (initialConnectionEstablished) {
+    await runWebSocketReconnectCheck({
+      env,
+      requestTimeout,
+      events,
+      secrets,
+      includePublicPayloads,
+      now,
+      results,
+      websocketClientFactory,
+    })
+  } else {
+    recordWebSocketReconnectSkipped({
+      now,
+      results,
+      secrets,
+      reason: "The initial WebSocket connection was not established; no reconnect attempt was made",
+    })
+    recordWebSocketSubscriptionSkipped({
+      now,
+      results,
+      secrets,
+    })
+  }
 }
 
 async function runConfiguredProbes({
