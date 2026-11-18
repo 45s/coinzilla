@@ -153,10 +153,18 @@ data: {} },
       factId: "order-submission-intent:partial-provider",
       factType: "ORDER_SUBMISSION_INTENT",
       data: {
-        clientOrderId: "partial-provider", providerInstanceId: "binanceTestnet",
-        marketId: "market-1", venue: "binance", symbol: "DOGEUSDT",
-        baseAssetId: "binance:DOGE", quoteAssetId: "binance:USDT",
-        side: "BUY", type: "LIMIT_MAKER", price: "0.099", quantity: "100", purpose: null,
+        clientOrderId: "partial-provider",
+        providerInstanceId: "binanceTestnet",
+        marketId: "market-1",
+        venue: "binance",
+        symbol: "DOGEUSDT",
+        baseAssetId: "binance:DOGE",
+        quoteAssetId: "binance:USDT",
+        side: "BUY",
+        type: "LIMIT_MAKER",
+        price: "0.099",
+        quantity: "100",
+        purpose: null,
       },
     },
   ]
@@ -181,7 +189,12 @@ test("fails closed for legacy pending orders without recorded provider provenanc
     status: "PENDING",
   })
   const result = await recordOrderSubmissionIntent({
-    operationalStateStore: { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } },
+    operationalStateStore: {
+      append: async () => {
+        appendCalls += 1
+        return { ok: true, data: { durable: true } }
+      },
+    },
     order: legacyOrder,
     purpose: null,
   })
