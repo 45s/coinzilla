@@ -37,8 +37,14 @@ function createHarnessAcknowledgedOrder({ order, immediateFilledAcknowledgement,
     market,
     side: order.side,
     type: order.type,
-    limitPrice: new Money({ amount: order.price, asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: order.quantity, asset: baseAsset }),
+    limitPrice: new Money({
+      amount: order.price,
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: order.quantity,
+      asset: baseAsset,
+    }),
     executedQuantity: new Quantity({
       amount: immediateFilledAcknowledgement ? order.quantity : "0",
       asset: baseAsset,
@@ -89,7 +95,10 @@ function createPlaceOrderHandler(options = {}) {
       remainingPlaceOrderFailures,
     })
     if (failure) {
-      return { ok: false, errors: [failure] }
+      return {
+        ok: false,
+        errors: [failure],
+      }
     }
     const acknowledgedOrder = createHarnessAcknowledgedOrder({
       order,
@@ -105,7 +114,10 @@ function createPlaceOrderHandler(options = {}) {
         getAcknowledgedFills({ order: acknowledgedOrder }),
       )
     }
-    return { ok: true, data: acknowledgedOrder }
+    return {
+      ok: true,
+      data: acknowledgedOrder,
+    }
   }
 }
 
@@ -133,7 +145,10 @@ function resolveCancelOrderFailure({
     }
   }
   if (cancelFailure) {
-    return { ok: false, errors: [new Error("cancel denied")] }
+    return {
+      ok: false,
+      errors: [new Error("cancel denied")],
+    }
   }
   return null
 }
