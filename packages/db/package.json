@@ -8,7 +8,7 @@
     "./testing": "./test-support/provider-conformance.js"
   },
   "scripts": {
-    "test": "node --test --experimental-test-coverage --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=80 --test-coverage-include=src/**/*.js --test-coverage-exclude=src/**/*.test.js --test-coverage-exclude=../utils/src/**/*.js",
+    "test": "node --test --experimental-test-coverage --test-coverage-lines=98 --test-coverage-branches=95 --test-coverage-functions=100 --test-coverage-include=src/**/*.js --test-coverage-exclude=src/**/*.test.js --test-coverage-exclude=../utils/src/**/*.js",
     "test:coverage": "pnpm test"
   },
   "engines": {
