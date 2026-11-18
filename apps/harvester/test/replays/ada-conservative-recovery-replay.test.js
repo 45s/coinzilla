@@ -65,14 +65,18 @@ async function waitForAdaOrder({ replay, side, occurrence = 1 }) {
 
 async function fillAdaBuy({ replay, order, price, tradeId }) {
   await replay.publishMarketPrice(price)
-  const result = await replay.publishFullOrderFill({
+  await replay.publishFullOrderFill({
     order,
     price,
     tradeId,
     commissionAmount: "0.05",
     commissionAsset: "ADA",
   })
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(
+    replay.receivedExecutionReports.at(-1)?.fill.id,
+    tradeId,
+    "the replay must record the normalized BUY execution before evaluating the next order",
+  )
 }
 
 async function submitAdaFirstBuyAndWait({ replay, firstBuy }) {
@@ -96,7 +100,10 @@ async function submitAdaFirstBuyAndWait({ replay, firstBuy }) {
   assert.equal(firstSell.quantity, "49.9")
   assert.equal(secondBuy.price, "0.1519")
   assert.equal(secondBuy.quantity, "50")
-  return { firstSell, secondBuy }
+  return {
+    firstSell,
+    secondBuy,
+  }
 }
 
 async function submitAdaSecondBuyAndWait({ replay, firstSell, secondBuy }) {
@@ -124,7 +131,10 @@ async function submitAdaSecondBuyAndWait({ replay, firstSell, secondBuy }) {
   )
   assert.equal(thirdBuy.price, "0.1514")
   assert.equal(thirdBuy.quantity, "50")
-  return { replacementSell, thirdBuy }
+  return {
+    replacementSell,
+    thirdBuy,
+  }
 }
 
 async function submitAdaBuySequence(replay) {
@@ -147,7 +157,7 @@ async function submitAdaBuySequence(replay) {
 
 async function fillAdaRecoverySell({ replay, replacementSell }) {
   const timestamp = Math.max(Date.now(), replacementSell.createdAt + 1)
-  const result = await replay.publishFullOrderFill({
+  await replay.publishFullOrderFill({
     order: replacementSell,
     price: scenarioExpectations.sellPrice,
     // The issue evidence records broker order IDs, not trade IDs; use deterministic numeric replay IDs.
@@ -156,7 +166,11 @@ async function fillAdaRecoverySell({ replay, replacementSell }) {
     commissionAmount: "0.01527938",
     commissionAsset: "USDT",
   })
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(
+    replay.receivedExecutionReports.at(-1)?.fill.id,
+    "900000003",
+    "the replay must record the normalized SELL execution before evaluating completion",
+  )
   return timestamp
 }
 
