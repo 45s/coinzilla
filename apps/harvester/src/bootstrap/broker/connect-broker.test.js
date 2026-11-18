@@ -16,6 +16,7 @@ const createCapabilities = ({ provider = "binance" } = {}) => Object.freeze({
     selectedMode: "testnet",
     nodeEnvSelectsEndpoint: false,
   }),
+  getStatus: () => "SUPPORTED",
 })
 
 function createBrokerPort({ calls, onConnect, onDisconnect }) {
@@ -169,4 +170,47 @@ test("rejects invalid provider identity before constructing a Binance client", a
   )
   assert.equal(factoryCalled, false,
     "Provider identity validation must precede the broker adapter factory.")
+})
+
+
+test("blocks UNKNOWN required capabilities before connecting", async () => {
+  const fixture = createFixture()
+  fixture.broker.capabilities = Object.freeze({
+    ...createCapabilities(),
+    getStatus: ({ type }) => type === "PLACE_LIMIT_ORDER" ? "UNKNOWN" : "SUPPORTED",
+  })
+  await assert.rejects(
+    connectBroker({
+      ...createConnectInput({ fixture }),
+      requiredCapabilities: ["PLACE_LIMIT_ORDER"],
+    }),
+    (error) => error.code === "HARVESTER_PROVIDER_CAPABILITY_UNAVAILABLE" &&
+      error.context.capabilityType === "PLACE_LIMIT_ORDER" &&
+      error.context.status === "UNKNOWN",
+  )
+  assert.deepEqual(fixture.calls, ["factory", "disconnect"])
+})
+
+test("registers the connected BrokerPort with the market-data resolver callback", async () => {
+  const fixture = createFixture()
+  const registered = []
+  const broker = await connectBroker({
+    ...createConnectInput({ fixture }),
+    onBrokerConnected: async (entry) => registered.push(entry),
+  })
+  assert.equal(registered.length, 1)
+  assert.equal(registered[0].providerInstanceId, broker.providerInstanceId)
+  assert.equal(registered[0].broker, broker)
+})
+
+test("disconnects when the post-connect provider registration callback fails", async () => {
+  const fixture = createFixture()
+  await assert.rejects(
+    connectBroker({
+      ...createConnectInput({ fixture }),
+      onBrokerConnected: () => { throw new Error("registration failed") },
+    }),
+    /registration failed/,
+  )
+  assert.deepEqual(fixture.calls, ["factory", "connect", "disconnect"])
 })

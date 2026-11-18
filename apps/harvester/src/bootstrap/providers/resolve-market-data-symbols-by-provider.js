@@ -1,3 +1,5 @@
+import { ReadonlyMap } from "./readonly-map.js"
+
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
 }
@@ -33,6 +35,9 @@ function addConfiguredRoute({ route, index, pairs, providerIds, routeBySymbol })
   })
   if (!Object.hasOwn(pairs, route.symbol)) {
     throw new TypeError(`Market-data route references unconfigured symbol ${route.symbol}`)
+  }
+  if (pairs[route.symbol]?.enabled !== true) {
+    throw new TypeError(`Market-data route references disabled market ${route.symbol}`)
   }
   const provider = providerIds.get(route.providerInstanceId)
   if (!provider) {
@@ -81,7 +86,7 @@ function groupSymbolsByProvider({ providers, routeBySymbol }) {
   for (const [symbol, providerInstanceId] of routeBySymbol) {
     symbolsByProvider.get(providerInstanceId).push(symbol)
   }
-  return new Map([...symbolsByProvider].map(([providerInstanceId, symbols]) => [
+  return new ReadonlyMap([...symbolsByProvider].map(([providerInstanceId, symbols]) => [
     providerInstanceId,
     Object.freeze(symbols),
   ]))
@@ -99,7 +104,7 @@ export function resolveMarketDataSymbolsByProvider({ appConfig, providers } = {}
   const providerIds = assertProviderInstances(providers)
   const pairs = appConfig?.strategies?.CG_coinGrabber?.pairs
   if (!isRecord(pairs) && providers.length === 1 && appConfig?.marketDataRouting === undefined) {
-    return new Map([[providers[0].providerInstanceId, Object.freeze([])]])
+    return new ReadonlyMap([[providers[0].providerInstanceId, Object.freeze([])]])
   }
   if (!isRecord(pairs)) {
     throw new TypeError("Market-data routing requires the configured CG_coinGrabber pair map")
@@ -108,7 +113,10 @@ export function resolveMarketDataSymbolsByProvider({ appConfig, providers } = {}
     if (providers.length !== 1) {
       throw new TypeError("Multi-provider Harvester configuration requires explicit marketDataRouting.routes")
     }
-    return new Map([[providers[0].providerInstanceId, Object.freeze(Object.keys(pairs))]])
+    const enabledSymbols = Object.entries(pairs)
+      .filter(([, pair]) => pair?.enabled === true)
+      .map(([symbol]) => symbol)
+    return new ReadonlyMap([[providers[0].providerInstanceId, Object.freeze(enabledSymbols)]])
   }
   const routeBySymbol = resolveConfiguredRoutes({
     configuredRouting: appConfig.marketDataRouting,

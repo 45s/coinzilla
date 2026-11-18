@@ -38,7 +38,7 @@ test("keeps the legacy single-provider market-data ownership", () => {
     appConfig,
     providers: [providers[0]],
   })
-  assert.deepEqual([...resolved], [["binance-one", ["BTCUSDT", "ETHUSDT", "XRPUSDT"]]],
+  assert.deepEqual([...resolved], [["binance-one", ["BTCUSDT", "ETHUSDT"]]],
     "a legacy single-provider runtime must continue receiving its configured market set")
 })
 
@@ -219,4 +219,37 @@ test("keeps legacy single-provider bootstrap compatible with minimal test config
     providers: [providers[0]],
   })
   assert.deepEqual([...resolved], [["binance-one", []]])
+})
+
+
+test("rejects disabled market routes and protects resolved source maps from mutation", () => {
+  assert.throws(
+    () => resolveMarketDataSymbolsByProvider({
+      appConfig: {
+        ...appConfig,
+        marketDataRouting: {
+          routes: [
+            { symbol: "BTCUSDT", providerInstanceId: "binance-one" },
+            { symbol: "ETHUSDT", providerInstanceId: "binance-two" },
+            { symbol: "XRPUSDT", providerInstanceId: "binance-one" },
+          ],
+        },
+      },
+      providers,
+    }),
+    /disabled market XRPUSDT/,
+  )
+  const resolved = resolveMarketDataSymbolsByProvider({
+    appConfig: {
+      ...appConfig,
+      marketDataRouting: {
+        routes: [
+          { symbol: "BTCUSDT", providerInstanceId: "binance-one" },
+          { symbol: "ETHUSDT", providerInstanceId: "binance-two" },
+        ],
+      },
+    },
+    providers,
+  })
+  assert.throws(() => resolved.set("binance-one", ["ETHUSDT"]), /ReadonlyMap/)
 })
