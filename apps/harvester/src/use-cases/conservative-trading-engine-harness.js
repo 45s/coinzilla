@@ -92,23 +92,11 @@ function createPlaceOrderHandler(options = {}) {
 async function executeHarnessPlaceOrder({ order, options }) {
   const {
     orders,
-    acknowledgedOrdersById,
-    acknowledgedFillsByOrder,
-    getAcknowledgedFills,
-    onPlaceOrder,
-    onPlaceOrderStarted,
+    placeOrderCallCount,
     placeOrderGate,
     deferOrderSide,
-    placeOrderThrow,
-    placeOrderFailureAfterCount,
-    placeOrderFailureError,
-    placeOrderFailureAfterFirst,
-    remainingPlaceOrderFailures,
-    placeOrderCallCount,
-    immediateFilledAcknowledgement,
-    market,
-    baseAsset,
-    quoteAsset,
+    onPlaceOrder,
+    onPlaceOrderStarted,
   } = options
   placeOrderCallCount.value += 1
   orders.push(order)
@@ -119,13 +107,20 @@ async function executeHarnessPlaceOrder({ order, options }) {
     onPlaceOrder,
     onPlaceOrderStarted,
   })
+  return resolveHarnessPlaceOrderOutcome({
+    order,
+    options,
+  })
+}
+
+function resolveHarnessPlaceOrderOutcome({ order, options }) {
   const failure = resolvePlaceOrderFailure({
-    placeOrderThrow,
-    placeOrderFailureAfterCount,
-    placeOrderCallCount,
-    placeOrderFailureError,
-    placeOrderFailureAfterFirst,
-    remainingPlaceOrderFailures,
+    placeOrderThrow: options.placeOrderThrow,
+    placeOrderFailureAfterCount: options.placeOrderFailureAfterCount,
+    placeOrderCallCount: options.placeOrderCallCount,
+    placeOrderFailureError: options.placeOrderFailureError,
+    placeOrderFailureAfterFirst: options.placeOrderFailureAfterFirst,
+    remainingPlaceOrderFailures: options.remainingPlaceOrderFailures,
   })
   if (failure) {
     return {
@@ -135,17 +130,17 @@ async function executeHarnessPlaceOrder({ order, options }) {
   }
   const acknowledgedOrder = createHarnessAcknowledgedOrder({
     order,
-    immediateFilledAcknowledgement,
-    market,
-    baseAsset,
-    quoteAsset,
+    immediateFilledAcknowledgement: options.immediateFilledAcknowledgement,
+    market: options.market,
+    baseAsset: options.baseAsset,
+    quoteAsset: options.quoteAsset,
   })
   rememberImmediateHarnessFill({
-    immediateFilledAcknowledgement,
+    immediateFilledAcknowledgement: options.immediateFilledAcknowledgement,
     acknowledgedOrder,
-    acknowledgedOrdersById,
-    acknowledgedFillsByOrder,
-    getAcknowledgedFills,
+    acknowledgedOrdersById: options.acknowledgedOrdersById,
+    acknowledgedFillsByOrder: options.acknowledgedFillsByOrder,
+    getAcknowledgedFills: options.getAcknowledgedFills,
   })
   return {
     ok: true,
