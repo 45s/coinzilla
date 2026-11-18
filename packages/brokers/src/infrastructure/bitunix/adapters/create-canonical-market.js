@@ -28,9 +28,13 @@ export function getBitunixSymbol({ symbolInfo } = {}) {
     throw new TypeError("Bitunix market metadata is missing base or quote asset code")
   }
   const derivedSymbol = `${symbolInfo.base.trim()}${symbolInfo.quote.trim()}`.toUpperCase()
-  if (typeof symbolInfo.symbol === "string" && symbolInfo.symbol.trim() &&
-      symbolInfo.symbol.trim().toUpperCase() !== derivedSymbol) {
-    throw new TypeError("Bitunix market metadata symbol must match base and quote assets")
+  if (symbolInfo.symbol !== undefined && symbolInfo.symbol !== null) {
+    if (typeof symbolInfo.symbol !== "string" || !symbolInfo.symbol.trim()) {
+      throw new TypeError("Bitunix market metadata symbol must be a non-empty string when supplied")
+    }
+    if (symbolInfo.symbol.trim().toUpperCase() !== derivedSymbol) {
+      throw new TypeError("Bitunix market metadata symbol must match base and quote assets")
+    }
   }
   return derivedSymbol
 }

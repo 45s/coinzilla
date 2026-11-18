@@ -62,6 +62,8 @@ Keep exchange-specific operations behind their provider adapters. Consumers shou
 
 ## Bitunix Spot integration
 
+The Spot pair catalog is a public, unsigned `GET /api/spot/v1/common/coin_pair/list` used by both `getExchangeMarkets()` and `getSymbolFilters({ symbol })`. The market list includes only pairs explicitly marked open; unknown/closed statuses are excluded. Symbol-filter lookup returns the unique matching raw Bitunix metadata row plus the normalized `symbol`, not a Binance filter DTO. It requires valid `base`/`quote` identity, rejects duplicate rows and a supplied non-matching symbol, and validates documented optional numeric metadata without converting its raw representation. `minPrice` and `minVolume` must be exact non-negative decimal strings when supplied; missing/null values remain unknown and explicit zero is preserved. `basePrecision`/`quotePrecision` are safe non-negative precision counts, and `precisions` is retained as a validated decimal-string list. None of these precision fields is treated as `tickSize`, `stepSize`, or a depth aggregation increment. Undocumented maximum fields found only in third-party fixtures are preserved but not promoted to canonical limits. The Harvester metadata adapter separately maps `minPrice` to `MIN_NOTIONAL` and `minVolume` to `MIN_QUANTITY`; unsupported increments and maxima remain unknown.
+
 The Bitunix adapter also exposes three one-shot public market-data reads:
 
 - `getOrderBook({ symbol, precision })` calls the documented Spot depth endpoint. The caller must supply the required numeric precision; Coinzilla does not guess which aggregation precision to select. Source level prices/volumes remain exact decimal strings, and the optional source timestamp is preserved as text.

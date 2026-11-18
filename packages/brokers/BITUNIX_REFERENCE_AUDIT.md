@@ -203,7 +203,7 @@ The following is the current method-by-method status from the Binance broker sur
 | getPrices() / getPrice() | Implemented | One-shot last-price lookup; no source timestamp. |
 | getCandles() | Blocked | Spot K-line omits volume required by canonical OHLCV. |
 | getExchangeMarkets() | Implemented | Open Spot pair catalog. |
-| getSymbolFilters() | Partial | Raw metadata + documented minimum quantity/notional mapping; no proven tick/step/depth precision. |
+| getSymbolFilters() | Partial | Raw Bitunix metadata with strict validation of documented minimum/precision fields; Harvester maps only minimum quantity/notional. No proven tick/step/depth precision or authoritative maximum constraints. |
 | subscribeForPrices() | Blocked | No continuous Spot public push subscription contract. |
 | subscribeForCandles() | Blocked | No Spot push K-line channel and no volume. |
 | subscribeForBookTicker() | Blocked | No continuous Spot book subscription; precision selection unresolved. |
@@ -238,6 +238,7 @@ It validates symbol, interval, decimals, OHLC invariants and timezone-qualified 
 **Priority 1 — remaining Bitunix-specific public metadata extension (not Binance parity):**
 
 - `getExchangeRates()` is implemented and merged in [PR #1370](https://github.com/45s/coinzilla/pull/1370); its source audit and stricter Coinzilla response contract are recorded above. Do not duplicate this capability.
+- The `getSymbolFilters()` metadata audit and strict validation are complete in [PR #1412](https://github.com/45s/coinzilla/pull/1412); the method remains partial because Bitunix does not document exact tick/step increments or maximum trading constraints.
 - `getTokenMetadata()` (or a domain-appropriate name) remains a separate candidate for `GET /api/spot/v1/common/coin/coin_network/list`, returning token and network metadata such as deposit/withdraw availability, memo requirement, network name, minimums and address validation pattern. Define a real consumer contract before implementation.
 
 These are Bitunix-only public extensions, not Binance parity methods. Keep exact decimal fields as strings; do not treat descriptive precision fields as tick/step filters. Token/network metadata is not authorization to implement transfers or withdrawals.
@@ -401,3 +402,40 @@ The existing `getOrderHistory()` and `getMatchingOrderDetails()` contracts remai
 | Coinzilla contract | Send one authenticated POST with only the caller-supplied `coin` and `network`; reject missing/invalid inputs before I/O. Require an array response and validate every row before returning any result. Preserve every address and memo exactly (memo may be omitted, null, or any string including empty); require returned coin/network identity to match the request. Freeze the array and records. Use stable input/response error codes with safe operation/field context only. Do not retry, paginate, select a network, log, or persist address/memo data. |
 
 The endpoint has no documented pagination or address-generation behavior. An explicit empty array is accepted; missing/null/non-array data is rejected rather than being silently treated as no address. PR #1399 passed the required exact-head broker/workspace tests and coverage, strict ESLint, JavaScript quality/syntax, actionlint, Utils tests, dependency audit, and Harvester regression checks before merge. The optional External Documentation Links workflow was still running at merge and is not a required branch-protection context. The method is not Binance parity, does not enable a funds mutation, and does not resolve any #1185 blocker.
+
+## 13. Bitunix Spot symbol-filter metadata audit (2026-11-18)
+
+**Decision:** keep `BitunixSpotBroker.getSymbolFilters({ symbol })` as a Bitunix-specific raw-metadata read. Do not reshape it into Binance's filter DTO: the official Spot pair catalog does not establish the exact price/quantity increments or authoritative maximum constraints required for that representation. The metadata audit and strict validation are implemented in [PR #1412](https://github.com/45s/coinzilla/pull/1412). This completes the read-side audit subtask, not Bitunix broker parity; [issue #1185](https://github.com/45s/coinzilla/issues/1185) remains open.
+
+### Official endpoint and response
+
+| Item | Verified contract |
+|---|---|
+| Endpoint | Public Spot `GET /api/spot/v1/common/coin_pair/list`; no query parameters or request body. |
+| Authentication | The endpoint is documented under the Spot public interface. The official request has no authentication inputs; JKorf marks the request unauthenticated, the TypeScript client uses its public GET path, and StockSharp passes the unauthenticated flag. Coinzilla now sends an unsigned GET and does not attach API-key headers or a signature. |
+| Response | Standard `code` / `msg` / `data` envelope; `data` is documented as an optional array of pair rows. The JKorf fixture has a successful `code: "0"` and an array. Coinzilla deliberately requires an actual array: missing, null, or malformed data fails closed rather than becoming an empty catalog. |
+| Identity | Official rows expose `base` and `quote`; the official schema/example does not require a `symbol` field. Coinzilla derives the identity from base+quote. A third-party `symbol` compatibility field, when supplied, must be a non-empty string matching that identity. |
+| Minimum value | `minPrice` is a string. The REST description says “minimum trading amount”; the official Spot WebSocket pair example clarifies “minimum trading value”. The established canonical mapping is quote-asset `MIN_NOTIONAL`, not `MIN_PRICE`. |
+| Minimum quantity | `minVolume` is a string describing minimum trading volume/quantity. The established canonical mapping is base-asset `MIN_QUANTITY`. |
+| Precision | `basePrecision` and `quotePrecision` are precision metadata (strings in the official REST schema; safe integer numbers in the JKorf fixture). They are not documented as order increments. Coinzilla accepts only non-negative safe integer counts (digit strings or safe integer numbers) and preserves the original representation. |
+| Precision list | `precisions` is a list of trading-precision values. It is validated as an array of exact non-negative decimal strings and preserved verbatim. No official source defines its mapping to tick size, step size, or the depth request's `precision` parameter. |
+| Status | `isOpen` is present in the official row/example. The active market list includes only explicit open values; closed/unknown status is not promoted to an active market. `getSymbolFilters()` preserves the source status for the caller and downstream fail-closed evaluation. |
+| Maximums | The official Spot pair schema does not document `maxAmount`, `minAmount`, `maxLimitOrderAmount`, `maxMarketOrderAmount`, `maxSlippage`, `premiumFactor`, or price-offset fields. Their appearance in the JKorf fixture is not sufficient authority to expose maximum quantity/notional constraints. They remain raw diagnostics only. |
+
+### Validation and canonical mapping
+
+- Require a non-empty requested symbol and a valid pair row with non-empty base and quote identity. Reject malformed catalog rows, missing matches, duplicate matching rows, and a supplied optional symbol that is malformed or disagrees with base+quote.
+- Validate supplied `minPrice` and `minVolume` as exact decimal strings and reject negative/non-finite/malformed values. Missing or explicit null optional values remain unknown; zero is preserved and is not converted to a positive minimum.
+- Validate `basePrecision` and `quotePrecision` as non-negative safe integer counts. Validate each `precisions[]` element as an exact non-negative decimal string. Do not coerce or rewrite the raw fields.
+- Preserve unrecognized metadata fields. Do not add `tickSize`, `stepSize`, `minQty`, `maxQty`, `minNotional`, `maxNotional`, or other guessed exchange rules to the Bitunix result.
+- The separate Harvester adapter remains the canonical mapping boundary: `minVolume` → base-asset `MIN_QUANTITY`; `minPrice` → quote-asset `MIN_NOTIONAL`. Missing/null minimums remain UNKNOWN. Precision diagnostics do not satisfy `PRICE_INCREMENT` or `QUANTITY_INCREMENT`.
+- Both `getExchangeMarkets()` and `getSymbolFilters()` use the public unsigned catalog GET. HTTP 429 remains an HTTP failure and is not retried. Existing REST response-envelope, exchange-error, HTTP-error, and transport-error classification remains unchanged.
+- Deterministic offline regressions cover matching and missing symbols, duplicate rows, malformed identity, exact/minimum values, precision types/ranges, unknown/null/zero values, inactive markets, unsigned requests, malformed catalog data, transport failure, and HTTP 429. No live exchange calls were made.
+
+### Sources inspected
+
+- Official [Spot REST public API](https://www.bitunix.com/api-docs/spots/en_us/public/) and [Spot public WebSocket API](https://www.bitunix.com/api-docs/spots/en_us/public-ws/).
+- JKorf at commit `4b081116c652784fca4ee3af346013f230be7e1e`: [GetSymbolsAsync implementation](https://github.com/JKorf/Bitunix.Net/blob/4b081116c652784fca4ee3af346013f230be7e1e/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiExchangeData.cs), [Spot exchange-data interface](https://github.com/JKorf/Bitunix.Net/blob/4b081116c652784fca4ee3af346013f230be7e1e/Bitunix.Net/Interfaces/Clients/SpotApi/IBitunixRestClientSpotApiExchangeData.cs), [BitunixSymbol model](https://github.com/JKorf/Bitunix.Net/blob/4b081116c652784fca4ee3af346013f230be7e1e/Bitunix.Net/Objects/Models/BitunixSymbol.cs), and [GetSymbols fixture](https://github.com/JKorf/Bitunix.Net/blob/4b081116c652784fca4ee3af346013f230be7e1e/Bitunix.Net.UnitTests/Endpoints/Spot/ExchangeData/GetSymbols.txt). The implementation uses GET with authentication disabled; the fixture contains string minimums, integer precision values, and undocumented maximum fields.
+- Independent [TypeScript Spot tools](https://github.com/samanzamani/bitunix-mcp/blob/6bf5d9f915bdf865394ac02f97c50b689ab9e8e7/src/tools/spot.ts) and [StockSharp connector sources](https://github.com/StockSharp/Connectors) corroborate the public unauthenticated catalog request. They do not override the official field semantics.
+
+**Remaining limitation:** Bitunix Spot `getSymbolFilters()` remains partial. No exact tick size, quantity step, maximum quantity/notional, or depth-precision mapping is established. Do not enable order execution or close #1185 from this audit.
