@@ -534,6 +534,47 @@ test("maps local submission deferrals with a bounded reason and exact client-ord
     order: canonicalOrderFacts,
     reason: "raw broker error with unbounded diagnostics",
   }).ok, false)
+
+  for (const partialIdentity of [
+    { providerInstanceId: "binance-testnet" },
+    { providerType: "binance" },
+    { accountId: "primary" },
+    { providerInstanceId: "binance-testnet", providerType: "binance" },
+    { providerInstanceId: "binance-testnet", accountId: "primary" },
+    { providerType: "binance", accountId: "primary" },
+  ]) {
+    assert.equal(
+      mapOrderSubmissionDeferredData({
+        order: { ...canonicalOrderFacts, ...partialIdentity },
+        reason: "MARKET_BOOK_STALE",
+      }).ok,
+      false,
+      "A partial provider identity must never be silently omitted from a lifecycle fact.",
+    )
+  }
+
+  const attributed = mapOrderSubmissionDeferredData({
+    order: {
+      ...canonicalOrderFacts,
+      providerInstanceId: "binance-testnet",
+      providerType: "binance",
+      accountId: "primary",
+    },
+    reason: "MARKET_BOOK_STALE",
+  })
+  assert.equal(attributed.ok, true)
+  assert.deepEqual(
+    {
+      providerInstanceId: attributed.data.providerInstanceId,
+      providerType: attributed.data.providerType,
+      accountId: attributed.data.accountId,
+    },
+    {
+      providerInstanceId: "binance-testnet",
+      providerType: "binance",
+      accountId: "primary",
+    },
+  )
 })
 
 test("maps rejected and unknown order outcomes with sanitized errors only", () => {
