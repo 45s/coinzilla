@@ -764,4 +764,8 @@ test("routes order submission, user-data fills, cancellation, and candle data to
 
   assert.equal(secondaryCalls.filter((call) => call === "cancel:BTCUSDT").length, 1)
   assert.equal(primaryCalls.filter((call) => call === "cancel:BTCUSDT").length, 0)
+  const [cancelledOrder] = secondaryCalls.cancelledOrders
+  assert.equal(cancelledOrder.providerInstanceId, "binance-testnet-secondary")
+  assert.equal(cancelledOrder.accountId, "account-secondary")
+  assert.equal(primaryCalls.cancelledOrders.length, 0)
 })
