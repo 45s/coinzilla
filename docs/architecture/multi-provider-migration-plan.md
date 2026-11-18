@@ -490,6 +490,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 **Owner:** Harvester.
 
 **Delivered:**
+
 - Explicit `marketDataRouting.routes` maps each enabled symbol to one `providerInstanceId`.
 - Multi-provider startup rejects missing, duplicate, unknown-provider, unconfigured-symbol and environment-incompatible routes before starting account runtimes.
 - Each account runtime receives only the symbols assigned to its selected source provider; price, book, initial-price and candle subscriptions are limited to those symbols.
