@@ -87,27 +87,27 @@ function createStyleExceptionFixture() {
   const documents = [
     {
       path: "docs/new.md",
-      content: "# New  \\n\\n\\n### Skipped",
+      content: "# New  \n\n\n### Skipped",
     },
     {
       path: "apps/harvester/AUDIT_2026-11-09.md",
-      content: "# Historical  \\n\\n\\nEvidence",
+      content: "# Historical  \n\n\nEvidence",
     },
     {
       path: "docs/ai-agent/repository-engineering-audit.md",
-      content: "# Historical task brief  \\n\\n\\nEvidence",
+      content: "# Historical task brief  \n\n\nEvidence",
     },
     {
       path: "apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md",
-      content: "# Superseded plan  \\n\\n\\nEvidence",
+      content: "# Superseded plan  \n\n\nEvidence",
     },
     {
       path: ".github/PULL_REQUEST_TEMPLATE.md",
-      content: "## Summary\\n\\nDescription  \\n",
+      content: "## Summary\n\nDescription  \n",
     },
     {
       path: ".github/ISSUE_TEMPLATE/cross-domain-request.md",
-      content: "## Summary\\n\\nDescription.\\n- item\\n\\n## Context\\n\\nDescription.\\n",
+      content: "## Summary\n\nDescription.\n- item\n\n## Context\n\nDescription.\n",
     },
   ]
   const changesByPath = new Map(documents.map(({ path, content }) => [
