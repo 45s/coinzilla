@@ -223,7 +223,10 @@ export function analyzeFullTreeMarkdownStyle({ documents }) {
       },
     ]),
   )
-  return analyzeMarkdownStyleDocuments({ documents, changesByPath })
+  return analyzeMarkdownStyleDocuments({
+    documents,
+    changesByPath,
+  })
 }
 
 /**
