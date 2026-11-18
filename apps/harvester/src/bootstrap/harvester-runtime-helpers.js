@@ -219,6 +219,49 @@ export function createHarvesterCandleHistoryService({
   })
 }
 
+function createRecoveredTradingEngineState(recoveredState) {
+  return {
+    orderRegistry: recoveredState.orderRegistry,
+    journalFills: recoveredState.journalFills,
+    pausedMarkets: recoveredState.pausedMarkets,
+    durablePausedMarkets: recoveredState.durablePausedMarkets,
+    recoveryManagedPausedMarkets: recoveredState.recoveryManagedPausedMarkets,
+    recoveryManagedCancellationClientOrderIds: recoveredState.recoveryManagedCancellationClientOrderIds,
+    unrequestedTerminalOrderClientIds: recoveredState.unrequestedTerminalOrderClientIds,
+    replacementIntents: recoveredState.replacementIntents,
+    trailingBuyRepriceIntents: recoveredState.trailingBuyRepriceIntents,
+    completedOrderClientIds: recoveredState.completedOrderClientIds,
+    trailingBuySymbols: recoveredState.trailingBuySymbols,
+  }
+}
+
+function createHarvesterTradingEngineSafetyCallbacks({
+  userDataState,
+  accountSnapshotManagerRef,
+  logger,
+}) {
+  return {
+    canTrade: () => userDataState.ready,
+    hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
+    onUnownedExternalOrderObserved: ({ order } = {}) => {
+      const manager = accountSnapshotManagerRef.current
+      if (typeof manager?.observeExternalOrder !== "function") {
+        throw new Error("Account snapshot manager cannot reconcile a newly observed external order")
+      }
+      return manager.observeExternalOrder({ symbol: order.market.symbol })
+    },
+    isStopping: () => userDataState.stopped || userDataState.shutdownRequested,
+    onPause: async ({ symbol, reason, error } = {}) => {
+      logger.error?.({
+        message: "paused a trading pair",
+        symbol,
+        reason,
+        error,
+      })
+    },
+  }
+}
+
 export function createHarvesterTradingEngine({
   makeConservativeTradingEngine,
   broker,
@@ -255,15 +298,11 @@ export function createHarvesterTradingEngine({
     getAccountSnapshot,
     updateTradingAccounting,
     completeRecoveryCycle,
-    canTrade: () => userDataState.ready,
-    hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
-    onUnownedExternalOrderObserved: ({ order } = {}) => {
-      const manager = accountSnapshotManagerRef.current
-      if (typeof manager?.observeExternalOrder !== "function") {
-        throw new Error("Account snapshot manager cannot reconcile a newly observed external order")
-      }
-      return manager.observeExternalOrder({ symbol: order.market.symbol })
-    },
+    ...createHarvesterTradingEngineSafetyCallbacks({
+      userDataState,
+      accountSnapshotManagerRef,
+      logger,
+    }),
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
@@ -273,28 +312,7 @@ export function createHarvesterTradingEngine({
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
     logger,
-    initialState: {
-      orderRegistry: recoveredState.orderRegistry,
-      journalFills: recoveredState.journalFills,
-      pausedMarkets: recoveredState.pausedMarkets,
-      durablePausedMarkets: recoveredState.durablePausedMarkets,
-      recoveryManagedPausedMarkets: recoveredState.recoveryManagedPausedMarkets,
-      recoveryManagedCancellationClientOrderIds: recoveredState.recoveryManagedCancellationClientOrderIds,
-      unrequestedTerminalOrderClientIds: recoveredState.unrequestedTerminalOrderClientIds,
-      replacementIntents: recoveredState.replacementIntents,
-      trailingBuyRepriceIntents: recoveredState.trailingBuyRepriceIntents,
-      completedOrderClientIds: recoveredState.completedOrderClientIds,
-      trailingBuySymbols: recoveredState.trailingBuySymbols,
-    },
-    isStopping: () => userDataState.stopped || userDataState.shutdownRequested,
-    onPause: async ({ symbol,
-  reason,
-  error } = {}) => {
-      logger.error?.({ message: "paused a trading pair",
-        symbol,
-        reason,
-        error })
-    },
+    initialState: createRecoveredTradingEngineState(recoveredState),
   })
 }
 
