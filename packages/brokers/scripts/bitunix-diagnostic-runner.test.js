@@ -362,7 +362,11 @@ test("public-only diagnostics run unsigned REST checks when credentials are miss
 
   assert.equal(report.summary.failed, 0, "missing optional credentials must not prevent the required public-only diagnostic checks")
   assert.deepEqual(
-    restCalls.map(({ path, authenticated, method }) => ({ path, authenticated, method })),
+    restCalls.map(({ path, authenticated, method }) => ({
+      path,
+      authenticated,
+      method,
+    })),
     [
       {
         path: "/api/spot/v1/common/coin_pair/list",
