@@ -1104,31 +1104,24 @@ right: minProfit }) >= 0
 }
 
 // eslint-disable-next-line max-lines-per-function -- Recovery event validation remains a cohesive domain boundary.
-function handleRecoveryNotCompletedEvent({ data, sequence, state }) {
-  const symbol = requireString({ value: data.symbol,
-field: "symbol" })
-  const marketId = requireString({ value: data.marketId,
-field: "marketId" })
-  const sellOrderClientId = requireString({ value: data.sellOrderClientId,
-field: "sellOrderClientId" })
-  const sellOrderBrokerOrderId = requireString({ value: data.sellOrderBrokerOrderId,
-field: "sellOrderBrokerOrderId" })
+function resolveRecoveryNonCompletionDetails({ data }) {
+  const symbol = requireString({ value: data.symbol, field: "symbol" })
+  const marketId = requireString({ value: data.marketId, field: "marketId" })
+  const sellOrderClientId = requireString({ value: data.sellOrderClientId, field: "sellOrderClientId" })
+  const sellOrderBrokerOrderId = requireString({ value: data.sellOrderBrokerOrderId, field: "sellOrderBrokerOrderId" })
   if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(data.outcome)) {
     throw new TypeError("Recovery-cycle non-completion outcome is invalid")
   }
-  const reason = requireString({ value: data.reason,
-field: "reason" })
-  const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit,
-field: "realizedNetProfit" })
-  const activeQuantity = requireDecimal({ value: data.activeQuantity,
-field: "activeQuantity" })
-  const keepQuantity = requireDecimal({ value: data.keepQuantity,
-field: "keepQuantity" })
-  const minProfit = requireDecimal({ value: data.minProfit,
-field: "minProfit",
-positive: true })
-  if (compareDecimal({ left: minProfit,
-right: "0.01" }) < 0) {
+  const reason = requireString({ value: data.reason, field: "reason" })
+  const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
+  const activeQuantity = requireDecimal({ value: data.activeQuantity, field: "activeQuantity" })
+  const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
+  const minProfit = requireDecimal({
+    value: data.minProfit,
+    field: "minProfit",
+    positive: true,
+  })
+  if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
     throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
   }
   validateRecoveryCycleNonCompletionReason({
@@ -1139,18 +1132,7 @@ right: "0.01" }) < 0) {
     keepQuantity,
     minProfit,
   })
-  const pendingSell = state.lastFullyFilledSellBySymbol.get(symbol)
-  if (
-    !pendingSell ||
-    pendingSell.clientOrderId !== sellOrderClientId ||
-    pendingSell.brokerOrderId !== sellOrderBrokerOrderId
-  ) {
-    throw new Error(`Recovery-cycle non-completion does not match the latest fully filled SELL order for ${symbol}`)
-  }
-  if (pendingSell.outcome === "BLOCKED") {
-    throw new Error(`Recovery-cycle SELL already has a terminal BLOCKED outcome for ${symbol}`)
-  }
-  state.recoveryCycleEvaluations.push(Object.freeze({
+  return {
     symbol,
     marketId,
     sellOrderClientId,
@@ -1161,9 +1143,27 @@ right: "0.01" }) < 0) {
     activeQuantity,
     keepQuantity,
     minProfit,
+  }
+}
+
+function handleRecoveryNotCompletedEvent({ data, sequence, state }) {
+  const details = resolveRecoveryNonCompletionDetails({ data })
+  const pendingSell = state.lastFullyFilledSellBySymbol.get(details.symbol)
+  if (
+    !pendingSell ||
+    pendingSell.clientOrderId !== details.sellOrderClientId ||
+    pendingSell.brokerOrderId !== details.sellOrderBrokerOrderId
+  ) {
+    throw new Error(`Recovery-cycle non-completion does not match the latest fully filled SELL order for ${details.symbol}`)
+  }
+  if (pendingSell.outcome === "BLOCKED") {
+    throw new Error(`Recovery-cycle SELL already has a terminal BLOCKED outcome for ${details.symbol}`)
+  }
+  state.recoveryCycleEvaluations.push(Object.freeze({
+    ...details,
     sequence,
   }))
-  pendingSell.outcome = data.outcome
+  pendingSell.outcome = details.outcome
 }
 
 function handleStrategyPausedEvent({ data, state }) {
