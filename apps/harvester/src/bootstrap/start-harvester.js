@@ -7,11 +7,9 @@ import { createCandleHistoryService } from "../use-cases/create-candle-history-s
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
 import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
-import { createBitunixReadOnlyAdapter } from "../infrastructure/brokers/bitunix-read-only-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
-import { resolveBitunixReadOnlyConfig } from "./config/resolve-bitunix-read-only-config.js"
 import { EffectiveConfigurationError } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
 import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
@@ -300,6 +298,46 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
   }
 }
 
+async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
+  const {
+    env,
+    runtimeSessionId,
+    suppliedOperationalStateStore,
+    createOperationalStateStore,
+    createTelegramOperatorAdapterFactory,
+    telegramOperatorFetchImpl,
+    logger,
+  } = dependencies
+  const operatorControlLifecycle = await prepareTelegramOperatorControl({
+    telegramConfig: resolved.appConfig.operatorControl?.telegram,
+    env,
+    runtimeSessionId,
+    operationalStateStore: suppliedOperationalStateStore,
+    createOperationalStateStore,
+    createAdapter: createTelegramOperatorAdapterFactory,
+    fetchImpl: telegramOperatorFetchImpl,
+    logger,
+  })
+  const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
+  const startupOptions = await resolveStartupOptionsForProcessRecovery({
+    resolved,
+    operationalStateStore,
+    logger,
+  })
+  await persistHarvesterProcessStart({
+    operationalStateStore,
+    appConfig: startupOptions.appConfig,
+    tradingEnabled: startupOptions.tradingEnabled,
+    configurationFingerprint: startupOptions.configurationFingerprint,
+    enabledMarkets: startupOptions.enabledSymbols,
+  })
+  return {
+    operatorControlLifecycle,
+    operationalStateStore,
+    startupOptions,
+  }
+}
+
 function resolveHarvesterStartupDependencies({ options = {} } = {}) {
   const logger = options.logger ?? defaultLogger
   return {
@@ -308,7 +346,6 @@ function resolveHarvesterStartupDependencies({ options = {} } = {}) {
     loadConfig: options.loadConfig ?? loadAppConfig,
     env: options.env ?? process.env,
     brokerAdapterFactory: options.brokerAdapterFactory ?? createBinanceBrokerAdapter,
-    bitunixReadOnlyAdapterFactory: options.bitunixReadOnlyAdapterFactory ?? createBitunixReadOnlyAdapter,
     evaluateStrategy: options.evaluateStrategy ?? conservativeStrategyPolicy.evaluate,
     logger,
     onMarketPriceError: options.onMarketPriceError ?? createCoinGrabberMarketPriceErrorHandler({ logger }),
@@ -336,18 +373,13 @@ async function resolveHarvesterStartupConfiguration({ dependencies }) {
       ...resolved,
       brokerName: dependencies.providerIdentity.providerType,
     })
-  const bitunixReadOnly = await createBitunixReadOnlyObserver({
-    env: dependencies.env,
-    adapterFactory: dependencies.bitunixReadOnlyAdapterFactory,
-    logger: dependencies.logger,
-  })
-  return { resolved: providerResolved, bitunixReadOnly }
+  return { resolved: providerResolved }
 }
 
 async function createHarvesterStartupContext({ options } = {}) {
   const dependencies = resolveHarvesterStartupDependencies({ options })
   const runtimeStartedAt = dependencies.now()
-  const { resolved, bitunixReadOnly } = await resolveHarvesterStartupConfiguration({ dependencies })
+  const { resolved } = await resolveHarvesterStartupConfiguration({ dependencies })
   const startupState = await prepareHarvesterStartupState({
     dependencies,
     resolved,
@@ -373,7 +405,6 @@ async function createHarvesterStartupContext({ options } = {}) {
     onBrokerConnected: dependencies.onBrokerConnected,
     requiredCapabilities: dependencies.requiredCapabilities ?? [],
     deferMarketDataStart: dependencies.deferMarketDataStart === true,
-    bitunixReadOnly,
     evaluateStrategy: dependencies.evaluateStrategy,
     logger: dependencies.logger,
     eventPublisher: dependencies.eventPublisher,
@@ -449,9 +480,6 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
   })
   const resources = {
     broker,
-    readOnlyProviders: Object.freeze({
-      bitunix: startup.bitunixReadOnly,
-    }),
     subscriptions: [],
     marketPriceIntake: new Map(),
     bookSubscriptions: [],
@@ -1058,7 +1086,6 @@ function createHarvesterRuntimeResult({
     executionEnabled: startup.tradingEnabled === true && marketData.executionSymbols.length > 0,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled === true && marketData.executionSymbols.length > 0,
-    readOnlyProviders: resources.readOnlyProviders,
     strategyMode: "conservative",
     get userDataReady() { return resources.userDataState.ready },
     get userDataStatus() { return resources.userDataState.status },
