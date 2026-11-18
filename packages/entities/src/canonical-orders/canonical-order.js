@@ -222,10 +222,22 @@ function normalizeCanonicalOrder({
   updatedAt,
   completedAt,
 } = {}) {
-  validateOrderIdentity({ clientOrderId, brokerOrderId })
+  validateOrderIdentity({
+    clientOrderId,
+    brokerOrderId,
+  })
   validateProviderProvenance({ providerInstanceId, providerType, accountId })
-  validateOrderType({ market, side, type, status })
-  const normalizedLimitPrice = normalizeLimitPrice({ type, limitPrice, market })
+  validateOrderType({
+    market,
+    side,
+    type,
+    status,
+  })
+  const normalizedLimitPrice = normalizeLimitPrice({
+    type,
+    limitPrice,
+    market,
+  })
   const remainingQuantity = deriveRemainingQuantity({
     market,
     originalQuantity,
@@ -237,7 +249,12 @@ function normalizeCanonicalOrder({
     executedQuantity,
     remainingQuantity,
   })
-  validateTimestamps({ createdAt, acknowledgedAt, updatedAt, completedAt })
+  validateTimestamps({
+    createdAt,
+    acknowledgedAt,
+    updatedAt,
+    completedAt,
+  })
   return {
     clientOrderId: clientOrderId.trim(),
     brokerOrderId: brokerOrderId == null ? undefined : brokerOrderId.trim(),
