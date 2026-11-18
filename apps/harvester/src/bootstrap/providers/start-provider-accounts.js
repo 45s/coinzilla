@@ -1,3 +1,24 @@
+function createAccountEnvironment({
+  env,
+  provider,
+  providers,
+}) {
+  const accountCredentials = new Set(Object.values(provider.credentialEnvironmentNames ?? {}))
+  const allCredentialNames = new Set(
+    providers.flatMap(({ credentialEnvironmentNames = {} }) => Object.values(credentialEnvironmentNames)),
+  )
+  const accountEnv = {
+    ...env,
+    TRADING_MODE: provider.environment,
+  }
+  for (const credentialName of allCredentialNames) {
+    if (!accountCredentials.has(credentialName)) {
+      delete accountEnv[credentialName]
+    }
+  }
+  return accountEnv
+}
+
 function createAccountAppConfig({
   appConfig,
   isPrimary,
@@ -197,6 +218,7 @@ function throwIfNoAccountStarted({
 
 async function startOneProviderAccount({
   provider,
+  providers,
   index,
   start,
   appConfig,
@@ -213,10 +235,11 @@ async function startOneProviderAccount({
         appConfig,
         isPrimary: index === 0,
       }),
-      env: {
-        ...env,
-        TRADING_MODE: provider.environment,
-      },
+      env: createAccountEnvironment({
+        env,
+        provider,
+        providers,
+      }),
       eventPublisher,
       runtimeSessionId,
       operationalStateStore: index === 0 ? operationalStateStore : undefined,
@@ -279,6 +302,7 @@ export async function startProviderAccounts({
   for (const [index, provider] of providers.entries()) {
     const result = await startOneProviderAccount({
       provider,
+      providers,
       index,
       start,
       appConfig,
