@@ -714,7 +714,10 @@ function emitLatestSessionState({ session, latestSession, state, emit }) {
   for (const [symbol, pause] of state.strategyPauses) {
     emit({
       name: EVENT.STRATEGY_PAUSED,
-      data: { symbol, reason: pause.reason },
+      data: {
+        symbol,
+        reason: pause.reason,
+      },
     })
   }
   for (const blocker of state.activeBlockers.values()) {
