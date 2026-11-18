@@ -4,31 +4,31 @@ function isMarketBuyPaused(market) {
     : market?.operatorPaused === true
 }
 
+function appendMarketActionRows({ rows, markets, marketAction }) {
+  let actionCount = 0
+  for (const market of markets) {
+    if (actionCount >= 20) { break }
+    if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
+    const buyPaused = isMarketBuyPaused(market)
+    if (marketAction === "PAUSE" && buyPaused) { continue }
+    if (marketAction === "RESUME" && !buyPaused) { continue }
+    const action = buyPaused ? "RESUME" : "PAUSE"
+    rows.push([{
+      text: `${action === "PAUSE" ? "Pause" : "Resume"} ${market.symbol}`,
+      callback_data: `cc:ask:${action}:${market.symbol}`,
+    }])
+    actionCount += 1
+  }
+}
+
 export function createNavigationKeyboard({ page = "home", markets = [], marketAction } = {}) {
   const rows = [
-    [{ text: "Status",
-callback_data: "cc:nav:status" }, { text: "Markets",
-callback_data: "cc:nav:markets" }],
-    [{ text: "Positions",
-callback_data: "cc:nav:positions" }, { text: "Orders",
-callback_data: "cc:nav:orders" }],
-    [{ text: "Balances",
-callback_data: "cc:nav:balances" }],
+    [{ text: "Status", callback_data: "cc:nav:status" }, { text: "Markets", callback_data: "cc:nav:markets" }],
+    [{ text: "Positions", callback_data: "cc:nav:positions" }, { text: "Orders", callback_data: "cc:nav:orders" }],
+    [{ text: "Balances", callback_data: "cc:nav:balances" }],
   ]
   if (page === "markets") {
-    let actionCount = 0
-    for (const market of markets) {
-      if (actionCount >= 20) { break }
-      if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
-      if (marketAction === "PAUSE" && isMarketBuyPaused(market)) { continue }
-      if (marketAction === "RESUME" && !isMarketBuyPaused(market)) { continue }
-      const action = isMarketBuyPaused(market) ? "RESUME" : "PAUSE"
-      rows.push([{
-        text: `${action === "PAUSE" ? "Pause" : "Resume"} ${market.symbol}`,
-        callback_data: `cc:ask:${action}:${market.symbol}`,
-      }])
-      actionCount += 1
-    }
+    appendMarketActionRows({ rows, markets, marketAction })
   }
   const refreshPage = marketAction ? marketAction.toLowerCase() : page
   rows.push([{
