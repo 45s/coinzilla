@@ -166,7 +166,7 @@ Source: `apps/harvester/src/infrastructure/process-lock/acquire-harvester-proces
 
 The current lock fingerprint is derived from `[broker.toLowerCase(), tradingMode]`. It preserves broker/environment isolation, atomic acquisition and ownership safeguards, but does not include account or provider-instance identity.
 
-Issue #1307 is closed as completed: TESTNET and LIVE can coexist while duplicate writers within one broker/environment remain excluded. The roadmap's prior `[~]` status is stale and should be corrected. Do not weaken the existing atomic acquisition, owner-token verification, conservative stale-owner recovery or uncertain-shutdown lock retention when introducing account-scoped locks.
+Issue #1307 is closed as completed: TESTNET and LIVE can coexist while duplicate writers within one broker/environment remain excluded. The Harvester roadmap's prior `[~]` status has since been corrected to `[x]` (Complete — #1307 closed); this audit note records the status at the earlier audit baseline. Do not weaken the existing atomic acquisition, owner-token verification, conservative stale-owner recovery or uncertain-shutdown lock retention when introducing account-scoped locks.
 
 An account-lock migration must prevent old and new lock protocols from granting concurrent writer authority to the same account. A coordinated transition/dual-lock or deployment barrier is required before legacy lock identity is retired.
 
@@ -589,4 +589,4 @@ This sequence closes the most important safety gap before routing can become ope
 - Tests were inspected but not executed in this audit.
 - No live or TESTNET exchange calls were made.
 - No multi-provider runtime exists to reproduce route-change misrouting or cross-account collisions; these are source-derived risks.
-- The Harvester roadmap's #1307 lock status was stale at the audit baseline: the issue is closed completed and the lock source implements broker/environment scoping. Correct the roadmap status without changing lock code.
+- At this audit baseline the Harvester roadmap's #1307 lock status was stale; it has since been corrected to `[x]` (Complete — #1307 closed). The issue is closed completed and the lock source implements broker/environment scoping. No lock code change was required.
