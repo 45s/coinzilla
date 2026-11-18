@@ -485,15 +485,15 @@ function assertIndependentAccountRuntimes({
   assert.notEqual(runtime.accountRuntimes[0].getMarketMetadata({ symbol: "ETHUSDT" }), runtime.accountRuntimes[1].getMarketMetadata({ symbol: "ETHUSDT" }))
   assert.notEqual(runtime.accountRuntimes[0].getMarketMetadata({ symbol: "BTCUSDT" }), runtime.accountRuntimes[1].getMarketMetadata({ symbol: "BTCUSDT" }))
   assert.equal(runtime.accountRuntimes.every((accountRuntime) => accountRuntime.userDataReady), true)
-  assert.equal(primaryCalls.includes("subscribe:BTCUSDT"), true)
-  assert.equal(primaryCalls.includes("subscribe:book:BTCUSDT"), true)
+  assert.equal(primaryCalls.filter((call) => call === "subscribe:BTCUSDT").length, 1)
+  assert.equal(primaryCalls.filter((call) => call === "subscribe:book:BTCUSDT").length, 1)
   assert.equal(primaryCalls.includes("subscribe:ETHUSDT"), false)
   assert.equal(primaryCalls.includes("subscribe:book:ETHUSDT"), false)
-  assert.equal(secondaryCalls.includes("subscribe:ETHUSDT"), true)
-  assert.equal(secondaryCalls.includes("subscribe:book:ETHUSDT"), true)
+  assert.equal(secondaryCalls.filter((call) => call === "subscribe:ETHUSDT").length, 1)
+  assert.equal(secondaryCalls.filter((call) => call === "subscribe:book:ETHUSDT").length, 1)
   assert.equal(secondaryCalls.includes("subscribe:BTCUSDT"), false)
   assert.equal(secondaryCalls.includes("subscribe:book:BTCUSDT"), false)
-  assert.equal(secondaryCalls.includes("subscribe:candles:ETHUSDT"), true)
+  assert.equal(secondaryCalls.filter((call) => call === "subscribe:candles:ETHUSDT").length, 1)
   assert.equal(primaryCalls.includes("subscribe:user-data"), true)
   assert.equal(secondaryCalls.includes("subscribe:user-data"), true)
 }
@@ -558,7 +558,7 @@ test("routes order submission, user-data fills, cancellation, and candle data to
     assert.equal(typeof primaryCalls.priceHandlers.get("BTCUSDT"), "function")
     assert.equal(typeof secondaryCalls.priceHandlers.get("ETHUSDT"), "function")
     assert.equal(secondaryCalls.includes("candles:ETHUSDT"), true)
-    assert.equal(secondaryCalls.includes("subscribe:candles:ETHUSDT"), true)
+    assert.equal(secondaryCalls.filter((call) => call === "subscribe:candles:ETHUSDT").length, 1)
     assert.equal(
       primaryRuntime.getVolatilityData({ symbol: "ETHUSDT" }).data.providerInstanceId,
       "binance-testnet-secondary",

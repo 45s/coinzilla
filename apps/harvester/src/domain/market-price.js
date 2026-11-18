@@ -29,7 +29,42 @@ export function createMarketPrice({ priceEvent } = {}) {
     throw new TypeError("Market price timestamp must be a non-negative safe integer other than negative zero")
   }
 
-  return Object.freeze({ symbol,
-price,
-timestamp })
+  const sourceIdentity = {}
+  if (priceEvent.providerInstanceId !== undefined) {
+    if (typeof priceEvent.providerInstanceId !== "string" || !priceEvent.providerInstanceId.trim()) {
+      throw new TypeError("Market price providerInstanceId must be a non-empty string")
+    }
+    sourceIdentity.providerInstanceId = priceEvent.providerInstanceId
+  }
+  if (priceEvent.providerType !== undefined) {
+    if (typeof priceEvent.providerType !== "string" || !priceEvent.providerType.trim()) {
+      throw new TypeError("Market price providerType must be a non-empty string")
+    }
+    sourceIdentity.providerType = priceEvent.providerType
+  }
+  if (priceEvent.accountId !== undefined) {
+    if (priceEvent.accountId !== null && (typeof priceEvent.accountId !== "string" || !priceEvent.accountId.trim())) {
+      throw new TypeError("Market price accountId must be a non-empty string or null")
+    }
+    sourceIdentity.accountId = priceEvent.accountId
+  }
+  if (priceEvent.environment !== undefined) {
+    if (priceEvent.environment !== "live" && priceEvent.environment !== "testnet") {
+      throw new TypeError("Market price environment must be live or testnet")
+    }
+    sourceIdentity.environment = priceEvent.environment
+  }
+  if (
+    Object.keys(sourceIdentity).length > 0 &&
+    (!sourceIdentity.providerInstanceId || !sourceIdentity.providerType || !sourceIdentity.environment)
+  ) {
+    throw new TypeError("Market price provider identity requires providerInstanceId, providerType, and environment")
+  }
+
+  return Object.freeze({
+    symbol,
+    price,
+    timestamp,
+    ...sourceIdentity,
+  })
 }
