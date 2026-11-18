@@ -32,6 +32,48 @@ function createSubmissionDeferralResolver({ canSubmit } = {}) {
   }
 }
 
+function resolveProviderIdentity({ broker, onDurableSubmissionIntent }) {
+  const providerIdentity = {
+    providerInstanceId: broker.providerInstanceId,
+    providerType: broker.providerType,
+    accountId: broker.accountId,
+  }
+  if (onDurableSubmissionIntent && !hasProviderIdentity({ value: providerIdentity })) {
+    throw new TypeError("Durable order submission requires broker providerInstanceId, providerType and accountId metadata")
+  }
+  return providerIdentity
+}
+
+function attachAcknowledgedOrderProviderIdentity({ pendingOrder, brokerAcknowledgedOrder }) {
+  if (pendingOrder.providerInstanceId === undefined) {
+    return brokerAcknowledgedOrder
+  }
+  assertProviderIdentityMatches({
+    expected: pendingOrder,
+    actual: brokerAcknowledgedOrder,
+    allowMissingActual: true,
+    context: "Broker acknowledgement provider identity",
+  })
+  return new CanonicalOrder({
+    clientOrderId: brokerAcknowledgedOrder.clientOrderId,
+    brokerOrderId: brokerAcknowledgedOrder.brokerOrderId,
+    providerInstanceId: pendingOrder.providerInstanceId,
+    providerType: pendingOrder.providerType,
+    accountId: pendingOrder.accountId,
+    market: brokerAcknowledgedOrder.market,
+    side: brokerAcknowledgedOrder.side,
+    type: brokerAcknowledgedOrder.type,
+    limitPrice: brokerAcknowledgedOrder.limitPrice,
+    originalQuantity: brokerAcknowledgedOrder.originalQuantity,
+    executedQuantity: brokerAcknowledgedOrder.executedQuantity,
+    status: brokerAcknowledgedOrder.status,
+    createdAt: brokerAcknowledgedOrder.createdAt,
+    acknowledgedAt: brokerAcknowledgedOrder.acknowledgedAt,
+    updatedAt: brokerAcknowledgedOrder.updatedAt,
+    completedAt: brokerAcknowledgedOrder.completedAt,
+  })
+}
+
 function createExecutionContext({ options } = {}) {
   const {
     broker,
@@ -531,34 +573,10 @@ async function handleMismatchedAcknowledgement({ context, candidate } = {}) {
 
 async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrder: brokerAcknowledgedOrder } = {}) {
   const { pendingOrder, purpose, ownership } = candidate
-  if (pendingOrder.providerInstanceId !== undefined) {
-    assertProviderIdentityMatches({
-      expected: pendingOrder,
-      actual: brokerAcknowledgedOrder,
-      allowMissingActual: true,
-      context: "Broker acknowledgement provider identity",
-    })
-  }
-  const acknowledgedOrder = pendingOrder.providerInstanceId === undefined
-    ? brokerAcknowledgedOrder
-    : new CanonicalOrder({
-        clientOrderId: brokerAcknowledgedOrder.clientOrderId,
-        brokerOrderId: brokerAcknowledgedOrder.brokerOrderId,
-        providerInstanceId: pendingOrder.providerInstanceId,
-        providerType: pendingOrder.providerType,
-        accountId: pendingOrder.accountId,
-        market: brokerAcknowledgedOrder.market,
-        side: brokerAcknowledgedOrder.side,
-        type: brokerAcknowledgedOrder.type,
-        limitPrice: brokerAcknowledgedOrder.limitPrice,
-        originalQuantity: brokerAcknowledgedOrder.originalQuantity,
-        executedQuantity: brokerAcknowledgedOrder.executedQuantity,
-        status: brokerAcknowledgedOrder.status,
-        createdAt: brokerAcknowledgedOrder.createdAt,
-        acknowledgedAt: brokerAcknowledgedOrder.acknowledgedAt,
-        updatedAt: brokerAcknowledgedOrder.updatedAt,
-        completedAt: brokerAcknowledgedOrder.completedAt,
-      })
+  const acknowledgedOrder = attachAcknowledgedOrderProviderIdentity({
+    pendingOrder,
+    brokerAcknowledgedOrder,
+  })
   const durableOutcome = await persistDurableSubmissionOutcome({
     context,
     order: acknowledgedOrder,
