@@ -23,13 +23,19 @@ function printSummary({
     outputPath,
   }) {
   const { passed, failed, skipped, total } = report.summary
-  process.stdout.write([
+  const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
+  const missingCredentials = configuration?.response?.missingCredentialVariables ?? []
+  const lines = [
     "Bitunix read-only diagnostics completed.",
     `Results: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
+    ...(missingCredentials.length > 0
+      ? [`Authenticated checks skipped. Configure both BITUNIX_API_KEY and BITUNIX_API_SECRET (missing: ${missingCredentials.join(", ")}).`]
+      : []),
     `Report: ${outputPath}`,
     "No order or withdrawal operations were attempted.",
     "",
-  ].join("\n"))
+  ]
+  process.stdout.write(lines.join("\n"))
 }
 
 async function main() {
