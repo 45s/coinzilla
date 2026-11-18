@@ -2273,3 +2273,96 @@ test("starts configured provider accounts and acquires one process lock per acco
     process.exitCode = previousExitCode
   }
 })
+
+
+test("keeps healthy accounts running and releases only a failed account's process lock", async () => {
+  const started = []
+  const stopped = []
+  const releasedLocks = []
+  const signalHandlers = new Map()
+  const config = {
+    ...appConfig,
+    brokers: {
+      instances: [
+        {
+          providerInstanceId: "binanceTestnetPrimary",
+          providerType: "binance",
+          accountId: "binance-primary",
+          environment: "testnet",
+          credentials: {
+            apiKeyEnv: "BINANCE_API_KEY",
+            apiSecretEnv: "BINANCE_API_SECRET_KEY",
+          },
+        },
+        {
+          providerInstanceId: "binanceTestnetSecondary",
+          providerType: "binance",
+          accountId: "binance-secondary",
+          environment: "testnet",
+          credentials: {
+            apiKeyEnv: "BINANCE_SECONDARY_API_KEY",
+            apiSecretEnv: "BINANCE_SECONDARY_API_SECRET",
+          },
+        },
+      ],
+    },
+  }
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    const result = await main({
+      loadConfig: async () => config,
+      env: {
+        TRADING_MODE: "testnet",
+        BINANCE_API_KEY: "primary-key",
+        BINANCE_API_SECRET_KEY: "primary-secret",
+        BINANCE_SECONDARY_API_KEY: "secondary-key",
+        BINANCE_SECONDARY_API_SECRET: "secondary-secret",
+      },
+      acquireProcessLock: async (input) => ({
+        ok: true,
+        lockScope: input,
+        release: async () => {
+          releasedLocks.push(input.providerInstanceId)
+          return { ok: true, released: true }
+        },
+      }),
+      start: async (input) => {
+        started.push(input.providerIdentity.providerInstanceId)
+        if (input.providerIdentity.accountId === "binance-secondary") {
+          throw new Error("secondary account connection failed")
+        }
+        return {
+          account: input.providerIdentity,
+          brokerName: "binance",
+          connected: true,
+          tradingEnabled: true,
+          strategyMode: "conservative",
+          subscriptions: ["BTCUSDT"],
+          stop: async () => {
+            stopped.push(input.providerIdentity.providerInstanceId)
+            return { ok: true },
+          },
+        }
+      },
+      registerSignalHandler: (signal, handler) => signalHandlers.set(signal, handler),
+      logger: { info() {}, system() {}, error() {} },
+    })
+
+    assert.ok(result)
+    assert.deepEqual(started, ["binanceTestnetPrimary", "binanceTestnetSecondary"])
+    assert.deepEqual(result.runtime.providerAccounts.map(({ providerInstanceId }) => providerInstanceId), [
+      "binanceTestnetPrimary",
+    ])
+    assert.equal(result.runtime.failedAccounts.length, 1)
+    assert.equal(result.runtime.failedAccounts[0].providerInstanceId, "binanceTestnetSecondary")
+    assert.deepEqual(releasedLocks, ["binanceTestnetSecondary"])
+
+    await signalHandlers.get("SIGINT")()
+    assert.deepEqual(stopped, ["binanceTestnetPrimary"])
+    assert.deepEqual(releasedLocks, ["binanceTestnetSecondary", "binanceTestnetPrimary"])
+    assert.equal(process.exitCode, 0)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
