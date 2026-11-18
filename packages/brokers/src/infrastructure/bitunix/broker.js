@@ -12,6 +12,7 @@ import { adaptWithdrawalHistory } from "./adapters/adapt-withdrawal-history.js"
 import { adaptMatchingOrderDetails } from "./adapters/adapt-matching-order-details.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
+import { validateBitunixSymbolFilterMetadata } from "./adapters/validate-symbol-filter-metadata.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
 
 const API = Object.freeze({
@@ -470,6 +471,7 @@ export class BitunixSpotBroker extends CoreBroker {
       const response = await this.restClient.request({
         method: "GET",
         path: API.markets,
+        authenticated: false,
       })
       const rows = requireArray({
         value: response.data,
@@ -505,6 +507,7 @@ export class BitunixSpotBroker extends CoreBroker {
       const response = await this.restClient.request({
         method: "GET",
         path: API.markets,
+        authenticated: false,
       })
       const rows = requireArray({
         value: response.data,
@@ -520,6 +523,7 @@ export class BitunixSpotBroker extends CoreBroker {
         throw new TypeError(`Bitunix Spot market catalog contains duplicate metadata for symbol ${normalizedSymbol}`)
       }
       const [symbolInfo] = matchingRows
+      validateBitunixSymbolFilterMetadata({ symbolInfo })
       return toResult({
         data: {
           ...symbolInfo,
