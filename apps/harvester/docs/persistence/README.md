@@ -2,15 +2,17 @@
 
 **Tracking issue:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
 
+**Integration blueprint:** [SQLite integration blueprint](./sqlite-integration-blueprint.md) — source-verified inventory, ownership, proposed repositories, environment isolation, operational constraints, and phased migration.
+
 **First slice:** Trading-session history
 
-**Implementation status:** In progress in [PR #1369](https://github.com/45s/coinzilla/pull/1369). This slice is not complete until the exact PR head is green, merged into `develop`, and verified after merge.
+**Implementation status:** MERGED in [PR #1369](https://github.com/45s/coinzilla/pull/1369) as `c2116fd647d942c11947e556e71a0e8e578cc192` (exact PR head `3bf1ad6ba88cfbfb5aa2ad3365353bf09718ea6b`). Its exact PR head passed 32 Actions checks; the optional read-only Binance TESTNET integration was skipped. This is merge evidence, not production deployment or readiness.
 
 ## 1. Scope and authority
 
 This database stores ordinary historical trading-session records for reporting and operational inspection. It is not a recovery store and is not evidence that a previous process is safe to resume.
 
-The Harvester ADR-0001 Operational State Store remains the authoritative recovery evidence. Its file format, append acknowledgement, sequence, hash-chain, integrity verification, durability barriers, startup checks, and recovery policy are unchanged.
+The Harvester ADR-0001 Operational State Store remains the authoritative recovery evidence whenever it is explicitly constructed/injected. The current committed configuration has `recovery.enabled: false`, so the default `main()` path does not construct or verify that store; Telegram-only operator control does not create or require it. Its file format, append acknowledgement, sequence, hash-chain, integrity verification, durability barriers, startup checks, and recovery policy are unchanged.
 
 The session history observer consumes already-published Harvester lifecycle events and projects them into the database. It is an independent, best-effort read-side observer; it does not write to, replace, replay, or cut over the Operational State Store. The database is never consulted to restore process, order, portfolio, strategy, or exchange state.
 
