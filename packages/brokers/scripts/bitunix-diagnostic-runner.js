@@ -664,7 +664,6 @@ function createConfiguredWebSocketClient({
 
 async function runWebSocketSession({
   client,
-  env,
   symbol,
   depthPrecision,
   now,
@@ -737,7 +736,6 @@ async function runWebSocketChecks({
   }
   await runWebSocketSession({
     client,
-    env,
     symbol,
     depthPrecision,
     now,
@@ -796,8 +794,7 @@ async function runConfiguredDiagnostics({
   restClientFactory,
   websocketClientFactory,
 }) {
-  const symbol = DIAGNOSTIC_CONFIG.symbol
-  const requestTimeout = DIAGNOSTIC_CONFIG.timeoutMs
+  const { symbol, timeoutMs: requestTimeout } = DIAGNOSTIC_CONFIG
   let depthPrecision
   try {
     if (!Number.isInteger(requestTimeout) || requestTimeout < 1 || requestTimeout > 60_000) {
@@ -849,7 +846,7 @@ export async function runBitunixDiagnostics({
   const secrets = getSecrets({ env })
   const results = []
   const events = []
-  const includePublicPayloads = DIAGNOSTIC_CONFIG.includePublicPayloads
+  const { includePublicPayloads } = DIAGNOSTIC_CONFIG
   const configuration = createConfigurationResult({
     env,
     startedAt,
