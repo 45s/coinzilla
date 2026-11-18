@@ -35,6 +35,7 @@ This revalidation was a read-only source and GitHub delivery-state inspection. I
 **Next implementation slice: Phase 3 — durable provider/account provenance.** Before introducing a second execution provider or routing live strategy intents, add stable non-secret provider-instance and account identity to the durable order lifecycle. Persist provenance in the submission intent before broker I/O, then preserve it through acknowledgement/unknown outcome, cancellation, user-data events, fills, Journal projections and recovery. Update strict fact validators and versioned readers without rewriting existing hash-chained v1 records. This is the critical prerequisite because routing a new order safely is impossible if later cancellation/reconciliation cannot identify the account that accepted it.
 
 **Delivery sequence after that slice:**
+
 1. Complete Phase 3 provenance and backward-compatible durable-fact/event handling.
 2. Complete Phase 4 account isolation, namespaced identities, account-scoped locks and the #654 restart-recovery release gates. Keep restart restoration and multi-provider execution disabled until parity and crash/restart acceptance are complete.
 3. Deliver Phase 5 independent market-data routing with source-aware subscription identity and freshness; no silent fallback or source blending.
