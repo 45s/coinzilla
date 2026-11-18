@@ -1,4 +1,12 @@
 import { parseTelegramOperatorCommand } from "./commands.js"
+import {
+  TELEGRAM_OPERATOR_ACTIONS,
+  TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN,
+} from "./constants.js"
+
+const CONTROL_CALLBACK_PATTERN = new RegExp(
+  `^cc:(?:ask|confirm):(${TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN}):([A-Z0-9]{2,30})(?::\\d+)?$`,
+)
 
 export function normalizeTelegramUserId(value) {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
@@ -13,8 +21,8 @@ export function normalizeTelegramUserId(value) {
 
 
 export function resolveMessageAction(parsed) {
-  if (parsed.type === "PAUSE_MENU") { return "PAUSE" }
-  if (parsed.type === "RESUME_MENU") { return "RESUME" }
+  if (parsed.type === TELEGRAM_OPERATOR_ACTIONS.PAUSE_MENU) { return TELEGRAM_OPERATOR_ACTIONS.PAUSE }
+  if (parsed.type === TELEGRAM_OPERATOR_ACTIONS.RESUME_MENU) { return TELEGRAM_OPERATOR_ACTIONS.RESUME }
   if (parsed.type === "INVALID" && parsed.command) { return parsed.command }
   return parsed.type
 }
@@ -43,7 +51,7 @@ export function createTelegramInteraction({ update, botUsername }) {
 }
 
 export function resolveCallbackAction(data) {
-  const control = /^cc:(?:ask|confirm):(PAUSE|RESUME):([A-Z0-9]{2,30})(?::\d+)?$/.exec(data ?? "")
+  const control = CONTROL_CALLBACK_PATTERN.exec(data ?? "")
   if (control) {
     return { action: control[1],
 symbol: control[2] }

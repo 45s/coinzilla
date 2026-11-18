@@ -1,3 +1,6 @@
+import {
+  TELEGRAM_OPERATOR_ACTIONS,
+} from "./constants.js"
 function isMarketBuyPaused(market) {
   return typeof market?.operatorBuysPaused === "boolean"
     ? market.operatorBuysPaused
@@ -10,11 +13,11 @@ function appendMarketActionRows({ rows, markets, marketAction }) {
     if (actionCount >= 20) { break }
     if (typeof market?.symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(market.symbol) || market.enabled !== true) { continue }
     const buyPaused = isMarketBuyPaused(market)
-    if (marketAction === "PAUSE" && buyPaused) { continue }
-    if (marketAction === "RESUME" && !buyPaused) { continue }
-    const action = buyPaused ? "RESUME" : "PAUSE"
+    if (marketAction === TELEGRAM_OPERATOR_ACTIONS.PAUSE && buyPaused) { continue }
+    if (marketAction === TELEGRAM_OPERATOR_ACTIONS.RESUME && !buyPaused) { continue }
+    const action = buyPaused ? TELEGRAM_OPERATOR_ACTIONS.RESUME : TELEGRAM_OPERATOR_ACTIONS.PAUSE
     rows.push([{
-      text: `${action === "PAUSE" ? "Pause" : "Resume"} ${market.symbol}`,
+      text: `${action === TELEGRAM_OPERATOR_ACTIONS.PAUSE ? "Pause" : "Resume"} ${market.symbol}`,
       callback_data: `cc:ask:${action}:${market.symbol}`,
     }])
     actionCount += 1
