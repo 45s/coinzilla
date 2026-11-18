@@ -24,7 +24,7 @@ BITUNIX_PROVIDER_INSTANCE_ID=bitunixSpotPrimary
 BITUNIX_ACCOUNT_ID=bitunix-primary
 ```
 
-Use a Bitunix API key with read permissions only. Disable trading and withdrawal permissions at the exchange. Never commit credentials or include them in logs, events, fingerprints, or error context.
+Copy apps/harvester/.env.example to the local Harvester environment file and set the flag and credentials there. Use a Bitunix API key with read permissions only. Disable trading and withdrawal permissions at the exchange. Never commit credentials or include them in logs, events, fingerprints, or error context.
 
 Bitunix Spot currently uses its documented production REST endpoint. The broker configuration value `tradingMode: "live"` selects that endpoint; it does not authorize trading and must not be reused as Harvester's `TRADING_MODE`. Harvester's Binance `TRADING_MODE` remains unchanged.
 
