@@ -1021,91 +1021,92 @@ test("Bitunix Spot symbol metadata preserves a closed pair without advertising i
   assert.deepEqual(markets.data, [], "closed pairs must remain excluded from the active market catalog")
 })
 
-test("Bitunix Spot symbol metadata rejects malformed documented numeric fields", async () => {
-  const invalidMetadataCases = [
-    {
-      field: "minPrice",
-      value: "NaN",
-      description: "non-finite minimum trading values must be rejected",
-    },
-    {
-      field: "minPrice",
-      value: "-0.01",
-      description: "negative minimum trading values must be rejected",
-    },
-    {
-      field: "minPrice",
-      value: 0.01,
-      description: "minimum trading values must remain exact decimal strings",
-    },
-    {
-      field: "minVolume",
-      value: "Infinity",
-      description: "non-finite minimum quantities must be rejected",
-    },
-    {
-      field: "minVolume",
-      value: "-0.001",
-      description: "negative minimum quantities must be rejected",
-    },
-    {
-      field: "basePrecision",
-      value: "-1",
-      description: "negative base precision counts must be rejected",
-    },
-    {
-      field: "basePrecision",
-      value: "1.5",
-      description: "fractional base precision counts must be rejected",
-    },
-    {
-      field: "basePrecision",
-      value: Infinity,
-      description: "non-finite base precision numbers must be rejected",
-    },
-    {
-      field: "quotePrecision",
-      value: 9007199254740992,
-      description: "unsafe quote precision integers must be rejected",
-    },
-    {
-      field: "precisions",
-      value: "0.01",
-      description: "the trading precisions field must be an array when present",
-    },
-    {
-      field: "precisions",
-      value: ["0.01", "NaN"],
-      description: "malformed precision entries must be rejected without interpreting them as increments",
-    },
-    {
-      field: "precisions",
-      value: ["0.01", 0.001],
-      description: "precision entries must retain the documented decimal-string representation",
-    },
-    {
-      field: "symbol",
-      value: 42,
-      description: "a supplied non-string compatibility symbol must not bypass pair identity validation",
-    },
-    {
-      field: "symbol",
-      value: "ETHUSDT",
-      description: "a supplied symbol must agree with the documented base and quote identity",
-    },
-    {
-      field: "base",
-      value: undefined,
-      description: "the base asset code is required to identify the trading pair",
-    },
-    {
-      field: "quote",
-      value: undefined,
-      description: "the quote asset code is required to identify the trading pair",
-    },
-  ]
 
-  for (const scenario of invalidMetadataCases) {
+const invalidSymbolMetadataCases = [
+  {
+    field: "minPrice",
+    value: "NaN",
+    name: "non-finite minimum trading values",
+  },
+  {
+    field: "minPrice",
+    value: "-0.01",
+    name: "negative minimum trading values",
+  },
+  {
+    field: "minPrice",
+    value: 0.01,
+    name: "numeric minimum trading values that could lose decimal precision",
+  },
+  {
+    field: "minVolume",
+    value: "Infinity",
+    name: "non-finite minimum quantities",
+  },
+  {
+    field: "minVolume",
+    value: "-0.001",
+    name: "negative minimum quantities",
+  },
+  {
+    field: "basePrecision",
+    value: "-1",
+    name: "negative base precision counts",
+  },
+  {
+    field: "basePrecision",
+    value: "1.5",
+    name: "fractional base precision counts",
+  },
+  {
+    field: "basePrecision",
+    value: Infinity,
+    name: "non-finite base precision numbers",
+  },
+  {
+    field: "quotePrecision",
+    value: 9007199254740992,
+    name: "unsafe quote precision integers",
+  },
+  {
+    field: "precisions",
+    value: "0.01",
+    name: "non-array trading precision metadata",
+  },
+  {
+    field: "precisions",
+    value: ["0.01", "NaN"],
+    name: "malformed trading precision entries",
+  },
+  {
+    field: "precisions",
+    value: ["0.01", 0.001],
+    name: "non-string trading precision entries",
+  },
+  {
+    field: "symbol",
+    value: 42,
+    name: "non-string compatibility symbols",
+  },
+  {
+    field: "symbol",
+    value: "ETHUSDT",
+    name: "symbols that conflict with base and quote identity",
+  },
+  {
+    field: "base",
+    value: undefined,
+    name: "missing base asset codes",
+  },
+  {
+    field: "quote",
+    value: undefined,
+    name: "missing quote asset codes",
+  },
+]
+
+for (const scenario of invalidSymbolMetadataCases) {
+  test(`Bitunix Spot symbol metadata rejects ${scenario.name}`, async () => {
     const { broker } = createBroker({
       responses: {
         "/api/spot/v1/common/coin_pair/list": [
@@ -1119,10 +1120,10 @@ test("Bitunix Spot symbol metadata rejects malformed documented numeric fields",
     })
     const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
 
-    assert.equal(result.ok, false, scenario.description)
+    assert.equal(result.ok, false, `${scenario.name} must fail closed before metadata is returned`)
     assert.ok(result.errors?.[0] instanceof Error, `Invalid ${scenario.field} metadata must return a diagnostic error`)
-  }
-})
+  })
+}
 
 test("Bitunix Spot symbol metadata rejects missing symbols, missing catalog rows and malformed response arrays", async () => {
   const missingSymbol = createBroker()
