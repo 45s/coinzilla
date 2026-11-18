@@ -213,16 +213,34 @@ function createSellPlan({ planInput, filters, feePolicy, minProfit }) {
   })
 }
 
-function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stopState }) {
-  validateSellPolicyContext({
-    pairConfig,
-    marketMetadata,
-    cycleState,
+function createContextFailure({ stopState, error, operation }) {
+  return createStoppedResult({
+    stopState,
+    explanation: getFailureExplanation({
+      error,
+      operation,
+    }),
   })
+}
+
+function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stopState }) {
   if (stopState.status === "STOPPED") {
     return Object.freeze({
       stopState,
       decision: stopState.decision,
+    })
+  }
+  try {
+    validateSellPolicyContext({
+      pairConfig,
+      marketMetadata,
+      cycleState,
+    })
+  } catch (error) {
+    return createContextFailure({
+      stopState,
+      error,
+      operation: "policy context validation",
     })
   }
   if (cycleState.status !== "ACCUMULATING") {
@@ -231,9 +249,18 @@ function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stop
       explanation: "Recovery Seller cannot submit a second SELL or trade from a non-accumulating cycle",
     })
   }
-  const feePolicy = resolveSellFeePolicy({
-    pairConfig,
-  })
+  let feePolicy
+  try {
+    feePolicy = resolveSellFeePolicy({
+      pairConfig,
+    })
+  } catch (error) {
+    return createContextFailure({
+      stopState,
+      error,
+      operation: "fee policy validation",
+    })
+  }
   if (!marketMetadata.supportedOrderTypes.includes(feePolicy.orderType)) {
     return createStoppedResult({
       stopState,
@@ -250,12 +277,10 @@ function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stop
       }),
     })
   } catch (error) {
-    return createStoppedResult({
+    return createContextFailure({
       stopState,
-      explanation: getFailureExplanation({
-        error,
-        operation: "exchange-filter validation",
-      }),
+      error,
+      operation: "exchange-filter validation",
     })
   }
 }
