@@ -282,13 +282,12 @@ PR #1166 added two maintained Harvester documents outside the frozen 97-file bas
 | `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted and implemented startup order ownership decision. |
 | `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Completed design and implementation record for #1157. |
 
-## Latest recursive inventory checkpoint — develop `88b89995a4f9e62a6fe4b0451ea675ce0495b539`
+## Latest recursive inventory checkpoint — develop `543753da5938eba2d95ad19d74c3f98a991e6461`
 
-The complete recursive Git tree at this checkpoint returned `truncated: false` and contains **159 tracked Markdown/MDX files**: **88 under `apps/harvester/` and 71 elsewhere**. A direct path comparison against the previous 157-file checkpoint `ea6110fb39c1c86acfbf9673910965e7f698d511` found exactly two additions and zero removals. The frozen 97-file baseline and all intervening historical checkpoints above remain unchanged.
+The complete recursive Git tree at this checkpoint returned `truncated: false` and contains **160 tracked Markdown/MDX files**: **89 under `apps/harvester/` and 71 elsewhere**. A direct path comparison against the previous 159-file checkpoint `88b89995a4f9e62a6fe4b0451ea675ce0495b539` found exactly one addition and zero removals. The frozen 97-file baseline and all intervening historical checkpoints above remain unchanged.
 
 | Added path | Purpose and disposition |
 | --- | --- |
-| `apps/harvester/docs/CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md` | Current source/test lifecycle audit for the Conservative ADA recovery follow-up; KEEP as a maintained evidence map linked from the Harvester roadmap. |
-| `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | Harvester infrastructure contract for the opt-in Bitunix Spot read-only observer; KEEP as the canonical observer boundary, distinct from provider registry, execution routing and trading readiness. |
+| `apps/harvester/docs/persistence/sqlite-integration-blueprint.md` | Source-verified Harvester persistence inventory, ownership boundaries, Production/Testnet isolation, operational constraints and phased migration plan; KEEP as the design/audit authority, with current implementation status delegated to the persistence README and #1327. |
 
-The Harvester documentation index links both documents. This is a path-completeness update only; it does not claim that all 159 documents have passed the maintained-document factual audit tracked by #1401, the full-tree Markdown classification/enforcement work tracked by #1402, or the reference-tracing work tracked by #1403.
+The Harvester documentation index and persistence index link the new blueprint. This is a path-completeness update only; it does not claim that all 160 documents have passed the maintained-document factual audit tracked by #1401, the full-tree Markdown classification/enforcement work tracked by #1402, or the reference-tracing work tracked by #1403.
