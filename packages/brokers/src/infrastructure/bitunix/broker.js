@@ -5,7 +5,9 @@ import { adaptAssets } from "./adapters/adapt-assets.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
 import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, createBitunixKlineHistoryQuery, normalizeBitunixKlineInterval } from "./adapters/adapt-market-data.js"
 import { adaptExchangeRates } from "./adapters/adapt-exchange-rates.js"
+import { adaptDepositAddresses } from "./adapters/adapt-deposit-addresses.js"
 import { adaptDeposits } from "./adapters/adapt-deposits.js"
+import { BitunixDepositAddressError } from "./errors/bitunix-deposit-address-error.js"
 import { adaptWithdrawalHistory } from "./adapters/adapt-withdrawal-history.js"
 import { adaptMatchingOrderDetails } from "./adapters/adapt-matching-order-details.js"
 import { adaptOrder } from "./adapters/adapt-order.js"
@@ -24,6 +26,7 @@ const API = Object.freeze({
   kline: "/api/spot/v1/market/kline",
   klineHistory: "/api/spot/v1/market/kline/history",
   deposits: "/api/spot/v1/deposit/page",
+  depositAddress: "/api/spot/v1/deposit/address",
   withdrawalHistory: "/api/spot/v1/withdraw_transfer/page",
   matchingOrderDetails: "/api/spot/v1/order/deal/list",
 })
@@ -158,6 +161,38 @@ function addDepositLimitFilter({ input, body }) {
     throw new RangeError("Bitunix Spot deposit limit must be an integer between 1 and 100")
   }
   body.limit = input.limit
+}
+
+function requireDepositAddressInput({ value, field }) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new BitunixDepositAddressError({
+      message: `Bitunix Spot deposit-address ${field} must be a non-empty string`,
+      kind: "input",
+      field,
+    })
+  }
+  return value
+}
+
+function createDepositAddressRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new BitunixDepositAddressError({
+      message: "Bitunix Spot getDepositAddress() input must be an object",
+      kind: "input",
+      field: "input",
+    })
+  }
+  const body = {
+    coin: requireDepositAddressInput({
+      value: input.coin,
+      field: "coin",
+    }),
+    network: requireDepositAddressInput({
+      value: input.network,
+      field: "network",
+    }),
+  }
+  return { body }
 }
 
 function createDepositRequest({ input }) {
@@ -648,6 +683,40 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getDeposits()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read all Bitunix deposit addresses for one explicitly selected coin/network.
+   * The endpoint is read-only and rate-limited to 10 requests per second per IP;
+   * callers must avoid polling above that exchange limit.
+   *
+   * @param {{coin: string, network: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getDepositAddress(input = {}) {
+    try {
+      const { body } = createDepositAddressRequest({ input })
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.depositAddress,
+        body,
+        authenticated: true,
+        stateChanging: false,
+      })
+      return toResult({
+        data: adaptDepositAddresses({
+          value: response.data,
+          coin: body.coin,
+          network: body.network,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getDepositAddress()",
         error,
       })
       return toResult({ errors: [error] })

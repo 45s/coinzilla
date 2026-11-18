@@ -12,6 +12,10 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 `@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
+## SQLite infrastructure audit and hardening — #1395
+
+**Status: In progress; task contract opened, implementation PR not yet linked.** Audit the existing SQLite connection/lifecycle, transactions, CRUD/query safety, migrations, WAL/locking, backup/restore and error paths, then harden only confirmed defects with deterministic real-SQLite RED → GREEN → REFACTOR tests. Keep all implementation inside `packages/db/**`; preserve the provider-neutral public API and existing compatibility unless a reproduced defect requires a documented change. Treat merged backup/restore PR #1382 as existing functionality to audit, not a feature to duplicate. Follow the exact coverage and CI gates in [issue #1395](https://github.com/45s/coinzilla/issues/1395); do not lower current thresholds or claim acceptance before exact-head verification.
+
 ## Provider-neutral CRUD API — core implementation and hardening merged
 
 **Core implementation:** [PR #1353](https://github.com/45s/coinzilla/pull/1353) merged into `develop` as `70f1345054bf619dca01896817967eeba6ad1141`; it delivered the provider-neutral CRUD facade, built-in SQLite provider, reusable conformance suite, and public documentation.

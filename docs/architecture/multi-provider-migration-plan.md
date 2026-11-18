@@ -4,7 +4,7 @@ status: active
 type: plan
 owner: harvester-and-brokers
 created: 2026-11-17
-last_verified: 2026-11-17
+last_verified: 2026-11-18
 ---
 
 # Multi-provider migration audit and implementation plan
@@ -14,6 +14,35 @@ last_verified: 2026-11-17
 **Audit baseline:** `develop` at `5d707d17114d524ef3cd7c6d35387dde61338976` (2026-11-17 09:45:59 UTC)
 **Integration sync:** the documentation branch is synchronized with `develop` at `70f1345054bf619dca01896817967eeba6ad1141`. This does not change the source-audit baseline above; revalidate source-sensitive findings against current `develop` before implementation.
 **Scope:** source-verified preparation and migration sequencing only. This document does not authorize runtime routing, database changes, provider mutations, or trading-behavior changes.
+
+## Current source revalidation — 2026-11-18
+
+**Revalidation checkpoint:** `develop` at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` (merged PR #1383). This section supersedes earlier statements about current delivery status where they differ; the original 2026-11-17 audit baseline and evidence remain historical and unchanged.
+
+- **Phase 1 — complete:** Brokers' immutable Binance capability declaration merged in [PR #1366](https://github.com/45s/coinzilla/pull/1366). This is additive capability metadata; it does not enable another provider.
+- **Phase 2 — foundation merged, routing not delivered:** [PR #1383](https://github.com/45s/coinzilla/pull/1383) adds stable Binance provider-instance/account identity, an exchange-neutral provider registry, capability validation, and deterministic connection/rollback lifecycle. It preserves the legacy single-Binance runtime. This is a foundation slice, not multi-provider execution or market-data routing.
+- **Overlapping stale work:** [PR #1386](https://github.com/45s/coinzilla/pull/1386) remains open on base `91403a5c055121687b7c1cf0b02807544bce8e48`, predating the merged PR #1383. Its registry changes must be reviewed against the merged implementation and either reconciled as a distinct follow-up or closed as superseded; do not merge it unchanged or claim its branch code is on `develop`.
+- **Current runtime remains one Binance instance:** `apps/harvester/src/domain/provider-identity.js` resolves stable non-secret Binance provider/account identifiers; `apps/harvester/src/application/providers/provider-registry.js` validates and owns registered provider lifecycle; `apps/harvester/src/bootstrap/broker/connect-broker.js` currently registers/connects the Binance broker. `apps/harvester/src/bootstrap/start-harvester.js` still defaults to `createBinanceBrokerAdapter`. There is no strategy/market execution route table, independent market-data route table, or second exchange instance on this checkpoint.
+- **Phases 3–6 remain planned:** durable provider/account order provenance, account isolation/reconciliation, independent market-data routing, execution routing/parity, and operational acceptance are not delivered. Process-restart recovery remains a related safety prerequisite under [issue #654](https://github.com/45s/coinzilla/issues/654).
+- **Safety gates unchanged:** Bitunix remains read-only / not Harvester-ready under [issue #1185](https://github.com/45s/coinzilla/issues/1185); Recovery Seller remains non-executable under [issue #1127](https://github.com/45s/coinzilla/issues/1127). No exchange operations were performed for this revalidation.
+
+This revalidation was a read-only source and GitHub delivery-state inspection. It did not execute tests or CI; do not transfer historical CI results to this checkpoint.
+
+## Priority and next delivery decision — 2026-11-18
+
+**Owner priority:** #1339 is the primary Harvester architecture/delivery workstream. The merged #1366 and #1383 work is a foundation only; the application still composes one Binance instance and has no independent execution or market-data route tables.
+
+**Next implementation slice: Phase 3 — durable provider/account provenance.** Before introducing a second execution provider or routing live strategy intents, add stable non-secret provider-instance and account identity to the durable order lifecycle. Persist provenance in the submission intent before broker I/O, then preserve it through acknowledgement/unknown outcome, cancellation, user-data events, fills, Journal projections and recovery. Update strict fact validators and versioned readers without rewriting existing hash-chained v1 records. This is the critical prerequisite because routing a new order safely is impossible if later cancellation/reconciliation cannot identify the account that accepted it.
+
+**Delivery sequence after that slice:**
+
+1. Complete Phase 3 provenance and backward-compatible durable-fact/event handling.
+2. Complete Phase 4 account isolation, namespaced identities, account-scoped locks and the #654 restart-recovery release gates. Keep restart restoration and multi-provider execution disabled until parity and crash/restart acceptance are complete.
+3. Deliver Phase 5 independent market-data routing with source-aware subscription identity and freshness; no silent fallback or source blending.
+4. Deliver Phase 6 Binance execution routing through explicit routes and prove behavior parity while still using the existing Binance account/instance.
+5. Only then consider another provider. Bitunix remains read-only until #1185 is closed with verified capability and lifecycle evidence; RS remains disabled until #1127 is complete.
+
+The Harvester roadmap now records #1339 as its top architecture/delivery priority. The ADA recovery lifecycle (#1359/#1362) remains a separate safety obligation and must continue to receive its own focused work; prioritization does not waive trading-safety gates.
 
 ## 1. Executive decision
 
@@ -539,18 +568,20 @@ Severity indicates architectural/operational risk, not a reproduced incident. Th
 - Keep current Conservative strategy rules in the canonical Conservative Domain Specification.
 - Do not modify runtime code, schema files, credentials, environment settings, or exchange behavior as part of this audit/plan.
 
-## 12. First implementation PR recommendation
+## 12. First implementation PR recommendation — status corrected
 
-The first implementation PR should be a **Brokers-only additive capability-contract slice**:
+The original first-slice recommendation was the **Brokers-only additive Binance capability-contract slice**. It is complete in [PR #1366](https://github.com/45s/coinzilla/pull/1366). The Harvester named provider identity/registry foundation is also merged in [PR #1383](https://github.com/45s/coinzilla/pull/1383), while preserving the one-Binance runtime.
 
-1. Introduce the additive capability contract and declare the existing Binance capabilities only.
-2. Represent unsupported/unknown operations explicitly without changing current results or errors.
-3. Add offline contract tests proving Binance declarations match actual source behavior.
-4. Preserve `CoreBroker`, existing constructors and every public export.
-5. Keep the implementation and acceptance scope Binance-only; do not add or modify another provider.
-6. Do not change Harvester bootstrap, configuration, routing, order execution or database/persistence in this PR.
+**The next implementation PR should be a narrow Phase 3 durable provider/account provenance slice**, not another registry rewrite:
 
-The Phase 1 capability-contract PR is complete. This does not enable multi-provider execution or change the Binance-only runtime.
+1. Audit all submission, acknowledgement/unknown-outcome, cancellation, user-data, fill, Journal and recovery fact/event contracts.
+2. Define stable, validated, non-secret provider-instance and account identity fields and their versioning/backward-compatibility behavior.
+3. Persist the immutable provenance in the submission intent before any broker write; carry the same identity through all later lifecycle facts and projections.
+4. Preserve existing v1 records and hash chains byte-for-byte; do not infer legacy identity from mutable current routes.
+5. Add deterministic offline tests proving pre-I/O durability, immutable identity, mixed-version reads, route-change pinning and fail-closed handling of ambiguous legacy orders.
+6. Keep execution routing, second-provider enablement, account aggregation and exchange operations out of this first provenance PR unless a separately reviewed prerequisite is unavoidable.
+
+This sequence closes the most important safety gap before routing can become operational. It does not authorize multi-provider trading; Phase 4 account isolation and #654 restart-recovery acceptance remain mandatory before execution is enabled.
 
 ## 13. Audit limitations and follow-up
 
