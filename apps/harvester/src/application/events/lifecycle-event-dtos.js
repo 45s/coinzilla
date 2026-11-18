@@ -1208,46 +1208,12 @@ function validateRecoveryCycleNonCompletion({
   })
 }
 
-function mapRecoveryCycleNotCompletedFields({
+function mapRecoveryCycleOrderIdentity({
   symbol,
   marketId,
   sellOrderClientId,
   sellOrderBrokerOrderId,
-  outcome,
-  reason,
-  realizedNetProfit,
-  activeQuantity,
-  keepQuantity,
-  minProfit,
 }) {
-  const mappedReason = requireString({
-    value: reason,
-    field: "reason",
-  })
-  const mappedRealizedNetProfit = requireDecimalString({
-    value: realizedNetProfit,
-    field: "realizedNetProfit",
-  })
-  const mappedActiveQuantity = requireDecimalString({
-    value: activeQuantity,
-    field: "activeQuantity",
-  })
-  const mappedKeepQuantity = requireDecimalString({
-    value: keepQuantity,
-    field: "keepQuantity",
-  })
-  const mappedMinProfit = requireDecimalString({
-    value: minProfit,
-    field: "minProfit",
-  })
-  validateRecoveryCycleNonCompletion({
-    outcome,
-    reason: mappedReason,
-    realizedNetProfit: mappedRealizedNetProfit,
-    activeQuantity: mappedActiveQuantity,
-    keepQuantity: mappedKeepQuantity,
-    minProfit: mappedMinProfit,
-  })
   return {
     symbol: requireString({
       value: symbol,
@@ -1265,12 +1231,56 @@ function mapRecoveryCycleNotCompletedFields({
       value: sellOrderBrokerOrderId,
       field: "sellOrderBrokerOrderId",
     }),
+  }
+}
+
+function mapRecoveryCycleNotCompletedFields({
+  symbol,
+  marketId,
+  sellOrderClientId,
+  sellOrderBrokerOrderId,
+  outcome,
+  reason,
+  realizedNetProfit,
+  activeQuantity,
+  keepQuantity,
+  minProfit,
+}) {
+  const metrics = {
+    reason: requireString({
+      value: reason,
+      field: "reason",
+    }),
+    realizedNetProfit: requireDecimalString({
+      value: realizedNetProfit,
+      field: "realizedNetProfit",
+    }),
+    activeQuantity: requireDecimalString({
+      value: activeQuantity,
+      field: "activeQuantity",
+    }),
+    keepQuantity: requireDecimalString({
+      value: keepQuantity,
+      field: "keepQuantity",
+    }),
+    minProfit: requireDecimalString({
+      value: minProfit,
+      field: "minProfit",
+    }),
+  }
+  validateRecoveryCycleNonCompletion({
     outcome,
-    reason: mappedReason,
-    realizedNetProfit: mappedRealizedNetProfit,
-    activeQuantity: mappedActiveQuantity,
-    keepQuantity: mappedKeepQuantity,
-    minProfit: mappedMinProfit,
+    ...metrics,
+  })
+  return {
+    ...mapRecoveryCycleOrderIdentity({
+      symbol,
+      marketId,
+      sellOrderClientId,
+      sellOrderBrokerOrderId,
+    }),
+    outcome,
+    ...metrics,
   }
 }
 
