@@ -1,4 +1,7 @@
-function createAccountAppConfig({ appConfig, isPrimary }) {
+function createAccountAppConfig({
+  appConfig,
+  isPrimary,
+}) {
   if (isPrimary || appConfig.operatorControl?.telegram?.enabled !== true) {
     return appConfig
   }
@@ -14,17 +17,22 @@ function createAccountAppConfig({ appConfig, isPrimary }) {
   }
 }
 
-function collectRuntimeStopErrors({ result, providerInstanceId }) {
+function collectRuntimeStopErrors({
+  result,
+  providerInstanceId,
+}) {
   if (result?.ok !== false) {
     return []
   }
-  const errors = Array.isArray(result.errors) && result.errors.length > 0
-    ? result.errors
-    : [new Error(`Provider account ${providerInstanceId} did not confirm shutdown`)]
-  return errors
+  if (Array.isArray(result.errors) && result.errors.length > 0) {
+    return result.errors
+  }
+  return [new Error(`Provider account ${providerInstanceId} did not confirm shutdown`)]
 }
 
-async function stopStartedAccounts({ startedAccounts }) {
+async function stopStartedAccounts({
+  startedAccounts,
+}) {
   const errors = []
   for (const entry of [...startedAccounts].reverse()) {
     if (entry.stopped) {
@@ -48,13 +56,25 @@ async function stopStartedAccounts({ startedAccounts }) {
   return errors
 }
 
-function createMultiAccountRuntime({ appConfig, startedAccounts, failedAccounts }) {
+function createMultiAccountRuntime({
+  appConfig,
+  startedAccounts,
+  failedAccounts,
+}) {
   const stop = async () => {
-    const errors = await stopStartedAccounts({ startedAccounts })
+    const errors = await stopStartedAccounts({
+      startedAccounts,
+    })
     if (errors.length > 0) {
-      return { ok: false, errors }
+      return {
+        ok: false,
+        errors,
+      }
     }
-    return { ok: true, stopped: true }
+    return {
+      ok: true,
+      stopped: true,
+    }
   }
   const primary = startedAccounts[0].runtime
   const providerAccounts = Object.freeze(startedAccounts.map(({ provider }) => Object.freeze({
@@ -86,7 +106,10 @@ function createMultiAccountRuntime({ appConfig, startedAccounts, failedAccounts 
   })
 }
 
-async function releaseFailedAccountLock({ provider, releaseProviderLock }) {
+async function releaseFailedAccountLock({
+  provider,
+  releaseProviderLock,
+}) {
   if (typeof releaseProviderLock !== "function") {
     return []
   }
@@ -95,15 +118,20 @@ async function releaseFailedAccountLock({ provider, releaseProviderLock }) {
     if (result?.ok !== false) {
       return []
     }
-    return Array.isArray(result.errors) && result.errors.length > 0
-      ? result.errors
-      : [new Error(`Provider account ${provider.providerInstanceId} process-lock release failed`)]
+    if (Array.isArray(result.errors) && result.errors.length > 0) {
+      return result.errors
+    }
+    return [new Error(`Provider account ${provider.providerInstanceId} process-lock release failed`)]
   } catch (error) {
     return [error]
   }
 }
 
-function createFailedAccount({ provider, error, cleanupErrors }) {
+function createFailedAccount({
+  provider,
+  error,
+  cleanupErrors,
+}) {
   return Object.freeze({
     providerInstanceId: provider.providerInstanceId,
     providerType: provider.providerType,
@@ -120,19 +148,68 @@ function createFailedAccount({ provider, error, cleanupErrors }) {
   })
 }
 
-function throwIfNoAccountStarted({ providers, failedErrors }) {
+function throwIfNoAccountStarted({
+  providers,
+  failedErrors,
+}) {
   if (failedErrors.length === 0) {
     return
   }
-  const failures = failedErrors
-  if (providers.length === 1 && failures.length === 1) {
-    throw failures[0]
+  if (providers.length === 1 && failedErrors.length === 1) {
+    throw failedErrors[0]
   }
   throw new AggregateError(
-    failures,
+    failedErrors,
     "No configured Harvester provider account could be started",
-    { cause: failures[0] },
+    { cause: failedErrors[0] },
   )
+}
+
+async function startOneProviderAccount({
+  provider,
+  index,
+  start,
+  appConfig,
+  env,
+  eventPublisher,
+  runtimeSessionId,
+  operationalStateStore,
+  releaseProviderLock,
+}) {
+  try {
+    const runtime = await start({
+      appConfig: createAccountAppConfig({
+        appConfig,
+        isPrimary: index === 0,
+      }),
+      env: {
+        ...env,
+        TRADING_MODE: provider.environment,
+      },
+      eventPublisher,
+      runtimeSessionId,
+      operationalStateStore: index === 0 ? operationalStateStore : undefined,
+      brokerAdapterFactory: provider.brokerAdapterFactory,
+      providerIdentity: provider.identity,
+    })
+    if (runtime === null || typeof runtime !== "object" || Array.isArray(runtime)) {
+      throw new TypeError(`Provider account ${provider.providerInstanceId} startup must return a runtime object`)
+    }
+    return {
+      runtime,
+      error: undefined,
+    }
+  } catch (error) {
+    const cleanupErrors = await releaseFailedAccountLock({
+      provider,
+      releaseProviderLock,
+    })
+    return {
+      runtime: undefined,
+      error,
+      cleanupErrors,
+    }
+  }
 }
 
 /**
@@ -166,44 +243,36 @@ export async function startProviderAccounts({
   const failedAccounts = []
   const failedErrors = []
   for (const [index, provider] of providers.entries()) {
-    try {
-      const runtime = await start({
-        appConfig: createAccountAppConfig({
-          appConfig,
-          isPrimary: index === 0,
-        }),
-        env: {
-          ...env,
-          TRADING_MODE: provider.environment,
-        },
-        eventPublisher,
-        runtimeSessionId,
-        operationalStateStore: index === 0 ? operationalStateStore : undefined,
-        brokerAdapterFactory: provider.brokerAdapterFactory,
-        providerIdentity: provider.identity,
-      })
-      if (runtime === null || typeof runtime !== "object" || Array.isArray(runtime)) {
-        throw new TypeError(`Provider account ${provider.providerInstanceId} startup must return a runtime object`)
-      }
+    const result = await startOneProviderAccount({
+      provider,
+      index,
+      start,
+      appConfig,
+      env,
+      eventPublisher,
+      runtimeSessionId,
+      operationalStateStore,
+      releaseProviderLock,
+    })
+    if (result.error === undefined) {
       startedAccounts.push({
         provider,
-        runtime,
+        runtime: result.runtime,
         stopped: false,
       })
-    } catch (error) {
-      const cleanupErrors = await releaseFailedAccountLock({
-        provider,
-        releaseProviderLock,
-      })
-      failedAccounts.push(createFailedAccount({
-        provider,
-        error,
-        cleanupErrors,
-      }))
-      failedErrors.push(error, ...cleanupErrors)
+      continue
     }
+    failedAccounts.push(createFailedAccount({
+      provider,
+      error: result.error,
+      cleanupErrors: result.cleanupErrors ?? [],
+    }))
+    failedErrors.push(result.error, ...(result.cleanupErrors ?? []))
   }
-  throwIfNoAccountStarted({ providers, failedErrors })
+  throwIfNoAccountStarted({
+    providers,
+    failedErrors,
+  })
   if (providers.length === 1) {
     return startedAccounts[0].runtime
   }
