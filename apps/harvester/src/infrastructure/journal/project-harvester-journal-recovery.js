@@ -126,6 +126,16 @@ right: mapped.minimumNotional }) >= 0)) {
 function requireOrderIntent({ data }) {
   const clientOrderId = requireString({ value: data.clientOrderId,
 field: "clientOrderId" })
+  const providerFields = ["providerInstanceId", "providerType", "accountId"]
+  const providerValues = providerFields.map((field) => data[field])
+  if (providerValues.some((value) => value !== undefined) && providerValues.some((value) => typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value))) {
+    throw new TypeError("Journal order provenance must contain all three stable provider identifiers")
+  }
+  const providerIdentity = providerValues.every((value) => value === undefined) ? {} : {
+    providerInstanceId: data.providerInstanceId,
+    providerType: data.providerType,
+    accountId: data.accountId,
+  }
   const symbol = requireString({ value: data.symbol,
 field: "symbol" })
   if (!ORDER_SIDES.has(data.side)) {throw new TypeError("order side must be BUY or SELL")}
@@ -138,6 +148,7 @@ positive: true })
 field: "quantity",
 positive: true })
   return { clientOrderId,
+    ...providerIdentity,
 symbol,
 side: data.side,
 type,
@@ -146,7 +157,7 @@ quantity }
 }
 
 function assertSameIntent({ current, next }) {
-  for (const field of ["clientOrderId", "symbol", "side", "type", "price", "quantity"]) {
+  for (const field of ["clientOrderId", "providerInstanceId", "providerType", "accountId", "symbol", "side", "type", "price", "quantity"]) {
     if (current[field] !== next[field]) {
       throw new Error(`Journal order event changed immutable ${  field  } for ${  current.clientOrderId}`)
     }
@@ -720,6 +731,9 @@ field: "brokerOrderId" })
     throw new Error("Cancellation intent brokerOrderId conflicts with submission acknowledgement")
   }
   if (
+    data.providerInstanceId !== order.providerInstanceId ||
+    data.providerType !== order.providerType ||
+    data.accountId !== order.accountId ||
     data.symbol !== order.symbol ||
     data.side !== order.side ||
     data.type !== order.type ||
