@@ -21,8 +21,14 @@ test("connects to SQLite, persists the process ID, and closes the database", asy
     assert.ok(result, "A valid isolated database directory must compose the real SQLite provider.")
     assert.equal(database.state, "connected", "The provider-neutral database must be connected before the process-ID record is read.")
     assert.deepEqual(
-      await database.readOne({ collection: "harvester_processes", id: "12345" }),
-      { id: "12345", processId: 12345 },
+      await database.readOne({
+        collection: "harvester_processes",
+        id: "12345",
+      }),
+      {
+        id: "12345",
+        processId: 12345,
+      },
       "Harvester must persist the operating-system process ID as a minimal temporary SQLite smoke-test record.",
     )
 
