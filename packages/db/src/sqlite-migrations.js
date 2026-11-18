@@ -1,1 +1,1 @@
-export { migrateSqliteDatabase } from "./infrastructure/sqlite/sqlite-migration-runner.js"
+export { migrateSqliteDatabase } from "./infrastructure/sqlite/migration-runner.js"
