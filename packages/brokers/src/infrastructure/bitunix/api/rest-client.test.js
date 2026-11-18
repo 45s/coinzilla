@@ -412,3 +412,49 @@ test("Bitunix REST client classifies HTTP 429 rate limits without retrying", asy
 
   assert.equal(requestCount, 1, "a rate-limited public catalog request must not be retried implicitly")
 })
+
+
+test("Bitunix REST client supports unsigned public reads without configured credentials", async () => {
+  let requestCount = 0
+  const client = new BitunixRestClient({
+    fetchFn: async (url, options) => {
+      requestCount += 1
+      assert.equal(url, "https://openapi.bitunix.com/api/spot/v1/common/coin_pair/list", "credential-free diagnostics must call only the requested public endpoint")
+      assert.equal(options.headers, undefined, "credential-free public requests must never construct authentication headers")
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            code: "0",
+            msg: "success",
+            data: [],
+          }
+        },
+      }
+    },
+  })
+
+  const result = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/common/coin_pair/list",
+    authenticated: false,
+  })
+
+  assert.deepEqual(result.data, [], "an unsigned public response must be returned normally when credentials are absent")
+  assert.equal(requestCount, 1, "one public diagnostic request must produce exactly one network call")
+  await assert.rejects(
+    client.request({
+      method: "GET",
+      path: "/api/spot/v1/user/account",
+    }),
+    (error) => {
+      assert.ok(error instanceof BitunixRestError, "a signed read without credentials must use the broker-owned REST error contract")
+      assert.equal(error.code, "BITUNIX_REST_AUTHENTICATION_REQUIRED", "missing signing credentials must have a stable broker-owned error code")
+      assert.equal(error.kind, "authentication", "missing credentials must be classified separately from transport and exchange failures")
+      return true
+    },
+    "private REST reads must fail before I/O when signing credentials are unavailable",
+  )
+  assert.equal(requestCount, 1, "a private request without credentials must be rejected before contacting Bitunix")
+})
