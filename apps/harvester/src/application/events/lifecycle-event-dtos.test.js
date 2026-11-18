@@ -553,6 +553,22 @@ test("maps local submission deferrals with a bounded reason and exact client-ord
     )
   }
 
+  for (const invalidIdentifier of ["", "binance testnet", "provider/one", "x".repeat(129)]) {
+    assert.equal(
+      mapOrderSubmissionDeferredData({
+        order: {
+          ...canonicalOrderFacts,
+          providerInstanceId: invalidIdentifier,
+          providerType: "binance",
+          accountId: "primary",
+        },
+        reason: "MARKET_BOOK_STALE",
+      }).ok,
+      false,
+      "Provider identity fields must be bounded stable identifier tokens.",
+    )
+  }
+
   const attributed = mapOrderSubmissionDeferredData({
     order: {
       ...canonicalOrderFacts,
