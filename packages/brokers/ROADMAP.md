@@ -1227,10 +1227,9 @@ The audit is the detailed evidence source; this roadmap records status and next 
 
 **Next candidate:** audit Spot order/deal history against #1185. Keep canonical `getFills()` blocked until quantity denomination, execution identity, and completeness are proven by authoritative evidence.
 
-
 ## 2026-11-18 — Bitunix Spot raw matching-order detail read (#1388 / PR #1389)
 
-**Status: In progress — implementation and offline tests are present in the draft PR; documentation and exact-head verification are being completed.**
+**Status: In progress — implementation, offline tests and documentation are complete in PR #1389; exact-head CI and merge are pending.**
 
 - Audited official `POST /api/spot/v1/order/deal/list` and cross-checked JKorf, the TypeScript MCP and the independent Python client. The JKorf Trading interface documents the correct path but says GET; its implementation sends POST to the wrong `order/pending/list` path. The Python client uses the official POST path but has unsafe request-header printing and no endpoint test fixture.
 - Added the Bitunix-only `getMatchingOrderDetails({ orderId, symbol })` read. It sends one signed POST with `stateChanging: false`, validates inputs before I/O, preserves the seven raw fields and decimal/identifier tokens, returns immutable data, and never retries.
