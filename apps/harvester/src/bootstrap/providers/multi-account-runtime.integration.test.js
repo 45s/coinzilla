@@ -559,10 +559,11 @@ test("routes order submission, user-data fills, cancellation, and candle data to
     assert.equal(typeof secondaryCalls.priceHandlers.get("ETHUSDT"), "function")
     assert.equal(secondaryCalls.includes("candles:ETHUSDT"), true)
     assert.equal(secondaryCalls.filter((call) => call === "subscribe:candles:ETHUSDT").length, 1)
-    assert.equal(
-      primaryRuntime.getVolatilityData({ symbol: "ETHUSDT" }).data.providerInstanceId,
-      "binance-testnet-secondary",
-    )
+    const volatilitySource = primaryRuntime.getVolatilityData({ symbol: "ETHUSDT" }).data
+    assert.equal(volatilitySource.providerInstanceId, "binance-testnet-secondary")
+    assert.equal(volatilitySource.providerType, "binance")
+    assert.equal(volatilitySource.accountId, "account-secondary")
+    assert.equal(volatilitySource.environment, "testnet")
 
     await primaryCalls.priceHandlers.get("BTCUSDT")({
       symbol: "BTCUSDT",

@@ -311,6 +311,7 @@ function resolveHarvesterStartupDependencies({ options = {} } = {}) {
     executionSymbols,
     marketDataSources,
     marketDataProviderTypes,
+    marketDataProviderIdentities,
     getMarketDataBroker,
     onBrokerConnected,
     requiredCapabilities,
@@ -343,6 +344,7 @@ function resolveHarvesterStartupDependencies({ options = {} } = {}) {
     executionSymbols,
     marketDataSources,
     marketDataProviderTypes,
+    marketDataProviderIdentities,
     getMarketDataBroker,
     onBrokerConnected,
     requiredCapabilities,
@@ -451,6 +453,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     executionSymbols: resolved.executionSymbols,
     marketDataSources: dependencies.marketDataSources,
     marketDataProviderTypes: dependencies.marketDataProviderTypes,
+    marketDataProviderIdentities: dependencies.marketDataProviderIdentities,
     getMarketDataBroker: dependencies.getMarketDataBroker,
     onBrokerConnected: dependencies.onBrokerConnected,
     requiredCapabilities: dependencies.requiredCapabilities ?? [],
@@ -552,7 +555,9 @@ async function createHarvesterRuntimeResources({ startup } = {}) {
     getMarketDataBroker: startup.getMarketDataBroker,
     marketDataSources: startup.marketDataSources,
     marketDataProviderTypes: startup.marketDataProviderTypes,
+    marketDataProviderIdentities: startup.marketDataProviderIdentities,
     providerIdentity: startup.providerIdentity,
+    tradingMode: startup.tradingMode,
   })
   return resources
 }
@@ -802,6 +807,7 @@ async function startHarvesterMarketServices({ startup, portfolio, resources, fre
     getMarketDataBroker: startup.getMarketDataBroker,
     marketDataSources: startup.marketDataSources,
     marketDataProviderTypes: startup.marketDataProviderTypes,
+    marketDataProviderIdentities: startup.marketDataProviderIdentities,
     marketDataEnvironment: startup.tradingMode,
     subscriptions: resources.subscriptions,
     bookSubscriptions: resources.bookSubscriptions,
@@ -1056,8 +1062,23 @@ function createHarvesterRuntimeResult({
 } = {}) {
   const identity = portfolio.accountRuntime.identity
   const executionSymbols = Object.freeze([...(startup.executionSymbols ?? Object.keys(startup.pairs))])
-  const marketDataSources = Object.freeze({ ...(startup.marketDataSources ?? {}) })
-  const marketDataProviderTypes = Object.freeze({ ...(startup.marketDataProviderTypes ?? {}) })
+  const marketDataProviderIdentities = Object.freeze({ ...(startup.marketDataProviderIdentities ?? {}) })
+  const marketDataSources = Object.freeze({
+    ...(startup.marketDataSources ?? Object.fromEntries(
+      Object.entries(marketDataProviderIdentities).map(([symbol, source]) => [
+        symbol,
+        source.providerInstanceId,
+      ]),
+    )),
+  })
+  const marketDataProviderTypes = Object.freeze({
+    ...(startup.marketDataProviderTypes ?? Object.fromEntries(
+      Object.entries(marketDataProviderIdentities).map(([symbol, source]) => [
+        symbol,
+        source.providerType,
+      ]),
+    )),
+  })
   const sourceProviderIds = [...new Set(Object.values(marketDataSources).filter(Boolean))]
   const marketDataProviderInstanceId = startup.marketDataProviderInstanceId
     ?? (sourceProviderIds.length === 1 ? sourceProviderIds[0] : null)
@@ -1075,6 +1096,7 @@ function createHarvesterRuntimeResult({
     marketDataProviderInstanceId,
     marketDataSources,
     marketDataProviderTypes,
+    marketDataProviderIdentities,
     executionSymbols,
     executionEnabled: startup.tradingEnabled === true && executionSymbols.length > 0,
     tradingMode: startup.tradingMode,
@@ -1105,6 +1127,17 @@ function createHarvesterRuntimeResult({
 export async function startHarvester(options = {}) {
   const startup = await createHarvesterStartupContext({ options })
   const portfolio = createHarvesterPortfolioContext({ startup })
+  if (!startup.marketDataProviderIdentities) {
+    if (typeof startup.getMarketDataBroker === "function") {
+      throw new TypeError("Multi-provider market-data routing requires an explicit source identity for every execution market")
+    }
+    startup.marketDataProviderIdentities = Object.freeze(Object.fromEntries(
+      Object.keys(startup.pairs).map((symbol) => [symbol, Object.freeze({
+        ...portfolio.accountRuntime.identity,
+        environment: startup.tradingMode,
+      })]),
+    ))
+  }
   const resources = await createHarvesterRuntimeResources({ startup })
   const accountSnapshots = createHarvesterAccountSnapshotRuntime({
     startup,

@@ -273,6 +273,7 @@ function createMultiAccountRuntime({
     executionSymbols: Object.freeze([...(runtime.executionSymbols ?? [])]),
     marketDataSources: Object.freeze({ ...(runtime.marketDataSources ?? {}) }),
     marketDataProviderTypes: Object.freeze({ ...(runtime.marketDataProviderTypes ?? {}) }),
+    marketDataProviderIdentities: Object.freeze({ ...(runtime.marketDataProviderIdentities ?? {}) }),
   })))
   const subscriptions = Object.freeze([...new Set(
     startedAccounts.flatMap(({ runtime }) => runtime.subscriptions ?? []),
@@ -404,6 +405,40 @@ async function throwIfRequiredProviderFailed({
   )
 }
 
+function createMarketDataProviderMetadata({
+  executionSymbols,
+  providers,
+  marketDataProviderBySymbol,
+}) {
+  const providerById = new Map(providers.map((provider) => [
+    provider.providerInstanceId,
+    provider,
+  ]))
+  const marketDataSources = {}
+  const marketDataProviderTypes = {}
+  const marketDataProviderIdentities = {}
+  for (const symbol of executionSymbols) {
+    const providerInstanceId = marketDataProviderBySymbol.get(symbol)
+    const sourceProvider = providerById.get(providerInstanceId)
+    if (!sourceProvider) {
+      throw new TypeError(`Market-data route for ${symbol} references an unknown source provider`)
+    }
+    marketDataSources[symbol] = providerInstanceId
+    marketDataProviderTypes[symbol] = sourceProvider.providerType
+    marketDataProviderIdentities[symbol] = Object.freeze({
+      providerInstanceId: sourceProvider.providerInstanceId,
+      providerType: sourceProvider.providerType,
+      accountId: sourceProvider.accountId,
+      environment: sourceProvider.environment,
+    })
+  }
+  return Object.freeze({
+    marketDataSources: Object.freeze(marketDataSources),
+    marketDataProviderTypes: Object.freeze(marketDataProviderTypes),
+    marketDataProviderIdentities: Object.freeze(marketDataProviderIdentities),
+  })
+}
+
 function createProviderAccountStartInput({
   provider,
   providers,
@@ -420,15 +455,11 @@ function createProviderAccountStartInput({
   deferMarketDataStart,
 }) {
   const executionSymbols = executionSymbolsByProvider.get(provider.providerInstanceId) ?? []
-  const marketDataSources = Object.fromEntries(executionSymbols.map((symbol) => [
-    symbol,
-    marketDataProviderBySymbol.get(symbol),
-  ]))
-  const providerById = new Map(providers.map((entry) => [entry.providerInstanceId, entry]))
-  const marketDataProviderTypes = Object.fromEntries(executionSymbols.map((symbol) => {
-    const sourceProvider = providerById.get(marketDataProviderBySymbol.get(symbol))
-    return [symbol, sourceProvider?.providerType]
-  }))
+  const marketDataProviderMetadata = createMarketDataProviderMetadata({
+    executionSymbols,
+    providers,
+    marketDataProviderBySymbol,
+  })
   return {
     appConfig: createAccountAppConfig({
       appConfig,
@@ -447,8 +478,7 @@ function createProviderAccountStartInput({
     providerRequired: provider.required !== false,
     executionSymbols: Object.freeze([...executionSymbols]),
     marketDataSymbols: Object.freeze([...executionSymbols]),
-    marketDataSources: Object.freeze(marketDataSources),
-    marketDataProviderTypes: Object.freeze(marketDataProviderTypes),
+    ...marketDataProviderMetadata,
     requiredCapabilities: requiredCapabilitiesByProvider.get(provider.providerInstanceId) ?? Object.freeze([]),
     deferMarketDataStart,
     ...(deferMarketDataStart ? {

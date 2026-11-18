@@ -19,10 +19,12 @@ function resolveMarketDataSourceIdentity({
   broker,
   expectedProviderInstanceId,
   expectedProviderType,
+  expectedAccountId,
   expectedEnvironment,
 }) {
   const providerInstanceId = broker.providerInstanceId ?? expectedProviderInstanceId
   const providerType = broker.providerType ?? expectedProviderType
+  const accountId = broker.accountId ?? expectedAccountId ?? null
   const environment = broker.environment ?? expectedEnvironment
   const hasExpectedIdentity = Boolean(
     expectedProviderInstanceId &&
@@ -59,7 +61,7 @@ function resolveMarketDataSourceIdentity({
   return Object.freeze({
     providerInstanceId,
     providerType,
-    accountId: broker.accountId ?? null,
+    accountId,
     environment,
   })
 }
@@ -397,12 +399,24 @@ function resolveMarketDataBroker({ context, symbol }) {
   if (!broker || typeof broker !== "object") {
     throw new TypeError(`No market-data broker is available for ${symbol}`)
   }
+  const configuredIdentity = context.marketDataProviderIdentities?.[symbol]
   const sourceIdentity = resolveMarketDataSourceIdentity({
     broker,
-    expectedProviderInstanceId: context.marketDataSources?.[symbol] ?? context.providerInstanceId,
-    expectedProviderType: context.marketDataProviderTypes?.[symbol] ?? context.brokerName,
-    expectedEnvironment: context.marketDataEnvironment,
+    expectedProviderInstanceId: configuredIdentity?.providerInstanceId
+      ?? context.marketDataSources?.[symbol]
+      ?? context.providerInstanceId,
+    expectedProviderType: configuredIdentity?.providerType
+      ?? context.marketDataProviderTypes?.[symbol]
+      ?? context.brokerName,
+    expectedAccountId: configuredIdentity?.accountId,
+    expectedEnvironment: configuredIdentity?.environment ?? context.marketDataEnvironment,
   })
+  if (configuredIdentity && (
+    sourceIdentity?.accountId !== configuredIdentity.accountId ||
+    sourceIdentity?.environment !== configuredIdentity.environment
+  )) {
+    throw new Error(`Market-data source identity for ${symbol} does not match its configured account/environment`)
+  }
   return { broker, sourceIdentity }
 }
 
@@ -603,6 +617,7 @@ function createMarketDataSubscriptionContext(options) {
     getMarketDataBroker,
     marketDataSources,
     marketDataProviderTypes,
+    marketDataProviderIdentities,
     marketDataEnvironment,
     allowPartialMarketData = false,
   } = options
@@ -611,6 +626,7 @@ function createMarketDataSubscriptionContext(options) {
     getMarketDataBroker,
     marketDataSources,
     marketDataProviderTypes,
+    marketDataProviderIdentities,
     marketDataEnvironment,
     allowPartialMarketData,
     providerInstanceId,

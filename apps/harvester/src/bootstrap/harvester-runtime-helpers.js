@@ -127,7 +127,9 @@ export function createHarvesterCandleHistoryService({
   getMarketDataBroker,
   marketDataSources = {},
   marketDataProviderTypes = {},
+  marketDataProviderIdentities = {},
   providerIdentity,
+  tradingMode,
 } = {}) {
   return createCandleHistoryService({
     broker,
@@ -135,8 +137,9 @@ export function createHarvesterCandleHistoryService({
       ? ({ symbol }) => getMarketDataBroker({ symbol })
       : undefined,
     getSourceMetadata: ({ symbol, broker: sourceBroker }) => {
-      const expectedProviderInstanceId = marketDataSources[symbol]
-      const expectedProviderType = marketDataProviderTypes[symbol]
+      const configuredIdentity = marketDataProviderIdentities[symbol]
+      const expectedProviderInstanceId = configuredIdentity?.providerInstanceId ?? marketDataSources[symbol]
+      const expectedProviderType = configuredIdentity?.providerType ?? marketDataProviderTypes[symbol]
       const providerInstanceId = sourceBroker.providerInstanceId
         ?? expectedProviderInstanceId
         ?? providerIdentity?.providerInstanceId
@@ -144,10 +147,13 @@ export function createHarvesterCandleHistoryService({
         ?? expectedProviderType
         ?? providerIdentity?.providerType
       const accountId = sourceBroker.accountId
+        ?? configuredIdentity?.accountId
         ?? (providerInstanceId === providerIdentity?.providerInstanceId
           ? providerIdentity?.accountId
           : null)
-      const environment = sourceBroker.environment ?? providerIdentity?.environment
+      const environment = sourceBroker.environment
+        ?? configuredIdentity?.environment
+        ?? tradingMode
 
       if (expectedProviderInstanceId && providerInstanceId !== expectedProviderInstanceId) {
         throw new Error(`Candle source for ${symbol} resolved to unexpected provider instance ${providerInstanceId}`)
@@ -155,7 +161,13 @@ export function createHarvesterCandleHistoryService({
       if (expectedProviderType && providerType !== expectedProviderType) {
         throw new Error(`Candle source for ${symbol} resolved to unexpected provider type ${providerType}`)
       }
-      if (providerIdentity?.environment && environment !== providerIdentity.environment) {
+      if (configuredIdentity && (
+        configuredIdentity.accountId !== accountId ||
+        configuredIdentity.environment !== environment
+      )) {
+        throw new Error(`Candle source for ${symbol} does not match its configured account/environment identity`)
+      }
+      if (tradingMode && environment !== tradingMode) {
         throw new Error(`Candle source for ${symbol} uses incompatible environment ${environment}`)
       }
       return {

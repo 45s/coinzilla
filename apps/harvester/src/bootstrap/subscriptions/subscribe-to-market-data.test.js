@@ -54,6 +54,8 @@ const createFixture = ({
   subscribeForPrices,
   subscribeForBookTicker,
   getPrices,
+  marketDataProviderIdentities,
+  marketDataEnvironment,
   logger = {},
   onMarketPriceError = () => {},
   processMarketPrice,
@@ -88,6 +90,8 @@ const createFixture = ({
     subscriptions,
     bookSubscriptions,
     marketPriceIntake,
+    marketDataProviderIdentities,
+    marketDataEnvironment,
   })
   return { result,
     calls,
@@ -96,6 +100,59 @@ const createFixture = ({
     bookSubscriptions,
     marketPriceIntake }
 }
+
+test("preserves configured market-data source identity on live price events", async () => {
+  const sourceIdentity = {
+    providerInstanceId: "binance-testnet-primary",
+    providerType: "binance",
+    accountId: "account-primary",
+    environment: "testnet",
+  }
+  const processed = []
+  const fixture = createFixture({
+    marketDataProviderIdentities: { BTCUSDT: sourceIdentity },
+    subscribeForPrices: async ({ symbol, onPrice }) => {
+      await onPrice({ symbol, price: "65000", timestamp: 10_000 })
+      return { ok: true, data: { unsubscribe: async () => {}, stream: "price" } }
+    },
+    processMarketPrice: async ({ priceEvent }) => {
+      processed.push(priceEvent)
+      return { ok: true, data: { decision: { action: "NO_ACTION" } } }
+    },
+  })
+  await fixture.result
+  assert.deepEqual(processed[0], {
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: 10_000,
+    ...sourceIdentity,
+  })
+})
+
+test("preserves configured market-data source identity on initial price snapshots", async () => {
+  const sourceIdentity = {
+    providerInstanceId: "binance-testnet-secondary",
+    providerType: "binance",
+    accountId: "account-secondary",
+    environment: "testnet",
+  }
+  const processed = []
+  const fixture = createFixture({
+    tradingEnabled: true,
+    marketDataProviderIdentities: { BTCUSDT: sourceIdentity },
+    processMarketPrice: async ({ priceEvent }) => {
+      processed.push(priceEvent)
+      return { ok: true, data: { decision: { action: "NO_ACTION" } } }
+    },
+  })
+  await fixture.result
+  assert.deepEqual(processed[0], {
+    symbol: "BTCUSDT",
+    price: "65000",
+    timestamp: 10_000,
+    ...sourceIdentity,
+  })
+})
 
 test("establishes all enabled book/price streams before WebSocket API ticker.price seeding", async () => {
   const fixture = createFixture({ tradingEnabled: true })
