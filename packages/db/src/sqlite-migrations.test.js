@@ -363,3 +363,38 @@ test("independent SQLite connections applying the same migrations record each ve
     })
   }
 })
+
+
+test("rejected migration promises are consumed while the migration transaction rolls back", async () => {
+  const database = createSqliteDatabase({ filename: ":memory:" })
+  await database.connect()
+  const rejectedMigration = Promise.reject(new Error("deferred migration rejection"))
+
+  try {
+    await assert.rejects(
+      database.migrate([{
+        version: 1,
+        name: "rejected-promise-migration",
+        up(transaction) {
+          transaction.exec("CREATE TABLE rejected_records (id INTEGER PRIMARY KEY)")
+          return rejectedMigration
+        },
+      }]),
+      /must be synchronous/,
+      "A rejected promise returned from a migration must still reject the synchronous migration contract",
+    )
+    await Promise.resolve()
+    assert.deepEqual(
+      database.prepare("SELECT version FROM schema_migrations").all(),
+      [],
+      "A rejected migration promise must not leave a migration history record",
+    )
+    assert.throws(
+      () => database.prepare("SELECT * FROM rejected_records").all(),
+      /no such table/,
+      "A rejected migration promise must roll back its schema changes",
+    )
+  } finally {
+    await database.close()
+  }
+})
