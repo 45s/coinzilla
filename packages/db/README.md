@@ -314,6 +314,8 @@ SQLite uses prepared statements and bound parameters. Never interpolate untruste
 
 Backup and restore are SQLite-specific infrastructure operations on the low-level facade. They are intentionally not methods on the provider-neutral `createDatabase({ provider })` CRUD API because backup guarantees and mechanisms differ between providers.
 
+The read-only connection used to validate a staged backup or restore artifact is always closed. If integrity/foreign-key validation and closing that verification connection both fail, the operation preserves both failures in an `AggregateError` (as the `cause` of `DatabaseProviderError` when the backup/restore boundary wraps it).
+
 **Create a backup from an open SQLite database:**
 
 ```js
