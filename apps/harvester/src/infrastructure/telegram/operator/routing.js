@@ -264,7 +264,46 @@ function resolveTelegramMessageContext({ message, interaction, context }) {
     })
     return undefined
   }
-  return { userId, parsed }
+  return {
+    userId,
+    parsed,
+  }
+}
+
+async function dispatchAuthorizedTelegramMessage({
+  parsed,
+  update,
+  message,
+  userId,
+  signal,
+  interaction,
+  context,
+}) {
+  context.logStage({
+    interaction,
+    message: "Telegram interaction AUTHORIZED",
+    stage: "AUTHORIZED",
+  })
+  await respondToAuthorizedMessage({
+    parsed,
+    update,
+    message,
+    userId,
+    signal,
+    interaction,
+    logStage: context.logStage,
+    respondToMenuCommand: (options) => respondToMenuCommand({
+      ...options,
+      context,
+    }),
+    respondToReadCommand: (options) => respondToReadCommand({
+      ...options,
+      context,
+    }),
+    executeControl: context.executeControl,
+    sendMessage: context.sendMessage,
+    buildNavigationKeyboard: context.buildNavigationKeyboard,
+  })
 }
 
 async function respondToTelegramMessage({
@@ -308,30 +347,14 @@ async function respondToTelegramMessage({
     })
     return
   }
-  context.logStage({
-    interaction,
-    message: "Telegram interaction AUTHORIZED",
-    stage: "AUTHORIZED",
-  })
-  await respondToAuthorizedMessage({
+  await dispatchAuthorizedTelegramMessage({
     parsed,
     update,
     message,
     userId,
     signal,
     interaction,
-    logStage: context.logStage,
-    respondToMenuCommand: (options) => respondToMenuCommand({
-      ...options,
-      context,
-    }),
-    respondToReadCommand: (options) => respondToReadCommand({
-      ...options,
-      context,
-    }),
-    executeControl: context.executeControl,
-    sendMessage: context.sendMessage,
-    buildNavigationKeyboard: context.buildNavigationKeyboard,
+    context,
   })
 }
 
