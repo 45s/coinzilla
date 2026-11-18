@@ -185,6 +185,9 @@ maxLength: 32 })
 function validateOrderSubmissionOutcomeFields({ canonicalData }) {
   const allowedFields = new Set([
     "clientOrderId",
+    "providerInstanceId",
+    "providerType",
+    "accountId",
     "marketId",
     "venue",
     "symbol",
@@ -203,6 +206,7 @@ function validateOrderSubmissionOutcomeFields({ canonicalData }) {
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Order-submission outcome fact contains unsupported fields")
   }
+  validateProviderIdentity({ canonicalData })
   const clientOrderId = requireNonEmptyString({
     value: canonicalData.clientOrderId,
     field: "data.clientOrderId",
@@ -315,6 +319,7 @@ function validateOrderCancellationFields({ canonicalData, outcome }) {
       ? "Order-cancellation intent fact contains unsupported fields"
       : "Order-cancellation outcome fact contains unsupported fields")
   }
+  validateProviderIdentity({ canonicalData })
   validateProviderIdentity({ canonicalData })
   const clientOrderId = requireNonEmptyString({
     value: canonicalData.clientOrderId,
