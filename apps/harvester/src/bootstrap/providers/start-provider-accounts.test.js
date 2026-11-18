@@ -267,42 +267,59 @@ function assertAccountStartupInputs({
   ])
 }
 
+function createShutdownTrackingProviderStarter(shutdownOrder) {
+  return async (input) => {
+    const { providerInstanceId } = input.providerIdentity
+    return {
+      executionSymbols: [...input.executionSymbols],
+      marketDataSources: input.marketDataSources,
+      marketDataProviderTypes: input.marketDataProviderTypes,
+      tradingEnabled: true,
+      startMarketData: async () => ({ ok: true }),
+      stop: async () => {
+        shutdownOrder.push(`runtime:${providerInstanceId}`)
+        return { ok: true }
+      },
+      stopMarketData: async () => {
+        shutdownOrder.push(`market-data:${providerInstanceId}`)
+        return { ok: true }
+      },
+    }
+  }
+}
+
+function createStopTrackingProviderStarter({ stopCalls, firstStopAttempts }) {
+  return async (input) => ({
+    startMarketData: async () => ({ ok: true }),
+    stopMarketData: async () => ({ ok: true }),
+    stop: async () => {
+      const { providerInstanceId } = input.providerIdentity
+      stopCalls.push(providerInstanceId)
+      if (providerInstanceId === "first") {
+        firstStopAttempts.value += 1
+        if (firstStopAttempts.value === 1) {
+          return {
+            ok: false,
+            errors: [new Error("first account still stopping")],
+          }
+        }
+      }
+      return { ok: true }
+    },
+  })
+}
+
 test("stops market-data intake only after each account runtime completes shutdown", async () => {
   const providers = [
-    createProvider({
-      providerInstanceId: "first",
-      providerType: "binance",
-      accountId: "account-one",
-    }),
-    createProvider({
-      providerInstanceId: "second",
-      providerType: "binance",
-      accountId: "account-two",
-    }),
+    createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
+    createProvider({ providerInstanceId: "second", providerType: "binance", accountId: "account-two" }),
   ]
   const shutdownOrder = []
   const runtime = await startProviderAccounts({
     providers,
     appConfig: appConfigForProviderSubset(providers),
     env: { TRADING_MODE: "testnet" },
-    start: async (input) => {
-      const { providerInstanceId } = input.providerIdentity
-      return {
-        executionSymbols: [...input.executionSymbols],
-        marketDataSources: input.marketDataSources,
-        marketDataProviderTypes: input.marketDataProviderTypes,
-        tradingEnabled: true,
-        startMarketData: async () => ({ ok: true }),
-        stop: async () => {
-          shutdownOrder.push(`runtime:${providerInstanceId}`)
-          return { ok: true }
-        },
-        stopMarketData: async () => {
-          shutdownOrder.push(`market-data:${providerInstanceId}`)
-          return { ok: true }
-        },
-      }
-    },
+    start: createShutdownTrackingProviderStarter(shutdownOrder),
   })
 
   const result = await runtime.stop()
@@ -315,6 +332,7 @@ test("stops market-data intake only after each account runtime completes shutdow
     "market-data:first",
   ], "Market-data intake must remain active until each account's strategy shutdown has completed safely.")
 })
+
 
 test("starts one independent runtime per configured provider account", async () => {
   const providers = createCredentialedProviderFixtures()
@@ -611,60 +629,22 @@ test("fails startup when no configured account can start", async () => {
 
 
 test("releases only accounts whose runtime shutdown is confirmed", async () => {
+  const providers = [
+    createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
+    createProvider({ providerInstanceId: "second", providerType: "binance", accountId: "account-two", required: false }),
+  ]
   const stopCalls = []
   const releasedLocks = []
-  let firstStopAttempts = 0
+  const firstStopAttempts = { value: 0 }
   const runtime = await startProviderAccounts({
-    providers: [
-      createProvider({
-        providerInstanceId: "first",
-        providerType: "binance",
-        accountId: "account-one",
-      }),
-      createProvider({
-        providerInstanceId: "second",
-        providerType: "binance",
-        accountId: "account-two",
-        required: false,
-      }),
-    ],
-    start: async (input) => ({
-      startMarketData: async () => ({ ok: true }),
-      stopMarketData: async () => ({ ok: true }),
-      stop: async () => {
-        const { providerInstanceId } = input.providerIdentity
-        stopCalls.push(providerInstanceId)
-        if (providerInstanceId === "first") {
-          firstStopAttempts += 1
-          if (firstStopAttempts === 1) {
-            return {
-              ok: false,
-              errors: [new Error("first account still stopping")],
-            }
-          }
-        }
-        return {
-          ok: true,
-        }
-      },
-    }),
+    providers,
+    start: createStopTrackingProviderStarter({ stopCalls, firstStopAttempts }),
     releaseProviderLock: async (providerInstanceId) => {
       releasedLocks.push(providerInstanceId)
-      return {
-        ok: true,
-      }
+      return { ok: true }
     },
-    appConfig: appConfigForProviderSubset([
-      createProvider({ providerInstanceId: "first",
-  providerType: "binance",
-  accountId: "account-one" }),
-      createProvider({ providerInstanceId: "second",
-  providerType: "binance",
-  accountId: "account-two" }),
-    ]),
-    env: {
-      TRADING_MODE: "testnet",
-    },
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
   })
 
   const firstStop = await runtime.stop()
