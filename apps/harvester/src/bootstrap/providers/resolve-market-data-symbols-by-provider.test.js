@@ -33,8 +33,14 @@ test("assigns each market only to its explicitly configured source provider", ()
       ...appConfig,
       marketDataRouting: {
         routes: [
-          { symbol: "BTCUSDT", providerInstanceId: "binance-two" },
-          { symbol: "ETHUSDT", providerInstanceId: "binance-one" },
+          {
+            symbol: "BTCUSDT",
+            providerInstanceId: "binance-two",
+          },
+          {
+            symbol: "ETHUSDT",
+            providerInstanceId: "binance-one",
+          },
         ],
       },
     },
@@ -60,7 +66,10 @@ test("rejects a missing route for an enabled market", () => {
       appConfig: {
         ...appConfig,
         marketDataRouting: {
-          routes: [{ symbol: "BTCUSDT", providerInstanceId: "binance-one" }],
+          routes: [{
+            symbol: "BTCUSDT",
+            providerInstanceId: "binance-one",
+          }],
         },
       },
       providers,
@@ -77,9 +86,18 @@ test("rejects duplicate market-data routes", () => {
         ...appConfig,
         marketDataRouting: {
           routes: [
-            { symbol: "BTCUSDT", providerInstanceId: "binance-one" },
-            { symbol: "BTCUSDT", providerInstanceId: "binance-two" },
-            { symbol: "ETHUSDT", providerInstanceId: "binance-one" },
+            {
+            symbol: "BTCUSDT",
+            providerInstanceId: "binance-one",
+          },
+            {
+            symbol: "BTCUSDT",
+            providerInstanceId: "binance-two",
+          },
+            {
+            symbol: "ETHUSDT",
+            providerInstanceId: "binance-one",
+          },
           ],
         },
       },
@@ -97,8 +115,14 @@ test("rejects routes to unknown providers and unconfigured markets", () => {
         ...appConfig,
         marketDataRouting: {
           routes: [
-            { symbol: "BTCUSDT", providerInstanceId: "missing" },
-            { symbol: "ETHUSDT", providerInstanceId: "binance-one" },
+            {
+            symbol: "BTCUSDT",
+            providerInstanceId: "missing",
+          },
+            {
+            symbol: "ETHUSDT",
+            providerInstanceId: "binance-one",
+          },
           ],
         },
       },
@@ -113,9 +137,18 @@ test("rejects routes to unknown providers and unconfigured markets", () => {
         ...appConfig,
         marketDataRouting: {
           routes: [
-            { symbol: "BTCUSDT", providerInstanceId: "binance-one" },
-            { symbol: "ETHUSDT", providerInstanceId: "binance-two" },
-            { symbol: "DOGEUSDT", providerInstanceId: "binance-one" },
+            {
+            symbol: "BTCUSDT",
+            providerInstanceId: "binance-one",
+          },
+            {
+            symbol: "ETHUSDT",
+            providerInstanceId: "binance-two",
+          },
+            {
+            symbol: "DOGEUSDT",
+            providerInstanceId: "binance-one",
+          },
           ],
         },
       },

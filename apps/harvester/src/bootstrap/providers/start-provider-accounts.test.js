@@ -26,7 +26,10 @@ function createProvider({
 
 const appConfig = {
   marketDataRouting: {
-    routes: [{ symbol: "BTCUSDT", providerInstanceId: "first" }],
+    routes: [{
+      symbol: "BTCUSDT",
+      providerInstanceId: "first",
+    }],
   },
   operatorControl: {
     telegram: {
@@ -49,7 +52,10 @@ function appConfigForMarketDataProvider(providerInstanceId) {
   return {
     ...appConfig,
     marketDataRouting: {
-      routes: [{ symbol: "BTCUSDT", providerInstanceId }],
+      routes: [{
+        symbol: "BTCUSDT",
+        providerInstanceId,
+      }],
     },
   }
 }
