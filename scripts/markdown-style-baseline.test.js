@@ -226,7 +226,10 @@ test("excludes indented code blocks from prose, list, and table style metrics", 
     "",
   ].join("\n")
   const report = collectMarkdownStyleBaseline([
-    { path: "apps/harvester/docs/diagram.md", content },
+    {
+      path: "apps/harvester/docs/diagram.md",
+      content,
+    },
   ])
 
   for (const name of [
