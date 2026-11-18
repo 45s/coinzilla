@@ -124,7 +124,10 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
   const identityMatches = fill.market.id === order.market.id &&
     fill.side === order.side &&
     fill.brokerOrderId === order.brokerOrderId &&
-    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId) &&
+    fill.providerInstanceId === order.providerInstanceId &&
+    fill.providerType === order.providerType &&
+    fill.accountId === order.accountId
   if (!identityMatches) {
     const error = new Error("Canonical Fill identity does not match its registered order")
     publishInvalidExecutionFill({
@@ -223,6 +226,26 @@ function publishExecutionFillOutcome({ accounting, fill, eventPublisher }) {
 }
 
 async function processExecutionFill({ dependencies, order, fill }) {
+  if (order instanceof CanonicalOrder && order.providerInstanceId !== undefined &&
+      fill instanceof Fill && fill.providerInstanceId === undefined) {
+    fill = new Fill({
+      tradeId: fill.tradeId,
+      brokerOrderId: fill.brokerOrderId,
+      clientOrderId: fill.clientOrderId,
+      providerInstanceId: order.providerInstanceId,
+      providerType: order.providerType,
+      accountId: order.accountId,
+      market: fill.market,
+      side: fill.side,
+      price: fill.price,
+      quantity: fill.quantity,
+      quoteQuantity: fill.quoteQuantity,
+      liquidityRole: fill.liquidityRole,
+      executedAt: fill.executedAt,
+      commissions: fill.commissions,
+      commissionStatus: fill.commissionStatus,
+    })
+  }
   const {
     state,
     eventPublisher,
