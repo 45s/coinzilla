@@ -186,7 +186,8 @@ function waitForLifecycleEvent({ state, eventName }) {
   if (existing) {
     return Promise.resolve(existing);
   }
-  return new Promise((resolve, reject) => {
+  return new Promise((...settlers) => {
+    const [resolve, reject] = settlers;
     const waiter = {
       eventName,
       resolve,
