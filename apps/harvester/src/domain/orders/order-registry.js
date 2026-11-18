@@ -589,13 +589,24 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
 }
 
 function createUpdatedOrderRegistryResult({ registry, orders, ownerships, index, current, nextOrder }) {
-  return createUpdatedOrderRegistryResult({
-    registry,
-    orders,
-    ownerships,
-    index,
-    current,
-    nextOrder,
+  const nextOrders = [...orders]
+  nextOrders[index] = nextOrder
+  const nextOwnerships = nextOrder.brokerOrderId === undefined
+    ? ownerships
+    : attachBrokerOrderIdToOwnership({
+        ownerships,
+        clientOrderId: current.clientOrderId,
+        brokerOrderId: nextOrder.brokerOrderId,
+      })
+  return Object.freeze({
+    registry: new OrderRegistry({
+      orders: nextOrders,
+      ownerships: nextOwnerships,
+    }),
+    applied: true,
+    duplicate: false,
+    stale: false,
+    unknown: false,
   })
 }
 
@@ -652,23 +663,12 @@ function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
       duplicate: true,
     })
   }
-  const nextOrders = [...orders]
-  nextOrders[index] = nextOrder
-  const nextOwnerships = nextOrder.brokerOrderId === undefined
-    ? ownerships
-    : attachBrokerOrderIdToOwnership({
-        ownerships,
-        clientOrderId: current.clientOrderId,
-        brokerOrderId: nextOrder.brokerOrderId,
-      })
-  return Object.freeze({
-    registry: new OrderRegistry({
-      orders: nextOrders,
-      ownerships: nextOwnerships,
-    }),
-    applied: true,
-    duplicate: false,
-    stale: false,
-    unknown: false,
+  return createUpdatedOrderRegistryResult({
+    registry,
+    orders,
+    ownerships,
+    index,
+    current,
+    nextOrder,
   })
 }
