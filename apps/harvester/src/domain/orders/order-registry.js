@@ -132,6 +132,9 @@ function createNextCanonicalOrder({ current, order } = {}) {
   }
   return new CanonicalOrder({
     clientOrderId: current.clientOrderId,
+    providerInstanceId: current.providerInstanceId,
+    providerType: current.providerType,
+    accountId: current.accountId,
     brokerOrderId: order.brokerOrderId,
     market: order.market,
     side: order.side,
@@ -304,6 +307,9 @@ alreadyAcknowledged: true } })
       }
       const unknownOrder = new CanonicalOrder({
         clientOrderId: current.clientOrderId,
+        providerInstanceId: current.providerInstanceId,
+        providerType: current.providerType,
+        accountId: current.accountId,
         brokerOrderId: current.brokerOrderId,
         market: current.market,
         side: current.side,
