@@ -55,6 +55,7 @@
       "src/domain/strategies/recovery-seller/mixed-sell-fill-accounting.test.js",
       "src/domain/strategies/recovery-seller/calculate-profitability.test.js",
       "src/domain/strategies/recovery-seller/calculate-sell-plan.test.js",
+      "src/domain/strategies/recovery-seller/evaluate-sell-decision.test.js",
       "src/domain/strategies/recovery-seller/stop-decision.test.js",
       "src/domain/strategies/recovery-seller/lifecycle-decision.test.js",
       "src/domain/strategies/recovery-seller/evaluate-buy-decision.test.js",
