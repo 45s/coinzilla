@@ -46,6 +46,11 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
     throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
   }
   const { market } = order
+  for (const field of ["providerInstanceId", "providerType", "accountId"]) {
+    if (typeof order[field] !== "string" || !order[field].trim()) {
+      throw new TypeError(`Order-submission intent requires immutable ${field} provenance`)
+    }
+  }
   validateCanonicalMarketIdentity({ market })
   const { price, quantity } = validateSubmissionOrderFields({ order })
   return {
@@ -77,6 +82,9 @@ export async function recordOrderSubmissionIntent(options = {}) {
       factType: "ORDER_SUBMISSION_INTENT",
       data: {
         clientOrderId,
+        providerInstanceId: order.providerInstanceId,
+        providerType: order.providerType,
+        accountId: order.accountId,
         marketId: market.id,
         venue: market.venue,
         symbol: market.symbol,

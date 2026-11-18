@@ -1,3 +1,4 @@
+/* eslint-disable max-nested-callbacks -- Existing node:test assertions use nested callbacks for throw predicates. */
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
@@ -45,6 +46,7 @@ const createOrder = (overrides = {}) =>
     ...overrides,
   })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${CanonicalOrder.name} lifecycle`, () => {
   it("represents a pending order intent before broker acknowledgement", () => {
     const order = createOrder()
@@ -122,6 +124,7 @@ describe(`${CanonicalOrder.name} lifecycle`, () => {
 
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${CanonicalOrder.name} price validation`, () => {
   it("supports market orders without a limit price", () => {
     const order = createOrder({
@@ -172,6 +175,7 @@ describe(`${CanonicalOrder.name} price validation`, () => {
 
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${CanonicalOrder.name} quantity validation`, () => {
   it("rejects mismatched markets and quantity assets", () => {
     assert.throws(
@@ -230,6 +234,7 @@ describe(`${CanonicalOrder.name} quantity validation`, () => {
 
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${CanonicalOrder.name} identity and timestamps`, () => {
   it("requires broker identity for acknowledged lifecycle states", () => {
     for (const status of [
@@ -298,5 +303,34 @@ describe(`${CanonicalOrder.name} identity and timestamps`, () => {
     assert.throws(() => {
       order.status = "FILLED"
     }, TypeError)
+  })
+})
+
+
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
+describe(`${CanonicalOrder.name} provider provenance`, () => {
+  it("retains the immutable provider instance, provider type and account identity", () => {
+    const order = createOrder({
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    })
+    assert.equal(order.providerInstanceId, "binanceTestnet")
+    assert.equal(order.providerType, "binance")
+    assert.equal(order.accountId, "binance-primary")
+    assert.deepEqual({
+      providerInstanceId: order.value.providerInstanceId,
+      providerType: order.value.providerType,
+      accountId: order.value.accountId,
+    }, {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    })
+    assert.equal(Object.isFrozen(order), true)
+  })
+
+  it("rejects partial provider provenance rather than inventing missing identity", () => {
+    assert.throws(() => createOrder({ providerInstanceId: "binanceTestnet" }), /all three.*providerInstanceId.*providerType.*accountId/i)
   })
 })

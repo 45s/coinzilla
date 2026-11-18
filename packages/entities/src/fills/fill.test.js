@@ -1,3 +1,4 @@
+/* eslint-disable max-nested-callbacks -- Existing node:test assertions use nested callbacks for throw predicates. */
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
@@ -60,6 +61,7 @@ const commission = new Commission({
   }),
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${Fill.name} execution facts`, () => {
   it("stores exact execution facts with explicit asset identity", () => {
     const fill = createFill()
@@ -109,6 +111,7 @@ describe(`${Fill.name} execution facts`, () => {
 
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${Fill.name} commission semantics`, () => {
   it("represents confirmed zero commission as COMPLETE with an empty list", () => {
     const fill = createFill({ commissionStatus: "COMPLETE" })
@@ -179,6 +182,7 @@ describe(`${Fill.name} commission semantics`, () => {
 
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${Fill.name} identity`, () => {
   it("scopes stable trade identity by market", () => {
     const otherMarket = new Market({
@@ -207,6 +211,7 @@ describe(`${Fill.name} identity`, () => {
 
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${Fill.name} validation`, () => {
   it("rejects invalid market, side, and value types", () => {
     assert.throws(() => createFill({ market: {} }), { message: fillErrMsgs.market })
@@ -280,6 +285,7 @@ describe(`${Fill.name} validation`, () => {
 
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${Fill.name} snapshots`, () => {
   it("returns independent snapshots and is immutable", () => {
     const fill = createFill({
@@ -303,5 +309,31 @@ describe(`${Fill.name} snapshots`, () => {
     assert.throws(() => {
       fill.side = "SELL"
     }, TypeError)
+  })
+})
+
+
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
+describe(`${Fill.name} provider provenance`, () => {
+  it("retains the exact provider instance and account identity", () => {
+    const fill = createFill({
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    })
+    assert.deepEqual({
+      providerInstanceId: fill.providerInstanceId,
+      providerType: fill.providerType,
+      accountId: fill.accountId,
+    }, {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    })
+    assert.equal(fill.value.providerInstanceId, "binanceTestnet")
+  })
+
+  it("rejects partial provider provenance", () => {
+    assert.throws(() => createFill({ providerInstanceId: "binanceTestnet" }), /all three.*providerInstanceId.*providerType.*accountId/i)
   })
 })

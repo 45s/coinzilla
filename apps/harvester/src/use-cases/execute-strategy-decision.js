@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { createPendingCanonicalOrder } from "../domain/orders/create-pending-canonical-order.js"
+import { assertProviderIdentityMatches, hasProviderIdentity } from "../domain/orders/provider-provenance.js"
 import { validateOrderAgainstTradingRules } from "../domain/orders/validate-order-against-trading-rules.js"
 
 function getOwnershipMetadata({ ownership } = {}) {
@@ -68,8 +69,10 @@ function createExecutionContext({ options } = {}) {
   }
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
+  const providerIdentity = resolveProviderIdentity({ broker, onDurableSubmissionIntent })
   return {
     broker,
+    providerIdentity,
     onPendingOrder,
     onAcknowledgedOrder,
     onSubmissionFailure,
@@ -83,7 +86,7 @@ function createExecutionContext({ options } = {}) {
   }
 }
 
-function createPendingOrderCandidate({ action, marketMetadata, clientOrderId } = {}) {
+function createPendingOrderCandidate({ action, marketMetadata, clientOrderId, providerIdentity } = {}) {
   const orderIntent = {
     symbol: marketMetadata.market.symbol,
     side: action.side,
@@ -95,6 +98,7 @@ function createPendingOrderCandidate({ action, marketMetadata, clientOrderId } =
   const pendingOrder = createPendingCanonicalOrder({
     order: orderIntent,
     market: marketMetadata.market,
+    ...providerIdentity,
     clientOrderId,
     supportedOrderTypes: marketMetadata.supportedOrderTypes,
   })
@@ -147,6 +151,7 @@ async function validateDecision({ context, decision, marketMetadata, notifyValid
         action,
         marketMetadata,
         clientOrderId: `h-${  context.orderIdNamespace  }-preflight-${  index}`,
+        providerIdentity: context.providerIdentity,
       })
       try {
         validateOrderAgainstTradingRules({
@@ -190,6 +195,7 @@ async function createPendingOrderCandidates({ context, decision, marketMetadata 
       action,
       marketMetadata,
       clientOrderId: context.nextClientOrderId(),
+      providerIdentity: context.providerIdentity,
     })
     try {
       validateOrderAgainstTradingRules({
@@ -520,8 +526,36 @@ async function handleMismatchedAcknowledgement({ context, candidate } = {}) {
   return toResult({ error })
 }
 
-async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrder } = {}) {
+async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrder: brokerAcknowledgedOrder } = {}) {
   const { pendingOrder, purpose, ownership } = candidate
+  if (pendingOrder.providerInstanceId !== undefined) {
+    assertProviderIdentityMatches({
+      expected: pendingOrder,
+      actual: brokerAcknowledgedOrder,
+      allowMissingActual: true,
+      context: "Broker acknowledgement provider identity",
+    })
+  }
+  const acknowledgedOrder = pendingOrder.providerInstanceId === undefined
+    ? brokerAcknowledgedOrder
+    : new CanonicalOrder({
+        clientOrderId: brokerAcknowledgedOrder.clientOrderId,
+        brokerOrderId: brokerAcknowledgedOrder.brokerOrderId,
+        providerInstanceId: pendingOrder.providerInstanceId,
+        providerType: pendingOrder.providerType,
+        accountId: pendingOrder.accountId,
+        market: brokerAcknowledgedOrder.market,
+        side: brokerAcknowledgedOrder.side,
+        type: brokerAcknowledgedOrder.type,
+        limitPrice: brokerAcknowledgedOrder.limitPrice,
+        originalQuantity: brokerAcknowledgedOrder.originalQuantity,
+        executedQuantity: brokerAcknowledgedOrder.executedQuantity,
+        status: brokerAcknowledgedOrder.status,
+        createdAt: brokerAcknowledgedOrder.createdAt,
+        acknowledgedAt: brokerAcknowledgedOrder.acknowledgedAt,
+        updatedAt: brokerAcknowledgedOrder.updatedAt,
+        completedAt: brokerAcknowledgedOrder.completedAt,
+      })
   const durableOutcome = await persistDurableSubmissionOutcome({
     context,
     order: acknowledgedOrder,

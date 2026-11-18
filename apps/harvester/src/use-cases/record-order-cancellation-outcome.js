@@ -1,5 +1,6 @@
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
+import { assertProviderIdentityMatches, requireProviderIdentity } from "../domain/orders/provider-provenance.js"
 
 const OUTCOMES = new Set(["CANCELED", "FILLED", "REJECTED", "EXPIRED", "NOT_CANCELED", "NOT_SENT", "OUTCOME_UNKNOWN", "UNCONFIRMED", "UNKNOWN"])
 const CANONICAL_OUTCOMES = new Set(["CANCELED", "FILLED", "REJECTED", "EXPIRED", "NOT_CANCELED"])
@@ -13,6 +14,12 @@ function validateCanonicalCancellationResponse({ order, canceledOrder, outcome }
       canceledOrder.side !== order.side) {
     throw new TypeError("Cancellation outcome response does not match the original canonical order identity")
   }
+  assertProviderIdentityMatches({
+    expected: order,
+    actual: canceledOrder,
+    allowMissingActual: true,
+    context: "Cancellation response provider identity",
+  })
   if (outcome === "NOT_CANCELED" && !["OPEN", "PARTIALLY_FILLED"].includes(canceledOrder.status)) {
     throw new TypeError("NOT_CANCELED outcome requires an active canonical order response")
   }
@@ -31,6 +38,7 @@ function validateCancellationInput({ operationalStateStore, order, canceledOrder
   if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
     throw new TypeError("Cancellation outcome requires the original active acknowledged order")
   }
+  requireProviderIdentity({ value: order, context: "Cancellation outcome" })
   if (!isReason(reason) || !OUTCOMES.has(outcome)) {
     throw new TypeError("Cancellation reason or outcome is unsupported")
   }
@@ -57,6 +65,9 @@ export async function recordOrderCancellationOutcome(options = {}) {
       factType: "ORDER_CANCELLATION_OUTCOME",
       data: {
         clientOrderId: order.clientOrderId,
+        providerInstanceId: order.providerInstanceId,
+        providerType: order.providerType,
+        accountId: order.accountId,
         brokerOrderId: order.brokerOrderId,
         marketId: market.id,
         venue: market.venue,

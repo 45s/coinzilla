@@ -21,6 +21,9 @@ const fill = new Fill({
   tradeId: "trade-123",
   brokerOrderId: "broker-order-9",
   clientOrderId: "client-order-9",
+  providerInstanceId: "binanceTestnet",
+  providerType: "binance",
+  accountId: "binance-primary",
   market,
   side: "BUY",
   price: new Money({ amount: "0.1",
@@ -40,6 +43,31 @@ asset: quoteAsset }),
     }),
   ],
   commissionStatus: "COMPLETE",
+})
+
+const createPartialProviderFact = () => ({
+  factId: "execution-fill-applied:partial-provider",
+  factType: "EXECUTION_FILL_APPLIED",
+  data: {
+    fillId: "binance:DOGEUSDT:trade-partial",
+    tradeId: "trade-partial",
+    brokerOrderId: "broker-partial",
+    clientOrderId: "client-partial",
+    providerInstanceId: "binanceTestnet",
+    marketId: "binance:DOGEUSDT",
+    venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAssetId: "binance:DOGE",
+    quoteAssetId: "binance:USDT",
+    side: "BUY",
+    price: "0.1",
+    quantity: "1",
+    quoteQuantity: "0.1",
+    liquidityRole: "MAKER",
+    executedAt: null,
+    commissionStatus: "COMPLETE",
+    commissions: [],
+  },
 })
 
 const createStore = async (t) => {
@@ -69,6 +97,9 @@ fill })
     tradeId: "trade-123",
     brokerOrderId: "broker-order-9",
     clientOrderId: "client-order-9",
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
     marketId: market.id,
     venue: "binance",
     symbol: "DOGEUSDT",
@@ -169,6 +200,7 @@ data: {} },
         apiSecret: "never persist",
       },
     },
+    createPartialProviderFact(),
   ]
 
   for (const fact of malformedFacts) {

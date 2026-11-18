@@ -126,6 +126,16 @@ right: mapped.minimumNotional }) >= 0)) {
 function requireOrderIntent({ data }) {
   const clientOrderId = requireString({ value: data.clientOrderId,
 field: "clientOrderId" })
+  const providerFields = ["providerInstanceId", "providerType", "accountId"]
+  const providerValues = providerFields.map((field) => data[field])
+  if (providerValues.some((value) => value !== undefined) && providerValues.some((value) => typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value))) {
+    throw new TypeError("Journal order provenance must contain all three stable provider identifiers")
+  }
+  const providerIdentity = providerValues.every((value) => value === undefined) ? {} : {
+    providerInstanceId: data.providerInstanceId,
+    providerType: data.providerType,
+    accountId: data.accountId,
+  }
   const symbol = requireString({ value: data.symbol,
 field: "symbol" })
   if (!ORDER_SIDES.has(data.side)) {throw new TypeError("order side must be BUY or SELL")}
@@ -138,6 +148,7 @@ positive: true })
 field: "quantity",
 positive: true })
   return { clientOrderId,
+    ...providerIdentity,
 symbol,
 side: data.side,
 type,
@@ -146,76 +157,97 @@ quantity }
 }
 
 function assertSameIntent({ current, next }) {
-  for (const field of ["clientOrderId", "symbol", "side", "type", "price", "quantity"]) {
+  for (const field of ["clientOrderId", "providerInstanceId", "providerType", "accountId", "symbol", "side", "type", "price", "quantity"]) {
     if (current[field] !== next[field]) {
       throw new Error(`Journal order event changed immutable ${  field  } for ${  current.clientOrderId}`)
     }
   }
 }
 
-function requireFill({ data }) {
-  const fillId = requireString({ value: data.fillId,
-field: "fillId" })
-  const tradeId = requireString({ value: data.tradeId,
-field: "tradeId" })
-  const brokerOrderId = requireString({ value: data.brokerOrderId,
-field: "brokerOrderId" })
+function requireFillIdentity({ data }) {
+  const fillId = requireString({ value: data.fillId, field: "fillId" })
+  const tradeId = requireString({ value: data.tradeId, field: "tradeId" })
+  const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
   const clientOrderId = data.clientOrderId === undefined
     ? undefined
-    : requireString({ value: data.clientOrderId,
-field: "clientOrderId" })
-  const symbol = requireString({ value: data.symbol,
-field: "symbol" })
-  if (!ORDER_SIDES.has(data.side)) {throw new TypeError("fill side must be BUY or SELL")}
-  const price = requireDecimal({ value: data.price,
-field: "price",
-positive: true })
-  const quantity = requireDecimal({ value: data.quantity,
-field: "quantity",
-positive: true })
-  const quoteQuantity = requireDecimal({ value: data.quoteQuantity,
-field: "quoteQuantity",
-positive: true })
-  const liquidityRole = requireString({ value: data.liquidityRole,
-field: "liquidityRole" })
-  const commissionStatus = requireString({ value: data.commissionStatus,
-field: "commissionStatus" })
-  if (!Array.isArray(data.commissions)) {throw new TypeError("fill commissions must be an array")}
-  const commissions = data.commissions.map((...args) => {
-    const [commission, index] = args
-    return ({
-    amount: requireDecimal({ value: commission?.amount,
-field: `commissions[${  index  }].amount` }),
-    assetId: requireString({ value: commission?.assetId,
-field: `commissions[${  index  }].assetId` }),
-    asset: requireString({ value: commission?.asset,
-field: `commissions[${  index  }].asset` }),
-    ...(commission?.quoteValue === undefined ? {} : {
-      quoteValue: {
-        amount: requireDecimal({
-          value: commission.quoteValue?.amount,
-          field: `commissions[${  index  }].quoteValue.amount`,
-        }),
-        assetId: requireString({
-          value: commission.quoteValue?.assetId,
-          field: `commissions[${  index  }].quoteValue.assetId`,
-        }),
-        asset: requireString({
-          value: commission.quoteValue?.asset,
-          field: `commissions[${  index  }].quoteValue.asset`,
-        }),
-      },
-    }),
-    })
-  })
-  if (data.duplicate !== undefined && typeof data.duplicate !== "boolean") {
-    throw new TypeError("fill duplicate marker must be a boolean")
+    : requireString({ value: data.clientOrderId, field: "clientOrderId" })
+  const providerFields = ["providerInstanceId", "providerType", "accountId"]
+  const providerValues = providerFields.map((field) => data[field])
+  const hasProviderIdentity = providerValues.some((value) => value !== undefined)
+  if (hasProviderIdentity && (
+    providerValues.some((value) => typeof value !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) ||
+    clientOrderId === undefined
+  )) {
+    throw new TypeError("Journal fill provenance requires all three provider identifiers and clientOrderId")
   }
+  const providerIdentity = hasProviderIdentity ? {
+    providerInstanceId: data.providerInstanceId,
+    providerType: data.providerType,
+    accountId: data.accountId,
+  } : {}
   return {
     fillId,
     tradeId,
     brokerOrderId,
     ...(clientOrderId === undefined ? {} : { clientOrderId }),
+    ...providerIdentity,
+  }
+}
+
+function requireFillCommissions({ data }) {
+  if (!Array.isArray(data.commissions)) {
+    throw new TypeError("fill commissions must be an array")
+  }
+  return data.commissions.map((commission, index) => ({
+    amount: requireDecimal({
+      value: commission?.amount,
+      field: `commissions[${index}].amount`,
+    }),
+    assetId: requireString({
+      value: commission?.assetId,
+      field: `commissions[${index}].assetId`,
+    }),
+    asset: requireString({
+      value: commission?.asset,
+      field: `commissions[${index}].asset`,
+    }),
+    ...(commission?.quoteValue === undefined ? {} : {
+      quoteValue: {
+        amount: requireDecimal({
+          value: commission.quoteValue?.amount,
+          field: `commissions[${index}].quoteValue.amount`,
+        }),
+        assetId: requireString({
+          value: commission.quoteValue?.assetId,
+          field: `commissions[${index}].quoteValue.assetId`,
+        }),
+        asset: requireString({
+          value: commission.quoteValue?.asset,
+          field: `commissions[${index}].quoteValue.asset`,
+        }),
+      },
+    }),
+  }))
+}
+
+function requireFill({ data }) {
+  const identity = requireFillIdentity({ data })
+  const symbol = requireString({ value: data.symbol, field: "symbol" })
+  if (!ORDER_SIDES.has(data.side)) {
+    throw new TypeError("fill side must be BUY or SELL")
+  }
+  const price = requireDecimal({ value: data.price, field: "price", positive: true })
+  const quantity = requireDecimal({ value: data.quantity, field: "quantity", positive: true })
+  const quoteQuantity = requireDecimal({ value: data.quoteQuantity, field: "quoteQuantity", positive: true })
+  const liquidityRole = requireString({ value: data.liquidityRole, field: "liquidityRole" })
+  const commissionStatus = requireString({ value: data.commissionStatus, field: "commissionStatus" })
+  const commissions = requireFillCommissions({ data })
+  if (data.duplicate !== undefined && typeof data.duplicate !== "boolean") {
+    throw new TypeError("fill duplicate marker must be a boolean")
+  }
+  return {
+    ...identity,
     symbol,
     side: data.side,
     price,
@@ -692,6 +724,12 @@ next: intent })
   order.requiresExchangeReconciliation = data.outcome !== "REJECTED"
 }
 
+function assertJournalOrderFieldsMatch({ data, order, fields, message }) {
+  if (fields.some((field) => data[field] !== order[field])) {
+    throw new Error(message)
+  }
+}
+
 function handleCancelRequestedEvent({ data, name, sequence, state }) {
   const clientOrderId = requireString({ value: data.clientOrderId,
 field: "clientOrderId" })
@@ -719,15 +757,12 @@ field: "brokerOrderId" })
   } else if (order.brokerOrderId !== brokerOrderId) {
     throw new Error("Cancellation intent brokerOrderId conflicts with submission acknowledgement")
   }
-  if (
-    data.symbol !== order.symbol ||
-    data.side !== order.side ||
-    data.type !== order.type ||
-    data.price !== order.price ||
-    data.quantity !== order.quantity
-  ) {
-    throw new Error("Cancellation intent changed immutable order facts")
-  }
+  assertJournalOrderFieldsMatch({
+    data,
+    order,
+    fields: ["providerInstanceId", "providerType", "accountId", "symbol", "side", "type", "price", "quantity"],
+    message: "Cancellation intent changed immutable order facts",
+  })
   if (!["OPEN", "PARTIALLY_FILLED"].includes(data.status)) {
     throw new Error("Cancellation intent must record an active order status")
   }
@@ -758,15 +793,13 @@ eventName: name })
   if (order.cancellationState !== "REQUESTED") {
     throw new Error("Confirmed cancellation has no preceding durable cancellation intent")
   }
-  if (
-    data.brokerOrderId !== order.brokerOrderId ||
-    data.symbol !== order.symbol ||
-    data.side !== order.side ||
-    data.type !== order.type ||
-    data.price !== order.price ||
-    data.quantity !== order.quantity ||
-    data.status !== "CANCELED"
-  ) {
+  assertJournalOrderFieldsMatch({
+    data,
+    order,
+    fields: ["providerInstanceId", "providerType", "accountId", "brokerOrderId", "symbol", "side", "type", "price", "quantity"],
+    message: "Confirmed cancellation conflicts with the owned order identity",
+  })
+  if (data.status !== "CANCELED") {
     throw new Error("Confirmed cancellation conflicts with the owned order identity")
   }
   const executedQuantity = requireDecimal({ value: data.executedQuantity,
@@ -802,9 +835,12 @@ eventName: name })
   if (!CANCEL_OUTCOMES.has(data.outcome)) {
     throw new TypeError("Invalid order cancellation outcome")
   }
-  if (data.symbol !== order.symbol || data.side !== order.side) {
-    throw new Error("Cancellation failure conflicts with the owned order identity")
-  }
+  assertJournalOrderFieldsMatch({
+    data,
+    order,
+    fields: ["providerInstanceId", "providerType", "accountId", "symbol", "side"],
+    message: "Cancellation failure conflicts with the owned order identity",
+  })
   if (data.brokerOrderId !== undefined) {
     const brokerOrderId = requireString({ value: data.brokerOrderId,
 field: "brokerOrderId" })
@@ -837,6 +873,14 @@ function resolveFillOrder({ fill, state }) {
     clientOrderId,
     eventName: EVENT.FILL_APPLIED,
   })
+  if (fill.providerInstanceId !== undefined) {
+    assertJournalOrderFieldsMatch({
+      data: fill,
+      order,
+      fields: ["providerInstanceId", "providerType", "accountId"],
+      message: "Applied fill provider provenance conflicts with its journaled order",
+    })
+  }
   if (order.submissionOutcome === "REJECTED") {
     throw new Error(`Applied fill references a definitively rejected submission: ${fill.fillId}`)
   }
@@ -1026,6 +1070,7 @@ right: minProfit }) >= 0
   }
 }
 
+// eslint-disable-next-line max-lines-per-function -- Recovery event validation remains a cohesive domain boundary.
 function handleRecoveryNotCompletedEvent({ data, sequence, state }) {
   const symbol = requireString({ value: data.symbol,
 field: "symbol" })

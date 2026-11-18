@@ -1,25 +1,25 @@
 import { CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
 import { assertDecimalString } from "@coinzilla/utils"
 
-/**
- * Build the local PENDING order aggregate before submitting it to a broker.
- * This pure function validates strategy intent and assigns no broker identity.
- */
-export function createPendingCanonicalOrder({
-  order,
-  market,
-  clientOrderId,
-  supportedOrderTypes,
-} = {}) {
+function validatePendingOrderObject({ order }) {
   if (!order || typeof order !== "object" || Array.isArray(order)) {
     throw new TypeError("createPendingCanonicalOrder requires an order object")
   }
+}
+
+function validatePendingOrderMarket({ market }) {
   if (!(market instanceof Market)) {
     throw new TypeError("createPendingCanonicalOrder requires a canonical Market")
   }
+}
+
+function validatePendingOrderClientId({ clientOrderId }) {
   if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
     throw new TypeError("createPendingCanonicalOrder requires clientOrderId")
   }
+}
+
+function resolvePendingOrderType({ order, market, supportedOrderTypes }) {
   if (typeof order.symbol !== "string" || order.symbol.trim().toUpperCase() !== market.symbol) {
     throw new TypeError("Order symbol does not match the selected Market")
   }
@@ -31,16 +31,44 @@ export function createPendingCanonicalOrder({
     throw new TypeError("Conservative strategy only supports LIMIT and LIMIT_MAKER orders")
   }
   if (!Array.isArray(supportedOrderTypes) || !supportedOrderTypes.includes(type)) {
-    throw new Error(`Exchange does not support order type ${  type  } for ${  market.symbol}`)
+    throw new Error(`Exchange does not support order type ${type} for ${market.symbol}`)
   }
+  assertDecimalString({ value: order.quantity, field: "order.quantity" })
+  assertDecimalString({ value: order.price, field: "order.price" })
+  return type
+}
 
-  assertDecimalString({ value: order.quantity,
-field: "order.quantity" })
-  assertDecimalString({ value: order.price,
-field: "order.price" })
+function validatePendingOrderIntent({ order, market, clientOrderId, supportedOrderTypes }) {
+  validatePendingOrderObject({ order })
+  validatePendingOrderMarket({ market })
+  validatePendingOrderClientId({ clientOrderId })
+  return resolvePendingOrderType({ order, market, supportedOrderTypes })
+}
 
+/**
+ * Build the local PENDING order aggregate before submitting it to a broker.
+ * This pure function validates strategy intent and assigns no broker identity.
+ */
+export function createPendingCanonicalOrder({
+  order,
+  market,
+  clientOrderId,
+  supportedOrderTypes,
+  providerInstanceId,
+  providerType,
+  accountId,
+} = {}) {
+  const type = validatePendingOrderIntent({
+    order,
+    market,
+    clientOrderId,
+    supportedOrderTypes,
+  })
   return new CanonicalOrder({
     clientOrderId: clientOrderId.trim(),
+    providerInstanceId,
+    providerType,
+    accountId,
     market,
     side: order.side,
     type,

@@ -1,5 +1,35 @@
 import { Fill } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
+import { requireProviderIdentity } from "../domain/orders/provider-provenance.js"
+
+function validateExecutionFillInput({ operationalStateStore, fill }) {
+  if (typeof operationalStateStore?.append !== "function") {
+    throw new TypeError("recordExecutionFill requires a Operational State Store append capability")
+  }
+  if (!(fill instanceof Fill)) {
+    throw new TypeError("recordExecutionFill requires a canonical Fill")
+  }
+  if (typeof fill.clientOrderId !== "string" || !fill.clientOrderId.trim()) {
+    throw new TypeError("Execution-fill fact requires its original Harvester clientOrderId")
+  }
+  requireProviderIdentity({ value: fill, context: "Execution-fill fact" })
+  return fill.market
+}
+
+function serializeCommissions({ fill }) {
+  return fill.commissions.map((commission) => ({
+    amount: commission.amount.amount,
+    assetId: commission.amount.asset.id,
+    assetCode: commission.amount.asset.code,
+    quoteValue: commission.quoteValue
+      ? {
+          amount: commission.quoteValue.amount,
+          assetId: commission.quoteValue.asset.id,
+          assetCode: commission.quoteValue.asset.code,
+        }
+      : null,
+  }))
+}
 
 /**
  * Persist a complete canonical execution fact before Portfolio/RecoveryLedger
@@ -12,27 +42,19 @@ import { toResult } from "@coinzilla/utils"
  */
 export async function recordExecutionFill({ operationalStateStore, fill } = {}) {
   try {
-    if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordExecutionFill requires a Operational State Store append capability") }
-    if (!(fill instanceof Fill)) { throw new TypeError("recordExecutionFill requires a canonical Fill") }
-    const {market} = fill
-    const commissions = fill.commissions.map((commission) => ({
-      amount: commission.amount.amount,
-      assetId: commission.amount.asset.id,
-      assetCode: commission.amount.asset.code,
-      quoteValue: commission.quoteValue
-        ? { amount: commission.quoteValue.amount,
-assetId: commission.quoteValue.asset.id,
-assetCode: commission.quoteValue.asset.code }
-        : null,
-    }))
+    const market = validateExecutionFillInput({ operationalStateStore, fill })
+    const commissions = serializeCommissions({ fill })
     const result = await operationalStateStore.append({
-      factId: `execution-fill-applied:${  fill.id}`,
+      factId: `execution-fill-applied:${fill.id}`,
       factType: "EXECUTION_FILL_APPLIED",
       data: {
         fillId: fill.id,
         tradeId: fill.tradeId,
         brokerOrderId: fill.brokerOrderId,
-        clientOrderId: fill.clientOrderId ?? null,
+        clientOrderId: fill.clientOrderId,
+        providerInstanceId: fill.providerInstanceId,
+        providerType: fill.providerType,
+        accountId: fill.accountId,
         marketId: market.id,
         venue: market.venue,
         symbol: market.symbol,
@@ -50,7 +72,9 @@ assetCode: commission.quoteValue.asset.code }
     })
     if (result?.ok !== true || result.data?.durable !== true) {
       return toResult({
-        errors: result?.errors?.length ? result.errors : [new Error("Execution-fill append did not confirm durable commitment")],
+        errors: result?.errors?.length
+          ? result.errors
+          : [new Error("Execution-fill append did not confirm durable commitment")],
       })
     }
     return result
