@@ -46,7 +46,7 @@ This revalidation was a read-only source and GitHub delivery-state inspection an
 
 1. Phase 3 is complete in merged PR #1416; preserve its immutable provenance and backward-compatible v1 fact guarantees in all subsequent phases.
 2. Complete Phase 4 basic in-process account isolation, namespaced identities, independent account state and account-scoped locks. Do not implement or depend on process-restart recovery; #654 is deferred and lowest priority.
-3. Phase 5 independent market-data routing is complete in PR #1452; continue with Phase 6 explicit Binance execution routing/parity. No silent fallback or source blending.
+3. Phase 5 independent market-data routing is complete in PR #1452; Phase 6 explicit execution routing is implemented in PR #1455 and pending exact-head CI/merge. No silent fallback or source blending.
 4. Complete exact-head CI, merge Phase 6 execution routing in PR #1455, and update the delivery record.
 5. After Phase 6, complete Bitunix under #1185 as a full broker and Harvester provider integration; do not introduce an observer-only or partial staging facade. RS remains disabled until #1127 is complete.
 
@@ -72,7 +72,7 @@ The safe direction is incremental:
 2. Add truthful provider capability declarations in `packages/brokers`.
 3. Prepare Harvester provider construction/registry without enabling multi-provider execution.
 4. Establish durable, immutable order provenance and account-scoped identity.
-5. Phase 4 account isolation and Phase 5 market-data routing are complete; keep process-restart recovery under separate lowest-priority #654 and continue with Phase 6 execution routing.
+5. Phase 4 account isolation and Phase 5 market-data routing are complete; Phase 6 execution routing is implemented in PR #1455 and pending exact-head verification/merge. Keep process-restart recovery under separate lowest-priority #654.
 6. Introduce independent market-data routing.
 7. Route existing Binance execution through the new composition and prove parity.
 8. Enable another provider only after its complete required lifecycle is verified.
