@@ -1113,6 +1113,7 @@ export const mapRecoveryCycleNotCompletedData = (input = {}) =>
   mapData({
     input,
     operation: "Recovery-cycle-not-completed event mapping",
+    // eslint-disable-next-line max-lines-per-function, complexity -- Recovery completion evidence is validated as one cohesive contract.
     mapper: ({
       symbol, marketId, sellOrderClientId, sellOrderBrokerOrderId, outcome, reason,
       realizedNetProfit, activeQuantity, keepQuantity, minProfit,
