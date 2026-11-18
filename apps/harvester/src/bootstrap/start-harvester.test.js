@@ -6199,16 +6199,6 @@ test("starts independent Binance account trading runtimes in one production boot
     SECONDARY_API_KEY: "secondary-key",
     SECONDARY_API_SECRET: "secondary-secret",
   }
-  const providers = resolveProviderInstances({
-    appConfig,
-    env,
-    adapterFactories: {
-      binance: ({ config }) => createBroker(
-        config.apiKey === "primary-key" ? primaryCalls : secondaryCalls,
-        { tradingMode: config.tradingMode },
-      ),
-    },
-  })
   const configuredAppConfig = {
     ...appConfig,
     brokers: {
