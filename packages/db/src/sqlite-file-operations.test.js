@@ -10,7 +10,7 @@ import {
   removeTemporaryDirectory,
   validateIntegrity,
   verifyDatabaseFile,
-} from "./infrastructure/sqlite/sqlite-file-operations.js"
+} from "./infrastructure/sqlite/file-operations.js"
 
 async function createTemporaryDirectory() {
   return mkdtemp(join(tmpdir(), "coinzilla-db-file-operations-"))
