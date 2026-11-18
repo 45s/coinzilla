@@ -8,7 +8,7 @@ import { backup as sqliteBackup } from "node:sqlite"
 import { DatabaseProviderError } from "../../domain/errors/database-errors.js"
 import {
   assertDifferentFiles,
-  createTemporaryDirectory,
+  createTemporaryDirectory as createTemporaryDirectoryInFilesystem,
   removeTemporaryDirectory,
   validateDatabasePath,
   verifyDatabaseFile,
@@ -86,7 +86,7 @@ function validateBackupSource({ sourceConnection, timeout }) {
   }
 }
 
-async function runBackup({ sourceConnection, destinationFilename, rate, progress, timeout, onProgressFailure, cleanupTemporaryDirectory }) {
+async function runBackup({ sourceConnection, destinationFilename, rate, progress, timeout, onProgressFailure, cleanupTemporaryDirectory, createTemporaryDirectory }) {
   let progressError = null
   let temporaryDirectory
   let operationError = null
@@ -174,6 +174,7 @@ export async function backupSqliteDatabase({
   progress,
   timeout = DEFAULT_TIMEOUT_MS,
   cleanupTemporaryDirectory = removeTemporaryDirectory,
+  createTemporaryDirectory = createTemporaryDirectoryInFilesystem,
 } = {}) {
   const destinationFilename = validateBackupOptions({
     destination,
@@ -207,6 +208,7 @@ export async function backupSqliteDatabase({
       progress,
       timeout,
       cleanupTemporaryDirectory,
+      createTemporaryDirectory,
       onProgressFailure: (error) => {
         progressError = error
       },
