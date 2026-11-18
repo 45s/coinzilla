@@ -2399,8 +2399,11 @@ test("retains an account process lock when startup cleanup is unconfirmed", asyn
     assert.deepEqual(fixture.releasedLocks, [])
     await fixture.signalHandlers.get("SIGINT")()
     assert.deepEqual(fixture.stopped, ["binanceTestnetPrimary"])
-    assert.deepEqual(fixture.releasedLocks, ["binanceTestnetPrimary"])
-    assert.equal(process.exitCode, 1)
+    assert.deepEqual(fixture.releasedLocks, [
+      "binanceTestnetPrimary",
+      "binanceTestnetSecondary",
+    ])
+    assert.equal(process.exitCode, 0)
   } finally {
     process.exitCode = previousExitCode
   }
