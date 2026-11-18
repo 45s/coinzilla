@@ -474,7 +474,7 @@ testCase("disconnects every provider successfully in reverse order", async () =>
 
 testCase("exposes the exact immutable provider identity on the BrokerPort facade", () => {
   const registry = createProviderRegistry({ providers: [createProvider()] })
-  const broker = registry.get("binanceTestnet").broker
+  const { broker } = registry.get("binanceTestnet")
   assert.equal(broker.providerInstanceId, "binanceTestnet")
   assert.equal(broker.providerType, "binance")
   assert.equal(broker.accountId, "binance-primary")
