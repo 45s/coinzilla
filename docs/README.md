@@ -1,6 +1,6 @@
 # Repository documentation
 
-This index is the entry point for maintained repository documentation. The governance foundation and umbrella tracking live in [#795](https://github.com/45s/coinzilla/issues/795); remaining work is split into the maintained-content audit [#1401](https://github.com/45s/coinzilla/issues/1401), full-tree Markdown enforcement [#1402](https://github.com/45s/coinzilla/issues/1402), and reference/consolidation audit [#1403](https://github.com/45s/coinzilla/issues/1403). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
+This index is the entry point for maintained repository documentation. The governance foundation and umbrella tracking live in [#795](https://github.com/45s/coinzilla/issues/795). Full-tree Markdown style and maintained-source anchor enforcement is complete in [#1402](https://github.com/45s/coinzilla/issues/1402) (implemented in [PR #1434](https://github.com/45s/coinzilla/pull/1434)); remaining work is split into the maintained-content audit [#1401](https://github.com/45s/coinzilla/issues/1401) and reference/consolidation audit [#1403](https://github.com/45s/coinzilla/issues/1403). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
 
 ## Start here
 
