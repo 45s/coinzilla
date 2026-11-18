@@ -165,12 +165,24 @@ function assertSameIntent({ current, next }) {
 }
 
 function requireFillIdentity({ data }) {
-  const fillId = requireString({ value: data.fillId, field: "fillId" })
-  const tradeId = requireString({ value: data.tradeId, field: "tradeId" })
-  const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
+  const fillId = requireString({
+    value: data.fillId,
+    field: "fillId",
+  })
+  const tradeId = requireString({
+    value: data.tradeId,
+    field: "tradeId",
+  })
+  const brokerOrderId = requireString({
+    value: data.brokerOrderId,
+    field: "brokerOrderId",
+  })
   const clientOrderId = data.clientOrderId === undefined
     ? undefined
-    : requireString({ value: data.clientOrderId, field: "clientOrderId" })
+    : requireString({
+        value: data.clientOrderId,
+        field: "clientOrderId",
+      })
   const providerFields = ["providerInstanceId", "providerType", "accountId"]
   const providerValues = providerFields.map((field) => data[field])
   const hasProviderIdentity = providerValues.some((value) => value !== undefined)
@@ -233,15 +245,36 @@ function requireFillCommissions({ data }) {
 
 function requireFill({ data }) {
   const identity = requireFillIdentity({ data })
-  const symbol = requireString({ value: data.symbol, field: "symbol" })
+  const symbol = requireString({
+    value: data.symbol,
+    field: "symbol",
+  })
   if (!ORDER_SIDES.has(data.side)) {
     throw new TypeError("fill side must be BUY or SELL")
   }
-  const price = requireDecimal({ value: data.price, field: "price", positive: true })
-  const quantity = requireDecimal({ value: data.quantity, field: "quantity", positive: true })
-  const quoteQuantity = requireDecimal({ value: data.quoteQuantity, field: "quoteQuantity", positive: true })
-  const liquidityRole = requireString({ value: data.liquidityRole, field: "liquidityRole" })
-  const commissionStatus = requireString({ value: data.commissionStatus, field: "commissionStatus" })
+  const price = requireDecimal({
+    value: data.price,
+    field: "price",
+    positive: true,
+  })
+  const quantity = requireDecimal({
+    value: data.quantity,
+    field: "quantity",
+    positive: true,
+  })
+  const quoteQuantity = requireDecimal({
+    value: data.quoteQuantity,
+    field: "quoteQuantity",
+    positive: true,
+  })
+  const liquidityRole = requireString({
+    value: data.liquidityRole,
+    field: "liquidityRole",
+  })
+  const commissionStatus = requireString({
+    value: data.commissionStatus,
+    field: "commissionStatus",
+  })
   const commissions = requireFillCommissions({ data })
   if (data.duplicate !== undefined && typeof data.duplicate !== "boolean") {
     throw new TypeError("fill duplicate marker must be a boolean")
