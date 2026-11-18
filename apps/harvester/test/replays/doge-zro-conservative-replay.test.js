@@ -472,7 +472,7 @@ function assertSingleCycleExecutionReports(dogeTradingReplay) {
   ], "the completed recovery cycle must reconcile actual BUY and SELL execution facts");
 }
 
-async function assertSingleCycleDuplicateFillIsIdempotent({ dogeTradingReplay, recoverySellOrder }) {
+async function assertSingleCycleDuplicateFillIsIdempotent({ dogeTradingReplay, recoverySellOrder, timestamp }) {
   assert.equal(
     dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
     1,
@@ -483,7 +483,7 @@ async function assertSingleCycleDuplicateFillIsIdempotent({ dogeTradingReplay, r
     order: recoverySellOrder,
     price: dogeTradingReplay.scenarioExpectations.sellFillPrice,
     tradeId: SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID,
-    timestamp: 1700000000000,
+    timestamp,
   });
   const after = dogeTradingReplay.runtime.portfolio.getPosition({ symbol: MARKET_SYMBOL });
   assert.equal(
@@ -497,19 +497,24 @@ async function assertSingleCycleDuplicateFillIsIdempotent({ dogeTradingReplay, r
 
 runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill report is received and reconciled", async (dogeTradingReplay) => {
   const { recoverySellOrder } = await submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay);
+  const executionTimestamp = Math.max(Date.now(), recoverySellOrder.createdAt + 1);
   const completion = dogeTradingReplay.waitForRecoveryCycleCompletion();
   await dogeTradingReplay.publishMarketPrice(dogeTradingReplay.scenarioExpectations.sellFillPrice);
   await dogeTradingReplay.publishFullOrderFill({
     order: recoverySellOrder,
     price: dogeTradingReplay.scenarioExpectations.sellFillPrice,
     tradeId: SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID,
-    timestamp: 1700000000000,
+    timestamp: executionTimestamp,
   });
   const recoveryCycleResult = await completion;
   assertSingleCycleCompletionResult({ dogeTradingReplay, recoveryCycleResult });
   assertSingleCyclePosition(dogeTradingReplay);
   assertSingleCycleExecutionReports(dogeTradingReplay);
-  await assertSingleCycleDuplicateFillIsIdempotent({ dogeTradingReplay, recoverySellOrder });
+  await assertSingleCycleDuplicateFillIsIdempotent({
+    dogeTradingReplay,
+    recoverySellOrder,
+    timestamp: executionTimestamp,
+  });
 });
 
 async function submitInitialBuyOrder(dogeTradingReplay) {

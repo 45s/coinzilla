@@ -8,7 +8,6 @@ const test = (...args) => {
 }
 
 const MARKET_SYMBOL = "ADAUSDT"
-const SELL_TIMESTAMP = 1794909224000
 const scenarioExpectations = {
   initialPrice: "0.15286",
   buyPrice: "0.1524",
@@ -91,15 +90,17 @@ async function submitAdaBuySequence(replay) {
 }
 
 async function fillAdaRecoverySell(replay, replacementSell) {
+  const timestamp = Math.max(Date.now(), replacementSell.createdAt + 1)
   const result = await replay.publishFullOrderFill({
     order: replacementSell,
     price: scenarioExpectations.sellPrice,
     tradeId: "ADA-SELL-738736",
-    timestamp: SELL_TIMESTAMP,
+    timestamp,
     commissionAmount: "0.01527938",
     commissionAsset: "USDT",
   })
   assert.equal(result.ok, true, result.errors?.[0]?.message)
+  return timestamp
 }
 
 function assertAdaExecutionReports(replay) {
@@ -163,12 +164,12 @@ function assertAdaBelowTargetOutcome(replay, replacementSell) {
   return replay.receivedLifecycleEvents.length
 }
 
-async function assertAdaDuplicateFillIsIdempotent(replay, replacementSell, eventCount) {
+async function assertAdaDuplicateFillIsIdempotent(replay, replacementSell, eventCount, timestamp) {
   await replay.publishFullOrderFill({
     order: replacementSell,
     price: scenarioExpectations.sellPrice,
     tradeId: "ADA-SELL-738736",
-    timestamp: SELL_TIMESTAMP,
+    timestamp,
     commissionAmount: "0.01527938",
     commissionAsset: "USDT",
   })
@@ -210,10 +211,10 @@ test("replays the 2026-11-17 ADA cycle and preserves the below-target outcome th
     }
   })
   const { replacementSell, thirdBuy } = await submitAdaBuySequence(replay)
-  await fillAdaRecoverySell(replay, replacementSell)
+  const sellExecutionTimestamp = await fillAdaRecoverySell(replay, replacementSell)
   assertAdaExecutionReports(replay)
   const eventCount = assertAdaBelowTargetOutcome(replay, replacementSell)
-  await assertAdaDuplicateFillIsIdempotent(replay, replacementSell, eventCount)
+  await assertAdaDuplicateFillIsIdempotent(replay, replacementSell, eventCount, sellExecutionTimestamp)
   await replay.runtime.stop()
   stopped = true
   assertAdaShutdownOutcome(replay, thirdBuy)
