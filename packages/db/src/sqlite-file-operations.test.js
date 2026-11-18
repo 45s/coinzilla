@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
+import { DatabaseSync } from "node:sqlite"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
