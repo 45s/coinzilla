@@ -83,10 +83,31 @@ export async function verifyDatabaseFile({ filename, timeout }) {
     readOnly: true,
     timeout,
   })
+  let verificationFailed = false
+  let verificationError
 
   try {
     validateIntegrity(database)
-  } finally {
+  } catch (error) {
+    verificationFailed = true
+    verificationError = error
+  }
+
+  try {
     database.close()
+  } catch (closeError) {
+    if (verificationFailed) {
+      throw new AggregateError(
+        [verificationError, closeError],
+        "SQLite database verification failed and its connection could not close",
+        { cause: verificationError },
+      )
+    }
+
+    throw closeError
+  }
+
+  if (verificationFailed) {
+    throw verificationError
   }
 }
