@@ -342,7 +342,7 @@ async function releaseProviderProcessLocks({ locks }) {
   return errors
 }
 
-function createProviderProcessLockGroup({
+function createProviderProcessLockEntries({
   providers,
   locks,
 }) {
@@ -355,58 +355,85 @@ function createProviderProcessLockGroup({
       released: false,
     })
   }
-  const releaseProvider = async (providerInstanceId) => {
-    const entry = entries.find((item) => item.providerInstanceId === providerInstanceId)
-    if (!entry) {
-      return {
-        ok: false,
-        errors: [new Error(`Provider account process lock ${providerInstanceId} is not registered`)],
-      }
-    }
-    if (entry.released) {
-      return {
-        ok: true,
-        alreadyReleased: true,
-      }
-    }
-    try {
-      const result = await entry.lock.release()
-      if (result?.ok === true) {
-        entry.released = true
-      }
-      return result
-    } catch (error) {
-      return {
-        ok: false,
-        errors: [error],
-      }
+  return entries
+}
+
+async function releaseProviderProcessLock({
+  entries,
+  providerInstanceId,
+}) {
+  const entry = entries.find((item) => item.providerInstanceId === providerInstanceId)
+  if (!entry) {
+    return {
+      ok: false,
+      errors: [new Error(`Provider account process lock ${providerInstanceId} is not registered`)],
     }
   }
-  const release = async () => {
-    const errors = []
-    for (const entry of [...entries].reverse()) {
-      if (entry.released) {
-        continue
-      }
-      const result = await releaseProvider(entry.providerInstanceId)
-      if (result?.ok !== true) {
-        errors.push(...getCleanupErrors({
-          result,
-          fallbackError: new Error(`Provider account ${entry.providerInstanceId} process-lock release failed`),
-        }))
-      }
-    }
-    if (errors.length > 0) {
-      return {
-        ok: false,
-        errors,
-      }
-    }
+  if (entry.released) {
     return {
       ok: true,
-      released: true,
+      alreadyReleased: true,
     }
   }
+  try {
+    const result = await entry.lock.release()
+    if (result?.ok === true) {
+      entry.released = true
+    }
+    return result
+  } catch (error) {
+    return {
+      ok: false,
+      errors: [error],
+    }
+  }
+}
+
+async function releaseAllProviderProcessLocks({
+  entries,
+  releaseProvider,
+}) {
+  const errors = []
+  for (const entry of [...entries].reverse()) {
+    if (entry.released) {
+      continue
+    }
+    const result = await releaseProvider(entry.providerInstanceId)
+    if (result?.ok !== true) {
+      errors.push(...getCleanupErrors({
+        result,
+        fallbackError: new Error(`Provider account ${entry.providerInstanceId} process-lock release failed`),
+      }))
+    }
+  }
+  if (errors.length > 0) {
+    return {
+      ok: false,
+      errors,
+    }
+  }
+  return {
+    ok: true,
+    released: true,
+  }
+}
+
+function createProviderProcessLockGroup({
+  providers,
+  locks,
+}) {
+  const entries = createProviderProcessLockEntries({
+    providers,
+    locks,
+  })
+  const releaseProvider = (providerInstanceId) => releaseProviderProcessLock({
+    entries,
+    providerInstanceId,
+  })
+  const release = () => releaseAllProviderProcessLocks({
+    entries,
+    releaseProvider,
+  })
   const lockMetadata = locks.length === 1
     ? locks[0]
     : {
