@@ -1110,6 +1110,11 @@ const invalidSymbolMetadataCases = [
     name: "non-string trading precision entries",
   },
   {
+    field: "precisions",
+    value: ["-0.001"],
+    name: "negative trading precision entries",
+  },
+  {
     field: "symbol",
     value: 42,
     name: "non-string compatibility symbols",
