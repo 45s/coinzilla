@@ -862,82 +862,99 @@ const mapFillCommissionData = ({ fill, commission, index }) => {
   }
 }
 
-// eslint-disable-next-line max-lines-per-function -- Canonical fill DTO remains a single auditable boundary.
+function requireFillSide({ fill }) {
+  if (fill.side !== "BUY" && fill.side !== "SELL") {
+    throw new TypeError("fill.side must be BUY or SELL")
+  }
+  return fill.side
+}
+
+function mapFillIdentityData({ fill }) {
+  return {
+    fillId: requireString({
+      value: fill.id,
+      field: "fillId",
+    }),
+    tradeId: requireString({
+      value: fill.tradeId,
+      field: "tradeId",
+    }),
+    brokerOrderId: requireString({
+      value: fill.brokerOrderId,
+      field: "brokerOrderId",
+    }),
+    ...(fill.clientOrderId === undefined ? {} : {
+      clientOrderId: requireString({
+        value: fill.clientOrderId,
+        field: "clientOrderId",
+      }),
+    }),
+    ...mapProviderProvenance({
+      value: fill,
+      field: "fill",
+    }),
+  }
+}
+
+function mapFillExecutionData({ fill }) {
+  return {
+    symbol: requireString({
+      value: fill.market.symbol,
+      field: "symbol",
+    }),
+    side: requireFillSide({ fill }),
+    price: requireDecimalString({
+      value: fill.price?.amount,
+      field: "price",
+    }),
+    quantity: requireDecimalString({
+      value: fill.quantity?.amount,
+      field: "quantity",
+    }),
+    quoteQuantity: requireDecimalString({
+      value: fill.quoteQuantity?.amount,
+      field: "quoteQuantity",
+    }),
+    liquidityRole: requireString({
+      value: fill.liquidityRole,
+      field: "liquidityRole",
+    }),
+    ...(fill.executedAt === undefined ? {} : {
+      executedAt: requireNonNegativeSafeInteger({
+        value: fill.executedAt,
+        field: "fill.executedAt",
+      }),
+    }),
+    commissions: mapArrayWithIndex({
+      values: fill.commissions,
+      mapper: ({ value: commission, index }) => mapFillCommissionData({
+        fill,
+        commission,
+        index,
+      }),
+    }),
+    commissionStatus: requireString({
+      value: fill.commissionStatus,
+      field: "commissionStatus",
+    }),
+  }
+}
+
+function mapFillAppliedFields({ fill }) {
+  if (!(fill instanceof Fill)) {
+    throw new TypeError("fill must be a canonical Fill")
+  }
+  return {
+    ...mapFillIdentityData({ fill }),
+    ...mapFillExecutionData({ fill }),
+  }
+}
+
 export const mapFillAppliedData = (input = {}) =>
   mapData({
     input,
     operation: "Fill-applied event mapping",
-    // eslint-disable-next-line max-lines-per-function -- Canonical fill DTO remains a single auditable boundary.
-    mapper: ({ fill }) => {
-      if (!(fill instanceof Fill)) {
-        throw new TypeError("fill must be a canonical Fill")
-      }
-      return {
-        fillId: requireString({
-          value: fill.id,
-          field: "fillId",
-        }),
-        tradeId: requireString({
-          value: fill.tradeId,
-          field: "tradeId",
-        }),
-        brokerOrderId: requireString({
-          value: fill.brokerOrderId,
-          field: "brokerOrderId",
-        }),
-        ...(fill.clientOrderId === undefined ? {} : {
-          clientOrderId: requireString({
-            value: fill.clientOrderId,
-            field: "clientOrderId",
-          }),
-        }),
-        ...mapProviderProvenance({
-          value: fill,
-          field: "fill",
-        }),
-        symbol: requireString({
-          value: fill.market.symbol,
-          field: "symbol",
-        }),
-        side: fill.side === "BUY" || fill.side === "SELL"
-          ? fill.side
-          : (() => { throw new TypeError("fill.side must be BUY or SELL") })(),
-        price: requireDecimalString({
-          value: fill.price?.amount,
-          field: "price",
-        }),
-        quantity: requireDecimalString({
-          value: fill.quantity?.amount,
-          field: "quantity",
-        }),
-        quoteQuantity: requireDecimalString({
-          value: fill.quoteQuantity?.amount,
-          field: "quoteQuantity",
-        }),
-        liquidityRole: requireString({
-          value: fill.liquidityRole,
-          field: "liquidityRole",
-        }),
-        ...(fill.executedAt === undefined ? {} : {
-          executedAt: requireNonNegativeSafeInteger({
-            value: fill.executedAt,
-            field: "fill.executedAt",
-          }),
-        }),
-        commissions: mapArrayWithIndex({
-          values: fill.commissions,
-          mapper: ({ value: commission, index }) => mapFillCommissionData({
-            fill,
-            commission,
-            index,
-          }),
-        }),
-        commissionStatus: requireString({
-          value: fill.commissionStatus,
-          field: "commissionStatus",
-        }),
-      }
-    },
+    mapper: ({ fill }) => mapFillAppliedFields({ fill }),
   })
 
 const requireExecutionOrderFacts = ({ order }) => {
