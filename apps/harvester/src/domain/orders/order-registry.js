@@ -77,6 +77,11 @@ function isStaleOrderUpdate({ current, next }) {
 }
 
 function validateOrderUpdate({ current, next }) {
+  for (const field of ["providerInstanceId", "providerType", "accountId"]) {
+    if (next[field] !== undefined && current[field] !== undefined && next[field] !== current[field]) {
+      throw new Error(`Canonical order update changed immutable ${field}`)
+    }
+  }
   if (!sameOrderIntent({ current,
 next })) {
     throw new Error("Canonical order update changed immutable order intent")
@@ -127,11 +132,17 @@ function findOrderUpdateIndex({ orders, order } = {}) {
 }
 
 function createNextCanonicalOrder({ current, order } = {}) {
-  if (current.clientOrderId === order.clientOrderId) {
+  if (current.clientOrderId === order.clientOrderId &&
+      current.providerInstanceId === order.providerInstanceId &&
+      current.providerType === order.providerType &&
+      current.accountId === order.accountId) {
     return order
   }
   return new CanonicalOrder({
     clientOrderId: current.clientOrderId,
+    providerInstanceId: current.providerInstanceId ?? order.providerInstanceId,
+    providerType: current.providerType ?? order.providerType,
+    accountId: current.accountId ?? order.accountId,
     brokerOrderId: order.brokerOrderId,
     market: order.market,
     side: order.side,
@@ -304,6 +315,9 @@ alreadyAcknowledged: true } })
       }
       const unknownOrder = new CanonicalOrder({
         clientOrderId: current.clientOrderId,
+        providerInstanceId: current.providerInstanceId,
+        providerType: current.providerType,
+        accountId: current.accountId,
         brokerOrderId: current.brokerOrderId,
         market: current.market,
         side: current.side,
@@ -360,6 +374,9 @@ alreadyTerminal: true } })
       const unknownOrder = new CanonicalOrder({
         clientOrderId: current.clientOrderId,
         brokerOrderId: current.brokerOrderId,
+        providerInstanceId: current.providerInstanceId,
+        providerType: current.providerType,
+        accountId: current.accountId,
         market: current.market,
         side: current.side,
         type: current.type,
@@ -425,6 +442,9 @@ duplicate: true })
     const attached = new CanonicalOrder({
       clientOrderId: current.clientOrderId,
       brokerOrderId: order.brokerOrderId,
+      providerInstanceId: current.providerInstanceId ?? order.providerInstanceId,
+      providerType: current.providerType ?? order.providerType,
+      accountId: current.accountId ?? order.accountId,
       market: current.market,
       side: current.side,
       type: current.type,

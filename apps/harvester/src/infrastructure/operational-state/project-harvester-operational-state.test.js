@@ -573,3 +573,48 @@ test("rejects a completed-cycle fact that names a different terminal SELL order"
 
   assert.equal(result.ok, false, "A cycle cannot be committed against a different fully filled SELL order.")
 })
+
+
+test("projects immutable provider provenance from submission intent through acknowledgement and fill", () => {
+  const provider = { providerInstanceId: "binanceTestnet", providerType: "binance", accountId: "binance-primary" }
+  const result = projectHarvesterOperationalState({
+    records: [
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+      baseline(),
+      started(),
+      ...preflightFacts(),
+      record(5, "ORDER_SUBMISSION_INTENT", {
+        clientOrderId: "provider-client-1", ...provider,
+        marketId: "binance:BTCUSDT", venue: "binance", symbol: "BTCUSDT",
+        baseAssetId: "asset:BTC", quoteAssetId: "asset:USDT", side: "BUY",
+        type: "LIMIT_MAKER", price: "100", quantity: "0.1", purpose: null,
+      }, "order-submission-intent:provider-client-1"),
+      record(6, "ORDER_SUBMISSION_OUTCOME", {
+        clientOrderId: "provider-client-1", ...provider,
+        marketId: "binance:BTCUSDT", venue: "binance", symbol: "BTCUSDT",
+        baseAssetId: "asset:BTC", quoteAssetId: "asset:USDT", side: "BUY",
+        type: "LIMIT_MAKER", price: "100", quantity: "0.1", executedQuantity: "0",
+        purpose: null, outcome: "ACKNOWLEDGED", brokerOrderId: "provider-broker-1", status: "OPEN",
+      }, "order-submission-outcome:provider-client-1:ACKNOWLEDGED"),
+      record(7, "EXECUTION_FILL_APPLIED", {
+        fillId: "binance:BTCUSDT:trade-1", tradeId: "trade-1", brokerOrderId: "provider-broker-1",
+        clientOrderId: "provider-client-1", ...provider,
+        marketId: "binance:BTCUSDT", venue: "binance", symbol: "BTCUSDT",
+        baseAssetId: "asset:BTC", quoteAssetId: "asset:USDT", side: "BUY",
+        price: "100", quantity: "0.01", quoteQuantity: "1", liquidityRole: "MAKER",
+        executedAt: 1, commissionStatus: "COMPLETE", commissions: [],
+      }, "execution-fill-applied:binance:BTCUSDT:trade-1"),
+    ],
+  })
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual([
+    result.data.orders[0].providerInstanceId,
+    result.data.orders[0].providerType,
+    result.data.orders[0].accountId,
+  ], ["binanceTestnet", "binance", "binance-primary"])
+  assert.deepEqual([
+    result.data.fills[0].providerInstanceId,
+    result.data.fills[0].providerType,
+    result.data.fills[0].accountId,
+  ], ["binanceTestnet", "binance", "binance-primary"])
+})

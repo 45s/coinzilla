@@ -15,6 +15,14 @@ export async function recordExecutionFill({ operationalStateStore, fill } = {}) 
     if (typeof operationalStateStore?.append !== "function") { throw new TypeError("recordExecutionFill requires a Operational State Store append capability") }
     if (!(fill instanceof Fill)) { throw new TypeError("recordExecutionFill requires a canonical Fill") }
     const {market} = fill
+    if (typeof fill.clientOrderId !== "string" || !fill.clientOrderId.trim()) {
+      throw new TypeError("Execution-fill fact requires its original Harvester clientOrderId")
+    }
+    for (const field of ["providerInstanceId", "providerType", "accountId"]) {
+      if (typeof fill[field] !== "string" || !fill[field].trim()) {
+        throw new TypeError(`Execution-fill fact requires immutable ${field} provenance`)
+      }
+    }
     const commissions = fill.commissions.map((commission) => ({
       amount: commission.amount.amount,
       assetId: commission.amount.asset.id,
@@ -33,6 +41,9 @@ assetCode: commission.quoteValue.asset.code }
         tradeId: fill.tradeId,
         brokerOrderId: fill.brokerOrderId,
         clientOrderId: fill.clientOrderId ?? null,
+        providerInstanceId: fill.providerInstanceId,
+        providerType: fill.providerType,
+        accountId: fill.accountId,
         marketId: market.id,
         venue: market.venue,
         symbol: market.symbol,

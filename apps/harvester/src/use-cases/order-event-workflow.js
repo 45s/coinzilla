@@ -121,10 +121,25 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
       }),
     }
   }
+  const hasProviderIdentity = ["providerInstanceId", "providerType", "accountId"].every((field) =>
+    typeof order[field] === "string" && order[field].trim())
+  if (!hasProviderIdentity) {
+    const error = new Error("Execution fill cannot be attributed to a provider instance: legacy order provenance is missing")
+    publishInvalidExecutionFill({ order, fill, reason: "IDENTITY_MISMATCH", error, eventPublisher })
+    return {
+      ok: false,
+      error,
+      symbol: order.market.symbol,
+      failure: { category: "OWNERSHIP_INTEGRITY", stage: "FILL_PROVIDER_PROVENANCE_MISSING", retryable: false },
+    }
+  }
   const identityMatches = fill.market.id === order.market.id &&
     fill.side === order.side &&
     fill.brokerOrderId === order.brokerOrderId &&
-    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId) &&
+    fill.providerInstanceId === order.providerInstanceId &&
+    fill.providerType === order.providerType &&
+    fill.accountId === order.accountId
   if (!identityMatches) {
     const error = new Error("Canonical Fill identity does not match its registered order")
     publishInvalidExecutionFill({
@@ -152,7 +167,7 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
 }
 
 async function pauseForInvalidExecutionFill({ pause, validation }) {
-  if (validation.failure?.stage !== "FILL_ORDER_IDENTITY") {
+  if (!["FILL_ORDER_IDENTITY", "FILL_PROVIDER_PROVENANCE_MISSING"].includes(validation.failure?.stage)) {
     return
   }
   await pause({
@@ -223,6 +238,26 @@ function publishExecutionFillOutcome({ accounting, fill, eventPublisher }) {
 }
 
 async function processExecutionFill({ dependencies, order, fill }) {
+  if (order instanceof CanonicalOrder && order.providerInstanceId !== undefined &&
+      fill instanceof Fill && fill.providerInstanceId === undefined) {
+    fill = new Fill({
+      tradeId: fill.tradeId,
+      brokerOrderId: fill.brokerOrderId,
+      clientOrderId: fill.clientOrderId ?? order.clientOrderId,
+      providerInstanceId: order.providerInstanceId,
+      providerType: order.providerType,
+      accountId: order.accountId,
+      market: fill.market,
+      side: fill.side,
+      price: fill.price,
+      quantity: fill.quantity,
+      quoteQuantity: fill.quoteQuantity,
+      liquidityRole: fill.liquidityRole,
+      executedAt: fill.executedAt,
+      commissions: fill.commissions,
+      commissionStatus: fill.commissionStatus,
+    })
+  }
   const {
     state,
     eventPublisher,
