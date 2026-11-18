@@ -20,10 +20,10 @@ export function resolveMarketAction(page) {
 export function selectMarketsForAction({ markets,
  action }) {
   if (action === "PAUSE") {
-    return markets.filter((market) => market?.enabled === true && market.operatorPaused !== true)
+    return markets.filter((market) => market?.enabled === true && market.operatorBuysPaused !== true)
   }
   if (action === "RESUME") {
-    return markets.filter((market) => market?.enabled === true && market.operatorPaused === true)
+    return markets.filter((market) => market?.enabled === true && market.operatorBuysPaused === true)
   }
   return []
 }
@@ -37,7 +37,7 @@ export function formatMarketActionPrompt({ action,
   if (eligibleMarkets.length > 0) { return `${prompt}\n\n${text}` }
   const emptyMessage = action === "PAUSE"
     ? "No enabled markets are currently available to pause."
-    : "No enabled operator-paused markets are currently available to resume."
+    : "No enabled BUY-paused markets are currently available to resume."
   return `${prompt}\n${emptyMessage}\n\n${text}`
 }
 
