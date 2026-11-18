@@ -373,25 +373,17 @@ Application services depend on the Harvester ports, not the DB facade or provide
 ```js
 export function createTradingHistoryService({
   orderHistoryRepository,
-  orderEventHistoryRepository,
   executionHistoryRepository,
   accountSnapshotHistoryRepository,
 }) {
   return {
-    listOrders(query) {
+    async listOrders(query) {
       return orderHistoryRepository.list(query)
     },
-    listOrderEvents(query) {
-      if (!orderEventHistoryRepository) {
-        throw new Error('Order-event history projection is not configured')
-      }
-
-      return orderEventHistoryRepository.listForOrder(query)
-    },
-    listFills(query) {
+    async listFills(query) {
       return executionHistoryRepository.list(query)
     },
-    listAccountSnapshots(query) {
+    async listAccountSnapshots(query) {
       return accountSnapshotHistoryRepository.list(query)
     },
   }
@@ -405,14 +397,27 @@ For writes, an infrastructure-owned projection observer subscribes to already-pu
 When one projection transition must update an order row and append its event atomically, the repository adapter uses the existing facade transaction pattern:
 
 ```js
-database.transaction(() => {
-  // Read the current projection and validate the next transition.
-  // Update the order projection and append the corresponding event.
-  // All DB calls are synchronous for the SQLite provider.
+await database.transaction((transaction) => {
+  const current = transaction.readOne({
+    collection: "harvester_order_history",
+    id: orderRecord.id,
+  })
+
+  // Validate the next projection against current before writing.
+  transaction.update({
+    collection: "harvester_order_history",
+    id: orderRecord.id,
+    changes: orderRecord.changes,
+  })
+
+  transaction.create({
+    collection: "harvester_order_events",
+    record: eventRecord,
+  })
 })
 ```
 
-The transaction callback must remain synchronous for SQLite. Do not perform exchange I/O, Journal writes, Operational State Store appends, or asynchronous validation inside it. The current trading-session adapter is the concrete implementation reference for the facade's transaction shape.
+The transaction callback must remain synchronous for SQLite. Do not perform exchange I/O, Journal writes, Operational State Store appends, or asynchronous validation inside it. The current trading-session adapter is the concrete implementation reference for the facade's transaction shape. If an order-event projection is enabled, its reporting service can call `orderEventHistoryRepository.listForOrder({ orderIdentity, limit, offset })` through the same application-owned port boundary.
 
 ### 5.7 Validation, errors and transactions
 
