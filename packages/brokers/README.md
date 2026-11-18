@@ -45,7 +45,7 @@ Both providers expose an immutable `BrokerCapabilities` declaration. The canonic
 
 Unsupported methods remain present and return a typed `BrokerUnsupportedOperationError` inside a failed result. They never silently no-op or fabricate successful empty data. State-changing methods expose `mutationOutcome` so callers can distinguish `NOT_SENT`, `REJECTED`, `CONFIRMED`, and `OUTCOME_UNKNOWN`.
 
-The declaration retains the Harvester registry's version/provider/environment metadata contract without importing Harvester ports or adapters. The legacy Entities capability export is not used by Brokers; its owner-coordinated compatibility disposition is tracked in [Entities issue #1450](https://github.com/45s/coinzilla/issues/1450).
+The public Brokers capability exports are compatibility re-exports of the canonical `BrokerCapabilities` contract from `@coinzilla/entities`. Provider adapters supply provider/product/environment identity and evidence metadata through that shared class. There is one capability vocabulary, three-state status model, validator, lookup implementation, and serializer; Brokers does not maintain a competing capability class.
 
 See [BROKER_API.md](./BROKER_API.md) for the full method-by-method Binance/Bitunix matrix, canonical and compatibility operations, result/error semantics, decimal/timestamp guarantees, pagination, lifecycle, and safety boundaries.
 
