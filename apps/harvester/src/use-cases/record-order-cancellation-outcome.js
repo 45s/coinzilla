@@ -11,9 +11,9 @@ function validateCanonicalCancellationResponse({ order, canceledOrder, outcome }
       canceledOrder.brokerOrderId !== order.brokerOrderId ||
       canceledOrder.market.id !== order.market.id ||
       canceledOrder.side !== order.side ||
-      canceledOrder.providerInstanceId !== order.providerInstanceId ||
-      canceledOrder.providerType !== order.providerType ||
-      canceledOrder.accountId !== order.accountId) {
+      (canceledOrder.providerInstanceId !== undefined && canceledOrder.providerInstanceId !== order.providerInstanceId) ||
+      (canceledOrder.providerType !== undefined && canceledOrder.providerType !== order.providerType) ||
+      (canceledOrder.accountId !== undefined && canceledOrder.accountId !== order.accountId)) {
     throw new TypeError("Cancellation outcome response does not match the original canonical order identity")
   }
   if (outcome === "NOT_CANCELED" && !["OPEN", "PARTIALLY_FILLED"].includes(canceledOrder.status)) {
