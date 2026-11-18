@@ -117,7 +117,10 @@ function createStyleExceptionFixture() {
       isNewFile: true,
     },
   ]))
-  return { documents, changesByPath }
+  return {
+    documents,
+    changesByPath,
+  }
 }
 
 test("checks new files fully while preserving historical, superseded and GitHub template exceptions", () => {
