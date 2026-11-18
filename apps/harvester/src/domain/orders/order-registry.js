@@ -21,7 +21,10 @@ const ALLOWED_TRANSITIONS = Object.freeze({
   EXPIRED: new Set(["EXPIRED", "FILLED"]),
 })
 
-function sameOrderIntent({ current, next }) {
+function sameOrderIntent({
+    current,
+    next,
+  }) {
   return current.market.id === next.market.id &&
     current.side === next.side &&
     current.type === next.type &&
@@ -76,7 +79,10 @@ function isStaleOrderUpdate({ current, next }) {
     next.status === "OPEN"
 }
 
-function validateProviderIdentityUnchanged({ current, next }) {
+function validateProviderIdentityUnchanged({
+    current,
+    next,
+  }) {
   for (const field of ["providerInstanceId", "providerType", "accountId"]) {
     if (next[field] !== undefined && current[field] !== undefined && next[field] !== current[field]) {
       throw new Error(`Canonical order update changed immutable ${field}`)
@@ -84,7 +90,10 @@ function validateProviderIdentityUnchanged({ current, next }) {
   }
 }
 
-function validateOrderProgress({ current, next }) {
+function validateOrderProgress({
+    current,
+    next,
+  }) {
   if (compareDecimal({
     left: next.executedQuantity.amount,
     right: current.executedQuantity.amount,
@@ -97,7 +106,10 @@ function validateOrderProgress({ current, next }) {
   }
 }
 
-function validateOrderStatusTransition({ current, next }) {
+function validateOrderStatusTransition({
+    current,
+    next,
+  }) {
   if (!ALLOWED_TRANSITIONS[current.status]?.has(next.status)) {
     throw new Error(
       `Invalid canonical order status transition: ${current.status} -> ${next.status}`,
@@ -133,7 +145,10 @@ function findOrderUpdateIndex({ orders, order } = {}) {
 }
 
 function createNextCanonicalOrder({ current, order } = {}) {
-  validateProviderIdentityUnchanged({ current, next: order })
+  validateProviderIdentityUnchanged({
+    current,
+    next: order,
+  })
   if (current.clientOrderId === order.clientOrderId &&
       current.providerInstanceId === order.providerInstanceId &&
       current.providerType === order.providerType &&
@@ -167,107 +182,6 @@ function createNextCanonicalOrder({ current, order } = {}) {
  * once the exchange identity is known. Unknown exchange orders are deliberately not adopted.
  */
 
-
-function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order }) {
-  if (!(order instanceof CanonicalOrder) || order.status === "PENDING" ||
-      typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
-    throw new TypeError("OrderRegistry.attachAcknowledgedBrokerOrderId requires an acknowledged order with brokerOrderId")
-  }
-  const index = orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
-  if (index < 0) { throw new Error("Acknowledged order is not registered by clientOrderId") }
-  const current = orders[index]
-  validateProviderIdentityUnchanged({ current, next: order })
-  if (!sameOrderIntent({ current, next: order })) {
-    throw new Error("Broker acknowledgement changed immutable order intent")
-  }
-  if (current.status === "UNKNOWN" && current.brokerOrderId === order.brokerOrderId) {
-    return Object.freeze({ registry, applied: false, duplicate: true })
-  }
-  if (!["PENDING", "UNKNOWN"].includes(current.status)) {
-    throw new Error("Only a PENDING or unresolved UNKNOWN order can receive its acknowledged brokerOrderId")
-  }
-  if (current.brokerOrderId !== undefined) {
-    if (current.brokerOrderId === order.brokerOrderId) {
-      return Object.freeze({ registry, applied: false, duplicate: true })
-    }
-    throw new Error("Acknowledged order changed brokerOrderId")
-  }
-  if (orders.some((item) => item.brokerOrderId === order.brokerOrderId)) {
-    throw new Error("Broker order ID is already owned by another Harvester order")
-  }
-  const attached = new CanonicalOrder({
-    clientOrderId: current.clientOrderId,
-    brokerOrderId: order.brokerOrderId,
-    providerInstanceId: current.providerInstanceId ?? order.providerInstanceId,
-    providerType: current.providerType ?? order.providerType,
-    accountId: current.accountId ?? order.accountId,
-    market: current.market,
-    side: current.side,
-    type: current.type,
-    limitPrice: current.limitPrice,
-    originalQuantity: current.originalQuantity,
-    executedQuantity: current.executedQuantity,
-    status: "UNKNOWN",
-    createdAt: order.createdAt ?? current.createdAt,
-    acknowledgedAt: order.acknowledgedAt,
-    updatedAt: order.updatedAt,
-  })
-  const nextOrders = [...orders]
-  nextOrders[index] = attached
-  return Object.freeze({
-    registry: new OrderRegistry({
-      orders: nextOrders,
-      ownerships: attachBrokerOrderIdToOwnership({
-        ownerships,
-        clientOrderId: current.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
-      }),
-    }),
-    applied: true,
-    duplicate: false,
-  })
-}
-
-function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
-  if (!(order instanceof CanonicalOrder) || order.status === "PENDING") {
-    throw new TypeError("OrderRegistry.applyUpdate requires a broker-acknowledged CanonicalOrder")
-  }
-  const index = findOrderUpdateIndex({ orders, order })
-  if (index < 0) {
-    return Object.freeze({ registry, applied: false, duplicate: false, unknown: true })
-  }
-  const current = orders[index]
-  if (current.brokerOrderId !== undefined && current.brokerOrderId !== order.brokerOrderId) {
-    throw new Error("Canonical order update changed brokerOrderId")
-  }
-  const nextOrder = createNextCanonicalOrder({ current, order })
-  const intentMatches = sameOrderIntent({ current, next: nextOrder })
-  const brokerIdentityMatches = current.brokerOrderId === undefined ||
-    current.brokerOrderId === nextOrder.brokerOrderId
-  if (intentMatches && brokerIdentityMatches && isStaleOrderUpdate({ current, next: nextOrder })) {
-    return Object.freeze({ registry, applied: false, duplicate: false, stale: true, unknown: false })
-  }
-  validateOrderUpdate({ current, next: nextOrder })
-  if (sameOrderState({ current, next: nextOrder })) {
-    return Object.freeze({ registry, applied: false, duplicate: true, stale: false, unknown: false })
-  }
-  const nextOrders = [...orders]
-  nextOrders[index] = nextOrder
-  const nextOwnerships = nextOrder.brokerOrderId === undefined
-    ? ownerships
-    : attachBrokerOrderIdToOwnership({
-        ownerships,
-        clientOrderId: current.clientOrderId,
-        brokerOrderId: nextOrder.brokerOrderId,
-      })
-  return Object.freeze({
-    registry: new OrderRegistry({ orders: nextOrders, ownerships: nextOwnerships }),
-    applied: true,
-    duplicate: false,
-    stale: false,
-    unknown: false,
-  })
-}
 
 export class OrderRegistry {
   #orders
@@ -542,4 +456,151 @@ next: unknownOrder })
       ownerships: Object.freeze(this.#ownerships.map((ownership) => Object.freeze({ ...ownership }))),
     })
   }
+}
+
+
+function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order }) {
+  if (!(order instanceof CanonicalOrder) || order.status === "PENDING" ||
+      typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
+    throw new TypeError("OrderRegistry.attachAcknowledgedBrokerOrderId requires an acknowledged order with brokerOrderId")
+  }
+  const index = orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
+  if (index < 0) { throw new Error("Acknowledged order is not registered by clientOrderId") }
+  const current = orders[index]
+  validateProviderIdentityUnchanged({ current, next: order })
+  if (!sameOrderIntent({
+    current,
+    next: order,
+  })) {
+    throw new Error("Broker acknowledgement changed immutable order intent")
+  }
+  if (current.status === "UNKNOWN" && current.brokerOrderId === order.brokerOrderId) {
+    return Object.freeze({
+      registry,
+      applied: false,
+      duplicate: true,
+    })
+  }
+  if (!["PENDING", "UNKNOWN"].includes(current.status)) {
+    throw new Error("Only a PENDING or unresolved UNKNOWN order can receive its acknowledged brokerOrderId")
+  }
+  if (current.brokerOrderId !== undefined) {
+    if (current.brokerOrderId === order.brokerOrderId) {
+      return Object.freeze({ registry, applied: false, duplicate: true })
+    }
+    throw new Error("Acknowledged order changed brokerOrderId")
+  }
+  if (orders.some((item) => item.brokerOrderId === order.brokerOrderId)) {
+    throw new Error("Broker order ID is already owned by another Harvester order")
+  }
+  const attached = new CanonicalOrder({
+    clientOrderId: current.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    providerInstanceId: current.providerInstanceId ?? order.providerInstanceId,
+    providerType: current.providerType ?? order.providerType,
+    accountId: current.accountId ?? order.accountId,
+    market: current.market,
+    side: current.side,
+    type: current.type,
+    limitPrice: current.limitPrice,
+    originalQuantity: current.originalQuantity,
+    executedQuantity: current.executedQuantity,
+    status: "UNKNOWN",
+    createdAt: order.createdAt ?? current.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: order.updatedAt,
+  })
+  const nextOrders = [...orders]
+  nextOrders[index] = attached
+  return Object.freeze({
+    registry: new OrderRegistry({
+      orders: nextOrders,
+      ownerships: attachBrokerOrderIdToOwnership({
+        ownerships,
+        clientOrderId: current.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+      }),
+    }),
+    applied: true,
+    duplicate: false,
+  })
+}
+
+function applyCanonicalOrderUpdate({ registry, orders, ownerships, order }) {
+  if (!(order instanceof CanonicalOrder) || order.status === "PENDING") {
+    throw new TypeError("OrderRegistry.applyUpdate requires a broker-acknowledged CanonicalOrder")
+  }
+  const index = findOrderUpdateIndex({
+    orders,
+    order,
+  })
+  if (index < 0) {
+    return Object.freeze({
+      registry,
+      applied: false,
+      duplicate: false,
+      unknown: true,
+    })
+  }
+  const current = orders[index]
+  if (current.brokerOrderId !== undefined && current.brokerOrderId !== order.brokerOrderId) {
+    throw new Error("Canonical order update changed brokerOrderId")
+  }
+  const nextOrder = createNextCanonicalOrder({
+    current,
+    order,
+  })
+  const intentMatches = sameOrderIntent({
+    current,
+    next: nextOrder,
+  })
+  const brokerIdentityMatches = current.brokerOrderId === undefined ||
+    current.brokerOrderId === nextOrder.brokerOrderId
+  if (intentMatches && brokerIdentityMatches && isStaleOrderUpdate({
+      current,
+      next: nextOrder,
+    })) {
+    return Object.freeze({
+      registry,
+      applied: false,
+      duplicate: false,
+      stale: true,
+      unknown: false,
+    })
+  }
+  validateOrderUpdate({
+    current,
+    next: nextOrder,
+  })
+  if (sameOrderState({
+    current,
+    next: nextOrder,
+  })) {
+    return Object.freeze({
+      registry,
+      applied: false,
+      duplicate: true,
+      stale: false,
+      unknown: false,
+    })
+  }
+  const nextOrders = [...orders]
+  nextOrders[index] = nextOrder
+  const nextOwnerships = nextOrder.brokerOrderId === undefined
+    ? ownerships
+    : attachBrokerOrderIdToOwnership({
+        ownerships,
+        clientOrderId: current.clientOrderId,
+        brokerOrderId: nextOrder.brokerOrderId,
+      })
+  return Object.freeze({
+    registry: new OrderRegistry({
+      orders: nextOrders,
+      ownerships: nextOwnerships,
+    }),
+    applied: true,
+    duplicate: false,
+    stale: false,
+    unknown: false,
+  })
 }
