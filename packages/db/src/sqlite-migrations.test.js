@@ -1,4 +1,7 @@
 import assert from "node:assert/strict"
+import { mkdtemp, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import test from "node:test"
 
 import { createSqliteDatabase } from "../src/index.js"
@@ -310,5 +313,53 @@ test("migration thenable inspection failures roll back schema changes", async ()
     )
   } finally {
     await database.close()
+  }
+})
+
+
+test("independent SQLite connections applying the same migrations record each version once", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-migration-concurrency-"))
+  const filename = join(directory, "shared.sqlite")
+  const first = createSqliteDatabase({ filename })
+  const second = createSqliteDatabase({ filename })
+  let migrationExecutions = 0
+  const migrations = [{
+    version: 1,
+    name: "create-shared-records",
+    up(transaction) {
+      migrationExecutions += 1
+      transaction.exec("CREATE TABLE shared_records (id INTEGER PRIMARY KEY)")
+    },
+  }]
+  await first.connect()
+  await second.connect()
+
+  try {
+    const results = await Promise.all([
+      first.migrate(migrations),
+      second.migrate(migrations),
+    ])
+
+    assert.deepEqual(
+      results,
+      [[1], []],
+      "Concurrent independent migration requests must apply a shared version once and report no duplicate work",
+    )
+    assert.equal(
+      migrationExecutions,
+      1,
+      "The migration callback must execute exactly once across independent SQLite connections",
+    )
+    assert.equal(
+      second.prepare("SELECT COUNT(*) AS count FROM schema_migrations").get().count,
+      1,
+      "Both connections must observe one durable migration-history record",
+    )
+  } finally {
+    await Promise.all([first.close(), second.close()])
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
