@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readTelegramOperatorPage } from "./pages.js"
+import { readTelegramOperatorPage, selectMarketsForAction } from "./pages.js"
+import { createNavigationKeyboard } from "./keyboard.js"
 
 function createPageDependencies({ operator = {} } = {}) {
   const diagnostics = {
@@ -115,4 +116,30 @@ test("does not hide a failed application query behind a successful page", async 
     1,
     "A failed application result must be preserved in diagnostics.",
   )
+})
+
+
+test("Pause and Resume market selection follow the BUY pause state, not the legacy market pause", () => {
+  const markets = [
+    { symbol: "LINKUSDT", enabled: true, operatorPaused: true, operatorBuysPaused: false },
+    { symbol: "BTCUSDT", enabled: true, operatorPaused: false, operatorBuysPaused: true },
+    { symbol: "ADAUSDT", enabled: false, operatorPaused: false, operatorBuysPaused: true },
+  ]
+
+  assert.deepEqual(
+    selectMarketsForAction({ markets, action: "PAUSE" }).map(({ symbol }) => symbol),
+    ["LINKUSDT"],
+  )
+  assert.deepEqual(
+    selectMarketsForAction({ markets, action: "RESUME" }).map(({ symbol }) => symbol),
+    ["BTCUSDT"],
+  )
+
+  const pauseButtons = createNavigationKeyboard({ page: "markets", markets, marketAction: "PAUSE" })
+    .inline_keyboard.flat().filter(button => button.callback_data?.startsWith("cc:ask:"))
+  const resumeButtons = createNavigationKeyboard({ page: "markets", markets, marketAction: "RESUME" })
+    .inline_keyboard.flat().filter(button => button.callback_data?.startsWith("cc:ask:"))
+
+  assert.deepEqual(pauseButtons.map(({ callback_data }) => callback_data), ["cc:ask:LINKUSDT"])
+  assert.deepEqual(resumeButtons.map(({ callback_data }) => callback_data), ["cc:ask:RESUME:BTCUSDT"])
 })
