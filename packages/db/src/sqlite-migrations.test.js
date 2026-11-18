@@ -406,7 +406,8 @@ function createMigrationWorker({ filename, gate }) {
   const source = `
     const { parentPort, workerData } = require("node:worker_threads")
     parentPort.postMessage({ ready: true })
-    Atomics.wait(new Int32Array(workerData.gate), 0, 0)
+    const gate = new Int32Array(workerData.gate)
+    Atomics.wait(gate, 0, 0)
 
     async function applyMigrations() {
       const { createSqliteDatabase } = await import(workerData.moduleUrl)
@@ -417,6 +418,8 @@ function createMigrationWorker({ filename, gate }) {
 
       try {
         await database.connect()
+        parentPort.postMessage({ connected: true })
+        Atomics.wait(gate, 1, 0)
         const applied = await database.migrate([{
           version: 1,
           name: "create-worker-shared-records",
@@ -433,6 +436,8 @@ function createMigrationWorker({ filename, gate }) {
     applyMigrations().catch((error) => {
       parentPort.postMessage({
         error: error.message,
+        code: error.code,
+        errcode: error.errcode,
         stack: error.stack,
       })
     })
@@ -448,13 +453,22 @@ function createMigrationWorker({ filename, gate }) {
   })
 }
 
-async function readMigrationWorkerResult(worker) {
+async function readMigrationWorkerMessage(worker) {
   const [message] = await once(worker, "message")
   if (message.error) {
     throw new Error(message.error, {
-      cause: message.stack,
+      cause: {
+        code: message.code,
+        errcode: message.errcode,
+        stack: message.stack,
+      },
     })
   }
+  return message
+}
+
+async function readMigrationWorkerResult(worker) {
+  const message = await readMigrationWorkerMessage(worker)
   return message.applied
 }
 
@@ -468,7 +482,7 @@ function compareMigrationResults(left) {
 test("independent worker connections serialize simultaneous migration attempts", async () => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-migration-workers-"))
   const filename = join(directory, "shared.sqlite")
-  const gate = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+  const gate = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT * 2)
   const workers = Array.from({ length: 2 }, () => createMigrationWorker({
     filename,
     gate,
@@ -478,7 +492,14 @@ test("independent worker connections serialize simultaneous migration attempts",
     await Promise.all(workers.map((worker) => once(worker, "message")))
     Atomics.store(new Int32Array(gate), 0, 1)
     Atomics.notify(new Int32Array(gate), 0, workers.length)
+    const connections = await Promise.all(workers.map(readMigrationWorkerMessage))
+    assert.ok(
+      connections.every((message) => message.connected),
+      "Both independent connections must finish WAL initialization before competing migrations begin",
+    )
 
+    Atomics.store(new Int32Array(gate), 1, 1)
+    Atomics.notify(new Int32Array(gate), 1, workers.length)
     const results = await Promise.all(workers.map(readMigrationWorkerResult))
     assert.deepEqual(
       results.sort(compareMigrationResults),
