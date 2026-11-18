@@ -458,8 +458,11 @@ async function readMigrationWorkerResult(worker) {
   return message.applied
 }
 
-function compareMigrationResults(left, right) {
-  return left.length - right.length
+function compareMigrationResults(left) {
+  if (left.length === 0) {
+    return -1
+  }
+  return 1
 }
 
 test("independent worker connections serialize simultaneous migration attempts", async () => {
