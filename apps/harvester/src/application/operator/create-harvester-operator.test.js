@@ -9,6 +9,34 @@ const actor = Object.freeze({
   roles: Object.freeze(["trading-operator"]),
 })
 
+function createEngineControl({ calls, action, prefix, resultData }) {
+  return async ({ symbol, beforeApply }) => {
+    calls.push({
+      type: `${prefix}-start`,
+      symbol,
+    })
+    const committed = typeof beforeApply === "function"
+      ? await beforeApply({ symbol, action })
+      : {
+        ok: true,
+        data: { durable: false },
+      }
+    if (!committed?.ok) { return committed }
+    calls.push({
+      type: `${prefix}-applied`,
+      symbol,
+    })
+    return {
+      ok: true,
+      data: {
+        symbol,
+        ...resultData,
+        durable: committed.data.durable,
+      },
+    }
+  }
+}
+
 function createHarnessEngine({ calls }) {
   return {
     pauseMarket: async () => {
@@ -17,69 +45,25 @@ function createHarnessEngine({ calls }) {
     resumeMarket: async () => {
       calls.push({ type: "legacy-resume" })
     },
-    pauseBuys: async ({ symbol, beforeApply }) => {
-      calls.push({
-        type: "pause-buys-start",
-        symbol,
-      })
-      const committed = typeof beforeApply === "function"
-        ? await beforeApply({
-          symbol,
-          action: "PAUSE_BUYS",
-        })
-        : {
-          ok: true,
-          data: {
-            durable: false,
-          },
-        }
-      if (!committed?.ok) { return committed }
-      calls.push({
-        type: "pause-buys-applied",
-        symbol,
-      })
-      return {
-        ok: true,
-        data: {
-          symbol,
-          paused: true,
-          canceled: 0,
-          reconciled: 0,
-          durable: committed.data.durable,
-        },
-      }
-    },
-    resumeBuys: async ({ symbol, beforeApply }) => {
-      calls.push({
-        type: "resume-buys-start",
-        symbol,
-      })
-      const committed = typeof beforeApply === "function"
-        ? await beforeApply({
-          symbol,
-          action: "RESUME_BUYS",
-        })
-        : {
-          ok: true,
-          data: {
-            durable: false,
-          },
-        }
-      if (!committed?.ok) { return committed }
-      calls.push({
-        type: "resume-buys-applied",
-        symbol,
-      })
-      return {
-        ok: true,
-        data: {
-          symbol,
-          resumed: true,
-          stillPaused: false,
-          durable: committed.data.durable,
-        },
-      }
-    },
+    pauseBuys: createEngineControl({
+      calls,
+      action: "PAUSE_BUYS",
+      prefix: "pause-buys",
+      resultData: {
+        paused: true,
+        canceled: 0,
+        reconciled: 0,
+      },
+    }),
+    resumeBuys: createEngineControl({
+      calls,
+      action: "RESUME_BUYS",
+      prefix: "resume-buys",
+      resultData: {
+        resumed: true,
+        stillPaused: false,
+      },
+    }),
   }
 }
 
