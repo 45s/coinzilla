@@ -299,6 +299,14 @@ export class BitunixSpotWebSocketClient {
     }
   }
 
+  /** Verify the authenticated Spot WebSocket connection using the documented ping RPC. */
+  ping() {
+    return this.#request({
+      method: "ping",
+      params: {},
+    })
+  }
+
   /** Query the latest Spot price using market.last_price. */
   getLastPrice({ symbol } = {}) {
     return this.#request({

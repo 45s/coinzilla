@@ -10,12 +10,13 @@ const ERROR_CODES = Object.freeze({
   http: "BITUNIX_REST_HTTP_FAILED",
   exchange: "BITUNIX_REST_EXCHANGE_REJECTED",
   response: "BITUNIX_REST_RESPONSE_INVALID",
+  authentication: "BITUNIX_REST_AUTHENTICATION_REQUIRED",
 })
 
 /** Error returned by the Bitunix Spot REST API or transport boundary. */
 export class BitunixRestError extends SystemCustomError {
   /**
-   * @param {{message: string, kind?: "transport"|"http"|"exchange"|"response", cause?: unknown, exchangeCode?: string|null, status?: number|null, path?: string|null, outcomeUnknown?: boolean}} input
+   * @param {{message: string, kind?: "transport"|"http"|"exchange"|"response"|"authentication", cause?: unknown, exchangeCode?: string|null, status?: number|null, path?: string|null, outcomeUnknown?: boolean}} input
    */
   constructor({
     message,
@@ -389,11 +390,22 @@ function validateResponse({ response, payload, path, stateChanging }) {
   })
 }
 
-function validateClientOptions({ apiKey, apiSecret, baseUrl, requestTimeout, fetchFn, now, nonceFactory }) {
-  if (typeof apiKey !== "string" || !apiKey.trim() ||
-      typeof apiSecret !== "string" || !apiSecret.trim()) {
-    throw new TypeError("Bitunix REST API key and secret are required")
+function validateCredentials({ apiKey, apiSecret }) {
+  const hasApiKey = apiKey !== undefined && apiKey !== null && apiKey !== ""
+  const hasApiSecret = apiSecret !== undefined && apiSecret !== null && apiSecret !== ""
+  if (hasApiKey || hasApiSecret) {
+    if (typeof apiKey !== "string" || !apiKey.trim() ||
+        typeof apiSecret !== "string" || !apiSecret.trim()) {
+      throw new TypeError("Bitunix REST API key and secret must be provided together")
+    }
   }
+}
+
+function validateClientOptions({ apiKey, apiSecret, baseUrl, requestTimeout, fetchFn, now, nonceFactory }) {
+  validateCredentials({
+    apiKey,
+    apiSecret,
+  })
   if (typeof baseUrl !== "string" || !baseUrl.startsWith("https://")) {
     throw new TypeError("Bitunix REST base URL must use https://")
   }
@@ -413,7 +425,7 @@ function validateClientOptions({ apiKey, apiSecret, baseUrl, requestTimeout, fet
  */
 export class BitunixRestClient {
   /**
-   * @param {{apiKey: string, apiSecret: string, baseUrl?: string, requestTimeout?: number, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string}} options
+   * @param {{apiKey?: string, apiSecret?: string, baseUrl?: string, requestTimeout?: number, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string}} options
    */
   constructor(options = {}) {
     const {
@@ -459,6 +471,13 @@ export class BitunixRestClient {
       stateChanging = false,
       authenticated = true,
     } = validateRequest(input)
+    if (authenticated && (!this.apiKey || !this.apiSecret)) {
+      throw new BitunixRestError({
+        message: "Bitunix REST credentials are required for authenticated requests",
+        kind: "authentication",
+        path,
+      })
+    }
     const request = authenticated
       ? createSignedRequest({
         client: this,
