@@ -1,3 +1,6 @@
+import { TELEGRAM_OPERATOR_ACTIONS } from "./constants.js"
+import { OPERATOR_ACTOR_ROLES } from "../../../application/operator/constants.js"
+
 function recordControlFailure({ result, method, symbol, interaction, diagnostics }) {
   if (interaction.failed) { return }
   const controlError = result?.errors?.[0] ?? result?.error
@@ -37,7 +40,7 @@ function buildControlFailureMessage({ code, action, symbol, interaction }) {
   if (code === "INVALID_OPERATOR_SCOPE") {
     return "Global BUY commands do not accept a market symbol."
   }
-  return `${action.startsWith("RESUME") ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
+  return `${action.startsWith(TELEGRAM_OPERATOR_ACTIONS.RESUME) ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
 }
 
 export function buildControlFailureReply(options) {
@@ -102,7 +105,7 @@ export function buildBuyControlSuccessReply({ action,
  result,
  interaction } = {}) {
   const buyScope = symbol ? `for ${symbol}` : "across all markets"
-  if (action === "PAUSE" || action === "PAUSE_BUYS" || action === "PAUSE_ALL_BUYS") {
+  if (action === TELEGRAM_OPERATOR_ACTIONS.PAUSE || action === TELEGRAM_OPERATOR_ACTIONS.PAUSE_BUYS || action === TELEGRAM_OPERATOR_ACTIONS.PAUSE_ALL_BUYS) {
     return buildPauseBuySuccessReply({
       buyScope,
       symbol,
@@ -110,7 +113,7 @@ export function buildBuyControlSuccessReply({ action,
       interaction,
     })
   }
-  if (action === "RESUME" || action === "RESUME_BUYS" || action === "RESUME_ALL_BUYS") {
+  if (action === TELEGRAM_OPERATOR_ACTIONS.RESUME || action === TELEGRAM_OPERATOR_ACTIONS.RESUME_BUYS || action === TELEGRAM_OPERATOR_ACTIONS.RESUME_ALL_BUYS) {
     return buildResumeBuySuccessReply({
       buyScope,
       symbol,
@@ -134,7 +137,7 @@ export function buildLegacyControlSuccessReply({ action,
     classification: "OPERATOR_CONTROL_RESULT_INVALID",
     message: `Operator control use case returned an invalid success result: ${method}`,
   })
-  return `${action.startsWith("RESUME") ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
+  return `${action.startsWith(TELEGRAM_OPERATOR_ACTIONS.RESUME) ? "Resume" : "Pause"} was not acknowledged; check Harvester logs and retry.`
 }
 
 export function buildControlSuccessReply(options) {
@@ -149,16 +152,16 @@ export function buildControlReply(options) {
 
 
 const OPERATOR_CONTROL_METHODS = Object.freeze({
-  PAUSE: "pauseMarket",
-  RESUME: "resumeMarket",
-  PAUSE_BUYS: "pauseBuys",
-  RESUME_BUYS: "resumeBuys",
-  PAUSE_ALL_BUYS: "pauseAllBuys",
-  RESUME_ALL_BUYS: "resumeAllBuys",
+  [TELEGRAM_OPERATOR_ACTIONS.PAUSE]: "pauseMarket",
+  [TELEGRAM_OPERATOR_ACTIONS.RESUME]: "resumeMarket",
+  [TELEGRAM_OPERATOR_ACTIONS.PAUSE_BUYS]: "pauseBuys",
+  [TELEGRAM_OPERATOR_ACTIONS.RESUME_BUYS]: "resumeBuys",
+  [TELEGRAM_OPERATOR_ACTIONS.PAUSE_ALL_BUYS]: "pauseAllBuys",
+  [TELEGRAM_OPERATOR_ACTIONS.RESUME_ALL_BUYS]: "resumeAllBuys",
 })
 
 function reportUnavailableOperatorControl({ action, symbol, method, interaction, diagnostics }) {
-  const verb = action.startsWith("RESUME") ? "Resume" : "Pause"
+  const verb = action.startsWith(TELEGRAM_OPERATOR_ACTIONS.RESUME) ? "Resume" : "Pause"
   diagnostics.report({
     interaction,
     stage: "APPLICATION_OPERATION_UNAVAILABLE",
@@ -178,7 +181,7 @@ async function callOperatorControl({ method, symbol, userId, requestId, operator
     return await operator[method]({
       actor: {
         id: `telegram-user:${userId}`,
-        roles: ["trading-operator"],
+        roles: [OPERATOR_ACTOR_ROLES.TRADING_OPERATOR],
       },
       requestId,
       symbol,
@@ -204,7 +207,7 @@ function logOperatorControlCompletion({ action, interaction, startedAt, logStage
     level: "info",
     fields: {
       durationMs: Date.now() - startedAt,
-      result: action.startsWith("PAUSE") ? "PAUSED" : "RESUME_PROCESSED",
+      result: action.startsWith(TELEGRAM_OPERATOR_ACTIONS.PAUSE) ? "PAUSED" : "RESUME_PROCESSED",
     },
   })
 }
