@@ -39,6 +39,7 @@ The registry owns connection lifecycle:
 - `connectAll()` connects entries in registration order. If a connection fails, it attempts cleanup for every constructed entry in reverse order, including the failing and not-yet-connected entries.
 - `disconnectAll()` attempts every disconnect in reverse order and aggregates cleanup failures.
 - Concurrent connection/disconnection requests for one instance share the in-flight operation. Successful disconnect is idempotent; failed cleanup remains visible and can be retried.
+- Process-wide operator control and Operational State Store ownership are assigned to the first successfully started account, not merely the first configured entry. If an optional first entry fails, the next healthy account receives those process-wide responsibilities.
 
 Errors preserve the original connection/cleanup causes. Credentials are never part of registry identity or diagnostic context.
 
