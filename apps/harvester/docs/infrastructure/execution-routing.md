@@ -30,6 +30,8 @@ marketDataRouting: {
 
 The example deliberately routes BTC execution to the secondary account while sourcing its market data from the primary account, and routes ETH execution to the primary account while sourcing its market data from the secondary account.
 
+A single execution account may own multiple symbols whose market-data sources differ. The per-symbol `marketDataProviderIdentities` map is authoritative; the legacy singular `marketDataProviderInstanceId` is populated only when all assigned symbols share one source and is `null` for mixed-source accounts. A `null` singular value is not permission to fall back to the execution provider.
+
 Every enabled executable strategy/market must have one execution route and one market-data route. Every configured provider instance must own at least one execution route; data-only provider instances are explicitly unsupported in this runtime. Duplicate, missing, disabled-market, unsupported-strategy, unknown-provider, and environment-incompatible routes fail closed. A strategy/market cannot be routed to multiple accounts. Market-data and execution routing are not interchangeable.
 
 ## Account and provider failure policy
