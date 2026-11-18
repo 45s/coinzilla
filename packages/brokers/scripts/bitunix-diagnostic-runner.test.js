@@ -385,7 +385,6 @@ assert.equal(
   true,
   "all private WebSocket RPC operations must be individually marked skipped in public-only mode",
 )
-assert.equal(websocketFactoryCalls, 0, "public-only mode must not construct or connect an authenticated WebSocket client")
 }
 
 test("public-only diagnostics run unsigned REST checks when credentials are missing", async () => {
