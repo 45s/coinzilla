@@ -1200,7 +1200,10 @@ function validateRecoveryCycleNonCompletion({
   keepQuantity,
   minProfit,
 }) {
-  validateRecoveryCycleNonCompletionReason({ outcome, reason })
+  validateRecoveryCycleNonCompletionReason({
+    outcome,
+    reason,
+  })
   validateRecoveryCycleNonCompletionQuantities({
     outcome,
     reason,
@@ -1673,11 +1676,26 @@ function mapBrokerExecutionReportEvidence({ evidence }) {
     schemaVersion: 1,
     source: "binance.spot.userData.executionReport",
   }
-  copyBrokerEvidenceStringFields({ evidence, data })
-  copyBrokerEvidenceIdentifierFields({ evidence, data })
-  copyBrokerEvidenceDecimalFields({ evidence, data })
-  copyBrokerEvidenceTimestampFields({ evidence, data })
-  copyBrokerEvidenceBooleanFields({ evidence, data })
+  copyBrokerEvidenceStringFields({
+    evidence,
+    data,
+  })
+  copyBrokerEvidenceIdentifierFields({
+    evidence,
+    data,
+  })
+  copyBrokerEvidenceDecimalFields({
+    evidence,
+    data,
+  })
+  copyBrokerEvidenceTimestampFields({
+    evidence,
+    data,
+  })
+  copyBrokerEvidenceBooleanFields({
+    evidence,
+    data,
+  })
   return data
 }
 
