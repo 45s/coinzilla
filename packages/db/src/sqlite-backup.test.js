@@ -292,7 +292,6 @@ test("SQLite restore refuses to overwrite an existing destination", async () => 
     destination.prepare("INSERT INTO existing_values (value) VALUES (?)").run("keep")
   } finally {
     await source.close()
-    await destination.close()
   }
 
   try {
@@ -306,17 +305,15 @@ test("SQLite restore refuses to overwrite an existing destination", async () => 
       "Restore must refuse to replace an existing database file by default",
     )
 
-    const retainedValue = await readDatabaseValue({
-      filename: destinationFilename,
-      query: "SELECT value FROM existing_values",
-    })
+    const retainedValue = destination.prepare("SELECT value FROM existing_values").get()
 
     assert.equal(
       retainedValue.value,
       "keep",
-      "A rejected restore must leave the pre-existing destination database unchanged",
+      "A rejected restore must leave the pre-existing destination database and its active connection unchanged",
     )
   } finally {
+    await destination.close()
     await rm(directory, {
       recursive: true,
       force: true,
