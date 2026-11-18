@@ -267,7 +267,7 @@ Update the canonical RS specification, architecture, runtime config docs only wh
 | RS-1 | CG source audit and reuse map | Evidence-backed inventory and reuse decisions |
 | RS-2a | Shared Portfolio/multi-Position accounting foundation | **COMPLETE** — merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118); exact-head required CI passed |
 | RS-2b | RS-specific domain accounting, custody and profitability | **COMPLETE** — PR #1276 merged as `9276b6c01bec62b743727548786c5af4a04b7908` from exact head `19448d63d117f563c31d8ab9422ac73623974782`; full Harvester suite 1,847/1,847 and all required checks passed. No exchange operations. |
-| RS-3 | RS pure policy | PR #1213 adds the pure profitability foundation; the current RS-3 slice implements independent recovery, legacy and combined-cycle eligibility and fee-aware mixed-SELL price/quantity planning with direct domain tests; order-type selection and broader deterministic policy outcomes remain pending |
+| RS-3 | RS pure policy | **COMPLETE** — merged PR #1127 adds the pure pre-submission SELL evaluator: independent profitability gates, pair-configured `minProfit`, Conservative-compatible order type/fee reserve, supported min/max filter validation and sticky fail-closed STOP; exact-head evaluator and Harvester tests passed |
 | RS-4 | Concurrent Trading Engine integration | Existing execution and safety infrastructure reused |
 | RS-5 | Offline lifecycle and docs | Full lifecycle and exact-head CI green |
 
@@ -326,4 +326,4 @@ flowchart TD
   J -->|"Yes"| K["Shared Trading Engine safety and order gates"]
 ~~~
 
-The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged in PR #1276; PR #1379 adds independent profitability gates and allocation-safe SELL price planning; RS remains non-executable. RS-3 policy must first resolve the contract gaps above; RS-4 then wires the policy into the shared engine, and RS-5 proves the offline lifecycle. Advanced lifecycle functionality remains deferred under FITDIB.
+The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged in PR #1276; PR #1379 adds independent profitability gates and allocation-safe SELL price planning; PR #1127 completes the pure pre-submission SELL evaluator and owner-approved filter/order-type/fee policy. RS remains non-executable. RS-4 must wire the policy into the shared engine, and RS-5 must prove the offline lifecycle before runtime registration or exchange operations. Advanced lifecycle functionality remains deferred under FITDIB.
