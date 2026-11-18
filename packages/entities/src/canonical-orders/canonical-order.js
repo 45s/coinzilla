@@ -214,11 +214,13 @@ function validateCanonicalOrderLifecycle({
   updatedAt,
   completedAt,
 }) {
-  validateCanonicalOrderLifecycle({
+  validateOrderLifecycle({
     status,
     brokerOrderId,
     executedQuantity,
     remainingQuantity,
+  })
+  validateTimestamps({
     createdAt,
     acknowledgedAt,
     updatedAt,
@@ -269,13 +271,11 @@ function resolveCanonicalOrderDerivedValues({
     originalQuantity,
     executedQuantity,
   })
-  validateOrderLifecycle({
+  validateCanonicalOrderLifecycle({
     status,
     brokerOrderId,
     executedQuantity,
     remainingQuantity,
-  })
-  validateTimestamps({
     createdAt,
     acknowledgedAt,
     updatedAt,
