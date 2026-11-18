@@ -173,3 +173,59 @@ test("concurrent SQLite restores publish exactly one complete database without o
     })
   }
 })
+
+
+async function createBackupSource({ filename, origin }) {
+  const database = createSqliteDatabase({ filename })
+  await database.connect()
+  database.exec("CREATE TABLE backup_origins (origin TEXT PRIMARY KEY, payload BLOB NOT NULL)")
+  database.prepare("INSERT INTO backup_origins (origin, payload) VALUES (?, ?)").run(
+    origin,
+    Buffer.from(`${origin}-complete-snapshot`),
+  )
+  return database
+}
+
+test("concurrent SQLite backups to one destination publish one complete validated snapshot", async () => {
+  const directory = await createTemporaryDirectory()
+  const first = await createBackupSource({
+    filename: join(directory, "first.sqlite"),
+    origin: "first",
+  })
+  const second = await createBackupSource({
+    filename: join(directory, "second.sqlite"),
+    origin: "second",
+  })
+  const destination = join(directory, "shared-backup.sqlite")
+
+  try {
+    const copiedPages = await Promise.all([
+      first.backup({ destination, rate: 1 }),
+      second.backup({ destination, rate: 1 }),
+    ])
+    assert.ok(
+      copiedPages.every((pages) => Number.isSafeInteger(pages) && pages > 0),
+      "Each concurrent backup must report a positive number of copied SQLite pages",
+    )
+
+    const record = await readRestoredValue({
+      filename: destination,
+      query: "SELECT origin, payload FROM backup_origins",
+    })
+    assert.ok(
+      ["first", "second"].includes(record.origin),
+      "The shared destination must contain one complete source snapshot rather than mixed data",
+    )
+    assert.equal(
+      Buffer.from(record.payload).toString(),
+      `${record.origin}-complete-snapshot`,
+      "The final atomically published backup must retain the winning source's complete payload",
+    )
+  } finally {
+    await Promise.all([first.close(), second.close()])
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
