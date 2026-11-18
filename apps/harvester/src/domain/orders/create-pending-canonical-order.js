@@ -10,6 +10,9 @@ export function createPendingCanonicalOrder({
   market,
   clientOrderId,
   supportedOrderTypes,
+  providerInstanceId,
+  providerType,
+  accountId,
 } = {}) {
   if (!order || typeof order !== "object" || Array.isArray(order)) {
     throw new TypeError("createPendingCanonicalOrder requires an order object")
@@ -41,6 +44,9 @@ field: "order.price" })
 
   return new CanonicalOrder({
     clientOrderId: clientOrderId.trim(),
+    providerInstanceId,
+    providerType,
+    accountId,
     market,
     side: order.side,
     type,
