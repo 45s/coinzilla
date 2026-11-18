@@ -14,7 +14,7 @@ Harvester currently composes one Binance broker instance. Its runtime configurat
 
 The accepted use case is explicit operator routing. For example, a future Recovery Seller (RS) strategy on STRKUSDT may use a Bitunix account, while Conservative / `CG_coinGrabber` on LINKUSDT uses Binance. The market-data source may be different from the execution venue.
 
-The current implementation does not yet satisfy this target. RS is not executable, and Bitunix Spot remains read-only and not Harvester-ready while the capability and exchange-contract blockers in [issue #1185](https://github.com/45s/coinzilla/issues/1185) remain open. This ADR records the target architecture; it does not enable either capability.
+The current implementation does not yet satisfy this target. RS is not executable, and Bitunix Spot remains query-only and not Harvester-ready while the capability and exchange-contract blockers in [issue #1185](https://github.com/45s/coinzilla/issues/1185) remain open. This ADR records the target architecture; it does not enable either capability.
 
 ## Decision
 
@@ -113,7 +113,7 @@ const brokers = {
 }
 ```
 
-Credentials are resolved from deployment secrets/environment and must never be committed, logged, placed in events, or included in configuration fingerprints. The Bitunix example is illustrative only: current Bitunix Spot support is read-only and must not be configured for execution.
+Credentials are resolved from deployment secrets/environment and must never be committed, logged, placed in events, or included in configuration fingerprints. The Bitunix example is illustrative only: current Bitunix Spot support is query-only and must not be configured for execution.
 
 ### Execution routes
 
