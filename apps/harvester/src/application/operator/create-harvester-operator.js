@@ -1,5 +1,3 @@
-import { createPauseMarket } from "../../use-cases/operator-control/pause-market.js"
-import { createResumeMarket } from "../../use-cases/operator-control/resume-market.js"
 import {
   createPauseAllBuys,
   createPauseBuys,
@@ -22,15 +20,15 @@ import { createReadOperatorTradingState } from "../../use-cases/operator-control
  * @returns {Readonly<object>} Explicit operator command and query methods.
  */
 export function createHarvesterOperator({ engine, operationalStateStore, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
+  const pauseBuys = createPauseBuys({ engine,
+    operationalStateStore })
+  const resumeBuys = createResumeBuys({ engine,
+    operationalStateStore })
   const operator = {
-    pauseMarket: createPauseMarket({ engine,
-      operationalStateStore }),
-    resumeMarket: createResumeMarket({ engine,
-      operationalStateStore }),
-    pauseBuys: createPauseBuys({ engine,
-      operationalStateStore }),
-    resumeBuys: createResumeBuys({ engine,
-      operationalStateStore }),
+    pauseMarket: pauseBuys,
+    resumeMarket: resumeBuys,
+    pauseBuys,
+    resumeBuys,
     pauseAllBuys: createPauseAllBuys({ engine,
       operationalStateStore }),
     resumeAllBuys: createResumeAllBuys({ engine,

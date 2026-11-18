@@ -17,13 +17,19 @@ export function resolveMarketAction(page) {
   return undefined
 }
 
+function isMarketBuyPaused(market) {
+  return typeof market?.operatorBuysPaused === "boolean"
+    ? market.operatorBuysPaused
+    : market?.operatorPaused === true
+}
+
 export function selectMarketsForAction({ markets,
  action }) {
   if (action === "PAUSE") {
-    return markets.filter((market) => market?.enabled === true && market.operatorPaused !== true)
+    return markets.filter((market) => market?.enabled === true && !isMarketBuyPaused(market))
   }
   if (action === "RESUME") {
-    return markets.filter((market) => market?.enabled === true && market.operatorPaused === true)
+    return markets.filter((market) => market?.enabled === true && isMarketBuyPaused(market))
   }
   return []
 }
@@ -37,7 +43,7 @@ export function formatMarketActionPrompt({ action,
   if (eligibleMarkets.length > 0) { return `${prompt}\n\n${text}` }
   const emptyMessage = action === "PAUSE"
     ? "No enabled markets are currently available to pause."
-    : "No enabled operator-paused markets are currently available to resume."
+    : "No enabled BUY-paused markets are currently available to resume."
   return `${prompt}\n${emptyMessage}\n\n${text}`
 }
 
@@ -60,6 +66,78 @@ function createUnavailablePage({ queryPage,
   }
 }
 
+async function executeOperatorQuery({ method, userId, operator, diagnostics, interaction }) {
+  try {
+    return {
+      result: await operator[method]({
+        actor: {
+          id: `telegram-user:${userId}`,
+          roles: ["trading-operator"],
+        },
+      }),
+    }
+  } catch (error) {
+    diagnostics.fail({
+      interaction,
+      error,
+      stage: "QUERY_EXECUTION",
+      operation: method,
+    })
+    return { threw: true }
+  }
+}
+
+function logOperatorQueryStarted({ interaction, queryPage, logStage }) {
+  logStage({
+    interaction,
+    message: "Telegram query STARTED",
+    stage: "QUERY_STARTED",
+    fields: { queryPage },
+  })
+}
+
+function logOperatorQueryCompleted({ interaction, startedAt, logStage }) {
+  logStage({
+    interaction,
+    message: "Telegram query COMPLETED",
+    stage: "QUERY_COMPLETED",
+    fields: { durationMs: Date.now() - startedAt },
+  })
+}
+
+function createQueryFailureOutcome({
+  outcome,
+  queryPage,
+  method,
+  diagnostics,
+  interaction,
+  buildNavigationKeyboard,
+}) {
+  if (outcome.threw) {
+    return {
+      ok: false,
+      page: createQueryFailurePage({
+        queryPage,
+        buildNavigationKeyboard,
+      }),
+    }
+  }
+  if (outcome.result?.ok === true) { return undefined }
+  reportQueryResultFailure({
+    result: outcome.result,
+    method,
+    diagnostics,
+    interaction,
+  })
+  return {
+    ok: false,
+    page: createQueryFailurePage({
+      queryPage,
+      buildNavigationKeyboard,
+    }),
+  }
+}
+
 async function readOperatorQuery({
   queryPage,
   userId,
@@ -73,53 +151,47 @@ async function readOperatorQuery({
   if (!method || typeof operator[method] !== "function") {
     return {
       ok: false,
-      page: createUnavailablePage({ queryPage,
- method,
- diagnostics,
- interaction,
- buildNavigationKeyboard }),
+      page: createUnavailablePage({
+        queryPage,
+        method,
+        diagnostics,
+        interaction,
+        buildNavigationKeyboard,
+      }),
     }
   }
   interaction.operation = method
   const startedAt = Date.now()
-  logStage({
+  logOperatorQueryStarted({
     interaction,
-    message: "Telegram query STARTED",
-    stage: "QUERY_STARTED",
-    fields: { queryPage },
+    queryPage,
+    logStage,
   })
-  let result
-  try {
-    result = await operator[method]({
-      actor: { id: `telegram-user:${userId}`,
- roles: ["trading-operator"] },
-    })
-  } catch (error) {
-    diagnostics.fail({ interaction,
- error,
- stage: "QUERY_EXECUTION",
- operation: method })
-    return { ok: false,
- page: createQueryFailurePage({ queryPage,
- buildNavigationKeyboard }) }
-  }
-  if (result?.ok !== true) {
-    reportQueryResultFailure({ result,
- method,
- diagnostics,
- interaction })
-    return { ok: false,
- page: createQueryFailurePage({ queryPage,
- buildNavigationKeyboard }) }
-  }
-  logStage({
+  const outcome = await executeOperatorQuery({
+    method,
+    userId,
+    operator,
+    diagnostics,
     interaction,
-    message: "Telegram query COMPLETED",
-    stage: "QUERY_COMPLETED",
-    fields: { durationMs: Date.now() - startedAt },
   })
-  return { ok: true,
- result }
+  const failure = createQueryFailureOutcome({
+    outcome,
+    queryPage,
+    method,
+    diagnostics,
+    interaction,
+    buildNavigationKeyboard,
+  })
+  if (failure) { return failure }
+  logOperatorQueryCompleted({
+    interaction,
+    startedAt,
+    logStage,
+  })
+  return {
+    ok: true,
+    result: outcome.result,
+  }
 }
 
 function createQueryFailurePage({ queryPage,

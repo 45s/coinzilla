@@ -79,13 +79,13 @@ test("reports unresolved owned-BUY cancellation without claiming full cancellati
   const interaction = { failed: false }
   const diagnostics = createDiagnostics()
   const reply = buildControlReply({
-    action: "PAUSE_BUYS",
+    action: "PAUSE",
     symbol: "LINKUSDT",
     result: {
       ok: false,
       errors: [{ code: "OPERATOR_BUY_CANCELLATION_INCOMPLETE" }],
     },
-    method: "pauseBuys",
+    method: "pauseMarket",
     interaction,
     diagnostics,
   })
@@ -101,20 +101,90 @@ test("reports unresolved owned-BUY cancellation without claiming full cancellati
   )
 })
 
-test("preserves the existing non-canceling market pause contract", () => {
+test("dispatches normal market Pause through the operator facade and reports cancellation", async () => {
+  const calls = []
+  const sentMessages = []
+  const diagnostics = createDiagnostics()
+  const interaction = {
+    failed: false,
+    applicationOperationInvoked: false,
+    applicationOperationCompleted: false,
+    stateChanged: false,
+  }
+
+  await executeTelegramOperatorControl({
+    action: "PAUSE",
+    symbol: "LINKUSDT",
+    userId: "123",
+    requestId: "telegram:502",
+    chatId: 123,
+    interaction,
+    operator: {
+      pauseMarket: async request => {
+        calls.push(request)
+        return {
+          ok: true,
+          data: {
+            symbol: "LINKUSDT",
+            paused: true,
+            alreadyPaused: false,
+            canceled: 2,
+            reconciled: 1,
+          },
+        }
+      },
+    },
+    diagnostics,
+    logStage: () => {},
+    sendMessage: async request => sentMessages.push(request),
+    editMessage: async () => {},
+    buildNavigationKeyboard: () => ({ inline_keyboard: [] }),
+  })
+
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0].symbol, "LINKUSDT")
+  assert.equal(calls[0].actor.id, "telegram-user:123")
+  assert.match(sentMessages[0].text, /Cancelled 2 Harvester-owned BUY order/)
+  assert.match(sentMessages[0].text, /reconciled 1 fill/)
+  assert.equal(interaction.stateChanged, true)
+})
+
+test("reports owned BUY cancellation and recovery SELL continuity for the normal market Pause command", () => {
   const reply = buildControlReply({
     action: "PAUSE",
     symbol: "LINKUSDT",
     result: { ok: true,
  data: { paused: true,
- alreadyPaused: false } },
+ alreadyPaused: false,
+ canceled: 2,
+ reconciled: 1 } },
     method: "pauseMarket",
     interaction: { failed: false },
     diagnostics: createDiagnostics(),
   })
   assert.match(
     reply,
-    /Existing exchange orders remain open and may still fill/,
-    "The legacy market pause response must not imply that existing exchange orders were cancelled.",
+    /Cancelled 2 Harvester-owned BUY order/,
+    "The normal market Pause response must report the confirmed owned-BUY cancellation count.",
+  )
+  assert.match(
+    reply,
+    /reconciled 1 fill/,
+    "The normal market Pause response must report fills reconciled during cancellation.",
+  )
+  assert.match(
+    reply,
+    /Recovery SELLs and accounting continue/,
+    "The normal market Pause response must make recovery SELL continuity explicit.",
+  )
+  assert.match(
+    reply,
+    /External\/manual and prior-process orders are untouched/,
+    "The normal market Pause response must preserve the startup/external-order ownership boundary.",
+  )
+  assert.match(
+    reply,
+    /Existing exchange orders remain open and may still fill if they are not current-process-owned BUYs/,
+    "The normal market Pause response must clarify that only current-process-owned BUYs are canceled.",
   )
 })
