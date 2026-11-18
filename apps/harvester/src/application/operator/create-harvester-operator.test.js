@@ -116,13 +116,13 @@ test("pause authorizes the actor and commits an ADR-0001 durable fact inside the
 
   assert.equal(result.ok, true)
   assert.deepEqual(calls.map(({ type }) => type), [
-    "pause-start",
+    "pause-buys-start",
     "append",
-    "pause-applied",
+    "pause-buys-applied",
   ], "The durable fact must commit before the engine applies the in-memory operator pause.")
   assert.deepEqual(calls[1].fact, {
     factId: "operator-control:telegram:1001",
-    factType: "OPERATOR_MARKET_PAUSED",
+    factType: "OPERATOR_MARKET_BUYS_PAUSED",
     data: {
       requestId: "telegram:1001",
       actorId: "telegram-user:12345",
@@ -181,7 +181,7 @@ test("pause propagates a failed Operational State Store commit without applying 
   })
 
   assert.equal(result.ok, false)
-  assert.deepEqual(calls.map(({ type }) => type), ["pause-start", "append"])
+  assert.deepEqual(calls.map(({ type }) => type), ["pause-buys-start", "append"])
 })
 
 test("resume records a distinct durable fact through the same application facade", async () => {
@@ -197,13 +197,13 @@ test("resume records a distinct durable fact through the same application facade
 
   assert.equal(result.ok, true)
   assert.deepEqual(calls.map(({ type }) => type), [
-    "resume-start",
+    "resume-buys-start",
     "append",
-    "resume-applied",
+    "resume-buys-applied",
   ])
   assert.deepEqual(calls[1].fact, {
     factId: "operator-control:local:resume:1004",
-    factType: "OPERATOR_MARKET_RESUMED",
+    factType: "OPERATOR_MARKET_BUYS_RESUMED",
     data: {
       requestId: "local:resume:1004",
       actorId: "telegram-user:12345",
@@ -271,10 +271,10 @@ test("pause and resume remain process-local when recovery storage is not supplie
   assert.equal(resume.ok, true)
   assert.equal(resume.data.durable, false)
   assert.deepEqual(calls.map(({ type }) => type), [
-    "pause-start",
-    "pause-applied",
-    "resume-start",
-    "resume-applied",
+    "pause-buys-start",
+    "pause-buys-applied",
+    "resume-buys-start",
+    "resume-buys-applied",
   ])
 })
 
