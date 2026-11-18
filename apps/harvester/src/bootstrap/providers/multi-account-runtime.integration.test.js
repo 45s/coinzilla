@@ -161,10 +161,10 @@ function createBinanceCapabilities({
   })
 }
 
-function createAccountSnapshot() {
+function createAccountSnapshot({ useCanonicalBinanceAssetIds = false } = {}) {
   const balances = ["BTC", "ETH", "USDT"].map((code) => {
     const asset = new Asset({
-      id: `asset:${code}`,
+      id: useCanonicalBinanceAssetIds ? code.toLowerCase() : `asset:${code}`,
       code,
     })
     return new Balance({
@@ -186,13 +186,14 @@ function createAccountSnapshot() {
 
 function createBrokerAccountPorts({
   calls,
+  useCanonicalBinanceAssetIds = false,
 }) {
   return {
     getAccountSnapshot: async () => {
       calls.push("account:snapshot")
       return {
         ok: true,
-        data: createAccountSnapshot(),
+        data: createAccountSnapshot({ useCanonicalBinanceAssetIds }),
       }
     },
     getExchangeMarkets: async () => ({
@@ -518,10 +519,16 @@ function createProductionBinanceBrokerClient({ calls, tradingMode }) {
     capabilities,
     connect: async () => calls.push("connect"),
     disconnect: async () => calls.push("disconnect"),
-    ...createBrokerAccountPorts({ calls }),
+    ...createBrokerAccountPorts({
+      calls,
+      useCanonicalBinanceAssetIds: true,
+    }),
     createOrder: (order) => orderMutationPorts.placeOrder({ order }),
     cancelOrder: async ({ symbol, orderId }) => {
-      const order = findCanonicalOrder({ calls, orderId })
+      const order = findCanonicalOrder({
+        calls,
+        orderId,
+      })
       if (!order || order.market.symbol !== symbol) {
         return {
           ok: false,
@@ -566,12 +573,16 @@ function createMultiAccountHarvesterConfig() {
     },
     executionRouting: {
       routes: [
-        { strategyId: "CG_coinGrabber",
-  symbol: "BTCUSDT",
-  providerInstanceId: "binance-testnet-secondary" },
-        { strategyId: "CG_coinGrabber",
-  symbol: "ETHUSDT",
-  providerInstanceId: "binance-testnet-primary" },
+        {
+          strategyId: "CG_coinGrabber",
+          symbol: "BTCUSDT",
+          providerInstanceId: "binance-testnet-secondary",
+        },
+        {
+          strategyId: "CG_coinGrabber",
+          symbol: "ETHUSDT",
+          providerInstanceId: "binance-testnet-primary",
+        },
       ],
     },
     brokers: {
