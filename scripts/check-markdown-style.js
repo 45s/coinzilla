@@ -277,11 +277,11 @@ export function checkFullTreeMarkdownStyle() {
   )
 
   process.stdout.write(
-    `Full-tree Markdown style: scanned ${result.scannedFiles} maintained files; skipped ${result.skippedHistorical} historical files.\\n`,
+    `Full-tree Markdown style: scanned ${result.scannedFiles} maintained files; skipped ${result.skippedHistorical} historical files.\n`,
   )
 
   if (violationEntries.length === 0) {
-    process.stdout.write("All maintained Markdown files satisfy the style standard.\\n")
+    process.stdout.write("All maintained Markdown files satisfy the style standard.\n")
     return result
   }
 
@@ -291,7 +291,7 @@ export function checkFullTreeMarkdownStyle() {
         ? ` (lines ${entry.lines.join(", ")})`
         : ""
       process.stderr.write(
-        `- ${entry.path}: ${FINDING_LABELS[name]}${lineDetail}\\n`,
+        `- ${entry.path}: ${FINDING_LABELS[name]}${lineDetail}\n`,
       )
     }
   }
