@@ -124,9 +124,11 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
   const hasProviderIdentity = ["providerInstanceId", "providerType", "accountId"].every((field) =>
     typeof order[field] === "string" && order[field].trim())
   if (!hasProviderIdentity) {
+    const error = new Error("Execution fill cannot be attributed to a provider instance: legacy order provenance is missing")
+    publishInvalidExecutionFill({ order, fill, reason: "IDENTITY_MISMATCH", error, eventPublisher })
     return {
       ok: false,
-      error: new Error("Execution fill cannot be attributed to a provider instance: legacy order provenance is missing"),
+      error,
       symbol: order.market.symbol,
       failure: { category: "OWNERSHIP_INTEGRITY", stage: "FILL_PROVIDER_PROVENANCE_MISSING", retryable: false },
     }
@@ -165,7 +167,7 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
 }
 
 async function pauseForInvalidExecutionFill({ pause, validation }) {
-  if (validation.failure?.stage !== "FILL_ORDER_IDENTITY") {
+  if (!["FILL_ORDER_IDENTITY", "FILL_PROVIDER_PROVENANCE_MISSING"].includes(validation.failure?.stage)) {
     return
   }
   await pause({
