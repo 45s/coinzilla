@@ -23,12 +23,31 @@ function appendMarketActionRows({ rows, markets, marketAction }) {
 
 export function createNavigationKeyboard({ page = "home", markets = [], marketAction } = {}) {
   const rows = [
-    [{ text: "Status", callback_data: "cc:nav:status" }, { text: "Markets", callback_data: "cc:nav:markets" }],
-    [{ text: "Positions", callback_data: "cc:nav:positions" }, { text: "Orders", callback_data: "cc:nav:orders" }],
-    [{ text: "Balances", callback_data: "cc:nav:balances" }],
+    [{
+      text: "Status",
+      callback_data: "cc:nav:status",
+    }, {
+      text: "Markets",
+      callback_data: "cc:nav:markets",
+    }],
+    [{
+      text: "Positions",
+      callback_data: "cc:nav:positions",
+    }, {
+      text: "Orders",
+      callback_data: "cc:nav:orders",
+    }],
+    [{
+      text: "Balances",
+      callback_data: "cc:nav:balances",
+    }],
   ]
   if (page === "markets") {
-    appendMarketActionRows({ rows, markets, marketAction })
+    appendMarketActionRows({
+      rows,
+      markets,
+      marketAction,
+    })
   }
   const refreshPage = marketAction ? marketAction.toLowerCase() : page
   rows.push([{
