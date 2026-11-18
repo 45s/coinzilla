@@ -211,43 +211,55 @@ function createBrokerAccountPorts({
   }
 }
 
+function createAcknowledgedCanonicalOrder({ order, calls }) {
+  const { market } = createMarketMetadata(order.symbol)
+  const now = Date.now()
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: `${order.symbol}-${calls.orders.size + 1}`,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
+    originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    status: "OPEN",
+    createdAt: now,
+    acknowledgedAt: now,
+    updatedAt: now,
+  })
+}
+
+function createCanceledCanonicalOrder(order) {
+  const now = Date.now()
+  return new CanonicalOrder({
+    ...order,
+    status: "CANCELED",
+    updatedAt: now,
+    completedAt: now,
+  })
+}
+
+function findCanonicalOrder({ calls, clientOrderId, orderId }) {
+  return [...calls.orders.values()].find((candidate) =>
+    (clientOrderId && candidate.clientOrderId === clientOrderId) ||
+    (orderId && candidate.brokerOrderId === orderId)
+  )
+}
+
 function createBrokerOrderPorts({ calls }) {
   return {
     placeOrder: async ({ order }) => {
       calls.push(`place:${order.symbol}`)
-      const { market } = createMarketMetadata(order.symbol)
-      const acknowledgedOrder = new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: `${order.symbol}-${calls.orders.size + 1}`,
-        market,
-        side: order.side,
-        type: order.type,
-        limitPrice: new Money({ amount: order.price,
-  asset: market.quoteAsset }),
-        originalQuantity: new Quantity({ amount: order.quantity,
-  asset: market.baseAsset }),
-        executedQuantity: new Quantity({ amount: "0",
-  asset: market.baseAsset }),
-        status: "OPEN",
-        createdAt: Date.now(),
-        acknowledgedAt: Date.now(),
-        updatedAt: Date.now(),
-      })
+      const acknowledgedOrder = createAcknowledgedCanonicalOrder({ order, calls })
       calls.orders.set(order.clientOrderId, acknowledgedOrder)
-      return { ok: true,
-  data: acknowledgedOrder }
+      return { ok: true, data: acknowledgedOrder }
     },
     cancelOrder: async ({ order }) => {
       calls.push(`cancel:${order.market.symbol}`)
-      const canceledOrder = new CanonicalOrder({
-        ...order,
-        status: "CANCELED",
-        updatedAt: Date.now(),
-        completedAt: Date.now(),
-      })
+      const canceledOrder = createCanceledCanonicalOrder(order)
       calls.orders.set(order.clientOrderId, canceledOrder)
-      return { ok: true,
-  data: canceledOrder }
+      return { ok: true, data: canceledOrder }
     },
     getOpenOrders: async () => ({
       ok: true,
@@ -265,17 +277,11 @@ function createBrokerOrderPorts({ calls }) {
         !symbol || order.market.symbol === symbol
       ),
     }),
-    getCanonicalOrder: async ({ clientOrderId,
-  orderId } = {}) => {
-      const order = [...calls.orders.values()].find((candidate) =>
-        (clientOrderId && candidate.clientOrderId === clientOrderId) ||
-        (orderId && candidate.brokerOrderId === orderId)
-      )
+    getCanonicalOrder: async ({ clientOrderId, orderId } = {}) => {
+      const order = findCanonicalOrder({ calls, clientOrderId, orderId })
       return order
-        ? { ok: true,
-  data: order }
-        : { ok: false,
-  errors: [new Error("order not found")] }
+        ? { ok: true, data: order }
+        : { ok: false, errors: [new Error("order not found")] }
     },
   }
 }
@@ -550,13 +556,114 @@ test("starts independent account runtimes through the real Harvester bootstrap",
   assert.equal(secondaryCalls.filter((call) => call === "disconnect").length, 1)
 })
 
+function createUserDataProcessedSignal() {
+  let resolve
+  const promise = new Promise((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+function assertMultiAccountMarketDataRouting({ primaryCalls, secondaryCalls, primaryRuntime }) {
+  assert.equal(typeof primaryCalls.priceHandlers.get("BTCUSDT"), "function")
+  assert.equal(typeof secondaryCalls.priceHandlers.get("ETHUSDT"), "function")
+  assert.equal(secondaryCalls.includes("candles:ETHUSDT"), true)
+  assert.equal(secondaryCalls.filter((call) => call === "subscribe:candles:ETHUSDT").length, 1)
+  const source = primaryRuntime.getVolatilityData({ symbol: "ETHUSDT" }).data
+  assert.deepEqual({
+    providerInstanceId: source.providerInstanceId,
+    providerType: source.providerType,
+    accountId: source.accountId,
+    environment: source.environment,
+  }, {
+    providerInstanceId: "binance-testnet-secondary",
+    providerType: "binance",
+    accountId: "account-secondary",
+    environment: "testnet",
+  })
+}
+
+async function submitAndResolveRoutedOrder({
+  primaryCalls,
+  secondaryCalls,
+  secondaryRuntime,
+}) {
+  await primaryCalls.priceHandlers.get("BTCUSDT")({
+    symbol: "BTCUSDT",
+    price: "100",
+    timestamp: Date.now(),
+  })
+  assert.equal(secondaryCalls.filter((call) => call === "place:BTCUSDT").length, 1)
+  assert.equal(primaryCalls.filter((call) => call === "place:BTCUSDT").length, 0)
+  const [acknowledgedOrder] = [...secondaryCalls.orders.values()]
+  assert.ok(acknowledgedOrder)
+  const registeredOrder = secondaryRuntime.recoveredState.orderRegistry.getOrder({
+    clientOrderId: acknowledgedOrder.clientOrderId,
+  })
+  assert.equal(registeredOrder.providerInstanceId, "binance-testnet-secondary")
+  assert.equal(registeredOrder.accountId, "account-secondary")
+  return registeredOrder
+}
+
+function createPartialFill({ registeredOrder }) {
+  const filledQuantity = new Quantity({
+    amount: "0.1",
+    asset: registeredOrder.market.baseAsset,
+  })
+  const partiallyFilledOrder = new CanonicalOrder({
+    ...registeredOrder,
+    executedQuantity: filledQuantity,
+    status: "PARTIALLY_FILLED",
+    updatedAt: Date.now() + 1,
+  })
+  const fill = new Fill({
+    tradeId: "btc-fill-1",
+    brokerOrderId: registeredOrder.brokerOrderId,
+    clientOrderId: registeredOrder.clientOrderId,
+    providerInstanceId: registeredOrder.providerInstanceId,
+    providerType: registeredOrder.providerType,
+    accountId: registeredOrder.accountId,
+    market: registeredOrder.market,
+    side: registeredOrder.side,
+    price: new Money({ amount: "100", asset: registeredOrder.market.quoteAsset }),
+    quantity: filledQuantity,
+    quoteQuantity: new Money({ amount: "10", asset: registeredOrder.market.quoteAsset }),
+    executedAt: Date.now() + 2,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  return { partiallyFilledOrder, fill }
+}
+
+async function processRoutedUserDataFill({
+  secondaryCalls,
+  secondaryRuntime,
+  primaryRuntime,
+  registeredOrder,
+  userDataProcessed,
+}) {
+  const { partiallyFilledOrder, fill } = createPartialFill({ registeredOrder })
+  secondaryCalls.fills.push(fill)
+  secondaryCalls.userDataHandler({
+    event: {
+      eventType: "executionReport",
+      executionType: "TRADE",
+      executedOrder: partiallyFilledOrder,
+      fill,
+    },
+  })
+  await userDataProcessed
+  assert.equal(
+    secondaryRuntime.portfolio.getPosition({ symbol: "BTCUSDT" })?.baseQuantity.amount,
+    "0.1",
+  )
+  assert.equal(primaryRuntime.portfolio.getPosition({ symbol: "BTCUSDT" }), undefined)
+}
+
 test("routes order submission, user-data fills, cancellation, and candle data to their configured account/source", async () => {
   const primaryCalls = createBrokerCalls()
   const secondaryCalls = createBrokerCalls()
-  let resolveUserDataProcessed
-  const userDataProcessed = new Promise((resolve) => {
-    resolveUserDataProcessed = resolve
-  })
+  const userDataSignal = createUserDataProcessedSignal()
   const runtime = await startMultiAccountRuntime({
     configuredAppConfig: createMultiAccountHarvesterConfig(),
     env: createMultiAccountHarvesterEnvironment(),
@@ -564,7 +671,7 @@ test("routes order submission, user-data fills, cancellation, and candle data to
     secondaryCalls,
     onUserDataEvent: async ({ event }) => {
       if (event?.executionType === "TRADE") {
-        resolveUserDataProcessed(event)
+        userDataSignal.resolve(event)
       }
     },
   })
@@ -572,81 +679,19 @@ test("routes order submission, user-data fills, cancellation, and candle data to
   const secondaryRuntime = runtime.accountRuntimes[1]
 
   try {
-    assert.equal(typeof primaryCalls.priceHandlers.get("BTCUSDT"), "function")
-    assert.equal(typeof secondaryCalls.priceHandlers.get("ETHUSDT"), "function")
-    assert.equal(secondaryCalls.includes("candles:ETHUSDT"), true)
-    assert.equal(secondaryCalls.filter((call) => call === "subscribe:candles:ETHUSDT").length, 1)
-    const volatilitySource = primaryRuntime.getVolatilityData({ symbol: "ETHUSDT" }).data
-    assert.equal(volatilitySource.providerInstanceId, "binance-testnet-secondary")
-    assert.equal(volatilitySource.providerType, "binance")
-    assert.equal(volatilitySource.accountId, "account-secondary")
-    assert.equal(volatilitySource.environment, "testnet")
-
-    await primaryCalls.priceHandlers.get("BTCUSDT")({
-      symbol: "BTCUSDT",
-      price: "100",
-      timestamp: Date.now(),
+    assertMultiAccountMarketDataRouting({ primaryCalls, secondaryCalls, primaryRuntime })
+    const registeredOrder = await submitAndResolveRoutedOrder({
+      primaryCalls,
+      secondaryCalls,
+      secondaryRuntime,
     })
-
-    assert.equal(secondaryCalls.filter((call) => call === "place:BTCUSDT").length, 1)
-    assert.equal(primaryCalls.filter((call) => call === "place:BTCUSDT").length, 0)
-
-    const [acknowledgedOrder] = [...secondaryCalls.orders.values()]
-    assert.ok(acknowledgedOrder)
-    const registeredOrder = secondaryRuntime.recoveredState.orderRegistry.getOrder({
-      clientOrderId: acknowledgedOrder.clientOrderId,
+    await processRoutedUserDataFill({
+      secondaryCalls,
+      secondaryRuntime,
+      primaryRuntime,
+      registeredOrder,
+      userDataProcessed: userDataSignal.promise,
     })
-    assert.equal(registeredOrder.providerInstanceId, "binance-testnet-secondary")
-    assert.equal(registeredOrder.accountId, "account-secondary")
-
-    const filledQuantity = new Quantity({
-      amount: "0.1",
-      asset: registeredOrder.market.baseAsset,
-    })
-    const partiallyFilledOrder = new CanonicalOrder({
-      ...registeredOrder,
-      executedQuantity: filledQuantity,
-      status: "PARTIALLY_FILLED",
-      updatedAt: Date.now() + 1,
-    })
-    const fill = new Fill({
-      tradeId: "btc-fill-1",
-      brokerOrderId: registeredOrder.brokerOrderId,
-      clientOrderId: registeredOrder.clientOrderId,
-      providerInstanceId: registeredOrder.providerInstanceId,
-      providerType: registeredOrder.providerType,
-      accountId: registeredOrder.accountId,
-      market: registeredOrder.market,
-      side: registeredOrder.side,
-      price: new Money({
-        amount: "100",
-        asset: registeredOrder.market.quoteAsset,
-      }),
-      quantity: filledQuantity,
-      quoteQuantity: new Money({
-        amount: "10",
-        asset: registeredOrder.market.quoteAsset,
-      }),
-      executedAt: Date.now() + 2,
-      commissions: [],
-      commissionStatus: "COMPLETE",
-    })
-    secondaryCalls.fills.push(fill)
-    secondaryCalls.userDataHandler({
-      event: {
-        eventType: "executionReport",
-        executionType: "TRADE",
-        executedOrder: partiallyFilledOrder,
-        fill,
-      },
-    })
-    await userDataProcessed
-
-    assert.equal(
-      secondaryRuntime.portfolio.getPosition({ symbol: "BTCUSDT" })?.baseQuantity.amount,
-      "0.1",
-    )
-    assert.equal(primaryRuntime.portfolio.getPosition({ symbol: "BTCUSDT" }), undefined)
   } finally {
     const stopped = await runtime.stop()
     assert.equal(stopped.ok, true)
