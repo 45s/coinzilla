@@ -48,7 +48,10 @@ function serializeCommissions({ fill }) {
  */
 export async function recordExecutionFill({ operationalStateStore, fill } = {}) {
   try {
-    const market = validateExecutionFillInput({ operationalStateStore, fill })
+    const market = validateExecutionFillInput({
+      operationalStateStore,
+      fill,
+    })
     const commissions = serializeCommissions({ fill })
     const result = await operationalStateStore.append({
       factId: `execution-fill-applied:${fill.id}`,
