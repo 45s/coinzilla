@@ -35,7 +35,10 @@ function assertRouteShape({ route, index }) {
 }
 
 function addConfiguredRoute({ route, index, pairs, providerIds, routeBySymbol }) {
-  assertRouteShape({ route, index })
+  assertRouteShape({
+    route,
+    index,
+  })
   if (!Object.hasOwn(pairs, route.symbol)) {
     throw new TypeError(`Market-data route references unconfigured symbol ${route.symbol}`)
   }

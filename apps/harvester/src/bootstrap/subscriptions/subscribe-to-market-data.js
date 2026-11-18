@@ -463,69 +463,12 @@ function createMarketDataSubscriptionContext(options) {
   }
 }
 
-function logMarketDataSubscriptionsReady({ logger, providerInstanceId, enabledSymbols, subscribedSymbols }) {
-  logMarketDataSubscriptionsReady({
-    logger,
-    providerInstanceId,
-    enabledSymbols,
-    subscribedSymbols,
-  })
-}
-
-/**
- * Establish market/book subscriptions for every enabled pair, then seed missing
- * first prices only after all WebSocket streams are active.
- */
-export async function subscribeToMarketData({
-  broker,
-  providerInstanceId,
-  brokerName,
-  eventPublisher,
+function logMarketDataSubscriptionsReady({
   logger,
-  tradingEnabled,
-  pairs,
-  settings,
-  processMarketPrice,
-  processMarketBook,
-  isMarketPriceFresh,
-  now,
-  isStopped,
-  onMarketPriceError,
-  subscriptions,
-  bookSubscriptions,
-  marketPriceIntake,
-} = {}) {
-  const enabledSymbols = Object.entries(pairs)
-    .filter(([, pairConfig]) => pairConfig.enabled)
-    .map(([symbol]) => symbol)
-  const context = createMarketDataSubscriptionContext({
-    broker,
-    providerInstanceId,
-    brokerName,
-    eventPublisher,
-    logger,
-    tradingEnabled,
-    pairs,
-    settings,
-    processMarketPrice,
-    processMarketBook,
-    isMarketPriceFresh,
-    now,
-    isStopped,
-    subscriptions,
-    bookSubscriptions,
-    marketPriceIntake,
-  })
-  const reportPriceError = createMarketPriceErrorReporter({ logger,
-onMarketPriceError })
-
-  // Establish every enabled market stream before requesting any missing
-  // initial ticker snapshot through Binance WebSocket API `ticker.price`.
-  // A slow first request must never prevent later markets receiving prices.
-  await subscribeToEnabledMarkets({ context,
-reportPriceError })
-  const subscribedSymbols = assertAllMarketSubscriptions({ enabledSymbols,
-subscriptions })
+  providerInstanceId,
+  enabledSymbols,
+  subscribedSymbols,
+}) {
   logSystem({
     logger,
     message: "Market data subscriptions ready",
@@ -533,16 +476,52 @@ subscriptions })
     enabledSymbols,
     subscribedSymbols,
   })
+}
+
+async function establishMarketDataSubscriptions({ context, reportPriceError }) {
+  const enabledSymbols = Object.entries(context.pairs)
+    .filter(([, pairConfig]) => pairConfig.enabled)
+    .map(([symbol]) => symbol)
+
+  // Establish every enabled market stream before requesting any missing
+  // initial ticker snapshot through Binance WebSocket API ticker.price.
+  // A slow first request must never prevent later markets receiving prices.
+  await subscribeToEnabledMarkets({ context, reportPriceError })
+  const subscribedSymbols = assertAllMarketSubscriptions({
+    enabledSymbols,
+    subscriptions: context.subscriptions,
+  })
+  logMarketDataSubscriptionsReady({
+    logger: context.logger,
+    providerInstanceId: context.providerInstanceId,
+    enabledSymbols,
+    subscribedSymbols,
+  })
 
   // Only after all enabled symbols have active WebSocket Streams may startup
-  // request missing ticker snapshots through WebSocket API `ticker.price`.
-  if (tradingEnabled) {
-    await seedMissingInitialPrices({ context,
-reportPriceError })
+  // request missing ticker snapshots through WebSocket API ticker.price.
+  if (context.tradingEnabled) {
+    await seedMissingInitialPrices({ context, reportPriceError })
   }
   return Object.freeze({
-    subscriptions,
-    bookSubscriptions,
-    marketPriceIntake,
+    subscriptions: context.subscriptions,
+    bookSubscriptions: context.bookSubscriptions,
+    marketPriceIntake: context.marketPriceIntake,
+  })
+}
+
+/**
+ * Establish market/book subscriptions for every enabled pair, then seed missing
+ * first prices only after all WebSocket streams are active.
+ */
+export async function subscribeToMarketData(options = {}) {
+  const context = createMarketDataSubscriptionContext(options)
+  const reportPriceError = createMarketPriceErrorReporter({
+    logger: context.logger,
+    onMarketPriceError: options.onMarketPriceError,
+  })
+  return establishMarketDataSubscriptions({
+    context,
+    reportPriceError,
   })
 }
