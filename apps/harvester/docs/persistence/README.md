@@ -267,17 +267,6 @@ A database-backed Operational State adapter requires a separate gated decision, 
 
 ## Temporary SQLite connectivity check
 
-Harvester currently writes one deliberately temporary `harvester_processes` record when it opens the selected SQLite database:
-
-```json
-{ "id": "12345", "processId": 12345 }
-```
-
-The record exists only to verify that the application can connect through `@coinzilla/db` and persist/read a value. It is not trading-session history, trading state, or a production persistence contract; remove this smoke-test write when real Harvester persistence is implemented. The existing LIVE/TESTNET database-file isolation remains unchanged.
-
-
-## Temporary SQLite connectivity check
-
 For the current integration smoke test, Harvester opens the existing environment-selected SQLite database and writes one temporary record to the `harvester_processes` collection:
 
 ```json

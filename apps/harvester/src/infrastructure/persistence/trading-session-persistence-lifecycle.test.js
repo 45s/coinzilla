@@ -6,8 +6,8 @@ import test from "node:test"
 import { closeTradingSessionPersistence } from "./close-trading-session-persistence.js"
 import { prepareTradingSessionPersistence } from "./prepare-trading-session-persistence.js"
 
-test("prepares a real provider-neutral SQLite session database and closes it", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-session-persistence-"))
+test("connects to SQLite, persists the process ID, and closes the database", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-id-persistence-"))
   const result = await prepareTradingSessionPersistence({
     tradingMode: "testnet",
     processId: 12345,
@@ -19,7 +19,7 @@ test("prepares a real provider-neutral SQLite session database and closes it", a
 
   try {
     assert.ok(result, "A valid isolated database directory must compose the real SQLite provider.")
-    assert.equal(database.state, "connected", "The provider-neutral database must be connected before the repository is exposed.")
+    assert.equal(database.state, "connected", "The provider-neutral database must be connected before the process-ID record is read.")
     assert.deepEqual(
       await database.readOne({ collection: "harvester_processes", id: "12345" }),
       { id: "12345", processId: 12345 },
