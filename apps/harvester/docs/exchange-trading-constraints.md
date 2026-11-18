@@ -63,9 +63,9 @@ These constraints are retained as immutable `unvalidatedConstraints` diagnostics
 
 The credential-free `pnpm run config:symbol` generator reads public `exchangeInfo` and ticker data only. It cannot query authenticated `myFilters`, so account-specific constraints are checked by Harvester during authenticated startup. The command updates only `token-specification.json`; its preview shows the derived per-market precision and retains public unvalidated-filter diagnostics. It does not create strategy pairs or persist exchange filters. See the [generator instructions](../README.md#generate-or-refresh-market-metadata).
 
-## Bitunix Spot partial mapping — read-only preparation
+## Bitunix Spot market-rule evidence — pending Brokers integration
 
-The Bitunix Spot market catalog does not expose a complete canonical trading-rule set. The pure Harvester adapter in `src/infrastructure/brokers/bitunix-market-metadata.js` maps only fields whose units are supported by the official Spot market metadata and order documentation:
+The Bitunix Spot market catalog does not expose a complete canonical trading-rule set. The following source analysis records the fields whose units were previously considered mappable from the official Spot market metadata and order documentation. The Harvester-specific mapping helper from PR #1209 was retired in PR #1455; this evidence is not a current runtime mapping. Any future normalization belongs in `@coinzilla/brokers` and must be reconciled with the complete broker contract in [#1185](https://github.com/45s/coinzilla/issues/1185):
 
 - `minVolume` is the minimum trading quantity and maps to canonical `MIN_QUANTITY` using the base asset.
 - `minPrice` is the minimum trading value and maps to canonical `MIN_NOTIONAL` using the quote asset.
@@ -75,7 +75,7 @@ The Bitunix Spot market catalog does not expose a complete canonical trading-rul
 - The .NET reference fixture includes `maxAmount`, `maxLimitOrderAmount`, and `maxMarketOrderAmount`, but the official Spot catalog does not document their semantics. Their presence is recorded only as unvalidated source metadata; they are not mapped into maximum trading rules.
 - Only an explicitly open market (`isOpen: "1"` or numeric `1`) advertises the documented `LIMIT` and `MARKET` order types. Closed or unknown market status advertises no supported order types. No `LIMIT_MAKER` or post-only support is inferred.
 
-This pure read-side mapping helper is implemented in [PR #1209](https://github.com/45s/coinzilla/pull/1209); it is not a broker adapter and not part of runtime composition. It does not enable Bitunix trading. The official evidence is in the [Bitunix Spot API documentation](https://www.bitunix.com/api-docs/spots/en_us/); the mapping deliberately does not reuse the .NET reference's undocumented maximum fields. Price/quantity increments remain unknown, so this metadata cannot pass the existing enabled-market trading-readiness gate.
+The previous Harvester helper was not a broker adapter and was never wired into runtime composition; it has now been removed to avoid a duplicate exchange-specific mapping boundary. The official evidence is in the [Bitunix Spot API documentation](https://www.bitunix.com/api-docs/spots/en_us/); the analysis deliberately does not reuse the .NET reference's undocumented maximum fields. Price/quantity increments remain unknown, so the current broker surface cannot satisfy the enabled-market trading-readiness gate.
 
 ## Adding another exchange later
 
