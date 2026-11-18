@@ -417,7 +417,8 @@ test("Bitunix REST client classifies HTTP 429 rate limits without retrying", asy
 test("Bitunix REST client supports unsigned public reads without configured credentials", async () => {
   let requestCount = 0
   const client = new BitunixRestClient({
-    fetchFn: async (url, options) => {
+    fetchFn: async (...args) => {
+      const [url, options] = args
       requestCount += 1
       assert.equal(url, "https://openapi.bitunix.com/api/spot/v1/common/coin_pair/list", "credential-free diagnostics must call only the requested public endpoint")
       assert.equal(options.headers, undefined, "credential-free public requests must never construct authentication headers")
