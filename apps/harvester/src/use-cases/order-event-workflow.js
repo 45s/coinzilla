@@ -121,6 +121,16 @@ function validateExecutionFill({ order, fill, eventPublisher }) {
       }),
     }
   }
+  const hasProviderIdentity = ["providerInstanceId", "providerType", "accountId"].every((field) =>
+    typeof order[field] === "string" && order[field].trim())
+  if (!hasProviderIdentity) {
+    return {
+      ok: false,
+      error: new Error("Execution fill cannot be attributed to a provider instance: legacy order provenance is missing"),
+      symbol: order.market.symbol,
+      failure: { category: "OWNERSHIP_INTEGRITY", stage: "FILL_PROVIDER_PROVENANCE_MISSING", retryable: false },
+    }
+  }
   const identityMatches = fill.market.id === order.market.id &&
     fill.side === order.side &&
     fill.brokerOrderId === order.brokerOrderId &&
