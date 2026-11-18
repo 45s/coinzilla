@@ -1139,19 +1139,34 @@ function validateRecoveryCycleNonCompletion({
   if (outcome === "BLOCKED" && continueReasons.includes(reason)) {
     throw new TypeError("BLOCKED cannot use a residual sell-through reason")
   }
-  if (compareDecimal({ left: activeQuantity, right: "0" }) < 0 ||
-      compareDecimal({ left: keepQuantity, right: "0" }) < 0) {
+  if (compareDecimal({
+    left: activeQuantity,
+    right: "0",
+  }) < 0 ||
+      compareDecimal({
+    left: keepQuantity,
+    right: "0",
+  }) < 0) {
     throw new RangeError("activeQuantity and keepQuantity must be non-negative")
   }
-  if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+  if (compareDecimal({
+    left: minProfit,
+    right: "0.01",
+  }) < 0) {
     throw new RangeError("minProfit must be at least 0.01")
   }
   if (outcome === "CONTINUE_SELL_THROUGH" &&
-      compareDecimal({ left: activeQuantity, right: keepQuantity }) <= 0) {
+      compareDecimal({
+      left: activeQuantity,
+      right: keepQuantity,
+    }) <= 0) {
     throw new RangeError("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
   }
   if (reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" &&
-      compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
+      compareDecimal({
+      left: realizedNetProfit,
+      right: minProfit,
+    }) >= 0) {
     throw new RangeError("RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY requires realized profit below minProfit")
   }
   if (reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
@@ -1205,10 +1220,22 @@ function mapRecoveryCycleNotCompletedFields({
     minProfit: mappedMinProfit,
   })
   return {
-    symbol: requireString({ value: symbol, field: "symbol" }),
-    marketId: requireString({ value: marketId, field: "marketId" }),
-    sellOrderClientId: requireString({ value: sellOrderClientId, field: "sellOrderClientId" }),
-    sellOrderBrokerOrderId: requireString({ value: sellOrderBrokerOrderId, field: "sellOrderBrokerOrderId" }),
+    symbol: requireString({
+      value: symbol,
+      field: "symbol",
+    }),
+    marketId: requireString({
+      value: marketId,
+      field: "marketId",
+    }),
+    sellOrderClientId: requireString({
+      value: sellOrderClientId,
+      field: "sellOrderClientId",
+    }),
+    sellOrderBrokerOrderId: requireString({
+      value: sellOrderBrokerOrderId,
+      field: "sellOrderBrokerOrderId",
+    }),
     outcome,
     reason: mappedReason,
     realizedNetProfit: mappedRealizedNetProfit,
@@ -1226,7 +1253,10 @@ export const mapRecoveryCycleNotCompletedData = (input = {}) =>
     mapper: (fields) => mapRecoveryCycleNotCompletedFields(fields),
   })
 
-function requireOpenOrderSide({ order, index }) {
+function requireOpenOrderSide({
+      order,
+      index,
+    }) {
   if (order.side !== "BUY" && order.side !== "SELL") {
     throw new TypeError(`orders[${index}].side must be BUY or SELL`)
   }
