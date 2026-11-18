@@ -730,6 +730,48 @@ async function runWebSocketSession({
   return isConnected
 }
 
+async function recordWebSocketReconnectPing({
+  client,
+  startedAt,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+}) {
+  const pingResponse = await client.ping()
+  results.push(createResult({
+    operation: "WebSocket reconnect",
+    startedAt,
+    now,
+    status: "passed",
+    request: {
+      method: "ping",
+      attempt: 1,
+    },
+    response: {
+      state: client.state,
+      pingResponse,
+    },
+    includePublicPayloads,
+    secrets,
+  }))
+}
+
+function recordWebSocketReconnectFailure({ error, startedAt, now, results, secrets }) {
+  results.push(createResult({
+    operation: "WebSocket reconnect",
+    startedAt,
+    now,
+    status: "failed",
+    request: {
+      method: "ping",
+      attempt: 1,
+    },
+    error,
+    secrets,
+  }))
+}
+
 async function runWebSocketReconnectCheck({
   env,
   requestTimeout,
@@ -755,36 +797,22 @@ async function runWebSocketReconnectCheck({
     })
     await client.connect()
     isConnected = true
-    const pingResponse = await client.ping()
-    results.push(createResult({
-      operation: "WebSocket reconnect",
+    await recordWebSocketReconnectPing({
+      client,
       startedAt,
       now,
-      status: "passed",
-      request: {
-        method: "ping",
-        attempt: 1,
-      },
-      response: {
-        state: client.state,
-        pingResponse,
-      },
+      results,
+      secrets,
       includePublicPayloads,
-      secrets,
-    }))
+    })
   } catch (error) {
-    results.push(createResult({
-      operation: "WebSocket reconnect",
+    recordWebSocketReconnectFailure({
+      error,
       startedAt,
       now,
-      status: "failed",
-      request: {
-        method: "ping",
-        attempt: 1,
-      },
-      error,
+      results,
       secrets,
-    }))
+    })
   } finally {
     if (client) {
       await cleanupWebSocket({
@@ -864,6 +892,75 @@ function recordWebSocketSkipped({ now, results, secrets }) {
   })
 }
 
+function recordWebSocketClientCreationFailure({ error, now, results, secrets }) {
+  recordWebSocketConnectionFailure({
+    error,
+    now,
+    results,
+    secrets,
+  })
+  recordWebSocketReconnectSkipped({
+    now,
+    results,
+    secrets,
+    reason: "The initial WebSocket client could not be created; no reconnect attempt was made",
+  })
+  recordWebSocketSubscriptionSkipped({
+    now,
+    results,
+    secrets,
+  })
+}
+
+async function runWebSocketLifecycle({
+  client,
+  env,
+  requestTimeout,
+  symbol,
+  depthPrecision,
+  now,
+  results,
+  events,
+  secrets,
+  includePublicPayloads,
+  websocketClientFactory,
+}) {
+  const initialConnectionEstablished = await runWebSocketSession({
+    client,
+    symbol,
+    depthPrecision,
+    now,
+    results,
+    events,
+    secrets,
+    includePublicPayloads,
+  })
+  if (!initialConnectionEstablished) {
+    recordWebSocketReconnectSkipped({
+      now,
+      results,
+      secrets,
+      reason: "The initial WebSocket connection was not established; no reconnect attempt was made",
+    })
+    recordWebSocketSubscriptionSkipped({
+      now,
+      results,
+      secrets,
+    })
+    return
+  }
+  await runWebSocketReconnectCheck({
+    env,
+    requestTimeout,
+    events,
+    secrets,
+    includePublicPayloads,
+    now,
+    results,
+    websocketClientFactory,
+  })
+}
+
 async function runWebSocketChecks({
   env,
   requestTimeout,
@@ -897,27 +994,18 @@ async function runWebSocketChecks({
       websocketClientFactory,
     })
   } catch (error) {
-    recordWebSocketConnectionFailure({
+    recordWebSocketClientCreationFailure({
       error,
-      now,
-      results,
-      secrets,
-    })
-    recordWebSocketReconnectSkipped({
-      now,
-      results,
-      secrets,
-      reason: "The initial WebSocket client could not be created; no reconnect attempt was made",
-    })
-    recordWebSocketSubscriptionSkipped({
       now,
       results,
       secrets,
     })
     return
   }
-  const initialConnectionEstablished = await runWebSocketSession({
+  await runWebSocketLifecycle({
     client,
+    env,
+    requestTimeout,
     symbol,
     depthPrecision,
     now,
@@ -925,31 +1013,8 @@ async function runWebSocketChecks({
     events,
     secrets,
     includePublicPayloads,
+    websocketClientFactory,
   })
-  if (initialConnectionEstablished) {
-    await runWebSocketReconnectCheck({
-      env,
-      requestTimeout,
-      events,
-      secrets,
-      includePublicPayloads,
-      now,
-      results,
-      websocketClientFactory,
-    })
-  } else {
-    recordWebSocketReconnectSkipped({
-      now,
-      results,
-      secrets,
-      reason: "The initial WebSocket connection was not established; no reconnect attempt was made",
-    })
-    recordWebSocketSubscriptionSkipped({
-      now,
-      results,
-      secrets,
-    })
-  }
 }
 
 async function runConfiguredProbes({
