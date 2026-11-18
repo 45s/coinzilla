@@ -1860,3 +1860,27 @@ test("maps explicit residual sell-through and blocked recovery-cycle outcomes", 
     outcome: "BLOCKED",
     reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" }).ok, false)
 })
+
+
+test("rejects malformed provider identity tokens in lifecycle DTOs", () => {
+  const invalidIdentifiers = [
+    "",
+    "contains space",
+    "contains/slash",
+    "x".repeat(129),
+  ]
+  for (const invalidIdentifier of invalidIdentifiers) {
+    assert.equal(
+      mapOrderSubmissionRequestedData({
+        order: {
+          ...canonicalOrderFacts,
+          providerInstanceId: invalidIdentifier,
+          providerType: "binance",
+          accountId: "binance-primary",
+        },
+      }).ok,
+      false,
+      `malformed provider identity token ${JSON.stringify(invalidIdentifier)} must be rejected`,
+    )
+  }
+})

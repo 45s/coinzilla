@@ -750,7 +750,7 @@ function createOperatorControlOperationalStateStore({ calls, appendedFacts }) {
     }),
     append: async (fact) => {
       calls.push(
-        fact.factType === "OPERATOR_MARKET_PAUSED" || fact.factType === "OPERATOR_MARKET_RESUMED"
+        fact.factType === "OPERATOR_MARKET_BUYS_PAUSED" || fact.factType === "OPERATOR_MARKET_BUYS_RESUMED"
           ? "append-operator-fact"
           : "append-process-fact",
       )
@@ -835,7 +835,7 @@ test("starts/stops Telegram CC and applies process-local pause without recovery 
     assert.equal(pauseResult.ok, true)
     assert.equal(pauseResult.data.durable, false)
     assert.equal(appendedFacts.some(({ factType }) =>
-      factType === "OPERATOR_MARKET_PAUSED" || factType === "OPERATOR_MARKET_RESUMED"), false)
+      factType === "OPERATOR_MARKET_BUYS_PAUSED" || factType === "OPERATOR_MARKET_BUYS_RESUMED"), false)
     assert.equal(calls.includes("append-operator-fact"), false)
     assert.equal(placeOrderCalls, 0)
     assert.equal(cancelOrderCalls, 0)
@@ -5305,7 +5305,7 @@ async function assertTelegramPauseCommandIsDurable({ operator, operationalStateS
   const persistedFacts = await operationalStateStore.readAll()
   assert.equal(persistedFacts.ok, true)
   assert.equal(
-    persistedFacts.data.records.some((record) => record.factType === "OPERATOR_MARKET_PAUSED"),
+    persistedFacts.data.records.some((record) => record.factType === "OPERATOR_MARKET_BUYS_PAUSED"),
     true,
     "the observation-only Telegram pause command must still be durably recorded before it is applied",
   )
@@ -5497,7 +5497,7 @@ async function assertOperatorPauseSurvivesReconnect({ fixture, broker }) {
   })
   assert.equal(reconnectedMarkets.ok, true)
   assert.equal(
-    reconnectedMarkets.data.markets.find(({ symbol }) => symbol === "BTCUSDT")?.operatorPaused,
+    reconnectedMarkets.data.markets.find(({ symbol }) => symbol === "BTCUSDT")?.operatorBuysPaused,
     true,
     "A user-data disconnect/reconnect and successful reconciliation must not silently clear the process-lifetime operator pause.",
   )
@@ -5526,7 +5526,7 @@ async function assertSharedOperatorFactsPersisted({ operationalStateStore, runti
   const read = await operationalStateStore.readAll()
   assert.equal(read.ok, true, read.errors?.[0]?.message)
   assert.equal(fixture.getSecondaryStoreFactoryCalls(), 0)
-  const pauseFact = read.data.records.find(({ factType }) => factType === "OPERATOR_MARKET_PAUSED")
+  const pauseFact = read.data.records.find(({ factType }) => factType === "OPERATOR_MARKET_BUYS_PAUSED")
   assert.ok(pauseFact)
   assert.equal(pauseFact.runtimeSessionId, runtimeSessionId)
   assert.equal(

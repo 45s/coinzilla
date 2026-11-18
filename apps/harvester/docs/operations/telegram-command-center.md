@@ -14,11 +14,11 @@ Pause and resume remain market-scoped application use cases:
 
 - Inline Pause/Resume buttons show eligible markets, then a confirmation page. Only the confirmation callback invokes the application use case.
 - Explicit `/pause SYMBOL` and `/resume SYMBOL` commands remain available to an authorized operator.
-- Pause suppresses new strategy BUY intents and trailing-BUY repricing for that market. It does not cancel or modify existing exchange orders; a resting BUY may still fill.
-- Emergency BUY pause is separate: `/pauseallbuys` blocks new BUYs across configured markets; `/pausebuys SYMBOL` blocks BUYs for one market. Both cancel active BUY orders owned by the current Harvester process through the existing cancellation/reconciliation workflow.
-- Emergency BUY pause never cancels startup-snapshot/manual/external orders. If a BUY cancellation is unconfirmed, the BUY remains UNKNOWN and the application reports the incomplete outcome. Global and per-market pause scopes are independent; resuming one does not clear the other. Orders from a previous Harvester process are external to the current process and are not canceled by a repeated pause command.
+- Market Pause first blocks new BUY decisions, replacements/repricing and final BUY submissions for that market, then cancels active BUY orders owned by the current Harvester process through the existing cancellation/reconciliation workflow.
+- Cancellation-racing fills are reconciled and accounted before success is acknowledged. Recovery SELL decisions/submissions, fill accounting and reconciliation continue.
+- Pause never cancels startup-snapshot/manual/external or prior-process orders under ADR-0004. Those orders remain outside current-process ownership and require explicit operator reconciliation.
 - If any owned BUY cancellation is unconfirmed, the BUY gate remains active and the command reports `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; inspect `/orders` and Harvester diagnostics before assuming the market is clear.
-- Both the legacy market pause and emergency BUY pause are process-lifetime only and are not restored after restart. Reissue `/pause SYMBOL` or the relevant emergency BUY command after restart when required.
+- Global and market BUY pause scopes are independent; resuming one does not clear the other. All operator BUY pauses are process-lifetime only and are not restored after restart.
 
 ## Supported commands and buttons
 
@@ -36,12 +36,12 @@ Pause and resume remain market-scoped application use cases:
 | `/markets` | Markets | Calls `getMarkets` |
 | `/positions` | Positions | Calls `getPositions` |
 | `/orders` | Orders | Calls `getOrders` |
-| `/pause SYMBOL` | Pause | Invokes the existing market-scoped `pauseMarket` use case |
-| `/resume SYMBOL` | Resume | Invokes the existing market-scoped `resumeMarket` use case |
+| `/pause SYMBOL` | Pause | Activates the market BUY gate, cancels current-process-owned BUYs, and reconciles racing fills |
+| `/resume SYMBOL` | Resume | Removes only that market's operator BUY gate |
 | `/pauseallbuys` | Emergency global BUY pause | Blocks new BUYs and cancels active current-process-owned BUY orders across configured markets |
 | `/resumeallbuys` | Resume global BUY pause | Removes only the global emergency BUY gate; market-specific gates remain |
-| `/pausebuys SYMBOL` | Emergency market BUY pause | Blocks new BUYs and cancels active current-process-owned BUYs for one market |
-| `/resumebuys SYMBOL` | Resume market BUY pause | Removes only that market emergency BUY gate; a global gate may still block BUYs |
+| `/pausebuys SYMBOL` | Compatibility alias | Same market BUY pause as `/pause SYMBOL` |
+| `/resumebuys SYMBOL` | Compatibility alias | Same market BUY resume as `/resume SYMBOL` |
 | Keyboard: Pause | Pause selection | Shows enabled, currently unpaused markets; selection opens confirmation |
 | Keyboard: Resume | Resume selection | Shows enabled, currently paused markets; selection opens confirmation |
 | Inline Refresh | Refresh | Re-runs the current read-only page or market selection |
@@ -49,7 +49,7 @@ Pause and resume remain market-scoped application use cases:
 
 The persistent keyboard has exactly six buttons: Pause, Resume, Status, Markets, Portfolio, and Open Orders. Balances remains available through inline navigation and `/balances`.
 
-Emergency BUY controls are explicit text commands and are not replacements for the existing confirmation-gated market Pause/Resume buttons. They execute immediately after the existing private-chat authorization checks; there is no additional confirmation step for these emergency commands. Telegram command names are lowercase; application methods are `pauseAllBuys`, `resumeAllBuys`, `pauseBuys({ symbol })`, and `resumeBuys({ symbol })`.
+The normal `/pause SYMBOL` and confirmed keyboard Pause use the same market-scoped BUY cancellation workflow. `/resume SYMBOL` and confirmed keyboard Resume clear that same market BUY gate. The `/pausebuys` and `/resumebuys` commands remain compatibility aliases. Global `/pauseallbuys` and `/resumeallbuys` remain separate. Text commands execute after private-chat authorization; inline market buttons require confirmation.
 
 ## Interaction diagnostics
 

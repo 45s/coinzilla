@@ -9,81 +9,89 @@ const actor = Object.freeze({
   roles: Object.freeze(["trading-operator"]),
 })
 
-function createHarness({ appendResult = { ok: true,
-  data: { durable: true,
-    duplicate: false } } } = {}) {
+function createEngineControl({ calls, action, prefix, resultData }) {
+  return async ({ symbol, beforeApply }) => {
+    calls.push({
+      type: `${prefix}-start`,
+      symbol,
+    })
+    const committed = typeof beforeApply === "function"
+      ? await beforeApply({
+        symbol,
+        action,
+      })
+      : {
+        ok: true,
+        data: { durable: false },
+      }
+    if (!committed?.ok) { return committed }
+    calls.push({
+      type: `${prefix}-applied`,
+      symbol,
+    })
+    return {
+      ok: true,
+      data: {
+        symbol,
+        ...resultData,
+        durable: committed.data.durable,
+      },
+    }
+  }
+}
+
+function createHarnessEngine({ calls }) {
+  return {
+    pauseMarket: async () => {
+      calls.push({ type: "legacy-pause" })
+    },
+    resumeMarket: async () => {
+      calls.push({ type: "legacy-resume" })
+    },
+    pauseBuys: createEngineControl({
+      calls,
+      action: "PAUSE_BUYS",
+      prefix: "pause-buys",
+      resultData: {
+        paused: true,
+        canceled: 0,
+        reconciled: 0,
+      },
+    }),
+    resumeBuys: createEngineControl({
+      calls,
+      action: "RESUME_BUYS",
+      prefix: "resume-buys",
+      resultData: {
+        resumed: true,
+        stillPaused: false,
+      },
+    }),
+  }
+}
+
+function createHarness({ appendResult = {
+  ok: true,
+  data: {
+    durable: true,
+    duplicate: false,
+  },
+} } = {}) {
   const calls = []
   const operationalStateStore = {
-    append: async (fact) => {
-      calls.push({ type: "append",
-        fact })
+    append: async fact => {
+      calls.push({
+        type: "append",
+        fact,
+      })
       return appendResult
     },
   }
-  const engine = {
-    pauseMarket: async ({ symbol, beforeApply }) => {
-      calls.push({ type: "pause-start",
-        symbol })
-      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol,
-        action: "PAUSE" }) : { ok: true,
-        data: { durable: false } }
-      if (!committed?.ok) {return committed}
-      calls.push({ type: "pause-applied",
-        symbol })
-      return { ok: true,
-        data: { symbol,
-          paused: true,
-          durable: committed.data.durable } }
-    },
-    resumeMarket: async ({ symbol, beforeApply }) => {
-      calls.push({ type: "resume-start",
-        symbol })
-      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol,
-        action: "RESUME" }) : { ok: true,
-        data: { durable: false } }
-      if (!committed?.ok) {return committed}
-      calls.push({ type: "resume-applied",
-        symbol })
-      return { ok: true,
-        data: { symbol,
-          resumed: true,
-          durable: committed.data.durable } }
-    },
-    pauseBuys: async ({ symbol, beforeApply }) => {
-      calls.push({ type: "pause-buys-start",
-        symbol })
-      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol,
-        action: symbol === undefined ? "PAUSE_ALL_BUYS" : "PAUSE_BUYS" }) : { ok: true,
-        data: { durable: false } }
-      if (!committed?.ok) {return committed}
-      calls.push({ type: "pause-buys-applied",
-        symbol })
-      return { ok: true,
-        data: { symbol,
-          paused: true,
-          canceled: 0,
-          reconciled: 0,
-          durable: committed.data.durable } }
-    },
-    resumeBuys: async ({ symbol, beforeApply }) => {
-      calls.push({ type: "resume-buys-start",
-        symbol })
-      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol,
-        action: symbol === undefined ? "RESUME_ALL_BUYS" : "RESUME_BUYS" }) : { ok: true,
-        data: { durable: false } }
-      if (!committed?.ok) {return committed}
-      calls.push({ type: "resume-buys-applied",
-        symbol })
-      return { ok: true,
-        data: { symbol,
-          resumed: true,
-          stillPaused: false,
-          durable: committed.data.durable } }
-    },
-  }
-  return { calls,
+  return {
+    calls,
     operationalStateStore,
-    engine }
+    engine: createHarnessEngine({ calls }),
+  }
 }
 
 test("creates an immutable Harvester operator facade without a generic command dispatcher", () => {
@@ -97,6 +105,8 @@ test("creates an immutable Harvester operator facade without a generic command d
   assert.equal(Object.isFrozen(operator), true)
   assert.equal(typeof operator.pauseMarket, "function")
   assert.equal(typeof operator.resumeMarket, "function")
+  assert.equal(operator.pauseMarket, operator.pauseBuys, "Market Pause must share the market BUY pause use case.")
+  assert.equal(operator.resumeMarket, operator.resumeBuys, "Market Resume must share the market BUY resume use case.")
   assert.equal(typeof operator.pauseBuys, "function")
   assert.equal(typeof operator.resumeBuys, "function")
   assert.equal(typeof operator.pauseAllBuys, "function")
@@ -116,13 +126,13 @@ test("pause authorizes the actor and commits an ADR-0001 durable fact inside the
 
   assert.equal(result.ok, true)
   assert.deepEqual(calls.map(({ type }) => type), [
-    "pause-start",
+    "pause-buys-start",
     "append",
-    "pause-applied",
+    "pause-buys-applied",
   ], "The durable fact must commit before the engine applies the in-memory operator pause.")
   assert.deepEqual(calls[1].fact, {
     factId: "operator-control:telegram:1001",
-    factType: "OPERATOR_MARKET_PAUSED",
+    factType: "OPERATOR_MARKET_BUYS_PAUSED",
     data: {
       requestId: "telegram:1001",
       actorId: "telegram-user:12345",
@@ -181,7 +191,7 @@ test("pause propagates a failed Operational State Store commit without applying 
   })
 
   assert.equal(result.ok, false)
-  assert.deepEqual(calls.map(({ type }) => type), ["pause-start", "append"])
+  assert.deepEqual(calls.map(({ type }) => type), ["pause-buys-start", "append"])
 })
 
 test("resume records a distinct durable fact through the same application facade", async () => {
@@ -197,13 +207,13 @@ test("resume records a distinct durable fact through the same application facade
 
   assert.equal(result.ok, true)
   assert.deepEqual(calls.map(({ type }) => type), [
-    "resume-start",
+    "resume-buys-start",
     "append",
-    "resume-applied",
+    "resume-buys-applied",
   ])
   assert.deepEqual(calls[1].fact, {
     factId: "operator-control:local:resume:1004",
-    factType: "OPERATOR_MARKET_RESUMED",
+    factType: "OPERATOR_MARKET_BUYS_RESUMED",
     data: {
       requestId: "local:resume:1004",
       actorId: "telegram-user:12345",
@@ -271,10 +281,10 @@ test("pause and resume remain process-local when recovery storage is not supplie
   assert.equal(resume.ok, true)
   assert.equal(resume.data.durable, false)
   assert.deepEqual(calls.map(({ type }) => type), [
-    "pause-start",
-    "pause-applied",
-    "resume-start",
-    "resume-applied",
+    "pause-buys-start",
+    "pause-buys-applied",
+    "resume-buys-start",
+    "resume-buys-applied",
   ])
 })
 
