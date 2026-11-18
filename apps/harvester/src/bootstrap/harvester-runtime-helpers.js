@@ -223,17 +223,8 @@ export function createHarvesterTradingEngine({
 
 
 function createExecutionFillCallback({ store, recordExecutionFill } = {}) {
-  if (!store) {
-    return undefined
-  }
-  const callback = ({ fill }) => recordExecutionFill({
-    operationalStateStore: store,
-    fill,
-  })
-  Object.defineProperty(callback, "requiresProviderProvenance", {
-    value: true,
-  })
-  return callback
+  return store ? ({ fill }) => recordExecutionFill({ operationalStateStore: store,
+    fill }) : undefined
 }
 
 function createRecoveryCycleCompletedCallback({ store, recordRecoveryCycleCompleted } = {}) {
