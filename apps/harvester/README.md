@@ -102,6 +102,10 @@ Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`
 
 The runtime is currently Binance-only. The accepted target architecture adds named provider instances, explicit strategy/market execution routes, and independent market-data routes; it is not yet implemented and does not change today's environment setup. See [ADR-0003](../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) and [issue #1339](https://github.com/45s/coinzilla/issues/1339).
 
+### Bitunix read-only observer — implemented in PR #1423
+
+The opt-in Bitunix Spot observer is implemented under [issue #1422](https://github.com/45s/coinzilla/issues/1422) and [PR #1423](https://github.com/45s/coinzilla/pull/1423). Its configuration is `BITUNIX_READ_ONLY_ENABLED=true` with `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` from a read-only API key. It is exposed separately from the Binance trading broker; it does not route orders or strategy market data, and it does not affect `TRADING_MODE`. See the [Bitunix read-only observer contract](docs/infrastructure/bitunix-read-only-observer.md).
+
 ### Generate or refresh market metadata
 
 Use the interactive generator to retrieve Binance precision metadata instead of guessing it:

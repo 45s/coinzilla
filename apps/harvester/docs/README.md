@@ -4,7 +4,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Current Harvester priority
 
-**Multi-provider execution and independent market-data routing (#1339) is the primary Harvester architecture/delivery workstream.** See the [Harvester roadmap](../ROADMAP.md#top-harvester-priority--multi-provider-execution-and-market-data-routing-1339), [accepted ADR-0003](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md), and [source-verified migration plan](../../../docs/architecture/multi-provider-migration-plan.md). The merged provider registry is a Binance-only foundation; the runtime is not yet multi-provider.
+**Multi-provider execution and independent market-data routing (#1339) is the primary Harvester architecture/delivery workstream.** See the [Harvester roadmap](../ROADMAP.md#top-harvester-priority--multi-provider-execution-and-market-data-routing-1339), [accepted ADR-0003](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md), and [source-verified migration plan](../../../docs/architecture/multi-provider-migration-plan.md). The merged provider registry is a Binance-only foundation; the runtime is not yet multi-provider. A separate opt-in Bitunix read-only observer is tracked in [#1422](https://github.com/45s/coinzilla/issues/1422); it is not a provider-registry entry, execution/market-data route, or trading-readiness claim.
 
 ## Start here
 
@@ -36,6 +36,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Accounting invariants](domain/ACCOUNTING_INVARIANTS.md)
 - [Portfolio domain](domain/portfolio.md)
 - [Broker port and adapter](infrastructure/broker-port-and-adapter.md)
+- [Bitunix Spot read-only observer](infrastructure/bitunix-read-only-observer.md) — opt-in read-only facade, configuration and source limitations; not a trading provider.
 - [Binance provider-instance identity and registry](infrastructure/provider-instance-registry.md) — explicit non-secret identity, capability validation and deterministic lifecycle; current bootstrap remains single-instance and unrouted.
 - [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive material is exploratory discussion, not an approved executable contract
 - [Recovery Seller Domain Specification](domain/recovery-seller-domain-specification.md) — draft RS accounting, legacy authorization, independent profitability gates, and concurrent CG/RS invariants
