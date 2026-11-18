@@ -76,7 +76,7 @@ export async function publishRestoredDatabase({
 
 }
 
-async function createRestoreArtifact({ sourceFilename, destinationFilename, timeout, rate, cleanupTemporaryDirectory }) {
+async function createRestoreArtifact({ sourceFilename, destinationFilename, timeout, rate, cleanupTemporaryDirectory = removeTemporaryDirectory }) {
   const sourceDatabase = new DatabaseSync(sourceFilename, {
     readOnly: true,
     timeout,
@@ -131,7 +131,7 @@ async function createRestoreArtifact({ sourceFilename, destinationFilename, time
   }
 }
 
-async function publishRestoreArtifact({ artifact, destinationFilename, cleanupTemporaryDirectory }) {
+export async function publishRestoreArtifact({ artifact, destinationFilename, cleanupTemporaryDirectory = removeTemporaryDirectory }) {
   let operationError = null
 
   try {
@@ -176,7 +176,6 @@ export async function restoreSqliteDatabase({
   filename,
   timeout = DEFAULT_TIMEOUT_MS,
   rate = DEFAULT_BACKUP_RATE,
-  cleanupTemporaryDirectory = removeTemporaryDirectory,
 } = {}) {
   const {
     sourceFilename,
@@ -205,12 +204,10 @@ export async function restoreSqliteDatabase({
       destinationFilename,
       timeout,
       rate,
-      cleanupTemporaryDirectory,
     })
     await publishRestoreArtifact({
       artifact,
       destinationFilename,
-      cleanupTemporaryDirectory,
     })
   } catch (error) {
     if (error instanceof TypeError || error instanceof DatabaseProviderError) {
