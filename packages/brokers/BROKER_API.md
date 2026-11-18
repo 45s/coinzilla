@@ -8,14 +8,9 @@ This document defines the exchange-neutral public Broker contract, the compatibi
 
 ## 1. Ownership and capability-model decision
 
-The canonical provider capability declaration belongs to **Brokers**.
+The shared exchange-neutral `BrokerCapabilities` value contract is owned by **Entities** and re-exported by Brokers for compatibility. Brokers owns the provider-specific declarations and the evidence supporting each status; it does not maintain a second capability class, vocabulary, status enum, validator, or lookup implementation.
 
-The source audit found two overlapping models:
-
-- Entities `BrokerCapabilities` (introduced by PR #308 / FR-015) is a generic three-status value with a fixed vocabulary and no provider evidence metadata. Its public export is retained for compatibility while its owner-coordinated disposition is tracked in [Entities issue #1450](https://github.com/45s/coinzilla/issues/1450).
-- Binance's previous declaration was provider-owned, carried method/guarantee/limitation/reason/condition evidence, and used a fourth `environment-dependent` status.
-
-These are not separate domain concepts. The Brokers model is canonical for provider declarations. Brokers does not import the legacy Entities capability class, and Entities must not depend on Brokers. New provider declarations must use `@coinzilla/brokers`.
+The canonical Entities value preserves the original capability-only constructor/value shape for compatibility and supports richer provider declarations with `contractVersion`, provider/product/environment identity, and method/guarantee/limitation/reason/condition evidence. Both legacy consumers and provider implementations therefore use one source of truth without making Entities depend on Brokers or importing exchange protocol details into Entities.
 
 ### Canonical status semantics
 
