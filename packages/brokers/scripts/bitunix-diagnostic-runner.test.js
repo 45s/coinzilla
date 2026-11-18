@@ -342,49 +342,49 @@ test("a failed WebSocket RPC does not suppress later independent RPC checks", as
 
 
 function assertPublicOnlyDiagnostics({ report, restCalls }) {
-assert.equal(report.summary.failed, 0, "missing optional credentials must not prevent the required public-only diagnostic checks")
-const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
-assert.equal(configuration.response.credentialsConfigured, false, "the report must preserve public-only credential state")
-assert.deepEqual(
-  configuration.response.missingCredentialVariables,
-  ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"],
-  "the report must identify the exact credential variables required to enable private diagnostics",
-)
-assert.deepEqual(
-  restCalls.map(({ path, authenticated, method }) => ({
-    path,
-    authenticated,
-    method,
-  })),
-  [
-    {
-      path: "/api/spot/v1/common/coin_pair/list",
-      authenticated: false,
-      method: "GET",
-    },
-    {
-      path: "/api/spot/v1/market/last_price",
-      authenticated: false,
-      method: "GET",
-    },
-  ],
-  "public-only mode must issue only the unsigned catalog and last-price GET requests",
-)
-assert.equal(
-  report.results.find((entry) => entry.operation === "REST private account balances").status,
-  "skipped",
-  "private REST account reads must be explicitly skipped when credentials are unavailable",
-)
-assert.equal(
-  report.results.find((entry) => entry.operation === "WebSocket connection").status,
-  "skipped",
-  "authenticated WebSocket connection must be explicitly skipped without credentials",
-)
-assert.equal(
-  report.results.filter((entry) => entry.operation.startsWith("user.")).every((entry) => entry.status === "skipped"),
-  true,
-  "all private WebSocket RPC operations must be individually marked skipped in public-only mode",
-)
+  assert.equal(report.summary.failed, 0, "missing optional credentials must not prevent the required public-only diagnostic checks")
+  const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
+  assert.equal(configuration.response.credentialsConfigured, false, "the report must preserve public-only credential state")
+  assert.deepEqual(
+    configuration.response.missingCredentialVariables,
+    ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"],
+    "the report must identify the exact credential variables required to enable private diagnostics",
+  )
+  assert.deepEqual(
+    restCalls.map(({ path, authenticated, method }) => ({
+      path,
+      authenticated,
+      method,
+    })),
+    [
+      {
+        path: "/api/spot/v1/common/coin_pair/list",
+        authenticated: false,
+        method: "GET",
+      },
+      {
+        path: "/api/spot/v1/market/last_price",
+        authenticated: false,
+        method: "GET",
+      },
+    ],
+    "public-only mode must issue only the unsigned catalog and last-price GET requests",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "REST private account balances").status,
+    "skipped",
+    "private REST account reads must be explicitly skipped when credentials are unavailable",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "WebSocket connection").status,
+    "skipped",
+    "authenticated WebSocket connection must be explicitly skipped without credentials",
+  )
+  assert.equal(
+    report.results.filter((entry) => entry.operation.startsWith("user.")).every((entry) => entry.status === "skipped"),
+    true,
+    "all private WebSocket RPC operations must be individually marked skipped in public-only mode",
+  )
 }
 
 test("public-only diagnostics run unsigned REST checks when credentials are missing", async () => {
@@ -433,6 +433,12 @@ test("partial Bitunix credentials fall back to public-only diagnostics without e
   })
 
   assert.equal(report.summary.failed, 0, "a partial credential pair must degrade to public-only checks rather than aborting public diagnostics")
+  const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
+  assert.deepEqual(
+    configuration.response.missingCredentialVariables,
+    ["BITUNIX_API_SECRET"],
+    "the report must identify the exact missing half of a partial credential pair",
+  )
   assert.equal(restCalls.length, 2, "partial credentials must still allow both unsigned public REST checks")
   assert.equal(JSON.stringify(report).includes("partial-api-key"), false, "a partial API key must never appear in the public-only diagnostic report")
 })
