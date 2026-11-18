@@ -113,7 +113,7 @@ const brokers = {
 }
 ```
 
-Credentials are resolved from deployment secrets/environment and must never be committed, logged, placed in events, or included in configuration fingerprints. The Bitunix example is illustrative only: current Bitunix Spot support is query-only and must not be configured for execution.
+Credentials are resolved from deployment secrets/environment and must never be committed, logged, placed in events, or included in configuration fingerprints. The Bitunix example is illustrative only and does not authorize provider registration: the existing partial Bitunix broker implementation must first satisfy the complete acceptance criteria in #1185.
 
 ### Execution routes
 
