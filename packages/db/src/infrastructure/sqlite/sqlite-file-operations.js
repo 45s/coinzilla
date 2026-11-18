@@ -59,9 +59,9 @@ export async function createTemporaryDirectory({ destinationFilename, prefix }) 
   return mkdtemp(join(dirname(destinationFilename), `.${prefix}-`))
 }
 
-export async function removeTemporaryDirectory({ directory, operationError }) {
+export async function removeTemporaryDirectory({ directory, operationError, remove = rm }) {
   try {
-    await rm(directory, {
+    await remove(directory, {
       recursive: true,
       force: true,
     })
