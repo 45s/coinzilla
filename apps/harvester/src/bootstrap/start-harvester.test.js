@@ -6,6 +6,8 @@ import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules } from "@coinzilla/entities"
 import { multiplyDecimal } from "@coinzilla/utils"
 import { startHarvester } from "./start-harvester.js"
+import { resolveProviderInstances } from "./providers/resolve-provider-instances.js"
+import { startProviderAccounts } from "./providers/start-provider-accounts.js"
 import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
@@ -6183,4 +6185,95 @@ test("default Bitunix runtime facade exposes read methods but no trading or stre
   } finally {
     await runtime.stop()
   }
+})
+
+
+test("starts independent Binance account trading runtimes in one production bootstrap", async () => {
+  const primaryCalls = []
+  const secondaryCalls = []
+  const env = {
+    NODE_ENV: "test",
+    TRADING_MODE: "testnet",
+    PRIMARY_API_KEY: "primary-key",
+    PRIMARY_API_SECRET: "primary-secret",
+    SECONDARY_API_KEY: "secondary-key",
+    SECONDARY_API_SECRET: "secondary-secret",
+  }
+  const providers = resolveProviderInstances({
+    appConfig,
+    env,
+    adapterFactories: {
+      binance: ({ config }) => createBroker(
+        config.apiKey === "primary-key" ? primaryCalls : secondaryCalls,
+        { tradingMode: config.tradingMode },
+      ),
+    },
+  })
+  const configuredAppConfig = {
+    ...appConfig,
+    brokers: {
+      instances: [
+        {
+          providerInstanceId: "binance-testnet-primary",
+          providerType: "binance",
+          accountId: "account-primary",
+          environment: "testnet",
+          credentials: {
+            apiKeyEnv: "PRIMARY_API_KEY",
+            apiSecretEnv: "PRIMARY_API_SECRET",
+          },
+        },
+        {
+          providerInstanceId: "binance-testnet-secondary",
+          providerType: "binance",
+          accountId: "account-secondary",
+          environment: "testnet",
+          credentials: {
+            apiKeyEnv: "SECONDARY_API_KEY",
+            apiSecretEnv: "SECONDARY_API_SECRET",
+          },
+        },
+      ],
+    },
+  }
+  const configuredProviders = resolveProviderInstances({
+    appConfig: configuredAppConfig,
+    env,
+    adapterFactories: {
+      binance: ({ config }) => createBroker(
+        config.apiKey === "primary-key" ? primaryCalls : secondaryCalls,
+        { tradingMode: config.tradingMode },
+      ),
+    },
+  })
+  const runtime = await startProviderAccounts({
+    providers: configuredProviders,
+    start: startHarvester,
+    appConfig: configuredAppConfig,
+    env,
+    eventPublisher: testEventPublisher,
+  })
+
+  try {
+    assert.equal(runtime.providerAccounts.length, 2)
+    assert.deepEqual(runtime.providerAccounts.map(({ accountId }) => accountId), [
+      "account-primary",
+      "account-secondary",
+    ])
+    assert.equal(runtime.accountRuntimes.length, 2)
+    assert.notEqual(runtime.accountRuntimes[0].recoveredState, runtime.accountRuntimes[1].recoveredState)
+    assert.notEqual(runtime.accountRuntimes[0].recoveredState.orderRegistry, runtime.accountRuntimes[1].recoveredState.orderRegistry)
+    assert.notEqual(runtime.accountRuntimes[0].getMarketMetadata({ symbol: "BTCUSDT" }), runtime.accountRuntimes[1].getMarketMetadata({ symbol: "BTCUSDT" }))
+    assert.equal(runtime.accountRuntimes.every((accountRuntime) => accountRuntime.userDataReady), true)
+    assert.equal(primaryCalls.filter((call) => call === "connect").length, 1)
+    assert.equal(secondaryCalls.filter((call) => call === "connect").length, 1)
+    assert.equal(primaryCalls.includes("subscribe:user-data"), true)
+    assert.equal(secondaryCalls.includes("subscribe:user-data"), true)
+  } finally {
+    const stopped = await runtime.stop()
+    assert.equal(stopped.ok, true)
+  }
+
+  assert.equal(primaryCalls.filter((call) => call === "disconnect").length, 1)
+  assert.equal(secondaryCalls.filter((call) => call === "disconnect").length, 1)
 })

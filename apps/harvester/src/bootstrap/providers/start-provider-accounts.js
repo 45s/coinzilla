@@ -70,6 +70,7 @@ function createMultiAccountRuntime({ appConfig, startedAccounts }) {
     appConfig,
     account: primary.account ?? providerAccounts[0],
     providerAccounts,
+    accountRuntimes: Object.freeze(startedAccounts.map(({ runtime }) => runtime)),
     brokerName: providerAccounts.length === 1 ? providerAccounts[0].providerType : "multiple",
     environment: primary.environment,
     tradingMode: providerAccounts[0].environment,
