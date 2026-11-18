@@ -152,7 +152,10 @@ function createMarketDataTestConfiguration(providerInstances) {
   const routes = Object.entries(configuredPairs)
     .filter(([, pair]) => pair.enabled)
     .map(([symbol, pair]) => {
-      const sourceProvider = resolveMarketDataSourceProvider({ pair, providerInstances })
+      const sourceProvider = resolveMarketDataSourceProvider({
+        pair,
+        providerInstances,
+      })
       return {
         symbol,
         providerInstanceId: sourceProvider.providerInstanceId,
