@@ -168,6 +168,7 @@ test("close waits for active transactions and rejects new transactions", async (
 
   assert.equal(database.state, "closed")
   assert.equal(calls.close, 1)
+  await database.close()
 })
 
 test("a closed database cannot reconnect", async () => {
