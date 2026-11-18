@@ -1,5 +1,8 @@
 # ADR-0003: Explicit multi-provider execution and market-data routing
 
+> **Bitunix admission amendment (2026-11-18):** the historical Bitunix observer-only exception and illustrative read-capability description below are superseded by [ADR-0004](./ADR-0004-complete-bitunix-provider-integration.md). Bitunix is not registered as a Harvester provider until #1185 is complete; no partial observer runtime is part of the current architecture. The general provider-instance, account-isolation, execution-routing and market-data-routing decisions in this ADR remain authoritative.
+
+
 - **Status:** Accepted
 - **Type:** Architecture decision
 - **Owner:** Harvester / Brokers
