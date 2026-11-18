@@ -505,6 +505,7 @@ function createConfigurationResult({ env, startedAt, now, secrets }) {
       missingCredentialVariables,
       liveReadConfirmation: DIAGNOSTIC_CONFIG.confirmLiveReads,
     },
+    includePublicPayloads: true,
     secrets,
   })
 }
