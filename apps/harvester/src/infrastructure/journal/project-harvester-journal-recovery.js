@@ -211,32 +211,32 @@ function requireFillCommissions({ data }) {
   if (!Array.isArray(data.commissions)) {
     throw new TypeError("fill commissions must be an array")
   }
-  return data.commissions.map((commission, index) => ({
+  return data.commissions.map((commission) => ({
     amount: requireDecimal({
       value: commission?.amount,
-      field: `commissions[${index}].amount`,
+      field: "commission.amount",
     }),
     assetId: requireString({
       value: commission?.assetId,
-      field: `commissions[${index}].assetId`,
+      field: "commission.assetId",
     }),
     asset: requireString({
       value: commission?.asset,
-      field: `commissions[${index}].asset`,
+      field: "commission.asset",
     }),
     ...(commission?.quoteValue === undefined ? {} : {
       quoteValue: {
         amount: requireDecimal({
           value: commission.quoteValue?.amount,
-          field: `commissions[${index}].quoteValue.amount`,
+          field: "commission.quoteValue.amount",
         }),
         assetId: requireString({
           value: commission.quoteValue?.assetId,
-          field: `commissions[${index}].quoteValue.assetId`,
+          field: "commission.quoteValue.assetId",
         }),
         asset: requireString({
           value: commission.quoteValue?.asset,
-          field: `commissions[${index}].quoteValue.asset`,
+          field: "commission.quoteValue.asset",
         }),
       },
     }),
