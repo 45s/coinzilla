@@ -7,7 +7,7 @@
 
 ## Context
 
-The existing market-scoped `pauseMarket` / Telegram `/pause SYMBOL` control intentionally suppresses future strategy BUY intents while leaving existing exchange orders untouched. It is not an emergency order-cancellation control. Operators also need a way to stop new BUY exposure globally or for one market during a sharp market correction, while retaining the ability to reduce existing inventory through recovery SELLs.
+At the time this ADR was accepted, the market-scoped `pauseMarket` / Telegram `/pause SYMBOL` control suppressed future strategy BUY intents while leaving existing exchange orders untouched. It was not an emergency order-cancellation control. [ADR-0006](./0006-market-pause-cancels-owned-buys.md) later superseded that public command split and routes the normal market Pause through the BUY cancellation workflow described here. Operators also need a way to stop new BUY exposure globally or for one market during a sharp market correction, while retaining the ability to reduce existing inventory through recovery SELLs.
 
 Reusing `pauseMarket` would silently change its established contract and conflate strategy pause ownership with a separate order-cancellation action. Cancelling account-wide open orders would also violate ADR-0004, which treats every unmatched startup-snapshot order as external to the current process.
 
