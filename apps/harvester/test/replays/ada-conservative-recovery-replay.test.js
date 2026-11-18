@@ -239,6 +239,11 @@ function assertAdaBelowTargetOutcome({ replay, replacementSell }) {
     false,
     "0.04910062 USDT is below the configured 0.05 USDT minimum",
   )
+  assert.equal(
+    replay.receivedLifecycleEvents.some(({ name }) => name === "strategy.paused"),
+    false,
+    "valid MIN_NOTIONAL dust with the next BUY pending must not pause the pair before shutdown",
+  )
   const notCompleted = replay.receivedLifecycleEvents.find(({ name }) => name === "recovery.cycle_not_completed")
   assert.ok(notCompleted, "the terminal SELL must persist an explicit non-completed recovery outcome")
   assert.equal(notCompleted.data.outcome, "CONTINUE_SELL_THROUGH")
@@ -268,20 +273,19 @@ async function assertAdaDuplicateFillIsIdempotent({ replay, replacementSell, eve
   assert.equal(replay.receivedLifecycleEvents.length, eventCount)
 }
 
-function assertAdaShutdownOutcome({ replay, thirdBuy }) {
+function assertAdaShutdownOutcome({ replay, thirdBuy, shutdownError }) {
   assert.ok(
     replay.confirmedCanceledOrders.some((order) => order.clientOrderId === thirdBuy.clientOrderId),
     "shutdown must cancel the still-open next BUY without completing the below-target recovery cycle",
   )
+  assert.ok(shutdownError instanceof AggregateError, "shutdown must fail closed while recovery SELL coverage is unproven")
+  assert.match(shutdownError.message, /CONSERVATIVE_SHUTDOWN_SAFETY_UNPROVEN/)
+  assert.match(shutdownError.message, /RECOVERY_SELL_COVERAGE_UNVERIFIED/)
+  assert.match(shutdownError.message, /SHUTDOWN_RECOVERY_REPLACEMENT_NOT_SUBMITTED/)
   assert.equal(
     replay.receivedLifecycleEvents.some(({ name }) => name === "recovery.cycle_completed"),
     false,
     "shutdown must not convert an incomplete recovery cycle into a completed one",
-  )
-  assert.equal(
-    replay.receivedLifecycleEvents.some(({ name }) => name === "strategy.paused"),
-    false,
-    "a valid MIN_NOTIONAL dust residual with an open next BUY must continue recovery, not pause the pair",
   )
 }
 
@@ -320,10 +324,16 @@ test("replays the 2026-11-17 ADA cycle and preserves the below-target outcome th
     eventCount,
     timestamp,
   })
-  await replay.runtime.stop()
+  let shutdownError
+  try {
+    await replay.runtime.stop()
+  } catch (error) {
+    shutdownError = error
+  }
   stopped = true
   assertAdaShutdownOutcome({
     replay,
     thirdBuy,
+    shutdownError,
   })
 })
