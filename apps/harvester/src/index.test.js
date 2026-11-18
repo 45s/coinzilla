@@ -7,7 +7,7 @@ import path, { isAbsolute as pathIsAbsolute } from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { main as startMain } from "./index.js"
-import { appConfig } from "../config/index.js"
+import { appConfig as defaultAppConfig } from "../config/index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
 
@@ -2189,6 +2189,7 @@ function createMainProviderAccountStarter({
   started,
   stopped,
   failAccountId,
+  startupCleanupConfirmed = true,
 }) {
   return async (input) => {
     started.push({
@@ -2197,7 +2198,11 @@ function createMainProviderAccountStarter({
       operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
     })
     if (input.providerIdentity.accountId === failAccountId) {
-      throw new Error("secondary account connection failed")
+      const error = new Error("secondary account connection failed")
+      if (startupCleanupConfirmed) {
+        error.startupCleanupConfirmed = true
+      }
+      throw error
     }
     return {
       account: input.providerIdentity,
@@ -2220,6 +2225,7 @@ function createMainMultiProviderFixture({
   providerInstances,
   env,
   failAccountId,
+  startupCleanupConfirmed = true,
   providerAdapterFactories = {},
 }) {
   const started = []
@@ -2228,7 +2234,7 @@ function createMainMultiProviderFixture({
   const releasedLocks = []
   const signalHandlers = new Map()
   const config = {
-    ...appConfig,
+    ...defaultAppConfig,
     operatorControl: {
       telegram: {
         enabled: true,
@@ -2251,6 +2257,7 @@ function createMainMultiProviderFixture({
       started,
       stopped,
       failAccountId,
+      startupCleanupConfirmed,
     }),
     registerSignalHandler: (...args) => signalHandlers.set(...args),
     logger: {
@@ -2282,13 +2289,13 @@ function createMultiProviderInstances() {
       },
     },
     {
-      providerInstanceId: "bitunixLiveSecondary",
-      providerType: "bitunix-spot",
-      accountId: "bitunix-secondary",
+      providerInstanceId: "testProviderLiveSecondary",
+      providerType: "test-exchange",
+      accountId: "test-provider-secondary",
       environment: "live",
       credentials: {
-        apiKeyEnv: "BITUNIX_API_KEY",
-        apiSecretEnv: "BITUNIX_API_SECRET",
+        apiKeyEnv: "TEST_PROVIDER_API_KEY",
+        apiSecretEnv: "TEST_PROVIDER_API_SECRET",
       },
     },
   ]
@@ -2330,7 +2337,7 @@ test("starts configured provider accounts and acquires one process lock per acco
       BITUNIX_API_SECRET: "bitunix-secret",
     },
     providerAdapterFactories: {
-      "bitunix-spot": () => ({}),
+      "test-exchange": () => ({}),
     },
   })
   const previousExitCode = process.exitCode
@@ -2341,7 +2348,7 @@ test("starts configured provider accounts and acquires one process lock per acco
     assert.equal(result.runtime.providerAccounts.length, 2)
     assert.deepEqual(fixture.started.map(({ identity }) => identity.providerInstanceId), [
       "binanceTestnetPrimary",
-      "bitunixLiveSecondary",
+      "testProviderLiveSecondary",
     ])
     assert.deepEqual(fixture.started.map(({ tradingMode }) => tradingMode), [
       "testnet",
@@ -2353,7 +2360,7 @@ test("starts configured provider accounts and acquires one process lock per acco
     ])
     assert.deepEqual(fixture.lockScopes.map(({ accountId, tradingMode }) => [accountId, tradingMode]), [
       ["binance-primary", "testnet"],
-      ["bitunix-secondary", "live"],
+      ["test-provider-secondary", "live"],
     ])
     await fixture.signalHandlers.get("SIGINT")()
     assert.deepEqual(fixture.stopped, [
@@ -2365,6 +2372,35 @@ test("starts configured provider accounts and acquires one process lock per acco
       "binanceTestnetPrimary",
     ])
     assert.equal(process.exitCode, 0)
+  } finally {
+    process.exitCode = previousExitCode
+  }
+})
+
+test("retains an account process lock when startup cleanup is unconfirmed", async () => {
+  const fixture = createMainMultiProviderFixture({
+    providerInstances: createTwoBinanceAccountInstances(),
+    env: {
+      TRADING_MODE: "testnet",
+      BINANCE_API_KEY: "primary-key",
+      BINANCE_API_SECRET_KEY: "primary-secret",
+      BINANCE_SECONDARY_API_KEY: "secondary-key",
+      BINANCE_SECONDARY_API_SECRET: "secondary-secret",
+    },
+    failAccountId: "binance-secondary",
+    startupCleanupConfirmed: false,
+  })
+  const previousExitCode = process.exitCode
+  process.exitCode = 0
+  try {
+    const result = await fixture.run()
+    assert.ok(result)
+    assert.equal(result.runtime.failedAccounts[0].lockRetained, true)
+    assert.deepEqual(fixture.releasedLocks, [])
+    await fixture.signalHandlers.get("SIGINT")()
+    assert.deepEqual(fixture.stopped, ["binanceTestnetPrimary"])
+    assert.deepEqual(fixture.releasedLocks, ["binanceTestnetPrimary"])
+    assert.equal(process.exitCode, 1)
   } finally {
     process.exitCode = previousExitCode
   }
