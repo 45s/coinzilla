@@ -11,15 +11,15 @@ const repositoryRoot = fileURLToPath(new URL("../", import.meta.url))
 export const GIT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024
 
 const HISTORICAL_PATHS = [
-  /^apps\\/harvester\\/AUDIT(?:_|\\.|$)/,
-  /^apps\\/harvester\\/docs\\/audits\\/(?:README_HISTORY|ROADMAP_HISTORY)\\.md$/,
-  /^apps\\/harvester\\/docs\\/audits\\/(?:evidence|reports|sessions)\\/(?!README\\.md$).+/,
-  /^apps\\/harvester\\/docs\\/incidents\\/(?!README\\.md$).+/,
-  /^apps\\/harvester\\/docs\\/tasks\\/(?!README\\.md$).+/,
-  /^apps\\/harvester\\/docs\\/DDD_CLEAN_ARCHITECTURE_AUDIT\\.md$/,
-  /^apps\\/harvester\\/docs\\/DOMAIN_FIRST_DELIVERY_PLAN\\.md$/,
-  /^docs\\/audits\\/(?!README\\.md$).+/,
-  /^docs\\/ai-agent\\/repository-engineering-audit\\.md$/,
+  /^apps\/harvester\/AUDIT(?:_|\.|$)/,
+  /^apps\/harvester\/docs\/audits\/(?:README_HISTORY|ROADMAP_HISTORY)\.md$/,
+  /^apps\/harvester\/docs\/audits\/(?:evidence|reports|sessions)\/(?!README\.md$).+/,
+  /^apps\/harvester\/docs\/incidents\/(?!README\.md$).+/,
+  /^apps\/harvester\/docs\/tasks\/(?!README\.md$).+/,
+  /^apps\/harvester\/docs\/DDD_CLEAN_ARCHITECTURE_AUDIT\.md$/,
+  /^apps\/harvester\/docs\/DOMAIN_FIRST_DELIVERY_PLAN\.md$/,
+  /^docs\/audits\/(?!README\.md$).+/,
+  /^docs\/ai-agent\/repository-engineering-audit\.md$/,
 ]
 
 const TEMPLATE_HEADING_EXEMPTIONS = [
