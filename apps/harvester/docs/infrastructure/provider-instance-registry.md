@@ -139,3 +139,12 @@ The default production adapter-factory map currently registers Binance only. Mul
 - Cross-account balance aggregation or shared Portfolio/OrderRegistry state.
 - Process-restart recovery, restoration, Journal replay, historical reconstruction, crash recovery or unattended restart mechanisms.
 - ADR-0001 / issue #654 implementation or release gates. **#654 remains LOWEST PRIORITY** and is not a Phase 4 dependency.
+
+
+## Phase 6 execution-routing contract
+
+The execution-routing integration contract is being added in PR #1455. Each enabled strategy/market must be assigned to exactly one provider instance, and each account runtime must contain only the markets assigned to that execution account. The market-data source for an assigned market is resolved independently and may be a different configured provider instance.
+
+The production bootstrap must connect all configured provider instances before starting any cross-provider market-data subscriptions. The execution runtime then subscribes through the selected market-data BrokerPort while retaining its own account BrokerPort for snapshots, order submission, user-data, cancellation, fills and reconciliation.
+
+The required integration proof is an order submitted through the configured execution account, a user-data fill applied only to that account's Portfolio, cancellation through that same account's BrokerPort, and candle/price data sourced through the independently configured market-data provider. The contract is not complete until those assertions pass on the production bootstrap path.
