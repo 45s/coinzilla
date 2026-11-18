@@ -196,7 +196,7 @@ test("diagnostics continue after independent REST failures and always disconnect
     ...factories,
   })
 
-  assert.equal(restCalls.length, 3, "A failed REST market request must not suppress the independent catalog and private-account checks")
+  assert.equal(restCalls.length, 9, "A failed REST market request must not suppress any independent documented public or private read")
   assert.equal(report.results.find((entry) => entry.operation === "REST public last price").status, "failed", "The failing REST endpoint must be reported independently")
   assert.equal(report.results.find((entry) => entry.operation === "REST private account balances").status, "passed", "Later REST checks must still run after an earlier endpoint failure")
   assert.equal(websocketCalls[0], "connect", "The WebSocket diagnostics must connect before issuing RPC calls")
