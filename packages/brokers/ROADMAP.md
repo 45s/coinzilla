@@ -57,7 +57,7 @@ The implementation and current provider matrix are specified in [BROKER_API.md](
    - [x] Select Brokers as the canonical owner; preserve the Harvester registry metadata boundary without importing Harvester.
    - [x] Define three statuses and represent environment/account/runtime conditions separately.
    - [x] Open the Entities owner-coordinated compatibility/deprecation request [#1450](https://github.com/45s/coinzilla/issues/1450); no Entities public export is silently removed.
-   - **Exit:** ownership and compatibility decision documented; implementation is underway in PR #1451.
+   - **Exit:** one canonical Entities value contract is extended and reused by Brokers; completed in PR #1455 with legacy capability-only value compatibility.
 
 2. **Public API and compatibility inventory.**
    - Compare Binance and Bitunix public own methods, inherited `CoreBroker` methods, signatures, argument defaults, return shapes, callbacks/events, error behavior, and actual provider support.
@@ -69,7 +69,7 @@ The implementation and current provider matrix are specified in [BROKER_API.md](
    - Define exchange-neutral method names/signatures and normalized argument contracts.
    - Define the existing `toResult` success/failure envelope, standardized unsupported errors, and explicit mutation outcomes (`NOT_SENT`, `REJECTED`, `CONFIRMED`, `OUTCOME_UNKNOWN`) while preserving legacy result compatibility.
    - Define the standardized unsupported-operation error/result with stable identity/code, operation/provider context, and safe diagnostic metadata. It must not be confused with transport, validation, authorization, or exchange rejection.
-   - Define canonical capability declarations using the Brokers-owned three-state model, omitted-entry `UNKNOWN`, immutable evidence metadata, and separate environment/account/runtime conditions.
+   - Use the shared Entities-owned `BrokerCapabilities` value with three-state semantics, omitted-entry `UNKNOWN`, immutable provider evidence metadata, and separate environment/account/runtime conditions. Brokers supplies provider-specific declarations through this shared contract.
    - Define exact decimal, identifier, timestamp/source-time, pagination, callback and lifecycle guarantees.
    - Specify how legacy methods and `CoreBroker` inheritance/state/defaults remain compatible during migration. Do not make `CoreBroker` the foundation of the new contract by default.
    - **Exit:** reviewed contract and compatibility plan, documented before provider implementations are changed.
@@ -92,16 +92,16 @@ The implementation and current provider matrix are specified in [BROKER_API.md](
 
 6. **Documentation, compatibility verification, and closeout.**
    - Update Brokers README/API documentation, architecture, roadmap, and relevant consumer-facing contract docs.
-   - If Phase 1 requires an Entities change, coordinate a separate owner-scoped change/PR and update the Entities roadmap and canonical docs; do not silently broaden the Brokers-only implementation PR.
+   - The shared Entities contract change for provider evidence is coordinated and delivered in PR #1455; future Entities API changes must continue to follow the Entities ownership workflow and update its roadmap/docs.
    - Run Brokers tests/coverage, relevant Entities and consumer compatibility tests when their contracts are affected, and all required workspace CI.
    - Verify all required checks on the exact final PR head and merge only into `develop`.
    - **Exit:** the common API, single capability source of truth, compatibility path, tests, documentation, and required CI are integrated and verified.
 
 ### Canonical capability contract
 
-The current provider declaration is implemented in `src/broker/broker-capabilities.js` and exported from `@coinzilla/brokers`. It uses three statuses only: `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; omitted capabilities resolve to `UNKNOWN`. Supported records require a method and guarantee. Unsupported/unknown records require a reason. Method, guarantee, limitation, reason, and conditions are immutable evidence metadata.
+The shared provider declaration uses the canonical `BrokerCapabilities` class from `@coinzilla/entities`; `src/broker/broker-capabilities.js` is a compatibility re-export from `@coinzilla/brokers`. It uses three statuses only: `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; omitted capabilities resolve to `UNKNOWN`. Provider declarations with identity require evidence: supported records require a method and guarantee, while unsupported/unknown records require a reason. Method, guarantee, limitation, reason, and conditions are immutable evidence metadata.
 
-Environment selection is represented separately as `environment.selectedMode` and `environment.supportedModes`. It does not prove account permission, connectivity, or runtime readiness. The model preserves the Harvester registry's `contractVersion`/`provider`/environment metadata boundary. See [BROKER_API.md](./BROKER_API.md) for the canonical Binance/Bitunix matrix and exact contract.
+Environment selection is represented separately as `environment.selectedMode` and `environment.supportedModes`. It does not prove account permission, connectivity, or runtime readiness. The shared value preserves the Harvester registry's `contractVersion`/`provider`/environment metadata boundary without making Entities depend on Brokers or Harvester. See [BROKER_API.md](./BROKER_API.md) for the canonical Binance/Bitunix matrix and exact contract.
 
 The previous four-state Binance declaration is superseded. The table below is retained as historical source evidence only; its old `environment-dependent` status must not be used as the current vocabulary. The current model maps implemented conditional operations to `SUPPORTED` plus explicit conditions.
 
