@@ -139,4 +139,3 @@ The default production adapter-factory map currently registers Binance only. Mul
 - Cross-account balance aggregation or shared Portfolio/OrderRegistry state.
 - Process-restart recovery, restoration, Journal replay, historical reconstruction, crash recovery or unattended restart mechanisms.
 - ADR-0001 / issue #654 implementation or release gates. **#654 remains LOWEST PRIORITY** and is not a Phase 4 dependency.
-
