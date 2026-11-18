@@ -235,6 +235,47 @@ function throwIfNoAccountStarted({
   )
 }
 
+function createProviderAccountStartInput({
+  provider,
+  providers,
+  index,
+  appConfig,
+  env,
+  eventPublisher,
+  runtimeSessionId,
+  operationalStateStore,
+}) {
+  return {
+    appConfig: createAccountAppConfig({
+      appConfig,
+      isPrimary: index === 0,
+    }),
+    env: createAccountEnvironment({
+      env,
+      provider,
+      providers,
+    }),
+    eventPublisher,
+    runtimeSessionId,
+    operationalStateStore: index === 0 ? operationalStateStore : undefined,
+    brokerAdapterFactory: provider.brokerAdapterFactory,
+    providerIdentity: provider.identity,
+  }
+}
+
+function validateStartedProviderRuntime({
+  runtime,
+  provider,
+  requireStop,
+}) {
+  if (runtime === null || typeof runtime !== "object" || Array.isArray(runtime)) {
+    throw new TypeError(`Provider account ${provider.providerInstanceId} startup must return a runtime object`)
+  }
+  if (requireStop && typeof runtime.stop !== "function") {
+    throw new TypeError(`Provider account ${provider.providerInstanceId} runtime must expose stop()`)
+  }
+}
+
 async function startOneProviderAccount({
   provider,
   providers,
@@ -249,28 +290,21 @@ async function startOneProviderAccount({
   requireStop,
 }) {
   try {
-    const runtime = await start({
-      appConfig: createAccountAppConfig({
-        appConfig,
-        isPrimary: index === 0,
-      }),
-      env: createAccountEnvironment({
-        env,
-        provider,
-        providers,
-      }),
+    const runtime = await start(createProviderAccountStartInput({
+      provider,
+      providers,
+      index,
+      appConfig,
+      env,
       eventPublisher,
       runtimeSessionId,
-      operationalStateStore: index === 0 ? operationalStateStore : undefined,
-      brokerAdapterFactory: provider.brokerAdapterFactory,
-      providerIdentity: provider.identity,
+      operationalStateStore,
+    }))
+    validateStartedProviderRuntime({
+      runtime,
+      provider,
+      requireStop,
     })
-    if (runtime === null || typeof runtime !== "object" || Array.isArray(runtime)) {
-      throw new TypeError(`Provider account ${provider.providerInstanceId} startup must return a runtime object`)
-    }
-    if (requireStop && typeof runtime.stop !== "function") {
-      throw new TypeError(`Provider account ${provider.providerInstanceId} runtime must expose stop()`)
-    }
     return {
       runtime,
       error: undefined,
@@ -288,17 +322,6 @@ async function startOneProviderAccount({
   }
 }
 
-/**
- * Start an independent Harvester runtime for each configured provider account.
- * Account startup failures release only that account's process lock; successful
- * account runtimes remain active and retain their own broker/state lifecycle.
- *
- * The first configured account owns process-wide Telegram control and optional
- * operational-state callbacks. All accounts share the process event publisher.
- *
- * @param {{providers: object[], start: Function, appConfig: object, env: object}} input
- * @returns {Promise<object>}
- */
 async function startConfiguredProviderAccounts({
   providers,
   start,
