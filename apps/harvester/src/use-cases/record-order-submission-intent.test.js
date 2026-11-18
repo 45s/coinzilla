@@ -111,9 +111,11 @@ data: { durable: true } } } }
 test("durable store rejects malformed order submission fact payloads", async (t) => {
   const store = await createStore(t)
   const malformedFacts = [
-    { factId: "bad-order:1",
-factType: "ORDER_SUBMISSION_INTENT",
-data: {} },
+    {
+      factId: "bad-order:1",
+      factType: "ORDER_SUBMISSION_INTENT",
+      data: {},
+    },
     {
       factId: "bad-order:2",
       factType: "ORDER_SUBMISSION_INTENT",
@@ -147,24 +149,6 @@ data: {} },
         quantity: "100",
         purpose: null,
         apiKey: "must-not-persist",
-      },
-    },
-    {
-      factId: "order-submission-intent:partial-provider",
-      factType: "ORDER_SUBMISSION_INTENT",
-      data: {
-        clientOrderId: "partial-provider",
-        providerInstanceId: "binanceTestnet",
-        marketId: "market-1",
-        venue: "binance",
-        symbol: "DOGEUSDT",
-        baseAssetId: "binance:DOGE",
-        quoteAssetId: "binance:USDT",
-        side: "BUY",
-        type: "LIMIT_MAKER",
-        price: "0.099",
-        quantity: "100",
-        purpose: null,
       },
     },
   ]
@@ -203,4 +187,18 @@ test("fails closed for legacy pending orders without recorded provider provenanc
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /providerInstanceId.*provenance/i)
   assert.equal(appendCalls, 0, "Missing historical identity must not be inferred or durably re-recorded.")
+})
+
+
+test("rejects partial provider identity in durable order facts", async (t) => {
+  const store = await createStore(t)
+  const result = await store.append({
+    factId: "order-submission-intent:partial-provider",
+    factType: "ORDER_SUBMISSION_INTENT",
+    data: {
+      clientOrderId: "partial-provider",
+      providerInstanceId: "binanceTestnet",
+    },
+  })
+  assert.equal(result.ok, false)
 })
