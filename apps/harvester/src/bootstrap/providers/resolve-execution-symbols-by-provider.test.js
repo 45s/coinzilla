@@ -196,3 +196,31 @@ test("rejects malformed route tables and duplicate provider identities", () => {
     "Provider identity must be unambiguous before route resolution",
   )
 })
+
+
+test("returns a mutation-protected execution route map", () => {
+  const result = resolveExecutionSymbolsByProvider({
+    appConfig: createAppConfig({
+      executionRouting: { routes: createRoutes() },
+    }),
+    providers,
+  })
+  assert.throws(() => result.set("binance-testnet-primary", ["ETHUSDT"]), /ReadonlyMap/)
+  assert.throws(() => result.delete("binance-testnet-primary"), /ReadonlyMap/)
+})
+
+test("rejects configured provider instances with no execution markets", () => {
+  assert.throws(
+    () => resolveExecutionSymbolsByProvider({
+      appConfig: createAppConfig({
+        executionRouting: { routes: createRoutes() },
+      }),
+      providers: [...providers, {
+        providerInstanceId: "binance-unused",
+        providerType: "binance",
+        environment: "testnet",
+      }],
+    }),
+    /no execution routes; data-only provider instances are not supported/,
+  )
+})

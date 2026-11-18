@@ -1,6 +1,6 @@
 # Harvester multi-provider execution routing
 
-**Status:** Route-table schema validation, mutation-protected route maps, and canonical Broker capability enforcement are implemented in the Phase 6 branch. Production bootstrap wiring and integrated verification remain in progress; do not treat the feature as production-ready until the integrated tests and required CI checks pass.
+**Status:** Route-table schema validation, mutation-protected route maps, provider required/optional policy, and canonical Broker capability enforcement are implemented in the Phase 6 branch. Production bootstrap wiring and integrated verification remain in progress; do not treat the feature as production-ready until the integrated tests and required CI checks pass.
 
 ## Ownership model
 

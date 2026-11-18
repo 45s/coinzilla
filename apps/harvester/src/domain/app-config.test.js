@@ -511,3 +511,60 @@ test("rejects credential environment variable reuse across provider accounts", (
   assert.throws(() => validateAppConfig(config), (error) =>
     error instanceof ConfigValidationError && error.path === "brokers.instances[1].credentials")
 })
+
+
+test("validates explicit execution-routing schema and rejects duplicate strategy/market keys", () => {
+  const config = createAppConfig()
+  config.executionRouting = {
+    routes: [{
+      strategyId: "CG_coinGrabber",
+      symbol: "ZROFDUSD",
+      providerInstanceId: "binance-testnet-primary",
+    }],
+  }
+  assert.equal(validateAppConfig(config), config)
+
+  config.executionRouting.routes.push({ ...config.executionRouting.routes[0] })
+  assert.throws(
+    () => validateAppConfig(config),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "executionRouting.routes" &&
+      /unique strategyId\/symbol/.test(error.expected),
+  )
+})
+
+test("rejects malformed execution routes and non-boolean provider required flags", () => {
+  const invalidRoutes = [
+    null,
+    {},
+    { strategyId: "CG_coinGrabber", symbol: "ZROFDUSD" },
+    { strategyId: "CG_coinGrabber", symbol: "ZROFDUSD", providerInstanceId: " " },
+    { strategyId: "CG_coinGrabber", symbol: "ZROFDUSD", providerInstanceId: "primary", fallbackProviderInstanceId: "secondary" },
+  ]
+  for (const route of invalidRoutes) {
+    const config = createAppConfig()
+    config.executionRouting = { routes: [route] }
+    assert.throws(() => validateAppConfig(config), ConfigValidationError)
+  }
+
+  const config = createAppConfig()
+  config.brokers = {
+    instances: [{
+      providerInstanceId: "binance-testnet-primary",
+      providerType: "binance",
+      accountId: "account-primary",
+      environment: "testnet",
+      required: "false",
+      credentials: {
+        apiKeyEnv: "BINANCE_API_KEY",
+        apiSecretEnv: "BINANCE_API_SECRET_KEY",
+      },
+    }],
+  }
+  assert.throws(
+    () => validateAppConfig(config),
+    (error) => error instanceof ConfigValidationError &&
+      error.path === "brokers.instances[0].required" &&
+      error.expected === "a boolean",
+  )
+})
