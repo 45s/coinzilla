@@ -1,0 +1,198 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { resolveExecutionSymbolsByProvider } from "./resolve-execution-symbols-by-provider.js"
+
+const providers = [
+  {
+    providerInstanceId: "binance-testnet-primary",
+    providerType: "binance",
+    environment: "testnet",
+  },
+  {
+    providerInstanceId: "binance-live-secondary",
+    providerType: "binance",
+    environment: "live",
+  },
+]
+
+const pairs = {
+  BTCUSDT: { enabled: true, tradingEnvironment: "testnet" },
+  ETHUSDT: { enabled: true, tradingEnvironment: "live" },
+  SOLUSDT: { enabled: false, tradingEnvironment: "both" },
+}
+
+function createAppConfig(overrides = {}) {
+  return {
+    strategies: {
+      CG_coinGrabber: {
+        pairs,
+      },
+    },
+    ...overrides,
+  }
+}
+
+function createRoutes() {
+  return [
+    {
+      strategyId: StrategyId.COIN_GRABBER,
+      symbol: "BTCUSDT",
+      providerInstanceId: "binance-testnet-primary",
+    },
+    {
+      strategyId: StrategyId.COIN_GRABBER,
+      symbol: "ETHUSDT",
+      providerInstanceId: "binance-live-secondary",
+    },
+  ]
+}
+
+test("preserves the legacy single-provider route for markets eligible in its environment", () => {
+  const result = resolveExecutionSymbolsByProvider({
+    appConfig: createAppConfig(),
+    providers: [providers[0]],
+  })
+
+  assert.deepEqual([...result], [
+    ["binance-testnet-primary", ["BTCUSDT"]],
+  ], "Legacy single-provider startup must keep routing eligible enabled markets to its existing Binance instance")
+})
+
+test("resolves every enabled strategy-market route to exactly one configured provider instance", () => {
+  const result = resolveExecutionSymbolsByProvider({
+    appConfig: createAppConfig({
+      executionRouting: { routes: createRoutes() },
+    }),
+    providers,
+  })
+
+  assert.deepEqual([...result], [
+    ["binance-testnet-primary", ["BTCUSDT"]],
+    ["binance-live-secondary", ["ETHUSDT"]],
+  ], "Each execution account must receive only the markets explicitly assigned to it")
+})
+
+test("rejects multi-provider configuration without an explicit execution route table", () => {
+  assert.throws(
+    () => resolveExecutionSymbolsByProvider({
+      appConfig: createAppConfig(),
+      providers,
+    }),
+    /explicit executionRouting\.routes/,
+    "Multi-provider execution must never infer a default provider or fall back to the first account",
+  )
+})
+
+test("rejects an enabled strategy-market pair without an execution route", () => {
+  assert.throws(
+    () => resolveExecutionSymbolsByProvider({
+      appConfig: createAppConfig({
+        executionRouting: {
+          routes: [createRoutes()[0]],
+        },
+      }),
+      providers,
+    }),
+    /missing enabled strategy-market routes.*ETHUSDT/i,
+    "Every enabled market must be routed before any provider can connect or submit an order",
+  )
+})
+
+test("rejects duplicate strategy-market routes", () => {
+  const routes = createRoutes()
+  routes.push({ ...routes[0], providerInstanceId: "binance-live-secondary" })
+
+  assert.throws(
+    () => resolveExecutionSymbolsByProvider({
+      appConfig: createAppConfig({ executionRouting: { routes } }),
+      providers,
+    }),
+    /duplicate route.*CG_coinGrabber.*BTCUSDT/i,
+    "A strategy-market key cannot be assigned to two execution accounts",
+  )
+})
+
+test("rejects unknown provider instances and environment-incompatible routes", () => {
+  assert.throws(
+    () => resolveExecutionSymbolsByProvider({
+      appConfig: createAppConfig({
+        executionRouting: {
+          routes: [
+            { ...createRoutes()[0], providerInstanceId: "missing-account" },
+            createRoutes()[1],
+          ],
+        },
+      }),
+      providers,
+    }),
+    /unknown provider instance missing-account/i,
+    "An execution route must resolve to a configured provider account",
+  )
+
+  assert.throws(
+    () => resolveExecutionSymbolsByProvider({
+      appConfig: createAppConfig({
+        executionRouting: {
+          routes: [
+            { ...createRoutes()[0], providerInstanceId: "binance-live-secondary" },
+            createRoutes()[1],
+          ],
+        },
+      }),
+      providers,
+    }),
+    /configured for testnet/i,
+    "A TESTNET market must not execute through a LIVE provider instance",
+  )
+})
+
+test("rejects routes for disabled or unconfigured markets and unknown strategy IDs", () => {
+  const invalidRoutes = [
+    { ...createRoutes()[0], symbol: "UNKNOWNUSDT" },
+    { ...createRoutes()[0], symbol: "SOLUSDT" },
+    { ...createRoutes()[0], strategyId: StrategyId.RECOVERY_SELLER, symbol: "BTCUSDT" },
+  ]
+
+  for (const route of invalidRoutes) {
+    assert.throws(
+      () => resolveExecutionSymbolsByProvider({
+        appConfig: createAppConfig({
+          executionRouting: { routes: [route, createRoutes()[1]] },
+        }),
+        providers,
+      }),
+      /unconfigured symbol|disabled market|unsupported strategy/i,
+      "Execution routing must not enable an unconfigured market or deferred Recovery Seller strategy",
+    )
+  }
+})
+
+test("rejects malformed route tables and duplicate provider identities", () => {
+  assert.throws(
+    () => resolveExecutionSymbolsByProvider({
+      appConfig: createAppConfig({
+        executionRouting: {
+          routes: [
+            { ...createRoutes()[0], fallbackProviderInstanceId: "binance-live-secondary" },
+            createRoutes()[1],
+          ],
+        },
+      }),
+      providers,
+    }),
+    /must contain only strategyId, symbol, and providerInstanceId/i,
+    "Execution route records must not introduce implicit fallback fields",
+  )
+
+  assert.throws(
+    () => resolveExecutionSymbolsByProvider({
+      appConfig: createAppConfig({
+        executionRouting: { routes: createRoutes() },
+      }),
+      providers: [providers[0], { ...providers[0] }],
+    }),
+    /unique configured provider instance IDs/i,
+    "Provider identity must be unambiguous before route resolution",
+  )
+})
