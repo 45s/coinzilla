@@ -1123,81 +1123,113 @@ export const mapRecoveryCycleCompletedData = (input = {}) =>
 
 
 
+function validateRecoveryCycleNonCompletion({
+  outcome,
+  reason,
+  realizedNetProfit,
+  activeQuantity,
+  keepQuantity,
+  minProfit,
+}) {
+  if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(outcome)) {
+    throw new TypeError("outcome must be CONTINUE_SELL_THROUGH or BLOCKED")
+  }
+  const continueReasons = [
+    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+  ]
+  if (outcome === "CONTINUE_SELL_THROUGH" && !continueReasons.includes(reason)) {
+    throw new TypeError("CONTINUE_SELL_THROUGH requires a recognized residual sell-through reason")
+  }
+  if (outcome === "BLOCKED" && continueReasons.includes(reason)) {
+    throw new TypeError("BLOCKED cannot use a residual sell-through reason")
+  }
+  if (compareDecimal({ left: activeQuantity, right: "0" }) < 0 ||
+      compareDecimal({ left: keepQuantity, right: "0" }) < 0) {
+    throw new RangeError("activeQuantity and keepQuantity must be non-negative")
+  }
+  if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+    throw new RangeError("minProfit must be at least 0.01")
+  }
+  if (outcome === "CONTINUE_SELL_THROUGH" &&
+      compareDecimal({ left: activeQuantity, right: keepQuantity }) <= 0) {
+    throw new RangeError("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
+  }
+  if (reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" &&
+      compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
+    throw new RangeError("RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY requires realized profit below minProfit")
+  }
+  if (reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
+      compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+    throw new RangeError("RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH requires realized profit to meet minProfit")
+  }
+  if (outcome === "BLOCKED" && reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
+      compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
+    throw new RangeError("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
+  }
+}
+
+function mapRecoveryCycleNotCompletedFields({
+  symbol,
+  marketId,
+  sellOrderClientId,
+  sellOrderBrokerOrderId,
+  outcome,
+  reason,
+  realizedNetProfit,
+  activeQuantity,
+  keepQuantity,
+  minProfit,
+}) {
+  const mappedReason = requireString({
+    value: reason,
+    field: "reason",
+  })
+  const mappedRealizedNetProfit = requireDecimalString({
+    value: realizedNetProfit,
+    field: "realizedNetProfit",
+  })
+  const mappedActiveQuantity = requireDecimalString({
+    value: activeQuantity,
+    field: "activeQuantity",
+  })
+  const mappedKeepQuantity = requireDecimalString({
+    value: keepQuantity,
+    field: "keepQuantity",
+  })
+  const mappedMinProfit = requireDecimalString({
+    value: minProfit,
+    field: "minProfit",
+  })
+  validateRecoveryCycleNonCompletion({
+    outcome,
+    reason: mappedReason,
+    realizedNetProfit: mappedRealizedNetProfit,
+    activeQuantity: mappedActiveQuantity,
+    keepQuantity: mappedKeepQuantity,
+    minProfit: mappedMinProfit,
+  })
+  return {
+    symbol: requireString({ value: symbol, field: "symbol" }),
+    marketId: requireString({ value: marketId, field: "marketId" }),
+    sellOrderClientId: requireString({ value: sellOrderClientId, field: "sellOrderClientId" }),
+    sellOrderBrokerOrderId: requireString({ value: sellOrderBrokerOrderId, field: "sellOrderBrokerOrderId" }),
+    outcome,
+    reason: mappedReason,
+    realizedNetProfit: mappedRealizedNetProfit,
+    activeQuantity: mappedActiveQuantity,
+    keepQuantity: mappedKeepQuantity,
+    minProfit: mappedMinProfit,
+  }
+}
+
 /** Map an explicit non-completion evaluation for a fully filled recovery SELL. */
-// eslint-disable-next-line max-lines-per-function -- Existing recovery evidence contract is intentionally validated as one unit.
-// eslint-disable-next-line max-lines-per-function -- Recovery completion evidence remains one auditable DTO boundary.
 export const mapRecoveryCycleNotCompletedData = (input = {}) =>
   mapData({
     input,
     operation: "Recovery-cycle-not-completed event mapping",
-    // eslint-disable-next-line max-lines-per-function, complexity -- Recovery completion evidence is validated as one cohesive contract.
-    mapper: ({
-      symbol, marketId, sellOrderClientId, sellOrderBrokerOrderId, outcome, reason,
-      realizedNetProfit, activeQuantity, keepQuantity, minProfit,
-    }) => {
-      if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(outcome)) {
-        throw new TypeError("outcome must be CONTINUE_SELL_THROUGH or BLOCKED")
-      }
-      const mappedReason = requireString({ value: reason,
-        field: "reason" })
-      const continueReasons = ["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"]
-      if (outcome === "CONTINUE_SELL_THROUGH" && !continueReasons.includes(mappedReason)) {
-        throw new TypeError("CONTINUE_SELL_THROUGH requires a recognized residual sell-through reason")
-      }
-      if (outcome === "BLOCKED" && continueReasons.includes(mappedReason)) {
-        throw new TypeError("BLOCKED cannot use a residual sell-through reason")
-      }
-      const mappedRealizedNetProfit = requireDecimalString({ value: realizedNetProfit,
-        field: "realizedNetProfit" })
-      const mappedActiveQuantity = requireDecimalString({ value: activeQuantity,
-        field: "activeQuantity" })
-      const mappedKeepQuantity = requireDecimalString({ value: keepQuantity,
-        field: "keepQuantity" })
-      const mappedMinProfit = requireDecimalString({ value: minProfit,
-        field: "minProfit" })
-      if (compareDecimal({ left: mappedActiveQuantity,
-        right: "0" }) < 0 || compareDecimal({ left: mappedKeepQuantity,
-        right: "0" }) < 0) {
-        throw new RangeError("activeQuantity and keepQuantity must be non-negative")
-      }
-      if (compareDecimal({ left: mappedMinProfit,
-        right: "0.01" }) < 0) {throw new RangeError("minProfit must be at least 0.01")}
-      if (outcome === "CONTINUE_SELL_THROUGH" && compareDecimal({ left: mappedActiveQuantity,
-        right: mappedKeepQuantity }) <= 0) {
-        throw new RangeError("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
-      }
-      if (mappedReason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: mappedRealizedNetProfit,
-        right: mappedMinProfit }) >= 0) {
-        throw new RangeError("RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY requires realized profit below minProfit")
-      }
-      if (mappedReason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" && compareDecimal({ left: mappedRealizedNetProfit,
-        right: mappedMinProfit }) < 0) {
-        throw new RangeError("RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH requires realized profit to meet minProfit")
-      }
-      if (outcome === "BLOCKED" && mappedReason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
-          compareDecimal({ left: mappedRealizedNetProfit,
-            right: mappedMinProfit }) >= 0) {
-        throw new RangeError("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
-      }
-      return {
-        symbol: requireString({ value: symbol,
-          field: "symbol" }),
-        marketId: requireString({ value: marketId,
-          field: "marketId" }),
-        sellOrderClientId: requireString({ value: sellOrderClientId,
-          field: "sellOrderClientId" }),
-        sellOrderBrokerOrderId: requireString({ value: sellOrderBrokerOrderId,
-          field: "sellOrderBrokerOrderId" }),
-        outcome,
-        reason: mappedReason,
-        realizedNetProfit: mappedRealizedNetProfit,
-        activeQuantity: mappedActiveQuantity,
-        keepQuantity: mappedKeepQuantity,
-        minProfit: mappedMinProfit,
-      }
-    },
+    mapper: (fields) => mapRecoveryCycleNotCompletedFields(fields),
   })
-
 
 /** Map the complete account-wide open-order snapshot; BLOCKED classifies audit ownership, not process startup readiness. */
 const mapAccountOpenOrder = ({ order, index }) => {
