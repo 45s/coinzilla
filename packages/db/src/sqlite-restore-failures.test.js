@@ -213,3 +213,19 @@ test("SQLite restore aggregates integrity and source-close failures", async (con
     })
   }
 })
+
+
+test("restore destination checks preserve TypeError failures from filesystem lookup", async () => {
+  const filesystemFailure = new TypeError("invalid filesystem lookup argument")
+
+  await assert.rejects(
+    assertRestoreDestinationIsNew({
+      filename: "/destination/records.sqlite",
+      realpathOperation: async () => {
+        throw filesystemFailure
+      },
+    }),
+    (error) => error === filesystemFailure,
+    "A TypeError raised by the filesystem lookup must not be mislabeled as an existing destination",
+  )
+})
