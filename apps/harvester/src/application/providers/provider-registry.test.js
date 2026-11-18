@@ -470,3 +470,14 @@ testCase("disconnects every provider successfully in reverse order", async () =>
     "disconnect:First",
   ], "Successful registry shutdown must attempt every provider in reverse construction order.")
 })
+
+
+testCase("exposes the exact immutable provider identity on the BrokerPort facade", () => {
+  const registry = createProviderRegistry({ providers: [createProvider()] })
+  const broker = registry.get("binanceTestnet").broker
+  assert.equal(broker.providerInstanceId, "binanceTestnet")
+  assert.equal(broker.providerType, "binance")
+  assert.equal(broker.accountId, "binance-primary")
+  assert.equal(Object.isFrozen(broker), true)
+  assert.equal(broker.environment, "testnet")
+})
