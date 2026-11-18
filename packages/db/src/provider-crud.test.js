@@ -139,6 +139,62 @@ test("SQLite CREATE uses the validated record snapshot instead of rereading a ca
 })
 
 
+async function verifyParameterizedSqlValues(database) {
+  const injectionValue = "' OR 1=1 --"
+  const injectionCollection = "people'; DROP TABLE records; --"
+  const injectionIdentifier = "person' OR 1=1 --"
+
+  await database.create({
+    collection: injectionCollection,
+    record: {
+      id: injectionIdentifier,
+      name: injectionValue,
+    },
+  })
+  await database.create({
+    collection: injectionCollection,
+    record: {
+      id: "ordinary-person",
+      name: "ordinary",
+    },
+  })
+
+  assert.deepEqual(
+    await database.readOne({
+      collection: injectionCollection,
+      id: injectionIdentifier,
+    }),
+    {
+      id: injectionIdentifier,
+      name: injectionValue,
+    },
+    "SQL-looking collection names and identifiers must be treated as bound data",
+  )
+  assert.deepEqual(
+    await database.readMany({
+      collection: injectionCollection,
+      query: {
+        filter: {
+          name: injectionValue,
+        },
+      },
+    }),
+    [{
+      id: injectionIdentifier,
+      name: injectionValue,
+    }],
+    "A SQL-looking filter value must match only its exact stored value and never alter the query predicate",
+  )
+  const allRecords = await database.readMany({
+    collection: injectionCollection,
+  })
+  assert.deepEqual(
+    new Set(allRecords.map(({ id }) => id)),
+    new Set([injectionIdentifier, "ordinary-person"]),
+    "Parameterized collection and filter operations must leave every record intact without assuming a default sort order",
+  )
+}
+
 test("SQLite CRUD binds collection, identifier, and filter values instead of interpolating SQL", async () => {
   const database = createDatabase({
     provider: createSqliteProvider({
@@ -146,60 +202,9 @@ test("SQLite CRUD binds collection, identifier, and filter values instead of int
     }),
   })
   await database.connect()
-  const injectionValue = "' OR 1=1 --"
-  const injectionCollection = "people'; DROP TABLE records; --"
-  const injectionIdentifier = "person' OR 1=1 --"
 
   try {
-    await database.create({
-      collection: injectionCollection,
-      record: {
-        id: injectionIdentifier,
-        name: injectionValue,
-      },
-    })
-    await database.create({
-      collection: injectionCollection,
-      record: {
-        id: "ordinary-person",
-        name: "ordinary",
-      },
-    })
-
-    assert.deepEqual(
-      await database.readOne({
-        collection: injectionCollection,
-        id: injectionIdentifier,
-      }),
-      {
-        id: injectionIdentifier,
-        name: injectionValue,
-      },
-      "SQL-looking collection names and identifiers must be treated as bound data",
-    )
-    assert.deepEqual(
-      await database.readMany({
-        collection: injectionCollection,
-        query: {
-          filter: {
-            name: injectionValue,
-          },
-        },
-      }),
-      [{
-        id: injectionIdentifier,
-        name: injectionValue,
-      }],
-      "A SQL-looking filter value must match only its exact stored value and never alter the query predicate",
-    )
-    const allRecords = await database.readMany({
-      collection: injectionCollection,
-    })
-    assert.deepEqual(
-      new Set(allRecords.map(({ id }) => id)),
-      new Set([injectionIdentifier, "ordinary-person"]),
-      "Parameterized collection and filter operations must leave every record intact without assuming a default sort order",
-    )
+    await verifyParameterizedSqlValues(database)
   } finally {
     await database.close()
   }
