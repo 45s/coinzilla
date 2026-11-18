@@ -152,45 +152,29 @@ const OPERATOR_CONTROL_METHODS = Object.freeze({
   RESUME_ALL_BUYS: "resumeAllBuys",
 })
 
-async function invokeOperatorControl({
-  action,
-  symbol,
-  userId,
-  requestId,
-  interaction,
-  operator,
-  diagnostics,
-  logStage,
-}) {
-  const method = OPERATOR_CONTROL_METHODS[action]
-  interaction.action = action
-  interaction.symbol = symbol
-  interaction.operation = method
-  if (typeof operator[method] !== "function") {
-    const verb = action.startsWith("RESUME") ? "Resume" : "Pause"
-    diagnostics.report({
-      interaction,
-      stage: "APPLICATION_OPERATION_UNAVAILABLE",
-      operation: method,
-      symbol,
-      classification: "OPERATOR_CONTROL_UNAVAILABLE",
-      message: `Operator control use case is unavailable: ${method}`,
-    })
-    return { method,
- reply: `${verb} is not available in this operator adapter configuration.` }
-  }
-  const startedAt = Date.now()
-  interaction.applicationOperationInvoked = true
-  logStage({
+function reportUnavailableOperatorControl({ action, symbol, method, interaction, diagnostics }) {
+  const verb = action.startsWith("RESUME") ? "Resume" : "Pause"
+  diagnostics.report({
     interaction,
-    message: "Telegram application operation STARTED",
-    stage: "APPLICATION_OPERATION_STARTED",
+    stage: "APPLICATION_OPERATION_UNAVAILABLE",
+    operation: method,
+    symbol,
+    classification: "OPERATOR_CONTROL_UNAVAILABLE",
+    message: `Operator control use case is unavailable: ${method}`,
   })
-  let result
+  return {
+    method,
+    reply: `${verb} is not available in this operator adapter configuration.`,
+  }
+}
+
+async function callOperatorControl({ method, symbol, userId, requestId, operator, diagnostics, interaction }) {
   try {
-    result = await operator[method]({
-      actor: { id: `telegram-user:${userId}`,
- roles: ["trading-operator"] },
+    return await operator[method]({
+      actor: {
+        id: `telegram-user:${userId}`,
+        roles: ["trading-operator"],
+      },
       requestId,
       symbol,
     })
@@ -202,7 +186,64 @@ async function invokeOperatorControl({
       operation: method,
       symbol,
     })
+    return undefined
   }
+}
+
+function logOperatorControlCompletion({ action, interaction, startedAt, logStage }) {
+  if (!interaction.applicationOperationCompleted) { return }
+  logStage({
+    interaction,
+    message: "Telegram application operation COMPLETED",
+    stage: "APPLICATION_OPERATION_COMPLETED",
+    level: "info",
+    fields: {
+      durationMs: Date.now() - startedAt,
+      result: action.startsWith("PAUSE") ? "PAUSED" : "RESUME_PROCESSED",
+    },
+  })
+}
+
+async function invokeOperatorControl(options) {
+  const {
+    action,
+    symbol,
+    userId,
+    requestId,
+    interaction,
+    operator,
+    diagnostics,
+    logStage,
+  } = options
+  const method = OPERATOR_CONTROL_METHODS[action]
+  interaction.action = action
+  interaction.symbol = symbol
+  interaction.operation = method
+  if (typeof operator[method] !== "function") {
+    return reportUnavailableOperatorControl({
+      action,
+      symbol,
+      method,
+      interaction,
+      diagnostics,
+    })
+  }
+  const startedAt = Date.now()
+  interaction.applicationOperationInvoked = true
+  logStage({
+    interaction,
+    message: "Telegram application operation STARTED",
+    stage: "APPLICATION_OPERATION_STARTED",
+  })
+  const result = await callOperatorControl({
+    method,
+    symbol,
+    userId,
+    requestId,
+    operator,
+    diagnostics,
+    interaction,
+  })
   const reply = buildControlReply({
     action,
     symbol,
@@ -211,20 +252,13 @@ async function invokeOperatorControl({
     interaction,
     diagnostics,
   })
-  if (interaction.applicationOperationCompleted) {
-    logStage({
-      interaction,
-      message: "Telegram application operation COMPLETED",
-      stage: "APPLICATION_OPERATION_COMPLETED",
-      level: "info",
-      fields: {
-        durationMs: Date.now() - startedAt,
-        result: action.startsWith("PAUSE") ? "PAUSED" : "RESUME_PROCESSED",
-      },
-    })
-  }
-  return { method,
- reply }
+  logOperatorControlCompletion({
+    action,
+    interaction,
+    startedAt,
+    logStage,
+  })
+  return { method, reply }
 }
 
 export async function executeTelegramOperatorControl({
