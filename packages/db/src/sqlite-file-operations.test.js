@@ -8,6 +8,7 @@ import {
   assertDifferentFiles,
   removeTemporaryDirectory,
   validateIntegrity,
+  verifyDatabaseFile,
 } from "./infrastructure/sqlite/sqlite-file-operations.js"
 
 async function createTemporaryDirectory() {
@@ -127,6 +128,55 @@ test("temporary-directory cleanup propagates cleanup failure when no operation f
       "A standalone cleanup failure must be propagated without inventing an operation error",
     )
   } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+
+test("SQLite verification preserves integrity and close failures", async (context) => {
+  const directory = await createTemporaryDirectory()
+  const filename = join(directory, "verification.sqlite")
+  const source = new DatabaseSync(filename)
+  source.exec("CREATE TABLE records (id INTEGER PRIMARY KEY)")
+  source.close()
+
+  const originalPrepare = DatabaseSync.prototype.prepare
+  const originalClose = DatabaseSync.prototype.close
+  const integrityFailure = new Error("SQLite integrity verification failed")
+  const closeFailure = new Error("SQLite verification connection close failed")
+  let verificationConnection
+
+  context.mock.method(DatabaseSync.prototype, "prepare", function prepare(sql) {
+    if (sql === "PRAGMA integrity_check") {
+      verificationConnection = this
+      throw integrityFailure
+    }
+    return originalPrepare.call(this, sql)
+  })
+  context.mock.method(DatabaseSync.prototype, "close", function close() {
+    if (this === verificationConnection) {
+      throw closeFailure
+    }
+    return originalClose.call(this)
+  })
+
+  try {
+    await assert.rejects(
+      verifyDatabaseFile({ filename, timeout: 100 }),
+      (error) => error instanceof AggregateError
+        && error.errors[0] === integrityFailure
+        && error.errors[1] === closeFailure
+        && error.cause === integrityFailure,
+      "A verification close failure must not mask the original integrity failure",
+    )
+  } finally {
+    context.mock.restoreAll()
+    if (verificationConnection?.isOpen) {
+      originalClose.call(verificationConnection)
+    }
     await rm(directory, {
       recursive: true,
       force: true,
