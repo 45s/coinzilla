@@ -1105,23 +1105,50 @@ right: minProfit }) >= 0
 
 // eslint-disable-next-line max-lines-per-function -- Recovery event validation remains a cohesive domain boundary.
 function resolveRecoveryNonCompletionDetails({ data }) {
-  const symbol = requireString({ value: data.symbol, field: "symbol" })
-  const marketId = requireString({ value: data.marketId, field: "marketId" })
-  const sellOrderClientId = requireString({ value: data.sellOrderClientId, field: "sellOrderClientId" })
-  const sellOrderBrokerOrderId = requireString({ value: data.sellOrderBrokerOrderId, field: "sellOrderBrokerOrderId" })
+  const symbol = requireString({
+    value: data.symbol,
+    field: "symbol",
+  })
+  const marketId = requireString({
+    value: data.marketId,
+    field: "marketId",
+  })
+  const sellOrderClientId = requireString({
+    value: data.sellOrderClientId,
+    field: "sellOrderClientId",
+  })
+  const sellOrderBrokerOrderId = requireString({
+    value: data.sellOrderBrokerOrderId,
+    field: "sellOrderBrokerOrderId",
+  })
   if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(data.outcome)) {
     throw new TypeError("Recovery-cycle non-completion outcome is invalid")
   }
-  const reason = requireString({ value: data.reason, field: "reason" })
-  const realizedNetProfit = requireSignedDecimal({ value: data.realizedNetProfit, field: "realizedNetProfit" })
-  const activeQuantity = requireDecimal({ value: data.activeQuantity, field: "activeQuantity" })
-  const keepQuantity = requireDecimal({ value: data.keepQuantity, field: "keepQuantity" })
+  const reason = requireString({
+    value: data.reason,
+    field: "reason",
+  })
+  const realizedNetProfit = requireSignedDecimal({
+    value: data.realizedNetProfit,
+    field: "realizedNetProfit",
+  })
+  const activeQuantity = requireDecimal({
+    value: data.activeQuantity,
+    field: "activeQuantity",
+  })
+  const keepQuantity = requireDecimal({
+    value: data.keepQuantity,
+    field: "keepQuantity",
+  })
   const minProfit = requireDecimal({
     value: data.minProfit,
     field: "minProfit",
     positive: true,
   })
-  if (compareDecimal({ left: minProfit, right: "0.01" }) < 0) {
+  if (compareDecimal({
+    left: minProfit,
+    right: "0.01",
+  }) < 0) {
     throw new RangeError("Recovery-cycle minProfit must be at least 0.01")
   }
   validateRecoveryCycleNonCompletionReason({
