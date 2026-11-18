@@ -62,6 +62,7 @@ All test paths below are under `apps/harvester`.
 | Below/equal/above minProfit | `src/domain/strategies/conservative/recovery-completion.test.js`: below-target pause when no sellable residual remains and continuation when sellable inventory remains; `src/domain/strategies/conservative/recovery-sell-plan-accounting.test.js`: one tick below target, exact equality after actual quote commission, and above-target realized profit; the ADA replay verifies its exact below-target outcome. |
 | Valid residual and sell-through | `src/domain/strategies/conservative/recovery-completion.test.js`: `defers completion while any active residual remains above keepQuantity`; `src/use-cases/create-portfolio-workflow.test.js`: durable non-completion outcome before returning and unchanged accounting projections. |
 | Dust classes and exchange evidence | `src/domain/strategies/conservative/recovery-completion.dust.test.js`: MIN_NOTIONAL, MIN_QUANTITY, QUANTITY_INCREMENT, fee-adjusted quantity-step dust, price-filter rejection, exact residual matching, and contradictory/non-limiting filter evidence. The merged #1363 regression covers the ADA 0.1 MIN_NOTIONAL case. |
+| Recovery SELL filter freshness | Source review at `develop` commit `543753da5938eba2d95ad19d74c3f98a991e6461`: `createMarketMetadataCache()` can return startup metadata; `refreshTrailingBuyMarketMetadata()` refreshes only trailing-BUY replacement; the latest transition evaluator uses the cache without a recovery-SELL refresh. No dedicated regression currently proves filter freshness at recovery SELL planning/completion. Tracked as an open acceptance gap in [#1359](https://github.com/45s/coinzilla/issues/1359) and [#1362](https://github.com/45s/coinzilla/issues/1362). |
 | Reconciliation and unknown/stale exchange outcomes | `src/use-cases/conservative-trading-engine.test.js`: `keeps UNKNOWN exchange order states active and waits for authoritative resolution`; `terminal recovery SELL with incomplete or conflicting fill history cannot advance`; `terminal recovery SELL reconciles partial fills and commissions before reevaluation`; `preserves the existing recovery SELL when shutdown market data is stale`; `fails closed when shutdown recovery SELL cancellation or replacement submission is unresolved`. |
 | Shutdown cannot fabricate completion | ADA replay asserts no `recovery.cycle_completed` event and verifies the fail-closed shutdown error. Engine tests cover unresolved cancellation/replacement, UNKNOWN orders, and recovery SELL coverage. |
 | Durability before completion/reset | `src/use-cases/create-portfolio-workflow.test.js`: durable non-completion before return; completed outcome bound to the exact fully filled terminal SELL before reset; no completion/reset without canonical fully filled terminal SELL; and no projection mutation when durable outcome persistence fails. |
@@ -72,6 +73,14 @@ PR #1411 updates all configured TESTNET pair entries to `makerPercent: 0.1` and 
 
 This is the explicit static configuration correction requested by the operator. It is not a change to the general fee policy, does not establish exchange-side fee evidence, and does not retroactively recalculate historical fills. Every new execution must continue to use the actual commission amount and asset returned by the exchange.
 
+## Remaining acceptance gap — recovery SELL filter freshness
+
+A source review of `develop` at `543753da5938eba2d95ad19d74c3f98a991e6461` on 2026-11-18 confirmed that recovery SELL planning and dust completion do not require a fresh exchange-filter read. In `src/use-cases/conservative-trading-engine.js`, `createMarketMetadataCache()` returns refreshed metadata when present and otherwise falls back to the process-start `getMarketMetadata()` snapshot. `refreshTrailingBuyMarketMetadata()` calls `broker.getSymbolFilters()` and updates the refreshed metadata only in the trailing-BUY replacement path. `src/use-cases/create-latest-transition-evaluator.js` builds strategy inputs from `getCurrentMarketMetadata()` without refreshing filters first. The architecture guide, [Broker–Harvester trading flow](architecture/BROKER_HARVESTER_TRADING_FLOW.md), also states that bootstrap loads the map once and no background refresh is claimed.
+
+The replay and dust-classification tests prove the accounting outcome and internal consistency of supplied filter evidence; they do **not** prove that the evidence is current when a recovery SELL is planned or completion is evaluated. This remains an acceptance gap for #1359/#1362. Required follow-up: add a deterministic RED regression for stale recovery-SELL filters, then implement a bounded refresh that fails closed if current symbol filters cannot be obtained or validated. Do not weaken existing exchange-filter, minimum-profit, reconciliation, durability, readiness, or shutdown gates.
+
+PR #1411's merged scope is complete: TESTNET pair configuration is aligned to 0.1% maker/taker while LIVE entries remain unchanged; the offline ADA replay and duplicate-terminal-fill evidence are implemented; historical execution facts are preserved. The PR did not implement the recovery-SELL filter refresh and must not be described as doing so.
+
 ## Verification and handoff
 
 - [x] PR #1411 merged to `develop` as `88b89995a4f9e62a6fe4b0451ea675ce0495b539`; final PR head `c676e0254269b70b21bfaddbc43eb14d24ad7014` passed all six required CI contexts and the advisory External Documentation Links workflow (the TESTNET integration job was skipped).
@@ -80,7 +89,6 @@ This is the explicit static configuration correction requested by the operator. 
 - [x] Exact-head Harvester coverage and workspace coverage pass.
 - [x] Exact-head strict ESLint, JavaScript syntax, dependency audit, and external documentation-link checks pass.
 - [x] Offline ADA replay passes without exchange access.
-- [ ] Human review of the final PR diff and acceptance map.
 
 Latest verified PR head at the time of this audit update: `c676e0254269b70b21bfaddbc43eb14d24ad7014`, merged to `develop` as `88b89995a4f9e62a6fe4b0451ea675ce0495b539`. CI status is tied to that exact commit; any later commit requires fresh exact-head verification.
 
