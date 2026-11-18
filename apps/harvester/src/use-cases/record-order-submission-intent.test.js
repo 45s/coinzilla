@@ -192,7 +192,10 @@ test("fails closed for legacy pending orders without recorded provider provenanc
     operationalStateStore: {
       append: async () => {
         appendCalls += 1
-        return { ok: true, data: { durable: true } }
+        return {
+          ok: true,
+          data: { durable: true },
+        }
       },
     },
     order: legacyOrder,
