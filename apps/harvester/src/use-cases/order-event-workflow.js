@@ -14,7 +14,10 @@ import { failureResult } from "./recovery-failure.js"
 import { createUserDataEventTransition } from "./create-user-data-event-transition.js"
 
 
-function resolveRegisteredOrder({ state, order }) {
+function resolveRegisteredOrder({
+      state,
+      order,
+    }) {
   return state.registry?.getOrder?.({
     clientOrderId: order.clientOrderId,
   }) ?? order
@@ -29,7 +32,10 @@ function createProviderAttributedFillHistoryBroker({ broker, state, ordersByBrok
   return {
     ...broker,
     getFills: async ({ symbol, orderId }) => {
-      const result = await broker.getFills({ symbol, orderId })
+      const result = await broker.getFills({
+        symbol,
+        orderId,
+      })
       if (result?.ok !== true || !Array.isArray(result.data)) {
         return result
       }
@@ -111,6 +117,44 @@ function createProcessExecutionFillTransition({
   })
 }
 
+function createWorkflowUserDataEventTransition({
+  state,
+  logger,
+  eventPublisher,
+  pairs,
+  pause,
+  resolveRecoveryManagedCancellation,
+  cancelAndReconcileRecoverySells,
+  evaluateLatestTransition,
+  getReconciledBuyExecutionPrice,
+  assertReconciledSellExecution,
+  completeRecoveryCycle,
+  publishRecoveryCycleNotCompleted,
+  isStopping,
+  onUnownedExternalOrderObserved,
+  processExecutionFillTransition,
+  reconcileTerminalOrderFills,
+}) {
+  return createUserDataEventTransition({
+    state,
+    logger,
+    eventPublisher,
+    pairs,
+    pause,
+    resolveRecoveryManagedCancellation,
+    cancelAndReconcileRecoverySells,
+    evaluateLatestTransition,
+    getReconciledBuyExecutionPrice,
+    assertReconciledSellExecution,
+    completeRecoveryCycle,
+    publishRecoveryCycleNotCompleted,
+    isStopping,
+    onUnownedExternalOrderObserved,
+    processExecutionFillTransition,
+    reconcileTerminalOrderFills,
+  })
+}
+
 export function makeOrderEventWorkflow({
   state,
   broker,
@@ -149,7 +193,7 @@ export function makeOrderEventWorkflow({
     pause,
     processExecutionFillTransition,
   })
-  const processUserDataEventTransition = createUserDataEventTransition({
+  const processUserDataEventTransition = createWorkflowUserDataEventTransition({
     state,
     logger,
     eventPublisher,
@@ -234,7 +278,11 @@ function validateMissingExecutionFill({
 }
 
 function validateExecutionFill({ order, fill, eventPublisher, requireProviderProvenance }) {
-  const missingFill = validateMissingExecutionFill({ order, fill, eventPublisher })
+  const missingFill = validateMissingExecutionFill({
+    order,
+    fill,
+    eventPublisher,
+  })
   if (missingFill) {
     return missingFill
   }
@@ -254,7 +302,10 @@ function validateExecutionFill({ order, fill, eventPublisher, requireProviderPro
   const providerFailure = requireProviderProvenance ||
     hasProviderIdentity({ value: order }) ||
     fillHasProviderIdentity
-    ? getProviderAttributionFailure({ order, fill })
+    ? getProviderAttributionFailure({
+        order,
+        fill,
+      })
     : null
   const identityMatches = fill.market.id === order.market.id &&
     fill.side === order.side &&
@@ -429,7 +480,11 @@ async function applyValidatedExecutionFill({ dependencies, order, fill }) {
     recordBuyExecutionFill,
     recordSellExecutionFill,
   })
-  publishExecutionFillOutcome({ accounting, fill, eventPublisher })
+  publishExecutionFillOutcome({
+    accounting,
+    fill,
+    eventPublisher,
+  })
   return toResult({
     data: {
       applied: accounting.data?.applied === true,
