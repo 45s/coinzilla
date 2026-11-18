@@ -170,6 +170,16 @@ test("allows different provider accounts to hold independent process locks", asy
       true,
       "The first account must acquire its own provider/account/environment lock.",
     )
+    assert.equal(
+      firstAccountLock.lockScope.accountId,
+      "account-one",
+      "The lock diagnostics must expose the stable non-secret account alias.",
+    )
+    assert.equal(
+      firstAccountLock.lockScope.providerInstanceId,
+      "binance-testnet-one",
+      "The lock diagnostics must expose the provider instance that requested the account lock.",
+    )
 
     const secondAccountLock = await acquireHarvesterProcessLocks({
       globalDirectory,
@@ -201,7 +211,10 @@ test("allows different provider accounts to hold independent process locks", asy
       "The first account must release only its own process lock.",
     )
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -250,7 +263,10 @@ test("blocks a second provider instance for the same account and environment", a
       "The account writer lock must remain releasable after a duplicate acquisition is rejected.",
     )
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -297,6 +313,9 @@ test("rejects incomplete provider/account lock identity", async () => {
       "Incomplete account/provider identity must fail with an actionable validation message.",
     )
   } finally {
-    await rm(root, { recursive: true, force: true })
+    await rm(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
