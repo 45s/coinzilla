@@ -297,7 +297,7 @@ From the repository root:
 pnpm --filter @coinzilla/brokers diagnose:bitunix
 ~~~
 
-The source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` constant is the explicit acknowledgement gate because Bitunix Spot has no documented TESTNET environment. It defaults to `true`; set it to `false` in `scripts/bitunix-diagnostic-runner.js` to prevent the runner from making requests. The runner contacts the configured LIVE Spot endpoint and performs read-only requests only.
+The source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` constant is the explicit acknowledgement gate because Bitunix Spot has no documented TESTNET environment. It defaults to `true`; set it to `false` in `scripts/bitunix-diagnostic-runner.js` to prevent the runner from making requests. The runner contacts the configured LIVE Spot endpoint and performs non-mutating query requests only.
 
 Both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` are optional for public-only diagnostics. With neither credential configured—or with only one configured—the runner executes the unsigned public REST catalog and latest-price GET requests, then marks private account and all authenticated WebSocket RPC checks as skipped. Configure **both** variables to enable signed account/open-order reads and authenticated WebSocket RPC. A private REST request without credentials fails closed with `BITUNIX_REST_AUTHENTICATION_REQUIRED`; the REST client never fabricates credentials. The two values are treated as one credential pair.
 
