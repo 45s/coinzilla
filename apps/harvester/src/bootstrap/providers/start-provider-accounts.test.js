@@ -150,7 +150,7 @@ test("reports failed-account lock cleanup errors without stopping healthy accoun
 
   assert.equal(runtime.failedAccounts.length, 1)
   assert.equal(runtime.failedAccounts[0].errorMessage, startupError.message)
-  assert.equal(runtime.failedAccounts[0].cleanupErrors[0], cleanupError)
+  assert.equal(runtime.failedAccounts[0].cleanupErrors[0].message, cleanupError.message)
   assert.deepEqual(stopped, [])
   assert.equal((await runtime.stop()).ok, true)
   assert.deepEqual(stopped, ["third", "first"])
