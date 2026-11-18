@@ -241,7 +241,12 @@ function assertAdaBelowTargetOutcome({ replay, replacementSell }) {
   )
   const notCompleted = replay.receivedLifecycleEvents.find(({ name }) => name === "recovery.cycle_not_completed")
   assert.ok(notCompleted, "the terminal SELL must persist an explicit non-completed recovery outcome")
-  assert.equal(notCompleted.data.reason, "RECOVERY_SELL_FAILED_MIN_PROFIT")
+  assert.equal(notCompleted.data.outcome, "CONTINUE_SELL_THROUGH")
+  assert.equal(notCompleted.data.reason, "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY")
+  assert.equal(notCompleted.data.realizedNetProfit, scenarioExpectations.expectedProfit)
+  assert.equal(notCompleted.data.minProfit, "0.05")
+  assert.equal(notCompleted.data.activeQuantity, "0.1")
+  assert.equal(notCompleted.data.keepQuantity, "0")
   assert.equal(notCompleted.data.sellOrderClientId, replacementSell.clientOrderId)
   assert.equal(notCompleted.data.sellOrderBrokerOrderId, replacementSell.brokerOrderId)
   return replay.receivedLifecycleEvents.length
@@ -272,6 +277,11 @@ function assertAdaShutdownOutcome({ replay, thirdBuy }) {
     replay.receivedLifecycleEvents.some(({ name }) => name === "recovery.cycle_completed"),
     false,
     "shutdown must not convert an incomplete recovery cycle into a completed one",
+  )
+  assert.equal(
+    replay.receivedLifecycleEvents.some(({ name }) => name === "strategy.paused"),
+    false,
+    "a valid MIN_NOTIONAL dust residual with an open next BUY must continue recovery, not pause the pair",
   )
 }
 
