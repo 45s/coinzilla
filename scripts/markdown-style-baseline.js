@@ -80,7 +80,10 @@ function collectIndentedCodeLineIndexes({ lines }) {
     if (line.trim() === "") {
       if (
         isInsideIndentedCodeBlock &&
-        hasIndentedCodeAfterBlankLines({ lines, index })
+        hasIndentedCodeAfterBlankLines({
+          lines,
+          index,
+        })
       ) {
         codeLineIndexes.add(index)
       } else if (isInsideIndentedCodeBlock) {
@@ -164,7 +167,10 @@ function collectTableCells({ source }) {
       continue
     }
 
-    const delimiterLength = getCodeSpanDelimiterLength({ source, index })
+    const delimiterLength = getCodeSpanDelimiterLength({
+      source,
+      index,
+    })
     if (delimiterLength > 0) {
       activeCodeDelimiterLength = updateCodeSpanDelimiterLength({
         activeLength: activeCodeDelimiterLength,
@@ -295,7 +301,11 @@ function findListBlockEnd({ lines, startIndex, codeLineIndexes }) {
     }
 
     if (lines[cursor].trim() === "") {
-      if (isListContinuationAfterBlank({ lines, cursor, codeLineIndexes })) {
+      if (isListContinuationAfterBlank({
+          lines,
+          cursor,
+          codeLineIndexes,
+        })) {
         cursor += 1
         continue
       }
@@ -570,7 +580,8 @@ function scanMarkdownDocumentLines({
       fenceMatch,
       activeFence,
     })
-    ({ activeFence } = fenceTransition)
+    const { activeFence: nextActiveFence } = fenceTransition
+    activeFence = nextActiveFence
 
     if (fenceTransition.isCode) {
       codeLineIndexes.add(index)
@@ -698,12 +709,26 @@ function collectDocumentFindings({ document, findings }) {
   }
 
   const { path, content } = document
-  const addFinding = createFindingRecorder({ findings, path })
-  const scannedDocument = scanMarkdownDocumentLines({ content })
+  const addFinding = createFindingRecorder({
+    findings,
+    path,
+  })
+  const scannedDocument = scanMarkdownDocumentLines({
+    content,
+  })
 
-  addLineFindings({ scannedDocument, addFinding })
-  addDocumentMetadataFindings({ scannedDocument, addFinding })
-  addStructureFindings({ scannedDocument, addFinding })
+  addLineFindings({
+    scannedDocument,
+    addFinding,
+  })
+  addDocumentMetadataFindings({
+    scannedDocument,
+    addFinding,
+  })
+  addStructureFindings({
+    scannedDocument,
+    addFinding,
+  })
 }
 
 /**
