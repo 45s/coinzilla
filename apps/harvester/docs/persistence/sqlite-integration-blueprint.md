@@ -2,7 +2,7 @@
 
 **Status:** preparation/design only; no runtime migration is authorized by this document  
 **Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)  
-**Source baseline:** develop commit 5c517f677232ea3aa2ec72053087307693f97919 (2026-11-18)  
+**Source baseline:** [develop commit 007f631a3db04b1a2d1ca3d21bb9af65123bd014](https://github.com/45s/coinzilla/commit/007f631a3db04b1a2d1ca3d21bb9af65123bd014) (2026-11-18)  
 **Primary owner:** Harvester (apps/harvester)  
 **Database infrastructure owner:** Database (packages/db)
 
