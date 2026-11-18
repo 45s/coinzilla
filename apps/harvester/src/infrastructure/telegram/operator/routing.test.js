@@ -86,10 +86,16 @@ test("routes a confirmed RESUME callback using the stable market-action contract
       callback_query: {
         id: "callback-1002",
         data: "cc:confirm:RESUME:LINKUSDT:42",
-        from: { id: 123, is_bot: false },
+        from: {
+          id: 123,
+          is_bot: false,
+        },
         message: {
           message_id: 7,
-          chat: { id: 123, type: "private" },
+          chat: {
+            id: 123,
+            type: "private",
+          },
         },
       },
     },
