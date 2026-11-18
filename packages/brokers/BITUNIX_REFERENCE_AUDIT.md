@@ -350,7 +350,6 @@ The Coinzilla method validates all supplied filters before I/O, sends only suppl
 
 The method validates all filters before I/O, sends only supplied filters, validates the entire response before returning it, preserves exact numeric identifiers/amounts, and performs no withdrawal or transfer mutation. Sensitive recipient fields are returned only to the caller; they are not logged or stored.
 
-
 ## 10. Bitunix Spot raw matching-order detail read (2026-11-18)
 
 **Decision:** expose a narrow Bitunix-only, signed, read-only `BitunixSpotBroker.getMatchingOrderDetails({ orderId, symbol })` lookup in [issue #1388](https://github.com/45s/coinzilla/issues/1388) / [PR #1389](https://github.com/45s/coinzilla/pull/1389). This returns raw exchange-native detail for one known order; it is not canonical fill history or Binance parity. Keep issue [#1185](https://github.com/45s/coinzilla/issues/1185) open.
