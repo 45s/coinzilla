@@ -11,44 +11,89 @@ const actor = Object.freeze({
 
 function createHarnessEngine({ calls }) {
   return {
-    pauseMarket: async () => { calls.push({ type: "legacy-pause" }) },
-    resumeMarket: async () => { calls.push({ type: "legacy-resume" }) },
+    pauseMarket: async () => {
+      calls.push({ type: "legacy-pause" })
+    },
+    resumeMarket: async () => {
+      calls.push({ type: "legacy-resume" })
+    },
     pauseBuys: async ({ symbol, beforeApply }) => {
-      calls.push({ type: "pause-buys-start", symbol })
+      calls.push({
+        type: "pause-buys-start",
+        symbol,
+      })
       const committed = typeof beforeApply === "function"
-        ? await beforeApply({ symbol, action: "PAUSE_BUYS" })
-        : { ok: true, data: { durable: false } }
+        ? await beforeApply({
+          symbol,
+          action: "PAUSE_BUYS",
+        })
+        : { ok: true,
+          data: { durable: false } }
       if (!committed?.ok) { return committed }
-      calls.push({ type: "pause-buys-applied", symbol })
-      return { ok: true, data: {
-        symbol, paused: true, canceled: 0, reconciled: 0,
-        durable: committed.data.durable,
-      } }
+      calls.push({
+        type: "pause-buys-applied",
+        symbol,
+      })
+      return {
+        ok: true,
+        data: {
+          symbol,
+          paused: true,
+          canceled: 0,
+          reconciled: 0,
+          durable: committed.data.durable,
+        },
+      }
     },
     resumeBuys: async ({ symbol, beforeApply }) => {
-      calls.push({ type: "resume-buys-start", symbol })
+      calls.push({
+        type: "resume-buys-start",
+        symbol,
+      })
       const committed = typeof beforeApply === "function"
-        ? await beforeApply({ symbol, action: "RESUME_BUYS" })
-        : { ok: true, data: { durable: false } }
+        ? await beforeApply({
+          symbol,
+          action: "RESUME_BUYS",
+        })
+        : { ok: true,
+          data: { durable: false } }
       if (!committed?.ok) { return committed }
-      calls.push({ type: "resume-buys-applied", symbol })
-      return { ok: true, data: {
-        symbol, resumed: true, stillPaused: false,
-        durable: committed.data.durable,
-      } }
+      calls.push({
+        type: "resume-buys-applied",
+        symbol,
+      })
+      return {
+        ok: true,
+        data: {
+          symbol,
+          resumed: true,
+          stillPaused: false,
+          durable: committed.data.durable,
+        },
+      }
     },
   }
 }
 
-function createHarness({ appendResult = { ok: true, data: { durable: true, duplicate: false } } } = {}) {
+function createHarness({ appendResult = {
+  ok: true,
+  data: { durable: true, duplicate: false },
+} } = {}) {
   const calls = []
   const operationalStateStore = {
     append: async fact => {
-      calls.push({ type: "append", fact })
+      calls.push({
+        type: "append",
+        fact,
+      })
       return appendResult
     },
   }
-  return { calls, operationalStateStore, engine: createHarnessEngine({ calls }) }
+  return {
+    calls,
+    operationalStateStore,
+    engine: createHarnessEngine({ calls }),
+  }
 }
 
 test("creates an immutable Harvester operator facade without a generic command dispatcher", () => {
