@@ -1089,7 +1089,10 @@ test("persists selected provider provenance before broker I/O and carries it ont
       accountId: "binance-primary",
       placeOrder: async ({ order }) => {
         calls.push("broker")
-        return { ok: true, data: makeAcknowledgement(order) }
+        return {
+          ok: true,
+          data: makeAcknowledgement(order),
+        }
       },
     },
     onPendingOrder: async ({ order }) => {
@@ -1101,7 +1104,10 @@ test("persists selected provider provenance before broker I/O and carries it ont
         "binanceTestnet", "binance", "binance-primary",
       ])
       calls.push("durable-intent")
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
     onDurableSubmissionOutcome: async ({ order, outcome }) => {
       assert.deepEqual([order.providerInstanceId, order.providerType, order.accountId], [
@@ -1115,7 +1121,10 @@ test("persists selected provider provenance before broker I/O and carries it ont
     onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
   })
 
-  const result = await execute({ decision, marketMetadata })
+  const result = await execute({
+    decision,
+    marketMetadata,
+  })
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.deepEqual(calls, ["pending", "durable-intent", "broker", "durable-outcome"])
   assert.equal(acknowledged.providerInstanceId, "binanceTestnet")
@@ -1129,7 +1138,13 @@ test("fails closed before registration or broker I/O when durable provenance met
     onPendingOrder: async () => {},
     onAcknowledgedOrder: async () => {},
     onSubmissionFailure: async () => {},
-    onDurableSubmissionIntent: async () => ({ ok: true, data: { durable: true } }),
-    onDurableSubmissionOutcome: async () => ({ ok: true, data: { durable: true } }),
+    onDurableSubmissionIntent: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    onDurableSubmissionOutcome: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
   }), /providerInstanceId, providerType and accountId/)
 })
