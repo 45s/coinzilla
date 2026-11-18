@@ -286,11 +286,11 @@ Bitunix currently documents the Spot WebSocket API as authenticated request/resp
 Create packages/brokers/.env.development locally (never commit it). Credentials are optional for public-only checks:
 
 ~~~dotenv
-# Optional: configure both to enable private account reads and authenticated WebSocket RPC.
-BITUNIX_API_KEY=your_read_only_api_key
-BITUNIX_API_SECRET=your_api_secret
+# Optional: uncomment and configure both to enable private account reads and authenticated WebSocket RPC.
+# BITUNIX_API_KEY=your_read_only_api_key
+# BITUNIX_API_SECRET=your_api_secret
 # Optional: leave unset to skip depth RPC; choose only a value you have verified for your market.
-BITUNIX_DIAGNOSTICS_DEPTH_PRECISION=
+# BITUNIX_DIAGNOSTICS_DEPTH_PRECISION=
 ~~~
 
 From the repository root:
