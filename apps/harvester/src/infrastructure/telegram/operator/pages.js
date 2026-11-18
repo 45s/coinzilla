@@ -6,14 +6,20 @@ import {
   formatTelegramOperatorBalances,
 } from "./format-response.js"
 import {
+  TELEGRAM_OPERATOR_ACTIONS,
+  TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN,
+  TELEGRAM_OPERATOR_QUERY_STAGES,
+} from "./constants.js"
+import { OPERATOR_ACTOR_ROLES } from "../../../application/operator/constants.js"
+import {
   helpText,
   PAGE_METHODS,
   PAGE_TITLES,
 } from "./keyboard.js"
 
 export function resolveMarketAction(page) {
-  if (page === "pause") { return "PAUSE" }
-  if (page === "resume") { return "RESUME" }
+  if (page === "pause") { return TELEGRAM_OPERATOR_ACTIONS.PAUSE }
+  if (page === "resume") { return TELEGRAM_OPERATOR_ACTIONS.RESUME }
   return undefined
 }
 
@@ -25,10 +31,10 @@ function isMarketBuyPaused(market) {
 
 export function selectMarketsForAction({ markets,
  action }) {
-  if (action === "PAUSE") {
+  if (action === TELEGRAM_OPERATOR_ACTIONS.PAUSE) {
     return markets.filter((market) => market?.enabled === true && !isMarketBuyPaused(market))
   }
-  if (action === "RESUME") {
+  if (action === TELEGRAM_OPERATOR_ACTIONS.RESUME) {
     return markets.filter((market) => market?.enabled === true && isMarketBuyPaused(market))
   }
   return []
@@ -37,11 +43,11 @@ export function selectMarketsForAction({ markets,
 export function formatMarketActionPrompt({ action,
  eligibleMarkets,
  text }) {
-  const prompt = action === "PAUSE"
+  const prompt = action === TELEGRAM_OPERATOR_ACTIONS.PAUSE
     ? "Choose an enabled market to pause."
     : "Choose an enabled market to resume."
   if (eligibleMarkets.length > 0) { return `${prompt}\n\n${text}` }
-  const emptyMessage = action === "PAUSE"
+  const emptyMessage = action === TELEGRAM_OPERATOR_ACTIONS.PAUSE
     ? "No enabled markets are currently available to pause."
     : "No enabled BUY-paused markets are currently available to resume."
   return `${prompt}\n${emptyMessage}\n\n${text}`
@@ -72,7 +78,7 @@ async function executeOperatorQuery({ method, userId, operator, diagnostics, int
       result: await operator[method]({
         actor: {
           id: `telegram-user:${userId}`,
-          roles: ["trading-operator"],
+          roles: [OPERATOR_ACTOR_ROLES.TRADING_OPERATOR],
         },
       }),
     }
@@ -80,7 +86,7 @@ async function executeOperatorQuery({ method, userId, operator, diagnostics, int
     diagnostics.fail({
       interaction,
       error,
-      stage: "QUERY_EXECUTION",
+      stage: TELEGRAM_OPERATOR_QUERY_STAGES.EXECUTION,
       operation: method,
     })
     return { threw: true }
@@ -91,7 +97,7 @@ function logOperatorQueryStarted({ interaction, queryPage, logStage }) {
   logStage({
     interaction,
     message: "Telegram query STARTED",
-    stage: "QUERY_STARTED",
+    stage: TELEGRAM_OPERATOR_QUERY_STAGES.STARTED,
     fields: { queryPage },
   })
 }
@@ -100,7 +106,7 @@ function logOperatorQueryCompleted({ interaction, startedAt, logStage }) {
   logStage({
     interaction,
     message: "Telegram query COMPLETED",
-    stage: "QUERY_COMPLETED",
+    stage: TELEGRAM_OPERATOR_QUERY_STAGES.COMPLETED,
     fields: { durationMs: Date.now() - startedAt },
   })
 }
