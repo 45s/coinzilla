@@ -334,11 +334,17 @@ async function applyValidatedExecutionFill({ dependencies, order, fill }) {
 }
 
 async function processExecutionFill({ dependencies, order, fill }) {
-  const attributedFill = attachOrderProviderIdentity({ order, fill })
+  const registeredOrder = dependencies.state.registry?.getOrder?.({
+    clientOrderId: order.clientOrderId,
+  }) ?? order
+  const attributedFill = attachOrderProviderIdentity({
+    order: registeredOrder,
+    fill,
+  })
   const { eventPublisher, pause } = dependencies
   try {
     const validation = validateExecutionFill({
-      order,
+      order: registeredOrder,
       fill: attributedFill,
       eventPublisher,
     })
@@ -356,7 +362,7 @@ async function processExecutionFill({ dependencies, order, fill }) {
     }
     return await applyValidatedExecutionFill({
       dependencies,
-      order,
+      order: registeredOrder,
       fill: attributedFill,
     })
   } catch (error) {
