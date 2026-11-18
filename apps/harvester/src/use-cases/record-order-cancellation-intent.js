@@ -34,7 +34,11 @@ function validateCancellationIntent({
 /** Persist the exact expected owned-order state before a broker cancellation RPC. */
 export async function recordOrderCancellationIntent({ operationalStateStore, order, reason } = {}) {
   try {
-    const market = validateCancellationIntent({ operationalStateStore, order, reason })
+    const market = validateCancellationIntent({
+      operationalStateStore,
+      order,
+      reason,
+    })
     const result = await operationalStateStore.append({
       factId: `order-cancellation-intent:${order.clientOrderId}:${reason}:${order.status}:${order.executedQuantity.amount}`,
       factType: "ORDER_CANCELLATION_INTENT",
