@@ -659,6 +659,55 @@ test("retains a failed account lock when startup cleanup is not confirmed", asyn
   assert.deepEqual(releasedLocks, ["first"])
 })
 
+test("isolates an optional provider market-data startup failure", async () => {
+  const providers = createThreeAccountProviders()
+  providers[0].required = false
+  const calls = []
+  const runtime = await startProviderAccounts({
+    providers,
+    appConfig: appConfigForProviderSubset(providers),
+    env: { TRADING_MODE: "testnet" },
+    start: async (input) => {
+      const providerInstanceId = input.providerIdentity.providerInstanceId
+      return {
+        executionSymbols: [...input.executionSymbols],
+        marketDataSources: input.marketDataSources,
+        marketDataProviderTypes: input.marketDataProviderTypes,
+        tradingEnabled: true,
+        startMarketData: async () => {
+          calls.push(`start-market-data:${providerInstanceId}`)
+          if (providerInstanceId === "first") {
+            throw new Error("optional market-data subscription failed")
+          }
+          return { ok: true }
+        },
+        stopMarketData: async () => {
+          calls.push(`stop-market-data:${providerInstanceId}`)
+          return { ok: true }
+        },
+        stop: async () => {
+          calls.push(`stop-runtime:${providerInstanceId}`)
+          return { ok: true }
+        },
+      }
+    },
+  })
+
+  assert.deepEqual(calls, [
+    "start-market-data:first",
+    "stop-market-data:first",
+    "start-market-data:second",
+    "start-market-data:third",
+  ])
+  assert.equal(runtime.tradingEnabled, true)
+  assert.deepEqual(runtime.providerAccounts.map(({ executionEnabled }) => executionEnabled), [
+    false,
+    true,
+    true,
+  ])
+  assert.equal(runtime.failedAccounts[0].providerInstanceId, "first")
+})
+
 test("fails startup when no configured account can start", async () => {
   await assert.rejects(
     startProviderAccounts({
