@@ -4,7 +4,7 @@ import { createDogeTradingReplay } from "./doge-zro-conservative-replay-harness.
 
 const test = (...testArguments) => {
   const [name, ...options] = testArguments;
-  return nodeTest(`[doge-zro-conservative-dogeTradingReplay.test.js] ${name}`, ...options);
+  return nodeTest(`[doge-zro-conservative-replay.test.js] ${name}`, ...options);
 };
 
 const MARKET_SYMBOL = "DOGEUSDT"
@@ -427,37 +427,6 @@ runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill 
 
     const recoveryCycleResult = await recoveryCycleCompletion
     assert.equal(
-      dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
-      1,
-      "the reconciled SELL must publish exactly one completed-cycle outcome",
-    )
-    const completedPositionBeforeDuplicate = dogeTradingReplay.runtime.portfolio.getPosition({
-      symbol: MARKET_SYMBOL,
-    })
-    await dogeTradingReplay.publishFullOrderFill({
-      order: recoverySellOrder,
-      price: dogeTradingReplay.scenarioExpectations.sellFillPrice,
-      tradeId: SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID,
-    })
-    const completedPositionAfterDuplicate = dogeTradingReplay.runtime.portfolio.getPosition({
-      symbol: MARKET_SYMBOL,
-    })
-    assert.equal(
-      dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
-      1,
-      "replaying the same SELL execution must not publish a second completed-cycle outcome",
-    )
-    assert.equal(
-      completedPositionAfterDuplicate.baseQuantity.amount,
-      completedPositionBeforeDuplicate.baseQuantity.amount,
-      "duplicate terminal SELL evidence must not change active inventory",
-    )
-    assert.equal(
-      completedPositionAfterDuplicate.freeBaseQuantity.amount,
-      completedPositionBeforeDuplicate.freeBaseQuantity.amount,
-      "duplicate terminal SELL evidence must not change retained inventory",
-    )
-    assert.equal(
       recoveryCycleResult.freeQuantity,
       dogeTradingReplay.scenarioExpectations.expectedFreeQuantity,
       "the recovery completion event must report the exact retained free DOGE quantity after the SELL fill",
@@ -522,6 +491,38 @@ runDogeTradingReplayTest("completes the recovery cycle only after the SELL fill 
         },
       ],
       "the completed recovery cycle must reconcile the BUY and SELL reports with their actual quantities, proceeds, and commission assets",
+    )
+
+    assert.equal(
+      dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
+      1,
+      "the reconciled SELL must publish exactly one completed-cycle outcome",
+    )
+    const completedPositionBeforeDuplicate = dogeTradingReplay.runtime.portfolio.getPosition({
+      symbol: MARKET_SYMBOL,
+    })
+    await dogeTradingReplay.publishFullOrderFill({
+      order: recoverySellOrder,
+      price: dogeTradingReplay.scenarioExpectations.sellFillPrice,
+      tradeId: SINGLE_CYCLE_RECOVERY_SELL_TRADE_ID,
+    })
+    const completedPositionAfterDuplicate = dogeTradingReplay.runtime.portfolio.getPosition({
+      symbol: MARKET_SYMBOL,
+    })
+    assert.equal(
+      dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "recovery.cycle_completed").length,
+      1,
+      "replaying the same SELL execution must not publish a second completed-cycle outcome",
+    )
+    assert.equal(
+      completedPositionAfterDuplicate.baseQuantity.amount,
+      completedPositionBeforeDuplicate.baseQuantity.amount,
+      "duplicate terminal SELL evidence must not change active inventory",
+    )
+    assert.equal(
+      completedPositionAfterDuplicate.freeBaseQuantity.amount,
+      completedPositionBeforeDuplicate.freeBaseQuantity.amount,
+      "duplicate terminal SELL evidence must not change retained inventory",
     )
   })
 
