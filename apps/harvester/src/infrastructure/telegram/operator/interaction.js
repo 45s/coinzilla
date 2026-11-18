@@ -4,6 +4,8 @@ import {
   TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN,
 } from "./constants.js"
 
+const CONTROL_CALLBACK_PATTERN = new RegExp("^cc:(?:ask|confirm):(" + TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN + "):([A-Z0-9]{2,30})(?::\\\\d+)?$")
+
 export function normalizeTelegramUserId(value) {
   if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
     return String(value)
