@@ -115,7 +115,7 @@ No repository-level evidence justifies moving every persisted artifact to SQLite
 
 The required dependency direction is:
 
-§§§text
+```text
 Harvester application services
           |
           v
@@ -132,7 +132,7 @@ Selected provider adapter (SQLite today)
           |
           v
 node:sqlite / SQLite infrastructure inside packages/db
-§§§
+```
 
 ### Layer responsibilities
 
@@ -148,7 +148,7 @@ The current session integration is the working example. Keep provider-specific s
 
 ### Composition outline
 
-§§§js
+```js
 const persistence = await prepareHarvesterPersistence({
   config: appConfig,
   environment: validatedTradingMode,
@@ -165,7 +165,7 @@ try {
 } finally {
   await persistence.close()
 }
-§§§
+```
 
 This is a target shape, not an existing function or approved code change. The real composition should follow the current main() and prepareTradingSessionPersistence conventions.
 
@@ -191,13 +191,13 @@ These are proposed Harvester-owned contracts. They are not implemented by this t
 
 Current contract:
 
-§§§js
+```js
 {
   create(record),
   findById(runtimeSessionId),
   transition({ id, status, endedAt }),
 }
-§§§
+```
 
 - Domain validation and allowed lifecycle transitions live in domain/trading-session/trading-session.js.
 - Infrastructure maps to harvester_trading_sessions.
@@ -212,14 +212,14 @@ Name the future contract OrderHistoryRepository, not OrderRegistryRepository, to
 
 Proposed methods:
 
-§§§js
+```js
 {
   recordIntent({ order, ownership, provenance, sourceEventId }),
   recordUpdate({ order, ownership, provenance, sourceEventId }),
   findByIdentity({ providerInstanceId, accountId, clientOrderId }),
   list({ providerInstanceId, accountId, marketId, status, from, to, limit, offset }),
 }
-§§§
+```
 
 The serialized order value must be mapped from the actual CanonicalOrder.value contract: clientOrderId, optional brokerOrderId, market, side, type, optional limitPrice, originalQuantity, executedQuantity, remainingQuantity, status, and optional lifecycle timestamps. Preserve Money/Quantity decimal strings; never convert financial amounts to JavaScript floating-point values.
 
@@ -229,7 +229,7 @@ Ownership is a separate Harvester concept. Preserve the actual strategy/position
 
 Example proposed record (fields marked as provenance are prerequisites, not current CanonicalOrder fields):
 
-§§§json
+```json
 {
   "id": "provider-instance/account-id/client-order-id",
   "schemaVersion": 1,
@@ -240,24 +240,25 @@ Example proposed record (fields marked as provenance are prerequisites, not curr
   "clientOrderId": "h-BTCUSDT-001",
   "brokerOrderId": "exchange-order-id",
   "market": {
-    "id": "BTCUSDT",
+    "id": "binance:BTCUSDT",
+    "venue": "binance",
     "symbol": "BTCUSDT",
-    "baseAsset": "BTC",
-    "quoteAsset": "USDT"
+    "baseAsset": { "id": "BTC", "code": "BTC" },
+    "quoteAsset": { "id": "USDT", "code": "USDT" }
   },
   "side": "BUY",
   "type": "LIMIT",
-  "limitPrice": { "amount": "65000.00", "asset": "USDT" },
-  "originalQuantity": { "amount": "0.001", "asset": "BTC" },
-  "executedQuantity": { "amount": "0.0004", "asset": "BTC" },
-  "remainingQuantity": { "amount": "0.0006", "asset": "BTC" },
+  "limitPrice": { "amount": "65000.00", "asset": { "id": "USDT", "code": "USDT" } },
+  "originalQuantity": { "amount": "0.001", "asset": { "id": "BTC", "code": "BTC" } },
+  "executedQuantity": { "amount": "0.0004", "asset": { "id": "BTC", "code": "BTC" } },
+  "remainingQuantity": { "amount": "0.0006", "asset": { "id": "BTC", "code": "BTC" } },
   "status": "PARTIALLY_FILLED",
   "createdAt": 1795000000000,
   "updatedAt": 1795000001000,
   "sourceEventId": "event-uuid",
   "runtimeSessionId": "runtime-session-uuid"
 }
-§§§
+```
 
 The ID format above is illustrative. A production key must be deterministic, collision-safe, normalized, and tested; use a stable encoding or hash of the complete identity tuple rather than naïve delimiter concatenation.
 
@@ -269,13 +270,13 @@ Journal already records ordered process events. Do not duplicate its entire stre
 
 Only if a concrete indexed-query/reporting use case justifies a second projection, introduce an append-only OrderEventHistoryRepository:
 
-§§§js
+```js
 {
   append({ event, sourcePosition, provenance }),
   listForOrder({ orderIdentity, limit, offset }),
   listForSession({ runtimeSessionId, from, to, limit, offset }),
 }
-§§§
+```
 
 Preserve the existing event envelope (id, timestamp, source, name, data) and a stable source position (Journal file/session plus record position, or a verified source sequence). Timestamp alone is not a total ordering guarantee. Do not rewrite or compact the source Journal.
 
@@ -283,18 +284,46 @@ Preserve the existing event envelope (id, timestamp, source, name, data) and a s
 
 Proposed ExecutionHistoryRepository:
 
-§§§js
+```js
 {
   append({ fill, provenance, sourceEventId, runtimeSessionId }),
   findByIdentity({ providerInstanceId, accountId, marketId, tradeId }),
   listByOrder({ orderIdentity, limit, offset }),
   list({ providerInstanceId, accountId, marketId, from, to, limit, offset }),
 }
-§§§
+```
 
 Map the actual Fill value, including market, trade/execution identity, order/client identity, side, exact price/quantity/quote quantity, execution timestamp, liquidity role, commission entries and commission status where present. Preserve each amount as its canonical decimal string and each commission asset identity. Do not reconstruct individual fills from terminal order status.
 
 **Identity prerequisite:** current fill identity includes market/trade identity, which is not proven globally unique across provider instances and accounts. Scope it with the immutable #1339 provider/account provenance. Bitunix Spot remains read-only/not Harvester-ready under [#1185](https://github.com/45s/coinzilla/issues/1185); its current matching-detail endpoint does not establish canonical fill denomination, stable execution ID, or complete partial-fill history. Do not claim provider-neutral fill completeness until each provider proves its fill contract.
+
+The actual `Fill.value` shape is:
+
+```json
+{
+  "id": "binance:BTCUSDT:trade-123",
+  "tradeId": "trade-123",
+  "brokerOrderId": "exchange-order-id",
+  "clientOrderId": "h-BTCUSDT-001",
+  "market": {
+    "id": "binance:BTCUSDT",
+    "venue": "binance",
+    "symbol": "BTCUSDT",
+    "baseAsset": { "id": "BTC", "code": "BTC" },
+    "quoteAsset": { "id": "USDT", "code": "USDT" }
+  },
+  "side": "BUY",
+  "price": { "amount": "65000.00", "asset": { "id": "USDT", "code": "USDT" } },
+  "quantity": { "amount": "0.0004", "asset": { "id": "BTC", "code": "BTC" } },
+  "quoteQuantity": { "amount": "26.00", "asset": { "id": "USDT", "code": "USDT" } },
+  "liquidityRole": "MAKER",
+  "executedAt": 1795000001000,
+  "commissions": [],
+  "commissionStatus": "COMPLETE"
+}
+```
+
+The domain-generated `Fill.id` is market ID plus trade ID (for example, `binance:BTCUSDT:trade-123`); that does not include provider-instance/account identity. The repository key therefore needs the full provenance tuple in addition to the canonical fill value.
 
 Never synchronously write to SQLite from the fill-application path before Portfolio/RecoveryLedger accounting. A history projection must be non-authoritative, queue/observe published evidence, expose write failures/gaps, and be repairable from verified source evidence. The SQLite write still blocks the Node event loop while executing; batching/worker isolation must be based on measured throughput and latency, not assumed.
 
@@ -302,15 +331,17 @@ Never synchronously write to SQLite from the fill-application path before Portfo
 
 Proposed AccountSnapshotHistoryRepository:
 
-§§§js
+```js
 {
   append({ snapshot, phase, auditStatus, auditReasons, sourceEventId, provenance }),
   listBySession({ runtimeSessionId, phase, limit, offset }),
   list({ providerInstanceId, accountId, from, to, limit, offset }),
 }
-§§§
+```
 
 Use the existing account-snapshot/event DTO rather than serializing private class internals. Preserve exchange sourceTime, local event timestamp, phase (PREFLIGHT, RECOVERY, CLOSING, or targeted COMMISSION_BASELINE), balances, audit status/reasons, source event identity, and provider/account/session provenance when available. Keep account-wide open-order audit records separate from balance snapshots.
+
+The published snapshot DTO is explicitly mapped and allowlisted. Its balance event contains `phase`, `auditStatus`, `sourceTime`, `assetCount`, sorted `balances` rows (`asset`, `free`, `locked`, `total`), and `auditReasons`. The separate open-order audit DTO contains `phase`, `observedAt`, `readiness`, `orderCount`, normalized `orders`, and `blockReasons`. `AccountSnapshot.value` itself contains only `sourceTime` and `balances`; its private reconciliation-baseline maps are not part of that value. Do not silently add those private maps to the history schema.
 
 Important limitation: current account audits intentionally include configured market base/quote assets and known commission assets, not every unrelated wallet asset. Label them as filtered strategy/account evidence; never report them as a complete wallet inventory.
 
@@ -350,7 +381,7 @@ The resolver is anchored to the Harvester package/source location, not the shell
 
 Use an explicit stable local-filesystem directory for production rather than relying on a release/worktree-local default:
 
-§§§bash
+```bash
 # .env.development — Binance Spot TESTNET
 TRADING_MODE=testnet
 HARVESTER_DATABASE_DIRECTORY=/var/lib/coinzilla/harvester
@@ -358,7 +389,7 @@ HARVESTER_DATABASE_DIRECTORY=/var/lib/coinzilla/harvester
 # .env — Binance Spot LIVE / REAL account
 TRADING_MODE=live
 HARVESTER_DATABASE_DIRECTORY=/var/lib/coinzilla/harvester
-§§§
+```
 
 With the same base directory, the resolver still selects separate testnet/ and production/ child directories. Separate base directories are also valid when deployment ownership requires them. The application must log the resolved environment and a sanitized path identity, never credentials.
 
@@ -385,7 +416,7 @@ The current runtime does not require an explicit production override; without on
 | Query contract | Generic API supports top-level scalar equality, sorting, limit/offset and stable ID tie-breaks; JSON records are stored in the SQLite record table. | Design stable IDs and top-level query fields. Do not assume joins, nested predicates, or secondary indexes. Measure before proposing generic DB changes. |
 | Transaction callbacks | SQLite callbacks are synchronous and reject async callbacks. | No await inside transactions. Keep transactions short and deterministic. |
 | Migrations | The low-level SQLite public API has immutable, synchronous migration support. The provider-neutral CRUD facade does not expose a generic migration method. | Current session records use application schemaVersion and generic JSON records; there is no Harvester SQL migration. For record-shape changes, use Harvester-owned versioned mappers/data transformations. Any physical SQLite migration must stay behind a DB-owned/public provider adapter; do not add SQL to Harvester. |
-| Backup | The DB package exposes WAL-aware SQLite backup primitives, including integrity checks and atomic publication. | Harvester owns backup schedules, destination policy, retention, encryption, offsite copy, monitoring and runbooks. The current Harvester integration does not schedule or invoke backups. |
+| Backup | The DB package exposes WAL-aware SQLite backup primitives, including integrity checks and atomic publication. | Harvester owns backup schedules, destination policy, retention, encryption, offsite copy, monitoring and runbooks. A future Harvester BackupPort may be implemented by a provider-specific infrastructure adapter that calls only exported `@coinzilla/db` backup/restore operations; application/domain services must depend on the Harvester port, not `createSqliteDatabase`, SQL, or driver objects. The current Harvester integration does not schedule or invoke backups. |
 | Restore | restoreSqliteDatabase publishes to a new destination and requires hard-link support; it does not overwrite an existing destination. | Stop all users of the target DB, restore to a new/staged path, verify, then perform a controlled path switch. Test hard-link support on the actual deployment filesystem. |
 | Close | DB lifecycle waits for active transactions/backups before closing. | Drain observers and outstanding persistence operations before closing; do not release the process lock while DB resources remain active. |
 
@@ -479,7 +510,7 @@ Reuse the @coinzilla/db provider conformance suite for generic CRUD/provider beh
 - ../../src/infrastructure/persistence/trading-session-repository.test.js — repository idempotency, conflict mapping, and transaction behavior.
 - ../../src/index.test.js — process composition, optional persistence, startup failure and cleanup behavior.
 - The Harvester persistence suite includes real child-process isolation checks for TESTNET/LIVE database paths; preserve and extend these rather than replacing them with mocks.
-- packages/db/README.md and its provider conformance tests define generic CRUD, transaction, reconnect, lock, backup and restore behavior.
+- packages/db/README.md and package tests cover generic CRUD/conformance, transactions, reconnect, lock handling, and SQLite backup/restore behavior.
 
 ### Required tests for future repository slices
 
