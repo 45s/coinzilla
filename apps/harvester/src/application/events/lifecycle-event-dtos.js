@@ -441,7 +441,10 @@ const requireOrderFacts = ({ order }) => {
   return {
     clientOrderId: requireString({ value: order.clientOrderId,
       field: "clientOrderId" }),
-    ...mapProviderProvenance({ value: order, field: "order" }),
+    ...mapProviderProvenance({
+          value: order,
+          field: "order",
+        }),
     symbol: requireString({ value: order.market.symbol,
       field: "symbol" }),
     side: order.side === "BUY" || order.side === "SELL"
@@ -588,7 +591,10 @@ export const mapOrderSubmissionFailedData = (input = {}) =>
       return {
         clientOrderId: requireString({ value: order?.clientOrderId,
           field: "clientOrderId" }),
-        ...mapProviderProvenance({ value: order, field: "order" }),
+        ...mapProviderProvenance({
+          value: order,
+          field: "order",
+        }),
         symbol: requireString({ value: order?.market?.symbol,
           field: "symbol" }),
         side: order?.side === "BUY" || order?.side === "SELL"
@@ -674,7 +680,10 @@ export const mapOrderCancelFailedData = (input = {}) =>
       return {
         clientOrderId: requireString({ value: order?.clientOrderId,
           field: "clientOrderId" }),
-        ...mapProviderProvenance({ value: order, field: "order" }),
+        ...mapProviderProvenance({
+          value: order,
+          field: "order",
+        }),
         symbol: requireString({ value: order?.market?.symbol,
           field: "symbol" }),
         side: order?.side === "BUY" || order?.side === "SELL"
@@ -845,7 +854,10 @@ export const mapFillAppliedData = (input = {}) =>
             field: "clientOrderId",
           }),
         }),
-        ...mapProviderProvenance({ value: fill, field: "fill" }),
+        ...mapProviderProvenance({
+          value: fill,
+          field: "fill",
+        }),
         symbol: requireString({
           value: fill.market.symbol,
           field: "symbol",
@@ -897,7 +909,10 @@ const requireExecutionOrderFacts = ({ order }) => {
   return {
     clientOrderId: requireString({ value: order.clientOrderId,
       field: "clientOrderId" }),
-    ...mapProviderProvenance({ value: order, field: "order" }),
+    ...mapProviderProvenance({
+          value: order,
+          field: "order",
+        }),
     ...(typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()
       ? { brokerOrderId: order.brokerOrderId.trim() }
       : {}),
@@ -914,7 +929,10 @@ const requireExecutionFillFacts = ({ fill }) => {
   return {
     fillId: requireString({ value: fill.id,
       field: "fillId" }),
-    ...mapProviderProvenance({ value: fill, field: "fill" }),
+    ...mapProviderProvenance({
+          value: fill,
+          field: "fill",
+        }),
     fillBrokerOrderId: requireString({ value: fill.brokerOrderId,
       field: "fillBrokerOrderId" }),
     fillSymbol: requireString({ value: fill.market?.symbol,
