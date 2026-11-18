@@ -297,7 +297,10 @@ function resolveExecutionFillProviderFailure({
       !fillHasProviderIdentity) {
     return null
   }
-  return getProviderAttributionFailure({ order, fill })
+  return getProviderAttributionFailure({
+    order,
+    fill,
+  })
 }
 
 function validateExecutionFill({ order, fill, eventPublisher, requireProviderProvenance }) {
