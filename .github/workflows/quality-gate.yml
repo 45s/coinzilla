@@ -97,9 +97,15 @@ jobs:
         if: github.event_name == 'pull_request'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          git fetch --no-tags --depth=1 origin "$BASE_SHA"
-          node scripts/check-markdown-style.js "$BASE_SHA"
+          if ! [[ "${BASE_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "PR base SHA is missing or invalid; resolving the current base branch commit."
+            git fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}"
+            BASE_SHA="$(git rev-parse FETCH_HEAD)"
+          fi
+          git fetch --no-tags --depth=1 origin "${BASE_SHA}"
+          node scripts/check-markdown-style.js "${BASE_SHA}"
 
 
   strict-changed:
