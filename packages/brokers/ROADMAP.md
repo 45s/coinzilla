@@ -1292,6 +1292,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Preserve Harvester registry metadata compatibility without importing or moving Harvester application code.
 - [x] Add the Brokers-owned capability value, typed unsupported error, structural method catalog, compatibility method catalog, mutation outcome classification, and initial shared conformance suite.
 - [x] Add the current method/capability matrix and result/error/decimal/timestamp/pagination/lifecycle contract in [BROKER_API.md](./BROKER_API.md).
-- [ ] Complete the same-contract Binance/Bitunix implementation and offline conformance suite; current work is in [PR #1451](https://github.com/45s/coinzilla/pull/1451).
-- [ ] Run focused Brokers tests/coverage, consumer compatibility, workspace verification, and required CI on the exact final PR head before merge.
+- [x] Complete the same-contract Binance/Bitunix implementation and offline conformance suite in [PR #1451](https://github.com/45s/coinzilla/pull/1451), merged into `develop` as `e6d3e60aaaa26ad23705564ffc17f786c995b3dd`.
+- [x] Verify the exact PR head: 688 Brokers tests passed; workspace unit tests and coverage passed; JavaScript Syntax/workspace quality, strict changed-file ESLint, actionlint, Harvester targeted tests, Utils tests, and dependency audit passed. Read-only Binance TESTNET integration was skipped by workflow policy.
+- [~] Advisory external documentation-link workflow remained in progress at merge; it is not a required ruleset check.
 - **Safety:** Bitunix Spot order placement/cancellation/fill support remains blocked by [#1185](https://github.com/45s/coinzilla/issues/1185). No live mutations are authorized.
