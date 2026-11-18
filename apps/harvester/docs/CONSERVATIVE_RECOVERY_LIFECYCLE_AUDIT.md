@@ -1,9 +1,9 @@
 # Conservative Recovery Lifecycle Audit
 
-**Tracking:** [#1359](https://github.com/45s/coinzilla/issues/1359), [#1362](https://github.com/45s/coinzilla/issues/1362)  
-**Application:** `apps/harvester`  
-**Strategy:** Conservative  
-**Evidence baseline:** 2026-11-17 ADAUSDT Binance TESTNET session, preserved in [PR #1358](https://github.com/45s/coinzilla/pull/1358)  
+**Tracking:** [#1359](https://github.com/45s/coinzilla/issues/1359), [#1362](https://github.com/45s/coinzilla/issues/1362)
+**Application:** `apps/harvester`
+**Strategy:** Conservative
+**Evidence baseline:** 2026-11-17 ADAUSDT Binance TESTNET session, preserved in [PR #1358](https://github.com/45s/coinzilla/pull/1358)
 **Implementation evidence:** [PR #1363](https://github.com/45s/coinzilla/pull/1363) for the MIN_NOTIONAL dust correction; [PR #1411](https://github.com/45s/coinzilla/pull/1411) for the deterministic ADA replay and TESTNET configuration correction.
 
 ## Purpose and safety boundary
