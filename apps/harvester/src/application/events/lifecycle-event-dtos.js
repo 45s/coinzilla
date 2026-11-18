@@ -1118,7 +1118,23 @@ export const mapRecoveryCycleCompletedData = (input = {}) =>
 
 
 
-function validateRecoveryCycleNonCompletion({
+function validateRecoveryCycleNonCompletionReason({ outcome, reason }) {
+  const continueReasons = [
+    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+  ]
+  if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(outcome)) {
+    throw new TypeError("outcome must be CONTINUE_SELL_THROUGH or BLOCKED")
+  }
+  if (outcome === "CONTINUE_SELL_THROUGH" && !continueReasons.includes(reason)) {
+    throw new TypeError("CONTINUE_SELL_THROUGH requires a recognized residual sell-through reason")
+  }
+  if (outcome === "BLOCKED" && continueReasons.includes(reason)) {
+    throw new TypeError("BLOCKED cannot use a residual sell-through reason")
+  }
+}
+
+function validateRecoveryCycleNonCompletionQuantities({
   outcome,
   reason,
   realizedNetProfit,
@@ -1126,27 +1142,15 @@ function validateRecoveryCycleNonCompletion({
   keepQuantity,
   minProfit,
 }) {
-  if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(outcome)) {
-    throw new TypeError("outcome must be CONTINUE_SELL_THROUGH or BLOCKED")
-  }
-  const continueReasons = [
-    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
-    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
-  ]
-  if (outcome === "CONTINUE_SELL_THROUGH" && !continueReasons.includes(reason)) {
-    throw new TypeError("CONTINUE_SELL_THROUGH requires a recognized residual sell-through reason")
-  }
-  if (outcome === "BLOCKED" && continueReasons.includes(reason)) {
-    throw new TypeError("BLOCKED cannot use a residual sell-through reason")
-  }
-  if (compareDecimal({
+  const activeIsNegative = compareDecimal({
     left: activeQuantity,
     right: "0",
-  }) < 0 ||
-      compareDecimal({
+  }) < 0
+  const keepIsNegative = compareDecimal({
     left: keepQuantity,
     right: "0",
-  }) < 0) {
+  }) < 0
+  if (activeIsNegative || keepIsNegative) {
     throw new RangeError("activeQuantity and keepQuantity must be non-negative")
   }
   if (compareDecimal({
@@ -1157,26 +1161,51 @@ function validateRecoveryCycleNonCompletion({
   }
   if (outcome === "CONTINUE_SELL_THROUGH" &&
       compareDecimal({
-      left: activeQuantity,
-      right: keepQuantity,
-    }) <= 0) {
+        left: activeQuantity,
+        right: keepQuantity,
+      }) <= 0) {
     throw new RangeError("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
   }
   if (reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" &&
       compareDecimal({
-      left: realizedNetProfit,
-      right: minProfit,
-    }) >= 0) {
+        left: realizedNetProfit,
+        right: minProfit,
+      }) >= 0) {
     throw new RangeError("RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY requires realized profit below minProfit")
   }
   if (reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
-      compareDecimal({ left: realizedNetProfit, right: minProfit }) < 0) {
+      compareDecimal({
+        left: realizedNetProfit,
+        right: minProfit,
+      }) < 0) {
     throw new RangeError("RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH requires realized profit to meet minProfit")
   }
   if (outcome === "BLOCKED" && reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
-      compareDecimal({ left: realizedNetProfit, right: minProfit }) >= 0) {
+      compareDecimal({
+        left: realizedNetProfit,
+        right: minProfit,
+      }) >= 0) {
     throw new RangeError("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
   }
+}
+
+function validateRecoveryCycleNonCompletion({
+  outcome,
+  reason,
+  realizedNetProfit,
+  activeQuantity,
+  keepQuantity,
+  minProfit,
+}) {
+  validateRecoveryCycleNonCompletionReason({ outcome, reason })
+  validateRecoveryCycleNonCompletionQuantities({
+    outcome,
+    reason,
+    realizedNetProfit,
+    activeQuantity,
+    keepQuantity,
+    minProfit,
+  })
 }
 
 function mapRecoveryCycleNotCompletedFields({
