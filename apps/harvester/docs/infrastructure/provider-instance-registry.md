@@ -64,6 +64,8 @@ The registry, identity resolver, adapter capability forwarding, and Binance boot
 
 ## Phase 3 — durable order provenance
 
+**Delivery status:** complete in merged [PR #1416](https://github.com/45s/coinzilla/pull/1416), merge commit `543753da5938eba2d95ad19d74c3f98a991e6461`. The runtime remains single-Binance and unrouted; this phase adds immutable order/fill provenance, not multi-provider execution.
+
 New Harvester orders now carry the selected registry entry's immutable `providerInstanceId`, `providerType`, and `accountId` from the broker facade into the local PENDING `CanonicalOrder`. The complete triple is validated as stable non-secret identifier tokens; partial identity is rejected. The selected facade exposes identity from the exact registry entry returned by `connectBroker`; no route is inferred from `NODE_ENV`, provider brand, or a fallback default.
 
 The durable order submission intent stores all three values and must be confirmed committed before `placeOrder()` is invoked. The same identity is required on the durable submission outcome and on cancellation intent/outcome facts. Broker acknowledgements are rehydrated with the pending order's provider identity before the outcome is committed, and registry transitions preserve it while rejecting any attempted identity mutation.
