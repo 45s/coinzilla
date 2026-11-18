@@ -53,25 +53,21 @@ The offline DOGE/ZRO Conservative runtime replay and its simulated Binance harne
 
 The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @coinzilla/harvester recovery:market -- --context ./recovery-evidence/linkusdt.json`. Audit-only is the default; `--confirm` explicitly appends an operational record to the Operational State Store and requires an already initialized store. The command does not connect to Binance, place/cancel orders, or enable startup restoration. See the [recovery operator guide](./docs/recovery/README.md) for the evidence schema and safety contract.
 
-## Operational State Store (ADR-0001 Step 8)
+## Operational State Store (ADR-0001)
 
-Harvester's composition root prepares the **Operational State Store**, backed by the ADR-0001 append-only ledger, when configured application capabilities require durable operational records. The composition root verifies the ledger before broker-capable runtime startup. Normal startup never creates a missing ledger, repairs a corrupt chain, or treats missing history as empty. The Telegram adapter does not construct, read, or write this store; it only invokes the operator application facade. Outbound Telegram notifications remain independently configured under `notifications.telegram`.
+The Operational State Store is a separate Harvester-owned append-only recovery-facts ledger. It is not the SQLite history database and is not interchangeable with Journal.
 
-The operator-control application layer uses this same Operational State Store for durable command records when configured, even when `recovery.enabled` is false. The Telegram adapter is unaware of the store and its record types; it only forwards authorized commands and reports application results. Startup policy independently decides whether prior process state can be restored. Operator-pause records remain audit-only: the in-memory market pause set starts empty and is never restored. The store is never created or initialized automatically.
+**Current default:** `config/strategies/cg-coin-grabber.js` sets `recovery.enabled: false`. `prepareProcessOperationalStateStore` returns no store unless recovery is enabled. Telegram-only operator control accepts an explicitly supplied store but deliberately does not create or require one. Therefore the default `main()` path does not construct, verify, or write ADR-0001 facts. The runtime starts with fresh in-memory Portfolio/RecoveryLedger/OrderRegistry state; no automatic restoration is enabled.
 
-The default Operational State Store directory is `apps/harvester/recovery-facts/`, resolved relative to the Harvester application package (not the shell's current working directory). This directory is created only by the explicit initializer and is ignored by Git because it contains private runtime data. The initializer and runtime use the same resolver.
+When a store is explicitly supplied or restart recovery is enabled in a separately authorized task, startup verifies the existing ledger before broker-capable runtime startup. Runtime never creates a missing ledger, repairs a corrupt chain, or treats missing history as empty. Fact recorders write only when a store is supplied. A prior PROCESS_STARTED fact is handled by the existing fail-closed/observation-only rules; this document does not enable those paths.
 
-For a new installation, stop Harvester and run the one-time initializer without setting any directory variable:
+The default directory is `apps/harvester/recovery-facts/`, resolved relative to the Harvester package. `OPERATIONAL_STATE_DIRECTORY` selects an alternate absolute local-filesystem directory. The one-time initializer is explicit:
 
 ```sh
 pnpm --filter @coinzilla/harvester operational-state:init -- --confirm-initialize
 ```
 
-To select another absolute local-filesystem directory, set `OPERATIONAL_STATE_DIRECTORY` for both the initializer and runtime. The default remains `apps/harvester/recovery-facts/` when the variable is absent. The former home-directory recovery-data location is not a supported default or automatic fallback. Existing runtime data is never moved, deleted, initialized, overwritten, or repaired by this path cleanup.
-
-The command requires exactly `--confirm-initialize`, rejects unknown arguments and invalid directory overrides, acquires the same broker-wide and Journal process locks as Harvester, creates the selected private directory (0700) and its record/manifest files (0600), and refuses to overwrite any existing store. The runtime resolves the same directory; do not initialize one directory and run against another. Do not delete or manually edit these files. If verification fails, startup remains blocked; investigate the integrity error instead of reinitializing.
-
-The Operational State Store currently supports append-only operational record production and offline candidate projection only. Acknowledged orders remain UNKNOWN until exchange reconciliation. When `recovery.enabled` is false, a prior PROCESS_STARTED fact does not block Command Center startup: Harvester starts in observation-only mode and trading remains disabled because prior Portfolio/RecoveryLedger/OrderRegistry state was not restored. A first start with no prior process session may trade according to the configured environment. No automatic restoration or READY publication from recovered state is enabled. The initialization command does not connect to Binance or place/cancel orders.
+The initializer creates a private directory (0700) and record/manifest files (0600), refuses to overwrite an existing store, and uses the same resolver as runtime. Do not initialize, move, delete, or manually edit these files as part of #1327. Restart restoration remains separately gated by [#654](https://github.com/45s/coinzilla/issues/654).
 
 ## Ordinary trading-session history (#1327)
 
@@ -88,7 +84,7 @@ The initial provider is SQLite, with independent files selected only by validate
 
 The database is an ordinary lifecycle-event projection, not the Operational State Store. ADR-0001 remains authoritative recovery evidence; restart restoration remains disabled. The session observer does not change Journal ordering, acknowledgement, flush, durability, or failure behavior. Database/history failures are logged and isolated; they do not add a trading-readiness gate or fallback to another persistence system.
 
-See the [persistence contract and migration plan](./docs/persistence/README.md) for the record schema, repository port, lifecycle transitions, isolation rules, failure semantics, and later migration slices.
+See the [SQLite integration blueprint](./docs/persistence/sqlite-integration-blueprint.md) for the source-verified inventory, target architecture, repository contracts, TESTNET/LIVE isolation, operational constraints, migration phases, and unresolved decisions; see the [trading-session repository contract](./docs/persistence/README.md) for the existing implementation.
 
 ## Configuration
 
@@ -196,8 +192,8 @@ Harvester's high-volatility protection is implemented and wired into the runtime
 
 ## Runtime and safety
 
-- Journal is enabled by default and writes its JSONL session into the process-specific `logs/sessions/<timestamp>-<runtime-session-id>/` directory. Cumulative diagnostics live under `logs/cumulative/`. The process entrypoint requires a ready Journal and a `flush()` capability before invoking the runtime in both TESTNET and LIVE. Broker-connected trading startup must durably complete the PREFLIGHT account audit before market subscriptions; order-intent, cancellation, fill, recovery-cycle and process-boundary records are committed to the Operational State Store; required Journal events retain their separate Journal flush barriers in both modes. A failed flush is retryable only when Journal status confirms an active, open writer with no recorded write failures; a poisoned writer or unclassified health state fails closed. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md).
-- Production `main()` verifies the application-owned ledger before Journal/runtime startup and injects it into `startHarvester`; `startHarvester` records the configuration baseline and PROCESS_STARTED boundary before broker connection. When restart recovery is disabled, a prior PROCESS_STARTED fact keeps trading disabled on the next start, while allowing the Command Center and read-only runtime to start. This is a deliberate fence until Step 8 reconciliation and Step 9 crash/restart proof are accepted.
+- Journal is enabled by default and writes its JSONL session into the process-specific `logs/sessions/<timestamp>-<runtime-session-id>/` directory. Cumulative diagnostics live under `logs/cumulative/`. The process entrypoint requires a ready Journal and a `flush()` capability before invoking the runtime. Broker-connected startup must durably complete the PREFLIGHT account audit before market subscriptions; Journal order/cancel/account audit barriers remain independent of ordinary SQLite history. See [Journal Operations](./docs/JOURNAL_OPERATIONS.md).
+- The ADR-0001 Operational State Store is separate and conditional. The committed configuration currently sets `recovery.enabled: false`; `prepareProcessOperationalStateStore` therefore does not construct or verify the store in the default `main()` path. Telegram-only operator control does not create or require it. An explicitly supplied store is verified and can receive ADR-0001 facts, but this does not enable restart restoration. See [Harvester ADR-0001](./docs/architecture/decisions/0001-application-owned-recovery-facts.md).
 - Pre-existing external/unowned orders are reported but are not adopted or canceled automatically.
 - `TRADING_MODE=testnet` executes on Binance Spot TESTNET; `TRADING_MODE=live` executes on Binance Spot LIVE and can submit real orders. Selecting `live` is the explicit environment choice; no separate trading-enable flag is used. Operational State Store candidate projection and one-market reconciliation remain offline-only; startup never restores previous Portfolio, RecoveryLedger, or OrderRegistry state and never publishes READY from a recovered candidate. Do not assume restart-safe unattended operation until Step 9 is accepted.
 - The process-ownership locks are described in [Journal Operations](./docs/JOURNAL_OPERATIONS.md#trading-process-ownership-locks).
@@ -205,6 +201,7 @@ Harvester's high-volatility protection is implemented and wired into the runtime
 ## Documentation
 
 - [Harvester documentation index](./docs/README.md) — all architecture, domain, operations, testing, audits and plans.
+- [SQLite integration blueprint](./docs/persistence/sqlite-integration-blueprint.md) — source-verified persistence architecture and migration plan.
 - [Operations index](./docs/operations/README.md) — Journal, logging, TESTNET runbooks and safety.
 - [Architecture](./docs/architecture.md) and [architecture diagrams](./docs/architecture/README.md).
 - [Volatility Protection](./docs/volatility-protection.md) — implemented runtime protection; provisional thresholds still require offline historical calibration.
