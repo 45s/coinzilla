@@ -108,7 +108,7 @@ test("SQLite surfaces a busy writer error when the configured timeout is zero", 
         },
       }),
       (error) => error instanceof DatabaseProviderError
-        && error.cause.code.startsWith("SQLITE_BUSY"),
+        && /database is locked/i.test(error.cause.message),
       "A writer blocked beyond a zero-millisecond busy timeout must surface the native SQLite busy error",
     )
     assert.equal(
