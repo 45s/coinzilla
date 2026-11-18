@@ -72,6 +72,7 @@
       "src/use-cases/conservative-trading-engine.test.js",
       "src/use-cases/conservative-trading-engine.multi-market.test.js",
       "src/application/operator/create-harvester-operator.test.js",
+      "src/application/operator/constants.test.js",
       "src/infrastructure/operational-state/operational-state-control.test.js",
       "src/infrastructure/operational-state/project-harvester-operational-state.test.js",
       "src/infrastructure/operational-state/operational-state-record-validation.test.js",
@@ -82,6 +83,7 @@
       "src/infrastructure/journal/helpers/resolve-session-chronology.test.js",
       "src/infrastructure/journal/discover-harvester-journal-sessions.test.js",
       "src/infrastructure/telegram/format-telegram-operator-response.test.js",
+      "src/infrastructure/telegram/operator/constants.test.js",
       "src/infrastructure/persistence/trading-session-persistence-lifecycle.test.js"
     ]
   }
