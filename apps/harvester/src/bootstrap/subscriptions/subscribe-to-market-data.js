@@ -16,6 +16,25 @@ function logSystem({ logger,
   logger?.info?.(data)
 }
 
+function resolveMarketDataIdentityField({
+  value,
+  expectedValue,
+  field,
+  allowedValues,
+}) {
+  const resolved = value ?? expectedValue
+  if (typeof resolved !== "string" || !resolved.trim()) {
+    throw new TypeError(`Market-data broker must expose a ${field}`)
+  }
+  if (expectedValue && resolved !== expectedValue) {
+    throw new Error(`Market-data route expected ${field} ${expectedValue}, received ${resolved}`)
+  }
+  if (allowedValues && !allowedValues.includes(resolved)) {
+    throw new TypeError("Market-data broker must expose a LIVE or TESTNET environment")
+  }
+  return resolved
+}
+
 function resolveMarketDataSourceIdentity({
   broker,
   expectedProviderInstanceId,
@@ -23,41 +42,40 @@ function resolveMarketDataSourceIdentity({
   expectedAccountId,
   expectedEnvironment,
 }) {
-  const providerInstanceId = broker.providerInstanceId ?? expectedProviderInstanceId
-  const providerType = broker.providerType ?? expectedProviderType
-  const accountId = broker.accountId ?? expectedAccountId ?? null
-  const environment = broker.environment ?? expectedEnvironment
   const hasExpectedIdentity = Boolean(
-    expectedProviderInstanceId &&
-    expectedProviderType &&
-    expectedEnvironment,
+    expectedProviderInstanceId && expectedProviderType && expectedEnvironment,
   )
   const hasBrokerIdentity = Boolean(
-    broker.providerInstanceId &&
-    broker.providerType &&
-    broker.environment,
+    broker.providerInstanceId && broker.providerType && broker.environment,
   )
-  const hasIdentity = hasExpectedIdentity || hasBrokerIdentity
-  if (!hasIdentity) {
+  if (!hasExpectedIdentity && !hasBrokerIdentity) {
     return undefined
   }
-  if (typeof providerInstanceId !== "string" || !providerInstanceId.trim()) {
-    throw new TypeError("Market-data broker must expose a providerInstanceId")
+  const providerInstanceId = resolveMarketDataIdentityField({
+    value: broker.providerInstanceId,
+    expectedValue: expectedProviderInstanceId,
+    field: "providerInstanceId",
+  })
+  const providerType = resolveMarketDataIdentityField({
+    value: broker.providerType,
+    expectedValue: expectedProviderType,
+    field: "providerType",
+  })
+  const environment = resolveMarketDataIdentityField({
+    value: broker.environment,
+    expectedValue: expectedEnvironment,
+    field: "environment",
+    allowedValues: ["live", "testnet"],
+  })
+  const accountId = broker.accountId ?? expectedAccountId ?? null
+  if (
+    expectedAccountId !== undefined &&
+    accountId !== expectedAccountId
+  ) {
+    throw new Error("Market-data route account identity does not match the selected provider")
   }
-  if (typeof providerType !== "string" || !providerType.trim()) {
-    throw new TypeError("Market-data broker must expose a providerType")
-  }
-  if (environment !== "live" && environment !== "testnet") {
-    throw new TypeError("Market-data broker must expose a LIVE or TESTNET environment")
-  }
-  if (expectedProviderInstanceId && providerInstanceId !== expectedProviderInstanceId) {
-    throw new Error(`Market-data route expected provider instance ${expectedProviderInstanceId}, received ${providerInstanceId}`)
-  }
-  if (expectedProviderType && providerType !== expectedProviderType) {
-    throw new Error(`Market-data route expected provider type ${expectedProviderType}, received ${providerType}`)
-  }
-  if (expectedEnvironment && environment !== expectedEnvironment) {
-    throw new Error(`Market-data route expected environment ${expectedEnvironment}, received ${environment}`)
+  if (accountId !== null && (typeof accountId !== "string" || !accountId.trim())) {
+    throw new TypeError("Market-data broker accountId must be a non-empty string or null")
   }
   return Object.freeze({
     providerInstanceId,
@@ -67,7 +85,7 @@ function resolveMarketDataSourceIdentity({
   })
 }
 
-function attachMarketDataSourceIdentity(event, sourceIdentity) {
+function attachMarketDataSourceIdentity({ event, sourceIdentity }) {
   if (!sourceIdentity) {
     return event
   }
@@ -81,6 +99,7 @@ function attachMarketDataSourceIdentity(event, sourceIdentity) {
     ...sourceIdentity,
   })
 }
+
 
 function logMarketPriceEvaluation({ logger,
   symbol,
@@ -143,7 +162,7 @@ reason: "STOPPING" } })
     intakeState.latestWebSocketBookTask = Promise.resolve()
       .then(() => processMarketBook({
         symbol,
-        bookTicker: attachMarketDataSourceIdentity(bookTicker, sourceIdentity),
+        bookTicker: attachMarketDataSourceIdentity({ event: bookTicker, sourceIdentity }),
       }))
       .then((processed) => {
         if (!processed.ok) {
@@ -184,7 +203,7 @@ function createMarketPriceHandler({
       return toResult({ data: { skipped: true,
 reason: "STOPPING" } })
     }
-    const sourcedPriceEvent = attachMarketDataSourceIdentity(priceEvent, sourceIdentity)
+    const sourcedPriceEvent = attachMarketDataSourceIdentity({ event: priceEvent, sourceIdentity })
     try {
       if (isMarketPriceFresh(createMarketPrice({ priceEvent: sourcedPriceEvent }))) {
         intakeState.hasFreshWebSocketPrice = true
@@ -418,8 +437,24 @@ async function subscribeToMarketPrice({
   })
 }
 
-function resolveMarketDataBroker({ context,
-  symbol }) {
+function assertConfiguredMarketDataSourceIdentity({
+  symbol,
+  sourceIdentity,
+  configuredIdentity,
+}) {
+  if (!configuredIdentity) {
+    return
+  }
+  if (
+    !sourceIdentity ||
+    sourceIdentity.accountId !== configuredIdentity.accountId ||
+    sourceIdentity.environment !== configuredIdentity.environment
+  ) {
+    throw new Error(`Market-data source identity for ${symbol} does not match its configured account/environment`)
+  }
+}
+
+function resolveMarketDataBroker({ context, symbol }) {
   const broker = typeof context.getMarketDataBroker === "function"
     ? context.getMarketDataBroker({ symbol })
     : context.broker
@@ -438,93 +473,104 @@ function resolveMarketDataBroker({ context,
     expectedAccountId: configuredIdentity?.accountId,
     expectedEnvironment: configuredIdentity?.environment ?? context.marketDataEnvironment,
   })
-  if (configuredIdentity && (
-    sourceIdentity?.accountId !== configuredIdentity.accountId ||
-    sourceIdentity?.environment !== configuredIdentity.environment
-  )) {
-    throw new Error(`Market-data source identity for ${symbol} does not match its configured account/environment`)
-  }
-  return { broker,
-  sourceIdentity }
+  assertConfiguredMarketDataSourceIdentity({
+    symbol,
+    sourceIdentity,
+    configuredIdentity,
+  })
+  return { broker, sourceIdentity }
 }
 
-async function subscribeToEnabledMarkets({ context,
-  reportPriceError }) {
-  const { pairs, tradingEnabled, bookSubscriptions } = context
+async function subscribeToEnabledMarket({
+  context,
+  symbol,
+  pairConfig,
+  reportPriceError,
+}) {
+  const intakeState = context.marketPriceIntake.get(symbol) ?? {}
+  intakeState.marketPriceSubscriptionReady = false
+  context.marketPriceIntake.set(symbol, intakeState)
+  let resolvedSource
+  let symbolError
+  try {
+    resolvedSource = resolveMarketDataBroker({ context, symbol })
+  } catch (error) {
+    symbolError = error
+  }
+  const providerInstanceId = resolvedSource?.sourceIdentity?.providerInstanceId
+    ?? context.marketDataSources?.[symbol]
+    ?? context.providerInstanceId
+  const brokerName = resolvedSource?.sourceIdentity?.providerType
+    ?? context.marketDataProviderTypes?.[symbol]
+    ?? context.brokerName
+  if (resolvedSource && context.tradingEnabled) {
+    try {
+      await subscribeToBookTicker({
+        broker: resolvedSource.broker,
+        providerInstanceId,
+        sourceIdentity: resolvedSource.sourceIdentity,
+        symbol,
+        logger: context.logger,
+        isStopped: context.isStopped,
+        processMarketBook: context.processMarketBook,
+        bookSubscriptions: context.bookSubscriptions,
+        marketPriceIntake: context.marketPriceIntake,
+      })
+    } catch (error) {
+      symbolError ??= error
+    }
+  }
+  if (resolvedSource) {
+    try {
+      await subscribeToMarketPrice({
+        ...context,
+        broker: resolvedSource.broker,
+        providerInstanceId,
+        sourceIdentity: resolvedSource.sourceIdentity,
+        brokerName,
+        symbol,
+        pairConfig,
+        reportPriceError,
+      })
+    } catch (error) {
+      symbolError ??= error
+    }
+  }
+  if (symbolError) {
+    context.logger.error?.({
+      message: "Market-data source subscription failed; execution route remains blocked",
+      symbol,
+      providerInstanceId: providerInstanceId ?? null,
+      broker: brokerName ?? null,
+      error: symbolError,
+    })
+  }
+  return symbolError
+}
+
+async function subscribeToEnabledMarkets({ context, reportPriceError }) {
   const failedSymbols = []
-  for (const [symbol, pairConfig] of Object.entries(pairs)) {
+  for (const [symbol, pairConfig] of Object.entries(context.pairs)) {
     if (!pairConfig.enabled) {
       continue
     }
-    const intakeState = context.marketPriceIntake.get(symbol) ?? {}
-    intakeState.marketPriceSubscriptionReady = false
-    context.marketPriceIntake.set(symbol, intakeState)
-    let marketDataBroker
-    let sourceIdentity
-    let symbolError
-    try {
-      const resolvedSource = resolveMarketDataBroker({ context,
-  symbol })
-      marketDataBroker = resolvedSource.broker
-      sourceIdentity = resolvedSource.sourceIdentity
-    } catch (error) {
-      symbolError = error
+    const symbolError = await subscribeToEnabledMarket({
+      context,
+      symbol,
+      pairConfig,
+      reportPriceError,
+    })
+    if (!symbolError) {
+      continue
     }
-    const providerInstanceId = sourceIdentity?.providerInstanceId
-      ?? context.marketDataSources?.[symbol]
-      ?? context.providerInstanceId
-    const brokerName = sourceIdentity?.providerType
-      ?? context.marketDataProviderTypes?.[symbol]
-      ?? context.brokerName
-    if (marketDataBroker && tradingEnabled) {
-      try {
-        await subscribeToBookTicker({
-          broker: marketDataBroker,
-          providerInstanceId,
-          sourceIdentity,
-          symbol,
-          logger: context.logger,
-          isStopped: context.isStopped,
-          processMarketBook: context.processMarketBook,
-          bookSubscriptions,
-          marketPriceIntake: context.marketPriceIntake,
-        })
-      } catch (error) {
-        symbolError ??= error
-      }
-    }
-    if (marketDataBroker) {
-      try {
-        await subscribeToMarketPrice({
-          ...context,
-          broker: marketDataBroker,
-          providerInstanceId,
-          sourceIdentity,
-          brokerName,
-          symbol,
-          pairConfig,
-          reportPriceError,
-        })
-      } catch (error) {
-        symbolError ??= error
-      }
-    }
-    if (symbolError) {
-      failedSymbols.push(symbol)
-      context.logger.error?.({
-        message: "Market-data source subscription failed; execution route remains blocked",
-        symbol,
-        providerInstanceId: providerInstanceId ?? null,
-        broker: brokerName ?? null,
-        error: symbolError,
-      })
-      if (!context.allowPartialMarketData) {
-        throw symbolError
-      }
+    failedSymbols.push(symbol)
+    if (!context.allowPartialMarketData) {
+      throw symbolError
     }
   }
   return failedSymbols
 }
+
 
 function assertAllMarketSubscriptions({ enabledSymbols,
   subscriptions,
@@ -555,10 +601,13 @@ async function getInitialMarketPriceEvent({ broker,
     throw new Error(`Unable to load initial market price for ${symbol}${details ? `: ${details}` : ""}`)
   }
   const priceEvent = attachMarketDataSourceIdentity({
-    symbol: result.data.symbol,
-    price: result.data.price,
-    timestamp: now(),
-  }, sourceIdentity)
+    event: {
+      symbol: result.data.symbol,
+      price: result.data.price,
+      timestamp: now(),
+    },
+    sourceIdentity,
+  })
   const marketPrice = createMarketPrice({ priceEvent })
   if (marketPrice.symbol !== symbol) {
     throw new Error(`Initial ticker price symbol does not match enabled market ${symbol}`)
