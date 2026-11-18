@@ -74,13 +74,6 @@ export function isHistoricalPath(path) {
   })
 }
 
-/**
- * Parse changed lines and new-file status from a unified Git diff.
- * Context lines are retained so nearby structural changes are checked too.
- *
- * @param {string} diffText
- * @returns {Map<string, {lines: Set<number>, isNewFile: boolean, removedHeading: boolean}>}
- */
 function createMarkdownDiffChange() {
   return {
     lines: new Set(),
@@ -122,7 +115,7 @@ function parseMarkdownDiffLine({ line, state }) {
     return
   }
 
-  if (!state.inHunk || line.startsWith("\\\\")) {
+  if (!state.inHunk || line.startsWith("\\")) {
     return
   }
 
@@ -140,7 +133,7 @@ function parseMarkdownDiffLine({ line, state }) {
 
   if (line.startsWith("-")) {
     const removedLine = line.slice(1)
-    if (/^ {0,3}#{1,6}(?:[ \\t]+|$)/.test(removedLine)) {
+    if (/^ {0,3}#{1,6}(?:[ \t]+|$)/.test(removedLine)) {
       state.currentChange.removedHeading = true
     }
   }
@@ -164,7 +157,7 @@ export function parseChangedMarkdownDiff(diffText) {
     newLineNumber: 0,
     inHunk: false,
   }
-  for (const line of diffText.split("\\n")) {
+  for (const line of diffText.split("\n")) {
     parseMarkdownDiffLine({
       line,
       state,
@@ -173,19 +166,6 @@ export function parseChangedMarkdownDiff(diffText) {
   return state.changes
 }
 
-/**
- * Analyze changed maintained Markdown documents without requiring unrelated
- * pre-existing findings in the same file to be reformatted.
- *
- * Formatting findings are enforced only on changed lines and two-line
- * context. Missing final newlines and CRLF are file-level checks. New files
- * are checked in full. Historical evidence is excluded, and GitHub templates
- * retain their heading conventions while all other style checks still apply.
- *
- * @param {{path: string, content: string}[]} documents
- * @param {Map<string, {lines: Set<number>, isNewFile: boolean, removedHeading?: boolean}>} changesByPath
- * @returns {{scannedFiles: number, skippedHistorical: number, violations: Record<string, Array<{path: string, count: number, lines: number[]}>>}}
- */
 function isTemplateHeadingExempt({ name, path }) {
   return HEADING_FINDINGS.has(name) && matchesAny({
     path,
@@ -204,7 +184,7 @@ function isChangedMarkdownFindingRelevant({ name, entry, change, document }) {
     return true
   }
   if (name === "missingH1") {
-    const lines = document.content.split(/\\r?\\n/)
+    const lines = document.content.split(/\r?\n/)
     const changedHeading = [...change.lines].some((lineNumber) =>
       /^ {0,3}#{1,6}(?:[ \\t]+|$)/.test(lines[lineNumber - 1] ?? ""),
     )
