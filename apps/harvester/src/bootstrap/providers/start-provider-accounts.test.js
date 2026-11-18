@@ -7,12 +7,14 @@ function createProvider({
   providerType,
   accountId,
   environment = "testnet",
+  credentialEnvironmentNames = {},
 }) {
   return {
     providerInstanceId,
     providerType,
     accountId,
     environment,
+    credentialEnvironmentNames,
     identity: {
       providerInstanceId,
       providerType,
@@ -46,17 +48,29 @@ test("starts one independent runtime per configured provider account", async () 
       providerInstanceId: "binance-one",
       providerType: "binance",
       accountId: "account-one",
+      credentialEnvironmentNames: {
+        apiKeyEnv: "PRIMARY_KEY",
+        apiSecretEnv: "PRIMARY_SECRET",
+      },
     }),
     createProvider({
       providerInstanceId: "binance-two",
       providerType: "binance",
       accountId: "account-two",
+      credentialEnvironmentNames: {
+        apiKeyEnv: "SECONDARY_KEY",
+        apiSecretEnv: "SECONDARY_SECRET",
+      },
     }),
     createProvider({
       providerInstanceId: "other-live",
       providerType: "other",
       accountId: "account-three",
       environment: "live",
+      credentialEnvironmentNames: {
+        apiKeyEnv: "OTHER_KEY",
+        apiSecretEnv: "OTHER_SECRET",
+      },
     }),
   ]
   const starts = []
@@ -83,13 +97,23 @@ test("starts one independent runtime per configured provider account", async () 
         tradingMode: input.env.TRADING_MODE,
         operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
         hasOperationalStateStore: input.operationalStateStore !== undefined,
+        credentialValues: [
+          input.env.PRIMARY_KEY,
+          input.env.SECONDARY_KEY,
+          input.env.OTHER_KEY,
+        ],
       })
       return runtimes[starts.filter((entry) => typeof entry === "object").length - 1]
     },
     appConfig,
     env: {
       TRADING_MODE: "testnet",
-      API_KEY: "not-copied",
+      PRIMARY_KEY: "primary-key",
+      PRIMARY_SECRET: "primary-secret",
+      SECONDARY_KEY: "secondary-key",
+      SECONDARY_SECRET: "secondary-secret",
+      OTHER_KEY: "other-key",
+      OTHER_SECRET: "other-secret",
     },
     eventPublisher: {},
     runtimeSessionId: "session",
@@ -113,6 +137,11 @@ test("starts one independent runtime per configured provider account", async () 
     true,
     false,
     false,
+  ])
+  assert.deepEqual(starts.filter((entry) => typeof entry === "object").map((entry) => entry.credentialValues), [
+    ["primary-key", undefined, undefined],
+    [undefined, "secondary-key", undefined],
+    [undefined, undefined, "other-key"],
   ])
   assert.equal(runtime.providerAccounts.length, 3)
   assert.deepEqual(runtime.subscriptions, ["BTCUSDT"])

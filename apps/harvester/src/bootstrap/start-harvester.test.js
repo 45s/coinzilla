@@ -6238,7 +6238,16 @@ test("starts independent Binance account trading runtimes in one production boot
   })
   const runtime = await startProviderAccounts({
     providers: configuredProviders,
-    start: startHarvester,
+    start: async (input) => {
+      if (input.providerIdentity.accountId === "account-primary") {
+        assert.equal(input.env.PRIMARY_API_KEY, "primary-key")
+        assert.equal(input.env.SECONDARY_API_KEY, undefined)
+      } else {
+        assert.equal(input.env.PRIMARY_API_KEY, undefined)
+        assert.equal(input.env.SECONDARY_API_KEY, "secondary-key")
+      }
+      return startHarvester(input)
+    },
     appConfig: configuredAppConfig,
     env,
     eventPublisher: testEventPublisher,
