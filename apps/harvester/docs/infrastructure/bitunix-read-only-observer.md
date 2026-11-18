@@ -1,6 +1,6 @@
 # Bitunix Spot read-only observer
 
-- **Status:** Implemented in [PR #1423](https://github.com/45s/coinzilla/pull/1423); merge and exact-head verification pending.
+- **Status:** Merged in [PR #1423](https://github.com/45s/coinzilla/pull/1423); available in develop and disabled by default.
 - **Owner:** Harvester.
 - **Parent architecture:** [multi-provider workstream #1339](https://github.com/45s/coinzilla/issues/1339).
 - **Trading-readiness blockers:** [Bitunix capability issue #1185](https://github.com/45s/coinzilla/issues/1185).
@@ -9,7 +9,7 @@
 
 Harvester will expose the existing Bitunix Spot read capabilities through a separate, opt-in read-only observer. This is not a Harvester BrokerPort, a provider-registry entry, an execution provider, or a strategy market-data source.
 
-The implementation is present on PR #1423. It is not part of develop until that PR merges.
+The implementation is merged into develop. The observer remains disabled unless explicitly enabled.
 
 ## Configuration
 
