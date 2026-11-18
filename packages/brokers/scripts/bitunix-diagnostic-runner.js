@@ -747,7 +747,7 @@ function recordWebSocketSkipped({ now, results, secrets }) {
   }
 }
 
-async function runWebSocketChecks({
+async async function runWebSocketChecks({
   env,
   requestTimeout,
   symbol,
