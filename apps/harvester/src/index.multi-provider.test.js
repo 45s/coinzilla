@@ -129,9 +129,9 @@ function createMainProviderAccountStarter({
 }
 
 function resolveMarketDataSourceProvider({
-        pair,
-        providerInstances,
-      }) {
+  pair,
+  providerInstances,
+}) {
   return providerInstances.find(({ environment }) =>
     pair.tradingEnvironment === "both" || pair.tradingEnvironment === environment)
 }
@@ -139,7 +139,10 @@ function resolveMarketDataSourceProvider({
 function createMarketDataTestConfiguration(providerInstances) {
   const configuredPairs = Object.fromEntries(
     Object.entries(defaultAppConfig.strategies.CG_coinGrabber.pairs).map(([symbol, pair]) => {
-      const sourceProvider = resolveMarketDataSourceProvider({ pair, providerInstances })
+      const sourceProvider = resolveMarketDataSourceProvider({
+        pair,
+        providerInstances,
+      })
       return [symbol, sourceProvider ? pair : {
         ...pair,
         enabled: false,
