@@ -501,8 +501,13 @@ function createFailedSecondAccountStarter({ startupError, stopped }) {
 
 function createFailedAccountLockReleaser({ cleanupError }) {
   return async (providerInstanceId) => providerInstanceId === "second"
-    ? { ok: false, errors: [cleanupError] }
-    : { ok: true }
+    ? {
+      ok: false,
+      errors: [cleanupError],
+    }
+    : {
+      ok: true,
+    }
 }
 
 test("reports failed-account lock cleanup errors without stopping healthy accounts", async () => {
@@ -529,8 +534,13 @@ test("reports failed-account lock cleanup errors without stopping healthy accoun
         accountId: "account-three",
       }),
     ],
-    start: createFailedSecondAccountStarter({ startupError, stopped }),
-    releaseProviderLock: createFailedAccountLockReleaser({ cleanupError }),
+    start: createFailedSecondAccountStarter({
+      startupError,
+      stopped,
+    }),
+    releaseProviderLock: createFailedAccountLockReleaser({
+      cleanupError,
+    }),
     appConfig,
     env: { TRADING_MODE: "testnet" },
   })
@@ -654,7 +664,10 @@ test("releases only accounts whose runtime shutdown is confirmed", async () => {
   const firstStopAttempts = { value: 0 }
   const runtime = await startProviderAccounts({
     providers,
-    start: createStopTrackingProviderStarter({ stopCalls, firstStopAttempts }),
+    start: createStopTrackingProviderStarter({
+      stopCalls,
+      firstStopAttempts,
+    }),
     releaseProviderLock: async (providerInstanceId) => {
       releasedLocks.push(providerInstanceId)
       return { ok: true }
