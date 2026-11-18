@@ -306,10 +306,12 @@ pnpm --filter @coinzilla/brokers diagnose:bitunix
 The explicit BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS=YES gate is required because Bitunix Spot has no documented TESTNET environment. The runner contacts the configured LIVE Spot endpoint and performs read-only requests only. Use an API key with account-read permission and **without** trading or withdrawal permission. Do not use production mutation-enabled keys for diagnostics.
 
 The runner checks these REST operations:
+
 - Public market catalog and latest price.
 - Private account balances.
 
 It then connects to the authenticated Spot WebSocket RPC endpoint and checks:
+
 - market.last_price, market.depth, and market.kline.
 - common.coin_pair.list, common.rate.list, and common.coin.coin_network.list.
 - user.account and user.info.
