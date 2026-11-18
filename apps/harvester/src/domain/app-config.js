@@ -460,7 +460,9 @@ function validateBrokerProviderInstances(config) {
 
 /** Validate Harvester's application-wide configuration, including strategy and notification settings. */
 function validateExecutionRouting(config) {
-  if (config.executionRouting === undefined) return
+  if (config.executionRouting === undefined) {
+    return
+  }
   const path = "executionRouting"
   requireRecord({ value: config.executionRouting,
   path })

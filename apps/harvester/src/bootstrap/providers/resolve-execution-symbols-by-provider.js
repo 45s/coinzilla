@@ -28,7 +28,7 @@ function assertProviderInstances(providers) {
   return providerById
 }
 
-function getStrategyPairs(appConfig, { allowMissing = false } = {}) {
+function getStrategyPairs({ appConfig, allowMissing = false } = {}) {
   const pairs = appConfig?.strategies?.[StrategyId.COIN_GRABBER]?.pairs
   if (allowMissing && pairs === undefined) {
     return {}
@@ -174,7 +174,8 @@ export function resolveExecutionSymbolsByProvider({ appConfig,
   providers } = {}) {
   const providerById = assertProviderInstances(providers)
   const isLegacySingleProvider = appConfig.executionRouting === undefined && providers.length === 1
-  const pairs = getStrategyPairs(appConfig, {
+  const pairs = getStrategyPairs({
+    appConfig,
     allowMissing: isLegacySingleProvider,
   })
   if (appConfig.executionRouting === undefined) {
