@@ -184,7 +184,15 @@ function createSqliteAdapter({
         }
         connection = openedConnection
       } catch (error) {
-        openedConnection.close()
+        try {
+          openedConnection.close()
+        } catch (closeError) {
+          throw new AggregateError(
+            [error, closeError],
+            "SQLite connection initialization failed and cleanup also failed",
+            { cause: error },
+          )
+        }
         throw error
       }
     },
