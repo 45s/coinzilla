@@ -69,7 +69,10 @@ function createExecutionContext({ options } = {}) {
   }
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
-  const providerIdentity = resolveProviderIdentity({ broker, onDurableSubmissionIntent })
+  const providerIdentity = resolveProviderIdentity({
+    broker,
+    onDurableSubmissionIntent,
+  })
   return {
     broker,
     providerIdentity,
