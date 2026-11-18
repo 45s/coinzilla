@@ -285,7 +285,10 @@ function mapExecutionFillFact({ data, orderIntents }) {
       context: "Execution fill",
     })
   }
-  return [{ name: EVENT.FILL_APPLIED, data: mapFill({ data }) }]
+  return [{
+    name: EVENT.FILL_APPLIED,
+    data: mapFill({ data }),
+  }]
 }
 
 function mapRecoveryCycleCompletedFact({ data }) {
