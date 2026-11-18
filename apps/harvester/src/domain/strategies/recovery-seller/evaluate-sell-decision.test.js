@@ -20,6 +20,74 @@ const market = new Market({
   quoteAsset,
 })
 
+const FILTER_DEFINITIONS = Object.freeze([
+  {
+    type: "PRICE_INCREMENT",
+    kind: "MONEY",
+    defaultAmount: "0.01",
+    asset: quoteAsset,
+  },
+  {
+    type: "QUANTITY_INCREMENT",
+    kind: "QUANTITY",
+    defaultAmount: "0.01",
+    asset: baseAsset,
+  },
+  {
+    type: "MIN_QUANTITY",
+    kind: "QUANTITY",
+    defaultAmount: "0.01",
+    asset: baseAsset,
+  },
+  {
+    type: "MIN_NOTIONAL",
+    kind: "MONEY",
+    defaultAmount: "5",
+    asset: quoteAsset,
+  },
+  {
+    type: "MAX_QUANTITY",
+    kind: "QUANTITY",
+    defaultAmount: "100",
+    asset: baseAsset,
+  },
+  {
+    type: "MAX_NOTIONAL",
+    kind: "MONEY",
+    defaultAmount: "1000",
+    asset: quoteAsset,
+  },
+  {
+    type: "MIN_PRICE",
+    kind: "MONEY",
+    defaultAmount: "0.01",
+    asset: quoteAsset,
+  },
+  {
+    type: "MAX_PRICE",
+    kind: "MONEY",
+    defaultAmount: "100",
+    asset: quoteAsset,
+  },
+])
+
+function createFilterConstraint({ type, kind, amount, asset }) {
+  const value = kind === "MONEY"
+    ? new Money({
+      amount,
+      asset,
+    })
+    : new Quantity({
+      amount,
+      asset,
+    })
+  return Object.freeze({
+    type,
+    status: "SUPPORTED",
+    value,
+  })
+}
+
 function createTradingRules({
   minimumPrice = "0.01",
   maximumPrice = "100",
@@ -30,77 +98,26 @@ function createTradingRules({
   missingFilter,
   supportedOrderTypes = ["LIMIT_MAKER", "LIMIT"],
 } = {}) {
+  const amounts = {
+    MIN_PRICE: minimumPrice,
+    MAX_PRICE: maximumPrice,
+    MIN_QUANTITY: minimumQuantity,
+    MAX_QUANTITY: maximumQuantity,
+    MIN_NOTIONAL: minimumNotional,
+    MAX_NOTIONAL: maximumNotional,
+  }
+  const constraints = FILTER_DEFINITIONS
+    .filter(({ type }) => type !== missingFilter)
+    .map((filter) => createFilterConstraint({
+      ...filter,
+      amount: amounts[filter.type] ?? filter.defaultAmount,
+    }))
   return {
     market,
     supportedOrderTypes,
     tradingRules: new TradingRules({
       market,
-      constraints: [
-        {
-          type: "PRICE_INCREMENT",
-          status: "SUPPORTED",
-          value: new Money({
-            amount: "0.01",
-            asset: quoteAsset,
-          }),
-        },
-        {
-          type: "QUANTITY_INCREMENT",
-          status: "SUPPORTED",
-          value: new Quantity({
-            amount: "0.01",
-            asset: baseAsset,
-          }),
-        },
-        {
-          type: "MIN_QUANTITY",
-          status: "SUPPORTED",
-          value: new Quantity({
-            amount: minimumQuantity,
-            asset: baseAsset,
-          }),
-        },
-        {
-          type: "MIN_NOTIONAL",
-          status: "SUPPORTED",
-          value: new Money({
-            amount: minimumNotional,
-            asset: quoteAsset,
-          }),
-        },
-        {
-          type: "MAX_QUANTITY",
-          status: "SUPPORTED",
-          value: new Quantity({
-            amount: maximumQuantity,
-            asset: baseAsset,
-          }),
-        },
-        {
-          type: "MAX_NOTIONAL",
-          status: "SUPPORTED",
-          value: new Money({
-            amount: maximumNotional,
-            asset: quoteAsset,
-          }),
-        },
-        {
-          type: "MIN_PRICE",
-          status: "SUPPORTED",
-          value: new Money({
-            amount: minimumPrice,
-            asset: quoteAsset,
-          }),
-        },
-        {
-          type: "MAX_PRICE",
-          status: "SUPPORTED",
-          value: new Money({
-            amount: maximumPrice,
-            asset: quoteAsset,
-          }),
-        },
-      ].filter(({ type }) => type !== missingFilter),
+      constraints,
     }),
   }
 }

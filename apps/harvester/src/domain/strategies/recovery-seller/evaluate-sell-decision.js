@@ -236,7 +236,7 @@ function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stop
   if (!marketMetadata.supportedOrderTypes.includes(feePolicy.orderType)) {
     return createStoppedResult({
       stopState,
-      explanation: `Exchange does not support required Recovery Seller ${feePolicy.orderType} SELL orders`",
+      explanation: `Exchange does not support required Recovery Seller ${feePolicy.orderType} SELL orders`,
     })
   }
   try {
