@@ -474,3 +474,15 @@ REST diagnostics use the existing BitunixRestClient.request() boundary. Public m
 This runner verifies connectivity and the currently implemented RPC/REST client behavior for the configured account. It does not resolve order client identity, conflicting order quantity units, fill denomination/completeness, source-timestamped account snapshots, account-wide open orders, exact price/quantity increments, private event streaming, TESTNET availability or safe mutation verification. [Issue #1185](https://github.com/45s/coinzilla/issues/1185) remains open and authoritative.
 
 The intended longer-term scope is full Bitunix broker and Harvester provider support, including order execution, once the blockers above and all additional order lifecycle/recovery gates have verified evidence. Current read-only status is temporary and fail-closed; this diagnostic tool does not itself enable trading.
+
+## 15. Follow-up: credential-free public-only diagnostics (2026-11-18)
+
+[PR #1439](https://github.com/45s/coinzilla/pull/1439) completes the missing-credential fallback identified while preparing the operator's local connectivity run:
+
+- The Bitunix REST client can be constructed without credentials for explicitly unsigned public GET requests. Any authenticated request without both credentials fails before network I/O with `BITUNIX_REST_AUTHENTICATION_REQUIRED`; credentials are never fabricated.
+- With both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` absent, or with only one present, the runner performs the public catalog and latest-price REST checks. It records private account and all authenticated Spot WebSocket RPC operations as skipped.
+- With both credentials present, the existing signed private REST and authenticated WebSocket RPC diagnostics remain enabled.
+- The CLI help and local environment example now reflect that the credential pair is optional for public-only diagnostics. The removed diagnostic configuration environment variables are not reintroduced.
+- The Bitunix Spot WebSocket client remains authenticated RPC-only. Public WebSocket RPC is not attempted without credentials, and no continuous stream/subscription capability is claimed.
+
+This follow-up adds offline regression tests; exact-head CI and an actual operator-local network run must be reported separately. No live Bitunix request or account-changing operation is implied by this source change.
