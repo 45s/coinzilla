@@ -21,6 +21,9 @@ export async function recordOrderCancellationIntent({ operationalStateStore, ord
       factType: "ORDER_CANCELLATION_INTENT",
       data: {
         clientOrderId: order.clientOrderId,
+        providerInstanceId: order.providerInstanceId,
+        providerType: order.providerType,
+        accountId: order.accountId,
         brokerOrderId: order.brokerOrderId,
         marketId: market.id,
         venue: market.venue,
