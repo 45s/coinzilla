@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtemp, rm, stat } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, stat } from "node:fs/promises"
 import { DatabaseSync } from "node:sqlite"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -63,7 +63,7 @@ test("SQLite restore reports post-publication cleanup failure without corrupting
   const artifactDirectory = join(directory, "artifact")
   const artifactFilename = join(artifactDirectory, "restored.sqlite")
   const destinationFilename = join(directory, "published.sqlite")
-  await import("node:fs/promises").then(({ mkdir }) => mkdir(artifactDirectory))
+  await mkdir(artifactDirectory)
   const artifactDatabase = new DatabaseSync(artifactFilename)
   artifactDatabase.exec("CREATE TABLE retained_records (id INTEGER PRIMARY KEY)")
   artifactDatabase.prepare("INSERT INTO retained_records (id) VALUES (?)").run(42)
