@@ -6,7 +6,7 @@ import { join } from "node:path"
 import test from "node:test"
 
 import { DatabaseProviderError } from "./domain/errors/database-errors.js"
-import { assertRestoreDestinationIsNew, publishRestoreArtifact, publishRestoredDatabase, restoreSqliteDatabase } from "./infrastructure/sqlite/sqlite-restore.js"
+import { assertRestoreDestinationIsNew, publishRestoreArtifact, publishRestoredDatabase, restoreSqliteDatabase } from "./infrastructure/sqlite/restore.js"
 
 test("SQLite restore preserves a source connection close failure and removes the staged artifact", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-restore-close-"))
