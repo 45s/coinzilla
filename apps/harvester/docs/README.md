@@ -22,7 +22,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
-- [Ordinary persistence and trading-session repository contract](persistence/README.md) — provider-neutral session history, lifecycle, environment isolation and migration boundaries
+- [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — source-verified persistence inventory, target architecture, repository contracts, TESTNET/LIVE isolation, operations and phased migration.
+- [Ordinary persistence and trading-session repository contract](persistence/README.md) — merged trading-session history implementation and lifecycle contract.
 - [ADR-0003: Multi-provider execution and market-data routing](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) — accepted target architecture; implementation is tracked by [#1339](https://github.com/45s/coinzilla/issues/1339).
 - [Multi-provider migration audit and implementation plan](../../../docs/architecture/multi-provider-migration-plan.md) — source-verified Harvester composition, order provenance, account isolation, recovery prerequisites and phased implementation plan.
 - [Operator control](operator-control/README.md) — Telegram Command Center commands, authorized read-only queries, confirmed controls and process-lifetime pause boundary
@@ -37,7 +38,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Portfolio domain](domain/portfolio.md)
 - [Broker port and adapter](infrastructure/broker-port-and-adapter.md)
 - [Bitunix Spot read-only observer](infrastructure/bitunix-read-only-observer.md) — opt-in read-only facade, configuration and source limitations; not a trading provider.
-- [Binance provider-instance identity and registry](infrastructure/provider-instance-registry.md) — explicit non-secret identity, capability validation and deterministic lifecycle; current bootstrap remains single-instance and unrouted.
+- [Binance provider-instance identity and registry](infrastructure/provider-instance-registry.md) — explicit non-secret identity, capability validation, deterministic lifecycle, and Phase 3 durable order/fill provenance (PR #1416 in review); current trading bootstrap remains single-instance and unrouted.
 - [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive material is exploratory discussion, not an approved executable contract
 - [Recovery Seller Domain Specification](domain/recovery-seller-domain-specification.md) — draft RS accounting, legacy authorization, independent profitability gates, and concurrent CG/RS invariants
 - [Recovery Seller Implementation Roadmap](domain/recovery-seller-implementation-roadmap.md) — six delivery phases from Conservative source audit to concurrent integration and offline lifecycle proof
@@ -58,6 +59,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Conservative session audit checklist](CONSERVATIVE_SESSION_AUDIT.md)
 
 ## Audit process
+
+- [Conservative Recovery Lifecycle Audit](CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md) — acceptance evidence, confirmed outcomes, and the remaining recovery-SELL filter-freshness gap for #1359/#1362.
 
 - [Harvester audit working rules](AUDIT_WORKING_RULES.md) — scope pointer to the repository-wide agent workflow and Harvester-specific audit boundaries.
 - [Harvester audit records index](audits/README.md) — historical evidence and investigation records.

@@ -218,6 +218,9 @@ test("preserves explicit strategy purpose through every submission-gate check wi
   }
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async ({ order }) => {
         brokerOrder = order
         return { ok: true,
@@ -261,6 +264,9 @@ test("returns a structured submission deferral reason and details without regist
   let brokerCalls = 0
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async () => {
         brokerCalls += 1
         return { ok: false }
@@ -301,6 +307,9 @@ bookTimestamp: 456 }
   let brokerCalls = 0
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async () => {
         brokerCalls += 1
         return { ok: false }
@@ -356,6 +365,9 @@ volatilityRatio: "2" }
   }
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async ({ order }) => ({
         ok: true,
         data: makeAcknowledgement({ ...order,
@@ -393,6 +405,9 @@ test("cleans up PENDING when the final submission gate returns an invalid struct
   let brokerCalls = 0
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async () => {
         brokerCalls += 1
         return { ok: false }
@@ -437,6 +452,9 @@ quantity: "100" },
   }
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async ({ order }) => {
         brokerCalls += 1
         return { ok: true,
@@ -507,6 +525,9 @@ test("preserves every stable submission-gate reason and its details without brok
     let deferredContext
     const execute = makeExecuteStrategyDecision({
       broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
         placeOrder: async () => {
           brokerCalls += 1
           return { ok: false }
@@ -544,6 +565,9 @@ test("durably records the exact order submission intent before calling the broke
   const calls = []
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async ({ order }) => {
         calls.push({ stage: "broker",
 clientOrderId: order.clientOrderId })
@@ -602,6 +626,9 @@ test("rechecks the shutdown gate after durable intent and before broker placemen
   let gateChecks = 0
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async () => {
         calls.push("broker")
         return {
@@ -660,6 +687,9 @@ test("does not call the broker and removes PENDING registration when durable ord
   const deferredRegistrations = []
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async ({ order }) => {
         brokerCalls += 1
         return { ok: true,
@@ -692,6 +722,9 @@ test("does not apply a broker acknowledgement when its durable outcome append fa
   const failureOutcomes = []
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async ({ order }) => ({ ok: true,
 data: makeAcknowledgement(order) }),
     },
@@ -724,6 +757,9 @@ test("persists a definite post-only rejection as REJECTED rather than an ambiguo
   })
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async () => ({ ok: false,
 errors: [postOnlyRejection] }),
     },
@@ -771,6 +807,9 @@ function createOwnershipRecordingExecutor({ observed, setBrokerOrder } = {}) {
   }
   return makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async ({ order }) => {
         setBrokerOrder(order)
         return {
@@ -843,6 +882,9 @@ test("propagates ownership when the post-registration submission gate throws", a
   let brokerCalls = 0
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async () => {
         brokerCalls += 1
         return {
@@ -891,6 +933,9 @@ test("propagates OrderOwnership to the order-validation failure callback", async
   let brokerCalls = 0
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async () => {
         brokerCalls += 1
         return {
@@ -992,6 +1037,9 @@ test("integrates the shared executor, RS OrderRegistry ownership and durable BUY
   let brokerOrder
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async ({ order }) => {
         brokerOrder = order
         return {
@@ -1050,6 +1098,9 @@ test("integrates an unknown fake-broker acknowledgement as an owned UNKNOWN RS o
   const workflow = createRecoverySellerAccountingWorkflow()
   const execute = makeExecuteStrategyDecision({
     broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
       placeOrder: async () => {
         throw new Error("offline fake broker socket closed")
       },
@@ -1076,4 +1127,78 @@ test("integrates an unknown fake-broker acknowledgement as an owned UNKNOWN RS o
     },
     "An unknown broker outcome must retain the original RS ownership for reconciliation.",
   )
+})
+
+
+test("persists selected provider provenance before broker I/O and carries it onto the acknowledgement", async () => {
+  const calls = []
+  let acknowledged
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+      placeOrder: async ({ order }) => {
+        calls.push("broker")
+        return {
+          ok: true,
+          data: makeAcknowledgement(order),
+        }
+      },
+    },
+    onPendingOrder: async ({ order }) => {
+      assert.equal(order.providerInstanceId, "binanceTestnet")
+      calls.push("pending")
+    },
+    onDurableSubmissionIntent: async ({ order }) => {
+      assert.deepEqual([order.providerInstanceId, order.providerType, order.accountId], [
+        "binanceTestnet", "binance", "binance-primary",
+      ])
+      calls.push("durable-intent")
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+    onDurableSubmissionOutcome: async ({ order, outcome }) => {
+      assert.deepEqual([order.providerInstanceId, order.providerType, order.accountId], [
+        "binanceTestnet", "binance", "binance-primary",
+      ])
+      assert.equal(outcome, "ACKNOWLEDGED")
+      calls.push("durable-outcome")
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+    onAcknowledgedOrder: async ({ order }) => { acknowledged = order },
+    onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
+  })
+
+  const result = await execute({
+    decision,
+    marketMetadata,
+  })
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.deepEqual(calls, ["pending", "durable-intent", "broker", "durable-outcome"])
+  assert.equal(acknowledged.providerInstanceId, "binanceTestnet")
+  assert.equal(acknowledged.providerType, "binance")
+  assert.equal(acknowledged.accountId, "binance-primary")
+})
+
+test("fails closed before registration or broker I/O when durable provenance metadata is missing", () => {
+  assert.throws(() => makeExecuteStrategyDecision({
+    broker: { placeOrder: async () => ({ ok: false }) },
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => {},
+    onDurableSubmissionIntent: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    onDurableSubmissionOutcome: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+  }), /providerInstanceId, providerType and accountId/)
 })
