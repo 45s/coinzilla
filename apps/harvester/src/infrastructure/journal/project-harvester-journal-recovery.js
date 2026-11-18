@@ -164,81 +164,90 @@ function assertSameIntent({ current, next }) {
   }
 }
 
-function requireFill({ data }) {
-  const fillId = requireString({ value: data.fillId,
-field: "fillId" })
-  const tradeId = requireString({ value: data.tradeId,
-field: "tradeId" })
-  const brokerOrderId = requireString({ value: data.brokerOrderId,
-field: "brokerOrderId" })
+function requireFillIdentity({ data }) {
+  const fillId = requireString({ value: data.fillId, field: "fillId" })
+  const tradeId = requireString({ value: data.tradeId, field: "tradeId" })
+  const brokerOrderId = requireString({ value: data.brokerOrderId, field: "brokerOrderId" })
   const clientOrderId = data.clientOrderId === undefined
     ? undefined
-    : requireString({ value: data.clientOrderId,
-field: "clientOrderId" })
+    : requireString({ value: data.clientOrderId, field: "clientOrderId" })
   const providerFields = ["providerInstanceId", "providerType", "accountId"]
   const providerValues = providerFields.map((field) => data[field])
-  if (providerValues.some((value) => value !== undefined) &&
-      (providerValues.some((value) => typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) || clientOrderId === undefined)) {
+  const hasProviderIdentity = providerValues.some((value) => value !== undefined)
+  if (hasProviderIdentity && (
+    providerValues.some((value) => typeof value !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) ||
+    clientOrderId === undefined
+  )) {
     throw new TypeError("Journal fill provenance requires all three provider identifiers and clientOrderId")
   }
-  const providerIdentity = providerValues.every((value) => value === undefined) ? {} : {
+  const providerIdentity = hasProviderIdentity ? {
     providerInstanceId: data.providerInstanceId,
     providerType: data.providerType,
     accountId: data.accountId,
-  }
-  const symbol = requireString({ value: data.symbol,
-field: "symbol" })
-  if (!ORDER_SIDES.has(data.side)) {throw new TypeError("fill side must be BUY or SELL")}
-  const price = requireDecimal({ value: data.price,
-field: "price",
-positive: true })
-  const quantity = requireDecimal({ value: data.quantity,
-field: "quantity",
-positive: true })
-  const quoteQuantity = requireDecimal({ value: data.quoteQuantity,
-field: "quoteQuantity",
-positive: true })
-  const liquidityRole = requireString({ value: data.liquidityRole,
-field: "liquidityRole" })
-  const commissionStatus = requireString({ value: data.commissionStatus,
-field: "commissionStatus" })
-  if (!Array.isArray(data.commissions)) {throw new TypeError("fill commissions must be an array")}
-  const commissions = data.commissions.map((...args) => {
-    const [commission, index] = args
-    return ({
-    amount: requireDecimal({ value: commission?.amount,
-field: `commissions[${  index  }].amount` }),
-    assetId: requireString({ value: commission?.assetId,
-field: `commissions[${  index  }].assetId` }),
-    asset: requireString({ value: commission?.asset,
-field: `commissions[${  index  }].asset` }),
-    ...(commission?.quoteValue === undefined ? {} : {
-      quoteValue: {
-        amount: requireDecimal({
-          value: commission.quoteValue?.amount,
-          field: `commissions[${  index  }].quoteValue.amount`,
-        }),
-        assetId: requireString({
-          value: commission.quoteValue?.assetId,
-          field: `commissions[${  index  }].quoteValue.assetId`,
-        }),
-        asset: requireString({
-          value: commission.quoteValue?.asset,
-          field: `commissions[${  index  }].quoteValue.asset`,
-        }),
-      },
-    }),
-    })
-  })
-  if (data.duplicate !== undefined && typeof data.duplicate !== "boolean") {
-    throw new TypeError("fill duplicate marker must be a boolean")
-  }
+  } : {}
   return {
     fillId,
     tradeId,
     brokerOrderId,
     ...(clientOrderId === undefined ? {} : { clientOrderId }),
     ...providerIdentity,
+  }
+}
+
+function requireFillCommissions({ data }) {
+  if (!Array.isArray(data.commissions)) {
+    throw new TypeError("fill commissions must be an array")
+  }
+  return data.commissions.map((commission, index) => ({
+    amount: requireDecimal({
+      value: commission?.amount,
+      field: `commissions[${index}].amount`,
+    }),
+    assetId: requireString({
+      value: commission?.assetId,
+      field: `commissions[${index}].assetId`,
+    }),
+    asset: requireString({
+      value: commission?.asset,
+      field: `commissions[${index}].asset`,
+    }),
+    ...(commission?.quoteValue === undefined ? {} : {
+      quoteValue: {
+        amount: requireDecimal({
+          value: commission.quoteValue?.amount,
+          field: `commissions[${index}].quoteValue.amount`,
+        }),
+        assetId: requireString({
+          value: commission.quoteValue?.assetId,
+          field: `commissions[${index}].quoteValue.assetId`,
+        }),
+        asset: requireString({
+          value: commission.quoteValue?.asset,
+          field: `commissions[${index}].quoteValue.asset`,
+        }),
+      },
+    }),
+  }))
+}
+
+function requireFill({ data }) {
+  const identity = requireFillIdentity({ data })
+  const symbol = requireString({ value: data.symbol, field: "symbol" })
+  if (!ORDER_SIDES.has(data.side)) {
+    throw new TypeError("fill side must be BUY or SELL")
+  }
+  const price = requireDecimal({ value: data.price, field: "price", positive: true })
+  const quantity = requireDecimal({ value: data.quantity, field: "quantity", positive: true })
+  const quoteQuantity = requireDecimal({ value: data.quoteQuantity, field: "quoteQuantity", positive: true })
+  const liquidityRole = requireString({ value: data.liquidityRole, field: "liquidityRole" })
+  const commissionStatus = requireString({ value: data.commissionStatus, field: "commissionStatus" })
+  const commissions = requireFillCommissions({ data })
+  if (data.duplicate !== undefined && typeof data.duplicate !== "boolean") {
+    throw new TypeError("fill duplicate marker must be a boolean")
+  }
+  return {
+    ...identity,
     symbol,
     side: data.side,
     price,
