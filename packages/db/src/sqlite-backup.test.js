@@ -18,6 +18,14 @@ function assertSqliteTransactionRejectedDuringClose(database) {
   )
 }
 
+function assertSqliteSqlRejectedDuringClose(database) {
+  assert.throws(
+    () => database.exec("SELECT 1"),
+    /closing/,
+    "New SQL statements must be rejected after SQLite shutdown has begun",
+  )
+}
+
 async function readDatabaseValue({ filename, query, parameters = [] }) {
   const database = createSqliteDatabase({ filename })
   await database.connect()
@@ -438,11 +446,17 @@ function startBackupAndCloseOnProgress({ database, backupFilename, rejectedBacku
       if (!closePromise) {
         closePromise = database.close()
         assert.equal(
+          database.close(),
+          closePromise,
+          "Concurrent close calls must share the active shutdown operation",
+        )
+        assert.equal(
           database.state,
           "closing",
           "The low-level facade must expose its closing state while an active backup drains",
         )
         assertSqliteTransactionRejectedDuringClose(database)
+        assertSqliteSqlRejectedDuringClose(database)
         backupAfterClosePromise = assert.rejects(
           database.backup({
             destination: rejectedBackupFilename,
