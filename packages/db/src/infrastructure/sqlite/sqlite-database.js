@@ -28,7 +28,7 @@ function isAsyncFunction(callback) {
   return callback.constructor?.name === "AsyncFunction"
 }
 
-function createGuardedIterator({ iterator, assertActive }) {
+export function createGuardedIterator({ iterator, assertActive }) {
   return Object.freeze({
     next(...args) {
       assertActive()
