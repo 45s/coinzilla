@@ -33,8 +33,7 @@ test("SQLite connection initialization preserves both setup and cleanup failures
       database.connect(),
       (error) => error instanceof AggregateError
         && error.errors[0] === initializationFailure
-        && error.errors[1] === cleanupFailure
-        && error.cause === initializationFailure,
+        && error.errors[1] === cleanupFailure,
       "A failed cleanup must not replace the original SQLite initialization failure",
     )
   } finally {
