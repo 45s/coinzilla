@@ -22,10 +22,13 @@ function validateOptionalPrecisionCount({ value, field }) {
     return
   }
 
-  const validNumber = typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+  const validNumber = typeof value === "number" && Number.isSafeInteger(value) &&
+    value >= 0
   const validString = typeof value === "string" &&
     /^\d+$/.test(value) &&
-    Number.isSafeInteger(Number(value))
+    Number.isSafeInteger(
+      Number(value),
+    )
   if (!validNumber && !validString) {
     throw new TypeError(`Bitunix Spot ${field} must be a non-negative safe integer or digit string`)
   }
