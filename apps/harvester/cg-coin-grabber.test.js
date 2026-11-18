@@ -4,10 +4,22 @@ import { tradingPairs } from "./cg-coin-grabber.js"
 import { TRADING_ENVIRONMENTS } from "./src/domain/trading-environment.js"
 
 const livePairFeeRates = {
-  ADAFDUSD: { makerPercent: 0, takerPercent: 0.075 },
-  LINKFDUSD: { makerPercent: 0, takerPercent: 0.075 },
-  WLDFDUSD: { makerPercent: 0, takerPercent: 0.075 },
-  ZROFDUSD: { makerPercent: 0, takerPercent: 0.1 },
+  ADAFDUSD: {
+    makerPercent: 0,
+    takerPercent: 0.075,
+  },
+  LINKFDUSD: {
+    makerPercent: 0,
+    takerPercent: 0.075,
+  },
+  WLDFDUSD: {
+    makerPercent: 0,
+    takerPercent: 0.075,
+  },
+  ZROFDUSD: {
+    makerPercent: 0,
+    takerPercent: 0.1,
+  },
 }
 
 test("every configured TESTNET pair uses 0.1% maker and taker commission", () => {
