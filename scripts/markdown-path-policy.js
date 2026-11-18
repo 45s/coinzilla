@@ -29,10 +29,16 @@ export function classifyMarkdownPath(path) {
   if (typeof path !== "string" || path.length === 0) {
     return "unknown"
   }
-  if (matchesAny({ path, patterns: HISTORICAL_PATHS })) {
+  if (matchesAny({
+    path,
+    patterns: HISTORICAL_PATHS,
+  })) {
     return "historical"
   }
-  if (matchesAny({ path, patterns: TEMPLATE_HEADING_EXEMPTIONS })) {
+  if (matchesAny({
+    path,
+    patterns: TEMPLATE_HEADING_EXEMPTIONS,
+  })) {
     return "github-template"
   }
   return "maintained"
