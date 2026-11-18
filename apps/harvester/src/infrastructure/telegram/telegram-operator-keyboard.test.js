@@ -283,17 +283,17 @@ test("Pause opens only eligible pause choices and never pauses a market without 
               makeMarket({
                 symbol: "LINKUSDT",
                 enabled: true,
-                operatorPaused: false,
+                operatorBuysPaused: false,
               }),
               makeMarket({
                 symbol: "BTCUSDT",
                 enabled: true,
-                operatorPaused: true,
+                operatorBuysPaused: true,
               }),
               makeMarket({
                 symbol: "ADAUSDT",
                 enabled: false,
-                operatorPaused: false,
+                operatorBuysPaused: false,
               }),
             ],
           },
@@ -312,8 +312,8 @@ test("Pause opens only eligible pause choices and never pauses a market without 
   const buttons = sentMessages[0].reply_markup.inline_keyboard.flat()
   assert.deepEqual(
     buttons.filter((button) => button.callback_data?.startsWith("cc:ask:")).map((button) => button.callback_data),
-    ["cc:ask:PAUSE:LINKUSDT"],
-    "The Pause page must offer confirmation requests only for enabled markets that are not already operator-paused.",
+    ["cc:ask:PAUSE:LINKUSDT", "cc:ask:PAUSE:BTCUSDT"],
+    "The Pause page must offer enabled markets whose BUY gate is not already active, regardless of the legacy strategy-pause flag.",
   )
 })
 
@@ -339,17 +339,17 @@ test("Resume opens only currently operator-paused markets and never resumes befo
               makeMarket({
                 symbol: "LINKUSDT",
                 enabled: true,
-                operatorPaused: false,
+                operatorBuysPaused: false,
               }),
               makeMarket({
                 symbol: "BTCUSDT",
                 enabled: true,
-                operatorPaused: true,
+                operatorBuysPaused: true,
               }),
               makeMarket({
                 symbol: "ADAUSDT",
                 enabled: false,
-                operatorPaused: true,
+                operatorBuysPaused: true,
               }),
             ],
           },
