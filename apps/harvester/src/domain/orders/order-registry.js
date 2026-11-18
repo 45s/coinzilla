@@ -459,12 +459,19 @@ next: unknownOrder })
 }
 
 
-function isDuplicateAcknowledgement({ current, order }) {
+function isDuplicateAcknowledgement({
+    current,
+    order,
+  }) {
   return current.brokerOrderId === order.brokerOrderId &&
     (current.status === "UNKNOWN" || current.brokerOrderId !== undefined)
 }
 
-function validateAcknowledgementCanAttach({ current, orders, order }) {
+function validateAcknowledgementCanAttach({
+    current,
+    orders,
+    order,
+  }) {
   if (!["PENDING", "UNKNOWN"].includes(current.status)) {
     throw new Error("Only a PENDING or unresolved UNKNOWN order can receive its acknowledged brokerOrderId")
   }
@@ -484,7 +491,10 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
   const index = orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
   if (index < 0) { throw new Error("Acknowledged order is not registered by clientOrderId") }
   const current = orders[index]
-  validateProviderIdentityUnchanged({ current, next: order })
+  validateProviderIdentityUnchanged({
+    current,
+    next: order,
+  })
   if (!sameOrderIntent({
     current,
     next: order,
