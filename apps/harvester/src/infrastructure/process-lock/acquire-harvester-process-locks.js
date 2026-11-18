@@ -185,9 +185,17 @@ async function acquireScopedLocks({
     lockFileName: `.harvester-trading-${environmentFingerprint}.lock`,
   })
   if (journalLock?.ok !== true || typeof journalLock.release !== "function") {
-    return handleJournalLockFailure({ journalLock, hostLock })
+    return handleJournalLockFailure({
+      journalLock,
+      hostLock,
+    })
   }
-  return toResult({ data: { hostLock, journalLock } })
+  return toResult({
+    data: {
+      hostLock,
+      journalLock,
+    },
+  })
 }
 
 export async function acquireHarvesterProcessLocks({
@@ -239,7 +247,10 @@ export async function acquireHarvesterProcessLocks({
         tradingMode,
         environmentFingerprint,
       }),
-      release: createLockRelease({ journalLock, hostLock }),
+      release: createLockRelease({
+          journalLock,
+          hostLock,
+        }),
     })
   } catch (error) {
     return toResult({ error })
