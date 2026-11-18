@@ -175,6 +175,18 @@ data: {} },
         apiSecret: "never persist",
       },
     },
+    {
+      factId: "execution-fill-applied:partial-provider",
+      factType: "EXECUTION_FILL_APPLIED",
+      data: {
+        fillId: "binance:DOGEUSDT:trade-partial", tradeId: "trade-partial",
+        brokerOrderId: "broker-partial", clientOrderId: "client-partial",
+        providerInstanceId: "binanceTestnet", marketId: "binance:DOGEUSDT",
+        venue: "binance", symbol: "DOGEUSDT", baseAssetId: "binance:DOGE", quoteAssetId: "binance:USDT",
+        side: "BUY", price: "0.1", quantity: "1", quoteQuantity: "0.1",
+        liquidityRole: "MAKER", executedAt: null, commissionStatus: "COMPLETE", commissions: [],
+      },
+    },
   ]
 
   for (const fact of malformedFacts) {
