@@ -90,7 +90,3 @@ Historical reports are snapshots, not current implementation authority. Use thei
 - Every new or moved document must be added to the appropriate local index.
 - Current behavior belongs in the canonical specification, architecture or runbook; task status belongs in the roadmap and GitHub Issues/PRs.
 - Preserve historical evidence, timestamps, source commit SHAs and uncertainty during migrations.
-
-## Additional infrastructure guides
-
-- [Multi-provider execution routing](./infrastructure/execution-routing.md)
