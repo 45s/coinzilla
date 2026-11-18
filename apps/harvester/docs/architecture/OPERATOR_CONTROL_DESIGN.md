@@ -138,15 +138,16 @@ A pause transition commits its fact from inside the engine's serialized transiti
 sequenceDiagram
   participant T as Inbound adapter
   participant O as HarvesterOperator
-  participant U as pauseMarket use case
+  participant U as market BUY pause use case
   participant E as Conservative engine
   participant F as Operational State Store port
   T->>O: pauseMarket(actor, requestId, symbol)
   O->>U: authorize trusted actor
-  U->>E: pauseMarket(symbol, beforeApply)
-  E->>F: append OPERATOR_MARKET_PAUSED
+  U->>E: pauseBuys(symbol, beforeApply)
+  E->>F: append OPERATOR_MARKET_BUYS_PAUSED
   F-->>E: committed durable fact
-  E->>E: add operatorPausedMarkets
+  E->>E: activate market BUY gate
+  E->>E: cancel owned BUYs and reconcile racing fills
   E-->>U: structured result
   U-->>O: application result
   O-->>T: transport response
@@ -182,7 +183,7 @@ The application writes through the Operational State Store port. It does not use
 ```js
 {
   factId: "operator-control:telegram:1001",
-  factType: "OPERATOR_MARKET_PAUSED",
+  factType: "OPERATOR_MARKET_BUYS_PAUSED",
   data: {
     requestId: "telegram:1001",
     actorId: "telegram-user:12345",
@@ -256,23 +257,24 @@ A successful emergency BUY pause additionally reports the number of confirmed ow
 
 If cancellation cannot be confirmed, the result uses `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; the gate remains active and the Telegram adapter warns that cancellation is unresolved.
 
-## Existing market pause semantics
+## Market-scoped BUY pause semantics
 
-The existing `pauseMarket` / Telegram `/pause SYMBOL` control is market-scoped and separate from safety/recovery pause ownership.
+The public `pauseMarket` / `resumeMarket` facade methods, Telegram `/pause SYMBOL` / `/resume SYMBOL` commands, and confirmed keyboard Pause/Resume actions all use the same market-scoped BUY-only control as `pauseBuys({ symbol })` / `resumeBuys({ symbol })`. The facade names remain stable for transport compatibility; they no longer invoke the legacy non-canceling engine market-pause operation.
 
-- Block new strategy BUY intents for the selected market.
-- Suppress trailing-BUY replacement/repricing for that market.
-- Allow Conservative recovery SELL decisions.
+- Activate the market BUY gate inside the serialized engine transition before starting cancellation.
+- Block new BUY decisions, trailing-BUY replacement/repricing and final BUY submissions for the selected market.
+- Cancel active BUY orders owned by the current process through the existing cancellation/reconciliation workflow.
+- Reconcile and account cancellation-racing fills before reporting successful completion.
+- Allow Conservative recovery SELL decisions and submissions.
 - Continue market prices, broker/user-data intake, fill accounting and reconciliation.
-- Leave all existing exchange orders untouched. A resting BUY may still fill after this pause; its fill is accounted and recovery SELL behavior remains available.
-- Do not cancel, adopt or modify orders, and do not mutate broker or OrderRegistry state outside the existing engine workflows.
-- Do not affect unrelated markets.
+- Do not cancel, adopt or modify startup-snapshot, manual, external or prior-process orders under ADR-0004.
+- Do not affect unrelated markets. A global BUY pause remains an independent scope.
 
-This is not an exchange kill switch. The existing `/pause SYMBOL` response must continue to state that already-open orders remain open and may still fill.
+A successful response requires no current-process-owned active BUY to remain in the requested market scope. If cancellation is unresolved, the BUY gate remains active and the operation returns `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; the operator must inspect `/orders` and diagnostics. This is not an exchange-wide kill switch. The pause is process-local and is not restored after restart.
 
-## Emergency BUY pause semantics
+## Global emergency BUY pause semantics
 
-The separate emergency BUY controls are exposed by the application facade as `pauseAllBuys()`, `resumeAllBuys()`, `pauseBuys({ symbol })`, and `resumeBuys({ symbol })`.
+The global emergency BUY controls remain exposed as `pauseAllBuys()` and `resumeAllBuys()`. The market-scoped `pauseBuys({ symbol })` / `resumeBuys({ symbol })` methods remain available as compatibility application aliases for the public `pauseMarket` / `resumeMarket` facade methods.
 
 - Global pause blocks every new BUY decision, BUY replacement/repricing and final BUY submission across configured markets.
 - Market pause applies the same BUY-only gate to one configured market.
@@ -351,7 +353,7 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 | Unknown configured market | Engine rejects before applying state. |
 | Durable fact write failed or uncertain (when a store is supplied) | No state transition and no successful acknowledgement. |
 | Process restart after a pause | The initial scope does not replay operator facts. The process starts without the operator pause; the operator must issue `/pause <SYMBOL>` again if needed. |
-| Existing BUY fills after `/pause SYMBOL` | Apply the fill normally; continue risk-reducing recovery SELL behavior; suppress new BUY intents. |
+| Existing BUY fills during `/pause SYMBOL` cancellation | Reconcile and account the fill normally; keep the BUY gate active; continue recovery SELL behavior; suppress new BUY intents. |
 | Emergency BUY cancellation is unresolved | Keep the requested BUY gate active; return `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; tell the operator to inspect `/orders` and diagnostics. Never claim the emergency pause fully canceled all owned BUYs. |
 | Global/market BUY pauses overlap | Effective BUY gate remains active until both applicable scopes are resumed. |
 | Resume while safety/recovery blocker exists | Reject before writing a resume fact; preserve the blocker. |
