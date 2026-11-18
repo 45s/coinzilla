@@ -204,7 +204,7 @@ function validateTimestamps({
   }
 }
 
-function normalizeCanonicalOrder({
+function resolveCanonicalOrderDerivedValues({
   clientOrderId,
   brokerOrderId,
   providerInstanceId,
@@ -216,17 +216,21 @@ function normalizeCanonicalOrder({
   limitPrice,
   originalQuantity,
   executedQuantity,
-  status = "PENDING",
+  status,
   createdAt,
   acknowledgedAt,
   updatedAt,
   completedAt,
-} = {}) {
+}) {
   validateOrderIdentity({
     clientOrderId,
     brokerOrderId,
   })
-  validateProviderProvenance({ providerInstanceId, providerType, accountId })
+  validateProviderProvenance({
+    providerInstanceId,
+    providerType,
+    accountId,
+  })
   validateOrderType({
     market,
     side,
@@ -250,6 +254,48 @@ function normalizeCanonicalOrder({
     remainingQuantity,
   })
   validateTimestamps({
+    createdAt,
+    acknowledgedAt,
+    updatedAt,
+    completedAt,
+  })
+  return {
+    normalizedLimitPrice,
+    remainingQuantity,
+  }
+}
+
+function normalizeCanonicalOrder({
+  clientOrderId,
+  brokerOrderId,
+  providerInstanceId,
+  providerType,
+  accountId,
+  market,
+  side,
+  type,
+  limitPrice,
+  originalQuantity,
+  executedQuantity,
+  status = "PENDING",
+  createdAt,
+  acknowledgedAt,
+  updatedAt,
+  completedAt,
+} = {}) {
+  const { normalizedLimitPrice, remainingQuantity } = resolveCanonicalOrderDerivedValues({
+    clientOrderId,
+    brokerOrderId,
+    providerInstanceId,
+    providerType,
+    accountId,
+    market,
+    side,
+    type,
+    limitPrice,
+    originalQuantity,
+    executedQuantity,
+    status,
     createdAt,
     acknowledgedAt,
     updatedAt,
