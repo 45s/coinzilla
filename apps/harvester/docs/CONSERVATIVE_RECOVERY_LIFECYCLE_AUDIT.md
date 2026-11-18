@@ -72,6 +72,14 @@ PR #1411 updates all configured TESTNET pair entries to `makerPercent: 0.1` and 
 
 This is the explicit static configuration correction requested by the operator. It is not a change to the general fee policy, does not establish exchange-side fee evidence, and does not retroactively recalculate historical fills. Every new execution must continue to use the actual commission amount and asset returned by the exchange.
 
+## Remaining acceptance gap — recovery SELL filter freshness
+
+A source audit recorded in the [PR #1411 discussion](https://github.com/45s/coinzilla/pull/1411) confirmed that recovery SELL planning and dust completion can use the process-start market-filter snapshot. `refreshTrailingBuyMarketMetadata()` explicitly calls `broker.getSymbolFilters()`, but that refresh is scoped to trailing-BUY replacement. The latest transition evaluator obtains metadata through `getCurrentMarketMetadata()` and can reach recovery SELL planning without first requiring a fresh filter read.
+
+The replay and dust-classification tests prove the accounting outcome and internal consistency of supplied filter evidence; they do **not** prove that the evidence is current when a recovery SELL is planned or completion is evaluated. This remains an acceptance gap for #1359/#1362. Required follow-up: add a deterministic RED regression for stale recovery-SELL filters, then implement a bounded refresh that fails closed if current symbol filters cannot be obtained or validated. Do not weaken existing exchange-filter, minimum-profit, reconciliation, durability, readiness, or shutdown gates.
+
+PR #1411's merged scope is complete: TESTNET pair configuration is aligned to 0.1% maker/taker while LIVE entries remain unchanged; the offline ADA replay and duplicate-terminal-fill evidence are implemented; historical execution facts are preserved. The PR did not implement the recovery-SELL filter refresh and must not be described as doing so.
+
 ## Verification and handoff
 
 - [ ] PR #1411 merged to `develop`.
