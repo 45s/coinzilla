@@ -42,7 +42,7 @@ No order is retried or redirected after an uncertain mutation outcome. A market-
 
 Before connecting a provider, Harvester verifies the canonical Broker capability declaration for every operation required by the account and its market-data routes. Only SUPPORTED satisfies a required capability; UNSUPPORTED and UNKNOWN block startup.
 
-The production provider-factory map currently registers Binance only. Bitunix Spot is not a configured execution provider while issue #1185 remains open. The optional Bitunix observer is a separate read-only interface and must not be added to brokers.instances or executionRouting.
+The production provider-factory map currently registers Binance only. Bitunix Spot is not a configured Harvester provider while issue #1185 remains open. Do not introduce a partial observer-only runtime or route Bitunix around the standard provider contract. Once #1185 is resolved, Bitunix must enter through the complete provider-instance, BrokerPort, capability, account-lifecycle, and routing integration.
 
 ## Backward compatibility
 
