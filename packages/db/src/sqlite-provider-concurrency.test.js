@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 
-import { createDatabase, createSqliteProvider } from "./index.js"
+import { DatabaseProviderError, createDatabase, createSqliteProvider } from "./index.js"
 
 async function createConcurrencyFixture() {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-concurrency-"))
@@ -87,6 +87,38 @@ test("SQLite reads remain available while another connection holds a write reser
 
   try {
     await verifyReadsDuringWriteReservation(fixture)
+  } finally {
+    await closeConcurrencyFixture(fixture)
+  }
+})
+
+
+test("SQLite surfaces a busy writer error when the configured timeout is zero", async () => {
+  const fixture = await createConcurrencyFixture()
+
+  try {
+    fixture.competingConnection.exec("BEGIN IMMEDIATE")
+
+    await assert.rejects(
+      fixture.database.create({
+        collection: "people",
+        record: {
+          id: "blocked-write",
+          name: "Must not commit",
+        },
+      }),
+      (error) => error instanceof DatabaseProviderError
+        && error.cause.code.startsWith("SQLITE_BUSY"),
+      "A writer blocked beyond a zero-millisecond busy timeout must surface the native SQLite busy error",
+    )
+    assert.equal(
+      await fixture.database.readOne({
+        collection: "people",
+        id: "blocked-write",
+      }),
+      null,
+      "A write rejected by SQLite lock contention must not leave a partial record",
+    )
   } finally {
     await closeConcurrencyFixture(fixture)
   }
