@@ -1,5 +1,6 @@
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
+import { assertProviderIdentityMatches, requireProviderIdentity } from "../domain/orders/provider-provenance.js"
 
 const OUTCOMES = new Set(["CANCELED", "FILLED", "REJECTED", "EXPIRED", "NOT_CANCELED", "NOT_SENT", "OUTCOME_UNKNOWN", "UNCONFIRMED", "UNKNOWN"])
 const CANONICAL_OUTCOMES = new Set(["CANCELED", "FILLED", "REJECTED", "EXPIRED", "NOT_CANCELED"])
@@ -10,12 +11,15 @@ function validateCanonicalCancellationResponse({ order, canceledOrder, outcome }
       canceledOrder.clientOrderId !== order.clientOrderId ||
       canceledOrder.brokerOrderId !== order.brokerOrderId ||
       canceledOrder.market.id !== order.market.id ||
-      canceledOrder.side !== order.side ||
-      (canceledOrder.providerInstanceId !== undefined && canceledOrder.providerInstanceId !== order.providerInstanceId) ||
-      (canceledOrder.providerType !== undefined && canceledOrder.providerType !== order.providerType) ||
-      (canceledOrder.accountId !== undefined && canceledOrder.accountId !== order.accountId)) {
+      canceledOrder.side !== order.side) {
     throw new TypeError("Cancellation outcome response does not match the original canonical order identity")
   }
+  assertProviderIdentityMatches({
+    expected: order,
+    actual: canceledOrder,
+    allowMissingActual: true,
+    context: "Cancellation response provider identity",
+  })
   if (outcome === "NOT_CANCELED" && !["OPEN", "PARTIALLY_FILLED"].includes(canceledOrder.status)) {
     throw new TypeError("NOT_CANCELED outcome requires an active canonical order response")
   }
@@ -34,11 +38,7 @@ function validateCancellationInput({ operationalStateStore, order, canceledOrder
   if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
     throw new TypeError("Cancellation outcome requires the original active acknowledged order")
   }
-  for (const field of ["providerInstanceId", "providerType", "accountId"]) {
-    if (typeof order[field] !== "string" || !order[field].trim()) {
-      throw new TypeError(`Cancellation outcome requires immutable ${field} provenance`)
-    }
-  }
+  requireProviderIdentity({ value: order, context: "Cancellation outcome" })
   if (!isReason(reason) || !OUTCOMES.has(outcome)) {
     throw new TypeError("Cancellation reason or outcome is unsupported")
   }
