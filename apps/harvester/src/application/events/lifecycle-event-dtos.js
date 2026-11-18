@@ -58,6 +58,27 @@ const requireConfigurationFingerprint = ({ value }) => {
   return value
 }
 
+const mapProviderProvenance = ({ value, field = "provider" } = {}) => {
+  const fields = ["providerInstanceId", "providerType", "accountId"]
+  if (fields.every((name) => value?.[name] === undefined)) {
+    return {}
+  }
+  return {
+    providerInstanceId: requireString({
+      value: value.providerInstanceId,
+      field: `${field}.providerInstanceId`,
+    }),
+    providerType: requireString({
+      value: value.providerType,
+      field: `${field}.providerType`,
+    }),
+    accountId: requireString({
+      value: value.accountId,
+      field: `${field}.accountId`,
+    }),
+  }
+}
+
 const mapArrayWithIndex = ({ values, mapper }) =>
   values.map((...args) => mapper({
     value: args[0],
@@ -421,6 +442,10 @@ const requireOrderFacts = ({ order }) => {
   return {
     clientOrderId: requireString({ value: order.clientOrderId,
       field: "clientOrderId" }),
+    ...mapProviderProvenance({
+          value: order,
+          field: "order",
+        }),
     symbol: requireString({ value: order.market.symbol,
       field: "symbol" }),
     side: order.side === "BUY" || order.side === "SELL"
@@ -435,40 +460,77 @@ const requireOrderFacts = ({ order }) => {
   }
 }
 
-const mapStrategyDecisionInputs = (inputs) => {
-  if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
-    throw new TypeError("inputs must be an object")
-  }
+const STRATEGY_DECIMAL_INPUT_FIELDS = Object.freeze([
+  "lastBuyPrice",
+  "activeBaseQuantity",
+  "activeBaseBalance",
+  "freeQuoteBalance",
+  "freeBaseBalance",
+  "quoteCashFlow",
+  "committedQuote",
+  "committedQuoteBalance",
+  "committedBase",
+  "committedBaseBalance",
+  "outstandingRecoveryAmount",
+  "investmentLimit",
+  "orderQuantity",
+  "keepQuantity",
+  "priceStepPercent",
+  "makerPercent",
+  "takerPercent",
+  "minProfit",
+])
+
+function mapStrategyDecimalInputs({ inputs }) {
   const mapped = {}
-  for (const field of [
-    "lastBuyPrice", "activeBaseQuantity", "activeBaseBalance", "freeQuoteBalance",
-    "freeBaseBalance", "quoteCashFlow", "committedQuote", "committedQuoteBalance",
-    "committedBase", "committedBaseBalance", "outstandingRecoveryAmount",
-    "investmentLimit", "orderQuantity", "keepQuantity", "priceStepPercent",
-    "makerPercent", "takerPercent", "minProfit",
-  ]) {
+  for (const field of STRATEGY_DECIMAL_INPUT_FIELDS) {
     const value = inputs[field]
-    if (value === undefined) {continue}
+    if (value === undefined) {
+      continue
+    }
     if (field === "lastBuyPrice" && value === null) {
       mapped[field] = null
       continue
     }
-    if (typeof value === "number" && (!Number.isFinite(value) || Object.is(value, -0))) {continue}
+    if (typeof value === "number" && (!Number.isFinite(value) || Object.is(value, -0))) {
+      continue
+    }
     const decimal = typeof value === "number" ? String(value) : value
-    if (typeof decimal !== "string") {continue}
+    if (typeof decimal !== "string") {
+      continue
+    }
     try {
-      assertDecimalString({ value: decimal,
-        field: `inputs.${field}` })
+      assertDecimalString({
+        value: decimal,
+        field: `inputs.${field}`,
+      })
       mapped[field] = decimal
     } catch {
       // Preserve valid decision inputs without letting malformed optional diagnostics hide the decision.
     }
   }
+  return mapped
+}
+
+function mapStrategyCountInputs({ inputs }) {
+  const mapped = {}
   for (const field of ["activeOrderCount", "activeBuyCount", "activeSellCount"]) {
     const value = inputs[field]
-    if (isNonNegativeSafeInteger(value)) {mapped[field] = value}
+    if (isNonNegativeSafeInteger(value)) {
+      mapped[field] = value
+    }
   }
   return mapped
+}
+
+const mapStrategyDecisionInputs = (inputs) => {
+  if (!inputs || typeof inputs !== "object" || Array.isArray(inputs)) {
+    throw new TypeError("inputs must be an object")
+  }
+  return {
+    ...mapStrategyDecimalInputs({ inputs }),
+    ...mapStrategyCountInputs({ inputs }),
+  }
 }
 
 /** Map an actionable strategy decision; NO_ACTION evaluations are not journal events. */
@@ -563,6 +625,10 @@ export const mapOrderSubmissionFailedData = (input = {}) =>
       return {
         clientOrderId: requireString({ value: order?.clientOrderId,
           field: "clientOrderId" }),
+        ...mapProviderProvenance({
+          value: order,
+          field: "order",
+        }),
         symbol: requireString({ value: order?.market?.symbol,
           field: "symbol" }),
         side: order?.side === "BUY" || order?.side === "SELL"
@@ -647,6 +713,10 @@ export const mapOrderCancelFailedData = (input = {}) =>
       return {
         clientOrderId: requireString({ value: order?.clientOrderId,
           field: "clientOrderId" }),
+        ...mapProviderProvenance({
+          value: order,
+          field: "order",
+        }),
         symbol: requireString({ value: order?.market?.symbol,
           field: "symbol" }),
         side: order?.side === "BUY" || order?.side === "SELL"
@@ -788,76 +858,99 @@ const mapFillCommissionData = ({ fill, commission, index }) => {
   }
 }
 
+function requireFillSide({ fill }) {
+  if (fill.side !== "BUY" && fill.side !== "SELL") {
+    throw new TypeError("fill.side must be BUY or SELL")
+  }
+  return fill.side
+}
+
+function mapFillIdentityData({ fill }) {
+  return {
+    fillId: requireString({
+      value: fill.id,
+      field: "fillId",
+    }),
+    tradeId: requireString({
+      value: fill.tradeId,
+      field: "tradeId",
+    }),
+    brokerOrderId: requireString({
+      value: fill.brokerOrderId,
+      field: "brokerOrderId",
+    }),
+    ...(fill.clientOrderId === undefined ? {} : {
+      clientOrderId: requireString({
+        value: fill.clientOrderId,
+        field: "clientOrderId",
+      }),
+    }),
+    ...mapProviderProvenance({
+      value: fill,
+      field: "fill",
+    }),
+  }
+}
+
+function mapFillExecutionData({ fill }) {
+  return {
+    symbol: requireString({
+      value: fill.market.symbol,
+      field: "symbol",
+    }),
+    side: requireFillSide({ fill }),
+    price: requireDecimalString({
+      value: fill.price?.amount,
+      field: "price",
+    }),
+    quantity: requireDecimalString({
+      value: fill.quantity?.amount,
+      field: "quantity",
+    }),
+    quoteQuantity: requireDecimalString({
+      value: fill.quoteQuantity?.amount,
+      field: "quoteQuantity",
+    }),
+    liquidityRole: requireString({
+      value: fill.liquidityRole,
+      field: "liquidityRole",
+    }),
+    ...(fill.executedAt === undefined ? {} : {
+      executedAt: requireNonNegativeSafeInteger({
+        value: fill.executedAt,
+        field: "fill.executedAt",
+      }),
+    }),
+    commissions: mapArrayWithIndex({
+      values: fill.commissions,
+      mapper: ({ value: commission, index }) => mapFillCommissionData({
+        fill,
+        commission,
+        index,
+      }),
+    }),
+    commissionStatus: requireString({
+      value: fill.commissionStatus,
+      field: "commissionStatus",
+    }),
+  }
+}
+
+function mapFillAppliedFields({ fill }) {
+  if (!(fill instanceof Fill)) {
+    throw new TypeError("fill must be a canonical Fill")
+  }
+  return {
+    ...mapFillIdentityData({ fill }),
+    ...mapFillExecutionData({ fill }),
+  }
+}
+
 export const mapFillAppliedData = (input = {}) =>
   mapData({
     input,
     operation: "Fill-applied event mapping",
-    mapper: ({ fill }) => {
-      if (!(fill instanceof Fill)) {
-        throw new TypeError("fill must be a canonical Fill")
-      }
-      return {
-        fillId: requireString({
-          value: fill.id,
-          field: "fillId",
-        }),
-        tradeId: requireString({
-          value: fill.tradeId,
-          field: "tradeId",
-        }),
-        brokerOrderId: requireString({
-          value: fill.brokerOrderId,
-          field: "brokerOrderId",
-        }),
-        ...(fill.clientOrderId === undefined ? {} : {
-          clientOrderId: requireString({
-            value: fill.clientOrderId,
-            field: "clientOrderId",
-          }),
-        }),
-        symbol: requireString({
-          value: fill.market.symbol,
-          field: "symbol",
-        }),
-        side: fill.side === "BUY" || fill.side === "SELL"
-          ? fill.side
-          : (() => { throw new TypeError("fill.side must be BUY or SELL") })(),
-        price: requireDecimalString({
-          value: fill.price?.amount,
-          field: "price",
-        }),
-        quantity: requireDecimalString({
-          value: fill.quantity?.amount,
-          field: "quantity",
-        }),
-        quoteQuantity: requireDecimalString({
-          value: fill.quoteQuantity?.amount,
-          field: "quoteQuantity",
-        }),
-        liquidityRole: requireString({
-          value: fill.liquidityRole,
-          field: "liquidityRole",
-        }),
-        ...(fill.executedAt === undefined ? {} : {
-          executedAt: requireNonNegativeSafeInteger({
-            value: fill.executedAt,
-            field: "fill.executedAt",
-          }),
-        }),
-        commissions: mapArrayWithIndex({
-          values: fill.commissions,
-          mapper: ({ value: commission, index }) => mapFillCommissionData({
-            fill,
-            commission,
-            index,
-          }),
-        }),
-        commissionStatus: requireString({
-          value: fill.commissionStatus,
-          field: "commissionStatus",
-        }),
-      }
-    },
+    mapper: ({ fill }) => mapFillAppliedFields({ fill }),
   })
 
 const requireExecutionOrderFacts = ({ order }) => {
@@ -866,6 +959,10 @@ const requireExecutionOrderFacts = ({ order }) => {
   return {
     clientOrderId: requireString({ value: order.clientOrderId,
       field: "clientOrderId" }),
+    ...mapProviderProvenance({
+          value: order,
+          field: "order",
+        }),
     ...(typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()
       ? { brokerOrderId: order.brokerOrderId.trim() }
       : {}),
@@ -882,6 +979,10 @@ const requireExecutionFillFacts = ({ fill }) => {
   return {
     fillId: requireString({ value: fill.id,
       field: "fillId" }),
+    ...mapProviderProvenance({
+          value: fill,
+          field: "fill",
+        }),
     fillBrokerOrderId: requireString({ value: fill.brokerOrderId,
       field: "fillBrokerOrderId" }),
     fillSymbol: requireString({ value: fill.market?.symbol,
@@ -1018,89 +1119,197 @@ export const mapRecoveryCycleCompletedData = (input = {}) =>
 
 
 
+function validateRecoveryCycleNonCompletionReason({
+    outcome,
+    reason,
+  }) {
+  const continueReasons = [
+    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+  ]
+  if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(outcome)) {
+    throw new TypeError("outcome must be CONTINUE_SELL_THROUGH or BLOCKED")
+  }
+  if (outcome === "CONTINUE_SELL_THROUGH" && !continueReasons.includes(reason)) {
+    throw new TypeError("CONTINUE_SELL_THROUGH requires a recognized residual sell-through reason")
+  }
+  if (outcome === "BLOCKED" && continueReasons.includes(reason)) {
+    throw new TypeError("BLOCKED cannot use a residual sell-through reason")
+  }
+}
+
+function validateRecoveryCycleNonCompletionQuantities({
+  outcome,
+  reason,
+  realizedNetProfit,
+  activeQuantity,
+  keepQuantity,
+  minProfit,
+}) {
+  const activeIsNegative = compareDecimal({
+    left: activeQuantity,
+    right: "0",
+  }) < 0
+  const keepIsNegative = compareDecimal({
+    left: keepQuantity,
+    right: "0",
+  }) < 0
+  if (activeIsNegative || keepIsNegative) {
+    throw new RangeError("activeQuantity and keepQuantity must be non-negative")
+  }
+  if (compareDecimal({
+    left: minProfit,
+    right: "0.01",
+  }) < 0) {
+    throw new RangeError("minProfit must be at least 0.01")
+  }
+  if (outcome === "CONTINUE_SELL_THROUGH" &&
+      compareDecimal({
+        left: activeQuantity,
+        right: keepQuantity,
+      }) <= 0) {
+    throw new RangeError("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
+  }
+  if (reason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" &&
+      compareDecimal({
+        left: realizedNetProfit,
+        right: minProfit,
+      }) >= 0) {
+    throw new RangeError("RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY requires realized profit below minProfit")
+  }
+  if (reason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" &&
+      compareDecimal({
+        left: realizedNetProfit,
+        right: minProfit,
+      }) < 0) {
+    throw new RangeError("RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH requires realized profit to meet minProfit")
+  }
+  if (outcome === "BLOCKED" && reason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
+      compareDecimal({
+        left: realizedNetProfit,
+        right: minProfit,
+      }) >= 0) {
+    throw new RangeError("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
+  }
+}
+
+function validateRecoveryCycleNonCompletion({
+  outcome,
+  reason,
+  realizedNetProfit,
+  activeQuantity,
+  keepQuantity,
+  minProfit,
+}) {
+  validateRecoveryCycleNonCompletionReason({
+    outcome,
+    reason,
+  })
+  validateRecoveryCycleNonCompletionQuantities({
+    outcome,
+    reason,
+    realizedNetProfit,
+    activeQuantity,
+    keepQuantity,
+    minProfit,
+  })
+}
+
+function mapRecoveryCycleOrderIdentity({
+  symbol,
+  marketId,
+  sellOrderClientId,
+  sellOrderBrokerOrderId,
+}) {
+  return {
+    symbol: requireString({
+      value: symbol,
+      field: "symbol",
+    }),
+    marketId: requireString({
+      value: marketId,
+      field: "marketId",
+    }),
+    sellOrderClientId: requireString({
+      value: sellOrderClientId,
+      field: "sellOrderClientId",
+    }),
+    sellOrderBrokerOrderId: requireString({
+      value: sellOrderBrokerOrderId,
+      field: "sellOrderBrokerOrderId",
+    }),
+  }
+}
+
+function mapRecoveryCycleNotCompletedFields({
+  symbol,
+  marketId,
+  sellOrderClientId,
+  sellOrderBrokerOrderId,
+  outcome,
+  reason,
+  realizedNetProfit,
+  activeQuantity,
+  keepQuantity,
+  minProfit,
+}) {
+  const metrics = {
+    reason: requireString({
+      value: reason,
+      field: "reason",
+    }),
+    realizedNetProfit: requireDecimalString({
+      value: realizedNetProfit,
+      field: "realizedNetProfit",
+    }),
+    activeQuantity: requireDecimalString({
+      value: activeQuantity,
+      field: "activeQuantity",
+    }),
+    keepQuantity: requireDecimalString({
+      value: keepQuantity,
+      field: "keepQuantity",
+    }),
+    minProfit: requireDecimalString({
+      value: minProfit,
+      field: "minProfit",
+    }),
+  }
+  validateRecoveryCycleNonCompletion({
+    outcome,
+    ...metrics,
+  })
+  return {
+    ...mapRecoveryCycleOrderIdentity({
+      symbol,
+      marketId,
+      sellOrderClientId,
+      sellOrderBrokerOrderId,
+    }),
+    outcome,
+    ...metrics,
+  }
+}
+
 /** Map an explicit non-completion evaluation for a fully filled recovery SELL. */
 export const mapRecoveryCycleNotCompletedData = (input = {}) =>
   mapData({
     input,
     operation: "Recovery-cycle-not-completed event mapping",
-    mapper: ({
-      symbol, marketId, sellOrderClientId, sellOrderBrokerOrderId, outcome, reason,
-      realizedNetProfit, activeQuantity, keepQuantity, minProfit,
-    }) => {
-      if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(outcome)) {
-        throw new TypeError("outcome must be CONTINUE_SELL_THROUGH or BLOCKED")
-      }
-      const mappedReason = requireString({ value: reason,
-        field: "reason" })
-      const continueReasons = ["RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH", "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY"]
-      if (outcome === "CONTINUE_SELL_THROUGH" && !continueReasons.includes(mappedReason)) {
-        throw new TypeError("CONTINUE_SELL_THROUGH requires a recognized residual sell-through reason")
-      }
-      if (outcome === "BLOCKED" && continueReasons.includes(mappedReason)) {
-        throw new TypeError("BLOCKED cannot use a residual sell-through reason")
-      }
-      const mappedRealizedNetProfit = requireDecimalString({ value: realizedNetProfit,
-        field: "realizedNetProfit" })
-      const mappedActiveQuantity = requireDecimalString({ value: activeQuantity,
-        field: "activeQuantity" })
-      const mappedKeepQuantity = requireDecimalString({ value: keepQuantity,
-        field: "keepQuantity" })
-      const mappedMinProfit = requireDecimalString({ value: minProfit,
-        field: "minProfit" })
-      if (compareDecimal({ left: mappedActiveQuantity,
-        right: "0" }) < 0 || compareDecimal({ left: mappedKeepQuantity,
-        right: "0" }) < 0) {
-        throw new RangeError("activeQuantity and keepQuantity must be non-negative")
-      }
-      if (compareDecimal({ left: mappedMinProfit,
-        right: "0.01" }) < 0) {throw new RangeError("minProfit must be at least 0.01")}
-      if (outcome === "CONTINUE_SELL_THROUGH" && compareDecimal({ left: mappedActiveQuantity,
-        right: mappedKeepQuantity }) <= 0) {
-        throw new RangeError("CONTINUE_SELL_THROUGH requires active inventory above keepQuantity")
-      }
-      if (mappedReason === "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY" && compareDecimal({ left: mappedRealizedNetProfit,
-        right: mappedMinProfit }) >= 0) {
-        throw new RangeError("RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY requires realized profit below minProfit")
-      }
-      if (mappedReason === "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" && compareDecimal({ left: mappedRealizedNetProfit,
-        right: mappedMinProfit }) < 0) {
-        throw new RangeError("RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH requires realized profit to meet minProfit")
-      }
-      if (outcome === "BLOCKED" && mappedReason === "RECOVERY_SELL_FAILED_MIN_PROFIT" &&
-          compareDecimal({ left: mappedRealizedNetProfit,
-            right: mappedMinProfit }) >= 0) {
-        throw new RangeError("RECOVERY_SELL_FAILED_MIN_PROFIT requires realized profit below minProfit")
-      }
-      return {
-        symbol: requireString({ value: symbol,
-          field: "symbol" }),
-        marketId: requireString({ value: marketId,
-          field: "marketId" }),
-        sellOrderClientId: requireString({ value: sellOrderClientId,
-          field: "sellOrderClientId" }),
-        sellOrderBrokerOrderId: requireString({ value: sellOrderBrokerOrderId,
-          field: "sellOrderBrokerOrderId" }),
-        outcome,
-        reason: mappedReason,
-        realizedNetProfit: mappedRealizedNetProfit,
-        activeQuantity: mappedActiveQuantity,
-        keepQuantity: mappedKeepQuantity,
-        minProfit: mappedMinProfit,
-      }
-    },
+    mapper: (fields) => mapRecoveryCycleNotCompletedFields(fields),
   })
 
-
-/** Map the complete account-wide open-order snapshot; BLOCKED classifies audit ownership, not process startup readiness. */
-const mapAccountOpenOrder = ({ order, index }) => {
-  if (!order || typeof order !== "object") {
-    throw new TypeError(`orders[${index}] must be a normalized broker order`)
+function requireOpenOrderSide({
+      order,
+      index,
+    }) {
+  if (order.side !== "BUY" && order.side !== "SELL") {
+    throw new TypeError(`orders[${index}].side must be BUY or SELL`)
   }
-  const symbol = order.market?.symbol ?? order.symbol
-  const brokerOrderId = order.brokerOrderId ?? order.id
-  const price = order.limitPrice?.amount ?? order.originalPrice
-  const quantity = order.originalQuantity?.amount ?? order.originalQuantity
-  const executedQuantity = order.executedQuantity?.amount ?? order.executedQuantity ?? "0"
+  return order.side
+}
+
+function mapOpenOrderIdentity({ order, index, symbol, brokerOrderId }) {
   return {
     ...(typeof order.clientOrderId === "string" && order.clientOrderId.trim()
       ? { clientOrderId: order.clientOrderId.trim() }
@@ -1113,13 +1322,19 @@ const mapAccountOpenOrder = ({ order, index }) => {
       value: symbol,
       field: `orders[${index}].symbol`,
     }),
-    side: order.side === "BUY" || order.side === "SELL"
-      ? order.side
-      : (() => { throw new TypeError(`orders[${index}].side must be BUY or SELL`) })(),
+    side: requireOpenOrderSide({
+      order,
+      index,
+    }),
     type: requireString({
       value: order.type,
       field: `orders[${index}].type`,
     }),
+  }
+}
+
+function mapOpenOrderQuantities({ order, index, price, quantity, executedQuantity }) {
+  return {
     ...(price === undefined ? {} : {
       price: requireDecimalString({
         value: price,
@@ -1137,6 +1352,33 @@ const mapAccountOpenOrder = ({ order, index }) => {
     status: requireString({
       value: order.status,
       field: `orders[${index}].status`,
+    }),
+  }
+}
+
+/** Map the complete account-wide open-order snapshot; BLOCKED classifies audit ownership, not process startup readiness. */
+const mapAccountOpenOrder = ({ order, index }) => {
+  if (!order || typeof order !== "object") {
+    throw new TypeError(`orders[${index}] must be a normalized broker order`)
+  }
+  const symbol = order.market?.symbol ?? order.symbol
+  const brokerOrderId = order.brokerOrderId ?? order.id
+  const price = order.limitPrice?.amount ?? order.originalPrice
+  const quantity = order.originalQuantity?.amount ?? order.originalQuantity
+  const executedQuantity = order.executedQuantity?.amount ?? order.executedQuantity ?? "0"
+  return {
+    ...mapOpenOrderIdentity({
+      order,
+      index,
+      symbol,
+      brokerOrderId,
+    }),
+    ...mapOpenOrderQuantities({
+      order,
+      index,
+      price,
+      quantity,
+      executedQuantity,
     }),
   }
 }
@@ -1326,47 +1568,144 @@ export const mapAccountSnapshotCapturedData = (input = {}) =>
     },
   })
 
+function copyBrokerEvidenceStringFields({
+    evidence,
+    data,
+  }) {
+  const fields = [
+    "symbol",
+    "clientOrderId",
+    "originalClientOrderId",
+    "side",
+    "orderType",
+    "timeInForce",
+    "executionType",
+    "orderStatus",
+    "rejectReason",
+    "selfTradePreventionMode",
+    "matchType",
+  ]
+  for (const field of fields) {
+    if (evidence[field] === undefined) {
+      continue
+    }
+    if (typeof evidence[field] !== "string") {
+      throw new TypeError(`evidence.${field} must be a string`)
+    }
+    data[field] = evidence[field].slice(0, 256)
+  }
+  if (evidence.commissionAsset !== undefined) {
+    if (evidence.commissionAsset !== null && typeof evidence.commissionAsset !== "string") {
+      throw new TypeError("evidence.commissionAsset must be a string or null")
+    }
+    data.commissionAsset = evidence.commissionAsset
+  }
+}
+
+function copyBrokerEvidenceIdentifierFields({
+    evidence,
+    data,
+  }) {
+  for (const field of ["orderId", "orderListId", "tradeId", "executionId", "tradeGroupId"]) {
+    if (evidence[field] !== undefined) {
+      data[field] = String(evidence[field])
+    }
+  }
+}
+
+function copyBrokerEvidenceDecimalFields({
+    evidence,
+    data,
+  }) {
+  const fields = [
+    "orderQuantity",
+    "orderPrice",
+    "stopPrice",
+    "icebergQuantity",
+    "quoteOrderQuantity",
+    "lastExecutedQuantity",
+    "cumulativeExecutedQuantity",
+    "lastExecutedPrice",
+    "commissionAmount",
+    "cumulativeQuoteQuantity",
+    "lastQuoteQuantity",
+  ]
+  for (const field of fields) {
+    if (evidence[field] !== undefined) {
+      data[field] = requireDecimalString({
+        value: evidence[field],
+        field: `evidence.${field}`,
+      })
+    }
+  }
+}
+
+function copyBrokerEvidenceTimestampFields({
+    evidence,
+    data,
+  }) {
+  for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
+    if (evidence[field] !== undefined) {
+      data[field] = requireNonNegativeSafeInteger({
+        value: evidence[field],
+        field: `evidence.${field}`,
+      })
+    }
+  }
+}
+
+function copyBrokerEvidenceBooleanFields({
+    evidence,
+    data,
+  }) {
+  for (const field of ["isMaker", "working"]) {
+    if (evidence[field] !== undefined) {
+      data[field] = requireBoolean({
+        value: evidence[field],
+        field: `evidence.${field}`,
+      })
+    }
+  }
+}
+
+function mapBrokerExecutionReportEvidence({ evidence }) {
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
+      evidence.schemaVersion !== 1 || evidence.source !== "binance.spot.userData.executionReport") {
+    throw new TypeError("evidence must be a version 1 Binance Spot executionReport")
+  }
+  const data = {
+    schemaVersion: 1,
+    source: "binance.spot.userData.executionReport",
+  }
+  copyBrokerEvidenceStringFields({
+    evidence,
+    data,
+  })
+  copyBrokerEvidenceIdentifierFields({
+    evidence,
+    data,
+  })
+  copyBrokerEvidenceDecimalFields({
+    evidence,
+    data,
+  })
+  copyBrokerEvidenceTimestampFields({
+    evidence,
+    data,
+  })
+  copyBrokerEvidenceBooleanFields({
+    evidence,
+    data,
+  })
+  return data
+}
+
 /** Preserve versioned, allowlisted Binance executionReport facts separately from normalized events. */
 export const mapBrokerExecutionReportData = (input = {}) =>
   mapData({
     input,
     operation: "Broker execution-report evidence mapping",
-    mapper: ({ evidence }) => {
-      if (!evidence || typeof evidence !== "object" || Array.isArray(evidence) ||
-          evidence.schemaVersion !== 1 || evidence.source !== "binance.spot.userData.executionReport") {
-        throw new TypeError("evidence must be a version 1 Binance Spot executionReport")
-      }
-      const data = { schemaVersion: 1,
-        source: "binance.spot.userData.executionReport" }
-      for (const field of ["symbol", "clientOrderId", "originalClientOrderId", "side", "orderType", "timeInForce", "executionType", "orderStatus", "rejectReason", "selfTradePreventionMode", "matchType"]) {
-        if (evidence[field] !== undefined) {
-          if (typeof evidence[field] !== "string") {throw new TypeError(`evidence.${field} must be a string`)}
-          data[field] = evidence[field].slice(0, 256)
-        }
-      }
-      if (evidence.commissionAsset !== undefined) {
-        if (evidence.commissionAsset !== null && typeof evidence.commissionAsset !== "string") {throw new TypeError("evidence.commissionAsset must be a string or null")}
-        data.commissionAsset = evidence.commissionAsset
-      }
-      for (const field of ["orderId", "orderListId", "tradeId", "executionId", "tradeGroupId"]) {
-        if (evidence[field] !== undefined) {data[field] = String(evidence[field])}
-      }
-      for (const field of ["orderQuantity", "orderPrice", "stopPrice", "icebergQuantity", "quoteOrderQuantity", "lastExecutedQuantity", "cumulativeExecutedQuantity", "lastExecutedPrice", "commissionAmount", "cumulativeQuoteQuantity", "lastQuoteQuantity"]) {
-        if (evidence[field] !== undefined) {data[field] = requireDecimalString({ value: evidence[field],
-          field: `evidence.${field}` })}
-      }
-      for (const field of ["eventTime", "transactionTime", "orderCreationTime", "workingTime"]) {
-        if (evidence[field] !== undefined) {
-          data[field] = requireNonNegativeSafeInteger({ value: evidence[field],
-            field: `evidence.${field}` })
-        }
-      }
-      for (const field of ["isMaker", "working"]) {
-        if (evidence[field] !== undefined) {data[field] = requireBoolean({ value: evidence[field],
-          field: `evidence.${field}` })}
-      }
-      return data
-    },
+    mapper: ({ evidence }) => mapBrokerExecutionReportEvidence({ evidence }),
   })
 
 /** Record an applied canonical order-state transition with exact cumulative quantities. */
@@ -1403,73 +1742,81 @@ export const mapOrderUpdatedData = (input = {}) =>
   })
 
 
+function mapMarketTradingRuleConstraints({ constraints }) {
+  return mapArrayWithIndex({
+    values: constraints,
+    mapper: ({ value: constraint, index }) => ({
+      type: requireString({
+        value: constraint?.type,
+        field: `constraints[${index}].type`,
+      }),
+      status: requireString({
+        value: constraint?.status,
+        field: `constraints[${index}].status`,
+      }),
+      ...(constraint?.value === undefined ? {} : {
+        amount: requireDecimalString({
+          value: constraint.value.amount,
+          field: `constraints[${index}].amount`,
+        }),
+        asset: requireString({
+          value: constraint.value.asset?.code,
+          field: `constraints[${index}].asset`,
+        }),
+      }),
+    }),
+  })
+}
+
+function mapMarketTradingRulesFields({ metadata }) {
+  const market = metadata?.market
+  const tradingRules = metadata?.tradingRules
+  if (!market || typeof market !== "object" || !Array.isArray(tradingRules?.constraints)) {
+    throw new TypeError("metadata must contain a canonical market and trading rules")
+  }
+  if (!Array.isArray(metadata.supportedOrderTypes) || metadata.supportedOrderTypes.length === 0) {
+    throw new TypeError("metadata.supportedOrderTypes must be a non-empty array")
+  }
+  return {
+    venue: requireString({
+      value: market.venue,
+      field: "market.venue",
+    }),
+    symbol: requireString({
+      value: market.symbol,
+      field: "market.symbol",
+    }),
+    baseAsset: requireString({
+      value: market.baseAsset?.code,
+      field: "market.baseAsset.code",
+    }),
+    quoteAsset: requireString({
+      value: market.quoteAsset?.code,
+      field: "market.quoteAsset.code",
+    }),
+    orderType: requireString({
+      value: metadata.orderType,
+      field: "metadata.orderType",
+    }),
+    supportedOrderTypes: mapArrayWithIndex({
+      values: metadata.supportedOrderTypes,
+      mapper: ({ value: type, index }) => requireString({
+        value: type,
+        field: `supportedOrderTypes[${index}]`,
+      }),
+    }),
+    constraints: mapMarketTradingRuleConstraints({
+      constraints: tradingRules.constraints,
+    }),
+  }
+}
+
 /** Capture the exact validated exchange filters used by Harvester order planning. */
 export const mapMarketTradingRulesCapturedData = (input = {}) =>
   mapData({
     input,
     operation: "Market trading-rules event mapping",
-    mapper: ({ metadata }) => {
-      const market = metadata?.market
-      const tradingRules = metadata?.tradingRules
-      if (!market || typeof market !== "object" || !Array.isArray(tradingRules?.constraints)) {
-        throw new TypeError("metadata must contain a canonical market and trading rules")
-      }
-      if (!Array.isArray(metadata.supportedOrderTypes) || metadata.supportedOrderTypes.length === 0) {
-        throw new TypeError("metadata.supportedOrderTypes must be a non-empty array")
-      }
-      return {
-        venue: requireString({
-          value: market.venue,
-          field: "market.venue",
-        }),
-        symbol: requireString({
-          value: market.symbol,
-          field: "market.symbol",
-        }),
-        baseAsset: requireString({
-          value: market.baseAsset?.code,
-          field: "market.baseAsset.code",
-        }),
-        quoteAsset: requireString({
-          value: market.quoteAsset?.code,
-          field: "market.quoteAsset.code",
-        }),
-        orderType: requireString({
-          value: metadata.orderType,
-          field: "metadata.orderType",
-        }),
-        supportedOrderTypes: mapArrayWithIndex({
-          values: metadata.supportedOrderTypes,
-          mapper: ({ value: type, index }) => requireString({
-            value: type,
-            field: `supportedOrderTypes[${index}]`,
-          }),
-        }),
-        constraints: mapArrayWithIndex({
-          values: tradingRules.constraints,
-          mapper: ({ value: constraint, index }) => ({
-            type: requireString({
-              value: constraint?.type,
-              field: `constraints[${index}].type`,
-            }),
-            status: requireString({
-              value: constraint?.status,
-              field: `constraints[${index}].status`,
-            }),
-            ...(constraint?.value === undefined ? {} : {
-              amount: requireDecimalString({
-                value: constraint.value.amount,
-                field: `constraints[${index}].amount`,
-              }),
-              asset: requireString({
-                value: constraint.value.asset?.code,
-                field: `constraints[${index}].asset`,
-              }),
-            }),
-          }),
-        }),
-      }
-    },
+    mapper: ({ metadata }) => mapMarketTradingRulesFields({ metadata }),
   })
 
 /** Map a local pre-broker deferral without retaining raw gate diagnostics. */
