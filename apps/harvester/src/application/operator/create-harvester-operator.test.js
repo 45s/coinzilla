@@ -118,6 +118,8 @@ test("creates an immutable Harvester operator facade without a generic command d
   assert.equal(Object.isFrozen(operator), true)
   assert.equal(typeof operator.pauseMarket, "function")
   assert.equal(typeof operator.resumeMarket, "function")
+  assert.equal(operator.pauseMarket, operator.pauseBuys, "Market Pause must share the market BUY pause use case.")
+  assert.equal(operator.resumeMarket, operator.resumeBuys, "Market Resume must share the market BUY resume use case.")
   assert.equal(typeof operator.pauseBuys, "function")
   assert.equal(typeof operator.resumeBuys, "function")
   assert.equal(typeof operator.pauseAllBuys, "function")
