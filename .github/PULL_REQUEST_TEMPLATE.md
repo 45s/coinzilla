@@ -62,7 +62,6 @@ Examples:
 
 <!-- Known limitations, migration risks, or follow-up work. Use "None" if not applicable. -->
 
-
 ## Workflow and ownership
 
 - [ ] I read `AI_AGENT_WORKFLOW.md` and the owning domain's `AGENTS.md`.
