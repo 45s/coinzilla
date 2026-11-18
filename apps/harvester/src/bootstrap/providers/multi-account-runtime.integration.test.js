@@ -3,6 +3,7 @@ import test from "node:test"
 import {
   Asset,
   Balance,
+  BrokerCapabilities,
   CanonicalOrder,
   Fill,
   Market,
@@ -10,6 +11,7 @@ import {
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
+import { createBinanceBrokerAdapter } from "../../infrastructure/brokers/binance-broker-adapter.js"
 import { resolveProviderInstances } from "./resolve-provider-instances.js"
 import { startProviderAccounts } from "./start-provider-accounts.js"
 import { startHarvester } from "../start-harvester.js"
@@ -212,11 +214,11 @@ function createBrokerAccountPorts({
 }
 
 function createAcknowledgedCanonicalOrder({ order, calls }) {
-  const { market } = createMarketMetadata(order.symbol)
+  const market = order.market ?? createMarketMetadata(order.symbol).market
   const now = Date.now()
   return new CanonicalOrder({
     clientOrderId: order.clientOrderId,
-    brokerOrderId: `${order.symbol}-${calls.orders.size + 1}`,
+    brokerOrderId: String(calls.orders.size + 1),
     market,
     side: order.side,
     type: order.type,
@@ -458,6 +460,99 @@ function createBroker({
   }
 }
 
+const REQUIRED_BINANCE_CAPABILITY_TYPES = [
+  "READ_ACCOUNT_SNAPSHOT",
+  "READ_OPEN_ORDERS",
+  "READ_CANONICAL_ORDER",
+  "READ_CANONICAL_ORDER_HISTORY",
+  "READ_FILLS",
+  "READ_SYMBOL_FILTERS",
+  "SUBSCRIBE_USER_DATA",
+  "RECOVER_USER_DATA_SESSION",
+  "PLACE_LIMIT_ORDER",
+  "CANCEL_ORDER",
+  "READ_MARKET_PRICE",
+  "READ_CANDLES",
+  "SUBSCRIBE_MARKET_PRICES",
+  "SUBSCRIBE_CANDLES",
+  "SUBSCRIBE_BOOK_TICKER",
+]
+
+function createRawBinanceSymbolFilters(symbol) {
+  return {
+    symbol,
+    baseAsset: symbol.startsWith("ETH") ? "ETH" : "BTC",
+    quoteAsset: "USDT",
+    tickSize: "0.01",
+    stepSize: "0.001",
+    minPrice: "0.01",
+    maxPrice: "1000000",
+    minQuantity: "0.001",
+    maxQuantity: "1000",
+    minNotional: "5",
+    maxNotional: "1000000",
+    supportedOrderTypes: ["LIMIT", "LIMIT_MAKER"],
+    unvalidatedConstraints: [],
+  }
+}
+
+function createProductionBinanceBrokerClient({ calls, tradingMode }) {
+  const orderMutationPorts = createBrokerOrderMutationPorts({ calls })
+  const capabilities = new BrokerCapabilities({
+    provider: "binance",
+    product: "spot",
+    environment: {
+      selector: "tradingMode",
+      selectedMode: tradingMode,
+      supportedModes: ["testnet", "live"],
+    },
+    capabilities: REQUIRED_BINANCE_CAPABILITY_TYPES.map((type) => ({
+      type,
+      status: "SUPPORTED",
+      method: type.toLowerCase(),
+      guarantee: "The offline production-adapter fixture implements this capability.",
+    })),
+  })
+
+  return {
+    capabilities,
+    connect: async () => calls.push("connect"),
+    disconnect: async () => calls.push("disconnect"),
+    ...createBrokerAccountPorts({ calls }),
+    createOrder: (order) => orderMutationPorts.placeOrder({ order }),
+    cancelOrder: async ({ symbol, orderId }) => {
+      const order = findCanonicalOrder({ calls, orderId })
+      if (!order || order.market.symbol !== symbol) {
+        return {
+          ok: false,
+          errors: [new Error("cancel target is not in the broker order registry")],
+        }
+      }
+      return orderMutationPorts.cancelOrder({ order })
+    },
+    getSymbolFilters: async ({ symbol }) => ({
+      ok: true,
+      data: createRawBinanceSymbolFilters(symbol),
+    }),
+    ...createBrokerOrderQueryPorts({ calls }),
+    ...createBrokerMarketDataPorts({ calls }),
+    ...createBrokerUserDataPorts({ calls }),
+  }
+}
+
+function createProductionAdapterFactories({ primaryCalls, secondaryCalls }) {
+  return {
+    binance: ({ config, logger }) => createBinanceBrokerAdapter({
+      config,
+      logger,
+      brokerFactory: ({ config: brokerConfig }) => createProductionBinanceBrokerClient({
+        calls: brokerConfig.apiKey === "primary-key" ? primaryCalls : secondaryCalls,
+        tradingMode: brokerConfig.tradingMode,
+      }),
+    }),
+  }
+}
+
 function createMultiAccountHarvesterConfig() {
   return {
     ...appConfig,
@@ -536,14 +631,12 @@ async function startMultiAccountRuntime({
   secondaryCalls,
   eventPublisher = testEventPublisher,
   onUserDataEvent,
+  adapterFactories = createMultiAccountAdapterFactories({ primaryCalls, secondaryCalls }),
 }) {
   const providers = resolveProviderInstances({
     appConfig: configuredAppConfig,
     env,
-    adapterFactories: createMultiAccountAdapterFactories({
-      primaryCalls,
-      secondaryCalls,
-    }),
+    adapterFactories,
   })
   return startProviderAccounts({
     providers,
@@ -762,7 +855,7 @@ async function processRoutedUserDataFill({
   assert.equal(primaryRuntime.portfolio.getPosition({ symbol: "BTCUSDT" }), undefined)
 }
 
-test("routes order submission, user-data fills, cancellation, and candle data to their configured account/source", async () => {
+test("routes order submission, user-data fills, cancellation, and candle data through the production adapter composition", async () => {
   const primaryCalls = createBrokerCalls()
   const secondaryCalls = createBrokerCalls()
   const userDataSignal = createUserDataProcessedSignal()
@@ -771,6 +864,7 @@ test("routes order submission, user-data fills, cancellation, and candle data to
     env: createMultiAccountHarvesterEnvironment(),
     primaryCalls,
     secondaryCalls,
+    adapterFactories: createProductionAdapterFactories({ primaryCalls, secondaryCalls }),
     onUserDataEvent: async ({ event }) => {
       if (event?.executionType === "TRADE") {
         userDataSignal.resolve(event)
