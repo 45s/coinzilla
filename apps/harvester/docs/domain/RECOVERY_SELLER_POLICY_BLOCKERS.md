@@ -177,14 +177,14 @@ Missing acceptance coverage/work before execution:
 ## 7. Recommended implementation sequence
 
 1. The owner-approved per-pair `minProfit`, Conservative order-type/fee-reserve and exchange-filter STOP decisions are recorded in the canonical RS specification and implemented in draft PR #1127.
-2. **Verified on exact PR head `562804d9cbcf2999588fe51b637f878cda1d1585`:** focused RS targeted tests, full workspace Unit Tests, Test Coverage, strict changed-file ESLint, workspace JavaScript quality/syntax, actionlint, Utils tests and dependency audit passed. Coverage includes all profitability gates, min/max filters, missing required filters, missing third-asset valuation, unsupported order types and one-SELL-per-cycle behavior.
+2. **Verified on exact PR head `96315757e74a4851770716b04d8dae5cf9580ece`:** 13/13 focused RS evaluator tests and 2,101/2,101 full Harvester tests, full workspace Unit Tests, Test Coverage, strict changed-file ESLint, workspace JavaScript quality/syntax, actionlint, Utils tests and dependency audit passed. Coverage includes all profitability gates, min/max filters, missing required filters, missing third-asset valuation, unsupported order types and one-SELL-per-cycle behavior.
 3. Keep post-fill adverse results, terminal partial/canceled/rejected/expired SELLs, third-asset valuation source and STOP reset/resume fail-closed. Do not add automatic recovery or a second SELL.
 4. RS-4 integration and RS-5 offline lifecycle proof remain separate required phases. Do not register or enable RS until the remaining safety contract and offline proof are complete; preserve CG behavior.
 
 ## 8. Current disposition
 
 - CG remains the reference and its behavior must not change as part of RS policy work.
-- RS accounting, BUY policy, independent profitability gates and the owner-approved pre-submission SELL evaluator are implemented and verified on exact PR head `562804d9cbcf2999588fe51b637f878cda1d1585`.
+- RS accounting, BUY policy, independent profitability gates and the owner-approved pre-submission SELL evaluator are implemented and verified on exact PR head `96315757e74a4851770716b04d8dae5cf9580ece`.
 - Owner-approved `minProfit`, order type/fee reserve and exchange-filter STOP decisions are no longer blockers.
 - Post-fill adverse outcomes, terminal partial/canceled/rejected/expired SELLs, third-asset valuation source and STOP reset/resume remain fail-closed. RS-4 and RS-5 remain mandatory separate phases.
 - This follow-up implementation used offline tests only. The read-only Binance TESTNET integration workflow was skipped. No TESTNET/LIVE exchange operation or order was performed.
