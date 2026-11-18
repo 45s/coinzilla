@@ -428,6 +428,43 @@ test("SQLite restore validates its timeout, rate, and destination options", asyn
   }
 })
 
+function startBackupAndCloseOnProgress({ database, backupFilename, rejectedBackupFilename }) {
+  let closePromise
+  let backupAfterClosePromise
+  const backupPromise = database.backup({
+    destination: backupFilename,
+    rate: 1,
+    progress() {
+      if (!closePromise) {
+        closePromise = database.close()
+        assert.equal(
+          database.state,
+          "closing",
+          "The low-level facade must expose its closing state while an active backup drains",
+        )
+        assertSqliteTransactionRejectedDuringClose(database)
+        backupAfterClosePromise = assert.rejects(
+          database.backup({
+            destination: rejectedBackupFilename,
+          }),
+          /closing|closed/i,
+          "The database must reject a new backup after shutdown has started",
+        )
+      }
+    },
+  })
+
+  return {
+    backupPromise,
+    get closePromise() {
+      return closePromise
+    },
+    get backupAfterClosePromise() {
+      return backupAfterClosePromise
+    },
+  }
+}
+
 test("SQLite close drains an active backup and rejects new backup requests", async () => {
   const directory = await createTemporaryDirectory()
   const sourceFilename = join(directory, "source.sqlite")
@@ -435,8 +472,6 @@ test("SQLite close drains an active backup and rejects new backup requests", asy
   const rejectedBackupFilename = join(directory, "rejected.sqlite")
   const database = createSqliteDatabase({ filename: sourceFilename })
   await database.connect()
-  let closePromise
-  let backupAfterClosePromise
 
   try {
     database.exec("CREATE TABLE large_records (payload BLOB NOT NULL)")
@@ -444,41 +479,24 @@ test("SQLite close drains an active backup and rejects new backup requests", asy
       Buffer.alloc(2 * 1024 * 1024, 7),
     )
 
-    const backupPromise = database.backup({
-      destination: backupFilename,
-      rate: 1,
-      progress() {
-        if (!closePromise) {
-          closePromise = database.close()
-          assert.equal(
-            database.state,
-            "closing",
-            "The low-level facade must expose its closing state while an active backup drains",
-          )
-          assertSqliteTransactionRejectedDuringClose(database)
-          backupAfterClosePromise = assert.rejects(
-            database.backup({
-              destination: rejectedBackupFilename,
-            }),
-            /closing|closed/i,
-            "The database must reject a new backup after shutdown has started",
-          )
-        }
-      },
+    const operation = startBackupAndCloseOnProgress({
+      database,
+      backupFilename,
+      rejectedBackupFilename,
     })
+    const copiedPages = await operation.backupPromise
 
-    const copiedPages = await backupPromise
     assert.ok(
-      closePromise instanceof Promise,
+      operation.closePromise instanceof Promise,
       "The backup progress callback must be able to begin closing while backup work is active",
     )
-    await closePromise
+    await operation.closePromise
 
     assert.ok(
       copiedPages > 0,
       "The in-flight backup must finish successfully before database shutdown completes",
     )
-    await backupAfterClosePromise
+    await operation.backupAfterClosePromise
     assert.equal(
       database.state,
       "closed",
