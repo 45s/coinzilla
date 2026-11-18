@@ -235,6 +235,11 @@ function mapOrderCancellationOutcomeFact({ data, orderIntents, cancellationInten
       name: EVENT.CANCELLED,
       data: {
         clientOrderId: data.clientOrderId,
+        ...(data.providerInstanceId === undefined ? {} : {
+          providerInstanceId: data.providerInstanceId,
+          providerType: data.providerType,
+          accountId: data.accountId,
+        }),
         brokerOrderId: data.brokerOrderId,
         symbol: data.symbol,
         side: data.side,
