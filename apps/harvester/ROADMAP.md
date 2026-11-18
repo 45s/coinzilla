@@ -21,7 +21,7 @@ The ADA recovery lifecycle work below remains a separate active trading-safety o
 
 ## Persistence — provider-agnostic database integration (#1327)
 
-**Status:** The generic `@coinzilla/db` provider-neutral CRUD/query, lifecycle, transaction, SQLite provider, backup/restore primitives and conformance infrastructure are implemented and hardened in PRs [#1353](https://github.com/45s/coinzilla/pull/1353), [#1364](https://github.com/45s/coinzilla/pull/1364), [#1365](https://github.com/45s/coinzilla/pull/1365), and [#1396](https://github.com/45s/coinzilla/pull/1396). The package-specific DB ESLint cleanup is complete and is not outstanding work.
+**Status:** The generic `@coinzilla/db` provider-neutral CRUD/query, lifecycle, transaction, SQLite provider, backup/restore primitives and conformance infrastructure are implemented in [PR #1353](https://github.com/45s/coinzilla/pull/1353), [PR #1382](https://github.com/45s/coinzilla/pull/1382), and hardened/audited in [PR #1364](https://github.com/45s/coinzilla/pull/1364), [PR #1365](https://github.com/45s/coinzilla/pull/1365), and [PR #1396](https://github.com/45s/coinzilla/pull/1396). The package-specific DB ESLint cleanup is complete and is not outstanding work.
 
 **First Harvester consumer — MERGED:** trading-session history is implemented in [PR #1369](https://github.com/45s/coinzilla/pull/1369) as `c2116fd647d942c11947e556e71a0e8e578cc192` (exact PR head `3bf1ad6ba88cfbfb5aa2ad3365353bf09718ea6b`). It stores one best-effort process/session projection in `harvester_trading_sessions` through the public `@coinzilla/db` facade. Its exact PR head passed 32 Actions checks; optional read-only Binance TESTNET integration was skipped. This is merge evidence, not a production deployment claim.
 
