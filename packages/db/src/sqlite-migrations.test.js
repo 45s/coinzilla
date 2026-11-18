@@ -472,13 +472,6 @@ async function readMigrationWorkerResult(worker) {
   return message.applied
 }
 
-function compareMigrationResults(left) {
-  if (left.length === 0) {
-    return -1
-  }
-  return 1
-}
-
 test("independent worker connections serialize simultaneous migration attempts", async () => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-migration-workers-"))
   const filename = join(directory, "shared.sqlite")
@@ -501,10 +494,15 @@ test("independent worker connections serialize simultaneous migration attempts",
     Atomics.store(new Int32Array(gate), 1, 1)
     Atomics.notify(new Int32Array(gate), 1, workers.length)
     const results = await Promise.all(workers.map(readMigrationWorkerResult))
+    assert.equal(
+      results.filter((result) => result.length === 0).length,
+      1,
+      "Exactly one independent worker must observe that the migration was already applied",
+    )
     assert.deepEqual(
-      results.sort(compareMigrationResults),
-      [[], [1]],
-      "Exactly one independent worker must apply the migration while the other observes it as already applied",
+      results.flat(),
+      [1],
+      "Exactly one independent worker must apply the migration",
     )
 
     const verification = createSqliteDatabase({ filename })
