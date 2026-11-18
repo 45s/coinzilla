@@ -459,6 +459,23 @@ next: unknownOrder })
 }
 
 
+function isDuplicateAcknowledgement({ current, order }) {
+  return current.brokerOrderId === order.brokerOrderId &&
+    (current.status === "UNKNOWN" || current.brokerOrderId !== undefined)
+}
+
+function validateAcknowledgementCanAttach({ current, orders, order }) {
+  if (!["PENDING", "UNKNOWN"].includes(current.status)) {
+    throw new Error("Only a PENDING or unresolved UNKNOWN order can receive its acknowledged brokerOrderId")
+  }
+  if (current.brokerOrderId !== undefined && current.brokerOrderId !== order.brokerOrderId) {
+    throw new Error("Acknowledged order changed brokerOrderId")
+  }
+  if (orders.some((item) => item.brokerOrderId === order.brokerOrderId)) {
+    throw new Error("Broker order ID is already owned by another Harvester order")
+  }
+}
+
 function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order }) {
   if (!(order instanceof CanonicalOrder) || order.status === "PENDING" ||
       typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
@@ -474,25 +491,14 @@ function createAcknowledgedOrderAttachment({ registry, orders, ownerships, order
   })) {
     throw new Error("Broker acknowledgement changed immutable order intent")
   }
-  if (current.status === "UNKNOWN" && current.brokerOrderId === order.brokerOrderId) {
+  if (isDuplicateAcknowledgement({ current, order })) {
     return Object.freeze({
       registry,
       applied: false,
       duplicate: true,
     })
   }
-  if (!["PENDING", "UNKNOWN"].includes(current.status)) {
-    throw new Error("Only a PENDING or unresolved UNKNOWN order can receive its acknowledged brokerOrderId")
-  }
-  if (current.brokerOrderId !== undefined) {
-    if (current.brokerOrderId === order.brokerOrderId) {
-      return Object.freeze({ registry, applied: false, duplicate: true })
-    }
-    throw new Error("Acknowledged order changed brokerOrderId")
-  }
-  if (orders.some((item) => item.brokerOrderId === order.brokerOrderId)) {
-    throw new Error("Broker order ID is already owned by another Harvester order")
-  }
+  validateAcknowledgementCanAttach({ current, orders, order })
   const attached = new CanonicalOrder({
     clientOrderId: current.clientOrderId,
     brokerOrderId: order.brokerOrderId,
