@@ -15,12 +15,20 @@ export class ConfigValidationError extends TypeError {
   }
 }
 
-const fail = ({ path, expectation }) => { throw new ConfigValidationError(path, expectation) }
-const requireRecord = ({ value, path }) => { if (!isRecord(value)) {fail({ path,
+const fail = ({ path,
+  expectation }) => { throw new ConfigValidationError(path, expectation) }
+const requireRecord = ({ value,
+  path }) => { if (!isRecord(value)) {fail({ path,
 expectation: "an object" })} }
-const requireBoolean = ({ value, path }) => { if (typeof value !== "boolean") {fail({ path,
+const requireBoolean = ({ value,
+  path }) => { if (typeof value !== "boolean") {fail({ path,
 expectation: "a boolean" })} }
-const requireNumber = ({ value, path, min = -Infinity, exclusiveMin = false, max = Infinity, exclusiveMax = false }) => {
+const requireNumber = ({ value,
+  path,
+  min = -Infinity,
+  exclusiveMin = false,
+  max = Infinity,
+  exclusiveMax = false }) => {
   if (typeof value !== "number" || !Number.isFinite(value)) {fail({ path,
 expectation: "a finite number" })}
   const validMinimum = exclusiveMin ? value > min : value >= min
@@ -30,7 +38,8 @@ expectation: exclusiveMin ? `a finite number greater than ${min}` : `a finite nu
   if (!validMaximum) {fail({ path,
 expectation: exclusiveMax ? `a finite number less than ${max}` : `a finite number less than or equal to ${max}` })}
 }
-const requirePrecision = ({ value, path }) => { if (!Number.isInteger(value) || value < 0) {fail({ path,
+const requirePrecision = ({ value,
+  path }) => { if (!Number.isInteger(value) || value < 0) {fail({ path,
 expectation: "a non-negative integer" })} }
 
 
@@ -41,7 +50,8 @@ export const TELEGRAM_NOTIFICATION_EVENT_KEYS = Object.freeze([
   "brokerConnected", "brokerDisconnected", "accountSafetyAlert",
 ])
 
-function validateTelegramNotificationMarkets({ markets, path }) {
+function validateTelegramNotificationMarkets({ markets,
+  path }) {
   if (markets === undefined) {
     return
   }
@@ -69,7 +79,8 @@ function validateTelegramNotificationMarkets({ markets, path }) {
   }
 }
 
-function validateTelegramNotificationEvents({ events, path }) {
+function validateTelegramNotificationEvents({ events,
+  path }) {
   if (events === undefined) {
     return
   }
@@ -269,7 +280,8 @@ const PROVIDER_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
 const PROVIDER_TYPE_PATTERN = /^[a-z0-9-]+$/i
 const CREDENTIAL_ENVIRONMENT_PATTERN = /^[A-Z][A-Z0-9_]*$/
 
-function validateProviderIdentityFields({ provider, path }) {
+function validateProviderIdentityFields({ provider,
+  path }) {
   const supportedKeys = new Set([
     "providerInstanceId",
     "providerType",
@@ -314,7 +326,9 @@ function validateProviderIdentityFields({ provider, path }) {
   }
 }
 
-function validateProviderIdentityUniqueness({ provider, instanceIds, accountScopes }) {
+function validateProviderIdentityUniqueness({ provider,
+  instanceIds,
+  accountScopes }) {
   if (instanceIds.has(provider.providerInstanceId)) {
     fail({
       path: "brokers.instances",
@@ -448,33 +462,40 @@ function validateBrokerProviderInstances(config) {
 function validateExecutionRouting(config) {
   if (config.executionRouting === undefined) return
   const path = "executionRouting"
-  requireRecord({ value: config.executionRouting, path })
+  requireRecord({ value: config.executionRouting,
+  path })
   for (const key of Object.keys(config.executionRouting)) {
     if (key !== "routes") {
-      fail({ path: `${path}.${key}`, expectation: "a supported execution-routing configuration field" })
+      fail({ path: `${path}.${key}`,
+  expectation: "a supported execution-routing configuration field" })
     }
   }
   const { routes } = config.executionRouting
   if (!Array.isArray(routes) || routes.length === 0) {
-    fail({ path: `${path}.routes`, expectation: "a non-empty array of explicit strategy/market execution routes" })
+    fail({ path: `${path}.routes`,
+  expectation: "a non-empty array of explicit strategy/market execution routes" })
   }
   const seen = new Set()
   for (const [index, route] of routes.entries()) {
     const routePath = `${path}.routes[${index}]`
-    requireRecord({ value: route, path: routePath })
+    requireRecord({ value: route,
+  path: routePath })
     for (const key of Object.keys(route)) {
       if (!["strategyId", "symbol", "providerInstanceId"].includes(key)) {
-        fail({ path: `${routePath}.${key}`, expectation: "only strategyId, symbol, and providerInstanceId" })
+        fail({ path: `${routePath}.${key}`,
+  expectation: "only strategyId, symbol, and providerInstanceId" })
       }
     }
     for (const field of ["strategyId", "symbol", "providerInstanceId"]) {
       if (typeof route[field] !== "string" || !route[field].trim() || route[field] !== route[field].trim()) {
-        fail({ path: `${routePath}.${field}`, expectation: "a non-empty trimmed string" })
+        fail({ path: `${routePath}.${field}`,
+  expectation: "a non-empty trimmed string" })
       }
     }
     const key = JSON.stringify([route.strategyId, route.symbol])
     if (seen.has(key)) {
-      fail({ path: `${path}.routes`, expectation: "unique strategyId/symbol execution routes" })
+      fail({ path: `${path}.routes`,
+  expectation: "unique strategyId/symbol execution routes" })
     }
     seen.add(key)
   }
@@ -511,7 +532,8 @@ expectation: "CG_coinGrabber must remain enabled" })}
  * @returns {object} Matching runtime pair map without tradingEnvironment.
  * @throws {ConfigValidationError} If any pair has a missing or unsupported selector.
  */
-export function selectPairsForTradingMode({ pairs, tradingMode } = {}) {
+export function selectPairsForTradingMode({ pairs,
+  tradingMode } = {}) {
   if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {
     fail({ path: "TRADING_MODE",
 expectation: "testnet or live" })
@@ -540,7 +562,8 @@ expectation: "testnet, live, or both" })
 }
 
 /** Resolve the fixed Binance broker and mandatory exchange mode from the process environment. */
-export function resolveRuntimeConfig({ tradingMode, environment } = {}) {
+export function resolveRuntimeConfig({ tradingMode,
+  environment } = {}) {
   if (tradingMode !== TRADING_ENVIRONMENTS.TESTNET && tradingMode !== TRADING_ENVIRONMENTS.LIVE) {throw new Error('TRADING_MODE must be set to "testnet" or "live"')}
   return Object.freeze({ environment: environment ?? "unspecified",
 brokerName: "binance",

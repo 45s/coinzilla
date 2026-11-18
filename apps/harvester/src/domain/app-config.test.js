@@ -537,9 +537,15 @@ test("rejects malformed execution routes and non-boolean provider required flags
   const invalidRoutes = [
     null,
     {},
-    { strategyId: "CG_coinGrabber", symbol: "ZROFDUSD" },
-    { strategyId: "CG_coinGrabber", symbol: "ZROFDUSD", providerInstanceId: " " },
-    { strategyId: "CG_coinGrabber", symbol: "ZROFDUSD", providerInstanceId: "primary", fallbackProviderInstanceId: "secondary" },
+    { strategyId: "CG_coinGrabber",
+  symbol: "ZROFDUSD" },
+    { strategyId: "CG_coinGrabber",
+  symbol: "ZROFDUSD",
+  providerInstanceId: " " },
+    { strategyId: "CG_coinGrabber",
+  symbol: "ZROFDUSD",
+  providerInstanceId: "primary",
+  fallbackProviderInstanceId: "secondary" },
   ]
   for (const route of invalidRoutes) {
     const config = createAppConfig()

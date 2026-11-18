@@ -7,7 +7,8 @@ import {
   mapBrokerSubscriptionFailedData,
 } from "../../application/events/lifecycle-event-dtos.js"
 
-function logSystem({ logger, ...data }) {
+function logSystem({ logger,
+  ...data }) {
   if (typeof logger?.system === "function") {
     logger.system(data)
     return
@@ -81,7 +82,10 @@ function attachMarketDataSourceIdentity(event, sourceIdentity) {
   })
 }
 
-function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
+function logMarketPriceEvaluation({ logger,
+  symbol,
+  priceEvent,
+  processed }) {
   if (!processed?.ok) {
     return
   }
@@ -98,7 +102,8 @@ function logMarketPriceEvaluation({ logger, symbol, priceEvent, processed }) {
   })
 }
 
-function createMarketPriceErrorReporter({ logger, onMarketPriceError }) {
+function createMarketPriceErrorReporter({ logger,
+  onMarketPriceError }) {
   return (details) => {
     const [rejection] = Array.isArray(details?.errors) ? details.errors : [details?.errors?.[0]]
     const expectedPostOnlyRejection = details?.errors?.length === 1 &&
@@ -124,7 +129,12 @@ function createMarketPriceErrorReporter({ logger, onMarketPriceError }) {
   }
 }
 
-function createBookTickerHandler({ symbol, sourceIdentity, isStopped, processMarketBook, logger, intakeState }) {
+function createBookTickerHandler({ symbol,
+  sourceIdentity,
+  isStopped,
+  processMarketBook,
+  logger,
+  intakeState }) {
   return (bookTicker) => {
     if (isStopped()) {
       return toResult({ data: { skipped: true,
@@ -211,7 +221,10 @@ errors: [error] }
   }
 }
 
-function publishSubscriptionFailure({ eventPublisher, brokerName, symbol, error }) {
+function publishSubscriptionFailure({ eventPublisher,
+  brokerName,
+  symbol,
+  error }) {
   publishLifecycleEvent({
     eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_FAILED,
@@ -224,7 +237,9 @@ function publishSubscriptionFailure({ eventPublisher, brokerName, symbol, error 
   })
 }
 
-function getSubscriptionFailure({ result, symbol, streamLabel }) {
+function getSubscriptionFailure({ result,
+  symbol,
+  streamLabel }) {
   const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
   return new Error(
     `Unable to subscribe to ${streamLabel} for ${symbol}${details ? `: ${details}` : ""}`,
@@ -277,7 +292,11 @@ async function subscribeToBookTicker({
   })
 }
 
-async function requestMarketPriceSubscription({ broker, symbol, handler, eventPublisher, brokerName }) {
+async function requestMarketPriceSubscription({ broker,
+  symbol,
+  handler,
+  eventPublisher,
+  brokerName }) {
   try {
     return await broker.subscribeForPrices({
       symbol,
@@ -292,7 +311,10 @@ async function requestMarketPriceSubscription({ broker, symbol, handler, eventPu
   }
 }
 
-function validateMarketPriceSubscription({ result, eventPublisher, brokerName, symbol }) {
+function validateMarketPriceSubscription({ result,
+  eventPublisher,
+  brokerName,
+  symbol }) {
   if (result?.ok && typeof result.data?.unsubscribe === "function") {
     return result.data
   }
@@ -308,7 +330,11 @@ function validateMarketPriceSubscription({ result, eventPublisher, brokerName, s
   throw error
 }
 
-function registerMarketPriceSubscription({ data, logger, symbol, subscriptions, intakeState }) {
+function registerMarketPriceSubscription({ data,
+  logger,
+  symbol,
+  subscriptions,
+  intakeState }) {
   publishLifecycleEvent({
     eventPublisher: data.eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
@@ -392,7 +418,8 @@ async function subscribeToMarketPrice({
   })
 }
 
-function resolveMarketDataBroker({ context, symbol }) {
+function resolveMarketDataBroker({ context,
+  symbol }) {
   const broker = typeof context.getMarketDataBroker === "function"
     ? context.getMarketDataBroker({ symbol })
     : context.broker
@@ -417,10 +444,12 @@ function resolveMarketDataBroker({ context, symbol }) {
   )) {
     throw new Error(`Market-data source identity for ${symbol} does not match its configured account/environment`)
   }
-  return { broker, sourceIdentity }
+  return { broker,
+  sourceIdentity }
 }
 
-async function subscribeToEnabledMarkets({ context, reportPriceError }) {
+async function subscribeToEnabledMarkets({ context,
+  reportPriceError }) {
   const { pairs, tradingEnabled, bookSubscriptions } = context
   const failedSymbols = []
   for (const [symbol, pairConfig] of Object.entries(pairs)) {
@@ -434,7 +463,8 @@ async function subscribeToEnabledMarkets({ context, reportPriceError }) {
     let sourceIdentity
     let symbolError
     try {
-      const resolvedSource = resolveMarketDataBroker({ context, symbol })
+      const resolvedSource = resolveMarketDataBroker({ context,
+  symbol })
       marketDataBroker = resolvedSource.broker
       sourceIdentity = resolvedSource.sourceIdentity
     } catch (error) {
@@ -496,7 +526,9 @@ async function subscribeToEnabledMarkets({ context, reportPriceError }) {
   return failedSymbols
 }
 
-function assertAllMarketSubscriptions({ enabledSymbols, subscriptions, allowPartialMarketData }) {
+function assertAllMarketSubscriptions({ enabledSymbols,
+  subscriptions,
+  allowPartialMarketData }) {
   const subscribedSymbols = subscriptions.map(({ symbol }) => symbol)
   const missingSubscriptions = enabledSymbols.filter((symbol) => !subscribedSymbols.includes(symbol))
   if (missingSubscriptions.length > 0 && !allowPartialMarketData) {
@@ -504,10 +536,14 @@ function assertAllMarketSubscriptions({ enabledSymbols, subscriptions, allowPart
       `Harvester startup did not establish market-price subscriptions for every enabled pair: ${missingSubscriptions.join(", ")}`,
     )
   }
-  return { subscribedSymbols, missingSubscriptions }
+  return { subscribedSymbols,
+  missingSubscriptions }
 }
 
-async function getInitialMarketPriceEvent({ broker, sourceIdentity, symbol, now }) {
+async function getInitialMarketPriceEvent({ broker,
+  sourceIdentity,
+  symbol,
+  now }) {
   let result
   try {
     result = await broker.getPrices({ symbol })
@@ -530,7 +566,11 @@ async function getInitialMarketPriceEvent({ broker, sourceIdentity, symbol, now 
   return priceEvent
 }
 
-async function processInitialMarketPrice({ context, reportPriceError, symbol, pairConfig, priceEvent }) {
+async function processInitialMarketPrice({ context,
+  reportPriceError,
+  symbol,
+  pairConfig,
+  priceEvent }) {
   const processed = await context.processMarketPrice({
     symbol,
     priceEvent,
@@ -550,7 +590,8 @@ async function processInitialMarketPrice({ context, reportPriceError, symbol, pa
   })
 }
 
-async function seedMissingInitialPrices({ context, reportPriceError }) {
+async function seedMissingInitialPrices({ context,
+  reportPriceError }) {
   const { pairs, marketPriceIntake, now } = context
   const failedSymbols = []
   for (const [symbol, pairConfig] of Object.entries(pairs)) {
@@ -572,14 +613,19 @@ async function seedMissingInitialPrices({ context, reportPriceError }) {
       continue
     }
     try {
-      const { broker, sourceIdentity } = resolveMarketDataBroker({ context, symbol })
+      const { broker, sourceIdentity } = resolveMarketDataBroker({ context,
+  symbol })
       const priceEvent = await getInitialMarketPriceEvent({
         broker,
         sourceIdentity,
         symbol,
         now,
       })
-      await processInitialMarketPrice({ context, reportPriceError, symbol, pairConfig, priceEvent })
+      await processInitialMarketPrice({ context,
+  reportPriceError,
+  symbol,
+  pairConfig,
+  priceEvent })
     } catch (error) {
       failedSymbols.push(symbol)
       context.logger.error?.({
@@ -664,7 +710,8 @@ function logMarketDataSubscriptionsReady({
   })
 }
 
-async function establishMarketDataSubscriptions({ context, reportPriceError }) {
+async function establishMarketDataSubscriptions({ context,
+  reportPriceError }) {
   const enabledSymbols = Object.entries(context.pairs)
     .filter(([, pairConfig]) => pairConfig.enabled)
     .map(([symbol]) => symbol)
@@ -682,7 +729,8 @@ async function establishMarketDataSubscriptions({ context, reportPriceError }) {
     allowPartialMarketData: context.allowPartialMarketData,
   })
   const initialPriceFailures = context.tradingEnabled
-    ? await seedMissingInitialPrices({ context, reportPriceError })
+    ? await seedMissingInitialPrices({ context,
+  reportPriceError })
     : []
   const failedSymbols = [...new Set([
     ...subscriptionFailures,

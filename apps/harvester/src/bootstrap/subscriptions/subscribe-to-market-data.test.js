@@ -4,7 +4,10 @@ import { subscribeToMarketData } from "./subscribe-to-market-data.js"
 
 const test = (...args) => nodeTest(`[subscribe-to-market-data.test.js] ${args[0]}`, ...args.slice(1))
 
-function createBrokerFixture({ calls, subscribeForPrices, subscribeForBookTicker, getPrices }) {
+function createBrokerFixture({ calls,
+  subscribeForPrices,
+  subscribeForBookTicker,
+  getPrices }) {
   return {
     subscribeForPrices: async (input) => {
       calls.push(`subscribe-price:${input.symbol}`)
@@ -33,7 +36,9 @@ function createBrokerFixture({ calls, subscribeForPrices, subscribeForBookTicker
   }
 }
 
-function createMarketProcessors({ calls, processMarketPrice, processMarketBook }) {
+function createMarketProcessors({ calls,
+  processMarketPrice,
+  processMarketBook }) {
   return {
     processMarketPrice: processMarketPrice ?? (async (input) => {
       calls.push(`process-price:${input.symbol}`)
@@ -111,13 +116,19 @@ test("preserves configured market-data source identity on live price events", as
   const processed = []
   const fixture = createFixture({
     marketDataProviderIdentities: { BTCUSDT: sourceIdentity },
-    subscribeForPrices: async ({ symbol, onPrice }) => {
-      await onPrice({ symbol, price: "65000", timestamp: 10_000 })
-      return { ok: true, data: { unsubscribe: async () => {}, stream: "price" } }
+    subscribeForPrices: async ({ symbol,
+  onPrice }) => {
+      await onPrice({ symbol,
+  price: "65000",
+  timestamp: 10_000 })
+      return { ok: true,
+  data: { unsubscribe: async () => {},
+    stream: "price" } }
     },
     processMarketPrice: async ({ priceEvent }) => {
       processed.push(priceEvent)
-      return { ok: true, data: { decision: { action: "NO_ACTION" } } }
+      return { ok: true,
+  data: { decision: { action: "NO_ACTION" } } }
     },
   })
   await fixture.result
@@ -142,7 +153,8 @@ test("preserves configured market-data source identity on initial price snapshot
     marketDataProviderIdentities: { BTCUSDT: sourceIdentity },
     processMarketPrice: async ({ priceEvent }) => {
       processed.push(priceEvent)
-      return { ok: true, data: { decision: { action: "NO_ACTION" } } }
+      return { ok: true,
+  data: { decision: { action: "NO_ACTION" } } }
     },
   })
   await fixture.result
@@ -180,7 +192,8 @@ test("tracks accepted book-ticker work in the per-market shutdown intake state",
       await bookTask
       return { ok: true }
     },
-    subscribeForBookTicker: async ({ symbol, onBookTicker }) => {
+    subscribeForBookTicker: async ({ symbol,
+  onBookTicker }) => {
       onBookTicker({
         symbol,
         bidPrice: "64999",
@@ -219,7 +232,8 @@ test("tracks accepted book-ticker work in the per-market shutdown intake state",
 test("skips WebSocket API ticker.price seeding when a fresh stream price arrives during subscription setup", async () => {
   const fixture = createFixture({
     tradingEnabled: true,
-    subscribeForPrices: async ({ symbol, onPrice }) => {
+    subscribeForPrices: async ({ symbol,
+  onPrice }) => {
       await onPrice({ symbol,
 price: "65000",
 timestamp: 10_000 })
