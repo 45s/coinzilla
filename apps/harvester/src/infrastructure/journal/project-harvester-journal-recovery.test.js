@@ -2268,7 +2268,11 @@ minProfit: "0.01",
 
 
 test("replays provider provenance consistently across order submission and execution fill", () => {
-  const provider = { providerInstanceId: "binanceTestnet", providerType: "binance", accountId: "binance-primary" }
+  const provider = {
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+  }
   const result = projectHarvesterJournalRecovery({
     records: [
       submissionRequested({ ...provider }),
@@ -2292,9 +2296,21 @@ test("replays provider provenance consistently across order submission and execu
 test("rejects a replayed fill whose provider identity differs from the original submission", () => {
   const result = projectHarvesterJournalRecovery({
     records: [
-      submissionRequested({ providerInstanceId: "binanceTestnet", providerType: "binance", accountId: "binance-primary" }),
-      submitted({ providerInstanceId: "binanceTestnet", providerType: "binance", accountId: "binance-primary" }),
-      fill({ providerInstanceId: "binanceLive", providerType: "binance", accountId: "binance-primary" }),
+      submissionRequested({
+        providerInstanceId: "binanceTestnet",
+        providerType: "binance",
+        accountId: "binance-primary",
+      }),
+      submitted({
+        providerInstanceId: "binanceTestnet",
+        providerType: "binance",
+        accountId: "binance-primary",
+      }),
+      fill({
+        providerInstanceId: "binanceLive",
+        providerType: "binance",
+        accountId: "binance-primary",
+      }),
     ],
   })
   assert.equal(result.ok, false, "Replay must fail closed rather than attach an execution to a different account instance.")
