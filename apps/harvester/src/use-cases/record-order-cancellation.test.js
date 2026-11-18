@@ -187,3 +187,37 @@ data: { durable: false } }) },
   assert.equal(uncommitted.ok, false)
   assert.equal(appendCalls, 0)
 })
+
+
+test("uses the original order provenance when the broker cancellation response omits adapter-level metadata", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const order = makeOrder()
+  const brokerResponse = new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: order.executedQuantity,
+    status: "CANCELED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+  const result = await recordOrderCancellationOutcome({
+    operationalStateStore,
+    order,
+    canceledOrder: brokerResponse,
+    reason: "TRAILING_BUY_REPRICE",
+    outcome: "CANCELED",
+  })
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.deepEqual([
+    result.data.record.data.providerInstanceId,
+    result.data.record.data.providerType,
+    result.data.record.data.accountId,
+  ], ["binanceTestnet", "binance", "binance-primary"])
+})
