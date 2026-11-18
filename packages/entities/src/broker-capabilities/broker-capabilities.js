@@ -213,8 +213,11 @@ export class BrokerCapabilities {
     }
     const hasProvider = input.provider !== undefined
     const hasProduct = input.product !== undefined
-    if (hasProvider !== hasProduct) {
-      throw new TypeError(brokerCapabilitiesErrMsgs.input)
+    if (hasProvider && !hasProduct) {
+      throw new TypeError(brokerCapabilitiesErrMsgs.product)
+    }
+    if (hasProduct && !hasProvider) {
+      throw new TypeError(brokerCapabilitiesErrMsgs.provider)
     }
     const provider = hasProvider
       ? requireNonEmptyString({
