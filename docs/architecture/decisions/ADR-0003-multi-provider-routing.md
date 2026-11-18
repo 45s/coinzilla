@@ -236,7 +236,7 @@ The diagrams are explanatory; the invariants in the Decision section are authori
 | Execution and market-data route resolution | Harvester application routing capability |
 | Harvester-facing broker contract | Harvester Application port |
 | Exchange-specific clients, signing, transport, DTOs and verified capabilities | Brokers Infrastructure |
-| Exchange-neutral broker capability semantics | Brokers package |
+| Shared exchange-neutral capability value/vocabulary/status semantics | Entities package |\n| Provider-specific capability declarations and implementation evidence | Brokers package |
 | Order provenance, account isolation, fill attribution and recovery | Harvester application/domain contracts, supported by broker facts |
 
 The Brokers package must not own Harvester strategy/market routing or import Harvester. Harvester must not import exchange protocol types into its domain.
