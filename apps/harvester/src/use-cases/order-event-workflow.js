@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { hasProviderIdentity } from "../domain/orders/provider-provenance.js"
+import { assertProviderIdentityMatches, hasProviderIdentity } from "../domain/orders/provider-provenance.js"
 import { toResult } from "@coinzilla/utils"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
@@ -13,6 +13,74 @@ import { makeReconcileTerminalOrderFills } from "./reconcile-terminal-order-fill
 import { failureResult } from "./recovery-failure.js"
 import { createUserDataEventTransition } from "./create-user-data-event-transition.js"
 
+
+function resolveRegisteredOrder({ state, order }) {
+  return state.registry?.getOrder?.({
+    clientOrderId: order.clientOrderId,
+  }) ?? order
+}
+
+function findRegisteredOrderByBrokerId({ state, brokerOrderId }) {
+  return state.registry?.getOrderByBrokerOrderId?.({ brokerOrderId }) ??
+    state.registry?.orders?.find((order) => order.brokerOrderId === brokerOrderId)
+}
+
+function createProviderAttributedFillHistoryBroker({ broker, state }) {
+  return {
+    ...broker,
+    getFills: async ({ symbol, orderId }) => {
+      const result = await broker.getFills({ symbol, orderId })
+      if (result?.ok !== true || !Array.isArray(result.data)) {
+        return result
+      }
+      const order = findRegisteredOrderByBrokerId({
+        state,
+        brokerOrderId: orderId,
+      })
+      if (!order) {
+        return result
+      }
+      return {
+        ...result,
+        data: result.data.map((fill) => attachOrderProviderIdentity({
+          order,
+          fill,
+        })),
+      }
+    },
+  }
+}
+
+function createReconcileTerminalOrderFillsTransition({
+  broker,
+  state,
+  pause,
+  processExecutionFillTransition,
+}) {
+  const attributedBroker = createProviderAttributedFillHistoryBroker({
+    broker,
+    state,
+  })
+  const reconcile = makeReconcileTerminalOrderFills({
+    broker: attributedBroker,
+    processedFillsByOrder: state.processedFillsByOrder,
+    pause,
+    processExecutionFillTransition,
+  })
+  return ({ order, eventFill } = {}) => {
+    const registeredOrder = resolveRegisteredOrder({ state, order })
+    const attributedEventFill = eventFill === undefined
+      ? undefined
+      : attachOrderProviderIdentity({
+          order: registeredOrder,
+          fill: eventFill,
+        })
+    return reconcile({
+      order: registeredOrder,
+      eventFill: attributedEventFill,
+    })
+  }
+}
 
 function createProcessExecutionFillTransition({
   state,
@@ -64,9 +132,9 @@ export function makeOrderEventWorkflow({
     recordSellExecutionFill,
     pause,
   })
-  const reconcileTerminalOrderFills = makeReconcileTerminalOrderFills({
+  const reconcileTerminalOrderFills = createReconcileTerminalOrderFillsTransition({
     broker,
-    processedFillsByOrder: state.processedFillsByOrder,
+    state,
     pause,
     processExecutionFillTransition,
   })
@@ -289,8 +357,17 @@ function attachOrderProviderIdentity({
     order,
     fill,
   }) {
-  if (!(order instanceof CanonicalOrder) || order.providerInstanceId === undefined ||
-      !(fill instanceof Fill) || fill.providerInstanceId !== undefined) {
+  if (!(order instanceof CanonicalOrder) || !(fill instanceof Fill) ||
+      !hasProviderIdentity({ value: order })) {
+    return fill
+  }
+  assertProviderIdentityMatches({
+    expected: order,
+    actual: fill,
+    allowMissingActual: true,
+    context: "Execution fill provider identity",
+  })
+  if (hasProviderIdentity({ value: fill })) {
     return fill
   }
   return new Fill({
@@ -348,9 +425,10 @@ async function applyValidatedExecutionFill({ dependencies, order, fill }) {
 }
 
 async function processExecutionFill({ dependencies, order, fill }) {
-  const registeredOrder = dependencies.state.registry?.getOrder?.({
-    clientOrderId: order.clientOrderId,
-  }) ?? order
+  const registeredOrder = resolveRegisteredOrder({
+    state: dependencies.state,
+    order,
+  })
   const attributedFill = attachOrderProviderIdentity({
     order: registeredOrder,
     fill,
