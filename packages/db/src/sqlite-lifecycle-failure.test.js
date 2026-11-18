@@ -17,13 +17,13 @@ test("SQLite connection initialization preserves both setup and cleanup failures
   const cleanupFailure = new Error("partial connection cleanup failed")
   let failedConnection
 
-  context.mock.method(DatabaseSync.prototype, "exec", function exec(sql, ...parameters) {
+  context.mock.method(DatabaseSync.prototype, "exec", function exec(sql) {
     if (sql === "PRAGMA journal_mode = WAL") {
       throw initializationFailure
     }
-    return originalExec.call(this, sql, ...parameters)
+    return originalExec.call(this, sql)
   })
-  context.mock.method(DatabaseSync.prototype, "close", function close(...parameters) {
+  context.mock.method(DatabaseSync.prototype, "close", function close() {
     failedConnection = this
     throw cleanupFailure
   })
