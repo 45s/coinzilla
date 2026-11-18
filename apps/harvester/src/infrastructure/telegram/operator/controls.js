@@ -60,9 +60,14 @@ export function buildPauseBuySuccessReply({ buyScope,
   }
   interaction.applicationOperationCompleted = true
   interaction.stateChanged = result.data.alreadyPaused !== true || result.data.canceled > 0
-  const prefix = result.data.alreadyPaused === true
-    ? `BUY pause remains active ${buyScope}`
-    : symbol ? `Paused ${symbol}: BUY pause activated` : "BUY pause activated across all markets"
+  let prefix
+  if (result.data.alreadyPaused === true) {
+    prefix = `BUY pause remains active ${buyScope}`
+  } else if (symbol) {
+    prefix = `Paused ${symbol}: BUY pause activated`
+  } else {
+    prefix = "BUY pause activated across all markets"
+  }
   return `${prefix}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched; check /orders. This pause is process-local and is not restored after restart.`
 }
 
@@ -258,7 +263,10 @@ async function invokeOperatorControl(options) {
     startedAt,
     logStage,
   })
-  return { method, reply }
+  return {
+    method,
+    reply,
+  }
 }
 
 export async function executeTelegramOperatorControl({
