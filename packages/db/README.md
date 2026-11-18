@@ -420,4 +420,4 @@ pnpm --filter @coinzilla/db test
 pnpm --filter @coinzilla/db test:coverage
 ```
 
-The package coverage run includes `src/**/*.js` production modules and the provider-conformance test-support implementation. It excludes test files and imported `@coinzilla/utils` source because that dependency is owned and tested by its own package; no `@coinzilla/db` production module is excluded.
+The package coverage run includes all `src/**/*.js` production modules. It excludes test files, the `test-support` conformance harness, and imported `@coinzilla/utils` source. The harness is exercised by the SQLite and asynchronous fake-provider conformance suites, but is test-only code whose negative-capability callbacks are intentionally not invoked; `@coinzilla/utils` is owned and tested by its own package. No `@coinzilla/db` production implementation file is excluded.
