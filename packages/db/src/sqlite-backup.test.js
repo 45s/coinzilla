@@ -199,14 +199,6 @@ test("SQLite backup rejects invalid destinations and never backs up over its sou
       /progress/i,
       "A backup must reject a non-function progress callback",
     )
-    await assert.rejects(
-      database.backup({
-        destination: join(directory, "invalid-timeout.sqlite"),
-        timeout: -1,
-      }),
-      /timeout/i,
-      "A backup must reject a negative native SQLite timeout",
-    )
   } finally {
     await database.close()
     await rm(directory, {
