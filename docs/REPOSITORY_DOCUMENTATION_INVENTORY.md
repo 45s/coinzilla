@@ -4,7 +4,7 @@
 - Type: Repository documentation inventory
 - Owner: Repository engineering
 - Baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Date: 2026-11-09 (baseline); latest verification: 2026-11-11
+- Date: 2026-11-09 (baseline); latest verification: 2026-11-18
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](DOCUMENTATION_GOVERNANCE.md)
 - Harvester detail: [Harvester documentation inventory](../apps/harvester/docs/plans/HARVESTER_DOCUMENTATION_INVENTORY.md)
@@ -75,8 +75,9 @@ The original 110-file checkpoint above remains a historical snapshot. Complete r
 | `b5fc236987833da4374258da876b412be3c48759` | Current source-verified develop checkpoint after merged PR #1012; complete recursive tree still contains 124 tracked Markdown/MDX paths (61 Harvester, 63 elsewhere) | 124 |
 | `7590d332a307c7ef7bea37f0ba8721b399bd96e8` | Historical source-verified develop checkpoint before merged PR #1269; complete recursive tree contains 147 tracked Markdown/MDX paths (81 Harvester, 66 elsewhere) | 147 |
 | `0a51d6034a6ff6473d9a9005b74744fd048c9135` | Current source-verified develop checkpoint after merged PR #1269; no Markdown/MDX path additions or removals since `7590d33`; 147 tracked Markdown/MDX paths (81 Harvester, 66 elsewhere) | 147 |
+| `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` | Current source-verified develop checkpoint after merged PRs #1267, #1353 and #1383; nine Markdown/MDX additions and no removals since `0a51d60`; 156 tracked paths (85 Harvester, 71 elsewhere) | 156 |
 
-The previous source-verified develop checkpoint `b5fc236987833da4374258da876b412be3c48759` (after merged PR #1012) contained 124 tracked Markdown/MDX files: 61 under Harvester and 63 elsewhere. The complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` contained **147 tracked Markdown/MDX files**: 81 under Harvester and 66 elsewhere (97 frozen baseline files plus 50 additions, zero net removals). The current source-verified develop checkpoint `0a51d6034a6ff6473d9a9005b74744fd048c9135`, after merged PR #1269, has the same 147 paths; a complete changed-path comparison confirms no Markdown/MDX additions or removals since `7590d33`. Since the 124-file checkpoint, 23 Markdown/MDX paths were added: 20 under Harvester and three under `docs/engineering/`; their paths and purposes are listed below. Earlier 110-, 112-, 113-, 114-, 117-, 118-, 119- and 124-file counts remain valid historical snapshots. The current PR #1267 adds one further Harvester ADR path on its branch; it is not part of the 147-file develop count and will bring the post-merge tree to 148 files (82 Harvester, 66 elsewhere).
+The previous source-verified develop checkpoint `b5fc236987833da4374258da876b412be3c48759` (after merged PR #1012) contained 124 tracked Markdown/MDX files: 61 under Harvester and 63 elsewhere. The complete recursive tree at `7590d332a307c7ef7bea37f0ba8721b399bd96e8` contained **147 tracked Markdown/MDX files**: 81 under Harvester and 66 elsewhere (97 frozen baseline files plus 50 additions, zero net removals). The subsequent checkpoint `0a51d6034a6ff6473d9a9005b74744fd048c9135`, after merged PR #1269, remained at 147 paths. The latest source-verified `develop` checkpoint `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` contains **156 tracked Markdown/MDX files**: 85 under Harvester and 71 elsewhere. A complete recursive tree comparison found nine added paths and no removals since `0a51d60`: four under Harvester, two under `docs/`, one under Brokers, and two under DB. The PR #1267 ADR is merged and included in this current count. Earlier 110-, 112-, 113-, 114-, 117-, 118-, 119-, 124- and 147-file counts remain valid historical snapshots.
 
 ## Subsequent recursive additions — current develop checkpoint 0a51d603
 
@@ -108,11 +109,21 @@ A complete recursive tree comparison from the 124-file checkpoint `b5fc236987833
 | `docs/engineering/ESLINT_STANDARD.md` | Repository ESLint policy and verification standard. |
 | `docs/engineering/structured-error-handling.md` | Repository structured error-handling standard. |
 
-### Pending addition — PR #1267
+## Subsequent recursive additions — current develop checkpoint 37aa07ec
 
-| Added path | Purpose | Expected post-merge total |
-| --- | --- | ---: |
-| `apps/harvester/docs/architecture/decisions/0005-emergency-buy-pause.md` | Accepted global/per-market emergency BUY pause, current-process-owned cancellation and recovery SELL continuity decision. | 148 (82 Harvester) |
+A complete recursive tree comparison from `0a51d6034a6ff6473d9a9005b74744fd048c9135` to current `develop` `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` found nine added Markdown/MDX paths and no removals:
+
+| Added path | Purpose |
+| --- | --- |
+| `apps/harvester/docs/architecture/decisions/0005-emergency-buy-pause.md` | Accepted global/per-market emergency BUY pause, current-process-owned cancellation and recovery SELL continuity decision (merged PR #1267). |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-17_08-48-56Z.md` | Preserved 2026-11-17 Harvester session audit evidence. |
+| `apps/harvester/docs/infrastructure/provider-instance-registry.md` | Harvester-owned provider identity/registry architecture and lifecycle contract (merged PR #1383). |
+| `apps/harvester/docs/persistence/README.md` | Harvester-owned persistence architecture and database integration boundary. |
+| `docs/architecture/decisions/ADR-0003-multi-provider-routing.md` | Accepted provider-neutral execution and independent market-data routing architecture. |
+| `docs/architecture/multi-provider-migration-plan.md` | Source-based migration audit, phases, blockers and delivery sequence. |
+| `packages/brokers/BITUNIX_REFERENCE_AUDIT.md` | Source/reference audit for Bitunix Spot API capabilities and unresolved contract gaps. |
+| `packages/db/docs/README.md` | Database package architecture and decision index. |
+| `packages/db/docs/decisions/0001-provider-neutral-record-crud-api.md` | Accepted provider-neutral record CRUD API decision. |
 
 ## Merged documentation additions — PR #1013 and follow-up work
 
