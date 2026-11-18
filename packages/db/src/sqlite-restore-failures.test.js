@@ -6,7 +6,7 @@ import { join } from "node:path"
 import test from "node:test"
 
 import { DatabaseProviderError } from "./domain/errors/database-errors.js"
-import { publishRestoredDatabase, restoreSqliteDatabase } from "./infrastructure/sqlite/sqlite-restore.js"
+import { publishRestoreArtifact, publishRestoredDatabase, restoreSqliteDatabase } from "./infrastructure/sqlite/sqlite-restore.js"
 
 test("SQLite restore preserves a source connection close failure and removes the staged artifact", async (context) => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-restore-close-"))
@@ -60,27 +60,29 @@ test("SQLite restore preserves a source connection close failure and removes the
 
 test("SQLite restore reports post-publication cleanup failure without corrupting the published database", async () => {
   const directory = await mkdtemp(join(tmpdir(), "coinzilla-db-restore-cleanup-"))
-  const backupFilename = join(directory, "backup.sqlite")
-  const destinationFilename = join(directory, "restored.sqlite")
-  const backup = new DatabaseSync(backupFilename)
-  backup.exec("CREATE TABLE retained_records (id INTEGER PRIMARY KEY)")
-  backup.prepare("INSERT INTO retained_records (id) VALUES (?)").run(42)
-  backup.close()
-
+  const artifactDirectory = join(directory, "artifact")
+  const artifactFilename = join(artifactDirectory, "restored.sqlite")
+  const destinationFilename = join(directory, "published.sqlite")
+  await import("node:fs/promises").then(({ mkdir }) => mkdir(artifactDirectory))
+  const artifactDatabase = new DatabaseSync(artifactFilename)
+  artifactDatabase.exec("CREATE TABLE retained_records (id INTEGER PRIMARY KEY)")
+  artifactDatabase.prepare("INSERT INTO retained_records (id) VALUES (?)").run(42)
+  artifactDatabase.close()
   const cleanupFailure = new Error("restore temporary cleanup failed")
-  let temporaryDirectory
 
   try {
     await assert.rejects(
-      restoreSqliteDatabase({
-        backupFilename,
-        filename: destinationFilename,
-        cleanupTemporaryDirectory: async ({ directory: temporaryPath }) => {
-          temporaryDirectory = temporaryPath
+      publishRestoreArtifact({
+        artifact: {
+          directory: artifactDirectory,
+          filename: artifactFilename,
+        },
+        destinationFilename,
+        cleanupTemporaryDirectory: async () => {
           throw cleanupFailure
         },
       }),
-      (error) => error instanceof DatabaseProviderError && error.cause === cleanupFailure,
+      (error) => error === cleanupFailure,
       "A cleanup failure after atomic publication must be reported with its original cause",
     )
 
@@ -95,19 +97,12 @@ test("SQLite restore reports post-publication cleanup failure without corrupting
       restored.close()
     }
   } finally {
-    if (temporaryDirectory) {
-      await rm(temporaryDirectory, {
-        recursive: true,
-        force: true,
-      })
-    }
     await rm(directory, {
       recursive: true,
       force: true,
     })
   }
 })
-
 
 test("SQLite restore publication propagates non-conflict filesystem failures", async () => {
   const publicationFailure = Object.assign(
