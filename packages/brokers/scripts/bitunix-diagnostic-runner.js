@@ -412,11 +412,13 @@ function createRestDiagnosticRequest({ endpoint, symbol, depthPrecision, klineIn
     depthPrecision,
     klineInterval,
   }
-  const queryParams = endpoint.getQueryParams
-    ? endpoint.getQueryParams(context)
-    : endpoint.queryParams === null
-      ? { symbol }
-      : endpoint.queryParams ?? {}
+  let queryParams = endpoint.queryParams ?? {}
+  if (endpoint.queryParams === null) {
+    queryParams = { symbol }
+  }
+  if (endpoint.getQueryParams) {
+    queryParams = endpoint.getQueryParams(context)
+  }
   const body = endpoint.getBody?.(context)
   return {
     method: endpoint.method ?? "GET",
