@@ -1,9 +1,7 @@
 import { isMarketDataFresh } from "../domain/market/is-market-data-fresh.js"
 import { defaultLogger, toResult } from "@coinzilla/utils"
-import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
-import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeConservativeTradingEngine } from "../use-cases/conservative-trading-engine.js"
 import { createCandleHistoryService } from "../use-cases/create-candle-history-service.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
@@ -40,6 +38,8 @@ import { recordSafetyBlockerRaised, recordStrategyMarketControl } from "../use-c
 import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
 import { prepareTelegramOperatorControl } from "./operator-control/prepare-telegram-operator-control.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
+import { createAccountRuntimeRegistry } from "../application/providers/account-runtime-registry.js"
+import { resolveBinanceProviderIdentity } from "../domain/provider-identity.js"
 import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop } from "./harvester-runtime-helpers.js"
@@ -222,7 +222,6 @@ function startPendingUserDataRecovery({ userDataState, startUserDataRecovery } =
     startUserDataRecovery()
   }
 }
-
 
 function createHarvesterOperationalStateCallbacks({ operationalStateStore } = {}) {
   return createOperationalStateCallbacks({
@@ -436,7 +435,21 @@ async function createHarvesterStartupContext({ options } = {}) {
 }
 
 function createHarvesterPortfolioContext({ startup } = {}) {
+  const providerIdentity = resolveBinanceProviderIdentity({
+    tradingMode: startup.tradingMode,
+    providerInstanceId: startup.env.BINANCE_PROVIDER_INSTANCE_ID,
+    accountId: startup.env.BINANCE_ACCOUNT_ID,
+  })
+  const accountRuntimeRegistry = createAccountRuntimeRegistry({
+    providers: [{
+      ...providerIdentity,
+      environment: startup.tradingMode,
+    }],
+  })
+  const accountRuntime = accountRuntimeRegistry.get(providerIdentity.providerInstanceId)
   const context = {
+    accountRuntime,
+    accountRuntimeRegistry,
     portfolioWorkflow: createPortfolioWorkflow({
       evaluateStrategy: startup.evaluateStrategy,
       logger: createStrategyLogger({
@@ -448,23 +461,8 @@ function createHarvesterPortfolioContext({ startup } = {}) {
       onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
       onOperationalStateRecoveryCycleNotCompleted: startup.onOperationalStateRecoveryCycleNotCompleted,
     }),
-    recoveredState: Object.freeze({
-      portfolio: new Portfolio(),
-      recoveryLedgers: new Map(),
-      orderRegistry: OrderRegistry.empty(),
-      journalFills: [],
-      pausedMarkets: new Set(),
-      durablePausedMarkets: new Set(),
-      recoveryManagedPausedMarkets: new Set(),
-      recoveryManagedCancellationClientOrderIds: new Set(),
-      unrequestedTerminalOrderClientIds: new Set(),
-      replacementIntents: new Set(),
-      trailingBuyRepriceIntents: new Set(),
-      completedOrderClientIds: new Set(),
-      trailingBuySymbols: new Set(),
-      requiresExchangeReconciliation: false,
-    }),
-    marketMetadata: new Map(),
+    recoveredState: accountRuntime.state,
+    marketMetadata: accountRuntime.marketMetadata,
   }
   context.processMarketPrice = (...args) => context.portfolioWorkflow.processMarketPrice(...args)
   context.processMarketBook = () => toResult({ data: { skipped: true,
@@ -884,6 +882,7 @@ function createHarvesterRuntimeResult({ startup, portfolio, resources, stop } = 
     eventPublisher: startup.eventPublisher,
     environment: startup.environment,
     brokerName: startup.brokerName,
+    account: portfolio.accountRuntime.identity,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled,
     readOnlyProviders: resources.readOnlyProviders,

@@ -9,6 +9,7 @@ import { TelegramNotifier } from "@coinzilla/notifiers"
 import { makeEventPublisher } from "./application/events/event-publisher.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { acquireHarvesterProcessLocks } from "./infrastructure/process-lock/acquire-harvester-process-locks.js"
+import { resolveBinanceProviderIdentity } from "./domain/provider-identity.js"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
 import { publishLifecycleEvent } from "./application/events/publish-lifecycle-event.js"
 import { mapHarvesterProcessStartedData, mapHarvesterStartedData, mapHarvesterStartupFailedData } from "./application/events/lifecycle-event-dtos.js"
@@ -303,12 +304,19 @@ async function prepareProcessIdDatabase({
   return persistence?.database ?? null
 }
 
-async function acquireEnvironmentProcessLock({ runtimeConfig, acquireProcessLock, logger }) {
+async function acquireEnvironmentProcessLock({ runtimeConfig, env, acquireProcessLock, logger }) {
   const processLockDirectory = resolveHostProcessLockDirectory()
+  const providerIdentity = resolveBinanceProviderIdentity({
+    tradingMode: runtimeConfig.tradingMode,
+    providerInstanceId: env.BINANCE_PROVIDER_INSTANCE_ID,
+    accountId: env.BINANCE_ACCOUNT_ID,
+  })
   const lockResult = await acquireProcessLock({
     journalDirectory: processLockDirectory,
     globalDirectory: processLockDirectory,
     broker: runtimeConfig.brokerName,
+    providerInstanceId: providerIdentity.providerInstanceId,
+    accountId: providerIdentity.accountId,
     tradingMode: runtimeConfig.tradingMode,
     logger,
   })
@@ -340,6 +348,7 @@ async function acquireProcessStartupResources({ options, resources, processStart
   })
   resources.processLock = await acquireEnvironmentProcessLock({
     runtimeConfig: resources.runtimeConfig,
+    env,
     acquireProcessLock,
     logger,
   })

@@ -48,12 +48,12 @@ The existing runtime still constructs and registers exactly one Binance instance
 
 The optional Bitunix observer tracked in [#1422](https://github.com/45s/coinzilla/issues/1422) is deliberately not registered here. It exposes a separate read-only facade and cannot be selected by registry lookup, execution routing, or strategy market-data routing. See the [Bitunix read-only observer contract](./bitunix-read-only-observer.md).
 
-The registry can represent multiple named instances of the same provider type, but this slice does not add multi-instance runtime configuration or routing. Explicitly out of scope are:
+The registry can represent multiple named instances of the same provider type. The next delivery under Phase 4 adds only basic in-process account isolation; it does not make this registry itself an execution or market-data router. Explicitly out of scope for the registry foundation are:
 
 - strategy/symbol execution-route tables;
 - independent market-data routing;
 - automatic selection, fallback, or failover;
-- account isolation or account-scoped process locks; and
+- independent account runtime state (Portfolio, orders, balances and reservations); and
 - process-restart recovery or restoration.
 
 Those are separate decisions and delivery slices under #1339 and the existing ADRs. No exchange requests are made by the registry tests.
@@ -79,3 +79,7 @@ This phase does not add multi-provider routing, a second exchange instance, acco
 ## Offline verification scope
 
 Regression coverage exercises CanonicalOrder/Fill immutability, provider metadata propagation from the BrokerPort facade, intent-before-broker ordering, acknowledgement preservation, registry mutation rejection, strict durable-fact validation, and legacy fact compatibility. Tests use deterministic in-memory fakes and temporary local stores; no credentials, Binance API calls, or live/TESTNET order actions are needed.
+
+## Phase 4 scope — basic in-process account isolation
+
+Phase 4 is tracked by [issue #1339](https://github.com/45s/coinzilla/issues/1339). The first Phase 4 slice is implemented in [PR #1440](https://github.com/45s/coinzilla/pull/1440): process locks require a complete stable provider/account identity, different accounts may run concurrently, and two provider instances targeting the same account/environment remain mutually exclusive. Regression tests also reject incomplete identity pairs. The lock key is provider type + account alias + environment (not the instance alias), so two aliases for one exchange account cannot become concurrent writers; the default Binance primary account retains its legacy fingerprint for mixed-version exclusion. The legacy Binance primary account keeps its existing lock fingerprint so an older single-account process cannot overlap it; a dedicated regression test verifies this mixed-version exclusion. Separate in-memory account runtime state and lifecycle isolation remain the next Phase 4 work. The account runtime registry is implemented in `src/application/providers/account-runtime-registry.js`: each provider/account/environment descriptor receives its own Portfolio, OrderRegistry, strategy ledger collections, applied-fill identities, pause state and market metadata. The existing Conservative recovery-cycle ledger is strategy state and remains unchanged; no process-restart restoration or replay is implemented. Duplicate provider-instance IDs and duplicate provider/account/environment scopes are rejected rather than silently creating two owners; unknown account lookups also fail explicitly. The registry tests verify state separation and duplicate-scope rejection using in-memory descriptors only. Bootstrap now composes the legacy Binance account through this registry; it currently registers one account because multi-account provider construction is not yet wired. No process-restart restoration, Journal replay, crash recovery or #654 release gate is part of this phase. See the [multi-provider migration plan](../../../../docs/architecture/multi-provider-migration-plan.md) for the complete scope and acceptance criteria.
