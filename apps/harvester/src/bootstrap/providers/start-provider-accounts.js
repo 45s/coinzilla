@@ -388,7 +388,6 @@ function createProviderAccountStartInput({
   eventPublisher,
   runtimeSessionId,
   operationalStateStore,
-  marketDataSymbolsByProvider,
   executionSymbolsByProvider,
   marketDataProviderBySymbol,
   providerBrokers,
@@ -400,6 +399,7 @@ function createProviderAccountStartInput({
     symbol,
     marketDataProviderBySymbol.get(symbol),
   ]))
+  const useExplicitExecutionRouting = deferMarketDataStart || appConfig.executionRouting !== undefined
   return {
     appConfig: createAccountAppConfig({
       appConfig,
@@ -415,9 +415,13 @@ function createProviderAccountStartInput({
     operationalStateStore: index === 0 ? operationalStateStore : undefined,
     brokerAdapterFactory: provider.brokerAdapterFactory,
     providerIdentity: provider.identity,
-    executionSymbols: Object.freeze([...executionSymbols]),
-    marketDataSources: Object.freeze(marketDataSources),
-    requiredCapabilities: requiredCapabilitiesByProvider.get(provider.providerInstanceId) ?? Object.freeze([]),
+    ...(useExplicitExecutionRouting ? {
+      executionSymbols: Object.freeze([...executionSymbols]),
+      marketDataSources: Object.freeze(marketDataSources),
+    } : {}),
+    requiredCapabilities: useExplicitExecutionRouting
+      ? requiredCapabilitiesByProvider.get(provider.providerInstanceId) ?? Object.freeze([])
+      : Object.freeze([]),
     deferMarketDataStart,
     ...(deferMarketDataStart ? {
       onBrokerConnected: ({ providerInstanceId, broker } = {}) => {
@@ -445,6 +449,14 @@ function validateStartedProviderRuntime({
   if (requireStop && typeof runtime.stop !== "function") {
     throw new TypeError(`Provider account ${provider.providerInstanceId} runtime must expose stop()`)
   }
+  if (requireStop && (
+    typeof runtime.startMarketData !== "function" ||
+    typeof runtime.stopMarketData !== "function"
+  )) {
+    throw new TypeError(
+      `Provider account ${provider.providerInstanceId} runtime must expose startMarketData() and stopMarketData()`,
+    )
+  }
 }
 
 async function startOneProviderAccount({
@@ -460,7 +472,6 @@ async function startOneProviderAccount({
   releaseProviderLock,
   retainProviderLock,
   requireStop,
-  marketDataSymbolsByProvider,
   executionSymbolsByProvider,
   marketDataProviderBySymbol,
   providerBrokers,
@@ -477,7 +488,6 @@ async function startOneProviderAccount({
       eventPublisher,
       runtimeSessionId,
       operationalStateStore,
-      marketDataSymbolsByProvider,
       executionSymbolsByProvider,
       marketDataProviderBySymbol,
       providerBrokers,
@@ -525,7 +535,6 @@ async function startConfiguredProviderAccounts({
   operationalStateStore,
   releaseProviderLock,
   retainProviderLock,
-  marketDataSymbolsByProvider,
   executionSymbolsByProvider,
   marketDataProviderBySymbol,
   providerBrokers,
@@ -549,7 +558,6 @@ async function startConfiguredProviderAccounts({
       releaseProviderLock,
       retainProviderLock,
       requireStop: providers.length > 1,
-      marketDataSymbolsByProvider,
       executionSymbolsByProvider,
       marketDataProviderBySymbol,
       providerBrokers,
@@ -644,8 +652,20 @@ export async function startProviderAccounts({
     failedErrors: startup.failedErrors,
   })
   if (deferMarketDataStart) {
-    for (const entry of startup.startedAccounts) {
-      await entry.runtime.startMarketData()
+    try {
+      for (const entry of startup.startedAccounts) {
+        await entry.runtime.startMarketData()
+      }
+    } catch (error) {
+      const cleanupErrors = await stopStartedAccounts({
+        startedAccounts: startup.startedAccounts,
+        releaseProviderLock,
+      })
+      throw new AggregateError(
+        [error, ...cleanupErrors],
+        "Deferred Harvester market-data startup failed",
+        { cause: error },
+      )
     }
   }
   if (providers.length === 1) {
