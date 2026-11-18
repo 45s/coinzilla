@@ -82,6 +82,8 @@ The low-level SQLite public API (createSqliteDatabase) remains available for dat
 
 The table distinguishes durable local stores from in-memory state and external exchange state. Paths below are actual current implementation/documentation locations.
 
+The audit traced actual file/database writers and their consumers across Harvester runtime, bootstrap, infrastructure, and scripts, including append/write/rename/stream operations, process-lock creation, SQLite provider construction, and read-only history tools. No direct `node:sqlite` access or SQL statement was found in Harvester application/domain code; the existing SQLite consumer uses the public `@coinzilla/db` API. No local persistent market-data cache was found.
+
 | Component | Purpose and stored shape | Writers / readers / consumers | Lifecycle and consistency | Classification / risk |
 |---|---|---|---|---|
 | Trading-session history | Generic JSON records in SQLite collection harvester_trading_sessions; one row per runtime session, schema version 1 | Writer: create-trading-session-history-observer.js through trading-session-repository.js. Reader: repository findById; current runtime does not use the data to trade or restore state. | Opened by prepare-trading-session-persistence.js; observer queue drains before DB close. Lifecycle transitions are transactional; duplicate identical session creation is idempotent; conflicting identity reuse is an integrity error. | **SQLite candidate — already integrated.** Low/medium risk; optional history only. Existing data is not an authority for trading/recovery. |
@@ -96,6 +98,7 @@ The table distinguishes durable local stores from in-memory state and external e
 | Token/market specification registry | Shared JSON configuration file at apps/harvester/token-specification.json | Interactive config:symbol script reads, validates, merges, and atomically replaces the file; runtime config loader reads it. The writer uses a same-directory temporary JSON file and a .config-symbol.lock exclusive lock. | Operator-driven configuration update, not per-process runtime history. Existing file mode is preserved; new file defaults to 0644. | **Keep as configuration.** Do not move it into SQLite; changes are reviewed/versioned as application configuration. |
 | Volatility calibration output | Optional JSON report written only when volatility:calibrate receives --output; inputs are external Binance Spot 1m CSV archives | Offline calibration CLI reads/validates/merges CSV inputs and writes the report to the operator-selected path. It does not change runtime thresholds. | Explicit one-shot diagnostic output; no runtime reader or startup dependency. | **Keep as an offline artifact.** Not a runtime persistence candidate. |
 | Exchange account/order state | Current remote balances, open orders, order status, and executions held by the exchange | Read through broker adapters and reconciled into current in-memory domain state. | Exchange is the remote authority for current account/order state; availability/freshness and provider semantics vary. | **Out of scope as a local persistence replacement.** A local history projection must retain source/provenance and never masquerade as current exchange state. |
+| Market-data runtime/cache | Live market data and derived caches are held in runtime memory; no Harvester-owned file/database cache was found in the persistence writer audit. | Producers/consumers are market-data adapters and strategy services; no local persistence writer/reader pair was found. | Process lifetime; refreshed from the configured provider/feed. | **Keep in memory / out of scope.** Do not add a SQLite market-data store without a separate measured retention/query requirement. |
 
 ### 3.1 Candidate classification
 
@@ -372,6 +375,8 @@ The current names are already established in apps/harvester/.env.example:
 - NODE_ENV does not select exchange environment or database file.
 - HARVESTER_DATABASE_DIRECTORY is an optional absolute base-directory override.
 - OPERATIONAL_STATE_DIRECTORY is a separate setting for the ADR-0001 file store; it must not be reused as a database path.
+
+`HARVESTER_DATABASE_DIRECTORY` is currently consumed by the Harvester persistence path resolver from the supplied environment object (defaulting to `process.env`); it is not a new `appConfig` property. Keep this environment read in infrastructure. Do not introduce a second `appConfig` export or read environment variables from domain/application services; any future move into the single validated `appConfig` object is a separate configuration migration.
 
 Current default database files:
 
