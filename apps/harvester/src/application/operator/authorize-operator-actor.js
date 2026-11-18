@@ -1,4 +1,5 @@
 import { OPERATOR_ACTOR_ROLES } from "./constants.js"
+
 /**
  * Authorize a trusted application actor for trading-control operations.
  *
