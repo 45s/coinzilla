@@ -135,3 +135,51 @@ describe(`${BrokerCapabilities.name} immutability`, () => {
     }, TypeError)
   })
 })
+
+describe(`${BrokerCapabilities.name} provider evidence`, () => {
+  it("supports the richer provider declaration through the shared Entities contract", () => {
+    const declaration = new BrokerCapabilities({
+      provider: "binance",
+      product: "spot",
+      environment: {
+        selector: "tradingMode",
+        selectedMode: "testnet",
+        supportedModes: ["testnet", "live"],
+      },
+      capabilities: [
+        {
+          type: "READ_ACCOUNT_SNAPSHOT",
+          status: "SUPPORTED",
+          method: "getAccountSnapshot",
+          guarantee: "Returns timestamped canonical account balances.",
+          conditions: ["The account-read permission must be enabled."],
+        },
+        {
+          type: "READ_COMPLETE_FILL_HISTORY",
+          status: "UNKNOWN",
+          reason: "Exhaustive fill-history coverage is not established.",
+        },
+      ],
+    })
+
+    assert.equal(declaration.contractVersion, 1)
+    assert.equal(declaration.provider, "binance")
+    assert.equal(declaration.product, "spot")
+    assert.equal(declaration.getStatus({ type: "READ_ACCOUNT_SNAPSHOT" }), "SUPPORTED")
+    assert.equal(declaration.getStatus({ type: "READ_COMPLETE_FILL_HISTORY" }), "UNKNOWN")
+    assert.equal(declaration.getCapability({ type: "READ_ACCOUNT_SNAPSHOT" }).method, "getAccountSnapshot")
+    assert.deepEqual(declaration.environment.supportedModes, ["testnet", "live"])
+    assert.equal(declaration.getStatus({ type: "READ_SERVER_TIME" }), "UNKNOWN")
+  })
+
+  it("preserves legacy Entities snapshots without provider evidence metadata", () => {
+    const declaration = new BrokerCapabilities({
+      capabilities: [{ type: "READ_BALANCES", status: "SUPPORTED" }],
+    })
+
+    assert.deepEqual(declaration.value, {
+      capabilities: [{ type: "READ_BALANCES", status: "SUPPORTED" }],
+    })
+    assert.equal(declaration.getStatus({ type: "READ_BALANCES" }), "SUPPORTED")
+  })
+})
