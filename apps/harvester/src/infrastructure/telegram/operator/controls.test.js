@@ -182,9 +182,9 @@ test("reports owned BUY cancellation and recovery SELL continuity for the normal
     /External\/manual and prior-process orders are untouched/,
     "The normal market Pause response must preserve the startup/external-order ownership boundary.",
   )
-  assert.doesNotMatch(
+  assert.match(
     reply,
-    /Existing exchange orders remain open and may still fill/,
-    "The normal market Pause response must not describe owned BUYs as intentionally left open.",
+    /Existing exchange orders remain open and may still fill if they are not current-process-owned BUYs/,
+    "The normal market Pause response must clarify that only current-process-owned BUYs are canceled.",
   )
 })
