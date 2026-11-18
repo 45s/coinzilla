@@ -4,7 +4,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Current Harvester priority
 
-**Multi-provider execution and independent market-data routing (#1339) is the primary Harvester architecture/delivery workstream.** Phase 4 production account isolation is implemented in [PR #1445](https://github.com/45s/coinzilla/pull/1445), pending exact-head CI verification. The runtime can construct configured Binance accounts independently; additional provider types require a registered production adapter factory. Phase 5 market-data routing and Phase 6 execution routes remain out of scope. The separate opt-in Bitunix read-only observer is implemented in merged [PR #1423](https://github.com/45s/coinzilla/pull/1423) and documented in [PR #1424](https://github.com/45s/coinzilla/pull/1424) under [#1422](https://github.com/45s/coinzilla/issues/1422); it is not a trading provider or route.
+**Multi-provider execution and independent market-data routing (#1339) is the primary Harvester architecture/delivery workstream.** Phase 4 account isolation is complete in merged [PR #1445](https://github.com/45s/coinzilla/pull/1445). Phase 5 independent market-data routing and Phase 6 execution routing are implemented in [PR #1455](https://github.com/45s/coinzilla/pull/1455), pending exact-head CI and merge. The production adapter catalog remains Binance-only. Bitunix is not registered as a Harvester provider until [#1185](https://github.com/45s/coinzilla/issues/1185) is resolved; future integration must be complete through the standard provider-instance, BrokerPort, capability, account-lifecycle and routing contracts, with no temporary partial facade.
 
 ## Start here
 
@@ -38,8 +38,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Accounting invariants](domain/ACCOUNTING_INVARIANTS.md)
 - [Portfolio domain](domain/portfolio.md)
 - [Broker port and adapter](infrastructure/broker-port-and-adapter.md)
-- [Bitunix Spot read-only observer](infrastructure/bitunix-read-only-observer.md) — opt-in read-only facade, configuration and source limitations; not a trading provider.
-- [Binance provider-instance identity and registry](infrastructure/provider-instance-registry.md) — explicit non-secret identity, capability validation, deterministic lifecycle, and Phase 3 durable order/fill provenance (merged PR #1416); current trading bootstrap remains single-instance and unrouted.
+- [Provider-instance identity and registry](infrastructure/provider-instance-registry.md) — explicit non-secret identity, capability validation, account isolation, independent market-data and execution routes, and lifecycle behavior.
+- [Multi-provider execution routing](infrastructure/execution-routing.md) — exact strategy/market execution routes, independent market-data source selection, provenance, and no-fallback safety rules.
 - [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive material is exploratory discussion, not an approved executable contract
 - [Recovery Seller Domain Specification](domain/recovery-seller-domain-specification.md) — draft RS accounting, legacy authorization, independent profitability gates, and concurrent CG/RS invariants
 - [Recovery Seller Implementation Roadmap](domain/recovery-seller-implementation-roadmap.md) — six delivery phases from Conservative source audit to concurrent integration and offline lifecycle proof
@@ -90,7 +90,6 @@ Historical reports are snapshots, not current implementation authority. Use thei
 - Every new or moved document must be added to the appropriate local index.
 - Current behavior belongs in the canonical specification, architecture or runbook; task status belongs in the roadmap and GitHub Issues/PRs.
 - Preserve historical evidence, timestamps, source commit SHAs and uncertainty during migrations.
-
 
 ## Additional infrastructure guides
 
