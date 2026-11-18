@@ -100,6 +100,15 @@ function getSecrets({ env }) {
   return [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
 }
 
+function getMissingCredentialNames({ env }) {
+  return ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"].filter((key) =>
+    typeof env[key] !== "string" || !env[key].trim())
+}
+
+function hasCredentials({ env }) {
+  return getMissingCredentialNames({ env }).length === 0
+}
+
 function normalizeMessageText({ message }) {
   if (typeof message === "string") {
     return message
@@ -349,9 +358,26 @@ async function runRestOperation({
   results,
   secrets,
   includePublicPayloads,
+  credentialsConfigured,
 }) {
   const startedAt = now()
   const queryParams = endpoint.queryParams === null ? { symbol } : endpoint.queryParams
+  if (endpoint.privateResponse && !credentialsConfigured) {
+    results.push(createResult({
+      operation: endpoint.operation,
+      startedAt,
+      now,
+      status: "skipped",
+      request: {
+        method: "GET",
+        path: endpoint.path,
+        authenticated: true,
+        reason: "BITUNIX_API_KEY and BITUNIX_API_SECRET are required for private REST diagnostics",
+      },
+      secrets,
+    }))
+    return
+  }
   const request = {
     method: "GET",
     path: endpoint.path,
@@ -456,17 +482,6 @@ function createRuntimeMetadata() {
 }
 
 function createConfigurationResult({ env, startedAt, now, secrets }) {
-  const missing = ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"].filter((key) => typeof env[key] !== "string" || !env[key].trim())
-  if (missing.length > 0) {
-    return createResult({
-      operation: "diagnostic configuration",
-      startedAt,
-      now,
-      status: "failed",
-      error: new Error(`Missing required environment variables: ${missing.join(", ")}`),
-      secrets,
-    })
-  }
   if (DIAGNOSTIC_CONFIG.confirmLiveReads !== true) {
     return createResult({
       operation: "diagnostic safety confirmation",
@@ -477,13 +492,17 @@ function createConfigurationResult({ env, startedAt, now, secrets }) {
       secrets,
     })
   }
+  const missingCredentialVariables = getMissingCredentialNames({ env })
+  const credentialsConfigured = missingCredentialVariables.length === 0
   return createResult({
     operation: "diagnostic configuration",
     startedAt,
     now,
     status: "passed",
     response: {
-      credentialsConfigured: true,
+      credentialsConfigured,
+      privateChecks: credentialsConfigured ? "enabled" : "skipped",
+      missingCredentialVariables,
       liveReadConfirmation: DIAGNOSTIC_CONFIG.confirmLiveReads,
     },
     secrets,
@@ -517,10 +536,10 @@ function createOptionFailure({ error, startedAtIso, now, results, events, secret
   })
 }
 
-async function runRestChecks({ env, requestTimeout, symbol, now, results, secrets, includePublicPayloads, restClientFactory }) {
+async function runRestChecks({ env, requestTimeout, symbol, now, results, secrets, includePublicPayloads, credentialsConfigured, restClientFactory }) {
   const client = restClientFactory({
-    apiKey: env.BITUNIX_API_KEY,
-    apiSecret: env.BITUNIX_API_SECRET,
+    apiKey: credentialsConfigured ? env.BITUNIX_API_KEY : undefined,
+    apiSecret: credentialsConfigured ? env.BITUNIX_API_SECRET : undefined,
     requestTimeout,
   })
   for (const endpoint of REST_ENDPOINTS) {
@@ -532,6 +551,7 @@ async function runRestChecks({ env, requestTimeout, symbol, now, results, secret
       results,
       secrets,
       includePublicPayloads,
+      credentialsConfigured,
     })
   }
 }
@@ -702,6 +722,31 @@ async function runWebSocketSession({
   }
 }
 
+function recordWebSocketSkipped({ now, results, secrets }) {
+  const reason = "BITUNIX_API_KEY and BITUNIX_API_SECRET are required for authenticated WebSocket RPC diagnostics"
+  results.push(createResult({
+    operation: "WebSocket connection",
+    startedAt: now(),
+    now,
+    status: "skipped",
+    request: { reason },
+    secrets,
+  }))
+  for (const definition of WEBSOCKET_OPERATIONS) {
+    results.push(createResult({
+      operation: definition.operation,
+      startedAt: now(),
+      now,
+      status: "skipped",
+      request: {
+        method: definition.operation,
+        reason,
+      },
+      secrets,
+    }))
+  }
+}
+
 async function runWebSocketChecks({
   env,
   requestTimeout,
@@ -712,8 +757,17 @@ async function runWebSocketChecks({
   events,
   secrets,
   includePublicPayloads,
+  credentialsConfigured,
   websocketClientFactory,
 }) {
+  if (!credentialsConfigured) {
+    recordWebSocketSkipped({
+      now,
+      results,
+      secrets,
+    })
+    return
+  }
   let client
   try {
     client = createConfiguredWebSocketClient({
@@ -756,6 +810,7 @@ async function runConfiguredProbes({
   events,
   secrets,
   includePublicPayloads,
+  credentialsConfigured,
   restClientFactory,
   websocketClientFactory,
 }) {
@@ -767,6 +822,7 @@ async function runConfiguredProbes({
     results,
     secrets,
     includePublicPayloads,
+    credentialsConfigured,
     restClientFactory,
   })
   await runWebSocketChecks({
@@ -779,6 +835,7 @@ async function runConfiguredProbes({
     events,
     secrets,
     includePublicPayloads,
+    credentialsConfigured,
     websocketClientFactory,
   })
 }
@@ -814,6 +871,7 @@ async function runConfiguredDiagnostics({
     })
   }
 
+  const credentialsConfigured = hasCredentials({ env })
   await runConfiguredProbes({
     env,
     requestTimeout,
@@ -824,6 +882,7 @@ async function runConfiguredDiagnostics({
     events,
     secrets,
     includePublicPayloads,
+    credentialsConfigured,
     restClientFactory,
     websocketClientFactory,
   })
