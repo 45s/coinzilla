@@ -264,7 +264,6 @@ No Operational State Store adapter or migration is part of this slice. Restart r
 
 A database-backed Operational State adapter requires a separate gated decision, complete ADR-0001 parity evidence, crash/torn-write and durability tests, backup/restore proof, a rollback plan, and explicit #654 owner approval.
 
-
 ## Temporary SQLite connectivity check
 
 For the current integration smoke test, Harvester opens the existing environment-selected SQLite database and writes one temporary record to the `harvester_processes` collection:
