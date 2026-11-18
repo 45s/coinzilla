@@ -797,6 +797,16 @@ async function cleanupFailedHarvesterStartup({ error, startup, resources } = {})
   const cleanupErrors = [...operatorCleanupErrors, ...brokerCleanupErrors]
   throwIfStartupCleanupFailed({ error,
 cleanupErrors })
+  if (error !== null && typeof error === "object") {
+    try {
+      Object.defineProperty(error, "startupCleanupConfirmed", {
+        value: true,
+        configurable: true,
+      })
+    } catch {
+      // Preserve the original startup error if it cannot carry cleanup metadata.
+    }
+  }
   throw error
 }
 
