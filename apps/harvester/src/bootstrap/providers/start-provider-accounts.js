@@ -48,7 +48,7 @@ async function stopStartedAccounts({ startedAccounts }) {
   return errors
 }
 
-function createMultiAccountRuntime({ appConfig, startedAccounts }) {
+function createMultiAccountRuntime({ appConfig, startedAccounts, failedAccounts }) {
   const stop = async () => {
     const errors = await stopStartedAccounts({ startedAccounts })
     if (errors.length > 0) {
@@ -71,6 +71,7 @@ function createMultiAccountRuntime({ appConfig, startedAccounts }) {
     account: primary.account ?? providerAccounts[0],
     providerAccounts,
     accountRuntimes: Object.freeze(startedAccounts.map(({ runtime }) => runtime)),
+    failedAccounts: Object.freeze(failedAccounts),
     brokerName: providerAccounts.length === 1 ? providerAccounts[0].providerType : "multiple",
     environment: primary.environment,
     tradingMode: providerAccounts[0].environment,
@@ -85,22 +86,61 @@ function createMultiAccountRuntime({ appConfig, startedAccounts }) {
   })
 }
 
-async function rollbackStartedAccounts({ startupError, startedAccounts }) {
-  const cleanupErrors = await stopStartedAccounts({ startedAccounts })
-  if (cleanupErrors.length > 0) {
-    throw new AggregateError(
-      [startupError, ...cleanupErrors],
-      "Harvester provider-account startup failed and account cleanup was incomplete",
-      { cause: startupError },
-    )
+async function releaseFailedAccountLock({ provider, releaseProviderLock }) {
+  if (typeof releaseProviderLock !== "function") {
+    return []
   }
-  throw startupError
+  try {
+    const result = await releaseProviderLock(provider.providerInstanceId)
+    if (result?.ok !== false) {
+      return []
+    }
+    return Array.isArray(result.errors) && result.errors.length > 0
+      ? result.errors
+      : [new Error(`Provider account ${provider.providerInstanceId} process-lock release failed`)]
+  } catch (error) {
+    return [error]
+  }
+}
+
+function createFailedAccount({ provider, error, cleanupErrors }) {
+  return Object.freeze({
+    providerInstanceId: provider.providerInstanceId,
+    providerType: provider.providerType,
+    accountId: provider.accountId,
+    environment: provider.environment,
+    errorName: error?.name ?? "Error",
+    errorCode: error?.code,
+    errorMessage: error?.message ?? String(error),
+    cleanupErrors: Object.freeze(cleanupErrors),
+  })
+}
+
+function throwIfNoAccountStarted({ providers, failedAccounts }) {
+  if (failedAccounts.length !== providers.length) {
+    return
+  }
+  const failures = failedAccounts.flatMap(({ error, cleanupErrors }) => [
+    error,
+    ...cleanupErrors,
+  ])
+  if (providers.length === 1 && failures.length === 1) {
+    throw failures[0]
+  }
+  throw new AggregateError(
+    failures,
+    "No configured Harvester provider account could be started",
+    { cause: failures[0] },
+  )
 }
 
 /**
- * Start one independent Harvester runtime for each configured provider account.
- * The first account owns process-wide Telegram control and operational-state callbacks;
- * all account runtimes share the process event publisher but retain separate broker/state lifecycles.
+ * Start an independent Harvester runtime for each configured provider account.
+ * Account startup failures release only that account's process lock; successful
+ * account runtimes remain active and retain their own broker/state lifecycle.
+ *
+ * The first configured account owns process-wide Telegram control and optional
+ * operational-state callbacks. All accounts share the process event publisher.
  *
  * @param {{providers: object[], start: Function, appConfig: object, env: object}} input
  * @returns {Promise<object>}
@@ -113,6 +153,7 @@ export async function startProviderAccounts({
   eventPublisher,
   runtimeSessionId,
   operationalStateStore,
+  releaseProviderLock,
 } = {}) {
   if (!Array.isArray(providers) || providers.length === 0) {
     throw new TypeError("Harvester requires at least one configured provider account")
@@ -121,8 +162,9 @@ export async function startProviderAccounts({
     throw new TypeError("Harvester provider-account startup requires a start function")
   }
   const startedAccounts = []
-  try {
-    for (const [index, provider] of providers.entries()) {
+  const failedAccounts = []
+  for (const [index, provider] of providers.entries()) {
+    try {
       const runtime = await start({
         appConfig: createAccountAppConfig({
           appConfig,
@@ -143,18 +185,28 @@ export async function startProviderAccounts({
         runtime,
         stopped: false,
       })
+    } catch (error) {
+      const cleanupErrors = await releaseFailedAccountLock({
+        provider,
+        releaseProviderLock,
+      })
+      failedAccounts.push({
+        ...createFailedAccount({
+          provider,
+          error,
+          cleanupErrors,
+        }),
+        error,
+      })
     }
-  } catch (startupError) {
-    await rollbackStartedAccounts({
-      startupError,
-      startedAccounts,
-    })
   }
-  if (startedAccounts.length === 1) {
+  throwIfNoAccountStarted({ providers, failedAccounts })
+  if (providers.length === 1) {
     return startedAccounts[0].runtime
   }
   return createMultiAccountRuntime({
     appConfig,
     startedAccounts,
+    failedAccounts,
   })
 }
