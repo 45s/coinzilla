@@ -1,5 +1,6 @@
 import { mkdirSync } from "node:fs"
 import { dirname, resolve } from "node:path"
+import { setTimeout as delay } from "node:timers/promises"
 import { DatabaseSync } from "node:sqlite"
 
 import { createDatabase } from "../../database.js"
@@ -26,6 +27,39 @@ function isThenable(value) {
 
 function isAsyncFunction(callback) {
   return callback.constructor?.name === "AsyncFunction"
+}
+
+function isSqliteLockError(error) {
+  return error?.errcode === 5
+    || error?.errcode === 6
+    || /database (?:is locked|table is locked)/i.test(error?.message ?? "")
+}
+
+async function enableWalMode({ connection, timeout }) {
+  const deadline = Date.now() + timeout
+
+  while (true) {
+    try {
+      const { journal_mode: currentMode } = connection.prepare("PRAGMA journal_mode").get()
+      if (currentMode === "wal") {
+        return
+      }
+
+      connection.exec("PRAGMA journal_mode = WAL")
+      const { journal_mode: enabledMode } = connection.prepare("PRAGMA journal_mode").get()
+      if (enabledMode !== "wal") {
+        throw new Error("SQLite failed to enable WAL journal mode")
+      }
+      return
+    } catch (error) {
+      const remaining = deadline - Date.now()
+      if (!isSqliteLockError(error) || remaining <= 0) {
+        throw error
+      }
+
+      await delay(Math.min(10, remaining))
+    }
+  }
 }
 
 export function createGuardedIterator({ iterator, assertActive }) {
@@ -183,7 +217,7 @@ function createSqliteAdapter({
   }
 
   const adapter = {
-    connect() {
+    async connect() {
       if (!isMemoryDatabase) {
         mkdirSync(dirname(databaseFilename), { recursive: true })
       }
@@ -193,7 +227,10 @@ function createSqliteAdapter({
       try {
         openedConnection.exec("PRAGMA foreign_keys = ON")
         if (!isMemoryDatabase) {
-          openedConnection.exec("PRAGMA journal_mode = WAL")
+          await enableWalMode({
+            connection: openedConnection,
+            timeout,
+          })
         }
         connection = openedConnection
       } catch (error) {
