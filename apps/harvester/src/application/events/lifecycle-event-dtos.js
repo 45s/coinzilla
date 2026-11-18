@@ -825,6 +825,11 @@ export const mapFillAppliedData = (input = {}) =>
             field: "clientOrderId",
           }),
         }),
+        ...(fill.providerInstanceId === undefined ? {} : {
+          providerInstanceId: requireString({ value: fill.providerInstanceId, field: "fill.providerInstanceId" }),
+          providerType: requireString({ value: fill.providerType, field: "fill.providerType" }),
+          accountId: requireString({ value: fill.accountId, field: "fill.accountId" }),
+        }),
         symbol: requireString({
           value: fill.market.symbol,
           field: "symbol",
