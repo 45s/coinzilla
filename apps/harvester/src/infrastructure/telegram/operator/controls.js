@@ -68,7 +68,7 @@ export function buildPauseBuySuccessReply({ buyScope,
   } else {
     prefix = "BUY pause activated across all markets"
   }
-  return `${prefix}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched; check /orders. This pause is process-local and is not restored after restart.`
+  return `${prefix}. Cancelled ${result.data.canceled ?? 0} Harvester-owned BUY order(s); reconciled ${result.data.reconciled ?? 0} fill(s). Recovery SELLs and accounting continue. External/manual and prior-process orders are untouched. Existing exchange orders remain open and may still fill if they are not current-process-owned BUYs; check /orders. This pause is process-local and is not restored after restart.`
 }
 
 export function buildResumeBuySuccessReply({ buyScope,
