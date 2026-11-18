@@ -1,7 +1,4 @@
-import {
-  TELEGRAM_OPERATOR_ACTIONS,
-  TELEGRAM_OPERATOR_QUERY_STAGES,
-} from "./constants.js"
+import { TELEGRAM_OPERATOR_ACTIONS } from "./constants.js"
 import { OPERATOR_ACTOR_ROLES } from "../../../application/operator/constants.js"
 function recordControlFailure({ result, method, symbol, interaction, diagnostics }) {
   if (interaction.failed) { return }
@@ -154,12 +151,12 @@ export function buildControlReply(options) {
 
 
 const OPERATOR_CONTROL_METHODS = Object.freeze({
-  PAUSE: "pauseMarket",
-  RESUME: "resumeMarket",
-  PAUSE_BUYS: "pauseBuys",
-  RESUME_BUYS: "resumeBuys",
-  PAUSE_ALL_BUYS: "pauseAllBuys",
-  RESUME_ALL_BUYS: "resumeAllBuys",
+  [TELEGRAM_OPERATOR_ACTIONS.PAUSE]: "pauseMarket",
+  [TELEGRAM_OPERATOR_ACTIONS.RESUME]: "resumeMarket",
+  [TELEGRAM_OPERATOR_ACTIONS.PAUSE_BUYS]: "pauseBuys",
+  [TELEGRAM_OPERATOR_ACTIONS.RESUME_BUYS]: "resumeBuys",
+  [TELEGRAM_OPERATOR_ACTIONS.PAUSE_ALL_BUYS]: "pauseAllBuys",
+  [TELEGRAM_OPERATOR_ACTIONS.RESUME_ALL_BUYS]: "resumeAllBuys",
 })
 
 function reportUnavailableOperatorControl({ action, symbol, method, interaction, diagnostics }) {
