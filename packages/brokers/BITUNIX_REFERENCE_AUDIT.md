@@ -440,7 +440,6 @@ The endpoint has no documented pagination or address-generation behavior. An exp
 
 **Remaining limitation:** Bitunix Spot `getSymbolFilters()` remains partial. No exact tick size, quantity step, maximum quantity/notional, or depth-precision mapping is established. Do not enable order execution or close #1185 from this audit.
 
-
 ## 14. Local Bitunix diagnostics runner (2026-11-18)
 
 The local diagnostic runner in [issue #1426](https://github.com/45s/coinzilla/issues/1426) and [PR #1427](https://github.com/45s/coinzilla/pull/1427) is an operator tool over the existing Coinzilla Spot clients; it is not a new exchange capability.
