@@ -43,7 +43,11 @@ const submitted = (identity = provider) => record({
     type: "LIMIT",
     price: "100",
     quantity: "1",
-    status: "NEW",
+    executedQuantity: "0",
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 101,
   },
 })
 const fill = (identity = provider) => record({
@@ -60,6 +64,7 @@ const fill = (identity = provider) => record({
     quantity: "0.4",
     quoteQuantity: "40",
     liquidityRole: "MAKER",
+    executedAt: 102,
     commissions: [{
       amount: "0.0004",
       assetId: "binance:BTC",
