@@ -13,7 +13,7 @@
 
 ## Repository-wide agent workflow continuity
 
-- **Incremental commits and resumable handoffs — IN PROGRESS** ([issue #1199](https://github.com/45s/coinzilla/issues/1199)). Strengthen the existing agent workflow so task issues remain the live contract, commits form small meaningful checkpoints, and every pause/ownership transfer leaves a complete GitHub handoff. Canonical rules live in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md); root [AGENTS.md](AGENTS.md), [task checklists](docs/engineering/TASK_WORKFLOWS.md) and the [PR template](.github/PULL_REQUEST_TEMPLATE.md) point contributors to the same contract. Documentation-only scope; no runtime or exchange operations.
+- **Incremental commits and resumable handoffs — COMPLETE** in merged [PR #1200](https://github.com/45s/coinzilla/pull/1200) (`65cec77b9f0c182c5f506654a7e33df2909b6a67`); tracking issue [#1199](https://github.com/45s/coinzilla/issues/1199) is closed. Task issues remain the live contract, commits form small meaningful checkpoints, and every pause/ownership transfer leaves a complete GitHub handoff. Canonical rules live in [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md); root [AGENTS.md](AGENTS.md), [task checklists](docs/engineering/TASK_WORKFLOWS.md) and the [PR template](.github/PULL_REQUEST_TEMPLATE.md) point contributors to the same contract. Documentation-only scope; no runtime or exchange operations.
 
 ## 2026-11-14 repository status audit
 
