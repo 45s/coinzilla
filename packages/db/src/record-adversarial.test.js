@@ -194,17 +194,27 @@ test("record validation safely preserves null-prototype objects and an own __pro
     enumerable: true,
   })
 
+  const restored = JSON.parse(serializeRecord(record))
+  assert.equal(
+    Object.hasOwn(restored, "__proto__"),
+    true,
+    "An own __proto__ data field must remain present after JSON serialization",
+  )
   assert.deepEqual(
-    JSON.parse(serializeRecord(record)),
+    restored.__proto__,
     {
-      id: "null-prototype-1",
-      details: {
-        enabled: true,
-      },
-      __proto__: {
-        retained: "ordinary JSON data",
-      },
+      retained: "ordinary JSON data",
     },
-    "Null-prototype records must remain valid JSON objects and own __proto__ data must not mutate the clone prototype",
+    "An own __proto__ data field must preserve its value instead of mutating the clone prototype",
+  )
+  assert.deepEqual(
+    restored.details,
+    { enabled: true },
+    "Nested null-prototype objects must remain valid JSON objects",
+  )
+  assert.equal(
+    Object.getPrototypeOf(restored),
+    Object.prototype,
+    "A data field named __proto__ must not mutate the cloned record prototype",
   )
 })
