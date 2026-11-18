@@ -38,7 +38,10 @@ function validateCancellationInput({ operationalStateStore, order, canceledOrder
   if (!["OPEN", "PARTIALLY_FILLED"].includes(order.status) || typeof order.brokerOrderId !== "string") {
     throw new TypeError("Cancellation outcome requires the original active acknowledged order")
   }
-  requireProviderIdentity({ value: order, context: "Cancellation outcome" })
+  requireProviderIdentity({
+    value: order,
+    context: "Cancellation outcome",
+  })
   if (!isReason(reason) || !OUTCOMES.has(outcome)) {
     throw new TypeError("Cancellation reason or outcome is unsupported")
   }
