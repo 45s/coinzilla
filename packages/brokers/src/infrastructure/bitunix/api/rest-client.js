@@ -390,7 +390,7 @@ function validateResponse({ response, payload, path, stateChanging }) {
   })
 }
 
-function validateClientOptions({ apiKey, apiSecret, baseUrl, requestTimeout, fetchFn, now, nonceFactory }) {
+function validateCredentials({ apiKey, apiSecret }) {
   const hasApiKey = apiKey !== undefined && apiKey !== null && apiKey !== ""
   const hasApiSecret = apiSecret !== undefined && apiSecret !== null && apiSecret !== ""
   if (hasApiKey || hasApiSecret) {
@@ -399,6 +399,13 @@ function validateClientOptions({ apiKey, apiSecret, baseUrl, requestTimeout, fet
       throw new TypeError("Bitunix REST API key and secret must be provided together")
     }
   }
+}
+
+function validateClientOptions({ apiKey, apiSecret, baseUrl, requestTimeout, fetchFn, now, nonceFactory }) {
+  validateCredentials({
+    apiKey,
+    apiSecret,
+  })
   if (typeof baseUrl !== "string" || !baseUrl.startsWith("https://")) {
     throw new TypeError("Bitunix REST base URL must use https://")
   }
