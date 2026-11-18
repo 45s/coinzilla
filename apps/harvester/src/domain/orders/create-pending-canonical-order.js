@@ -33,8 +33,14 @@ function resolvePendingOrderType({ order, market, supportedOrderTypes }) {
   if (!Array.isArray(supportedOrderTypes) || !supportedOrderTypes.includes(type)) {
     throw new Error(`Exchange does not support order type ${type} for ${market.symbol}`)
   }
-  assertDecimalString({ value: order.quantity, field: "order.quantity" })
-  assertDecimalString({ value: order.price, field: "order.price" })
+  assertDecimalString({
+    value: order.quantity,
+    field: "order.quantity",
+  })
+  assertDecimalString({
+    value: order.price,
+    field: "order.price",
+  })
   return type
 }
 
@@ -42,7 +48,11 @@ function validatePendingOrderIntent({ order, market, clientOrderId, supportedOrd
   validatePendingOrderObject({ order })
   validatePendingOrderMarket({ market })
   validatePendingOrderClientId({ clientOrderId })
-  return resolvePendingOrderType({ order, market, supportedOrderTypes })
+  return resolvePendingOrderType({
+    order,
+    market,
+    supportedOrderTypes,
+  })
 }
 
 /**
