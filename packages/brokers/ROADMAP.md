@@ -1284,7 +1284,6 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [ ] Run the actual local LIVE diagnostics and inspect sanitized REST/WS responses with the operator's environment; this cannot be completed from the remote repository execution context.
 - [ ] Run the local command and inspect its sanitized report. Public-only mode needs no credentials; authenticated checks require both Bitunix credential variables and a dedicated read-only key. This LIVE API smoke test is operator-owned; CI must not receive exchange credentials.
 
-
 ## 2026-11-18 — Issue #1446 capability ownership and API checkpoint
 
 - [x] Documentation PR [#1449](https://github.com/45s/coinzilla/pull/1449) merged into `develop` as `433a5300c884a39771939082c4a25d78ff6d5d9c`.
