@@ -166,3 +166,8 @@ No HTTP server, webhook, web session, generic command framework or extra Telegra
 ## Later emergency BUY control boundary
 
 The accepted market-pause behavior in this ADR remains unchanged: `pauseMarket` / `/pause SYMBOL` blocks new strategy BUY intents but leaves existing exchange orders untouched. The distinct emergency BUY capability is defined by [ADR-0005](./0005-emergency-buy-pause.md); it uses separate global/market gates and cancels only current-process-owned BUY orders through the existing engine cancellation workflow. Recovery SELLs continue, and startup-snapshot/manual/external orders remain untouched.
+
+
+## 2026-11-18 command-contract update — superseded by ADR-0006
+
+The original non-canceling `pauseMarket` behavior documented above is retained as historical decision context. It is no longer the public Command Center contract. [ADR-0006](./0006-market-pause-cancels-owned-buys.md) supersedes the market-pause side-effect decision: the application facade's `pauseMarket` / `resumeMarket` methods now delegate to the market-scoped BUY pause/resume use cases. Telegram `/pause SYMBOL`, `/resume SYMBOL`, and confirmed keyboard Pause/Resume therefore activate/clear the BUY-only gate; Pause cancels current-process-owned BUYs and reconciles racing fills. Recovery SELLs continue; startup-snapshot/manual/external/prior-process orders remain untouched. Global BUY pause scope remains independent. Current facts are `OPERATOR_MARKET_BUYS_PAUSED` and `OPERATOR_MARKET_BUYS_RESUMED`.
