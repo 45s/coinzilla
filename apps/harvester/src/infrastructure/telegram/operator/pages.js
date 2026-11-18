@@ -17,13 +17,19 @@ export function resolveMarketAction(page) {
   return undefined
 }
 
+function isMarketBuyPaused(market) {
+  return typeof market?.operatorBuysPaused === "boolean"
+    ? market.operatorBuysPaused
+    : market?.operatorPaused === true
+}
+
 export function selectMarketsForAction({ markets,
  action }) {
   if (action === "PAUSE") {
-    return markets.filter((market) => market?.enabled === true && market.operatorBuysPaused !== true)
+    return markets.filter((market) => market?.enabled === true && !isMarketBuyPaused(market))
   }
   if (action === "RESUME") {
-    return markets.filter((market) => market?.enabled === true && market.operatorBuysPaused === true)
+    return markets.filter((market) => market?.enabled === true && isMarketBuyPaused(market))
   }
   return []
 }
