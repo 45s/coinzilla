@@ -43,9 +43,12 @@ function validateRestoreOptions({ backupFilename, filename, timeout, rate }) {
   }
 }
 
-async function assertRestoreDestinationIsNew({ filename }) {
+export async function assertRestoreDestinationIsNew({
+  filename,
+  realpathOperation = realpath,
+}) {
   try {
-    await realpath(filename)
+    await realpathOperation(filename)
     throw new TypeError("SQLite restore destination already exists")
   } catch (error) {
     if (error instanceof TypeError) {
