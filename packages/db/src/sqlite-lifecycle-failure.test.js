@@ -102,9 +102,9 @@ test("SQLite connection closes the native handle when WAL mode cannot be enabled
   context.mock.method(DatabaseSync.prototype, "exec", function exec(sql) {
     if (sql === "PRAGMA journal_mode = WAL") {
       openedConnection = this
-      return
+    } else {
+      originalExec.call(this, sql)
     }
-    return originalExec.call(this, sql)
   })
 
   try {
