@@ -173,7 +173,7 @@ test("SQLite verification preserves integrity and close failures", async (contex
       (error) => error instanceof AggregateError
         && error.errors[0] === integrityFailure
         && error.errors[1] === closeFailure
-        && error.cause === integrityFailure,
+        && error.cause === closeFailure,
       "A verification close failure must not mask the original integrity failure",
     )
   } finally {
