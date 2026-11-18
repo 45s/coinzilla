@@ -57,6 +57,23 @@ function createHarnessAcknowledgedOrder({ order, immediateFilledAcknowledgement,
   })
 }
 
+function rememberImmediateHarnessFill({
+  immediateFilledAcknowledgement,
+  acknowledgedOrder,
+  acknowledgedOrdersById,
+  acknowledgedFillsByOrder,
+  getAcknowledgedFills,
+}) {
+  if (!immediateFilledAcknowledgement) {
+    return
+  }
+  acknowledgedOrdersById.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
+  acknowledgedFillsByOrder.set(
+    acknowledgedOrder.brokerOrderId,
+    getAcknowledgedFills({ order: acknowledgedOrder }),
+  )
+}
+
 function createPlaceOrderHandler(options = {}) {
   const {
     orders,
@@ -107,13 +124,13 @@ function createPlaceOrderHandler(options = {}) {
       baseAsset,
       quoteAsset,
     })
-    if (immediateFilledAcknowledgement) {
-      acknowledgedOrdersById.set(acknowledgedOrder.brokerOrderId, acknowledgedOrder)
-      acknowledgedFillsByOrder.set(
-        acknowledgedOrder.brokerOrderId,
-        getAcknowledgedFills({ order: acknowledgedOrder }),
-      )
-    }
+    rememberImmediateHarnessFill({
+      immediateFilledAcknowledgement,
+      acknowledgedOrder,
+      acknowledgedOrdersById,
+      acknowledgedFillsByOrder,
+      getAcknowledgedFills,
+    })
     return {
       ok: true,
       data: acknowledgedOrder,
