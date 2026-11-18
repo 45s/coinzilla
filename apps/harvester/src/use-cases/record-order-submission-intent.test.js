@@ -156,3 +156,26 @@ data: {} },
     assert.equal(result.ok, false, "Malformed or secret-bearing order facts must be rejected by the durable store.")
   }
 })
+
+
+test("fails closed for legacy pending orders without recorded provider provenance", async () => {
+  let appendCalls = 0
+  const legacyOrder = new CanonicalOrder({
+    clientOrderId: "legacy-client-order",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: order.executedQuantity,
+    status: "PENDING",
+  })
+  const result = await recordOrderSubmissionIntent({
+    operationalStateStore: { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } },
+    order: legacyOrder,
+    purpose: null,
+  })
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /providerInstanceId.*provenance/i)
+  assert.equal(appendCalls, 0, "Missing historical identity must not be inferred or durably re-recorded.")
+})
