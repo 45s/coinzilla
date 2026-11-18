@@ -220,9 +220,18 @@ function createAcknowledgedCanonicalOrder({ order, calls }) {
     market,
     side: order.side,
     type: order.type,
-    limitPrice: new Money({ amount: order.price, asset: market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: order.quantity, asset: market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: market.baseAsset }),
+    limitPrice: new Money({
+      amount: order.price,
+      asset: market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: order.quantity,
+      asset: market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: market.baseAsset,
+    }),
     status: "OPEN",
     createdAt: now,
     acknowledgedAt: now,
@@ -251,15 +260,24 @@ function createBrokerOrderPorts({ calls }) {
   return {
     placeOrder: async ({ order }) => {
       calls.push(`place:${order.symbol}`)
-      const acknowledgedOrder = createAcknowledgedCanonicalOrder({ order, calls })
+      const acknowledgedOrder = createAcknowledgedCanonicalOrder({
+        order,
+        calls,
+      })
       calls.orders.set(order.clientOrderId, acknowledgedOrder)
-      return { ok: true, data: acknowledgedOrder }
+      return {
+        ok: true,
+        data: acknowledgedOrder,
+      }
     },
     cancelOrder: async ({ order }) => {
       calls.push(`cancel:${order.market.symbol}`)
       const canceledOrder = createCanceledCanonicalOrder(order)
       calls.orders.set(order.clientOrderId, canceledOrder)
-      return { ok: true, data: canceledOrder }
+      return {
+        ok: true,
+        data: canceledOrder,
+      }
     },
     getOpenOrders: async () => ({
       ok: true,
@@ -278,10 +296,20 @@ function createBrokerOrderPorts({ calls }) {
       ),
     }),
     getCanonicalOrder: async ({ clientOrderId, orderId } = {}) => {
-      const order = findCanonicalOrder({ calls, clientOrderId, orderId })
+      const order = findCanonicalOrder({
+        calls,
+        clientOrderId,
+        orderId,
+      })
       return order
-        ? { ok: true, data: order }
-        : { ok: false, errors: [new Error("order not found")] }
+        ? {
+          ok: true,
+          data: order,
+        }
+        : {
+          ok: false,
+          errors: [new Error("order not found")],
+        }
     },
   }
 }
@@ -561,10 +589,17 @@ function createUserDataProcessedSignal() {
   const promise = new Promise((done) => {
     resolve = done
   })
-  return { promise, resolve }
+  return {
+    promise,
+    resolve,
+  }
 }
 
-function assertMultiAccountMarketDataRouting({ primaryCalls, secondaryCalls, primaryRuntime }) {
+function assertMultiAccountMarketDataRouting({
+      primaryCalls,
+      secondaryCalls,
+      primaryRuntime,
+    }) {
   assert.equal(typeof primaryCalls.priceHandlers.get("BTCUSDT"), "function")
   assert.equal(typeof secondaryCalls.priceHandlers.get("ETHUSDT"), "function")
   assert.equal(secondaryCalls.includes("candles:ETHUSDT"), true)
@@ -625,14 +660,23 @@ function createPartialFill({ registeredOrder }) {
     accountId: registeredOrder.accountId,
     market: registeredOrder.market,
     side: registeredOrder.side,
-    price: new Money({ amount: "100", asset: registeredOrder.market.quoteAsset }),
+    price: new Money({
+      amount: "100",
+      asset: registeredOrder.market.quoteAsset,
+    }),
     quantity: filledQuantity,
-    quoteQuantity: new Money({ amount: "10", asset: registeredOrder.market.quoteAsset }),
+    quoteQuantity: new Money({
+      amount: "10",
+      asset: registeredOrder.market.quoteAsset,
+    }),
     executedAt: Date.now() + 2,
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  return { partiallyFilledOrder, fill }
+  return {
+    partiallyFilledOrder,
+    fill,
+  }
 }
 
 async function processRoutedUserDataFill({
@@ -675,8 +719,7 @@ test("routes order submission, user-data fills, cancellation, and candle data to
       }
     },
   })
-  const primaryRuntime = runtime.accountRuntimes[0]
-  const secondaryRuntime = runtime.accountRuntimes[1]
+  const [primaryRuntime, secondaryRuntime] = runtime.accountRuntimes
 
   try {
     assertMultiAccountMarketDataRouting({ primaryCalls, secondaryCalls, primaryRuntime })
