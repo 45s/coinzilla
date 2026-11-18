@@ -63,6 +63,13 @@ function createFakeMarketMethods({ websocketCalls }) {
       })
       return { close: "123.45" }
     },
+    async ping() {
+      websocketCalls.push({
+        method: "ping",
+        args: {},
+      })
+      return "pong"
+    },
   }
 }
 
@@ -441,4 +448,39 @@ test("partial Bitunix credentials fall back to public-only diagnostics without e
   )
   assert.equal(restCalls.length, 2, "partial credentials must still allow both unsigned public REST checks")
   assert.equal(JSON.stringify(report).includes("partial-api-key"), false, "a partial API key must never appear in the public-only diagnostic report")
+})
+
+
+test("diagnostics verify authenticated ping and one explicit reconnect without claiming subscription restoration", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+  })
+  const report = await runBitunixDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+
+  assert.equal(
+    websocketCalls.filter((entry) => entry === "connect").length,
+    2,
+    "the runner must make one explicit second connection after the initial RPC session closes",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "ping").status,
+    "passed",
+    "the initial session must verify the documented authenticated ping RPC",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "WebSocket reconnect").status,
+    "passed",
+    "the second authenticated connection and ping must be reported independently",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "WebSocket subscription restoration").status,
+    "skipped",
+    "subscription restoration must be skipped because Bitunix documents one-shot RPC, not subscriptions",
+  )
 })
