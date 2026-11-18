@@ -138,9 +138,9 @@ The complete recursive tree at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c` contai
 | `apps/harvester/docs/infrastructure/provider-instance-registry.md` | Provider identity/registry architecture and lifecycle contract (merged PR #1383). |
 | `apps/harvester/docs/persistence/README.md` | Harvester-owned persistence architecture and database integration boundary. |
 
-## Latest recursive addition — develop checkpoint ea6110fb
+## Last complete recursive inventory checkpoint — develop commit 007f631a
 
-The complete recursive tree at `ea6110fb39c1c86acfbf9673910965e7f698d511` contains **86 Harvester Markdown/MDX paths**: one path was added since the 85-file checkpoint at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c`; no paths were removed. The recursive tree was reverified at intermediate checkpoint `c3337a5d7a716334e2751b83bcf121ae1ebaa508` and current checkpoint `ea6110f`; no further path changes occurred.
+The complete recursive tree at `007f631a3db04b1a2d1ca3d21bb9af65123bd014` contained **86 Harvester Markdown/MDX paths**: one path was added since the 85-file checkpoint at `37aa07ec4c6421bd6c8b10084d734dc4ad9ed47c`; no paths were removed through this checkpoint. Later `develop` changes have not yet been included in a new complete recursive path count.
 
 | Added path | Purpose |
 | --- | --- |
