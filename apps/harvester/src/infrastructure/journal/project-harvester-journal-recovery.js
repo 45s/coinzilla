@@ -175,6 +175,17 @@ field: "brokerOrderId" })
     ? undefined
     : requireString({ value: data.clientOrderId,
 field: "clientOrderId" })
+  const providerFields = ["providerInstanceId", "providerType", "accountId"]
+  const providerValues = providerFields.map((field) => data[field])
+  if (providerValues.some((value) => value !== undefined) &&
+      (providerValues.some((value) => typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) || clientOrderId === undefined)) {
+    throw new TypeError("Journal fill provenance requires all three provider identifiers and clientOrderId")
+  }
+  const providerIdentity = providerValues.every((value) => value === undefined) ? {} : {
+    providerInstanceId: data.providerInstanceId,
+    providerType: data.providerType,
+    accountId: data.accountId,
+  }
   const symbol = requireString({ value: data.symbol,
 field: "symbol" })
   if (!ORDER_SIDES.has(data.side)) {throw new TypeError("fill side must be BUY or SELL")}
@@ -227,6 +238,7 @@ field: `commissions[${  index  }].asset` }),
     tradeId,
     brokerOrderId,
     ...(clientOrderId === undefined ? {} : { clientOrderId }),
+    ...providerIdentity,
     symbol,
     side: data.side,
     price,
