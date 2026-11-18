@@ -118,7 +118,7 @@ await database.close()
 
 See the [README](./README.md) for the current detailed contract, examples and SQLite runtime constraints. Implementation status remains in the issue/PR; do not mark roadmap steps complete until the PR is merged and required checks pass.
 
-## Existing SQLite functionality — preserved
+## Generic SQLite backup and restore primitives — merged\n\n**Implementation:** [PR #1382](https://github.com/45s/coinzilla/pull/1382) merged into `develop`; tracking issue [#1381](https://github.com/45s/coinzilla/issues/1381). The package now provides native online backup, integrity/foreign-key validation, temporary-file staging, atomic backup publication, and no-overwrite restore publication. These are SQLite infrastructure primitives only; retention, encryption, off-site storage, scheduling, compatibility policy and restore runbooks remain application-owned.\n\n**Follow-up reliability audit:** [Issue #1395](https://github.com/45s/coinzilla/issues/1395), [PR #1396](https://github.com/45s/coinzilla/pull/1396), audits the complete SQLite implementation and adds regression coverage for lifecycle, transaction-handle lifetime, WAL backup concurrency, restore races, cleanup failures and recovery. Do not mark this follow-up complete until its exact-head CI passes and its final PR is reviewed.\n\n## Existing SQLite functionality — preserved
 
 The package already provides and must retain:
 
