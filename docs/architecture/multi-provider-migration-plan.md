@@ -25,6 +25,7 @@ last_verified: 2026-11-18
 - **Current runtime remains one Binance instance:** `apps/harvester/src/domain/provider-identity.js` resolves stable non-secret Binance provider/account identifiers; `apps/harvester/src/application/providers/provider-registry.js` validates and owns registered provider lifecycle; `apps/harvester/src/bootstrap/broker/connect-broker.js` currently registers/connects the Binance broker. `apps/harvester/src/bootstrap/start-harvester.js` still defaults to `createBinanceBrokerAdapter`. There is no strategy/market execution route table, independent market-data route table, or second exchange instance on this checkpoint.
 - **Phases 3–6 remain planned:** durable provider/account order provenance, account isolation/reconciliation, independent market-data routing, execution routing/parity, and operational acceptance are not delivered. Process-restart recovery remains a related safety prerequisite under [issue #654](https://github.com/45s/coinzilla/issues/654).
 - **Safety gates unchanged:** Bitunix remains read-only / not Harvester-ready under [issue #1185](https://github.com/45s/coinzilla/issues/1185); Recovery Seller remains non-executable under [issue #1127](https://github.com/45s/coinzilla/issues/1127). No exchange operations were performed for this revalidation.
+- **Read-only observer exception (2026-11-18):** an opt-in Bitunix Spot read-only observer is authorized under [#1422](https://github.com/45s/coinzilla/issues/1422). It is separate from the provider registry, execution routes and strategy market-data routes; it does not satisfy Phase 7, resolve #1185, or establish Harvester execution readiness.
 
 This revalidation was a read-only source and GitHub delivery-state inspection. It did not execute tests or CI; do not transfer historical CI results to this checkpoint.
 
@@ -239,7 +240,7 @@ Relevant implementation: `packages/brokers/src/infrastructure/binance/broker-web
 
 **Binance is the first provider in the implementation sequence, not the permanent or exclusive provider.** Bitunix development is temporarily paused while Binance capability contracts and Harvester integration progress.
 
-Existing Bitunix source, completed read-only work, and capability research remain part of the project. Bitunix implementation continues under [issue #1185](https://github.com/45s/coinzilla/issues/1185). Its current partial/read-only functionality must not be treated as Harvester execution readiness.
+Existing Bitunix source, completed read-only work, and capability research remain part of the project. Bitunix implementation continues under [issue #1185](https://github.com/45s/coinzilla/issues/1185). Its current partial/read-only functionality must not be treated as Harvester execution readiness. The separate #1422 observer is a non-routing read interface only and does not alter this Phase 7 execution gate.
 
 When Bitunix implements and verifies the capabilities required by the shared broker contracts—including reliable account snapshots, stable order identity, safe placement and cancellation outcomes, complete order/fill reconciliation, private execution events, environment isolation, and lifecycle/recovery guarantees—it can be added to the provider registry and routed by Harvester under the same provider-neutral architecture.
 
