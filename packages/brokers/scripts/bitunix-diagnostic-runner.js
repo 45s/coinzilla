@@ -429,6 +429,50 @@ function createRestDiagnosticRequest({ endpoint, symbol, depthPrecision, klineIn
   }
 }
 
+function recordRestSkipped({ endpoint, startedAt, now, results, secrets, authenticated, reason }) {
+  results.push(createResult({
+    operation: endpoint.operation,
+    startedAt,
+    now,
+    status: "skipped",
+    request: {
+      method: endpoint.method ?? "GET",
+      path: endpoint.path,
+      authenticated,
+      stateChanging: false,
+      reason,
+    },
+    secrets,
+  }))
+}
+
+function recordRestSuccess({ endpoint, startedAt, now, results, request, response, includePublicPayloads, secrets }) {
+  results.push(createResult({
+    operation: endpoint.operation,
+    startedAt,
+    now,
+    status: "passed",
+    request,
+    response: response.data,
+    privateResponse: endpoint.privateResponse,
+    includePublicPayloads,
+    secrets,
+  }))
+}
+
+function recordRestFailure({ endpoint, startedAt, now, results, request, error, includePublicPayloads, secrets }) {
+  results.push(createResult({
+    operation: endpoint.operation,
+    startedAt,
+    now,
+    status: "failed",
+    request,
+    error,
+    includePublicPayloads,
+    secrets,
+  }))
+}
+
 async function runRestOperation({
   client,
   endpoint,
@@ -443,37 +487,27 @@ async function runRestOperation({
 }) {
   const startedAt = now()
   if (endpoint.requiresDepthPrecision && depthPrecision === null) {
-    results.push(createResult({
-      operation: endpoint.operation,
+    recordRestSkipped({
+      endpoint,
       startedAt,
       now,
-      status: "skipped",
-      request: {
-        method: endpoint.method ?? "GET",
-        path: endpoint.path,
-        authenticated: false,
-        stateChanging: false,
-        reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is required for the documented depth endpoint",
-      },
+      results,
       secrets,
-    }))
+      authenticated: false,
+      reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is required for the documented depth endpoint",
+    })
     return
   }
   if (endpoint.privateResponse && !credentialsConfigured) {
-    results.push(createResult({
-      operation: endpoint.operation,
+    recordRestSkipped({
+      endpoint,
       startedAt,
       now,
-      status: "skipped",
-      request: {
-        method: endpoint.method ?? "GET",
-        path: endpoint.path,
-        authenticated: true,
-        stateChanging: false,
-        reason: "BITUNIX_API_KEY and BITUNIX_API_SECRET are required for private REST diagnostics",
-      },
+      results,
       secrets,
-    }))
+      authenticated: true,
+      reason: "BITUNIX_API_KEY and BITUNIX_API_SECRET are required for private REST diagnostics",
+    })
     return
   }
   const request = createRestDiagnosticRequest({
@@ -484,155 +518,28 @@ async function runRestOperation({
   })
   try {
     const response = await client.request(request)
-    results.push(createResult({
-      operation: endpoint.operation,
+    recordRestSuccess({
+      endpoint,
       startedAt,
       now,
-      status: "passed",
+      results,
       request,
-      response: response.data,
-      privateResponse: endpoint.privateResponse,
-      includePublicPayloads,
-      secrets,
-    }))
-  } catch (error) {
-    results.push(createResult({
-      operation: endpoint.operation,
-      startedAt,
-      now,
-      status: "failed",
-      request,
-      error,
-      includePublicPayloads,
-      secrets,
-    }))
-  }
-}
-
-async function runWebSocketOperation({
-  client,
-  definition,
-  context,
-  now,
-  results,
-  secrets,
-  includePublicPayloads,
-}) {
-  const startedAt = now()
-  if (definition.requiresDepthPrecision && context.depthPrecision === null) {
-    results.push(createResult({
-      operation: definition.operation,
-      startedAt,
-      now,
-      status: "skipped",
-      request: {
-        method: definition.operation,
-        reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is not configured",
-      },
-      includePublicPayloads,
-      secrets,
-    }))
-    return
-  }
-  const args = definition.getArguments(context)
-  try {
-    const response = await client[definition.method](args)
-    results.push(createResult({
-      operation: definition.operation,
-      startedAt,
-      now,
-      status: "passed",
-      request: {
-        method: definition.operation,
-        params: args,
-      },
       response,
-      privateResponse: definition.privateResponse,
       includePublicPayloads,
       secrets,
-    }))
+    })
   } catch (error) {
-    results.push(createResult({
-      operation: definition.operation,
+    recordRestFailure({
+      endpoint,
       startedAt,
       now,
-      status: "failed",
-      request: {
-        method: definition.operation,
-        params: args,
-      },
+      results,
+      request,
       error,
       includePublicPayloads,
-      secrets,
-    }))
-  }
-}
-
-function createRuntimeMetadata() {
-  return {
-    node: process.version,
-    platform: process.platform,
-    symbol: DIAGNOSTIC_CONFIG.symbol,
-    restEndpoint: "https://openapi.bitunix.com",
-    websocketEndpoint: "wss://openapi.bitunix.com:443/ws-api/v1",
-    websocketMode: "authenticated request/response RPC; no documented continuous Spot subscription",
-  }
-}
-
-function createConfigurationResult({ env, startedAt, now, secrets }) {
-  if (DIAGNOSTIC_CONFIG.confirmLiveReads !== true) {
-    return createResult({
-      operation: "diagnostic safety confirmation",
-      startedAt,
-      now,
-      status: "failed",
-      error: new Error("Set DIAGNOSTIC_CONFIG.confirmLiveReads to true to confirm read-only requests against the configured LIVE Spot API account"),
       secrets,
     })
   }
-  const missingCredentialVariables = getMissingCredentialNames({ env })
-  const credentialsConfigured = missingCredentialVariables.length === 0
-  return createResult({
-    operation: "diagnostic configuration",
-    startedAt,
-    now,
-    status: "passed",
-    response: {
-      credentialsConfigured,
-      privateChecks: credentialsConfigured ? "enabled" : "skipped",
-      missingCredentialVariables,
-      liveReadConfirmation: DIAGNOSTIC_CONFIG.confirmLiveReads,
-    },
-    includePublicPayloads: true,
-    secrets,
-  })
-}
-
-function createReport({ startedAtIso, now, results, events }) {
-  return createDiagnosticReport({
-    startedAt: startedAtIso,
-    finishedAt: new Date(now()).toISOString(),
-    runtime: createRuntimeMetadata(),
-    results,
-    events,
-  })
-}
-
-function createOptionFailure({ error, startedAtIso, now, results, events, secrets }) {
-  results.push(createResult({
-    operation: "diagnostic options",
-    startedAt: now(),
-    now,
-    status: "failed",
-    error,
-    secrets,
-  }))
-  return createReport({
-    startedAtIso,
-    now,
-    results,
-    events,
-  })
 }
 
 async function runRestChecks({
