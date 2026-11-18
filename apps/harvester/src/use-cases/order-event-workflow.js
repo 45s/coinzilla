@@ -299,8 +299,7 @@ function attachOrderProviderIdentity({
   })
 }
 
-async function processExecutionFill({ dependencies, order, fill }) {
-  const attributedFill = attachOrderProviderIdentity({ order, fill })
+async function applyValidatedExecutionFill({ dependencies, order, fill }) {
   const {
     state,
     eventPublisher,
@@ -309,6 +308,35 @@ async function processExecutionFill({ dependencies, order, fill }) {
     recordSellExecutionFill,
     pause,
   } = dependencies
+  const accounting = await updateTradingAccounting({ fill })
+  if (!accounting?.ok) {
+    return handleExecutionAccountingFailure({
+      accounting,
+      order,
+      fill,
+      pause,
+      eventPublisher,
+    })
+  }
+  recordExecutionFillIdentity({
+    state,
+    order,
+    fill,
+    recordBuyExecutionFill,
+    recordSellExecutionFill,
+  })
+  publishExecutionFillOutcome({ accounting, fill, eventPublisher })
+  return toResult({
+    data: {
+      applied: accounting.data?.applied === true,
+      duplicate: accounting.data?.duplicate === true,
+    },
+  })
+}
+
+async function processExecutionFill({ dependencies, order, fill }) {
+  const attributedFill = attachOrderProviderIdentity({ order, fill })
+  const { eventPublisher, pause } = dependencies
   try {
     const validation = validateExecutionFill({
       order,
@@ -327,33 +355,10 @@ async function processExecutionFill({ dependencies, order, fill }) {
         retryable: validation.failure.retryable,
       })
     }
-    const accounting = await updateTradingAccounting({ fill: attributedFill })
-    if (!accounting?.ok) {
-      return handleExecutionAccountingFailure({
-        accounting,
-        order,
-        fill: attributedFill,
-        pause,
-        eventPublisher,
-      })
-    }
-    recordExecutionFillIdentity({
-      state,
+    return await applyValidatedExecutionFill({
+      dependencies,
       order,
       fill: attributedFill,
-      recordBuyExecutionFill,
-      recordSellExecutionFill,
-    })
-    publishExecutionFillOutcome({
-      accounting,
-      fill: attributedFill,
-      eventPublisher,
-    })
-    return toResult({
-      data: {
-        applied: accounting.data?.applied === true,
-        duplicate: accounting.data?.duplicate === true,
-      },
     })
   } catch (error) {
     return failureResult({
@@ -364,6 +369,7 @@ async function processExecutionFill({ dependencies, order, fill }) {
     })
   }
 }
+
 /**
  * Coordinate canonical user-data order events and execution-fill application.
  * The caller owns serialization and supplies accounting, cancellation,
