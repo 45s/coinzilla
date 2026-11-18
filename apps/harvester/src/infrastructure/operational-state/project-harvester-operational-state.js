@@ -683,8 +683,6 @@ function sortSessionsByStartedSequence({ sessions }) {
   return orderedSessions
 }
 
-// eslint-disable-next-line max-lines-per-function -- Existing synthetic session projection remains a single recovery boundary.
-// eslint-disable-next-line max-lines-per-function -- Session synthesis remains a single projection boundary.
 function emitSessionPreflight({ session, emit }) {
   const preflight = session.facts.filter((record) =>
     (
