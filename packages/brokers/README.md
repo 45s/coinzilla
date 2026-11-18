@@ -283,9 +283,10 @@ Bitunix currently documents the Spot WebSocket API as authenticated request/resp
 
 ### Configure and run
 
-Create packages/brokers/.env.development locally (never commit it):
+Create packages/brokers/.env.development locally (never commit it). Credentials are optional for public-only checks:
 
 ~~~dotenv
+# Optional: configure both to enable private account reads and authenticated WebSocket RPC.
 BITUNIX_API_KEY=your_read_only_api_key
 BITUNIX_API_SECRET=your_api_secret
 # Optional: leave unset to skip depth RPC; choose only a value you have verified for your market.
@@ -298,7 +299,11 @@ From the repository root:
 pnpm --filter @coinzilla/brokers diagnose:bitunix
 ~~~
 
-The source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` constant is the explicit acknowledgement gate because Bitunix Spot has no documented TESTNET environment. It defaults to `true`; set it to `false` in `scripts/bitunix-diagnostic-runner.js` to prevent the runner from making requests. The runner contacts the configured LIVE Spot endpoint and performs read-only requests only. Use an API key with account-read permission and **without** trading or withdrawal permission. Do not use production mutation-enabled keys for diagnostics.
+The source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` constant is the explicit acknowledgement gate because Bitunix Spot has no documented TESTNET environment. It defaults to `true`; set it to `false` in `scripts/bitunix-diagnostic-runner.js` to prevent the runner from making requests. The runner contacts the configured LIVE Spot endpoint and performs read-only requests only.
+
+Both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` are optional for public-only diagnostics. With neither credential configured—or with only one configured—the runner executes the unsigned public REST catalog and latest-price GET requests, then marks private account and all authenticated WebSocket RPC checks as skipped. Configure **both** variables to enable signed account reads and authenticated WebSocket RPC. A private REST request without credentials fails closed with `BITUNIX_REST_AUTHENTICATION_REQUIRED`; the REST client never fabricates credentials. The two values are treated as one credential pair.
+
+When enabling private diagnostics, use a dedicated API key with account-read permission and **without** trading or withdrawal permission. Do not use production mutation-enabled keys for diagnostics.
 
 The runner checks these REST operations:
 
