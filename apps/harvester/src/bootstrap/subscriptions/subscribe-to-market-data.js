@@ -236,7 +236,7 @@ function validateMarketPriceSubscription({ result, eventPublisher, brokerName, s
   throw error
 }
 
-function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }) {
+function registerMarketPriceSubscription({ data, logger, symbol, subscriptions, intakeState }) {
   publishLifecycleEvent({
     eventPublisher: data.eventPublisher,
     eventName: HARVESTER_EVENT_NAMES.BROKER_SUBSCRIPTION_ESTABLISHED,
@@ -250,6 +250,7 @@ function registerMarketPriceSubscription({ data, logger, symbol, subscriptions }
     symbol,
     unsubscribe: data.unsubscribe,
   })
+  intakeState.marketPriceSubscriptionReady = true
   logSystem({
     logger,
     message: "Market data subscribed",
@@ -313,6 +314,7 @@ async function subscribeToMarketPrice({
     logger,
     symbol,
     subscriptions,
+    intakeState,
   })
 }
 
@@ -393,15 +395,15 @@ async function subscribeToEnabledMarkets({ context, reportPriceError }) {
   return failedSymbols
 }
 
-function assertAllMarketSubscriptions({ enabledSymbols, subscriptions }) {
+function assertAllMarketSubscriptions({ enabledSymbols, subscriptions, allowPartialMarketData }) {
   const subscribedSymbols = subscriptions.map(({ symbol }) => symbol)
   const missingSubscriptions = enabledSymbols.filter((symbol) => !subscribedSymbols.includes(symbol))
-  if (missingSubscriptions.length > 0) {
+  if (missingSubscriptions.length > 0 && !allowPartialMarketData) {
     throw new Error(
       `Harvester startup did not establish market-price subscriptions for every enabled pair: ${missingSubscriptions.join(", ")}`,
     )
   }
-  return subscribedSymbols
+  return { subscribedSymbols, missingSubscriptions }
 }
 
 async function getInitialMarketPriceEvent({ broker, symbol, now }) {
@@ -448,7 +450,8 @@ async function processInitialMarketPrice({ context, reportPriceError, symbol, pa
 }
 
 async function seedMissingInitialPrices({ context, reportPriceError }) {
-  const { broker, pairs, marketPriceIntake, now } = context
+  const { pairs, marketPriceIntake, now } = context
+  const failedSymbols = []
   for (const [symbol, pairConfig] of Object.entries(pairs)) {
     if (!pairConfig.enabled) {
       continue
@@ -457,21 +460,34 @@ async function seedMissingInitialPrices({ context, reportPriceError }) {
     if (!intakeState) {
       throw new Error(`Missing market-price intake state for enabled pair ${symbol}`)
     }
+    if (!intakeState.marketPriceSubscriptionReady) {
+      failedSymbols.push(symbol)
+      continue
+    }
     if (intakeState.latestWebSocketPriceTask) {
       await intakeState.latestWebSocketPriceTask
     }
     if (intakeState.hasFreshWebSocketPrice) {
       continue
     }
-    const priceEvent = await getInitialMarketPriceEvent({ broker,
-      symbol,
-      now })
-    await processInitialMarketPrice({ context,
-      reportPriceError,
-      symbol,
-      pairConfig,
-      priceEvent })
+    try {
+      const broker = resolveMarketDataBroker({ context, symbol })
+      const priceEvent = await getInitialMarketPriceEvent({ broker, symbol, now })
+      await processInitialMarketPrice({ context, reportPriceError, symbol, pairConfig, priceEvent })
+    } catch (error) {
+      failedSymbols.push(symbol)
+      context.logger.error?.({
+        message: "Initial market-price seed failed; execution route remains blocked",
+        symbol,
+        providerInstanceId: context.marketDataSources?.[symbol] ?? context.providerInstanceId ?? null,
+        error,
+      })
+      if (!context.allowPartialMarketData) {
+        throw error
+      }
+    }
   }
+  return failedSymbols
 }
 
 function createMarketDataSubscriptionContext(options) {
@@ -492,9 +508,17 @@ function createMarketDataSubscriptionContext(options) {
     subscriptions,
     bookSubscriptions,
     marketPriceIntake,
+    getMarketDataBroker,
+    marketDataSources,
+    marketDataProviderTypes,
+    allowPartialMarketData = false,
   } = options
   return {
     broker,
+    getMarketDataBroker,
+    marketDataSources,
+    marketDataProviderTypes,
+    allowPartialMarketData,
     providerInstanceId,
     brokerName,
     eventPublisher,
@@ -518,6 +542,7 @@ function logMarketDataSubscriptionsReady({
   providerInstanceId,
   enabledSymbols,
   subscribedSymbols,
+  failedSymbols = [],
 }) {
   logSystem({
     logger,
@@ -525,6 +550,7 @@ function logMarketDataSubscriptionsReady({
     providerInstanceId: providerInstanceId ?? null,
     enabledSymbols,
     subscribedSymbols,
+    failedSymbols,
   })
 }
 
@@ -540,26 +566,34 @@ async function establishMarketDataSubscriptions({ context, reportPriceError }) {
     context,
     reportPriceError,
   })
-  const subscribedSymbols = assertAllMarketSubscriptions({
+  const subscriptionFailures = await subscribeToEnabledMarkets({
+    context,
+    reportPriceError,
+  })
+  const { subscribedSymbols, missingSubscriptions } = assertAllMarketSubscriptions({
     enabledSymbols,
     subscriptions: context.subscriptions,
+    allowPartialMarketData: context.allowPartialMarketData,
   })
+  const initialPriceFailures = context.tradingEnabled
+    ? await seedMissingInitialPrices({ context, reportPriceError })
+    : []
+  const failedSymbols = [...new Set([
+    ...subscriptionFailures,
+    ...missingSubscriptions,
+    ...initialPriceFailures,
+  ])]
   logMarketDataSubscriptionsReady({
     logger: context.logger,
     providerInstanceId: context.providerInstanceId,
     enabledSymbols,
     subscribedSymbols,
+    failedSymbols,
   })
 
-  // Only after all enabled symbols have active WebSocket Streams may startup
-  // request missing ticker snapshots through WebSocket API ticker.price.
-  if (context.tradingEnabled) {
-    await seedMissingInitialPrices({
-      context,
-      reportPriceError,
-    })
-  }
   return Object.freeze({
+    ok: failedSymbols.length === 0,
+    failedSymbols: Object.freeze(failedSymbols),
     subscriptions: context.subscriptions,
     bookSubscriptions: context.bookSubscriptions,
     marketPriceIntake: context.marketPriceIntake,
