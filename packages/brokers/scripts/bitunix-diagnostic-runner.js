@@ -9,6 +9,14 @@ import {
   summarizePrivatePayload,
 } from "./bitunix-diagnostics.js"
 
+const DIAGNOSTIC_CONFIG = Object.freeze({
+  confirmLiveReads: true,
+  symbol: "BTCUSDT",
+  klineInterval: "1min",
+  timeoutMs: 10_000,
+  includePublicPayloads: false,
+})
+
 const REST_ENDPOINTS = Object.freeze([
   {
     operation: "REST public market catalog",
@@ -436,11 +444,11 @@ async function runWebSocketOperation({
   }
 }
 
-function createRuntimeMetadata({ env }) {
+function createRuntimeMetadata() {
   return {
     node: process.version,
     platform: process.platform,
-    symbol: env.BITUNIX_DIAGNOSTICS_SYMBOL || "BTCUSDT",
+    symbol: DIAGNOSTIC_CONFIG.symbol,
     restEndpoint: "https://openapi.bitunix.com",
     websocketEndpoint: "wss://openapi.bitunix.com:443/ws-api/v1",
     websocketMode: "authenticated request/response RPC; no documented continuous Spot subscription",
@@ -459,13 +467,13 @@ function createConfigurationResult({ env, startedAt, now, secrets }) {
       secrets,
     })
   }
-  if (env.BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS !== "YES") {
+  if (DIAGNOSTIC_CONFIG.confirmLiveReads !== true) {
     return createResult({
       operation: "diagnostic safety confirmation",
       startedAt,
       now,
       status: "failed",
-      error: new Error("Set BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS=YES to confirm read-only requests against the configured LIVE Spot API account"),
+      error: new Error("Set DIAGNOSTIC_CONFIG.confirmLiveReads to true to confirm read-only requests against the configured LIVE Spot API account"),
       secrets,
     })
   }
@@ -476,23 +484,23 @@ function createConfigurationResult({ env, startedAt, now, secrets }) {
     status: "passed",
     response: {
       credentialsConfigured: true,
-      liveReadConfirmation: true,
+      liveReadConfirmation: DIAGNOSTIC_CONFIG.confirmLiveReads,
     },
     secrets,
   })
 }
 
-function createReport({ startedAtIso, now, env, results, events }) {
+function createReport({ startedAtIso, now, results, events }) {
   return createDiagnosticReport({
     startedAt: startedAtIso,
     finishedAt: new Date(now()).toISOString(),
-    runtime: createRuntimeMetadata({ env }),
+    runtime: createRuntimeMetadata(),
     results,
     events,
   })
 }
 
-function createOptionFailure({ error, startedAtIso, now, env, results, events, secrets }) {
+function createOptionFailure({ error, startedAtIso, now, results, events, secrets }) {
   results.push(createResult({
     operation: "diagnostic options",
     startedAt: now(),
@@ -504,7 +512,6 @@ function createOptionFailure({ error, startedAtIso, now, env, results, events, s
   return createReport({
     startedAtIso,
     now,
-    env,
     results,
     events,
   })
@@ -563,7 +570,6 @@ function recordWebSocketConnectionFailure({ error, now, results, secrets }) {
 
 async function executeWebSocketOperations({
   client,
-  env,
   symbol,
   depthPrecision,
   now,
@@ -574,7 +580,7 @@ async function executeWebSocketOperations({
   const context = {
     symbol,
     depthPrecision,
-    klineInterval: env.BITUNIX_DIAGNOSTICS_KLINE_INTERVAL || "1min",
+    klineInterval: DIAGNOSTIC_CONFIG.klineInterval,
   }
   for (const definition of WEBSOCKET_OPERATIONS) {
     await runWebSocketOperation({
@@ -658,7 +664,6 @@ function createConfiguredWebSocketClient({
 
 async function runWebSocketSession({
   client,
-  env,
   symbol,
   depthPrecision,
   now,
@@ -677,7 +682,6 @@ async function runWebSocketSession({
     if (isConnected) {
       await executeWebSocketOperations({
         client,
-        env,
         symbol,
         depthPrecision,
         now,
@@ -732,7 +736,6 @@ async function runWebSocketChecks({
   }
   await runWebSocketSession({
     client,
-    env,
     symbol,
     depthPrecision,
     now,
@@ -791,12 +794,11 @@ async function runConfiguredDiagnostics({
   restClientFactory,
   websocketClientFactory,
 }) {
-  const symbol = env.BITUNIX_DIAGNOSTICS_SYMBOL || "BTCUSDT"
-  const requestTimeout = Number(env.BITUNIX_DIAGNOSTICS_TIMEOUT_MS || 10_000)
+  const { symbol, timeoutMs: requestTimeout } = DIAGNOSTIC_CONFIG
   let depthPrecision
   try {
     if (!Number.isInteger(requestTimeout) || requestTimeout < 1 || requestTimeout > 60_000) {
-      throw new RangeError("BITUNIX_DIAGNOSTICS_TIMEOUT_MS must be an integer between 1 and 60000")
+      throw new RangeError("DIAGNOSTIC_CONFIG.timeoutMs must be an integer between 1 and 60000")
     }
     depthPrecision = parseDepthPrecision({
       value: env.BITUNIX_DIAGNOSTICS_DEPTH_PRECISION,
@@ -806,7 +808,6 @@ async function runConfiguredDiagnostics({
       error,
       startedAtIso,
       now,
-      env,
       results,
       events,
       secrets,
@@ -829,7 +830,6 @@ async function runConfiguredDiagnostics({
   return createReport({
     startedAtIso,
     now,
-    env,
     results,
     events,
   })
@@ -846,7 +846,7 @@ export async function runBitunixDiagnostics({
   const secrets = getSecrets({ env })
   const results = []
   const events = []
-  const includePublicPayloads = env.BITUNIX_DIAGNOSTICS_INCLUDE_PUBLIC_PAYLOADS === "true"
+  const { includePublicPayloads } = DIAGNOSTIC_CONFIG
   const configuration = createConfigurationResult({
     env,
     startedAt,
@@ -858,7 +858,6 @@ export async function runBitunixDiagnostics({
     return createReport({
       startedAtIso,
       now,
-      env,
       results,
       events,
     })

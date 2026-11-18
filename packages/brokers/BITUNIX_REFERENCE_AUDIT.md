@@ -463,7 +463,8 @@ REST diagnostics use the existing BitunixRestClient.request() boundary. Public m
 
 ### Diagnostic safety and evidence limits
 
-- The tool requires BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS=YES; no Spot TESTNET endpoint is documented.
+- The tool uses the source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` constant as its explicit opt-in; it defaults to `true`, and setting it to `false` prevents requests. No Spot TESTNET endpoint is documented.
+- `DIAGNOSTIC_CONFIG` also owns the default symbol (`BTCUSDT`), K-line interval (`1min`), request/connect/close timeout (`10_000` ms), and public-payload capture policy (`false`). These settings are not read from environment variables. API credentials remain environment-only; optional depth precision remains explicitly configurable.
 - API keys should have read-only account permissions and no trading/withdrawal permission.
 - The depth request requires an explicit caller-provided precision. No default is inferred from catalog precision fields because the official semantics remain unresolved.
 - Signed outbound frames are captured only after redacting API key, signature and nonce. Private user.account and user.info responses are shape summaries only. Public response payload capture is opt-in and sanitized.
