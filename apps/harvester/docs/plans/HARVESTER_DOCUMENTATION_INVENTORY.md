@@ -1,10 +1,10 @@
 # Harvester documentation inventory
 
-- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 44 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
+- Status: Frozen 42-file baseline dispositions complete; all 4 initial Harvester REVIEW candidates have verified KEEP/SUPERSEDE dispositions; 46 post-baseline additions are recorded below; no current Harvester REVIEW candidates remain
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest verified checkpoint: `develop` at `ea6110fb39c1c86acfbf9673910965e7f698d511`; 86 Harvester Markdown/MDX paths (one addition, zero removals since the 37aa07e checkpoint)
+- Latest verified checkpoint: `develop` at `543753da5938eba2d95ad19d74c3f98a991e6461`; 89 Harvester Markdown/MDX paths (three additions, zero removals since `ea6110f`)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-18
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
@@ -184,3 +184,15 @@ The following maintained documents were added for #1157 and completed in PR #116
 | --- | --- |
 | `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted and implemented ownership decision for all orders in the startup snapshot. |
 | `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Completed design, original acceptance criteria, TDD sequence and implementation closeout. |
+
+## Latest recursive additions — develop checkpoint 543753da
+
+The complete recursive tree at `543753da5938eba2d95ad19d74c3f98a991e6461` contains **89 Harvester Markdown/MDX paths**. A direct path comparison against the 86-file checkpoint `ea6110fb39c1c86acfbf9673910965e7f698d511` found three additions and zero removals.
+
+| Added path | Purpose and disposition |
+| --- | --- |
+| `apps/harvester/docs/CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md` | Maintained source/test evidence map for the Conservative ADA recovery lifecycle follow-up; KEEP and link from the Harvester roadmap. |
+| `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | Maintained read-only observer configuration and boundary contract; KEEP, linked from the Harvester docs index and separate from provider routing/readiness. |
+| `apps/harvester/docs/persistence/sqlite-integration-blueprint.md` | Source-verified inventory, repository boundaries, environment isolation, operational constraints and phased persistence migration plan; KEEP as the design/audit authority, with implementation status delegated to the persistence README and #1327. |
+
+This path inventory does not imply that all current behavior claims in the 89 files have been source-verified; that remains tracked by #1401. Full-tree Markdown classification and reference tracing remain tracked by #1402 and #1403.
