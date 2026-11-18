@@ -306,3 +306,36 @@ content }],
   assert.equal(result.skippedHistorical, 1)
   assert.deepEqual(Object.values(result.violations).flat(), [])
 })
+
+
+test("ignores indented code blocks in changed-file Markdown enforcement", () => {
+  const content = [
+    "# Architecture",
+    "",
+    "Intro paragraph.",
+    "",
+    "    Binance WebSocket API",
+    "    - list-looking code with trailing whitespace  ",
+    "",
+    "",
+    "    | Name | Value |",
+    "    | --- | -- |",
+    "    | one | two | extra |",
+    "",
+    "After the diagram.",
+    "",
+  ].join("\n")
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{ path: "docs/indented-code.md", content }],
+    changesByPath: new Map([["docs/indented-code.md", {
+      lines: new Set(getLineNumbers(content)),
+      isNewFile: true,
+    }]]),
+  })
+
+  assert.deepEqual(
+    Object.values(result.violations).flat(),
+    [],
+    "indented code must not trigger blocking changed-file style rules",
+  )
+})
