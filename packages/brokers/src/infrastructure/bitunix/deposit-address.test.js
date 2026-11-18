@@ -26,7 +26,10 @@ function createBroker({ response, failure } = {}) {
       }),
     },
   })
-  return { broker, calls }
+  return {
+    broker,
+    calls,
+  }
 }
 
 function createAddress(overrides = {}) {
@@ -70,12 +73,29 @@ test("Bitunix Spot broker rejects missing or invalid deposit-address inputs befo
     null,
     [],
     {},
-    { coin: "", network: REQUEST.network },
-    { coin: " ", network: REQUEST.network },
-    { coin: REQUEST.coin },
-    { coin: REQUEST.coin, network: "" },
-    { coin: REQUEST.coin, network: " " },
-    { coin: REQUEST.coin, network: 12 },
+    {
+      coin: "",
+      network: REQUEST.network,
+    },
+    {
+      coin: " ",
+      network: REQUEST.network,
+    },
+    {
+      coin: REQUEST.coin,
+    },
+    {
+      coin: REQUEST.coin,
+      network: "",
+    },
+    {
+      coin: REQUEST.coin,
+      network: " ",
+    },
+    {
+      coin: REQUEST.coin,
+      network: 12,
+    },
   ]
   const { broker, calls } = createBroker({ response: [] })
   const results = []
