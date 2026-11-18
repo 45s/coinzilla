@@ -89,14 +89,18 @@ async function routeTelegramCallbackData({ callback,
  navigation })
     return
   }
-  const ask = new RegExp("^cc:ask:(" + TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN + "):([A-Z0-9]{2,30})$").exec(callback.data)
+  const ask = new RegExp(
+    `^cc:ask:(${TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN}):([A-Z0-9]{2,30})$`,
+  ).exec(callback.data)
   if (ask) {
     await handleMarketSelectionCallback({ ...common,
  ask,
  update })
     return
   }
-  const confirm = new RegExp("^cc:confirm:(" + TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN + "):([A-Z0-9]{2,30}):(\\d+)$").exec(callback.data)
+  const confirm = new RegExp(
+    `^cc:confirm:(${TELEGRAM_OPERATOR_MARKET_ACTION_PATTERN}):([A-Z0-9]{2,30}):(\\d+)$`,
+  ).exec(callback.data)
   if (confirm) {
     await handleConfirmationCallback({ ...common,
  confirm })
@@ -230,10 +234,40 @@ async function respondToReadCommand({ parsed,
   return true
 }
 
-async function respondToTelegramMessage({ update,
- signal,
- interaction,
- context }) {
+function resolveTelegramMessageContext({ message, interaction, context }) {
+  const userId = normalizeTelegramUserId(message.from?.id)
+  const chatId = normalizeTelegramUserId(message.chat?.id)
+  const authorizationFailure = messageAuthorizationFailure({
+    message,
+    userId,
+    chatId,
+  })
+  if (authorizationFailure) {
+    context.logStage({
+      interaction,
+      message: "Telegram interaction REJECTED",
+      stage: "AUTHORIZATION",
+      level: "warn",
+      fields: { reason: authorizationFailure },
+    })
+    return undefined
+  }
+  const parsed = parseTelegramOperatorCommand(message.text, {
+    botUsername: context.getBotUsername(),
+  })
+  if (parsed.type === "IGNORE") {
+    context.logStage({
+      interaction,
+      message: "Telegram interaction IGNORED",
+      stage: "COMMAND_PARSING",
+      fields: { reason: "NOT_A_SUPPORTED_COMMAND_OR_BUTTON" },
+    })
+    return undefined
+  }
+  return { userId, parsed }
+}
+
+async function respondToTelegramMessage({ update, signal, interaction, context }) {
   const { message } = update
   if (!message) {
     context.logStage({
@@ -244,31 +278,13 @@ async function respondToTelegramMessage({ update,
     })
     return
   }
-  const userId = normalizeTelegramUserId(message.from?.id)
-  const chatId = normalizeTelegramUserId(message.chat?.id)
-  const authorizationFailure = messageAuthorizationFailure({ message,
- userId,
- chatId })
-  if (authorizationFailure) {
-    context.logStage({
-      interaction,
-      message: "Telegram interaction REJECTED",
-      stage: "AUTHORIZATION",
-      level: "warn",
-      fields: { reason: authorizationFailure },
-    })
-    return
-  }
-  const parsed = parseTelegramOperatorCommand(message.text, { botUsername: context.getBotUsername() })
-  if (parsed.type === "IGNORE") {
-    context.logStage({
-      interaction,
-      message: "Telegram interaction IGNORED",
-      stage: "COMMAND_PARSING",
-      fields: { reason: "NOT_A_SUPPORTED_COMMAND_OR_BUTTON" },
-    })
-    return
-  }
+  const messageContext = resolveTelegramMessageContext({
+    message,
+    interaction,
+    context,
+  })
+  if (!messageContext) { return }
+  const { userId, parsed } = messageContext
   interaction.action = resolveMessageAction(parsed)
   interaction.symbol = parsed.symbol
   if (!context.allowedUsers.has(userId)) {
@@ -279,15 +295,19 @@ async function respondToTelegramMessage({ update,
       level: "warn",
       fields: { reason: "USER_NOT_ALLOWLISTED" },
     })
-    await context.sendMessage({ chatId: message.chat.id,
- text: "Not authorized.",
- signal,
- interaction })
+    await context.sendMessage({
+      chatId: message.chat.id,
+      text: "Not authorized.",
+      signal,
+      interaction,
+    })
     return
   }
-  context.logStage({ interaction,
- message: "Telegram interaction AUTHORIZED",
- stage: "AUTHORIZED" })
+  context.logStage({
+    interaction,
+    message: "Telegram interaction AUTHORIZED",
+    stage: "AUTHORIZED",
+  })
   await respondToAuthorizedMessage({
     parsed,
     update,
@@ -296,10 +316,14 @@ async function respondToTelegramMessage({ update,
     signal,
     interaction,
     logStage: context.logStage,
-    respondToMenuCommand: (options) => respondToMenuCommand({ ...options,
- context }),
-    respondToReadCommand: (options) => respondToReadCommand({ ...options,
- context }),
+    respondToMenuCommand: (options) => respondToMenuCommand({
+      ...options,
+      context,
+    }),
+    respondToReadCommand: (options) => respondToReadCommand({
+      ...options,
+      context,
+    }),
     executeControl: context.executeControl,
     sendMessage: context.sendMessage,
     buildNavigationKeyboard: context.buildNavigationKeyboard,
