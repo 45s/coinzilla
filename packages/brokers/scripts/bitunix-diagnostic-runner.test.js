@@ -348,7 +348,90 @@ test("a failed WebSocket RPC does not suppress later independent RPC checks", as
 })
 
 
-function assertPublicOnlyDiagnostics({ report, restCalls }) {
+const expectedPublicRestRequests = [
+  {
+    path: "/api/spot/v1/common/coin_pair/list",
+    authenticated: false,
+    method: "GET",
+    queryParams: {},
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/market/last_price",
+    authenticated: false,
+    method: "GET",
+    queryParams: {
+      symbol: "BTCUSDT",
+    },
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/market/kline",
+    authenticated: false,
+    method: "GET",
+    queryParams: {
+      symbol: "BTCUSDT",
+      interval: "1min",
+    },
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/market/kline/history",
+    authenticated: false,
+    method: "GET",
+    queryParams: {
+      symbol: "BTCUSDT",
+      interval: "1min",
+      limit: "1",
+    },
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/common/rate/list",
+    authenticated: false,
+    method: "GET",
+    queryParams: {},
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/common/coin/coin_network/list",
+    authenticated: false,
+    method: "GET",
+    queryParams: {},
+    body: undefined,
+    stateChanging: false,
+  },
+]
+
+function assertPublicRestCalls(restCalls) {
+  const actualRequests = restCalls.map(({
+    path,
+    authenticated,
+    method,
+    queryParams,
+    body,
+    stateChanging,
+  }) => ({
+    path,
+    authenticated,
+    method,
+    queryParams,
+    body,
+    stateChanging,
+  }))
+  assert.deepEqual(
+    actualRequests,
+    expectedPublicRestRequests,
+    "public-only mode must issue the documented unsigned public REST reads and no private requests",
+  )
+}
+
+function assertPublicOnlyReport(report) {
   assert.equal(report.summary.failed, 0, "missing optional credentials must not prevent the required public-only diagnostic checks")
   const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
   assert.equal(configuration.response.credentialsConfigured, false, "the report must preserve public-only credential state")
@@ -356,67 +439,6 @@ function assertPublicOnlyDiagnostics({ report, restCalls }) {
     configuration.response.missingCredentialVariables,
     ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"],
     "the report must identify the exact credential variables required to enable private diagnostics",
-  )
-  assert.deepEqual(
-    restCalls.map(({ path, authenticated, method, queryParams, body, stateChanging }) => ({
-      path,
-      authenticated,
-      method,
-      queryParams,
-      body,
-      stateChanging,
-    })),
-    [
-      {
-        path: "/api/spot/v1/common/coin_pair/list",
-        authenticated: false,
-        method: "GET",
-        queryParams: {},
-        body: undefined,
-        stateChanging: false,
-      },
-      {
-        path: "/api/spot/v1/market/last_price",
-        authenticated: false,
-        method: "GET",
-        queryParams: { symbol: "BTCUSDT" },
-        body: undefined,
-        stateChanging: false,
-      },
-      {
-        path: "/api/spot/v1/market/kline",
-        authenticated: false,
-        method: "GET",
-        queryParams: { symbol: "BTCUSDT", interval: "1min" },
-        body: undefined,
-        stateChanging: false,
-      },
-      {
-        path: "/api/spot/v1/market/kline/history",
-        authenticated: false,
-        method: "GET",
-        queryParams: { symbol: "BTCUSDT", interval: "1min", limit: "1" },
-        body: undefined,
-        stateChanging: false,
-      },
-      {
-        path: "/api/spot/v1/common/rate/list",
-        authenticated: false,
-        method: "GET",
-        queryParams: {},
-        body: undefined,
-        stateChanging: false,
-      },
-      {
-        path: "/api/spot/v1/common/coin/coin_network/list",
-        authenticated: false,
-        method: "GET",
-        queryParams: {},
-        body: undefined,
-        stateChanging: false,
-      },
-    ],
-    "public-only mode must issue the documented unsigned public REST reads and no private requests",
   )
   assert.equal(
     report.results.find((entry) => entry.operation === "REST public order book depth").status,
@@ -429,6 +451,11 @@ function assertPublicOnlyDiagnostics({ report, restCalls }) {
     "private REST account reads must be explicitly skipped when credentials are unavailable",
   )
   assert.equal(
+    report.results.find((entry) => entry.operation === "REST private open orders").status,
+    "skipped",
+    "private open-order reads must be explicitly skipped when credentials are unavailable",
+  )
+  assert.equal(
     report.results.find((entry) => entry.operation === "WebSocket connection").status,
     "skipped",
     "authenticated WebSocket connection must be explicitly skipped without credentials",
@@ -438,6 +465,11 @@ function assertPublicOnlyDiagnostics({ report, restCalls }) {
     true,
     "all private WebSocket RPC operations must be individually marked skipped in public-only mode",
   )
+}
+
+function assertPublicOnlyDiagnostics({ report, restCalls }) {
+  assertPublicRestCalls(restCalls)
+  assertPublicOnlyReport(report)
 }
 
 test("public-only diagnostics run unsigned REST checks when credentials are missing", async () => {
