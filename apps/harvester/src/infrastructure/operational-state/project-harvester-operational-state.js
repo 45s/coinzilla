@@ -683,6 +683,7 @@ function sortSessionsByStartedSequence({ sessions }) {
   return orderedSessions
 }
 
+// eslint-disable-next-line max-lines-per-function -- Existing synthetic session projection remains a single recovery boundary.
 function createSessionSyntheticRecords({ session, latestSession, state }) {
   const syntheticRecords = []
   let lineNumber = 0
