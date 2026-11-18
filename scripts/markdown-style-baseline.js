@@ -29,6 +29,91 @@ marker: match[2],
 separator: match[3] }
 }
 
+function getIndentationWidth(line) {
+  const indentation = line.match(/^([ \t]*)/)?.[1] ?? ""
+  return indentation.replace(/\t/g, "    ").length
+}
+
+function isIndentedCodeLine(line) {
+  return /^(?: {4,}|\t)\\S/.test(line)
+}
+
+function isNestedListContent({ lines, index, indentation }) {
+  let previousIndex = index - 1
+  while (previousIndex >= 0 && lines[previousIndex].trim() === "") {
+    previousIndex -= 1
+  }
+
+  if (previousIndex < 0) {return false}
+
+  const parentItem = parseListItem(lines[previousIndex])
+  if (!parentItem) {return false}
+
+  const parentContentColumn = getIndentationWidth(parentItem.indent) +
+    parentItem.marker.length +
+    parentItem.separator.length
+  return indentation === parentContentColumn
+}
+
+function collectIndentedCodeLineIndexes({ lines }) {
+  const codeLineIndexes = new Set()
+  let isInsideIndentedCodeBlock = false
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (line.trim() === "") {
+      if (isInsideIndentedCodeBlock) {
+        let nextContentIndex = index + 1
+        while (
+          nextContentIndex < lines.length &&
+          lines[nextContentIndex].trim() === ""
+        ) {
+          nextContentIndex += 1
+        }
+
+        if (
+          nextContentIndex < lines.length &&
+          isIndentedCodeLine(lines[nextContentIndex])
+        ) {
+          codeLineIndexes.add(index)
+        } else {
+          isInsideIndentedCodeBlock = false
+        }
+      }
+      continue
+    }
+
+    if (isInsideIndentedCodeBlock) {
+      if (isIndentedCodeLine(line)) {
+        codeLineIndexes.add(index)
+        continue
+      }
+      isInsideIndentedCodeBlock = false
+    }
+
+    if (!isIndentedCodeLine(line)) {continue}
+
+    const hasRequiredBlockSeparation = index === 0 ||
+      lines[index - 1].trim() === ""
+    if (!hasRequiredBlockSeparation) {continue}
+
+    if (
+      isNestedListContent({
+        lines,
+        index,
+        indentation: getIndentationWidth(line),
+      })
+    ) {
+      continue
+    }
+
+    codeLineIndexes.add(index)
+    isInsideIndentedCodeBlock = true
+  }
+
+  return codeLineIndexes
+}
+
 function splitTableCells(line) {
   const trimmed = line.trim()
   if (!trimmed.includes("|")) {return null}
@@ -283,7 +368,7 @@ function collectTableFormattingFindings({ lines, codeLineIndexes }) {
  */
 function scanMarkdownDocumentLines({ content }) {
   const lines = content.split(/\r?\n/)
-  const codeLineIndexes = new Set()
+  const codeLineIndexes = collectIndentedCodeLineIndexes({ lines })
   const trailingWhitespaceLines = []
   const repeatedBlankLines = []
   const headingLevelSkips = []
@@ -321,6 +406,8 @@ function scanMarkdownDocumentLines({ content }) {
       }
       continue
     }
+
+    if (codeLineIndexes.has(index)) {continue}
 
     if (/[ \t]+$/.test(line)) {trailingWhitespaceLines.push(lineNumber)}
     if (index > 0 && line.trim() === "" && lines[index - 1].trim() === "") {
