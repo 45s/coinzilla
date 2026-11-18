@@ -45,7 +45,17 @@ test("SQLite transaction statements and iterators cannot escape their transactio
   try {
     await database.transaction((transaction) => {
       escapedStatement = transaction.prepare("SELECT 1 AS value")
+      assert.equal(
+        typeof escapedStatement.sourceSQL,
+        "string",
+        "A guarded statement must preserve read-only metadata properties",
+      )
       escapedIterator = escapedStatement.iterate()
+      assert.equal(
+        escapedIterator[Symbol.iterator](),
+        escapedIterator,
+        "A guarded iterator must preserve its iterable identity",
+      )
       assert.equal(
         escapedIterator.next().value.value,
         1,
