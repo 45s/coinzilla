@@ -311,8 +311,16 @@ function createStopTrackingProviderStarter({ stopCalls, firstStopAttempts }) {
 
 test("stops market-data intake only after each account runtime completes shutdown", async () => {
   const providers = [
-    createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
-    createProvider({ providerInstanceId: "second", providerType: "binance", accountId: "account-two" }),
+    createProvider({
+      providerInstanceId: "first",
+      providerType: "binance",
+      accountId: "account-one",
+    }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+    }),
   ]
   const shutdownOrder = []
   const runtime = await startProviderAccounts({
@@ -472,12 +480,36 @@ test("keeps healthy account runtimes running when another account fails to start
   assert.deepEqual(stopCalls, ["third", "first"])
 })
 
+function createFailedSecondAccountStarter({ startupError, stopped }) {
+  let startCount = 0
+  return async () => {
+    startCount += 1
+    if (startCount === 2) {
+      throw startupError
+    }
+    const account = startCount === 1 ? "first" : "third"
+    return {
+      startMarketData: async () => ({ ok: true }),
+      stopMarketData: async () => ({ ok: true }),
+      stop: async () => {
+        stopped.push(account)
+        return { ok: true }
+      },
+    }
+  }
+}
+
+function createFailedAccountLockReleaser({ cleanupError }) {
+  return async (providerInstanceId) => providerInstanceId === "second"
+    ? { ok: false, errors: [cleanupError] }
+    : { ok: true }
+}
+
 test("reports failed-account lock cleanup errors without stopping healthy accounts", async () => {
   const startupError = new Error("second account failed")
   startupError.startupCleanupConfirmed = true
   const cleanupError = new Error("second account lock cleanup failed")
   const stopped = []
-  let startCount = 0
   const runtime = await startProviderAccounts({
     providers: [
       createProvider({
@@ -497,35 +529,10 @@ test("reports failed-account lock cleanup errors without stopping healthy accoun
         accountId: "account-three",
       }),
     ],
-    start: async () => {
-      startCount += 1
-      if (startCount === 2) {
-        throw startupError
-      }
-      const account = startCount === 1 ? "first" : "third"
-      return {
-        startMarketData: async () => ({ ok: true }),
-        stopMarketData: async () => ({ ok: true }),
-        stop: async () => {
-          stopped.push(account)
-          return {
-            ok: true,
-          }
-        },
-      }
-    },
-    releaseProviderLock: async (providerInstanceId) => providerInstanceId === "second"
-      ? {
-        ok: false,
-        errors: [cleanupError],
-      }
-      : {
-        ok: true,
-      },
+    start: createFailedSecondAccountStarter({ startupError, stopped }),
+    releaseProviderLock: createFailedAccountLockReleaser({ cleanupError }),
     appConfig,
-    env: {
-      TRADING_MODE: "testnet",
-    },
+    env: { TRADING_MODE: "testnet" },
   })
 
   assert.equal(runtime.failedAccounts.length, 1)
@@ -631,7 +638,12 @@ test("fails startup when no configured account can start", async () => {
 test("releases only accounts whose runtime shutdown is confirmed", async () => {
   const providers = [
     createProvider({ providerInstanceId: "first", providerType: "binance", accountId: "account-one" }),
-    createProvider({ providerInstanceId: "second", providerType: "binance", accountId: "account-two", required: false }),
+    createProvider({
+      providerInstanceId: "second",
+      providerType: "binance",
+      accountId: "account-two",
+      required: false,
+    }),
   ]
   const stopCalls = []
   const releasedLocks = []
