@@ -305,10 +305,15 @@ Both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` are optional for public-only dia
 
 When enabling private diagnostics, use a dedicated API key with account-read permission and **without** trading or withdrawal permission. Do not use production mutation-enabled keys for diagnostics.
 
-The runner checks these REST operations:
+The runner checks these documented Spot REST operations:
 
-- Public market catalog and latest price.
+- Public trading-pair catalog, latest price, exchange rates, and token/network metadata.
+- Public order-book depth when `BITUNIX_DIAGNOSTICS_DEPTH_PRECISION` is explicitly configured.
+- Current K-line and one historical K-line sample using the constant `1min` interval.
 - Private account balances.
+- Private current open orders via `POST /api/spot/v1/order/pending/list`. Although the HTTP method is POST, Bitunix documents this as **Query current orders**; the diagnostic sends only the symbol, sets `stateChanging: false`, and never places or cancels orders.
+
+The official [Spot public REST reference](https://www.bitunix.com/api-docs/spots/en_us/public/) does not document a server-time or general recent-trades endpoint, so neither is invented or probed. The [Spot order reference](https://www.bitunix.com/api-docs/spots/en_us/order/) documents the read-only current-orders query separately from place/cancel operations.
 
 It then connects to the authenticated Spot WebSocket RPC endpoint and checks:
 
@@ -319,7 +324,7 @@ It then connects to the authenticated Spot WebSocket RPC endpoint and checks:
 
 After a successful initial RPC session, it makes one explicit fresh-client reconnect probe and verifies it with another `ping`. This is not an automatic retry loop and does not simulate the documented 24-hour server expiry. Subscription restoration is explicitly skipped because the official Spot API reference defines one-shot request/response methods and no subscription channels.
 
-Depth RPC is skipped unless BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is explicitly supplied; the runner does not infer depth aggregation precision from basePrecision, quotePrecision, or precisions[].
+REST and WebSocket depth checks are skipped unless `BITUNIX_DIAGNOSTICS_DEPTH_PRECISION` is explicitly supplied; the runner does not infer depth aggregation precision from basePrecision, quotePrecision, or precisions[].
 
 Each operation receives its own pass/fail/skip result and duration. The named `DIAGNOSTIC_CONFIG` constants in `scripts/bitunix-diagnostic-runner.js` set the symbol (`BTCUSDT`), K-line interval (`1min`), request/connect/close timeout (`10_000` ms), and public-payload capture policy (`false`). Change these values in code when needed; they are not environment settings. Public response payloads are omitted by default. The optional depth precision remains an environment setting because its value must be explicitly chosen rather than inferred. The report is written to packages/brokers/.diagnostics/ (ignored by Git) with restrictive file permissions. Outbound WS messages are captured only after credential/signature/nonce redaction. Private account responses are summarized by shape and field names; private balances, UIDs and other sensitive values are never persisted.
 
