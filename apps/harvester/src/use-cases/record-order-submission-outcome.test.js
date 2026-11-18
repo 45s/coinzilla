@@ -170,7 +170,10 @@ test("rejects a legacy acknowledged order without provider provenance", async ()
     operationalStateStore: {
       append: async () => {
         appendCalls += 1
-        return { ok: true, data: { durable: true } }
+        return {
+          ok: true,
+          data: { durable: true },
+        }
       },
     },
     order: legacyOrder,
