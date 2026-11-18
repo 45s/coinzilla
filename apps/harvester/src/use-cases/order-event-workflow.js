@@ -25,7 +25,7 @@ function findRegisteredOrderByBrokerId({ state, brokerOrderId }) {
     state.registry?.orders?.find((order) => order.brokerOrderId === brokerOrderId)
 }
 
-function createProviderAttributedFillHistoryBroker({ broker, state }) {
+function createProviderAttributedFillHistoryBroker({ broker, state, ordersByBrokerId }) {
   return {
     ...broker,
     getFills: async ({ symbol, orderId }) => {
@@ -33,7 +33,7 @@ function createProviderAttributedFillHistoryBroker({ broker, state }) {
       if (result?.ok !== true || !Array.isArray(result.data)) {
         return result
       }
-      const order = findRegisteredOrderByBrokerId({
+      const order = ordersByBrokerId.get(orderId) ?? findRegisteredOrderByBrokerId({
         state,
         brokerOrderId: orderId,
       })
@@ -57,9 +57,11 @@ function createReconcileTerminalOrderFillsTransition({
   pause,
   processExecutionFillTransition,
 }) {
+  const ordersByBrokerId = new Map()
   const attributedBroker = createProviderAttributedFillHistoryBroker({
     broker,
     state,
+    ordersByBrokerId,
   })
   const reconcile = makeReconcileTerminalOrderFills({
     broker: attributedBroker,
@@ -69,6 +71,9 @@ function createReconcileTerminalOrderFillsTransition({
   })
   return ({ order, eventFill } = {}) => {
     const registeredOrder = resolveRegisteredOrder({ state, order })
+    if (typeof registeredOrder.brokerOrderId === "string") {
+      ordersByBrokerId.set(registeredOrder.brokerOrderId, registeredOrder)
+    }
     const attributedEventFill = eventFill === undefined
       ? undefined
       : attachOrderProviderIdentity({
