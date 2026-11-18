@@ -184,7 +184,7 @@ assert.equal(
 - Invalid collection names, identifiers, records and queries throw `TypeError`.
 - Missing records are ordinary results (`null` or `false`), not exceptions.
 - If transaction work fails and SQLite rollback also fails, the low-level transaction rejects with an `AggregateError` whose `errors` preserve the work error first and rollback error second; its `cause` is the original work error. A failed rollback can leave the connection inside a native transaction; do not continue using it until the underlying transaction state has been recovered or the connection has been closed.
-- If connection initialization fails and closing the partially initialized native connection also fails, the low-level connection attempt rejects with an `AggregateError` containing both failures. The provider facade wraps that aggregate in `DatabaseProviderError` as its `cause`.
+- If connection initialization fails and closing the partially initialized native connection also fails, the low-level connection attempt rejects with an `AggregateError` containing both failures. The facade retains ownership of the native handle: a subsequent `close()` retries cleanup, and a subsequent `connect()` first closes the retained handle before opening a replacement. The provider facade wraps the aggregate in `DatabaseProviderError` as its `cause`.
 
 Consumers should branch on the public error class or stable code, not provider error messages or SQLite error codes. Inspect nested `cause` and `AggregateError.errors` when operational recovery requires the underlying SQLite or filesystem failure.
 
