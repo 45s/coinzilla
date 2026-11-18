@@ -152,7 +152,7 @@ function collectTableCells({ source }) {
   for (let index = 0; index < source.length; index += 1) {
     const character = source[index]
 
-    if (character === "\\\\" && source[index + 1] === "|") {
+    if (character === "\\" && source[index + 1] === "|") {
       current += "|"
       index += 1
       continue
@@ -220,7 +220,7 @@ function recordListItem({
   }
 
   const parent = parentStack[parentStack.length - 1]
-  const hasUnexpectedIndentation = item.indent.includes("\\t") ||
+  const hasUnexpectedIndentation = item.indent.includes("\t") ||
     (indentWidth > 0 && (!parent || indentWidth !== parent.contentColumn))
   if (hasUnexpectedIndentation) {
     nestedListIndentation.push(lineNumber)
@@ -268,7 +268,7 @@ function isListContinuationAfterBlank({ lines, cursor, codeLineIndexes }) {
   const nextIndex = cursor + 1
   const nextLine = lines[nextIndex] ?? ""
   return !codeLineIndexes.has(nextIndex) &&
-    Boolean(parseListItem(nextLine) || /^[ \\t]{2,}\\S/.test(nextLine))
+    Boolean(parseListItem(nextLine) || /^[ \t]{2,}\S/.test(nextLine))
 }
 
 function findListBlockEnd({ lines, startIndex, codeLineIndexes }) {
@@ -292,7 +292,7 @@ function findListBlockEnd({ lines, startIndex, codeLineIndexes }) {
       break
     }
 
-    if (/^[ \\t]{2,}\\S/.test(lines[cursor])) {
+    if (/^[ \t]{2,}\S/.test(lines[cursor])) {
       end = cursor
       cursor += 1
       continue
@@ -457,23 +457,13 @@ function collectTableFormattingFindings({ lines, codeLineIndexes }) {
   }
 }
 
-/**
- * Collect objective Markdown style metrics without enforcing or rewriting files.
- *
- * Fenced and indented code content is excluded from prose/list/table analysis. A fence is
- * considered unlabeled when its opening delimiter has no info string. Findings
- * are grouped by file and include affected line numbers where applicable.
- *
- * @param {{path: string, content: string}[]} documents
- * @returns {{fileCount: number, findings: Record<string, Array<{path: string, count: number, lines: number[]}>>}}
- */
 function getFenceTransition({ fenceMatch, activeFence }) {
   if (activeFence) {
     const closesFence = Boolean(
       fenceMatch &&
       fenceMatch[1][0] === activeFence.character &&
       fenceMatch[1].length >= activeFence.length &&
-      /^[ \\t]*$/.test(fenceMatch[2]),
+      /^[ \t]*$/.test(fenceMatch[2]),
     )
     return {
       isCode: true,
@@ -506,28 +496,43 @@ function collectLineFormattingFindings({
   lines,
   lineNumber,
   previousHeadingLevel,
+  trailingWhitespaceLines,
+  repeatedBlankLines,
   headingLevelSkips,
   h1Lines,
 }) {
-  if (/[ \\t]+$/.test(line)) {return { previousHeadingLevel, trailingWhitespace: true }}
-  const hasRepeatedBlankLine = index > 0 &&
+  if (/[ \t]+$/.test(line)) {trailingWhitespaceLines.push(lineNumber)}
+  if (
+    index > 0 &&
     line.trim() === "" &&
     lines[index - 1].trim() === ""
-  if (hasRepeatedBlankLine) {return { previousHeadingLevel, repeatedBlankLine: true }}
+  ) {
+    repeatedBlankLines.push(lineNumber)
+  }
 
-  const headingMatch = line.match(/^ {0,3}(#{1,6})(?:[ \\t]+|$)/)
-  if (!headingMatch) {return { previousHeadingLevel }}
+  const headingMatch = line.match(/^ {0,3}(#{1,6})(?:[ \t]+|$)/)
+  if (!headingMatch) {return previousHeadingLevel}
 
   const level = headingMatch[1].length
   if (level === 1) {h1Lines.push(lineNumber)}
   if (level > previousHeadingLevel + 1) {
     headingLevelSkips.push(lineNumber)
   }
-  return { previousHeadingLevel: level }
+  return level
 }
 
+/**
+ * Collect objective Markdown style metrics without enforcing or rewriting files.
+ *
+ * Fenced and indented code content is excluded from prose/list/table analysis. A fence is
+ * considered unlabeled when its opening delimiter has no info string. Findings
+ * are grouped by file and include affected line numbers where applicable.
+ *
+ * @param {{content: string}} input
+ * @returns {{fileCount: number, findings: Record<string, Array<{path: string, count: number, lines: number[]}>>}}
+ */
 function scanMarkdownDocumentLines({ content }) {
-  const lines = content.split(/\\r?\\n/)
+  const lines = content.split(/\r?\n/)
   const codeLineIndexes = collectIndentedCodeLineIndexes({ lines })
   const trailingWhitespaceLines = []
   const repeatedBlankLines = []
@@ -559,22 +564,17 @@ function scanMarkdownDocumentLines({ content }) {
 
     if (codeLineIndexes.has(index)) {continue}
 
-    const lineFindings = collectLineFormattingFindings({
+    previousHeadingLevel = collectLineFormattingFindings({
       line,
       index,
       lines,
       lineNumber,
       previousHeadingLevel,
+      trailingWhitespaceLines,
+      repeatedBlankLines,
       headingLevelSkips,
       h1Lines,
     })
-    if (lineFindings.trailingWhitespace) {
-      trailingWhitespaceLines.push(lineNumber)
-    }
-    if (lineFindings.repeatedBlankLine) {
-      repeatedBlankLines.push(lineNumber)
-    }
-    previousHeadingLevel = lineFindings.previousHeadingLevel
   }
 
   return {
@@ -585,8 +585,8 @@ function scanMarkdownDocumentLines({ content }) {
     headingLevelSkips,
     unlabelledCodeFenceLines,
     h1Lines,
-    hasFinalNewline: content.endsWith("\\n"),
-    hasCrlfLineEndings: content.includes("\\r\\n"),
+    hasFinalNewline: content.endsWith("\n"),
+    hasCrlfLineEndings: content.includes("\r\n"),
   }
 }
 
