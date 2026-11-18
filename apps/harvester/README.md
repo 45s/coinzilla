@@ -73,7 +73,7 @@ The initializer creates a private directory (0700) and record/manifest files (06
 
 **Implementation status:** The trading-session slice is merged into `develop` in [PR #1369](https://github.com/45s/coinzilla/pull/1369) as `c2116fd647d942c11947e556e71a0e8e578cc192`. Its exact PR head passed 32 GitHub Actions checks; the optional read-only Binance TESTNET integration was skipped. This records code integration into `develop`, not a production deployment or authorization for exchange operations.
 
-Harvester is adding a provider-neutral, non-authoritative history store through `@coinzilla/db`. The first slice stores process trading-session history only; it does not migrate orders, fills, account snapshots, or recovery state.
+Harvester has integrated a provider-neutral, non-authoritative history store through `@coinzilla/db`. The merged first slice stores process trading-session history only; it does not migrate orders, fills, account snapshots, or recovery state.
 
 The initial provider is SQLite, with independent files selected only by validated `TRADING_MODE`:
 
