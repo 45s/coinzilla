@@ -223,6 +223,13 @@ function createContextFailure({ stopState, error, operation }) {
   })
 }
 
+function createCycleNotReadyResult({ stopState }) {
+  return createStoppedResult({
+    stopState,
+    explanation: "Recovery Seller cannot submit a second SELL or trade from a non-accumulating cycle",
+  })
+}
+
 function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stopState }) {
   if (stopState.status === "STOPPED") {
     return Object.freeze({
@@ -244,9 +251,8 @@ function resolveSellPolicyContext({ pairConfig, marketMetadata, cycleState, stop
     })
   }
   if (cycleState.status !== "ACCUMULATING") {
-    return createStoppedResult({
+    return createCycleNotReadyResult({
       stopState,
-      explanation: "Recovery Seller cannot submit a second SELL or trade from a non-accumulating cycle",
     })
   }
   let feePolicy
