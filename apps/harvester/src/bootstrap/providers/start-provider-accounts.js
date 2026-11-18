@@ -444,7 +444,7 @@ function createMarketDataProviderMetadata({
 function createProviderAccountStartInput({
   provider,
   providers,
-  index,
+  isPrimary,
   appConfig,
   env,
   eventPublisher,
@@ -465,7 +465,7 @@ function createProviderAccountStartInput({
   return {
     appConfig: createAccountAppConfig({
       appConfig,
-      isPrimary: index === 0,
+      isPrimary,
     }),
     env: createAccountEnvironment({
       env,
@@ -474,7 +474,7 @@ function createProviderAccountStartInput({
     }),
     eventPublisher,
     runtimeSessionId,
-    operationalStateStore: index === 0 ? operationalStateStore : undefined,
+    operationalStateStore: isPrimary ? operationalStateStore : undefined,
     brokerAdapterFactory: provider.brokerAdapterFactory,
     providerIdentity: provider.identity,
     providerRequired: provider.required !== false,
@@ -619,7 +619,7 @@ async function startDeferredProviderMarketData({ startedAccounts, releaseProvide
 async function startOneProviderAccount({
   provider,
   providers,
-  index,
+  isPrimary,
   start,
   appConfig,
   env,
@@ -639,7 +639,7 @@ async function startOneProviderAccount({
     const runtime = await start(createProviderAccountStartInput({
       provider,
       providers,
-      index,
+      isPrimary,
       appConfig,
       env,
       eventPublisher,
@@ -690,11 +690,11 @@ async function startConfiguredProviderAccounts({
   const startedAccounts = []
   const failedAccounts = []
   const failedErrors = []
-  for (const [index, provider] of providers.entries()) {
+  for (const provider of providers) {
     const result = await startOneProviderAccount({
       provider,
       providers,
-      index,
+      isPrimary: startedAccounts.length === 0,
       start,
       appConfig,
       env,
