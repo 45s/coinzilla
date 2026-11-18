@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
+import { BitunixDepositAddressError } from "./errors/bitunix-deposit-address-error.js"
 
 const DEPOSIT_ADDRESS_PATH = "/api/spot/v1/deposit/address"
 const REQUEST = {
@@ -116,7 +117,12 @@ test("Bitunix Spot broker rejects missing or invalid deposit-address inputs befo
   }
 
   assert.ok(results.every((result) => result.ok === false), "invalid inputs must return unsuccessful results")
+  assert.ok(results.every((result) => result.errors[0] instanceof BitunixDepositAddressError), "input failures must use the broker-owned error type")
   assert.ok(results.every((result) => result.errors[0].code === "BITUNIX_DEPOSIT_ADDRESS_INPUT_INVALID"), "input failures must use the stable broker-owned error code")
+  assert.deepEqual(results[4].errors[0].context, {
+    operation: "getDepositAddress",
+    field: "coin",
+  }, "input diagnostics must contain only safe operation/field context")
   assert.equal(calls.length, 0, "invalid coin/network inputs must be rejected before REST I/O")
 })
 
@@ -140,6 +146,7 @@ test("Bitunix Spot broker rejects missing, malformed, or mismatched deposit-addr
   }
 
   assert.ok(results.every((result) => result.ok === false), "malformed or mismatched address data must fail closed")
+  assert.ok(results.every((result) => result.errors[0] instanceof BitunixDepositAddressError), "response failures must use the broker-owned error type")
   assert.ok(results.every((result) => result.errors[0].code === "BITUNIX_DEPOSIT_ADDRESS_RESPONSE_INVALID"), "response failures must use the stable broker-owned error code")
   assert.ok(results.every((result) => result.errors?.length > 0), "each rejected response must expose a validation error")
 })
