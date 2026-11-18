@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 import { createPendingCanonicalOrder } from "../domain/orders/create-pending-canonical-order.js"
+import { hasProviderIdentity } from "../domain/orders/provider-provenance.js"
 import { validateOrderAgainstTradingRules } from "../domain/orders/validate-order-against-trading-rules.js"
 
 function getOwnershipMetadata({ ownership } = {}) {
@@ -68,14 +69,7 @@ function createExecutionContext({ options } = {}) {
   }
   const orderIdNamespace = randomUUID().replaceAll("-", "").slice(0, 22)
   let orderSequence = 0
-  const providerIdentity = {
-    providerInstanceId: broker.providerInstanceId,
-    providerType: broker.providerType,
-    accountId: broker.accountId,
-  }
-  if (onDurableSubmissionIntent && Object.values(providerIdentity).some((value) => typeof value !== "string" || !value.trim())) {
-    throw new TypeError("Durable order submission requires broker providerInstanceId, providerType and accountId metadata")
-  }
+  const providerIdentity = resolveProviderIdentity({ broker, onDurableSubmissionIntent })
   return {
     broker,
     providerIdentity,
@@ -532,28 +526,28 @@ async function handleMismatchedAcknowledgement({ context, candidate } = {}) {
   return toResult({ error })
 }
 
-async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrder } = {}) {
+async function handleBrokerAcknowledgement({ context, candidate, acknowledgedOrder: brokerAcknowledgedOrder } = {}) {
   const { pendingOrder, purpose, ownership } = candidate
-  if (pendingOrder.providerInstanceId !== undefined) {
-    acknowledgedOrder = new CanonicalOrder({
-      clientOrderId: acknowledgedOrder.clientOrderId,
-      brokerOrderId: acknowledgedOrder.brokerOrderId,
-      providerInstanceId: pendingOrder.providerInstanceId,
-      providerType: pendingOrder.providerType,
-      accountId: pendingOrder.accountId,
-      market: acknowledgedOrder.market,
-      side: acknowledgedOrder.side,
-      type: acknowledgedOrder.type,
-      limitPrice: acknowledgedOrder.limitPrice,
-      originalQuantity: acknowledgedOrder.originalQuantity,
-      executedQuantity: acknowledgedOrder.executedQuantity,
-      status: acknowledgedOrder.status,
-      createdAt: acknowledgedOrder.createdAt,
-      acknowledgedAt: acknowledgedOrder.acknowledgedAt,
-      updatedAt: acknowledgedOrder.updatedAt,
-      completedAt: acknowledgedOrder.completedAt,
-    })
-  }
+  const acknowledgedOrder = pendingOrder.providerInstanceId === undefined
+    ? brokerAcknowledgedOrder
+    : new CanonicalOrder({
+        clientOrderId: brokerAcknowledgedOrder.clientOrderId,
+        brokerOrderId: brokerAcknowledgedOrder.brokerOrderId,
+        providerInstanceId: pendingOrder.providerInstanceId,
+        providerType: pendingOrder.providerType,
+        accountId: pendingOrder.accountId,
+        market: brokerAcknowledgedOrder.market,
+        side: brokerAcknowledgedOrder.side,
+        type: brokerAcknowledgedOrder.type,
+        limitPrice: brokerAcknowledgedOrder.limitPrice,
+        originalQuantity: brokerAcknowledgedOrder.originalQuantity,
+        executedQuantity: brokerAcknowledgedOrder.executedQuantity,
+        status: brokerAcknowledgedOrder.status,
+        createdAt: brokerAcknowledgedOrder.createdAt,
+        acknowledgedAt: brokerAcknowledgedOrder.acknowledgedAt,
+        updatedAt: brokerAcknowledgedOrder.updatedAt,
+        completedAt: brokerAcknowledgedOrder.completedAt,
+      })
   const durableOutcome = await persistDurableSubmissionOutcome({
     context,
     order: acknowledgedOrder,
