@@ -60,6 +60,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Audit process
 
+- [Conservative Recovery Lifecycle Audit](CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md) — acceptance evidence, confirmed outcomes, and the remaining recovery-SELL filter-freshness gap for #1359/#1362.
+
 - [Harvester audit working rules](AUDIT_WORKING_RULES.md) — scope pointer to the repository-wide agent workflow and Harvester-specific audit boundaries.
 - [Harvester audit records index](audits/README.md) — historical evidence and investigation records.
 
