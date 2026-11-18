@@ -17,6 +17,9 @@ baseAsset,
 quoteAsset })
 const makeOrder = ({ brokerOrderId, status = "PENDING", executedQuantity = "0" } = {}) => new CanonicalOrder({
   clientOrderId: "h-0123456789abcdef012345-1",
+  providerInstanceId: "binanceTestnet",
+  providerType: "binance",
+  accountId: "binance-primary",
   brokerOrderId,
   market,
   side: "BUY",
@@ -64,6 +67,9 @@ executedQuantity: "12.5" })
   assert.equal(result.data.record.factType, "ORDER_SUBMISSION_OUTCOME")
   assert.deepEqual(result.data.record.data, {
     clientOrderId: order.clientOrderId,
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
     marketId: market.id,
     venue: "binance",
     symbol: "DOGEUSDT",
