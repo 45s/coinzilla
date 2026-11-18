@@ -670,7 +670,7 @@ test("uses the registry-enriched provider identity when an exchange update omits
     executedQuantity: "0",
     brokerOrderId: null,
   })
-  const registry = OrderRegistry.empty().registerPending({ order: pendingOrder }).registry
+  const { registry } = OrderRegistry.empty().registerPending({ order: pendingOrder })
   const eventOrder = makeOrder({ includeProviderProvenance: false })
   const fill = makeFill({ includeProviderProvenance: false })
   const { workflow, calls } = makeWorkflow({ registry })
