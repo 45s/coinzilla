@@ -1,6 +1,6 @@
 # ADR-0005: Emergency BUY pause is separate from the market operator pause
 
-- **Status:** Accepted
+- **Status:** Accepted; market-scoped command entry point superseded by [ADR-0006](./0006-market-pause-cancels-owned-buys.md)
 - **Date:** 2026-11-16
 - **Owners:** Harvester
 - **Related:** [ADR-0002](./0002-transport-independent-operator-control.md), [ADR-0003](./0003-process-lifetime-operator-pause.md), [ADR-0004](./0004-startup-open-orders-are-external.md), [operator-control design](../OPERATOR_CONTROL_DESIGN.md), [issue #1267](https://github.com/45s/coinzilla/issues/1267)
@@ -40,3 +40,8 @@ The controls are process-lifetime only. They are not replayed or restored after 
 - Global and per-market restrictions compose without one resume command accidentally overriding another.
 - The operator must reissue the required pause after process restart.
 - Automated tests must cover overlapping scopes, recovery SELL continuity, cancellation-racing fills, unresolved cancellation and external-order isolation. Live Telegram and exchange verification remain operator-controlled and are not implied by offline CI.
+
+
+## 2026-11-18 command-contract update — superseded in part by ADR-0006
+
+The emergency BUY gate and its owned-order cancellation/reconciliation workflow remain the accepted implementation. The separation of public command names is superseded: `/pause SYMBOL`, `/resume SYMBOL`, and the confirmed market Pause/Resume buttons now use this same market-scoped BUY workflow. `/pausebuys SYMBOL` and `/resumebuys SYMBOL` remain compatibility aliases. The global commands remain unchanged. The market facade methods `pauseMarket` / `resumeMarket` delegate to `pauseBuys({ symbol })` / `resumeBuys({ symbol })`. See [ADR-0006](./0006-market-pause-cancels-owned-buys.md).
