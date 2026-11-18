@@ -439,3 +439,37 @@ The endpoint has no documented pagination or address-generation behavior. An exp
 - Independent [TypeScript Spot tools](https://github.com/samanzamani/bitunix-mcp/blob/6bf5d9f915bdf865394ac02f97c50b689ab9e8e7/src/tools/spot.ts) and [StockSharp connector sources](https://github.com/StockSharp/Connectors) corroborate the public unauthenticated catalog request. They do not override the official field semantics.
 
 **Remaining limitation:** Bitunix Spot `getSymbolFilters()` remains partial. No exact tick size, quantity step, maximum quantity/notional, or depth-precision mapping is established. Do not enable order execution or close #1185 from this audit.
+
+## 14. Local Bitunix diagnostics runner (2026-11-18)
+
+The local diagnostic runner in [issue #1426](https://github.com/45s/coinzilla/issues/1426) and [PR #1427](https://github.com/45s/coinzilla/pull/1427) is an operator tool over the existing Coinzilla Spot clients; it is not a new exchange capability.
+
+### Verified surface exercised
+
+The current BitunixSpotWebSocketClient exposes authenticated request/response calls for:
+
+- market.last_price
+- market.depth
+- market.kline
+- common.coin_pair.list
+- common.rate.list
+- common.coin.coin_network.list
+- user.account
+- user.info
+
+The official [Spot WebSocket introduction](https://www.bitunix.com/api-docs/spots/en_us/ws/) documents JSON text-frame requests with an id, method, and signed params, and a response correlated by the same id with code, msg, and optional data. The official docs state a 24-hour connection lifetime. The [public Spot WS](https://www.bitunix.com/api-docs/spots/en_us/public-ws/) and [user Spot WS](https://www.bitunix.com/api-docs/spots/en_us/user-ws/) pages show one-shot RPCs, not continuous subscriptions or pushed execution events. The runner must not claim stream readiness.
+
+REST diagnostics use the existing BitunixRestClient.request() boundary. Public market catalog/price requests explicitly set authenticated: false; account reads remain signed. The client constructor still requires API key/secret configuration even for its public request mode.
+
+### Diagnostic safety and evidence limits
+
+- The tool requires BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS=YES; no Spot TESTNET endpoint is documented.
+- API keys should have read-only account permissions and no trading/withdrawal permission.
+- The depth request requires an explicit caller-provided precision. No default is inferred from catalog precision fields because the official semantics remain unresolved.
+- Signed outbound frames are captured only after redacting API key, signature and nonce. Private user.account and user.info responses are shape summaries only. Public response payload capture is opt-in and sanitized.
+- Reports are local, ignored by Git and written with restrictive permissions. No raw account balances, UID, address, memo, or transaction details are persisted.
+- The tool does not submit/cancel orders, transfer/withdraw funds, retry requests, auto-reconnect, or run during unit tests/Harvester startup.
+
+This runner verifies connectivity and the currently implemented RPC/REST client behavior for the configured account. It does not resolve order client identity, conflicting order quantity units, fill denomination/completeness, source-timestamped account snapshots, account-wide open orders, exact price/quantity increments, private event streaming, TESTNET availability or safe mutation verification. [Issue #1185](https://github.com/45s/coinzilla/issues/1185) remains open and authoritative.
+
+The intended longer-term scope is full Bitunix broker and Harvester provider support, including order execution, once the blockers above and all additional order lifecycle/recovery gates have verified evidence. Current read-only status is temporary and fail-closed; this diagnostic tool does not itself enable trading.
