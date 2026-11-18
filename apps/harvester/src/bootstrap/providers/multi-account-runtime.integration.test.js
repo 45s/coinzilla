@@ -642,7 +642,10 @@ async function startMultiAccountRuntime({
   secondaryCalls,
   eventPublisher = testEventPublisher,
   onUserDataEvent,
-  adapterFactories = createMultiAccountAdapterFactories({ primaryCalls, secondaryCalls }),
+  adapterFactories = createMultiAccountAdapterFactories({
+    primaryCalls,
+    secondaryCalls,
+  }),
 }) {
   const providers = resolveProviderInstances({
     appConfig: configuredAppConfig,
@@ -875,7 +878,10 @@ test("routes order submission, user-data fills, cancellation, and candle data th
     env: createMultiAccountHarvesterEnvironment(),
     primaryCalls,
     secondaryCalls,
-    adapterFactories: createProductionAdapterFactories({ primaryCalls, secondaryCalls }),
+    adapterFactories: createProductionAdapterFactories({
+      primaryCalls,
+      secondaryCalls,
+    }),
     onUserDataEvent: async ({ event }) => {
       if (event?.executionType === "TRADE") {
         userDataSignal.resolve(event)
