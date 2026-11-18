@@ -1,4 +1,5 @@
 import { resolveMarketDataSymbolsByProvider } from "./resolve-market-data-symbols-by-provider.js"
+import { resolveExecutionSymbolsByProvider } from "./resolve-execution-symbols-by-provider.js"
 
 function createAccountEnvironment({
   env,
@@ -37,6 +38,104 @@ function createAccountAppConfig({
         enabled: false,
       },
     },
+  }
+}
+
+function createMarketDataProviderBySymbol({ marketDataSymbolsByProvider }) {
+  const providerBySymbol = new Map()
+  for (const [providerInstanceId, symbols] of marketDataSymbolsByProvider) {
+    for (const symbol of symbols) {
+      if (providerBySymbol.has(symbol)) {
+        throw new TypeError(`Market-data symbol ${symbol} has more than one configured source`)
+      }
+      providerBySymbol.set(symbol, providerInstanceId)
+    }
+  }
+  return providerBySymbol
+}
+
+function assertExecutionAndMarketDataEnvironments({
+  providers,
+  executionSymbolsByProvider,
+  marketDataProviderBySymbol,
+}) {
+  const providerById = new Map(providers.map((provider) => [provider.providerInstanceId, provider]))
+  for (const [executionProviderId, symbols] of executionSymbolsByProvider) {
+    const executionProvider = providerById.get(executionProviderId)
+    for (const symbol of symbols) {
+      const sourceProviderId = marketDataProviderBySymbol.get(symbol)
+      const sourceProvider = providerById.get(sourceProviderId)
+      if (!sourceProvider) {
+        throw new TypeError(`Market-data route for ${symbol} references an unknown source provider`)
+      }
+      if (executionProvider.environment !== sourceProvider.environment) {
+        throw new TypeError(
+          `Execution and market-data providers for ${symbol} must use the same trading environment`,
+        )
+      }
+    }
+  }
+}
+
+function createRequiredCapabilitiesByProvider({
+  providers,
+  executionSymbolsByProvider,
+  marketDataSymbolsByProvider,
+}) {
+  const accountCapabilities = [
+    "READ_ACCOUNT_SNAPSHOT",
+    "READ_OPEN_ORDERS",
+    "READ_CANONICAL_ORDER",
+    "READ_CANONICAL_ORDER_HISTORY",
+    "READ_FILLS",
+    "READ_SYMBOL_FILTERS",
+    "SUBSCRIBE_USER_DATA",
+    "RECOVER_USER_DATA_SESSION",
+  ]
+  const executionCapabilities = ["PLACE_LIMIT_ORDER", "CANCEL_ORDER"]
+  const marketDataCapabilities = [
+    "READ_MARKET_PRICE",
+    "READ_CANDLES",
+    "SUBSCRIBE_MARKET_PRICES",
+    "SUBSCRIBE_CANDLES",
+    "SUBSCRIBE_BOOK_TICKER",
+  ]
+  return new Map(providers.map(({ providerInstanceId }) => {
+    const required = new Set(accountCapabilities)
+    if ((executionSymbolsByProvider.get(providerInstanceId) ?? []).length > 0) {
+      for (const capability of executionCapabilities) {
+        required.add(capability)
+      }
+    }
+    if ((marketDataSymbolsByProvider.get(providerInstanceId) ?? []).length > 0) {
+      for (const capability of marketDataCapabilities) {
+        required.add(capability)
+      }
+    }
+    return [providerInstanceId, Object.freeze([...required])]
+  }))
+}
+
+function createMarketDataBrokerResolver({
+  providerBrokers,
+  marketDataProviderBySymbol,
+}) {
+  return ({ symbol } = {}) => {
+    const providerInstanceId = marketDataProviderBySymbol.get(symbol)
+    if (!providerInstanceId) {
+      const error = new Error(`No explicit market-data source is configured for ${symbol}`)
+      error.code = "HARVESTER_MARKET_DATA_ROUTE_MISSING"
+      throw error
+    }
+    const broker = providerBrokers.get(providerInstanceId)
+    if (!broker) {
+      const error = new Error(
+        `Configured market-data source provider ${providerInstanceId} is unavailable for ${symbol}`,
+      )
+      error.code = "HARVESTER_MARKET_DATA_PROVIDER_UNAVAILABLE"
+      throw error
+    }
+    return broker
   }
 }
 
@@ -120,6 +219,21 @@ async function stopStartedAccounts({
 }) {
   const errors = []
   for (const entry of [...startedAccounts].reverse()) {
+    if (typeof entry.runtime.stopMarketData === "function") {
+      try {
+        const result = await entry.runtime.stopMarketData()
+        if (result?.ok === false) {
+          errors.push(...collectRuntimeStopErrors({
+            result,
+            providerInstanceId: entry.provider.providerInstanceId,
+          }))
+        }
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+  }
+  for (const entry of [...startedAccounts].reverse()) {
     errors.push(...await stopOneStartedAccount({
       entry,
       releaseProviderLock,
@@ -151,11 +265,13 @@ function createMultiAccountRuntime({
     }
   }
   const primary = startedAccounts[0].runtime
-  const providerAccounts = Object.freeze(startedAccounts.map(({ provider }) => Object.freeze({
+  const providerAccounts = Object.freeze(startedAccounts.map(({ provider, runtime }) => Object.freeze({
     providerInstanceId: provider.providerInstanceId,
     providerType: provider.providerType,
     accountId: provider.accountId,
     environment: provider.environment,
+    executionSymbols: Object.freeze([...(runtime.executionSymbols ?? [])]),
+    marketDataSources: Object.freeze({ ...(runtime.marketDataSources ?? {}) }),
   })))
   const subscriptions = Object.freeze([...new Set(
     startedAccounts.flatMap(({ runtime }) => runtime.subscriptions ?? []),
@@ -169,7 +285,8 @@ function createMultiAccountRuntime({
     brokerName: providerAccounts.length === 1 ? providerAccounts[0].providerType : "multiple",
     environment: primary.environment,
     tradingMode: providerAccounts[0].environment,
-    tradingEnabled: startedAccounts.some(({ runtime }) => runtime.tradingEnabled === true),
+    tradingEnabled: startedAccounts.some(({ runtime }) =>
+      runtime.tradingEnabled === true && runtime.executionEnabled !== false),
     strategyMode: primary.strategyMode ?? "conservative",
     connected: startedAccounts.every(({ runtime }) => runtime.connected !== false),
     subscriptions,
@@ -272,7 +389,17 @@ function createProviderAccountStartInput({
   runtimeSessionId,
   operationalStateStore,
   marketDataSymbolsByProvider,
+  executionSymbolsByProvider,
+  marketDataProviderBySymbol,
+  providerBrokers,
+  requiredCapabilitiesByProvider,
+  deferMarketDataStart,
 }) {
+  const executionSymbols = executionSymbolsByProvider.get(provider.providerInstanceId) ?? []
+  const marketDataSources = Object.fromEntries(executionSymbols.map((symbol) => [
+    symbol,
+    marketDataProviderBySymbol.get(symbol),
+  ]))
   return {
     appConfig: createAccountAppConfig({
       appConfig,
@@ -288,8 +415,22 @@ function createProviderAccountStartInput({
     operationalStateStore: index === 0 ? operationalStateStore : undefined,
     brokerAdapterFactory: provider.brokerAdapterFactory,
     providerIdentity: provider.identity,
-    marketDataProviderInstanceId: provider.providerInstanceId,
-    marketDataSymbols: marketDataSymbolsByProvider.get(provider.providerInstanceId),
+    executionSymbols: Object.freeze([...executionSymbols]),
+    marketDataSources: Object.freeze(marketDataSources),
+    requiredCapabilities: requiredCapabilitiesByProvider.get(provider.providerInstanceId) ?? Object.freeze([]),
+    deferMarketDataStart,
+    ...(deferMarketDataStart ? {
+      onBrokerConnected: ({ providerInstanceId, broker } = {}) => {
+        if (providerInstanceId !== provider.providerInstanceId || !broker) {
+          throw new TypeError("Provider runtime registered a broker with mismatched instance identity")
+        }
+        providerBrokers.set(providerInstanceId, broker)
+      },
+      getMarketDataBroker: createMarketDataBrokerResolver({
+        providerBrokers,
+        marketDataProviderBySymbol,
+      }),
+    } : {}),
   }
 }
 
@@ -320,6 +461,11 @@ async function startOneProviderAccount({
   retainProviderLock,
   requireStop,
   marketDataSymbolsByProvider,
+  executionSymbolsByProvider,
+  marketDataProviderBySymbol,
+  providerBrokers,
+  requiredCapabilitiesByProvider,
+  deferMarketDataStart,
 }) {
   try {
     const runtime = await start(createProviderAccountStartInput({
@@ -332,6 +478,11 @@ async function startOneProviderAccount({
       runtimeSessionId,
       operationalStateStore,
       marketDataSymbolsByProvider,
+      executionSymbolsByProvider,
+      marketDataProviderBySymbol,
+      providerBrokers,
+      requiredCapabilitiesByProvider,
+      deferMarketDataStart,
     }))
     validateStartedProviderRuntime({
       runtime,
@@ -343,6 +494,7 @@ async function startOneProviderAccount({
       error: undefined,
     }
   } catch (error) {
+    providerBrokers.delete(provider.providerInstanceId)
     const cleanupConfirmed = error?.startupCleanupConfirmed === true
     const cleanupErrors = cleanupConfirmed
       ? await releaseFailedAccountLock({
@@ -374,6 +526,11 @@ async function startConfiguredProviderAccounts({
   releaseProviderLock,
   retainProviderLock,
   marketDataSymbolsByProvider,
+  executionSymbolsByProvider,
+  marketDataProviderBySymbol,
+  providerBrokers,
+  requiredCapabilitiesByProvider,
+  deferMarketDataStart,
 }) {
   const startedAccounts = []
   const failedAccounts = []
@@ -393,6 +550,11 @@ async function startConfiguredProviderAccounts({
       retainProviderLock,
       requireStop: providers.length > 1,
       marketDataSymbolsByProvider,
+      executionSymbolsByProvider,
+      marketDataProviderBySymbol,
+      providerBrokers,
+      requiredCapabilitiesByProvider,
+      deferMarketDataStart,
     })
     if (result.error === undefined) {
       startedAccounts.push({
@@ -436,10 +598,29 @@ export async function startProviderAccounts({
   if (typeof start !== "function") {
     throw new TypeError("Harvester provider-account startup requires a start function")
   }
+  const executionSymbolsByProvider = resolveExecutionSymbolsByProvider({
+    appConfig,
+    providers,
+  })
   const marketDataSymbolsByProvider = resolveMarketDataSymbolsByProvider({
     appConfig,
     providers,
   })
+  const marketDataProviderBySymbol = createMarketDataProviderBySymbol({
+    marketDataSymbolsByProvider,
+  })
+  assertExecutionAndMarketDataEnvironments({
+    providers,
+    executionSymbolsByProvider,
+    marketDataProviderBySymbol,
+  })
+  const providerBrokers = new Map()
+  const requiredCapabilitiesByProvider = createRequiredCapabilitiesByProvider({
+    providers,
+    executionSymbolsByProvider,
+    marketDataSymbolsByProvider,
+  })
+  const deferMarketDataStart = providers.length > 1
   const startup = await startConfiguredProviderAccounts({
     providers,
     start,
@@ -451,12 +632,22 @@ export async function startProviderAccounts({
     releaseProviderLock,
     retainProviderLock,
     marketDataSymbolsByProvider,
+    executionSymbolsByProvider,
+    marketDataProviderBySymbol,
+    providerBrokers,
+    requiredCapabilitiesByProvider,
+    deferMarketDataStart,
   })
   throwIfNoAccountStarted({
     providers,
     startedAccounts: startup.startedAccounts,
     failedErrors: startup.failedErrors,
   })
+  if (deferMarketDataStart) {
+    for (const entry of startup.startedAccounts) {
+      await entry.runtime.startMarketData()
+    }
+  }
   if (providers.length === 1) {
     return startup.startedAccounts[0].runtime
   }
