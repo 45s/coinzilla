@@ -8,7 +8,9 @@ owner: brokers
 
 This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may retain consumer-integration context for provenance, but application ports, adapters, routing, and runtime composition remain owned by each consuming application.
 
-## Common exchange-neutral Broker API — [#1446](https://github.com/45s/coinzilla/issues/1446)
+## Common exchange-neutral Broker API
+
+Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
 **Status: planned; next Brokers-package priority.** Define one stable public Broker API and implement Binance and Bitunix against the same method surface and compatible argument/result contracts.
 
