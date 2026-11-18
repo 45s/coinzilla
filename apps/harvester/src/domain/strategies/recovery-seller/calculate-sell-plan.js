@@ -125,6 +125,12 @@ function validateQuantityAndCostInputs(input) {
     value: input.minProfit,
     field: "minProfit",
   })
+  if (compareDecimal({
+    left: input.minProfit,
+    right: "0.01",
+  }) < 0) {
+    throw new RangeError("minProfit must be at least 0.01 quote-asset units")
+  }
 }
 
 function validateFeeAndMarketInputs(input) {
