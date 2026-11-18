@@ -6056,3 +6056,131 @@ test("keeps shared services connected when a real market callback returns a fail
   assert.equal(calls.includes("unsubscribe:user-data"), false, "User-data intake must remain connected after a failed accepted task.")
   assert.equal(calls.includes("disconnect"), false, "The broker must remain connected after a failed accepted task.")
 })
+
+test("keeps the Bitunix read-only observer disabled by default", async () => {
+  let bitunixFactoryCalls = 0
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: binanceEnv,
+    brokerAdapterFactory: () => createBroker(),
+    bitunixReadOnlyAdapterFactory: () => {
+      bitunixFactoryCalls += 1
+      throw new Error("Bitunix must not be constructed unless explicitly enabled.")
+    },
+  })
+  try {
+    assert.deepEqual(runtime.readOnlyProviders, { bitunix: null },
+      "The runtime must expose an explicit empty read-only provider slot without enabling Bitunix.")
+    assert.equal(bitunixFactoryCalls, 0, "Credentials or default configuration must not implicitly construct Bitunix.")
+  } finally {
+    await runtime.stop()
+  }
+})
+
+test("exposes enabled Bitunix only through the isolated read-only runtime surface", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const observerReadCalls = []
+  const bitunixObserver = Object.freeze({
+    accessMode: "read-only",
+    getBalances: async () => {
+      observerReadCalls.push("getBalances")
+      return {
+        ok: true,
+        data: [],
+      }
+    },
+  })
+  let receivedBitunixConfig
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: {
+      ...binanceEnv,
+      BITUNIX_READ_ONLY_ENABLED: "true",
+      BITUNIX_API_KEY: "read-only-key",
+      BITUNIX_API_SECRET: "read-only-secret",
+    },
+    brokerAdapterFactory: ({ config: brokerConfig } = {}) => {
+      assert.equal(brokerConfig.tradingMode, "testnet", "The existing Binance trading environment must remain unchanged.")
+      return broker
+    },
+    bitunixReadOnlyAdapterFactory: ({ config } = {}) => {
+      receivedBitunixConfig = config
+      return bitunixObserver
+    },
+    logger: {
+      info() {},
+      debug() {},
+      error() {},
+    },
+  })
+  try {
+    assert.equal(runtime.readOnlyProviders.bitunix, bitunixObserver,
+      "The explicitly enabled Bitunix observer must be exposed separately from the trading broker.")
+    assert.equal(receivedBitunixConfig.apiKey, "read-only-key", "The Bitunix factory must receive its own API key.")
+    assert.equal(receivedBitunixConfig.apiSecret, "read-only-secret", "The Bitunix factory must receive its own API secret.")
+    assert.equal(receivedBitunixConfig.tradingMode, "live", "Bitunix Spot must use its documented production read endpoint.")
+    assert.equal(runtime.tradingMode, "testnet", "Bitunix endpoint selection must not change Binance trading mode.")
+    assert.equal(runtime.tradingEnabled, true, "The existing Binance trading workflow must remain unchanged.")
+    assert.ok(calls.includes("connect"), "The existing Binance broker must still own the trading runtime.")
+    assert.deepEqual(observerReadCalls, [], "Bitunix reads must remain on-demand and must not run during Harvester startup.")
+  } finally {
+    await runtime.stop()
+  }
+})
+
+test("rejects enabled Bitunix configuration without credentials before Binance broker construction", async () => {
+  let binanceFactoryCalls = 0
+  await assert.rejects(
+    startHarvesterForTest({
+      loadConfig: async () => appConfig,
+      env: {
+        ...binanceEnv,
+        BITUNIX_READ_ONLY_ENABLED: "true",
+        BITUNIX_API_KEY: "",
+        BITUNIX_API_SECRET: "secret-must-not-appear-in-error",
+      },
+      brokerAdapterFactory: () => {
+        binanceFactoryCalls += 1
+        return createBroker()
+      },
+    }),
+    (error) => error.code === "HARVESTER_BITUNIX_READ_ONLY_CONFIGURATION_INVALID",
+    "An explicitly enabled Bitunix observer must reject missing credentials with a stable configuration error.",
+  )
+  assert.equal(binanceFactoryCalls, 0, "Invalid Bitunix configuration must fail before Binance broker construction.")
+})
+
+test("default Bitunix runtime facade exposes read methods but no trading or streaming methods", async () => {
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: {
+      ...binanceEnv,
+      BITUNIX_READ_ONLY_ENABLED: "true",
+      BITUNIX_API_KEY: "read-only-key",
+      BITUNIX_API_SECRET: "read-only-secret",
+    },
+    brokerAdapterFactory: () => createBroker(),
+    logger: {
+      info() {},
+      debug() {},
+      error() {},
+    },
+  })
+  try {
+    const { bitunix } = runtime.readOnlyProviders
+    assert.ok(bitunix, "Explicitly enabled Bitunix must be available as a read-only observer.")
+    for (const method of ["getBalances", "getExchangeMarkets", "getSymbolFilters", "getMarketMetadata", "getPrices", "getOrderBook", "getKlines", "getKlineHistory", "getOpenOrders", "getOrderHistory", "getOrder", "getDeposits", "getDepositAddress", "getWithdrawalHistory", "getExchangeRates", "getMatchingOrderDetails"]) {
+      assert.equal(typeof bitunix[method], "function", `Read-only method ${method} must be exposed.`)
+    }
+    for (const method of ["createOrder", "createCanonicalOrder", "cancelOrder", "cancelAllOpenOrders", "subscribeForPrices", "subscribeForBookTicker", "subscribeForUserData", "getFills", "getMyTrades", "getAccountSnapshot", "getAssets", "getCandles"]) {
+      assert.equal(bitunix[method], undefined, `Unsafe or unsupported method ${method} must not be exposed.`)
+    }
+    assert.equal(bitunix.accessMode, "read-only", "The observer must declare its access mode.")
+    assert.equal(bitunix.capabilities.trading.orderPlacement, false, "Order placement must be explicitly unsupported.")
+    assert.equal(bitunix.capabilities.trading.orderCancellation, false, "Order cancellation must be explicitly unsupported.")
+    assert.equal(Object.isFrozen(bitunix), true, "The read-only facade must be immutable.")
+  } finally {
+    await runtime.stop()
+  }
+})

@@ -139,7 +139,7 @@ See the [README](./README.md) for the current detailed contract, examples and SQ
 
 **Implementation:** [PR #1382](https://github.com/45s/coinzilla/pull/1382) merged into `develop`; tracking issue [#1381](https://github.com/45s/coinzilla/issues/1381). The package provides native online backup, integrity/foreign-key validation, temporary-file staging, atomic backup publication, and no-overwrite restore publication. These are SQLite infrastructure primitives only; retention, encryption, off-site storage, scheduling, compatibility policy and restore runbooks remain application-owned.
 
-**Follow-up reliability audit:** [Issue #1395](https://github.com/45s/coinzilla/issues/1395) and [PR #1396](https://github.com/45s/coinzilla/pull/1396) audit the complete SQLite implementation, including the merged backup/restore primitives. Do not mark this follow-up complete until its exact-head CI passes and the final PR is reviewed.
+**Follow-up reliability audit — COMPLETE:** [Issue #1395](https://github.com/45s/coinzilla/issues/1395) closed after [PR #1396](https://github.com/45s/coinzilla/pull/1396) merged. Exact-head tests, coverage and required CI passed; the audit included the merged backup/restore primitives. See the completed audit status above and the linked issue/PR for detailed evidence.
 
 ## Existing SQLite functionality — preserved
 
