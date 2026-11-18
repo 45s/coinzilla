@@ -1103,7 +1103,6 @@ right: minProfit }) >= 0
   }
 }
 
-// eslint-disable-next-line max-lines-per-function -- Recovery event validation remains a cohesive domain boundary.
 function resolveRecoveryNonCompletionDetails({ data }) {
   const symbol = requireString({
     value: data.symbol,
