@@ -69,3 +69,27 @@ test("rejects incomplete or invalid provider account descriptors", () => {
     "An empty account registry must fail closed.",
   )
 })
+
+
+test("rejects duplicate provider instance ids and unknown account lookups", () => {
+  const duplicateProviderInstances = [
+    providers[0],
+    {
+      ...providers[1],
+      providerInstanceId: providers[0].providerInstanceId,
+      accountId: "account-three",
+    },
+  ]
+  assert.throws(
+    () => createAccountRuntimeRegistry({ providers: duplicateProviderInstances }),
+    /duplicate providerInstanceId/,
+    "A provider instance id must identify exactly one account runtime.",
+  )
+
+  const registry = createAccountRuntimeRegistry({ providers })
+  assert.throws(
+    () => registry.get("missing-provider"),
+    /not registered/,
+    "Unknown provider instances must not silently receive an account runtime.",
+  )
+})
