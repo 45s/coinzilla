@@ -223,6 +223,15 @@ function createMainMultiProviderFixture({
   const signalHandlers = new Map()
   const errors = []
   const config = createMainMultiProviderAppConfig(providerInstances)
+  if (providerInstances.length > 1) {
+    const [, secondaryProvider] = providerInstances
+    const [firstSymbol] = Object.keys(config.strategies.CG_coinGrabber.pairs)
+    config.executionRouting.routes = config.executionRouting.routes.map((route) =>
+      route.symbol === firstSymbol
+        ? { ...route, providerInstanceId: secondaryProvider.providerInstanceId }
+        : route
+    )
+  }
   const run = () => main({
     loadConfig: async () => config,
     env,
