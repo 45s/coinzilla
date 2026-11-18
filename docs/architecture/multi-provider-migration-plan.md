@@ -16,15 +16,15 @@ last_verified: 2026-11-18
 
 ## Current source revalidation — 2026-11-18
 
-**Revalidation checkpoint:** `develop` at `16a8842fed0407fce67361fb382a6aaa1dab32bd` (2026-11-18 11:12:04 UTC; includes PR #1416 and the latest documentation-index synchronization). This section supersedes earlier statements about current delivery status where they differ; historical audit evidence remains unchanged.
+**Revalidation checkpoint:** `develop` at `5eaf38d88591a055e155ab5b8df22326ff76949b` (2026-11-18; includes merged PR #1445 Phase 4 production account isolation). This section supersedes earlier statements about current delivery status where they differ; historical audit evidence remains unchanged.
 
 - **Phase 1 — complete:** Brokers' immutable Binance capability declaration merged in [PR #1366](https://github.com/45s/coinzilla/pull/1366). This is additive capability metadata; it does not enable another provider.
 - **Phase 2 — foundation merged, routing not delivered:** [PR #1383](https://github.com/45s/coinzilla/pull/1383) adds stable Binance provider-instance/account identity, an exchange-neutral provider registry, capability validation, and deterministic connection/rollback lifecycle. It preserves the legacy single-Binance trading runtime.
 - **Superseded parallel work:** [PR #1386](https://github.com/45s/coinzilla/pull/1386) was closed unmerged as superseded by PR #1383. The final closure review confirmed that #1383 already contains the in-flight connect/disconnect lifecycle serialization and deterministic regression coverage added during the #1386 review. No code from the old #1386 branch is needed.
-- **Phase 4 production integration — implementation in review in [PR #1445](https://github.com/45s/coinzilla/pull/1445):** `brokers.instances` resolves explicit provider/account/environment identities and credential environment-variable references; the process entrypoint acquires account-scoped locks and starts an independent Harvester runtime per account. Credential variables belonging to other configured accounts are removed from each child runtime environment. Confirmed startup cleanup releases the failed account lock; uncertain cleanup retains it until process shutdown cleanup is confirmed. The legacy single-Binance environment remains the compatibility fallback. The default production adapter map currently registers Binance only; unsupported provider types fail clearly.
+- **Phase 4 production integration — COMPLETE in merged [PR #1445](https://github.com/45s/coinzilla/pull/1445):** exact head `8f1f2b4888edb716b15741bec61afcb0b8d8dcdc` merged as `5eaf38d88591a055e155ab5b8df22326ff76949b`. `brokers.instances` resolves explicit provider/account/environment identities and credential environment-variable references; the process entrypoint acquires account-scoped locks and starts an independent Harvester runtime per account. Credential variables belonging to other configured accounts are removed from each child runtime environment. Confirmed startup cleanup releases the failed account lock; uncertain cleanup retains it until process shutdown cleanup is confirmed. The legacy single-Binance environment remains the compatibility fallback. The default production adapter map currently registers Binance only; unsupported provider types fail clearly.
 - **Isolated read-only observer exception:** the opt-in Bitunix Spot observer is implemented in [PR #1423](https://github.com/45s/coinzilla/pull/1423), with its documentation update in [PR #1424](https://github.com/45s/coinzilla/pull/1424), under user-authorized [issue #1422](https://github.com/45s/coinzilla/issues/1422). It is exposed only as `runtime.readOnlyProviders.bitunix`, disabled by default, and is not registered as a Harvester BrokerPort/provider-registry entry or used by execution, strategy market-data, Portfolio, account snapshots, recovery, Journal, reservations, or process locks. It does not satisfy Phase 7, resolve [#1185](https://github.com/45s/coinzilla/issues/1185), or establish trading readiness.
 - **Phase 3 — COMPLETE:** [PR #1416](https://github.com/45s/coinzilla/pull/1416) merged as `543753da5938eba2d95ad19d74c3f98a991e6461` from synchronized head `e58569eaebf968f5cfcfd3fbef5b6302eb0f21ee`. Immutable provider-instance/type/account provenance is persisted before broker I/O and retained through order, cancellation, fill, Journal and Operational State lifecycle records. Historical v1 facts and hash chains remain compatible; ambiguous legacy identities fail closed. All six required `develop-core` checks passed on the exact synchronized head.
-- **Phase 4 — basic in-process account isolation is implemented in [PR #1445](https://github.com/45s/coinzilla/pull/1445), pending exact-head CI.** PR #1440 provides account-scoped process locks and the per-provider/account state registry; PR #1445 wires optional `brokers.instances` configuration into the production entrypoint and starts a separate runtime per configured account. Credential environment variables are isolated per account. Partial provider startup failures are isolated; healthy account runtimes continue. Uncertain startup cleanup retains the failed account lock until confirmed process shutdown cleanup. The default production adapter map currently supports Binance only.
+- **Phase 4 — COMPLETE: basic in-process account isolation is merged in [PR #1445](https://github.com/45s/coinzilla/pull/1445)** (head `8f1f2b4888edb716b15741bec61afcb0b8d8dcdc`, merge `5eaf38d88591a055e155ab5b8df22326ff76949b`). PR #1440 provides account-scoped process locks and the per-provider/account state registry; PR #1445 wires optional `brokers.instances` configuration into the production entrypoint and starts a separate runtime per configured account. Credential environment variables are isolated per account. Partial provider startup failures are isolated; healthy account runtimes continue. Uncertain startup cleanup retains the failed account lock until confirmed process shutdown cleanup. The default production adapter map currently supports Binance only.
 - **Phases 5–6 remain later work:** independent market-data routing, then explicit Binance execution routing/parity. Bitunix execution remains blocked by #1185.
 - **Trading safety gates unchanged:** Bitunix order mutations and Harvester trading readiness remain blocked by [issue #1185](https://github.com/45s/coinzilla/issues/1185); Recovery Seller remains non-executable under [issue #1127](https://github.com/45s/coinzilla/issues/1127). The read-only observer does not relax either gate. No exchange operations were performed for this revalidation.
 
@@ -32,13 +32,13 @@ This revalidation was a read-only source and GitHub delivery-state inspection an
 
 ## Priority and next delivery decision — 2026-11-18
 
-**Owner priority:** #1339 remains the primary Harvester architecture/delivery workstream. The merged #1366 and #1383 work is a foundation only; the application still composes one Binance trading instance and has no independent execution or strategy market-data route tables. The isolated Bitunix observer is read-only and is not part of the provider-routing architecture.
+**Owner priority:** #1339 remains the primary Harvester architecture/delivery workstream. Phase 4 now supports multiple configured Binance account runtimes in one process; the application still has no independent execution or strategy market-data route tables, and no second production exchange adapter is registered. The isolated Bitunix observer is read-only and is not part of the provider-routing architecture.
 
-**Current implementation priority: Phase 4 — basic in-process account isolation only.** The production bootstrap integration is under review in [PR #1445](https://github.com/45s/coinzilla/pull/1445). Verify exact-head tests and CI before marking the phase complete. Keep runtime state in memory; do not introduce restart restoration or recovery gates.
+**Current implementation priority: Phase 5 — independent market-data routing.** Phase 4 basic in-process account isolation is complete in merged [PR #1445](https://github.com/45s/coinzilla/pull/1445). Keep runtime state in memory; do not introduce restart restoration or recovery gates.
 
-**Process-restart recovery (#654) is explicitly the lowest-priority separate workstream.** It must not block Phase 4 or receive further implementation effort until the basic multi-provider runtime is working and the user reprioritizes it.
+**Process-restart recovery (#654) is explicitly the lowest-priority separate workstream.** It must not block Phase 5/6 or receive further implementation effort unless the user explicitly reprioritizes it.
 
-**Phase 4 implementation under review:** [PR #1445](https://github.com/45s/coinzilla/pull/1445) wires configured accounts into production bootstrap; final acceptance depends on exact-head tests, CI and review.
+**Phase 4 implementation complete:** [PR #1445](https://github.com/45s/coinzilla/pull/1445) merged with independent configured account runtimes, account-specific credential isolation, scoped process locks and partial startup failure isolation.
 
 **Delivery sequence after Phase 3:**
 
@@ -70,7 +70,7 @@ The safe direction is incremental:
 2. Add truthful provider capability declarations in `packages/brokers`.
 3. Prepare Harvester provider construction/registry without enabling multi-provider execution.
 4. Establish durable, immutable order provenance and account-scoped identity.
-5. Complete account isolation and process-restart recovery.
+5. Phase 4 account isolation is complete; keep process-restart recovery under separate lowest-priority #654 and continue with Phase 5/6 routing.
 6. Introduce independent market-data routing.
 7. Route existing Binance execution through the new composition and prove parity.
 8. Enable another provider only after its complete required lifecycle is verified.
@@ -446,7 +446,7 @@ Each phase is a separate reviewable issue/PR slice under #1339. Cross-domain con
 ### Phase 4 — Basic in-process account isolation (recovery deferred)
 
 **Owner:** Harvester.
-**Implementation:** production bootstrap wiring is under review in [PR #1445](https://github.com/45s/coinzilla/pull/1445); do not mark complete until exact-head tests and CI pass.
+**Implementation:** production bootstrap wiring is complete in merged [PR #1445](https://github.com/45s/coinzilla/pull/1445) (head `8f1f2b4888edb716b15741bec61afcb0b8d8dcdc`, merge `5eaf38d88591a055e155ab5b8df22326ff76949b`). Required exact-head CI checks passed.
 
 **Configuration:** optional `brokers.instances` in the named `appConfig` export. Each entry has `providerInstanceId`, `providerType`, `accountId`, `environment` (`testnet` or `live`) and `credentials.apiKeyEnv`/`credentials.apiSecretEnv`. Credential values remain in environment variables. When the list is absent, the existing single-Binance environment configuration remains unchanged. The default production factory map currently registers Binance only; unsupported provider types fail clearly until a real adapter is registered.
 
@@ -590,9 +590,9 @@ Severity indicates architectural/operational risk, not a reproduced incident. Th
 
 The durable provider/account provenance slice is complete in merged [PR #1416](https://github.com/45s/coinzilla/pull/1416). It carries immutable, validated provider-instance, provider-type and stable account identity through canonical orders/fills, durable submission and cancellation facts, user-data/REST attribution, Journal projection and Operational State recovery. The implementation preserves historical v1 facts and hash chains, rejects partial/conflicting identity, and does not infer legacy identity from current routes.
 
-The synchronized final PR head `e58569eaebf968f5cfcfd3fbef5b6302eb0f21ee` passed all six required `develop-core` checks and was merged as `543753da5938eba2d95ad19d74c3f98a991e6461`. Phase 4 production account isolation is now implemented in PR #1445 and awaits exact-head CI/review; no multi-exchange execution routing or unattended restart is enabled.
+The synchronized final PR head `e58569eaebf968f5cfcfd3fbef5b6302eb0f21ee` passed all six required `develop-core` checks and was merged as `543753da5938eba2d95ad19d74c3f98a991e6461`. Phase 4 production account isolation is complete in merged PR #1445 (head `8f1f2b4888edb716b15741bec61afcb0b8d8dcdc`, merge `5eaf38d88591a055e155ab5b8df22326ff76949b`); no multi-exchange execution routing or unattended restart is enabled.
 
-**Phase 4 production integration is under review in PR #1445.** This is basic in-process account isolation only. #654 restart-recovery release gates remain separate, LOWEST PRIORITY and must not be treated as Phase 4 acceptance criteria.
+**Phase 4 production integration is complete in merged PR #1445.** This is basic in-process account isolation only. #654 restart-recovery release gates remain separate, LOWEST PRIORITY and must not be treated as Phase 4 acceptance criteria.
 
 ## 13. Audit limitations and follow-up
 
