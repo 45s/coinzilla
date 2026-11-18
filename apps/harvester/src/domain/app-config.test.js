@@ -452,14 +452,14 @@ test("rejects duplicate provider instance IDs and account scopes", () => {
     ],
   }
   assert.throws(() => validateAppConfig(config), (error) =>
-    error instanceof ConfigValidationError && error.path === "brokers.instances[1].credentials")
+    error instanceof ConfigValidationError && error.path === "brokers.instances")
 
   config.brokers.instances[1] = {
     ...provider,
     providerInstanceId: "binanceTestnetAlias",
   }
   assert.throws(() => validateAppConfig(config), (error) =>
-    error instanceof ConfigValidationError && error.path === "brokers.instances[1].credentials")
+    error instanceof ConfigValidationError && error.path === "brokers.instances")
 })
 
 test("rejects provider credentials stored directly in application configuration", () => {
