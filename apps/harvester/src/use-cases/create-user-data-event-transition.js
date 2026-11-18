@@ -141,26 +141,21 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
     })
   }
   state.registry = update.registry
-  const registeredOrder = state.registry.getOrder?.({
-    clientOrderId: order.clientOrderId,
-  }) ?? order
   if (update.applied === true) {
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
       dataResult: mapOrderUpdatedData({
-        order: registeredOrder,
+        order,
         executionType: event.executionType,
         evidence: event.brokerEvidence,
       }),
     })
   }
-  return {
-    order: registeredOrder,
+  return { order,
     symbol,
     update,
-    previousOrder,
-  }
+    previousOrder }
 }
 
 async function handlePreFillRecoveryState({ dependencies, order, symbol, recoveryMode } = {}) {
