@@ -87,30 +87,38 @@ async function releaseStoppedAccountLock({
   }
 }
 
+async function stopOneStartedAccount({
+  entry,
+  releaseProviderLock,
+}) {
+  if (!entry.runtimeStopped) {
+    try {
+      const result = await entry.runtime.stop?.()
+      const stopErrors = collectRuntimeStopErrors({
+        result,
+        providerInstanceId: entry.provider.providerInstanceId,
+      })
+      if (stopErrors.length > 0) {
+        return stopErrors
+      }
+      entry.runtimeStopped = true
+    } catch (error) {
+      return [error]
+    }
+  }
+  return releaseStoppedAccountLock({
+    entry,
+    releaseProviderLock,
+  })
+}
+
 async function stopStartedAccounts({
   startedAccounts,
   releaseProviderLock,
 }) {
   const errors = []
   for (const entry of [...startedAccounts].reverse()) {
-    if (!entry.runtimeStopped) {
-      try {
-        const result = await entry.runtime.stop?.()
-        const stopErrors = collectRuntimeStopErrors({
-          result,
-          providerInstanceId: entry.provider.providerInstanceId,
-        })
-        if (stopErrors.length > 0) {
-          errors.push(...stopErrors)
-          continue
-        }
-        entry.runtimeStopped = true
-      } catch (error) {
-        errors.push(error)
-        continue
-      }
-    }
-    errors.push(...await releaseStoppedAccountLock({
+    errors.push(...await stopOneStartedAccount({
       entry,
       releaseProviderLock,
     }))
@@ -291,22 +299,16 @@ async function startOneProviderAccount({
  * @param {{providers: object[], start: Function, appConfig: object, env: object}} input
  * @returns {Promise<object>}
  */
-export async function startProviderAccounts({
+async function startConfiguredProviderAccounts({
   providers,
   start,
   appConfig,
-  env = process.env,
+  env,
   eventPublisher,
   runtimeSessionId,
   operationalStateStore,
   releaseProviderLock,
-} = {}) {
-  if (!Array.isArray(providers) || providers.length === 0) {
-    throw new TypeError("Harvester requires at least one configured provider account")
-  }
-  if (typeof start !== "function") {
-    throw new TypeError("Harvester provider-account startup requires a start function")
-  }
+}) {
   const startedAccounts = []
   const failedAccounts = []
   const failedErrors = []
@@ -340,18 +342,51 @@ export async function startProviderAccounts({
     }))
     failedErrors.push(result.error, ...(result.cleanupErrors ?? []))
   }
+  return {
+    startedAccounts,
+    failedAccounts,
+    failedErrors,
+  }
+}
+
+export async function startProviderAccounts({
+  providers,
+  start,
+  appConfig,
+  env = process.env,
+  eventPublisher,
+  runtimeSessionId,
+  operationalStateStore,
+  releaseProviderLock,
+} = {}) {
+  if (!Array.isArray(providers) || providers.length === 0) {
+    throw new TypeError("Harvester requires at least one configured provider account")
+  }
+  if (typeof start !== "function") {
+    throw new TypeError("Harvester provider-account startup requires a start function")
+  }
+  const startup = await startConfiguredProviderAccounts({
+    providers,
+    start,
+    appConfig,
+    env,
+    eventPublisher,
+    runtimeSessionId,
+    operationalStateStore,
+    releaseProviderLock,
+  })
   throwIfNoAccountStarted({
     providers,
-    startedAccounts,
-    failedErrors,
+    startedAccounts: startup.startedAccounts,
+    failedErrors: startup.failedErrors,
   })
   if (providers.length === 1) {
-    return startedAccounts[0].runtime
+    return startup.startedAccounts[0].runtime
   }
   return createMultiAccountRuntime({
     appConfig,
-    startedAccounts,
-    failedAccounts,
+    startedAccounts: startup.startedAccounts,
+    failedAccounts: startup.failedAccounts,
     releaseProviderLock,
   })
 }
