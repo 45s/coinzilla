@@ -1231,16 +1231,14 @@ export const mapRecoveryCycleNotCompletedData = (input = {}) =>
     mapper: (fields) => mapRecoveryCycleNotCompletedFields(fields),
   })
 
-/** Map the complete account-wide open-order snapshot; BLOCKED classifies audit ownership, not process startup readiness. */
-const mapAccountOpenOrder = ({ order, index }) => {
-  if (!order || typeof order !== "object") {
-    throw new TypeError(`orders[${index}] must be a normalized broker order`)
+function requireOpenOrderSide({ order, index }) {
+  if (order.side !== "BUY" && order.side !== "SELL") {
+    throw new TypeError(`orders[${index}].side must be BUY or SELL`)
   }
-  const symbol = order.market?.symbol ?? order.symbol
-  const brokerOrderId = order.brokerOrderId ?? order.id
-  const price = order.limitPrice?.amount ?? order.originalPrice
-  const quantity = order.originalQuantity?.amount ?? order.originalQuantity
-  const executedQuantity = order.executedQuantity?.amount ?? order.executedQuantity ?? "0"
+  return order.side
+}
+
+function mapOpenOrderIdentity({ order, index, symbol, brokerOrderId }) {
   return {
     ...(typeof order.clientOrderId === "string" && order.clientOrderId.trim()
       ? { clientOrderId: order.clientOrderId.trim() }
@@ -1253,13 +1251,16 @@ const mapAccountOpenOrder = ({ order, index }) => {
       value: symbol,
       field: `orders[${index}].symbol`,
     }),
-    side: order.side === "BUY" || order.side === "SELL"
-      ? order.side
-      : (() => { throw new TypeError(`orders[${index}].side must be BUY or SELL`) })(),
+    side: requireOpenOrderSide({ order, index }),
     type: requireString({
       value: order.type,
       field: `orders[${index}].type`,
     }),
+  }
+}
+
+function mapOpenOrderQuantities({ order, index, price, quantity, executedQuantity }) {
+  return {
     ...(price === undefined ? {} : {
       price: requireDecimalString({
         value: price,
@@ -1277,6 +1278,33 @@ const mapAccountOpenOrder = ({ order, index }) => {
     status: requireString({
       value: order.status,
       field: `orders[${index}].status`,
+    }),
+  }
+}
+
+/** Map the complete account-wide open-order snapshot; BLOCKED classifies audit ownership, not process startup readiness. */
+const mapAccountOpenOrder = ({ order, index }) => {
+  if (!order || typeof order !== "object") {
+    throw new TypeError(`orders[${index}] must be a normalized broker order`)
+  }
+  const symbol = order.market?.symbol ?? order.symbol
+  const brokerOrderId = order.brokerOrderId ?? order.id
+  const price = order.limitPrice?.amount ?? order.originalPrice
+  const quantity = order.originalQuantity?.amount ?? order.originalQuantity
+  const executedQuantity = order.executedQuantity?.amount ?? order.executedQuantity ?? "0"
+  return {
+    ...mapOpenOrderIdentity({
+      order,
+      index,
+      symbol,
+      brokerOrderId,
+    }),
+    ...mapOpenOrderQuantities({
+      order,
+      index,
+      price,
+      quantity,
+      executedQuantity,
     }),
   }
 }
