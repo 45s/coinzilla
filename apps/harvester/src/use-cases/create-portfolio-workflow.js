@@ -714,30 +714,12 @@ async function runCompleteRecoveryCycle({
   }
 }
 
-/**
- * Create the in-memory Portfolio and RecoveryLedger workflow used by Harvester.
- *
- * Owns serialized canonical-fill accounting and atomic recovery-cycle completion.
- * Bootstrap composes this stateful workflow with broker and process lifecycle
- * resources; the domain transitions remain in Portfolio and RecoveryLedger.
- *
- * @param {object} options
- * @param {Function} options.evaluateStrategy Strategy evaluator used by market-price processing.
- * @param {object} options.logger Structured logger used for workflow diagnostics.
- * @param {Portfolio} [options.initialPortfolio] Initial immutable portfolio.
- * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
- * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
- */
-export const createPortfolioWorkflow = ({
-  evaluateStrategy,
-  logger,
+function validatePortfolioWorkflowOptions({
   initialPortfolio,
   initialRecoveryLedgers,
-  onCommissionAsset,
   onOperationalStateExecutionFill,
   onOperationalStateRecoveryCycleCompleted,
-  onOperationalStateRecoveryCycleNotCompleted,
-} = {}) => {
+}) {
   if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
@@ -747,30 +729,46 @@ export const createPortfolioWorkflow = ({
   if (onOperationalStateExecutionFill !== undefined && typeof onOperationalStateExecutionFill !== "function") {
     throw new TypeError("onOperationalStateExecutionFill must be a function")
   }
-  if (onOperationalStateRecoveryCycleCompleted !== undefined && typeof onOperationalStateRecoveryCycleCompleted !== "function") {
+  if (onOperationalStateRecoveryCycleCompleted !== undefined &&
+      typeof onOperationalStateRecoveryCycleCompleted !== "function") {
     throw new TypeError("onOperationalStateRecoveryCycleCompleted must be a function")
   }
+}
 
-  const state = {
+function createPortfolioWorkflowState({ initialPortfolio, initialRecoveryLedgers }) {
+  return {
     portfolio: initialPortfolio ?? new Portfolio(),
     recoveryLedgers: new Map(initialRecoveryLedgers ?? []),
     updateQueue: Promise.resolve(),
   }
-  const tracedEvaluateStrategy = (input = {}) => evaluateStrategyWithPortfolioState({
-    state,
-    evaluateStrategy,
-    logger,
-    input,
-  })
-  const processMarketPrice = makeProcessMarketPrice({ evaluateStrategy: tracedEvaluateStrategy })
-  const updateTradingAccounting = ({ fill } = {}) => runUpdateTradingAccounting({
+}
+
+function createTradingAccountingCallback({
+  state,
+  logger,
+  onCommissionAsset,
+  onOperationalStateExecutionFill,
+}) {
+  const callback = ({ fill } = {}) => runUpdateTradingAccounting({
     state,
     fill,
     logger,
     onCommissionAsset,
     onOperationalStateExecutionFill,
   })
-  const completeRecoveryCycle = ({
+  Object.defineProperty(callback, "requiresProviderProvenance", {
+    value: onOperationalStateExecutionFill?.requiresProviderProvenance === true,
+  })
+  return callback
+}
+
+function createRecoveryCycleCompletionCallback({
+  state,
+  logger,
+  onOperationalStateRecoveryCycleCompleted,
+  onOperationalStateRecoveryCycleNotCompleted,
+}) {
+  return ({
     marketId,
     keepQuantity,
     minProfit,
@@ -790,12 +788,71 @@ export const createPortfolioWorkflow = ({
       onOperationalStateRecoveryCycleNotCompleted,
     }),
   })
+}
 
+/**
+ * Create the in-memory Portfolio and RecoveryLedger workflow used by Harvester.
+ *
+ * Owns serialized canonical-fill accounting and atomic recovery-cycle completion.
+ * Bootstrap composes this stateful workflow with broker and process lifecycle
+ * resources; the domain transitions remain in Portfolio and RecoveryLedger.
+ *
+ * @param {object} options
+ * @param {Function} options.evaluateStrategy Strategy evaluator used by market-price processing.
+ * @param {object} options.logger Structured logger used for workflow diagnostics.
+ * @param {Portfolio} [options.initialPortfolio] Initial immutable portfolio.
+ * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
+ * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
+ */
+export const createPortfolioWorkflow = (options = {}) => {
+  const {
+    evaluateStrategy,
+    logger,
+    initialPortfolio,
+    initialRecoveryLedgers,
+    onCommissionAsset,
+    onOperationalStateExecutionFill,
+    onOperationalStateRecoveryCycleCompleted,
+    onOperationalStateRecoveryCycleNotCompleted,
+  } = options
+  validatePortfolioWorkflowOptions({
+    initialPortfolio,
+    initialRecoveryLedgers,
+    onOperationalStateExecutionFill,
+    onOperationalStateRecoveryCycleCompleted,
+  })
+  const state = createPortfolioWorkflowState({
+    initialPortfolio,
+    initialRecoveryLedgers,
+  })
+  const tracedEvaluateStrategy = (input = {}) => evaluateStrategyWithPortfolioState({
+    state,
+    evaluateStrategy,
+    logger,
+    input,
+  })
+  const processMarketPrice = makeProcessMarketPrice({
+    evaluateStrategy: tracedEvaluateStrategy,
+  })
+  const updateTradingAccounting = createTradingAccountingCallback({
+    state,
+    logger,
+    onCommissionAsset,
+    onOperationalStateExecutionFill,
+  })
+  const completeRecoveryCycle = createRecoveryCycleCompletionCallback({
+    state,
+    logger,
+    onOperationalStateRecoveryCycleCompleted,
+    onOperationalStateRecoveryCycleNotCompleted,
+  })
   return {
     updatePortfolio: updateTradingAccounting,
     updateTradingAccounting,
-    processMarketPrice: (input = {}) => processMarketPrice({ ...input, 
-      portfolio: state.portfolio }),
+    processMarketPrice: (input = {}) => processMarketPrice({
+      ...input,
+      portfolio: state.portfolio,
+    }),
     getPortfolio: () => state.portfolio,
     getRecoveryLedger: ({ marketId } = {}) => state.recoveryLedgers.get(marketId),
     completeRecoveryCycle,
