@@ -8,8 +8,8 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 | --- | --- | --- | --- |
 | `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`; an independent workspace-quality job with JavaScript syntax and strict full-workspace ESLint (`pnpm lint`, zero errors and warnings); and, for PRs targeting `develop`, an independent `Check strict ESLint for changed files` job. The required `Check JavaScript syntax` aggregator fails unless the workspace job and every applicable changed-file check succeed. The workflow also runs agent-policy/domain-ownership checks, the report-only Markdown formatting baseline, changed-file Markdown style enforcement, and mocked external-link checker unit tests. The agent-policy command also prints the report-only heading-anchor baseline. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
 | `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace package-test matrix offline. Manual `develop` dispatch can explicitly opt into read-only Binance TESTNET integration. | `Run package tests` in both active rulesets. |
-| `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace test-coverage matrix and writes the coverage command output to the Actions step summary. | `Workspace test coverage` in both active rulesets. |
-| `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the focused Utils package test command (`node --test packages/utils`). | `packages/utils tests` in both active rulesets. |
+| `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the Node.js test-coverage matrix for all workspace packages and enforces package-specific thresholds where a `test:coverage` script exists (Entities has no separate threshold script). | `Workspace test coverage` in both active rulesets. |
+| `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the focused Utils package test command (`node --test packages/utils/src/*.test.js`). | `packages/utils tests` in both active rulesets. |
 | `dependency-audit.yml` (**Dependency Audit**) | Pull requests; pushes to `main`/`develop`; manual dispatch; weekly schedule | Audits production dependencies with the high-severity threshold. | `Audit production dependencies` in both active rulesets. |
 | `harvester-targeted-tests.yml` (**Harvester Targeted Tests**) | Pull requests; manual dispatch | Runs `pnpm --filter @coinzilla/harvester test:targeted`. | Additional PR workflow; not required by either active ruleset. |
 | `harvester-process-lock.yml` (**Harvester Process Lock**) | Path-filtered pull requests/pushes; manual dispatch | Runs the process-lock regression test on Ubuntu and Windows when process-lock code, Harvester entrypoint, or this workflow changes. | Additional path-filtered workflow; not required by either active ruleset. |
@@ -21,7 +21,7 @@ The version-update schedule, ecosystem grouping, open-PR limits and target branc
 
 ## Required status contexts on `develop`
 
-As verified against the active repository ruleset `develop-core` on 2026-11-10, strict required-status freshness is enabled and the ruleset requires exactly these six contexts:
+As verified against the active repository ruleset `develop-core` on 2026-11-18, strict required-status freshness is enabled and the ruleset requires exactly these six contexts:
 
 1. `Run package tests`
 2. `Workspace test coverage`
@@ -31,8 +31,6 @@ As verified against the active repository ruleset `develop-core` on 2026-11-10, 
 6. `actionlint`
 
 The two Harvester workflows and External Documentation Links run as additional checks but are not required contexts in this ruleset. A workflow trigger starting a run does not, by itself, make that check a merge requirement. Re-read the live ruleset before changing workflow names, job names, or required contexts; never infer required contexts from workflow names. The required `Check JavaScript syntax` context is an aggregator: it requires the independent workspace-quality job (including `pnpm lint`) and, for PRs targeting `develop`, the independent `Check strict ESLint for changed files` job. Either failure blocks the PR. The changed-file job fetches the target branch and complete history, computes the merge base with the PR head, and runs `pnpm lint:changed`; missing history or a missing merge base fails closed. The existing six ruleset contexts are unchanged because the required aggregator retains the existing `Check JavaScript syntax` name.
-
-The Unit Tests and Test Coverage package matrices explicitly list workspace packages. When adding a package, update both matrices in the same PR; the Indicators package is included in both. Indicators coverage runs the package's 90% line / 85% branch threshold script.
 
 The Unit Tests and Test Coverage package matrices explicitly list workspace packages. When adding a package, update both matrices in the same PR; the Indicators package is included in both. Indicators coverage runs the package's 90% line / 85% branch threshold script.
 
@@ -61,7 +59,7 @@ Pull-request package tests do not contact Binance or any exchange endpoint. The 
 
 ## Active repository rulesets
 
-Live GitHub rulesets were verified on 2026-11-10:
+Live GitHub rulesets were verified on 2026-11-18:
 
 | Ruleset | Target branch | Required status contexts |
 | --- | --- | --- |
