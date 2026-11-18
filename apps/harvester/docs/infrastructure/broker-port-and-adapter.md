@@ -270,3 +270,8 @@ For Conservative, order-type selection, POST-ONLY crossing constraints, and fail
 ## Bitunix Spot metadata boundary
 
 The current application broker port and runtime composition remain Binance-only. The Bitunix Spot market-metadata helper (`src/infrastructure/brokers/bitunix-market-metadata.js`) is a pure read-side transformation; it is not a broker adapter, does not satisfy the full Harvester broker port, and is not wired into bootstrap. It maps only `minVolume` and `minPrice` into canonical minimum constraints; precision increments remain UNKNOWN. Do not use it to enable Bitunix trading while issue #1185 remains open.
+
+
+## Bitunix read-only observer boundary
+
+The separately authorized Bitunix integration tracked in [issue #1422](https://github.com/45s/coinzilla/issues/1422) is a read-only observer, not an implementation of this full trading BrokerPort. It is exposed through a separate runtime read-only surface and must not be registered with the execution provider registry, passed to the Trading Engine, selected for strategy market data, or used for account snapshots/recovery. Its source-backed read limitations and opt-in credentials are documented in the [Bitunix read-only observer contract](./bitunix-read-only-observer.md). This does not resolve the trading-readiness blockers in [#1185](https://github.com/45s/coinzilla/issues/1185).
