@@ -76,7 +76,10 @@ function createReconcileTerminalOrderFillsTransition({
     processExecutionFillTransition,
   })
   return ({ order, eventFill } = {}) => {
-    const registeredOrder = resolveRegisteredOrder({ state, order })
+    const registeredOrder = resolveRegisteredOrder({
+      state,
+      order,
+    })
     if (typeof registeredOrder.brokerOrderId === "string") {
       ordersByBrokerId.set(registeredOrder.brokerOrderId, registeredOrder)
     }
@@ -155,6 +158,15 @@ function createWorkflowUserDataEventTransition({
   })
 }
 
+function resolveProviderProvenanceRequirement({
+  override,
+  updateTradingAccounting,
+  broker,
+}) {
+  return override ??
+    (updateTradingAccounting?.requiresProviderProvenance === true || hasProviderIdentity({ value: broker }))
+}
+
 export function makeOrderEventWorkflow({
   state,
   broker,
@@ -176,8 +188,11 @@ export function makeOrderEventWorkflow({
   onUnownedExternalOrderObserved,
   requireProviderProvenance: requireProviderProvenanceOverride,
 } = {}) {
-  const requireProviderProvenance = requireProviderProvenanceOverride ??
-    (updateTradingAccounting?.requiresProviderProvenance === true || hasProviderIdentity({ value: broker }))
+  const requireProviderProvenance = resolveProviderProvenanceRequirement({
+    override: requireProviderProvenanceOverride,
+    updateTradingAccounting,
+    broker,
+  })
   const processExecutionFillTransition = createProcessExecutionFillTransition({
     state,
     eventPublisher,
@@ -277,6 +292,13 @@ function validateMissingExecutionFill({
   }
 }
 
+function executionFillMatchesOrder({ order, fill }) {
+  return fill.market.id === order.market.id &&
+    fill.side === order.side &&
+    fill.brokerOrderId === order.brokerOrderId &&
+    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+}
+
 function validateExecutionFill({ order, fill, eventPublisher, requireProviderProvenance }) {
   const missingFill = validateMissingExecutionFill({
     order,
@@ -307,10 +329,7 @@ function validateExecutionFill({ order, fill, eventPublisher, requireProviderPro
         fill,
       })
     : null
-  const identityMatches = fill.market.id === order.market.id &&
-    fill.side === order.side &&
-    fill.brokerOrderId === order.brokerOrderId &&
-    (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+  const identityMatches = executionFillMatchesOrder({ order, fill })
   if (providerFailure || !identityMatches) {
     const failure = providerFailure ?? {
       error: new Error("Canonical Fill identity does not match its registered order"),
