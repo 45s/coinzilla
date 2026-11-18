@@ -1281,7 +1281,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 ## 2026-11-18 — Bitunix local diagnostics runner (#1426)
 
-**Status: In progress in [PR #1427](https://github.com/45s/coinzilla/pull/1427).**
+**Status: Implementation and offline verification complete in [PR #1427](https://github.com/45s/coinzilla/pull/1427); local live API smoke test remains operator-owned.**
 
 - Add an explicitly invoked local runner over the existing Bitunix Spot REST and authenticated WebSocket RPC clients.
 - Verify public REST catalog/price reads, private account reads, WS connection/authentication, all existing Spot RPC methods, request/response IDs, durations, exchange errors, transport errors, close behavior and cleanup.
@@ -1289,6 +1289,5 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - Require explicit confirmation before contacting the configured LIVE Spot API. Bitunix Spot TESTNET is not documented; this runner does not claim TESTNET verification.
 - Keep the tool outside Harvester startup and trading composition. No order placement/cancellation, withdrawals, transfers, retries or automatic reconnects.
 - Preserve #1185 as the trading-readiness blocker. The current read-only integration is a temporary safety state, not the intended end state: the longer-term goal is a complete Bitunix broker/Harvester provider including trading, once order identity, quantity semantics, execution-history completeness, account freshness, market constraints, event/recovery and environment-safety requirements are independently resolved and tested.
-- [ ] Pass offline diagnostic-helper/runner tests and all Brokers/workspace required CI on the exact PR head.
-- [ ] Verify the local command and report redaction against an explicitly configured read-only API key; do not request or store credentials in GitHub.
-- [ ] Merge PR #1427 only after exact-head checks and branch freshness pass; then mark this roadmap item complete.
+- [x] Pass offline diagnostic-helper/runner tests and all Brokers/workspace required CI on the exact PR head.
+- [ ] Run the local command and inspect its sanitized report using an explicitly configured read-only API key. This live smoke test is operator-owned; CI must not receive exchange credentials.
