@@ -243,7 +243,10 @@ function createMainMultiProviderFixture({
   const errors = []
   const config = createMainMultiProviderAppConfig(providerInstances)
   if (providerInstances.length > 1) {
-    assignSecondaryExecutionRoute({ config, secondaryProvider: providerInstances[1] })
+    assignSecondaryExecutionRoute({
+      config,
+      secondaryProvider: providerInstances[1],
+    })
   }
   const run = () => main({
     loadConfig: async () => config,
