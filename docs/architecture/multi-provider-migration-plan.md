@@ -4,7 +4,7 @@ status: active
 type: plan
 owner: harvester-and-brokers
 created: 2026-11-17
-last_verified: 2026-11-17
+last_verified: 2026-11-18
 ---
 
 # Multi-provider migration audit and implementation plan
@@ -14,6 +14,19 @@ last_verified: 2026-11-17
 **Audit baseline:** `develop` at `5d707d17114d524ef3cd7c6d35387dde61338976` (2026-11-17 09:45:59 UTC)
 **Integration sync:** the documentation branch is synchronized with `develop` at `70f1345054bf619dca01896817967eeba6ad1141`. This does not change the source-audit baseline above; revalidate source-sensitive findings against current `develop` before implementation.
 **Scope:** source-verified preparation and migration sequencing only. This document does not authorize runtime routing, database changes, provider mutations, or trading-behavior changes.
+
+## Current source revalidation — 2026-11-18
+
+**Revalidation checkpoint:** `develop` at `40e98f594b00f68cfa11cf6e8ae31c48cc5a0bb6`. This section supersedes earlier statements about current delivery status where they differ; the original 2026-11-17 audit baseline and its evidence remain historical and unchanged.
+
+- **Phase 1 — complete:** Brokers capability declarations merged in [PR #1366](https://github.com/45s/coinzilla/pull/1366). This is additive capability metadata only; it does not change Harvester composition or enable another provider.
+- **Phase 2 — in progress outside `develop`:** [PR #1383](https://github.com/45s/coinzilla/pull/1383) and [PR #1386](https://github.com/45s/coinzilla/pull/1386) both target the named provider-instance registry work under [issue #1339](https://github.com/45s/coinzilla/issues/1339). They overlap in scope. PR #1383 was created from the current revalidation checkpoint; PR #1386 is based on older `develop` `91403a5c055121687b7c1cf0b02807544bce8e48`. Reconcile the implementations into one coherent delivery and synchronize to latest `develop` before merge. Neither PR's source is part of this `develop` checkpoint.
+- **Current runtime remains single-provider:** `apps/harvester/src/domain/app-config.js` still resolves `brokerName: "binance"`; `apps/harvester/src/bootstrap/broker/connect-broker.js` constructs one broker using Binance credentials; `apps/harvester/src/bootstrap/start-harvester.js` defaults to `createBinanceBrokerAdapter`. Do not describe provider registry, multiple-instance lifecycle, or routing as implemented on `develop`.
+- **Phases 3–6 remain planned:** durable provider/account provenance, account isolation/reconciliation, independent market-data routing, execution routing/parity, and operational acceptance are not delivered by the current source checkpoint. Process-restart recovery remains a prerequisite/related safety track under [issue #654](https://github.com/45s/coinzilla/issues/654).
+- **Safety gates unchanged:** Bitunix remains read-only / not Harvester-ready under [issue #1185](https://github.com/45s/coinzilla/issues/1185); Recovery Seller remains non-executable under [issue #1127](https://github.com/45s/coinzilla/issues/1127). No exchange operations were performed for this revalidation.
+
+This revalidation was a read-only source and GitHub delivery-state inspection. It did not execute tests or CI; do not transfer historical CI results to this checkpoint.
+
 
 ## 1. Executive decision
 
