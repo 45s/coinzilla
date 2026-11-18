@@ -130,4 +130,4 @@ The package test commands and pull-request workflow remain deterministic, creden
 4. Fix the underlying issue rather than skipping, weakening, or masking the check.
 5. Re-run the relevant tests and checks, then confirm the pull request's checks have completed successfully.
 
-The coverage workflow writes its command output to the GitHub Actions step summary to make the report easier to inspect. A failed coverage command still fails the job.
+The coverage workflow emits command output in the Actions job log; it does not write a custom step summary. A failed coverage command still fails the job.

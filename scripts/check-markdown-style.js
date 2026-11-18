@@ -12,12 +12,13 @@ export const GIT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024
 
 const HISTORICAL_PATHS = [
   /^apps\/harvester\/AUDIT(?:_|\.|$)/,
-  /^apps\/harvester\/docs\/audits\//,
-  /^apps\/harvester\/docs\/incidents\//,
-  /^apps\/harvester\/docs\/tasks\//,
+  /^apps\/harvester\/docs\/audits\/(?:README_HISTORY|ROADMAP_HISTORY)\.md$/,
+  /^apps\/harvester\/docs\/audits\/(?:evidence|reports|sessions)\/(?!README\.md$).+/,
+  /^apps\/harvester\/docs\/incidents\/(?!README\.md$).+/,
+  /^apps\/harvester\/docs\/tasks\/(?!README\.md$).+/,
   /^apps\/harvester\/docs\/DDD_CLEAN_ARCHITECTURE_AUDIT\.md$/,
   /^apps\/harvester\/docs\/DOMAIN_FIRST_DELIVERY_PLAN\.md$/,
-  /^docs\/audits\//,
+  /^docs\/audits\/(?!README\.md$).+/,
   /^docs\/ai-agent\/repository-engineering-audit\.md$/,
 ]
 
@@ -73,6 +74,65 @@ export function isHistoricalPath(path) {
   })
 }
 
+function createMarkdownDiffChange() {
+  return {
+    lines: new Set(),
+    isNewFile: false,
+    removedHeading: false,
+  }
+}
+
+function findMarkdownDiffPath(line) {
+  const match = line.match(/^diff --git a\/(.+) b\/(.+)$/)
+  const path = match?.[2]
+  return path && /\.mdx?$/i.test(path) ? path : null
+}
+
+function parseMarkdownDiffLine({ line, state }) {
+  if (line.startsWith("diff --git ")) {
+    const path = findMarkdownDiffPath(line)
+    state.currentChange = path ? createMarkdownDiffChange() : null
+    if (path) {
+      state.changes.set(path, state.currentChange)
+    }
+    state.inHunk = false
+    return
+  }
+
+  if (!state.currentChange) {
+    return
+  }
+
+  if (line.startsWith("new file mode ") || line === "--- /dev/null") {
+    state.currentChange.isNewFile = true
+    return
+  }
+
+  const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/)
+  if (hunk) {
+    state.newLineNumber = Number(hunk[1])
+    state.inHunk = true
+    return
+  }
+
+  if (!state.inHunk || line.startsWith("\\")) {
+    return
+  }
+
+  if (line.startsWith("+") || line.startsWith(" ")) {
+    state.currentChange.lines.add(state.newLineNumber)
+    state.newLineNumber += 1
+    return
+  }
+
+  if (line.startsWith("-")) {
+    const removedLine = line.slice(1)
+    if (/^ {0,3}#{1,6}(?:[ \t]+|$)/.test(removedLine)) {
+      state.currentChange.removedHeading = true
+    }
+  }
+}
+
 /**
  * Parse changed lines and new-file status from a unified Git diff.
  * Context lines are retained so nearby structural changes are checked too.
@@ -85,71 +145,90 @@ export function parseChangedMarkdownDiff(diffText) {
     throw new TypeError("Markdown diff must be a string")
   }
 
-  const changes = new Map()
-  let currentChange = null
-  let newLineNumber = 0
-  let inHunk = false
-
+  const state = {
+    changes: new Map(),
+    currentChange: null,
+    newLineNumber: 0,
+    inHunk: false,
+  }
   for (const line of diffText.split("\n")) {
-    if (line.startsWith("diff --git ")) {
-      const match = line.match(/^diff --git a\/(.+) b\/(.+)$/)
-      const path = match?.[2]
-      currentChange = path && /\.mdx?$/i.test(path)
-        ? {
-            lines: new Set(),
-            isNewFile: false,
-            removedHeading: false,
-          }
-        : null
+    parseMarkdownDiffLine({
+      line,
+      state,
+    })
+  }
+  return state.changes
+}
 
-      if (currentChange) {
-        changes.set(path, currentChange)
+function isTemplateHeadingExempt({ name, path }) {
+  return HEADING_FINDINGS.has(name) && matchesAny({
+    path,
+    patterns: TEMPLATE_HEADING_EXEMPTIONS,
+  })
+}
+
+function isChangedMarkdownFindingRelevant({ name, entry, change, document }) {
+  if (isTemplateHeadingExempt({
+    name,
+    path: entry.path,
+  })) {
+    return false
+  }
+  if (FILE_LEVEL_FINDINGS.has(name) || change.isNewFile) {
+    return true
+  }
+  if (name === "missingH1") {
+    const lines = document.content.split(/\r?\n/)
+    const changedHeading = [...change.lines].some((lineNumber) =>
+      /^ {0,3}#{1,6}(?:[ \t]+|$)/.test(lines[lineNumber - 1] ?? ""),
+    )
+    return Boolean(change.removedHeading || changedHeading)
+  }
+  if (name === "multipleH1") {
+    return Boolean(change.removedHeading) || entry.lines.some((lineNumber) =>
+      change.lines.has(lineNumber),
+    )
+  }
+  if (name === "headingLevelSkips") {
+    return Boolean(change.removedHeading) || entry.lines.some((lineNumber) =>
+      [lineNumber, lineNumber - 1, lineNumber - 2].some((candidate) =>
+        change.lines.has(candidate),
+      ),
+    )
+  }
+  if (name === "repeatedBlankLines") {
+    return entry.lines.some((lineNumber) =>
+      change.lines.has(lineNumber) || change.lines.has(lineNumber - 1),
+    )
+  }
+  return entry.lines.some((lineNumber) => change.lines.has(lineNumber))
+}
+
+function collectChangedMarkdownStyleViolations({ baseline, changesByPath, documentsByPath }) {
+  const violations = Object.fromEntries(
+    Object.keys(baseline.findings).map((name) => [name, []]),
+  )
+  for (const [name, entries] of Object.entries(baseline.findings)) {
+    if (REPORT_ONLY_FINDINGS.has(name)) {
+      continue
+    }
+    for (const entry of entries) {
+      const change = changesByPath.get(entry.path)
+      const document = documentsByPath.get(entry.path)
+      if (!change || !document) {
+        continue
       }
-      inHunk = false
-      continue
-    }
-
-    if (!currentChange) {
-      continue
-    }
-
-    if (line.startsWith("new file mode ") || line === "--- /dev/null") {
-      currentChange.isNewFile = true
-      continue
-    }
-
-    const hunk = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/)
-    if (hunk) {
-      newLineNumber = Number(hunk[1])
-      inHunk = true
-      continue
-    }
-
-    if (!inHunk || line.startsWith("\\")) {
-      continue
-    }
-
-    if (line.startsWith("+")) {
-      currentChange.lines.add(newLineNumber)
-      newLineNumber += 1
-      continue
-    }
-
-    if (line.startsWith(" ") ) {
-      currentChange.lines.add(newLineNumber)
-      newLineNumber += 1
-      continue
-    }
-
-    if (line.startsWith("-")) {
-      const removedLine = line.slice(1)
-      if (/^ {0,3}#{1,6}(?:[ \t]+|$)/.test(removedLine)) {
-        currentChange.removedHeading = true
+      if (isChangedMarkdownFindingRelevant({
+        name,
+        entry,
+        change,
+        document,
+      })) {
+        violations[name].push(entry)
       }
     }
   }
-
-  return changes
+  return violations
 }
 
 /**
@@ -173,74 +252,15 @@ export function analyzeMarkdownStyleDocuments({ documents, changesByPath }) {
     throw new TypeError("Changed Markdown file metadata must be a Map")
   }
 
-  const selectedDocuments = documents.filter(({ path }) =>
-    changesByPath.has(path),
-  )
-  const maintainedDocuments = selectedDocuments.filter(
-    ({ path }) => !isHistoricalPath(path),
-  )
+  const selectedDocuments = documents.filter(({ path }) => changesByPath.has(path))
+  const maintainedDocuments = selectedDocuments.filter(({ path }) => !isHistoricalPath(path))
   const baseline = collectMarkdownStyleBaseline(maintainedDocuments)
-  const documentsByPath = new Map(
-    maintainedDocuments.map((document) => [document.path, document]),
-  )
-  const violations = Object.fromEntries(
-    Object.keys(baseline.findings).map((name) => [name, []]),
-  )
-
-  for (const [name, entries] of Object.entries(baseline.findings)) {
-    if (REPORT_ONLY_FINDINGS.has(name)) {continue}
-    for (const entry of entries) {
-      const change = changesByPath.get(entry.path)
-      const document = documentsByPath.get(entry.path)
-      if (!change || !document) {continue}
-
-      if (
-        HEADING_FINDINGS.has(name) &&
-        matchesAny({
-          path: entry.path,
-          patterns: TEMPLATE_HEADING_EXEMPTIONS,
-        })
-      ) {
-        continue
-      }
-
-      let isRelevant
-
-      if (FILE_LEVEL_FINDINGS.has(name)) {
-        isRelevant = true
-      } else if (change.isNewFile) {
-        isRelevant = true
-      } else if (name === "missingH1") {
-        const lines = document.content.split(/\r?\n/)
-        const changedHeading = [...change.lines].some((lineNumber) =>
-          /^ {0,3}#{1,6}(?:[ \t]+|$)/.test(lines[lineNumber - 1] ?? ""),
-        )
-        isRelevant = Boolean(change.removedHeading || changedHeading)
-      } else if (name === "multipleH1") {
-        isRelevant = Boolean(change.removedHeading) || entry.lines.some((lineNumber) =>
-          change.lines.has(lineNumber),
-        )
-      } else if (name === "headingLevelSkips") {
-        isRelevant = Boolean(change.removedHeading) || entry.lines.some((lineNumber) =>
-          [lineNumber, lineNumber - 1, lineNumber - 2].some((candidate) =>
-            change.lines.has(candidate),
-          ),
-        )
-      } else if (name === "repeatedBlankLines") {
-        isRelevant = entry.lines.some((lineNumber) =>
-          change.lines.has(lineNumber) || change.lines.has(lineNumber - 1),
-        )
-      } else {
-        isRelevant = entry.lines.some((lineNumber) =>
-          change.lines.has(lineNumber),
-        )
-      }
-
-      if (isRelevant) {
-        violations[name].push(entry)
-      }
-    }
-  }
+  const documentsByPath = new Map(maintainedDocuments.map((document) => [document.path, document]))
+  const violations = collectChangedMarkdownStyleViolations({
+    baseline,
+    changesByPath,
+    documentsByPath,
+  })
 
   return {
     scannedFiles: maintainedDocuments.length,
