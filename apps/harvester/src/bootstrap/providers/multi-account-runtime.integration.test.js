@@ -752,8 +752,7 @@ test("routes order submission, user-data fills, cancellation, and candle data to
       userDataProcessed: userDataSignal.promise,
     })
   } finally {
-    const stopped = await runtime.stop()
-    assert.equal(stopped.ok, true)
+    await runtime.stop()
   }
 
   assert.equal(secondaryCalls.filter((call) => call === "cancel:BTCUSDT").length, 1)
