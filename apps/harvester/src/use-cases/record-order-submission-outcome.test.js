@@ -142,3 +142,28 @@ data: { durable: false } }) },
   assert.equal(result.ok, false, "A non-durable outcome append must not permit local progression.")
   assert.match(result.errors[0].message, /durable|commit/i)
 })
+
+
+test("rejects a legacy acknowledged order without provider provenance", async () => {
+  let appendCalls = 0
+  const legacyOrder = new CanonicalOrder({
+    clientOrderId: "legacy-client-order",
+    brokerOrderId: "legacy-broker-order",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "0.099", asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "100", asset: baseAsset }),
+    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    status: "OPEN",
+  })
+  const result = await recordOrderSubmissionOutcome({
+    operationalStateStore: { append: async () => { appendCalls += 1; return { ok: true, data: { durable: true } } } },
+    order: legacyOrder,
+    outcome: "ACKNOWLEDGED",
+    purpose: null,
+  })
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /providerInstanceId.*provenance/i)
+  assert.equal(appendCalls, 0)
+})
