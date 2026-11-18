@@ -1077,3 +1077,59 @@ test("integrates an unknown fake-broker acknowledgement as an owned UNKNOWN RS o
     "An unknown broker outcome must retain the original RS ownership for reconciliation.",
   )
 })
+
+
+test("persists selected provider provenance before broker I/O and carries it onto the acknowledgement", async () => {
+  const calls = []
+  let acknowledged
+  const execute = makeExecuteStrategyDecision({
+    broker: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+      placeOrder: async ({ order }) => {
+        calls.push("broker")
+        return { ok: true, data: makeAcknowledgement(order) }
+      },
+    },
+    onPendingOrder: async ({ order }) => {
+      assert.equal(order.providerInstanceId, "binanceTestnet")
+      calls.push("pending")
+    },
+    onDurableSubmissionIntent: async ({ order }) => {
+      assert.deepEqual([order.providerInstanceId, order.providerType, order.accountId], [
+        "binanceTestnet", "binance", "binance-primary",
+      ])
+      calls.push("durable-intent")
+      return { ok: true, data: { durable: true } }
+    },
+    onDurableSubmissionOutcome: async ({ order, outcome }) => {
+      assert.deepEqual([order.providerInstanceId, order.providerType, order.accountId], [
+        "binanceTestnet", "binance", "binance-primary",
+      ])
+      assert.equal(outcome, "ACKNOWLEDGED")
+      calls.push("durable-outcome")
+      return { ok: true, data: { durable: true } }
+    },
+    onAcknowledgedOrder: async ({ order }) => { acknowledged = order },
+    onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
+  })
+
+  const result = await execute({ decision, marketMetadata })
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.deepEqual(calls, ["pending", "durable-intent", "broker", "durable-outcome"])
+  assert.equal(acknowledged.providerInstanceId, "binanceTestnet")
+  assert.equal(acknowledged.providerType, "binance")
+  assert.equal(acknowledged.accountId, "binance-primary")
+})
+
+test("fails closed before registration or broker I/O when durable provenance metadata is missing", () => {
+  assert.throws(() => makeExecuteStrategyDecision({
+    broker: { placeOrder: async () => ({ ok: false }) },
+    onPendingOrder: async () => {},
+    onAcknowledgedOrder: async () => {},
+    onSubmissionFailure: async () => {},
+    onDurableSubmissionIntent: async () => ({ ok: true, data: { durable: true } }),
+    onDurableSubmissionOutcome: async () => ({ ok: true, data: { durable: true } }),
+  }), /providerInstanceId, providerType and accountId/)
+})
