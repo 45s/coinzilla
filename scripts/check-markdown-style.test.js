@@ -326,7 +326,10 @@ test("ignores indented code blocks in changed-file Markdown enforcement", () => 
     "",
   ].join("\n")
   const result = analyzeMarkdownStyleDocuments({
-    documents: [{ path: "docs/indented-code.md", content }],
+    documents: [{
+      path: "docs/indented-code.md",
+      content,
+    }],
     changesByPath: new Map([["docs/indented-code.md", {
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
