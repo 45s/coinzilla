@@ -48,7 +48,10 @@ export const canonicalOrderErrMsgs = {
   timestamp: "CanonicalOrder timestamps should be non-negative safe integers",
 }
 
-function validateOrderIdentity({ clientOrderId, brokerOrderId }) {
+function validateOrderIdentity({
+    clientOrderId,
+    brokerOrderId,
+  }) {
   if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
     throw new Error(canonicalOrderErrMsgs.clientOrderId)
   }
@@ -61,7 +64,12 @@ function validateOrderIdentity({ clientOrderId, brokerOrderId }) {
   }
 }
 
-function validateOrderType({ market, side, type, status }) {
+function validateOrderType({
+    market,
+    side,
+    type,
+    status,
+  }) {
   if (!(market instanceof Market)) {
     throw new Error(canonicalOrderErrMsgs.market)
   }
@@ -76,7 +84,11 @@ function validateOrderType({ market, side, type, status }) {
   }
 }
 
-function normalizeLimitPrice({ type, limitPrice, market }) {
+function normalizeLimitPrice({
+    type,
+    limitPrice,
+    market,
+  }) {
   const normalizedLimitPrice = limitPrice ?? undefined
   if (type === "MARKET" && normalizedLimitPrice !== undefined) {
     throw new Error(canonicalOrderErrMsgs.marketPrice)
@@ -167,7 +179,11 @@ function validateOrderLifecycle({
   }
 }
 
-function validateProviderProvenance({ providerInstanceId, providerType, accountId }) {
+function validateProviderProvenance({
+    providerInstanceId,
+    providerType,
+    accountId,
+  }) {
   const values = [providerInstanceId, providerType, accountId]
   if (values.every((value) => value === undefined)) { return }
   if (values.some((value) => typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value))) {
@@ -175,7 +191,12 @@ function validateProviderProvenance({ providerInstanceId, providerType, accountI
   }
 }
 
-function validateTimestamps({ createdAt, acknowledgedAt, updatedAt, completedAt }) {
+function validateTimestamps({
+    createdAt,
+    acknowledgedAt,
+    updatedAt,
+    completedAt,
+  }) {
   for (const timestamp of [createdAt, acknowledgedAt, updatedAt, completedAt]) {
     if (timestamp !== undefined && (!Number.isSafeInteger(timestamp) || timestamp < 0)) {
       throw new Error(canonicalOrderErrMsgs.timestamp)
