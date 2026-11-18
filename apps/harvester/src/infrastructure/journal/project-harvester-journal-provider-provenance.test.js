@@ -96,7 +96,11 @@ test("rejects a replayed fill attributed to a different provider account", () =>
     records: [
       submissionRequested(),
       submitted(),
-      fill({ ...provider, providerInstanceId: "binanceLive", accountId: "binance-live" }),
+      fill({
+        ...provider,
+        providerInstanceId: "binanceLive",
+        accountId: "binance-live",
+      }),
     ],
   })
   assert.equal(result.ok, false)
