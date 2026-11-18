@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtemp, rm, symlink } from "node:fs/promises"
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
@@ -60,6 +60,7 @@ test("SQLite path comparison preserves non-ENOENT canonicalization failures", as
   const loopingDestination = join(directory, "looping-destination.sqlite")
 
   try {
+    await writeFile(sourceFilename, "")
     await symlink(loopingDestination, loopingDestination)
     await assert.rejects(
       assertDifferentFiles({
