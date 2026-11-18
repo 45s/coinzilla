@@ -256,7 +256,7 @@ test("enforces list and table structure metrics on changed maintained documents"
   }
 })
 
-test("full-tree analysis skips historical evidence but keeps template style checks", () => {
+function createFullTreeStyleResult() {
   const maintainedContent = [
     "# Guide",
     "* item",
@@ -272,7 +272,7 @@ test("full-tree analysis skips historical evidence but keeps template style chec
   ].join("\n")
   const historicalContent = "## Old report  \n* historical marker"
 
-  const result = analyzeFullTreeMarkdownStyle({
+  return analyzeFullTreeMarkdownStyle({
     documents: [
       {
         path: "docs/guide.md",
@@ -288,9 +288,12 @@ test("full-tree analysis skips historical evidence but keeps template style chec
       },
     ],
   })
+}
 
-  assert.equal(result.scannedFiles, 2)
-  assert.equal(result.skippedHistorical, 1)
+function assertFullTreeStyleFindings(result) {
+  assert.equal(result.scannedFiles, 2, "maintained documents and templates must be included in full-tree enforcement")
+  assert.equal(result.skippedHistorical, 1, "historical evidence must be excluded from blocking style enforcement")
+
   for (const rule of [
     "unorderedListMarkers",
     "nestedListIndentation",
@@ -302,6 +305,7 @@ test("full-tree analysis skips historical evidence but keeps template style chec
       `${rule} must be enforced in the full-tree analysis`,
     )
   }
+
   assert.ok(
     result.violations.unorderedListMarkers.some(
       (entry) => entry.path === ".github/PULL_REQUEST_TEMPLATE.md",
@@ -313,19 +317,25 @@ test("full-tree analysis skips historical evidence but keeps template style chec
       (entry) => entry.path === ".github/PULL_REQUEST_TEMPLATE.md",
     ),
     false,
+    "GitHub templates must remain exempt from the H1 requirement",
   )
   assert.equal(
     result.violations.headingLevelSkips.some(
       (entry) => entry.path === ".github/PULL_REQUEST_TEMPLATE.md",
     ),
     false,
+    "GitHub templates must remain exempt from heading hierarchy checks",
   )
   assert.equal(
-    Object.values(result.violations).some(
-      (entries) => entries.some((entry) => entry.path.includes("legacy.md")),
-    ),
+    Object.values(result.violations).flat().some((entry) => entry.path.includes("legacy.md")),
     false,
+    "historical evidence must not produce blocking full-tree style findings",
   )
+}
+
+test("full-tree analysis skips historical evidence but keeps template style checks", () => {
+  const result = createFullTreeStyleResult()
+  assertFullTreeStyleFindings(result)
 })
 
 test("enforces blank lines before and after list blocks in changed maintained documents", () => {
