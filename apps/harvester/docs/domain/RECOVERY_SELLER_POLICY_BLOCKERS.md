@@ -224,7 +224,6 @@ Missing acceptance coverage/work before execution:
 
 Resolve policy decisions with the strategy owner **one blocker at a time** before implementation. For each blocker, present the current CG behavior, RS alternatives, a simple concrete example, risks, and a recommended default. Record the approved decision and rationale in this report and the canonical RS specification/issue #1127. Do not silently choose a policy.
 
-
 ### Owner clarification order
 
 1. SELL order type (LIMIT_MAKER vs LIMIT).
@@ -235,7 +234,6 @@ Resolve policy decisions with the strategy owner **one blocker at a time** befor
 6. Third-asset commission valuation and price freshness.
 7. STOP resolution and safe restart/resume semantics.
 8. P2 minimum-profit floor and trailing-BUY semantics.
-
 
 ### Implementation handoff
 
