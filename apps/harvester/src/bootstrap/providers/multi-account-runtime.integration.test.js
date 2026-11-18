@@ -239,13 +239,25 @@ function createAcknowledgedCanonicalOrder({ order, calls }) {
   })
 }
 
-function createCanceledCanonicalOrder(order) {
+function createCanceledCanonicalOrder(order, identity = {}) {
   const now = Date.now()
   return new CanonicalOrder({
-    ...order,
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market: order.market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: order.executedQuantity,
     status: "CANCELED",
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
     updatedAt: now,
     completedAt: now,
+    providerInstanceId: identity.providerInstanceId ?? order.providerInstanceId,
+    providerType: identity.providerType ?? order.providerType,
+    accountId: identity.accountId ?? order.accountId,
   })
 }
 
@@ -256,7 +268,7 @@ function findCanonicalOrder({ calls, clientOrderId, orderId }) {
   )
 }
 
-function createBrokerOrderPorts({ calls }) {
+function createBrokerOrderMutationPorts({ calls }) {
   return {
     placeOrder: async ({ order }) => {
       calls.push(`place:${order.symbol}`)
@@ -284,11 +296,10 @@ function createBrokerOrderPorts({ calls }) {
         }
       }
       calls.cancelledOrders.push(order)
-      const canceledOrder = createCanceledCanonicalOrder({
-        ...canonicalOrder,
-        providerInstanceId: order.providerInstanceId ?? canonicalOrder.providerInstanceId,
-        providerType: order.providerType ?? canonicalOrder.providerType,
-        accountId: order.accountId ?? canonicalOrder.accountId,
+      const canceledOrder = createCanceledCanonicalOrder(canonicalOrder, {
+        providerInstanceId: order.providerInstanceId,
+        providerType: order.providerType,
+        accountId: order.accountId,
       })
       calls.orders.set(canonicalOrder.clientOrderId, canceledOrder)
       return {
@@ -296,6 +307,11 @@ function createBrokerOrderPorts({ calls }) {
         data: canceledOrder,
       }
     },
+  }
+}
+
+function createBrokerOrderQueryPorts({ calls }) {
+  return {
     getOpenOrders: async () => ({
       ok: true,
       data: [...calls.orders.values()].filter((order) =>
@@ -331,6 +347,12 @@ function createBrokerOrderPorts({ calls }) {
   }
 }
 
+function createBrokerOrderPorts({ calls }) {
+  return {
+    ...createBrokerOrderMutationPorts({ calls }),
+    ...createBrokerOrderQueryPorts({ calls }),
+  }
+}
 function createBrokerMarketDataPorts({
   calls,
 }) {
