@@ -9,81 +9,44 @@ const actor = Object.freeze({
   roles: Object.freeze(["trading-operator"]),
 })
 
-function createHarness({ appendResult = { ok: true,
-  data: { durable: true,
-    duplicate: false } } } = {}) {
+function createHarnessEngine({ calls }) {
+  return {
+    pauseBuys: async ({ symbol, beforeApply }) => {
+      calls.push({ type: "pause-buys-start", symbol })
+      const committed = typeof beforeApply === "function"
+        ? await beforeApply({ symbol, action: "PAUSE_BUYS" })
+        : { ok: true, data: { durable: false } }
+      if (!committed?.ok) { return committed }
+      calls.push({ type: "pause-buys-applied", symbol })
+      return { ok: true, data: {
+        symbol, paused: true, canceled: 0, reconciled: 0,
+        durable: committed.data.durable,
+      } }
+    },
+    resumeBuys: async ({ symbol, beforeApply }) => {
+      calls.push({ type: "resume-buys-start", symbol })
+      const committed = typeof beforeApply === "function"
+        ? await beforeApply({ symbol, action: "RESUME_BUYS" })
+        : { ok: true, data: { durable: false } }
+      if (!committed?.ok) { return committed }
+      calls.push({ type: "resume-buys-applied", symbol })
+      return { ok: true, data: {
+        symbol, resumed: true, stillPaused: false,
+        durable: committed.data.durable,
+      } }
+    },
+  }
+}
+
+function createHarness({ appendResult = { ok: true, data: { durable: true, duplicate: false } } } = {}) {
   const calls = []
   const operationalStateStore = {
-    append: async (fact) => {
-      calls.push({ type: "append",
-        fact })
+    append: async fact => {
+      calls.push({ type: "append", fact })
       return appendResult
     },
   }
-  const engine = {
-    pauseMarket: async ({ symbol, beforeApply }) => {
-      calls.push({ type: "pause-start",
-        symbol })
-      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol,
-        action: "PAUSE" }) : { ok: true,
-        data: { durable: false } }
-      if (!committed?.ok) {return committed}
-      calls.push({ type: "pause-applied",
-        symbol })
-      return { ok: true,
-        data: { symbol,
-          paused: true,
-          durable: committed.data.durable } }
-    },
-    resumeMarket: async ({ symbol, beforeApply }) => {
-      calls.push({ type: "resume-start",
-        symbol })
-      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol,
-        action: "RESUME" }) : { ok: true,
-        data: { durable: false } }
-      if (!committed?.ok) {return committed}
-      calls.push({ type: "resume-applied",
-        symbol })
-      return { ok: true,
-        data: { symbol,
-          resumed: true,
-          durable: committed.data.durable } }
-    },
-    pauseBuys: async ({ symbol, beforeApply }) => {
-      calls.push({ type: "pause-buys-start",
-        symbol })
-      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol,
-        action: symbol === undefined ? "PAUSE_ALL_BUYS" : "PAUSE_BUYS" }) : { ok: true,
-        data: { durable: false } }
-      if (!committed?.ok) {return committed}
-      calls.push({ type: "pause-buys-applied",
-        symbol })
-      return { ok: true,
-        data: { symbol,
-          paused: true,
-          canceled: 0,
-          reconciled: 0,
-          durable: committed.data.durable } }
-    },
-    resumeBuys: async ({ symbol, beforeApply }) => {
-      calls.push({ type: "resume-buys-start",
-        symbol })
-      const committed = typeof beforeApply === "function" ? await beforeApply({ symbol,
-        action: symbol === undefined ? "RESUME_ALL_BUYS" : "RESUME_BUYS" }) : { ok: true,
-        data: { durable: false } }
-      if (!committed?.ok) {return committed}
-      calls.push({ type: "resume-buys-applied",
-        symbol })
-      return { ok: true,
-        data: { symbol,
-          resumed: true,
-          stillPaused: false,
-          durable: committed.data.durable } }
-    },
-  }
-  return { calls,
-    operationalStateStore,
-    engine }
+  return { calls, operationalStateStore, engine: createHarnessEngine({ calls }) }
 }
 
 test("creates an immutable Harvester operator facade without a generic command dispatcher", () => {
