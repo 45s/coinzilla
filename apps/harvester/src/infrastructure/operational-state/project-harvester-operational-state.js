@@ -67,6 +67,11 @@ function mapFill({ data }) {
     tradeId: data.tradeId,
     brokerOrderId: data.brokerOrderId,
     ...(data.clientOrderId == null ? {} : { clientOrderId: data.clientOrderId }),
+    ...(data.providerInstanceId === undefined ? {} : {
+      providerInstanceId: data.providerInstanceId,
+      providerType: data.providerType,
+      accountId: data.accountId,
+    }),
     symbol: data.symbol,
     side: data.side,
     price: data.price,
@@ -262,9 +267,20 @@ function mapOrderCancellationOutcomeFact({ data, orderIntents, cancellationInten
   }]
 }
 
-function mapExecutionFillFact({ data }) {
-  return [{ name: EVENT.FILL_APPLIED,
-data: mapFill({ data }) }]
+function mapExecutionFillFact({ data, orderIntents }) {
+  if (data.providerInstanceId !== undefined) {
+    const intent = orderIntents.get(data.clientOrderId)
+    if (!intent) {
+      throw new Error(`Provider-attributed execution fill has no preceding submission intent: ${data.clientOrderId}`)
+    }
+    assertIntentMatches({
+      intent,
+      data,
+      fields: ["providerInstanceId", "providerType", "accountId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side"],
+      context: "Execution fill",
+    })
+  }
+  return [{ name: EVENT.FILL_APPLIED, data: mapFill({ data }) }]
 }
 
 function mapRecoveryCycleCompletedFact({ data }) {
