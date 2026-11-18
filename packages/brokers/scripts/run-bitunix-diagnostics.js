@@ -23,22 +23,30 @@ function printSummary({
     outputPath,
   }) {
   const { passed, failed, skipped, total } = report.summary
-  process.stdout.write([
+  const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
+  const missingCredentials = configuration?.response?.missingCredentialVariables ?? []
+  const lines = [
     "Bitunix read-only diagnostics completed.",
     `Results: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
+    ...(missingCredentials.length > 0
+      ? [`Authenticated checks skipped. Configure both BITUNIX_API_KEY and BITUNIX_API_SECRET (missing: ${missingCredentials.join(", ")}).`]
+      : []),
     `Report: ${outputPath}`,
     "No order or withdrawal operations were attempted.",
     "",
-  ].join("\n"))
+  ]
+  process.stdout.write(lines.join("\n"))
 }
 
 async function main() {
   if (process.argv.includes("--help")) {
     process.stdout.write([
       "Run read-only Bitunix Spot REST and authenticated WebSocket RPC diagnostics.",
-      "Requires BITUNIX_API_KEY, BITUNIX_API_SECRET and explicit",
-      "BITUNIX_DIAGNOSTICS_CONFIRM_LIVE_READS=YES confirmation.",
-      "See packages/brokers/README.md for all supported environment variables.",
+      "BITUNIX_API_KEY and BITUNIX_API_SECRET are optional for public-only REST checks.",
+      "Configure both credentials to enable private account reads and authenticated WebSocket RPC.",
+      "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is optional; without it, depth RPC is skipped.",
+      "Live-read confirmation and other diagnostic defaults are source constants.",
+      "See packages/brokers/README.md for configuration and safety details.",
       "",
     ].join("\n"))
     return

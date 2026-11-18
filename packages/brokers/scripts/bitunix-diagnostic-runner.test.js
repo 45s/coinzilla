@@ -63,6 +63,13 @@ function createFakeMarketMethods({ websocketCalls }) {
       })
       return { close: "123.45" }
     },
+    async ping() {
+      websocketCalls.push({
+        method: "ping",
+        args: {},
+      })
+      return "pong"
+    },
   }
 }
 
@@ -338,4 +345,242 @@ test("a failed WebSocket RPC does not suppress later independent RPC checks", as
   assert.equal(report.results.find((entry) => entry.operation === "common.rate.list").status, "failed", "The failing RPC must retain its own failure result")
   assert.equal(report.results.find((entry) => entry.operation === "user.info").status, "passed", "Later RPC checks must continue after one request fails")
   assert.equal(websocketCalls.at(-1), "disconnect", "The WebSocket session must still close after an RPC failure")
+})
+
+
+const expectedPublicRestRequests = [
+  {
+    path: "/api/spot/v1/common/coin_pair/list",
+    authenticated: false,
+    method: "GET",
+    queryParams: {},
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/market/last_price",
+    authenticated: false,
+    method: "GET",
+    queryParams: {
+      symbol: "BTCUSDT",
+    },
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/market/kline",
+    authenticated: false,
+    method: "GET",
+    queryParams: {
+      symbol: "BTCUSDT",
+      interval: "1min",
+    },
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/market/kline/history",
+    authenticated: false,
+    method: "GET",
+    queryParams: {
+      symbol: "BTCUSDT",
+      interval: "1min",
+      limit: "1",
+    },
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/common/rate/list",
+    authenticated: false,
+    method: "GET",
+    queryParams: {},
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/common/coin/coin_network/list",
+    authenticated: false,
+    method: "GET",
+    queryParams: {},
+    body: undefined,
+    stateChanging: false,
+  },
+]
+
+function assertPublicRestCalls(restCalls) {
+  const actualRequests = restCalls.map(({
+    path,
+    authenticated,
+    method,
+    queryParams,
+    body,
+    stateChanging,
+  }) => ({
+    path,
+    authenticated,
+    method,
+    queryParams,
+    body,
+    stateChanging,
+  }))
+  assert.deepEqual(
+    actualRequests,
+    expectedPublicRestRequests,
+    "public-only mode must issue the documented unsigned public REST reads and no private requests",
+  )
+}
+
+function assertPublicOnlyReport(report) {
+  assert.equal(report.summary.failed, 0, "missing optional credentials must not prevent the required public-only diagnostic checks")
+  const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
+  assert.equal(configuration.response.credentialsConfigured, false, "the report must preserve public-only credential state")
+  assert.deepEqual(
+    configuration.response.missingCredentialVariables,
+    ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"],
+    "the report must identify the exact credential variables required to enable private diagnostics",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "REST public order book depth").status,
+    "skipped",
+    "depth REST must be skipped when its required precision is not explicitly configured",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "REST private account balances").status,
+    "skipped",
+    "private REST account reads must be explicitly skipped when credentials are unavailable",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "REST private open orders").status,
+    "skipped",
+    "private open-order reads must be explicitly skipped when credentials are unavailable",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "WebSocket connection").status,
+    "skipped",
+    "authenticated WebSocket connection must be explicitly skipped without credentials",
+  )
+  assert.equal(
+    report.results.filter((entry) => entry.operation.startsWith("user.")).every((entry) => entry.status === "skipped"),
+    true,
+    "all private WebSocket RPC operations must be individually marked skipped in public-only mode",
+  )
+}
+
+function assertPublicOnlyDiagnostics({ report, restCalls }) {
+  assertPublicRestCalls(restCalls)
+  assertPublicOnlyReport(report)
+}
+
+test("public-only diagnostics run unsigned REST checks when credentials are missing", async () => {
+  const restCalls = []
+  let websocketFactoryCalls = 0
+  const report = await runBitunixDiagnostics({
+    env: {},
+    restClientFactory() {
+      return {
+        async request(request) {
+          restCalls.push(request)
+          return { data: [] }
+        },
+      }
+    },
+    websocketClientFactory() {
+      websocketFactoryCalls += 1
+      throw new Error("authenticated WebSocket client must not be constructed without credentials")
+    },
+  })
+
+  assertPublicOnlyDiagnostics({
+    report,
+    restCalls,
+  })
+  assert.equal(websocketFactoryCalls, 0, "public-only mode must not construct or connect an authenticated WebSocket client")
+})
+
+test("partial Bitunix credentials fall back to public-only diagnostics without exposing the supplied key", async () => {
+  const restCalls = []
+  const report = await runBitunixDiagnostics({
+    env: {
+      BITUNIX_API_KEY: "partial-api-key",
+    },
+    restClientFactory() {
+      return {
+        async request(request) {
+          restCalls.push(request)
+          return { data: [] }
+        },
+      }
+    },
+    websocketClientFactory() {
+      throw new Error("private WebSocket checks must be skipped for partial credentials")
+    },
+  })
+
+  assert.equal(report.summary.failed, 0, "a partial credential pair must degrade to public-only checks rather than aborting public diagnostics")
+  const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
+  assert.deepEqual(
+    configuration.response.missingCredentialVariables,
+    ["BITUNIX_API_SECRET"],
+    "the report must identify the exact missing half of a partial credential pair",
+  )
+  assert.equal(restCalls.length, 6, "partial credentials must still allow every configured unsigned public REST check")
+  assert.equal(JSON.stringify(report).includes("partial-api-key"), false, "a partial API key must never appear in the public-only diagnostic report")
+})
+
+
+test("diagnostics verify authenticated ping and one explicit reconnect without claiming subscription restoration", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+  })
+  const report = await runBitunixDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+
+  assert.equal(
+    websocketCalls.filter((entry) => entry === "connect").length,
+    2,
+    "the runner must make one explicit second connection after the initial RPC session closes",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "ping").status,
+    "passed",
+    "the initial session must verify the documented authenticated ping RPC",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "WebSocket reconnect").status,
+    "passed",
+    "the second authenticated connection and ping must be reported independently",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "WebSocket subscription restoration").status,
+    "skipped",
+    "subscription restoration must be skipped because Bitunix documents one-shot RPC, not subscriptions",
+  )
+})
+
+
+test("diagnostics query current open orders through the documented read-only POST endpoint", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+  })
+  const report = await runBitunixDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+
+  const openOrdersRequest = restCalls.find((request) => request.path === "/api/spot/v1/order/pending/list")
+  assert.ok(openOrdersRequest, "the documented current-orders query must be included in authenticated REST diagnostics")
+  assert.equal(openOrdersRequest.method, "POST", "the documented current-orders query uses POST")
+  assert.deepEqual(openOrdersRequest.body, { symbol: "BTCUSDT" }, "the current-orders query must be scoped to the diagnostic symbol")
+  assert.equal(openOrdersRequest.authenticated, true, "the current-orders query must use signed authentication")
+  assert.equal(openOrdersRequest.stateChanging, false, "the current-orders POST is a read-only query, not an account-changing operation")
+  assert.equal(report.results.find((entry) => entry.operation === "REST private open orders").status, "passed")
 })

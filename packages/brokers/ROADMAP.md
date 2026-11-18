@@ -1281,7 +1281,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 ## 2026-11-18 — Bitunix local diagnostics runner (#1426)
 
-**Status: Implemented in [PR #1427](https://github.com/45s/coinzilla/pull/1427); diagnostic defaults/configuration cleanup is in [PR #1433](https://github.com/45s/coinzilla/pull/1433). Local live API smoke test remains operator-owned.**
+**Status: Base runner and source-constant configuration are implemented in [PR #1427](https://github.com/45s/coinzilla/pull/1427) and [PR #1433](https://github.com/45s/coinzilla/pull/1433). [PR #1439](https://github.com/45s/coinzilla/pull/1439) extends public REST coverage, adds a documented read-only open-orders query, credential-free mode, authenticated ping and one explicit reconnect probe. Actual local LIVE API smoke testing remains operator-owned.**
 
 - Add an explicitly invoked local runner over the existing Bitunix Spot REST and authenticated WebSocket RPC clients.
 - Verify public REST catalog/price reads, private account reads, WS connection/authentication, all existing Spot RPC methods, request/response IDs, durations, exchange errors, transport errors, close behavior and cleanup.
@@ -1289,5 +1289,6 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - Require the source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` opt-in before contacting the configured LIVE Spot API. Symbol, K-line interval, timeout and public-payload capture are named source constants; API credentials remain environment-only and optional depth precision remains configurable. Bitunix Spot TESTNET is not documented; this runner does not claim TESTNET verification.
 - Keep the tool outside Harvester startup and trading composition. No order placement/cancellation, withdrawals, transfers, retries or automatic reconnects.
 - Preserve #1185 as the trading-readiness blocker. The current read-only integration is a temporary safety state, not the intended end state: the longer-term goal is a complete Bitunix broker/Harvester provider including trading, once order identity, quantity semantics, execution-history completeness, account freshness, market constraints, event/recovery and environment-safety requirements are independently resolved and tested.
-- [x] Pass offline diagnostic-helper/runner tests and all Brokers/workspace required CI on the exact PR head.
-- [ ] Run the local command and inspect its sanitized report using an explicitly configured read-only API key. This live smoke test is operator-owned; CI must not receive exchange credentials.
+- [x] Pass offline diagnostic-helper/runner tests and all Brokers/workspace required CI for the original runner and source-constant configuration.
+- [ ] Verify PR #1439's public-only fallback, private-check skip behavior, credential-free REST authentication boundary, public market endpoint coverage, read-only open-orders POST, documented ping RPC and controlled reconnect probe through offline tests and exact-head CI. Subscription restoration and 24-hour expiry simulation remain unsupported/not run.
+- [ ] Run the local command and inspect its sanitized report. Public-only mode needs no credentials; authenticated checks require both Bitunix credential variables and a dedicated read-only key. This LIVE API smoke test is operator-owned; CI must not receive exchange credentials.
