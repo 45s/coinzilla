@@ -942,8 +942,8 @@ test("Bitunix Spot symbol metadata selects the matching pair and preserves exact
       symbol: "btcusdt",
       minPrice: "0",
       minVolume: "0",
-      basePrecision: 8,
-      quotePrecision: "2",
+      basePrecision: 0,
+      quotePrecision: "0",
       precisions: ["0.01", "0.001"],
       maxAmount: "500000",
       maxLimitOrderAmount: "1500000",
@@ -999,6 +999,32 @@ test("Bitunix Spot symbol metadata leaves omitted optional trading rules unknown
   assert.equal(result.data.minVolume, undefined, "an omitted minimum trading quantity must remain unknown rather than becoming zero")
   assert.equal(result.data.basePrecision, undefined, "an omitted base precision must remain absent")
   assert.equal(result.data.quotePrecision, undefined, "an omitted quote precision must remain absent")
+})
+
+test("Bitunix Spot symbol metadata preserves explicit null optional fields as unknown", async () => {
+  const symbolMetadata = createSymbolMetadata({
+    overrides: {
+      minPrice: null,
+      minVolume: null,
+      basePrecision: null,
+      quotePrecision: null,
+      precisions: null,
+    },
+  })
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/common/coin_pair/list": [symbolMetadata],
+    },
+  })
+
+  const result = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, true, "explicit null optional metadata must remain unknown rather than being coerced")
+  assert.equal(result.data.minPrice, null, "a null minimum trading value must remain null")
+  assert.equal(result.data.minVolume, null, "a null minimum quantity must remain null")
+  assert.equal(result.data.basePrecision, null, "a null base precision must remain null")
+  assert.equal(result.data.quotePrecision, null, "a null quote precision must remain null")
+  assert.equal(result.data.precisions, null, "a null precision list must remain null")
 })
 
 test("Bitunix Spot symbol metadata preserves a closed pair without advertising it as an active market", async () => {
