@@ -48,12 +48,12 @@ The existing runtime still constructs and registers exactly one Binance instance
 
 The optional Bitunix observer tracked in [#1422](https://github.com/45s/coinzilla/issues/1422) is deliberately not registered here. It exposes a separate read-only facade and cannot be selected by registry lookup, execution routing, or strategy market-data routing. See the [Bitunix read-only observer contract](./bitunix-read-only-observer.md).
 
-The registry can represent multiple named instances of the same provider type, but this slice does not add multi-instance runtime configuration or routing. Explicitly out of scope are:
+The registry can represent multiple named instances of the same provider type. The next delivery under Phase 4 adds only basic in-process account isolation; it does not make this registry itself an execution or market-data router. Explicitly out of scope for the registry foundation are:
 
 - strategy/symbol execution-route tables;
 - independent market-data routing;
 - automatic selection, fallback, or failover;
-- account isolation or account-scoped process locks; and
+- independent account runtime state (Portfolio, orders, balances and reservations); and
 - process-restart recovery or restoration.
 
 Those are separate decisions and delivery slices under #1339 and the existing ADRs. No exchange requests are made by the registry tests.
@@ -79,3 +79,8 @@ This phase does not add multi-provider routing, a second exchange instance, acco
 ## Offline verification scope
 
 Regression coverage exercises CanonicalOrder/Fill immutability, provider metadata propagation from the BrokerPort facade, intent-before-broker ordering, acknowledgement preservation, registry mutation rejection, strict durable-fact validation, and legacy fact compatibility. Tests use deterministic in-memory fakes and temporary local stores; no credentials, Binance API calls, or live/TESTNET order actions are needed.
+
+
+## Phase 4 scope — basic in-process account isolation
+
+Phase 4 is tracked by [issue #1339](https://github.com/45s/coinzilla/issues/1339). It will introduce separate in-memory account runtime state and provider/account/environment-scoped process locks while preserving the legacy single-Binance path. No process-restart restoration, Journal replay, crash recovery or #654 release gate is part of this phase. See the [multi-provider migration plan](../../../../docs/architecture/multi-provider-migration-plan.md) for the complete scope and acceptance criteria.
