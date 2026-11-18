@@ -77,7 +77,11 @@ function createAccountRuntimes({ providers }) {
   const accounts = new Map()
   const accountScopes = new Set()
   for (const provider of providers) {
-    addAccountRuntime({ provider, accounts, accountScopes })
+    addAccountRuntime({
+      provider,
+      accounts,
+      accountScopes,
+    })
   }
   return accounts
 }
