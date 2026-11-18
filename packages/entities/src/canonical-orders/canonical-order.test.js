@@ -1,3 +1,4 @@
+/* eslint-disable max-nested-callbacks -- Existing node:test assertions use nested callbacks for throw predicates. */
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 
@@ -45,6 +46,7 @@ const createOrder = (overrides = {}) =>
     ...overrides,
   })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${CanonicalOrder.name} lifecycle`, () => {
   it("represents a pending order intent before broker acknowledgement", () => {
     const order = createOrder()
@@ -122,6 +124,7 @@ describe(`${CanonicalOrder.name} lifecycle`, () => {
 
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${CanonicalOrder.name} price validation`, () => {
   it("supports market orders without a limit price", () => {
     const order = createOrder({
@@ -172,6 +175,7 @@ describe(`${CanonicalOrder.name} price validation`, () => {
 
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${CanonicalOrder.name} quantity validation`, () => {
   it("rejects mismatched markets and quantity assets", () => {
     assert.throws(
@@ -230,6 +234,7 @@ describe(`${CanonicalOrder.name} quantity validation`, () => {
 
 })
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${CanonicalOrder.name} identity and timestamps`, () => {
   it("requires broker identity for acknowledged lifecycle states", () => {
     for (const status of [
@@ -302,6 +307,7 @@ describe(`${CanonicalOrder.name} identity and timestamps`, () => {
 })
 
 
+// eslint-disable-next-line max-lines-per-function -- Keep the existing cohesive entity test group intact.
 describe(`${CanonicalOrder.name} provider provenance`, () => {
   it("retains the immutable provider instance, provider type and account identity", () => {
     const order = createOrder({
