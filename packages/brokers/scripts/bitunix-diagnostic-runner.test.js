@@ -358,24 +358,70 @@ function assertPublicOnlyDiagnostics({ report, restCalls }) {
     "the report must identify the exact credential variables required to enable private diagnostics",
   )
   assert.deepEqual(
-    restCalls.map(({ path, authenticated, method }) => ({
+    restCalls.map(({ path, authenticated, method, queryParams, body, stateChanging }) => ({
       path,
       authenticated,
       method,
+      queryParams,
+      body,
+      stateChanging,
     })),
     [
       {
         path: "/api/spot/v1/common/coin_pair/list",
         authenticated: false,
         method: "GET",
+        queryParams: {},
+        body: undefined,
+        stateChanging: false,
       },
       {
         path: "/api/spot/v1/market/last_price",
         authenticated: false,
         method: "GET",
+        queryParams: { symbol: "BTCUSDT" },
+        body: undefined,
+        stateChanging: false,
+      },
+      {
+        path: "/api/spot/v1/market/kline",
+        authenticated: false,
+        method: "GET",
+        queryParams: { symbol: "BTCUSDT", interval: "1min" },
+        body: undefined,
+        stateChanging: false,
+      },
+      {
+        path: "/api/spot/v1/market/kline/history",
+        authenticated: false,
+        method: "GET",
+        queryParams: { symbol: "BTCUSDT", interval: "1min", limit: "1" },
+        body: undefined,
+        stateChanging: false,
+      },
+      {
+        path: "/api/spot/v1/common/rate/list",
+        authenticated: false,
+        method: "GET",
+        queryParams: {},
+        body: undefined,
+        stateChanging: false,
+      },
+      {
+        path: "/api/spot/v1/common/coin/coin_network/list",
+        authenticated: false,
+        method: "GET",
+        queryParams: {},
+        body: undefined,
+        stateChanging: false,
       },
     ],
-    "public-only mode must issue only the unsigned catalog and last-price GET requests",
+    "public-only mode must issue the documented unsigned public REST reads and no private requests",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "REST public order book depth").status,
+    "skipped",
+    "depth REST must be skipped when its required precision is not explicitly configured",
   )
   assert.equal(
     report.results.find((entry) => entry.operation === "REST private account balances").status,
@@ -446,7 +492,7 @@ test("partial Bitunix credentials fall back to public-only diagnostics without e
     ["BITUNIX_API_SECRET"],
     "the report must identify the exact missing half of a partial credential pair",
   )
-  assert.equal(restCalls.length, 2, "partial credentials must still allow both unsigned public REST checks")
+  assert.equal(restCalls.length, 6, "partial credentials must still allow every configured unsigned public REST check")
   assert.equal(JSON.stringify(report).includes("partial-api-key"), false, "a partial API key must never appear in the public-only diagnostic report")
 })
 
@@ -483,4 +529,26 @@ test("diagnostics verify authenticated ping and one explicit reconnect without c
     "skipped",
     "subscription restoration must be skipped because Bitunix documents one-shot RPC, not subscriptions",
   )
+})
+
+
+test("diagnostics query current open orders through the documented read-only POST endpoint", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+  })
+  const report = await runBitunixDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+
+  const openOrdersRequest = restCalls.find((request) => request.path === "/api/spot/v1/order/pending/list")
+  assert.ok(openOrdersRequest, "the documented current-orders query must be included in authenticated REST diagnostics")
+  assert.equal(openOrdersRequest.method, "POST", "the documented current-orders query uses POST")
+  assert.deepEqual(openOrdersRequest.body, { symbol: "BTCUSDT" }, "the current-orders query must be scoped to the diagnostic symbol")
+  assert.equal(openOrdersRequest.authenticated, true, "the current-orders query must use signed authentication")
+  assert.equal(openOrdersRequest.stateChanging, false, "the current-orders POST is a read-only query, not an account-changing operation")
+  assert.equal(report.results.find((entry) => entry.operation === "REST private open orders").status, "passed")
 })
