@@ -170,7 +170,11 @@ export class Fill {
       brokerOrderId,
       clientOrderId,
     })
-    validateProviderIdentity({ providerInstanceId, providerType, accountId })
+    validateProviderIdentity({
+      providerInstanceId,
+      providerType,
+      accountId,
+    })
     validateFillValues({
       market,
       side,
