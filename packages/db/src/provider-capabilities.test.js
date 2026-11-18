@@ -269,3 +269,16 @@ test("provider transaction facades reject incomplete transaction contexts", asyn
     await database.close()
   }
 })
+
+
+test("provider composition rejects missing and array capability declarations", () => {
+  for (const capabilities of [null, [], "not-an-object"]) {
+    assert.throws(
+      () => createDatabase({
+        provider: createProvider({ capabilities }),
+      }),
+      /declare its database capabilities/,
+      "A provider must supply one non-array capability object at the composition boundary",
+    )
+  }
+})
