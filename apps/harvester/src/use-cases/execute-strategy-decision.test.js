@@ -1115,7 +1115,10 @@ test("persists selected provider provenance before broker I/O and carries it ont
       ])
       assert.equal(outcome, "ACKNOWLEDGED")
       calls.push("durable-outcome")
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
     onAcknowledgedOrder: async ({ order }) => { acknowledged = order },
     onSubmissionFailure: async () => assert.fail("unexpected submission failure"),
