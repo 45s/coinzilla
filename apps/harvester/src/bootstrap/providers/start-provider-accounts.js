@@ -724,42 +724,29 @@ async function startConfiguredProviderAccounts({
   }
 }
 
-async function startProviderAccountRuntimes({
+function createProviderAccountStartupContext({
   providers,
-  start,
-  appConfig,
-  env,
-  eventPublisher,
-  runtimeSessionId,
-  operationalStateStore,
-  releaseProviderLock,
-  retainProviderLock,
-  routing,
+  executionSymbolsByProvider,
+  marketDataSymbolsByProvider,
 }) {
-  const { executionSymbolsByProvider, marketDataSymbolsByProvider, marketDataProviderBySymbol } = routing
-  const providerBrokers = new Map()
-  const requiredCapabilitiesByProvider = createRequiredCapabilitiesByProvider({
-    providers,
-    executionSymbolsByProvider,
-    marketDataSymbolsByProvider,
-  })
-  const deferMarketDataStart = providers.length > 1
-  const startup = await startConfiguredProviderAccounts({
-    providers,
-    start,
-    appConfig,
-    env,
-    eventPublisher,
-    runtimeSessionId,
-    operationalStateStore,
-    releaseProviderLock,
-    retainProviderLock,
-    executionSymbolsByProvider,
-    marketDataProviderBySymbol,
-    providerBrokers,
-    requiredCapabilitiesByProvider,
-    deferMarketDataStart,
-  })
+  return {
+    providerBrokers: new Map(),
+    requiredCapabilitiesByProvider: createRequiredCapabilitiesByProvider({
+      providers,
+      executionSymbolsByProvider,
+      marketDataSymbolsByProvider,
+    }),
+    deferMarketDataStart: providers.length > 1,
+  }
+}
+
+async function finalizeProviderAccountStartup({
+  providers,
+  appConfig,
+  startup,
+  deferMarketDataStart,
+  releaseProviderLock,
+}) {
   throwIfNoAccountStarted({
     providers,
     startedAccounts: startup.startedAccounts,
@@ -784,6 +771,57 @@ async function startProviderAccountRuntimes({
     appConfig,
     startedAccounts: startup.startedAccounts,
     failedAccounts: startup.failedAccounts,
+    releaseProviderLock,
+  })
+}
+
+async function startProviderAccountRuntimes({
+  providers,
+  start,
+  appConfig,
+  env,
+  eventPublisher,
+  runtimeSessionId,
+  operationalStateStore,
+  releaseProviderLock,
+  retainProviderLock,
+  routing,
+}) {
+  const {
+    executionSymbolsByProvider,
+    marketDataSymbolsByProvider,
+    marketDataProviderBySymbol,
+  } = routing
+  const {
+    providerBrokers,
+    requiredCapabilitiesByProvider,
+    deferMarketDataStart,
+  } = createProviderAccountStartupContext({
+    providers,
+    executionSymbolsByProvider,
+    marketDataSymbolsByProvider,
+  })
+  const startup = await startConfiguredProviderAccounts({
+    providers,
+    start,
+    appConfig,
+    env,
+    eventPublisher,
+    runtimeSessionId,
+    operationalStateStore,
+    releaseProviderLock,
+    retainProviderLock,
+    executionSymbolsByProvider,
+    marketDataProviderBySymbol,
+    providerBrokers,
+    requiredCapabilitiesByProvider,
+    deferMarketDataStart,
+  })
+  return finalizeProviderAccountStartup({
+    providers,
+    appConfig,
+    startup,
+    deferMarketDataStart,
     releaseProviderLock,
   })
 }
