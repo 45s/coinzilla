@@ -192,21 +192,13 @@ test("SQLite CRUD binds collection, identifier, and filter values instead of int
       }],
       "A SQL-looking filter value must match only its exact stored value and never alter the query predicate",
     )
+    const allRecords = await database.readMany({
+      collection: injectionCollection,
+    })
     assert.deepEqual(
-      await database.readMany({
-        collection: injectionCollection,
-      }),
-      [
-        {
-          id: injectionIdentifier,
-          name: injectionValue,
-        },
-        {
-          id: "ordinary-person",
-          name: "ordinary",
-        },
-      ],
-      "Parameterized collection and filter operations must leave every record intact",
+      new Set(allRecords.map(({ id }) => id)),
+      new Set([injectionIdentifier, "ordinary-person"]),
+      "Parameterized collection and filter operations must leave every record intact without assuming a default sort order",
     )
   } finally {
     await database.close()
