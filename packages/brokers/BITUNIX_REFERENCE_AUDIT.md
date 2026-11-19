@@ -239,7 +239,7 @@ It validates symbol, interval, decimals, OHLC invariants and timezone-qualified 
 
 - `getExchangeRates()` is implemented and merged in [PR #1370](https://github.com/45s/coinzilla/pull/1370); its source audit and stricter Coinzilla response contract are recorded above. Do not duplicate this capability.
 - The `getSymbolFilters()` metadata audit and strict validation are complete in [PR #1412](https://github.com/45s/coinzilla/pull/1412); the method remains partial because Bitunix does not document exact tick/step increments or maximum trading constraints.
-- `getTokenMetadata()` (or a domain-appropriate name) remains a separate candidate for `GET /api/spot/v1/common/coin/coin_network/list`, returning token and network metadata such as deposit/withdraw availability, memo requirement, network name, minimums and address validation pattern. Define a real consumer contract before implementation.
+- `getTokenNetworks()` is implemented in [PR #1468](https://github.com/45s/coinzilla/pull/1468) as a Bitunix-only public read of `GET /api/spot/v1/common/coin/coin_network/list`. It returns immutable token/network records, preserves exact decimal text and optional/null fields, validates non-negative deposit/withdraw limits, and rejects malformed rows. The existing `getAssets()` balance projection is unchanged. This method is not Binance parity and does not authorize a transfer or withdrawal.
 
 These are Bitunix-only public extensions, not Binance parity methods. Keep exact decimal fields as strings; do not treat descriptive precision fields as tick/step filters. Token/network metadata is not authorization to implement transfers or withdrawals.
 
