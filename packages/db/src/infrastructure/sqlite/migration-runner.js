@@ -56,7 +56,7 @@ function ensureMigrationChecksumColumn(transaction) {
   const hasChecksumColumn = columns.some(({ name }) => name === "checksum")
 
   if (!hasChecksumColumn) {
-    transaction.exec("ALTER TABLE schema_migrations ADD COLUMN checksum TEXT")
+    transaction.exec("ALTER TABLE schema_migrations ADD COLUMN checksum TEXT DEFAULT 'legacy-unverified'")
   }
 }
 
@@ -78,7 +78,7 @@ export async function migrateSqliteDatabase({ database, migrations }) {
       version INTEGER PRIMARY KEY CHECK (version > 0),
       name TEXT NOT NULL UNIQUE,
       applied_at TEXT NOT NULL,
-      checksum TEXT
+      checksum TEXT NOT NULL
     )
   `)
 
