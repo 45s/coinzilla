@@ -29,7 +29,7 @@ owner: utils
 ## Completed — custom ensure diagnostics and remove legacy Validator/VR ([#1507](https://github.com/45s/coinzilla/issues/1507), [#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
 
 - Add optional `errMsg` to direct `ensure` assertions and fluent chains. Custom diagnostics preserve the original `TypeError` / `RangeError` class; successful assertions still return the original value.
-- Remove the deprecated `Validator` / `VR` public exports, declarative implementation, and tests. Migrate current `Coin` and `Order` consumers in Entities while preserving accepted values and their domain-specific `Error` messages.
+- Remove the deprecated `Validator` / `VR` public exports, declarative implementation, and tests. The initial Entity consumer migration in PR #1509 was corrected in [PR #1512](https://github.com/45s/coinzilla/pull/1512) to use shared `ensure` assertions, preserving accepted values, domain-specific `Error` messages, and assertion causes.
 - Fix the dedicated Utils Unit Tests workflow to discover nested `ensure` tests; the prior root-only glob omitted `src/ensure/ensure.test.js`.
 - **Verification:** merged as `ab77568acfcd286560270aaac325bf65301efb0c`. Required exact-head CI passed: Utils 225 tests (223 passed, 0 failed, 2 skipped), Entities 145/145, workspace tests and coverage, JavaScript syntax/strict lint/Markdown/policy, dependency audit and Harvester targeted tests. External documentation links also passed.
 
