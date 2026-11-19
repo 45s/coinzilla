@@ -985,7 +985,7 @@ This work is in an open task PR targeting `develop`; do not mark it complete unt
 - Added a separately managed `BitunixSpotWebSocketClient` and native WHATWG WebSocket transport at the official Spot endpoint. It does not change the REST-backed `BitunixSpotBroker` lifecycle or silently switch existing methods to another transport.
 - Implemented documented query RPCs: latest price, depth, current K-line, trading-pair catalog, exchange rates, token/network metadata, account balances, and user identity. All requests are authenticated as required by the official Spot WS documentation.
 - Implemented the Spot-specific double-SHA256 signature separately from REST signing, echoed-ID correlation for concurrent RPCs, strict response-envelope handling, bounded request timeouts, and pending-request cleanup on transport errors/close. Account balance numeric tokens and unsafe int64 user IDs are preserved without JavaScript number rounding. Requests are never automatically replayed.
-- Added no generic arbitrary-method request, order placement/cancellation, public push subscription, private user-data subscription, or automatic reconnect. A terminal connection must be replaced by constructing a new client; Bitunix documents a 24-hour connection lifetime.
+- Added no generic arbitrary-method request, order placement/cancellation, public push subscription, private user-data subscription, or automatic reconnect. Explicit `connect()` after a closed connection now creates a fresh transport/listener set on the same client instance; pending RPCs are rejected and never replayed. Bitunix documents a 24-hour connection lifetime.
 - Test-first RED was reproduced in GitHub Actions on the test-only checkpoint because the package did not export `BitunixSpotWebSocketClient`. Offline coverage now includes the public export, signature vector, all documented read method names, request correlation, exchange/protocol errors, timeout, disconnect and transport lifecycle.
 - The official docs and JKorf Spot socket/authentication implementation agree on the RPC envelope and per-request authentication fields. JKorf's Spot socket methods themselves cover order mutations only; no continuous Spot subscriptions are copied from Futures.
 - Issue [#1185](https://github.com/45s/coinzilla/issues/1185) remains unchanged: this RPC client does not establish source-timestamped account snapshots, fill completeness, order identity, safe mutation semantics, a TESTNET, or continuous push streams. Bitunix trading capability is not established; the current broker implementation does not support order mutations or complete execution lifecycle guarantees.
@@ -1292,3 +1292,16 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Verify the exact PR head: 688 Brokers tests passed; workspace unit tests and coverage passed; JavaScript Syntax/workspace quality, strict changed-file ESLint, actionlint, Harvester targeted tests, Utils tests, and dependency audit passed. Read-only Binance TESTNET integration was skipped by workflow policy.
 - [~] Advisory external documentation-link workflow remained in progress at merge; it is not a required ruleset check.
 - **Safety:** Bitunix Spot order placement/cancellation/fill support remains blocked by [#1185](https://github.com/45s/coinzilla/issues/1185). No live mutations are authorized.
+
+
+## 2026-11-19 — Bitunix Spot WebSocket explicit reconnection (PR #1459)
+
+**Status: Implemented in PR #1459; deterministic offline verification and required repository CI are tracked on the exact PR head.**
+
+- Official Spot WebSocket documentation states that connections are valid for 24 hours and clients must handle reconnection. The client now permits an explicit subsequent `connect()` after closure by constructing a fresh native transport and registering a fresh listener set on the same client instance.
+- Concurrent reconnect calls share one in-progress connection attempt; a reconnect is rejected while explicit disconnect cleanup is still in progress.
+- Connection closure rejects and clears every pending RPC. Requests are never replayed on the replacement transport, and the client does not add automatic retry/backoff.
+- The diagnostic runner now closes and reconnects the same authenticated client instance, then verifies the new transport with a fresh `ping` RPC. It no longer creates a second client to claim reconnection coverage.
+- The diagnostic still marks subscription restoration as skipped: official Spot methods remain request/response RPCs, not continuous public/private streams. This does not implement missed-event replay or 24-hour expiry simulation.
+- No order placement/cancellation, fills, provider registration, Harvester routing, automatic fallback, or live exchange mutations are added. Issue #1185 remains open for the exchange-side order identity, quantity denomination, execution completeness, account freshness, private push-event and isolated mutation-environment blockers.
+- Updated the broker WebSocket contract and package README to document explicit same-instance reconnect semantics and the no-replay guarantee.
