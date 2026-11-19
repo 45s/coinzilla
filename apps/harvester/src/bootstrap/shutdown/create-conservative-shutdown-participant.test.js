@@ -77,7 +77,7 @@ function createFakeEngineOrderOperations({ calls } = {}) {
 
 function createFakeEngineSafetyOperations({ calls, unsafeSymbols, onAudit, markets, state, invalidate, snapshot } = {}) {
   return {
-    async auditShutdownSafety({ symbol, reconciliationComplete, journalDurable, coverageResult }) {
+    async auditShutdownSafety({ symbol, reconciliationComplete, journalDurable, coverageResult, externalBlockers }) {
       calls.push(`audit:${symbol}`)
       const blockers = []
       if (!state.gateActive) {
@@ -94,6 +94,14 @@ function createFakeEngineSafetyOperations({ calls, unsafeSymbols, onAudit, marke
       }
       if (unsafeSymbols.includes(symbol)) {
         blockers.push("OWNED_SELL_ORDER_UNRESOLVED")
+      }
+      for (const blocker of externalBlockers ?? []) {
+        const reason = typeof blocker === "string"
+          ? blocker
+          : blocker?.reason ?? blocker?.code ?? blocker?.message
+        if (reason) {
+          blockers.push(reason)
+        }
       }
       onAudit?.({
         symbol,
@@ -300,6 +308,10 @@ test("rechecks a market immediately when late evidence invalidates it during ano
   )
 })
 
+function getMarketBlockersFromShutdownError(error, symbol) {
+  return error.shutdownDiagnostics.markets.find((entry) => entry.symbol === symbol)?.blockers ?? []
+}
+
 test("keeps recovery-input failures separate from owned order and fill reconciliation", async () => {
   const calls = []
   const engine = createFakeEngine({ calls })
@@ -309,22 +321,28 @@ test("keeps recovery-input failures separate from owned order and fill reconcili
     if (symbol === "DOGEUSDT") {
       return {
         ok: false,
-        errors: [Object.assign(new Error("Shutdown recovery price is unavailable"), {
-          code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
-        })],
+        errors: [Object.assign(
+          new Error("Shutdown recovery price is unavailable"),
+          {
+            code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+          },
+        )],
       }
     }
     return { ok: true }
   }
-  const participant = createParticipant({ engine, calls })
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
 
   participant.beginShutdown()
   await assert.rejects(
     participant.waitUntilSafe(),
     (error) => {
-      const market = error.shutdownDiagnostics.markets.find((entry) => entry.symbol === "DOGEUSDT")
+      const blockers = getMarketBlockersFromShutdownError(error, "DOGEUSDT")
       assert.ok(
-        market.blockers.includes("RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE"),
+        blockers.includes("RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE"),
         "The market must retain the exact recovery-input failure.",
       )
       assert.equal(
@@ -355,7 +373,10 @@ test("keeps stale recovery-price coverage separate from owned order and fill rec
         ok: true,
         data: {
           covered: false,
-          findings: [{ symbol, reason: "STALE_MARKET_PRICE" }],
+          findings: [{
+            symbol,
+            reason: "STALE_MARKET_PRICE",
+          }],
         },
       }
     }
