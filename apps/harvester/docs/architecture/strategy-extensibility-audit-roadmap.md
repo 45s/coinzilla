@@ -147,6 +147,8 @@ The strategy owner approved the following direction. It is the architecture deci
 
 This approval does not authorize a universal `BaseStrategy`, a speculative strategy framework, a second broker/execution implementation, broker-package changes, exchange TESTNET/LIVE mutations, or early RS enablement. Exact DTOs, module boundaries and queue APIs are implementation details to derive from the existing source and prove with deterministic offline tests—not new architecture decisions to reopen the approved direction.
 
+**Implementation status — PR #1515 (2026-11-19):** the branch adds a fail-closed guard for missing production RS evaluator registration and records per-cycle canonical BUY execution VWAP in the RS accounting workflow. The latter is process-local only. These are prerequisites, not completion of the account-level coordinator contract; evaluator composition, shared reservation arbitration, terminal mixed-SELL processing, durable STOP/operator reset and RS-5 lifecycle proof remain open.
+
 ## 6. Configuration ownership: app root loads and composes; domain receives validated inputs
 
 Configuration should not be owned or loaded by the strategy domain.

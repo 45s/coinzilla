@@ -444,3 +444,10 @@ A configured Recovery Seller market must never be silently treated as a successf
 ### Startup registration guard — regression checkpoint
 
 Configured RS execution routes are now rejected before process-start facts or broker connection when the production RS transition evaluator is missing. A runtime market-event guard remains as defense in depth. This is a startup safety boundary, not production evaluator composition: RS remains non-executable until the actual evaluator and remaining RS-4/RS-5 acceptance work are complete.
+
+
+## RS-4 per-cycle BUY execution reference — foundational slice
+
+The RS accounting workflow records each accepted canonical BUY Fill under its immutable OrderRegistry cycle ownership and exposes `getBuyExecutionVwap({ cycleId })`. The reference is calculated exactly as aggregate canonical quote quantity divided by aggregate executed base quantity; it is not derived from a market-price snapshot or Portfolio averages. Duplicate Fill replay does not change the result, and cycle IDs are isolated. This provides the actual execution reference required by the next standing-BUY policy.
+
+The current map is process-local and is not restored from Operational State Store facts. A restarted process must not infer a prior cycle's VWAP from an empty map; durable order/cycle/fill replay remains an RS-4/RS-5 requirement. This slice does not register the production evaluator, authorize order submission, or make RS executable.

@@ -4,7 +4,7 @@ status: active
 type: testing
 owner: harvester
 created: 2026-11-10
-last_verified: 2026-11-17
+last_verified: 2026-11-19
 ---
 
 # Harvester domain logic test inventory
@@ -13,7 +13,7 @@ last_verified: 2026-11-17
 
 This is the source-driven inventory for deterministic tests under `apps/harvester/src/domain/`. It maps business responsibilities to existing tests, records test-quality risks, and sequences follow-up work. It does not define trading behavior; the [Conservative Domain Specification](CONSERVATIVE_DOMAIN_SPECIFICATION.md) remains authoritative.
 
-Reviewed baseline: `develop` at `56097e527f44cfd9bddfd10f8078346695092607` (2026-11-17, after RS-2b application accounting PR #1276 and the latest broker identity hardening). The current domain tree contains 45 production JavaScript files and 38 domain test files. Historical checkpoints below remain labeled as historical; they are not current file-count claims. PR #917 corrected Conservative BUY gating after RED regressions.
+Reviewed baseline: `develop` at `17f560ed96439fe9dcf3eb159d9f7e0b850dcd42` (2026-11-19, after the RS-2b application accounting and RS-3 policy foundations). The current domain tree contains 45 production JavaScript files and 38 domain test files. Historical checkpoints below remain labeled as historical; they are not current file-count claims. PR #917 corrected Conservative BUY gating after RED regressions.
 
 All test improvements in this initiative must remain deterministic and offline. Issue [#626](https://github.com/45s/coinzilla/issues/626) and its user-data recovery implementation remain paused and outside this initiative.
 
@@ -66,7 +66,7 @@ This service collects data and exposes snapshots only. It does not activate vola
 
 ## Application-level orchestration coverage (supplemental; not included in the 38 domain test files)
 
-`src/use-cases/resolve-recovery-seller-stop.test.js` covers the durable operator-only STOP reset barrier and proves incomplete reconciliation/accounting or a failed Operational State Store append leaves STOP active. `src/use-cases/create-recovery-seller-accounting-workflow.test.js` covers atomic terminal OrderRegistry/Portfolio/legacy projection commits, reservation retention on failed reconciliation, release after successful commit, verified external Spot and quote-cash-flow providers, duplicate terminal replay, commission allocation, and the rule that confirmed fills are committed even when any applicable profitability gate fails. The profitability tests reject recovery-profit/legacy-loss and legacy-profit/recovery-loss cross-subsidies. This is accounting orchestration coverage, not executable RS policy or runtime integration.
+`src/use-cases/resolve-recovery-seller-stop.test.js` covers the durable operator-only STOP reset barrier and proves incomplete reconciliation/accounting or a failed Operational State Store append leaves STOP active. `src/use-cases/create-recovery-seller-accounting-workflow.buy-vwap.test.js` verifies exact per-cycle canonical BUY quote/base VWAP, cycle isolation and duplicate-fill idempotency. The VWAP map is process-local; restart replay remains unimplemented. `src/use-cases/create-recovery-seller-accounting-workflow.test.js` covers atomic terminal OrderRegistry/Portfolio/legacy projection commits, reservation retention on failed reconciliation, release after successful commit, verified external Spot and quote-cash-flow providers, duplicate terminal replay, commission allocation, and the rule that confirmed fills are committed even when any applicable profitability gate fails. The profitability tests reject recovery-profit/legacy-loss and legacy-profit/recovery-loss cross-subsidies. This is accounting orchestration coverage, not executable RS policy or runtime integration.
 
 `test/replays/ada-conservative-recovery-replay.test.js` replays the 2026-11-17 ADA lifecycle with exact decimal inputs, explicit actual commission amounts/assets, exchange filters, recovery SELL replacement, below-minProfit CONTINUE_SELL_THROUGH outcome, duplicate SELL evidence and shutdown. It verifies that a valid MIN_NOTIONAL dust residual with the next BUY pending does not pause the pair or complete the recovery cycle. During shutdown it cancels the pending next BUY but expects the existing fail-closed safety result because the incomplete recovery cycle has no sellable SELL coverage for the 0.1 ADA dust residual. It registers order waiters before emitting the market-price events that trigger submissions, emits a terminal SELL price event before the fill and waits for the explicit recovery.cycle_not_completed lifecycle event before asserting Portfolio and RecoveryLedger projections. The incident record does not contain Binance trade IDs, so the replay uses deterministic numeric synthetic IDs while preserving the actual broker order IDs in the separate audit evidence. It verifies the normalized execution-report collection rather than relying on the replay publisher's optional return value. `test/replays/doge-zro-conservative-replay.test.js` proves successful recovery completion is emitted exactly once when the same terminal SELL execution is replayed.
 
