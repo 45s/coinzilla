@@ -778,7 +778,10 @@ test("re-audits previously safe markers when the initial user-data drain fails",
         error,
         symbol: "DOGEUSDT",
       })
-      assert.ok(blockers.includes("USER_DATA_DRAIN_FAILED"))
+      assert.ok(hasBlockerWithPrefix({
+        blockers,
+        prefix: "USER_DATA_DRAIN:USER_DATA_DRAIN_FAILED",
+      }))
       assert.ok(blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"))
       return true
     },
