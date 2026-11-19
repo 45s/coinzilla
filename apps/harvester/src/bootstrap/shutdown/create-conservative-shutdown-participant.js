@@ -80,6 +80,7 @@ function createStageBlocker({ stage, error } = {}) {
   const details = getStageBlockerDetails(error)
   return `${stage}:${reason}${details.length > 0 ? `:${details.join(":")}` : ""}`
 }
+
 async function runStage({ stage, operation } = {}) {
   try {
     const result = await operation()
