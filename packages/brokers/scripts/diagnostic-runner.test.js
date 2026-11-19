@@ -670,19 +670,19 @@ test("diagnostics query current open orders through the documented read-only POS
 })
 
 
-function createBrokerApiDiagnosticRestClientFactory({ calls, expectedApiKey }) {
+function createBrokerApiDiagnosticRestClientFactory({ calls, expectedApiKey, invalidSchema = false }) {
   return (configuration) => {
     assert.equal(configuration.apiKey, expectedApiKey, "the public Broker diagnostic must receive configured credentials without logging them")
     return {
       async request(request) {
         calls.push(request)
-        return createBrokerApiDiagnosticResponse({ request })
+        return createBrokerApiDiagnosticResponse({ request, invalidSchema })
       },
     }
   }
 }
 
-function createBrokerApiDiagnosticResponse({ request }) {
+function createBrokerApiDiagnosticResponse({ request, invalidSchema }) {
   if (request.path === "/api/spot/v1/common/coin_pair/list") {
     return {
       data: [{
@@ -693,7 +693,7 @@ function createBrokerApiDiagnosticResponse({ request }) {
         quotePrecision: "8",
         minPrice: "0.0001",
         minVolume: "0.0001",
-        isOpen: "1",
+        ...(invalidSchema ? {} : { isOpen: "1" }),
         isHot: "0",
         isRecommend: "0",
         isShow: "1",
@@ -706,7 +706,7 @@ function createBrokerApiDiagnosticResponse({ request }) {
     }
   }
   if (request.path === "/api/spot/v1/market/last_price") {
-    return { data: "123.4500" }
+    return { data: invalidSchema ? 123.45 : "123.4500" }
   }
   if (request.path === "/api/spot/v1/user/account") {
     return {
@@ -755,10 +755,43 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
   assert.equal(brokerApiCalls[2].authenticated, true, "account balances must use authenticated REST")
   assert.equal(brokerApiCalls[3].authenticated, true, "open orders must use authenticated REST")
   assert.deepEqual(report.schemaObservations[0].unexpectedFields, ["futureField"], "unknown exchange fields must be reported without failing otherwise valid normalization")
+  assert.equal(report.schemaObservations[0].schemaValid, true, "unknown fields alone must not fail the expected response schema")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getExchangeMarkets").status, "passed", "unknown additions must not fail the public Broker response schema check")
   assert.equal(report.schemaObservations[0].missingRequiredFields.length, 0, "the valid market fixture must satisfy required fields")
   assert.equal(JSON.stringify(report).includes("must-not-be-persisted"), false, "unknown response field values must never be persisted")
   assert.equal(JSON.stringify(report).includes("987654.321"), false, "private financial values must never be persisted")
   assert.equal(JSON.stringify(report).includes(validEnvironment.BITUNIX_API_SECRET), false, "diagnostic reports must never persist the API secret")
+})
+
+
+test("Broker diagnostics fail schema checks for missing required fields and unexpected scalar types", async () => {
+  const brokerApiCalls = []
+  const factories = createFakeClients({
+    restCalls: [],
+    websocketCalls: [],
+  })
+  const report = await runBitunixDiagnostics({
+    env: validEnvironment,
+    ...factories,
+    brokerApiRestClientFactory: createBrokerApiDiagnosticRestClientFactory({
+      calls: brokerApiCalls,
+      expectedApiKey: validEnvironment.BITUNIX_API_KEY,
+      invalidSchema: true,
+    }),
+  })
+
+  assert.deepEqual(report.schemaObservations[0].missingRequiredFields, [{
+    index: 0,
+    fields: ["isOpen"],
+  }], "the market response must expose missing required fields")
+  assert.equal(report.schemaObservations[0].schemaValid, false, "missing required market fields must fail schema validation")
+  assert.deepEqual(report.schemaObservations[1].unexpectedValueType, {
+    expected: ["string"],
+    actual: "number",
+  }, "the latest-price response must be validated as a decimal string")
+  assert.equal(report.schemaObservations[1].schemaValid, false, "unexpected scalar types must fail schema validation")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getExchangeMarkets").status, "failed", "the report must surface missing required fields as a failed check")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getPrices").status, "failed", "the report must surface unexpected response types as a failed check")
 })
 
 test("public-only Broker diagnostics never send the internal placeholder credential", async () => {

@@ -1363,6 +1363,55 @@ async function runWebSocketChecks({
 }
 
 
+
+function getDiagnosticSchemaIssues({ inspection }) {
+  const issues = []
+  if (inspection.unexpectedValueType) {
+    issues.push("unexpected_value_type")
+  }
+  if (inspection.missingRequiredFields.length > 0) {
+    issues.push("missing_required_fields")
+  }
+  if (inspection.unexpectedFieldTypes.length > 0) {
+    issues.push("unexpected_field_types")
+  }
+  if (inspection.invalidRowIndexes.length > 0) {
+    issues.push("invalid_rows")
+  }
+  return issues
+}
+
+function recordBrokerApiSchemaResult({ method, observation, now, results, secrets }) {
+  if (!observation || !Object.hasOwn(observation, "schemaValid")) {
+    return
+  }
+  const schemaValid = observation.schemaValid
+  const error = schemaValid
+    ? undefined
+    : new Error(`Bitunix response schema mismatch: ${observation.schemaIssues.join(", ")}`)
+  results.push(createResult({
+    operation: `Broker API schema ${method}`,
+    startedAt: now(),
+    now,
+    status: schemaValid ? "passed" : "failed",
+    request: {
+      api: "Broker",
+      method: "inspectResponseSchema",
+      path: observation.path,
+      stateChanging: false,
+    },
+    response: {
+      schemaValid,
+      unexpectedFields: observation.unexpectedFields,
+      missingRequiredFieldCount: observation.missingRequiredFields.length,
+      unexpectedFieldTypeCount: observation.unexpectedFieldTypes.length,
+      invalidRowCount: observation.invalidRowIndexes.length,
+    },
+    error,
+    secrets,
+  }))
+}
+
 function createObservedBrokerRestClientFactory({
   restClientFactory,
   schemaObservations,
@@ -1377,6 +1426,11 @@ function createObservedBrokerRestClientFactory({
           const response = await client.request(request)
           const schema = BITUNIX_RESPONSE_SCHEMAS[request.path]
           if (schema) {
+            const inspection = inspectDiagnosticSchema({
+              value: response.data,
+              ...schema,
+            })
+            const schemaIssues = getDiagnosticSchemaIssues({ inspection })
             schemaObservations.push({
               timestamp: new Date(now()).toISOString(),
               provider: "bitunix",
@@ -1384,10 +1438,9 @@ function createObservedBrokerRestClientFactory({
               method: request.method,
               authenticated: request.authenticated ?? true,
               stateChanging: request.stateChanging ?? false,
-              ...inspectDiagnosticSchema({
-                value: response.data,
-                ...schema,
-              }),
+              schemaValid: schemaIssues.length === 0,
+              schemaIssues,
+              ...inspection,
             })
           }
           return response
@@ -1507,12 +1560,40 @@ function recordBrokerApiOperationFailure({
   })
 }
 
+
+function recordBrokerApiOperationFailure({
+  method,
+  args,
+  error,
+  startedAt,
+  now,
+  results,
+  secrets,
+  onProgress,
+}) {
+  recordBrokerApiFailure({
+    method,
+    args,
+    error,
+    startedAt,
+    now,
+    results,
+    secrets,
+  })
+  emitBrokerApiProgress({
+    method,
+    status: "FAIL",
+    onProgress,
+  })
+}
+
 async function runBrokerApiOperation({
   broker,
   definition,
   now,
   results,
   secrets,
+  schemaObservations,
   onProgress,
 }) {
   const startedAt = now()
@@ -1534,23 +1615,23 @@ async function runBrokerApiOperation({
         secrets,
         onProgress,
       })
-      return
+    } else {
+      recordBrokerApiSuccess({
+        method: definition.method,
+        args: definition.args,
+        result,
+        privateResponse: definition.privateResponse,
+        startedAt,
+        now,
+        results,
+        secrets,
+      })
+      emitBrokerApiProgress({
+        method: definition.method,
+        status: "PASS",
+        onProgress,
+      })
     }
-    recordBrokerApiSuccess({
-      method: definition.method,
-      args: definition.args,
-      result,
-      privateResponse: definition.privateResponse,
-      startedAt,
-      now,
-      results,
-      secrets,
-    })
-    emitBrokerApiProgress({
-      method: definition.method,
-      status: "PASS",
-      onProgress,
-    })
   } catch (error) {
     recordBrokerApiOperationFailure({
       method: definition.method,
@@ -1563,6 +1644,13 @@ async function runBrokerApiOperation({
       onProgress,
     })
   }
+  recordBrokerApiSchemaResult({
+    method: definition.method,
+    observation: schemaObservations.at(-1),
+    now,
+    results,
+    secrets,
+  })
 }
 
 function createBrokerDiagnostic({
@@ -1749,6 +1837,7 @@ async function runBrokerApiChecks({
         now,
         results,
         secrets,
+        schemaObservations,
         onProgress,
       })
     }
