@@ -48,6 +48,19 @@ Every non-trivial task MUST have a GitHub Issue (or an existing issue explicitly
 
 An issue title/body is not frozen after kickoff. The responsible agent MUST update it when scope, acceptance criteria, decisions, dependencies, blockers or status materially change. Keep the description concise and current; put dated progress/checkpoint detail in comments rather than accumulating an event log in the issue body. Link the issue from the branch/PR and the owning roadmap where appropriate. If the task is genuinely a tiny standalone change, use an existing tracking issue or create a concise issue; do not invent bureaucracy for a one-line typo.
 
+### One task, one branch, one PR — mandatory
+
+A coherent task MUST be implemented on one short-lived task branch and delivered through one task PR. The branch and PR are the unit of review, validation, integration and handoff.
+
+- Keep the task's implementation, regression tests, configuration/schema changes, and all affected living-documentation updates in that same branch and PR.
+- Do not split implementation and its required documentation into parallel branches or separate PRs merely because the files live in different directories or have different formats. Documentation is part of the change, not follow-up housekeeping.
+- Keep commits small and logically ordered inside that one branch/PR. A test-first commit, implementation commit, focused refactor and related documentation/status update may be separate commits when each is independently understandable.
+- Do not combine unrelated tasks in one branch/PR. Split work only when the outcomes are independently deliverable, have distinct ownership/review or release constraints, or one is explicitly deferred; record the dependency between them.
+- A genuinely independent documentation-policy or documentation-only task may have its own issue, branch and PR. It must not be used to offload docs required by an active implementation task.
+- If the task scope changes materially, update the issue and PR rather than silently creating a second branch. If the scope must be split, explain the reason and link the follow-up task before proceeding.
+
+This rule does not require one commit per task. It requires one coherent task branch and one reviewable PR containing all work needed to deliver that task.
+
 ### Small, meaningful commits
 
 Commit continuously in coherent increments. A commit should represent one reviewable intention (for example: a failing regression test, the minimal fix, a focused refactor, or the corresponding documentation/status update), not an arbitrary number of changed lines.

@@ -50,6 +50,10 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 ## Refactoring or code audit
 
 - Read the canonical [AI Refactoring and Code Audit Standard](AI_REFACTORING_AUDIT_STANDARD.md) before inspecting or changing code.
+- Keep one task on one task branch and one PR; include implementation, tests and affected living documentation together. Do not open a separate docs PR for documentation required by the same implementation.
+- Audit architecture, dependencies, correctness, reliability, maintainability, tests, lint/static-analysis, security and performance where relevant to the authorized scope.
+- Back bottleneck/performance claims with measurements or reproducible evidence; label unmeasured concerns as hypotheses, not confirmed defects.
+- Prioritize findings by concrete risk and impact; record a disposition for each significant finding rather than creating an unbounded cleanup list.
 - Confirm the exact user-authorized folder/package scope and owning domain; do not expand scope silently.
 - Read applicable domain instructions, roadmap, specifications, contracts, implementation, consumers, tests, and configuration.
 - Establish existing public behavior and invariants before proposing structural changes.
