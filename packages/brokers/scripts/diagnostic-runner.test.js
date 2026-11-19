@@ -680,52 +680,10 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
   const report = await runBitunixDiagnostics({
     env: validEnvironment,
     ...factories,
-    brokerApiRestClientFactory(configuration) {
-      assert.equal(configuration.apiKey, validEnvironment.BITUNIX_API_KEY, "the public Broker diagnostic must receive configured credentials without logging them")
-      return {
-        async request(request) {
-          brokerApiCalls.push(request)
-          if (request.path === "/api/spot/v1/common/coin_pair/list") {
-            return {
-              data: [{
-                id: "1",
-                base: "BTC",
-                quote: "USDT",
-                basePrecision: "8",
-                quotePrecision: "8",
-                minPrice: "0.0001",
-                minVolume: "0.0001",
-                isOpen: "1",
-                isHot: "0",
-                isRecommend: "0",
-                isShow: "1",
-                tradeArea: "Spot",
-                sort: "1",
-                openTime: "2026-01-01T00:00:00Z",
-                precisions: ["0.0001"],
-                futureField: "must-not-be-persisted",
-              }],
-            }
-          }
-          if (request.path === "/api/spot/v1/market/last_price") {
-            return { data: "123.4500" }
-          }
-          if (request.path === "/api/spot/v1/user/account") {
-            return {
-              data: [{
-                coin: "BTC",
-                balance: "987654.321",
-                balanceLocked: "0",
-              }],
-            }
-          }
-          if (request.path === "/api/spot/v1/order/pending/list") {
-            return { data: [] }
-          }
-          throw new Error(`Unexpected Broker API diagnostic request: ${request.path}`)
-        },
-      }
-    },
+    brokerApiRestClientFactory: createBrokerApiDiagnosticRestClientFactory({
+      calls: brokerApiCalls,
+      expectedApiKey: validEnvironment.BITUNIX_API_KEY,
+    }),
   })
 
   assert.equal(report.results.find((entry) => entry.operation === "Broker API getExchangeMarkets").status, "passed", "the public Broker must normalize the exchange market catalog")

@@ -310,11 +310,16 @@ function inspectDiagnosticRow({
     row,
     requiredFields,
   })
+  const missingRequiredFields = []
+  if (missingFields.length > 0) {
+    missingRequiredFields.push({
+      index,
+      fields: missingFields,
+    })
+  }
   return {
     fields: Object.keys(row),
-    missingRequiredFields: missingFields.length > 0
-      ? [{ index, fields: missingFields }]
-      : [],
+    missingRequiredFields,
     unexpectedFieldTypes: getUnexpectedFieldTypes({
       row,
       index,
