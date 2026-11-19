@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto"
+
 import { createMigration } from "../../domain/entities/migration.js"
 import { findPendingMigrations } from "../../domain/services/migration-history.js"
 
@@ -10,6 +12,11 @@ function isThenable(value) {
 function compareMigrationVersions(...migrations) {
   const [left, right] = migrations
   return left.version - right.version
+}
+
+function createMigrationChecksum(migration) {
+  const source = Function.prototype.toString.call(migration.up)
+  return createHash("sha256").update(source).digest("hex")
 }
 
 function validateMigrations(migrations) {
@@ -36,13 +43,29 @@ function validateMigrations(migrations) {
 
       versions.add(migration.version)
       names.add(migration.name)
-      return migration
+      return Object.freeze({
+        ...migration,
+        checksum: createMigrationChecksum(migration),
+      })
     })
     .sort(compareMigrationVersions)
 }
 
+function ensureMigrationChecksumColumn(transaction) {
+  const columns = transaction.prepare("PRAGMA table_info(schema_migrations)").all()
+  const hasChecksumColumn = columns.some(({ name }) => name === "checksum")
+
+  if (!hasChecksumColumn) {
+    transaction.exec("ALTER TABLE schema_migrations ADD COLUMN checksum TEXT DEFAULT 'legacy-unverified'")
+  }
+}
+
 /**
  * Apply ordered, synchronous SQL migrations atomically.
+ *
+ * Applied migration checksums identify the source text of each synchronous
+ * migration callback. Legacy history rows retain an explicit unverified marker because
+ * their original implementation cannot be reconstructed safely.
  *
  * @param {{database: {exec: Function, transaction: Function}, migrations: Array<{version: number, name: string, up: (transaction: {exec: Function, prepare: Function}) => void}>}} options
  * @returns {Promise<number[]>} Newly applied migration versions.
@@ -54,20 +77,23 @@ export async function migrateSqliteDatabase({ database, migrations }) {
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY CHECK (version > 0),
       name TEXT NOT NULL UNIQUE,
-      applied_at TEXT NOT NULL
+      applied_at TEXT NOT NULL,
+      checksum TEXT NOT NULL
     )
   `)
 
   return database.transaction((transaction) => {
+    ensureMigrationChecksumColumn(transaction)
+
     const appliedMigrations = transaction
-      .prepare("SELECT version, name FROM schema_migrations ORDER BY version")
+      .prepare("SELECT version, name, checksum FROM schema_migrations ORDER BY version")
       .all()
     const pendingMigrations = findPendingMigrations(
       orderedMigrations,
       appliedMigrations,
     )
     const insertMigration = transaction.prepare(
-      "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+      "INSERT INTO schema_migrations (version, name, applied_at, checksum) VALUES (?, ?, ?, ?)",
     )
     const newlyApplied = []
 
@@ -82,6 +108,7 @@ export async function migrateSqliteDatabase({ database, migrations }) {
         migration.version,
         migration.name,
         new Date().toISOString(),
+        migration.checksum,
       )
       newlyApplied.push(migration.version)
     }
