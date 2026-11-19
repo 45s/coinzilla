@@ -92,6 +92,90 @@ describe("ensure direct assertions", () => {
   })
 })
 
+describe("ensure custom error messages", () => {
+  it("uses a custom message for direct and chained assertion failures while preserving error classes", () => {
+    const customMessage = "Recovery Seller STOP reset requires accounting must be verified"
+    const accounting = {}
+
+    assert.equal(
+      ensure.object({
+        value: accounting,
+        errMsg: customMessage,
+      }),
+      accounting,
+      "Successful assertions must return the original validated value even when a custom message is supplied",
+    )
+    assert.throws(
+      () => ensure.object({
+        value: [],
+        name: "accounting",
+        errMsg: customMessage,
+      }),
+      {
+        name: "TypeError",
+        message: customMessage,
+      },
+      "Object assertion must reject arrays using the caller's domain-specific message and retain TypeError",
+    )
+    assert.throws(
+      () => ensure.integerInRange({
+        value: 0,
+        min: 1,
+        max: 3,
+        name: "attempts",
+        errMsg: customMessage,
+      }),
+      {
+        name: "RangeError",
+        message: customMessage,
+      },
+      "Range assertion must use the custom message while preserving RangeError for out-of-range values",
+    )
+    assert.throws(
+      () => ensure.chain({
+        value: [],
+        name: "symbols",
+        errMsg: customMessage,
+      }).nonEmpty(),
+      {
+        name: "TypeError",
+        message: customMessage,
+      },
+      "Fluent-chain assertions must propagate the configured custom message without changing the error class",
+    )
+  })
+
+  it("rejects empty or non-string custom messages", () => {
+    for (const invalidMessage of [null, "", "   ", 42, false]) {
+      assert.throws(
+        () => ensure.object({
+          value: {},
+          errMsg: invalidMessage,
+        }),
+        {
+          name: "TypeError",
+          message: /errMsg must be a non-empty string/,
+        },
+        "Custom assertion messages must reject null, blank, and non-string values rather than silently ignoring invalid configuration",
+      )
+    }
+  })
+
+  it("retains default diagnostics when no custom message is supplied", () => {
+    assert.throws(
+      () => ensure.object({
+        value: [],
+        name: "accounting",
+      }),
+      {
+        name: "TypeError",
+        message: /accounting must be an object/,
+      },
+      "Omitting errMsg must preserve the existing field-specific diagnostic",
+    )
+  })
+})
+
 describe("ensure error semantics", () => {
   it("rejects invalid primitive types and empty strings", () => {
     expectError([ensure, "string", namedValue([12, "symbol"]), "TypeError", /symbol must be a string/, "string assertion must identify its field and type"])
