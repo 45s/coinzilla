@@ -298,35 +298,17 @@ async function reconcileTerminalOrderTransition({
   return result
 }
 
-async function reconcileTerminalOrderFills({
+async function collectCanonicalTerminalFills({
   broker,
   processedFillsByOrder,
   pause,
-  processExecutionFillTransition,
-  onTerminalOrderReconciled,
   order,
   eventFill,
+  symbol,
 } = {}) {
-  const symbol = order?.market?.symbol
-  const invalidOrder = validateTerminalOrder({ order })
-  if (invalidOrder) {
-    return invalidOrder
-  }
-  if (typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
-    return pauseWithFailure({
-      pause,
-      symbol,
-      reason: "TERMINAL_ORDER_MISSING_BROKER_ID",
-      error: new Error("Terminal order has no broker order ID for fill reconciliation"),
-      category: "OWNERSHIP_INTEGRITY",
-      stage: "TERMINAL_ORDER_ID",
-      retryable: false,
-    })
-  }
-
   const restFills = await readTerminalFillHistory({ broker, order, pause, symbol })
   if (!Array.isArray(restFills)) {
-    return restFills
+    return { result: restFills }
   }
   const streamResult = await collectStreamFills({
     order,
@@ -336,9 +318,9 @@ async function reconcileTerminalOrderFills({
     symbol,
   })
   if (streamResult?.ok !== undefined && streamResult.ok !== true) {
-    return streamResult
+    return { result: streamResult }
   }
-  const restMergeResult = await mergeRestFills({
+  const mergeResult = await mergeRestFills({
     fillsById: streamResult.fillsById,
     restFills,
     streamFills: streamResult.streamFills,
@@ -346,11 +328,22 @@ async function reconcileTerminalOrderFills({
     pause,
     symbol,
   })
-  if (restMergeResult) {
-    return restMergeResult
+  if (mergeResult) {
+    return { result: mergeResult }
   }
+  return {
+    fills: sortTerminalFills({ fillsById: streamResult.fillsById }),
+  }
+}
 
-  const fills = sortTerminalFills({ fillsById: streamResult.fillsById })
+async function applyCanonicalTerminalFills({
+  fills,
+  order,
+  pause,
+  symbol,
+  processExecutionFillTransition,
+  onTerminalOrderReconciled,
+} = {}) {
   const quantityResult = await verifyTerminalFillQuantities({ fills, order, pause, symbol })
   if (quantityResult?.ok !== undefined && quantityResult.ok !== true) {
     return quantityResult
@@ -382,6 +375,51 @@ async function reconcileTerminalOrderFills({
   })
 }
 
+async function reconcileTerminalOrderFills({
+  broker,
+  processedFillsByOrder,
+  pause,
+  processExecutionFillTransition,
+  onTerminalOrderReconciled,
+  order,
+  eventFill,
+} = {}) {
+  const symbol = order?.market?.symbol
+  const invalidOrder = validateTerminalOrder({ order })
+  if (invalidOrder) {
+    return invalidOrder
+  }
+  if (typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()) {
+    return pauseWithFailure({
+      pause,
+      symbol,
+      reason: "TERMINAL_ORDER_MISSING_BROKER_ID",
+      error: new Error("Terminal order has no broker order ID for fill reconciliation"),
+      category: "OWNERSHIP_INTEGRITY",
+      stage: "TERMINAL_ORDER_ID",
+      retryable: false,
+    })
+  }
+  const history = await collectCanonicalTerminalFills({
+    broker,
+    processedFillsByOrder,
+    pause,
+    order,
+    eventFill,
+    symbol,
+  })
+  if (history.result) {
+    return history.result
+  }
+  return applyCanonicalTerminalFills({
+    fills: history.fills,
+    order,
+    pause,
+    symbol,
+    processExecutionFillTransition,
+    onTerminalOrderReconciled,
+  })
+}
 export function makeReconcileTerminalOrderFills(options = {}) {
   return (input = {}) => reconcileTerminalOrderFills({
     ...options,

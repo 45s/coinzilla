@@ -706,9 +706,18 @@ function makeRecoverySellerVwapFills({ buyOrder } = {}) {
       clientOrderId: buyOrder.clientOrderId,
       market,
       side: "BUY",
-      price: new Money({ amount: "5", asset: quoteAsset }),
-      quantity: new Quantity({ amount: "2", asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      price: new Money({
+        amount: "5",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "2",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "10",
+        asset: quoteAsset,
+      }),
       commissions: [],
       commissionStatus: "COMPLETE",
     }),
@@ -718,9 +727,18 @@ function makeRecoverySellerVwapFills({ buyOrder } = {}) {
       clientOrderId: buyOrder.clientOrderId,
       market,
       side: "BUY",
-      price: new Money({ amount: "6", asset: quoteAsset }),
-      quantity: new Quantity({ amount: "1", asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "6", asset: quoteAsset }),
+      price: new Money({
+        amount: "6",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "1",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "6",
+        asset: quoteAsset,
+      }),
       commissions: [],
       commissionStatus: "COMPLETE",
     }),

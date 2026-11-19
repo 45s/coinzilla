@@ -434,7 +434,9 @@ test("Recovery Seller STOP state is exposed only to an authorized operator", asy
         ok: true,
         data: {
           stopState: Object.freeze({ status: "RUNNING" }),
-          record: { factType: "SAFETY_BLOCKER_RESOLVED" },
+          record: {
+            factType: "SAFETY_BLOCKER_RESOLVED",
+          },
         },
       }
     },
@@ -469,7 +471,9 @@ test("Recovery Seller STOP resolution binds operator identity and action ID and 
         ok: true,
         data: {
           stopState: Object.freeze({ status: "RUNNING" }),
-          record: { factType: "SAFETY_BLOCKER_RESOLVED" },
+          record: {
+            factType: "SAFETY_BLOCKER_RESOLVED",
+          },
         },
       }
     },
@@ -519,7 +523,10 @@ test("Recovery Seller STOP resolution rejects unauthorized actors and missing ac
     getBlockerId: () => "rs-stop-blocker-3",
     resolve: async (evidence) => {
       calls.push(evidence)
-      return { ok: true, data: {} }
+      return {
+        ok: true,
+        data: {},
+      }
     },
   }
   const { engine } = createHarness()
