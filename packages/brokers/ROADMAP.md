@@ -1495,3 +1495,12 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Preserve `outcomeUnknown` for transport failures, ambiguous HTTP failures, and malformed success envelopes after a mutation is dispatched.
 - Keep explicit non-zero exchange codes as definitive rejections and never retry mutations automatically.
 - Add REST-client tests for missing/invalid classifications, malformed response envelopes, explicit exchange rejection, and read-only/mutation outcome differences.
+
+## 2026-11-19 — Bounded Bitunix deposit and withdrawal diagnostics (#1542)
+
+**Status: Implemented in the current PR; exact-head CI verification pending.**
+
+- Added authenticated `getDeposits({ limit: 1 })` and `getWithdrawalHistory({ limit: 1 })` diagnostics through the public Broker facade.
+- Added structural schemas from fields already validated by the deposit/withdrawal adapters.
+- Added deterministic fixtures and assertions for authentication, exact one-record request bounds, schema validity, and private-value redaction.
+- Public-only diagnostics continue to skip private methods. No pagination, address lookup, withdrawal, transfer, cancellation, mutation, Harvester or canonical Fill behavior was added.

@@ -473,3 +473,7 @@ Do not convert observations into execution reports, canonical fills, or account 
 Bitunix Spot order request/response mapping lives in the Bitunix infrastructure `adapters/order-requests.js` module and has direct offline tests. It owns exact LIMIT quote-volume / MARKET base-volume request construction, order identity correlation, and the explicit signed detail/cancel request envelopes. The broker facade retains mutation opt-in, dispatch tracking, reconciliation, unknown-outcome classification, and cancellation/fill-race orchestration. This separation does not change the public Broker API or enable live mutations.
 
 For state-changing Bitunix REST calls, an HTTP-success response with an unusable API envelope (malformed payload, invalid exchange code, or missing required message) is classified as `outcomeUnknown`. An explicit non-zero exchange response code remains a definitive exchange rejection. Callers must reconcile uncertain mutations and must never retry them blindly.
+
+### Bitunix Spot deposit and withdrawal diagnostics
+
+When credentials are configured, the read-only diagnostic runner also exercises `getDeposits({ limit: 1 })` and `getWithdrawalHistory({ limit: 1 })` through the public Broker facade. These are single bounded page probes only; they do not establish complete history. Reports retain structural schema observations and never persist deposit amounts, withdrawal amounts, addresses, transaction hashes, or record values. Public-only mode skips both private reads.

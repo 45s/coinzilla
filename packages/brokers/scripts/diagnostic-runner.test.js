@@ -685,31 +685,84 @@ function createBrokerApiDiagnosticRestClientFactory({ calls, expectedApiKey, inv
   }
 }
 
+function createDepositDiagnosticResponse({ invalidSchema = false } = {}) {
+  return {
+    data: [{
+      id: "deposit-1",
+      transactionHash: "deposit-hash-must-not-be-persisted",
+      coin: "USDT",
+      network: null,
+      type: "deposit",
+      fromAddress: "deposit-source-must-not-be-persisted",
+      toAddress: "deposit-target-must-not-be-persisted",
+      amount: invalidSchema ? 9876.54321 : "9876.54321",
+      status: "1",
+      ctime: 1760000000000,
+      futureDepositField: "must-not-be-persisted",
+    }],
+  }
+}
+
+function createWithdrawalDiagnosticResponse({ invalidSchema = false } = {}) {
+  return {
+    data: [{
+      id: "withdrawal-1",
+      outBizId: "withdrawal-business-id",
+      type: "withdraw",
+      coin: "USDT",
+      amount: "123.456",
+      status: "1",
+      ctime: 1760000000001,
+      network: "ERC20",
+      transactionHash: null,
+      feeCoin: null,
+      fee: invalidSchema ? 0.1 : null,
+      memo: null,
+      address: "withdrawal-address-must-not-be-persisted",
+      toType: "1",
+      toUid: 987654321,
+      toPhoneCountryCode: "+1",
+      toPhoneNumber: "withdrawal-phone-must-not-be-persisted",
+      toEmail: "withdrawal-email-must-not-be-persisted",
+      remark: "withdrawal-remark-must-not-be-persisted",
+      futureWithdrawalField: "must-not-be-persisted",
+    }],
+  }
+}
+
+function createMarketDiagnosticResponse({ invalidSchema }) {
+  return {
+    data: [{
+      id: "1",
+      base: "BTC",
+      quote: "USDT",
+      basePrecision: "8",
+      quotePrecision: "8",
+      minPrice: "0.0001",
+      minVolume: "0.0001",
+      ...(invalidSchema ? {} : { isOpen: "1" }),
+      isHot: "0",
+      isRecommend: "0",
+      isShow: "1",
+      tradeArea: "Spot",
+      sort: "1",
+      openTime: "2026-01-01T00:00:00Z",
+      precisions: ["0.0001"],
+      futureField: "must-not-be-persisted",
+    }],
+  }
+}
+
 function createBrokerApiDiagnosticResponse({ request, invalidSchema }) {
   if (request.path === "/api/spot/v1/common/coin_pair/list") {
-    return {
-      data: [{
-        id: "1",
-        base: "BTC",
-        quote: "USDT",
-        basePrecision: "8",
-        quotePrecision: "8",
-        minPrice: "0.0001",
-        minVolume: "0.0001",
-        ...(invalidSchema ? {} : { isOpen: "1" }),
-        isHot: "0",
-        isRecommend: "0",
-        isShow: "1",
-        tradeArea: "Spot",
-        sort: "1",
-        openTime: "2026-01-01T00:00:00Z",
-        precisions: ["0.0001"],
-        futureField: "must-not-be-persisted",
-      }],
-    }
+    return createMarketDiagnosticResponse({
+      invalidSchema,
+    })
   }
   if (request.path === "/api/spot/v1/market/last_price") {
-    return { data: invalidSchema ? 123.45 : "123.4500" }
+    return {
+      data: invalidSchema ? 123.45 : "123.4500",
+    }
   }
   if (request.path === "/api/spot/v1/user/account") {
     return {
@@ -721,7 +774,9 @@ function createBrokerApiDiagnosticResponse({ request, invalidSchema }) {
     }
   }
   if (request.path === "/api/spot/v1/order/pending/list") {
-    return { data: [] }
+    return {
+      data: [],
+    }
   }
   if (request.path === "/api/spot/v1/order/history/page") {
     return {
@@ -731,7 +786,112 @@ function createBrokerApiDiagnosticResponse({ request, invalidSchema }) {
       },
     }
   }
+  if (request.path === "/api/spot/v1/deposit/page") {
+    return createDepositDiagnosticResponse({
+      invalidSchema,
+    })
+  }
+  if (request.path === "/api/spot/v1/withdraw_transfer/page") {
+    return createWithdrawalDiagnosticResponse({
+      invalidSchema,
+    })
+  }
   throw new Error(`Unexpected Broker API diagnostic request: ${request.path}`)
+}
+
+function assertBrokerApiOperationResults({ report }) {
+  const expectedOperations = [
+    "getExchangeMarkets",
+    "getPrices",
+    "getBalances",
+    "getOpenOrders",
+    "getSymbolFilters",
+    "getOrderHistory",
+    "getDeposits",
+    "getWithdrawalHistory",
+  ]
+  for (const method of expectedOperations) {
+    assert.equal(
+      report.results.find((entry) => entry.operation === `Broker API ${method}`).status,
+      "passed",
+      `the public Broker must successfully exercise ${method}`,
+    )
+  }
+}
+
+function assertBrokerApiRequestCoverage({ report, brokerApiCalls }) {
+  assert.deepEqual(brokerApiCalls.map((request) => request.path), [
+    "/api/spot/v1/common/coin_pair/list",
+    "/api/spot/v1/market/last_price",
+    "/api/spot/v1/common/coin_pair/list",
+    "/api/spot/v1/user/account",
+    "/api/spot/v1/order/pending/list",
+    "/api/spot/v1/order/history/page",
+    "/api/spot/v1/deposit/page",
+    "/api/spot/v1/withdraw_transfer/page",
+  ], "authenticated diagnostics must issue the expected public and private Broker requests in order")
+  for (const index of [0, 1, 2]) {
+    assert.equal(brokerApiCalls[index].authenticated, false, "public catalog and ticker reads must not be signed")
+  }
+  for (const index of [3, 4, 5, 6, 7]) {
+    assert.equal(brokerApiCalls[index].authenticated ?? true, true, "account and history reads must use signed authentication")
+  }
+  for (const index of [6, 7]) {
+    assert.equal(brokerApiCalls[index].method, "POST", "deposit and withdrawal history must use the documented read-only POST endpoints")
+    assert.equal(brokerApiCalls[index].stateChanging, false, "history POST requests must be explicitly classified as read-only")
+    assert.deepEqual(brokerApiCalls[index].body, {
+      limit: 1,
+    }, "each funds-history probe must request exactly one record without pagination")
+  }
+  assert.deepEqual(report.results.find((entry) => entry.operation === "Broker API getOrderHistory").request.params, {
+    symbol: "BTCUSDT",
+    page: 1,
+    limit: 10,
+  }, "the diagnostic report must retain the configured symbol and first-page order-history bounds")
+  assert.deepEqual(brokerApiCalls[5].body, {
+    symbol: "BTCUSDT",
+    page: 1,
+    pageSize: 10,
+  }, "the actual order-history request must carry its explicit symbol and bounded first page")
+  assert.deepEqual(report.results.find((entry) => entry.operation === "Broker API getSymbolFilters").request.params, {
+    symbol: "BTCUSDT",
+  }, "symbol-filter diagnostics must inspect only the configured market")
+}
+
+function assertBrokerApiSchemaAndPrivacy({ report }) {
+  const expectedSchemaPaths = [
+    "/api/spot/v1/order/history/page",
+    "/api/spot/v1/deposit/page",
+    "/api/spot/v1/withdraw_transfer/page",
+  ]
+  for (const path of expectedSchemaPaths) {
+    const observation = report.schemaObservations.find((item) => item.path === path)
+    assert.equal(observation.schemaValid, true, `${path} must satisfy its documented schema`)
+    assert.deepEqual(observation.missingRequiredFields, [], `${path} must contain every adapter-required record field`)
+    assert.deepEqual(observation.unexpectedFieldTypes, [], `${path} must preserve every documented field type, including nullable optional fields`)
+  }
+  const depositObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/deposit/page")
+  const withdrawalObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/withdraw_transfer/page")
+  assert.deepEqual(depositObservation.unexpectedFields, ["futureDepositField"], "unknown deposit fields must be reported without recording their values")
+  assert.deepEqual(withdrawalObservation.unexpectedFields, ["futureWithdrawalField"], "unknown withdrawal fields must be reported without recording their values")
+  assert.deepEqual(report.schemaObservations[0].unexpectedFields, ["futureField"], "unknown market fields must remain visible as schema drift")
+  assert.equal(report.schemaObservations[0].schemaValid, true, "unknown market fields alone must not fail a valid response")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getExchangeMarkets").status, "passed", "the market schema check must pass when only an unknown field is added")
+  assert.equal(report.schemaObservations[0].missingRequiredFields.length, 0, "the market fixture must satisfy every required field")
+  const serializedReport = JSON.stringify(report)
+  for (const privateValue of [
+    "must-not-be-persisted",
+    "deposit-1",
+    "withdrawal-1",
+    "withdrawal-business-id",
+    "987654321",
+    "987654.321",
+    "9876.54321",
+    "123.456",
+    validEnvironment.BITUNIX_API_SECRET,
+  ]) {
+    assert.equal(serializedReport.includes(privateValue), false, "diagnostic output must never persist private record values or configured credentials")
+  }
 }
 
 test("live diagnostics exercise Bitunix Spot reads through the public Broker API and report response schema drift", async () => {
@@ -751,50 +911,17 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
     }),
   })
 
-  assert.equal(report.results.find((entry) => entry.operation === "Broker API getExchangeMarkets").status, "passed", "the public Broker must normalize the exchange market catalog")
-  assert.equal(report.results.find((entry) => entry.operation === "Broker API getPrices").status, "passed", "the public Broker must normalize one-shot prices")
-  assert.equal(report.results.find((entry) => entry.operation === "Broker API getBalances").status, "passed", "the public Broker must normalize authenticated exact-decimal balances")
-  assert.equal(report.results.find((entry) => entry.operation === "Broker API getOpenOrders").status, "passed", "the public Broker must exercise the authenticated open-order read")
-  assert.equal(report.results.find((entry) => entry.operation === "Broker API getSymbolFilters").status, "passed", "the public Broker must validate raw symbol-filter metadata")
-  assert.equal(report.results.find((entry) => entry.operation === "Broker API getOrderHistory").status, "passed", "the public Broker must exercise one authenticated symbol-scoped order-history page")
-  assert.deepEqual(brokerApiCalls.map((request) => request.path), [
-    "/api/spot/v1/common/coin_pair/list",
-    "/api/spot/v1/market/last_price",
-    "/api/spot/v1/common/coin_pair/list",
-    "/api/spot/v1/user/account",
-    "/api/spot/v1/order/pending/list",
-    "/api/spot/v1/order/history/page",
-  ], "the same public Broker instance must exercise the metadata, ticker, balance, open-order and history reads")
-  assert.equal(brokerApiCalls[0].authenticated, false, "the market catalog must use unsigned public REST")
-  assert.equal(brokerApiCalls[1].authenticated, false, "the public ticker must use unsigned REST")
-  assert.equal(brokerApiCalls[2].authenticated, false, "symbol-filter metadata must use unsigned public REST")
-  assert.equal(brokerApiCalls[3].authenticated ?? true, true, "account balances must use authenticated REST")
-  assert.equal(brokerApiCalls[4].authenticated ?? true, true, "open orders must use authenticated REST")
-  assert.equal(brokerApiCalls[5].authenticated ?? true, true, "order history must use authenticated REST")
-  assert.deepEqual(report.results.find((entry) => entry.operation === "Broker API getOrderHistory").request.params, {
-    symbol: "BTCUSDT",
-    page: 1,
-    limit: 10,
-  }, "order history diagnostics must remain symbol-scoped and inspect only the first bounded page")
-  assert.deepEqual(brokerApiCalls[5].body, {
-    symbol: "BTCUSDT",
-    page: 1,
-    pageSize: 10,
-  }, "the actual exchange request must carry the explicit symbol and bounded first-page parameters")
-  assert.deepEqual(report.results.find((entry) => entry.operation === "Broker API getSymbolFilters").request.params, {
-    symbol: "BTCUSDT",
-  }, "symbol-filter diagnostics must inspect only the configured market")
-  assert.equal(report.schemaObservations.at(-1).path, "/api/spot/v1/order/history/page", "the report must include order-history response-shape observations")
-  assert.equal(report.schemaObservations.at(-1).schemaValid, true, "the order-history envelope must satisfy its documented page schema")
-  assert.deepEqual(report.schemaObservations[0].unexpectedFields, ["futureField"], "unknown exchange fields must be reported without failing otherwise valid normalization")
-  assert.equal(report.schemaObservations[0].schemaValid, true, "unknown fields alone must not fail the expected response schema")
-  assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getExchangeMarkets").status, "passed", "unknown additions must not fail the public Broker response schema check")
-  assert.equal(report.schemaObservations[0].missingRequiredFields.length, 0, "the valid market fixture must satisfy required fields")
-  assert.equal(JSON.stringify(report).includes("must-not-be-persisted"), false, "unknown response field values must never be persisted")
-  assert.equal(JSON.stringify(report).includes("987654.321"), false, "private financial values must never be persisted")
-  assert.equal(JSON.stringify(report).includes(validEnvironment.BITUNIX_API_SECRET), false, "diagnostic reports must never persist the API secret")
+  assertBrokerApiOperationResults({
+    report,
+  })
+  assertBrokerApiRequestCoverage({
+    report,
+    brokerApiCalls,
+  })
+  assertBrokerApiSchemaAndPrivacy({
+    report,
+  })
 })
-
 
 test("Broker diagnostics fail schema checks for missing required fields and unexpected scalar types", async () => {
   const brokerApiCalls = []
@@ -824,6 +951,22 @@ test("Broker diagnostics fail schema checks for missing required fields and unex
   assert.equal(report.schemaObservations[1].schemaValid, false, "unexpected scalar types must fail schema validation")
   assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getExchangeMarkets").status, "failed", "the report must surface missing required fields as a failed check")
   assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getPrices").status, "failed", "the report must surface unexpected response types as a failed check")
+  const depositObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/deposit/page")
+  const withdrawalObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/withdraw_transfer/page")
+  assert.deepEqual(depositObservation.unexpectedFieldTypes, [{
+    index: 0,
+    field: "amount",
+    expected: ["string"],
+    actual: "number",
+  }], "deposit amount must remain a decimal string at the diagnostic response boundary")
+  assert.deepEqual(withdrawalObservation.unexpectedFieldTypes, [{
+    index: 0,
+    field: "fee",
+    expected: ["null", "string"],
+    actual: "number",
+  }], "withdrawal fee must be a decimal string or null, never a JSON number")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getDeposits").status, "failed", "malformed deposit records must fail the public Broker operation")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getWithdrawalHistory").status, "failed", "malformed withdrawal records must fail the public Broker operation")
 })
 
 test("public-only Broker diagnostics never send the internal placeholder credential", async () => {
@@ -869,4 +1012,6 @@ test("public-only Broker diagnostics never send the internal placeholder credent
     "/api/spot/v1/common/coin_pair/list",
   ], "public-only mode must run public market metadata and skip all private Broker methods")
   assert.equal(JSON.stringify(report).includes("READ_ONLY_PUBLIC_DIAGNOSTIC"), false, "the internal placeholder credential must never be persisted")
+  assert.equal(report.results.some((entry) => entry.operation === "Broker API getDeposits"), false, "public-only mode must not invoke the private deposit-history Broker method")
+  assert.equal(report.results.some((entry) => entry.operation === "Broker API getWithdrawalHistory"), false, "public-only mode must not invoke the private withdrawal-history Broker method")
 })
