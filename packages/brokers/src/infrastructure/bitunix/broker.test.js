@@ -2076,7 +2076,7 @@ test("Bitunix Spot broker passes tax data type filters and explicit pagination u
 
   const result = await broker.getTaxFilingHistory({
     startTime: "2024-01-01T00:00:00Z",
-    endTime: "2024-12-31T23:59:59Z",
+    endTime: "2024-12-31T00:00:00Z",
     dataTypeCodes: ["BUY_ORDER", "FUNDING_COST"],
     page: 2,
     pageSize: 50,
