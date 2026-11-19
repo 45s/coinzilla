@@ -48,14 +48,8 @@ function defineValidatedStateProperty({
   })
 }
 
-function createAccountTradingState() {
-  // CG and RS accounting share one account-level serialization queue and canonical state.
-  let portfolio = new Portfolio()
-  let recoveryLedgers = new Map()
-  let orderRegistry = OrderRegistry.empty()
-  let legacyPositions = new Map()
-  let updateQueue = Promise.resolve()
-  const state = {
+function createAccountStateCollections() {
+  return {
     journalFills: [],
     pausedMarkets: new Set(),
     durablePausedMarkets: new Set(),
@@ -68,6 +62,16 @@ function createAccountTradingState() {
     trailingBuySymbols: new Set(),
     requiresExchangeReconciliation: false,
   }
+}
+
+function createAccountTradingState() {
+  // CG and RS accounting share one account-level serialization queue and canonical state.
+  let portfolio = new Portfolio()
+  let recoveryLedgers = new Map()
+  let orderRegistry = OrderRegistry.empty()
+  let legacyPositions = new Map()
+  let updateQueue = Promise.resolve()
+  const state = createAccountStateCollections()
   defineValidatedStateProperty({
     state,
     property: "portfolio",
