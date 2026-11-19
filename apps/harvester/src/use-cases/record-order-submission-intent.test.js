@@ -237,3 +237,22 @@ test("requires complete RS ownership for a Recovery Seller submission intent", a
   assert.match(result.errors[0].message, /ownership|cycleId|positionId/i)
   assert.equal(appendCalls, 0)
 })
+
+test("persists purpose-free Coin Grabber strategy and position ownership", async () => {
+  const store = createMemoryOperationalStateStore()
+  const result = await recordOrderSubmissionIntent({
+    operationalStateStore: store,
+    order,
+    purpose: null,
+    ownership: {
+      strategyId: "COIN_GRABBER",
+      positionId: "cg-position-1",
+      purpose: null,
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(store.records[0].data.strategyId, "COIN_GRABBER")
+  assert.equal(store.records[0].data.positionId, "cg-position-1")
+  assert.equal(store.records[0].data.cycleId, undefined)
+})

@@ -117,6 +117,13 @@ test("accepts canonical order-submission intents and recovery-sell purpose", () 
     })),
     "A recovery SELL intent must preserve its complete strategy, position and cycle ownership.",
   )
+  assert.doesNotThrow(
+    () => validateOrderSubmissionIntentFact(makeSubmissionIntent({
+      strategyId: "COIN_GRABBER",
+      positionId: "cg-position-1",
+    })),
+    "Purpose-free Coin Grabber intents may preserve their strategy and position ownership.",
+  )
 })
 
 test("rejects malformed order-submission intent identity, fields, classification, and amounts", () => {
@@ -186,6 +193,13 @@ test("accepts acknowledged and unacknowledged order-submission outcomes", () => 
       cycleId: "rs-cycle-1",
     })),
     "A Recovery Seller outcome must preserve complete strategy, position and cycle ownership.",
+  )
+  assert.doesNotThrow(
+    () => validateOrderSubmissionOutcomeFact(makeSubmissionOutcome({
+      strategyId: "COIN_GRABBER",
+      positionId: "cg-position-1",
+    })),
+    "Purpose-free Coin Grabber outcomes may preserve their strategy and position ownership.",
   )
 })
 
