@@ -109,6 +109,31 @@ function createFakeAccountMethods({ websocketCalls }) {
   }
 }
 
+function createFakeOrderMethods({ websocketCalls }) {
+  return {
+    async getOpenOrders(args) {
+      websocketCalls.push({
+        method: "order.pending.list",
+        args,
+      })
+      return [{
+        orderId: "private-order-id",
+        symbol: "BTCUSDT",
+      }]
+    },
+    async getOrderHistory(args) {
+      websocketCalls.push({
+        method: "order.history.page",
+        args,
+      })
+      return [{
+        orderId: "private-history-order-id",
+        symbol: "BTCUSDT",
+      }]
+    },
+  }
+}
+
 function createFakeWebSocketClientFactory({ websocketCalls, options, clientCreations = [] }) {
   return (configuration) => {
     clientCreations.push(configuration)
@@ -132,6 +157,7 @@ function createFakeWebSocketClientFactory({ websocketCalls, options, clientCreat
         options,
       }),
       ...createFakeAccountMethods({ websocketCalls }),
+      ...createFakeOrderMethods({ websocketCalls }),
     }
   }
 }
@@ -464,6 +490,11 @@ function assertPublicOnlyReport(report) {
     "authenticated WebSocket connection must be explicitly skipped without credentials",
   )
   assert.equal(
+    report.results.find((entry) => entry.operation === "order.pending.list").status,
+    "skipped",
+    "private WebSocket order queries must be explicitly skipped without credentials",
+  )
+  assert.equal(
     report.results.filter((entry) => entry.operation.startsWith("user.")).every((entry) => entry.status === "skipped"),
     true,
     "all private WebSocket RPC operations must be individually marked skipped in public-only mode",
@@ -531,6 +562,34 @@ test("partial Bitunix credentials fall back to public-only diagnostics without e
   assert.equal(JSON.stringify(report).includes("partial-api-key"), false, "a partial API key must never appear in the public-only diagnostic report")
 })
 
+
+test("diagnostics query and sanitize private WebSocket open orders and order history", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+  })
+  const report = await runBitunixDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+  const openOrdersCall = websocketCalls.find((entry) => entry?.method === "order.pending.list")
+  const orderHistoryCall = websocketCalls.find((entry) => entry?.method === "order.history.page")
+
+  assert.deepEqual(openOrdersCall.args, {
+    symbol: "BTCUSDT",
+  }, "private open-order RPC must be scoped to the configured symbol")
+  assert.deepEqual(orderHistoryCall.args, {
+    symbol: "BTCUSDT",
+    page: 1,
+    pageSize: 1,
+  }, "private order-history RPC must be bounded to one small page")
+  assert.equal(report.results.find((entry) => entry.operation === "order.pending.list").response.type, "array")
+  assert.equal(report.results.find((entry) => entry.operation === "order.history.page").response.type, "array")
+  assert.equal(JSON.stringify(report).includes("private-order-id"), false, "private order IDs must not be persisted in diagnostic reports")
+  assert.equal(JSON.stringify(report).includes("private-history-order-id"), false, "private order-history IDs must not be persisted in diagnostic reports")
+})
 
 test("diagnostics reconnect the same authenticated client and do not claim subscription restoration", async () => {
   const restCalls = []
