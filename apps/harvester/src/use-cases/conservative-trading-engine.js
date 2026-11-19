@@ -1618,9 +1618,8 @@ function bindSharedAccountOrderRegistry({ state, sharedAccountState } = {}) {
   }
   if (!sharedAccountState ||
       typeof sharedAccountState !== "object" ||
-      !(sharedAccountState.orderRegistry instanceof OrderRegistry) ||
-      typeof sharedAccountState.runTransition !== "function") {
-    throw new TypeError("sharedAccountState must expose an OrderRegistry and account-level transition queue")
+      !(sharedAccountState.orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("sharedAccountState must expose an OrderRegistry")
   }
   if (state.registry !== sharedAccountState.orderRegistry) {
     throw new TypeError("initialState.orderRegistry must match sharedAccountState.orderRegistry")
