@@ -2,25 +2,15 @@ import { addDecimal, compareDecimal, maxDecimal, subtractDecimal, toResult } fro
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { failureResult } from "./recovery-failure.js"
 
-function shutdownRecoveryError({ code, message, reason, cause } = {}) {
-  const error = new Error(message, cause ? { cause } : undefined)
-  error.code = code
-  if (reason) {
-    error.reason = reason
-  }
-  return error
+function shutdownRecoveryError({ code, message } = {}) {
+  return Object.assign(new Error(message), { code })
 }
 
 function getShutdownRecoveryMetadata({ dependencies, symbol } = {}) {
   try {
-    return {
-      metadata: dependencies.getCurrentMarketMetadata({ symbol }),
-    }
-  } catch (error) {
-    return {
-      metadata: undefined,
-      error,
-    }
+    return dependencies.getCurrentMarketMetadata({ symbol })
+  } catch {
+    return undefined
   }
 }
 
@@ -40,7 +30,6 @@ function inventoryWithoutMarketMetadata({
   symbol,
   portfolio,
   metadata,
-  metadataError,
   positionBySymbol,
   activeSells,
 } = {}) {
@@ -49,7 +38,6 @@ function inventoryWithoutMarketMetadata({
     symbol,
     portfolio,
     metadata,
-    metadataError,
     position: positionBySymbol,
     activeSells,
     errorReason: positionBySymbol || activeSells.length > 0 || marketEnabled
@@ -152,7 +140,7 @@ function buildShutdownRecoveryInventory({
 }
 
 function getShutdownRecoveryInventory({ dependencies, symbol } = {}) {
-  const { metadata, error: metadataError } = getShutdownRecoveryMetadata({ dependencies,
+  const metadata = getShutdownRecoveryMetadata({ dependencies,
     symbol })
   const portfolio = dependencies.getPortfolio()
   const { activeSellsForSymbol, positionBySymbol } = getShutdownRecoveryOrders({ dependencies,
@@ -164,7 +152,6 @@ function getShutdownRecoveryInventory({ dependencies, symbol } = {}) {
       symbol,
       portfolio,
       metadata,
-      metadataError,
       positionBySymbol,
       activeSells: activeSellsForSymbol,
     })
@@ -281,7 +268,6 @@ function assessShutdownRecoverySellCoverage({ dependencies, symbol } = {}) {
       symbol,
       reason: inventory.errorReason,
       activeSellCount: inventory.activeSells.length,
-      error: inventory.metadataError,
     }
   }
   if (inventory.noRecoveryRequired) {
@@ -497,8 +483,6 @@ async function reconcileRecoverySellForShutdownSymbol({ dependencies, symbol } =
       error: shutdownRecoveryError({
         code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
         message: `Shutdown recovery SELL cannot be safely evaluated for ${symbol}: ${assessment.reason}`,
-        reason: assessment.reason,
-        cause: assessment.error,
       }),
     }
   }
@@ -525,8 +509,6 @@ async function reconcileRecoverySellForShutdownSymbol({ dependencies, symbol } =
       error: shutdownRecoveryError({
         code: "SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE",
         message: `Shutdown recovery SELL coverage remains incomplete for ${symbol}: ${assessment.reason}`,
-        reason: assessment.reason,
-        cause: assessment.error,
       }),
     }
   }
