@@ -138,6 +138,27 @@ test("evaluates RS-owned symbols through the shared transition when CG has no ro
   assert.equal(result.data?.submitted, true)
 })
 
+test("fails closed when an RS route has no production transition evaluator", async () => {
+  const dependencies = createDependencies()
+  dependencies.recoverySellerPairs = {
+    RSUSDT: { enabled: true },
+  }
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  const result = await evaluate({ symbol: "RSUSDT" })
+
+  assert.equal(
+    result.ok,
+    false,
+    "A configured RS market must not be reported as successfully skipped when production has no RS evaluator",
+  )
+  assert.match(
+    result.errors?.[0]?.message ?? result.error?.message ?? "",
+    /Recovery Seller execution route is configured but no production transition evaluator is registered/,
+    "The missing RS production evaluator must be identified as the reason the configured route is blocked",
+  )
+})
+
 test("does not evaluate RS while the shared engine performs a preflight", async () => {
   const dependencies = createDependencies()
   let recoverySellerCalls = 0
