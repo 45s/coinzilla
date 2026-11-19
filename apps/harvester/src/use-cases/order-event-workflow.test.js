@@ -689,3 +689,42 @@ test("uses the registry-enriched provider identity when an exchange update omits
     calls.accounting[0].accountId,
   ], ["binanceTestnet", "binance", "binance-primary"])
 })
+
+
+test("routes Recovery Seller-owned fills to RS accounting without mutating Conservative accounting", async () => {
+  const recoverySellerOrder = makeOrder({
+    clientOrderId: "h-dogeusdt-rs-buy-1",
+  })
+  const recoverySellerFill = makeFill({
+    clientOrderId: recoverySellerOrder.clientOrderId,
+  })
+  const ownership = {
+    clientOrderId: recoverySellerOrder.clientOrderId,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "doge-recovery-seller-position",
+    purpose: "RECOVERY_BUY",
+    cycleId: "doge-recovery-seller-cycle-1",
+  }
+  const registry = createLifecycleRegistry({
+    currentOrder: recoverySellerOrder,
+    ownership,
+  })
+  const recoverySellerAccountingCalls = []
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    updateRecoverySellerAccounting: async ({ fill }) => {
+      recoverySellerAccountingCalls.push(fill)
+      return toResult({ data: { applied: true, duplicate: false } })
+    },
+  })
+
+  const result = await workflow.processExecutionFillTransition({
+    order: recoverySellerOrder,
+    fill: recoverySellerFill,
+  })
+
+  assert.equal(result.ok, true, "A valid RS-owned canonical fill must be applied through the RS accounting workflow.")
+  assert.deepEqual(recoverySellerAccountingCalls, [recoverySellerFill], "The RS workflow must receive the canonical fill exactly once.")
+  assert.deepEqual(calls.accounting, [], "An RS fill must never mutate Conservative Portfolio/RecoveryLedger accounting.")
+  assert.deepEqual(calls.buyFills, [], "RS BUY fills must not enter Conservative BUY execution totals.")
+})
