@@ -463,6 +463,8 @@ The exact-head package test exposed that an RS order intent with strategy and Po
 
 ## RS-4 durable SELL intent-before-reservation
 
-The RS order submitter now commits the exact durable `ORDER_SUBMISSION_INTENT` before reserving the sole SELL for a cycle. It then registers the pending order and enters the shared broker executor. The executor reuses the same committed intent write, avoiding a duplicate operational fact. If the intent write fails, cycle reservation and broker submission do not occur; the submitter latches STOP.
+The RS order submitter commits the exact durable `ORDER_SUBMISSION_INTENT` before reserving the sole SELL for a cycle. It then registers the pending order and enters the shared broker executor. The executor reuses the same committed intent write, avoiding a duplicate operational fact. If the intent write fails, cycle reservation and broker submission do not occur; the submitter latches STOP.
 
-This is an offline-tested submitter capability, not production evaluator composition. Terminal mixed-SELL reconciliation, account-wide RS/CG budget integration, operator reset, and deterministic restart restoration remain outstanding. RS stays disabled and non-executable.
+RS SELL ownership now carries the exact recovery/legacy quantity split from the domain SELL plan through the canonical OrderRegistry record. The same allocation is persisted in submission intent and outcome facts; validation requires canonical non-negative quantities whose sum equals the canonical order quantity. STOP callbacks mark a cycle unresolved only when the callback order identity matches the cycle's reserved SELL identity.
+
+This remains an offline-tested submitter capability, not production evaluator composition. Terminal mixed-SELL reconciliation against canonical terminal broker events, account-wide RS/CG budget integration, durable cycle/fill/reservation replay, operator reset, and deterministic runtime restart restoration remain outstanding. RS stays disabled and non-executable.
