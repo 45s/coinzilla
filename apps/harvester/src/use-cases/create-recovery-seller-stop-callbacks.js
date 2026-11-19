@@ -10,10 +10,13 @@ function hasRecoverySellerSellOwnership({ order, ownership } = {}) {
 
 function matchesReservedSellIdentity({ cycleState, ownership, order } = {}) {
   const reservedIdentity = cycleState?.sellOrderIdentity
+  const matchesClientIdentity = reservedIdentity?.clientOrderId === order.clientOrderId
+  const brokerIdentityIsCompatible = reservedIdentity?.brokerOrderId === undefined ||
+    order.brokerOrderId === undefined ||
+    reservedIdentity.brokerOrderId === order.brokerOrderId
   return cycleState?.cycleId === ownership.cycleId &&
-    reservedIdentity?.clientOrderId === order.clientOrderId &&
-    (reservedIdentity.brokerOrderId === undefined || order.brokerOrderId === undefined ||
-      reservedIdentity.brokerOrderId === order.brokerOrderId)
+    matchesClientIdentity &&
+    brokerIdentityIsCompatible
 }
 
 function markSellCycleUnknown({ cycleCoordinator, input } = {}) {
