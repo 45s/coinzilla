@@ -4,6 +4,7 @@ import { createAccountRuntimeRegistry } from "./account-runtime-registry.js"
 import { createPortfolioWorkflow } from "../../use-cases/create-portfolio-workflow.js"
 import { createRecoverySellerAccountingWorkflow } from "../../use-cases/create-recovery-seller-accounting-workflow.js"
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
+import { OrderRegistry } from "../../domain/orders/order-registry.js"
 
 const providers = [
   {
@@ -123,6 +124,13 @@ test("shares one account Portfolio, OrderRegistry, and serialized queue across C
   assert.throws(() => {
     accountRuntime.state.recoveryLedgers = []
   }, /must be a Map/)
+
+  const nextOrderRegistry = OrderRegistry.empty()
+  accountRuntime.state.orderRegistry = nextOrderRegistry
+  assert.equal(recoverySeller.getOrderRegistry(), nextOrderRegistry)
+  assert.throws(() => {
+    accountRuntime.state.orderRegistry = {}
+  }, /must be an OrderRegistry/)
 
   const queuedTransition = Promise.resolve()
   accountRuntime.state.updateQueue = queuedTransition
