@@ -26,24 +26,52 @@ function validatePurposeFreeOwnership({ ownership } = {}) {
   }
 }
 
-function validatePurposeOwnership({ purpose, ownership, side } = {}) {
-  const isSupportedStrategy = ["CG_coinGrabber", "RS_recoverySeller"].includes(ownership?.strategyId)
-  const hasCycleId = hasNonEmptyValue(ownership?.cycleId)
-  if (!isSupportedStrategy ||
+function validateStrategyPositionOwnership({ purpose, ownership } = {}) {
+  const supportedStrategies = ["CG_coinGrabber", "RS_recoverySeller"]
+  if (!supportedStrategies.includes(ownership?.strategyId) ||
       ownership.purpose !== purpose ||
       !hasNonEmptyValue(ownership.positionId)) {
     throw new TypeError("Strategy order submission requires complete strategy and position ownership")
   }
-  if (ownership.strategyId === "RS_recoverySeller" && !hasCycleId) {
+}
+
+function validateRecoverySellerCycleOwnership({ ownership } = {}) {
+  if (ownership.strategyId === "RS_recoverySeller" &&
+      !hasNonEmptyValue(ownership.cycleId)) {
     throw new TypeError("Recovery Seller order submission requires its immutable cycleId")
   }
+}
+
+function validateRecoveryBuyOwnership({ purpose, ownership } = {}) {
   if (purpose === "RECOVERY_BUY" && ownership.strategyId !== "RS_recoverySeller") {
     throw new TypeError("RECOVERY_BUY ownership must belong to Recovery Seller")
   }
-  if ((purpose === "RECOVERY_BUY" && side !== "BUY") ||
-      (purpose === "RECOVERY_SELL" && side !== "SELL")) {
+}
+
+function validateRecoveryPurposeSide({ purpose, side } = {}) {
+  const expectedSide = purpose === "RECOVERY_BUY" ? "BUY" : "SELL"
+  if (side !== expectedSide) {
     throw new TypeError("Recovery order purpose must match the canonical order side")
   }
+}
+
+function validatePurposeOwnership({ purpose, ownership, side } = {}) {
+  const hasCycleId = hasNonEmptyValue(ownership?.cycleId)
+  validateStrategyPositionOwnership({
+    purpose,
+    ownership,
+  })
+  validateRecoverySellerCycleOwnership({
+    ownership,
+  })
+  validateRecoveryBuyOwnership({
+    purpose,
+    ownership,
+  })
+  validateRecoveryPurposeSide({
+    purpose,
+    side,
+  })
   return {
     strategyId: ownership.strategyId,
     positionId: ownership.positionId,
