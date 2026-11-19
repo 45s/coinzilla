@@ -14,9 +14,12 @@ async function request({ path,
     apiSecret: authenticated ? "api-secret" : undefined,
     baseUrl: "https://fapi.bitunix.com",
     language,
-    fetchFn: async (url, options) => {
-      capturedRequest = { url,
-        options }
+    fetchFn: async (...args) => {
+      const [url, options] = args
+      capturedRequest = {
+        url,
+        options,
+      }
       return new Response(body, {
         status: 200,
         headers: {
