@@ -53,7 +53,10 @@ function requireUid({ value }) {
     }
   }
   if (uid === undefined) {
-    throw new RangeError("Bitunix Spot toUid must be a positive safe integer; use phone/email routing for larger int64 UIDs")
+    throw new RangeError(
+      "Bitunix Spot toUid must be a positive safe integer; " +
+      "use phone/email routing for larger int64 UIDs",
+    )
   }
   return uid
 }
