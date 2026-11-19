@@ -23,6 +23,7 @@ function printResult({ result }) {
   const lines = [
     "Bitunix Spot health check completed.",
     `Checks: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
+    `Overall: ${result.exitCode === 0 ? "HEALTHY" : "FAILED"}`,
     `Report branch: ${result.branch}`,
     `Report commit: ${result.commitSha ?? "not created"}`,
     `Published report: ${result.reportPath}`,
