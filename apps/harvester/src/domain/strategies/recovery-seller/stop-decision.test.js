@@ -158,50 +158,18 @@ test("rejects attempts to latch a non-STOP decision or an invalid state", () => 
 })
 
 
-test("clears STOP only after an explicit operator action and complete reconciliation/accounting evidence", () => {
-  const stoppedState = latchRecoverySellerStop({
+function createStoppedState() {
+  return latchRecoverySellerStop({
     state: createRecoverySellerStopState(),
     decision: createRecoverySellerStopDecision({
       explanation: "The exchange order outcome required operator review",
     }),
   })
-  const resolved = resolveRecoverySellerStopState({
-    state: stoppedState,
-    operatorId: "operator-45s",
-    actionId: "rs-stop-reset-1",
-    causeFixed: true,
-    reconciliation: {
-      ordersReconciled: true,
-      fillsReconciled: true,
-      balancesReconciled: true,
-      unresolvedOrderCount: 0,
-      unresolvedFillCount: 0,
-      balanceDiscrepancyCount: 0,
-    },
-    accounting: {
-      verified: true,
-      portfolioConsistent: true,
-      legacyConsistent: true,
-      reservationsConsistent: true,
-    },
-  })
+}
 
-  assert.deepEqual(resolved, {
-    status: "CLEAR",
-    decision: null,
-  }, "Only an explicit, evidence-backed operator resolution may return RS to CLEAR.")
-  assert.equal(Object.isFrozen(resolved), true, "The resolved STOP state must remain immutable.")
-})
-
-test("refuses STOP reset when the cause, orders, fills, balances, or accounting remain unresolved", () => {
-  const stoppedState = latchRecoverySellerStop({
-    state: createRecoverySellerStopState(),
-    decision: createRecoverySellerStopDecision({
-      explanation: "The order fill set is incomplete",
-    }),
-  })
-  const valid = {
-    state: stoppedState,
+function createValidStopResetInput() {
+  return {
+    state: createStoppedState(),
     operatorId: "operator-45s",
     actionId: "rs-stop-reset-2",
     causeFixed: true,
@@ -220,14 +188,29 @@ test("refuses STOP reset when the cause, orders, fills, balances, or accounting 
       reservationsConsistent: true,
     },
   }
+}
 
+test("clears STOP only after explicit operator action and complete reconciliation/accounting evidence", () => {
+  const resolved = resolveRecoverySellerStopState(createValidStopResetInput())
+  assert.deepEqual(resolved, {
+    status: "CLEAR",
+    decision: null,
+  }, "Only an explicit, evidence-backed operator resolution may return RS to CLEAR.")
+  assert.equal(Object.isFrozen(resolved), true, "The resolved STOP state must remain immutable.")
+})
+
+test("refuses STOP reset until the underlying cause is fixed", () => {
   assert.throws(
     () => resolveRecoverySellerStopState({
-      ...valid,
+      ...createValidStopResetInput(),
       causeFixed: false,
     }),
     /underlying cause must be fixed/i,
   )
+})
+
+test("refuses STOP reset while orders or fills remain unresolved", () => {
+  const valid = createValidStopResetInput()
   assert.throws(
     () => resolveRecoverySellerStopState({
       ...valid,
@@ -248,6 +231,10 @@ test("refuses STOP reset when the cause, orders, fills, balances, or accounting 
     }),
     /unresolved fills/i,
   )
+})
+
+test("refuses STOP reset while balances or accounting remain inconsistent", () => {
+  const valid = createValidStopResetInput()
   assert.throws(
     () => resolveRecoverySellerStopState({
       ...valid,
@@ -269,7 +256,6 @@ test("refuses STOP reset when the cause, orders, fills, balances, or accounting 
     /accounting must be verified/i,
   )
 })
-
 test("does not clear a STOP state that is already clear or malformed", () => {
   assert.throws(
     () => resolveRecoverySellerStopState({
