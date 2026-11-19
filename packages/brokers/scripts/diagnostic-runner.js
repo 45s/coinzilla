@@ -12,7 +12,10 @@ import {
 const DIAGNOSTIC_CONFIG = Object.freeze({
   confirmLiveReads: true,
   symbol: "BTCUSDT",
-  klineInterval: "1min",
+  // REST Spot uses numeric minute intervals; WebSocket RPC documents the "1min" form and base-coin symbol.
+  klineInterval: "1",
+  websocketKlineSymbol: "BTC",
+  websocketKlineInterval: "1min",
   timeoutMs: 10_000,
   includePublicPayloads: false,
 })
@@ -115,9 +118,9 @@ const WEBSOCKET_OPERATIONS = Object.freeze([
     operation: "market.kline",
     method: "getKline",
     privateResponse: false,
-    getArguments: ({ symbol, klineInterval }) => ({
-      symbol,
-      interval: klineInterval,
+    getArguments: ({ websocketKlineSymbol, websocketKlineInterval }) => ({
+      symbol: websocketKlineSymbol,
+      interval: websocketKlineInterval,
     }),
   },
   {
@@ -888,7 +891,8 @@ async function executeWebSocketOperations({
   const context = {
     symbol,
     depthPrecision,
-    klineInterval: DIAGNOSTIC_CONFIG.klineInterval,
+    websocketKlineSymbol: DIAGNOSTIC_CONFIG.websocketKlineSymbol,
+    websocketKlineInterval: DIAGNOSTIC_CONFIG.websocketKlineInterval,
   }
   for (const definition of WEBSOCKET_OPERATIONS) {
     await runWebSocketOperation({
