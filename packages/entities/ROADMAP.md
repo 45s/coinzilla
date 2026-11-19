@@ -144,10 +144,10 @@ An item is complete only after its focused tests pass, its PR is merged into `de
 
 ## Completed — coordinated Utils validation API removal ([#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
 
-- Migrates `Coin` and `Order` constructor checks away from the removed `Validator` facade.
-- Preserves accepted values and existing domain-specific `Error` classes/messages; no financial representation or entity contract changes.
-- Regression tests cover the ticker, quantity, price, order ID and optional client-order ID failure contracts.
-- **Verification:** merged in PR #1509 (`ab77568acfcd286560270aaac325bf65301efb0c`); Entities tests passed 145/145 and full workspace checks passed.
+- The legacy `Validator` facade was removed and `Coin`/`Order` no longer import it.
+- **Correction:** PR #1509 replaced those calls with handwritten checks rather than using the shared `ensure` API, contrary to the shared-utilities policy. The required consumer migration is tracked in [#1511](https://github.com/45s/coinzilla/issues/1511) and [PR #1512](https://github.com/45s/coinzilla/pull/1512).
+- The correction uses `ensure` for generic checks while keeping domain constraints in Entities and preserving accepted values and existing domain `Error` classes/messages.
+- **API removal verification:** PR #1509 merged as `ab77568acfcd286560270aaac325bf65301efb0c`; its test/CI claims remain historical. Follow-up verification is recorded in #1511/#1512.
 
 ## Shared utility reuse
 
