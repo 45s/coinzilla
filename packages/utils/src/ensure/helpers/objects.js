@@ -2,15 +2,16 @@ import { typeError } from "./diagnostics.js"
 
 /**
  * Validate a non-null, non-array object.
- * @param {{ value: unknown, name: string }} options
+ * @param {{ value: unknown, name: string, errMsg?: string }} options
  * @returns {object}
  */
-export function requireObject({ value, name }) {
+export function requireObject({ value, name, errMsg }) {
   if (value === null || typeof value !== "object") {
     throw typeError({
       name,
       expectation: "an object",
       value,
+      errMsg,
     })
   }
   let isArray
@@ -24,6 +25,7 @@ export function requireObject({ value, name }) {
       name,
       expectation: "an object",
       value,
+      errMsg,
     })
   }
   return value
@@ -31,13 +33,14 @@ export function requireObject({ value, name }) {
 
 /**
  * Validate a plain object with Object.prototype or null prototype.
- * @param {{ value: unknown, name: string }} options
+ * @param {{ value: unknown, name: string, errMsg?: string }} options
  * @returns {object}
  */
-export function requirePlainObject({ value, name }) {
+export function requirePlainObject({ value, name, errMsg }) {
   requireObject({
     value,
     name,
+    errMsg,
   })
   let prototype
   try {
@@ -47,6 +50,7 @@ export function requirePlainObject({ value, name }) {
       name,
       expectation: "a plain object",
       value,
+      errMsg,
     })
   }
   if (prototype !== Object.prototype && prototype !== null) {
@@ -54,6 +58,7 @@ export function requirePlainObject({ value, name }) {
       name,
       expectation: "a plain object",
       value,
+      errMsg,
     })
   }
   return value

@@ -59,9 +59,24 @@ export function resolveName({ name }) {
 }
 
 /**
+ * Resolve an optional custom assertion message.
+ * @param {{ errMsg?: unknown }} options
+ * @returns {string|undefined}
+ */
+export function resolveErrorMessage({ errMsg }) {
+  if (errMsg === undefined) {
+    return undefined
+  }
+  if (typeof errMsg !== "string" || errMsg.trim() === "") {
+    throw new TypeError("errMsg must be a non-empty string")
+  }
+  return errMsg
+}
+
+/**
  * Read value and diagnostic name from a one-argument options object.
  * @param {{ options: unknown }} options
- * @returns {{ value: unknown, name: string, record: object }}
+ * @returns {{ value: unknown, name: string, errMsg?: string, record: object }}
  */
 export function readValueOptions({ options }) {
   const record = readOptions({ options })
@@ -73,9 +88,14 @@ export function readValueOptions({ options }) {
     record,
     key: "name",
   })
+  const errMsg = readOption({
+    record,
+    key: "errMsg",
+  })
   return {
     value,
     name: resolveName({ name }),
+    errMsg: resolveErrorMessage({ errMsg }),
     record,
   }
 }

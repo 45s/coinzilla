@@ -31,4 +31,4 @@ jobs:
           node-version: 24.x
 
       - name: Run packages/utils tests
-        run: node --test packages/utils/src/*.test.js
+        run: find packages/utils/src -type f -name '*.test.js' -print0 | xargs -0 node --test
