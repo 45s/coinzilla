@@ -165,8 +165,8 @@ const BITUNIX_SPOT_CAPABILITIES = [
     status: "SUPPORTED",
     method: "createOrder",
     guarantee: "Uses only the documented single-order REST endpoint; converts base quantity to quote-coin volume with exact decimal arithmetic and verifies the returned order ID with order detail.",
-    conditions: ["LIMIT volume is quote-coin quantity on the single-order REST endpoint.", "Only the documented default GTC behavior is supported."],
-    limitation: "Bitunix does not accept a caller-supplied clientOrderId. A transport failure after dispatch returns OUTCOME_UNKNOWN and is never retried; callers must reconcile manually. Exact tick/step constraints remain UNKNOWN and are enforced by the exchange.",
+    conditions: ["LIMIT volume is quote-coin quantity on the single-order REST endpoint."],
+    limitation: "Bitunix does not accept a caller-supplied clientOrderId. A transport failure after dispatch returns OUTCOME_UNKNOWN and is never retried; callers must reconcile manually. Exact tick/step constraints remain UNKNOWN and are enforced by the exchange. The REST endpoint documents no time-in-force selector; the exchange default is not asserted.",
   },
   {
     type: "PLACE_MARKET_ORDER",
