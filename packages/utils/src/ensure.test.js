@@ -304,3 +304,14 @@ describe("ensure hostile collections", () => {
     expectError([ensure, "unique", namedValue([[-0, 0], "values"]), "TypeError", /values must contain unique values/, "positive and negative zero must count as duplicates"])
   })
 })
+
+describe("ensure remaining numeric and null edge cases", () => {
+  it("rejects invalid upper bounds and non-finite numeric inputs", () => {
+    expectError([ensure, "integerInRange", rangedValue([1, 0, 0.5, "count"]), "TypeError", /max must be a safe integer/, "integer range must reject fractional upper bounds"])
+    expectError([ensure, "numberInRange", rangedValue([1, 0, Infinity, "ratio"]), "TypeError", /max must be a finite number/, "number range must reject infinite upper bounds"])
+    expectError([ensure, "numberInRange", rangedValue(["1", 0, 2, "ratio"]), "TypeError", /ratio must be a finite number/, "number range must not coerce numeric strings"])
+    expectError([ensure, "number", namedValue([NaN, "amount"]), "TypeError", /amount must be a finite number/, "finite number assertion must reject NaN"])
+    expectError([ensure, "nonEmptyString", namedValue([1, "label"]), "TypeError", /label must be a non-empty string/, "non-empty string assertion must reject non-string values"])
+    expectError([ensure, "notNull", namedValue([undefined, "field"]), "TypeError", /field must not be null or undefined/, "not-null assertion must reject undefined"])
+  })
+})
