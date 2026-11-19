@@ -141,7 +141,10 @@ function assertCanonicalRecoverySellerBuyFillQuantities({ fill } = {}) {
   if (!hasCanonicalQuantities) {
     throw new TypeError("Recovery Seller BUY execution requires canonical base and quote quantities")
   }
-  return { quantity, quoteQuantity }
+  return {
+    quantity,
+    quoteQuantity,
+  }
 }
 
 function isRecoverySellerBuyExecutionIdentityCompatible({ existing, identity } = {}) {
@@ -164,7 +167,10 @@ function createNextRecoverySellerBuyExecution({ state, fill, ownership } = {}) {
     baseAssetId: fill.market.baseAsset.id,
     quoteAssetId: fill.market.quoteAsset.id,
   }
-  if (!isRecoverySellerBuyExecutionIdentityCompatible({ existing, identity })) {
+  if (!isRecoverySellerBuyExecutionIdentityCompatible({
+    existing,
+    identity,
+  })) {
     throw new Error("Recovery Seller cycle identity was reused across a different market, Position or asset pair")
   }
   return Object.freeze({
@@ -555,5 +561,8 @@ export function createRecoverySellerAccountingWorkflow({
     state,
     onOperationalStateExecutionFill,
   })
-  return createRecoverySellerAccountingWorkflowApi({ state, operations })
+  return createRecoverySellerAccountingWorkflowApi({
+    state,
+    operations,
+  })
 }
