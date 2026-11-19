@@ -1,9 +1,9 @@
 /**
  * Polling-backed Bitunix Spot observations.
  *
- * This is deliberately not a native user-data subscription and does not emit
- * canonical order/fill events. Each successful cycle is an observed snapshot;
- * consumers must account for its bounded freshness and incomplete history.
+ * This is not a native user-data subscription and emits no canonical order or
+ * fill events. Every successful cycle is an observed snapshot with explicit
+ * scope and incomplete-history guarantees.
  */
 function validateInterval({ intervalMs }) {
   if (!Number.isSafeInteger(intervalMs) || intervalMs < 250 || intervalMs > 60_000) {
@@ -66,28 +66,28 @@ function stableSerialize({ value }) {
 }
 
 function freezeSnapshot({ snapshot }) {
+  const symbols = snapshot.symbols.map((entry) => Object.freeze({
+    ...entry,
+    openOrders: Object.freeze([...entry.openOrders]),
+    firstHistoryPage: Object.freeze([...entry.firstHistoryPage]),
+  }))
+  const matchingOrderObservations = snapshot.matchingOrderObservations.map((entry) => Object.freeze({
+    ...entry,
+    data: entry.data && Object.freeze({ ...entry.data }),
+  }))
   return Object.freeze({
     ...snapshot,
     balances: Object.freeze([...snapshot.balances]),
-    symbols: Object.freeze(snapshot.symbols.map((entry) => Object.freeze({
-      ...entry,
-      openOrders: Object.freeze([...entry.openOrders]),
-      firstHistoryPage: Object.freeze([...entry.firstHistoryPage]),
-    }))),
-    matchingOrderObservations: Object.freeze(snapshot.matchingOrderObservations.map((entry) =>
-      Object.freeze({ ...entry, data: entry.data && Object.freeze({ ...entry.data }) }))),
+    symbols: Object.freeze(symbols),
+    matchingOrderObservations: Object.freeze(matchingOrderObservations),
   })
 }
 
-/**
- * Runs single-flight polling cycles against read-only Bitunix Spot broker
- * methods. A cycle is published only when every requested read succeeds.
- */
 export class BitunixSpotReconciler {
   constructor({
     broker,
     now = Date.now,
-    schedule = setTimeout,
+    schedule = ({ callback, delay }) => setTimeout(callback, delay),
     cancel = clearTimeout,
   } = {}) {
     for (const method of ["getBalances", "getOpenOrders", "getOrderHistory", "getMatchingOrderDetails"]) {
@@ -116,12 +116,16 @@ export class BitunixSpotReconciler {
   getStatus() {
     const observedAt = this.lastSuccessAt
     const ageMs = observedAt === null ? null : Math.max(0, this.now() - observedAt)
+    let freshness = "NEVER_SYNCED"
+    if (observedAt !== null) {
+      freshness = ageMs > this.staleAfterMs ? "STALE" : "FRESH"
+    }
     return Object.freeze({
       mode: "POLLING",
       nativePush: false,
       running: this.running,
       lastSuccessAt: observedAt,
-      freshness: observedAt === null ? "NEVER_SYNCED" : ageMs > this.staleAfterMs ? "STALE" : "FRESH",
+      freshness,
       ageMs,
     })
   }
@@ -135,7 +139,10 @@ export class BitunixSpotReconciler {
       }
     }
     const requestKey = stableSerialize({
-      value: { symbols: normalizedSymbols, trackedOrders: normalizedTrackedOrders },
+      value: {
+        symbols: normalizedSymbols,
+        trackedOrders: normalizedTrackedOrders,
+      },
     })
     if (this.inFlight) {
       if (requestKey !== this.inFlightKey) {
@@ -143,7 +150,7 @@ export class BitunixSpotReconciler {
       }
       return this.inFlight
     }
-    const generation = this.generation
+    const { generation } = this
     this.inFlightKey = requestKey
     this.inFlight = this.#collect({
       symbols: normalizedSymbols,
@@ -156,6 +163,49 @@ export class BitunixSpotReconciler {
     return this.inFlight
   }
 
+  async #readSymbolSnapshots({ symbols }) {
+    const snapshots = []
+    for (const symbol of symbols) {
+      const [openOrdersResult, historyResult] = await Promise.all([
+        this.broker.getOpenOrders({ symbol }),
+        this.broker.getOrderHistory({
+          symbol,
+          page: 1,
+          limit: 100,
+        }),
+      ])
+      snapshots.push({
+        symbol,
+        openOrders: assertSuccessfulRead({
+          result: openOrdersResult,
+          operation: `open orders for ${symbol}`,
+        }),
+        firstHistoryPage: assertSuccessfulRead({
+          result: historyResult,
+          operation: `order history for ${symbol}`,
+        }),
+        historyCoverage: "FIRST_PAGE_ONLY",
+      })
+    }
+    return snapshots
+  }
+
+  async #readMatchingOrderObservations({ trackedOrders }) {
+    const observations = []
+    for (const order of trackedOrders) {
+      const result = await this.broker.getMatchingOrderDetails(order)
+      observations.push({
+        ...order,
+        data: assertSuccessfulRead({
+          result,
+          operation: `matching-order lookup for ${order.symbol}/${order.orderId}`,
+        }),
+        interpretation: "EXCHANGE_NATIVE_UNVERIFIED",
+      })
+    }
+    return observations
+  }
+
   async #collect({ symbols, trackedOrders, generation }) {
     const observedAt = this.now()
     if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
@@ -165,31 +215,8 @@ export class BitunixSpotReconciler {
       result: await this.broker.getBalances(),
       operation: "balances",
     })
-    const symbolSnapshots = []
-    for (const symbol of symbols) {
-      const [openOrdersResult, historyResult] = await Promise.all([
-        this.broker.getOpenOrders({ symbol }),
-        this.broker.getOrderHistory({ symbol, page: 1, limit: 100 }),
-      ])
-      symbolSnapshots.push({
-        symbol,
-        openOrders: assertSuccessfulRead({ result: openOrdersResult, operation: `open orders for ${symbol}` }),
-        firstHistoryPage: assertSuccessfulRead({ result: historyResult, operation: `order history for ${symbol}` }),
-        historyCoverage: "FIRST_PAGE_ONLY",
-      })
-    }
-    const matchingOrderObservations = []
-    for (const order of trackedOrders) {
-      const result = await this.broker.getMatchingOrderDetails(order)
-      matchingOrderObservations.push({
-        ...order,
-        data: assertSuccessfulRead({
-          result,
-          operation: `matching-order lookup for ${order.symbol}/${order.orderId}`,
-        }),
-        interpretation: "EXCHANGE_NATIVE_UNVERIFIED",
-      })
-    }
+    const symbolSnapshots = await this.#readSymbolSnapshots({ symbols })
+    const matchingOrderObservations = await this.#readMatchingOrderObservations({ trackedOrders })
     if (generation !== this.generation) {
       throw new Error("Bitunix Spot polling cycle was invalidated by stop()")
     }
@@ -222,6 +249,87 @@ export class BitunixSpotReconciler {
     })
   }
 
+  #reportStatus({ status, onStatus, onError }) {
+    try {
+      onStatus(status)
+    } catch (error) {
+      this.#reportError({ error, onError })
+    }
+  }
+
+  #reportError({ error, onError }) {
+    try {
+      onError(error)
+    } catch {
+      return
+    }
+  }
+
+  async #runCycle({ generation, symbols, trackedOrders, intervalMs, onSnapshot, onStatus, onError }) {
+    try {
+      const result = await this.pollOnce({ symbols, trackedOrders })
+      if (!this.running || generation !== this.generation) {
+        return
+      }
+      if (result.changed) {
+        try {
+          await onSnapshot(result.snapshot)
+        } catch (error) {
+          this.lastFingerprint = null
+          throw error
+        }
+      }
+      this.failureCount = 0
+      this.#reportStatus({
+        status: {
+          ...result.status,
+          staleAfterMs: intervalMs * 2,
+          lastCycle: "SUCCESS",
+        },
+        onStatus,
+        onError,
+      })
+    } catch (error) {
+      if (!this.running || generation !== this.generation) {
+        return
+      }
+      this.failureCount += 1
+      this.#reportStatus({
+        status: {
+          ...this.getStatus(),
+          staleAfterMs: intervalMs * 2,
+          lastCycle: "FAILED",
+        },
+        onStatus,
+        onError,
+      })
+      this.#reportError({ error, onError })
+    } finally {
+      if (this.running && generation === this.generation) {
+        const backoffMs = Math.min(intervalMs * (2 ** Math.min(this.failureCount, 5)), 60_000)
+        try {
+          this.timer = this.schedule({
+            callback: () => {
+              void this.#runCycle({
+                generation,
+                symbols,
+                trackedOrders,
+                intervalMs,
+                onSnapshot,
+                onStatus,
+                onError,
+              })
+            },
+            delay: backoffMs,
+          })
+        } catch (error) {
+          this.running = false
+          this.#reportError({ error, onError })
+        }
+      }
+    }
+  }
+
   start({
     symbols,
     trackedOrders = [],
@@ -241,48 +349,19 @@ export class BitunixSpotReconciler {
     }
     this.running = true
     this.staleAfterMs = intervalMs * 2
-    const generation = ++this.generation
-    const reportStatus = (status) => {
-      if (this.running && generation === this.generation) {
-        try { onStatus(status) } catch (error) { onError(error) }
-      }
-    }
-    const cycle = async () => {
-      if (!this.running || generation !== this.generation) return
-      try {
-        const result = await this.pollOnce({ symbols: normalizedSymbols, trackedOrders: normalizedTrackedOrders })
-        if (!this.running || generation !== this.generation) return
-        if (result.changed) {
-          try {
-            await onSnapshot(result.snapshot)
-          } catch (error) {
-            this.lastFingerprint = null
-            throw error
-          }
-        }
-        this.failureCount = 0
-        reportStatus({
-          ...result.status,
-          staleAfterMs: intervalMs * 2,
-          lastCycle: "SUCCESS",
-        })
-      } catch (error) {
-        if (!this.running || generation !== this.generation) return
-        this.failureCount += 1
-        reportStatus({
-          ...this.getStatus(),
-          staleAfterMs: intervalMs * 2,
-          lastCycle: "FAILED",
-        })
-        try { onError(error) } catch {}
-      } finally {
-        if (this.running && generation === this.generation) {
-          const backoffMs = Math.min(intervalMs * (2 ** Math.min(this.failureCount, 5)), 60_000)
-          this.timer = this.schedule(() => { void cycle() }, backoffMs)
-        }
-      }
-    }
-    void cycle()
+    const { generation } = this
+    this.generation += 1
+    const sessionGeneration = this.generation
+    void generation
+    void this.#runCycle({
+      generation: sessionGeneration,
+      symbols: normalizedSymbols,
+      trackedOrders: normalizedTrackedOrders,
+      intervalMs,
+      onSnapshot,
+      onStatus,
+      onError,
+    })
     return Object.freeze({
       stop: () => this.stop(),
       getStatus: () => this.getStatus(),
