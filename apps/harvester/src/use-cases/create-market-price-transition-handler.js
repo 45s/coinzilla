@@ -1,5 +1,117 @@
-import { toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
+
+function createMarketPriceRefreshTimeoutError({ symbol, timeoutMs } = {}) {
+  return Object.assign(
+    new Error(`No fresh market-price event arrived for ${symbol} within ${timeoutMs} ms`),
+    {
+      code: "MARKET_PRICE_REFRESH_TIMEOUT",
+      symbol,
+      timeoutMs,
+    },
+  )
+}
+
+function createMarketPriceRefreshAbortError({ signal } = {}) {
+  return Object.assign(
+    new Error("Waiting for a fresh market-price event was aborted", {
+      cause: signal?.reason,
+    }),
+    {
+      code: "MARKET_PRICE_REFRESH_ABORTED",
+    },
+  )
+}
+
+/**
+ * Wait for an accepted fresh stream event without blocking the serialized engine transition queue.
+ */
+export function createFreshMarketPriceWaiter({
+  state,
+  isMarketPriceFresh,
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout,
+} = {}) {
+  if (!state || !(state.prices instanceof Map) || typeof isMarketPriceFresh !== "function") {
+    throw new TypeError("Fresh market-price waiter requires engine state and a freshness predicate")
+  }
+
+  const waitersBySymbol = new Map()
+
+  const waitForFreshMarketPrice = ({ symbol, timeoutMs, signal } = {}) => {
+    if (typeof symbol !== "string" || symbol.length === 0) {
+      return Promise.reject(new TypeError("Fresh market-price wait requires a symbol"))
+    }
+    const currentPrice = state.prices.get(symbol)
+    if (currentPrice && isMarketPriceFresh(currentPrice)) {
+      return Promise.resolve(currentPrice)
+    }
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+      return Promise.reject(new RangeError("Fresh market-price wait timeout must be a positive safe integer"))
+    }
+    if (signal?.aborted) {
+      return Promise.reject(createMarketPriceRefreshAbortError({ signal }))
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false
+      let timeoutHandle
+      let waiter
+      const waiters = waitersBySymbol.get(symbol) ?? new Set()
+      const cleanup = () => {
+        if (timeoutHandle !== undefined) {
+          clearTimeoutFn(timeoutHandle)
+        }
+        signal?.removeEventListener?.("abort", onAbort)
+        waiters.delete(waiter)
+        if (waiters.size === 0) {
+          waitersBySymbol.delete(symbol)
+        }
+      }
+      const settle = (callback, value) => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        callback(value)
+      }
+      const onAbort = () => settle(reject, createMarketPriceRefreshAbortError({ signal }))
+      waiter = {
+        resolve: (price) => settle(resolve, price),
+        reject: (error) => settle(reject, error),
+      }
+
+      waiters.add(waiter)
+      waitersBySymbol.set(symbol, waiters)
+      timeoutHandle = setTimeoutFn(
+        () => settle(reject, createMarketPriceRefreshTimeoutError({ symbol, timeoutMs })),
+        timeoutMs,
+      )
+      signal?.addEventListener?.("abort", onAbort, { once: true })
+      if (signal?.aborted) {
+        onAbort()
+      }
+    })
+  }
+
+  const notifyFreshMarketPrice = ({ symbol, price } = {}) => {
+    if (!isMarketPriceFresh(price)) {
+      return
+    }
+    const waiters = waitersBySymbol.get(symbol)
+    if (!waiters) {
+      return
+    }
+    for (const waiter of [...waiters]) {
+      waiter.resolve(price)
+    }
+  }
+
+  return Object.freeze({
+    waitForFreshMarketPrice,
+    notifyFreshMarketPrice,
+  })
+}
 
 /** Log the existing market and trading context before applying a price event. */
 function logMarketPriceReceived({
@@ -117,6 +229,7 @@ function acceptFreshMarketPriceTransition({
 
   state.marketPriceEventIds.set(symbol, marketEventId)
   state.prices.set(symbol, price)
+  notifyFreshMarketPrice?.({ symbol, price })
 
   return {
     accepted: true,
@@ -185,6 +298,7 @@ export function createMarketPriceTransitionHandler({
   maybeReplaceTrailingBuy,
   evaluateLatestTransition,
   nextMarketPriceEventId,
+  notifyFreshMarketPrice,
 } = {}) {
   return async ({ symbol, priceEvent } = {}) => {
     try {
