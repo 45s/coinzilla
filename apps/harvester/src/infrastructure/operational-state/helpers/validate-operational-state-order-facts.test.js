@@ -111,8 +111,11 @@ test("accepts canonical order-submission intents and recovery-sell purpose", () 
       side: "SELL",
       type: "LIMIT_MAKER",
       purpose: "RECOVERY_SELL",
+      strategyId: "RECOVERY_SELLER",
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
     })),
-    "A recovery SELL intent may use the supported maker order type and purpose.",
+    "A recovery SELL intent must preserve its complete strategy, position and cycle ownership.",
   )
 })
 
@@ -125,7 +128,11 @@ test("rejects malformed order-submission intent identity, fields, classification
     ["unsupported order type", { type: "MARKET" }, /type must be LIMIT/],
     ["zero price", { price: "0" }, /price and quantity must be positive/],
     ["non-canonical quantity", { quantity: "01" }, /price and quantity must be positive/],
-    ["unsupported purpose", { purpose: "MANUAL" }, /purpose must be null or RECOVERY_SELL/],
+    ["unsupported purpose", { purpose: "MANUAL" }, /purpose must be null, RECOVERY_BUY or RECOVERY_SELL/],
+    ["RS purpose without ownership", { purpose: "RECOVERY_BUY" }, /complete strategy.*positionId.*cycleId ownership/],
+    ["partial RS ownership", { purpose: "RECOVERY_BUY", strategyId: "RECOVERY_SELLER", positionId: "rs-position-1" }, /complete strategy.*positionId.*cycleId ownership/],
+    ["RS purpose/side mismatch", { purpose: "RECOVERY_BUY", strategyId: "RECOVERY_SELLER", positionId: "rs-position-1", cycleId: "rs-cycle-1", side: "SELL" }, /purpose must match its canonical side/],
+    ["Conservative fact with RS ownership", { strategyId: "RECOVERY_SELLER", positionId: "rs-position-1", cycleId: "rs-cycle-1" }, /cannot contain Recovery Seller ownership/],
   ]
 
   for (const [description, changes, expectedError] of invalidCases) {
@@ -171,6 +178,15 @@ test("accepts acknowledged and unacknowledged order-submission outcomes", () => 
     })),
     "An uncertain submission must remain explicitly unacknowledged and pending.",
   )
+  assert.doesNotThrow(
+    () => validateOrderSubmissionOutcomeFact(makeSubmissionOutcome({
+      purpose: "RECOVERY_BUY",
+      strategyId: "RECOVERY_SELLER",
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    })),
+    "A Recovery Seller outcome must preserve complete strategy, position and cycle ownership.",
+  )
 })
 
 test("rejects order-submission outcomes with inconsistent identity, amounts, or acknowledgement state", () => {
@@ -182,7 +198,9 @@ test("rejects order-submission outcomes with inconsistent identity, amounts, or 
     ["invalid type", { type: "MARKET" }, /type must be LIMIT/],
     ["invalid amount", { price: "0" }, /amounts must be canonical/],
     ["invalid outcome", { outcome: "SENT" }, /classification is unsupported/],
-    ["invalid purpose", { purpose: "MANUAL" }, /purpose must be null or RECOVERY_SELL/],
+    ["invalid purpose", { purpose: "MANUAL" }, /purpose must be null, RECOVERY_BUY or RECOVERY_SELL/],
+    ["RS purpose without ownership", { purpose: "RECOVERY_BUY" }, /complete strategy.*positionId.*cycleId ownership/],
+    ["RS purpose/side mismatch", { purpose: "RECOVERY_BUY", strategyId: "RECOVERY_SELLER", positionId: "rs-position-1", cycleId: "rs-cycle-1", side: "SELL" }, /purpose must match its canonical side/],
     ["unacknowledged order with broker identity", { brokerOrderId: "broker-order-1" }, /PENDING order without broker identity/],
     ["unacknowledged order with non-pending status", { status: "NEW" }, /PENDING order without broker identity/],
     ["unacknowledged order with execution", { executedQuantity: "0.1" }, /PENDING order without broker identity/],
