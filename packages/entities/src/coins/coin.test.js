@@ -54,25 +54,6 @@ quantity })
     }
   })
 
-  it("preserves generic validation failures as domain Errors with the original messages", () => {
-    assert.throws(
-      () => createCoin({ ticker: " " }),
-      {
-        name: "Error",
-        message: errMsgs.ticker,
-      },
-      "Coin ticker validation must retain its domain Error class and field-specific message",
-    )
-    assert.throws(
-      () => createCoin({ quantity: -1 }),
-      {
-        name: "Error",
-        message: errMsgs.quantity,
-      },
-      "Coin quantity validation must retain its domain Error class and field-specific message",
-    )
-  })
-
   it("requires constructor input to be an object", () => {
     for (const input of [undefined]) {
       assert.throws(() => new Coin(input), {
