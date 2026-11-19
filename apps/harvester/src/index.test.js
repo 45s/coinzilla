@@ -1,4 +1,4 @@
-import test from "node:test"
+import test, { after } from "node:test"
 import assert from "node:assert/strict"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import os from "node:os"
@@ -2196,3 +2196,11 @@ function createDelayedJournalProcessIdentity() {
     },
   }
 }
+
+
+after(() => {
+  // Tests exercise startup failures that intentionally set the process exit code.
+  // Clear application side effects after all assertions; the test runner still
+  // reports assertion failures independently.
+  process.exitCode = undefined
+})
