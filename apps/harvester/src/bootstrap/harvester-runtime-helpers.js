@@ -262,32 +262,44 @@ function createHarvesterTradingEngineSafetyCallbacks({
   }
 }
 
-export function createHarvesterTradingEngine({
-  makeConservativeTradingEngine,
-  broker,
-  conservativeStrategyPolicy,
-  eventPublisher,
-  appConfig,
-  getPortfolio,
-  getRecoveryLedger,
-  getMarketMetadata,
-  getAccountSnapshot,
-  updateTradingAccounting,
-  completeRecoveryCycle,
-  userDataState,
-  accountSnapshotManagerRef,
-  candleHistoryService,
-  onOperationalStateSubmissionIntent,
-  onOperationalStateSubmissionOutcome,
-  onOperationalStateCancellationIntent,
-  onOperationalStateCancellationOutcome,
-  onOperationalStateStrategyMarketPaused,
-  logger,
-  recoveredState,
-  isMarketPriceFresh,
-  isMarketBookFresh,
-} = {}) {
-  return makeConservativeTradingEngine({
+function createHarvesterTradingEngineOperationalCallbacks(options = {}) {
+  return {
+    onOperationalStateSubmissionIntent: options.onOperationalStateSubmissionIntent,
+    onOperationalStateSubmissionOutcome: options.onOperationalStateSubmissionOutcome,
+    onOperationalStateCancellationIntent: options.onOperationalStateCancellationIntent,
+    onOperationalStateCancellationOutcome: options.onOperationalStateCancellationOutcome,
+    onOperationalStateStrategyMarketPaused: options.onOperationalStateStrategyMarketPaused,
+  }
+}
+
+function createHarvesterTradingEngineOptions(options = {}) {
+  const {
+    broker,
+    conservativeStrategyPolicy,
+    eventPublisher,
+    appConfig,
+    getPortfolio,
+    getRecoveryLedger,
+    getMarketMetadata,
+    getAccountSnapshot,
+    getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow,
+    recoverySellerPairs,
+    recoverySellerWorkflow,
+    getRecoverySellerMarketMetadata,
+    evaluateRecoverySellerTransition,
+    updateTradingAccounting,
+    completeRecoveryCycle,
+    userDataState,
+    accountSnapshotManagerRef,
+    candleHistoryService,
+    logger,
+    recoveredState,
+    sharedAccountState,
+    isMarketPriceFresh,
+    isMarketBookFresh,
+  } = options
+  return {
     broker,
     strategyPolicy: conservativeStrategyPolicy,
     eventPublisher,
@@ -296,7 +308,14 @@ export function createHarvesterTradingEngine({
     getRecoveryLedger,
     getMarketMetadata,
     getAccountSnapshot,
+    getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow,
+    recoverySellerPairs,
+    recoverySellerWorkflow,
+    getRecoverySellerMarketMetadata,
+    evaluateRecoverySellerTransition,
     updateTradingAccounting,
+    updateRecoverySellerAccounting: recoverySellerWorkflow?.applyBuyFill,
     completeRecoveryCycle,
     ...createHarvesterTradingEngineSafetyCallbacks({
       userDataState,
@@ -306,14 +325,15 @@ export function createHarvesterTradingEngine({
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
-    onOperationalStateSubmissionIntent,
-    onOperationalStateSubmissionOutcome,
-    onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome,
-    onOperationalStateStrategyMarketPaused,
+    ...createHarvesterTradingEngineOperationalCallbacks(options),
     logger,
+    sharedAccountState,
     initialState: createRecoveredTradingEngineState(recoveredState),
-  })
+  }
+}
+
+export function createHarvesterTradingEngine(options = {}) {
+  return options.makeConservativeTradingEngine(createHarvesterTradingEngineOptions(options))
 }
 
 

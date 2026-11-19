@@ -1,0 +1,480 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+import {
+  Asset,
+  CanonicalOrder,
+  Market,
+  Money,
+  Quantity,
+  TradingRules,
+} from "@coinzilla/entities"
+import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
+import { createRecoverySellerOrderSubmitter } from "./create-recovery-seller-order-submitter.js"
+import { createRecoverySellerStopWorkflow } from "./create-recovery-seller-stop-workflow.js"
+
+const baseAsset = new Asset({
+  id: "zro",
+  code: "ZRO",
+})
+const quoteAsset = new Asset({
+  id: "usdt",
+  code: "USDT",
+})
+const market = new Market({
+  venue: "binance",
+  symbol: "ZROUSDT",
+  baseAsset,
+  quoteAsset,
+})
+const marketMetadata = {
+  market,
+  orderType: "LIMIT_MAKER",
+  supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
+  tradingRules: new TradingRules({
+    market,
+    constraints: [
+      {
+        type: "PRICE_INCREMENT",
+        status: "SUPPORTED",
+        value: new Money({
+          amount: "0.001",
+          asset: quoteAsset,
+        }),
+      },
+      {
+        type: "QUANTITY_INCREMENT",
+        status: "SUPPORTED",
+        value: new Quantity({
+          amount: "0.01",
+          asset: baseAsset,
+        }),
+      },
+      {
+        type: "MIN_QUANTITY",
+        status: "SUPPORTED",
+        value: new Quantity({
+          amount: "0.01",
+          asset: baseAsset,
+        }),
+      },
+      {
+        type: "MIN_NOTIONAL",
+        status: "SUPPORTED",
+        value: new Money({
+          amount: "5",
+          asset: quoteAsset,
+        }),
+      },
+    ],
+  }),
+}
+
+function createSharedState() {
+  return {
+    portfolio: new Portfolio(),
+    recoveryLedgers: new Map(),
+    orderRegistry: OrderRegistry.empty(),
+    legacyPositions: new Map(),
+    updateQueue: Promise.resolve(),
+  }
+}
+
+function createAcknowledgedOrder({ order }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: "broker-rs-1",
+    providerInstanceId: "binance-testnet-primary",
+    providerType: "binance",
+    accountId: "harvester-testnet",
+    market,
+    side: order.side,
+    type: order.type,
+    limitPrice: new Money({
+      amount: order.price,
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: order.quantity,
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 2,
+    updatedAt: 2,
+  })
+}
+
+function createMemoryOperationalStateStore() {
+  const records = []
+  return {
+    records,
+    append: async (fact) => {
+      records.push(fact)
+      return {
+        ok: true,
+        data: {
+          durable: true,
+          record: fact,
+        },
+      }
+    },
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [...records],
+      },
+    }),
+  }
+}
+
+function createSubmitter({
+  sharedState,
+  broker,
+  unresolved,
+  onUnresolvedSubmission,
+  onSellReserved,
+  onDurableSubmissionIntent,
+  onDurableSubmissionOutcome,
+} = {}) {
+  const workflow = createRecoverySellerAccountingWorkflow({
+    sharedState,
+  })
+  const durableFacts = []
+  const submit = createRecoverySellerOrderSubmitter({
+    broker,
+    recoverySellerAccountingWorkflow: workflow,
+    onDurableSubmissionIntent: onDurableSubmissionIntent ?? (async (fact) => {
+      durableFacts.push({
+        type: "INTENT",
+        fact,
+      })
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    }),
+    onDurableSubmissionOutcome: onDurableSubmissionOutcome ?? (async (fact) => {
+      durableFacts.push({
+        type: "OUTCOME",
+        fact,
+      })
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    }),
+    onUnresolvedSubmission: onUnresolvedSubmission ?? (async (fact) => {
+      unresolved.push(fact)
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    }),
+    onSellReserved,
+    canSubmit: () => true,
+  })
+  return {
+    submit,
+    workflow,
+    durableFacts,
+  }
+}
+
+function createAction({ side = "BUY" } = {}) {
+  return {
+    side,
+    purpose: side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL",
+    cycleId: "rs-cycle-1",
+    positionId: "rs-position-1",
+    type: "LIMIT_MAKER",
+    price: "1.999",
+    quantity: "5",
+  }
+}
+
+function createBroker({ onPlaceOrder, placeOrderFailure } = {}) {
+  return {
+    providerInstanceId: "binance-testnet-primary",
+    providerType: "binance",
+    accountId: "harvester-testnet",
+    placeOrder: async ({ order }) => {
+      onPlaceOrder?.({ order })
+      if (placeOrderFailure) {
+        throw new Error("broker acknowledgement timed out")
+      }
+      return {
+        ok: true,
+        data: createAcknowledgedOrder({ order }),
+      }
+    },
+  }
+}
+
+test("submits one RS order through the shared executor and registers immutable RS ownership", async () => {
+  const sharedState = createSharedState()
+  const unresolved = []
+  let pendingWasRegisteredBeforeBroker = false
+  const broker = createBroker({
+    onPlaceOrder: ({ order }) => {
+      const registered = sharedState.orderRegistry.getOrder({
+        clientOrderId: order.clientOrderId,
+      })
+      pendingWasRegisteredBeforeBroker = registered?.status === "PENDING"
+    },
+  })
+  const { submit, workflow, durableFacts } = createSubmitter({
+    sharedState,
+    broker,
+    unresolved,
+  })
+
+  const result = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "BUY_TRANCHE_ELIGIBLE",
+    },
+    action: createAction(),
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.submitted, true)
+  assert.equal(pendingWasRegisteredBeforeBroker, true)
+  assert.equal(durableFacts.length, 2)
+  assert.equal(unresolved.length, 0)
+  assert.equal(workflow.getActiveOrders().length, 1)
+  const [submittedOrder] = result.data.submittedOrders
+  assert.deepEqual(
+    workflow.getOrderRegistry().getOwnership({
+      clientOrderId: submittedOrder.clientOrderId,
+    }),
+    {
+      clientOrderId: submittedOrder.clientOrderId,
+      strategyId: "RS_recoverySeller",
+      positionId: "rs-position-1",
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-1",
+      brokerOrderId: "broker-rs-1",
+    },
+  )
+})
+
+test("retains an unknown RS submission and persists sticky STOP without retry", async () => {
+  const sharedState = createSharedState()
+  const unresolved = []
+  const operationalStateStore = createMemoryOperationalStateStore()
+  const stopWorkflowResult = await createRecoverySellerStopWorkflow({
+    operationalStateStore,
+  })
+  assert.equal(stopWorkflowResult.ok, true)
+  const broker = createBroker({
+    placeOrderFailure: true,
+  })
+  const { submit, workflow } = createSubmitter({
+    sharedState,
+    broker,
+    unresolved,
+    onUnresolvedSubmission: async ({ order, outcome }) => {
+      unresolved.push({
+        order,
+        outcome,
+      })
+      return stopWorkflowResult.data.latch({
+        explanation: `RS order submission is unresolved: ${outcome}`,
+        orderIdentity: {
+          clientOrderId: order.clientOrderId,
+        },
+      })
+    },
+  })
+
+  const result = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "BUY_TRANCHE_ELIGIBLE",
+    },
+    action: createAction(),
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(unresolved.length, 1)
+  assert.equal(unresolved[0].outcome, "UNKNOWN")
+  assert.equal(workflow.getActiveOrders()[0].status, "UNKNOWN")
+  assert.equal(workflow.getActiveOrders().length, 1)
+  assert.equal(stopWorkflowResult.data.getStopState().status, "STOPPED")
+  assert.equal(operationalStateStore.records.length, 1)
+  assert.equal(
+    operationalStateStore.records[0].factType,
+    "SAFETY_BLOCKER_RAISED",
+  )
+})
+
+test("blocks RS SELL when no durable single-cycle reservation callback is supplied", async () => {
+  const sharedState = createSharedState()
+  const unresolved = []
+  let placeOrderCalls = 0
+  const broker = createBroker({
+    onPlaceOrder: () => {
+      placeOrderCalls += 1
+    },
+  })
+  const { submit } = createSubmitter({
+    sharedState,
+    broker,
+    unresolved,
+  })
+
+  const result = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "RECOVERY_SELL_PROFITABILITY_AND_FILTERS_PASSED",
+    },
+    action: createAction({ side: "SELL" }),
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /single-cycle reservation callback/)
+  assert.equal(placeOrderCalls, 0)
+})
+
+test("durably reserves the sole RS SELL cycle before registry registration and broker I/O", async () => {
+  const sharedState = createSharedState()
+  const unresolved = []
+  let reservedOrder
+  let pendingWasRegisteredAtBroker = false
+  const broker = createBroker({
+    onPlaceOrder: ({ order }) => {
+      pendingWasRegisteredAtBroker = sharedState.orderRegistry.getOrder({
+        clientOrderId: order.clientOrderId,
+      })?.status === "PENDING"
+    },
+  })
+  const { submit } = createSubmitter({
+    sharedState,
+    broker,
+    unresolved,
+    onSellReserved: async ({ order, ownership }) => {
+      reservedOrder = {
+        order,
+        ownership,
+        pendingAlreadyRegistered: sharedState.orderRegistry.getOrder({
+          clientOrderId: order.clientOrderId,
+        }) !== undefined,
+      }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  })
+
+  const result = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "RECOVERY_SELL_PROFITABILITY_AND_FILTERS_PASSED",
+    },
+    action: createAction({ side: "SELL" }),
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(reservedOrder.pendingAlreadyRegistered, false)
+  assert.equal(reservedOrder.ownership.strategyId, "RS_recoverySeller")
+  assert.equal(reservedOrder.ownership.purpose, "RECOVERY_SELL")
+  assert.equal(pendingWasRegisteredAtBroker, true)
+  assert.equal(unresolved.length, 0)
+})
+
+test("latches STOP when the reserved sole SELL is deferred before broker submission", async () => {
+  const sharedState = createSharedState()
+  const unresolved = []
+  const operationalStateStore = createMemoryOperationalStateStore()
+  const stopWorkflowResult = await createRecoverySellerStopWorkflow({
+    operationalStateStore,
+  })
+  let placeOrderCalls = 0
+  const broker = createBroker({
+    onPlaceOrder: () => {
+      placeOrderCalls += 1
+    },
+  })
+  const { submit, workflow } = createSubmitter({
+    sharedState,
+    broker,
+    unresolved,
+    onSellReserved: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+    onDurableSubmissionIntent: async () => ({
+      ok: false,
+      errors: [new Error("submission intent store unavailable")],
+    }),
+    onUnresolvedSubmission: async ({ order, outcome }) => {
+      unresolved.push({
+        order,
+        outcome,
+      })
+      return stopWorkflowResult.data.latch({
+        explanation: "The sole RS SELL was reserved but submission was deferred",
+        orderIdentity: {
+          clientOrderId: order.clientOrderId,
+        },
+      })
+    },
+  })
+
+  const result = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "RECOVERY_SELL_PROFITABILITY_AND_FILTERS_PASSED",
+    },
+    action: createAction({ side: "SELL" }),
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(placeOrderCalls, 0)
+  assert.equal(workflow.getActiveOrders().length, 0)
+  assert.equal(unresolved.length, 1)
+  assert.equal(unresolved[0].outcome, "UNKNOWN")
+  assert.equal(stopWorkflowResult.data.getStopState().status, "STOPPED")
+  assert.equal(operationalStateStore.records.length, 1)
+})
+
+test("does not call the broker when the RS lifecycle decision is not SUBMIT", async () => {
+  const sharedState = createSharedState()
+  const unresolved = []
+  let placeOrderCalls = 0
+  const broker = createBroker({
+    onPlaceOrder: () => {
+      placeOrderCalls += 1
+    },
+  })
+  const { submit } = createSubmitter({
+    sharedState,
+    broker,
+    unresolved,
+  })
+
+  const result = await submit({
+    lifecycleDecision: {
+      outcome: "BLOCK",
+      reasonCode: "MARKET_PAUSED",
+    },
+    action: undefined,
+    marketMetadata,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.submitted, false)
+  assert.equal(placeOrderCalls, 0)
+})

@@ -1,5 +1,5 @@
 import { resolveMarketDataSymbolsByProvider } from "./resolve-market-data-symbols-by-provider.js"
-import { resolveExecutionSymbolsByProvider } from "./resolve-execution-symbols-by-provider.js"
+import { resolveExecutionRoutesByProvider, resolveExecutionSymbolsByProvider } from "./resolve-execution-symbols-by-provider.js"
 
 function createAccountEnvironment({
   env,
@@ -272,6 +272,7 @@ function createMultiAccountRuntime({
     required: provider.required !== false,
     executionEnabled: executionEnabled !== false,
     executionSymbols: Object.freeze([...(runtime.executionSymbols ?? [])]),
+    executionRoutes: Object.freeze([...(runtime.executionRoutes ?? [])]),
     marketDataSources: Object.freeze({ ...(runtime.marketDataSources ?? {}) }),
     marketDataProviderTypes: Object.freeze({ ...(runtime.marketDataProviderTypes ?? {}) }),
     marketDataProviderIdentities: Object.freeze({ ...(runtime.marketDataProviderIdentities ?? {}) }),
@@ -443,6 +444,40 @@ function createMarketDataProviderMetadata({
   })
 }
 
+function getProviderExecutionRoutes({ appConfig, providers, providerInstanceId }) {
+  return resolveExecutionRoutesByProvider({
+    appConfig,
+    providers,
+  })
+    .get(providerInstanceId) ?? []
+}
+
+function createProviderAccountExecutionInput({
+  provider,
+  providers,
+  appConfig,
+  executionSymbolsByProvider,
+  marketDataProviderBySymbol,
+}) {
+  const executionSymbols = executionSymbolsByProvider.get(provider.providerInstanceId) ?? []
+  const executionRoutes = getProviderExecutionRoutes({
+    appConfig,
+    providers,
+    providerInstanceId: provider.providerInstanceId,
+  })
+  const marketDataProviderMetadata = createMarketDataProviderMetadata({
+    executionSymbols,
+    providers,
+    marketDataProviderBySymbol,
+  })
+  return {
+    executionSymbols: Object.freeze([...executionSymbols]),
+    executionRoutes: Object.freeze([...executionRoutes]),
+    marketDataSymbols: Object.freeze([...executionSymbols]),
+    ...marketDataProviderMetadata,
+  }
+}
+
 function createProviderAccountStartInput({
   provider,
   providers,
@@ -458,10 +493,11 @@ function createProviderAccountStartInput({
   requiredCapabilitiesByProvider,
   deferMarketDataStart,
 }) {
-  const executionSymbols = executionSymbolsByProvider.get(provider.providerInstanceId) ?? []
-  const marketDataProviderMetadata = createMarketDataProviderMetadata({
-    executionSymbols,
+  const executionInput = createProviderAccountExecutionInput({
+    provider,
     providers,
+    appConfig,
+    executionSymbolsByProvider,
     marketDataProviderBySymbol,
   })
   return {
@@ -480,9 +516,7 @@ function createProviderAccountStartInput({
     brokerAdapterFactory: provider.brokerAdapterFactory,
     providerIdentity: provider.identity,
     providerRequired: provider.required !== false,
-    executionSymbols: Object.freeze([...executionSymbols]),
-    marketDataSymbols: Object.freeze([...executionSymbols]),
-    ...marketDataProviderMetadata,
+    ...executionInput,
     requiredCapabilities: requiredCapabilitiesByProvider.get(provider.providerInstanceId) ?? Object.freeze([]),
     deferMarketDataStart,
     ...(deferMarketDataStart ? {

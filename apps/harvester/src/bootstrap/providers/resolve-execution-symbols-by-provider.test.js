@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
-import { resolveExecutionSymbolsByProvider } from "./resolve-execution-symbols-by-provider.js"
+import { resolveExecutionRoutesByProvider, resolveExecutionSymbolsByProvider } from "./resolve-execution-symbols-by-provider.js"
 
 const providers = [
   {
@@ -74,6 +74,72 @@ test("resolves every enabled strategy-market route to exactly one configured pro
     ["binance-testnet-primary", ["BTCUSDT"]],
     ["binance-live-secondary", ["ETHUSDT"]],
   ], "Each execution account must receive only the markets explicitly assigned to it")
+})
+
+test("routes enabled RS markets through explicit provider assignments and deduplicates shared market subscriptions", () => {
+  const recoverySellerPairs = {
+    BTCUSDT: {
+      enabled: true,
+      tradingEnvironment: "testnet",
+    },
+    DOGEUSDT: {
+      enabled: true,
+      tradingEnvironment: "testnet",
+    },
+  }
+  const routes = [
+    ...createRoutes(),
+    {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "BTCUSDT",
+      providerInstanceId: "binance-testnet-primary",
+    },
+    {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "DOGEUSDT",
+      providerInstanceId: "binance-testnet-primary",
+    },
+  ]
+  const result = resolveExecutionSymbolsByProvider({
+    appConfig: createAppConfig({
+      strategies: {
+        CG_coinGrabber: {
+          pairs,
+        },
+        RS_recoverySeller: {
+          enabled: true,
+          pairs: recoverySellerPairs,
+        },
+      },
+      executionRouting: {
+        routes,
+      },
+    }),
+    providers,
+  })
+
+  assert.deepEqual([...result], [
+    ["binance-testnet-primary", ["BTCUSDT", "DOGEUSDT"]],
+    ["binance-live-secondary", ["ETHUSDT"]],
+  ], "A provider subscribes to each market once even when CG and RS both have explicit routes for that market")
+})
+
+test("rejects an RS route unless RS is explicitly enabled and the market is enabled", () => {
+  const route = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    symbol: "BTCUSDT",
+    providerInstanceId: "binance-testnet-primary",
+  }
+  assert.throws(
+    () => resolveExecutionSymbolsByProvider({
+      appConfig: createAppConfig({
+        executionRouting: { routes: [...createRoutes(), route] },
+      }),
+      providers,
+    }),
+    /disabled|not enabled|unsupported strategy/i,
+    "An RS route must never implicitly enable RS or adopt the CG pair configuration",
+  )
 })
 
 test("rejects multi-provider configuration without an explicit execution route table", () => {
@@ -160,7 +226,7 @@ test("rejects routes for disabled or unconfigured markets and unknown strategy I
     { ...createRoutes()[0],
   symbol: "SOLUSDT" },
     { ...createRoutes()[0],
-  strategyId: StrategyId.RECOVERY_SELLER,
+  strategyId: "UNSUPPORTED_STRATEGY",
   symbol: "BTCUSDT" },
   ]
 
@@ -233,5 +299,88 @@ test("rejects configured provider instances with no execution markets", () => {
       }],
     }),
     /no execution routes; data-only provider instances are not supported/,
+  )
+})
+
+
+function createExpectedSameMarketCgAndRsRoutes() {
+  return [
+    ["binance-testnet-primary", [
+      {
+        strategyId: StrategyId.COIN_GRABBER,
+        symbol: "BTCUSDT",
+      },
+      {
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "BTCUSDT",
+      },
+      {
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "DOGEUSDT",
+      },
+    ]],
+    ["binance-live-secondary", [
+      {
+        strategyId: StrategyId.COIN_GRABBER,
+        symbol: "ETHUSDT",
+      },
+    ]],
+  ]
+}
+
+function createSameMarketCgAndRsRouteFixture() {
+  const recoverySellerPairs = {
+    BTCUSDT: {
+      enabled: true,
+      tradingEnvironment: "testnet",
+    },
+    DOGEUSDT: {
+      enabled: true,
+      tradingEnvironment: "testnet",
+    },
+  }
+  const routes = [
+    ...createRoutes(),
+    {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "BTCUSDT",
+      providerInstanceId: "binance-testnet-primary",
+    },
+    {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "DOGEUSDT",
+      providerInstanceId: "binance-testnet-primary",
+    },
+  ]
+  return {
+    appConfig: createAppConfig({
+      strategies: {
+        CG_coinGrabber: {
+          pairs,
+        },
+        RS_recoverySeller: {
+          enabled: true,
+          pairs: recoverySellerPairs,
+        },
+      },
+      executionRouting: {
+        routes,
+      },
+    }),
+    expectedRoutes: createExpectedSameMarketCgAndRsRoutes(),
+  }
+}
+
+test("preserves strategy identity for same-market CG and RS routes on one provider", () => {
+  const fixture = createSameMarketCgAndRsRouteFixture()
+  const result = resolveExecutionRoutesByProvider({
+    appConfig: fixture.appConfig,
+    providers,
+  })
+
+  assert.deepEqual(
+    [...result],
+    fixture.expectedRoutes,
+    "The account runtime must retain strategy identity even when its market-data/execution symbol list is deduplicated",
   )
 })

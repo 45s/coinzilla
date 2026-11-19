@@ -1,6 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { createAccountRuntimeRegistry } from "./account-runtime-registry.js"
+import { createPortfolioWorkflow } from "../../use-cases/create-portfolio-workflow.js"
+import { createRecoverySellerAccountingWorkflow } from "../../use-cases/create-recovery-seller-accounting-workflow.js"
+import { Portfolio } from "../../domain/portfolio/portfolio.js"
+import { OrderRegistry } from "../../domain/orders/order-registry.js"
 
 const providers = [
   {
@@ -91,5 +95,92 @@ test("rejects duplicate provider instance ids and unknown account lookups", () =
     () => registry.get("missing-provider"),
     /not registered/,
     "Unknown provider instances must not silently receive an account runtime.",
+  )
+})
+
+
+test("shares one account Portfolio, OrderRegistry, and serialized queue across CG and RS workflows", () => {
+  const accountRuntime = createAccountRuntimeRegistry({ providers }).get("binance-testnet-one")
+  const conservative = createPortfolioWorkflow({ sharedState: accountRuntime.state })
+  const recoverySeller = createRecoverySellerAccountingWorkflow({ sharedState: accountRuntime.state })
+
+  assert.equal(conservative.getPortfolio(), accountRuntime.state.portfolio)
+  assert.equal(recoverySeller.getPortfolio(), accountRuntime.state.portfolio)
+  assert.equal(recoverySeller.getOrderRegistry(), accountRuntime.state.orderRegistry)
+  assert.equal(accountRuntime.state.legacyPositions instanceof Map, true)
+  const nextLegacyPositions = new Map()
+  accountRuntime.state.legacyPositions = nextLegacyPositions
+  assert.equal(accountRuntime.state.legacyPositions, nextLegacyPositions)
+  assert.throws(() => {
+    accountRuntime.state.legacyPositions = []
+  }, /must be a Map/)
+
+  const nextPortfolio = new Portfolio()
+  accountRuntime.state.portfolio = nextPortfolio
+  assert.equal(conservative.getPortfolio(), nextPortfolio)
+  assert.equal(recoverySeller.getPortfolio(), nextPortfolio)
+  assert.throws(() => {
+    accountRuntime.state.portfolio = {}
+  }, /must be a Portfolio/)
+
+  const nextRecoveryLedgers = new Map()
+  accountRuntime.state.recoveryLedgers = nextRecoveryLedgers
+  assert.equal(conservative.getRecoveryLedger({ marketId: "BTCUSDT" }), undefined)
+  assert.equal(accountRuntime.state.recoveryLedgers, nextRecoveryLedgers)
+  assert.throws(() => {
+    accountRuntime.state.recoveryLedgers = []
+  }, /must be a Map/)
+
+  const nextOrderRegistry = OrderRegistry.empty()
+  accountRuntime.state.orderRegistry = nextOrderRegistry
+  assert.equal(recoverySeller.getOrderRegistry(), nextOrderRegistry)
+  assert.throws(() => {
+    accountRuntime.state.orderRegistry = {}
+  }, /must be an OrderRegistry/)
+
+  const queuedTransition = Promise.resolve()
+  accountRuntime.state.updateQueue = queuedTransition
+  assert.equal(accountRuntime.state.updateQueue, queuedTransition)
+  assert.equal(Object.isFrozen(accountRuntime.state), true)
+})
+
+test("serializes CG and RS engine transitions through one account-level queue", async () => {
+  const accountRuntime = createAccountRuntimeRegistry({ providers }).get("binance-testnet-one")
+  const events = []
+  let releaseFirst
+  const firstGate = new Promise((resolve) => {
+    releaseFirst = resolve
+  })
+
+  const first = accountRuntime.state.runTransition({
+    task: async () => {
+      events.push("first-started")
+      await firstGate
+      events.push("first-finished")
+      return "first"
+    },
+  })
+  await Promise.resolve()
+  const second = accountRuntime.state.runTransition({
+    task: async () => {
+      events.push("second-started")
+      return "second"
+    },
+  })
+  await Promise.resolve()
+
+  assert.deepEqual(
+    events,
+    ["first-started"],
+    "A second strategy transition must wait while the first account transition is active.",
+  )
+  releaseFirst()
+  const results = await Promise.all([first, second])
+
+  assert.deepEqual(results, ["first", "second"], "The shared account queue must preserve each transition result.")
+  assert.deepEqual(
+    events,
+    ["first-started", "first-finished", "second-started"],
+    "CG and RS transitions must execute in one deterministic account-level order.",
   )
 })

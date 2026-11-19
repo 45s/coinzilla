@@ -52,6 +52,13 @@ function validateOptionalCallbacks({
   }
 }
 
+function validateRecoverySellerEvaluator({ evaluateRecoverySellerTransition } = {}) {
+  if (evaluateRecoverySellerTransition !== undefined &&
+      typeof evaluateRecoverySellerTransition !== "function") {
+    throw new TypeError("evaluateRecoverySellerTransition must be a function when provided")
+  }
+}
+
 function validateInitialState({ initialState } = {}) {
   if (!initialState || typeof initialState !== "object" || Array.isArray(initialState)) {
     throw new TypeError("initialState must be an object")
@@ -81,6 +88,7 @@ export function validateConservativeTradingEngineOptions({
   onOperationalStateCancellationOutcome,
   onOperationalStateStrategyMarketPaused,
   hasUnownedOpenOrdersForSymbol,
+  evaluateRecoverySellerTransition,
   initialState,
 } = {}) {
   validateStrategyPolicy({ strategyPolicy })
@@ -105,6 +113,7 @@ export function validateConservativeTradingEngineOptions({
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
     hasUnownedOpenOrdersForSymbol,
-    })
+  })
+  validateRecoverySellerEvaluator({ evaluateRecoverySellerTransition })
   validateInitialState({ initialState })
 }

@@ -28,12 +28,28 @@ function createAccountScopeKey({ identity }) {
   return JSON.stringify([identity.providerType, identity.accountId, identity.environment])
 }
 
-function createAccountTradingState() {
-  // These are in-process Conservative strategy ledgers and controls, not restart-recovery data.
-  return Object.freeze({
-    portfolio: new Portfolio(),
-    recoveryLedgers: new Map(),
-    orderRegistry: OrderRegistry.empty(),
+function defineValidatedStateProperty({
+  state,
+  property,
+  getValue,
+  setValue,
+  isValid,
+  errorMessage,
+}) {
+  Object.defineProperty(state, property, {
+    enumerable: true,
+    get: getValue,
+    set: (value) => {
+      if (!isValid(value)) {
+        throw new TypeError(errorMessage)
+      }
+      setValue(value)
+    },
+  })
+}
+
+function createAccountStateCollections() {
+  return {
     journalFills: [],
     pausedMarkets: new Set(),
     durablePausedMarkets: new Set(),
@@ -45,7 +61,71 @@ function createAccountTradingState() {
     completedOrderClientIds: new Set(),
     trailingBuySymbols: new Set(),
     requiresExchangeReconciliation: false,
+  }
+}
+
+function createSerializedAccountTransitionQueue() {
+  let transitionTail = Promise.resolve()
+  return ({ task } = {}) => {
+    if (typeof task !== "function") {
+      return Promise.reject(new TypeError("Account transition queue requires a task"))
+    }
+    const current = transitionTail.then(task)
+    transitionTail = current.catch(() => undefined)
+    return current
+  }
+}
+
+function createAccountTradingState() {
+  // CG and RS accounting share one account-level serialization queue and canonical state.
+  let portfolio = new Portfolio()
+  let recoveryLedgers = new Map()
+  let orderRegistry = OrderRegistry.empty()
+  let legacyPositions = new Map()
+  let updateQueue = Promise.resolve()
+  const state = createAccountStateCollections()
+  state.runTransition = createSerializedAccountTransitionQueue()
+  defineValidatedStateProperty({
+    state,
+    property: "portfolio",
+    getValue: () => portfolio,
+    setValue: (value) => { portfolio = value },
+    isValid: (value) => value instanceof Portfolio,
+    errorMessage: "Account workflow portfolio must be a Portfolio",
   })
+  defineValidatedStateProperty({
+    state,
+    property: "recoveryLedgers",
+    getValue: () => recoveryLedgers,
+    setValue: (value) => { recoveryLedgers = value },
+    isValid: (value) => value instanceof Map,
+    errorMessage: "Account workflow recoveryLedgers must be a Map",
+  })
+  defineValidatedStateProperty({
+    state,
+    property: "orderRegistry",
+    getValue: () => orderRegistry,
+    setValue: (value) => { orderRegistry = value },
+    isValid: (value) => value instanceof OrderRegistry,
+    errorMessage: "Account workflow orderRegistry must be an OrderRegistry",
+  })
+  defineValidatedStateProperty({
+    state,
+    property: "legacyPositions",
+    getValue: () => legacyPositions,
+    setValue: (value) => { legacyPositions = value },
+    isValid: (value) => value instanceof Map,
+    errorMessage: "Account workflow legacyPositions must be a Map",
+  })
+  defineValidatedStateProperty({
+    state,
+    property: "updateQueue",
+    getValue: () => updateQueue,
+    setValue: (value) => { updateQueue = value },
+    isValid: (value) => value !== null && typeof value?.then === "function",
+    errorMessage: "Account workflow updateQueue must be Promise-like",
+  })
+  return Object.freeze(state)
 }
 
 function createAccountRuntime({ identity }) {

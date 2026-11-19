@@ -197,6 +197,7 @@ function createAccountRuntimeStarter({
       operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
       hasOperationalStateStore: input.operationalStateStore !== undefined,
       executionSymbols: input.executionSymbols,
+      executionRoutes: input.executionRoutes,
       marketDataSymbols: input.marketDataSymbols,
       marketDataSources: input.marketDataSources,
       marketDataProviderTypes: input.marketDataProviderTypes,
@@ -212,6 +213,7 @@ function createAccountRuntimeStarter({
     return {
       ...runtime,
       executionSymbols: [...input.executionSymbols],
+      executionRoutes: [...(input.executionRoutes ?? [])],
       marketDataSources: input.marketDataSources,
       marketDataProviderTypes: input.marketDataProviderTypes,
       subscriptions: [...input.executionSymbols],
@@ -244,6 +246,20 @@ function assertAccountStartupInputs({
     ["ETHUSDT"],
     ["SOLUSDT"],
   ])
+  assert.deepEqual(inputs.map((entry) => entry.executionRoutes), [
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "BTCUSDT",
+    }],
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "ETHUSDT",
+    }],
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "SOLUSDT",
+    }],
+  ], "Provider startup must retain strategy ownership instead of receiving only deduplicated market symbols")
   assert.deepEqual(inputs.map((entry) => entry.marketDataSymbols), [
     ["BTCUSDT"],
     ["ETHUSDT"],
@@ -272,6 +288,7 @@ function createShutdownTrackingProviderStarter(shutdownOrder) {
     const { providerInstanceId } = input.providerIdentity
     return {
       executionSymbols: [...input.executionSymbols],
+      executionRoutes: [...(input.executionRoutes ?? [])],
       marketDataSources: input.marketDataSources,
       marketDataProviderTypes: input.marketDataProviderTypes,
       tradingEnabled: true,
@@ -376,6 +393,21 @@ test("starts one independent runtime per configured provider account", async () 
   assertAccountStartupInputs({
     starts,
   })
+  assert.deepEqual(runtime.providerAccounts.map((account) => account.executionRoutes), [
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "BTCUSDT",
+    }],
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "ETHUSDT",
+    }],
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "SOLUSDT",
+    }],
+  ], "Multi-account runtime metadata must retain each provider's strategy ownership")
+
   assert.equal(runtime.providerAccounts.length, 3)
   assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
   assert.equal(runtime.connected, true)
@@ -422,6 +454,7 @@ function createSecondAccountFailureStarter({
     const account = startCount === 1 ? "first" : "third"
     return {
       executionSymbols: [...input.executionSymbols],
+      executionRoutes: [...(input.executionRoutes ?? [])],
       marketDataSources: input.marketDataSources,
       marketDataProviderTypes: input.marketDataProviderTypes,
       subscriptions: [...input.executionSymbols],
@@ -809,4 +842,75 @@ test("rejects multi-provider startup without explicit market-data ownership befo
     "multi-provider startup must fail before connecting any account when market ownership is ambiguous",
   )
   assert.equal(startCalls, 0, "invalid market-data routes must be rejected before account startup")
+})
+
+
+function createSameMarketCgAndRsConfig() {
+  return {
+    ...appConfig,
+    marketDataRouting: {
+      routes: [{
+        symbol: "BTCUSDT",
+        providerInstanceId: "first",
+      }],
+    },
+    executionRouting: {
+      routes: [
+        {
+          strategyId: "CG_coinGrabber",
+          symbol: "BTCUSDT",
+          providerInstanceId: "first",
+        },
+        {
+          strategyId: "RS_recoverySeller",
+          symbol: "BTCUSDT",
+          providerInstanceId: "first",
+        },
+      ],
+    },
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        pairs: {
+          BTCUSDT: { enabled: true },
+        },
+      },
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: {
+          BTCUSDT: { enabled: true },
+        },
+      },
+    },
+  }
+}
+
+test("passes both strategy routes to one provider while deduplicating its market subscription", async () => {
+  const provider = createProvider({
+    providerInstanceId: "first",
+    providerType: "binance",
+    accountId: "account-one",
+  })
+  const starts = []
+
+  await startProviderAccounts({
+    providers: [provider],
+    appConfig: createSameMarketCgAndRsConfig(),
+    start: async (input) => {
+      starts.push(input)
+      return {}
+    },
+  })
+
+  assert.deepEqual(starts[0].executionRoutes, [
+    {
+      strategyId: "CG_coinGrabber",
+      symbol: "BTCUSDT",
+    },
+    {
+      strategyId: "RS_recoverySeller",
+      symbol: "BTCUSDT",
+    },
+  ], "A shared provider account must retain both independently owned strategy routes")
+  assert.deepEqual(starts[0].executionSymbols, ["BTCUSDT"], "The shared market must be subscribed only once")
 })

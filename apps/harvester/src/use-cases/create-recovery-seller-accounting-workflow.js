@@ -1,147 +1,23 @@
-import { CanonicalOrder, Fill, Market } from "@coinzilla/entities"
-import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { CanonicalOrder, Fill } from "@coinzilla/entities"
+import { addDecimal, ensure, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
-import { calculateVerifiedLegacySpotAllocation } from "../domain/strategies/recovery-seller/legacy-spot-allocation.js"
 import { applyReconciledMixedSellOrder } from "../domain/strategies/recovery-seller/mixed-sell-fill-accounting.js"
 import { calculateRecoverySellerProfitability } from "../domain/strategies/recovery-seller/calculate-profitability.js"
-import { createLegacyPosition } from "../domain/strategies/recovery-seller/legacy-position.js"
+
+import {
+  createLegacyPositionMap,
+  initializeLegacyPositionsTransition,
+  getLegacyPositionRecord,
+  createAdditionalTrackedQuoteCashFlow,
+  createAdditionalTrackedBaseQuantity,
+} from "../domain/strategies/recovery-seller/legacy-accounting-state.js"
+import {
+  createRecoverySellerExecutionCallbacks,
+} from "./recovery-seller-order-callbacks.js"
 
 const TERMINAL_ORDER_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
-
-function assertLegacyPositionAmounts(position) {
-  for (const field of ["invested", "originalQuantity", "averageCost", "remainingQuantity"]) {
-    assertDecimalString({
-      value: position[field],
-      field: `legacyPosition.${field}`,
-    })
-  }
-  for (const field of ["invested", "originalQuantity", "averageCost"]) {
-    if (compareDecimal({
-      left: position[field],
-      right: "0",
-    }) <= 0) {
-      throw new RangeError(`legacyPosition.${field} must be greater than zero`)
-    }
-  }
-  if (compareDecimal({
-    left: position.remainingQuantity,
-    right: "0",
-  }) < 0 || compareDecimal({
-    left: position.remainingQuantity,
-    right: position.originalQuantity,
-  }) > 0) {
-    throw new RangeError("Recovery Seller legacy remaining quantity must be within its original authorized quantity")
-  }
-  const originalPosition = createLegacyPosition({
-    invested: position.invested,
-    quantity: position.originalQuantity,
-  })
-  if (compareDecimal({
-    left: position.averageCost,
-    right: originalPosition.averageCost,
-  }) !== 0) {
-    throw new RangeError("Recovery Seller legacy average cost must remain the original invested/quantity basis")
-  }
-}
-
-function assertLegacyAccountingFillIdentityShape(accounting) {
-  if (!Array.isArray(accounting.appliedFillIds) ||
-      !Array.isArray(accounting.appliedFillFingerprints) ||
-      accounting.appliedFillIds.length !== accounting.appliedFillFingerprints.length) {
-    throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
-  }
-}
-
-function assertLegacyAccountingFillIdentityRecords(accounting) {
-  const seenFillIds = new Set()
-  for (const [index, item] of accounting.appliedFillFingerprints.entries()) {
-    if (!item ||
-        typeof item.id !== "string" ||
-        !item.id.trim() ||
-        typeof item.fillFingerprint !== "string" ||
-        !item.fillFingerprint.trim() ||
-        typeof item.allocationFingerprint !== "string" ||
-        !item.allocationFingerprint.trim() ||
-        item.id !== accounting.appliedFillIds[index] ||
-        seenFillIds.has(item.id)) {
-      throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
-    }
-    seenFillIds.add(item.id)
-  }
-}
-
-function assertLegacyAccountingState(accounting) {
-  for (const field of ["realizedQuoteProceeds", "realizedCostBasis", "realizedProfit"]) {
-    assertDecimalString({
-      value: accounting[field],
-      field: `legacyAccounting.${field}`,
-    })
-  }
-  assertLegacyAccountingFillIdentityShape(accounting)
-  if (compareDecimal({
-    left: accounting.realizedQuoteProceeds,
-    right: "0",
-  }) < 0 || compareDecimal({
-    left: accounting.realizedCostBasis,
-    right: "0",
-  }) < 0) {
-    throw new RangeError("Recovery Seller legacy proceeds and cost basis must be non-negative")
-  }
-  const expectedProfit = subtractDecimal({
-    left: accounting.realizedQuoteProceeds,
-    right: accounting.realizedCostBasis,
-  })
-  if (compareDecimal({
-    left: accounting.realizedProfit,
-    right: expectedProfit,
-  }) !== 0) {
-    throw new RangeError("Recovery Seller legacy realized profit does not match its proceeds and cost basis")
-  }
-  assertLegacyAccountingFillIdentityRecords(accounting)
-}
-
-function assertLegacyPositionRecord(record) {
-  if (!record || typeof record !== "object" || Array.isArray(record) ||
-      !(record.market instanceof Market) ||
-      !record.position || typeof record.position !== "object" ||
-      !record.accounting || typeof record.accounting !== "object") {
-    throw new TypeError("Recovery Seller initialLegacyPositions must contain market, position and accounting records")
-  }
-  assertLegacyPositionAmounts(record.position)
-  assertLegacyAccountingState(record.accounting)
-}
-
-function createLegacyPositionMap(records) {
-  if (!Array.isArray(records)) {
-    throw new TypeError("initialLegacyPositions must be an array")
-  }
-  const positions = new Map()
-  for (const record of records) {
-    assertLegacyPositionRecord(record)
-    if (positions.has(record.market.id)) {
-      throw new TypeError(`Recovery Seller legacy Position already exists for market ${record.market.id}`)
-    }
-    positions.set(record.market.id, Object.freeze({
-      market: record.market,
-      position: record.position,
-      accounting: record.accounting,
-    }))
-  }
-  return positions
-}
-
-function getLegacyPositionRecord({ state, marketId }) {
-  if (typeof marketId !== "string" || !marketId.trim()) {
-    throw new TypeError("Recovery Seller legacy Position lookup requires marketId")
-  }
-  const record = state.legacyPositions.get(marketId)
-  if (!record) {
-    throw new TypeError(`Recovery Seller legacy Position is not configured for market ${marketId}`)
-  }
-  return record
-}
 
 function calculateNetAllocatedQuoteProceeds({ allocationSide, quoteAssetId }) {
   let netProceeds = allocationSide.quoteProceeds
@@ -216,167 +92,6 @@ function calculateOrderProfitability({
     legacyAverageCost: legacyPosition.averageCost,
     legacyBaseDebit: totals.legacyBaseDebit,
     legacyNetQuoteProceeds: totals.legacyNetQuoteProceeds,
-  })
-}
-
-function createLegacySpotPositions({ legacyPositions }) {
-  return [...legacyPositions.values()].map(({ market, position }) => ({
-    market,
-    originalQuantity: position.originalQuantity,
-    remainingQuantity: position.remainingQuantity,
-  }))
-}
-
-function createAdditionalTrackedQuoteCashFlow({ legacyPositions }) {
-  const totals = new Map()
-  for (const { market, accounting } of legacyPositions.values()) {
-    const assetId = market.quoteAsset.id
-    totals.set(assetId, addDecimal({
-      left: totals.get(assetId) ?? "0",
-      right: accounting.realizedQuoteProceeds,
-    }))
-  }
-  return Object.freeze([...totals.keys()].sort().map((assetId) => Object.freeze({
-    assetId,
-    amount: totals.get(assetId),
-  })))
-}
-
-function createAdditionalTrackedBaseQuantity({ state, balances, portfolio }) {
-  if (portfolio !== state.portfolio) {
-    throw new Error("Recovery Seller Spot allocation requires the current shared Portfolio snapshot")
-  }
-  return calculateVerifiedLegacySpotAllocation({
-    balances,
-    portfolio,
-    legacyPositions: createLegacySpotPositions({
-      legacyPositions: state.legacyPositions,
-    }),
-  })
-}
-
-function getRecoverySellerPurposeForSide({ side } = {}) {
-  if (side === "BUY") {return "RECOVERY_BUY"}
-  if (side === "SELL") {return "RECOVERY_SELL"}
-  return undefined
-}
-
-function validateRecoverySellerExecutionOwnership({ order, ownership } = {}) {
-  if (!(order instanceof CanonicalOrder) || order.status !== "PENDING") {
-    throw new TypeError("Recovery Seller pending submission requires a PENDING CanonicalOrder")
-  }
-  const expectedPurpose = getRecoverySellerPurposeForSide({ side: order.side })
-  if (ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
-      typeof ownership.positionId !== "string" ||
-      !ownership.positionId.trim() ||
-      typeof ownership.cycleId !== "string" ||
-      !ownership.cycleId.trim() ||
-      ownership.purpose !== expectedPurpose) {
-    throw new Error("Recovery Seller submission requires matching RS strategy, Position, purpose and cycle ownership")
-  }
-  return ownership
-}
-
-function resolveRegisteredRecoverySellerOrderOwnership({ registry, order } = {}) {
-  const registeredOrder = registry.getOrder({ clientOrderId: order.clientOrderId })
-  const ownership = registry.getOwnership({ clientOrderId: order.clientOrderId })
-  const expectedPurpose = getRecoverySellerPurposeForSide({ side: registeredOrder?.side })
-  if (!registeredOrder ||
-      !ownership ||
-      ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
-      ownership.purpose !== expectedPurpose ||
-      typeof ownership.positionId !== "string" ||
-      !ownership.positionId.trim() ||
-      typeof ownership.cycleId !== "string" ||
-      !ownership.cycleId.trim()) {
-    throw new Error("Recovery Seller execution callback requires a registered RS-owned order")
-  }
-  return ownership
-}
-
-function createRecoverySellerPendingOrderCallback({ state } = {}) {
-  return ({ order, ownership } = {}) => {
-    validateRecoverySellerExecutionOwnership({
-      order,
-      ownership,
-    })
-    const result = state.orderRegistry.registerPending({
-      order,
-      ownership,
-    })
-    state.orderRegistry = result.registry
-    return result
-  }
-}
-
-function createRecoverySellerAcknowledgedOrderCallback({ state } = {}) {
-  return ({ order } = {}) => {
-    const ownership = resolveRegisteredRecoverySellerOrderOwnership({
-      registry: state.orderRegistry,
-      order,
-    })
-    const result = state.orderRegistry.attachAcknowledgedBrokerOrderId({ order })
-    state.orderRegistry = result.registry
-    return Object.freeze({
-      ...result,
-      ownership,
-    })
-  }
-}
-
-function createRecoverySellerSubmissionFailureCallback({ state } = {}) {
-  return ({ order, outcome } = {}) => {
-    const ownership = resolveRegisteredRecoverySellerOrderOwnership({
-      registry: state.orderRegistry,
-      order,
-    })
-    if (outcome === "REJECTED") {
-      const result = state.orderRegistry.removePending({ clientOrderId: order.clientOrderId })
-      if (!result.removed) {
-        throw new Error("Recovery Seller rejected submission was not a removable pending order")
-      }
-      state.orderRegistry = result.registry
-      return Object.freeze({
-        ...result,
-        ownership,
-      })
-    }
-    const result = state.orderRegistry.markUnknown({ clientOrderId: order.clientOrderId })
-    if (!result.ok) {
-      throw result.errors[0] ?? new Error("Unable to retain uncertain Recovery Seller submission as UNKNOWN")
-    }
-    state.orderRegistry = result.data.registry
-    return Object.freeze({
-      ...result.data,
-      ownership,
-    })
-  }
-}
-
-function createRecoverySellerSubmissionDeferredCallback({ state } = {}) {
-  return ({ order, registered } = {}) => {
-    if (!registered) {
-      return Object.freeze({ removed: false })
-    }
-    resolveRegisteredRecoverySellerOrderOwnership({
-      registry: state.orderRegistry,
-      order,
-    })
-    const result = state.orderRegistry.removePending({ clientOrderId: order.clientOrderId })
-    if (!result.removed) {
-      throw new Error("Recovery Seller deferral did not resolve a registered pending order")
-    }
-    state.orderRegistry = result.registry
-    return result
-  }
-}
-
-function createRecoverySellerExecutionCallbacks({ state } = {}) {
-  return Object.freeze({
-    onPendingOrder: createRecoverySellerPendingOrderCallback({ state }),
-    onAcknowledgedOrder: createRecoverySellerAcknowledgedOrderCallback({ state }),
-    onSubmissionFailure: createRecoverySellerSubmissionFailureCallback({ state }),
-    onSubmissionDeferred: createRecoverySellerSubmissionDeferredCallback({ state }),
   })
 }
 
@@ -602,48 +317,122 @@ function createSerializedWorkflowOperation({ state, transition } = {}) {
   }
 }
 
-export function createRecoverySellerAccountingWorkflow({
-  initialPortfolio = new Portfolio(),
-  initialOrderRegistry = OrderRegistry.empty(),
-  initialLegacyPositions = [],
-  onOperationalStateExecutionFill,
+function validateSharedRecoverySellerWorkflowState({
+  sharedState,
+  initialPortfolio,
+  initialOrderRegistry,
+  initialLegacyPositions,
 } = {}) {
-  if (!(initialPortfolio instanceof Portfolio)) {
-    throw new TypeError("initialPortfolio must be a Portfolio")
+  if (sharedState === undefined) {
+    return
   }
-  if (!(initialOrderRegistry instanceof OrderRegistry)) {
-    throw new TypeError("initialOrderRegistry must be an OrderRegistry")
+  ensure.object({
+    value: sharedState,
+    name: "sharedState",
+    errMsg: "sharedState must be an account workflow state object",
+  })
+  if (!(sharedState.portfolio instanceof Portfolio)) {
+    throw new TypeError("sharedState.portfolio must be a Portfolio")
   }
+  if (!(sharedState.orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("sharedState.orderRegistry must be an OrderRegistry")
+  }
+  if (!(sharedState.legacyPositions instanceof Map)) {
+    throw new TypeError("sharedState.legacyPositions must be a Map")
+  }
+  if (typeof sharedState.updateQueue?.then !== "function") {
+    throw new TypeError("sharedState.updateQueue must be a Promise-like queue")
+  }
+  if (initialPortfolio !== undefined && initialPortfolio !== sharedState.portfolio) {
+    throw new TypeError("initialPortfolio must match sharedState.portfolio")
+  }
+  if (initialOrderRegistry !== undefined && initialOrderRegistry !== sharedState.orderRegistry) {
+    throw new TypeError("initialOrderRegistry must match sharedState.orderRegistry")
+  }
+  if (initialLegacyPositions.length > 0) {
+    throw new TypeError("initialLegacyPositions cannot be combined with sharedState")
+  }
+}
 
-  const state = {
-    portfolio: initialPortfolio,
-    orderRegistry: initialOrderRegistry,
+function createRecoverySellerWorkflowState({
+  sharedState,
+  initialPortfolio,
+  initialOrderRegistry,
+  initialLegacyPositions,
+} = {}) {
+  validateSharedRecoverySellerWorkflowState({
+    sharedState,
+    initialPortfolio,
+    initialOrderRegistry,
+    initialLegacyPositions,
+  })
+  const state = sharedState ?? {
+    portfolio: initialPortfolio ?? new Portfolio(),
+    orderRegistry: initialOrderRegistry ?? OrderRegistry.empty(),
     legacyPositions: createLegacyPositionMap(initialLegacyPositions),
     updateQueue: Promise.resolve(),
   }
-
-  if (onOperationalStateExecutionFill !== undefined &&
-      typeof onOperationalStateExecutionFill !== "function") {
-    throw new TypeError("onOperationalStateExecutionFill must be a function")
+  if (!(state.portfolio instanceof Portfolio)) {
+    throw new TypeError("initialPortfolio must be a Portfolio")
   }
+  if (!(state.orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("initialOrderRegistry must be an OrderRegistry")
+  }
+  return state
+}
 
-  const applyBuyFill = createSerializedWorkflowOperation({
-    state,
-    transition: ({ state: currentState, fill }) => applyRecoverySellerBuyFillTransition({
-      state: currentState,
-      fill,
-      onOperationalStateExecutionFill,
+function createRecoverySellerAccountingOperations({
+  state,
+  onOperationalStateExecutionFill,
+} = {}) {
+  return {
+    applyBuyFill: createSerializedWorkflowOperation({
+      state,
+      transition: ({ state: currentState, fill }) => applyRecoverySellerBuyFillTransition({
+        state: currentState,
+        fill,
+        onOperationalStateExecutionFill,
+      }),
     }),
+    reconcileTerminalMixedSell: createSerializedWorkflowOperation({
+      state,
+      transition: reconcileTerminalMixedSellTransition,
+    }),
+    initializeLegacyPositions: createSerializedWorkflowOperation({
+      state,
+      transition: initializeLegacyPositionsTransition,
+    }),
+  }
+}
+
+export function createRecoverySellerAccountingWorkflow({
+  initialPortfolio,
+  initialOrderRegistry,
+  initialLegacyPositions = [],
+  onOperationalStateExecutionFill,
+  sharedState,
+} = {}) {
+  if (onOperationalStateExecutionFill !== undefined) {
+    ensure.function({
+      value: onOperationalStateExecutionFill,
+      name: "onOperationalStateExecutionFill",
+    })
+  }
+  const state = createRecoverySellerWorkflowState({
+    sharedState,
+    initialPortfolio,
+    initialOrderRegistry,
+    initialLegacyPositions,
   })
-  const reconcileTerminalMixedSell = createSerializedWorkflowOperation({
+
+  const operations = createRecoverySellerAccountingOperations({
     state,
-    transition: reconcileTerminalMixedSellTransition,
+    onOperationalStateExecutionFill,
   })
 
   return Object.freeze({
-    applyBuyFill,
+    ...operations,
     getExecutionCallbacks: () => createRecoverySellerExecutionCallbacks({ state }),
-    reconcileTerminalMixedSell,
     getPortfolio: () => state.portfolio,
     getOrderRegistry: () => state.orderRegistry,
     getActiveOrders: () => state.orderRegistry.getActiveOrders(),
