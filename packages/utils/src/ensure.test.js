@@ -53,6 +53,7 @@ describe("ensure direct assertions", () => {
     assert.throws(() => ensure.nonEmptyArray({ value: [], name: "symbols" }), { name: "TypeError", message: /symbols must be a non-empty array/ }, "non-empty array assertion must reject empty arrays")
     assert.throws(() => ensure.strings({ value: ["BTC", 2], name: "symbols" }), { name: "TypeError", message: /symbols\[1\] must be a string/ }, "string-array assertion must identify the invalid element index")
     assert.throws(() => ensure.nonEmptyStrings({ value: ["BTC", " "], name: "symbols" }), { name: "TypeError", message: /symbols\[1\] must be a non-empty string/ }, "non-empty string-array assertion must identify blank elements")
+    assert.throws(() => ensure.nonEmptyStrings({ value: [], name: "symbols" }), { name: "TypeError", message: /symbols must be a non-empty array/ }, "non-empty string-array assertion must reject empty arrays")
     assert.throws(() => ensure.unique({ value: ["BTC", "BTC"], name: "symbols" }), { name: "TypeError", message: /symbols must contain unique values/ }, "unique assertion must reject duplicate values")
     assert.throws(() => ensure.object({ value: null, name: "config" }), { name: "TypeError", message: /config must be an object/ }, "object assertion must reject null")
     assert.throws(() => ensure.object({ value: [], name: "config" }), { name: "TypeError", message: /config must be an object/ }, "object assertion must reject arrays")
@@ -89,7 +90,7 @@ describe("ensure direct assertions", () => {
     assert.throws(() => ensure.string(), TypeError, "assertions must reject missing options instead of silently accepting undefined")
     assert.throws(() => ensure.string({ value: "x", name: "" }), TypeError, "field names must be non-empty strings")
     assert.throws(() => ensure.string(null), TypeError, "assertions must reject null options")
-    assert.throws(() => ensure.string({ get value() { throw new Error("must not run") } }), { name: "TypeError", message: /options must contain readable properties/ }, "assertions must not invoke option getters")
+    assert.throws(() => ensure.string({ get value() { throw new Error("must not run") } }), { name: "TypeError", message: /options.value must not be an accessor/ }, "assertions must not invoke option getters")
   })
 })
 
@@ -139,7 +140,10 @@ describe("ensure fluent pipelines", () => {
 
   it("rejects invalid pipeline operations with field-aware diagnostics", () => {
     assert.throws(() => ensure.chain({ value: [] }).nonEmpty(), { name: "TypeError", message: /value must be a non-empty array/ }, "non-empty pipeline assertion must reject an empty collection")
-    assert.throws(() => ensure.chain({ value: [1, "x"], name: "symbols" }).strings(), { name: "TypeError", message: /symbols\[1\] must be a string/ }, "pipeline string validation must identify invalid collection elements")
+    assert.throws(() => ensure.chain({ value: ["BTC", 2], name: "symbols" }).strings(), { name: "TypeError", message: /symbols\[1\] must be a string/ }, "pipeline string validation must identify invalid collection elements")
+    assert.throws(() => ensure.chain({ value: ["BTC", " "], name: "symbols" }).nonEmptyStrings(), { name: "TypeError", message: /symbols\[1\] must be a non-empty string/ }, "pipeline non-empty strings must reject blank entries")
+    assert.throws(() => ensure.chain({ value: [], name: "symbols" }).nonEmptyStrings(), { name: "TypeError", message: /symbols must be a non-empty array/ }, "pipeline non-empty strings must reject empty arrays")
+    assert.throws(() => ensure.chain({ value: [1.5], name: "values" }).integers(), { name: "TypeError", message: /values\[0\] must be an integer/ }, "pipeline integer validation must reject fractional elements")
     assert.throws(() => ensure.chain({ value: ["x", "x"], name: "symbols" }).unique(), { name: "TypeError", message: /symbols must contain unique values/ }, "pipeline uniqueness must reject duplicates")
     assert.throws(() => ensure.chain({ value: "x", name: "name" }).map({ transform: (value) => value }), { name: "TypeError", message: /name must be an array/ }, "map must require an array")
     assert.throws(() => ensure.chain({ value: [1], name: "values" }).map({ transform: null }), TypeError, "map must reject non-function transforms")
