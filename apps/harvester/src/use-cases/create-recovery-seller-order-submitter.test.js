@@ -538,3 +538,71 @@ test("uses durable STOP callbacks to block further RS submissions after an unkno
   assert.equal(stopWorkflowResult.data.getStopState().status, "STOPPED")
   assert.equal(operationalStateStore.records.length, 1)
 })
+
+test("blocks further RS submissions when durable STOP persistence fails", async () => {
+  const sharedState = createSharedState()
+  const operationalStateStore = {
+    append: async () => ({
+      ok: false,
+      errors: [new Error("durable store unavailable")],
+    }),
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [],
+      },
+    }),
+  }
+  const stopWorkflowResult = await createRecoverySellerStopWorkflow({
+    operationalStateStore,
+  })
+  const recoverySellerStopCallbacks = createRecoverySellerStopCallbacks({
+    stopWorkflow: stopWorkflowResult.data,
+  })
+  let placeOrderCalls = 0
+  const broker = createBroker({
+    onPlaceOrder: () => {
+      placeOrderCalls += 1
+    },
+    placeOrderFailure: true,
+  })
+  const durable = async () => ({
+    ok: true,
+    data: {
+      durable: true,
+    },
+  })
+  const submit = createRecoverySellerOrderSubmitter({
+    broker,
+    recoverySellerAccountingWorkflow: createRecoverySellerAccountingWorkflow({
+      sharedState,
+    }),
+    onDurableSubmissionIntent: durable,
+    onDurableSubmissionOutcome: durable,
+    recoverySellerStopCallbacks,
+  })
+
+  const first = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "BUY_TRANCHE_ELIGIBLE",
+    },
+    action: createAction(),
+    marketMetadata,
+  })
+  const second = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "BUY_TRANCHE_ELIGIBLE",
+    },
+    action: createAction(),
+    marketMetadata,
+  })
+
+  assert.equal(first.ok, false)
+  assert.equal(second.ok, true)
+  assert.equal(second.data.submitted, false)
+  assert.equal(placeOrderCalls, 1)
+  assert.equal(recoverySellerStopCallbacks.canSubmit(), false)
+  assert.equal(stopWorkflowResult.data.getStopState().status, "STOPPED")
+})
