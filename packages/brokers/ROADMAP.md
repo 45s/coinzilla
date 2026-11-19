@@ -1057,10 +1057,10 @@ The method names below are the concrete Binance broker surface compared with `Bi
 | `getCanonicalOrderHistory({ ... })` | Blocked | Stable client identity and a proven history query contract capable of resolving canonical orders. |
 | `getMyTrades({ ... })` | Blocked | Account-wide trade history endpoint, documented pagination, stable per-execution IDs and time/cursor semantics. |
 | `getFills({ symbol, orderId })` | Blocked | Prove the quantity denomination, complete partial-execution coverage, stable/unique execution identity, fee semantics and ordering before exposing canonical Fill values. |
-| `createOrder()` | Implemented (single-order REST LIMIT/MARKET) | Exact REST-specific volume conversion, order-ID detail verification, conservative unknown-outcome handling. Client-order-ID and canonical placement remain unsupported. |
+| `createOrder()` | Implemented (single-order REST LIMIT/MARKET; live opt-in required) | Exact REST-specific volume conversion, order-ID detail verification, conservative unknown-outcome handling. Client-order-ID and canonical placement remain unsupported. |
 | `createCanonicalOrder()` | Blocked | All placement prerequisites plus canonical response facts and a stable client order ID. |
-| `cancelOrder()` | Implemented (single known order) | Signed REST cancellation followed by order-detail verification; unknown outcomes require manual reconciliation. |
-| `cancelAllOpenOrders()` | Implemented (one symbol) | Reads open orders for the requested symbol, cancels each order, verifies final state, and returns partial/unknown outcomes. Account-wide cancellation remains unavailable. |
+| `cancelOrder()` | Implemented (single known order; live opt-in required) | Signed REST cancellation followed by order-detail verification; unknown outcomes require manual reconciliation. |
+| `cancelAllOpenOrders()` | Implemented (one symbol; live opt-in required) | Reads open orders for the requested symbol, cancels each order, verifies final state, and returns partial/unknown outcomes. Account-wide cancellation remains unavailable. |
 | `subscribeForPrices()` | Blocked | Continuous public Spot price push subscription with event identity/timestamp, subscription confirmation, heartbeat and reconnect/resubscribe contract. Existing public Spot WS methods are RPC request/response. |
 | `subscribeForBookTicker()` | Blocked | Continuous Spot order-book push subscription and documented depth/precision semantics. Current depth RPC precision selection is unclear; no continuous subscription is documented. |
 | `getCandles()` | Blocked | Historical Spot candle endpoint/response with all canonical OHLCV fields, including volume, timestamp units and interval boundaries. Documented Spot kline payload omits volume. |
@@ -1314,7 +1314,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Add offline regressions for cancellation request shape, partial-fill cancellation, non-terminal states, validation-before-I/O, and multi-order cancellation.
 - [x] PR #1464 merged to `develop` as `daf151cc71615a3d09a0446fae4c1e560b8ae4dc` after exact-head Brokers tests/coverage, all workspace unit/coverage jobs, strict ESLint, workspace JavaScript/Markdown quality, actionlint, dependency audit, external documentation links, and Harvester regression tests.
 
-**Still blocked:** canonical placement and idempotent recovery remain unavailable because Bitunix Spot does not document a caller-supplied order ID. Canonical fills, continuous market/private event streams and account-wide order enumeration remain open. Direct legacy placement is tracked in the next section.
+**Still blocked:** canonical placement and idempotent recovery remain unavailable because Bitunix Spot does not document a caller-supplied order ID. Canonical fills, continuous market/private event streams and account-wide order enumeration remain open. Direct legacy placement is implemented but live mutation is disabled by default; explicit configuration opt-in is required.
 
 ## 2026-11-19 — Bitunix Spot single-order REST placement
 
