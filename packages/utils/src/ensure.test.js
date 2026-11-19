@@ -179,7 +179,10 @@ describe("ensure normalization pipelines", () => {
     assert.equal(ensure.chain(namedValue(["COINZILLA", "name"])).lowercase().value, "coinzilla", "lowercase must transform a valid string")
   })
 
-})\n\ndescribe("ensure collection pipelines", () => {\n  it("filters intentionally while preserving the original collection", () => {
+})
+
+describe("ensure collection pipelines", () => {
+  it("filters intentionally while preserving the original collection", () => {
     const source = [1, 2, 3, 4]
     const result = ensure
       .chain(namedValue([source, "values"]))
@@ -198,7 +201,10 @@ describe("ensure normalization pipelines", () => {
     assert.deepEqual(second.value, ["BTC"], "transformations must return a distinct chain")
   })
 
-})\n\ndescribe("ensure pipeline errors", () => {\n  it("rejects invalid pipeline operations with useful errors", () => {
+})
+
+describe("ensure pipeline errors", () => {
+  it("rejects invalid pipeline operations with useful errors", () => {
     const emptyArray = ensure.chain(namedValue([[], "values"]))
     const invalidSymbols = ensure.chain(namedValue([["BTC", 2], "symbols"]))
     const blankSymbols = ensure.chain(namedValue([["BTC", " "], "symbols"]))
