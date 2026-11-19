@@ -21,6 +21,10 @@ The strict ESLint findings in the already changed route and Telegram test fixtur
 
 The latest routing guard and regression tests ensure that a provider account's RS-only symbol is never passed into the CG Conservative pair map. Until the RS runtime is registered, a provider account with no CG-owned route fails startup explicitly rather than silently running an idle or misattributed strategy. This guard is temporary and must be replaced by actual RS strategy dispatch, not relaxed or removed without the dispatch implementation.
 
+## RS-4 account transition queue — test-first checkpoint
+
+The first missing runtime contract is now specified by an offline regression in `src/application/providers/account-runtime-registry.test.js`: two strategy transitions submitted to one provider-account runtime must execute sequentially and preserve their results. The current account state exposes only the accounting update queue, so this test is expected to fail until the shared engine transition queue is wired into the account runtime and Conservative engine. This is an implementation checkpoint, not completion; continue with the production wiring and cross-strategy dispatch.
+
 ## Approved RS-4 architecture direction — 2026-11-19
 
 The owner approved the architecture direction recorded in [Strategy extensibility architecture](../architecture/strategy-extensibility-audit-roadmap.md): one shared provider-account execution coordinator, explicit `{ strategyId, symbol }` dispatch, and one serialized account-level decision/order-transition path across CG and RS. Strategy policies, lifecycle semantics, accounting attribution and budgets remain independent; Portfolio custody, canonical order/fill processing, broker submission and quote/base reservations are coordinated account-wide. This is the implementation direction for #1475 / PR #1476, not a pending design question.
