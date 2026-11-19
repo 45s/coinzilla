@@ -74,7 +74,7 @@ test("diagnostic errors preserve stable classification while redacting messages"
   assert.equal(sanitized.code, "BITUNIX_WEBSOCKET_EXCHANGE_REJECTED", "Stable local error codes must remain searchable")
   assert.equal(sanitized.kind, "exchange", "The transport or exchange failure classification must remain visible")
   assert.equal(sanitized.exchangeCode, "10001", "The opaque Bitunix response code must remain available for investigation")
-  assert.equal(sanitized.message, "Bitunix rejected [REDACTED]", "Error messages must be sanitized before they are written to disk")
+  assert.equal(sanitized.message, "[error message withheld]", "Free-form errors must never be persisted, even after credential redaction")
 })
 
 test("diagnostic results retain operation timing and safe request/response summaries", () => {
