@@ -777,6 +777,14 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
     page: 1,
     limit: 10,
   }, "order history diagnostics must remain symbol-scoped and inspect only the first bounded page")
+  assert.deepEqual(brokerApiCalls[5].body, {
+    symbol: "BTCUSDT",
+    page: 1,
+    pageSize: 10,
+  }, "the actual exchange request must carry the explicit symbol and bounded first-page parameters")
+  assert.deepEqual(report.results.find((entry) => entry.operation === "Broker API getSymbolFilters").request.params, {
+    symbol: "BTCUSDT",
+  }, "symbol-filter diagnostics must inspect only the configured market")
   assert.equal(report.schemaObservations.at(-1).path, "/api/spot/v1/order/history/page", "the report must include order-history response-shape observations")
   assert.equal(report.schemaObservations.at(-1).schemaValid, true, "the order-history envelope must satisfy its documented page schema")
   assert.deepEqual(report.schemaObservations[0].unexpectedFields, ["futureField"], "unknown exchange fields must be reported without failing otherwise valid normalization")
