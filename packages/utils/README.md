@@ -13,7 +13,8 @@ Import the supported API from the package entry point:
 - `Logger`, `defaultLogger`: structured logger with `trace`, `debug`, `info`, `warn`, `error`, `success`, and `system` methods, independently filtered output transports, runtime threshold changes, opt-in structured context, and safe structured-data redaction. `success` and `system` are semantic methods with `info` severity.
 - `captureBuildMetadata`: one-time, allowlisted application build provenance capture from Git, with explicit `COINZILLA_BUILD_*` environment fallback.
 - `EM`: shared error-message factories.
-- `ensure`: generic input validation/assertions with direct helpers and an optional fluent pipeline. Every method takes one options object; direct methods return the validated value. See [validation and compatibility](#validation-and-compatibility).\n- `Validator`, `VR`: deprecated declarative-validation compatibility API. Do not add new callers; existing exports and predicate-helper semantics are retained during migration.
+- `ensure`: generic input validation/assertions with direct helpers and an optional fluent pipeline. Every method takes one options object; direct methods return the validated value. See [validation and compatibility](#validation-and-compatibility).
+- `Validator`, `VR`: deprecated declarative-validation compatibility API. Do not add new callers; existing exports and predicate-helper semantics are retained during migration.
 - `NH`: numeric helpers (`round`, `fix`, `precise`).
 - `calculateTimeDiff`: signed, fractional difference between `Date` instances in seconds, minutes, or hours (default: hours); omitted `end` defaults to the current time, and an earlier end produces a negative result.
 - `formatTimeRelatively`: English relative-time formatting via `Intl.RelativeTimeFormat` (default unit: hours; callers may select another supported unit).
