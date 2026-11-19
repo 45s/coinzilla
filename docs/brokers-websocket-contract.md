@@ -187,7 +187,7 @@ Official references: [Spot REST API](https://www.bitunix.com/api-docs/spots/en_u
 
 ### External reference audit and Bitunix-only extensions
 
-The source-level comparison of JKorf/Bitunix.Net, the TypeScript MCP, StockSharp and other independent clients is maintained in the [Bitunix external implementation reference audit](../packages/brokers/BITUNIX_REFERENCE_AUDIT.md). It records implementation defects and does not override this contract or official Bitunix documentation.
+The source-level comparison of JKorf/Bitunix.Net, the TypeScript MCP, StockSharp and other independent clients is maintained in the [Bitunix external implementation reference audit](../packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md). It records implementation defects and does not override this contract or official Bitunix documentation.
 
 The audit identified public exchange-rate and token/network metadata endpoints as **Bitunix-specific query extensions**, not Binance parity methods. Exchange rates are already available through the REST broker and the new WebSocket RPC client; token/network metadata is available through the WebSocket RPC client. These are not new Binance-parity broker methods. Do not infer trading filters or authorize wallet mutations from metadata.
 
