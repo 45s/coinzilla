@@ -134,7 +134,7 @@ Do not present speculation as a confirmed bug. Label unverified concerns as risk
 
 When asked to audit and refactor, fix justified in-scope findings rather than returning only recommendations. When asked for an audit only, do not modify implementation; provide an evidence-based, prioritized report.
 
-## 9. Documentation and scope discipline
+## 10. Documentation and scope discipline
 
 - Update living documentation when behavior, contracts, configuration, architecture, ownership, operations, or roadmap status changes.
 - Keep documentation aligned with the actual implementation and tests; distinguish current guarantees from intended future behavior.
@@ -145,7 +145,7 @@ When asked to audit and refactor, fix justified in-scope findings rather than re
 
 Follow [Documentation Governance](../DOCUMENTATION_GOVERNANCE.md) and the [documentation-impact policy](../../ENGINEERING_STANDARDS.md#documentation-impact).
 
-## 10. Verification is part of completion
+## 11. Verification is part of completion
 
 - Discover the actual package scripts and CI workflows; do not guess command names.
 - Run focused tests first, then package tests and coverage, and applicable workspace checks.
@@ -155,7 +155,7 @@ Follow [Documentation Governance](../DOCUMENTATION_GOVERNANCE.md) and the [docum
 - Record commands/checks actually run and their outcomes. Explicitly list skipped checks and why they were not run.
 - Never claim that a check passed, a behavior is safe, or documentation is current without evidence.
 
-## 11. Pull request and final report
+## 12. Pull request and final report
 
 Keep the work focused and reviewable, with logically separated commits where useful. Follow [AI_AGENT_WORKFLOW.md](../../AI_AGENT_WORKFLOW.md) for branch freshness, PR target, required checks, merge, and branch cleanup. Do not bypass branch protection or merge into `main` as task work.
 
@@ -181,7 +181,7 @@ The completion report to the user must state:
 
 Be concise, factual, and explicit about incomplete work.
 
-## 12. Non-negotiable principles
+## 13. Non-negotiable principles
 
 - Understand first; change second.
 - Correctness and compatibility outrank cosmetic cleanup.
