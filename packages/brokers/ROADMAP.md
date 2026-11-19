@@ -1514,7 +1514,6 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Add deterministic regressions for 408, 409, 400, 429, 500, 502, and read-only 409 responses.
 - No generic Broker API, Harvester, exchange endpoint, authentication, or live mutation behavior changes.
 
-
 ## 2026-11-20 — Bitunix Spot order volume and generic quote quantity (#1549)
 
 **Status: In progress in [PR #1550](https://github.com/45s/coinzilla/pull/1550); exact-head CI pending.**
@@ -1523,4 +1522,3 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Generic `quantity` remains base-denominated; new generic `quoteQuantity` expresses quote-denominated MARKET orders.
 - Binance maps `quoteQuantity` to native `quoteOrderQty`; Bitunix maps LIMIT `quantity` and MARKET `quoteQuantity` directly to REST `volume`.
 - No price-based conversion or automatic estimate is permitted. Live mutations remain disabled by default and all #1185 lifecycle/Harvester blockers remain.
-
