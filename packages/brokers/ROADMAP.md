@@ -137,7 +137,7 @@ The declaration's `environment.selectedMode` is the instance's validated `tradin
 
 This section contains only work owned by `@coinzilla/brokers`. Consumer application ports, adapters, routing, and runtime composition are tracked by the owning application.
 
-1. **P1 — Bitunix Spot capability completion (#1185).** Continue only where official Spot contracts and mandatory reference implementations establish safe behavior. Preserve explicit unsupported operations until identity, quantity semantics, execution completeness, account freshness, mutation outcomes, private-event lifecycle and environment safety are source-backed. Do not enable order placement/cancellation while these blockers remain.
+1. **P1 — Bitunix Spot lifecycle completion (#1185).** Provider-specific reads and gated funds operations are implemented in PR #1468. Keep canonical order placement blocked until stable client order identity and recovery are source-backed; keep direct legacy order placement/cancellation disabled by default and unavailable to Harvester. Continue to preserve explicit unsupported operations until execution completeness, account freshness, private-event lifecycle, reconciliation and environment safety are proven.
 2. **P1 — Binance protocol acceptance and recovery.** Diagnose the outstanding read-only TESTNET handshake/acceptance gap in an eligible environment. Preserve recovery-generation fencing, subscriber acknowledgements, state-changing request gates, and unknown-outcome semantics. Offline tests do not prove live endpoint compatibility.
 3. **P2 — Broker lifecycle maintainability.** Decompose transport, RPC, Streams, and user-data lifecycle modules only in small behavior-preserving slices with characterization tests and cleanup/race coverage.
 4. **Deferred — additional exchanges/transports and performance work.** Add neither a generic transport abstraction nor another exchange without a real broker-contract need and a verified protocol acceptance matrix.
@@ -154,19 +154,21 @@ This section contains only work owned by `@coinzilla/brokers`. Consumer applicat
 - These additions are reads only; they do not enable transfers, withdrawals, order mutations, or Harvester execution. Issue #1185 remains authoritative for lifecycle and mutation gates.
 - Completion is contingent on exact-head Brokers tests/coverage, workspace CI, and documentation verification.
 
-### Bitunix Spot funds-operation implementation — PR #1468 (in progress)
+### Bitunix Spot funds-operation implementation — PR #1468 (implemented; pending merge)
 
 - Add the documented withdrawal, withdrawal-cancel, internal-transfer, internal-transfer-cancel, and Spot/Futures transfer endpoints as Bitunix-only extensions.
 - Keep all five operations behind independent `allowLiveFundsMutations: false` by default; never run them in live diagnostics or CI.
 - Use exact decimal strings, signed state-changing requests, caller-supplied `outBizId` idempotency only, no automatic retries, and explicit mutation outcomes.
 - Verify cancellation through withdrawal-history state; a successful cancel acknowledgement alone is not terminal confirmation.
+- Exact-head validation: 753/753 Brokers tests passed; 95.75% lines, 90.34% branches, and 96.21% functions; strict ESLint, workspace JavaScript quality, actionlint, external documentation links, Harvester regression tests, and dependency audit passed.
 - Official documentation is the protocol source; the inspected .NET, TypeScript MCP, Python, and additional GitHub references do not provide matching operation fixtures. Record that absence rather than inventing reference coverage.
 - This does not satisfy or weaken #1185's separate order identity, fill completeness, private-event, recovery, or Harvester execution blockers.
 
-### Bitunix Spot WebSocket RPC order queries — PR #1468 (in progress)
+### Bitunix Spot WebSocket RPC order queries — PR #1468 (implemented; pending merge)
 
 - Expose the official Spot RPC reads `order.pending.list`, `order.history.page`, and `order.deal.list` from `BitunixSpotWebSocketClient`.
 - Keep the WebSocket client request/response-only. The official Spot public/user WebSocket docs do not define continuous market or private event subscriptions; Futures push channels must not be copied into Spot.
+- Extend the read-only local diagnostics to query current orders and one page of order history, sanitize private payloads, and skip these checks without credentials. Subscription restoration remains explicitly skipped because no Spot subscription contract is documented.
 - Keep WebSocket order mutations on the existing REST-backed broker path so the established order mutation gate and verification remain authoritative.
 - This does not satisfy #1185's canonical order/fill/private-event lifecycle or enable Harvester execution.
 
