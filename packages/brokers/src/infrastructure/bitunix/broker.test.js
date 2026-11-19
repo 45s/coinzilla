@@ -1925,6 +1925,7 @@ test("Bitunix Spot broker rejects malformed user-info payloads and UID values", 
     { uid: 1.5 },
     { uid: "not-a-uid" },
     { uid: true },
+    { uid: "9223372036854775808" },
   ]
 
   for (const invalidResponse of invalidResponses) {
@@ -1938,6 +1939,34 @@ test("Bitunix Spot broker rejects malformed user-info payloads and UID values", 
     assert.equal(result.ok, false, `malformed user information must fail closed: ${JSON.stringify(invalidResponse)}`)
     assert.ok(result.errors?.[0] instanceof Error, "invalid user-info data must include a diagnostic error")
   }
+})
+
+test("Bitunix Spot broker normalizes safe numeric UIDs to exact identifier strings", async () => {
+  const { broker } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: {
+        uid: 681979174,
+      },
+    },
+  })
+
+  const result = await broker.getUserInfo()
+
+  assert.equal(result.ok, true, "a safe numeric UID from the official example must be accepted")
+  assert.equal(result.data.uid, "681979174", "UIDs must have one stable string identifier representation")
+})
+
+test("Bitunix Spot broker preserves an absent optional user-info data object as null", async () => {
+  const { broker } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: null,
+    },
+  })
+
+  const result = await broker.getUserInfo()
+
+  assert.equal(result.ok, true, "the optional user-info data object may be null")
+  assert.equal(result.data, null, "an absent user-info object must remain explicitly absent")
 })
 
 test("Bitunix Spot broker propagates user-info REST failures without retrying", async () => {
