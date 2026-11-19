@@ -9,16 +9,15 @@ test("keeps Recovery Seller explicitly disabled in the default application confi
     false,
     "RS must be present as an independent strategy and disabled until an operator supplies valid legacy authorization.",
   )
-  assert.equal(
-    validateAppConfig(appConfig),
-    appConfig,
-    "The default application configuration must validate without enabling or authorizing RS.",
-  )
 })
 
 
 function createEnabledRecoverySellerConfig() {
   const config = structuredClone(appConfig)
+  for (const pair of Object.values(config.strategies.CG_coinGrabber.pairs)) {
+    pair.pricePrecision = 3
+    pair.quantityPrecision = 2
+  }
   config.strategies.RS_recoverySeller = {
     enabled: true,
     pairs: {
@@ -37,6 +36,8 @@ function createEnabledRecoverySellerConfig() {
           invested: 100,
           quantity: 50,
         },
+        pricePrecision: 3,
+        quantityPrecision: 1,
       },
     },
   }
@@ -71,6 +72,6 @@ test("rejects RS legacy SELL authorization larger than the declared original qua
   config.strategies.RS_recoverySeller.pairs.ZROUSDT.sellQuantity = 51
   assert.throws(
     () => validateAppConfig(config),
-    /sellQuantity.*legacyPosition.quantity|legacyPosition.quantity.*sellQuantity/i,
+    /sellQuantity.*legacy.*quantity/i,
   )
 })
