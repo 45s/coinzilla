@@ -1864,7 +1864,6 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 - [x] Keep price/quantity increments, maximum bounds, and depth precision UNKNOWN where the official API does not define their semantics; record reference-only maximum field names as unvalidated diagnostics.
 - [ ] Keep this helper disconnected from runtime bootstrap until Bitunix lifecycle and reconciliation prerequisites in [issue #1185](https://github.com/45s/coinzilla/issues/1185) are resolved. This work does not enable Bitunix trading. Implemented as a pure helper in [PR #1209](https://github.com/45s/coinzilla/pull/1209).
 
-
 ### RS-4/RS-5 implementation checkpoint — PR #1476 (2026-11-19)
 
 - Canonical order-event fills are dispatched using immutable OrderRegistry ownership.
