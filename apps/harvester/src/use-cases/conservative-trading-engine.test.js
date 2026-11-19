@@ -4249,6 +4249,7 @@ test("preserves the existing recovery SELL when shutdown market data is stale", 
   const reconciliation = await harness.engine.reconcileRecoverySellsForShutdown()
   assert.equal(reconciliation.ok, false, "Stale shutdown market data must prevent an unsafe recovery SELL replacement.")
   assert.equal(reconciliation.errors?.[0]?.code, "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE", "Stale price must be classified as unavailable shutdown input.")
+  assert.equal(reconciliation.errors?.[0]?.reason, "STALE_MARKET_PRICE", "The stable recovery-input reason must remain available to shutdown diagnostics.")
   assert.match(reconciliation.errors?.[0]?.message ?? "", /STALE_MARKET_PRICE/, "The shutdown failure must retain the stale-price reason.")
 
   const retainedSell = harness.engine.getOrders().find((order) =>
