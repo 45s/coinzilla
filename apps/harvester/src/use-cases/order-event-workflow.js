@@ -491,11 +491,13 @@ async function resolveExecutionFillAccounting({ dependencies, order, fill }) {
     brokerOrderId: order.brokerOrderId,
   })
   const isRecoverySellerOwned = ownership?.strategyId === StrategyId.RECOVERY_SELLER
-  if (isRecoverySellerOwned && fill.side !== "BUY") {
+  if (isRecoverySellerOwned && fill.side === "SELL") {
     return {
       isRecoverySellerOwned,
       accounting: toResult({
-        error: new Error("Recovery Seller SELL fills require terminal mixed-SELL reconciliation and cannot be applied as individual fills"),
+        data: {
+          stagedForTerminalReconciliation: true,
+        },
       }),
     }
   }
@@ -544,6 +546,27 @@ async function applyValidatedExecutionFill({ dependencies, order, fill }) {
     order,
     fill,
   })
+  if (isRecoverySellerOwned && accounting?.data?.stagedForTerminalReconciliation === true) {
+    if (typeof recordSellExecutionFill !== "function") {
+      return handleExecutionAccountingFailure({
+        accounting: toResult({
+          error: new TypeError("Recovery Seller SELL staging requires the canonical execution-fill recorder"),
+        }),
+        order,
+        fill,
+        pause,
+        eventPublisher,
+      })
+    }
+    recordSellExecutionFill({
+      fill,
+    })
+    return toResult({
+      data: {
+        stagedForTerminalReconciliation: true,
+      },
+    })
+  }
   if (!accounting?.ok) {
     return handleExecutionAccountingFailure({
       accounting,
