@@ -9,8 +9,8 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../.
 function printHelp() {
   process.stdout.write([
     "Run read-only Bitunix Spot diagnostics and publish a sanitized report branch.",
-    "Run from a clean develop checkout: pnpm bitunix:health",
-    "Credentials are loaded from the repository-root .env.development file.",
+    "Run from packages/brokers on a clean develop checkout: pnpm diagnose:bitunix:publish",
+    "Credentials are loaded from packages/brokers/.env.development.",
     "The report branch is pushed to origin and the local checkout returns to develop.",
     "Only redacted diagnostic metadata is committed; local reports stay ignored.",
     "No orders, withdrawals, transfers or other mutations are attempted.",
@@ -43,7 +43,7 @@ async function main() {
     printHelp()
     return
   }
-  process.stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n")
+  process.stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\\n")
   const result = await publishBitunixDiagnostics({
     repositoryRoot,
     runDiagnostics: ({ env }) => runBitunixDiagnostics({ env }),
@@ -62,7 +62,7 @@ if (isMainModule) {
       error,
       secrets: [process.env.BITUNIX_API_KEY, process.env.BITUNIX_API_SECRET].filter(Boolean),
     })
-    process.stderr.write(`Bitunix health check failed: ${JSON.stringify(sanitized)}\n`)
+    process.stderr.write(`Bitunix health check failed: ${JSON.stringify(sanitized)}\\n`)
     process.exitCode = 1
   })
 }
