@@ -121,7 +121,10 @@ function createRunnerFailureReport({ error, env, startedAt, now }) {
 async function runDiagnosticsSafely({ runDiagnostics, env, now, onProgress }) {
   const startedAt = now()
   try {
-    return await runDiagnostics({ env, onProgress })
+    return await runDiagnostics({
+      env,
+      onProgress,
+    })
   } catch (error) {
     return createRunnerFailureReport({
       error,
