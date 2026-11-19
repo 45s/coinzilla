@@ -539,9 +539,8 @@ test("uses durable STOP callbacks to block further RS submissions after an unkno
   assert.equal(operationalStateStore.records.length, 1)
 })
 
-test("blocks further RS submissions when durable STOP persistence fails", async () => {
-  const sharedState = createSharedState()
-  const operationalStateStore = {
+function createFailingStopStore() {
+  return {
     append: async () => ({
       ok: false,
       errors: [new Error("durable store unavailable")],
@@ -553,6 +552,43 @@ test("blocks further RS submissions when durable STOP persistence fails", async 
       },
     }),
   }
+}
+
+function createDurableSubmissionCallback() {
+  return async () => ({
+    ok: true,
+    data: {
+      durable: true,
+    },
+  })
+}
+
+function createStopProtectedSubmitter({ sharedState, broker, recoverySellerStopCallbacks }) {
+  return createRecoverySellerOrderSubmitter({
+    broker,
+    recoverySellerAccountingWorkflow: createRecoverySellerAccountingWorkflow({
+      sharedState,
+    }),
+    onDurableSubmissionIntent: createDurableSubmissionCallback(),
+    onDurableSubmissionOutcome: createDurableSubmissionCallback(),
+    recoverySellerStopCallbacks,
+  })
+}
+
+function createSubmitInput() {
+  return {
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "BUY_TRANCHE_ELIGIBLE",
+    },
+    action: createAction(),
+    marketMetadata,
+  }
+}
+
+test("blocks further RS submissions when durable STOP persistence fails", async () => {
+  const sharedState = createSharedState()
+  const operationalStateStore = createFailingStopStore()
   const stopWorkflowResult = await createRecoverySellerStopWorkflow({
     operationalStateStore,
   })
@@ -566,38 +602,14 @@ test("blocks further RS submissions when durable STOP persistence fails", async 
     },
     placeOrderFailure: true,
   })
-  const durable = async () => ({
-    ok: true,
-    data: {
-      durable: true,
-    },
-  })
-  const submit = createRecoverySellerOrderSubmitter({
+  const submit = createStopProtectedSubmitter({
+    sharedState,
     broker,
-    recoverySellerAccountingWorkflow: createRecoverySellerAccountingWorkflow({
-      sharedState,
-    }),
-    onDurableSubmissionIntent: durable,
-    onDurableSubmissionOutcome: durable,
     recoverySellerStopCallbacks,
   })
 
-  const first = await submit({
-    lifecycleDecision: {
-      outcome: "SUBMIT",
-      reasonCode: "BUY_TRANCHE_ELIGIBLE",
-    },
-    action: createAction(),
-    marketMetadata,
-  })
-  const second = await submit({
-    lifecycleDecision: {
-      outcome: "SUBMIT",
-      reasonCode: "BUY_TRANCHE_ELIGIBLE",
-    },
-    action: createAction(),
-    marketMetadata,
-  })
+  const first = await submit(createSubmitInput())
+  const second = await submit(createSubmitInput())
 
   assert.equal(first.ok, false)
   assert.equal(second.ok, true)

@@ -126,6 +126,73 @@ function createStopPersistenceFailure({ persisted } = {}) {
     })
 }
 
+function resolveExistingStopLatch({ current } = {}) {
+  if (current.stopState.status !== "STOPPED") {
+    return undefined
+  }
+  if (!current.blockerId) {
+    return toResult({
+      error: new Error("Recovery Seller STOP is active in memory but is not durably persisted"),
+    })
+  }
+  return toResult({
+    data: {
+      durable: true,
+      duplicate: true,
+      stopState: current.stopState,
+      blockerId: current.blockerId,
+    },
+  })
+}
+
+function createLatchedStopState({ current, explanation } = {}) {
+  const decision = createRecoverySellerStopDecision({
+    explanation,
+  })
+  return latchRecoverySellerStop({
+    state: current.stopState,
+    decision,
+  })
+}
+
+async function persistAndAcknowledgeStop({
+  operationalStateStore,
+  explanation,
+  orderIdentity,
+  stopState,
+  setStopSnapshot,
+} = {}) {
+  let persisted
+  try {
+    persisted = await persistRecoverySellerBlocker({
+      operationalStateStore,
+      explanation,
+      orderIdentity,
+    })
+  } catch (error) {
+    return toResult({ error })
+  }
+  if (persisted?.ok !== true || persisted.data?.durable !== true) {
+    return createStopPersistenceFailure({
+      persisted,
+    })
+  }
+  const { blockerId } = persisted.data.record.data
+  setStopSnapshot({
+    stopState,
+    blockerId,
+  })
+  return toResult({
+    data: {
+      durable: true,
+      duplicate: persisted.data.duplicate === true,
+      stopState,
+      blockerId,
+      record: persisted.data.record,
+    },
+  })
+}
+
 function createStopLatch({
   operationalStateStore,
   getStopSnapshot,
@@ -133,63 +200,29 @@ function createStopLatch({
 } = {}) {
   return async ({ explanation, orderIdentity } = {}) => {
     const current = getStopSnapshot()
-    if (current.stopState.status === "STOPPED") {
-      if (!current.blockerId) {
-        return toResult({
-          error: new Error("Recovery Seller STOP is active in memory but is not durably persisted"),
-        })
-      }
-      return toResult({
-        data: {
-          durable: true,
-          duplicate: true,
-          stopState: current.stopState,
-          blockerId: current.blockerId,
-        },
-      })
-    }
-    const decision = createRecoverySellerStopDecision({
-      explanation,
+    const existing = resolveExistingStopLatch({
+      current,
     })
+    if (existing) {
+      return existing
+    }
     const normalizedIdentity = normalizeOrderIdentity({
       orderIdentity,
     })
-    const stopState = latchRecoverySellerStop({
-      state: current.stopState,
-      decision,
+    const stopState = createLatchedStopState({
+      current,
+      explanation,
     })
     setStopSnapshot({
       stopState,
       blockerId: null,
     })
-    let persisted
-    try {
-      persisted = await persistRecoverySellerBlocker({
-        operationalStateStore,
-        explanation,
-        orderIdentity: normalizedIdentity,
-      })
-    } catch (error) {
-      return toResult({ error })
-    }
-    if (persisted?.ok !== true || persisted.data?.durable !== true) {
-      return createStopPersistenceFailure({
-        persisted,
-      })
-    }
-    const { blockerId } = persisted.data.record.data
-    setStopSnapshot({
+    return persistAndAcknowledgeStop({
+      operationalStateStore,
+      explanation,
+      orderIdentity: normalizedIdentity,
       stopState,
-      blockerId,
-    })
-    return toResult({
-      data: {
-        durable: true,
-        duplicate: persisted.data.duplicate === true,
-        stopState,
-        blockerId,
-        record: persisted.data.record,
-      },
+      setStopSnapshot,
     })
   }
 }
