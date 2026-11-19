@@ -411,7 +411,10 @@ export class BitunixFuturesBroker extends CoreBroker {
   getHistoryOrders(input = {}) {
     return this.#read({
       path: FUTURES_ENDPOINTS.historyOrders,
-      queryFactory: () => createHistoryOrdersQuery(input, { now: this.now() }),
+      queryFactory: () => createHistoryOrdersQuery({
+        input,
+        now: this.now(),
+      }),
       authenticated: true,
       adapter: adaptFuturesHistoryOrders,
     })
