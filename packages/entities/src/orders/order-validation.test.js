@@ -183,3 +183,36 @@ test("Order constructor accepts null optional ID and valid domain values", () =>
     "Order must preserve a valid optional client ID",
   )
 })
+
+test("Order preserves ensure assertion causes behind its domain errors", () => {
+  assert.throws(
+    () => new Order({
+      ...validOrderInput,
+      price: "1",
+    }),
+    (error) => error instanceof Error &&
+      error.message === errMsgs.price &&
+      error.cause instanceof TypeError,
+    "Order price validation must preserve the generic TypeError as cause while exposing its legacy domain Error",
+  )
+  assert.throws(
+    () => new Order({
+      ...validOrderInput,
+      id: 42,
+    }),
+    (error) => error instanceof Error &&
+      error.message === errMsgs.id &&
+      error.cause instanceof TypeError,
+    "Order identity validation must preserve the generic TypeError as cause while exposing its legacy domain Error",
+  )
+  assert.throws(
+    () => new Order({
+      ...validOrderInput,
+      clientOrderId: " ",
+    }),
+    (error) => error instanceof Error &&
+      error.message === errMsgs.clientOrderId &&
+      error.cause instanceof TypeError,
+    "Optional client identity validation must preserve the generic TypeError as cause while exposing its legacy domain Error",
+  )
+})
