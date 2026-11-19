@@ -149,6 +149,18 @@ function adaptPage({ data,
   })
 }
 
+function validateDepthLevel({ level, side, index }) {
+  if (!Array.isArray(level) || level.length !== 2) {
+    throw new TypeError(`Bitunix Futures market/depth ${side}[${index}] must be a [price, quantity] pair`)
+  }
+  for (let valueIndex = 0; valueIndex < level.length; valueIndex += 1) {
+    const value = level[valueIndex]
+    if (typeof value !== "string" || !DECIMAL_PATTERN.test(value)) {
+      throw new TypeError(`Bitunix Futures market/depth ${side}[${index}][${valueIndex}] must be an exact decimal string`)
+    }
+  }
+}
+
 function adaptOrderBook(data) {
   requireRecord({
     value: data,
@@ -160,16 +172,11 @@ function adaptOrderBook(data) {
       field: `market/depth ${side}`,
     })
     for (let index = 0; index < levels.length; index += 1) {
-      const level = levels[index]
-      if (!Array.isArray(level) || level.length !== 2) {
-        throw new TypeError(`Bitunix Futures market/depth ${side}[${index}] must be a [price, quantity] pair`)
-      }
-      for (let valueIndex = 0; valueIndex < level.length; valueIndex += 1) {
-        const value = level[valueIndex]
-        if (typeof value !== "string" || !DECIMAL_PATTERN.test(value)) {
-          throw new TypeError(`Bitunix Futures market/depth ${side}[${index}][${valueIndex}] must be an exact decimal string`)
-        }
-      }
+      validateDepthLevel({
+        level: levels[index],
+        side,
+        index,
+      })
     }
   }
   return Object.freeze({
