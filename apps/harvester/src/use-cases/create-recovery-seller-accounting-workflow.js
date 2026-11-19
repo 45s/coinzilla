@@ -603,23 +603,42 @@ function createSerializedWorkflowOperation({ state, transition } = {}) {
 }
 
 export function createRecoverySellerAccountingWorkflow({
-  initialPortfolio = new Portfolio(),
-  initialOrderRegistry = OrderRegistry.empty(),
+  initialPortfolio,
+  initialOrderRegistry,
   initialLegacyPositions = [],
   onOperationalStateExecutionFill,
+  sharedState,
 } = {}) {
-  if (!(initialPortfolio instanceof Portfolio)) {
-    throw new TypeError("initialPortfolio must be a Portfolio")
+  if (sharedState !== undefined && (
+    !sharedState ||
+    !(sharedState.portfolio instanceof Portfolio) ||
+    !(sharedState.orderRegistry instanceof OrderRegistry) ||
+    !(sharedState.legacyPositions instanceof Map) ||
+    typeof sharedState.updateQueue?.then !== "function"
+  )) {
+    throw new TypeError("sharedState must provide a Portfolio, OrderRegistry, legacy-position map, and shared update queue")
   }
-  if (!(initialOrderRegistry instanceof OrderRegistry)) {
-    throw new TypeError("initialOrderRegistry must be an OrderRegistry")
+  if (sharedState && initialPortfolio !== undefined && initialPortfolio !== sharedState.portfolio) {
+    throw new TypeError("initialPortfolio must match sharedState.portfolio")
+  }
+  if (sharedState && initialOrderRegistry !== undefined && initialOrderRegistry !== sharedState.orderRegistry) {
+    throw new TypeError("initialOrderRegistry must match sharedState.orderRegistry")
+  }
+  if (sharedState && initialLegacyPositions.length > 0) {
+    throw new TypeError("initialLegacyPositions cannot be combined with sharedState")
   }
 
-  const state = {
-    portfolio: initialPortfolio,
-    orderRegistry: initialOrderRegistry,
+  const state = sharedState ?? {
+    portfolio: initialPortfolio ?? new Portfolio(),
+    orderRegistry: initialOrderRegistry ?? OrderRegistry.empty(),
     legacyPositions: createLegacyPositionMap(initialLegacyPositions),
     updateQueue: Promise.resolve(),
+  }
+  if (!(state.portfolio instanceof Portfolio)) {
+    throw new TypeError("initialPortfolio must be a Portfolio")
+  }
+  if (!(state.orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("initialOrderRegistry must be an OrderRegistry")
   }
 
   if (onOperationalStateExecutionFill !== undefined &&

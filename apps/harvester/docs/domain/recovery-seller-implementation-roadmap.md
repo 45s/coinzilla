@@ -23,6 +23,8 @@ The strict ESLint findings in the already changed route and Telegram test fixtur
 
 The next integration boundary is one mutable account-workflow state shared by the Conservative Portfolio workflow and the RS accounting workflow. It must serialize updates through the same queue and expose the same immutable Portfolio snapshot after either strategy's fill. The RS OrderRegistry must also be reachable from this account state; engine-owned order-registry mutation still requires explicit integration and is not yet complete. A test-first regression now specifies shared Portfolio visibility and independent strategy-owned Positions. No RS order submission is enabled by this checkpoint.
 
+The Conservative Portfolio workflow and RS accounting workflow now accept the same explicit account-state object. That object shares one immutable Portfolio snapshot, RS OrderRegistry, legacy-position map, and serialized update queue; the new regression proves both strategies' Positions are visible through the same Portfolio. Bootstrap composition and shared execution-engine registry mutation remain the next integration steps.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.

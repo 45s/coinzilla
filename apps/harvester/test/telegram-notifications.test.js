@@ -579,7 +579,11 @@ test("provides distinct minimal, trader, and verbose Telegram profile presets", 
       loadConfig: async () => createTestAppConfig({
         telegram: { enabled: true, profile: scenario.profile },
       }),
-      createTelegramNotifier: () => ({ async sendMessage(message) { sentMessages.push(message) } }),
+      createTelegramNotifier: () => ({
+        async sendMessage(message) {
+          sentMessages.push(message)
+        },
+      }),
       createJournalService: disabledJournalService,
       start: async ({ eventPublisher }) => {
         publishProfileNotifications(eventPublisher);

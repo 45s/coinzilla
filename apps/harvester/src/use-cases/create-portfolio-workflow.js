@@ -737,7 +737,22 @@ export const createPortfolioWorkflow = ({
   onOperationalStateExecutionFill,
   onOperationalStateRecoveryCycleCompleted,
   onOperationalStateRecoveryCycleNotCompleted,
+  sharedState,
 } = {}) => {
+  if (sharedState !== undefined && (
+    !sharedState ||
+    !(sharedState.portfolio instanceof Portfolio) ||
+    !(sharedState.recoveryLedgers instanceof Map) ||
+    typeof sharedState.updateQueue?.then !== "function"
+  )) {
+    throw new TypeError("sharedState must provide a Portfolio, RecoveryLedger map, and shared update queue")
+  }
+  if (sharedState && initialPortfolio !== undefined && initialPortfolio !== sharedState.portfolio) {
+    throw new TypeError("initialPortfolio must match sharedState.portfolio")
+  }
+  if (sharedState && initialRecoveryLedgers !== undefined && initialRecoveryLedgers !== sharedState.recoveryLedgers) {
+    throw new TypeError("initialRecoveryLedgers must match sharedState.recoveryLedgers")
+  }
   if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
@@ -751,7 +766,7 @@ export const createPortfolioWorkflow = ({
     throw new TypeError("onOperationalStateRecoveryCycleCompleted must be a function")
   }
 
-  const state = {
+  const state = sharedState ?? {
     portfolio: initialPortfolio ?? new Portfolio(),
     recoveryLedgers: new Map(initialRecoveryLedgers ?? []),
     updateQueue: Promise.resolve(),

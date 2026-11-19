@@ -344,12 +344,24 @@ function createSameMarketCgAndRsRouteFixture() {
     }),
     expectedRoutes: [
       ["binance-testnet-primary", [
-        { strategyId: StrategyId.COIN_GRABBER, symbol: "BTCUSDT" },
-        { strategyId: StrategyId.RECOVERY_SELLER, symbol: "BTCUSDT" },
-        { strategyId: StrategyId.RECOVERY_SELLER, symbol: "DOGEUSDT" },
+        {
+          strategyId: StrategyId.COIN_GRABBER,
+          symbol: "BTCUSDT",
+        },
+        {
+          strategyId: StrategyId.RECOVERY_SELLER,
+          symbol: "BTCUSDT",
+        },
+        {
+          strategyId: StrategyId.RECOVERY_SELLER,
+          symbol: "DOGEUSDT",
+        },
       ]],
       ["binance-live-secondary", [
-        { strategyId: StrategyId.COIN_GRABBER, symbol: "ETHUSDT" },
+        {
+          strategyId: StrategyId.COIN_GRABBER,
+          symbol: "ETHUSDT",
+        },
       ]],
     ],
   }
