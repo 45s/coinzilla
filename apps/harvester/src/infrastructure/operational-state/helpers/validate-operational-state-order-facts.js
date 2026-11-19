@@ -21,28 +21,39 @@ function validatePersistedOrderOwnership({ canonicalData } = {}) {
   const supplied = fields.filter((field) => canonicalData[field] !== undefined)
   if (canonicalData.purpose === null) {
     if (supplied.length > 0) {
-      throw new TypeError("Conservative order facts cannot contain Recovery Seller ownership")
+      throw new TypeError("Conservative order facts cannot contain strategy ownership")
     }
     return
   }
+  if (canonicalData.purpose === "RECOVERY_SELL" && supplied.length === 0) {
+    return
+  }
   if (!["RECOVERY_BUY", "RECOVERY_SELL"].includes(canonicalData.purpose) ||
-      supplied.length !== fields.length ||
-      canonicalData.strategyId !== "RECOVERY_SELLER") {
-    throw new TypeError("Recovery Seller order facts require complete strategy, positionId and cycleId ownership")
+      supplied.length < 2 ||
+      !["COIN_GRABBER", "RECOVERY_SELLER"].includes(canonicalData.strategyId)) {
+    throw new TypeError("Recovery order facts require complete strategy and position ownership")
   }
   requireNonEmptyString({
     value: canonicalData.positionId,
     field: "data.positionId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  requireNonEmptyString({
-    value: canonicalData.cycleId,
-    field: "data.cycleId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
+  if (canonicalData.strategyId === "RECOVERY_SELLER") {
+    requireNonEmptyString({
+      value: canonicalData.cycleId,
+      field: "data.cycleId",
+      maxLength: MAX_FACT_ID_LENGTH,
+    })
+  } else if (canonicalData.cycleId !== undefined) {
+    requireNonEmptyString({
+      value: canonicalData.cycleId,
+      field: "data.cycleId",
+      maxLength: MAX_FACT_ID_LENGTH,
+    })
+  }
   if ((canonicalData.purpose === "RECOVERY_BUY" && canonicalData.side !== "BUY") ||
       (canonicalData.purpose === "RECOVERY_SELL" && canonicalData.side !== "SELL")) {
-    throw new TypeError("Recovery Seller order purpose must match its canonical side")
+    throw new TypeError("Recovery order purpose must match its canonical side")
   }
 }
 

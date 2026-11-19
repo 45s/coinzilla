@@ -7,28 +7,33 @@ const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
 function validateSubmissionOwnership({ purpose, ownership, side } = {}) {
   if (purpose === null) {
     if (ownership !== undefined && ownership !== null) {
-      throw new TypeError("Conservative order submission cannot contain Recovery Seller ownership")
+      throw new TypeError("Conservative order submission cannot contain strategy ownership")
     }
     return {}
   }
-  if (
-    ownership?.strategyId !== "RECOVERY_SELLER" ||
-    ownership.purpose !== purpose ||
-    typeof ownership.positionId !== "string" ||
-    !ownership.positionId.trim() ||
-    typeof ownership.cycleId !== "string" ||
-    !ownership.cycleId.trim()
-  ) {
-    throw new TypeError("Recovery Seller order submission requires complete strategy, positionId, purpose and cycleId ownership")
+  if (purpose === "RECOVERY_SELL" && (ownership === undefined || ownership === null)) {
+    return {}
+  }
+  const isSupportedStrategy = ["COIN_GRABBER", "RECOVERY_SELLER"].includes(ownership?.strategyId)
+  const hasPositionId = typeof ownership?.positionId === "string" && ownership.positionId.trim()
+  const hasCycleId = typeof ownership?.cycleId === "string" && ownership.cycleId.trim()
+  if (!isSupportedStrategy || ownership.purpose !== purpose || !hasPositionId) {
+    throw new TypeError("Recovery order submission requires complete strategy, positionId and purpose ownership")
+  }
+  if (ownership.strategyId === "RECOVERY_SELLER" && !hasCycleId) {
+    throw new TypeError("Recovery Seller order submission requires its immutable cycleId")
+  }
+  if (purpose === "RECOVERY_BUY" && ownership.strategyId !== "RECOVERY_SELLER") {
+    throw new TypeError("RECOVERY_BUY ownership must belong to Recovery Seller")
   }
   if ((purpose === "RECOVERY_BUY" && side !== "BUY") ||
       (purpose === "RECOVERY_SELL" && side !== "SELL")) {
-    throw new TypeError("Recovery Seller order purpose must match the canonical order side")
+    throw new TypeError("Recovery order purpose must match the canonical order side")
   }
   return {
     strategyId: ownership.strategyId,
     positionId: ownership.positionId,
-    cycleId: ownership.cycleId,
+    ...(hasCycleId ? { cycleId: ownership.cycleId } : {}),
   }
 }
 
