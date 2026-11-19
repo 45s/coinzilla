@@ -143,6 +143,23 @@ async function writeDiagnosticReport({ path, report }) {
   })
 }
 
+function withholdFreeFormErrorMessages({ value }) {
+  if (Array.isArray(value)) {
+    return value.map((item) => withholdFreeFormErrorMessages({ value: item }))
+  }
+  if (!value || typeof value !== "object") {
+    return value
+  }
+  const sanitized = Object.fromEntries(Object.entries(value).map(([key, entryValue]) => [
+    key,
+    withholdFreeFormErrorMessages({ value: entryValue }),
+  ]))
+  if (typeof sanitized.name === "string" && typeof sanitized.message === "string") {
+    sanitized.message = "[error message withheld]"
+  }
+  return sanitized
+}
+
 function createPublishedReport({ report }) {
   return {
     ...report,
@@ -169,9 +186,11 @@ function createPublishedReport({ report }) {
 }
 
 async function writeReports({ paths, report, env }) {
-  const sanitized = sanitizeDiagnosticValue({
-    value: report,
-    secrets: getSecrets({ env }),
+  const sanitized = withholdFreeFormErrorMessages({
+    value: sanitizeDiagnosticValue({
+      value: report,
+      secrets: getSecrets({ env }),
+    }),
   })
   const published = createPublishedReport({
     report: sanitized,
