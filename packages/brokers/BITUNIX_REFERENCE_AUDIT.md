@@ -538,3 +538,14 @@ The .NET REST implementation sends `GET /api/spot/v1/order/detail` with only the
 **Reference defect not copied:** the inspected .NET `GetUserTradesAsync` implementation currently sends `/api/spot/v1/order/pending/list`, although its interface documents `/api/spot/v1/order/deal/list`. Coinzilla's existing `getMatchingOrderDetails()` continues to use the latter documented endpoint. This does not establish complete canonical fills or account-wide trade history.
 
 This compatibility improvement does not change the canonical-order, fill-completeness, private-event, or Harvester-admission blockers in issue #1185. No live order mutation is enabled or tested.
+
+
+## 10. Bitunix Spot polling-backed observation primitive (2026-11-19)
+
+Coinzilla now has a broker-specific `BitunixSpotReconciler` implementation in `src/infrastructure/bitunix/bitunix-spot-reconciler.js`. It uses existing read-only broker methods and does not create a second REST client or pretend the Spot RPC socket is a push stream.
+
+A polling cycle reads Spot balances (local observation only; no exchange source timestamp/version), pending orders for every explicitly configured symbol, page 1 of order history for each configured symbol, and matching-order detail for explicitly tracked `symbol + orderId` pairs. The lifecycle coalesces identical in-flight requests, rejects concurrent requests with conflicting scope, deduplicates unchanged snapshots, exposes local `observedAt` and freshness state, and fences in-flight work/scheduled callbacks on stop. A snapshot is emitted only if every requested read succeeds.
+
+**This is not yet canonical reconciliation.** History remains first-page-only; pending orders are symbol-scoped; matching-order response identity, volume denomination, completeness and fee semantics remain unproven. The implementation intentionally does not synthesize fills, canonical order events, source timestamps or atomic account snapshots. It is not wired to Harvester's Binance-shaped `subscribeForUserData` event contract and does not satisfy Harvester admission.
+
+See [BITUNIX_SPOT_POLLING.md](./BITUNIX_SPOT_POLLING.md) for the exact API and guarantees. Deterministic offline tests are added alongside the implementation; their pass status must be reported only after exact-head execution/CI.
