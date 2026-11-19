@@ -3,6 +3,7 @@ import { BitunixRestClient } from "../src/infrastructure/bitunix/api/rest-client
 import { BitunixSpotWebSocketClient } from "../src/infrastructure/bitunix/api/websocket-client.js"
 import { BitunixWebSocketTransport } from "../src/infrastructure/bitunix/api/websocket-transport.js"
 import {
+  BrokerDiagnosticError,
   createDiagnosticReport,
   inspectDiagnosticSchema,
   createDiagnosticResult,
@@ -1388,7 +1389,14 @@ function recordBrokerApiSchemaResult({ method, observation, now, results, secret
   const { schemaValid } = observation
   const error = schemaValid
     ? undefined
-    : new Error(`Bitunix response schema mismatch: ${observation.schemaIssues.join(", ")}`)
+    : new BrokerDiagnosticError({
+      code: "BROKER_DIAGNOSTIC_SCHEMA_MISMATCH",
+      message: `Bitunix response schema mismatch for ${observation.path}`,
+      context: {
+        path: observation.path,
+        issues: observation.schemaIssues.join(","),
+      },
+    })
   results.push(createResult({
     operation: `Broker API schema ${method}`,
     startedAt: now(),
@@ -1585,7 +1593,13 @@ function recordBrokerApiOperationResult({
     recordBrokerApiOperationFailure({
       method: definition.method,
       args: definition.args,
-      error: result?.errors?.[0] ?? new Error("Broker read returned no successful result envelope"),
+      error: result?.errors?.[0] ?? new BrokerDiagnosticError({
+        code: "BROKER_DIAGNOSTIC_RESULT_INVALID",
+        message: "Broker read returned no successful result envelope",
+        context: {
+          method: definition.method,
+        },
+      }),
       startedAt,
       now,
       results,

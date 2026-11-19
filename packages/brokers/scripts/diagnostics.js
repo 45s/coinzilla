@@ -1,3 +1,38 @@
+
+import { SystemCustomError } from "@coinzilla/utils"
+
+function createBrokerDiagnosticErrorOptions({ code, context, cause }) {
+  const options = {
+    code,
+    context,
+  }
+  if (cause !== undefined) {
+    options.cause = cause
+  }
+  return options
+}
+
+/**
+ * Package-owned diagnostic failure with a stable code and safe scalar context.
+ */
+export class BrokerDiagnosticError extends SystemCustomError {
+  /**
+   * @param {{
+   *   code: string,
+   *   message: string,
+   *   context: Record<string, string|number|boolean|null>,
+   *   cause?: unknown,
+   * }} input
+   */
+  constructor({ code, message, context, cause }) {
+    super(message, createBrokerDiagnosticErrorOptions({
+      code,
+      context,
+      cause,
+    }))
+  }
+}
+
 const REDACTED = "[REDACTED]"
 const MAX_DEPTH = 6
 const MAX_ITEMS = 50
@@ -151,7 +186,7 @@ export function sanitizeDiagnosticError({ error, secrets = [] } = {}) {
     // Free-form errors can echo private account data or credentials. Never persist them.
     message: "[error message withheld]",
   }
-  for (const field of ["code", "kind", "status", "exchangeCode", "method", "path", "requestId"]) {
+  for (const field of ["code", "context", "kind", "status", "exchangeCode", "method", "path", "requestId"]) {
     if (source[field] !== undefined && source[field] !== null) {
       result[field] = sanitizeDiagnosticValue({
         value: source[field],
