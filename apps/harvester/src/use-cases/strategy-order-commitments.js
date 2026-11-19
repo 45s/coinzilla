@@ -159,14 +159,38 @@ function validateStrategyOrderCommitmentInput({
   pairConfig,
   actions,
 } = {}) {
-  ensure.object({ value: dependencies, name: "dependencies" })
-  ensure.nonEmptyString({ value: strategyId, name: "strategyId" })
-  ensure.nonEmptyString({ value: symbol, name: "symbol" })
-  ensure.object({ value: metadata, name: "metadata" })
-  ensure.object({ value: portfolio, name: "portfolio" })
-  ensure.array({ value: activeOrders, name: "activeOrders" })
-  ensure.object({ value: pairConfig, name: "pairConfig" })
-  ensure.array({ value: actions, name: "actions" })
+  ensure.object({
+    value: dependencies,
+    name: "dependencies",
+  })
+  ensure.nonEmptyString({
+    value: strategyId,
+    name: "strategyId",
+  })
+  ensure.nonEmptyString({
+    value: symbol,
+    name: "symbol",
+  })
+  ensure.object({
+    value: metadata,
+    name: "metadata",
+  })
+  ensure.object({
+    value: portfolio,
+    name: "portfolio",
+  })
+  ensure.array({
+    value: activeOrders,
+    name: "activeOrders",
+  })
+  ensure.object({
+    value: pairConfig,
+    name: "pairConfig",
+  })
+  ensure.array({
+    value: actions,
+    name: "actions",
+  })
 }
 
 function prepareStrategyOrderCommitmentContext({
