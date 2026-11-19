@@ -1,5 +1,6 @@
 import { toResult } from "@coinzilla/utils"
 import { createRecoverySellerStopWorkflow } from "../use-cases/create-recovery-seller-stop-workflow.js"
+import { createRecoverySellerStopCallbacks } from "../use-cases/create-recovery-seller-stop-callbacks.js"
 
 function validateRecoverySellerRoutes({ recoverySellerPairs } = {}) {
   if (!recoverySellerPairs ||
@@ -43,6 +44,9 @@ export async function createRecoverySellerStopRuntime({
       data: {
         enabled: true,
         workflow: created.data,
+        callbacks: createRecoverySellerStopCallbacks({
+          stopWorkflow: created.data,
+        }),
       },
     })
   } catch (error) {

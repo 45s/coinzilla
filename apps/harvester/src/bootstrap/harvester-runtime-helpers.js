@@ -277,6 +277,7 @@ function createHarvesterRecoverySellerOptions(options = {}) {
     recoverySellerPairs: options.recoverySellerPairs,
     recoverySellerWorkflow: options.recoverySellerWorkflow,
     recoverySellerStopWorkflow: options.recoverySellerStopWorkflow,
+    recoverySellerStopCallbacks: options.recoverySellerStopCallbacks,
     getRecoverySellerMarketMetadata: options.getRecoverySellerMarketMetadata,
     evaluateRecoverySellerTransition: options.evaluateRecoverySellerTransition,
     updateTradingAccounting: options.updateTradingAccounting,
