@@ -32,9 +32,9 @@ function createAccountTradingState() {
   // CG and RS accounting share one account-level serialization queue and canonical state.
   let portfolio = new Portfolio()
   let recoveryLedgers = new Map()
+  let orderRegistry = OrderRegistry.empty()
   let updateQueue = Promise.resolve()
   const state = {
-    orderRegistry: OrderRegistry.empty(),
     legacyPositions: new Map(),
     journalFills: [],
     pausedMarkets: new Set(),
@@ -66,6 +66,16 @@ function createAccountTradingState() {
         throw new TypeError("Account workflow recoveryLedgers must be a Map")
       }
       recoveryLedgers = nextRecoveryLedgers
+    },
+  })
+  Object.defineProperty(state, "orderRegistry", {
+    enumerable: true,
+    get: () => orderRegistry,
+    set: (nextOrderRegistry) => {
+      if (!(nextOrderRegistry instanceof OrderRegistry)) {
+        throw new TypeError("Account workflow orderRegistry must be an OrderRegistry")
+      }
+      orderRegistry = nextOrderRegistry
     },
   })
   Object.defineProperty(state, "updateQueue", {
