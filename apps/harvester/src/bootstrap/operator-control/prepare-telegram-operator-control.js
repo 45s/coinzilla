@@ -70,6 +70,13 @@ function createAndValidateTelegramAdapter({
   return adapter
 }
 
+function createTelegramAdapterStartedResult(alreadyStarted) {
+  return Object.freeze({
+    started: true,
+    alreadyStarted,
+  })
+}
+
 async function startTelegramOperatorAdapter({
   getAdapter,
   setAdapter,
@@ -88,7 +95,7 @@ async function startTelegramOperatorAdapter({
   recoverySellerStopWorkflow,
 } = {}) {
   if (getAdapter()) {
-    return Object.freeze({ started: true, alreadyStarted: true })
+    return createTelegramAdapterStartedResult(true)
   }
   const operator = createHarvesterOperator({
     engine,
@@ -111,7 +118,7 @@ async function startTelegramOperatorAdapter({
     })
     setAdapter(adapter)
     await adapter.start()
-    return Object.freeze({ started: true, alreadyStarted: false })
+    return createTelegramAdapterStartedResult(false)
   } catch (cause) {
     const failure = await cleanupFailedTelegramAdapter({
       getAdapter,
