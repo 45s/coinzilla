@@ -1628,9 +1628,9 @@ async function runBrokerApiOperation({
       onProgress,
     })
   }
-  recordBrokerApiSchemaResult({
-    method: definition.method,
-    observation: schemaObservations.at(-1),
+  recordLatestBrokerApiSchemaResult({
+    definition,
+    schemaObservations,
     now,
     results,
     secrets,
