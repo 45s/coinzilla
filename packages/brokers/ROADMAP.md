@@ -1360,7 +1360,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Save a local diagnostic report in ignored `packages/brokers/.diagnostics/` and a separately staged, sanitized report in `packages/brokers/diagnostics/reports/`.
 - [x] Stage only the generated report, commit it, push without force, and attempt to switch the checkout back to `develop` on all post-branch paths.
 - [x] Preserve failed API checks in the published report and return a non-zero process exit code; preserve push failures and still attempt cleanup.
-- [x] Add offline tests for clean-tree/branch guards, redaction, exact report staging, failed API results, push failure, and return-to-develop behavior.
+- [ ] Add and verify offline tests for clean-tree/branch guards, redaction, exact report staging, failed API results, push failure, and return-to-develop behavior.
 - [x] Document the command, root `.env.development` loading, required read-only API permissions, report privacy boundary, and Git prerequisites in the root and Brokers READMEs.
 - [ ] Run Brokers package tests and coverage, strict changed-file/workspace lint, syntax and required CI on the exact final PR head; merge only after all required checks pass.
 
