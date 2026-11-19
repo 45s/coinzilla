@@ -23,6 +23,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
+- [Strategy extensibility architecture discussion and audit roadmap](architecture/strategy-extensibility-audit-roadmap.md) — current source observations, agreed design direction, open decisions and S-1 through S-4 audit roadmap.
 - [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — source-verified persistence inventory, target architecture, repository contracts, TESTNET/LIVE isolation, operations and phased migration.
 - [Ordinary persistence and trading-session repository contract](persistence/README.md) — merged trading-session history implementation and lifecycle contract.
 - [ADR-0003: Multi-provider execution and market-data routing](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) — accepted target architecture; implementation is tracked by [#1339](https://github.com/45s/coinzilla/issues/1339).
