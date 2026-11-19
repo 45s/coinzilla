@@ -330,6 +330,7 @@ It then connects to the authenticated Spot WebSocket RPC endpoint and checks:
 - `market.last_price`, `market.depth`, and `market.kline`.
 - `common.coin_pair.list`, `common.rate.list`, and `common.coin.coin_network.list`.
 - `user.account` and `user.info`.
+- `order.pending.list`, `order.history.page`, and `order.deal.list` (read-only, authenticated, symbol/order scoped).
 
 After a successful initial RPC session, it disconnects and explicitly reconnects the same client instance, then verifies the replacement transport with another authenticated `ping`. This is not an automatic retry loop and does not simulate the documented 24-hour server expiry. Subscription restoration is explicitly skipped because the official Spot API reference defines one-shot request/response methods and no subscription channels.
 
