@@ -1436,3 +1436,12 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - Read-only only. No live order/funds mutations. TESTNET is not required for offline tests or authenticated read-only verification.
 
 See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitunix documentation index](./docs/README.md).
+
+## Bitunix read-only Broker diagnostics expansion (#1519)
+
+**Status: In progress.** Extend the diagnostic run through the public `Broker` facade to include public symbol-filter metadata and an authenticated, symbol-scoped first page of order history.
+
+- Add schema inspection for the order-history page envelope without recording private response values.
+- Preserve public-only mode: symbol filters remain public; authenticated order history is skipped without the full credential pair.
+- Keep order history page-bounded; do not imply complete history or canonical fills.
+- No order/funds mutations or Harvester changes.
