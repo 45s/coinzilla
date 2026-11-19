@@ -100,9 +100,19 @@ export function resolveName({ name }) {
  */
 export function readValueOptions({ options }) {
   const record = readOptions({ options })
-  const value = readOption({ record, key: "value" })
-  const name = readOption({ record, key: "name" })
-  return { value, name: resolveName({ name }), record }
+  const value = readOption({
+    record,
+    key: "value",
+  })
+  const name = readOption({
+    record,
+    key: "name",
+  })
+  return {
+    value,
+    name: resolveName({ name }),
+    record,
+  }
 }
 
 /**
@@ -121,7 +131,11 @@ export function typeError({ name, expectation, value }) {
  */
 export function requireFiniteNumber({ value, name }) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
-    throw typeError({ name, expectation: "a finite number", value })
+    throw typeError({
+      name,
+      expectation: "a finite number",
+      value,
+    })
   }
   return value
 }
