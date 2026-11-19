@@ -1,3 +1,5 @@
+# Harvester ordinary persistence
+
 ## Filled-order history projection — implementation
 
 This slice implements the next Harvester-owned persistence consumer under issue [#1327](https://github.com/45s/coinzilla/issues/1327). It stores one order-history record in `harvester_orders` as soon as a Harvester-owned order has a positive cumulative executed quantity.
@@ -14,10 +16,7 @@ The temporary `harvester_processes` process-ID smoke-test write and its obsolete
 
 **Status:** implementation and regression coverage are in PR [#1469](https://github.com/45s/coinzilla/pull/1469); exact-head CI must pass before merge.
 
-
 ---
-
-# Harvester ordinary persistence
 
 **Tracking issue:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
 

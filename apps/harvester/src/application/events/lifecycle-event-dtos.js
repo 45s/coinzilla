@@ -1065,9 +1065,11 @@ function requireOrderHistoryFacts({ order, ownership }) {
       value: order.executedQuantity.amount,
       field: "order.executedQuantity",
     }),
-    remainingQuantity: requireDecimalString({
-      value: order.remainingQuantity.amount,
-      field: "order.remainingQuantity",
+    ...(order.remainingQuantity === undefined ? {} : {
+      remainingQuantity: requireDecimalString({
+        value: order.remainingQuantity.amount,
+        field: "order.remainingQuantity",
+      }),
     }),
   }
   if (order.limitPrice !== undefined) {
