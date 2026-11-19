@@ -7,7 +7,7 @@ import {
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
   summarizePrivatePayload,
-} from "./bitunix-diagnostics.js"
+} from "./diagnostics.js"
 
 const DIAGNOSTIC_CONFIG = Object.freeze({
   confirmLiveReads: true,
