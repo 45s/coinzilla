@@ -835,3 +835,119 @@ test("Bitunix REST explicit exchange rejections remain definitive for state-chan
     },
   )
 })
+
+
+async function assertMutationHttpOutcome({ status, outcomeUnknown, retryAfterMs = null }) {
+  let requestCount = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      requestCount += 1
+      return {
+        ok: false,
+        status,
+        headers: {
+          get(name) {
+            return name === "retry-after" && retryAfterMs !== null
+              ? String(retryAfterMs / 1000)
+              : null
+          },
+        },
+        async text() {
+          return JSON.stringify({
+            code: String(status),
+            msg: "request failed",
+          })
+        },
+      }
+    },
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/place_order",
+      body: {
+        symbol: "BTCUSDT",
+      },
+      stateChanging: true,
+    }),
+    (error) => {
+      assert.equal(error.status, status, "the HTTP status must remain available for mutation classification")
+      assert.equal(error.outcomeUnknown, outcomeUnknown, "REST mutation metadata must match the common Broker HTTP outcome rules")
+      if (retryAfterMs !== null) {
+        assert.equal(error.retryAfterMs, retryAfterMs, "Retry-After must remain available without causing an automatic retry")
+      }
+      return true
+    },
+  )
+  assert.equal(requestCount, 1, "ambiguous and rejected mutation responses must never trigger an automatic retry")
+}
+
+test("Bitunix REST client aligns mutation outcome metadata with shared Broker HTTP classification", async () => {
+  const scenarios = [
+    {
+      status: 408,
+      outcomeUnknown: true,
+    },
+    {
+      status: 409,
+      outcomeUnknown: true,
+    },
+    {
+      status: 400,
+      outcomeUnknown: false,
+    },
+    {
+      status: 429,
+      outcomeUnknown: false,
+      retryAfterMs: 2000,
+    },
+    {
+      status: 500,
+      outcomeUnknown: true,
+    },
+    {
+      status: 502,
+      outcomeUnknown: true,
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    await assertMutationHttpOutcome(scenario)
+  }
+})
+
+test("Bitunix REST client keeps read-only HTTP conflicts outside mutation uncertainty", async () => {
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => ({
+      ok: false,
+      status: 409,
+      async text() {
+        return JSON.stringify({
+          code: "409",
+          msg: "conflict",
+        })
+      },
+    }),
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/pending/list",
+      body: {
+        symbol: "BTCUSDT",
+      },
+      stateChanging: false,
+    }),
+    (error) => {
+      assert.equal(error.status, 409, "read-only HTTP conflicts must preserve the response status")
+      assert.equal(error.outcomeUnknown, false, "read-only responses must not carry state-changing mutation uncertainty")
+      return true
+    },
+  )
+})

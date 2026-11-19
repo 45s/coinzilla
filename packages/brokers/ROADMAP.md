@@ -1504,3 +1504,12 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Added structural schemas from fields already validated by the deposit/withdrawal adapters.
 - Added deterministic fixtures and assertions for authentication, exact one-record request bounds, schema validity, and private-value redaction.
 - Public-only diagnostics continue to skip private methods. No pagination, address lookup, withdrawal, transfer, cancellation, mutation, Harvester or canonical Fill behavior was added.
+
+## 2026-11-19 — Bitunix REST mutation HTTP outcome alignment (#1547)
+
+**Status: Implemented in [PR #1548](https://github.com/45s/coinzilla/pull/1548); exact-head required CI verification is pending.**
+
+- Align `BitunixRestError.outcomeUnknown` with the common Broker contract for dispatched state-changing requests: HTTP 408, 409, and 5xx are ambiguous; other HTTP 4xx responses, including 429, remain definitive rejections.
+- Preserve read-only response behavior, HTTP status, Retry-After metadata, and the no-automatic-retry boundary.
+- Add deterministic regressions for 408, 409, 400, 429, 500, 502, and read-only 409 responses.
+- No generic Broker API, Harvester, exchange endpoint, authentication, or live mutation behavior changes.
