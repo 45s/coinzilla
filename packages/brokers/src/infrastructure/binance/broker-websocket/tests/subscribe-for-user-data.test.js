@@ -183,7 +183,7 @@ it("filters stale subscriptions and deduplicates repeated execution reports", as
 
 function createFilledExecutionReport() {
   return {
-e: "executionReport",
+    e: "executionReport",
     s: "BTCUSDT",
     i: 100,
     I: 200,

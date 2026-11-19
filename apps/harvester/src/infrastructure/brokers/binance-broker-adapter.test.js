@@ -78,7 +78,11 @@ type: "LIMIT_MAKER" } })
 })
 
 async function assertMarketMetadataIsMapped(broker) {
-  await assertMarketMetadataIsMapped(broker)
+  const marketMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+  assert.equal(marketMetadata.ok, true)
+  assert.ok(marketMetadata.data.market instanceof Market)
+  assert.ok(marketMetadata.data.tradingRules instanceof TradingRules)
+  assert.deepEqual(marketMetadata.data.supportedOrderTypes, ["LIMIT", "LIMIT_MAKER"])
 }
 
 test("maps object-shaped application inputs to the broker package methods", async () => {
@@ -110,11 +114,7 @@ orderId: 7 }), result)
 limit: 10 }), result)
   assert.equal(await broker.getAccountSnapshot(), result)
   assert.equal(await broker.getExchangeMarkets(), result)
-  const marketMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
-  assert.equal(marketMetadata.ok, true)
-  assert.ok(marketMetadata.data.market instanceof Market)
-  assert.ok(marketMetadata.data.tradingRules instanceof TradingRules)
-  assert.deepEqual(marketMetadata.data.supportedOrderTypes, ["LIMIT", "LIMIT_MAKER"])
+  await assertMarketMetadataIsMapped(broker)
   assert.equal(await broker.getPrices({ symbol: "BTCUSDT" }), result)
   const candleRequest = { symbol: "BTCUSDT",
 interval: "1m",
