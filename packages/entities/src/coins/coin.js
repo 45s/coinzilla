@@ -1,5 +1,4 @@
-import { capitalize, ensure } from "@coinzilla/utils"
-import { assertWithDomainError } from "../helpers/assert-with-domain-error.js"
+import { capitalize } from "@coinzilla/utils"
 
 export const errMsgs = {
   ticker: "Symbol is required for coin",
@@ -26,23 +25,10 @@ export class Coin {
   }
 
   constructor({ ticker, quantity } = {}) {
-    assertWithDomainError({
-      validate: () => ensure.nonEmptyString({
-        value: ticker,
-        name: "ticker",
-        errMsg: errMsgs.ticker,
-      }),
-      errorMessage: errMsgs.ticker,
-    })
-    assertWithDomainError({
-      validate: () => ensure.number({
-        value: quantity,
-        name: "quantity",
-        errMsg: errMsgs.quantity,
-      }),
-      errorMessage: errMsgs.quantity,
-    })
-    if (quantity < 0) {
+    if (typeof ticker !== "string" || ticker.trim() === "") {
+      throw new Error(errMsgs.ticker)
+    }
+    if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity < 0) {
       throw new Error(errMsgs.quantity)
     }
     this.#ticker = capitalize(ticker.trim())
