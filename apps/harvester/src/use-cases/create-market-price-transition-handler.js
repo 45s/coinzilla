@@ -43,7 +43,8 @@ function createPendingFreshPriceWaiter({
   setTimeoutFn,
   clearTimeoutFn,
 } = {}) {
-  return new Promise((resolve, reject) => {
+  return new Promise((...settlers) => {
+    const [resolve, reject] = settlers
     const waiters = waitersBySymbol.get(symbol) ?? new Set()
     const settledState = { settled: false }
     const waiter = {}
@@ -77,7 +78,10 @@ function createPendingFreshPriceWaiter({
     waitersBySymbol.set(symbol, waiters)
     try {
       waiter.timeoutHandle = setTimeoutFn(
-        () => waiter.reject(createMarketPriceRefreshTimeoutError({ symbol, timeoutMs })),
+        () => waiter.reject(createMarketPriceRefreshTimeoutError({
+          symbol,
+          timeoutMs,
+        })),
         timeoutMs,
       )
       if (!settledState.settled) {
@@ -266,7 +270,10 @@ function acceptFreshMarketPriceTransition({
 
   state.marketPriceEventIds.set(symbol, marketEventId)
   state.prices.set(symbol, price)
-  notifyFreshMarketPrice?.({ symbol, price })
+  notifyFreshMarketPrice?.({
+    symbol,
+    price,
+  })
 
   return {
     accepted: true,
