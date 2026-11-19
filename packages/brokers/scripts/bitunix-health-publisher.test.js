@@ -218,7 +218,10 @@ test("publishes failed API diagnostics and returns a failing exit code after cle
       repositoryRoot,
       runGit,
       runDiagnostics: async () => createDiagnosticReport({ failed: 1 }),
-      env: {},
+      env: {
+        BITUNIX_API_KEY: apiKey,
+        BITUNIX_API_SECRET: apiSecret,
+      },
       now: () => fixedTimestamp,
     })
 
@@ -256,6 +259,33 @@ test("publishes a sanitized failure report when the diagnostic runner throws", a
     assert.equal(JSON.stringify(result.report).includes(apiSecret), false, "the generated failure report must redact credential values from exception messages")
     assert.equal(calls.some((args) => args[0] === "push"), true, "a sanitized failure report must still be pushed when Git operations succeed")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "a thrown diagnostic exception must still return the checkout to develop")
+  } finally {
+    await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+
+test("requires both private API credentials before fetching or contacting Bitunix", async () => {
+  const repositoryRoot = await createRepositoryDirectory()
+  const { calls, runGit } = createFakeGit({ repositoryRoot })
+  try {
+    await assert.rejects(
+      publishBitunixDiagnostics({
+        repositoryRoot,
+        runGit,
+        runDiagnostics: async () => {
+          throw new Error("Bitunix must not be contacted without both private credentials")
+        },
+        env: {},
+        now: () => fixedTimestamp,
+      }),
+      /requires both read-only credentials/,
+      "the published health check must never report a healthy public-only run as an authenticated account check",
+    )
+    assert.equal(calls.some((args) => args[0] === "fetch"), false, "missing private credentials must be rejected before a report branch is created")
   } finally {
     await rm(repositoryRoot, {
       recursive: true,
