@@ -463,10 +463,33 @@ function validateOrderDetailResponse({ response, orderId, symbol }) {
   return response.data
 }
 
+function expandOrderNumberExponent({ value }) {
+  const [mantissa, exponentText] = value.toLowerCase().split("e")
+  const exponent = Number(exponentText)
+  const negative = mantissa.startsWith("-")
+  const unsigned = negative ? mantissa.slice(1) : mantissa
+  const [integer, fraction = ""] = unsigned.split(".")
+  const digits = integer + fraction
+  const decimalIndex = integer.length + exponent
+  let expanded
+  if (decimalIndex <= 0) {
+    expanded = `0.${"0".repeat(-decimalIndex)}${digits}`
+  } else if (decimalIndex >= digits.length) {
+    expanded = `${digits}${"0".repeat(decimalIndex - digits.length)}`
+  } else {
+    expanded = `${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`
+  }
+  return negative ? `-${expanded}` : expanded
+}
+
 function normalizeOrderDecimal({ value, field }) {
-  const normalized = typeof value === "number" && Number.isFinite(value)
-    ? String(value)
-    : value
+  let normalized = value
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const numberText = String(value)
+    normalized = numberText.includes("e")
+      ? expandOrderNumberExponent({ value: numberText })
+      : numberText
+  }
   assertDecimalString({
     value: normalized,
     field,
@@ -515,6 +538,9 @@ function validateSpotOrderInput({ input }) {
   }
   if (type !== "LIMIT" && type !== "MARKET") {
     throw new TypeError("Bitunix Spot single-order REST supports only LIMIT and MARKET orders")
+  }
+  if (type === "MARKET" && input.price !== undefined && String(input.price) !== "0") {
+    throw new TypeError("Bitunix Spot MARKET orders must use the documented zero price")
   }
   return { symbol, side, type }
 }
