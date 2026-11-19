@@ -7,8 +7,7 @@ import {
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
-import { Portfolio } from "../domain/portfolio/portfolio.js"
-import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { createAccountRuntimeRegistry } from "../application/providers/account-runtime-registry.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
@@ -108,13 +107,14 @@ function createMarketMetadata() {
 }
 
 function createSharedAccountState() {
-  return {
-    portfolio: new Portfolio(),
-    recoveryLedgers: new Map(),
-    orderRegistry: OrderRegistry.empty(),
-    legacyPositions: new Map(),
-    updateQueue: Promise.resolve(),
-  }
+  return createAccountRuntimeRegistry({
+    providers: [{
+      providerInstanceId: "test-provider",
+      providerType: "binance",
+      accountId: "test-account",
+      environment: "testnet",
+    }],
+  }).get("test-provider").state
 }
 
 function createEngine({ sharedAccountState }) {
