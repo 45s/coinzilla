@@ -494,7 +494,10 @@ function normalizeOrderDecimal({ value, field }) {
     value: normalized,
     field,
   })
-  if (compareDecimal({ left: normalized, right: "0" }) <= 0) {
+  if (compareDecimal({
+    left: normalized,
+    right: "0",
+  }) <= 0) {
     throw new RangeError(`${field} must be greater than zero`)
   }
   return normalized
@@ -527,8 +530,8 @@ function validateSpotOrderInput({ input }) {
     symbol: input.symbol,
     operation: "createOrder()",
   })
-  const side = input.side
-  const type = input.type ?? "LIMIT"
+  const { side, type: inputType } = input
+  const type = inputType ?? "LIMIT"
   if (side !== "BUY" && side !== "SELL") {
     throw new TypeError("Bitunix Spot createOrder() side must be BUY or SELL")
   }
@@ -538,7 +541,11 @@ function validateSpotOrderInput({ input }) {
   if (type === "MARKET" && input.price !== undefined) {
     throw new TypeError("Bitunix Spot MARKET orders derive their required zero price; omit price")
   }
-  return { symbol, side, type }
+  return {
+    symbol,
+    side,
+    type,
+  }
 }
 
 function createSpotOrderRequest({ input }) {
@@ -556,7 +563,10 @@ function createSpotOrderRequest({ input }) {
   // The single-order REST endpoint uses quote volume for LIMIT and base
   // volume for MARKET. Batch REST and WebSocket have different contracts.
   const volume = type === "LIMIT"
-    ? multiplyDecimal({ left: quantity, right: price })
+    ? multiplyDecimal({
+      left: quantity,
+      right: price,
+    })
     : quantity
   return {
     symbol,
