@@ -28,7 +28,7 @@ const disabledLifecycle = Object.freeze({
   },
 })
 
-function createAdapterStartHandler({
+async function startTelegramOperatorAdapter({
   getAdapter,
   setAdapter,
   botToken,
@@ -37,74 +37,78 @@ function createAdapterStartHandler({
   fetchImpl,
   logger,
   operationalStateStore,
+  engine,
+  getRuntimeSnapshot,
+  getPortfolio,
+  getRecoveryLedger,
+  getAccountSnapshot,
+  getOpenOrders,
+  recoverySellerStopWorkflow,
 } = {}) {
-  return async function startTelegramAdapter({
+  if (getAdapter()) {
+    return Object.freeze({
+      started: true,
+      alreadyStarted: true,
+    })
+  }
+  const operator = createHarvesterOperator({
     engine,
+    operationalStateStore,
     getRuntimeSnapshot,
     getPortfolio,
     getRecoveryLedger,
     getAccountSnapshot,
     getOpenOrders,
     recoverySellerStopWorkflow,
-  } = {}) {
-    if (getAdapter()) {
-      return Object.freeze({
-        started: true,
-        alreadyStarted: true,
-      })
-    }
-    const operator = createHarvesterOperator({
-      engine,
-      operationalStateStore,
-      getRuntimeSnapshot,
-      getPortfolio,
-      getRecoveryLedger,
-      getAccountSnapshot,
-      getOpenOrders,
-      recoverySellerStopWorkflow,
+  })
+  try {
+    const adapter = createAdapter({
+      botToken,
+      allowedUserIds: telegramConfig.allowedUserIds,
+      operator,
+      fetchImpl,
+      logger,
     })
-    try {
-      const adapter = createAdapter({
-        botToken,
-        allowedUserIds: telegramConfig.allowedUserIds,
-        operator,
-        fetchImpl,
-        logger,
-      })
-      setAdapter(adapter)
-      if (typeof adapter?.start !== "function" || typeof adapter?.stop !== "function") {
-        throw new TypeError("Telegram operator adapter must expose start() and stop()")
-      }
-      await adapter.start()
-      return Object.freeze({
-        started: true,
-        alreadyStarted: false,
-      })
-    } catch (cause) {
-      const adapter = getAdapter()
-      let failure = cause
-      let cleanupConfirmed = false
-      if (typeof adapter?.stop === "function") {
-        try {
-          await adapter.stop()
-          cleanupConfirmed = true
-        } catch (cleanupError) {
-          failure = new AggregateError(
-            [cause, cleanupError],
-            "Telegram operator startup and cleanup both failed",
-          )
-        }
-      }
-      if (cleanupConfirmed || !adapter) {
-        setAdapter(undefined)
-      }
-      throw new OperatorControlStartupError(
-        "Telegram operator adapter failed to authenticate or start; Harvester startup is aborted",
-        "OPERATOR_CONTROL_TELEGRAM_START_FAILED",
-        failure,
-      )
+    setAdapter(adapter)
+    if (typeof adapter?.start !== "function" || typeof adapter?.stop !== "function") {
+      throw new TypeError("Telegram operator adapter must expose start() and stop()")
     }
+    await adapter.start()
+    return Object.freeze({
+      started: true,
+      alreadyStarted: false,
+    })
+  } catch (cause) {
+    const adapter = getAdapter()
+    let failure = cause
+    let cleanupConfirmed = false
+    if (typeof adapter?.stop === "function") {
+      try {
+        await adapter.stop()
+        cleanupConfirmed = true
+      } catch (cleanupError) {
+        failure = new AggregateError(
+          [cause, cleanupError],
+          "Telegram operator startup and cleanup both failed",
+        )
+      }
+    }
+    if (cleanupConfirmed || !adapter) {
+      setAdapter(undefined)
+    }
+    throw new OperatorControlStartupError(
+      "Telegram operator adapter failed to authenticate or start; Harvester startup is aborted",
+      "OPERATOR_CONTROL_TELEGRAM_START_FAILED",
+      failure,
+    )
   }
+}
+
+function createAdapterStartHandler(options = {}) {
+  return (context = {}) => startTelegramOperatorAdapter({
+    ...options,
+    ...context,
+  })
 }
 
 function createAdapterStopHandler({ getAdapter, setAdapter } = {}) {
@@ -133,14 +137,7 @@ function createAdapterStopHandler({ getAdapter, setAdapter } = {}) {
   }
 }
 
-function createEnabledLifecycle({
-  botToken,
-  telegramConfig,
-  operationalStateStore,
-  createAdapter,
-  fetchImpl,
-  logger,
-} = {}) {
+function createEnabledLifecycle(options = {}) {
   let adapter
   const getAdapter = () => adapter
   const setAdapter = (nextAdapter) => {
@@ -148,15 +145,11 @@ function createEnabledLifecycle({
   }
   return Object.freeze({
     enabled: true,
-    operationalStateStore,
+    operationalStateStore: options.operationalStateStore,
     start: createAdapterStartHandler({
+      ...options,
       getAdapter,
       setAdapter,
-      botToken,
-      telegramConfig,
-      createAdapter,
-      fetchImpl,
-      logger,
     }),
     stop: createAdapterStopHandler({
       getAdapter,
