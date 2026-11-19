@@ -235,6 +235,18 @@ function createRecoveredTradingEngineState(recoveredState) {
   }
 }
 
+export function assertRecoverySellerEvaluatorConfigured({
+  recoverySellerPairs,
+  evaluateRecoverySellerTransition,
+} = {}) {
+  if (Object.keys(recoverySellerPairs ?? {}).length === 0) {
+    return
+  }
+  if (typeof evaluateRecoverySellerTransition !== "function") {
+    throw new Error("Configured Recovery Seller routes require a production transition evaluator before broker connection")
+  }
+}
+
 function createHarvesterTradingEngineSafetyCallbacks({
   userDataState,
   accountSnapshotManagerRef,
