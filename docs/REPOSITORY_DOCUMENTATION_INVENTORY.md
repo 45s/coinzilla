@@ -127,7 +127,7 @@ A complete recursive tree comparison from `0a51d6034a6ff6473d9a9005b74744fd048c9
 | `apps/harvester/docs/persistence/README.md` | Harvester-owned persistence architecture and database integration boundary. |
 | `docs/architecture/decisions/ADR-0003-multi-provider-routing.md` | Accepted provider-neutral execution and independent market-data routing architecture. |
 | `docs/architecture/multi-provider-migration-plan.md` | Source-based migration audit, phases, blockers and delivery sequence. |
-| `packages/brokers/BITUNIX_REFERENCE_AUDIT.md` | Source/reference audit for Bitunix Spot API capabilities and unresolved contract gaps. |
+| `packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md` | Source/reference audit for Bitunix Spot API capabilities and unresolved contract gaps. |
 | `packages/db/docs/README.md` | Database package architecture and decision index. |
 | `packages/db/docs/decisions/0001-provider-neutral-record-crud-api.md` | Accepted provider-neutral record CRUD API decision. |
 
