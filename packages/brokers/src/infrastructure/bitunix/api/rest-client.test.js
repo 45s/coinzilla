@@ -838,6 +838,45 @@ test("Bitunix REST explicit exchange rejections remain definitive for state-chan
 
 
 
+
+async function assertMutationHttpOutcome({ status, outcomeUnknown }) {
+  let requestCount = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      requestCount += 1
+      return {
+        ok: false,
+        status,
+        async text() {
+          return JSON.stringify({
+            code: String(status),
+            msg: "request failed",
+          })
+        },
+      }
+    },
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/place_order",
+      body: {
+        symbol: "BTCUSDT",
+      },
+      stateChanging: true,
+    }),
+    (error) => {
+      assert.equal(error.status, status, "the HTTP status must remain available for mutation classification")
+      assert.equal(error.outcomeUnknown, outcomeUnknown, "REST mutation metadata must match the common Broker HTTP outcome rules")
+      return true
+    },
+  )
+  assert.equal(requestCount, 1, "ambiguous and rejected mutation responses must never trigger an automatic retry")
+}
+
 test("Bitunix REST client aligns mutation outcome metadata with shared Broker HTTP classification", async () => {
   const scenarios = [
     {
@@ -867,41 +906,7 @@ test("Bitunix REST client aligns mutation outcome metadata with shared Broker HT
   ]
 
   for (const scenario of scenarios) {
-    let requestCount = 0
-    const client = new BitunixRestClient({
-      apiKey: "api-key",
-      apiSecret: "secret",
-      fetchFn: async () => {
-        requestCount += 1
-        return {
-          ok: false,
-          status: scenario.status,
-          async text() {
-            return JSON.stringify({
-              code: String(scenario.status),
-              msg: "request failed",
-            })
-          },
-        }
-      },
-    })
-
-    await assert.rejects(
-      client.request({
-        method: "POST",
-        path: "/api/spot/v1/order/place_order",
-        body: {
-          symbol: "BTCUSDT",
-        },
-        stateChanging: true,
-      }),
-      (error) => {
-        assert.equal(error.status, scenario.status, "the HTTP status must remain available for mutation classification")
-        assert.equal(error.outcomeUnknown, scenario.outcomeUnknown, "REST mutation metadata must match the common Broker HTTP outcome rules")
-        return true
-      },
-    )
-    assert.equal(requestCount, 1, "ambiguous and rejected mutation responses must never trigger an automatic retry")
+    await assertMutationHttpOutcome(scenario)
   }
 })
 
