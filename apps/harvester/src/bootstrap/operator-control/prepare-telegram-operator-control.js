@@ -28,6 +28,27 @@ const disabledLifecycle = Object.freeze({
   },
 })
 
+async function cleanupFailedTelegramAdapter({ getAdapter, setAdapter, cause } = {}) {
+  const adapter = getAdapter()
+  let failure = cause
+  let cleanupConfirmed = false
+  if (typeof adapter?.stop === "function") {
+    try {
+      await adapter.stop()
+      cleanupConfirmed = true
+    } catch (cleanupError) {
+      failure = new AggregateError(
+        [cause, cleanupError],
+        "Telegram operator startup and cleanup both failed",
+      )
+    }
+  }
+  if (cleanupConfirmed || !adapter) {
+    setAdapter(undefined)
+  }
+  return failure
+}
+
 async function startTelegramOperatorAdapter({
   getAdapter,
   setAdapter,
@@ -79,23 +100,11 @@ async function startTelegramOperatorAdapter({
       alreadyStarted: false,
     })
   } catch (cause) {
-    const adapter = getAdapter()
-    let failure = cause
-    let cleanupConfirmed = false
-    if (typeof adapter?.stop === "function") {
-      try {
-        await adapter.stop()
-        cleanupConfirmed = true
-      } catch (cleanupError) {
-        failure = new AggregateError(
-          [cause, cleanupError],
-          "Telegram operator startup and cleanup both failed",
-        )
-      }
-    }
-    if (cleanupConfirmed || !adapter) {
-      setAdapter(undefined)
-    }
+    const failure = await cleanupFailedTelegramAdapter({
+      getAdapter,
+      setAdapter,
+      cause,
+    })
     throw new OperatorControlStartupError(
       "Telegram operator adapter failed to authenticate or start; Harvester startup is aborted",
       "OPERATOR_CONTROL_TELEGRAM_START_FAILED",
