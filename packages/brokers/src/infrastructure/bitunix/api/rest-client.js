@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto"
 import { SystemCustomError } from "@coinzilla/utils"
 import { createRestSignature } from "../auth/create-rest-signature.js"
+import { serializeBitunixJson } from "./json-serializer.js"
 
 const DEFAULT_BASE_URL = "https://openapi.bitunix.com"
 const DEFAULT_REQUEST_TIMEOUT = 10_000
@@ -187,7 +188,7 @@ function createSignedRequest({ client, method, path, queryParams, body }) {
   const sortedQuery = Object.fromEntries(
     Object.keys(queryParams).sort().map((key) => [key, queryParams[key]]),
   )
-  const bodyText = body === undefined ? undefined : JSON.stringify(body)
+  const bodyText = serializeBitunixJson({ value: body })
   const signature = createRestSignature({
     nonce,
     timestamp,
