@@ -20,8 +20,23 @@ function validatePersistedOrderOwnership({ canonicalData } = {}) {
   const fields = ["strategyId", "positionId", "cycleId"]
   const supplied = fields.filter((field) => canonicalData[field] !== undefined)
   if (canonicalData.purpose === null) {
-    if (supplied.length > 0) {
-      throw new TypeError("Conservative order facts cannot contain strategy ownership")
+    if (supplied.length === 0) {
+      return
+    }
+    if (canonicalData.strategyId !== "COIN_GRABBER" || supplied.length < 2) {
+      throw new TypeError("Purpose-free order ownership must be complete Coin Grabber ownership")
+    }
+    requireNonEmptyString({
+      value: canonicalData.positionId,
+      field: "data.positionId",
+      maxLength: MAX_FACT_ID_LENGTH,
+    })
+    if (canonicalData.cycleId !== undefined) {
+      requireNonEmptyString({
+        value: canonicalData.cycleId,
+        field: "data.cycleId",
+        maxLength: MAX_FACT_ID_LENGTH,
+      })
     }
     return
   }

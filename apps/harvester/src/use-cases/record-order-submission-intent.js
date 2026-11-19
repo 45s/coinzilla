@@ -33,20 +33,21 @@ function validateSubmissionOrderFields({ order }) {
 }
 
 function validateSubmissionOwnership({ purpose, ownership, side } = {}) {
-  if (purpose === null) {
-    if (ownership !== undefined && ownership !== null) {
-      throw new TypeError("Conservative order submission cannot contain strategy ownership")
-    }
+  const hasOwnership = ownership !== undefined && ownership !== null
+  if (purpose === null && !hasOwnership) {
     return {}
   }
-  if (purpose === "RECOVERY_SELL" && (ownership === undefined || ownership === null)) {
+  if (purpose === null && ownership.strategyId !== "COIN_GRABBER") {
+    throw new TypeError("Purpose-free order ownership must belong to Coin Grabber")
+  }
+  if (purpose === "RECOVERY_SELL" && !hasOwnership) {
     return {}
   }
   const isSupportedStrategy = ["COIN_GRABBER", "RECOVERY_SELLER"].includes(ownership?.strategyId)
   const hasPositionId = typeof ownership?.positionId === "string" && ownership.positionId.trim()
   const hasCycleId = typeof ownership?.cycleId === "string" && ownership.cycleId.trim()
   if (!isSupportedStrategy || ownership.purpose !== purpose || !hasPositionId) {
-    throw new TypeError("Recovery order submission requires complete strategy, positionId and purpose ownership")
+    throw new TypeError("Strategy order submission requires complete strategy, positionId and purpose ownership")
   }
   if (ownership.strategyId === "RECOVERY_SELLER" && !hasCycleId) {
     throw new TypeError("Recovery Seller order submission requires its immutable cycleId")
