@@ -56,6 +56,62 @@ function validateMutationFlag({ value,
   }
 }
 
+function validateFuturesConfigOptions({
+  apiKey,
+  apiSecret,
+  baseUrl,
+  publicWebSocketUrl,
+  privateWebSocketUrl,
+  language,
+  requestTimeout,
+  allowLiveOrderMutations,
+  allowLivePositionMutations,
+  allowLiveAccountMutations,
+  allowLiveFundsMutations,
+}) {
+  validateOptionalCredentialPair({
+    apiKey,
+    apiSecret,
+  })
+  validateHttpsUrl({
+    value: baseUrl,
+    field: "baseUrl",
+  })
+  validateWebSocketUrl({
+    value: publicWebSocketUrl,
+    field: "publicWebSocketUrl",
+  })
+  validateWebSocketUrl({
+    value: privateWebSocketUrl,
+    field: "privateWebSocketUrl",
+  })
+
+  if (typeof language !== "string" || !language.trim()) {
+    throw new TypeError("Bitunix Futures language must be a non-empty string")
+  }
+
+  if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
+    throw new RangeError("Bitunix Futures requestTimeout must be a positive integer")
+  }
+
+  validateMutationFlag({
+    value: allowLiveOrderMutations,
+    field: "allowLiveOrderMutations",
+  })
+  validateMutationFlag({
+    value: allowLivePositionMutations,
+    field: "allowLivePositionMutations",
+  })
+  validateMutationFlag({
+    value: allowLiveAccountMutations,
+    field: "allowLiveAccountMutations",
+  })
+  validateMutationFlag({
+    value: allowLiveFundsMutations,
+    field: "allowLiveFundsMutations",
+  })
+}
+
 /**
  * Immutable Bitunix Futures API configuration.
  *
@@ -92,38 +148,18 @@ export class BitunixFuturesConfig {
     allowLiveAccountMutations = false,
     allowLiveFundsMutations = false,
   } = {}) {
-    validateOptionalCredentialPair({ apiKey,
-      apiSecret })
-    validateHttpsUrl({ value: baseUrl,
-      field: "baseUrl" })
-    validateWebSocketUrl({ value: publicWebSocketUrl,
-      field: "publicWebSocketUrl" })
-    validateWebSocketUrl({ value: privateWebSocketUrl,
-      field: "privateWebSocketUrl" })
-
-    if (typeof language !== "string" || !language.trim()) {
-      throw new TypeError("Bitunix Futures language must be a non-empty string")
-    }
-
-    if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
-      throw new RangeError("Bitunix Futures requestTimeout must be a positive integer")
-    }
-
-    validateMutationFlag({
-      value: allowLiveOrderMutations,
-      field: "allowLiveOrderMutations",
-    })
-    validateMutationFlag({
-      value: allowLivePositionMutations,
-      field: "allowLivePositionMutations",
-    })
-    validateMutationFlag({
-      value: allowLiveAccountMutations,
-      field: "allowLiveAccountMutations",
-    })
-    validateMutationFlag({
-      value: allowLiveFundsMutations,
-      field: "allowLiveFundsMutations",
+    validateFuturesConfigOptions({
+      apiKey,
+      apiSecret,
+      baseUrl,
+      publicWebSocketUrl,
+      privateWebSocketUrl,
+      language,
+      requestTimeout,
+      allowLiveOrderMutations,
+      allowLivePositionMutations,
+      allowLiveAccountMutations,
+      allowLiveFundsMutations,
     })
 
     this.apiKey = apiKey
