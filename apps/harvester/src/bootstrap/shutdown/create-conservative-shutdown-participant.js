@@ -106,56 +106,71 @@ function createMarketSafetyError({ symbol, blockers } = {}) {
   return error
 }
 
-async function collectStageBlockers({ blockers, stage, operation } = {}) {
+async function collectStageBlockers({ blockers, reconciliationBlockers, stage, operation } = {}) {
   const stageBlockers = await runStage({ stage,
     operation })
   blockers.push(...stageBlockers)
+  reconciliationBlockers?.push(...stageBlockers)
 }
 
-async function collectDrainBlockers({ blockers, drainUserDataEvents } = {}) {
+async function collectDrainBlockers({ blockers, reconciliationBlockers, drainUserDataEvents } = {}) {
   const drainBlockers = await drainUserData(drainUserDataEvents)
   blockers.push(...drainBlockers)
+  reconciliationBlockers?.push(...drainBlockers)
 }
 
 async function reconcileOwnedOrders({
   engine,
   symbol,
   blockers,
+  reconciliationBlockers,
   drainUserDataEvents,
 } = {}) {
   await collectStageBlockers({
     blockers,
+    reconciliationBlockers,
     stage: "OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
   })
-  await collectDrainBlockers({ blockers,
-    drainUserDataEvents })
+  await collectDrainBlockers({
+    blockers,
+    reconciliationBlockers,
+    drainUserDataEvents,
+  })
 
   await collectStageBlockers({
     blockers,
     stage: "OWNED_BUY_CANCELLATION",
     operation: () => engine.cancelOwnedBuyOrdersForShutdown({ symbol }),
   })
-  await collectDrainBlockers({ blockers,
-    drainUserDataEvents })
+  await collectDrainBlockers({
+    blockers,
+    reconciliationBlockers,
+    drainUserDataEvents,
+  })
 
   await collectStageBlockers({
     blockers,
+    reconciliationBlockers,
     stage: "FINAL_OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
   })
-  await collectDrainBlockers({ blockers,
-    drainUserDataEvents })
+  await collectDrainBlockers({
+    blockers,
+    reconciliationBlockers,
+    drainUserDataEvents,
+  })
 }
 
 async function reconcileRecoverySells({
   engine,
   symbol,
   blockers,
+  reconciliationBlockers,
   drainUserDataEvents,
 } = {}) {
   if (blockers.length > 0) {
-    return false
+    return
   }
 
   const recoveryBlockers = await runStage({
@@ -163,22 +178,27 @@ async function reconcileRecoverySells({
     operation: () => engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] }),
   })
   blockers.push(...recoveryBlockers)
-  await collectDrainBlockers({ blockers,
-    drainUserDataEvents })
+  await collectDrainBlockers({
+    blockers,
+    reconciliationBlockers,
+    drainUserDataEvents,
+  })
 
   if (blockers.length > 0) {
-    return false
+    return
   }
 
   await collectStageBlockers({
     blockers,
+    reconciliationBlockers,
     stage: "POST_RECOVERY_OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
   })
-  await collectDrainBlockers({ blockers,
-    drainUserDataEvents })
-
-  return recoveryBlockers.length === 0 && blockers.length === 0
+  await collectDrainBlockers({
+    blockers,
+    reconciliationBlockers,
+    drainUserDataEvents,
+  })
 }
 
 async function auditRecoverySellCoverage({ engine, symbol, blockers } = {}) {
@@ -220,7 +240,7 @@ async function assessMarketSafety({
   engine,
   symbol,
   blockers,
-  recoveryReconciled,
+  reconciliationComplete,
   journalDurable,
   coverageResult,
   getShutdownBlockers,
@@ -231,7 +251,7 @@ async function assessMarketSafety({
 
   const safety = await engine.auditShutdownSafety({
     symbol,
-    reconciliationComplete: blockers.length === 0 && recoveryReconciled,
+    reconciliationComplete,
     journalDurable,
     coverageResult,
     externalBlockers: blockers,
@@ -290,17 +310,20 @@ async function secureMarket({
   initialDrainBlockers,
 } = {}) {
   const blockers = [...initialDrainBlockers]
+  const reconciliationBlockers = [...initialDrainBlockers]
   await reconcileOwnedOrders({
     engine,
     symbol,
     blockers,
+    reconciliationBlockers,
     drainUserDataEvents,
   })
 
-  const recoveryReconciled = await reconcileRecoverySells({
+  await reconcileRecoverySells({
     engine,
     symbol,
     blockers,
+    reconciliationBlockers,
     drainUserDataEvents,
   })
   const coverageResult = await auditRecoverySellCoverage({
@@ -315,7 +338,7 @@ async function secureMarket({
     engine,
     symbol,
     blockers,
-    recoveryReconciled,
+    reconciliationComplete: reconciliationBlockers.length === 0,
     journalDurable: journal.durable,
     coverageResult,
     getShutdownBlockers,
