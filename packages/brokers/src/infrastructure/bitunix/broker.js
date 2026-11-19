@@ -44,6 +44,8 @@ const API = Object.freeze({
   withdraw: "/api/spot/v1/withdraw",
   cancelWithdrawal: "/api/spot/v1/withdraw/cancel",
   fundsTransfer: "/api/spot/v1/funds_transfer",
+  internalTransfer: "/api/spot/v1/inside_transfer",
+  cancelInternalTransfer: "/api/spot/v1/inside_transfer/cancel",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -416,6 +418,155 @@ function createWithdrawalCancelRequest({ input }) {
       withdrawId: String(withdrawId),
     },
   }
+}
+
+function createInternalTransferRecipient({ input }) {
+  if (input.toType === "uid") {
+    const { toUid } = input
+    if ((typeof toUid !== "string" || !/^[0-9]+$/.test(toUid)) &&
+        !(typeof toUid === "number" && Number.isSafeInteger(toUid) && toUid >= 0)) {
+      throw new TypeError("Bitunix Spot internal transfer toUid must be a non-negative integer string or safe integer")
+    }
+    if (input.toPhoneCountryCode !== undefined ||
+        input.toPhoneNumber !== undefined ||
+        input.toEmail !== undefined) {
+      throw new TypeError("Bitunix Spot UID transfer must not include phone or email recipient fields")
+    }
+    return { toUid: String(toUid) }
+  }
+  if (input.toType === "phone") {
+    if (input.toUid !== undefined || input.toEmail !== undefined) {
+      throw new TypeError("Bitunix Spot phone transfer must not include UID or email recipient fields")
+    }
+    return {
+      toPhoneCountryCode: requireFundsMutationString({
+        value: input.toPhoneCountryCode,
+        field: "toPhoneCountryCode",
+      }),
+      toPhoneNumber: requireFundsMutationString({
+        value: input.toPhoneNumber,
+        field: "toPhoneNumber",
+      }),
+    }
+  }
+  if (input.toType === "email") {
+    if (input.toUid !== undefined ||
+        input.toPhoneCountryCode !== undefined ||
+        input.toPhoneNumber !== undefined) {
+      throw new TypeError("Bitunix Spot email transfer must not include UID or phone recipient fields")
+    }
+    return {
+      toEmail: requireFundsMutationString({
+        value: input.toEmail,
+        field: "toEmail",
+      }),
+    }
+  }
+  throw new TypeError("Bitunix Spot internal transfer toType must be uid, phone, or email")
+}
+
+function createInternalTransferRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot requestInternalTransfer() input must be an object")
+  }
+  const allowedFields = new Set([
+    "outBizId",
+    "coin",
+    "amount",
+    "toType",
+    "toUid",
+    "toPhoneCountryCode",
+    "toPhoneNumber",
+    "toEmail",
+    "remark",
+  ])
+  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field))
+  if (unsupportedFields.length > 0) {
+    throw new TypeError(`Bitunix Spot requestInternalTransfer() does not support fields: ${unsupportedFields.join(", ")}`)
+  }
+  const body = {
+    coin: requireFundsMutationString({
+      value: input.coin,
+      field: "coin",
+    }),
+    amount: requirePositiveFundsAmount({
+      value: input.amount,
+      operation: "internal transfer",
+    }),
+    toType: input.toType,
+    ...createInternalTransferRecipient({ input }),
+  }
+  if (input.outBizId !== undefined) {
+    const outBizId = requireFundsMutationString({
+      value: input.outBizId,
+      field: "outBizId",
+    })
+    if (outBizId.length > 32) {
+      throw new RangeError("Bitunix Spot internal transfer outBizId must not exceed 32 characters")
+    }
+    body.outBizId = outBizId
+  }
+  if (input.remark !== undefined) {
+    const remark = requireFundsMutationString({
+      value: input.remark,
+      field: "remark",
+    })
+    if (remark.length > 256) {
+      throw new RangeError("Bitunix Spot internal transfer remark must not exceed 256 characters")
+    }
+    body.remark = remark
+  }
+  return { body }
+}
+
+function createInternalTransferCancelRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot cancelInternalTransfer() input must be an object")
+  }
+  const allowedFields = new Set(["insideTransferId"])
+  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field))
+  if (unsupportedFields.length > 0) {
+    throw new TypeError(`Bitunix Spot cancelInternalTransfer() does not support fields: ${unsupportedFields.join(", ")}`)
+  }
+  const { insideTransferId } = input
+  if ((typeof insideTransferId !== "string" || !insideTransferId.trim()) &&
+      !(typeof insideTransferId === "number" &&
+        Number.isSafeInteger(insideTransferId) &&
+        insideTransferId >= 0)) {
+    throw new TypeError("Bitunix Spot cancelInternalTransfer() requires a non-empty string or safe integer insideTransferId")
+  }
+  return {
+    body: {
+      insideTransferId: String(insideTransferId),
+    },
+  }
+}
+
+async function verifyCancelledFundsHistory({ broker, id, type, operation }) {
+  const history = await broker.getWithdrawalHistory({
+    id,
+    type,
+  })
+  if (!history.ok) {
+    return toResult({
+      errors: history.errors ?? [new Error(`Bitunix Spot ${operation} cancellation could not be verified`)],
+      mutationOutcome: "OUTCOME_UNKNOWN",
+    })
+  }
+  const cancelledRecord = history.data.find((record) =>
+    record.id === id && record.status === "cancelled",
+  )
+  if (cancelledRecord) {
+    return toResult({
+      data: cancelledRecord,
+      mutationOutcome: "CONFIRMED",
+    })
+  }
+  return toResult({
+    data: history.data.find((record) => record.id === id),
+    errors: [new Error(`Bitunix Spot ${operation} cancellation is not confirmed by history; reconcile before retrying`)],
+    mutationOutcome: "OUTCOME_UNKNOWN",
+  })
 }
 
 function normalizeFundsMutationId({ value, field }) {
@@ -1321,29 +1472,11 @@ export class BitunixSpotBroker extends CoreBroker {
       if (response.data !== null) {
         throw new TypeError("Bitunix Spot withdrawal cancellation response data must be null")
       }
-      const history = await this.getWithdrawalHistory({
+      return verifyCancelledFundsHistory({
+        broker: this,
         id: body.withdrawId,
         type: "withdraw",
-      })
-      if (!history.ok) {
-        return toResult({
-          errors: history.errors ?? [new Error("Bitunix Spot withdrawal cancellation could not be verified")],
-          mutationOutcome: "OUTCOME_UNKNOWN",
-        })
-      }
-      const cancelledWithdrawal = history.data.find((withdrawal) =>
-        withdrawal.id === body.withdrawId && withdrawal.status === "cancelled",
-      )
-      if (!cancelledWithdrawal) {
-        return toResult({
-          data: history.data.find((withdrawal) => withdrawal.id === body.withdrawId),
-          errors: [new Error("Bitunix Spot withdrawal cancellation is not confirmed by history; reconcile before retrying")],
-          mutationOutcome: "OUTCOME_UNKNOWN",
-        })
-      }
-      return toResult({
-        data: cancelledWithdrawal,
-        mutationOutcome: "CONFIRMED",
+        operation: "withdrawal",
       })
     } catch (error) {
       handleErr({
@@ -1356,6 +1489,7 @@ export class BitunixSpotBroker extends CoreBroker {
       })
     }
   }
+
 
   /**
    * Transfer funds between the Spot and Futures accounts.
@@ -1393,6 +1527,100 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.transferFunds()",
+        error,
+      })
+      return createFundsMutationFailure({
+        error,
+        requestDispatched,
+      })
+    }
+  }
+
+  /**
+   * Request an internal user-to-user transfer. A caller-supplied outBizId is the
+   * exchange's idempotency key; uncertain outcomes are never retried automatically.
+   *
+   * @param {{coin: string, amount: string, toType: "uid"|"phone"|"email", toUid?: string|number, toPhoneCountryCode?: string, toPhoneNumber?: string, toEmail?: string, outBizId?: string, remark?: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string}>}
+   */
+  async requestInternalTransfer(input = {}) {
+    if (!this.config.allowLiveFundsMutations) {
+      return unsupportedMutationResult({
+        operation: "requestInternalTransfer",
+        reason: "live Bitunix funds mutations are disabled by default; set allowLiveFundsMutations: true only after independent internal-transfer authorization",
+      })
+    }
+    let requestDispatched = false
+    try {
+      const { body } = createInternalTransferRequest({ input })
+      requestDispatched = true
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.internalTransfer,
+        body,
+        authenticated: true,
+        stateChanging: true,
+      })
+      const insideTransferId = normalizeFundsMutationId({
+        value: response.data,
+        field: "insideTransferId",
+      })
+      return toResult({
+        data: Object.freeze({
+          insideTransferId,
+          ...(body.outBizId === undefined ? {} : { outBizId: body.outBizId }),
+        }),
+        mutationOutcome: "CONFIRMED",
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.requestInternalTransfer()",
+        error,
+      })
+      return createFundsMutationFailure({
+        error,
+        requestDispatched,
+      })
+    }
+  }
+
+  /**
+   * Cancel an internal transfer and verify its final status through withdrawal history.
+   * Only transfers still in the initial manual-review stage are cancellable.
+   *
+   * @param {{insideTransferId: string|number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string}>}
+   */
+  async cancelInternalTransfer(input = {}) {
+    if (!this.config.allowLiveFundsMutations) {
+      return unsupportedMutationResult({
+        operation: "cancelInternalTransfer",
+        reason: "live Bitunix funds mutations are disabled by default; set allowLiveFundsMutations: true only after independent internal-transfer-cancellation authorization",
+      })
+    }
+    let requestDispatched = false
+    try {
+      const { body } = createInternalTransferCancelRequest({ input })
+      requestDispatched = true
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.cancelInternalTransfer,
+        body,
+        authenticated: true,
+        stateChanging: true,
+      })
+      if (response.data !== null) {
+        throw new TypeError("Bitunix Spot internal-transfer cancellation response data must be null")
+      }
+      return verifyCancelledFundsHistory({
+        broker: this,
+        id: body.insideTransferId,
+        type: "inside_transfer_out",
+        operation: "internal transfer",
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.cancelInternalTransfer()",
         error,
       })
       return createFundsMutationFailure({
