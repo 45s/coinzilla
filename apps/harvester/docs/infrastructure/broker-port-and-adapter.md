@@ -267,3 +267,6 @@ Harvester supplies both callback channels through the same application-owned Bro
 - `onStatus` reports lifecycle and delivery health.
 
 The broker's returned `deliveryMode` and `nativePush` metadata describe the actual delivery semantics. Harvester does not inspect provider source code or branch on provider identity. Bitunix remains excluded from the provider registry while its native user-data, authoritative snapshot, and canonical-fill capabilities remain unsupported.
+
+
+The Binance infrastructure adapter forwards the complete callback object unchanged. Binance emits native user-data messages through `onEvent`; the optional `onObservation` callback is accepted by the common adapter contract but is not used by the native Binance stream.
