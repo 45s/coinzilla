@@ -45,6 +45,15 @@ function validateTrackedOrders({ trackedOrders = [] }) {
   })
 }
 
+
+function validateTrackedOrderScope({ symbols, trackedOrders }) {
+  for (const order of trackedOrders) {
+    if (!symbols.includes(order.symbol)) {
+      throw new TypeError(`Tracked order symbol ${order.symbol} is not in polling symbols`)
+    }
+  }
+}
+
 function assertSuccessfulRead({ result, operation }) {
   if (!result || result.ok !== true) {
     const errors = Array.isArray(result?.errors) ? result.errors : []
@@ -133,11 +142,10 @@ export class BitunixSpotReconciler {
   async pollOnce({ symbols, trackedOrders = [] } = {}) {
     const normalizedSymbols = validateSymbols({ symbols })
     const normalizedTrackedOrders = validateTrackedOrders({ trackedOrders })
-    for (const order of normalizedTrackedOrders) {
-      if (!normalizedSymbols.includes(order.symbol)) {
-        throw new TypeError(`Tracked order symbol ${order.symbol} is not in polling symbols`)
-      }
-    }
+    validateTrackedOrderScope({
+      symbols: normalizedSymbols,
+      trackedOrders: normalizedTrackedOrders,
+    })
     const requestKey = stableSerialize({
       value: {
         symbols: normalizedSymbols,
@@ -215,10 +223,6 @@ export class BitunixSpotReconciler {
   }
 
   async #collect({ symbols, trackedOrders, generation }) {
-    const observedAt = this.now()
-    if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
-      throw new TypeError("Bitunix Spot reconciler clock must return a non-negative safe integer")
-    }
     const balances = assertSuccessfulRead({
       result: await this.broker.getBalances(),
       operation: "balances",
@@ -233,6 +237,10 @@ export class BitunixSpotReconciler {
       generation,
     })
     this.#assertActive({ generation })
+    const observedAt = this.now()
+    if (!Number.isSafeInteger(observedAt) || observedAt < 0) {
+      throw new TypeError("Bitunix Spot reconciler clock must return a non-negative safe integer")
+    }
     const snapshot = freezeSnapshot({
       snapshot: {
         provider: "bitunix",
@@ -251,7 +259,17 @@ export class BitunixSpotReconciler {
         }),
       },
     })
-    const fingerprint = stableSerialize({ value: snapshot })
+    const fingerprint = stableSerialize({
+      value: {
+        provider: snapshot.provider,
+        product: snapshot.product,
+        mode: snapshot.mode,
+        balances: snapshot.balances,
+        symbols: snapshot.symbols,
+        matchingOrderObservations: snapshot.matchingOrderObservations,
+        guarantees: snapshot.guarantees,
+      },
+    })
     const changed = fingerprint !== this.lastFingerprint
     this.lastFingerprint = fingerprint
     this.lastSuccessAt = observedAt
@@ -382,6 +400,10 @@ export class BitunixSpotReconciler {
     validateInterval({ intervalMs })
     const normalizedSymbols = validateSymbols({ symbols })
     const normalizedTrackedOrders = validateTrackedOrders({ trackedOrders })
+    validateTrackedOrderScope({
+      symbols: normalizedSymbols,
+      trackedOrders: normalizedTrackedOrders,
+    })
     if (typeof onSnapshot !== "function" || typeof onStatus !== "function" || typeof onError !== "function") {
       throw new TypeError("Bitunix Spot reconciler callbacks must be functions")
     }
