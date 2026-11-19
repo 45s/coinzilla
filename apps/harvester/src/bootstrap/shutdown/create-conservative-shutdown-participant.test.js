@@ -272,6 +272,17 @@ test("does not mark a market safe when Journal durability cannot be proven", asy
     true,
     "No market may be marked safe when the Journal durability barrier fails.",
   )
+  for (const market of participant.getSafetySnapshot().markets) {
+    assert.ok(
+      market.blockers.includes("JOURNAL_NOT_DURABLE"),
+      "The Journal durability failure must remain explicit for " + market.symbol + ".",
+    )
+    assert.equal(
+      market.blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
+      false,
+      "A Journal failure must not be misclassified as order/fill reconciliation failure for " + market.symbol + ".",
+    )
+  }
 })
 
 test("rechecks a market immediately when late evidence invalidates it during another market audit", async () => {
@@ -312,6 +323,10 @@ function getMarketBlockersFromShutdownError({ error, symbol } = {}) {
   return error.shutdownDiagnostics.markets.find((entry) => entry.symbol === symbol)?.blockers ?? []
 }
 
+function hasBlockerWithPrefix({ blockers, prefix } = {}) {
+  return blockers.some((blocker) => blocker.startsWith(prefix))
+}
+
 test("keeps recovery-input failures separate from owned order and fill reconciliation", async () => {
   const calls = []
   const engine = createFakeEngine({ calls })
@@ -325,6 +340,7 @@ test("keeps recovery-input failures separate from owned order and fill reconcili
           new Error("Shutdown recovery price is unavailable"),
           {
             code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+            reason: "STALE_MARKET_PRICE",
           },
         )],
       }
@@ -342,7 +358,10 @@ test("keeps recovery-input failures separate from owned order and fill reconcili
     (error) => {
       const blockers = getMarketBlockersFromShutdownError({ error, symbol: "DOGEUSDT" })
       assert.ok(
-        blockers.includes("RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE"),
+        hasBlockerWithPrefix({
+          blockers,
+          prefix: "RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE:STALE_MARKET_PRICE",
+        }),
         "The market must retain the exact recovery-input failure.",
       )
       assert.equal(
@@ -409,6 +428,48 @@ test("keeps stale recovery-price coverage separate from owned order and fill rec
     calls.filter((call) => call === "reconcile:DOGEUSDT").length,
     3,
     "Pre-cancel, post-cancel and post-recovery owned-order reconciliation must all remain required.",
+  )
+})
+ 
+test("retains the order and fill blocker when canonical owned-order reconciliation fails", async () => {
+  const calls = []
+  const engine = createFakeEngine({ calls })
+  engine.reconcileOwnedOrders = async ({ symbol } = {}) => {
+    calls.push("reconcile:" + symbol)
+    if (symbol === "DOGEUSDT") {
+      return {
+        ok: false,
+        errors: [Object.assign(
+          new Error("Canonical owned-order history is unavailable"),
+          {
+            code: "CANONICAL_ORDER_HISTORY_UNAVAILABLE",
+          },
+        )],
+      }
+    }
+    return { ok: true }
+  }
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
+
+  participant.beginShutdown()
+  await assert.rejects(
+    participant.waitUntilSafe(),
+    (error) => {
+      const blockers = getMarketBlockersFromShutdownError({ error, symbol: "DOGEUSDT" })
+      assert.ok(
+        blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
+        "An unsuccessful canonical owned-order reconciliation must retain the order/fill blocker.",
+      )
+      assert.ok(
+        blockers.includes("OWNED_ORDER_RECONCILIATION:CANONICAL_ORDER_HISTORY_UNAVAILABLE"),
+        "The exact failed reconciliation stage and stable error code must remain visible.",
+      )
+      return true
+    },
+    "Shutdown must remain unsafe when canonical owned-order reconciliation is incomplete.",
   )
 })
 
