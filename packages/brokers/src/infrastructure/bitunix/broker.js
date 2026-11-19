@@ -318,6 +318,9 @@ function requireFundsMutationString({ value, field }) {
 }
 
 function requirePositiveFundsAmount({ value, operation }) {
+  if (typeof value !== "string") {
+    throw new TypeError(`Bitunix Spot ${operation} amount must be an exact decimal string`)
+  }
   assertDecimalString({
     value,
     field: `Bitunix Spot ${operation} amount`,
@@ -403,7 +406,7 @@ function createWithdrawalCancelRequest({ input }) {
   if (unsupportedFields.length > 0) {
     throw new TypeError(`Bitunix Spot cancelWithdrawal() does not support fields: ${unsupportedFields.join(", ")}`)
   }
-  const withdrawId = input.withdrawId
+  const { withdrawId } = input
   if ((typeof withdrawId !== "string" || !withdrawId.trim()) &&
       !(typeof withdrawId === "number" && Number.isSafeInteger(withdrawId) && withdrawId >= 0)) {
     throw new TypeError("Bitunix Spot cancelWithdrawal() requires a non-empty string or safe integer withdrawId")
