@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { resolve } from "node:path"
 import { pathToFileURL } from "node:url"
-import { runBitunixDiagnostics } from "./bitunix-diagnostic-runner.js"
-import { sanitizeDiagnosticError } from "./bitunix-diagnostics.js"
+import { runBitunixDiagnostics } from "./diagnostic-runner.js"
+import { sanitizeDiagnosticError } from "./diagnostics.js"
 
 function createOutputPath({ now }) {
   const timestamp = new Date(now()).toISOString().replaceAll(/[:.]/g, "-")

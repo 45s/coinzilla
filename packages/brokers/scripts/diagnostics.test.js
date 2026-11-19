@@ -5,7 +5,7 @@ import {
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
   summarizePrivatePayload,
-} from "./bitunix-diagnostics.js"
+} from "./diagnostics.js"
 
 test("diagnostic sanitization redacts credentials and sensitive fields recursively", () => {
   const sanitized = sanitizeDiagnosticValue({

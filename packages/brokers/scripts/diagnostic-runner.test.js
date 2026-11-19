@@ -3,7 +3,7 @@ import test from "node:test"
 import {
   createObservedTransportFactory,
   runBitunixDiagnostics,
-} from "./bitunix-diagnostic-runner.js"
+} from "./diagnostic-runner.js"
 
 const validEnvironment = Object.freeze({
   BITUNIX_API_KEY: "diagnostic-api-key",

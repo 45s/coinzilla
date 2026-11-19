@@ -1,8 +1,8 @@
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { runBitunixDiagnostics } from "./bitunix-diagnostic-runner.js"
-import { sanitizeDiagnosticError } from "./bitunix-diagnostics.js"
-import { publishBitunixDiagnostics } from "./bitunix-health-publisher.js"
+import { runBitunixDiagnostics } from "./diagnostic-runner.js"
+import { sanitizeDiagnosticError } from "./diagnostics.js"
+import { publishBitunixDiagnostics } from "./health-publisher.js"
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..")
 
@@ -46,8 +46,12 @@ async function main() {
   process.stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n")
   const result = await publishBitunixDiagnostics({
     repositoryRoot,
-    runDiagnostics: ({ env }) => runBitunixDiagnostics({ env }),
+    runDiagnostics: ({ env, onProgress }) => runBitunixDiagnostics({
+      env,
+      onProgress,
+    }),
     env: process.env,
+    onProgress: ({ message }) => process.stdout.write(`${message}\n`),
   })
   printResult({ result })
   process.exitCode = result.exitCode
