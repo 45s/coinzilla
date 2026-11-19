@@ -118,10 +118,10 @@ function createRunnerFailureReport({ error, env, startedAt, now }) {
   })
 }
 
-async function runDiagnosticsSafely({ runDiagnostics, env, now }) {
+async function runDiagnosticsSafely({ runDiagnostics, env, now, onProgress }) {
   const startedAt = now()
   try {
-    return await runDiagnostics({ env })
+    return await runDiagnostics({ env, onProgress })
   } catch (error) {
     return createRunnerFailureReport({
       error,
@@ -231,11 +231,13 @@ async function writeReports({ paths, report, env }) {
   }
 }
 
-async function publishReportBranch({ repositoryRoot, runGit, branch, reportPath, env }) {
+async function publishReportBranch({ repositoryRoot, runGit, branch, reportPath, env, onProgress }) {
+  onProgress?.({ message: "Staging the sanitized report" })
   await runGit({
     repositoryRoot,
     args: ["add", "--", reportPath],
   })
+  onProgress?.({ message: "Committing the report-only change" })
   await runGit({
     repositoryRoot,
     args: ["commit", "--only", "-m", REPORT_COMMIT_MESSAGE, "--", reportPath],
@@ -246,6 +248,7 @@ async function publishReportBranch({ repositoryRoot, runGit, branch, reportPath,
   })
   let pushError = null
   try {
+    onProgress?.({ message: `Pushing ${branch} to origin` })
     await runGit({
       repositoryRoot,
       args: ["push", "--set-upstream", "origin", branch],
@@ -284,14 +287,17 @@ function evaluateHealthCheck({ report }) {
   }
 }
 
-async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now }) {
+async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now, onProgress }) {
+  onProgress?.({ message: "Running Bitunix REST and authenticated WebSocket diagnostics" })
   const report = await runDiagnosticsSafely({
     runDiagnostics,
     env,
     now,
+    onProgress,
   })
   validateDiagnosticReport({ report })
   const healthCheck = evaluateHealthCheck({ report })
+  onProgress?.({ message: "Writing sanitized local and publishable reports" })
   const reports = await writeReports({
     paths,
     report: {
@@ -306,6 +312,7 @@ async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publis
     branch,
     reportPath: publishedReportPath,
     env,
+    onProgress,
   })
   return {
     report: reports.published,
@@ -329,17 +336,19 @@ function throwWorkflowErrors({ operationError, cleanupError }) {
   }
 }
 
-async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now }) {
+async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now, onProgress }) {
   let branchCreated = false
   let operationError = null
   let cleanupError = null
   let result
 
   try {
+    onProgress?.({ message: "Fetching the latest origin/develop" })
     await runGit({
       repositoryRoot,
       args: ["fetch", "origin", "refs/heads/develop:refs/remotes/origin/develop"],
     })
+    onProgress?.({ message: `Creating report branch ${branch}` })
     await runGit({
       repositoryRoot,
       args: ["switch", "--create", branch, "--track", "origin/develop"],
@@ -354,16 +363,19 @@ async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, pat
       runDiagnostics,
       env,
       now,
+      onProgress,
     })
   } catch (error) {
     operationError = error
   } finally {
     if (branchCreated) {
       try {
+        onProgress?.({ message: "Returning the local checkout to develop" })
         await switchBackToDevelop({
           repositoryRoot,
           runGit,
         })
+        onProgress?.({ message: "Local checkout is back on develop" })
       } catch (error) {
         cleanupError = error
       }
@@ -383,16 +395,19 @@ export async function publishBitunixDiagnostics({
   runGit = executeGitCommand,
   env = process.env,
   now = Date.now,
+  onProgress = () => {},
 } = {}) {
   if (typeof runDiagnostics !== "function") {
     throw new TypeError("A Bitunix diagnostic runner must be provided")
   }
   const root = resolve(repositoryRoot)
+  onProgress({ message: "Validating credentials and clean develop checkout" })
   await validateStartingState({
     repositoryRoot: root,
     runGit,
   })
   validatePrivateCredentials({ env })
+  onProgress({ message: "Credentials and repository state verified" })
   const timestamp = createTimestamp({ now })
   const branch = `diagnostics/bitunix-health-${timestamp}`
   const paths = createReportPaths({
@@ -412,6 +427,7 @@ export async function publishBitunixDiagnostics({
     runDiagnostics,
     env,
     now,
+    onProgress,
   })
   return {
     branch,
