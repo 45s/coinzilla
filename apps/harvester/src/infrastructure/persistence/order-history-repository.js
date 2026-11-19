@@ -13,17 +13,16 @@ function createOrderChanges(record) {
   return changes
 }
 
-function upsertSynchronously({ transaction, record } = {}) {
-  const current = transaction.readOne({
-    collection: ORDER_HISTORY_COLLECTION,
-    id: record.id,
+function createMissingRecordError(record) {
+  return new OrderHistoryIntegrityError({
+    field: "record",
+    providerInstanceId: record.providerInstanceId,
+    accountId: record.accountId,
+    clientOrderId: record.clientOrderId,
   })
-  if (current === null || current === undefined) {
-    return transaction.create({
-      collection: ORDER_HISTORY_COLLECTION,
-      record,
-    })
-  }
+}
+
+function mergeOrderHistoryTransactionResult({ transaction, record, current } = {}) {
   const merged = mergeOrderHistoryRecords({
     current,
     candidate: record,
@@ -37,14 +36,27 @@ function upsertSynchronously({ transaction, record } = {}) {
     changes: createOrderChanges(merged),
   })
   if (updated === null || updated === undefined) {
-    throw new OrderHistoryIntegrityError({
-      field: "record",
-      providerInstanceId: record.providerInstanceId,
-      accountId: record.accountId,
-      clientOrderId: record.clientOrderId,
-    })
+    throw createMissingRecordError(record)
   }
   return updated
+}
+
+function upsertSynchronously({ transaction, record } = {}) {
+  const current = transaction.readOne({
+    collection: ORDER_HISTORY_COLLECTION,
+    id: record.id,
+  })
+  if (current === null || current === undefined) {
+    return transaction.create({
+      collection: ORDER_HISTORY_COLLECTION,
+      record,
+    })
+  }
+  return mergeOrderHistoryTransactionResult({
+    transaction,
+    record,
+    current,
+  })
 }
 
 async function upsertAsynchronously({ transaction, record } = {}) {
@@ -93,6 +105,62 @@ function isOrderHistoryDomainError(error) {
     error?.code === "HARVESTER_ORDER_HISTORY_RECORD_INVALID"
 }
 
+function normalizeOrderHistoryWriteError({ error, record } = {}) {
+  if (isOrderHistoryDomainError(error)) {
+    return error
+  }
+  return createOrderHistoryPersistenceError({
+    cause: error,
+    record,
+  })
+}
+
+function createTransactionExecutor({ database, callbackMode } = {}) {
+  return async function runOrderHistoryTransaction(record) {
+    if (callbackMode === "synchronous") {
+      return database.transaction((transaction) => upsertSynchronously({
+        transaction,
+        record,
+      }))
+    }
+    return database.transaction((transaction) => upsertAsynchronously({
+      transaction,
+      record,
+    }))
+  }
+}
+
+async function retryConflictedOrderHistoryWrite({ runTransaction, record } = {}) {
+  try {
+    return await runTransaction(record)
+  } catch (error) {
+    throw normalizeOrderHistoryWriteError({
+      error,
+      record,
+    })
+  }
+}
+
+async function upsertOrderHistoryRecord({ runTransaction, record } = {}) {
+  if (!record || typeof record.id !== "string" || record.id.trim() === "") {
+    throw new TypeError("OrderHistoryRepository.upsert requires a record with a stable ID")
+  }
+  try {
+    return await runTransaction(record)
+  } catch (error) {
+    if (error instanceof DatabaseConflictError) {
+      return retryConflictedOrderHistoryWrite({
+        runTransaction,
+        record,
+      })
+    }
+    throw normalizeOrderHistoryWriteError({
+      error,
+      record,
+    })
+  }
+}
+
 /**
  * Create the provider-neutral repository adapter for Harvester order history.
  *
@@ -109,62 +177,14 @@ export function createOrderHistoryRepository({ database } = {}) {
   ) {
     throw new TypeError("OrderHistoryRepository requires a database with transaction callback capabilities")
   }
-
-  async function executeTransaction(record) {
-    if (callbackMode === "synchronous") {
-      return database.transaction((transaction) => upsertSynchronously({
-        transaction,
-        record,
-      }))
-    }
-    return database.transaction((transaction) => upsertAsynchronously({
-      transaction,
-      record,
-    }))
-  }
-
-  function normalizeOrderHistoryWriteError({ error, record } = {}) {
-  if (isOrderHistoryDomainError(error)) {
-    return error
-  }
-  return createOrderHistoryPersistenceError({
-    cause: error,
-    record,
+  const runTransaction = createTransactionExecutor({
+    database,
+    callbackMode,
   })
-}
-
-async function retryConflictedOrderHistoryWrite({ executeTransaction, record } = {}) {
-  try {
-    return await executeTransaction(record)
-  } catch (error) {
-    throw normalizeOrderHistoryWriteError({
-      error,
-      record,
-    })
-  }
-}
-
-async function upsert(record) {
-  if (!record || typeof record.id !== "string" || record.id.trim() === "") {
-    throw new TypeError("OrderHistoryRepository.upsert requires a record with a stable ID")
-  }
-  try {
-    return await executeTransaction(record)
-  } catch (error) {
-    if (error instanceof DatabaseConflictError) {
-      return retryConflictedOrderHistoryWrite({
-        executeTransaction,
-        record,
-      })
-    }
-    throw normalizeOrderHistoryWriteError({
-      error,
-      record,
-    })
-  }
-}
-
   return Object.freeze({
-    upsert,
+    upsert: (record) => upsertOrderHistoryRecord({
+      runTransaction,
+      record,
+    }),
   })
 }
