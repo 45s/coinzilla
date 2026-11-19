@@ -679,9 +679,18 @@ test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fill
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "6", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "3", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "6",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "3",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
     status: "OPEN",
     createdAt: 100,
     acknowledgedAt: 101,
@@ -716,9 +725,18 @@ test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fill
       clientOrderId: buyOrder.clientOrderId,
       market,
       side: "BUY",
-      price: new Money({ amount: "5", asset: quoteAsset }),
-      quantity: new Quantity({ amount: "2", asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      price: new Money({
+        amount: "5",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "2",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "10",
+        asset: quoteAsset,
+      }),
       commissions: [],
       commissionStatus: "COMPLETE",
     }),
@@ -728,9 +746,18 @@ test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fill
       clientOrderId: buyOrder.clientOrderId,
       market,
       side: "BUY",
-      price: new Money({ amount: "6", asset: quoteAsset }),
-      quantity: new Quantity({ amount: "1", asset: baseAsset }),
-      quoteQuantity: new Money({ amount: "6", asset: quoteAsset }),
+      price: new Money({
+        amount: "6",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "1",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "6",
+        asset: quoteAsset,
+      }),
       commissions: [],
       commissionStatus: "COMPLETE",
     }),
@@ -743,6 +770,12 @@ test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fill
     })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
   }
+
+  const duplicateFill = await workflow.applyBuyFill({
+    order: buyOrder,
+    fill: fills[0],
+  })
+  assert.equal(duplicateFill.ok, true, duplicateFill.errors?.[0]?.message)
 
   assert.equal(workflow.getBuyExecutionQuantity({ cycleId: "rs-cycle-vwap-1" }), "3")
   assert.equal(workflow.getBuyExecutionVwap({ cycleId: "rs-cycle-vwap-1" }), "5.333333333333333333")
