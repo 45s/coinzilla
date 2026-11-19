@@ -145,10 +145,6 @@ function markUserDataReconciliationRequired(state) {
     : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 }
 
-function assertNoUserDataAccountingFailure(state) {
-  assertNoUserDataAccountingFailure(state)
-}
-
 /**
  * Subscribe to broker user-data delivery and complete the authoritative account audit gate.
  * The caller owns failure cleanup; this module owns subscription evidence and
