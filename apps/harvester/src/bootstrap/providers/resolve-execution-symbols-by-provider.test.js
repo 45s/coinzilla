@@ -303,6 +303,31 @@ test("rejects configured provider instances with no execution markets", () => {
 })
 
 
+function createExpectedSameMarketCgAndRsRoutes() {
+  return [
+    ["binance-testnet-primary", [
+      {
+        strategyId: StrategyId.COIN_GRABBER,
+        symbol: "BTCUSDT",
+      },
+      {
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "BTCUSDT",
+      },
+      {
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "DOGEUSDT",
+      },
+    ]],
+    ["binance-live-secondary", [
+      {
+        strategyId: StrategyId.COIN_GRABBER,
+        symbol: "ETHUSDT",
+      },
+    ]],
+  ]
+}
+
 function createSameMarketCgAndRsRouteFixture() {
   const recoverySellerPairs = {
     BTCUSDT: {
@@ -342,28 +367,7 @@ function createSameMarketCgAndRsRouteFixture() {
         routes,
       },
     }),
-    expectedRoutes: [
-      ["binance-testnet-primary", [
-        {
-          strategyId: StrategyId.COIN_GRABBER,
-          symbol: "BTCUSDT",
-        },
-        {
-          strategyId: StrategyId.RECOVERY_SELLER,
-          symbol: "BTCUSDT",
-        },
-        {
-          strategyId: StrategyId.RECOVERY_SELLER,
-          symbol: "DOGEUSDT",
-        },
-      ]],
-      ["binance-live-secondary", [
-        {
-          strategyId: StrategyId.COIN_GRABBER,
-          symbol: "ETHUSDT",
-        },
-      ]],
-    ],
+    expectedRoutes: createExpectedSameMarketCgAndRsRoutes(),
   }
 }
 

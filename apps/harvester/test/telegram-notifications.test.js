@@ -577,7 +577,10 @@ test("provides distinct minimal, trader, and verbose Telegram profile presets", 
         TELEGRAM_CHAT_ID: "test-chat",
       },
       loadConfig: async () => createTestAppConfig({
-        telegram: { enabled: true, profile: scenario.profile },
+        telegram: {
+        enabled: true,
+        profile: scenario.profile,
+      },
       }),
       createTelegramNotifier: () => ({
         async sendMessage(message) {

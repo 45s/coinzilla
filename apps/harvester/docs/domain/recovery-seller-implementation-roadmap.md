@@ -25,6 +25,8 @@ The next integration boundary is one mutable account-workflow state shared by th
 
 The Conservative Portfolio workflow and RS accounting workflow now accept the same explicit account-state object. That object shares one immutable Portfolio snapshot, RS OrderRegistry, legacy-position map, and serialized update queue; the new regression proves both strategies' Positions are visible through the same Portfolio. Bootstrap composition and shared execution-engine registry mutation remain the next integration steps.
 
+Shared-state constructor validation is isolated in small helpers to keep the use-case entry points within the repository's complexity/length standards. The same commit also removes strict-lint violations from changed bootstrap/provider and notification fixtures without disabling rules.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.

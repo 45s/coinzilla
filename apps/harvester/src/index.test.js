@@ -61,7 +61,10 @@ const runMain = (options = {}) => main(options)
 
 const createTestAppConfig = ({ operatorControlEnabled = false, allowedUserIds = [] } = {}) => {
   const config = structuredClone(defaultAppConfig)
-  config.operatorControl.telegram = { enabled: operatorControlEnabled, allowedUserIds }
+  config.operatorControl.telegram = {
+    enabled: operatorControlEnabled,
+    allowedUserIds,
+  }
   return config
 }
 
@@ -90,7 +93,10 @@ test("does not create or inject durable recovery facts while recovery is disable
 })
 
 test("does not create or inject recovery storage when Telegram operator control is enabled without recovery", async () => {
-  const configuredApp = createTestAppConfig({ operatorControlEnabled: true, allowedUserIds: ["12345"] })
+  const configuredApp = createTestAppConfig({
+    operatorControlEnabled: true,
+    allowedUserIds: ["12345"],
+  })
   let storeFactoryCalls = 0
   let startupInput
 

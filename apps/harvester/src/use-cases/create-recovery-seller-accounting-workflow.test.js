@@ -825,7 +825,7 @@ test("does not publish RS BUY accounting when the durable execution-fill append 
 })
 
 
-test("Conservative and RS accounting workflows can share one serialized account Portfolio", async () => {
+function createSharedAccountWorkflowFixture() {
   const buyOrder = makeRecoveryBuyOrder()
   const sharedState = {
     portfolio: new Portfolio(),
@@ -839,9 +839,7 @@ test("Conservative and RS accounting workflows can share one serialized account 
     evaluateStrategy: () => ({ action: "NO_ACTION" }),
     logger: {},
   })
-  const recoverySeller = createRecoverySellerAccountingWorkflow({
-    sharedState,
-  })
+  const recoverySeller = createRecoverySellerAccountingWorkflow({ sharedState })
   const recoveryBuyFill = makeRecoveryBuyFill({
     tradeId: "shared-account-rs-buy",
     quantity: "5.01",
@@ -853,24 +851,26 @@ test("Conservative and RS accounting workflows can share one serialized account 
     clientOrderId: "cg-shared-buy",
     market,
     side: "BUY",
-    price: new Money({
-      amount: "2",
-      asset: quoteAsset,
-    }),
-    quantity: new Quantity({
-      amount: "1",
-      asset: baseAsset,
-    }),
-    quoteQuantity: new Money({
-      amount: "2",
-      asset: quoteAsset,
-    }),
+    price: new Money({ amount: "2", asset: quoteAsset }),
+    quantity: new Quantity({ amount: "1", asset: baseAsset }),
+    quoteQuantity: new Money({ amount: "2", asset: quoteAsset }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
+  return {
+    sharedState,
+    conservative,
+    recoverySeller,
+    recoveryBuyFill,
+    conservativeBuyFill,
+  }
+}
 
-  const rsResult = await recoverySeller.applyBuyFill({ fill: recoveryBuyFill })
-  const cgResult = await conservative.updateTradingAccounting({ fill: conservativeBuyFill })
+test("Conservative and RS accounting workflows can share one serialized account Portfolio", async () => {
+  const fixture = createSharedAccountWorkflowFixture()
+  const { sharedState, conservative, recoverySeller } = fixture
+  const rsResult = await recoverySeller.applyBuyFill({ fill: fixture.recoveryBuyFill })
+  const cgResult = await conservative.updateTradingAccounting({ fill: fixture.conservativeBuyFill })
 
   assert.equal(rsResult.ok, true, rsResult.errors?.[0]?.message)
   assert.equal(cgResult.ok, true, cgResult.errors?.[0]?.message)

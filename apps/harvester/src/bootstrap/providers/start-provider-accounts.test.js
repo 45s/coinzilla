@@ -845,14 +845,8 @@ test("rejects multi-provider startup without explicit market-data ownership befo
 })
 
 
-test("passes both strategy routes to one provider while deduplicating its market subscription", async () => {
-  const provider = createProvider({
-    providerInstanceId: "first",
-    providerType: "binance",
-    accountId: "account-one",
-  })
-  const starts = []
-  const sameMarketConfig = {
+function createSameMarketCgAndRsConfig() {
+  return {
     ...appConfig,
     marketDataRouting: {
       routes: [{
@@ -889,10 +883,19 @@ test("passes both strategy routes to one provider while deduplicating its market
       },
     },
   }
+}
+
+test("passes both strategy routes to one provider while deduplicating its market subscription", async () => {
+  const provider = createProvider({
+    providerInstanceId: "first",
+    providerType: "binance",
+    accountId: "account-one",
+  })
+  const starts = []
 
   await startProviderAccounts({
     providers: [provider],
-    appConfig: sameMarketConfig,
+    appConfig: createSameMarketCgAndRsConfig(),
     start: async (input) => {
       starts.push(input)
       return {}

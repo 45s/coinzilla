@@ -728,6 +728,69 @@ async function runCompleteRecoveryCycle({
  * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
  * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
  */
+function validateSharedPortfolioWorkflowState({
+  sharedState,
+  initialPortfolio,
+  initialRecoveryLedgers,
+} = {}) {
+  if (sharedState === undefined) {
+    return
+  }
+  if (!sharedState) {
+    throw new TypeError("sharedState must be an account workflow state object")
+  }
+  if (!(sharedState.portfolio instanceof Portfolio)) {
+    throw new TypeError("sharedState.portfolio must be a Portfolio")
+  }
+  if (!(sharedState.recoveryLedgers instanceof Map)) {
+    throw new TypeError("sharedState.recoveryLedgers must be a Map")
+  }
+  if (typeof sharedState.updateQueue?.then !== "function") {
+    throw new TypeError("sharedState.updateQueue must be a Promise-like queue")
+  }
+  if (initialPortfolio !== undefined && initialPortfolio !== sharedState.portfolio) {
+    throw new TypeError("initialPortfolio must match sharedState.portfolio")
+  }
+  if (initialRecoveryLedgers !== undefined && initialRecoveryLedgers !== sharedState.recoveryLedgers) {
+    throw new TypeError("initialRecoveryLedgers must match sharedState.recoveryLedgers")
+  }
+}
+
+function createPortfolioWorkflowState({
+  sharedState,
+  initialPortfolio,
+  initialRecoveryLedgers,
+} = {}) {
+  validateSharedPortfolioWorkflowState({
+    sharedState,
+    initialPortfolio,
+    initialRecoveryLedgers,
+  })
+  if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
+    throw new TypeError("initialPortfolio must be a Portfolio")
+  }
+  if (initialRecoveryLedgers !== undefined && !(initialRecoveryLedgers instanceof Map)) {
+    throw new TypeError("initialRecoveryLedgers must be a Map")
+  }
+  return sharedState ?? {
+    portfolio: initialPortfolio ?? new Portfolio(),
+    recoveryLedgers: new Map(initialRecoveryLedgers ?? []),
+    updateQueue: Promise.resolve(),
+  }
+}
+
+function validatePortfolioWorkflowCallbacks({
+  onOperationalStateExecutionFill,
+  onOperationalStateRecoveryCycleCompleted,
+} = {}) {
+  if (onOperationalStateExecutionFill !== undefined && typeof onOperationalStateExecutionFill !== "function") {
+    throw new TypeError("onOperationalStateExecutionFill must be a function")
+  }
+  if (onOperationalStateRecoveryCycleCompleted !== undefined && typeof onOperationalStateRecoveryCycleCompleted !== "function") {
+    throw new TypeError("onOperationalStateRecoveryCycleCompleted must be a function")
+  }
+}
+
 export const createPortfolioWorkflow = ({
   evaluateStrategy,
   logger,
@@ -739,38 +802,15 @@ export const createPortfolioWorkflow = ({
   onOperationalStateRecoveryCycleNotCompleted,
   sharedState,
 } = {}) => {
-  if (sharedState !== undefined && (
-    !sharedState ||
-    !(sharedState.portfolio instanceof Portfolio) ||
-    !(sharedState.recoveryLedgers instanceof Map) ||
-    typeof sharedState.updateQueue?.then !== "function"
-  )) {
-    throw new TypeError("sharedState must provide a Portfolio, RecoveryLedger map, and shared update queue")
-  }
-  if (sharedState && initialPortfolio !== undefined && initialPortfolio !== sharedState.portfolio) {
-    throw new TypeError("initialPortfolio must match sharedState.portfolio")
-  }
-  if (sharedState && initialRecoveryLedgers !== undefined && initialRecoveryLedgers !== sharedState.recoveryLedgers) {
-    throw new TypeError("initialRecoveryLedgers must match sharedState.recoveryLedgers")
-  }
-  if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
-    throw new TypeError("initialPortfolio must be a Portfolio")
-  }
-  if (initialRecoveryLedgers !== undefined && !(initialRecoveryLedgers instanceof Map)) {
-    throw new TypeError("initialRecoveryLedgers must be a Map")
-  }
-  if (onOperationalStateExecutionFill !== undefined && typeof onOperationalStateExecutionFill !== "function") {
-    throw new TypeError("onOperationalStateExecutionFill must be a function")
-  }
-  if (onOperationalStateRecoveryCycleCompleted !== undefined && typeof onOperationalStateRecoveryCycleCompleted !== "function") {
-    throw new TypeError("onOperationalStateRecoveryCycleCompleted must be a function")
-  }
-
-  const state = sharedState ?? {
-    portfolio: initialPortfolio ?? new Portfolio(),
-    recoveryLedgers: new Map(initialRecoveryLedgers ?? []),
-    updateQueue: Promise.resolve(),
-  }
+  validatePortfolioWorkflowCallbacks({
+    onOperationalStateExecutionFill,
+    onOperationalStateRecoveryCycleCompleted,
+  })
+  const state = createPortfolioWorkflowState({
+    sharedState,
+    initialPortfolio,
+    initialRecoveryLedgers,
+  })
   const tracedEvaluateStrategy = (input = {}) => evaluateStrategyWithPortfolioState({
     state,
     evaluateStrategy,

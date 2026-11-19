@@ -602,6 +602,62 @@ function createSerializedWorkflowOperation({ state, transition } = {}) {
   }
 }
 
+function validateSharedRecoverySellerWorkflowState({
+  sharedState,
+  initialPortfolio,
+  initialOrderRegistry,
+  initialLegacyPositions,
+} = {}) {
+  if (sharedState === undefined) {
+    return
+  }
+  if (!sharedState) {
+    throw new TypeError("sharedState must be an account workflow state object")
+  }
+  if (!(sharedState.portfolio instanceof Portfolio)) {
+    throw new TypeError("sharedState.portfolio must be a Portfolio")
+  }
+  if (!(sharedState.orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("sharedState.orderRegistry must be an OrderRegistry")
+  }
+  if (!(sharedState.legacyPositions instanceof Map)) {
+    throw new TypeError("sharedState.legacyPositions must be a Map")
+  }
+  if (typeof sharedState.updateQueue?.then !== "function") {
+    throw new TypeError("sharedState.updateQueue must be a Promise-like queue")
+  }
+  if (initialPortfolio !== undefined && initialPortfolio !== sharedState.portfolio) {
+    throw new TypeError("initialPortfolio must match sharedState.portfolio")
+  }
+  if (initialOrderRegistry !== undefined && initialOrderRegistry !== sharedState.orderRegistry) {
+    throw new TypeError("initialOrderRegistry must match sharedState.orderRegistry")
+  }
+  if (initialLegacyPositions.length > 0) {
+    throw new TypeError("initialLegacyPositions cannot be combined with sharedState")
+  }
+}
+
+function createRecoverySellerWorkflowState({
+  sharedState,
+  initialPortfolio,
+  initialOrderRegistry,
+  initialLegacyPositions,
+} = {}) {
+  validateSharedRecoverySellerWorkflowState({
+    sharedState,
+    initialPortfolio,
+    initialOrderRegistry,
+    initialLegacyPositions,
+  })
+  const state = createRecoverySellerWorkflowState({
+    sharedState,
+    initialPortfolio,
+    initialOrderRegistry,
+    initialLegacyPositions,
+  })
+  return state
+}
+
 export function createRecoverySellerAccountingWorkflow({
   initialPortfolio,
   initialOrderRegistry,
@@ -609,38 +665,6 @@ export function createRecoverySellerAccountingWorkflow({
   onOperationalStateExecutionFill,
   sharedState,
 } = {}) {
-  if (sharedState !== undefined && (
-    !sharedState ||
-    !(sharedState.portfolio instanceof Portfolio) ||
-    !(sharedState.orderRegistry instanceof OrderRegistry) ||
-    !(sharedState.legacyPositions instanceof Map) ||
-    typeof sharedState.updateQueue?.then !== "function"
-  )) {
-    throw new TypeError("sharedState must provide a Portfolio, OrderRegistry, legacy-position map, and shared update queue")
-  }
-  if (sharedState && initialPortfolio !== undefined && initialPortfolio !== sharedState.portfolio) {
-    throw new TypeError("initialPortfolio must match sharedState.portfolio")
-  }
-  if (sharedState && initialOrderRegistry !== undefined && initialOrderRegistry !== sharedState.orderRegistry) {
-    throw new TypeError("initialOrderRegistry must match sharedState.orderRegistry")
-  }
-  if (sharedState && initialLegacyPositions.length > 0) {
-    throw new TypeError("initialLegacyPositions cannot be combined with sharedState")
-  }
-
-  const state = sharedState ?? {
-    portfolio: initialPortfolio ?? new Portfolio(),
-    orderRegistry: initialOrderRegistry ?? OrderRegistry.empty(),
-    legacyPositions: createLegacyPositionMap(initialLegacyPositions),
-    updateQueue: Promise.resolve(),
-  }
-  if (!(state.portfolio instanceof Portfolio)) {
-    throw new TypeError("initialPortfolio must be a Portfolio")
-  }
-  if (!(state.orderRegistry instanceof OrderRegistry)) {
-    throw new TypeError("initialOrderRegistry must be an OrderRegistry")
-  }
-
   if (onOperationalStateExecutionFill !== undefined &&
       typeof onOperationalStateExecutionFill !== "function") {
     throw new TypeError("onOperationalStateExecutionFill must be a function")

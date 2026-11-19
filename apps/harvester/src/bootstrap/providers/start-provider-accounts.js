@@ -444,6 +444,11 @@ function createMarketDataProviderMetadata({
   })
 }
 
+function getProviderExecutionRoutes({ appConfig, providers, providerInstanceId }) {
+  return resolveExecutionRoutesByProvider({ appConfig, providers })
+    .get(providerInstanceId) ?? []
+}
+
 function createProviderAccountStartInput({
   provider,
   providers,
@@ -460,11 +465,11 @@ function createProviderAccountStartInput({
   deferMarketDataStart,
 }) {
   const executionSymbols = executionSymbolsByProvider.get(provider.providerInstanceId) ?? []
-  const executionRoutes = resolveExecutionRoutesByProvider({
+  const executionRoutes = getProviderExecutionRoutes({
     appConfig,
     providers,
+    providerInstanceId: provider.providerInstanceId,
   })
-    .get(provider.providerInstanceId) ?? []
   const marketDataProviderMetadata = createMarketDataProviderMetadata({
     executionSymbols,
     providers,
