@@ -1,4 +1,5 @@
 import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
+import { getBrokerMutationOutcome } from "../../broker/broker-contract.js"
 import { CoreBroker } from "../../broker.core.js"
 import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
 import { createBitunixBrokerCapabilities } from "./capabilities.js"
@@ -32,6 +33,7 @@ const API = Object.freeze({
   depositAddress: "/api/spot/v1/deposit/address",
   withdrawalHistory: "/api/spot/v1/withdraw_transfer/page",
   matchingOrderDetails: "/api/spot/v1/order/deal/list",
+  cancelOrder: "/api/spot/v1/order/cancel",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -1038,13 +1040,83 @@ export class BitunixSpotBroker extends CoreBroker {
     })
   }
 
-  async cancelOrder() {
-    return {
-      ...unsupportedMutationResult({
-        operation: "cancelOrder",
-        reason: "the adapter has no private order/execution push stream or verified cancellation-outcome reconciliation",
-      }),
-      cancellationOutcome: "NOT_SENT",
+  /**
+   * Cancel one known Spot order and verify the exchange's final order state.
+   * A successful cancel acknowledgement alone is insufficient because a fill
+   * may win the cancellation race; the follow-up detail read is authoritative.
+   *
+   * @param {{symbol: string, orderId: string|number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string, cancellationOutcome?: string}>}
+   */
+  async cancelOrder({ symbol, orderId } = {}) {
+    let requestDispatched = false
+    try {
+      const normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "cancelOrder()",
+      })
+      const normalizedOrderId = validateOrderId({ orderId })
+      requestDispatched = true
+      await this.restClient.request({
+        method: "POST",
+        path: API.cancelOrder,
+        body: {
+          orderIdList: [{
+            orderId: normalizedOrderId,
+            symbol: normalizedSymbol,
+          }],
+        },
+        authenticated: true,
+        stateChanging: true,
+      })
+
+      const detailResponse = await this.restClient.request({
+        method: "GET",
+        path: API.orderDetail,
+        queryParams: { orderId: normalizedOrderId },
+        authenticated: true,
+        stateChanging: false,
+      })
+      const order = validateOrderDetailResponse({
+        response: detailResponse,
+        orderId: normalizedOrderId,
+        symbol: normalizedSymbol,
+      })
+      const normalizedOrder = adaptOrder(order)
+      if (normalizedOrder.status === "CANCELED" ||
+          normalizedOrder.status === "PARTIALLY_FILLED_CANCELED") {
+        return {
+          ...toResult({ data: normalizedOrder }),
+          mutationOutcome: "CONFIRMED",
+          cancellationOutcome: "CONFIRMED",
+        }
+      }
+      return {
+        ...toResult({
+          errors: [new Error(
+            `Bitunix Spot cancellation was acknowledged but final order status is ${normalizedOrder.status}; reconcile order ${normalizedOrder.id} before retrying`,
+          )],
+        }),
+        data: normalizedOrder,
+        mutationOutcome: "CONFIRMED",
+        cancellationOutcome: "OUTCOME_UNKNOWN",
+      }
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.cancelOrder()",
+        error,
+      })
+      const outcome = getBrokerMutationOutcome({
+        error,
+        requestDispatched,
+      })
+      return {
+        ...toResult({ errors: [error] }),
+        mutationOutcome: outcome,
+        cancellationOutcome: requestDispatched && outcome !== "NOT_SENT"
+          ? "OUTCOME_UNKNOWN"
+          : "NOT_SENT",
+      }
     }
   }
 
