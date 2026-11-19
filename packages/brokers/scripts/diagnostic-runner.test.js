@@ -3,7 +3,7 @@ import test from "node:test"
 import {
   createObservedTransportFactory,
   runBitunixDiagnostics,
-} from "./bitunix-diagnostic-runner.js"
+} from "./diagnostic-runner.js"
 
 const validEnvironment = Object.freeze({
   BITUNIX_API_KEY: "diagnostic-api-key",
@@ -202,7 +202,11 @@ test("diagnostics use code defaults without diagnostic environment variables", a
   assert.equal(report.runtime.symbol, "BTCUSDT", "The default diagnostic symbol must come from the diagnostic constants")
   assert.deepEqual(restCalls.find((request) => request.path.endsWith("/market/last_price")).queryParams, { symbol: "BTCUSDT" }, "REST market requests must use the constant symbol")
   assert.equal(websocketCalls.find((call) => call?.method === "market.last_price").args.symbol, "BTCUSDT", "WebSocket market requests must use the constant symbol")
-  assert.equal(websocketCalls.find((call) => call?.method === "market.kline").args.interval, "1min", "K-line requests must use the constant interval")
+  const restKlineRequest = restCalls.find((request) => request.path.endsWith("/market/kline"))
+  assert.equal(restKlineRequest.queryParams.interval, "1", "REST K-line requests must use the documented numeric interval")
+  const websocketKlineArgs = websocketCalls.find((call) => call?.method === "market.kline").args
+  assert.equal(websocketKlineArgs.symbol, "BTC", "WebSocket K-line requests must use the documented base-coin symbol")
+  assert.equal(websocketKlineArgs.interval, "1min", "WebSocket K-line requests must use the documented interval format")
   assert.equal(report.results.find((entry) => entry.operation === "REST public market catalog").response.type, "array", "Public response bodies must remain omitted by the constant default")
 })
 
@@ -402,7 +406,7 @@ const expectedPublicRestRequests = [
     method: "GET",
     queryParams: {
       symbol: "BTCUSDT",
-      interval: "1min",
+      interval: "1",
     },
     body: undefined,
     stateChanging: false,
@@ -413,7 +417,7 @@ const expectedPublicRestRequests = [
     method: "GET",
     queryParams: {
       symbol: "BTCUSDT",
-      interval: "1min",
+      interval: "1",
       limit: "1",
     },
     body: undefined,

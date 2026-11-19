@@ -7,12 +7,15 @@ import {
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
   summarizePrivatePayload,
-} from "./bitunix-diagnostics.js"
+} from "./diagnostics.js"
 
 const DIAGNOSTIC_CONFIG = Object.freeze({
   confirmLiveReads: true,
   symbol: "BTCUSDT",
-  klineInterval: "1min",
+  // REST Spot uses numeric minute intervals; WebSocket RPC documents the "1min" form and base-coin symbol.
+  klineInterval: "1",
+  websocketKlineSymbol: "BTC",
+  websocketKlineInterval: "1min",
   timeoutMs: 10_000,
   includePublicPayloads: false,
 })
@@ -115,9 +118,9 @@ const WEBSOCKET_OPERATIONS = Object.freeze([
     operation: "market.kline",
     method: "getKline",
     privateResponse: false,
-    getArguments: ({ symbol, klineInterval }) => ({
-      symbol,
-      interval: klineInterval,
+    getArguments: ({ websocketKlineSymbol, websocketKlineInterval }) => ({
+      symbol: websocketKlineSymbol,
+      interval: websocketKlineInterval,
     }),
   },
   {
@@ -167,6 +170,10 @@ const WEBSOCKET_OPERATIONS = Object.freeze([
     }),
   },
 ])
+
+function emitProgress({ onProgress, area, operation, status }) {
+  onProgress?.({ message: `      ${area}: ${operation} ... ${status}` })
+}
 
 function getSecrets({ env }) {
   return [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
@@ -505,6 +512,55 @@ function getRestSkipReason({ endpoint, depthPrecision, credentialsConfigured }) 
   return null
 }
 
+async function executeRestRequest({
+  client,
+  endpoint,
+  startedAt,
+  now,
+  results,
+  request,
+  includePublicPayloads,
+  secrets,
+  onProgress,
+}) {
+  try {
+    const response = await client.request(request)
+    recordRestSuccess({
+      endpoint,
+      startedAt,
+      now,
+      results,
+      request,
+      response,
+      includePublicPayloads,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "PASS",
+    })
+  } catch (error) {
+    recordRestFailure({
+      endpoint,
+      startedAt,
+      now,
+      results,
+      request,
+      error,
+      includePublicPayloads,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "FAIL",
+    })
+  }
+}
+
 async function runRestOperation({
   client,
   endpoint,
@@ -516,8 +572,15 @@ async function runRestOperation({
   secrets,
   includePublicPayloads,
   credentialsConfigured,
+  onProgress,
 }) {
   const startedAt = now()
+  emitProgress({
+    onProgress,
+    area: "REST",
+    operation: endpoint.operation,
+    status: "RUNNING",
+  })
   const skipReason = getRestSkipReason({
     endpoint,
     depthPrecision,
@@ -532,6 +595,12 @@ async function runRestOperation({
       secrets,
       ...skipReason,
     })
+    emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "SKIPPED",
+    })
     return
   }
   const request = createRestDiagnosticRequest({
@@ -540,30 +609,17 @@ async function runRestOperation({
     depthPrecision,
     klineInterval,
   })
-  try {
-    const response = await client.request(request)
-    recordRestSuccess({
-      endpoint,
-      startedAt,
-      now,
-      results,
-      request,
-      response,
-      includePublicPayloads,
-      secrets,
-    })
-  } catch (error) {
-    recordRestFailure({
-      endpoint,
-      startedAt,
-      now,
-      results,
-      request,
-      error,
-      includePublicPayloads,
-      secrets,
-    })
-  }
+  await executeRestRequest({
+    client,
+    endpoint,
+    startedAt,
+    now,
+    results,
+    request,
+    includePublicPayloads,
+    secrets,
+    onProgress,
+  })
 }
 
 async function runRestChecks({
@@ -578,6 +634,7 @@ async function runRestChecks({
   includePublicPayloads,
   credentialsConfigured,
   restClientFactory,
+  onProgress,
 }) {
   const client = restClientFactory({
     apiKey: credentialsConfigured ? env.BITUNIX_API_KEY : undefined,
@@ -596,36 +653,37 @@ async function runRestChecks({
       secrets,
       includePublicPayloads,
       credentialsConfigured,
+      onProgress,
     })
   }
 }
 
-async function runWebSocketOperation({
+function recordWebSocketSkippedOperation({ definition, startedAt, now, results, includePublicPayloads, secrets }) {
+  results.push(createResult({
+    operation: definition.operation,
+    startedAt,
+    now,
+    status: "skipped",
+    request: {
+      method: definition.operation,
+      reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is not configured",
+    },
+    includePublicPayloads,
+    secrets,
+  }))
+}
+
+async function executeWebSocketRequest({
   client,
   definition,
-  context,
+  args,
+  startedAt,
   now,
   results,
   secrets,
   includePublicPayloads,
+  onProgress,
 }) {
-  const startedAt = now()
-  if (definition.requiresDepthPrecision && context.depthPrecision === null) {
-    results.push(createResult({
-      operation: definition.operation,
-      startedAt,
-      now,
-      status: "skipped",
-      request: {
-        method: definition.operation,
-        reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is not configured",
-      },
-      includePublicPayloads,
-      secrets,
-    }))
-    return
-  }
-  const args = definition.getArguments(context)
   try {
     const response = await client[definition.method](args)
     results.push(createResult({
@@ -642,6 +700,12 @@ async function runWebSocketOperation({
       includePublicPayloads,
       secrets,
     }))
+    emitProgress({
+      onProgress,
+      area: "WebSocket",
+      operation: definition.operation,
+      status: "PASS",
+    })
   } catch (error) {
     results.push(createResult({
       operation: definition.operation,
@@ -656,7 +720,60 @@ async function runWebSocketOperation({
       includePublicPayloads,
       secrets,
     }))
+    emitProgress({
+      onProgress,
+      area: "WebSocket",
+      operation: definition.operation,
+      status: "FAIL",
+    })
   }
+}
+
+async function runWebSocketOperation({
+  client,
+  definition,
+  context,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+  onProgress,
+}) {
+  const startedAt = now()
+  emitProgress({
+    onProgress,
+    area: "WebSocket",
+    operation: definition.operation,
+    status: "RUNNING",
+  })
+  if (definition.requiresDepthPrecision && context.depthPrecision === null) {
+    recordWebSocketSkippedOperation({
+      definition,
+      startedAt,
+      now,
+      results,
+      includePublicPayloads,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "WebSocket",
+      operation: definition.operation,
+      status: "SKIPPED",
+    })
+    return
+  }
+  await executeWebSocketRequest({
+    client,
+    definition,
+    args: definition.getArguments(context),
+    startedAt,
+    now,
+    results,
+    secrets,
+    includePublicPayloads,
+    onProgress,
+  })
 }
 
 function createRuntimeMetadata() {
@@ -670,17 +787,20 @@ function createRuntimeMetadata() {
   }
 }
 
-function createConfigurationResult({ env, startedAt, now, secrets }) {
-  if (DIAGNOSTIC_CONFIG.confirmLiveReads !== true) {
-    return createResult({
-      operation: "diagnostic safety confirmation",
-      startedAt,
-      now,
-      status: "failed",
+function createSafetyConfirmationResult({ startedAt, now, secrets }) {
+  return createResult({
+    operation: "diagnostic safety confirmation",
+    startedAt,
+    now,
+    status: DIAGNOSTIC_CONFIG.confirmLiveReads === true ? "passed" : "failed",
+    ...(DIAGNOSTIC_CONFIG.confirmLiveReads === true ? {} : {
       error: new Error("Set DIAGNOSTIC_CONFIG.confirmLiveReads to true to confirm read-only requests against the configured LIVE Spot API account"),
-      secrets,
-    })
-  }
+    }),
+    secrets,
+  })
+}
+
+function createConfigurationResult({ env, startedAt, now, secrets }) {
   const missingCredentialVariables = getMissingCredentialNames({ env })
   const credentialsConfigured = missingCredentialVariables.length === 0
   return createResult({
@@ -766,11 +886,13 @@ async function executeWebSocketOperations({
   results,
   secrets,
   includePublicPayloads,
+  onProgress,
 }) {
   const context = {
     symbol,
     depthPrecision,
-    klineInterval: DIAGNOSTIC_CONFIG.klineInterval,
+    websocketKlineSymbol: DIAGNOSTIC_CONFIG.websocketKlineSymbol,
+    websocketKlineInterval: DIAGNOSTIC_CONFIG.websocketKlineInterval,
   }
   for (const definition of WEBSOCKET_OPERATIONS) {
     await runWebSocketOperation({
@@ -781,6 +903,7 @@ async function executeWebSocketOperations({
       results,
       secrets,
       includePublicPayloads,
+      onProgress,
     })
   }
 }
@@ -805,8 +928,9 @@ async function cleanupWebSocket({ client, isConnected, now, results, events, sec
   }
 }
 
-async function connectWebSocket({ client, now, results, secrets }) {
+async function connectWebSocket({ client, now, results, secrets, onProgress }) {
   const startedAt = now()
+  onProgress?.({ message: "      WebSocket: connecting authenticated Spot RPC ... RUNNING" })
   try {
     await client.connect()
     results.push(createResult({
@@ -817,6 +941,7 @@ async function connectWebSocket({ client, now, results, secrets }) {
       response: { state: client.state },
       secrets,
     }))
+    onProgress?.({ message: "      WebSocket: connection ... PASS" })
     return true
   } catch (error) {
     recordWebSocketConnectionFailure({
@@ -825,6 +950,7 @@ async function connectWebSocket({ client, now, results, secrets }) {
       results,
       secrets,
     })
+    onProgress?.({ message: "      WebSocket: connection ... FAIL" })
     return false
   }
 }
@@ -861,12 +987,14 @@ async function runWebSocketSession({
   events,
   secrets,
   includePublicPayloads,
+  onProgress,
 }) {
   const isConnected = await connectWebSocket({
     client,
     now,
     results,
     secrets,
+    onProgress,
   })
   try {
     if (isConnected) {
@@ -878,6 +1006,7 @@ async function runWebSocketSession({
         results,
         secrets,
         includePublicPayloads,
+        onProgress,
       })
     }
   } finally {
@@ -1070,6 +1199,7 @@ async function runWebSocketLifecycle({
   events,
   secrets,
   includePublicPayloads,
+  onProgress,
 }) {
   const initialConnectionEstablished = await runWebSocketSession({
     client,
@@ -1080,6 +1210,7 @@ async function runWebSocketLifecycle({
     events,
     secrets,
     includePublicPayloads,
+    onProgress,
   })
   if (!initialConnectionEstablished) {
     recordWebSocketReconnectSkipped({
@@ -1117,6 +1248,7 @@ async function runWebSocketChecks({
   includePublicPayloads,
   credentialsConfigured,
   websocketClientFactory,
+  onProgress,
 }) {
   if (!credentialsConfigured) {
     recordWebSocketSkipped({
@@ -1155,6 +1287,7 @@ async function runWebSocketChecks({
     events,
     secrets,
     includePublicPayloads,
+    onProgress,
   })
 }
 
@@ -1172,6 +1305,7 @@ async function runConfiguredProbes({
   credentialsConfigured,
   restClientFactory,
   websocketClientFactory,
+  onProgress,
 }) {
   await runRestChecks({
     env,
@@ -1185,6 +1319,7 @@ async function runConfiguredProbes({
     includePublicPayloads,
     credentialsConfigured,
     restClientFactory,
+    onProgress,
   })
   await runWebSocketChecks({
     env,
@@ -1198,6 +1333,7 @@ async function runConfiguredProbes({
     includePublicPayloads,
     credentialsConfigured,
     websocketClientFactory,
+    onProgress,
   })
 }
 
@@ -1211,6 +1347,7 @@ async function runConfiguredDiagnostics({
   includePublicPayloads,
   restClientFactory,
   websocketClientFactory,
+  onProgress,
 }) {
   const { symbol, klineInterval, timeoutMs: requestTimeout } = DIAGNOSTIC_CONFIG
   let depthPrecision
@@ -1247,6 +1384,7 @@ async function runConfiguredDiagnostics({
     credentialsConfigured,
     restClientFactory,
     websocketClientFactory,
+    onProgress,
   })
   return createReport({
     startedAtIso,
@@ -1261,6 +1399,7 @@ export async function runBitunixDiagnostics({
   now = Date.now,
   restClientFactory = (options) => new BitunixRestClient(options),
   websocketClientFactory = (options) => new BitunixSpotWebSocketClient(options),
+  onProgress,
 } = {}) {
   const startedAt = now()
   const startedAtIso = new Date(startedAt).toISOString()
@@ -1268,14 +1407,13 @@ export async function runBitunixDiagnostics({
   const results = []
   const events = []
   const { includePublicPayloads } = DIAGNOSTIC_CONFIG
-  const configuration = createConfigurationResult({
-    env,
+  const safetyConfirmation = createSafetyConfirmationResult({
     startedAt,
     now,
     secrets,
   })
-  results.push(configuration)
-  if (configuration.status !== "passed") {
+  results.push(safetyConfirmation)
+  if (safetyConfirmation.status !== "passed") {
     return createReport({
       startedAtIso,
       now,
@@ -1283,6 +1421,14 @@ export async function runBitunixDiagnostics({
       events,
     })
   }
+  const configuration = createConfigurationResult({
+    env,
+    startedAt,
+    now,
+    secrets,
+  })
+  results.push(configuration)
+  onProgress?.({ message: "      Configuration: credentials and live-read safety ... PASS" })
   return runConfiguredDiagnostics({
     env,
     now,
@@ -1293,6 +1439,7 @@ export async function runBitunixDiagnostics({
     includePublicPayloads,
     restClientFactory,
     websocketClientFactory,
+    onProgress,
   })
 }
 
