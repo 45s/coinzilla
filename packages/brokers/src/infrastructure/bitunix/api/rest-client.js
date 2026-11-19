@@ -388,12 +388,13 @@ function validateHttpResponse({ response, payload, path, stateChanging }) {
   }
 }
 
-function validateResponseEnvelope({ payload, path, response }) {
+function validateResponseEnvelope({ payload, path, response, stateChanging }) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new BitunixRestError({
       message: "Bitunix REST response envelope is malformed",
       kind: "response",
       path,
+      outcomeUnknown: stateChanging,
     })
   }
   const code = normalizeErrorCode({ code: payload.code })
@@ -402,6 +403,7 @@ function validateResponseEnvelope({ payload, path, response }) {
       message: "Bitunix REST response has an invalid error code",
       kind: "response",
       path,
+      outcomeUnknown: stateChanging,
     })
   }
   if (typeof payload.msg !== "string") {
@@ -411,6 +413,7 @@ function validateResponseEnvelope({ payload, path, response }) {
       path,
       exchangeCode: code,
       status: response.status,
+      outcomeUnknown: stateChanging,
     })
   }
   if (code !== "0") {
@@ -436,6 +439,7 @@ function validateResponse({ response, payload, path, stateChanging }) {
     payload,
     path,
     response,
+    stateChanging,
   })
 }
 

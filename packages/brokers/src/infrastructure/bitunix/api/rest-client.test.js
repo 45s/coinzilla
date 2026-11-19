@@ -731,3 +731,66 @@ test("Bitunix REST client accepts explicitly classified read-only POST requests"
   assert.deepEqual(result.data, [])
   assert.equal(requestCount, 1, "an explicitly read-only POST must still be dispatched once")
 })
+
+
+test("Bitunix REST malformed success envelopes preserve unknown mutation outcomes", async () => {
+  const malformedPayloads = [
+    { name: "non-object envelope", payload: null },
+    { name: "invalid exchange code", payload: { code: ["0"], msg: "success", data: [] } },
+    { name: "missing message", payload: { code: "0", data: [] } },
+  ]
+
+  for (const { name, payload } of malformedPayloads) {
+    for (const stateChanging of [false, true]) {
+      const client = new BitunixRestClient({
+        apiKey: "api-key",
+        apiSecret: "secret",
+        fetchFn: async () => ({
+          ok: true,
+          status: 200,
+          async json() {
+            return payload
+          },
+        }),
+      })
+
+      await assert.rejects(client.request({
+        method: "POST",
+        path: "/api/spot/v1/order/place_order",
+        body: { symbol: "BTCUSDT" },
+        stateChanging,
+      }), (error) => {
+        assert.ok(error instanceof BitunixRestError, `${name} must use the Bitunix REST error contract`)
+        assert.equal(error.kind, "response")
+        assert.equal(error.outcomeUnknown, stateChanging, `${name} must preserve uncertainty only for mutations`)
+        return true
+      })
+    }
+  }
+})
+
+test("Bitunix REST explicit exchange rejections remain definitive for state-changing requests", async () => {
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return { code: "10001", msg: "order rejected", data: null }
+      },
+    }),
+  })
+
+  await assert.rejects(client.request({
+    method: "POST",
+    path: "/api/spot/v1/order/place_order",
+    body: { symbol: "BTCUSDT" },
+    stateChanging: true,
+  }), (error) => {
+    assert.equal(error.kind, "exchange")
+    assert.equal(error.outcomeUnknown, false)
+    assert.equal(error.exchangeCode, "10001")
+    return true
+  })
+})

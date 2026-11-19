@@ -1456,3 +1456,13 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - [x] Mark all existing read-only POST operations explicitly, while preserving `true` on order/funds mutation calls.
 - [x] Add deterministic client regressions proving invalid classifications never reach the network and explicit read-only POSTs remain supported.
 - [ ] Verify exact-head Brokers tests/coverage, strict lint and all required workspace CI before marking complete.
+
+## 2026-11-19 — Bitunix REST malformed mutation-envelope outcomes (#1527)
+
+**Status: Implemented in stacked PR #1528; exact-head CI verification is pending.**
+
+- Propagated the request's explicit mutation classification into success-envelope validation.
+- Malformed envelopes, invalid/missing exchange codes, and missing required messages now preserve `outcomeUnknown` for state-changing requests; read-only errors remain non-mutation failures.
+- Explicit non-zero exchange codes remain definitive exchange rejections.
+- Added deterministic tests for malformed payloads, invalid codes, missing messages, read-only/mutation parity, and explicit exchange rejection.
+- No retries, endpoint changes, live exchange calls, or mutation behavior changes.
