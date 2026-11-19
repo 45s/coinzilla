@@ -734,49 +734,66 @@ test("Bitunix REST client accepts explicitly classified read-only POST requests"
 
 
 
-async function assertMalformedEnvelopeOutcome({ payload, stateChanging, name }) {
-  const client = new BitunixRestClient({
-    apiKey: "api-key",
-    apiSecret: "secret",
-    fetchFn: async () => ({
-      ok: true,
-      status: 200,
-      async json() {
-        return payload
-      },
-    }),
-  })
-
-  await assert.rejects(
-    client.request({
-      method: "POST",
-      path: "/api/spot/v1/order/place_order",
-      body: { symbol: "BTCUSDT" },
-      stateChanging,
-    }),
-    (error) => {
-      assert.ok(error instanceof BitunixRestError)
-      assert.equal(error.kind, "response")
-      assert.equal(
-        error.outcomeUnknown,
-        stateChanging,
-        `${name} must preserve uncertainty only for mutations`,
-      )
-      return true
-    },
-  )
-}
-
 test("Bitunix REST malformed success envelopes preserve unknown mutation outcomes", async () => {
   const malformedPayloads = [
-    { name: "non-object envelope", payload: null },
-    { name: "invalid exchange code", payload: { code: ["0"], msg: "success", data: [] } },
-    { name: "missing message", payload: { code: "0", data: [] } },
+    {
+      name: "non-object envelope",
+      payload: null,
+    },
+    {
+      name: "invalid exchange code",
+      payload: {
+        code: ["0"],
+        msg: "success",
+        data: [],
+      },
+    },
+    {
+      name: "missing message",
+      payload: {
+        code: "0",
+        data: [],
+      },
+    },
   ]
 
   for (const { name, payload } of malformedPayloads) {
     for (const stateChanging of [false, true]) {
-      await assertMalformedEnvelopeOutcome({ payload, stateChanging, name })
+      const client = new BitunixRestClient({
+        apiKey: "api-key",
+        apiSecret: "secret",
+        fetchFn: async () => ({
+          ok: true,
+          status: 200,
+          async json() {
+            return payload
+          },
+        }),
+      })
+
+      await assert.rejects(
+        client.request({
+          method: "POST",
+          path: "/api/spot/v1/order/place_order",
+          body: {
+            symbol: "BTCUSDT",
+          },
+          stateChanging,
+        }),
+        (error) => {
+          assert.ok(
+            error instanceof BitunixRestError,
+            `${name} must use the Bitunix REST error contract`,
+          )
+          assert.equal(error.kind, "response")
+          assert.equal(
+            error.outcomeUnknown,
+            stateChanging,
+            `${name} must preserve uncertainty only for mutations`,
+          )
+          return true
+        },
+      )
     }
   }
 })
