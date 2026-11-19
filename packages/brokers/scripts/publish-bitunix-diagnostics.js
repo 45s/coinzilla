@@ -64,7 +64,7 @@ export async function runBitunixHealthCheck() {
       error,
       secrets: [process.env.BITUNIX_API_KEY, process.env.BITUNIX_API_SECRET].filter(Boolean),
     })
-    process.stderr.write(`Bitunix health check failed: ${JSON.stringify(sanitized)}\\n`)
+    process.stderr.write(`Bitunix health check failed: ${JSON.stringify(sanitized)}\n`)
     process.exitCode = 1
   }
 }
