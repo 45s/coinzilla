@@ -15,7 +15,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
+const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onEvent = () => {}, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
   const calls = []
   const events = []
   const subscription = { disconnect: async () => calls.push("disconnect") }
@@ -36,7 +36,7 @@ data: subscription }
     tradingMode,
     tradingEnabled,
     enabledSymbols: ["BTCUSDT"],
-    onEvent: () => {},
+    onEvent,
     onObservation,
     onStatus: () => {},
     publishAccountSnapshot: async (input) => {
@@ -195,6 +195,10 @@ test("LIVE startup failures report LIVE instead of hard-coded TESTNET", async ()
 })
 
 
+const fixtureSubscription = {
+  disconnect: async () => {},
+}
+
 test("passes polling observations through a separate callback without treating them as execution events", async () => {
   const observation = Object.freeze({
     mode: "POLLING",
@@ -203,19 +207,23 @@ test("passes polling observations through a separate callback without treating t
     sourceTime: null,
   })
   const received = []
+  const receivedEvents = []
   const fixture = createFixture({
+    onEvent: (message) => receivedEvents.push(message),
     onObservation: ({ observation: value }) => received.push(value),
     subscribe: async (handlers) => {
       handlers.onObservation({ observation })
-      return { ok: true, data: fixtureSubscription }
+      return {
+        ok: true,
+        data: fixtureSubscription,
+      }
     },
   })
   const subscription = await fixture.result
 
   assert.deepEqual(received, [observation], "Polling data must arrive through onObservation.")
+  assert.deepEqual(receivedEvents, [], "Polling observations must not enter the native execution-event callback.")
   assert.equal(fixture.state.ready, false, "An observation must not open trading readiness.")
   assert.equal(fixture.events.length, 1, "An observation must not publish a canonical broker event.")
-  assert.equal(subscription, fixture.subscription, "The subscription lifecycle handle must remain available to bootstrap.")
+  assert.equal(subscription, fixtureSubscription, "The subscription lifecycle handle must remain available to bootstrap.")
 })
-
-const fixtureSubscription = { disconnect: async () => {} }

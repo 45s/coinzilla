@@ -2336,42 +2336,44 @@ test("Bitunix Spot broker propagates tax-filing REST failures without retrying",
 })
 
 
-test("Bitunix Spot user-data subscription delivers polling observations separately from native events", async () => {
-  const observation = Object.freeze({
-    provider: "bitunix",
-    product: "spot",
-    mode: "POLLING",
-    observedAt: 1234,
-    sourceTime: null,
-    balances: Object.freeze([]),
-    symbols: Object.freeze([]),
-    matchingOrderObservations: Object.freeze([]),
-    guarantees: Object.freeze({
-      accountSnapshotAuthoritative: false,
-      historyCoverage: "FIRST_PAGE_ONLY",
-      fillsCanonical: false,
-      nativePush: false,
-    }),
-  })
-  const status = Object.freeze({
-    mode: "POLLING",
+
+const POLLING_OBSERVATION = Object.freeze({
+  provider: "bitunix",
+  product: "spot",
+  mode: "POLLING",
+  observedAt: 1234,
+  sourceTime: null,
+  balances: Object.freeze([]),
+  symbols: Object.freeze([]),
+  matchingOrderObservations: Object.freeze([]),
+  guarantees: Object.freeze({
+    accountSnapshotAuthoritative: false,
+    historyCoverage: "FIRST_PAGE_ONLY",
+    fillsCanonical: false,
     nativePush: false,
-    running: true,
-    freshness: "FRESH",
-    lastSuccessAt: 1234,
-    ageMs: 0,
-  })
+  }),
+})
+const POLLING_STATUS = Object.freeze({
+  mode: "POLLING",
+  nativePush: false,
+  running: true,
+  freshness: "FRESH",
+  lastSuccessAt: 1234,
+  ageMs: 0,
+})
+
+test("Bitunix Spot user-data subscription delivers polling observations separately from native events", async () => {
   let reconcilerInput
   let stopped = 0
   const { broker, calls } = createBroker({
     reconcilerFactory: () => ({
       start: (input) => {
         reconcilerInput = input
-        input.onSnapshot(observation)
-        input.onStatus(status)
+        input.onSnapshot(POLLING_OBSERVATION)
+        input.onStatus(POLLING_STATUS)
         return {
           stop: () => { stopped += 1 },
-          getStatus: () => status,
+          getStatus: () => POLLING_STATUS,
         }
       },
     }),
@@ -2383,21 +2385,30 @@ test("Bitunix Spot user-data subscription delivers polling observations separate
 
   const result = await broker.subscribeForUserData({
     symbols: ["BTCUSDT"],
-    trackedOrders: [{ symbol: "BTCUSDT", orderId: "order-1" }],
+    trackedOrders: [
+      {
+        symbol: "BTCUSDT",
+        orderId: "order-1",
+      },
+    ],
     intervalMs: 1000,
     onEvent: ({ event }) => events.push(event),
-    onObservation: ({ observation: received }) => observations.push(received),
-    onStatus: (received) => statuses.push(received),
+    onObservation: ({ observation }) => observations.push(observation),
+    onStatus: (status) => statuses.push(status),
   })
 
   assert.equal(result.ok, true, "A valid polling observation subscription must succeed.")
   assert.equal(result.data.deliveryMode, "POLLING_OBSERVATIONS", "The subscription must identify its non-native delivery semantics.")
   assert.equal(result.data.nativePush, false, "Polling observations must never claim native push.")
   assert.deepEqual(reconcilerInput.symbols, ["BTCUSDT"], "Polling must use only explicitly supplied symbols.")
-  assert.deepEqual(reconcilerInput.trackedOrders, [{ symbol: "BTCUSDT", orderId: "order-1" }], "Only explicitly tracked order identities may be queried.")
+  assert.deepEqual(
+    reconcilerInput.trackedOrders,
+    [{ symbol: "BTCUSDT", orderId: "order-1" }],
+    "Only explicitly tracked order identities may be queried.",
+  )
   assert.deepEqual(events, [], "Polling observations must never be converted into native execution events.")
-  assert.deepEqual(observations, [observation], "The snapshot must be delivered only through onObservation.")
-  assert.deepEqual(statuses, [status], "Polling lifecycle status must use the separate status callback.")
+  assert.deepEqual(observations, [POLLING_OBSERVATION], "The snapshot must be delivered only through onObservation.")
+  assert.deepEqual(statuses, [POLLING_STATUS], "Polling lifecycle status must use the separate status callback.")
   assert.equal(calls.length, 0, "Subscription setup must not submit or cancel exchange orders.")
 
   await result.data.disconnect()
