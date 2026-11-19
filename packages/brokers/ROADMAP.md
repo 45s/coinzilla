@@ -1292,3 +1292,16 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Verify the exact PR head: 688 Brokers tests passed; workspace unit tests and coverage passed; JavaScript Syntax/workspace quality, strict changed-file ESLint, actionlint, Harvester targeted tests, Utils tests, and dependency audit passed. Read-only Binance TESTNET integration was skipped by workflow policy.
 - [~] Advisory external documentation-link workflow remained in progress at merge; it is not a required ruleset check.
 - **Safety:** Bitunix Spot order placement/cancellation/fill support remains blocked by [#1185](https://github.com/45s/coinzilla/issues/1185). No live mutations are authorized.
+
+
+## 2026-11-19 — Bitunix Spot order cancellation implementation
+
+- [x] Implement the documented signed REST `POST /api/spot/v1/order/cancel` for one explicit `symbol + orderId`.
+- [x] Verify the cancellation result with a follow-up signed `GET /api/spot/v1/order/detail`; return confirmed cancellation only for `CANCELED` or `PARTIALLY_FILLED_CANCELED`.
+- [x] Preserve fill/cancel race visibility: if the order remains open or has another non-terminal/unknown state after the exchange acknowledgement, return `OUTCOME_UNKNOWN` and require reconciliation rather than retrying.
+- [x] Classify transport failures after dispatch through the shared broker mutation-outcome contract.
+- [x] Add offline regressions for request shape, normalized symbol, confirmed partial-fill cancellation, non-terminal post-cancel state, and validation-before-I/O.
+- [ ] Run Brokers package tests/coverage and required workspace CI on the exact PR head.
+- [ ] Merge only after all required checks pass.
+
+**Still blocked:** Spot order placement and canonical order placement remain disabled. The official single-order REST, batch REST, and WebSocket order descriptions still disagree on the denomination of `volume`; the exchange also does not document a caller-supplied client order ID. Cancellation does not depend on those placement semantics and is now implemented independently. #1185 remains open.
