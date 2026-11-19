@@ -46,8 +46,9 @@ async function main() {
   process.stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n")
   const result = await publishBitunixDiagnostics({
     repositoryRoot,
-    runDiagnostics: ({ env }) => runBitunixDiagnostics({ env }),
+    runDiagnostics: ({ env, onProgress }) => runBitunixDiagnostics({ env, onProgress }),
     env: process.env,
+    onProgress: ({ message }) => process.stdout.write(`${message}\\n`),
   })
   printResult({ result })
   process.exitCode = result.exitCode
