@@ -2,7 +2,7 @@
 
 **Tracking issue:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
 
-**Current implementation:** filled-order history projection in [PR #1469](https://github.com/45s/coinzilla/pull/1469).
+**Current implementation:** filled-order history projection merged in [PR #1469](https://github.com/45s/coinzilla/pull/1469) as `39f098000d6c20cb596a9e6700250faa00bbd80e`.
 
 ## Filled-order history
 
