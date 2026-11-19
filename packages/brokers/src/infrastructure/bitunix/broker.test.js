@@ -227,6 +227,7 @@ test("Bitunix Spot MARKET placement submits base quantity and zero price on sing
         price: "100",
         ctime: "2026-11-15T12:00:00Z",
         utime: "2026-11-15T12:00:01Z",
+        avgPrice: "100",
       },
     },
   })
@@ -273,6 +274,7 @@ test("Bitunix Spot numeric scientific-notation quantities are expanded before ex
         price: "100",
         ctime: "2026-11-15T12:00:00Z",
         utime: "2026-11-15T12:00:00Z",
+        avgPrice: "100",
       },
     },
   })
