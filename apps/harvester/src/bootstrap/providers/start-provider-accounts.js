@@ -445,8 +445,37 @@ function createMarketDataProviderMetadata({
 }
 
 function getProviderExecutionRoutes({ appConfig, providers, providerInstanceId }) {
-  return resolveExecutionRoutesByProvider({ appConfig, providers })
+  return resolveExecutionRoutesByProvider({
+    appConfig,
+    providers,
+  })
     .get(providerInstanceId) ?? []
+}
+
+function createProviderAccountExecutionInput({
+  provider,
+  providers,
+  appConfig,
+  executionSymbolsByProvider,
+  marketDataProviderBySymbol,
+}) {
+  const executionSymbols = executionSymbolsByProvider.get(provider.providerInstanceId) ?? []
+  const executionRoutes = getProviderExecutionRoutes({
+    appConfig,
+    providers,
+    providerInstanceId: provider.providerInstanceId,
+  })
+  const marketDataProviderMetadata = createMarketDataProviderMetadata({
+    executionSymbols,
+    providers,
+    marketDataProviderBySymbol,
+  })
+  return {
+    executionSymbols: Object.freeze([...executionSymbols]),
+    executionRoutes: Object.freeze([...executionRoutes]),
+    marketDataSymbols: Object.freeze([...executionSymbols]),
+    ...marketDataProviderMetadata,
+  }
 }
 
 function createProviderAccountStartInput({
@@ -464,15 +493,11 @@ function createProviderAccountStartInput({
   requiredCapabilitiesByProvider,
   deferMarketDataStart,
 }) {
-  const executionSymbols = executionSymbolsByProvider.get(provider.providerInstanceId) ?? []
-  const executionRoutes = getProviderExecutionRoutes({
+  const executionInput = createProviderAccountExecutionInput({
+    provider,
+    providers,
     appConfig,
-    providers,
-    providerInstanceId: provider.providerInstanceId,
-  })
-  const marketDataProviderMetadata = createMarketDataProviderMetadata({
-    executionSymbols,
-    providers,
+    executionSymbolsByProvider,
     marketDataProviderBySymbol,
   })
   return {
@@ -491,10 +516,7 @@ function createProviderAccountStartInput({
     brokerAdapterFactory: provider.brokerAdapterFactory,
     providerIdentity: provider.identity,
     providerRequired: provider.required !== false,
-    executionSymbols: Object.freeze([...executionSymbols]),
-    executionRoutes: Object.freeze([...executionRoutes]),
-    marketDataSymbols: Object.freeze([...executionSymbols]),
-    ...marketDataProviderMetadata,
+    ...executionInput,
     requiredCapabilities: requiredCapabilitiesByProvider.get(provider.providerInstanceId) ?? Object.freeze([]),
     deferMarketDataStart,
     ...(deferMarketDataStart ? {

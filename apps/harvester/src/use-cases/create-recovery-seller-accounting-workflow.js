@@ -649,12 +649,18 @@ function createRecoverySellerWorkflowState({
     initialOrderRegistry,
     initialLegacyPositions,
   })
-  const state = createRecoverySellerWorkflowState({
-    sharedState,
-    initialPortfolio,
-    initialOrderRegistry,
-    initialLegacyPositions,
-  })
+  const state = sharedState ?? {
+    portfolio: initialPortfolio ?? new Portfolio(),
+    orderRegistry: initialOrderRegistry ?? OrderRegistry.empty(),
+    legacyPositions: createLegacyPositionMap(initialLegacyPositions),
+    updateQueue: Promise.resolve(),
+  }
+  if (!(state.portfolio instanceof Portfolio)) {
+    throw new TypeError("initialPortfolio must be a Portfolio")
+  }
+  if (!(state.orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("initialOrderRegistry must be an OrderRegistry")
+  }
   return state
 }
 
@@ -669,6 +675,12 @@ export function createRecoverySellerAccountingWorkflow({
       typeof onOperationalStateExecutionFill !== "function") {
     throw new TypeError("onOperationalStateExecutionFill must be a function")
   }
+  const state = createRecoverySellerWorkflowState({
+    sharedState,
+    initialPortfolio,
+    initialOrderRegistry,
+    initialLegacyPositions,
+  })
 
   const applyBuyFill = createSerializedWorkflowOperation({
     state,

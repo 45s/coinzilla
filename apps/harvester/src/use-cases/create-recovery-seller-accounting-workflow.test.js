@@ -851,9 +851,18 @@ function createSharedAccountWorkflowFixture() {
     clientOrderId: "cg-shared-buy",
     market,
     side: "BUY",
-    price: new Money({ amount: "2", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "2", asset: quoteAsset }),
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
