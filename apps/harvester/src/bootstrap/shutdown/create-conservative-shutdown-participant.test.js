@@ -481,4 +481,107 @@ test("retains the order and fill blocker when canonical owned-order reconciliati
     "Shutdown must remain unsafe when canonical owned-order reconciliation is incomplete.",
   )
 })
+ 
+test("waits for a fresh market-price event before retrying shutdown recovery inputs", async () => {
+  const calls = []
+  const recoveryAttempts = new Map()
+  const engine = createFakeEngine({ calls })
+  engine.reconcileRecoverySellsForShutdown = async ({ symbols } = {}) => {
+    const [symbol] = symbols
+    const attempts = (recoveryAttempts.get(symbol) ?? 0) + 1
+    recoveryAttempts.set(symbol, attempts)
+    calls.push("recovery:" + symbol + ":" + attempts)
+    if (symbol === "DOGEUSDT" && attempts === 1) {
+      return {
+        ok: false,
+        errors: [Object.assign(
+          new Error("Shutdown recovery price is stale"),
+          {
+            code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+            reason: "STALE_MARKET_PRICE",
+          },
+        )],
+      }
+    }
+    return { ok: true }
+  }
+  engine.waitForFreshMarketPrice = async ({ symbol, timeoutMs } = {}) => {
+    calls.push("wait-price:" + symbol)
+    assert.equal(timeoutMs, 5000, "The wait must use the established five-second market-price freshness bound.")
+    return {
+      symbol,
+      price: "0.123",
+      timestamp: 10_000,
+    }
+  }
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
+
+  participant.beginShutdown()
+  await participant.waitUntilSafe()
+
+  assert.equal(recoveryAttempts.get("DOGEUSDT"), 2, "Recovery must be re-evaluated once after fresh market evidence arrives.")
+  assert.ok(calls.includes("wait-price:DOGEUSDT"), "The participant must wait for a source market event, not sleep.")
+  assert.equal(participant.isSafeToShutdown(), true, "The safety proof may pass only after recovery is re-evaluated.")
+})
+
+test("keeps shutdown unsafe with an explicit blocker when fresh market price does not arrive", async () => {
+  const calls = []
+  const engine = createFakeEngine({ calls })
+  engine.reconcileRecoverySellsForShutdown = async ({ symbols } = {}) => {
+    const [symbol] = symbols
+    calls.push("recovery:" + symbol)
+    if (symbol === "DOGEUSDT") {
+      return {
+        ok: false,
+        errors: [Object.assign(
+          new Error("Shutdown recovery price is stale"),
+          {
+            code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+            reason: "STALE_MARKET_PRICE",
+          },
+        )],
+      }
+    }
+    return { ok: true }
+  }
+  engine.waitForFreshMarketPrice = async ({ symbol } = {}) => {
+    calls.push("wait-price:" + symbol)
+    throw Object.assign(new Error("No fresh market-price event arrived before the freshness deadline"), {
+      code: "MARKET_PRICE_REFRESH_TIMEOUT",
+    })
+  }
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
+
+  participant.beginShutdown()
+  await assert.rejects(
+    participant.waitUntilSafe(),
+    (error) => {
+      const blockers = getMarketBlockersFromShutdownError({
+        error,
+        symbol: "DOGEUSDT",
+      })
+      assert.ok(
+        hasBlockerWithPrefix({
+          blockers,
+          prefix: "RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE:MARKET_PRICE_REFRESH_TIMEOUT",
+        }),
+        "The timeout must remain a specific recovery-input blocker.",
+      )
+      assert.equal(
+        blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
+        false,
+        "A missing fresh market price must not be misclassified as order/fill reconciliation failure.",
+      )
+      return true
+    },
+    "Shutdown must fail closed when the market stream cannot provide fresh recovery pricing.",
+  )
+  assert.ok(calls.includes("wait-price:DOGEUSDT"), "The bounded event wait must be attempted.")
+})
 
