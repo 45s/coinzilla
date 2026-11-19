@@ -1,6 +1,9 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { createFreshMarketPriceWaiter, createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
+import {
+  createFreshMarketPriceWaiter,
+  createMarketPriceTransitionHandler,
+} from "./create-market-price-transition-handler.js"
 
 const activeBuyOrder = Object.freeze({
   side: "BUY",
@@ -47,7 +50,7 @@ function createState({
   return state
 }
 
-function createTransitionActionPorts({ state, trace }) {
+function createTransitionActionPorts({ state, trace, notifyFreshMarketPrice }) {
   const assertAcceptedPrice = () => {
     assert.equal(
       state.prices.get("DOGEUSDT")?.price,
@@ -119,9 +122,9 @@ function createHandler({ state, trace, isFresh, canTrade, notifyFreshMarketPrice
     }),
     canTrade: () => canTrade,
     ...createTransitionActionPorts({
-      
       state,
       trace,
+      notifyFreshMarketPrice,
     }),
   })
 }
