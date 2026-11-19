@@ -14,6 +14,18 @@ Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
 **Status: COMPLETE.** The common method/result/error contract and shared Binance/Bitunix offline conformance suite were merged in [PR #1451](https://github.com/45s/coinzilla/pull/1451), merge `e6d3e60aaaa26ad23705564ffc17f786c995b3dd`. Capability-model ownership was subsequently reconciled in [PR #1455](https://github.com/45s/coinzilla/pull/1455): `@coinzilla/entities` owns the single shared value contract; Brokers owns provider-specific declarations/evidence and re-exports the shared class for compatibility. The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md). This API completion does not resolve Bitunix's separate Harvester admission blockers in [#1185](https://github.com/45s/coinzilla/issues/1185).
 
+### Public `Broker` constructor follow-up
+
+Tracking: [issue #1497](https://github.com/45s/coinzilla/issues/1497), implementation [PR #1498](https://github.com/45s/coinzilla/pull/1498).
+
+**Status: COMPLETE.** Merged into `develop` through [PR #1498](https://github.com/45s/coinzilla/pull/1498) on 2026-11-19 at 09:59:41 UTC; merge commit `6e73923d63d16b43fb0a70ec3b9e5d0c5a6bb51c` contains the exact validated PR head `2a506e9cd4711b442900c79208a11ccdf9d1c81c`. The public `new Broker({ provider, apiKey, apiSecret, tradingMode, providerOptions })` constructor selects the existing Binance or Bitunix Spot adapter, validates the shared structural contract, and preserves direct concrete constructors. Provider-specific options are namespaced; environment selection remains explicit (Binance testnet/live, Bitunix Spot live only). The shared offline conformance suite constructs both providers through this public API, including provider dependency injection.
+
+The Bitunix read-only diagnostic workflow also exercises the public Broker API for market catalog, price, balances and open orders. Direct REST/WebSocket clients remain only for transport-specific endpoint/RPC diagnostics. Reports include sanitized response-schema observations (unknown fields, missing required fields and unexpected types); unknown additions are recorded without rejecting valid normalized responses, while missing required fields or invalid types produce failed schema checks. Diagnostic failures use the shared `SystemCustomError` base through `BrokerDiagnosticError`, with stable `BROKER_DIAGNOSTIC_SCHEMA_MISMATCH` and `BROKER_DIAGNOSTIC_RESULT_INVALID` codes and safe path/operation/issue context. The public Spot latest-price call explicitly disables authentication, as required by the official public endpoint.
+
+Exact-head verification on `2a506e9cd4711b442900c79208a11ccdf9d1c81c`: 771/771 Broker tests passed; Broker and workspace coverage passed; all workspace unit tests passed; strict changed-file/full-workspace ESLint, JavaScript syntax, actionlint, dependency audit, Utils tests, Harvester targeted tests and external documentation links passed. Read-only Binance TESTNET integration was skipped by repository policy; no live Bitunix diagnostics or exchange mutations were executed.
+
+This is a public composition convenience, not application routing. Bitunix Futures remain out of scope and issue #1185 remains the source of truth for unresolved Spot lifecycle/fill/mutation safety blockers.
+
 ### Ownership boundary
 
 - `@coinzilla/entities` owns the shared exchange-neutral `BrokerCapabilities` value, vocabulary, three-state status semantics, validation, lookup, immutability, and serialization.
@@ -1383,10 +1395,12 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 ## 2026-11-19 — Bitunix Spot order-detail lookup parity (PR #1481)
 
+**Status: COMPLETE.** Merged into `develop` as [PR #1481](https://github.com/45s/coinzilla/pull/1481), merge commit `efa7bdfe61f2720d9faddd963d38dd12d75f589c`.
+
 - [x] Added a regression test proving `getOrder({ orderId })` can call the documented `GET /api/spot/v1/order/detail` without a caller-supplied symbol.
 - [x] Matched JKorf/Bitunix.Net `GetOrderAsync(string id)`: the request sends only `orderId`, and the adapter uses the symbol returned by Bitunix.
 - [x] Preserve optional symbol consistency validation when callers provide one; malformed responses without an exchange symbol still fail closed.
-- [ ] PR #1481 CI and merge verification pending.
+- [x] All seven required workflow runs passed on exact PR head `77405b924cf1f78fb8543928461ff1920973438e`, including workspace unit tests/coverage, JavaScript Syntax, dependency audit, Utils tests, Harvester targeted tests, and external documentation links.
 
 **Reference note:** JKorf's `GetUserTradesAsync` interface documents `/api/spot/v1/order/deal/list`, but the inspected REST implementation currently sends `/api/spot/v1/order/pending/list`. Coinzilla retains its already-correct documented matching-order path and does not copy that reference defect.
 

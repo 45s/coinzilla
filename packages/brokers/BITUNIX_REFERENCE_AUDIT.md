@@ -1,7 +1,7 @@
 # Bitunix Spot — external implementation reference audit
 
 **Status:** living engineering reference
-**Last audited:** 2026-11-17
+**Last audited:** 2026-11-19
 **Scope:** Bitunix Spot REST, Spot WebSocket RPC, market/account reads, order lifecycle, and Binance-broker parity
 **Canonical blockers:** [issue #1185](https://github.com/45s/coinzilla/issues/1185)
 **Related in-flight work:** [PR #1324 — read-only market data](https://github.com/45s/coinzilla/pull/1324)
@@ -66,6 +66,20 @@ Key Spot source:
 - Spot socket methods are PlaceOrderAsync, CancelOrderAsync and CancelOrdersAsync implemented with QueryAsync; they are not subscriptions.
 
 **Use:** first implementation to inspect for a Spot method, but verify every request path and fixture against the official contract. Treat the discovered trade endpoint mismatch as a known defect.
+
+### 2.1.1 Fresh public-market authentication and schema audit — 2026-11-19
+
+The latest-price path was rechecked before changing Coinzilla's public adapter:
+
+- [JKorf market-data implementation, current inspected commit](https://github.com/JKorf/Bitunix.Net/blob/c6e9a26f799b345dcb9e1310fa57a3da8524a5bb/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiExchangeData.cs): `GetLastPriceAsync` builds `GET /api/spot/v1/market/last_price` with request-definition authentication set to `false`. The same Spot class marks depth, klines, kline history, pair catalog, exchange rates and assets as public.
+- [Independent TypeScript Spot implementation](https://github.com/samanzamani/bitunix-mcp/blob/6bf5d9f915bdf865394ac02f97c50b689ab9e8e7/src/tools/spot.ts): `spot_get_last_price` calls `publicGet`; [its HTTP client](https://github.com/samanzamani/bitunix-mcp/blob/6bf5d9f915bdf865394ac02f97c50b689ab9e8e7/src/http.ts) explicitly uses `signed: false` for public GETs.
+- [Official Spot public REST documentation](https://www.bitunix.com/api-docs/spots/en_us/public/): classifies the latest-price endpoint under Public Interface, documents `GET /api/spot/v1/market/last_price`, and specifies a string `data` price. The Spot introduction states public requests can be invoked without authentication.
+
+**Coinzilla finding:** `BitunixSpotBroker.getPrices()` omitted `authenticated: false`, so the REST client's default signed mode was applied to a documented public endpoint. The implementation now explicitly marks this read as unsigned, with a regression test asserting the exact request boundary. No credentials or signatures are sent for this method.
+
+**Market-catalog response schema:** the official pair-list table documents `id`, `base`, `quote`, `basePrecision`, `quotePrecision`, `minPrice`, `minVolume`, `isOpen`, `isHot`, `isRecommend`, `isShow`, `tradeArea`, `sort`, `openTime`, and `precisions`. Coinzilla's diagnostic allow-list includes these fields (plus optional `symbol` tolerated by the adapter), so documented fields are not misreported as schema drift.
+
+**Open-order response schema:** the official [Spot order interface](https://www.bitunix.com/api-docs/spots/en_us/order/) documents `orderId`, `userId`, `orderType`, `amount`, `dealAmount`, `volume`, `leftAmount`, `dealVolume`, `leftVolume`, `status`, `type`, `side`, `price`, `avgPrice`, `progress`, `ctime`, `utime`, `base`, `quote`, `symbol`, `fee`, and `feeCoin`. The diagnostic schema checks these documented names/types; unknown additions are reported without rejecting an otherwise valid normalized response.
 
 ### 2.2 [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp) — independent TypeScript
 

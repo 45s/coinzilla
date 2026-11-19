@@ -22,7 +22,7 @@ test("Bitunix diagnostic help describes the current source-constant configuratio
     "the help output must identify the two supported Bitunix credential variables",
   )
   assert.equal(
-    result.stdout.includes("Public-only mode runs unsigned REST checks; authenticated REST and WebSocket RPC checks are skipped unless both credentials are set."),
+    result.stdout.includes("Public-only mode runs unsigned REST and public Broker API checks; private REST, private Broker API, and authenticated WebSocket RPC checks are skipped unless both credentials are set."),
     true,
     "the help output must clearly distinguish public-only and authenticated diagnostic modes",
   )

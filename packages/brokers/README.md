@@ -27,6 +27,7 @@ See the detailed [Binance WebSocket contract](../../docs/brokers-websocket-contr
 
 The `@coinzilla/brokers` entry point exports:
 
+- `Broker` — exchange-neutral constructor selecting the existing Binance or Bitunix Spot implementation.
 - `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
 - `BitunixSpotBroker` and `BitunixSpotConfig` — the partial Bitunix Spot REST broker implementation and its validated configuration.
@@ -37,6 +38,34 @@ The `@coinzilla/brokers` entry point exports:
 - `BROKER_METHODS`, `BROKER_COMPATIBILITY_METHODS`, `BROKER_MUTATION_OUTCOMES`, `assertBrokerContract`, `getBrokerMutationOutcome` — structural API, compatibility, and mutation-outcome contract helpers.
 
 ## Exchange-neutral Broker API
+
+Construct a provider through the public `Broker` constructor:
+
+```js
+import { Broker } from "@coinzilla/brokers"
+
+const broker = new Broker({
+  provider: "binance",
+  apiKey,
+  apiSecret,
+  tradingMode: "testnet",
+})
+
+// Bitunix Spot uses the same constructor and requires explicit LIVE selection.
+const spotBroker = new Broker({
+  provider: "bitunix",
+  apiKey,
+  apiSecret,
+  tradingMode: "live",
+  providerOptions: {
+    requestTimeout: 10_000,
+  },
+})
+```
+
+The provider must be exactly `"binance"` or `"bitunix"`. Environment selection is explicit: Binance requires `tradingMode: "testnet" | "live"`; Bitunix Spot currently requires `tradingMode: "live"` because no Spot TESTNET endpoint is documented. Provider-specific options (such as `baseUrl`, `websocketApiUrl`, `requestTimeout`, or injected dependencies) belong inside `providerOptions`. Common credentials, environment selection, and the optional logger cannot be overridden there.
+
+The constructor returns the existing concrete provider instance, preserving its behavior and concrete `instanceof` checks. Both instances also satisfy `instanceof Broker` through the shared structural contract. Existing direct constructors remain supported. The factory selects an adapter only; application-specific account/market routing remains with the consuming application.
 
 Both providers expose an immutable `BrokerCapabilities` declaration. The canonical three statuses are `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; environment selection and runtime readiness are metadata/conditions, never a fourth status. Supported declarations require method and guarantee evidence; unsupported/unknown declarations require reasons.
 
@@ -280,7 +309,7 @@ Protocol references: [Binance Spot WebSocket API — Klines](https://github.com/
 
 ## Bitunix Spot local diagnostics
 
-The Bitunix diagnostic runner is an explicitly invoked, non-mutating local tool for checking REST connectivity/authentication, authenticated Spot WebSocket RPC, request/response correlation, latency, exchange errors, transport failures, and cleanup. It uses the existing Bitunix clients; it does not change broker runtime composition or enable trading.
+The Bitunix diagnostic runner is an explicitly invoked, non-mutating local tool. Application-level read checks run through the same public `Broker` constructor used by consumers (market catalog, price, balances, and open orders); REST and WebSocket clients are accessed directly only for separate transport-level endpoint, request-correlation, connection, and cleanup probes. The diagnostic does not change broker runtime composition or enable trading.
 
 Bitunix documents Spot WebSocket as authenticated request/response RPC: every request, including methods listed under the Public Interface, carries API key, timestamp, nonce and signature. The connection is documented as valid for 24 hours, and the API exposes a `ping` RPC connection test. It does **not** document continuous market subscriptions or private order/execution event streams. A successful RPC is not proof of a live stream. See the [official WebSocket introduction](https://www.bitunix.com/api-docs/spots/en_us/ws/) and [public RPC methods](https://www.bitunix.com/api-docs/spots/en_us/public-ws/).
 
@@ -305,7 +334,7 @@ For public-only diagnostics without private credentials, use `pnpm --filter @coi
 
 The source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` constant is the explicit acknowledgement gate because Bitunix Spot has no documented TESTNET environment. It defaults to `true`; set it to `false` in `scripts/diagnostic-runner.js` to prevent the runner from making requests. The runner contacts the configured LIVE Spot endpoint and performs non-mutating query requests only.
 
-Both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` are optional for public-only diagnostics. With neither credential configured—or with only one configured—the runner executes the unsigned public REST catalog and latest-price GET requests, then marks private account, open-order, order-history, and all authenticated WebSocket RPC checks as skipped. Configure **both** variables to enable signed account/open-order/order-history reads and authenticated WebSocket RPC. A private REST request without credentials fails closed with `BITUNIX_REST_AUTHENTICATION_REQUIRED`; the REST client never fabricates credentials. The two values are treated as one credential pair.
+Both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` are optional for public-only diagnostics. With neither credential configured—or with only one configured—the runner executes unsigned public REST transport probes plus public `Broker` API market-catalog and price reads, then marks private `Broker` API balance/open-order, REST account/open-order/order-history, and authenticated WebSocket RPC checks as skipped. The public `Broker` instance receives an internal read-only placeholder config only because the Bitunix Spot config requires non-empty constructor credentials; the public requests explicitly set `authenticated: false`, so the placeholder is never sent or signed. Configure **both** variables to enable signed `Broker` API balance/open-order reads, REST order-history probes, and authenticated WebSocket RPC. A private REST request without credentials fails closed with `BITUNIX_REST_AUTHENTICATION_REQUIRED`; the REST client never fabricates or sends credentials for a private request. The two values are treated as one credential pair.
 
 When enabling private diagnostics, use a dedicated API key with account-read permission and **without** trading or withdrawal permission. Do not use production mutation-enabled keys for diagnostics.
 
@@ -331,7 +360,7 @@ After a successful initial RPC session, it disconnects and explicitly reconnects
 
 REST and WebSocket depth checks are skipped unless `BITUNIX_DIAGNOSTICS_DEPTH_PRECISION` is explicitly supplied; the runner does not infer depth aggregation precision from basePrecision, quotePrecision, or precisions[].
 
-Each operation receives its own pass/fail/skip result and duration. The named `DIAGNOSTIC_CONFIG` constants in `scripts/diagnostic-runner.js` set the symbol (`BTCUSDT`), K-line interval (`1min`), request/connect/close timeout (`10_000` ms), and public-payload capture policy (`false`). Change these values in code when needed; they are not environment settings. Public response payloads are omitted by default. The optional depth precision remains an environment setting because its value must be explicitly chosen rather than inferred. The report is written to packages/brokers/.diagnostics/ (ignored by Git) with restrictive file permissions. Outbound WS messages are captured only after credential/signature/nonce redaction. Private account responses are summarized by shape and field names; private balances, UIDs and other sensitive values are never persisted.
+Each operation receives its own pass/fail/skip result and duration. The named `DIAGNOSTIC_CONFIG` constants in `scripts/diagnostic-runner.js` set the symbol (`BTCUSDT`), K-line interval (`1min`), request/connect/close timeout (`10_000` ms), and public-payload capture policy (`false`). Change these values in code when needed; they are not environment settings. Public response payloads are omitted by default. Broker API checks additionally emit `schemaObservations` containing response shape, observed/unknown field names, missing required fields, and unexpected field types—never response values. Unknown fields are reported but do not fail otherwise valid normalization; missing required fields, invalid row shapes, and unexpected types produce explicit failed schema checks. Diagnostic failures use `BrokerDiagnosticError` (`BROKER_DIAGNOSTIC_SCHEMA_MISMATCH` or `BROKER_DIAGNOSTIC_RESULT_INVALID`), preserving only safe path/operation/issue context and the stable code in the sanitized report. The optional depth precision remains an environment setting because its value must be explicitly chosen rather than inferred. The report is written to packages/brokers/.diagnostics/ (ignored by Git) with restrictive file permissions. Outbound WS messages are captured only after credential/signature/nonce redaction. Private account responses are summarized by shape and field names; private balances, UIDs and other sensitive values are never persisted.
 
 This is an operator diagnostic, not a trading test, exchange acceptance certificate, TESTNET substitute, or proof of trading readiness. It never places/cancels orders, withdraws/transfers funds, retries failed requests, or automatically reconnects after an unexpected failure. Its single controlled same-client reconnect probe runs only after the first session completes successfully. It does not test protocol-level control-frame heartbeats or simulate 24-hour expiry. The report records response latency and sanitized response structure, but does not impose a stale-data threshold because Bitunix does not document a maximum market-data age; RPC response correlation is tested, but there is no stream sequence-ordering or subscription-restoration test. Default unit tests remain offline and do not execute this command.
 

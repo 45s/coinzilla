@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { resolve } from "node:path"
 import { pathToFileURL } from "node:url"
+import { BitunixRestClient } from "../src/infrastructure/bitunix/api/rest-client.js"
 import { runBitunixDiagnostics } from "./diagnostic-runner.js"
 import { sanitizeDiagnosticError } from "./diagnostics.js"
 
@@ -42,10 +43,11 @@ async function main() {
   if (process.argv.includes("--help")) {
     process.stdout.write([
       "Run read-only Bitunix Spot REST and authenticated WebSocket RPC diagnostics.",
-      "Public-only mode runs unsigned REST checks; authenticated REST and WebSocket RPC checks are skipped unless both credentials are set.",
-      "BITUNIX_API_KEY and BITUNIX_API_SECRET are optional for public-only REST checks.",
+      "Public-only mode runs unsigned REST and public Broker API checks; private REST, private Broker API, and authenticated WebSocket RPC checks are skipped unless both credentials are set.",
+      "BITUNIX_API_KEY and BITUNIX_API_SECRET are optional for public-only REST and Broker API checks.",
       "Configure both credentials to enable private account, open-order, order-history, and authenticated WebSocket RPC reads.",
       "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is optional; without it, REST and WebSocket depth checks are skipped.",
+      "Read-only Broker API checks use the same public constructor as applications; response schema observations report field names and types only.",
       "Live-read confirmation and other diagnostic defaults are source constants.",
       "See packages/brokers/README.md for configuration and safety details.",
       "",
@@ -53,7 +55,9 @@ async function main() {
     return
   }
   process.stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot API account using read-only requests.\n")
-  const report = await runBitunixDiagnostics()
+  const report = await runBitunixDiagnostics({
+    brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
+  })
   const outputPath = createOutputPath({ now: Date.now })
   await writeReport({
     report,

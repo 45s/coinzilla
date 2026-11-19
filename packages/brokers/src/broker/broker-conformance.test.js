@@ -5,8 +5,7 @@ import { Balance } from "@coinzilla/entities"
 import { BrokerCapabilities } from "./broker-capabilities.js"
 import { BrokerUnsupportedOperationError } from "./errors/broker-unsupported-operation-error.js"
 import { assertBrokerContract } from "./broker-contract.js"
-import { BinanceWebSocketBroker } from "../infrastructure/binance/broker-websocket/broker.js"
-import { BitunixSpotBroker } from "../infrastructure/bitunix/broker.js"
+import { Broker } from "../index.js"
 
 const PRICE = "123.45000000"
 const FREE_BALANCE = "0.00000001"
@@ -76,34 +75,38 @@ function createBinanceApiClient({ calls }) {
 function createBinanceBroker() {
   const calls = []
   const subscriptionCalls = []
-  const broker = new BinanceWebSocketBroker({
+  const broker = new Broker({
+    provider: "binance",
     apiKey: "offline-contract-key",
     apiSecret: "offline-contract-secret",
     tradingMode: "testnet",
-  }, {
-    apiClientFactory: () => createBinanceApiClient({ calls }),
-    marketClientFactory: () => ({
-      async disconnect() {},
-      async subscribe(...args) {
-        subscriptionCalls.push({
-          action: "subscribe",
-          args,
-        })
-      },
-      async unsubscribe(...args) {
-        subscriptionCalls.push({
-          action: "unsubscribe",
-          args,
-        })
-      },
-    }),
     logger: {
       error() {},
       warn() {},
       info() {},
     },
-    setTimeoutFn: () => 1,
-    clearTimeoutFn: () => {},
+    providerOptions: {
+      dependencies: {
+        apiClientFactory: () => createBinanceApiClient({ calls }),
+        marketClientFactory: () => ({
+          async disconnect() {},
+          async subscribe(...args) {
+            subscriptionCalls.push({
+              action: "subscribe",
+              args,
+            })
+          },
+          async unsubscribe(...args) {
+            subscriptionCalls.push({
+              action: "unsubscribe",
+              args,
+            })
+          },
+        }),
+        setTimeoutFn: () => 1,
+        clearTimeoutFn: () => {},
+      },
+    },
   })
   return {
     broker,
@@ -114,26 +117,29 @@ function createBinanceBroker() {
 
 function createBitunixBroker() {
   const calls = []
-  const broker = new BitunixSpotBroker({
+  const broker = new Broker({
+    provider: "bitunix",
     apiKey: "offline-contract-key",
     apiSecret: "offline-contract-secret",
     tradingMode: "live",
-    dependencies: {
-      restClientFactory: () => ({
-        async request(input) {
-          calls.push(input)
-          if (input.queryParams?.symbol) {
-            return { data: PRICE }
-          }
-          return {
-            data: [{
-              coin: "BTC",
-              balance: FREE_BALANCE,
-              balanceLocked: LOCKED_BALANCE,
-            }],
-          }
-        },
-      }),
+    providerOptions: {
+      dependencies: {
+        restClientFactory: () => ({
+          async request(input) {
+            calls.push(input)
+            if (input.queryParams?.symbol) {
+              return { data: PRICE }
+            }
+            return {
+              data: [{
+                coin: "BTC",
+                balance: FREE_BALANCE,
+                balanceLocked: LOCKED_BALANCE,
+              }],
+            }
+          },
+        }),
+      },
     },
   })
   return {
