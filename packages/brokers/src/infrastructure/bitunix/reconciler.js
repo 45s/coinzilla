@@ -163,16 +163,21 @@ export class BitunixSpotReconciler {
       return this.inFlight
     }
     const { generation } = this
-    this.inFlightKey = requestKey
-    this.inFlight = this.#collect({
+    const inFlight = this.#collect({
       symbols: normalizedSymbols,
       trackedOrders: normalizedTrackedOrders,
       generation,
     }).finally(() => {
-      this.inFlight = null
-      this.inFlightKey = null
+      // An older generation may settle after stop() and a subsequent start().
+      // It must never clear the newer generation's coalescing state.
+      if (this.inFlight === inFlight) {
+        this.inFlight = null
+        this.inFlightKey = null
+      }
     })
-    return this.inFlight
+    this.inFlightKey = requestKey
+    this.inFlight = inFlight
+    return inFlight
   }
 
   #assertActive({ generation }) {
@@ -439,6 +444,10 @@ export class BitunixSpotReconciler {
     const { timer } = this
     this.timer = null
     this.lastFingerprint = null
+    // A dispatched request cannot be aborted, but it must not remain the
+    // active coalescing target for a later polling generation.
+    this.inFlight = null
+    this.inFlightKey = null
     if (timer !== null) {
       this.cancel(timer)
     }

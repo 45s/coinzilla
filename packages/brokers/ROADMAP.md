@@ -1448,3 +1448,12 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Updated the polling contract and production-readiness matrix to distinguish this recovery guarantee from authoritative event/fill reconciliation.
 - No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
 - Required CI must pass on the exact final PR head before this item is marked complete.
+
+
+## 2026-11-19 — Bitunix polling generation isolation (#1521)
+
+- [x] Detach a stopped generation's in-flight read from the active coalescing slot so an immediate restart can begin a fresh read even when the old network request has not settled.
+- [x] Guard promise cleanup by identity so a late old-generation `finally` cannot clear a newer generation's in-flight promise or scope key.
+- [x] Preserve the honest cancellation boundary: stop fences stale results and callbacks but does not claim to abort a request already dispatched.
+- [x] Add deterministic same-scope and different-scope stop/restart regressions, including late completion from the old generation.
+- [ ] Verify exact-head Brokers tests/coverage, strict lint and all required workspace CI before marking complete.
