@@ -396,10 +396,8 @@ export function adaptFuturesHistoryTpSlOrders(data) {
 }
 
 export function adaptFuturesCopyTradingAssets(data) {
-  const rows = Array.isArray(data) ? data : [data]
-  return adaptRows(rows, {
-    strings: ["marginCoin"],
-    decimals: ["available", "maxTransfer", "balance"],
+  return validateRecord(data, {
+    decimals: ["available", "maxTransfer"],
     path: "copyTrading/asset/query",
-  }, "copyTrading/asset/query")
+  })
 }
