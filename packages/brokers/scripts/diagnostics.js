@@ -240,3 +240,101 @@ export function createDiagnosticReport({ startedAt, finishedAt, runtime, results
     events,
   }
 }
+
+
+function getDiagnosticValueType({ value }) {
+  if (value === null) {
+    return "null"
+  }
+  if (Array.isArray(value)) {
+    return "array"
+  }
+  return typeof value
+}
+
+function normalizeExpectedTypes({ expected }) {
+  return Array.isArray(expected) ? expected : [expected]
+}
+
+/**
+ * Inspect only response shape and field types. Never return field values.
+ *
+ * @param {{
+ *   value: unknown,
+ *   expectedFields?: string[],
+ *   requiredFields?: string[],
+ *   expectedFieldTypes?: Record<string, string|string[]>,
+ * }} input
+ * @returns {{
+ *   valueType: string,
+ *   itemCount: number|null,
+ *   observedFields: string[],
+ *   unexpectedFields: string[],
+ *   missingRequiredFields: Array<{index: number, fields: string[]}>,
+ *   unexpectedFieldTypes: Array<{index: number, field: string, expected: string[], actual: string}>,
+ *   invalidRowIndexes: number[],
+ * }}
+ */
+export function inspectDiagnosticSchema({
+  value,
+  expectedFields = [],
+  requiredFields = [],
+  expectedFieldTypes = {},
+} = {}) {
+  const rows = Array.isArray(value) ? value : (
+    value !== null && typeof value === "object" ? [value] : []
+  )
+  const observedFields = new Set()
+  const missingRequiredFields = []
+  const unexpectedFieldTypes = []
+  const invalidRowIndexes = []
+
+  for (const [index, row] of rows.entries()) {
+    if (row === null || typeof row !== "object" || Array.isArray(row)) {
+      invalidRowIndexes.push(index)
+      continue
+    }
+
+    for (const field of Object.keys(row)) {
+      observedFields.add(field)
+    }
+
+    const missingFields = requiredFields.filter((field) => !Object.hasOwn(row, field))
+    if (missingFields.length > 0) {
+      missingRequiredFields.push({
+        index,
+        fields: missingFields.sort(),
+      })
+    }
+
+    for (const [field, expected] of Object.entries(expectedFieldTypes)) {
+      if (!Object.hasOwn(row, field)) {
+        continue
+      }
+      const expectedTypes = normalizeExpectedTypes({ expected }).slice().sort()
+      const actual = getDiagnosticValueType({ value: row[field] })
+      if (!expectedTypes.includes(actual)) {
+        unexpectedFieldTypes.push({
+          index,
+          field,
+          expected: expectedTypes,
+          actual,
+        })
+      }
+    }
+  }
+
+  const sortedObservedFields = [...observedFields].sort()
+  const allowedFields = new Set(expectedFields)
+  const unexpectedFields = sortedObservedFields.filter((field) => !allowedFields.has(field))
+
+  return {
+    valueType: getDiagnosticValueType({ value }),
+    itemCount: Array.isArray(value) ? value.length : null,
+    observedFields: sortedObservedFields,
+    unexpectedFields,
+    missingRequiredFields,
+    unexpectedFieldTypes,
+    invalidRowIndexes,
+  }
+}
