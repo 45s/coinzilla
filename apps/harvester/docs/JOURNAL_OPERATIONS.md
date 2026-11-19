@@ -181,6 +181,8 @@ Conservative tracks every configured market independently. A market is safe only
 
 The marker is process-local. It is not trusted after restart; rebuild safety from the Journal and authoritative exchange state. An execution report, REST reconciliation result, newly discovered owned order, changed SELL state or accounting discrepancy invalidates the affected marker. A market is re-audited before the shared shutdown barrier can pass.
 
+**Diagnostic limitation tracked by [#1479](https://github.com/45s/coinzilla/issues/1479):** the current participant derives `ORDER_OR_FILL_RECONCILIATION_INCOMPLETE` from the aggregate blocker list. A recovery-input failure or stale recovery-coverage finding can therefore add that blocker even when the owned-order reconciliation passes succeeded. Until the corrective change is merged, interpret the specific `RECOVERY_SELL_RECONCILIATION:*` or `RECOVERY_SELL_COVERAGE:*` finding as the actionable cause; the generic reconciliation marker alone does not prove that canonical order/fill reconciliation failed. This is a diagnostic defect, not permission to bypass any safety gate.
+
 ### Market-scoped REST snapshot parity
 
 `reconcileOwnedOrders({ symbol })` and `reconcileOwnedOrders({ symbols })` preserve the caller's original market scope through REST collection and the serialized snapshot-apply transition. The parity check compares current registry membership only for markets in that explicit scope. An owned order in another market does not invalidate a symbol-scoped snapshot. A reconciliation with no symbol filter remains global and compares the complete current registry.
