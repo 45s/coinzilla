@@ -820,26 +820,15 @@ function validatePortfolioWorkflowCallbacks({
   }
 }
 
-export const createPortfolioWorkflow = ({
+function createPortfolioWorkflowApi({
+  state,
   evaluateStrategy,
   logger,
-  initialPortfolio,
-  initialRecoveryLedgers,
   onCommissionAsset,
   onOperationalStateExecutionFill,
   onOperationalStateRecoveryCycleCompleted,
   onOperationalStateRecoveryCycleNotCompleted,
-  sharedState,
-} = {}) => {
-  validatePortfolioWorkflowCallbacks({
-    onOperationalStateExecutionFill,
-    onOperationalStateRecoveryCycleCompleted,
-  })
-  const state = createPortfolioWorkflowState({
-    sharedState,
-    initialPortfolio,
-    initialRecoveryLedgers,
-  })
+}) {
   const tracedEvaluateStrategy = (input = {}) => evaluateStrategyWithPortfolioState({
     state,
     evaluateStrategy,
@@ -854,34 +843,30 @@ export const createPortfolioWorkflow = ({
     onCommissionAsset,
     onOperationalStateExecutionFill,
   })
-  const completeRecoveryCycle = ({
-    marketId,
-    keepQuantity,
-    minProfit,
-    inventoryDisposition,
-    sellOrder,
-  } = {}) => enqueueAccountingTransition({
+  const completeRecoveryCycle = (input = {}) => enqueueAccountingTransition({
     state,
     transition: () => runCompleteRecoveryCycle({
+      ...input,
       state,
-      marketId,
-      keepQuantity,
-      minProfit,
-      inventoryDisposition,
-      sellOrder,
       logger,
       onOperationalStateRecoveryCycleCompleted,
       onOperationalStateRecoveryCycleNotCompleted,
     }),
   })
-
   return {
     updatePortfolio: updateTradingAccounting,
     updateTradingAccounting,
-    processMarketPrice: (input = {}) => processMarketPrice({ ...input, 
+    processMarketPrice: (input = {}) => processMarketPrice({ ...input,
       portfolio: state.portfolio }),
     getPortfolio: () => state.portfolio,
     getRecoveryLedger: ({ marketId } = {}) => state.recoveryLedgers.get(marketId),
     completeRecoveryCycle,
   }
+}
+
+export const createPortfolioWorkflow = (input = {}) => {
+  validatePortfolioWorkflowCallbacks(input)
+  const state = createPortfolioWorkflowState(input)
+  return createPortfolioWorkflowApi({ ...input,
+    state })
 }
