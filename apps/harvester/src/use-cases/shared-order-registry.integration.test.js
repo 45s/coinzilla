@@ -16,8 +16,14 @@ import { makeConservativeTradingEngine } from "./conservative-trading-engine.js"
 import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
 import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
+const baseAsset = new Asset({
+  id: "doge",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "usdt",
+  code: "USDT",
+})
 const market = new Market({
   venue: "binance",
   symbol: "DOGEUSDT",
@@ -30,8 +36,12 @@ const appConfig = {
     [StrategyId.COIN_GRABBER]: {
       enabled: true,
       settings: {
-        conservative: { enabled: true },
-        aggressive: { enabled: false },
+        conservative: {
+          enabled: true,
+        },
+        aggressive: {
+          enabled: false,
+        },
       },
       pairs: {
         DOGEUSDT: {
@@ -60,10 +70,38 @@ function createMarketMetadata() {
     tradingRules: new TradingRules({
       market,
       constraints: [
-        { type: "PRICE_INCREMENT", status: "SUPPORTED", value: new Money({ amount: "0.01", asset: quoteAsset }) },
-        { type: "QUANTITY_INCREMENT", status: "SUPPORTED", value: new Quantity({ amount: "0.1", asset: baseAsset }) },
-        { type: "MIN_QUANTITY", status: "SUPPORTED", value: new Quantity({ amount: "0.1", asset: baseAsset }) },
-        { type: "MIN_NOTIONAL", status: "SUPPORTED", value: new Money({ amount: "5", asset: quoteAsset }) },
+        {
+          type: "PRICE_INCREMENT",
+          status: "SUPPORTED",
+          value: new Money({
+            amount: "0.01",
+            asset: quoteAsset,
+          }),
+        },
+        {
+          type: "QUANTITY_INCREMENT",
+          status: "SUPPORTED",
+          value: new Quantity({
+            amount: "0.1",
+            asset: baseAsset,
+          }),
+        },
+        {
+          type: "MIN_QUANTITY",
+          status: "SUPPORTED",
+          value: new Quantity({
+            amount: "0.1",
+            asset: baseAsset,
+          }),
+        },
+        {
+          type: "MIN_NOTIONAL",
+          status: "SUPPORTED",
+          value: new Money({
+            amount: "5",
+            asset: quoteAsset,
+          }),
+        },
       ],
     }),
   }
@@ -101,8 +139,19 @@ function createEngine({ sharedAccountState }) {
     getRecoveryLedger: () => RecoveryLedger.empty({ market }),
     getMarketMetadata: () => marketMetadata,
     getAccountSnapshot: () => brokerState.accountSnapshot,
-    updateTradingAccounting: async () => ({ ok: true, data: { applied: false, duplicate: true } }),
-    completeRecoveryCycle: async () => ({ ok: true, data: { eligible: false } }),
+    updateTradingAccounting: async () => ({
+      ok: true,
+      data: {
+        applied: false,
+        duplicate: true,
+      },
+    }),
+    completeRecoveryCycle: async () => ({
+      ok: true,
+      data: {
+        eligible: false,
+      },
+    }),
     canTrade: () => true,
     onPause: async () => {},
     isStopping: () => false,
