@@ -180,6 +180,94 @@ async function switchBackToDevelop({ repositoryRoot, runGit }) {
   })
 }
 
+async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now }) {
+  const report = await runDiagnosticsSafely({
+    runDiagnostics,
+    env,
+    now,
+  })
+  validateDiagnosticReport({ report })
+  const sanitizedReport = await writeReports({
+    paths,
+    report,
+    env,
+  })
+  const publication = await publishReportBranch({
+    repositoryRoot,
+    runGit,
+    branch,
+    reportPath: publishedReportPath,
+    env,
+  })
+  return {
+    report: sanitizedReport,
+    ...publication,
+  }
+}
+
+function throwWorkflowErrors({ operationError, cleanupError }) {
+  if (operationError && cleanupError) {
+    throw new AggregateError(
+      [operationError, cleanupError],
+      "Bitunix diagnostics failed and the checkout could not be returned to develop",
+    )
+  }
+  if (operationError) {
+    throw operationError
+  }
+  if (cleanupError) {
+    throw cleanupError
+  }
+}
+
+async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now }) {
+  let branchCreated = false
+  let operationError = null
+  let cleanupError = null
+  let result
+
+  try {
+    await runGit({
+      repositoryRoot,
+      args: ["fetch", "origin", "develop"],
+    })
+    await runGit({
+      repositoryRoot,
+      args: ["switch", "--create", branch, "--track", "origin/develop"],
+    })
+    branchCreated = true
+    result = await runOnReportBranch({
+      repositoryRoot,
+      runGit,
+      branch,
+      paths,
+      publishedReportPath,
+      runDiagnostics,
+      env,
+      now,
+    })
+  } catch (error) {
+    operationError = error
+  } finally {
+    if (branchCreated) {
+      try {
+        await switchBackToDevelop({
+          repositoryRoot,
+          runGit,
+        })
+      } catch (error) {
+        cleanupError = error
+      }
+    }
+  }
+
+  throwWorkflowErrors({
+    operationError,
+    cleanupError,
+  })
+  return result
+}
+
 export async function publishBitunixDiagnostics({
   repositoryRoot,
   runDiagnostics,
@@ -205,81 +293,26 @@ export async function publishBitunixDiagnostics({
     repositoryRoot: root,
     path: paths.published,
   })
-  let branchCreated = false
-  let operationError = null
-  let cleanupError = null
-  let report
-  let commitSha = null
-  let pushError = null
-
-  try {
-    await runGit({
-      repositoryRoot: root,
-      args: ["fetch", "origin", "develop"],
-    })
-    await runGit({
-      repositoryRoot: root,
-      args: ["switch", "--create", branch, "--track", "origin/develop"],
-    })
-    branchCreated = true
-    report = await runDiagnosticsSafely({
-      runDiagnostics,
-      env,
-      now,
-    })
-    validateDiagnosticReport({ report })
-    report = await writeReports({
-      paths,
-      report,
-      env,
-    })
-    const publication = await publishReportBranch({
-      repositoryRoot: root,
-      runGit,
-      branch,
-      reportPath: publishedReportPath,
-      env,
-    })
-    commitSha = publication.commitSha
-    pushError = publication.pushError
-  } catch (error) {
-    operationError = error
-  } finally {
-    if (branchCreated) {
-      try {
-        await switchBackToDevelop({
-          repositoryRoot: root,
-          runGit,
-        })
-      } catch (error) {
-        cleanupError = error
-      }
-    }
-  }
-
-  if (operationError && cleanupError) {
-    throw new AggregateError(
-      [operationError, cleanupError],
-      "Bitunix diagnostics failed and the checkout could not be returned to develop",
-    )
-  }
-  if (operationError) {
-    throw operationError
-  }
-  if (cleanupError) {
-    throw cleanupError
-  }
-
+  const execution = await executeReportBranchWorkflow({
+    repositoryRoot: root,
+    runGit,
+    branch,
+    paths,
+    publishedReportPath,
+    runDiagnostics,
+    env,
+    now,
+  })
   return {
     branch,
-    commitSha,
-    report,
+    commitSha: execution.commitSha,
+    report: execution.report,
     reportPath: publishedReportPath,
     localReportPath: getRelativePath({
       repositoryRoot: root,
       path: paths.local,
     }),
-    pushError,
-    exitCode: report.summary.failed > 0 || pushError ? 1 : 0,
+    pushError: execution.pushError,
+    exitCode: execution.report.summary.failed > 0 || execution.pushError ? 1 : 0,
   }
 }
