@@ -141,7 +141,7 @@ export const ensure = Object.freeze({
   notNull(options) {
     const { value, name } = readValueOptions({ options })
     if (value === null || value === undefined) {
-      throw typeError({ name, expectation: "not null or undefined", value })
+      throw new TypeError(`${name} must not be null or undefined (received ${value === null ? "null" : "undefined"})`)
     }
     return value
   },
