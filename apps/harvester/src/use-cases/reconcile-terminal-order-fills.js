@@ -306,7 +306,12 @@ async function collectCanonicalTerminalFills({
   eventFill,
   symbol,
 } = {}) {
-  const restFills = await readTerminalFillHistory({ broker, order, pause, symbol })
+  const restFills = await readTerminalFillHistory({
+    broker,
+    order,
+    pause,
+    symbol,
+  })
   if (!Array.isArray(restFills)) {
     return { result: restFills }
   }
@@ -344,7 +349,12 @@ async function applyCanonicalTerminalFills({
   processExecutionFillTransition,
   onTerminalOrderReconciled,
 } = {}) {
-  const quantityResult = await verifyTerminalFillQuantities({ fills, order, pause, symbol })
+  const quantityResult = await verifyTerminalFillQuantities({
+    fills,
+    order,
+    pause,
+    symbol,
+  })
   if (quantityResult?.ok !== undefined && quantityResult.ok !== true) {
     return quantityResult
   }
