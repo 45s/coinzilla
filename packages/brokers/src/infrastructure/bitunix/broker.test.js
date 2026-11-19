@@ -2295,3 +2295,241 @@ test("Bitunix Spot broker propagates tax-filing REST failures without retrying",
   assert.equal(result.errors[0], transportFailure, "the original tax-filing transport error must remain available")
   assert.equal(calls.length, 1, "a failed tax-filing read must not be retried implicitly")
 })
+
+const WITHDRAW_PATH = "/api/spot/v1/withdraw"
+const CANCEL_WITHDRAW_PATH = "/api/spot/v1/withdraw/cancel"
+const FUNDS_TRANSFER_PATH = "/api/spot/v1/funds_transfer"
+const WITHDRAWAL_HISTORY_PATH = "/api/spot/v1/withdraw_transfer/page"
+
+test("Bitunix Spot withdrawal is disabled by default and never dispatches a funds mutation", async () => {
+  const { broker, calls } = createBroker({
+    allowLiveOrderMutations: true,
+  })
+
+  const result = await broker.withdraw({
+    coin: "USDT",
+    network: "Tron (TRC-20)",
+    address: "TExampleAddress",
+    amount: "10.00000000",
+  })
+
+  assert.equal(result.ok, false, "withdrawal must remain disabled unless the separate funds-mutation gate is enabled")
+  assert.equal(result.mutationOutcome, "NOT_SENT", "a locally blocked withdrawal must be classified as not sent")
+  assert.equal(calls.length, 0, "a disabled withdrawal must not contact the Bitunix API")
+})
+
+test("Bitunix Spot withdrawal sends the documented signed request and preserves the withdrawal ID", async () => {
+  const { broker, calls } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [WITHDRAW_PATH]: "1909879608889339906",
+    },
+  })
+
+  const result = await broker.withdraw({
+    coin: "USDT",
+    network: "Tron (TRC-20)",
+    address: "TExampleAddress",
+    amount: "10.000000000000000001",
+    memo: "deposit-tag",
+  })
+
+  assert.equal(result.ok, true, "a successful Bitunix withdrawal acknowledgement must return a successful result")
+  assert.equal(result.data.withdrawId, "1909879608889339906", "the exchange withdrawal ID must be preserved exactly")
+  assert.equal(result.mutationOutcome, "CONFIRMED", "a successful exchange acknowledgement must be classified as confirmed")
+  assert.deepEqual(calls, [{
+    method: "POST",
+    path: WITHDRAW_PATH,
+    options: {
+      body: {
+        coin: "USDT",
+        network: "Tron (TRC-20)",
+        address: "TExampleAddress",
+        amount: "10.000000000000000001",
+        memo: "deposit-tag",
+      },
+      authenticated: true,
+      stateChanging: true,
+    },
+  }], "withdrawal must use one signed state-changing request with exact amount text")
+})
+
+test("Bitunix Spot withdrawal rejects invalid amounts and destination data before dispatch", async () => {
+  const invalidRequests = [
+    { coin: "USDT", network: "TRC-20", address: "TAddress", amount: "0" },
+    { coin: "USDT", network: "TRC-20", address: "TAddress", amount: "-1" },
+    { coin: "USDT", network: "TRC-20", address: "TAddress", amount: 1.25 },
+    { coin: "USDT", network: "TRC-20", address: "TAddress", amount: "1e-8" },
+    { coin: "", network: "TRC-20", address: "TAddress", amount: "1" },
+    { coin: "USDT", network: "", address: "TAddress", amount: "1" },
+    { coin: "USDT", network: "TRC-20", address: "", amount: "1" },
+    { coin: "USDT", network: "TRC-20", address: "TAddress", amount: "1", memo: 7 },
+  ]
+  for (const request of invalidRequests) {
+    const { broker, calls } = createBroker({
+      allowLiveFundsMutations: true,
+    })
+    const result = await broker.withdraw(request)
+
+    assert.equal(result.ok, false, `invalid withdrawal request must fail locally: ${JSON.stringify(request)}`)
+    assert.equal(result.mutationOutcome, "NOT_SENT", "invalid withdrawal input must be classified as not sent")
+    assert.equal(calls.length, 0, "invalid withdrawal input must not reach the exchange")
+  }
+})
+
+test("Bitunix Spot withdrawal reports an unknown outcome after a dispatched transport failure without retrying", async () => {
+  const transportFailure = new Error("connection lost after withdrawal submission")
+  const { broker, calls } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [WITHDRAW_PATH]: transportFailure,
+    },
+  })
+
+  const result = await broker.withdraw({
+    coin: "USDT",
+    network: "Tron (TRC-20)",
+    address: "TExampleAddress",
+    amount: "10",
+  })
+
+  assert.equal(result.ok, false, "a lost withdrawal response must not be represented as a successful withdrawal")
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "a dispatched withdrawal with lost acknowledgement must be classified as unknown")
+  assert.equal(result.errors[0], transportFailure, "the original transport failure must remain available")
+  assert.equal(calls.length, 1, "an uncertain withdrawal must never be retried automatically")
+})
+
+test("Bitunix Spot withdrawal cancellation verifies the final cancelled history state", async () => {
+  const withdrawalId = "1909879608889339906"
+  const { broker, calls } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [CANCEL_WITHDRAW_PATH]: null,
+      [WITHDRAWAL_HISTORY_PATH]: [{
+        id: withdrawalId,
+        type: "withdraw",
+        coin: "USDT",
+        amount: "9.5",
+        status: "cancelled",
+        ctime: 1744185294000,
+      }],
+    },
+  })
+
+  const result = await broker.cancelWithdrawal({
+    withdrawId: withdrawalId,
+  })
+
+  assert.equal(result.ok, true, "a cancelled withdrawal confirmed by history must return success")
+  assert.equal(result.data.status, "cancelled", "the authoritative cancelled status must be returned")
+  assert.equal(result.mutationOutcome, "CONFIRMED", "a history-confirmed cancellation must be classified as confirmed")
+  assert.deepEqual(calls, [
+    {
+      method: "POST",
+      path: CANCEL_WITHDRAW_PATH,
+      options: {
+        body: { withdrawId: withdrawalId },
+        authenticated: true,
+        stateChanging: true,
+      },
+    },
+    {
+      method: "POST",
+      path: WITHDRAWAL_HISTORY_PATH,
+      options: {
+        body: { id: withdrawalId },
+        authenticated: true,
+        stateChanging: false,
+      },
+    },
+  ], "cancellation must be followed by one signed read-only history verification")
+})
+
+test("Bitunix Spot withdrawal cancellation remains unknown until history confirms cancellation", async () => {
+  const withdrawalId = "1909879608889339906"
+  const { broker } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [CANCEL_WITHDRAW_PATH]: null,
+      [WITHDRAWAL_HISTORY_PATH]: [{
+        id: withdrawalId,
+        type: "withdraw",
+        coin: "USDT",
+        amount: "9.5",
+        status: "pending",
+        ctime: 1744185294000,
+      }],
+    },
+  })
+
+  const result = await broker.cancelWithdrawal({
+    withdrawId: withdrawalId,
+  })
+
+  assert.equal(result.ok, false, "a non-cancelled withdrawal history row must not be reported as cancelled")
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "a successful cancel acknowledgement without cancelled final state must remain unknown")
+})
+
+test("Bitunix Spot funds transfer is separately gated and submits exact decimal amounts", async () => {
+  const { broker: disabledBroker, calls: disabledCalls } = createBroker({
+    allowLiveOrderMutations: true,
+  })
+  const disabled = await disabledBroker.transferFunds({
+    type: "spot_futures",
+    coin: "USDT",
+    amount: "100.01000000",
+  })
+
+  assert.equal(disabled.ok, false, "funds transfer must not inherit the order-mutation opt-in")
+  assert.equal(disabled.mutationOutcome, "NOT_SENT", "a disabled funds transfer must be classified as not sent")
+  assert.equal(disabledCalls.length, 0, "a disabled funds transfer must not contact the exchange")
+
+  const { broker, calls } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [FUNDS_TRANSFER_PATH]: "1909902180506972162",
+    },
+  })
+  const result = await broker.transferFunds({
+    type: "spot_futures",
+    coin: "USDT",
+    amount: "100.01000000",
+  })
+
+  assert.equal(result.ok, true, "a successful Bitunix funds-transfer acknowledgement must return success")
+  assert.equal(result.data.transferId, "1909902180506972162", "the transfer ID must be preserved exactly")
+  assert.equal(result.mutationOutcome, "CONFIRMED", "a successful transfer acknowledgement must be classified as confirmed")
+  assert.deepEqual(calls, [{
+    method: "POST",
+    path: FUNDS_TRANSFER_PATH,
+    options: {
+      body: {
+        type: "spot_futures",
+        coin: "USDT",
+        amount: "100.01000000",
+      },
+      authenticated: true,
+      stateChanging: true,
+    },
+  }], "funds transfer must use one signed state-changing request and preserve exact amount text")
+})
+
+test("Bitunix Spot funds transfer rejects invalid asset, direction, and quantity before dispatch", async () => {
+  const invalidRequests = [
+    { type: "unknown", coin: "USDT", amount: "1" },
+    { type: "spot_futures", coin: "", amount: "1" },
+    { type: "spot_futures", coin: "USDT", amount: "0" },
+    { type: "futures_spot", coin: "USDT", amount: "-1" },
+    { type: "futures_spot", coin: "USDT", amount: 1 },
+  ]
+  for (const request of invalidRequests) {
+    const { broker, calls } = createBroker({
+      allowLiveFundsMutations: true,
+    })
+    const result = await broker.transferFunds(request)
+
+    assert.equal(result.ok, false, `invalid funds-transfer request must fail locally: ${JSON.stringify(request)}`)
+    assert.equal(result.mutationOutcome, "NOT_SENT", "invalid funds-transfer input must be classified as not sent")
+    assert.equal(calls.length, 0, "invalid funds-transfer input must not reach the exchange")
+  }
+})
