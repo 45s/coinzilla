@@ -21,6 +21,10 @@ The strict ESLint findings in the already changed route and Telegram test fixtur
 
 The latest routing guard and regression tests ensure that a provider account's RS-only symbol is never passed into the CG Conservative pair map. Until the RS runtime is registered, a provider account with no CG-owned route fails startup explicitly rather than silently running an idle or misattributed strategy. This guard is temporary and must be replaced by actual RS strategy dispatch, not relaxed or removed without the dispatch implementation.
 
+### Shared transition queue integration regression
+
+The first full-workspace run after the queue wiring exposed one stale test fixture: `shared-order-registry.integration.test.js` manually constructed account state without the newly required queue. The fixture now uses the production `createAccountRuntimeRegistry` factory, so the integration test exercises the real account-state contract rather than duplicating it. No production behavior was changed to accommodate the test.
+
 ## RS-4 account transition queue — shared coordinator foundation
 
 - The provider-account runtime now owns one serialized `runTransition({ task })` queue.
