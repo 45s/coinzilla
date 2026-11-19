@@ -84,8 +84,6 @@ The public `contractVersion`, `provider`, `environment.selectedMode`, and `envir
 
 ## 2. Structural Broker contract
 
-The common Broker API is a **structural contract**, not a required base class. Implementations do not need to extend `CoreBroker`.
-
 The public exports `BROKER_METHODS`, `BROKER_COMPATIBILITY_METHODS`, `BROKER_MUTATION_OUTCOMES`, and `assertBrokerContract({ broker })` define and verify the contract. The conformance suite runs against both Binance and Bitunix.
 
 ### Common operations
@@ -160,12 +158,6 @@ HTTP/RPC conflicts and server failures, timeouts, connection loss after dispatch
 - A successful order lookup or mutation acknowledgement is not proof of complete fill reconciliation. Canonical fills and account/order snapshots remain separate facts.
 
 ## 5. Lifecycle and cleanup
-
-- `connect()` and `disconnect()` are idempotent lifecycle hooks, not a universal proof of current network health.
-- Binance owns the WebSocket API and public Streams resources; disconnect must close provider-owned connections and stop subscriptions/user-data lifecycle resources.
-- Bitunix Spot uses stateless signed/unsigned REST requests for its supported operations. Its lifecycle flag is local adapter state; it does not create a persistent exchange connection.
-- Every successful subscription exposes cleanup. Disconnect cleans up provider-owned subscriptions. Unsupported Bitunix subscriptions return an explicit failed result and create no resource.
-- `CoreBroker` remains a compatibility base for existing provider and Market Simulator consumers. The structural Broker contract does not require inheritance; replacing or removing `CoreBroker` requires a separate consumer-backed migration.
 
 ## 6. Safety and ownership boundaries
 

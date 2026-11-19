@@ -206,14 +206,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/utils
 
-  packages/market-simulator:
-    dependencies:
-      '@coinzilla/brokers':
-        specifier: workspace:*
-        version: link:../brokers
-      '@coinzilla/utils':
-        specifier: workspace:*
-        version: link:../utils
 
   packages/brokers:
     dependencies:

@@ -137,11 +137,6 @@
 
 ## DEFERRED — evidence or consumer required
 
-- **Market Simulator correctness and determinism:** intentionally lowest priority until a real application/workflow consumes it. Keep existing behavior/tests intact; do not schedule simulator work ahead of active Harvester or shared-package risks. [Owner roadmap](packages/market-simulator/ROADMAP.md).
-- **Event Bus advanced delivery features:** sequential delivery, retries, dead-letter handling and cooperative cancellation remain demand-driven; preserve the existing bounded delivery and shutdown contract. [Owner roadmap](packages/event-bus/ROADMAP.md).
-- **Additional notification transports/retries/outbox:** require a concrete consumer and explicit duplicate-delivery/storage ownership. The live Telegram smoke test remains operator-controlled. [Owner roadmap](packages/notifiers/ROADMAP.md).
-- **Additional database providers:** reassess only when measured deployment, concurrency, scale or query requirements exceed SQLite.
-
 ## Recently completed — do not reopen without new evidence
 
 - **Harvester process-lifetime operator control:** the engine/application/Telegram adapter foundation merged in [PR #1045](https://github.com/45s/coinzilla/pull/1045), process-lifetime scope/docs in [PR #1065](https://github.com/45s/coinzilla/pull/1065), and runtime/config/lifecycle integration in [PR #1067](https://github.com/45s/coinzilla/pull/1067). The Command Center's commands, read-only queries, inline controls, persistent keyboard, emergency BUY controls and correlated interaction diagnostics are complete in PRs #1079, #1081, #1086, #1088, #1194, #1267 and #1215. Operator pauses remain process-lifetime only. Tracking issues #1066, #1201 and #1214 are closed. Outbound notification delivery is tracked separately under #1103.
@@ -151,16 +146,6 @@
 - **Harvester per-process log layout and Journal filename compatibility:** PRs [#874](https://github.com/45s/coinzilla/pull/874) and [#880](https://github.com/45s/coinzilla/pull/880) merged. New process logs and Journal JSONL sessions share `logs/sessions/<UTC timestamp>-<runtime session ID>/`; append-only diagnostic histories live under `logs/cumulative/`, and Harvester process locks live outside logs under `~/.coinzilla/harvester/process-locks/`. Legacy flat Journal sessions remain readable; no Journal record schema or trading behavior changed. See [Harvester logging](apps/harvester/docs/LOGGING.md) and [Journal operations](apps/harvester/docs/JOURNAL_OPERATIONS.md).
 
 ## Roadmap ownership map
-
-- [Harvester](apps/harvester/ROADMAP.md) — trading safety, recovery, restart reconciliation and session statistics.
-- [Brokers](packages/brokers/ROADMAP.md) — native WebSocket protocol, user-data lifecycle and exchange acceptance.
-- [Entities](packages/entities/ROADMAP.md) — exact financial contracts and package-owned quality.
-- [Journal](packages/journal/ROADMAP.md) — record contract, persistence lifecycle and durability.
-- [Database](packages/db/ROADMAP.md) — embedded provider-neutral persistence infrastructure; first Harvester session-history consumer merged in PR #1369.
-- [Event Bus](packages/event-bus/ROADMAP.md) — bounded delivery and lifecycle guarantees.
-- [Notifiers](packages/notifiers/ROADMAP.md) — optional operational notifications.
-- [Utils](packages/utils/ROADMAP.md) — shared exact arithmetic, Logger and generic helpers.
-- [Market Simulator](packages/market-simulator/ROADMAP.md) — intentionally deferred unused package.
 
 ## Delivery and documentation synchronization rules
 

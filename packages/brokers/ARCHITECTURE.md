@@ -18,13 +18,9 @@ The package already contains valuable boundaries (RPC, Streams, transport, user-
 
 ## Public Broker contract and capability ownership
 
-The exchange-neutral public contract is owned by `@coinzilla/brokers` and lives in `src/broker/`. It is structural: provider facades must satisfy the method catalog, but they are not required to inherit from `CoreBroker`.
-
 The canonical `BrokerCapabilities` value is owned by `@coinzilla/entities` and is re-exported by Brokers for compatibility. Brokers provider adapters build evidence-backed declarations with the shared class, including provider/product/environment identity and method/guarantee/limitation/reason/condition metadata. The contract has one exchange-neutral vocabulary and three statuses: `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; omitted capabilities resolve to `UNKNOWN`. Supported provider declarations require method/guarantee evidence, while unsupported and unknown declarations require a reason. Environment selection and prerequisites live in metadata/conditions, not a fourth status.
 
 The shared value model does not own provider implementation facts or runtime readiness. Brokers owns the truthfulness of each provider declaration; Harvester owns its application port, provider adapter, registry, route validation, and workflow orchestration. See [BROKER_API.md](./BROKER_API.md) for the full public contract and provider matrix.
-
-`CoreBroker` remains a temporary public compatibility extension point because existing provider and Market Simulator consumers rely on it. The new structural contract does not make it mandatory. Any future change to its state, inherited methods, or exports requires consumer-backed characterization tests and an explicit migration.
 
 ## Exchange infrastructure boundaries
 
@@ -243,8 +239,6 @@ The Phase A source audit was read-only. The subsequent PR #693 final-head CI pas
 
 `@coinzilla/brokers` exposes the package-owned public Broker API. A consuming application may wrap that API in a narrower application port and adapter, but those contracts belong to the consuming application and must not be copied into this package.
 
-`CoreBroker` is directly extended by `HistoricalMarketBroker` in `packages/market-simulator`. Preserve its constructor, shared state/maps, and unsupported-method behavior unless a separate compatibility migration is explicitly planned. This is a concrete package consumer and a reason to characterize `CoreBroker` before changing it.
-
 ### Current gaps and boundary pressure
 
 - `infrastructure/binance/broker-websocket/broker.js` imports both `application/user-data-session.js` and the concrete `infrastructure/binance/user-data-client-adapter.js`, as well as RPC, Streams, transport, Binance request builders, and Binance response adapters. It is the public facade and current composition boundary. The existing roadmap justifies keeping simple RPC methods cohesive; extract only a demonstrated composition seam or a cohesive stateful/application responsibility.
@@ -258,19 +252,6 @@ The Phase A source audit was read-only. The subsequent PR #693 final-head CI pas
 
 ### Verified ownership map
 
-| Current path | Verified responsibility | Architectural status / likely destination |
-| --- | --- | --- |
-| `domain/user-data-recovery-policy.js` | Pure recovery-completion policy | Correctly placed in Domain |
-| `application/user-data-session.js` | Subscriber/session lifecycle and recovery coordination | Application coordinator; retain state ownership and test behavior |
-| `application/ports/user-data-client-port.js` | Exchange-neutral user-data client contract and runtime assertion | Correctly placed under Application; infrastructure implements it |
-| `infrastructure/binance/user-data-client-adapter.js` | Binance RPC/event adaptation to user-data port | Correctly placed in Infrastructure |
-| `infrastructure/binance/broker-websocket/broker.js` | Public broker facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only demonstrated composition or cohesive responsibilities |
-| `infrastructure/binance/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; physically grouped under `src/infrastructure/binance/` by PR #697 |
-| `infrastructure/binance/broker-websocket/helpers/adapters/*` | Binance request/response/event DTO mapping | Infrastructure adapters |
-| `infrastructure/binance/adapters/adapt-canonical-*.js` | Binance DTO to canonical Entities conversion | Infrastructure adapters; preserve exact decimal contracts |
-| `infrastructure/binance/adapters/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
-| `broker.core.js` | Shared base class and contract used by Market Simulator | Public compatibility extension point; preserve construction, state, and default methods |
-
 `application/user-data-session.js` is a cohesive stateful lifecycle coordinator with private state, injected client/port factories, and controlled timer dependencies. Its size triggers a modularity review under repository standards, but it must not be fragmented mechanically: first determine whether its state transitions can be separated without splitting ownership of the recovery state machine.
 
 The broker facade warrants review because its constructor and imports reveal both composition and exchange-operation responsibilities. The existing package roadmap records a concrete reason to keep simple RPC methods cohesive there. No code movement is authorized by this snapshot alone; identify a genuine dependency inversion or cohesive responsibility before extracting anything.
@@ -278,20 +259,6 @@ The broker facade warrants review because its constructor and imports reveal bot
 ## Existing code: initial responsibility map
 
 This map is a starting hypothesis based on the current tree. Validate each module and its import graph before moving it.
-
-| Existing module / area | Primary responsibility | Target owner |
-| --- | --- | --- |
-| `src/broker.core.js` | Shared broker base class and contract used by Market Simulator | Public compatibility extension point; preserve constructor/state/default-method behavior until consumers are migrated |
-| `src/infrastructure/binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC methods plus client/session wiring | Retain simple RPC operations; extract only a demonstrated composition seam or cohesive responsibility, never one wrapper per RPC |
-| `utils/rpc-client.js` | WebSocket API RPC mechanics | Infrastructure / Binance API |
-| `utils/streams-client.js`, `utils/streams-protocol.js` | Public stream protocol and subscription lifecycle | Infrastructure / Binance Streams |
-| `utils/transport.js`, `utils/runtime.js` | Native socket and runtime mechanics | Infrastructure / transport |
-| `application/user-data-session.js` | User-data subscriber/recovery lifecycle coordinator | Existing Application layer; injected port and domain policy already separate |
-| `utils/signature.js`, `helpers/history-query-params.js`, endpoint/config modules | Binance signing, request construction, protocol configuration | Infrastructure / Binance API |
-| `shared/adapt-canonical-*.js` | Binance DTO to canonical Entities adaptation | Infrastructure / Binance adapters; canonical output does not make Binance mapping domain logic |
-| `shared/adapt-*.js`, `helpers/adapters/*` | External response/event mapping | Infrastructure adapters unless proven protocol-neutral |
-| `helpers/user-data-event-deduplicator.js` | Binance user-data event identity/deduplication | Infrastructure adapter/session support until a protocol-neutral policy is demonstrated |
-| `test-helpers/*`, `*.test.js`, `tests/*` | Deterministic fixtures and behavioral specifications | Stay near the unit under test; shared fixtures remain test-only |
 
 Do not move a file based on its name alone. Inspect imports, callers, state ownership, side effects, and the meaning of each exported function. A single current file may contain responsibilities for more than one target layer.
 
@@ -422,7 +389,5 @@ The package currently has no `src/bootstrap/` directory. The Binance broker faca
 `src/architecture-boundaries.test.js` runs as part of the existing `node --test` package suite. Its dependency scanner is implemented in `src/test-helpers/architecture-boundaries.js` using Node built-ins only. It scans production JavaScript under Domain, Application, Infrastructure, optional Bootstrap, and the package entry point; test and opt-in integration files are excluded from the production graph. It recognizes static imports, re-exports, literal dynamic imports, and literal CommonJS `require()` calls. Violations report the importing file, original import specifier, resolved target, and violated rule.
 
 The architecture test has three cases: the real package source graph must be clean; synthetic forbidden Domain/Application-to-Infrastructure imports must be reported with actionable file/specifier details; and allowed inward dependencies plus Bootstrap composition must remain accepted.
-
-`src/index.contract.test.js` asserts the exact current root exports (`BinanceWebSocketBroker`, `BinanceWebSocketConfig`, `BitunixSpotBroker`, `BitunixSpotConfig`, `BitunixSpotWebSocketClient`, `BitunixWebSocketError`, `CoreBroker`, and `normalizeBinanceId`) and verifies public broker construction/method availability without opening a network connection. Existing broker operation, normalized DTO, and user-data port/event suites remain the behavior contract; see the package roadmap and `docs/brokers-websocket-contract.md` for the named suites.
 
 Verified source/test commit `be7e0a9ec3f5d09533cc6446cc5c4177e83b79d0` passed GitHub Actions Brokers unit tests (411/411), Brokers coverage (98.73% lines / 93.62% branches / 94.94% functions; thresholds 90/80/80), all workspace unit-test and coverage jobs, Harvester targeted regressions, JavaScript syntax, actionlint, and production dependency audit. The documentation-only follow-up was included in final PR head `f611175838f99cf1861ab7a0a9b0e9fee849723c`; all required checks passed on that exact head, and PR #704 merged into `develop` at `216f7c8397d83837c4e6d3202778469c2a4e85bf`. The read-only TESTNET job was skipped; no exchange integration was run. The earlier RED-stage failure was intentional.

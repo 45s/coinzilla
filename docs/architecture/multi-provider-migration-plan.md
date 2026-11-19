@@ -117,10 +117,6 @@ Relevant source:
 
 Harvester owns the application-facing `BrokerPort`, which is the correct dependency boundary. The current port is a broad application contract covering order, account, market metadata, market-data and user-data operations. The Binance adapter maps package-specific names such as `createOrder()` to the Harvester-facing `placeOrder()`.
 
-`CoreBroker` installs default methods that throw “method should be implemented” errors. Inherited method presence is therefore not proof of support. `assertBrokerPort()` validates method shape, not exchange capability or verified lifecycle support.
-
-**Recommendation:** keep the Harvester-owned port and existing public exports. Add explicit, provider-instance-specific capability metadata and validate routes against it. Do not make `CoreBroker` inheritance the capability system and do not introduce a generic plugin/DI framework.
-
 ### 3.4 Market-data subscriptions
 
 Relevant source:
@@ -256,13 +252,6 @@ Until those acceptance requirements are met, Bitunix must not be enabled for Har
 
 Do not infer capability from:
 
-- Inheritance from `CoreBroker`.
-- Method existence or a broad BrokerPort assertion.
-- A one-shot read being available.
-- A method returning a generic Result envelope.
-- A partial endpoint response or one-page history.
-- A passing offline mapping test without exchange-contract completeness.
-
 Capabilities must be explicit per provider instance and environment, with unsupported/unknown values failing closed. Distinguish read support from stream support, and basic order reads from canonical identity/reconciliation support.
 
 ## 6. Order provenance and persistence assessment
@@ -335,18 +324,6 @@ A routing configuration change must affect only new order intents. For an existi
 ## 7. Binance compatibility baseline
 
 The existing Binance implementation is the compatibility baseline. Keep these contracts unchanged during preparation and provider-registry introduction:
-
-- Existing `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY` configuration mapping until an explicit compatibility adapter is reviewed.
-- Explicit `TRADING_MODE=testnet|live`; `NODE_ENV` must never select Binance endpoints. ADR-0002 remains authoritative.
-- Existing Binance WebSocket API/Streams transport and exchange endpoint selection.
-- Order types, request parameters, response normalization and definite-vs-unknown error classification.
-- Exact decimal strings, market filters, quantity/price precision and commissions.
-- Client order IDs, exchange order IDs and `normalizeBinanceId` behavior.
-- Durable submission/cancellation intent barriers and unknown-outcome handling.
-- User-data session reconnect/recovery generations and state-changing-operation readiness gate.
-- Existing same-process order/fill reconciliation and shutdown sequencing.
-- Existing process-lock atomicity, owner verification, conservative stale-lock handling and retention on uncertain shutdown.
-- Existing public exports, `CoreBroker` compatibility and Harvester BrokerPort behavior.
 
 The first multi-provider deployments should continue to resolve the existing configuration into one Binance instance. No live/testnet environment or credential contract should change as a side effect of registry work.
 
@@ -543,18 +520,6 @@ Keep default tests offline, deterministic and credential-free. No test in this p
 Tests for Harvester must follow the repository human-readable test standard and include detailed assertion messages. Financial quantities remain exact decimal strings. Broker order integration, if separately authorized, is TESTNET-only; this audit and its documentation PR perform no exchange operation.
 
 ## 10. Risk register
-
-| Risk | Severity | Evidence / required control |
-| --- | --- | --- |
-| Existing order sent to wrong account after route change | P1 | Phase 3 provenance merged in PR #1416; preserve immutable provider/account pinning for all lifecycle calls |
-| Restart loses ownership/accounting context | P1 | #654 Step 8/9 incomplete; do not enable unattended restart or multi-provider execution |
-| Cross-account Position/Fill collision | P1 | Current IDs omit account; account-scope identities |
-| Duplicate order after uncertain timeout | P1 | Preserve UNKNOWN outcome; never retry on another provider |
-| Same-account concurrent writers during lock migration | P1 | Account-aware lock plus mixed-version transition barrier |
-| False capability from CoreBroker method presence | P1 | Explicit declarations verified against implementation and tests |
-| Partial startup/shutdown leaks provider resources | P2 | Registry-owned lifecycle with failure-injection tests |
-| Market data silently changes venue/source | P2 | Exact explicit route and source-aware freshness |
-| Binance behavior changes during refactor | P1 | Single-provider parity suite and legacy config adapter |
 
 Severity indicates architectural/operational risk, not a reproduced incident. The cross-provider order misrouting, cross-account identity collision and duplicate-order scenarios have not been reproduced end-to-end in a multi-provider runtime because that runtime does not exist yet.
 

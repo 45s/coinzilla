@@ -27,19 +27,7 @@ See the detailed [Binance WebSocket contract](../../docs/brokers-websocket-contr
 
 The `@coinzilla/brokers` entry point exports:
 
-- `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
-- `BinanceWebSocketConfig` — validated Binance broker configuration.
-- `BitunixSpotBroker` and `BitunixSpotConfig` — the partial Bitunix Spot REST broker implementation and its validated configuration.
-- `BitunixSpotWebSocketClient` and `BitunixWebSocketError` — a separately managed, authenticated Spot WebSocket request/response RPC client; it does not add subscriptions or order mutations.
-- `CoreBroker` — the existing compatibility base class; it is not a formal application-owned broker port.
-- `normalizeBinanceId` — exact non-negative Binance identifier normalization, exported for package consumers that need the same identifier contract.
-- `BrokerCapabilities`, `BROKER_CAPABILITY_TYPES`, `BROKER_CAPABILITY_STATUSES` — the canonical immutable provider capability declaration contract.
-- `BrokerUnsupportedOperationError` — stable typed error for explicitly unsupported operations.
-- `BROKER_METHODS`, `BROKER_COMPATIBILITY_METHODS`, `BROKER_MUTATION_OUTCOMES`, `assertBrokerContract`, `getBrokerMutationOutcome` — structural API, compatibility, and mutation-outcome contract helpers.
-
 ## Exchange-neutral Broker API
-
-Both `BinanceWebSocketBroker` and `BitunixSpotBroker` expose the same structural method surface. The public contract does not require `CoreBroker` inheritance; `CoreBroker` remains a compatibility base for existing consumers, including Market Simulator.
 
 Both providers expose an immutable `BrokerCapabilities` declaration. The canonical three statuses are `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; environment selection and runtime readiness are metadata/conditions, never a fourth status. Supported declarations require method and guarantee evidence; unsupported/unknown declarations require reasons.
 
@@ -54,9 +42,6 @@ See [BROKER_API.md](./BROKER_API.md) for the full method-by-method Binance/Bitun
 The package exposes exchange-specific broker implementations; it does not select which exchange a strategy or market should use. A consuming application owns its application port and composition root, constructs the named provider instances it needs, and owns any strategy/market execution routing and independent market-data routing.
 
 Multiple instances of one provider type may represent different accounts or supported environments. Keep provider-specific options and endpoint selection inside the matching implementation. Binance requires explicit `TRADING_MODE=testnet|live`; this rule does not define another exchange's environment support.
-
-Application-specific provider selection, registries, account isolation, and execution/market-data routing belong to each consuming application and are outside this package. The Binance capability-declaration slice is delivered by [PR #1366](https://github.com/45s/coinzilla/pull/1366). The Bitunix Spot class does not yet implement the complete order, fill, and account lifecycle; do not infer order capability from the public class or `CoreBroker` methods.
-Keep exchange-specific operations behind their provider adapters. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
 
 ## Bitunix Spot integration
 

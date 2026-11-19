@@ -2,19 +2,6 @@
 
 Coinzilla is a monorepo with independently maintained application and package domains. Ownership is defined by repository paths and local instructions, not by permanent Git branches.
 
-| Domain | Owned path | Responsibility |
-| --- | --- | --- |
-| Market Simulator | `packages/market-simulator/` | Offline historical-candle simulation and simulated order matching; candle-matching/accounting rules are deterministic, while lifecycle timestamps use wall-clock time |
-| Harvester | `apps/harvester/` | Portfolio/position workflows, strategies, use cases and application composition |
-| Entities | `packages/entities/` | Exchange-neutral domain entities, identity, exact value contracts, lifecycle/value semantics |
-| Brokers | `packages/brokers/` | Broker contracts/adapters, exchange API integration, normalization, market/account/order I/O |
-| Indicators | `packages/indicators/` | Exchange-neutral technical-indicator calculations over normalized caller-supplied market data |
-| Utils | `packages/utils/` | Domain-neutral reusable helpers, logging and generic utilities |
-| Event bus | `packages/event-bus/` | Event publication, subscription, delivery and event-bus reliability |
-| Journal | `packages/journal/` | Journal records, persistence boundaries and journal-specific behavior |
-| Database Infrastructure | `packages/db/` | Provider-neutral record CRUD/query contracts, database lifecycle/transactions, and concrete database infrastructure adapters |
-| Notifiers | `packages/notifiers/` | Telegram notification formatting, delivery and lifecycle safety |
-
 ## Indicators domain
 
 `@coinzilla/indicators` owns pure, deterministic, exchange-neutral technical-indicator calculations over normalized caller-supplied market data. It owns its public API, tests, documentation and roadmap. The first consumer is Harvester high-volatility protection (#1016); adaptive price-step planning (#1013) is a later consumer. Harvester retains strategy/risk policy; Brokers retains exchange-specific candle retrieval and normalization. See the [Indicators README](../../packages/indicators/README.md) and [Indicators roadmap](../../packages/indicators/ROADMAP.md).
