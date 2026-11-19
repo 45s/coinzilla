@@ -18,7 +18,11 @@ Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
 Tracking: [issue #1497](https://github.com/45s/coinzilla/issues/1497), implementation [PR #1498](https://github.com/45s/coinzilla/pull/1498).
 
-**Status: In progress.** Add a public `new Broker({ provider, apiKey, apiSecret, tradingMode, providerOptions })` constructor that selects the existing Binance or Bitunix Spot adapter, validates the selected structural contract, and preserves direct concrete constructors. Provider-specific options are namespaced; environment selection remains explicit (Binance testnet/live, Bitunix Spot live only). This is a public composition convenience, not application routing. Bitunix Futures remain out of scope and issue #1185 remains the source of truth for unresolved Spot lifecycle/fill/mutation safety blockers.
+**Status: In progress.** Add a public `new Broker({ provider, apiKey, apiSecret, tradingMode, providerOptions })` constructor that selects the existing Binance or Bitunix Spot adapter, validates the selected structural contract, and preserves direct concrete constructors. Provider-specific options are namespaced; environment selection remains explicit (Binance testnet/live, Bitunix Spot live only). The shared offline conformance suite now constructs both providers through this public API, including provider dependency injection.
+
+The Bitunix read-only diagnostic workflow also exercises the public Broker API for market catalog, price, balances and open orders. Direct REST/WebSocket clients remain only for transport-specific endpoint/RPC diagnostics. Reports include sanitized response-schema observations (unknown fields, missing required fields and unexpected types); unknown additions are recorded without rejecting valid normalized responses. The public Spot latest-price call explicitly disables authentication, as required by the official public endpoint.
+
+This is a public composition convenience, not application routing. Bitunix Futures remain out of scope and issue #1185 remains the source of truth for unresolved Spot lifecycle/fill/mutation safety blockers.
 
 ### Ownership boundary
 
