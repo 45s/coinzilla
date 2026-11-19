@@ -89,7 +89,8 @@ export function createTaxFilingQuery({ input }) {
     startTime: input.startTime,
     endTime: input.endTime,
   }
-  addTaxDataTypeCodes({ input, body })
+  addTaxDataTypeCodes({ input,
+    body })
   body.page = page
   body.pageSize = pageSize
 
