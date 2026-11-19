@@ -215,6 +215,30 @@ test("start publishes the first observation, reports status and stops scheduling
   assert.equal(requestCount, 3)
 })
 
+test("stop remains idempotent when scheduler cancellation throws", async () => {
+  const { broker } = createBroker()
+  let cancellationCalls = 0
+  const reconciler = new BitunixSpotReconciler({
+    broker,
+    schedule: () => 1,
+    cancel: () => {
+      cancellationCalls += 1
+      throw new Error("timer cancellation failed")
+    },
+  })
+  const session = reconciler.start({
+    symbols: ["BTCUSDT"],
+    intervalMs: 500,
+    onSnapshot: () => {},
+  })
+
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.throws(() => session.stop(), /timer cancellation failed/, "the first stop must surface a scheduler cleanup failure")
+  assert.equal(session.getStatus().running, false, "a failed timer cancellation must not restore the stopped polling session")
+  assert.doesNotThrow(() => session.stop(), "repeating stop after cleanup failure must remain safe and idempotent")
+  assert.equal(cancellationCalls, 1, "the failed timer handle must not be cancelled repeatedly after local cleanup")
+})
+
 test("start retries a snapshot after callback failure and backs off the failed cycle", async () => {
   const { broker } = createBroker()
   const scheduled = []
@@ -252,6 +276,64 @@ test("start retries a snapshot after callback failure and backs off the failed c
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(snapshots, 2)
   assert.equal(scheduled[1].delay, 500)
+  session.stop()
+})
+
+
+test("start republishes a full snapshot after a failed polling cycle", async () => {
+  const { broker } = createBroker()
+  const originalGetOrderHistory = broker.getOrderHistory
+  let historyCalls = 0
+  broker.getOrderHistory = async (input) => {
+    historyCalls += 1
+    if (historyCalls === 2) {
+      return {
+        ok: false,
+        errors: [new Error("temporary read failure")],
+      }
+    }
+    return originalGetOrderHistory(input)
+  }
+  const scheduled = []
+  const snapshots = []
+  let errors = 0
+  const reconciler = new BitunixSpotReconciler({
+    broker,
+    schedule: ({ callback, delay }) => {
+      scheduled.push({
+        callback,
+        delay,
+      })
+      return scheduled.length
+    },
+    cancel: () => undefined,
+  })
+  const session = reconciler.start({
+    symbols: ["BTCUSDT"],
+    intervalMs: 500,
+    onSnapshot: (snapshot) => {
+      snapshots.push(snapshot)
+    },
+    onError: () => {
+      errors += 1
+    },
+  })
+
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(snapshots.length, 1, "the first successful poll must publish one complete observation")
+  assert.equal(scheduled.length, 1, "the first completed poll must schedule exactly one next cycle")
+  scheduled[0].callback()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(errors, 1, "a failed read cycle must report its failure to the error callback")
+  assert.equal(snapshots.length, 1, "a failed read cycle must not publish a partial observation")
+  assert.equal(scheduled[1].delay, 1000, "the first failed cycle must apply the configured exponential backoff")
+  scheduled[1].callback()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(snapshots.length, 2, "recovery must republish even an unchanged full observation")
+  assert.deepEqual(snapshots[1].balances, snapshots[0].balances, "recovery must contain unchanged balance data when exchange state is unchanged")
+  assert.deepEqual(snapshots[1].symbols, snapshots[0].symbols, "recovery must contain unchanged symbol data when exchange state is unchanged")
+  assert.equal(scheduled[2].delay, 500, "a successful recovery cycle must reset the polling delay to its base interval")
   session.stop()
 })
 
