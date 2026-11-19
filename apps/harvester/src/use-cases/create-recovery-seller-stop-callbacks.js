@@ -1,26 +1,33 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 
+function hasRecoverySellerSellOwnership({ order, ownership } = {}) {
+  return order?.side === "SELL" &&
+    ownership?.strategyId === StrategyId.RECOVERY_SELLER &&
+    typeof ownership.cycleId === "string" &&
+    typeof order.market?.id === "string" &&
+    typeof order.clientOrderId === "string"
+}
+
+function matchesReservedSellIdentity({ cycleState, ownership, order } = {}) {
+  const reservedIdentity = cycleState?.sellOrderIdentity
+  return cycleState?.cycleId === ownership.cycleId &&
+    reservedIdentity?.clientOrderId === order.clientOrderId &&
+    (reservedIdentity.brokerOrderId === undefined || order.brokerOrderId === undefined ||
+      reservedIdentity.brokerOrderId === order.brokerOrderId)
+}
+
 function markSellCycleUnknown({ cycleCoordinator, input } = {}) {
   const { order, ownership } = input ?? {}
-  if (!cycleCoordinator ||
-      order?.side !== "SELL" ||
-      ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
-      typeof ownership.cycleId !== "string" ||
-      typeof order.market?.id !== "string") {
+  if (!cycleCoordinator || !hasRecoverySellerSellOwnership({ order, ownership })) {
     return
   }
-  const cycleState = cycleCoordinator.getCycleState({
-    marketId: order.market.id,
-  })
-  const reservedIdentity = cycleState?.sellOrderIdentity
-  if (cycleState?.cycleId !== ownership.cycleId ||
-      reservedIdentity?.clientOrderId !== order.clientOrderId ||
-      (reservedIdentity.brokerOrderId !== undefined && order.brokerOrderId !== undefined &&
-        reservedIdentity.brokerOrderId !== order.brokerOrderId)) {
+  const marketId = order.market.id
+  const cycleState = cycleCoordinator.getCycleState({ marketId })
+  if (!matchesReservedSellIdentity({ cycleState, ownership, order })) {
     return
   }
   cycleCoordinator.markSellUnknown({
-    marketId: order.market.id,
+    marketId,
     cycleId: ownership.cycleId,
   })
 }
