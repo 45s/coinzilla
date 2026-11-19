@@ -86,7 +86,7 @@ test("publishes complete canonical facts for immediately filled acknowledgements
   })
 
   assert.equal(result.ok, true, "A canonical filled acknowledgement must map successfully.")
-  assert.equal(result.data.executedQuantity, "1.0000", "The submitted event must include executed quantity for immediate fills.")
+  assert.equal(result.data.executedQuantity, "1.0000", JSON.stringify(result))
   assert.equal(result.data.remainingQuantity, "0.0000", "The submitted event must include remaining quantity.")
   assert.deepEqual(result.data.market, order.market.value, "Order events must carry canonical market and asset identity.")
   assert.deepEqual(result.data.ownership, {
@@ -109,7 +109,7 @@ test("publishes order type, market, ownership, and cumulative quantities for app
   assert.equal(result.ok, true, "A canonical partial-fill update must map successfully.")
   assert.equal(result.data.type, "LIMIT_MAKER", "Order update evidence must include the canonical order type.")
   assert.deepEqual(result.data.market, order.market.value, "Order update evidence must include full market identity.")
-  assert.equal(result.data.originalQuantity, "1.0000", "Order update evidence must include original quantity.")
+  assert.equal(result.data.originalQuantity, "1.0000", JSON.stringify(result))
   assert.equal(result.data.executedQuantity, "0.2500", "Order update evidence must preserve cumulative execution.")
   assert.equal(result.data.remainingQuantity, "0.7500", "Order update evidence must preserve remaining quantity.")
   assert.deepEqual(result.data.ownership, {
@@ -144,7 +144,7 @@ test("publishes cumulative execution for partially filled cancellation outcomes"
     outcome: "UNCONFIRMED",
   })
 
-  assert.equal(canceled.data.executedQuantity, "0.2500", "Confirmed cancellation must retain cumulative partial execution.")
+  assert.equal(canceled.data.executedQuantity, "0.2500", JSON.stringify(canceled))
   assert.equal(canceled.data.remainingQuantity, "0.7500", "Confirmed cancellation must retain remaining quantity.")
   assert.equal(unknown.data.executedQuantity, "0.2500", "Unconfirmed cancellation must retain cumulative partial execution.")
   assert.equal(unknown.data.status, "UNKNOWN", "Unconfirmed cancellation must retain the canonical order status.")
