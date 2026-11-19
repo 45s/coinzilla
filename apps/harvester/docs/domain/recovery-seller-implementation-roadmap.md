@@ -457,7 +457,13 @@ When at least one RS execution route is configured, bootstrap now requires an ex
 
 This closes only STOP workflow construction/restoration. The production RS evaluator and submitter still need to call the latch on unexpected/ambiguous outcomes, the strategy dispatcher must block new RS trading while STOPPED while allowing reconciliation, and the authorized operator adapter must perform the existing evidence-gated durable reset. It does not enable restart restoration: prior process history still follows the existing fail-closed process-restart policy.
 
-
 ### Persisted RS ownership validation correction — 2026-11-19
 
 The exact-head package test exposed that an RS order intent with strategy and Position identity but no cycle identity reached the lower-level string validator and produced the wrong failure contract. Persisted RS BUY/SELL ownership now requires all three immutable identifiers (strategy, Position and cycle) before validating their values; the existing Conservative recovery ownership contract remains unchanged. The existing malformed partial-ownership regression is the RED evidence for this correction. This is a validation fix only and does not complete or enable the RS runtime.
+
+
+## RS-4 durable SELL intent-before-reservation
+
+The RS order submitter now commits the exact durable `ORDER_SUBMISSION_INTENT` before reserving the sole SELL for a cycle. It then registers the pending order and enters the shared broker executor. The executor reuses the same committed intent write, avoiding a duplicate operational fact. If the intent write fails, cycle reservation and broker submission do not occur; the submitter latches STOP.
+
+This is an offline-tested submitter capability, not production evaluator composition. Terminal mixed-SELL reconciliation, account-wide RS/CG budget integration, operator reset, and deterministic restart restoration remain outstanding. RS stays disabled and non-executable.

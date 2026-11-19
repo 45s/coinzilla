@@ -32,9 +32,35 @@ function createUnresolvedSubmissionCallback({ onUnresolvedSubmission } = {}) {
   }
 }
 
+function createDurableSubmissionIntentWriter({ onDurableSubmissionIntent } = {}) {
+  const writesByOrder = new WeakMap()
+  return async (input = {}) => {
+    if (!input.order || typeof input.order !== "object") {
+      throw new TypeError("Durable submission intent requires a canonical order")
+    }
+    const existing = writesByOrder.get(input.order)
+    if (existing) {
+      return existing
+    }
+    const write = Promise.resolve().then(() => onDurableSubmissionIntent(input))
+    writesByOrder.set(input.order, write)
+    try {
+      const result = await write
+      if (result?.ok !== true || result.data?.durable !== true) {
+        writesByOrder.delete(input.order)
+      }
+      return result
+    } catch (error) {
+      writesByOrder.delete(input.order)
+      throw error
+    }
+  }
+}
+
 function createPendingOrderCallback({
   executionCallbacks,
   onSellReserved,
+  persistDurableSubmissionIntent,
   latchUnresolvedSubmission,
 } = {}) {
   return async (input = {}) => {
@@ -42,6 +68,11 @@ function createPendingOrderCallback({
       return executionCallbacks.onPendingOrder(input)
     }
     try {
+      const intent = await persistDurableSubmissionIntent(input)
+      if (intent?.ok !== true || intent.data?.durable !== true) {
+        throw intent?.errors?.[0] ??
+          new Error("Recovery Seller SELL intent was not durably acknowledged before cycle reservation")
+      }
       const reserved = await onSellReserved({
         order: input.order,
         ownership: input.ownership,
@@ -169,7 +200,7 @@ function validateSubmitterOptions({
     throw new TypeError("recoverySellerAccountingWorkflow must expose getExecutionCallbacks")
   }
   for (const [name, callback] of Object.entries({
-    onDurableSubmissionIntent,
+    onDurableSubmissionIntent: persistDurableSubmissionIntent,
     onDurableSubmissionOutcome,
     onUnresolvedSubmission,
     canSubmit,
@@ -194,12 +225,16 @@ function createRecoverySellerExecutor({
   const latchUnresolvedSubmission = createUnresolvedSubmissionCallback({
     onUnresolvedSubmission,
   })
+  const persistDurableSubmissionIntent = createDurableSubmissionIntentWriter({
+    onDurableSubmissionIntent,
+  })
   return makeExecuteStrategyDecision({
     broker,
     ...executionCallbacks,
     onPendingOrder: createPendingOrderCallback({
       executionCallbacks,
       onSellReserved,
+      persistDurableSubmissionIntent,
       latchUnresolvedSubmission,
     }),
     onSubmissionDeferred: createSubmissionDeferredCallback({
