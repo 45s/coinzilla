@@ -206,7 +206,7 @@ test("diagnostics use code defaults without diagnostic environment variables", a
   assert.equal(restKlineRequest.queryParams.interval, "1", "REST K-line requests must use the documented numeric interval")
   const websocketKlineArgs = websocketCalls.find((call) => call?.method === "market.kline").args
   assert.equal(websocketKlineArgs.symbol, "BTC", "WebSocket K-line requests must use the documented base-coin symbol")
-  assert.equal(websocketKlineArgs.interval, "1min", "WebSocket K-line requests must use the documented interval format")
+  assert.equal(websocketKlineArgs.interval, "1", "WebSocket K-line requests must use the Spot RPC interval format")
   assert.equal(report.results.find((entry) => entry.operation === "REST public market catalog").response.type, "array", "Public response bodies must remain omitted by the constant default")
 })
 
