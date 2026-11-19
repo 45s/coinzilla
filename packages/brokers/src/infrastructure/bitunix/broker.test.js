@@ -250,6 +250,72 @@ test("Bitunix Spot MARKET placement submits base quantity and zero price on sing
   })
 })
 
+test("Bitunix Spot numeric scientific-notation quantities are expanded before exact REST serialization", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/order/place_order": {
+        orderId: "126",
+        symbol: "BTCUSDT",
+        side: 2,
+        type: 2,
+        volume: "0.00000001",
+        price: "0",
+        placeStatus: "1",
+      },
+      "/api/spot/v1/order/detail": {
+        orderId: "126",
+        symbol: "BTCUSDT",
+        side: "2",
+        type: "2",
+        status: "1",
+        volume: "0.00000001",
+        dealVolume: "0",
+        price: "0",
+        ctime: "2026-11-15T12:00:00Z",
+        utime: "2026-11-15T12:00:00Z",
+      },
+    },
+  })
+
+  const result = await broker.createOrder({
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "MARKET",
+    quantity: 1e-8,
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(calls[0].options.body.volume, "0.00000001")
+})
+
+test("Bitunix Spot placement reports exchange rejection as REJECTED", async () => {
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/order/place_order": {
+        orderId: "127",
+        symbol: "BTCUSDT",
+        side: 2,
+        type: 1,
+        volume: "100",
+        price: "100",
+        placeStatus: "0",
+      },
+    },
+  })
+
+  const result = await broker.createOrder({
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    quantity: "1",
+    price: "100",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "REJECTED")
+  assert.match(result.errors[0].message, /rejected the order placement/i)
+})
+
 test("Bitunix Spot placement rejects unsupported identity and order fields before dispatch", async () => {
   const { broker, calls } = createBroker()
 
