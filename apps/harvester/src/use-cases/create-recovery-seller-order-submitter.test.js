@@ -357,11 +357,13 @@ test("durably reserves the sole RS SELL cycle before registry registration and b
       })?.status === "PENDING"
     },
   })
-  const { submit } = createSubmitter({
+  const { submit, durableFacts } = createSubmitter({
     sharedState,
     broker,
     unresolved,
     onSellReserved: async ({ order, ownership }) => {
+      assert.equal(durableFacts[0]?.type, "INTENT", "The canonical SELL intent must be durably committed before reserving the cycle.")
+      assert.equal(durableFacts[0]?.fact.ownership?.cycleId, ownership.cycleId, "The durable intent must carry the exact cycle identity before reservation.")
       reservedOrder = {
         order,
         ownership,
