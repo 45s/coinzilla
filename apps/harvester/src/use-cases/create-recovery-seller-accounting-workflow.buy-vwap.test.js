@@ -124,25 +124,33 @@ function createWorkflow() {
   }
 }
 
-test("exposes exact per-cycle BUY execution VWAP and ignores duplicate fills", async () => {
+function createCycleFills({ orders }) {
+  return [
+    createBuyFill({
+      order: orders[0],
+      tradeId: "trade-1",
+      quantity: "2",
+      quoteQuantity: "4.2",
+    }),
+    createBuyFill({
+      order: orders[1],
+      tradeId: "trade-2",
+      quantity: "3",
+      quoteQuantity: "6.6",
+    }),
+    createBuyFill({
+      order: orders[2],
+      tradeId: "trade-3",
+      quantity: "10",
+      quoteQuantity: "25",
+    }),
+  ]
+}
+
+test("exposes exact per-cycle BUY execution VWAP", async () => {
   const { workflow, orders } = createWorkflow()
-  const firstFill = createBuyFill({
-    order: orders[0],
-    tradeId: "trade-1",
-    quantity: "2",
-    quoteQuantity: "4.2",
-  })
-  const secondFill = createBuyFill({
-    order: orders[1],
-    tradeId: "trade-2",
-    quantity: "3",
-    quoteQuantity: "6.6",
-  })
-  const otherCycleFill = createBuyFill({
-    order: orders[2],
-    tradeId: "trade-3",
-    quantity: "10",
-    quoteQuantity: "25",
+  const fills = createCycleFills({
+    orders,
   })
 
   assert.equal(
@@ -152,15 +160,12 @@ test("exposes exact per-cycle BUY execution VWAP and ignores duplicate fills", a
     undefined,
     "A cycle without accepted BUY fills must not invent a reference price.",
   )
-  assert.equal((await workflow.applyBuyFill({
-    fill: firstFill,
-  })).data.applied, true)
-  assert.equal((await workflow.applyBuyFill({
-    fill: secondFill,
-  })).data.applied, true)
-  assert.equal((await workflow.applyBuyFill({
-    fill: otherCycleFill,
-  })).data.applied, true)
+  for (const fill of fills) {
+    const result = await workflow.applyBuyFill({
+      fill,
+    })
+    assert.equal(result.data.applied, true)
+  }
   assert.equal(
     workflow.getBuyExecutionVwap({
       cycleId: "cycle-1",
@@ -175,17 +180,31 @@ test("exposes exact per-cycle BUY execution VWAP and ignores duplicate fills", a
     "2.5",
     "BUY execution prices must remain isolated by RS cycle.",
   )
+})
+
+test("does not change the cycle VWAP when a canonical BUY fill is replayed", async () => {
+  const { workflow, orders } = createWorkflow()
+  const fill = createCycleFills({
+    orders,
+  })[0]
+  await workflow.applyBuyFill({
+    fill,
+  })
+  const before = workflow.getBuyExecutionVwap({
+    cycleId: "cycle-1",
+  })
 
   const duplicate = await workflow.applyBuyFill({
-    fill: firstFill,
+    fill,
   })
+
   assert.equal(duplicate.ok, true)
   assert.equal(duplicate.data.duplicate, true)
   assert.equal(
     workflow.getBuyExecutionVwap({
       cycleId: "cycle-1",
     }),
-    "2.16",
+    before,
     "Replayed canonical fills must not change the cycle VWAP.",
   )
 })
