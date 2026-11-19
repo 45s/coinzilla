@@ -40,6 +40,18 @@ Typical candidates:
 
 A capability does not become generic merely because it is a pure function or appears in two files. Reuse must not make the package depend on application concepts or force unrelated domains into one policy.
 
+## Generic validation policy
+
+Use the public `ensure` API from `@coinzilla/utils` for new generic input/type/range/collection validation.
+
+- Search for an existing `ensure` helper before implementing another generic check.
+- Prefer direct assertions (`ensure.integerInRange`, `ensure.nonEmptyString`, etc.) for one constraint; use `ensure.chain({ value, name })` when composing multiple checks or transformations makes the code clearer.
+- Every call uses one options object. Do not create positional validation APIs, rule DSLs, implicit coercion, or another generic assertion namespace.
+- Validation errors are field-specific native `TypeError` or `RangeError`; preserve the utility's contract rather than catching and silently ignoring invalid input.
+- Use explicit `map`/`filter` only for intentional transformations. Validate elements before filtering so malformed input is not silently discarded.
+- Keep business, exchange, entity, strategy and workflow invariants in their owning domains. Do not replace boolean predicates with throwing assertions if the semantics differ.
+- The old `Validator`/`VR` API is retained for compatibility but deprecated; do not add new callers.
+
 ## What must remain in its owning domain
 
 Keep business and integration rules with the domain that owns them, even when they are implemented as pure functions:
@@ -114,7 +126,7 @@ This is an initial source-tree and targeted implementation scan, not a claim tha
 | Object input assertion | Previously implemented in packages/event-bus/src/helpers/object-input.js | [x] Generic non-null, non-array object assertion now lives in `@coinzilla/utils`; EventBus still owns its event-specific input semantics. |
 | Numeric helpers | packages/utils/src/number-operations.js, number-helper.js and app-specific numeric calculations | Reuse existing Number-based helpers only for ordinary non-financial calculations. Do not use binary floating-point helpers for exact financial amounts. |
 | Time and wait | packages/utils/src/calculate-time-diff.js, format-time-relatively.js, wait.js, wait-duration.js | Existing shared capability; search before adding alternatives. |
-| Validation and results | packages/utils/src/validation.js, validator.js, to-result.js | Existing shared capability; compare contract before adding generic validators/result wrappers. |
+| Generic validation and results | packages/utils/src/ensure/, validation.js, validator.js, to-result.js | Prefer the public `ensure` API for generic assertions; legacy `Validator`/`VR` remains compatibility-only. `toResult` retains its separate result contract. |
 | Broker adapters and protocol helpers | packages/brokers/src/**/helpers/**, utils/** | Keep protocol-specific transformations and transport behavior in brokers. Extract only protocol-independent primitives. |
 | Event-bus helpers | packages/event-bus/src/helpers/** | Keep event contract and delivery policy local to the event-bus domain. |
 | Telegram formatting | packages/notifiers/src/telegram/** | Keep Telegram-specific message rules local to notifiers. |
