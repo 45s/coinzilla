@@ -548,14 +548,14 @@ test("waits for a fresh market-price event before retrying shutdown recovery inp
     const attempts = (recoveryAttempts.get(symbol) ?? 0) + 1
     recoveryAttempts.set(symbol, attempts)
     calls.push(`recovery:${symbol}:${attempts}`)
-    if (symbol === "DOGEUSDT" && attempts === 1) {
+    if (attempts === 1) {
+      const reason = symbol === "DOGEUSDT" ? "STALE_MARKET_PRICE" : "MARKET_PRICE_UNAVAILABLE"
       return {
         ok: false,
         errors: [Object.assign(
-          new Error("Shutdown recovery price is stale: STALE_MARKET_PRICE"),
+          new Error(`Shutdown recovery price is unavailable: ${reason}`),
           {
             code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
-            reason: "STALE_MARKET_PRICE",
           },
         )],
       }
@@ -579,8 +579,10 @@ test("waits for a fresh market-price event before retrying shutdown recovery inp
   participant.beginShutdown()
   await participant.waitUntilSafe()
 
-  assert.equal(recoveryAttempts.get("DOGEUSDT"), 2, "Recovery must be re-evaluated once after fresh market evidence arrives.")
+  assert.equal(recoveryAttempts.get("DOGEUSDT"), 2, "Stale price must be re-evaluated once after fresh market evidence arrives.")
+  assert.equal(recoveryAttempts.get("SOLUSDT"), 2, "Missing price must be re-evaluated once after fresh market evidence arrives.")
   assert.ok(calls.includes("wait-price:DOGEUSDT"), "The participant must wait for a source market event, not sleep.")
+  assert.ok(calls.includes("wait-price:SOLUSDT"), "The participant must also wait when no market price exists.")
   assert.equal(participant.isSafeToShutdown(), true, "The safety proof may pass only after recovery is re-evaluated.")
 })
 
