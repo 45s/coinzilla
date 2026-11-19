@@ -1467,3 +1467,21 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Added direct deterministic adapter tests for LIMIT quote-volume conversion, MARKET base-volume preservation, scientific-notation expansion, unsupported fields/client IDs, response identity mismatches, and exact signed detail/cancel request envelopes.
 - Kept live-mutation opt-in, dispatch tracking, mutation outcome classification, no-retry behavior, placement reconciliation, cancellation/fill-race handling, and per-symbol cancel-all orchestration in the Broker facade.
 - No public Broker API, exchange endpoint, request body, retry behavior, Harvester, Binance, or shared utility changes.
+
+## 2026-11-19 — Explicit Bitunix REST mutation classification (#1523)
+
+- [x] Require every REST POST call to declare `stateChanging: true` or `stateChanging: false`; do not silently default a POST to read-only.
+- [x] Reject non-boolean classifications and state-changing GET requests before transport.
+- [x] Mark all existing read-only POST operations explicitly, while preserving `true` on order/funds mutation calls.
+- [x] Add deterministic client regressions proving invalid classifications never reach the network and explicit read-only POSTs remain supported.
+- [ ] Verify exact-head Brokers tests/coverage, strict lint and all required workspace CI before marking complete.
+
+## 2026-11-19 — Bitunix REST malformed mutation-envelope outcomes (#1527)
+
+**Status: Implemented in stacked PR #1528; exact-head CI verification is pending.**
+
+- Propagated the request's explicit mutation classification into success-envelope validation.
+- Malformed envelopes, invalid/missing exchange codes, and missing required messages now preserve `outcomeUnknown` for state-changing requests; read-only errors remain non-mutation failures.
+- Explicit non-zero exchange codes remain definitive exchange rejections.
+- Added deterministic tests for malformed payloads, invalid codes, missing messages, read-only/mutation parity, and explicit exchange rejection.
+- No retries, endpoint changes, live exchange calls, or mutation behavior changes.
