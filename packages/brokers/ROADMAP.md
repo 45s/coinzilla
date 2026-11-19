@@ -1312,8 +1312,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Implement `cancelAllOpenOrders({ symbol })` by enumerating that symbol's pending orders, canceling each independently, and verifying final state.
 - [x] Preserve fill/cancel races and unknown outcomes; never retry automatically.
 - [x] Add offline regressions for cancellation request shape, partial-fill cancellation, non-terminal states, validation-before-I/O, and multi-order cancellation.
-- [ ] Pass required Brokers tests, coverage, strict ESLint and workspace CI on the exact final PR head.
-- [ ] Merge after required checks pass.
+- [x] PR #1464 merged to `develop` as `daf151cc71615a3d09a0446fae4c1e560b8ae4dc` after exact-head Brokers tests/coverage, all workspace unit/coverage jobs, strict ESLint, workspace JavaScript/Markdown quality, actionlint, dependency audit, external documentation links, and Harvester regression tests.
 
 **Still blocked:** canonical placement and idempotent recovery remain unavailable because Bitunix Spot does not document a caller-supplied order ID. Canonical fills, continuous market/private event streams and account-wide order enumeration remain open. Direct legacy placement is tracked in the next section.
 
@@ -1325,6 +1324,6 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Validate the exchange placement response and read back the returned order ID via order detail before returning the normalized order.
 - [x] A dispatched transport failure returns `OUTCOME_UNKNOWN`; no automatic retry. If placement was acknowledged but detail reconciliation fails, return the exchange order ID and `CONFIRMED` mutation outcome for manual follow-up.
 - [x] Added offline tests for LIMIT and MARKET request payloads, exact quantity conversion, identity rejection, unknown transport outcomes, and acknowledged-placement reconciliation failure.
-- [ ] Pass required CI on the exact final PR head before merge.
+- [x] PR #1464 exact head `cca3bade1d9609a265f4b7c104b2bb06c5b117d0` passed all required repository CI and was squash-merged to `develop` as `daf151cc71615a3d09a0446fae4c1e560b8ae4dc`.
 
 **Protocol boundary:** This implementation deliberately uses the single-order REST endpoint. Bitunix documents different `volume` denominations for batch REST and WebSocket order methods; neither is used by this method. Bitunix Spot does not accept a caller-supplied client order ID, so canonical order placement and idempotent unknown-outcome recovery remain unsupported.
