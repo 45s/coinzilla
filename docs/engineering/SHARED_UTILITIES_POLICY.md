@@ -50,7 +50,7 @@ Use the public `ensure` API from `@coinzilla/utils` for new generic input/type/r
 - Validation errors are field-specific native `TypeError` or `RangeError`; preserve the utility's contract rather than catching and silently ignoring invalid input.
 - Use explicit `map`/`filter` only for intentional transformations. Validate elements before filtering so malformed input is not silently discarded.
 - Keep business, exchange, entity, strategy and workflow invariants in their owning domains. Do not replace boolean predicates with throwing assertions if the semantics differ.
-- The old `Validator`/`VR` API is retained for compatibility but deprecated; do not add new callers.
+- The old declarative `Validator`/`VR` API has been removed (issue #1508 / PR #1509); do not recreate rule DSLs or compatibility facades.
 
 ## What must remain in its owning domain
 
@@ -126,7 +126,7 @@ This is an initial source-tree and targeted implementation scan, not a claim tha
 | Object input assertion | Previously implemented in packages/event-bus/src/helpers/object-input.js | [x] Generic non-null, non-array object assertion now lives in `@coinzilla/utils`; EventBus still owns its event-specific input semantics. |
 | Numeric helpers | packages/utils/src/number-operations.js, number-helper.js and app-specific numeric calculations | Reuse existing Number-based helpers only for ordinary non-financial calculations. Do not use binary floating-point helpers for exact financial amounts. |
 | Time and wait | packages/utils/src/calculate-time-diff.js, format-time-relatively.js, wait.js, wait-duration.js | Existing shared capability; search before adding alternatives. |
-| Generic validation and results | packages/utils/src/ensure/, validation.js, validator.js, to-result.js | Prefer the public `ensure` API for generic assertions; legacy `Validator`/`VR` remains compatibility-only. `toResult` retains its separate result contract. |
+| Generic validation and results | packages/utils/src/ensure/, to-result.js | Prefer the public `ensure` API for generic assertions; the deprecated `Validator`/`VR` facade and declarative rule modules were removed in PR #1509. `toResult` retains its separate result contract. |
 | Broker adapters and protocol helpers | packages/brokers/src/**/helpers/**, utils/** | Keep protocol-specific transformations and transport behavior in brokers. Extract only protocol-independent primitives. |
 | Event-bus helpers | packages/event-bus/src/helpers/** | Keep event contract and delivery policy local to the event-bus domain. |
 | Telegram formatting | packages/notifiers/src/telegram/** | Keep Telegram-specific message rules local to notifiers. |
@@ -170,7 +170,7 @@ The source-tree audit covers the applications and workspace packages present in 
 | Notifiers | Keep Telegram formatting, Telegram API validation, and Telegram delivery behavior in `packages/notifiers`; these are channel-specific. |
 | Journal | Keep persistence, journal lifecycle, and record contracts in `packages/journal`; these are storage-domain behavior. |
 | Applications | Keep configuration schemas, trading strategies, order planning, portfolio policy, market-history schema, and simulator matching rules with their owning application/domain. |
-| Existing general utilities | Reuse existing logger, result, validation, UUID, time, wait, feature-flag, and numeric helpers through the public `@coinzilla/utils` API. `NH` remains Number-based and must not be used for exact financial arithmetic. |
+| Existing general utilities | Reuse existing logger, result, `ensure` validation, UUID, time, wait, feature-flag, and numeric helpers through the public `@coinzilla/utils` API. `NH` remains Number-based and must not be used for exact financial arithmetic. |
 
 ### Remaining audit work
 
