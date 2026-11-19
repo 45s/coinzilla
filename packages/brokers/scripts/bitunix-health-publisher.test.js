@@ -39,7 +39,36 @@ function createFakeGit({ repositoryRoot, failPush = false } = {}) {
   }
 }
 
-function createDiagnosticReport({ failed = 0 } = {}) {
+const requiredOperations = [
+  "diagnostic safety confirmation",
+  "diagnostic configuration",
+  "REST private account balances",
+  "WebSocket connection",
+  "ping",
+  "user.account",
+  "user.info",
+]
+
+function createDiagnosticReport({ failed = 0, omitOperation } = {}) {
+  const results = requiredOperations
+    .filter((operation) => operation !== omitOperation)
+    .map((operation) => {
+      const result = {
+        operation,
+        status: failed > 0 && operation === "user.account" ? "failed" : "passed",
+      }
+      if (operation === "user.account") {
+        result.request = {
+          apiKey,
+          sign: "private-signature",
+        }
+        result.response = {
+          uid: "private-uid",
+          balance: "123.456",
+        }
+      }
+      return result
+    })
   return {
     schemaVersion: 1,
     startedAt: "2026-11-19T08:29:00.000Z",
@@ -48,23 +77,12 @@ function createDiagnosticReport({ failed = 0 } = {}) {
       node: "v24.0.0",
     },
     summary: {
-      total: 2,
-      passed: 2 - failed,
+      total: results.length,
+      passed: results.filter((result) => result.status === "passed").length,
       failed,
       skipped: 0,
     },
-    results: [{
-      operation: "user.account",
-      status: failed > 0 ? "failed" : "passed",
-      request: {
-        apiKey,
-        sign: "private-signature",
-      },
-      response: {
-        uid: "private-uid",
-        balance: "123.456",
-      },
-    }],
+    results,
     events: [],
   }
 }
@@ -91,6 +109,7 @@ test("publishes only a sanitized report from a fresh diagnostics branch and retu
     assert.equal(result.branch, "diagnostics/bitunix-health-20261119T083000000Z", "the report branch must have a unique UTC timestamped name")
     assert.equal(result.commitSha, "report-commit-sha", "the pushed report commit SHA must be returned for inspection")
     assert.equal(result.exitCode, 0, "a fully successful read-only health check must return a successful exit code")
+    assert.equal(result.healthCheck.healthy, true, "all required authenticated account and WebSocket probes must pass")
     assert.equal(calls.some((args) => args[0] === "fetch" && args[1] === "origin" && args[2] === "refs/heads/develop:refs/remotes/origin/develop"), true, "the report branch must start from the latest fetched origin/develop")
     assert.equal(calls.some((args) => args[0] === "switch" && args[1] === "--create" && args[3] === "--track" && args[4] === "origin/develop"), true, "the script must create a dedicated branch tracking the fetched develop tip")
     assert.deepEqual(calls.find((args) => args[0] === "add"), ["add", "--", result.reportPath], "only the generated sanitized report may be staged for publication")
@@ -227,6 +246,7 @@ test("publishes failed API diagnostics and returns a failing exit code after cle
 
     assert.equal(result.exitCode, 1, "an API diagnostic failure must remain a failing command result after its report is published")
     assert.equal(result.report.summary.failed, 1, "the pushed report must preserve the failed Bitunix operation")
+    assert.equal(result.healthCheck.healthy, false, "a failed required Bitunix probe must fail the overall health check")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "failed API diagnostics must still return the checkout to develop")
   } finally {
     await rm(repositoryRoot, {
@@ -286,6 +306,34 @@ test("requires both private API credentials before fetching or contacting Bituni
       "the published health check must never report a healthy public-only run as an authenticated account check",
     )
     assert.equal(calls.some((args) => args[0] === "fetch"), false, "missing private credentials must be rejected before a report branch is created")
+  } finally {
+    await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+
+test("fails the health check when a required authenticated operation is skipped", async () => {
+  const repositoryRoot = await createRepositoryDirectory()
+  const { calls, runGit } = createFakeGit({ repositoryRoot })
+  try {
+    const result = await publishBitunixDiagnostics({
+      repositoryRoot,
+      runGit,
+      runDiagnostics: async () => createDiagnosticReport({ omitOperation: "user.info" }),
+      env: {
+        BITUNIX_API_KEY: apiKey,
+        BITUNIX_API_SECRET: apiSecret,
+      },
+      now: () => fixedTimestamp,
+    })
+
+    assert.equal(result.exitCode, 1, "skipping a required authenticated operation must not produce a healthy result")
+    assert.deepEqual(result.healthCheck.missingRequiredOperations, ["user.info"], "the report must identify the required operation that did not pass")
+    assert.equal(calls.some((args) => args[0] === "push"), true, "the incomplete health report must still be pushed for diagnosis")
+    assert.deepEqual(calls.at(-1), ["switch", "develop"], "an incomplete health report must still return the checkout to develop")
   } finally {
     await rm(repositoryRoot, {
       recursive: true,
