@@ -21,27 +21,31 @@ async function createTestContext({ t } = {}) {
   const eventBus = new EventBus()
   const filename = resolveHarvesterDatabaseFilename({
     tradingMode: "testnet",
-    env: {
-      HARVESTER_DATABASE_DIRECTORY: directory,
-    },
+    env: { HARVESTER_DATABASE_DIRECTORY: directory },
   })
   let persistence
   t.after(async () => {
     await closeHarvesterPersistence(persistence ?? {})
     await eventBus.close()
-    await rm(directory, {
-      recursive: true,
-      force: true,
-    })
+    await rm(directory, { recursive: true, force: true })
   })
   return {
     directory,
     eventBus,
     filename,
-    setPersistence: (value) => {
-      persistence = value
-    },
+    setPersistence: (value) => { persistence = value },
   }
+}
+
+async function preparePersistence({ context } = {}) {
+  const persistence = await prepareOrderHistoryPersistence({
+    tradingMode: "testnet",
+    env: { HARVESTER_DATABASE_DIRECTORY: context.directory },
+    eventBus: context.eventBus,
+    logger: { error() {} },
+  })
+  context.setPersistence(persistence)
+  return persistence
 }
 
 async function inspectSqlite({ filename, work } = {}) {
@@ -54,99 +58,57 @@ async function inspectSqlite({ filename, work } = {}) {
   }
 }
 
-test("creates versioned physical orders, fills, and commission tables on a fresh database", async (t) => {
-  const context = await createTestContext({ t })
-  const persistence = await prepareOrderHistoryPersistence({
-    tradingMode: "testnet",
-    env: {
-      HARVESTER_DATABASE_DIRECTORY: context.directory,
-    },
-    eventBus: context.eventBus,
-    logger: { error() {} },
+function assertColumnsPresent({ database, table, columns } = {}) {
+  const actual = database.prepare(`PRAGMA table_info(${table})`).all().map(({ name }) => name)
+  for (const column of columns) {
+    assert.ok(actual.includes(column), `The ${table} table must expose the readable ${column} column.`)
+  }
+}
+
+function assertMigrationHistory(database) {
+  const migrations = database.prepare(
+    "SELECT version, name, checksum FROM schema_migrations ORDER BY version",
+  ).all()
+  assert.equal(migrations.length, 1, "A fresh database must record exactly one initial Harvester relational migration.")
+  assert.equal(migrations[0].version, 1, "The initial Harvester relational schema must use migration version 1.")
+  assert.ok(migrations[0].checksum, "The migration history must record the implementation checksum.")
+}
+
+function assertFreshRelationalSchema(database) {
+  const tables = database.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
+  ).all().map(({ name }) => name)
+  for (const table of ["orders", "fills", "fill_commissions", "schema_migrations"]) {
+    assert.ok(tables.includes(table), `A fresh Harvester database must contain the physical ${table} table.`)
+  }
+  assertColumnsPresent({
+    database,
+    table: "orders",
+    columns: [
+      "provider_type", "provider_instance_id", "account_id", "environment",
+      "market_id", "symbol", "exchange_order_id", "client_order_id",
+      "strategy_id", "side", "order_type", "limit_price", "average_execution_price",
+      "original_quantity", "executed_quantity", "cumulative_quote_quantity",
+      "remaining_quantity", "status", "exchange_created_at", "exchange_updated_at",
+      "local_first_observed_at", "local_last_observed_at", "source_kind", "source_record_id",
+    ],
   })
-  context.setPersistence(persistence)
-
-  assert.ok(persistence, "A valid fresh TESTNET database must prepare the existing order-history observer.")
-
-  await inspectSqlite({
-    filename: context.filename,
-    work: (database) => {
-      const tables = database.prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
-      ).all().map(({ name }) => name)
-      for (const table of ["orders", "fills", "fill_commissions", "schema_migrations"]) {
-        assert.ok(tables.includes(table), `A fresh Harvester database must contain the physical ${table} table.`)
-      }
-
-      const orderColumns = database.prepare("PRAGMA table_info(orders)").all().map(({ name }) => name)
-      for (const column of [
-        "provider_type",
-        "provider_instance_id",
-        "account_id",
-        "environment",
-        "market_id",
-        "symbol",
-        "exchange_order_id",
-        "client_order_id",
-        "strategy_id",
-        "side",
-        "order_type",
-        "limit_price",
-        "average_execution_price",
-        "original_quantity",
-        "executed_quantity",
-        "cumulative_quote_quantity",
-        "remaining_quantity",
-        "status",
-        "exchange_created_at",
-        "exchange_updated_at",
-        "local_first_observed_at",
-        "local_last_observed_at",
-        "source_kind",
-        "source_record_id",
-      ]) {
-        assert.ok(orderColumns.includes(column), `The orders table must expose the readable ${column} column.`)
-      }
-
-      const fillColumns = database.prepare("PRAGMA table_info(fills)").all().map(({ name }) => name)
-      for (const column of [
-        "provider_type",
-        "provider_instance_id",
-        "account_id",
-        "environment",
-        "market_id",
-        "symbol",
-        "exchange_trade_id",
-        "exchange_order_id",
-        "order_id",
-        "client_order_id",
-        "strategy_id",
-        "cycle_id",
-        "side",
-        "execution_price",
-        "executed_base_quantity",
-        "executed_quote_quantity",
-        "commission_status",
-        "exchange_executed_at",
-        "local_observed_at",
-        "source_kind",
-      ]) {
-        assert.ok(fillColumns.includes(column), `The fills table must expose the readable ${column} column.`)
-      }
-
-      const migrations = database.prepare(
-        "SELECT version, name, checksum FROM schema_migrations ORDER BY version",
-      ).all()
-      assert.equal(migrations.length, 1, "A fresh database must record exactly one initial Harvester relational migration.")
-      assert.equal(migrations[0].version, 1, "The initial Harvester relational schema must use migration version 1.")
-      assert.ok(migrations[0].checksum, "The migration history must record the implementation checksum.")
-    },
+  assertColumnsPresent({
+    database,
+    table: "fills",
+    columns: [
+      "provider_type", "provider_instance_id", "account_id", "environment",
+      "market_id", "symbol", "exchange_trade_id", "exchange_order_id", "order_id",
+      "client_order_id", "strategy_id", "cycle_id", "side", "execution_price",
+      "executed_base_quantity", "executed_quote_quantity", "commission_status",
+      "exchange_executed_at", "local_observed_at", "source_kind",
+    ],
   })
-})
+  assertMigrationHistory(database)
+}
 
-test("migrates legacy harvester_orders without deleting source records or fabricating fills", async (t) => {
-  const context = await createTestContext({ t })
-  const legacyRecord = createOrderHistoryRecord({
+function createLegacyRecord() {
+  return createOrderHistoryRecord({
     order: createOrderHistoryEventData(),
     sourceEvent: {
       id: "legacy-source-event-1",
@@ -156,129 +118,125 @@ test("migrates legacy harvester_orders without deleting source records or fabric
     },
     environment: "testnet",
   })
-  const legacyDatabase = createDatabase({
-    provider: createSqliteProvider({
-      filename: context.filename,
-      timeout: 5_000,
-    }),
+}
+
+async function seedLegacyRecord({ filename, record } = {}) {
+  const database = createDatabase({
+    provider: createSqliteProvider({ filename, timeout: 5_000 }),
   })
-  await legacyDatabase.connect()
+  await database.connect()
   try {
-    await legacyDatabase.create({
-      collection: "harvester_orders",
-      record: legacyRecord,
-    })
+    await database.create({ collection: "harvester_orders", record })
   } finally {
-    await legacyDatabase.close()
+    await database.close()
   }
+}
 
-  const persistence = await prepareOrderHistoryPersistence({
-    tradingMode: "testnet",
-    env: {
-      HARVESTER_DATABASE_DIRECTORY: context.directory,
-    },
-    eventBus: context.eventBus,
-    logger: { error() {} },
-  })
-  context.setPersistence(persistence)
+function assertMigratedLegacyHistory({ database, legacyRecord } = {}) {
+  const migrated = database.prepare(
+    "SELECT id, executed_quantity, source_kind, source_record_id FROM orders",
+  ).get()
+  assert.ok(migrated, "Every valid legacy harvester_orders record must have a relational orders row.")
+  assert.equal(migrated.id, legacyRecord.id, "Migration must preserve the original composite order identity.")
+  assert.equal(migrated.executed_quantity, legacyRecord.executedQuantity, "Migration must preserve the exact cumulative execution decimal string.")
+  assert.equal(migrated.source_kind, "legacy_harvester_orders", "Migrated rows must retain explicit legacy migration provenance.")
+  assert.equal(migrated.source_record_id, legacyRecord.id, "Migrated rows must point to their exact source record.")
+  const source = database.prepare(
+    "SELECT record FROM db_records WHERE collection = ? AND id = ?",
+  ).get("harvester_orders", legacyRecord.id)
+  assert.ok(source, "The original harvester_orders source record must remain available after migration.")
+  assert.deepEqual(JSON.parse(source.record), legacyRecord, "Migration must not rewrite the original JSON history record.")
+  const fills = database.prepare("SELECT COUNT(*) AS count FROM fills").get()
+  assert.equal(fills.count, 0, "Cumulative order execution quantity must never be converted into synthetic fill records.")
+}
 
-  assert.ok(persistence, "An existing database with valid legacy order history must remain available after migration.")
+function createAppliedFillEvent() {
+  return {
+    fillId: "binance:BTCUSDT:trade-0001",
+    tradeId: "trade-0001",
+    brokerOrderId: "order-0001",
+    clientOrderId: "client-order-0001",
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+    marketId: "binance:BTCUSDT",
+    marketVenue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "btc",
+    baseAssetCode: "BTC",
+    quoteAssetId: "usdt",
+    quoteAssetCode: "USDT",
+    side: "BUY",
+    price: "100000.00000001",
+    quantity: "0.123456789123",
+    quoteQuantity: "12345.67890123",
+    liquidityRole: "TAKER",
+    executedAt: 1_763_500_000_123,
+    commissions: [{
+      amount: "0.000012340000000001",
+      assetId: "bnb",
+      assetCode: "BNB",
+      quoteValue: null,
+    }],
+    commissionStatus: "COMPLETE",
+  }
+}
 
+function assertPersistedFill({ database } = {}) {
+  const fill = database.prepare("SELECT * FROM fills").get()
+  assert.ok(fill, "One canonical applied execution must create one physical fills row.")
+  assert.equal(fill.exchange_trade_id, "trade-0001", "The exchange execution identifier must be preserved exactly.")
+  assert.equal(fill.execution_price, "100000.00000001", "Execution price must remain an exact decimal string.")
+  assert.equal(fill.executed_base_quantity, "0.123456789123", "Base quantity must remain an exact decimal string.")
+  assert.equal(fill.executed_quote_quantity, "12345.67890123", "Quote quantity must remain an exact decimal string.")
+  assert.equal(fill.exchange_executed_at, "2025-11-18T22:26:40.123Z", "Exchange execution time must be preserved separately in canonical UTC ISO-8601.")
+  assert.ok(fill.local_observed_at, "Local observation time must be recorded independently from exchange execution time.")
+  const commission = database.prepare("SELECT * FROM fill_commissions").get()
+  assert.ok(commission, "The actual commission must be stored in a readable commission row.")
+  assert.equal(commission.amount, "0.000012340000000001", "Commission amount must retain all supplied decimal precision.")
+  assert.equal(commission.asset_id, "bnb", "Commission asset identity must be preserved.")
+  assert.equal(commission.asset_code, "BNB", "Commission asset code must be preserved.")
+  assert.equal(fill.strategy_id, null, "Missing order ownership must remain nullable rather than inventing strategy attribution.")
+  assert.equal(fill.order_id, null, "A fill without a verified relational parent order must retain a nullable order reference.")
+}
+
+test("creates versioned physical orders, fills, and commission tables on a fresh database", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  assert.ok(persistence, "A valid fresh TESTNET database must prepare the existing order-history observer.")
   await inspectSqlite({
     filename: context.filename,
-    work: (database) => {
-      const migrated = database.prepare(
-        "SELECT id, executed_quantity, source_kind, source_record_id FROM orders",
-      ).get()
-      assert.ok(migrated, "Every valid legacy harvester_orders record must have a relational orders row.")
-      assert.equal(migrated.id, legacyRecord.id, "Migration must preserve the original composite order identity.")
-      assert.equal(migrated.executed_quantity, legacyRecord.executedQuantity, "Migration must preserve the exact cumulative execution decimal string.")
-      assert.equal(migrated.source_kind, "legacy_harvester_orders", "Migrated rows must retain explicit legacy migration provenance.")
-      assert.equal(migrated.source_record_id, legacyRecord.id, "Migrated rows must point to their exact source record.")
+    work: (database) => assertFreshRelationalSchema(database),
+  })
+})
 
-      const source = database.prepare(
-        "SELECT record FROM db_records WHERE collection = ? AND id = ?",
-      ).get("harvester_orders", legacyRecord.id)
-      assert.ok(source, "The original harvester_orders source record must remain available after migration.")
-      assert.deepEqual(JSON.parse(source.record), legacyRecord, "Migration must not rewrite the original JSON history record.")
-
-      const fills = database.prepare("SELECT COUNT(*) AS count FROM fills").get()
-      assert.equal(fills.count, 0, "Cumulative order execution quantity must never be converted into synthetic fill records.")
-    },
+test("migrates legacy harvester_orders without deleting source records or fabricating fills", async (t) => {
+  const context = await createTestContext({ t })
+  const legacyRecord = createLegacyRecord()
+  await seedLegacyRecord({ filename: context.filename, record: legacyRecord })
+  const persistence = await preparePersistence({ context })
+  assert.ok(persistence, "An existing database with valid legacy order history must remain available after migration.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => assertMigratedLegacyHistory({ database, legacyRecord }),
   })
 })
 
 test("persists actual applied fills asynchronously with exact execution and commission facts", async (t) => {
   const context = await createTestContext({ t })
-  const persistence = await prepareOrderHistoryPersistence({
-    tradingMode: "testnet",
-    env: {
-      HARVESTER_DATABASE_DIRECTORY: context.directory,
-    },
-    eventBus: context.eventBus,
-    logger: { error() {} },
-  })
-  context.setPersistence(persistence)
-
+  const persistence = await preparePersistence({ context })
   assert.ok(persistence, "The existing order-history persistence must remain available when relational fill history is enabled.")
   assert.ok(persistence.fillObserver, "Phase 2 must expose a separate bounded observer for canonical execution.fill_applied events.")
-
   context.eventBus.publish({
     name: HARVESTER_EVENT_NAMES.FILL_APPLIED,
     source: "harvester",
-    data: {
-      fillId: "binance:BTCUSDT:trade-0001",
-      tradeId: "trade-0001",
-      brokerOrderId: "order-0001",
-      clientOrderId: "client-order-0001",
-      providerInstanceId: "binanceTestnet",
-      providerType: "binance",
-      accountId: "binance-primary",
-      marketId: "binance:BTCUSDT",
-      marketVenue: "binance",
-      symbol: "BTCUSDT",
-      baseAssetId: "btc",
-      baseAssetCode: "BTC",
-      quoteAssetId: "usdt",
-      quoteAssetCode: "USDT",
-      side: "BUY",
-      price: "100000.00000001",
-      quantity: "0.123456789123",
-      quoteQuantity: "12345.67890123",
-      liquidityRole: "TAKER",
-      executedAt: 1_763_500_000_123,
-      commissions: [{
-        amount: "0.000012340000000001",
-        assetId: "bnb",
-        assetCode: "BNB",
-        quoteValue: null,
-      }],
-      commissionStatus: "COMPLETE",
-    },
+    data: createAppliedFillEvent(),
   })
   await context.eventBus.flush()
   const observerResult = await persistence.fillObserver.flush()
   assert.equal(observerResult.ok, true, "A valid applied execution must drain successfully into relational history.")
-
   await inspectSqlite({
     filename: context.filename,
-    work: (database) => {
-      const fill = database.prepare("SELECT * FROM fills").get()
-      assert.ok(fill, "One canonical applied execution must create one physical fills row.")
-      assert.equal(fill.exchange_trade_id, "trade-0001", "The exchange execution identifier must be preserved exactly.")
-      assert.equal(fill.execution_price, "100000.00000001", "Execution price must remain an exact decimal string.")
-      assert.equal(fill.executed_base_quantity, "0.123456789123", "Base quantity must remain an exact decimal string.")
-      assert.equal(fill.executed_quote_quantity, "12345.67890123", "Quote quantity must remain an exact decimal string.")
-      assert.equal(fill.exchange_executed_at, "2025-11-18T22:26:40.123Z", "Exchange execution time must be preserved separately in canonical UTC ISO-8601.")
-      assert.ok(fill.local_observed_at, "Local observation time must be recorded independently from exchange execution time.")
-
-      const commission = database.prepare("SELECT * FROM fill_commissions").get()
-      assert.ok(commission, "The actual commission must be stored in a readable commission row.")
-      assert.equal(commission.amount, "0.000012340000000001", "Commission amount must retain all supplied decimal precision.")
-      assert.equal(commission.asset_id, "bnb", "Commission asset identity must be preserved.")
-      assert.equal(commission.asset_code, "BNB", "Commission asset code must be preserved.")
-      assert.equal(fill.strategy_id, null, "Missing order ownership must remain nullable rather than inventing strategy attribution.")
-      assert.equal(fill.order_id, null, "A fill without a verified relational parent order must retain a nullable order reference.")
-    },
+    work: (database) => assertPersistedFill({ database }),
   })
 })
