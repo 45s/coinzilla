@@ -40,6 +40,75 @@ const createFixture = ({ cfg = config(), env = {} } = {}) => {
   }
 }
 
+test("selects only Conservative-owned symbols from provider strategy routes", async () => {
+  const cfg = config({ enabledSymbols: ["BTCUSDT", "ETHUSDT"] })
+  const executionRoutes = [
+    {
+      strategyId: "CG_coinGrabber",
+      symbol: "BTCUSDT",
+    },
+    {
+      strategyId: "RS_recoverySeller",
+      symbol: "ETHUSDT",
+    },
+  ]
+  const fixture = createFixture({
+    cfg,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
+  const result = await resolveHarvesterOptions({
+    ...fixture.input,
+    executionSymbols: ["BTCUSDT", "ETHUSDT"],
+    executionRoutes,
+  })
+
+  assert.deepEqual(Object.keys(result.pairs), ["BTCUSDT"])
+  assert.deepEqual(result.executionSymbols, ["BTCUSDT"])
+  assert.deepEqual(result.executionRoutes, executionRoutes)
+})
+
+test("fails closed for an RS-only provider until RS runtime dispatch exists", async () => {
+  const fixture = createFixture({
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
+
+  await assert.rejects(
+    resolveHarvesterOptions({
+      ...fixture.input,
+      executionSymbols: ["ETHUSDT"],
+      executionRoutes: [{
+        strategyId: "RS_recoverySeller",
+        symbol: "ETHUSDT",
+      }],
+    }),
+    /no Conservative execution route.*RS-only runtime dispatch is not integrated/i,
+  )
+})
+
+test("rejects duplicate Conservative strategy routes before selecting runtime pairs", async () => {
+  const fixture = createFixture({
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
+
+  await assert.rejects(
+    resolveHarvesterOptions({
+      ...fixture.input,
+      executionSymbols: ["BTCUSDT"],
+      executionRoutes: [
+        {
+          strategyId: "CG_coinGrabber",
+          symbol: "BTCUSDT",
+        },
+        {
+          strategyId: "CG_coinGrabber",
+          symbol: "BTCUSDT",
+        },
+      ],
+    }),
+    /duplicate CG market/i,
+  )
+})
+
 test("requires an explicit TRADING_MODE before publishing validated configuration", async () => {
   const fixture = createFixture()
   await assert.rejects(

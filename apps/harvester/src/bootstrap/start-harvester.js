@@ -367,6 +367,7 @@ async function resolveHarvesterStartupConfiguration({ dependencies }) {
     eventPublisher: dependencies.eventPublisher,
     logger: dependencies.logger,
     executionSymbols: dependencies.executionSymbols,
+    executionRoutes: dependencies.executionRoutes,
   })
   const providerResolved = dependencies.providerIdentity === undefined
     ? resolved

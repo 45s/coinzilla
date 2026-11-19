@@ -2,6 +2,7 @@ import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { publishLifecycleEvent } from "../../application/events/publish-lifecycle-event.js"
 import { mapConfigValidatedData } from "../../application/events/lifecycle-event-dtos.js"
 import { resolveRuntimeConfig, selectPairsForTradingMode } from "../../domain/app-config.js"
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import {
   createEffectiveStrategyConfigurationFingerprint,
   EffectiveConfigurationError,
@@ -20,6 +21,41 @@ function assertSupportedStrategyConfig(strategyConfig) {
       "Aggressive strategy is disabled and deferred; set strategies.CG_coinGrabber.settings.aggressive.enabled=false",
     )
   }
+}
+
+function resolveConservativeExecutionSymbols({ executionRoutes, executionSymbols } = {}) {
+  if (executionRoutes === undefined) {
+    return executionSymbols
+  }
+  if (!Array.isArray(executionRoutes)) {
+    throw new TypeError("executionRoutes must be an array when supplied")
+  }
+  const symbols = []
+  const seenSymbols = new Set()
+  for (const route of executionRoutes) {
+    if (!route || typeof route !== "object" ||
+        typeof route.strategyId !== "string" ||
+        typeof route.symbol !== "string" || !route.symbol.trim()) {
+      throw new TypeError("executionRoutes must contain strategyId and non-empty symbol values")
+    }
+    if (route.strategyId === StrategyId.RECOVERY_SELLER) {
+      continue
+    }
+    if (route.strategyId !== StrategyId.COIN_GRABBER) {
+      throw new TypeError(`Unsupported execution strategy route: ${route.strategyId}`)
+    }
+    if (seenSymbols.has(route.symbol)) {
+      throw new TypeError(`Execution routes contain a duplicate CG market: ${route.symbol}`)
+    }
+    seenSymbols.add(route.symbol)
+    symbols.push(route.symbol)
+  }
+  if (symbols.length === 0) {
+    throw new Error(
+      "This provider account has no Conservative execution route; RS-only runtime dispatch is not integrated yet",
+    )
+  }
+  return symbols
 }
 
 function selectExecutionPairs({ pairs, executionSymbols }) {
@@ -136,6 +172,7 @@ export async function resolveHarvesterOptions({
   eventPublisher,
   logger,
   executionSymbols,
+  executionRoutes,
 } = {}) {
   const loadedAppConfig = suppliedAppConfig ?? await loadConfig(configSource)
   const configuredAppConfig = resolveTelegramOperatorConfig({
@@ -149,10 +186,14 @@ export async function resolveHarvesterOptions({
     tradingMode: env.TRADING_MODE,
     environment: env.NODE_ENV,
   })
+  const conservativeExecutionSymbols = resolveConservativeExecutionSymbols({
+    executionRoutes,
+    executionSymbols,
+  })
   const pairs = resolveEffectivePairs({
     strategyConfig,
     tradingMode: runtime.tradingMode,
-    executionSymbols,
+    executionSymbols: conservativeExecutionSymbols,
   })
   const appConfig = createEffectiveAppConfig({
     configuredAppConfig,
@@ -187,5 +228,6 @@ export async function resolveHarvesterOptions({
     brokerName: runtime.brokerName,
     tradingMode: runtime.tradingMode,
     tradingEnabled: runtime.tradingEnabled && evidence.enabledSymbols.length > 0,
+    executionRoutes: Object.freeze([...(executionRoutes ?? [])]),
   })
 }
