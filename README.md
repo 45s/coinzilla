@@ -118,7 +118,7 @@ GitHub Actions runs the repository's checks on Node.js 24.x (the supported Node.
 
 - **JavaScript Syntax** runs workspace ESLint, JavaScript syntax, agent-policy and documentation checks; pull requests to `develop` also run strict changed-file ESLint. **actionlint** is a separate required status context in the same workflow.
 - **Unit Tests** installs dependencies with `pnpm install --frozen-lockfile` and runs `pnpm test`.
-- **Utils Unit Tests** independently runs `node --test packages/utils/src` and discovers nested Utils feature tests.
+- **Utils Unit Tests** independently discovers all Utils tests recursively with `find packages/utils/src -type f -name '*.test.js' -print0 | xargs -0 node --test`.
 - **Test Coverage** runs workspace coverage and enforces package-specific coverage thresholds.
 - **Dependency Audit** runs `pnpm audit --prod --audit-level high` on pull requests, pushes to `main` and `develop`, and a weekly schedule.
 
