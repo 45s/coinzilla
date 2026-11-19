@@ -108,6 +108,12 @@ test("shares one account Portfolio, OrderRegistry, and serialized queue across C
   assert.equal(recoverySeller.getPortfolio(), accountRuntime.state.portfolio)
   assert.equal(recoverySeller.getOrderRegistry(), accountRuntime.state.orderRegistry)
   assert.equal(accountRuntime.state.legacyPositions instanceof Map, true)
+  const nextLegacyPositions = new Map()
+  accountRuntime.state.legacyPositions = nextLegacyPositions
+  assert.equal(accountRuntime.state.legacyPositions, nextLegacyPositions)
+  assert.throws(() => {
+    accountRuntime.state.legacyPositions = []
+  }, /must be a Map/)
 
   const nextPortfolio = new Portfolio()
   accountRuntime.state.portfolio = nextPortfolio
