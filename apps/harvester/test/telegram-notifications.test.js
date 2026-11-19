@@ -414,27 +414,8 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
     })
 
     await signalHandlers.get("SIGTERM")()
-    assert.equal(process.exitCode, 0, "Telegram transport failure must not change Harvester's shutdown result")
-    const deliveryFailure = loggerErrors.find((entry) => entry.message === "Telegram notification delivery failed")
-    assert.ok(deliveryFailure, "A Telegram delivery failure must remain visible in the application logger.")
-    assert.equal(deliveryFailure.eventName, "bot.started", "Failure evidence must identify the notification event that could not be delivered.")
-    assert.equal(deliveryFailure.failureCategory, "NETWORK", "The Harvester logger must retain the safe network-failure category.")
-    assert.deepEqual(deliveryFailure.delivery, {
-      acceptedCount: 1,
-      deliveredCount: 0,
-      failedCount: 1,
-      overflowCount: 0,
-      pendingCount: 1,
-      closed: false,
-    }, "The failure log must capture immutable delivery counters at the failed-send boundary.")
-    assert.equal(deliveryFailure.notificationDiagnostics.failedCount, 1, "Harvester must also retain its notifier diagnostics snapshot.")
-    const deliverySummary = loggerInfos.find((entry) => entry.message === "Telegram notification delivery summary")
-    assert.equal(deliverySummary.acceptedCount, 2, "The shutdown summary must include the startup and final stop notifications.")
-    assert.equal(deliverySummary.deliveredCount, 0, "The shutdown summary must not count failed API sends as delivered.")
-    assert.equal(deliverySummary.failedCount, 2, "Shutdown must report every failed API send, including the final stop notification.")
-    assert.equal(deliverySummary.overflowCount, 0, "The shutdown summary must keep queue overflow separate from failed sends.")
-    assert.equal(deliverySummary.pendingCount, 0, "The final delivery summary must be captured after accepted sends drain.")
-    assert.equal(deliverySummary.closed, true, "The final delivery summary must confirm the subscriber is closed.")
+    assert.equal(process.exitCode, 0)
+    assertTelegramDeliveryFailure({ loggerErrors, loggerInfos })
   } finally {
     process.exitCode = previousExitCode
   }
@@ -488,27 +469,7 @@ error() {} },
 
   await signalHandlers.get("SIGTERM")()
 
-  assert.equal(
-    sentMessages.length,
-    3,
-    "Custom policy must deliver the selected LINK fill and both non-disableable safety alerts, while excluding the filtered ETH fill and disabled recovery summary.",
-  )
-  assert.ok(
-    sentMessages.some((message) => message.includes("FILL RECEIVED") && message.includes("LINK/USDT") && message.includes("link-fill")),
-    "The enabled fillReceived override must deliver fills for the selected LINKUSDT market.",
-  )
-  assert.ok(
-    sentMessages.some((message) => message.includes("PAUSED") && message.includes("ETH/USDT")),
-    "A critical pair-pause alert must bypass both an explicit false override and the LINKUSDT-only market filter.",
-  )
-  assert.ok(
-    sentMessages.some((message) => message.includes("🚨 ACCOUNT SAFETY") && message.includes("ETH/USDT")),
-    "An execution-accounting safety alert must bypass custom event exclusions and market filters.",
-  )
-  assert.ok(
-    sentMessages.every((message) => !message.includes("eth-fill") && !message.includes("0.42")),
-    "Ordinary filtered fills and explicitly disabled recovery-completion messages must not reach Telegram.",
-  )
+  assertCustomTelegramOverrides({ sentMessages })
 })
 
 test("does not construct Telegram transport when the unified config disables notifications", async () => {
@@ -569,58 +530,7 @@ test("provides distinct minimal, trader, and verbose Telegram profile presets", 
   ]
 
   for (const scenario of scenarios) {
-    const sentMessages = []
-    const signalHandlers = new Map()
-    await runMain({
-      env: {
-        TELEGRAM_BOT_TOKEN: "test-token",
-        TELEGRAM_CHAT_ID: "test-chat",
-      },
-      loadConfig: async () => createTestAppConfig({
-        telegram: {
-        enabled: true,
-        profile: scenario.profile,
-      },
-      }),
-      createTelegramNotifier: () => ({
-        async sendMessage(message) {
-          sentMessages.push(message)
-        },
-      }),
-      createJournalService: disabledJournalService,
-      start: async ({ eventPublisher }) => {
-        publishProfileNotifications(eventPublisher);
-        return {
-          connected: true,
-          brokerName: "binance",
-          tradingEnabled: true,
-          strategyMode: "conservative",
-          subscriptions: ["LINKUSDT"],
-          stop: async () => ({ ok: true }),
-        };
-      },
-      registerSignalHandler: (...signalHandlerArguments) => {
-        const [signal, handler] = signalHandlerArguments;
-        signalHandlers.set(signal, handler);
-      },
-      logger: { info() {},
-error() {} },
-    })
-    await signalHandlers.get("SIGTERM")()
-
-    for (const expected of scenario.expected) {
-      assert.ok(
-        sentMessages.some((message) => message.includes(expected)),
-        `The ${scenario.profile} profile must include its expected ${expected} notification.`,
-      )
-    }
-    for (const excluded of scenario.excluded) {
-      assert.equal(
-        sentMessages.some((message) => message.includes(excluded)),
-        false,
-        `The ${scenario.profile} profile must exclude its non-selected ${excluded} notification.`,
-      )
-    }
+    await runTelegramProfileScenario({ scenario })
   }
 })
 
@@ -668,34 +578,7 @@ error() {} },
 
   await signalHandlers.get("SIGTERM")()
 
-  assert.equal(
-    sentMessages.length,
-    9,
-    "Custom mode must deliver every critical startup, broker, order, and execution failure even when each related override is false and the symbol is outside the market filter.",
-  )
-  for (const [fragment, description] of [
-    ["BOT STARTUP FAILED", "startup failure"],
-    ["DISCONNECTED", "broker connection failure"],
-    ["broker-subscription-failed", "broker subscription failure"],
-    ["FAILED", "order submission/cancellation failure"],
-    ["unowned-order", "unowned external order"],
-    ["invalid-fill", "invalid execution fill"],
-  ]) {
-    assert.ok(
-      sentMessages.some((message) => message.includes(fragment)),
-      `The non-disableable safety policy must retain the ${description} notification.`,
-    )
-  }
-
-  assert.ok(sentMessages.some((message) => message.startsWith("🛠️ BOT STARTUP FAILED")), "Startup failure must use the selected tools icon in the delivered Telegram message.")
-  assert.ok(sentMessages.some((message) => message.startsWith("💤 BINANCE DISCONNECTED")), "Broker disconnection must use the selected sleep icon in the delivered Telegram message.")
-  assert.ok(sentMessages.some((message) => message.startsWith("🚨 ACCOUNT SAFETY") && message.includes("broker-subscription-failed")), "Broker subscription failure must use the selected siren icon.")
-  assert.ok(sentMessages.some((message) => message.startsWith("❌ BUY ETH/USDT FAILED")), "BUY submission failure must use the selected cross icon.")
-  assert.ok(sentMessages.some((message) => message.startsWith("❌ SELL ETH/USDT FAILED")), "SELL submission failure must use the selected cross icon.")
-  assert.ok(sentMessages.some((message) => message.startsWith("🚫 BUY ETH/USDT FAILED")), "BUY cancellation failure must use the selected prohibited icon.")
-  assert.ok(sentMessages.some((message) => message.startsWith("⛔ SELL ETH/USDT FAILED")), "SELL cancellation failure must use the selected no-entry icon.")
-  assert.ok(sentMessages.some((message) => message.startsWith("⚠️ ACCOUNT SAFETY") && message.includes("unowned-order")), "The undecided unowned-order alert must retain its existing warning icon.")
-  assert.ok(sentMessages.some((message) => message.startsWith("⚠️ ACCOUNT SAFETY") && message.includes("invalid-fill")), "The undecided invalid-fill alert must retain its existing warning icon.")
+  assertCriticalTelegramFailureNotifications({ sentMessages })
 })
 
 
@@ -749,3 +632,112 @@ error() {} },
   assert.ok(sentMessages.some((message) => message.startsWith("🚨 ACCOUNT SAFETY") && message.includes("recovery-cycle-blocked") && message.includes("RECOVERY_SELL_FAILED_MIN_PROFIT")), "The undecided blocked recovery alert must retain its existing siren icon.")
   assert.equal(sentMessages.some((message) => message.includes("CONTINUE_SELL_THROUGH")), false, "Expected residual sell-through must not generate a false safety alarm.")
 })
+
+
+function assertTelegramDeliveryFailure({ loggerErrors, loggerInfos }) {
+  const failure = loggerErrors.find((entry) => entry.message === "Telegram notification delivery failed")
+  assert.ok(failure)
+  assert.equal(failure.eventName, "bot.started")
+  assert.equal(failure.failureCategory, "NETWORK")
+  assert.deepEqual(failure.delivery, {
+    acceptedCount: 1,
+    deliveredCount: 0,
+    failedCount: 1,
+    overflowCount: 0,
+    pendingCount: 1,
+    closed: false,
+  })
+  assert.equal(failure.notificationDiagnostics.failedCount, 1)
+  const summary = loggerInfos.find((entry) => entry.message === "Telegram notification delivery summary")
+  assert.equal(summary.acceptedCount, 2)
+  assert.equal(summary.deliveredCount, 0)
+  assert.equal(summary.failedCount, 2)
+  assert.equal(summary.overflowCount, 0)
+  assert.equal(summary.pendingCount, 0)
+  assert.equal(summary.closed, true)
+}
+
+function assertCustomTelegramOverrides({ sentMessages }) {
+  assert.equal(sentMessages.length, 3)
+  assert.ok(sentMessages.some((message) => message.includes("FILL RECEIVED") && message.includes("LINK/USDT") && message.includes("link-fill")))
+  assert.ok(sentMessages.some((message) => message.includes("PAUSED") && message.includes("ETH/USDT")))
+  assert.ok(sentMessages.some((message) => message.includes("🚨 ACCOUNT SAFETY") && message.includes("ETH/USDT")))
+  assert.ok(sentMessages.every((message) => !message.includes("eth-fill") && !message.includes("0.42")))
+}
+
+async function runTelegramProfileScenario({ scenario }) {
+  const sentMessages = []
+  const signalHandlers = new Map()
+  await runMain({
+    env: {
+      TELEGRAM_BOT_TOKEN: "test-token",
+      TELEGRAM_CHAT_ID: "test-chat",
+    },
+    loadConfig: async () => createTestAppConfig({
+      telegram: { enabled: true, profile: scenario.profile },
+    }),
+    createTelegramNotifier: () => ({
+      async sendMessage(message) {
+        sentMessages.push(message)
+      },
+    }),
+    createJournalService: disabledJournalService,
+    start: async ({ eventPublisher }) => {
+      publishProfileNotifications(eventPublisher)
+      return {
+        connected: true,
+        brokerName: "binance",
+        tradingEnabled: true,
+        strategyMode: "conservative",
+        subscriptions: ["LINKUSDT"],
+        stop: async () => ({ ok: true }),
+      }
+    },
+    registerSignalHandler: (...args) => {
+      const [signal, handler] = args
+      signalHandlers.set(signal, handler)
+    },
+    logger: { info() {}, error() {} },
+  })
+  await signalHandlers.get("SIGTERM")()
+  assertTelegramProfileMessages({ scenario, sentMessages })
+}
+
+function assertTelegramProfileMessages({ scenario, sentMessages }) {
+  for (const expected of scenario.expected) {
+    assert.ok(sentMessages.some((message) => message.includes(expected)),
+      `The ${scenario.profile} profile must include its expected ${expected} notification.`)
+  }
+  for (const excluded of scenario.excluded) {
+    assert.equal(sentMessages.some((message) => message.includes(excluded)), false,
+      `The ${scenario.profile} profile must exclude its non-selected ${excluded} notification.`)
+  }
+}
+
+function assertCriticalTelegramFailureNotifications({ sentMessages }) {
+  assert.equal(sentMessages.length, 9)
+  for (const [fragment, description] of [
+    ["BOT STARTUP FAILED", "startup failure"],
+    ["DISCONNECTED", "broker connection failure"],
+    ["broker-subscription-failed", "broker subscription failure"],
+    ["FAILED", "order submission/cancellation failure"],
+    ["unowned-order", "unowned external order"],
+    ["invalid-fill", "invalid execution fill"],
+  ]) {
+    assert.ok(sentMessages.some((message) => message.includes(fragment)),
+      `The non-disableable safety policy must retain the ${description} notification.`)
+  }
+  const prefixes = [
+    "🛠️ BOT STARTUP FAILED",
+    "💤 BINANCE DISCONNECTED",
+    "🚨 ACCOUNT SAFETY",
+    "❌ BUY ETH/USDT FAILED",
+    "❌ SELL ETH/USDT FAILED",
+    "🚫 BUY ETH/USDT FAILED",
+    "⛔ SELL ETH/USDT FAILED",
+    "⚠️ ACCOUNT SAFETY",
+  ]
+  for (const prefix of prefixes) {
+    assert.ok(sentMessages.some((message) => message.startsWith(prefix)))
+  }
+}
