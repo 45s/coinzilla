@@ -107,6 +107,7 @@ export class BitunixSpotReconciler {
     this.inFlight = null
     this.inFlightKey = null
     this.staleAfterMs = 4_000
+    this.failureCount = 0
     this.lastFingerprint = null
     this.lastSuccessAt = null
     this.generation = 0
@@ -233,8 +234,8 @@ export class BitunixSpotReconciler {
       throw new Error("Bitunix Spot reconciler is already running")
     }
     validateInterval({ intervalMs })
-    validateSymbols({ symbols })
-    validateTrackedOrders({ trackedOrders })
+    const normalizedSymbols = validateSymbols({ symbols })
+    const normalizedTrackedOrders = validateTrackedOrders({ trackedOrders })
     if (typeof onSnapshot !== "function" || typeof onStatus !== "function" || typeof onError !== "function") {
       throw new TypeError("Bitunix Spot reconciler callbacks must be functions")
     }
@@ -249,9 +250,17 @@ export class BitunixSpotReconciler {
     const cycle = async () => {
       if (!this.running || generation !== this.generation) return
       try {
-        const result = await this.pollOnce({ symbols, trackedOrders })
+        const result = await this.pollOnce({ symbols: normalizedSymbols, trackedOrders: normalizedTrackedOrders })
         if (!this.running || generation !== this.generation) return
-        if (result.changed) await onSnapshot(result.snapshot)
+        if (result.changed) {
+          try {
+            await onSnapshot(result.snapshot)
+          } catch (error) {
+            this.lastFingerprint = null
+            throw error
+          }
+        }
+        this.failureCount = 0
         reportStatus({
           ...result.status,
           staleAfterMs: intervalMs * 2,
@@ -259,6 +268,7 @@ export class BitunixSpotReconciler {
         })
       } catch (error) {
         if (!this.running || generation !== this.generation) return
+        this.failureCount += 1
         reportStatus({
           ...this.getStatus(),
           staleAfterMs: intervalMs * 2,
@@ -267,7 +277,8 @@ export class BitunixSpotReconciler {
         try { onError(error) } catch {}
       } finally {
         if (this.running && generation === this.generation) {
-          this.timer = this.schedule(() => { void cycle() }, intervalMs)
+          const backoffMs = Math.min(intervalMs * (2 ** Math.min(this.failureCount, 5)), 60_000)
+          this.timer = this.schedule(() => { void cycle() }, backoffMs)
         }
       }
     }
