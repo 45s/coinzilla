@@ -32,6 +32,62 @@ function createUnresolvedSubmissionCallback({ onUnresolvedSubmission } = {}) {
   }
 }
 
+function createPendingOrderCallback({
+  executionCallbacks,
+  onSellReserved,
+  latchUnresolvedSubmission,
+} = {}) {
+  return async (input = {}) => {
+    if (input.order?.side !== "SELL") {
+      return executionCallbacks.onPendingOrder(input)
+    }
+    try {
+      const reserved = await onSellReserved({
+        order: input.order,
+        ownership: input.ownership,
+      })
+      if (reserved?.ok !== true || reserved.data?.durable !== true) {
+        throw reserved?.errors?.[0] ??
+          new Error("Recovery Seller sole-SELL cycle reservation was not durably acknowledged")
+      }
+      return await executionCallbacks.onPendingOrder(input)
+    } catch (error) {
+      await latchUnresolvedSubmission({
+        ...input,
+        outcome: "UNKNOWN",
+        error,
+      })
+      throw error
+    }
+  }
+}
+
+function createSubmissionDeferredCallback({
+  executionCallbacks,
+  latchUnresolvedSubmission,
+} = {}) {
+  return async (input = {}) => {
+    let callbackError
+    let callbackResult
+    try {
+      callbackResult = await executionCallbacks.onSubmissionDeferred(input)
+    } catch (error) {
+      callbackError = error
+    }
+    if (input.order?.side === "SELL" && input.registered === true) {
+      await latchUnresolvedSubmission({
+        ...input,
+        outcome: "UNKNOWN",
+        reason: input.reason ?? "SOLE_SELL_SUBMISSION_DEFERRED",
+      })
+    }
+    if (callbackError) {
+      throw callbackError
+    }
+    return callbackResult
+  }
+}
+
 function createSubmissionFailureCallback({
   executionCallbacks,
   onUnresolvedSubmission,
@@ -47,7 +103,7 @@ function createSubmissionFailureCallback({
     } catch (error) {
       callbackError = error
     }
-    if (input.outcome !== "REJECTED") {
+    if (input.outcome !== "REJECTED" || input.order?.side === "SELL") {
       await latchUnresolvedSubmission(input)
     }
     if (callbackError) {
@@ -63,7 +119,11 @@ function validateSubmitterOptions({
   onDurableSubmissionOutcome,
   onUnresolvedSubmission,
   canSubmit,
+  onSellReserved,
 } = {}) {
+  if (onSellReserved !== undefined && typeof onSellReserved !== "function") {
+    throw new TypeError("onSellReserved must be a function when supplied")
+  }
   if (typeof recoverySellerAccountingWorkflow?.getExecutionCallbacks !== "function") {
     throw new TypeError("recoverySellerAccountingWorkflow must expose getExecutionCallbacks")
   }
@@ -87,11 +147,24 @@ function createRecoverySellerExecutor({
   onUnresolvedSubmission,
   onOrderValidationFailure,
   canSubmit,
+  onSellReserved,
 } = {}) {
   const executionCallbacks = recoverySellerAccountingWorkflow.getExecutionCallbacks()
+  const latchUnresolvedSubmission = createUnresolvedSubmissionCallback({
+    onUnresolvedSubmission,
+  })
   return makeExecuteStrategyDecision({
     broker,
     ...executionCallbacks,
+    onPendingOrder: createPendingOrderCallback({
+      executionCallbacks,
+      onSellReserved,
+      latchUnresolvedSubmission,
+    }),
+    onSubmissionDeferred: createSubmissionDeferredCallback({
+      executionCallbacks,
+      latchUnresolvedSubmission,
+    }),
     onSubmissionFailure: createSubmissionFailureCallback({
       executionCallbacks,
       onUnresolvedSubmission,
@@ -111,6 +184,7 @@ export function createRecoverySellerOrderSubmitter({
   onUnresolvedSubmission,
   onOrderValidationFailure,
   canSubmit,
+  onSellReserved,
 } = {}) {
   validateSubmitterOptions({
     recoverySellerAccountingWorkflow,
@@ -118,6 +192,7 @@ export function createRecoverySellerOrderSubmitter({
     onDurableSubmissionOutcome,
     onUnresolvedSubmission,
     canSubmit,
+    onSellReserved,
   })
   const execute = createRecoverySellerExecutor({
     broker,
@@ -127,6 +202,7 @@ export function createRecoverySellerOrderSubmitter({
     onUnresolvedSubmission,
     onOrderValidationFailure,
     canSubmit,
+    onSellReserved,
   })
 
   return async ({ lifecycleDecision, action, marketMetadata } = {}) => {
@@ -138,6 +214,9 @@ export function createRecoverySellerOrderSubmitter({
             decision: lifecycleDecision,
           },
         })
+      }
+      if (action?.side === "SELL" && typeof onSellReserved !== "function") {
+        throw new Error("Recovery Seller SELL requires a durable single-cycle reservation callback")
       }
       const ownedAction = validateRecoverySellerAction({ action })
       const result = await execute({
