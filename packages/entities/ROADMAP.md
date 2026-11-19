@@ -145,9 +145,9 @@ An item is complete only after its focused tests pass, its PR is merged into `de
 ## Completed — coordinated Utils validation API removal ([#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
 
 - The legacy `Validator` facade was removed and `Coin`/`Order` no longer import it.
-- **Correction:** PR #1509 replaced those calls with handwritten checks rather than using the shared `ensure` API, contrary to the shared-utilities policy. The required consumer migration is tracked in [#1511](https://github.com/45s/coinzilla/issues/1511) and [PR #1512](https://github.com/45s/coinzilla/pull/1512).
-- The correction uses `ensure` for generic checks while keeping domain constraints in Entities and preserving accepted values and existing domain `Error` classes/messages.
-- **API removal verification:** PR #1509 merged as `ab77568acfcd286560270aaac325bf65301efb0c`; its test/CI claims remain historical. Follow-up verification is recorded in #1511/#1512.
+- **Correction completed:** PR #1509 replaced those calls with handwritten checks rather than using the shared `ensure` API, contrary to the shared-utilities policy. This was corrected in [#1511](https://github.com/45s/coinzilla/issues/1511) and merged as [PR #1512](https://github.com/45s/coinzilla/pull/1512).
+- PR #1512 uses `ensure` for generic checks while keeping domain constraints in Entities and preserving accepted values and existing domain `Error` classes/messages.
+- **Verification:** PR #1512 merged as `38204fa5cb90bd3ce9f838d5f0c525aacf2a5695`; exact PR head `3ca2a9721421404c109bc2153cfa32c10645a76b` passed Entities tests (153/153), strict changed-file ESLint, workspace ESLint, the six required `develop-core` CI contexts, and Harvester Targeted Tests. The original API-removal verification from PR #1509 (`ab77568acfcd286560270aaac325bf65301efb0c`) remains historical.
 
 ## Shared utility reuse
 
