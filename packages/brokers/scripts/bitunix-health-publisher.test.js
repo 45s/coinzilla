@@ -115,6 +115,19 @@ function createDiagnosticReport({ failed = 0, omitOperation } = {}) {
   }
 }
 
+function assertFailedHealthReport({ result, calls }) {
+  assert.equal(result.exitCode, 1, "an API diagnostic failure must make the command fail")
+  assert.equal(result.report.summary.failed, 1, "the pushed report must preserve the failed Bitunix operation")
+  assert.equal(result.healthCheck.healthy, false, "a failed required Bitunix probe must fail the overall health check")
+  const publicError = result.report.results.find((item) => item.operation === "user.account").error
+  assert.equal(publicError.message, "[error message withheld from public report]", "public reports must withhold free-form private error text")
+  assert.equal(publicError.cause.message, "[nested error message withheld from public report]", "nested error messages must also be withheld")
+  assert.equal(JSON.stringify(result.report).includes("private-uid"), false, "public reports must not leak account identifiers")
+  assert.equal(JSON.stringify(result.report).includes("123.456"), false, "public reports must not leak balances")
+  assert.equal(calls.some((args) => args[0] === "push"), true, "a sanitized failure report must still be pushed")
+  assert.deepEqual(calls.at(-1), ["switch", "develop"], "failed API diagnostics must return the checkout to develop")
+}
+
 async function createRepositoryDirectory() {
   return mkdtemp(join(tmpdir(), "bitunix-health-publisher-"))
 }
@@ -276,18 +289,7 @@ test("publishes failed API diagnostics and returns a failing exit code after cle
       },
       now: () => fixedTimestamp,
     })
-
-    assert.equal(result.exitCode, 1, "an API diagnostic failure must remain a failing command result after its report is published")
-    assert.equal(result.report.summary.failed, 1, "the pushed report must preserve the failed Bitunix operation")
-    assert.equal(result.healthCheck.healthy, false, "a failed required Bitunix probe must fail the overall health check")
-    const publicError = result.report.results.find((item) => item.operation === "user.account").error
-    assert.equal(publicError.message, undefined, "public reports must omit free-form private error text entirely")
-    assert.equal(publicError.cause, undefined, "public reports must omit nested error details entirely")
-    assert.equal(result.report.results.find((item) => item.operation === "user.account").request, undefined, "public reports must never include request payloads")
-    assert.equal(result.report.results.find((item) => item.operation === "user.account").response, undefined, "public reports must never include response payloads")
-    assert.equal(JSON.stringify(result.report).includes("private-uid"), false, "public reports must not leak account identifiers embedded in exchange error messages")
-    assert.equal(JSON.stringify(result.report).includes("123.456"), false, "public reports must not leak balances embedded in exchange error messages")
-    assert.deepEqual(calls.at(-1), ["switch", "develop"], "failed API diagnostics must still return the checkout to develop")
+    assertFailedHealthReport({ result, calls })
   } finally {
     await rm(repositoryRoot, {
       recursive: true,
