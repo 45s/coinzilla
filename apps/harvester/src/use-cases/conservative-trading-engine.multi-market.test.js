@@ -901,6 +901,75 @@ function createOperatorPauseStrategyPolicy() {
   }
 }
 
+
+test("shutdown owned-BUY cancellation leaves an active recovery SELL untouched", async () => {
+  const dogeMarket = marketsBySymbol.get("DOGEUSDT")
+  const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market: dogeMarket })
+  const strategyPolicy = createOperatorPauseStrategyPolicy()
+  const { engine } = await createHarness({
+    portfolio,
+    strategyPolicy,
+    recoveryLedgersByMarket: new Map([[dogeMarket.id, recoveryLedger]]),
+  })
+  await startBothMarkets({ engine })
+  engine.beginShutdown()
+
+  const describeActiveOrders = () => engine.getActiveOrders()
+    .map((order) => ({
+      symbol: order.market.symbol,
+      side: order.side,
+    }))
+    .sort((left, right) => `${left.symbol}:${left.side}`.localeCompare(`${right.symbol}:${right.side}`))
+  const before = describeActiveOrders()
+  assert.deepEqual(
+    before,
+    [
+      {
+        symbol: "DOGEUSDT",
+        side: "BUY",
+      },
+      {
+        symbol: "DOGEUSDT",
+        side: "SELL",
+      },
+      {
+        symbol: "SOLUSDT",
+        side: "BUY",
+      },
+    ],
+    "The shutdown fixture must contain the recovery SELL and both markets' owned BUY orders.",
+  )
+
+  const cancellation = await engine.cancelOwnedBuyOrdersForShutdown({
+    symbol: "DOGEUSDT",
+  })
+
+  assert.equal(
+    cancellation.ok,
+    true,
+    "The scoped owned-BUY shutdown cancellation must complete successfully.",
+  )
+  assert.equal(
+    cancellation.data.canceled,
+    1,
+    "Only the requested market's owned BUY may be canceled.",
+  )
+  assert.deepEqual(
+    describeActiveOrders(),
+    [
+      {
+        symbol: "DOGEUSDT",
+        side: "SELL",
+      },
+      {
+        symbol: "SOLUSDT",
+        side: "BUY",
+      },
+    ],
+    "The recovery SELL and unrelated market BUY must remain active after owned-BUY shutdown cancellation.",
+  )
+})
+
 test("operator pause preserves recovery SELL execution while suppressing the same market's BUY", async () => {
   const dogeMarket = marketsBySymbol.get("DOGEUSDT")
   const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market: dogeMarket })
