@@ -1,30 +1,25 @@
-import { capitalize, ensure } from "@coinzilla/utils"
-import { assertWithDomainError } from "../helpers/assert-with-domain-error.js"
+import { capitalize } from "@coinzilla/utils"
 import { errMsgs } from "./err-msgs.js"
 
 const supportedTypes = ["LIMIT", "LIMIT_MAKER", "MARKET"]
-const supportedSides = ["BUY", "SELL"]
 
-function assertValidString({ value, name, errorMessage }) {
-  assertWithDomainError({
-    validate: () => ensure.nonEmptyString({
-      value,
-      name,
-      errMsg: errorMessage,
-    }),
-    errorMessage,
-  })
+function assertValidPrice({ price }) {
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
+    throw new Error(errMsgs.price)
+  }
 }
 
-function assertValidNumber({ value, name, errorMessage }) {
-  assertWithDomainError({
-    validate: () => ensure.number({
-      value,
-      name,
-      errMsg: errorMessage,
-    }),
-    errorMessage,
-  })
+function assertValidRequiredString({ value, errorMessage }) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(errorMessage)
+  }
+}
+
+function assertValidOptionalString({ value, errorMessage }) {
+  if (value !== undefined && value !== null &&
+      (typeof value !== "string" || value.trim() === "")) {
+    throw new Error(errorMessage)
+  }
 }
 
 export class Order {
@@ -49,67 +44,39 @@ export class Order {
   }
 
   constructor({ symbol, type, side, quantity, price, id, clientOrderId }) {
-    assertValidString({
-      value: symbol,
-      name: "symbol",
-      errorMessage: errMsgs.symbol,
-    })
+    if (typeof symbol !== "string" || !symbol.trim()) {
+      throw new Error(errMsgs.symbol)
+    }
     this.#symbol = capitalize(symbol.trim())
 
-    assertValidString({
-      value: type,
-      name: "type",
-      errorMessage: errMsgs.type,
-    })
     if (!supportedTypes.includes(type)) {
       throw new Error(errMsgs.type)
     }
     this.#type = type
 
-    assertValidString({
-      value: side,
-      name: "side",
-      errorMessage: errMsgs.side,
-    })
-    if (!supportedSides.includes(side)) {
+    if (!["BUY", "SELL"].includes(side)) {
       throw new Error(errMsgs.side)
     }
     this.#side = side
 
-    assertValidNumber({
-      value: quantity,
-      name: "quantity",
-      errorMessage: errMsgs.quantity,
-    })
-    if (quantity < 0) {
+    if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity < 0) {
       throw new Error(errMsgs.quantity)
     }
     this.#quantity = quantity
 
-    assertValidNumber({
-      value: price,
-      name: "price",
-      errorMessage: errMsgs.price,
-    })
-    if (price <= 0) {
-      throw new Error(errMsgs.price)
-    }
+    assertValidPrice({ price })
     this.#price = price
 
-    assertValidString({
+    assertValidRequiredString({
       value: id,
-      name: "id",
       errorMessage: errMsgs.id,
     })
     this.#id = id
 
-    if (clientOrderId !== undefined && clientOrderId !== null) {
-      assertValidString({
-        value: clientOrderId,
-        name: "clientOrderId",
-        errorMessage: errMsgs.clientOrderId,
-      })
-    }
+    assertValidOptionalString({
+      value: clientOrderId,
+      errorMessage: errMsgs.clientOrderId,
+    })
     this.#clientOrderId = clientOrderId ?? undefined
   }
 
