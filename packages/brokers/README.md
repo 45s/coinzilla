@@ -67,7 +67,6 @@ The provider must be exactly `"binance"` or `"bitunix"`. Environment selection i
 
 The constructor returns the existing concrete provider instance, preserving its behavior and concrete `instanceof` checks. Both instances also satisfy `instanceof Broker` through the shared structural contract. Existing direct constructors remain supported. The factory selects an adapter only; application-specific account/market routing remains with the consuming application.
 
-
 Both providers expose an immutable `BrokerCapabilities` declaration. The canonical three statuses are `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; environment selection and runtime readiness are metadata/conditions, never a fourth status. Supported declarations require method and guarantee evidence; unsupported/unknown declarations require reasons.
 
 Unsupported methods remain present and return a typed `BrokerUnsupportedOperationError` inside a failed result. They never silently no-op or fabricate successful empty data. State-changing methods expose `mutationOutcome` so callers can distinguish `NOT_SENT`, `REJECTED`, `CONFIRMED`, and `OUTCOME_UNKNOWN`.

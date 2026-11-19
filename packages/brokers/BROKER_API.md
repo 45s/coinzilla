@@ -6,7 +6,7 @@
 
 This document defines the exchange-neutral public Broker contract, the compatibility surface retained for existing consumers, and the provider capability declaration model. Provider protocols and DTOs remain private to each provider implementation.
 
-## 0. Public provider constructor
+## Public provider constructor
 
 Consumers may select either supported provider without importing an exchange-specific class:
 
@@ -36,7 +36,6 @@ const spotBroker = new Broker({
 - The optional common `logger` is passed to the selected adapter. Unknown top-level options fail fast rather than being silently ignored.
 - The constructor returns the selected existing concrete provider instance and validates it against `assertBrokerContract`. Existing `BinanceWebSocketBroker` and `BitunixSpotBroker` constructors remain supported. Concrete provider `instanceof` checks remain valid; both providers also satisfy `instanceof Broker` via the structural contract.
 - `Broker` is a constructor convenience, not an application provider registry or market-routing policy. Consuming applications retain ownership of account/market routing and composition.
-
 
 ## 1. Ownership and capability-model decision
 

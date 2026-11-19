@@ -20,7 +20,6 @@ Tracking: [issue #1497](https://github.com/45s/coinzilla/issues/1497), implement
 
 **Status: In progress.** Add a public `new Broker({ provider, apiKey, apiSecret, tradingMode, providerOptions })` constructor that selects the existing Binance or Bitunix Spot adapter, validates the selected structural contract, and preserves direct concrete constructors. Provider-specific options are namespaced; environment selection remains explicit (Binance testnet/live, Bitunix Spot live only). This is a public composition convenience, not application routing. Bitunix Futures remain out of scope and issue #1185 remains the source of truth for unresolved Spot lifecycle/fill/mutation safety blockers.
 
-
 ### Ownership boundary
 
 - `@coinzilla/entities` owns the shared exchange-neutral `BrokerCapabilities` value, vocabulary, three-state status semantics, validation, lookup, immutability, and serialization.
