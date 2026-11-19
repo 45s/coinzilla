@@ -686,17 +686,20 @@ function createRuntimeMetadata() {
   }
 }
 
-function createConfigurationResult({ env, startedAt, now, secrets }) {
-  if (DIAGNOSTIC_CONFIG.confirmLiveReads !== true) {
-    return createResult({
-      operation: "diagnostic safety confirmation",
-      startedAt,
-      now,
-      status: "failed",
+function createSafetyConfirmationResult({ startedAt, now, secrets }) {
+  return createResult({
+    operation: "diagnostic safety confirmation",
+    startedAt,
+    now,
+    status: DIAGNOSTIC_CONFIG.confirmLiveReads === true ? "passed" : "failed",
+    ...(DIAGNOSTIC_CONFIG.confirmLiveReads === true ? {} : {
       error: new Error("Set DIAGNOSTIC_CONFIG.confirmLiveReads to true to confirm read-only requests against the configured LIVE Spot API account"),
-      secrets,
-    })
-  }
+    }),
+    secrets,
+  })
+}
+
+function createConfigurationResult({ env, startedAt, now, secrets }) {
   const missingCredentialVariables = getMissingCredentialNames({ env })
   const credentialsConfigured = missingCredentialVariables.length === 0
   return createResult({
@@ -1095,6 +1098,7 @@ async function runWebSocketLifecycle({
   events,
   secrets,
   includePublicPayloads,
+  onProgress,
 }) {
   const initialConnectionEstablished = await runWebSocketSession({
     client,
@@ -1105,6 +1109,7 @@ async function runWebSocketLifecycle({
     events,
     secrets,
     includePublicPayloads,
+    onProgress,
   })
   if (!initialConnectionEstablished) {
     recordWebSocketReconnectSkipped({
@@ -1142,6 +1147,7 @@ async function runWebSocketChecks({
   includePublicPayloads,
   credentialsConfigured,
   websocketClientFactory,
+  onProgress,
 }) {
   if (!credentialsConfigured) {
     recordWebSocketSkipped({
@@ -1301,14 +1307,13 @@ export async function runBitunixDiagnostics({
   const results = []
   const events = []
   const { includePublicPayloads } = DIAGNOSTIC_CONFIG
-  const configuration = createConfigurationResult({
-    env,
+  const safetyConfirmation = createSafetyConfirmationResult({
     startedAt,
     now,
     secrets,
   })
-  results.push(configuration)
-  if (configuration.status !== "passed") {
+  results.push(safetyConfirmation)
+  if (safetyConfirmation.status !== "passed") {
     return createReport({
       startedAtIso,
       now,
@@ -1316,6 +1321,14 @@ export async function runBitunixDiagnostics({
       events,
     })
   }
+  const configuration = createConfigurationResult({
+    env,
+    startedAt,
+    now,
+    secrets,
+  })
+  results.push(configuration)
+  onProgress?.({ message: "      Configuration: credentials and live-read safety ... PASS" })
   return runConfiguredDiagnostics({
     env,
     now,
