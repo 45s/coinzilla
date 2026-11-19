@@ -118,6 +118,14 @@ async function persistRecoverySellerBlocker({
   })
 }
 
+function createStopPersistenceFailure({ persisted } = {}) {
+  return persisted?.ok === false
+    ? persisted
+    : toResult({
+      error: new Error("Recovery Seller STOP blocker was not durably acknowledged"),
+    })
+}
+
 function createStopLatch({
   operationalStateStore,
   getStopSnapshot,
@@ -126,6 +134,11 @@ function createStopLatch({
   return async ({ explanation, orderIdentity } = {}) => {
     const current = getStopSnapshot()
     if (current.stopState.status === "STOPPED") {
+      if (!current.blockerId) {
+        return toResult({
+          error: new Error("Recovery Seller STOP is active in memory but is not durably persisted"),
+        })
+      }
       return toResult({
         data: {
           durable: true,
@@ -141,20 +154,29 @@ function createStopLatch({
     const normalizedIdentity = normalizeOrderIdentity({
       orderIdentity,
     })
-    const persisted = await persistRecoverySellerBlocker({
-      operationalStateStore,
-      explanation,
-      orderIdentity: normalizedIdentity,
-    })
-    if (persisted?.ok !== true || persisted.data?.durable !== true) {
-      return persisted?.ok === false
-        ? persisted
-        : toResult({ error: new Error("Recovery Seller STOP blocker was not durably acknowledged") })
-    }
     const stopState = latchRecoverySellerStop({
       state: current.stopState,
       decision,
     })
+    setStopSnapshot({
+      stopState,
+      blockerId: null,
+    })
+    let persisted
+    try {
+      persisted = await persistRecoverySellerBlocker({
+        operationalStateStore,
+        explanation,
+        orderIdentity: normalizedIdentity,
+      })
+    } catch (error) {
+      return toResult({ error })
+    }
+    if (persisted?.ok !== true || persisted.data?.durable !== true) {
+      return createStopPersistenceFailure({
+        persisted,
+      })
+    }
     const { blockerId } = persisted.data.record.data
     setStopSnapshot({
       stopState,
