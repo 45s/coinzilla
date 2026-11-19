@@ -146,6 +146,11 @@ Remaining safety and observability follow-up #1105 remains open; #1103 is comple
 
 ---
 
+
+### RS-4 runtime integration progress — PR #1476
+
+The disabled-by-default RS configuration boundary is now present and validated. RS pair precision uses the shared token registry. Provider route resolution now retains `strategyId` and `symbol` per account while deriving deduplicated market symbols separately. This is routing metadata only: the bootstrap still creates the Conservative engine, and RS is not yet registered for runtime order evaluation/submission. Keep RS disabled until the shared Portfolio/OrderRegistry/Trading Engine integration and RS-5 offline lifecycle acceptance are complete.
+
 ## Proposed strategy — Recovery Seller (RS)
 
 **Current delivery:** RS-4/RS-5 implementation is tracked in [#1475](https://github.com/45s/coinzilla/issues/1475). The owner-approved manual STOP reset domain/application barrier is implemented in the active draft [PR #1476](https://github.com/45s/coinzilla/pull/1476); shared-engine runtime integration and offline lifecycle proof remain outstanding.
