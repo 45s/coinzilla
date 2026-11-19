@@ -1719,6 +1719,7 @@ test("Bitunix canonical order placement remains unsupported because client order
   assert.equal(calls.length, 0)
 })
 const TOKEN_NETWORK_PATH = "/api/spot/v1/common/coin/coin_network/list"
+const USER_INFO_PATH = "/api/spot/v1/user/info"
 
 test("Bitunix Spot token-network metadata uses one unsigned public REST request and preserves exact source fields", async () => {
   const tokenMetadata = [{
@@ -1862,4 +1863,94 @@ test("Bitunix Spot token-network metadata propagates REST failures without retry
   assert.equal(result.ok, false, "a failed token-network request must never appear as a successful empty catalog")
   assert.equal(result.errors[0], transportFailure, "the original token-network transport error must remain available")
   assert.equal(calls.length, 1, "a failed token-network read must not be retried implicitly")
+})
+
+
+test("Bitunix Spot broker reads authenticated user information and preserves UID identity", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: {
+        uid: "9223372036854775807",
+      },
+    },
+  })
+
+  const result = await broker.getUserInfo()
+
+  assert.equal(result.ok, true, "a valid user-info response must return a successful result")
+  assert.deepEqual(result.data, {
+    uid: "9223372036854775807",
+  }, "an int64 UID must remain an exact string identifier")
+  assert.equal(Object.isFrozen(result.data), true, "the user-info record must be immutable")
+  assert.deepEqual(calls, [{
+    method: "GET",
+    path: USER_INFO_PATH,
+    options: {
+      authenticated: true,
+    },
+  }], "user information must use one signed private GET request")
+})
+
+test("Bitunix Spot broker preserves nullable and omitted optional user identity", async () => {
+  const { broker: nullUidBroker } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: {
+        uid: null,
+      },
+    },
+  })
+  const nullUidResult = await nullUidBroker.getUserInfo()
+
+  assert.equal(nullUidResult.ok, true, "a documented null UID must remain a successful user-info result")
+  assert.deepEqual(nullUidResult.data, {
+    uid: null,
+  }, "an explicit null UID must remain null")
+
+  const { broker: omittedUidBroker } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: {},
+    },
+  })
+  const omittedUidResult = await omittedUidBroker.getUserInfo()
+
+  assert.equal(omittedUidResult.ok, true, "the documented optional UID may be omitted")
+  assert.equal(Object.hasOwn(omittedUidResult.data, "uid"), false, "an omitted UID must not be synthesized")
+})
+
+test("Bitunix Spot broker rejects malformed user-info payloads and UID values", async () => {
+  const invalidResponses = [
+    [],
+    "user",
+    { uid: -1 },
+    { uid: 1.5 },
+    { uid: "not-a-uid" },
+    { uid: true },
+  ]
+
+  for (const invalidResponse of invalidResponses) {
+    const { broker } = createBroker({
+      responses: {
+        [USER_INFO_PATH]: invalidResponse,
+      },
+    })
+    const result = await broker.getUserInfo()
+
+    assert.equal(result.ok, false, `malformed user information must fail closed: ${JSON.stringify(invalidResponse)}`)
+    assert.ok(result.errors?.[0] instanceof Error, "invalid user-info data must include a diagnostic error")
+  }
+})
+
+test("Bitunix Spot broker propagates user-info REST failures without retrying", async () => {
+  const transportFailure = new Error("user-info endpoint unavailable")
+  const { broker, calls } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: transportFailure,
+    },
+  })
+
+  const result = await broker.getUserInfo()
+
+  assert.equal(result.ok, false, "a failed user-info request must not appear as a successful empty record")
+  assert.equal(result.errors[0], transportFailure, "the original user-info transport error must remain available")
+  assert.equal(calls.length, 1, "a failed user-info read must not be retried implicitly")
 })
