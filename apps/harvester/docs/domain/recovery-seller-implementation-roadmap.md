@@ -33,6 +33,8 @@ Canonical streamed RS BUY fills now dispatch through the RS accounting workflow 
 
 ## RS-4 production evaluator dispatch — callback path connected
 
+A RED bootstrap regression now requires the durable RS STOP workflow to restore its account-scoped blocker from the verified Operational State Store before the current `PROCESS_STARTED` fact is appended. The current bootstrap does not yet compose this workflow.
+
 - `createLatestTransitionEvaluator` already supports a strategy-owned RS transition callback after Conservative evaluation.
 - The production Conservative engine now injects that callback into the evaluator, and bootstrap/runtime composition preserves it from startup options to the engine.
 - The callback is optional and validated when supplied; existing CG-only startup remains unchanged.
