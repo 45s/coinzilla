@@ -2,7 +2,8 @@ import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 
 function createStageBlocker({ stage, error } = {}) {
   const reason = error?.code ?? error?.message ?? "FAILED"
-  return `${stage}:${reason}`
+  const detail = error?.reason
+  return `${stage}:${reason}${detail ? `:${detail}` : ""}`
 }
 
 async function runStage({ stage, operation } = {}) {
