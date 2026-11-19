@@ -68,12 +68,84 @@ const LOSSLESS_NUMERIC_FIELDS = Object.freeze({
   "/api/spot/v1/withdraw_transfer/page": Object.freeze(["id", "toUid", "amount", "fee"]),
   "/api/spot/v1/order/deal/list": Object.freeze(["id", "volume", "price", "fee", "role"]),
   "/api/spot/v1/user/info": Object.freeze(["uid"]),
+  "/api/v1/futures/market/trading_pairs": Object.freeze([
+    "minTradeVolume", "minBuyPriceOffset", "maxSellPriceOffset", "maxLimitOrderVolume",
+    "maxMarketOrderVolume", "maxFundingRate", "minFundingRate", "priceProtectScope",
+    "launchTime", "delistTime",
+  ]),
+  "/api/v1/futures/market/tickers": Object.freeze([
+    "markPrice", "lastPrice", "open", "last", "quoteVol", "baseVol", "high", "low",
+  ]),
+  "/api/v1/futures/market/funding_rate": Object.freeze([
+    "markPrice", "lastPrice", "indexPrice", "fundingRate", "nextFundingTime",
+    "maxFundingRate", "minFundingRate",
+  ]),
+  "/api/v1/futures/market/funding_rate/batch": Object.freeze([
+    "markPrice", "lastPrice", "indexPrice", "fundingRate", "nextFundingTime",
+    "maxFundingRate", "minFundingRate",
+  ]),
+  "/api/v1/futures/market/get_funding_rate_history": Object.freeze([
+    "markPrice", "fundingRate", "fundingTime",
+  ]),
+  "/api/v1/futures/market/kline": Object.freeze([
+    "open", "high", "low", "close", "quoteVol", "baseVol", "time",
+  ]),
+  "/api/v1/futures/position/get_position_tiers": Object.freeze([
+    "startValue", "endValue", "maintenanceMarginRate", "initialMarginRate", "maintainAmount",
+  ]),
+  "/api/v1/futures/position/get_pending_positions": Object.freeze([
+    "positionId", "qty", "entryValue", "fee", "funding", "realizedPNL", "margin",
+    "unrealizedPNL", "liqPrice", "marginRate", "avgOpenPrice", "ctime", "mtime",
+    "subAccountId",
+  ]),
+  "/api/v1/futures/position/get_history_positions": Object.freeze([
+    "positionId", "maxQty", "entryPrice", "closePrice", "liqQty", "fee", "funding",
+    "realizedPNL", "liqPrice", "ctime", "mtime", "subAccountId", "total",
+  ]),
+  "/api/v1/futures/trade/get_pending_orders": Object.freeze([
+    "orderId", "positionId", "qty", "price", "avgPrice", "dealQty", "dealAmount", "fee",
+    "realizedPNL", "triggerPrice", "tpPrice", "slPrice", "ctime", "mtime", "triggerTime",
+    "total", "subAccountId",
+  ]),
+  "/api/v1/futures/trade/get_history_orders": Object.freeze([
+    "orderId", "positionId", "qty", "price", "avgPrice", "dealQty", "dealAmount", "fee",
+    "realizedPNL", "triggerPrice", "tpPrice", "slPrice", "ctime", "mtime", "triggerTime",
+    "total", "subAccountId",
+  ]),
+  "/api/v1/futures/trade/get_order_detail": Object.freeze([
+    "orderId", "positionId", "qty", "price", "avgPrice", "dealQty", "dealAmount", "fee",
+    "realizedPNL", "triggerPrice", "tpPrice", "slPrice", "ctime", "mtime", "triggerTime",
+    "subAccountId",
+  ]),
+  "/api/v1/futures/trade/get_history_trades": Object.freeze([
+    "tradeId", "orderId", "positionId", "qty", "price", "fee", "realizedPNL", "ctime",
+    "mtime", "total", "subAccountId",
+  ]),
+  "/api/v1/futures/tpsl/get_pending_orders": Object.freeze([
+    "id", "positionId", "tpPrice", "slPrice", "tpOrderPrice", "slOrderPrice", "tpQty",
+    "slQty", "ctime", "triggerTime", "total",
+  ]),
+  "/api/v1/futures/tpsl/get_history_orders": Object.freeze([
+    "id", "positionId", "tpPrice", "slPrice", "tpOrderPrice", "slOrderPrice", "tpQty",
+    "slQty", "ctime", "triggerTime", "total",
+  ]),
+  "/api/v1/futures/account": Object.freeze([
+    "available", "frozen", "margin", "transfer", "crossUnrealizedPNL",
+    "isolationUnrealizedPNL", "bonus",
+  ]),
+  "/api/v1/futures/copyTrading/asset/query": Object.freeze([
+    "available", "maxTransfer", "balance",
+  ]),
 })
+
+const LOSSLESS_ARRAY_NUMBER_PATHS = new Set([
+  "/api/v1/futures/market/depth",
+])
 
 function stringifyNumericJsonFields({ text, fields }) {
   const fieldPattern = fields.join("|")
   const numericFieldPattern = new RegExp(
-    `("(?:${fieldPattern})"\\s*:\\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])`,
+    '("(?:' + fieldPattern + ')"\\s*:\\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])',
     "g",
   )
   return text.replace(
@@ -85,23 +157,37 @@ function stringifyNumericJsonFields({ text, fields }) {
   )
 }
 
-function parseResponseText({ text, path }) {
-  if (Object.hasOwn(LOSSLESS_NUMERIC_FIELDS, path)) {
-    return JSON.parse(stringifyNumericJsonFields({
-      text,
-      fields: LOSSLESS_NUMERIC_FIELDS[path],
-    }))
-  }
-  if (!path.endsWith("/user/account")) {
-    return JSON.parse(text)
-  }
-  const losslessText = text.replace(
-    /("(?:balance|balanceLocked)"\s*:\s*)(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*[,}])/g,
+function stringifyNumericArrayValues({ text }) {
+  return text.replace(
+    /([\[,]\s*)(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*(?:,|\]))/g,
     (...matches) => {
-      const [, prefix, amount] = matches
-      return prefix + JSON.stringify(amount)
+      const [, prefix, value] = matches
+      return prefix + JSON.stringify(value)
     },
   )
+}
+
+function parseResponseText({ text, path }) {
+  let losslessText = text
+
+  if (LOSSLESS_ARRAY_NUMBER_PATHS.has(path)) {
+    losslessText = stringifyNumericArrayValues({ text: losslessText })
+  }
+
+  if (Object.hasOwn(LOSSLESS_NUMERIC_FIELDS, path)) {
+    losslessText = stringifyNumericJsonFields({
+      text: losslessText,
+      fields: LOSSLESS_NUMERIC_FIELDS[path],
+    })
+  }
+
+  if (path.endsWith("/user/account")) {
+    losslessText = stringifyNumericJsonFields({
+      text: losslessText,
+      fields: ["balance", "balanceLocked"],
+    })
+  }
+
   return JSON.parse(losslessText)
 }
 
@@ -217,6 +303,7 @@ function createSignedRequest({ client, method, path, queryParams, body }) {
         timestamp,
         sign: signature,
         "Content-Type": "application/json",
+        ...(client.language === undefined ? {} : { language: client.language }),
       },
       signal: AbortSignal.timeout(client.requestTimeout),
       ...(bodyText === undefined ? {} : { body: bodyText }),
@@ -440,13 +527,25 @@ function validateCredentials({ apiKey, apiSecret }) {
   }
 }
 
-function validateClientOptions({ apiKey, apiSecret, baseUrl, requestTimeout, fetchFn, now, nonceFactory }) {
+function validateClientOptions({
+  apiKey,
+  apiSecret,
+  baseUrl,
+  language,
+  requestTimeout,
+  fetchFn,
+  now,
+  nonceFactory,
+}) {
   validateCredentials({
     apiKey,
     apiSecret,
   })
   if (typeof baseUrl !== "string" || !baseUrl.startsWith("https://")) {
     throw new TypeError("Bitunix REST base URL must use https://")
+  }
+  if (language !== undefined && (typeof language !== "string" || !language.trim())) {
+    throw new TypeError("Bitunix REST language must be a non-empty string when supplied")
   }
   if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
     throw new RangeError("Bitunix REST requestTimeout must be a positive integer")
@@ -471,6 +570,7 @@ export class BitunixRestClient {
       apiKey,
       apiSecret,
       baseUrl = DEFAULT_BASE_URL,
+      language,
       requestTimeout = DEFAULT_REQUEST_TIMEOUT,
       fetchFn = fetch,
       now = Date.now,
@@ -480,6 +580,7 @@ export class BitunixRestClient {
       apiKey,
       apiSecret,
       baseUrl,
+      language,
       requestTimeout,
       fetchFn,
       now,
@@ -489,6 +590,7 @@ export class BitunixRestClient {
     this.apiKey = apiKey
     this.apiSecret = apiSecret
     this.baseUrl = baseUrl.replace(/\/$/, "")
+    this.language = language
     this.requestTimeout = requestTimeout
     this.fetch = fetchFn
     this.now = now
