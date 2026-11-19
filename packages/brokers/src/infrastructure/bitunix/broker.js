@@ -10,6 +10,7 @@ import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, cre
 import { adaptExchangeRates } from "./adapters/adapt-exchange-rates.js"
 import { adaptTokenNetworks } from "./adapters/adapt-token-networks.js"
 import { adaptUserInfo } from "./adapters/adapt-user-info.js"
+import { adaptTaxFilingPage, createTaxFilingQuery } from "./adapters/adapt-tax-filing.js"
 import { adaptDepositAddresses } from "./adapters/adapt-deposit-addresses.js"
 import { adaptDeposits } from "./adapters/adapt-deposits.js"
 import { BitunixDepositAddressError } from "./errors/bitunix-deposit-address-error.js"
@@ -31,6 +32,7 @@ const API = Object.freeze({
   exchangeRates: "/api/spot/v1/common/rate/list",
   tokenNetworks: "/api/spot/v1/common/coin/coin_network/list",
   userInfo: "/api/spot/v1/user/info",
+  taxFiling: "/api/spot/v1/tax/filing/page",
   depth: "/api/spot/v1/market/depth",
   kline: "/api/spot/v1/market/kline",
   klineHistory: "/api/spot/v1/market/kline/history",
@@ -1183,6 +1185,39 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getUserInfo()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read one signed page of Bitunix Spot tax-filing records.
+   * The caller controls pagination; each query is limited to a UTC range of 365 days.
+   *
+   * @param {{startTime: string, endTime: string, dataTypeCodes?: string[], page?: number, pageSize?: number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getTaxFilingHistory(input = {}) {
+    try {
+      const query = createTaxFilingQuery({ input })
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.taxFiling,
+        body: query.body,
+        authenticated: true,
+        stateChanging: false,
+      })
+      return toResult({
+        data: adaptTaxFilingPage({
+          value: response.data,
+          page: query.page,
+          pageSize: query.pageSize,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getTaxFilingHistory()",
         error,
       })
       return toResult({ errors: [error] })
