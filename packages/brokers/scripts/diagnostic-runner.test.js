@@ -731,6 +731,39 @@ function createBrokerApiDiagnosticResponse({ request, invalidSchema }) {
       },
     }
   }
+  if (request.path === "/api/spot/v1/deposit/page") {
+    return {
+      data: [{
+        id: "deposit-1",
+        transactionHash: "deposit-hash-must-not-be-persisted",
+        coin: "USDT",
+        network: "ERC20",
+        type: "deposit",
+        fromAddress: "deposit-source-must-not-be-persisted",
+        toAddress: "deposit-target-must-not-be-persisted",
+        amount: "9876.54321",
+        status: "1",
+        ctime: 1760000000000,
+      }],
+    }
+  }
+  if (request.path === "/api/spot/v1/withdraw_transfer/page") {
+    return {
+      data: [{
+        id: "withdrawal-1",
+        type: "withdraw",
+        coin: "USDT",
+        amount: "123.456",
+        status: "1",
+        ctime: 1760000000001,
+        network: "ERC20",
+        transactionHash: "withdrawal-hash-must-not-be-persisted",
+        feeCoin: "USDT",
+        fee: "0.1",
+        address: "withdrawal-address-must-not-be-persisted",
+      }],
+    }
+  }
   throw new Error(`Unexpected Broker API diagnostic request: ${request.path}`)
 }
 
@@ -757,6 +790,8 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
   assert.equal(report.results.find((entry) => entry.operation === "Broker API getOpenOrders").status, "passed", "the public Broker must exercise the authenticated open-order read")
   assert.equal(report.results.find((entry) => entry.operation === "Broker API getSymbolFilters").status, "passed", "the public Broker must validate raw symbol-filter metadata")
   assert.equal(report.results.find((entry) => entry.operation === "Broker API getOrderHistory").status, "passed", "the public Broker must exercise one authenticated symbol-scoped order-history page")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getDeposits").status, "passed", "the public Broker must exercise one bounded authenticated deposit-history page")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getWithdrawalHistory").status, "passed", "the public Broker must exercise one bounded authenticated withdrawal-history page")
   assert.deepEqual(brokerApiCalls.map((request) => request.path), [
     "/api/spot/v1/common/coin_pair/list",
     "/api/spot/v1/market/last_price",
@@ -764,13 +799,21 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
     "/api/spot/v1/user/account",
     "/api/spot/v1/order/pending/list",
     "/api/spot/v1/order/history/page",
-  ], "the same public Broker instance must exercise the metadata, ticker, balance, open-order and history reads")
+    "/api/spot/v1/deposit/page",
+    "/api/spot/v1/withdraw_transfer/page",
+  ], "the same public Broker instance must exercise the market, account and bounded history reads")
   assert.equal(brokerApiCalls[0].authenticated, false, "the market catalog must use unsigned public REST")
   assert.equal(brokerApiCalls[1].authenticated, false, "the public ticker must use unsigned REST")
   assert.equal(brokerApiCalls[2].authenticated, false, "symbol-filter metadata must use unsigned public REST")
   assert.equal(brokerApiCalls[3].authenticated ?? true, true, "account balances must use authenticated REST")
   assert.equal(brokerApiCalls[4].authenticated ?? true, true, "open orders must use authenticated REST")
   assert.equal(brokerApiCalls[5].authenticated ?? true, true, "order history must use authenticated REST")
+  assert.equal(brokerApiCalls[6].authenticated ?? true, true, "deposit history must use authenticated REST")
+  assert.equal(brokerApiCalls[7].authenticated ?? true, true, "withdrawal history must use authenticated REST")
+  assert.deepEqual(brokerApiCalls[6].body, { limit: 1 }, "deposit history must inspect only one bounded record")
+  assert.deepEqual(brokerApiCalls[7].body, { limit: 1 }, "withdrawal history must inspect only one bounded record")
+  assert.equal(report.schemaObservations.find((item) => item.path === "/api/spot/v1/deposit/page").schemaValid, true, "deposit records must satisfy their documented structural schema")
+  assert.equal(report.schemaObservations.find((item) => item.path === "/api/spot/v1/withdraw_transfer/page").schemaValid, true, "withdrawal records must satisfy their documented structural schema")
   assert.deepEqual(report.results.find((entry) => entry.operation === "Broker API getOrderHistory").request.params, {
     symbol: "BTCUSDT",
     page: 1,
@@ -792,6 +835,10 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
   assert.equal(report.schemaObservations[0].missingRequiredFields.length, 0, "the valid market fixture must satisfy required fields")
   assert.equal(JSON.stringify(report).includes("must-not-be-persisted"), false, "unknown response field values must never be persisted")
   assert.equal(JSON.stringify(report).includes("987654.321"), false, "private financial values must never be persisted")
+  assert.equal(JSON.stringify(report).includes("9876.54321"), false, "deposit amounts must never be persisted")
+  assert.equal(JSON.stringify(report).includes("123.456"), false, "withdrawal amounts must never be persisted")
+  assert.equal(JSON.stringify(report).includes("deposit-hash-must-not-be-persisted"), false, "deposit transaction hashes must never be persisted")
+  assert.equal(JSON.stringify(report).includes("withdrawal-address-must-not-be-persisted"), false, "withdrawal addresses must never be persisted")
   assert.equal(JSON.stringify(report).includes(validEnvironment.BITUNIX_API_SECRET), false, "diagnostic reports must never persist the API secret")
 })
 
