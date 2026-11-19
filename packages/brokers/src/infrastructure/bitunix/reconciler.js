@@ -79,6 +79,10 @@ function cloneAndFreeze({ value }) {
     return Object.freeze(value.map((entry) => cloneAndFreeze({ value: entry })))
   }
   if (value !== null && typeof value === "object") {
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) {
+      throw new TypeError("Bitunix Spot observation snapshots must contain only JSON-shaped objects")
+    }
     return Object.freeze(Object.fromEntries(
       Object.entries(value).map(([key, entry]) => [key, cloneAndFreeze({ value: entry })]),
     ))
