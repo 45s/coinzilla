@@ -353,6 +353,34 @@ function hasBlockerContaining({ blockers, fragment } = {}) {
   return blockers.some((blocker) => blocker.includes(fragment))
 }
 
+function assertMarketPriceRefreshTimeoutBlockers({ error } = {}) {
+  const blockers = getMarketBlockersFromShutdownError({
+    error,
+    symbol: "DOGEUSDT",
+  })
+  assert.ok(
+    hasBlockerWithPrefix({
+      blockers,
+      prefix: "RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE:MARKET_PRICE_REFRESH_TIMEOUT",
+    }),
+    "The timeout must remain a specific recovery-input blocker.",
+  )
+  assert.equal(
+    blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
+    false,
+    "A missing fresh market price must not be misclassified as order/fill reconciliation failure.",
+  )
+  assert.ok(hasBlockerContaining({
+    blockers,
+    fragment: "timeoutMs=5000",
+  }))
+  assert.ok(hasBlockerContaining({
+    blockers,
+    fragment: "retryable=true",
+  }))
+  return true
+}
+
 function hasBlockerWithPrefix({ blockers, prefix } = {}) {
   return blockers.some((blocker) => blocker.startsWith(prefix))
 }
@@ -590,33 +618,7 @@ test("keeps shutdown unsafe with an explicit blocker when fresh market price doe
   participant.beginShutdown()
   await assert.rejects(
     participant.waitUntilSafe(),
-    (error) => {
-      const blockers = getMarketBlockersFromShutdownError({
-        error,
-        symbol: "DOGEUSDT",
-      })
-      assert.ok(
-        hasBlockerWithPrefix({
-          blockers,
-          prefix: "RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE:MARKET_PRICE_REFRESH_TIMEOUT",
-        }),
-        "The timeout must remain a specific recovery-input blocker.",
-      )
-      assert.equal(
-        blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
-        false,
-        "A missing fresh market price must not be misclassified as order/fill reconciliation failure.",
-      )
-      assert.ok(hasBlockerContaining({
-        blockers,
-        fragment: "timeoutMs=5000",
-      }))
-      assert.ok(hasBlockerContaining({
-        blockers,
-        fragment: "retryable=true",
-      }))
-      return true
-    },
+    (error) => assertMarketPriceRefreshTimeoutBlockers({ error }),
     "Shutdown must fail closed when the market stream cannot provide fresh recovery pricing.",
   )
   assert.ok(calls.includes("wait-price:DOGEUSDT"), "The bounded event wait must be attempted.")
