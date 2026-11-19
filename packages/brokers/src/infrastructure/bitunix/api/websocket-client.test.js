@@ -550,11 +550,17 @@ test("Bitunix Spot WebSocket client reconnects the same instance with a fresh tr
     id: "request-2",
     code: "0",
     msg: "success",
-    data: [{ coin: "BTC", balance: "1.25" }],
+    data: [{
+      coin: "BTC",
+      balance: "1.25",
+    }],
   })
   assert.deepEqual(
     await nextRequest,
-    [{ coin: "BTC", balance: "1.25" }],
+    [{
+      coin: "BTC",
+      balance: "1.25",
+    }],
     "the reconnected client must resolve a fresh request using the new transport",
   )
 
