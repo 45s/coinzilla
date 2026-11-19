@@ -20,13 +20,15 @@ function createBroker({ responses = {} } = {}) {
   })
 
   return {
-    broker: new BitunixFuturesBroker({ config, restClient }),
+    broker: new BitunixFuturesBroker({ config,
+      restClient }),
     calls,
   }
 }
 
 test("getTradingPairs uses the documented public trading-pairs endpoint", async () => {
-  const { broker, calls } = createBroker({
+  const { broker,
+    calls } = createBroker({
     responses: {
       "/api/v1/futures/market/trading_pairs": [{
         symbol: "BTCUSDT",
@@ -58,7 +60,8 @@ test("getTradingPairs uses the documented public trading-pairs endpoint", async 
 })
 
 test("getTickers uses the documented public ticker endpoint and preserves decimal strings", async () => {
-  const { broker, calls } = createBroker({
+  const { broker,
+    calls } = createBroker({
     responses: {
       "/api/v1/futures/market/tickers": [{
         symbol: "BTCUSDT",
@@ -88,7 +91,8 @@ test("getTickers uses the documented public ticker endpoint and preserves decima
 })
 
 test("getDepth validates the documented fixed-depth values", async () => {
-  const { broker, calls } = createBroker({
+  const { broker,
+    calls } = createBroker({
     responses: {
       "/api/v1/futures/market/depth": {
         asks: [["60001.25", "1.00000001"]],
@@ -97,7 +101,8 @@ test("getDepth validates the documented fixed-depth values", async () => {
     },
   })
 
-  const result = await broker.getDepth({ symbol: "BTCUSDT", limit: "max" })
+  const result = await broker.getDepth({ symbol: "BTCUSDT",
+    limit: "max" })
 
   assert.equal(result.ok, true)
   assert.equal(result.data.asks[0][0], "60001.25")
@@ -105,14 +110,16 @@ test("getDepth validates the documented fixed-depth values", async () => {
   assert.deepEqual(calls[0], {
     method: "GET",
     path: "/api/v1/futures/market/depth",
-    queryParams: { symbol: "BTCUSDT", limit: "max" },
+    queryParams: { symbol: "BTCUSDT",
+      limit: "max" },
     authenticated: false,
     stateChanging: false,
   })
 })
 
 test("getKlines preserves exclusive endTime and the documented 200-candle maximum", async () => {
-  const { broker, calls } = createBroker({
+  const { broker,
+    calls } = createBroker({
     responses: {
       "/api/v1/futures/market/kline": [{
         open: "60000.1",
@@ -153,7 +160,8 @@ test("getKlines preserves exclusive endTime and the documented 200-candle maximu
 })
 
 test("getFundingRate and getFundingRates use the current and batch public endpoints", async () => {
-  const { broker, calls } = createBroker({
+  const { broker,
+    calls } = createBroker({
     responses: {
       "/api/v1/futures/market/funding_rate": [{
         symbol: "BTCUSDT",
@@ -177,14 +185,19 @@ test("getFundingRate and getFundingRates use the current and batch public endpoi
   assert.equal(current.data[0].indexPrice, "60000.3")
   assert.equal(current.data[0].nextFundingTime, "1770710400000")
   assert.equal(batch.ok, true)
-  assert.deepEqual(calls.map(({ path, authenticated }) => ({ path, authenticated })), [
-    { path: "/api/v1/futures/market/funding_rate", authenticated: false },
-    { path: "/api/v1/futures/market/funding_rate/batch", authenticated: false },
+  assert.deepEqual(calls.map(({ path,
+    authenticated }) => ({ path,
+    authenticated })), [
+    { path: "/api/v1/futures/market/funding_rate",
+      authenticated: false },
+    { path: "/api/v1/futures/market/funding_rate/batch",
+      authenticated: false },
   ])
 })
 
 test("getFundingRateHistory preserves funding settlement timestamps and validates the limit", async () => {
-  const { broker, calls } = createBroker({
+  const { broker,
+    calls } = createBroker({
     responses: {
       "/api/v1/futures/market/get_funding_rate_history": [{
         fundingRate: "-0.00001191",
@@ -212,7 +225,8 @@ test("getFundingRateHistory preserves funding settlement timestamps and validate
 })
 
 test("private position and order reads use authenticated GET requests", async () => {
-  const { broker, calls } = createBroker({
+  const { broker,
+    calls } = createBroker({
     responses: {
       "/api/v1/futures/account": [{
         marginCoin: "USDT",
@@ -226,31 +240,42 @@ test("private position and order reads use authenticated GET requests", async ()
         bonus: "0",
       }],
       "/api/v1/futures/position/get_pending_positions": [],
-      "/api/v1/futures/trade/get_pending_orders": { orderList: [], total: "0" },
+      "/api/v1/futures/trade/get_pending_orders": { orderList: [],
+        total: "0" },
     },
   })
 
   const account = await broker.getAccount({ marginCoin: "USDT" })
   const positions = await broker.getPendingPositions({ symbol: "BTCUSDT" })
-  const orders = await broker.getPendingOrders({ symbol: "BTCUSDT", limit: 100 })
+  const orders = await broker.getPendingOrders({ symbol: "BTCUSDT",
+    limit: 100 })
 
   assert.equal(account.ok, true)
   assert.equal(account.data[0].available, "1000")
   assert.equal(positions.ok, true)
   assert.equal(orders.ok, true)
-  assert.deepEqual(calls.map(({ path, authenticated, stateChanging }) => ({
+  assert.deepEqual(calls.map(({ path,
+    authenticated,
+    stateChanging }) => ({
     path,
     authenticated,
     stateChanging,
   })), [
-    { path: "/api/v1/futures/account", authenticated: true, stateChanging: false },
-    { path: "/api/v1/futures/position/get_pending_positions", authenticated: true, stateChanging: false },
-    { path: "/api/v1/futures/trade/get_pending_orders", authenticated: true, stateChanging: false },
+    { path: "/api/v1/futures/account",
+      authenticated: true,
+      stateChanging: false },
+    { path: "/api/v1/futures/position/get_pending_positions",
+      authenticated: true,
+      stateChanging: false },
+    { path: "/api/v1/futures/trade/get_pending_orders",
+      authenticated: true,
+      stateChanging: false },
   ])
 })
 
 test("invalid Kline and pagination requests fail before reaching the REST client", async () => {
-  const { broker, calls } = createBroker()
+  const { broker,
+    calls } = createBroker()
 
   const invalidInterval = await broker.getKlines({
     symbol: "BTCUSDT",
