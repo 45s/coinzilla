@@ -1422,3 +1422,18 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Run Brokers package tests and coverage, strict changed-file/workspace lint, syntax and all required CI on exact PR head `acba911cb614df8c4a95781bed624c3832f36c13`; all passed before merge.
 
 **Privacy and safety boundary:** only a strict allowlist of operation names, statuses, durations, aggregate counts, health verdict, and selected error classifications is committed. No request/response payloads, API keys, signatures, nonces, UIDs, account identifiers, balances, addresses, memos, request IDs, or free-form error messages are published. Local report files remain ignored and are written with restrictive permissions. The command uses the configured LIVE Spot API for read-only requests only; it never places/cancels orders, withdraws, transfers, force-pushes, deletes branches, or creates a PR for the generated report. Bitunix Futures remains out of scope and issue #1185 remains the Harvester lifecycle blocker.
+
+
+## 2026-11-19 — Bitunix Spot polling-backed observations
+
+**Status: first implementation slice; exact-head verification pending.**
+
+- Added `BitunixSpotReconciler` as an explicitly polling-backed, broker-specific observation primitive; exported from the Brokers package.
+- Each complete cycle reads account balances, pending orders and page 1 of history for every explicitly configured symbol, plus exchange-native matching-order details for explicitly tracked order IDs.
+- Added single-flight cycle coalescing, conflicting-scope rejection, unchanged-snapshot deduplication, local observation timestamps, stale/fresh status, failure reporting, and stop-generation fencing.
+- Failed or partial reads never publish a snapshot. No native push events, canonical fills, exchange source timestamps, complete history, account-wide open-order coverage, or authoritative account snapshot are claimed.
+- Added deterministic offline tests for snapshot semantics, failed reads, symbol validation, deduplication, single-flight behavior, conflicting scopes, stop races and scheduler cleanup.
+- Added [BITUNIX_SPOT_POLLING.md](./BITUNIX_SPOT_POLLING.md) documenting the contract and deliberate non-guarantees.
+- TESTNET is not a development prerequisite. The implementation uses read-only methods only; no live order/funds mutations are part of this work.
+
+**Next:** run exact package/workspace tests and lint; inspect authenticated read-only endpoint behavior locally; then determine whether stronger pagination and exchange semantics can be established. Do not connect this primitive to Harvester's event port or enable trading until canonical order identity, complete fill facts, account freshness, market constraints and safe unknown mutation outcomes are proven.
