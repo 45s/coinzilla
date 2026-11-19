@@ -1,6 +1,5 @@
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
-
-const MAX_SAFE_UID = Number.MAX_SAFE_INTEGER
+import { createBitunixInt64JsonNumber } from "../api/json-serializer.js"
 const RECIPIENT_FIELDS = Object.freeze([
   "toUid",
   "toPhoneCountryCode",
@@ -43,22 +42,9 @@ function requireOptionalString({ value, field, maxLength }) {
 }
 
 function requireUid({ value }) {
-  let uid
-  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) {
-    uid = value
-  } else if (typeof value === "string" && /^\d+$/.test(value)) {
-    const parsed = Number(value)
-    if (Number.isSafeInteger(parsed) && parsed > 0) {
-      uid = parsed
-    }
-  }
-  if (uid === undefined) {
-    throw new RangeError(
-      "Bitunix Spot toUid must be a positive safe integer; " +
-      "use phone/email routing for larger int64 UIDs",
-    )
-  }
-  return uid
+  return createBitunixInt64JsonNumber({
+    value,
+  })
 }
 
 function rejectUnusedRecipientFields({ input, allowed }) {
@@ -173,7 +159,7 @@ function createTransferRecipient({ input }) {
 
 /**
  * Build the exact request body for Bitunix Spot internal user-to-user transfer.
- * UID routing accepts only safely representable numeric IDs; phone/email routes support larger identity spaces.
+ * UID routing preserves positive signed int64 values as exact JSON integer tokens; phone/email routes remain available.
  *
  * @param {{input: object}} options
  * @returns {object}
