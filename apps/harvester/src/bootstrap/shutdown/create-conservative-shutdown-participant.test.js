@@ -490,7 +490,7 @@ test("waits for a fresh market-price event before retrying shutdown recovery inp
     const [symbol] = symbols
     const attempts = (recoveryAttempts.get(symbol) ?? 0) + 1
     recoveryAttempts.set(symbol, attempts)
-    calls.push("recovery:" + symbol + ":" + attempts)
+    calls.push(`recovery:${symbol}:${attempts}`)
     if (symbol === "DOGEUSDT" && attempts === 1) {
       return {
         ok: false,
@@ -506,7 +506,7 @@ test("waits for a fresh market-price event before retrying shutdown recovery inp
     return { ok: true }
   }
   engine.waitForFreshMarketPrice = async ({ symbol, timeoutMs } = {}) => {
-    calls.push("wait-price:" + symbol)
+    calls.push(`wait-price:${symbol}`)
     assert.equal(timeoutMs, 5000, "The wait must use the established five-second market-price freshness bound.")
     return {
       symbol,
@@ -532,7 +532,7 @@ test("keeps shutdown unsafe with an explicit blocker when fresh market price doe
   const engine = createFakeEngine({ calls })
   engine.reconcileRecoverySellsForShutdown = async ({ symbols } = {}) => {
     const [symbol] = symbols
-    calls.push("recovery:" + symbol)
+    calls.push(`recovery:${symbol}`)
     if (symbol === "DOGEUSDT") {
       return {
         ok: false,
@@ -548,7 +548,7 @@ test("keeps shutdown unsafe with an explicit blocker when fresh market price doe
     return { ok: true }
   }
   engine.waitForFreshMarketPrice = async ({ symbol } = {}) => {
-    calls.push("wait-price:" + symbol)
+    calls.push(`wait-price:${symbol}`)
     throw Object.assign(new Error("No fresh market-price event arrived before the freshness deadline"), {
       code: "MARKET_PRICE_REFRESH_TIMEOUT",
     })
