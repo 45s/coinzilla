@@ -2440,7 +2440,7 @@ test("Bitunix Spot withdrawal rejects invalid amounts and destination data befor
     const result = await broker.withdraw(request)
 
     assert.equal(result.ok, false, `invalid withdrawal request must fail locally: ${JSON.stringify(request)}`)
-    assert.equal(result.mutationOutcome, "NOT_SENT", "invalid withdrawal input must be classified as not sent")
+    assert.equal(result.mutationOutcome, "NOT_SENT", `invalid withdrawal input must be classified as not sent: ${JSON.stringify(request)}`)
     assert.equal(calls.length, 0, "invalid withdrawal input must not reach the exchange")
   }
 })
@@ -2505,7 +2505,10 @@ test("Bitunix Spot withdrawal cancellation verifies the final cancelled history 
       method: "POST",
       path: WITHDRAWAL_HISTORY_PATH,
       options: {
-        body: { id: withdrawalId },
+        body: {
+          id: withdrawalId,
+          type: "withdraw",
+        },
         authenticated: true,
         stateChanging: false,
       },
