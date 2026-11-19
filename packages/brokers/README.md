@@ -292,12 +292,11 @@ Bitunix documents Spot WebSocket as authenticated request/response RPC: every re
 
 ### Configure and run
 
-Create `.env.development` in the repository root (never commit it; the root `.gitignore` already excludes it). Credentials are optional for public-only checks:
+Create `.env.development` in the repository root (never commit it; the root `.gitignore` already excludes it). The published health check requires both private API credentials; the lower-level diagnostic command still supports public-only checks:
 
 ~~~dotenv
-# Optional: uncomment and configure both to enable private account, open-order, and order-history reads plus authenticated WebSocket RPC.
-# BITUNIX_API_KEY=your_diagnostic_api_key
-# BITUNIX_API_SECRET=your_api_secret
+BITUNIX_API_KEY=your_read_only_diagnostic_api_key
+BITUNIX_API_SECRET=your_api_secret
 # Optional: leave unset to skip REST and WebSocket depth checks; choose only a value you have verified for your market.
 # BITUNIX_DIAGNOSTICS_DEPTH_PRECISION=
 ~~~
@@ -307,6 +306,8 @@ From the repository root:
 ~~~sh
 pnpm bitunix:health
 ~~~
+
+For public-only diagnostics without private credentials, use `pnpm --filter @coinzilla/brokers diagnose:bitunix`; this command does not create or push a report branch. The publisher rejects missing or blank credentials before fetching or creating a branch, so it cannot label a public-only run as a successful authenticated health check.
 
 The source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` constant is the explicit acknowledgement gate because Bitunix Spot has no documented TESTNET environment. It defaults to `true`; set it to `false` in `scripts/bitunix-diagnostic-runner.js` to prevent the runner from making requests. The runner contacts the configured LIVE Spot endpoint and performs non-mutating query requests only.
 
