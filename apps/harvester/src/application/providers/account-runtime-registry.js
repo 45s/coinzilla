@@ -28,6 +28,26 @@ function createAccountScopeKey({ identity }) {
   return JSON.stringify([identity.providerType, identity.accountId, identity.environment])
 }
 
+function defineValidatedStateProperty({
+  state,
+  property,
+  getValue,
+  setValue,
+  isValid,
+  errorMessage,
+}) {
+  Object.defineProperty(state, property, {
+    enumerable: true,
+    get: getValue,
+    set: (value) => {
+      if (!isValid(value)) {
+        throw new TypeError(errorMessage)
+      }
+      setValue(value)
+    },
+  })
+}
+
 function createAccountTradingState() {
   // CG and RS accounting share one account-level serialization queue and canonical state.
   let portfolio = new Portfolio()
@@ -48,55 +68,45 @@ function createAccountTradingState() {
     trailingBuySymbols: new Set(),
     requiresExchangeReconciliation: false,
   }
-  Object.defineProperty(state, "portfolio", {
-    enumerable: true,
-    get: () => portfolio,
-    set: (nextPortfolio) => {
-      if (!(nextPortfolio instanceof Portfolio)) {
-        throw new TypeError("Account workflow portfolio must be a Portfolio")
-      }
-      portfolio = nextPortfolio
-    },
+  defineValidatedStateProperty({
+    state,
+    property: "portfolio",
+    getValue: () => portfolio,
+    setValue: (value) => { portfolio = value },
+    isValid: (value) => value instanceof Portfolio,
+    errorMessage: "Account workflow portfolio must be a Portfolio",
   })
-  Object.defineProperty(state, "recoveryLedgers", {
-    enumerable: true,
-    get: () => recoveryLedgers,
-    set: (nextRecoveryLedgers) => {
-      if (!(nextRecoveryLedgers instanceof Map)) {
-        throw new TypeError("Account workflow recoveryLedgers must be a Map")
-      }
-      recoveryLedgers = nextRecoveryLedgers
-    },
+  defineValidatedStateProperty({
+    state,
+    property: "recoveryLedgers",
+    getValue: () => recoveryLedgers,
+    setValue: (value) => { recoveryLedgers = value },
+    isValid: (value) => value instanceof Map,
+    errorMessage: "Account workflow recoveryLedgers must be a Map",
   })
-  Object.defineProperty(state, "orderRegistry", {
-    enumerable: true,
-    get: () => orderRegistry,
-    set: (nextOrderRegistry) => {
-      if (!(nextOrderRegistry instanceof OrderRegistry)) {
-        throw new TypeError("Account workflow orderRegistry must be an OrderRegistry")
-      }
-      orderRegistry = nextOrderRegistry
-    },
+  defineValidatedStateProperty({
+    state,
+    property: "orderRegistry",
+    getValue: () => orderRegistry,
+    setValue: (value) => { orderRegistry = value },
+    isValid: (value) => value instanceof OrderRegistry,
+    errorMessage: "Account workflow orderRegistry must be an OrderRegistry",
   })
-  Object.defineProperty(state, "legacyPositions", {
-    enumerable: true,
-    get: () => legacyPositions,
-    set: (nextLegacyPositions) => {
-      if (!(nextLegacyPositions instanceof Map)) {
-        throw new TypeError("Account workflow legacyPositions must be a Map")
-      }
-      legacyPositions = nextLegacyPositions
-    },
+  defineValidatedStateProperty({
+    state,
+    property: "legacyPositions",
+    getValue: () => legacyPositions,
+    setValue: (value) => { legacyPositions = value },
+    isValid: (value) => value instanceof Map,
+    errorMessage: "Account workflow legacyPositions must be a Map",
   })
-  Object.defineProperty(state, "updateQueue", {
-    enumerable: true,
-    get: () => updateQueue,
-    set: (nextQueue) => {
-      if (nextQueue === null || typeof nextQueue?.then !== "function") {
-        throw new TypeError("Account workflow updateQueue must be Promise-like")
-      }
-      updateQueue = nextQueue
-    },
+  defineValidatedStateProperty({
+    state,
+    property: "updateQueue",
+    getValue: () => updateQueue,
+    setValue: (value) => { updateQueue = value },
+    isValid: (value) => value !== null && typeof value?.then === "function",
+    errorMessage: "Account workflow updateQueue must be Promise-like",
   })
   return Object.freeze(state)
 }
