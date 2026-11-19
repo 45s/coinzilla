@@ -92,9 +92,15 @@ function validateRecoverySellAllocation({ purpose, ownership, quantity } = {}) {
       Object.keys(allocation).length !== 2 ||
       !isPositiveCanonicalDecimalString({ value: allocation.recoverySellQuantity }) ||
       !isCanonicalDecimalString({ value: allocation.legacySellQuantity }) ||
-      compareDecimal({ left: allocation.legacySellQuantity, right: "0" }) < 0 ||
       compareDecimal({
-        left: addDecimal({ left: allocation.recoverySellQuantity, right: allocation.legacySellQuantity }),
+        left: allocation.legacySellQuantity,
+        right: "0",
+      }) < 0 ||
+      compareDecimal({
+        left: addDecimal({
+          left: allocation.recoverySellQuantity,
+          right: allocation.legacySellQuantity,
+        }),
         right: quantity,
       }) !== 0) {
     throw new TypeError("Recovery Seller SELL requires an exact recovery/legacy allocation equal to the canonical order quantity")
@@ -130,13 +136,16 @@ function validatePurposeOwnership({ purpose, ownership, side, quantity } = {}) {
   validateRecoveryPurposeSide({
     purpose,
     side,
-    quantity,
   })
   return {
     strategyId: ownership.strategyId,
     positionId: ownership.positionId,
     ...(hasCycleId ? { cycleId: ownership.cycleId } : {}),
-    ...validateRecoverySellAllocation({ purpose, ownership, quantity }),
+    ...validateRecoverySellAllocation({
+      purpose,
+      ownership,
+      quantity,
+    }),
   }
 }
 
@@ -153,6 +162,7 @@ function validateSubmissionOwnership({ purpose, ownership, side, quantity } = {}
     purpose,
     ownership,
     side,
+    quantity,
   })
 }
 
