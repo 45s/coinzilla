@@ -177,7 +177,8 @@ A task PR targeting `develop` must:
 - Pass the relevant package tests and coverage checks.
 - Pass the repository's required CI checks.
 - Contain the latest `develop` commit immediately before merge.
-- Satisfy the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact) for every meaningful change; do not leave required documentation as an untracked follow-up.- Have a reviewed final diff with no secrets, generated noise, weakened tests, or unrelated edits.
+- Satisfy the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact) for every meaningful change; do not leave required documentation as an untracked follow-up.
+- Have a reviewed final diff with no secrets, generated noise, weakened tests, or unrelated edits.
 
 **Human approval is not a routine gate for `develop`.** After all required checks pass, branch freshness is verified, and the diff/ownership checks are satisfied, the responsible agent may merge its own task PR into `develop`. Prefer GitHub auto-merge if the repository enables it; otherwise merge only after the required checks have completed successfully. Never bypass branch protection or merge with pending/failed checks.
 
