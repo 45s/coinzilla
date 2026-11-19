@@ -443,7 +443,6 @@ The module retains an internal `BinanceSdkConfig` alias for compatibility inside
 
 The Brokers package exposes its own public Broker API. Each consuming application owns any narrower application port, adapters, bootstrap, provider selection, and routing it needs. Those application contracts must not be copied into this package.
 
-
 Compatibility consumers may be inspected and their regression suites may run through repository CI, but no consuming-application implementation is part of a Brokers-owned change.
 
 ### Current broker operations and Binance mapping
@@ -1223,7 +1222,6 @@ The following comparison resolves what the references actually implement; it doe
 4. **Resolve order lifecycle contracts externally:** quantity units, client identity, execution completeness, cancellation/unknown-outcome recovery and isolated mutation environment. Keep placement/cancellation disabled until all are resolved.
 5. **Implement a private user-data lifecycle only if the Spot contract supports it:** require a documented push stream or rigorously specified timestamped polling/reconciliation alternative. Match the broker package's recovery safety; do not invent a stream or replay guarantee.
 6. **Parity acceptance:** add a shared broker contract suite for every capability Bitunix claims to support; compare result shapes, exact decimal strings, errors, unsupported behavior and cleanup against Binance without weakening Binance contracts.
-
 
 ---
 
