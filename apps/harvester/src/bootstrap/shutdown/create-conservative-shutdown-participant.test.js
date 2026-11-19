@@ -349,6 +349,10 @@ function getMarketBlockersFromShutdownError({ error, symbol } = {}) {
   return error.shutdownDiagnostics.markets.find((entry) => entry.symbol === symbol)?.blockers ?? []
 }
 
+function hasBlockerContaining({ blockers, fragment } = {}) {
+  return blockers.some((blocker) => blocker.includes(fragment))
+}
+
 function hasBlockerWithPrefix({ blockers, prefix } = {}) {
   return blockers.some((blocker) => blocker.startsWith(prefix))
 }
@@ -603,8 +607,8 @@ test("keeps shutdown unsafe with an explicit blocker when fresh market price doe
         false,
         "A missing fresh market price must not be misclassified as order/fill reconciliation failure.",
       )
-      assert.ok(blockers.some((blocker) => blocker.includes("timeoutMs=5000")))
-      assert.ok(blockers.some((blocker) => blocker.includes("retryable=true")))
+      assert.ok(hasBlockerContaining({ blockers, fragment: "timeoutMs=5000" }))
+      assert.ok(hasBlockerContaining({ blockers, fragment: "retryable=true" }))
       return true
     },
     "Shutdown must fail closed when the market stream cannot provide fresh recovery pricing.",
