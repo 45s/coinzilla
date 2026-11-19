@@ -120,3 +120,12 @@ Sometimes the submission acknowledgement already reports the order as FILLED. In
 - [Volatility protection state machine](../../src/domain/market/volatility-protection-state.js)
 - [Volatility protection state-machine tests](../../src/domain/market/volatility-protection-state.test.js)
 - [Harvester Broker Port and Adapter](../infrastructure/broker-port-and-adapter.md)
+
+
+## Native events versus polling observations
+
+The generic Broker API exposes one `subscribeForUserData()` method with independent `onEvent`, `onObservation`, and `onStatus` callbacks. Harvester does not inspect provider identity or implementation source to choose a delivery path.
+
+- Native exchange events arrive only through `onEvent` and remain the only input to canonical execution accounting.
+- Polling-backed snapshots arrive only through `onObservation` and are handled by a diagnostic-only callback. They cannot enter the canonical event queue, create fills, mutate order ownership, satisfy an authoritative account snapshot, or open trading readiness.
+- The returned subscription declares `deliveryMode` and `nativePush`. Bitunix Spot currently advertises `OBSERVE_USER_DATA: SUPPORTED` but keeps native `SUBSCRIBE_USER_DATA` and `getAccountSnapshot()` unsupported. It remains outside Harvester provider registration until issue #1185's full admission criteria are satisfied.
