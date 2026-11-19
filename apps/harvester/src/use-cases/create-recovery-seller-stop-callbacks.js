@@ -1,3 +1,20 @@
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
+
+function markSellCycleUnknown({ cycleCoordinator, input } = {}) {
+  const { order, ownership } = input ?? {}
+  if (!cycleCoordinator ||
+      order?.side !== "SELL" ||
+      ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
+      typeof ownership.cycleId !== "string" ||
+      typeof order.market?.id !== "string") {
+    return
+  }
+  cycleCoordinator.markSellUnknown({
+    marketId: order.market.id,
+    cycleId: ownership.cycleId,
+  })
+}
+
 function resolveOrderIdentity({ order } = {}) {
   if (!order || typeof order !== "object" || Array.isArray(order) ||
       typeof order.clientOrderId !== "string" || !order.clientOrderId.trim()) {
@@ -30,15 +47,19 @@ function createStopExplanation({ order, outcome, orderIdentity } = {}) {
   return `Recovery Seller ${side} submission outcome ${safeOutcome} ${identityStatus}`
 }
 
-function createDurableStopLatch({ stopWorkflow } = {}) {
-  return async ({ order, outcome } = {}) => {
+function createDurableStopLatch({ stopWorkflow, cycleCoordinator } = {}) {
+  return async (input = {}) => {
+    markSellCycleUnknown({
+      cycleCoordinator,
+      input,
+    })
     const orderIdentity = resolveOrderIdentity({
-      order,
+      order: input.order,
     })
     return stopWorkflow.latch({
       explanation: createStopExplanation({
-        order,
-        outcome,
+        order: input.order,
+        outcome: input.outcome,
         orderIdentity,
       }),
       ...(orderIdentity ? { orderIdentity } : {}),
@@ -46,13 +67,17 @@ function createDurableStopLatch({ stopWorkflow } = {}) {
   }
 }
 
-export function createRecoverySellerStopCallbacks({ stopWorkflow } = {}) {
+export function createRecoverySellerStopCallbacks({
+  stopWorkflow,
+  cycleCoordinator,
+} = {}) {
   if (typeof stopWorkflow?.getStopState !== "function" ||
       typeof stopWorkflow?.latch !== "function") {
     throw new TypeError("Recovery Seller STOP callbacks require a durable STOP workflow")
   }
   const latchStop = createDurableStopLatch({
     stopWorkflow,
+    cycleCoordinator,
   })
   return Object.freeze({
     canSubmit: () => stopWorkflow.getStopState()?.status === "CLEAR",

@@ -113,6 +113,32 @@ function createSubmissionFailureCallback({
   }
 }
 
+function createCycleSellReservationCallback({ cycleCoordinator } = {}) {
+  if (!cycleCoordinator) {
+    return undefined
+  }
+  return async ({ order, ownership } = {}) => {
+    const result = cycleCoordinator.reserveSell({
+      marketId: order?.market?.id,
+      cycleId: ownership?.cycleId,
+      orderIdentity: {
+        clientOrderId: order?.clientOrderId,
+        ...(order?.brokerOrderId ? { brokerOrderId: order.brokerOrderId } : {}),
+      },
+      durableSubmissionIntent: true,
+    })
+    if (result?.ok !== true) {
+      return result
+    }
+    return toResult({
+      data: {
+        durable: true,
+        cycleState: result.data,
+      },
+    })
+  }
+}
+
 function resolveSubmitterStopCallbacks({
   recoverySellerStopCallbacks,
   onUnresolvedSubmission,
@@ -240,8 +266,12 @@ export function createRecoverySellerOrderSubmitter({
   onOrderValidationFailure,
   canSubmit,
   recoverySellerStopCallbacks,
+  recoverySellerCycleCoordinator,
   onSellReserved,
 } = {}) {
+  const sellReservationCallback = onSellReserved ?? createCycleSellReservationCallback({
+    cycleCoordinator: recoverySellerCycleCoordinator,
+  })
   const stopCallbacks = resolveSubmitterStopCallbacks({
     recoverySellerStopCallbacks,
     onUnresolvedSubmission,
@@ -254,7 +284,7 @@ export function createRecoverySellerOrderSubmitter({
     onDurableSubmissionOutcome,
     onUnresolvedSubmission: stopCallbacks.onUnresolvedSubmission,
     canSubmit: stopCallbacks.canSubmit,
-    onSellReserved,
+    onSellReserved: sellReservationCallback,
   })
   const execute = createRecoverySellerExecutor({
     broker,
@@ -264,10 +294,10 @@ export function createRecoverySellerOrderSubmitter({
     onUnresolvedSubmission: stopCallbacks.onUnresolvedSubmission,
     onOrderValidationFailure: stopCallbacks.onOrderValidationFailure,
     canSubmit: stopCallbacks.canSubmit,
-    onSellReserved,
+    onSellReserved: sellReservationCallback,
   })
   return createRecoverySellerSubmissionHandler({
     execute,
-    onSellReserved,
+    onSellReserved: sellReservationCallback,
   })
 }

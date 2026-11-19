@@ -48,6 +48,7 @@ import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, c
 import { assertRecoverySellerEvaluatorAvailable } from "./assert-recovery-seller-evaluator-available.js"
 import { createRecoverySellerStopRuntime } from "./create-recovery-seller-stop-runtime.js"
 import { createRecoverySellerCycleCoordinator } from "../use-cases/create-recovery-seller-cycle-coordinator.js"
+import { createRecoverySellerStopCallbacks } from "../use-cases/create-recovery-seller-stop-callbacks.js"
 
 function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
   if (typeof operationalStateStore?.append !== "function" ||
@@ -449,6 +450,22 @@ async function createHarvesterStartupContext({ options } = {}) {
   }
 }
 
+function createHarvesterRecoverySellerRuntime({ startup, accountRuntime } = {}) {
+  const cycleCoordinator = createRecoverySellerCycleCoordinator({
+    sharedState: accountRuntime.state,
+  })
+  const stopCallbacks = startup.recoverySellerStopRuntime.enabled
+    ? createRecoverySellerStopCallbacks({
+      stopWorkflow: startup.recoverySellerStopRuntime.workflow,
+      cycleCoordinator,
+    })
+    : undefined
+  return {
+    cycleCoordinator,
+    stopCallbacks,
+  }
+}
+
 function createHarvesterPortfolioContext({ startup } = {}) {
   const providerIdentity = startup.providerIdentity ?? resolveBinanceProviderIdentity({
     tradingMode: startup.tradingMode,
@@ -465,13 +482,16 @@ function createHarvesterPortfolioContext({ startup } = {}) {
   const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
     sharedState: accountRuntime.state,
   })
+  const recoverySellerRuntime = createHarvesterRecoverySellerRuntime({
+    startup,
+    accountRuntime,
+  })
   const context = {
     accountRuntime,
     accountRuntimeRegistry,
     recoverySellerWorkflow,
-    recoverySellerCycleCoordinator: createRecoverySellerCycleCoordinator({
-      sharedState: accountRuntime.state,
-    }),
+    recoverySellerCycleCoordinator: recoverySellerRuntime.cycleCoordinator,
+    recoverySellerStopCallbacks: recoverySellerRuntime.stopCallbacks,
     recoverySellerMarketMetadata: new Map(),
     getRecoverySellerMarketMetadata: ({ symbol } = {}) => context.recoverySellerMarketMetadata.get(symbol),
     getAdditionalTrackedBaseQuantity: (...args) => recoverySellerWorkflow.getAdditionalTrackedBaseQuantity(...args),
@@ -708,7 +728,7 @@ function createHarvesterTradingEngineActivator({ startup,
       recoverySellerWorkflow: portfolio.recoverySellerWorkflow,
       recoverySellerCycleCoordinator: portfolio.recoverySellerCycleCoordinator,
       recoverySellerStopWorkflow: startup.recoverySellerStopRuntime.workflow,
-      recoverySellerStopCallbacks: startup.recoverySellerStopRuntime.callbacks,
+      recoverySellerStopCallbacks: portfolio.recoverySellerStopCallbacks,
       evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
       getRecoverySellerMarketMetadata: portfolio.getRecoverySellerMarketMetadata,
       updateTradingAccounting: portfolio.updateTradingAccounting,
