@@ -237,12 +237,31 @@ const BITUNIX_SPOT_CAPABILITIES = [
   },
 ]
 
+const LIVE_MUTATION_TYPES = new Set([
+  "PLACE_LIMIT_ORDER",
+  "PLACE_MARKET_ORDER",
+  "CANCEL_ORDER",
+  "CANCEL_ALL_ORDERS",
+])
+
 /**
  * Create the immutable, evidence-backed Bitunix Spot capability declaration.
  *
+ * @param {{allowLiveOrderMutations?: boolean}} options
  * @returns {BrokerCapabilities}
  */
-export function createBitunixBrokerCapabilities() {
+export function createBitunixBrokerCapabilities({ allowLiveOrderMutations = false } = {}) {
+  const capabilities = BITUNIX_SPOT_CAPABILITIES.map((capability) => {
+    if (!LIVE_MUTATION_TYPES.has(capability.type) || allowLiveOrderMutations) {
+      return capability
+    }
+    return {
+      type: capability.type,
+      status: "UNSUPPORTED",
+      method: capability.method,
+      reason: "Live Bitunix Spot mutations are disabled by default. Explicitly set allowLiveOrderMutations: true only after independent live-account authorization.",
+    }
+  })
   return new BrokerCapabilities({
     provider: "bitunix",
     product: "spot",
@@ -250,8 +269,8 @@ export function createBitunixBrokerCapabilities() {
       selector: "tradingMode",
       selectedMode: "live",
       supportedModes: ["live"],
-      notes: "No Bitunix Spot TESTNET is documented. Order mutations use signed LIVE REST endpoints; offline tests do not constitute live exchange acceptance.",
+      notes: "No Bitunix Spot TESTNET is documented. Live order mutations are disabled by default and require explicit configuration opt-in.",
     },
-    capabilities: BITUNIX_SPOT_CAPABILITIES,
+    capabilities,
   })
 }
