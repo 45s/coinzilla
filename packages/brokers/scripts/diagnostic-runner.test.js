@@ -728,7 +728,6 @@ function createBrokerApiDiagnosticResponse({ request, invalidSchema }) {
       data: {
         pageNum: 1,
         total: 0,
-        data: [],
       },
     }
   }
