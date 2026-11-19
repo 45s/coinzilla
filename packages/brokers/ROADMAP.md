@@ -1057,7 +1057,7 @@ The method names below are the concrete Binance broker surface compared with `Bi
 | `getCanonicalOrderHistory({ ... })` | Blocked | Stable client identity and a proven history query contract capable of resolving canonical orders. |
 | `getMyTrades({ ... })` | Blocked | Account-wide trade history endpoint, documented pagination, stable per-execution IDs and time/cursor semantics. |
 | `getFills({ symbol, orderId })` | Blocked | Prove the quantity denomination, complete partial-execution coverage, stable/unique execution identity, fee semantics and ordering before exposing canonical Fill values. |
-| `createOrder()` | Blocked | Written clarification of single-order REST quantity units; client-supplied idempotency identity or authoritative unknown-outcome reconciliation; verified mutation environment. |
+| `createOrder()` | Implemented (single-order REST LIMIT/MARKET) | Exact REST-specific volume conversion, order-ID detail verification, conservative unknown-outcome handling. Client-order-ID and canonical placement remain unsupported. |
 | `createCanonicalOrder()` | Blocked | All placement prerequisites plus canonical response facts and a stable client order ID. |
 | `cancelOrder()` | Implemented (single known order) | Signed REST cancellation followed by order-detail verification; unknown outcomes require manual reconciliation. |
 | `cancelAllOpenOrders()` | Implemented (one symbol) | Reads open orders for the requested symbol, cancels each order, verifies final state, and returns partial/unknown outcomes. Account-wide cancellation remains unavailable. |
