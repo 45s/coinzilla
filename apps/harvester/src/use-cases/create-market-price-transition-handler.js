@@ -1,6 +1,155 @@
 import { toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 
+function createMarketPriceRefreshTimeoutError({ symbol, timeoutMs } = {}) {
+  const error = new Error(`No fresh market-price event arrived for ${symbol} within ${timeoutMs} ms`)
+  error.code = "MARKET_PRICE_REFRESH_TIMEOUT"
+  error.symbol = symbol
+  error.timeoutMs = timeoutMs
+  return error
+}
+
+function createMarketPriceRefreshAbortError({ signal } = {}) {
+  const error = new Error("Waiting for a fresh market-price event was aborted", {
+    cause: signal?.reason,
+  })
+  error.code = "MARKET_PRICE_REFRESH_ABORTED"
+  return error
+}
+
+function cleanupFreshPriceWaiter({
+  symbol,
+  waiters,
+  waitersBySymbol,
+  waiter,
+  signal,
+  clearTimeoutFn,
+} = {}) {
+  if (waiter.timeoutHandle !== undefined) {
+    clearTimeoutFn(waiter.timeoutHandle)
+  }
+  signal?.removeEventListener?.("abort", waiter.onAbort)
+  waiters.delete(waiter)
+  if (waiters.size === 0) {
+    waitersBySymbol.delete(symbol)
+  }
+}
+
+function createPendingFreshPriceWaiter({
+  symbol,
+  timeoutMs,
+  signal,
+  waitersBySymbol,
+  setTimeoutFn,
+  clearTimeoutFn,
+} = {}) {
+  return new Promise((...settlers) => {
+    const [resolve, reject] = settlers
+    const waiters = waitersBySymbol.get(symbol) ?? new Set()
+    const settledState = { settled: false }
+    const waiter = {}
+    const cleanup = () => cleanupFreshPriceWaiter({
+      symbol,
+      waiters,
+      waitersBySymbol,
+      waiter,
+      signal,
+      clearTimeoutFn,
+    })
+    const settle = ({ callback, value } = {}) => {
+      if (settledState.settled) {
+        return
+      }
+      settledState.settled = true
+      cleanup()
+      callback(value)
+    }
+    waiter.resolve = (price) => settle({
+      callback: resolve,
+      value: price,
+    })
+    waiter.reject = (error) => settle({
+      callback: reject,
+      value: error,
+    })
+    waiter.onAbort = () => waiter.reject(createMarketPriceRefreshAbortError({ signal }))
+
+    waiters.add(waiter)
+    waitersBySymbol.set(symbol, waiters)
+    try {
+      waiter.timeoutHandle = setTimeoutFn(
+        () => waiter.reject(createMarketPriceRefreshTimeoutError({
+          symbol,
+          timeoutMs,
+        })),
+        timeoutMs,
+      )
+      if (!settledState.settled) {
+        signal?.addEventListener?.("abort", waiter.onAbort, { once: true })
+      }
+      if (signal?.aborted) {
+        waiter.onAbort()
+      }
+    } catch (error) {
+      waiter.reject(error)
+    }
+  })
+}
+
+/**
+ * Wait for an accepted fresh stream event without blocking the serialized engine transition queue.
+ */
+export function createFreshMarketPriceWaiter({
+  state,
+  isMarketPriceFresh,
+  setTimeoutFn = setTimeout,
+  clearTimeoutFn = clearTimeout,
+} = {}) {
+  if (!state || !(state.prices instanceof Map) || typeof isMarketPriceFresh !== "function") {
+    throw new TypeError("Fresh market-price waiter requires engine state and a freshness predicate")
+  }
+
+  const waitersBySymbol = new Map()
+  const waitForFreshMarketPrice = ({ symbol, timeoutMs, signal } = {}) => {
+    if (typeof symbol !== "string" || symbol.length === 0) {
+      return Promise.reject(new TypeError("Fresh market-price wait requires a symbol"))
+    }
+    if (signal?.aborted) {
+      return Promise.reject(createMarketPriceRefreshAbortError({ signal }))
+    }
+    const currentPrice = state.prices.get(symbol)
+    if (currentPrice && isMarketPriceFresh(currentPrice)) {
+      return Promise.resolve(currentPrice)
+    }
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+      return Promise.reject(new RangeError("Fresh market-price wait timeout must be a positive safe integer"))
+    }
+
+    return createPendingFreshPriceWaiter({
+      symbol,
+      timeoutMs,
+      signal,
+      waitersBySymbol,
+      setTimeoutFn,
+      clearTimeoutFn,
+    })
+  }
+  const notifyFreshMarketPrice = ({ symbol, price } = {}) => {
+    const waiters = waitersBySymbol.get(symbol)
+    if (!waiters) {
+      return
+    }
+    for (const waiter of [...waiters]) {
+      waiter.resolve(price)
+    }
+  }
+
+  return Object.freeze({
+    waitForFreshMarketPrice,
+    notifyFreshMarketPrice,
+  })
+}
+
 /** Log the existing market and trading context before applying a price event. */
 function logMarketPriceReceived({
   state,
@@ -95,6 +244,7 @@ function acceptFreshMarketPriceTransition({
   isMarketPriceFresh,
   logger,
   transition,
+  notifyFreshMarketPrice,
 } = {}) {
   const { symbol, price, marketEventId } = transition
   if (!isMarketPriceFresh(price)) {
@@ -117,6 +267,10 @@ function acceptFreshMarketPriceTransition({
 
   state.marketPriceEventIds.set(symbol, marketEventId)
   state.prices.set(symbol, price)
+  notifyFreshMarketPrice?.({
+    symbol,
+    price,
+  })
 
   return {
     accepted: true,
@@ -185,6 +339,7 @@ export function createMarketPriceTransitionHandler({
   maybeReplaceTrailingBuy,
   evaluateLatestTransition,
   nextMarketPriceEventId,
+  notifyFreshMarketPrice,
 } = {}) {
   return async ({ symbol, priceEvent } = {}) => {
     try {
@@ -204,6 +359,7 @@ export function createMarketPriceTransitionHandler({
         isMarketPriceFresh,
         logger,
         transition,
+        notifyFreshMarketPrice,
       })
       if (!acceptance.accepted) {
         return acceptance.result
