@@ -76,8 +76,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Why:** Utils is foundational and every dependency/API change increases workspace-wide risk.
    - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
-
- > Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and ensure validation modernization are complete. The legacy Validator/VR removal is being delivered in PR #1509; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven. The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
+> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and ensure validation modernization are complete. The legacy Validator/VR removal is in PR #1509 (pending merge). The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
 
 **Owner:** `packages/utils/`
 
