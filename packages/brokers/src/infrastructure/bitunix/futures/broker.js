@@ -59,7 +59,7 @@ const FUTURES_ENDPOINTS = Object.freeze({
   account: "/api/v1/futures/account",
   tradingSettings: "/api/v1/futures/account/trading_settings",
   leverageMarginMode: "/api/v1/futures/account/get_leverage_margin_mode",
-  positionMode: "/api/v1/futures/account/get_position_mode",
+  positionMode: "/api/v1/futures/account/position_mode",
   pendingPositions: "/api/v1/futures/position/get_pending_positions",
   historyPositions: "/api/v1/futures/position/get_history_positions",
   pendingOrders: "/api/v1/futures/trade/get_pending_orders",
