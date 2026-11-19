@@ -15,6 +15,13 @@ const market = new Market({ venue: "binance",
 symbol: "DOGEUSDT",
 baseAsset,
 quoteAsset })
+const recoverySellerBuyOwnership = {
+  strategyId: "RECOVERY_SELLER",
+  positionId: "rs-position-1",
+  purpose: "RECOVERY_BUY",
+  cycleId: "rs-cycle-1",
+}
+
 const order = new CanonicalOrder({
   clientOrderId: "h-0123456789abcdef012345-1",
   providerInstanceId: "binanceTestnet",
@@ -50,7 +57,8 @@ test("records the canonical immutable order intent and requires a durable append
   const result = await recordOrderSubmissionIntent({
     operationalStateStore,
     order,
-    purpose: "RECOVERY_SELL",
+    purpose: "RECOVERY_BUY",
+    ownership: recoverySellerBuyOwnership,
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
@@ -71,8 +79,11 @@ test("records the canonical immutable order intent and requires a durable append
     type: "LIMIT_MAKER",
     price: "0.099",
     quantity: "100",
-    purpose: "RECOVERY_SELL",
-  }, "The fact must preserve canonical market/order identities, exact decimal strings, and strategy purpose.")
+    purpose: "RECOVERY_BUY",
+    strategyId: "RECOVERY_SELLER",
+    positionId: "rs-position-1",
+    cycleId: "rs-cycle-1",
+  }, "The fact must preserve canonical market/order identities, exact decimal strings, and complete RS ownership.")
 })
 
 test("rejects a successful-shaped append that does not confirm durable commitment", async () => {
@@ -204,4 +215,25 @@ test("rejects partial provider identity in durable order facts", async (t) => {
     },
   })
   assert.equal(result.ok, false)
+})
+
+test("requires complete RS ownership for a Recovery Seller submission intent", async () => {
+  let appendCalls = 0
+  const result = await recordOrderSubmissionIntent({
+    operationalStateStore: {
+      append: async () => {
+        appendCalls += 1
+        return {
+          ok: true,
+          data: { durable: true },
+        }
+      },
+    },
+    order,
+    purpose: "RECOVERY_BUY",
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /ownership|cycleId|positionId/i)
+  assert.equal(appendCalls, 0)
 })
