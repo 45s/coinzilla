@@ -827,8 +827,8 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
   assert.deepEqual(report.results.find((entry) => entry.operation === "Broker API getSymbolFilters").request.params, {
     symbol: "BTCUSDT",
   }, "symbol-filter diagnostics must inspect only the configured market")
-  assert.equal(report.schemaObservations.at(-1).path, "/api/spot/v1/order/history/page", "the report must include order-history response-shape observations")
-  assert.equal(report.schemaObservations.at(-1).schemaValid, true, "the order-history envelope must satisfy its documented page schema")
+  const orderHistorySchema = report.schemaObservations.find((item) => item.path === "/api/spot/v1/order/history/page")
+  assert.equal(orderHistorySchema.schemaValid, true, "the order-history envelope must satisfy its documented page schema")
   assert.deepEqual(report.schemaObservations[0].unexpectedFields, ["futureField"], "unknown exchange fields must be reported without failing otherwise valid normalization")
   assert.equal(report.schemaObservations[0].schemaValid, true, "unknown fields alone must not fail the expected response schema")
   assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getExchangeMarkets").status, "passed", "unknown additions must not fail the public Broker response schema check")
