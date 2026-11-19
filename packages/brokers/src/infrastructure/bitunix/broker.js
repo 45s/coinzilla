@@ -1180,21 +1180,22 @@ export class BitunixSpotBroker extends CoreBroker {
     }
 
     const allConfirmed = errors.length === 0
+    let mutationOutcome = "REJECTED"
+    let cancellationOutcome = "NOT_SENT"
+    if (hasUnknownOutcome) {
+      mutationOutcome = "OUTCOME_UNKNOWN"
+      cancellationOutcome = "OUTCOME_UNKNOWN"
+    } else if (allConfirmed) {
+      mutationOutcome = "CONFIRMED"
+      cancellationOutcome = "CONFIRMED"
+    }
     return {
       ...toResult({
         data: results,
         ...(errors.length > 0 ? { errors } : {}),
       }),
-      mutationOutcome: hasUnknownOutcome
-        ? "OUTCOME_UNKNOWN"
-        : allConfirmed
-          ? "CONFIRMED"
-          : "REJECTED",
-      cancellationOutcome: hasUnknownOutcome
-        ? "OUTCOME_UNKNOWN"
-        : allConfirmed
-          ? "CONFIRMED"
-          : "NOT_SENT",
+      mutationOutcome,
+      cancellationOutcome,
     }
   }
 
