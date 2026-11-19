@@ -254,3 +254,44 @@ test("start retries a snapshot after callback failure and backs off the failed c
   assert.equal(scheduled[1].delay, 500)
   session.stop()
 })
+
+test("pollOnce deduplicates identical exchange data when local observation time advances", async () => {
+  const { broker } = createBroker()
+  let now = 1234
+  const reconciler = new BitunixSpotReconciler({
+    broker,
+    now: () => now,
+  })
+
+  const first = await reconciler.pollOnce({ symbols: ["BTCUSDT"] })
+  now += 2_000
+  const second = await reconciler.pollOnce({ symbols: ["BTCUSDT"] })
+
+  assert.equal(first.snapshot.observedAt, 1234)
+  assert.equal(second.snapshot.observedAt, 3234)
+  assert.equal(first.changed, true)
+  assert.equal(second.changed, false)
+  assert.equal(second.status.lastSuccessAt, 3234)
+})
+
+test("start rejects tracked orders outside its polling symbol scope before scheduling", () => {
+  const { broker, calls } = createBroker()
+  let scheduleCount = 0
+  const reconciler = new BitunixSpotReconciler({
+    broker,
+    schedule: () => {
+      scheduleCount += 1
+      return 1
+    },
+  })
+
+  assert.throws(() => reconciler.start({
+    symbols: ["BTCUSDT"],
+    trackedOrders: [{ symbol: "ETHUSDT", orderId: "order-1" }],
+    onSnapshot: () => {},
+  }), /Tracked order symbol ETHUSDT is not in polling symbols/)
+  assert.equal(calls.length, 0)
+  assert.equal(scheduleCount, 0)
+  assert.equal(reconciler.getStatus().running, false)
+})
+
