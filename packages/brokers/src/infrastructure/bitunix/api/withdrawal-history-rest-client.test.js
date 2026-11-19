@@ -19,6 +19,7 @@ test("Bitunix REST client preserves numeric withdrawal IDs, UIDs, amounts and fe
     method: "POST",
     path: "/api/spot/v1/withdraw_transfer/page",
     body: { limit: 1 },
+    stateChanging: false,
   })
 
   assert.equal(result.data[0].id, "1909877667383767042", "withdrawal IDs must remain exact strings")

@@ -361,6 +361,7 @@ test("Bitunix REST client rejects unauthenticated mutations before network I/O",
       path: "/api/spot/v1/order/place_order",
       authenticated: false,
       body: { symbol: "BTCUSDT" },
+      stateChanging: true,
     }),
     /unauthenticated Bitunix requests must be read-only GET requests/i,
     "an unauthenticated order POST must be rejected before the network boundary",
@@ -373,8 +374,8 @@ test("Bitunix REST client rejects unauthenticated mutations before network I/O",
       authenticated: false,
       stateChanging: true,
     }),
-    /unauthenticated Bitunix requests must be read-only GET requests/i,
-    "an unauthenticated GET explicitly marked state-changing must be rejected before the network boundary",
+    /state-changing requests must use POST/i,
+    "a GET explicitly marked state-changing must be rejected before the network boundary",
   )
 
   assert.equal(callCount, 0, "no unauthenticated mutation may reach the exchange transport")
@@ -642,5 +643,175 @@ test("Bitunix REST client sends and signs exact int64 request numbers", async ()
       body: captured.options.body,
       bodyIsSerialized: true,
     }),
+  )
+})
+
+
+test("Bitunix REST client requires explicit state-changing classification for every POST", async () => {
+  let requestCount = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      requestCount += 1
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            code: "0",
+            msg: "success",
+            data: {},
+          }
+        },
+      }
+    },
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/history/page",
+      body: { symbol: "BTCUSDT" },
+    }),
+    /POST requests must explicitly set stateChanging/i,
+    "a POST without an explicit read/mutation classification must fail before dispatch",
+  )
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/history/page",
+      body: { symbol: "BTCUSDT" },
+      stateChanging: "false",
+    }),
+    /stateChanging flag must be a boolean/i,
+    "string booleans must not silently classify a request as read-only",
+  )
+  await assert.rejects(
+    client.request({
+      method: "GET",
+      path: "/api/spot/v1/market/last_price",
+      stateChanging: true,
+    }),
+    /state-changing requests must use POST/i,
+    "state-changing GET requests must be rejected before dispatch",
+  )
+
+  assert.equal(requestCount, 0, "invalid request classifications must never reach the transport")
+})
+
+test("Bitunix REST client accepts explicitly classified read-only POST requests", async () => {
+  let requestCount = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      requestCount += 1
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            code: "0",
+            msg: "success",
+            data: [],
+          }
+        },
+      }
+    },
+  })
+
+  const result = await client.request({
+    method: "POST",
+    path: "/api/spot/v1/order/pending/list",
+    body: { symbol: "BTCUSDT" },
+    stateChanging: false,
+  })
+
+  assert.deepEqual(result.data, [])
+  assert.equal(requestCount, 1, "an explicitly read-only POST must still be dispatched once")
+})
+
+
+
+async function assertMalformedEnvelopeOutcome({ payload, stateChanging, name }) {
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return payload
+      },
+    }),
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/place_order",
+      body: { symbol: "BTCUSDT" },
+      stateChanging,
+    }),
+    (error) => {
+      assert.ok(error instanceof BitunixRestError)
+      assert.equal(error.kind, "response")
+      assert.equal(
+        error.outcomeUnknown,
+        stateChanging,
+        `${name} must preserve uncertainty only for mutations`,
+      )
+      return true
+    },
+  )
+}
+
+test("Bitunix REST malformed success envelopes preserve unknown mutation outcomes", async () => {
+  const malformedPayloads = [
+    { name: "non-object envelope", payload: null },
+    { name: "invalid exchange code", payload: { code: ["0"], msg: "success", data: [] } },
+    { name: "missing message", payload: { code: "0", data: [] } },
+  ]
+
+  for (const { name, payload } of malformedPayloads) {
+    for (const stateChanging of [false, true]) {
+      await assertMalformedEnvelopeOutcome({ payload, stateChanging, name })
+    }
+  }
+})
+
+test("Bitunix REST explicit exchange rejections remain definitive for state-changing requests", async () => {
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          code: "10001",
+          msg: "order rejected",
+          data: null,
+        }
+      },
+    }),
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/place_order",
+      body: {
+        symbol: "BTCUSDT",
+      },
+      stateChanging: true,
+    }),
+    (error) => {
+      assert.equal(error.kind, "exchange")
+      assert.equal(error.outcomeUnknown, false)
+      assert.equal(error.exchangeCode, "10001")
+      return true
+    },
   )
 })

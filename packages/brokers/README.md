@@ -471,3 +471,5 @@ Do not convert observations into execution reports, canonical fills, or account 
 ### Bitunix Spot order request adapters
 
 Bitunix Spot order request/response mapping lives in the Bitunix infrastructure `adapters/order-requests.js` module and has direct offline tests. It owns exact LIMIT quote-volume / MARKET base-volume request construction, order identity correlation, and the explicit signed detail/cancel request envelopes. The broker facade retains mutation opt-in, dispatch tracking, reconciliation, unknown-outcome classification, and cancellation/fill-race orchestration. This separation does not change the public Broker API or enable live mutations.
+
+For state-changing Bitunix REST calls, an HTTP-success response with an unusable API envelope (malformed payload, invalid exchange code, or missing required message) is classified as `outcomeUnknown`. An explicit non-zero exchange response code remains a definitive exchange rejection. Callers must reconcile uncertain mutations and must never retry them blindly.

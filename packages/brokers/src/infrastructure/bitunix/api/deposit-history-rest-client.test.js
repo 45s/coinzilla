@@ -19,6 +19,7 @@ test("Bitunix REST client preserves numeric deposit identifiers and amount token
     method: "POST",
     path: "/api/spot/v1/deposit/page",
     body: { limit: 1 },
+    stateChanging: false,
   })
 
   assert.equal(result.data[0].id, "1909903708907155457", "deposit IDs beyond Number.MAX_SAFE_INTEGER must remain exact strings")

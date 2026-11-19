@@ -1485,3 +1485,13 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Guard promise cleanup by identity so a late old-generation `finally` cannot clear a newer generation's in-flight promise or scope key.
 - Preserve the honest cancellation boundary: stop fences stale results and callbacks but does not claim to abort a request already dispatched.
 - Add deterministic same-scope and different-scope stop/restart regressions, including late completion from the old generation.
+
+## 2026-11-19 — Bitunix REST mutation outcome classification (#1523)
+
+**Status: Implemented in PR #1538; exact-head CI verification is pending.**
+
+- Require every Bitunix REST POST to declare `stateChanging: true|false`; no implicit mutation classification.
+- Explicitly classify documented read-only POSTs, including current orders, order history, deposit history, withdrawal history, and matching-order detail.
+- Preserve `outcomeUnknown` for transport failures, ambiguous HTTP failures, and malformed success envelopes after a mutation is dispatched.
+- Keep explicit non-zero exchange codes as definitive rejections and never retry mutations automatically.
+- Add REST-client tests for missing/invalid classifications, malformed response envelopes, explicit exchange rejection, and read-only/mutation outcome differences.

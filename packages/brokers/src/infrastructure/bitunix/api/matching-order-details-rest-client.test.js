@@ -22,6 +22,7 @@ test("Bitunix REST client preserves numeric matching-order IDs and decimal token
       orderId: "order-123",
       symbol: "BTCUSDT",
     },
+    stateChanging: false,
   })
 
   assert.equal(result.data.id, "1909877667383767042", "matching-order IDs must remain exact strings")
