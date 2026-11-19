@@ -308,7 +308,7 @@ test("rechecks a market immediately when late evidence invalidates it during ano
   )
 })
 
-function getMarketBlockersFromShutdownError(error, symbol) {
+function getMarketBlockersFromShutdownError({ error, symbol } = {}) {
   return error.shutdownDiagnostics.markets.find((entry) => entry.symbol === symbol)?.blockers ?? []
 }
 
@@ -340,13 +340,13 @@ test("keeps recovery-input failures separate from owned order and fill reconcili
   await assert.rejects(
     participant.waitUntilSafe(),
     (error) => {
-      const blockers = getMarketBlockersFromShutdownError(error, "DOGEUSDT")
+      const blockers = getMarketBlockersFromShutdownError({ error, symbol: "DOGEUSDT" })
       assert.ok(
         blockers.includes("RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE"),
         "The market must retain the exact recovery-input failure.",
       )
       assert.equal(
-        market.blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
+        blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
         false,
         "A recovery-input failure must not be reported as incomplete owned-order/fill reconciliation.",
       )
@@ -382,19 +382,22 @@ test("keeps stale recovery-price coverage separate from owned order and fill rec
     }
     return auditCoverage({ symbols })
   }
-  const participant = createParticipant({ engine, calls })
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
 
   participant.beginShutdown()
   await assert.rejects(
     participant.waitUntilSafe(),
     (error) => {
-      const market = error.shutdownDiagnostics.markets.find((entry) => entry.symbol === "DOGEUSDT")
+      const blockers = getMarketBlockersFromShutdownError({ error, symbol: "DOGEUSDT" })
       assert.ok(
-        market.blockers.includes("RECOVERY_SELL_COVERAGE:STALE_MARKET_PRICE"),
+        blockers.includes("RECOVERY_SELL_COVERAGE:STALE_MARKET_PRICE"),
         "The market must retain the exact stale-price coverage finding.",
       )
       assert.equal(
-        market.blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
+        blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
         false,
         "A stale recovery price must not be reported as incomplete owned-order/fill reconciliation.",
       )
