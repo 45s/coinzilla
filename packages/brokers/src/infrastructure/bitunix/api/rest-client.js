@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto"
 import { SystemCustomError } from "@coinzilla/utils"
 import { createRestSignature } from "../auth/create-rest-signature.js"
+import { serializeBitunixJson } from "./json-serializer.js"
 
 const DEFAULT_BASE_URL = "https://openapi.bitunix.com"
 const DEFAULT_REQUEST_TIMEOUT = 10_000
@@ -16,7 +17,16 @@ const ERROR_CODES = Object.freeze({
 /** Error returned by the Bitunix Spot REST API or transport boundary. */
 export class BitunixRestError extends SystemCustomError {
   /**
-   * @param {{message: string, kind?: "transport"|"http"|"exchange"|"response"|"authentication", cause?: unknown, exchangeCode?: string|null, status?: number|null, path?: string|null, outcomeUnknown?: boolean}} input
+   * @param {{
+   *   message: string,
+   *   kind?: "transport"|"http"|"exchange"|"response"|"authentication",
+   *   cause?: unknown,
+   *   exchangeCode?: string|null,
+   *   status?: number|null,
+   *   path?: string|null,
+   *   outcomeUnknown?: boolean,
+   *   retryAfterMs?: number|null,
+   * }} input
    */
   constructor({
     message,
@@ -26,6 +36,7 @@ export class BitunixRestError extends SystemCustomError {
     status = null,
     path = null,
     outcomeUnknown = false,
+    retryAfterMs = null,
   } = {}) {
     if (!Object.hasOwn(ERROR_CODES, kind)) {
       throw new TypeError("Bitunix REST error kind is unsupported")
@@ -36,6 +47,7 @@ export class BitunixRestError extends SystemCustomError {
         path,
         status,
         exchangeCode,
+        retryAfterMs,
       },
     }
     if (cause !== undefined) {
@@ -47,6 +59,7 @@ export class BitunixRestError extends SystemCustomError {
     this.status = status
     this.path = path
     this.outcomeUnknown = outcomeUnknown
+    this.retryAfterMs = retryAfterMs
   }
 }
 
@@ -54,6 +67,7 @@ const LOSSLESS_NUMERIC_FIELDS = Object.freeze({
   "/api/spot/v1/deposit/page": Object.freeze(["id", "amount"]),
   "/api/spot/v1/withdraw_transfer/page": Object.freeze(["id", "toUid", "amount", "fee"]),
   "/api/spot/v1/order/deal/list": Object.freeze(["id", "volume", "price", "fee", "role"]),
+  "/api/spot/v1/user/info": Object.freeze(["uid"]),
 })
 
 function stringifyNumericJsonFields({ text, fields }) {
@@ -174,14 +188,14 @@ function createSignedRequest({ client, method, path, queryParams, body }) {
   const sortedQuery = Object.fromEntries(
     Object.keys(queryParams).sort().map((key) => [key, queryParams[key]]),
   )
-  const bodyText = body === undefined ? undefined : JSON.stringify(body)
+  const bodyText = serializeBitunixJson({ value: body })
   const signature = createRestSignature({
     nonce,
     timestamp,
     apiKey: client.apiKey,
     secretKey: client.apiSecret,
     queryParams: sortedQuery,
-    ...(bodyText === undefined ? {} : { body: bodyText }),
+    ...(bodyText === undefined ? {} : { body: bodyText, bodyIsSerialized: true }),
   })
   const url = new URL(path, client.baseUrl)
   for (const [key, value] of Object.entries(sortedQuery)) {
@@ -257,6 +271,24 @@ function validateResponseReader({ response, path, stateChanging }) {
   }
 }
 
+function parseRetryAfterMs({ response }) {
+  const value = response?.headers?.get?.("retry-after")
+  if (typeof value !== "string" || !value.trim()) {
+    return null
+  }
+
+  const seconds = Number(value)
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.ceil(seconds * 1000)
+  }
+
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) {
+    return null
+  }
+  return Math.max(0, timestamp - Date.now())
+}
+
 function createResponseReadError({ error, response, path, stateChanging }) {
   const hasValidMetadata = hasValidHttpMetadata({ response })
   const isHttpFailure = hasValidMetadata && response.ok === false
@@ -275,6 +307,7 @@ function createResponseReadError({ error, response, path, stateChanging }) {
     path,
     status: hasValidMetadata ? response.status : null,
     outcomeUnknown: stateChanging,
+    retryAfterMs: isHttpFailure ? parseRetryAfterMs({ response }) : null,
   })
 }
 
@@ -335,6 +368,7 @@ function validateHttpResponse({ response, payload, path, stateChanging }) {
       status: response.status,
       path,
       outcomeUnknown: stateChanging && response.status >= 500,
+      retryAfterMs: response.status === 429 ? parseRetryAfterMs({ response }) : null,
     })
   }
 }
