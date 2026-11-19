@@ -9,7 +9,8 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 - [ ] A GitHub Issue (or explicitly adopted existing issue) describes the goal, owning scope, exclusions, requirements/invariants, acceptance criteria, dependencies, verification and documentation impact.
 - [ ] The issue, branch, PR and owning roadmap link to one another where applicable; update task state as scope, decisions, blockers and progress change.
 - [ ] Work is split into cohesive, reviewable commits using `<type>(<scope>): <imperative outcome>`; preserve test-first RED/GREEN evidence and avoid unrelated or progress-only commits.
-- [ ] Each meaningful checkpoint is committed and pushed; validation status is recorded against the exact commit SHA.
+- [ ] Follow the commit-to-checkpoint loop in the canonical workflow: after each meaningful increment, inspect and validate it, commit and push it, synchronize with latest `develop` before pushing, and refresh the issue's current-state summary with the exact head SHA and next action before starting another increment.
+- [ ] Keep implementation, tests, and affected living documentation consistent in the same logical increment; when no documentation change is warranted, record the reason. Keep the roadmap status accurate without turning it into a commit diary.
 - [ ] Before pausing or changing owners, add a handoff checkpoint to the issue (and update the PR when applicable) with exact branch/head, base freshness, completed/in-progress work, next action, decisions, checks/CI SHA, blockers, safety boundaries and documentation/roadmap status.
 - [ ] The task can be resumed from GitHub issue, branch, PR and canonical docs without relying on private chat history.
 
