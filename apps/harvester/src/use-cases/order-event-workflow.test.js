@@ -783,6 +783,66 @@ test("stages streamed RS SELL fills for complete terminal mixed-SELL reconciliat
 })
 
 
+test("routes terminal RS SELL fill history through mixed accounting without Conservative completion", async () => {
+  const previousOrder = makeOrder({
+    side: "SELL",
+    status: "OPEN",
+    quantity: "1",
+    executedQuantity: "0",
+    clientOrderId: "h-dogeusdt-rs-sell-terminal",
+    brokerOrderId: "broker-rs-sell-terminal",
+  })
+  const terminalOrder = makeOrder({
+    side: "SELL",
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+    clientOrderId: previousOrder.clientOrderId,
+    brokerOrderId: previousOrder.brokerOrderId,
+  })
+  const fill = makeFill({
+    side: "SELL",
+    quantity: "1",
+    quoteQuantity: "100",
+    clientOrderId: terminalOrder.clientOrderId,
+    brokerOrderId: terminalOrder.brokerOrderId,
+  })
+  const ownership = {
+    clientOrderId: terminalOrder.clientOrderId,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "doge-recovery-seller-position",
+    purpose: "RECOVERY_SELL",
+    cycleId: "doge-recovery-seller-cycle-1",
+  }
+  const registry = createLifecycleRegistry({
+    currentOrder: previousOrder,
+    ownership,
+  })
+  const mixedSellReconciliations = []
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    terminalFills: [fill],
+    reconcileRecoverySellerMixedSell: async (input) => {
+      mixedSellReconciliations.push(input)
+      return toResult({ data: { reconciled: true } })
+    },
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: terminalOrder,
+    },
+  })
+
+  assert.equal(result.ok, true, "A fully reconciled RS SELL must complete its strategy-owned terminal transition.")
+  assert.equal(mixedSellReconciliations.length, 1, "The complete terminal history must be handed to RS mixed accounting exactly once.")
+  assert.equal(mixedSellReconciliations[0].order, terminalOrder)
+  assert.deepEqual(mixedSellReconciliations[0].canonicalFills, [fill])
+  assert.deepEqual(calls.completedCycles, [], "RS SELL must never enter Conservative recovery-cycle completion.")
+  assert.deepEqual(calls.sellFills, [fill], "The terminal canonical fill must be staged exactly once.")
+})
+
 test("fails closed for a registered order owned by an unsupported strategy", async () => {
   const unsupportedOrder = makeOrder({
     clientOrderId: "h-dogeusdt-future-strategy-buy-1",
