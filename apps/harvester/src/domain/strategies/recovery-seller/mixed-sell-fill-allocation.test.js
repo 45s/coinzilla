@@ -290,7 +290,7 @@ test("rejects legacy-only SELL allocation and quantity splits that do not conser
       recoveryQuantity: "0",
       legacyQuantity: "5.01",
     })),
-    /recoverySellQuantity must be greater than zero/i,
+    /recoveryQuantity must be greater than zero/i,
     "A mixed SELL allocation must contain a positive recovery tranche.",
   )
   assert.throws(
