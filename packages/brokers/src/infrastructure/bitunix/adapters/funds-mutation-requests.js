@@ -9,7 +9,7 @@ const RECIPIENT_FIELDS = Object.freeze([
 
 function requireNonEmptyString({ value, field }) {
   if (typeof value !== "string" || !value.trim()) {
-    throw new TypeError(\`Bitunix Spot \${field} must be a non-empty string\`)
+    throw new TypeError(`Bitunix Spot ${field} must be a non-empty string`)
   }
   return value
 }
@@ -33,10 +33,10 @@ function requireOptionalString({ value, field, maxLength }) {
     return undefined
   }
   if (typeof value !== "string") {
-    throw new TypeError(\`Bitunix Spot \${field} must be a string when supplied\`)
+    throw new TypeError(`Bitunix Spot ${field} must be a string when supplied`)
   }
   if (maxLength !== undefined && value.length > maxLength) {
-    throw new RangeError(\`Bitunix Spot \${field} must not exceed \${maxLength} characters\`)
+    throw new RangeError(`Bitunix Spot ${field} must not exceed ${maxLength} characters`)
   }
   return value
 }
@@ -50,7 +50,7 @@ function requireUid({ value }) {
 function rejectUnusedRecipientFields({ input, allowed }) {
   for (const field of RECIPIENT_FIELDS) {
     if (!allowed.includes(field) && input[field] !== undefined && input[field] !== null) {
-      throw new TypeError(\`Bitunix Spot \${field} is not valid for the selected toType\`)
+      throw new TypeError(`Bitunix Spot ${field} is not valid for the selected toType`)
     }
   }
 }
