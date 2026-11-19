@@ -210,10 +210,21 @@ const BITUNIX_SPOT_CAPABILITIES = [
     reason: "The documented Spot WebSocket API does not define a continuous order-book subscription.",
   },
   {
+    type: "OBSERVE_USER_DATA",
+    status: "SUPPORTED",
+    method: "subscribeForUserData",
+    guarantee: "Polls explicitly scoped Spot account/order data and delivers changed snapshots through onObservation.",
+    limitation: "Observations use local time only, cannot replay transient states, do not establish account-wide completeness, and are not canonical fills or authoritative account snapshots.",
+    conditions: [
+      "At least one explicit Spot symbol and an onObservation callback are required.",
+      "Only explicitly supplied tracked order identities are queried for matching-order details.",
+    ],
+  },
+  {
     type: "SUBSCRIBE_USER_DATA",
     status: "UNSUPPORTED",
     method: "subscribeForUserData",
-    reason: "The documented private Spot WebSocket API does not define a continuous order/execution event stream.",
+    reason: "The documented private Spot WebSocket API does not define a continuous native order/execution event stream.",
   },
   {
     type: "RECONCILE_ORDERS",

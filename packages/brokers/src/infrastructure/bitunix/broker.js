@@ -28,6 +28,7 @@ import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
 import { validateBitunixSymbolFilterMetadata } from "./adapters/validate-symbol-filter-metadata.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
+import { BitunixSpotReconciler } from "./reconciler.js"
 
 const API = Object.freeze({
   markets: "/api/spot/v1/common/coin_pair/list",
@@ -804,7 +805,7 @@ export class BitunixSpotBroker {
  *   allowLiveOrderMutations?: boolean,
  *   allowLiveFundsMutations?: boolean,
  *   logger?: object,
- *   dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient},
+ *   dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient, reconcilerFactory?: ({broker: BitunixSpotBroker}) => BitunixSpotReconciler},
  * }} input
    */
   constructor(input = {}) {
@@ -812,7 +813,13 @@ export class BitunixSpotBroker {
       dependencies = {},
       ...configInput
     } = input
-    const { restClientFactory = createRestClient } = dependencies
+    const {
+      restClientFactory = createRestClient,
+      reconcilerFactory = ({ broker }) => new BitunixSpotReconciler({ broker }),
+    } = dependencies
+    if (typeof reconcilerFactory !== "function") {
+      throw new TypeError("Bitunix Spot reconcilerFactory must be a function")
+    }
     this.logger = configInput.logger || defaultLogger
     this.config = new BitunixSpotConfig(configInput)
     Object.defineProperty(this, "capabilities", {
@@ -822,6 +829,8 @@ export class BitunixSpotBroker {
     this.restClient = restClientFactory(this.config)
     this.connected = false
     this.canonicalMarkets = new Map()
+    this.reconcilerFactory = reconcilerFactory
+    this.userDataSubscriptions = new Set()
   }
 
   /** Mark the stateless REST adapter ready. */
@@ -831,6 +840,9 @@ export class BitunixSpotBroker {
 
   /** Mark the stateless REST adapter disconnected. */
   async disconnect() {
+    for (const subscription of [...this.userDataSubscriptions]) {
+      await subscription.disconnect()
+    }
     this.connected = false
   }
 
@@ -1777,13 +1789,97 @@ export class BitunixSpotBroker {
     })
   }
 
-  async subscribeForUserData() {
-    return toResult({
-      errors: [unsupported({
-        operation: "subscribeForUserData",
-        reason: "the documented private Spot WebSocket API does not define a continuous order/execution event stream",
-      })],
-    })
+  /**
+   * Deliver explicitly scoped, non-authoritative Spot observations.
+   *
+   * @param {{symbols: string[], trackedOrders?: Array<{symbol: string, orderId: string|number}>, intervalMs?: number, onEvent?: (message: {event: object}) => void|Promise<void>, onObservation: (message: {observation: object}) => void|Promise<void>, onStatus?: (status: object) => void}} options
+   * @returns {Promise<BrokerResult<object>>}
+   */
+  async subscribeForUserData({
+    symbols,
+    trackedOrders = [],
+    intervalMs = 2_000,
+    onEvent,
+    onObservation,
+    onStatus,
+  } = {}) {
+    try {
+      if (!this.connected) {
+        throw new Error("Bitunix Spot broker must be connected before subscribing to user-data observations")
+      }
+      if (onEvent !== undefined && typeof onEvent !== "function") {
+        throw new TypeError("Bitunix Spot onEvent must be a function when supplied")
+      }
+      if (typeof onObservation !== "function") {
+        throw new TypeError("Bitunix Spot onObservation must be a function")
+      }
+      if (onStatus !== undefined && typeof onStatus !== "function") {
+        throw new TypeError("Bitunix Spot onStatus must be a function when supplied")
+      }
+
+      const reportStatus = (status) => {
+        if (typeof onStatus !== "function") {
+          return
+        }
+        try {
+          onStatus(status)
+        } catch (error) {
+          handleErr({
+            where: "BitunixSpotBroker.subscribeForUserData().onStatus",
+            error,
+          })
+        }
+      }
+      const reconciler = this.reconcilerFactory({ broker: this })
+      const session = reconciler.start({
+        symbols,
+        trackedOrders,
+        intervalMs,
+        onSnapshot: (observation) => onObservation({ observation }),
+        onStatus: reportStatus,
+        onError: (error) => {
+          handleErr({
+            where: "BitunixSpotBroker.subscribeForUserData().poll",
+            error,
+          })
+          reportStatus({
+            type: "pollingError",
+            deliveryMode: "POLLING_OBSERVATIONS",
+            nativePush: false,
+            error,
+          })
+        },
+      })
+
+      let active = true
+      let subscription
+      subscription = Object.freeze({
+        deliveryMode: "POLLING_OBSERVATIONS",
+        nativePush: false,
+        disconnect: async () => {
+          if (!active) {
+            return
+          }
+          active = false
+          session.stop()
+          this.userDataSubscriptions.delete(subscription)
+        },
+        getStatus: () => session.getStatus(),
+      })
+      this.userDataSubscriptions.add(subscription)
+      reportStatus({
+        type: "pollingStarted",
+        deliveryMode: "POLLING_OBSERVATIONS",
+        nativePush: false,
+      })
+      return toResult({ data: subscription })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.subscribeForUserData()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
   }
 
   async subscribeForBookTicker() {

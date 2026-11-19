@@ -21,13 +21,13 @@ Each poll reads account balances, symbol-scoped open orders, the first order-his
 - Matching-order detail remains provider-native and unverified; it is not a canonical Fill.
 - Polling cannot replay transient states that occur between cycles.
 - Stop fencing prevents further reads and callbacks after an in-flight request returns; it cannot abort a request already dispatched.
-- The helper does not fabricate Binance `executionReport` events and does not implement `subscribeForUserData()`.
+- The helper does not fabricate Binance `executionReport` events. The public `subscribeForUserData()` method exposes its output only through `onObservation`; it does not emit native execution events through `onEvent`.
 
 ## Harvester and trading safety
 
-The public Bitunix Broker API continues to report `subscribeForUserData()` and `getAccountSnapshot()` as unsupported. Harvester's authoritative startup gate requires a source-timestamped account snapshot and valid user-data lifecycle evidence. The current Bitunix Spot contract cannot provide those guarantees.
+The Bitunix Broker API advertises `OBSERVE_USER_DATA` as supported and keeps native `SUBSCRIBE_USER_DATA` and `getAccountSnapshot()` unsupported. Harvester's authoritative startup gate requires a source-timestamped account snapshot and native user-data lifecycle evidence. Polling observations cannot satisfy those guarantees, cannot create canonical fills, and do not make Bitunix eligible for Harvester provider registration.
 
-This helper is therefore not evidence of Harvester readiness and must not be used to enable order placement, cancellation, or automated trading. See [the canonical lifecycle blockers](https://github.com/45s/coinzilla/issues/1185).
+This polling subscription is therefore not evidence of Harvester readiness and must not be used to enable order placement, cancellation, or automated trading. It requires an explicit non-empty `symbols` list, accepts only explicitly supplied `trackedOrders`, and returns a `disconnect()` handle. Changed snapshots are delivered as `{ observation }` messages; native `onEvent` is never called. See [the canonical lifecycle blockers](https://github.com/45s/coinzilla/issues/1185).
 
 ## TESTNET and live safety
 
