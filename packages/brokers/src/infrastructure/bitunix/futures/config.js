@@ -4,7 +4,8 @@ const DEFAULT_PRIVATE_WEBSOCKET_URL = "wss://fapi.bitunix.com/private/"
 const DEFAULT_LANGUAGE = "en-US"
 const DEFAULT_REQUEST_TIMEOUT = 10_000
 
-function validateOptionalCredentialPair({ apiKey, apiSecret }) {
+function validateOptionalCredentialPair({ apiKey,
+  apiSecret }) {
   const hasApiKey = apiKey !== undefined && apiKey !== null
   const hasApiSecret = apiSecret !== undefined && apiSecret !== null
 
@@ -18,7 +19,8 @@ function validateOptionalCredentialPair({ apiKey, apiSecret }) {
   }
 }
 
-function validateHttpsUrl({ value, field }) {
+function validateHttpsUrl({ value,
+  field }) {
   let parsed
 
   try {
@@ -32,7 +34,8 @@ function validateHttpsUrl({ value, field }) {
   }
 }
 
-function validateWebSocketUrl({ value, field }) {
+function validateWebSocketUrl({ value,
+  field }) {
   let parsed
 
   try {
@@ -46,7 +49,8 @@ function validateWebSocketUrl({ value, field }) {
   }
 }
 
-function validateMutationFlag({ value, field }) {
+function validateMutationFlag({ value,
+  field }) {
   if (typeof value !== "boolean") {
     throw new TypeError(`Bitunix Futures ${field} must be a boolean`)
   }
@@ -88,10 +92,14 @@ export class BitunixFuturesConfig {
     allowLiveAccountMutations = false,
     allowLiveFundsMutations = false,
   } = {}) {
-    validateOptionalCredentialPair({ apiKey, apiSecret })
-    validateHttpsUrl({ value: baseUrl, field: "baseUrl" })
-    validateWebSocketUrl({ value: publicWebSocketUrl, field: "publicWebSocketUrl" })
-    validateWebSocketUrl({ value: privateWebSocketUrl, field: "privateWebSocketUrl" })
+    validateOptionalCredentialPair({ apiKey,
+      apiSecret })
+    validateHttpsUrl({ value: baseUrl,
+      field: "baseUrl" })
+    validateWebSocketUrl({ value: publicWebSocketUrl,
+      field: "publicWebSocketUrl" })
+    validateWebSocketUrl({ value: privateWebSocketUrl,
+      field: "privateWebSocketUrl" })
 
     if (typeof language !== "string" || !language.trim()) {
       throw new TypeError("Bitunix Futures language must be a non-empty string")
