@@ -318,6 +318,7 @@ function validateOrderSubmissionOutcomeFields({ canonicalData }) {
     "strategyId",
     "positionId",
     "cycleId",
+    "sellAllocation",
   ])
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Order-submission outcome fact contains unsupported fields")

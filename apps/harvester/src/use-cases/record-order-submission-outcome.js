@@ -1,5 +1,9 @@
 import { CanonicalOrder } from "@coinzilla/entities"
-import { addDecimal, compareDecimal, isCanonicalDecimalString, isPositiveCanonicalDecimalString, toResult } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, toResult } from "@coinzilla/utils"
+import {
+  isCanonicalDecimalString,
+  isPositiveCanonicalDecimalString,
+} from "../infrastructure/operational-state/helpers/operational-state-decimal-validation.js"
 
 const OUTCOMES = new Set(["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
 const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
@@ -67,10 +71,12 @@ function validateRecoverySellAllocation({ purpose, ownership, quantity } = {}) {
       }) !== 0) {
     throw new TypeError("Recovery Seller SELL requires an exact recovery/legacy allocation equal to the canonical order quantity")
   }
-  return { sellAllocation: Object.freeze({
-    recoverySellQuantity: allocation.recoverySellQuantity,
-    legacySellQuantity: allocation.legacySellQuantity,
-  }) }
+  return {
+    sellAllocation: Object.freeze({
+      recoverySellQuantity: allocation.recoverySellQuantity,
+      legacySellQuantity: allocation.legacySellQuantity,
+    }),
+  }
 }
 
 function validateRecoveryPurposeSide({ purpose, side } = {}) {
