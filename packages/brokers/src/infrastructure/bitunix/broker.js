@@ -1120,11 +1120,82 @@ export class BitunixSpotBroker extends CoreBroker {
     }
   }
 
-  async cancelAllOpenOrders() {
-    return unsupportedMutationResult({
-      operation: "cancelAllOpenOrders",
-      reason: "no safe order-mutation reconciliation contract is available",
-    })
+  /**
+   * Cancel every open order for one explicitly selected Spot symbol.
+   * The API has no account-wide pending-order query, so symbol is mandatory.
+   * Each cancellation is independently verified; failures never stop later
+   * known orders from being processed and are returned to the caller.
+   *
+   * @param {{symbol: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string, cancellationOutcome: string}>}
+   */
+  async cancelAllOpenOrders({ symbol } = {}) {
+    let normalizedSymbol
+    try {
+      normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "cancelAllOpenOrders()",
+      })
+    } catch (error) {
+      return {
+        ...toResult({ errors: [error] }),
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      }
+    }
+
+    const openOrders = await this.getOpenOrders({ symbol: normalizedSymbol })
+    if (!openOrders.ok) {
+      return {
+        ...toResult({ errors: openOrders.errors ?? [] }),
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      }
+    }
+    if (openOrders.data.length === 0) {
+      return {
+        ...toResult({ data: [] }),
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      }
+    }
+
+    const results = []
+    const errors = []
+    let hasUnknownOutcome = false
+    for (const order of openOrders.data) {
+      const cancellation = await this.cancelOrder({
+        symbol: normalizedSymbol,
+        orderId: order.id,
+      })
+      if (cancellation.ok) {
+        results.push(cancellation.data)
+        continue
+      }
+      errors.push(...(cancellation.errors ?? []))
+      results.push(cancellation.data ?? order)
+      if (cancellation.cancellationOutcome === "OUTCOME_UNKNOWN") {
+        hasUnknownOutcome = true
+      }
+    }
+
+    const allConfirmed = errors.length === 0
+    return {
+      ...toResult({
+        data: results,
+        ...(errors.length > 0 ? { errors } : {}),
+      }),
+      mutationOutcome: hasUnknownOutcome
+        ? "OUTCOME_UNKNOWN"
+        : allConfirmed
+          ? "CONFIRMED"
+          : "REJECTED",
+      cancellationOutcome: hasUnknownOutcome
+        ? "OUTCOME_UNKNOWN"
+        : allConfirmed
+          ? "CONFIRMED"
+          : "NOT_SENT",
+    }
   }
 
   async subscribeForUserData() {
