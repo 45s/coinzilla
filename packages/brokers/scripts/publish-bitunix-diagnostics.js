@@ -48,7 +48,7 @@ async function main() {
     repositoryRoot,
     runDiagnostics: ({ env, onProgress }) => runBitunixDiagnostics({ env, onProgress }),
     env: process.env,
-    onProgress: ({ message }) => process.stdout.write(`${message}\\n`),
+    onProgress: ({ message }) => process.stdout.write(`${message}\n`),
   })
   printResult({ result })
   process.exitCode = result.exitCode
