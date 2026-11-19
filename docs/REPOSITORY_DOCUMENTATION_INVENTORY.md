@@ -290,3 +290,10 @@ The current checker classifies **132 paths as maintained** and **28 as historica
 | `apps/harvester/docs/persistence/sqlite-integration-blueprint.md` | Source-verified Harvester persistence inventory, ownership boundaries, Production/Testnet isolation, operational constraints and phased migration plan; KEEP as the design/audit authority, with current implementation status delegated to the persistence README and #1327. |
 
 The Harvester documentation index and persistence index link the new blueprint. This is a path-completeness update only; it does not claim that all 160 documents have passed the maintained-document factual audit tracked by #1401, the full-tree Markdown classification/enforcement work tracked by #1402, or the reference-tracing work tracked by #1403.
+
+
+## User-data delivery architecture addition (2026-11-19)
+
+| Added path | Purpose |
+| --- | --- |
+| `docs/architecture/decisions/ADR-0005-generic-user-data-observation-channel.md` | Defines the provider-neutral distinction between native user-data events and non-authoritative polling observations, while preserving Bitunix provider-admission and trading-readiness barriers. |
