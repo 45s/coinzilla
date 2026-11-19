@@ -64,3 +64,26 @@ test("BitunixSpotConfig validates endpoint overrides and timeout", () => {
     requestTimeout: 0,
   }), /requestTimeout/i)
 })
+
+test("BitunixSpotConfig keeps funds mutations separately disabled unless explicitly opted in", () => {
+  const disabled = new BitunixSpotConfig({
+    apiKey: "key",
+    apiSecret: "secret",
+    tradingMode: "live",
+  })
+  const enabled = new BitunixSpotConfig({
+    apiKey: "key",
+    apiSecret: "secret",
+    tradingMode: "live",
+    allowLiveFundsMutations: true,
+  })
+
+  assert.equal(disabled.allowLiveFundsMutations, false)
+  assert.equal(enabled.allowLiveFundsMutations, true)
+  assert.throws(() => new BitunixSpotConfig({
+    apiKey: "key",
+    apiSecret: "secret",
+    tradingMode: "live",
+    allowLiveFundsMutations: "true",
+  }), /must be a boolean/i)
+})
