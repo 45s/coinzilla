@@ -302,6 +302,22 @@ Available chain methods: `.array()`, `.string()`, `.integer()`, `.nonEmpty()`, `
 
 The legacy `Validator.isRequiredNumberValid` predicate accepts only finite, non-zero numbers, and `Validator.isRequiredNotEmptyString` accepts only strings with non-whitespace content. They remain for existing consumers and are not equivalent to the throwing `ensure` assertions.
 
+Legacy rule meanings remain unchanged:
+
+| Rule | Contract |
+| --- | --- |
+| `VR.required` | JavaScript truthiness; rejects zero, false, empty string, null and undefined. Whitespace-only strings pass. |
+| `VR.notEmptyString` | String with non-whitespace content after trimming. |
+| `VR.num` | Finite number; zero is valid, NaN and infinities fail. |
+| `VR.str` | String; empty is allowed. |
+| `VR.fn` | Function. |
+| `VR.notUndefined` | Rejects only undefined; null passes. |
+| `VR.arr` | Array. |
+| `VR.notEmptyArr` | Non-empty array. |
+
+Legacy rules must exactly match exported `VR` values. Invalid tuple/rule configuration is rejected before values are evaluated. `isSoft` defaults to `true` and must be boolean when supplied.
+
+
 ## Development
 
 ```sh
