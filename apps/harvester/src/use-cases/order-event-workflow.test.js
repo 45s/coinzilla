@@ -189,6 +189,7 @@ function createWorkflowDependencies({
   externalOrdersPolicy,
   isStopping,
   accountingResult,
+  updateRecoverySellerAccounting,
 } = {}) {
   const accountedFillIds = new Set()
   return {
@@ -209,6 +210,7 @@ function createWorkflowDependencies({
       accountedFillIds,
       accountingResult,
     }),
+    updateRecoverySellerAccounting,
     recordBuyExecutionFill: ({ fill }) => calls.buyFills.push(fill),
     recordSellExecutionFill: ({ fill }) => calls.sellFills.push(fill),
     pause: async (input) => calls.pauses.push(input),
@@ -255,6 +257,7 @@ duplicate: false } }),
   logger,
   registry,
   requireProviderProvenance = false,
+  updateRecoverySellerAccounting,
 } = {}) {
   const calls = createWorkflowCalls()
   const state = createWorkflowState({ updateResult,
@@ -270,6 +273,7 @@ activeOrders })
     externalOrdersPolicy,
     isStopping,
     accountingResult,
+    updateRecoverySellerAccounting,
   })
   const workflow = makeOrderEventWorkflow({
     ...dependencies,
@@ -688,4 +692,120 @@ test("uses the registry-enriched provider identity when an exchange update omits
     calls.accounting[0].providerType,
     calls.accounting[0].accountId,
   ], ["binanceTestnet", "binance", "binance-primary"])
+})
+
+
+test("routes Recovery Seller-owned fills to RS accounting without mutating Conservative accounting", async () => {
+  const recoverySellerOrder = makeOrder({
+    clientOrderId: "h-dogeusdt-rs-buy-1",
+  })
+  const recoverySellerFill = makeFill({
+    clientOrderId: recoverySellerOrder.clientOrderId,
+  })
+  const ownership = {
+    clientOrderId: recoverySellerOrder.clientOrderId,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "doge-recovery-seller-position",
+    purpose: "RECOVERY_BUY",
+    cycleId: "doge-recovery-seller-cycle-1",
+  }
+  const registry = createLifecycleRegistry({
+    currentOrder: recoverySellerOrder,
+    ownership,
+  })
+  const recoverySellerAccountingCalls = []
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    updateRecoverySellerAccounting: async ({ fill }) => {
+      recoverySellerAccountingCalls.push(fill)
+      return toResult({ data: {
+        applied: true,
+        duplicate: false,
+      } })
+    },
+  })
+
+  const result = await workflow.processExecutionFillTransition({
+    order: recoverySellerOrder,
+    fill: recoverySellerFill,
+  })
+
+  assert.equal(result.ok, true, "A valid RS-owned canonical fill must be applied through the RS accounting workflow.")
+  assert.deepEqual(recoverySellerAccountingCalls, [recoverySellerFill], "The RS workflow must receive the canonical fill exactly once.")
+  assert.deepEqual(calls.accounting, [], "An RS fill must never mutate Conservative Portfolio/RecoveryLedger accounting.")
+  assert.deepEqual(calls.buyFills, [], "RS BUY fills must not enter Conservative BUY execution totals.")
+})
+
+
+test("fails closed for an RS SELL fill until terminal mixed-SELL reconciliation", async () => {
+  const recoverySellerOrder = makeOrder({
+    side: "SELL",
+    clientOrderId: "h-dogeusdt-rs-sell-1",
+  })
+  const recoverySellerFill = makeFill({
+    side: "SELL",
+    clientOrderId: recoverySellerOrder.clientOrderId,
+  })
+  const ownership = {
+    clientOrderId: recoverySellerOrder.clientOrderId,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "doge-recovery-seller-position",
+    purpose: "RECOVERY_SELL",
+    cycleId: "doge-recovery-seller-cycle-1",
+  }
+  const registry = createLifecycleRegistry({
+    currentOrder: recoverySellerOrder,
+    ownership,
+  })
+  const recoverySellerAccountingCalls = []
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    updateRecoverySellerAccounting: async ({ fill }) => {
+      recoverySellerAccountingCalls.push(fill)
+      return toResult({ data: {
+        applied: true,
+        duplicate: false,
+      } })
+    },
+  })
+
+  const result = await workflow.processExecutionFillTransition({
+    order: recoverySellerOrder,
+    fill: recoverySellerFill,
+  })
+
+  assert.equal(result.ok, false, "An RS SELL fill must wait for terminal mixed-SELL reconciliation instead of committing partial allocation.")
+  assert.deepEqual(calls.accounting, [], "An RS SELL fill must never be applied to Conservative accounting.")
+  assert.deepEqual(recoverySellerAccountingCalls, [], "The RS mixed-SELL accounting workflow must not be invoked with an isolated streamed fill.")
+  assert.equal(calls.pauses[0]?.reason, "EXECUTION_ACCOUNTING_FAILED", "Unsupported RS SELL accounting must pause the affected market fail-closed.")
+})
+
+
+test("fails closed for a registered order owned by an unsupported strategy", async () => {
+  const unsupportedOrder = makeOrder({
+    clientOrderId: "h-dogeusdt-future-strategy-buy-1",
+  })
+  const unsupportedFill = makeFill({
+    clientOrderId: unsupportedOrder.clientOrderId,
+  })
+  const ownership = {
+    clientOrderId: unsupportedOrder.clientOrderId,
+    strategyId: "FUTURE_strategy",
+    positionId: "future-strategy-position",
+    purpose: "FUTURE_BUY",
+  }
+  const registry = createLifecycleRegistry({
+    currentOrder: unsupportedOrder,
+    ownership,
+  })
+  const { workflow, calls } = makeWorkflow({ registry })
+
+  const result = await workflow.processExecutionFillTransition({
+    order: unsupportedOrder,
+    fill: unsupportedFill,
+  })
+
+  assert.equal(result.ok, false, "Unsupported strategy ownership must not fall through to Conservative accounting.")
+  assert.deepEqual(calls.accounting, [], "An unsupported strategy fill must not mutate Conservative accounting.")
+  assert.equal(calls.pauses[0]?.reason, "EXECUTION_ACCOUNTING_FAILED", "Unsupported attribution must fail closed.")
 })

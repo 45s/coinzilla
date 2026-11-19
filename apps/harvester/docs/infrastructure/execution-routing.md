@@ -34,6 +34,18 @@ A single execution account may own multiple symbols whose market-data sources di
 
 Every enabled executable strategy/market must have one execution route and one market-data route. Every configured provider instance must own at least one execution route; data-only provider instances are explicitly unsupported in this runtime. Duplicate, missing, disabled-market, unsupported-strategy, unknown-provider, and environment-incompatible routes fail closed. A strategy/market cannot be routed to multiple accounts. Market-data and execution routing are not interchangeable.
 
+## Strategy route identity at the runtime boundary
+
+Execution routing is defined per `(strategyId, symbol)`. The provider's market-data subscription list is a separate, deduplicated set of symbols and must not replace the strategy route records. When multiple strategies share a market, the runtime startup contract must retain both strategy identities even though the provider subscribes to that symbol once. The runtime integration tracked by [#1475](https://github.com/45s/coinzilla/issues/1475) must preserve these records through provider startup before strategy dispatch is enabled. Until that integration and offline lifecycle proof are complete, RS remains non-executable.
+
+## Strategy route identity at provider startup
+
+The provider-account startup input carries the immutable `executionRoutes` array separately from the deduplicated `executionSymbols` list. The same-market regression verifies that CG and RS both reach the provider boundary while only one market subscription is requested. PR #1476 now consumes these records for disabled-by-default RS configuration, shared account composition and RS BUY fill ownership dispatch. Production RS policy/order lifecycle, terminal mixed-SELL integration, shared reservations and offline lifecycle proof remain incomplete; route metadata does not authorize RS execution.
+
+## Strategy route identity through runtime metadata
+
+Provider startup receives and returns the immutable strategy-owned `executionRoutes` separately from deduplicated `executionSymbols`. Multi-account runtime metadata preserves each provider's route assignments as well. PR #1476 consumes this metadata for RS route resolution and shared accounting composition, but the concrete RS policy/lifecycle evaluator and order/fill management are still incomplete. Route metadata does not enable RS execution.
+
 ## Account and provider failure policy
 
 Provider identity is immutable and includes provider instance, provider type, account identity, and LIVE/TESTNET environment. All configured providers are required by default. An explicitly optional provider may fail account connection or its deferred market-data startup without terminating unrelated healthy accounts; its execution route is marked unavailable and no other provider is substituted. Partial subscriptions are stopped; if cleanup is unconfirmed, the account lock remains held for safe retry/shutdown. A required-provider failure rolls back every account that already started. If a route depends on an unavailable market-data source, it fails closed rather than selecting another source.
@@ -52,4 +64,12 @@ When brokers.instances, executionRouting, and marketDataRouting are absent, the 
 
 ## Deferred boundaries
 
-Process-restart restoration remains disabled under issue #654. Recovery Seller remains non-executable under #1127. This Phase 6 contract does not enable live or TESTNET order mutations during engineering verification; integrated tests use deterministic in-memory BrokerPort fakes.
+Process-restart restoration remains disabled under issue #654. Recovery Seller remains non-executable while RS-4/RS-5 are incomplete; implementation is tracked in [issue #1475](https://github.com/45s/coinzilla/issues/1475). This Phase 6 contract does not enable live or TESTNET order mutations during engineering verification; integrated tests use deterministic in-memory BrokerPort fakes.
+
+## Recovery Seller account routes
+
+Provider routing preserves the `{ strategyId, symbol }` owner while market and user-data subscriptions are deduplicated by symbol. A provider account with CG routes may also receive explicitly configured RS routes; the effective runtime keeps CG and RS pair maps separate and builds a union market map for canonical exchange metadata and subscriptions.
+
+RS routes are rejected unless `strategies.RS_recoverySeller.enabled` is true and every routed market is enabled for the selected `TRADING_MODE`. RS markets require an explicit positive per-market `investment` budget and an operator-declared legacy `invested` basis, original `quantity`, and per-cycle `sellQuantity`. An RS-only provider account remains rejected until the shared engine can be composed without a CG route.
+
+At startup, canonical exchange metadata is loaded before the RS legacy basis is initialized in the provider-account state. The RS pair is validated against its own order quantity, investment, precision, and order-type requirements even when CG owns the same market. The declared legacy quantity is not treated as available inventory: the account snapshot and shared reservation accounting must independently prove unreserved Spot custody before an RS SELL can be authorized. RS remains disabled by default.

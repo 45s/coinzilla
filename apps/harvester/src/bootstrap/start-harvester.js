@@ -8,6 +8,9 @@ import { conservativeStrategyPolicy } from "../domain/strategies/conservative/st
 import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
+import { createRecoverySellerAccountingWorkflow } from "../use-cases/create-recovery-seller-accounting-workflow.js"
+import { createLegacyPosition, createLegacyPositionAccounting } from "../domain/strategies/recovery-seller/legacy-position.js"
+import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
 import { EffectiveConfigurationError } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
@@ -366,6 +369,7 @@ async function resolveHarvesterStartupConfiguration({ dependencies }) {
     eventPublisher: dependencies.eventPublisher,
     logger: dependencies.logger,
     executionSymbols: dependencies.executionSymbols,
+    executionRoutes: dependencies.executionRoutes,
   })
   const providerResolved = dependencies.providerIdentity === undefined
     ? resolved
@@ -398,6 +402,10 @@ async function createHarvesterStartupContext({ options } = {}) {
     marketDataProviderInstanceId: dependencies.marketDataProviderInstanceId,
     marketDataSymbols: dependencies.marketDataSymbols,
     executionSymbols: resolved.executionSymbols,
+    marketSymbols: resolved.marketSymbols,
+    recoverySellerPairs: resolved.recoverySellerPairs,
+    evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
+    executionRoutes: Object.freeze([...(dependencies.executionRoutes ?? [])]),
     marketDataSources: dependencies.marketDataSources,
     marketDataProviderTypes: dependencies.marketDataProviderTypes,
     marketDataProviderIdentities: dependencies.marketDataProviderIdentities,
@@ -436,10 +444,19 @@ function createHarvesterPortfolioContext({ startup } = {}) {
     }],
   })
   const accountRuntime = accountRuntimeRegistry.get(providerIdentity.providerInstanceId)
+  const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
+    sharedState: accountRuntime.state,
+  })
   const context = {
     accountRuntime,
     accountRuntimeRegistry,
+    recoverySellerWorkflow,
+    recoverySellerMarketMetadata: new Map(),
+    getRecoverySellerMarketMetadata: ({ symbol } = {}) => context.recoverySellerMarketMetadata.get(symbol),
+    getAdditionalTrackedBaseQuantity: (...args) => recoverySellerWorkflow.getAdditionalTrackedBaseQuantity(...args),
+    getAdditionalTrackedQuoteCashFlow: () => recoverySellerWorkflow.getAdditionalTrackedQuoteCashFlow(),
     portfolioWorkflow: createPortfolioWorkflow({
+      sharedState: accountRuntime.state,
       evaluateStrategy: startup.evaluateStrategy,
       logger: createStrategyLogger({
         logger: startup.logger,
@@ -520,6 +537,8 @@ function createHarvesterAccountSnapshotRuntime({ startup,
     eventPublisher: startup.eventPublisher,
     marketMetadata: portfolio.marketMetadata,
     getPortfolio: portfolio.getPortfolio,
+    getAdditionalTrackedBaseQuantity: portfolio.getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
     getTradingEngine: () => resources.tradingEngine,
     getRecoveredState: () => portfolio.recoveredState,
     getHasCanonicalOwnershipReconciliation: () => resources.hasCanonicalOwnershipReconciliation,
@@ -658,7 +677,14 @@ function createHarvesterTradingEngineActivator({ startup,
       getRecoveryLedger: portfolio.getRecoveryLedger,
       getMarketMetadata: portfolio.getMarketMetadata,
       getAccountSnapshot: portfolio.getAccountSnapshot,
+      getAdditionalTrackedBaseQuantity: portfolio.getAdditionalTrackedBaseQuantity,
+      getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
+      recoverySellerPairs: startup.recoverySellerPairs,
+      recoverySellerWorkflow: portfolio.recoverySellerWorkflow,
+      evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
+      getRecoverySellerMarketMetadata: portfolio.getRecoverySellerMarketMetadata,
       updateTradingAccounting: portfolio.updateTradingAccounting,
+      updateRecoverySellerAccounting: portfolio.recoverySellerWorkflow.applyBuyFill,
       completeRecoveryCycle: portfolio.completeRecoveryCycle,
       userDataState: resources.userDataState,
       accountSnapshotManagerRef: startup.accountSnapshotManagerRef,
@@ -670,6 +696,7 @@ function createHarvesterTradingEngineActivator({ startup,
       onOperationalStateStrategyMarketPaused: startup.onOperationalStateStrategyMarketPaused,
       logger: startup.logger,
       recoveredState: portfolio.recoveredState,
+      sharedAccountState: portfolio.accountRuntime.state,
       isMarketPriceFresh: freshness.isMarketPriceFresh,
       isMarketBookFresh: freshness.isMarketBookFresh,
     })
@@ -678,13 +705,7 @@ function createHarvesterTradingEngineActivator({ startup,
   }
 }
 
-async function startHarvesterPreflightServices({ startup,
-  portfolio,
-  resources,
-  accountSnapshots,
-  userDataEvents,
-  recoveryRuntime,
-  activateTradingEngine } = {}) {
+async function initializeHarvesterMarketMetadata({ startup, portfolio, resources } = {}) {
   await loadMarketMetadata({
     broker: resources.broker,
     pairs: startup.pairs,
@@ -692,16 +713,38 @@ async function startHarvesterPreflightServices({ startup,
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
   })
-  activateTradingEngine()
-  await startup.operatorControlLifecycle.start({
-    engine: resources.tradingEngine,
-    getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
-    getPortfolio: portfolio.getPortfolio,
-    getRecoveryLedger: portfolio.getRecoveryLedger,
-    getAccountSnapshot: portfolio.getAccountSnapshot,
-    getOpenOrders: () => resources.broker.getOpenOrders(),
+  const records = []
+  for (const [symbol, pairConfig] of Object.entries(startup.recoverySellerPairs ?? {})) {
+    const metadata = portfolio.marketMetadata.get(symbol)
+    if (!metadata) {
+      throw new Error(`Recovery Seller market metadata is unavailable for ${symbol}`)
+    }
+    portfolio.recoverySellerMarketMetadata.set(symbol, validateMarketTradingReadiness({
+      symbol,
+      pairConfig,
+      marketMetadata: metadata,
+    }))
+    records.push({
+      market: metadata.market,
+      position: createLegacyPosition({
+        invested: String(pairConfig.legacyPosition.invested),
+        quantity: String(pairConfig.legacyPosition.quantity),
+      }),
+      accounting: createLegacyPositionAccounting(),
+    })
+  }
+  const initialized = await portfolio.recoverySellerWorkflow.initializeLegacyPositions({
+    records,
   })
-  portfolio.portfolioWorkflow = createPortfolioWorkflow({
+  if (initialized?.ok !== true) {
+    throw initialized?.errors?.[0] ??
+      new Error("Recovery Seller legacy basis initialization was not committed")
+  }
+}
+
+function createHarvesterPortfolioWorkflow({ startup, portfolio } = {}) {
+  return createPortfolioWorkflow({
+    sharedState: portfolio.accountRuntime.state,
     evaluateStrategy: startup.evaluateStrategy,
     logger: createStrategyLogger({
       logger: startup.logger,
@@ -712,6 +755,20 @@ async function startHarvesterPreflightServices({ startup,
     onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
     onOperationalStateRecoveryCycleNotCompleted: startup.onOperationalStateRecoveryCycleNotCompleted,
   })
+}
+
+async function startHarvesterUserDataServices({
+  startup,
+  portfolio,
+  resources,
+  accountSnapshots,
+  userDataEvents,
+  recoveryRuntime,
+} = {}) {
+  portfolio.portfolioWorkflow = createHarvesterPortfolioWorkflow({
+    startup,
+    portfolio,
+  })
   resources.userDataSubscription = await subscribeToUserData({
     broker: resources.broker,
     brokerName: startup.brokerName,
@@ -720,7 +777,7 @@ async function startHarvesterPreflightServices({ startup,
     state: resources.userDataState,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled,
-    enabledSymbols: startup.enabledSymbols,
+    enabledSymbols: startup.marketSymbols ?? startup.enabledSymbols,
     onEvent: userDataEvents.handleUserDataEvent,
     onStatus: recoveryRuntime.handleUserDataStatus,
     onSubscriptionEstablished: (subscription) => { resources.userDataSubscription = subscription },
@@ -735,6 +792,37 @@ async function startHarvesterPreflightServices({ startup,
     eventPublisher: startup.eventPublisher,
     brokerName: startup.brokerName,
     userDataState: resources.userDataState,
+  })
+}
+
+async function startHarvesterPreflightServices({ startup,
+  portfolio,
+  resources,
+  accountSnapshots,
+  userDataEvents,
+  recoveryRuntime,
+  activateTradingEngine } = {}) {
+  await initializeHarvesterMarketMetadata({
+    startup,
+    portfolio,
+    resources,
+  })
+  activateTradingEngine()
+  await startup.operatorControlLifecycle.start({
+    engine: resources.tradingEngine,
+    getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
+    getPortfolio: portfolio.getPortfolio,
+    getRecoveryLedger: portfolio.getRecoveryLedger,
+    getAccountSnapshot: portfolio.getAccountSnapshot,
+    getOpenOrders: () => resources.broker.getOpenOrders(),
+  })
+  await startHarvesterUserDataServices({
+    startup,
+    portfolio,
+    resources,
+    accountSnapshots,
+    userDataEvents,
+    recoveryRuntime,
   })
 }
 
@@ -1101,6 +1189,7 @@ function createHarvesterRuntimeResult({
     accountId: identity.accountId,
     required: startup.providerRequired !== false,
     ...marketData,
+    executionRoutes: Object.freeze([...(startup.executionRoutes ?? [])]),
     executionEnabled: startup.tradingEnabled === true && marketData.executionSymbols.length > 0,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled === true && marketData.executionSymbols.length > 0,
