@@ -29,65 +29,33 @@ The ADA recovery lifecycle work below remains a separate active trading-safety o
 
 ## Persistence — provider-agnostic database integration (#1327)
 
-**Status:** The generic `@coinzilla/db` provider-neutral CRUD/query, lifecycle, transaction, SQLite provider, backup/restore primitives and conformance infrastructure are implemented in [PR #1353](https://github.com/45s/coinzilla/pull/1353), [PR #1382](https://github.com/45s/coinzilla/pull/1382), and hardened/audited in [PR #1364](https://github.com/45s/coinzilla/pull/1364), [PR #1365](https://github.com/45s/coinzilla/pull/1365), and [PR #1396](https://github.com/45s/coinzilla/pull/1396). The package-specific DB ESLint cleanup is complete and is not outstanding work.
+**Status:** The generic `@coinzilla/db` provider-neutral CRUD/query, lifecycle, transaction, SQLite provider, backup/restore primitives and conformance infrastructure are implemented and hardened. The package-specific DB ESLint cleanup is complete.
 
-**First Harvester consumer — MERGED:** trading-session history is implemented in [PR #1369](https://github.com/45s/coinzilla/pull/1369) as `c2116fd647d942c11947e556e71a0e8e578cc192` (exact PR head `3bf1ad6ba88cfbfb5aa2ad3365353bf09718ea6b`). It stores one best-effort process/session projection in `harvester_trading_sessions` through the public `@coinzilla/db` facade. Its exact PR head passed 32 Actions checks; optional read-only Binance TESTNET integration was skipped. This is merge evidence, not a production deployment claim.
+**Previous persistence scope:** The trading-session-ID history projection from PR #1369 and the temporary `harvester_processes` process-ID smoke-test write are removed in this slice, as explicitly requested. The replacement history record is an executed-order projection; it does not use process or runtime-session identity.
 
-The full source-derived inventory, candidate classifications, repository contracts, path/operational constraints, lifecycle strategy, phased migration, test plan and unresolved decisions are documented in the [Harvester SQLite integration blueprint](docs/persistence/sqlite-integration-blueprint.md). The [persistence README](docs/persistence/README.md) remains the implementation-level reference for the merged session slice.
+**Current slice — filled-order history:** PR #1469 adds a non-authoritative `harvester_orders` projection. Persist an order as soon as cumulative executed quantity is positive, including immediate partial/fully filled acknowledgements, later partial/final fills, and partial-fill cancellation outcomes. Further lifecycle snapshots update the same row. Identity is `(environment, providerInstanceId, providerType, accountId, clientOrderId)`; exact decimal strings, canonical market/asset facts, provider/account provenance, and available strategy/position ownership are retained.
+
+The observer uses a bounded serialized best-effort queue. SQLite is never awaited from broker submission, user-data processing, fill application, accounting, Journal, or trading readiness. Queue overflow and write errors are reported as history gaps without blocking trading. TESTNET/LIVE retain separate database files. OrderRegistry, Journal, and ADR-0001 retain their existing authority and guarantees; no restart restoration is introduced.
+
+The temporary `harvester_processes` process-ID smoke-test row and its obsolete persistence helper are removed. Neither process ID nor runtime session ID is part of the order-history record or key. No changes are made to `packages/db`.
 
 ### Ownership and dependency direction
 
-- Harvester owns domain models, validation, repository contracts/ports, mapping, history projection policy, data transformations, backup schedules/retention, operational recovery procedures, and startup/shutdown orchestration.
-- Harvester infrastructure selects the provider and implements the Harvester-owned repository contracts through the public `@coinzilla/db` API.
-- `packages/db` owns generic record/query/lifecycle/transaction contracts, provider adapters, SQLite infrastructure/migrations/backup/restore primitives and provider conformance tests only.
-- No Harvester business model, repository, SQL statement, or direct `node:sqlite` access belongs in application/domain code or `packages/db`.
-- SQLite is the only currently implemented provider. Provider-neutral architecture does not mean PostgreSQL/MongoDB adapters already exist.
+- Harvester owns order-history domain records, repository semantics, lifecycle projection, and SQLite composition.
+- `packages/db` owns only generic provider-neutral persistence contracts and adapters.
+- OrderRegistry remains authoritative for in-process order ownership/state.
+- Journal remains the ordered lifecycle evidence store; this is not a second event ledger.
+- ADR-0001 remains separate and unchanged. The projection does not restore/adopt orders after restart.
+- SQLite is the only currently implemented provider.
 
-### Existing persistence classification
+### Remaining #1327 work
 
-- **Trading sessions:** SQLite history projection is complete (#1369); not used for readiness or recovery.
-- **Journal:** keep the process-scoped append-only JSONL evidence store and its ordering/flush/durability barriers unchanged.
-- **Operational State Store:** keep the separate ADR-0001 append-only hash-chained ledger. Current `recovery.enabled` is false; default `main()` does not construct/verify it, and Telegram-only control does not create or require it. Any database adapter is a separate #654/ADR decision.
-- **Orders and fills:** possible read-side history projections only, after immutable provider/account provenance and identity from #1339. Do not replace OrderRegistry/Portfolio or add DB writes to broker/fill critical paths.
-- **Order events:** Journal already owns ordered event evidence. A second SQLite projection is conditional on a concrete query/reporting need.
-- **Account snapshots/open-order audits:** possible historical projections only; account-balance snapshots are filtered to configured market and commission assets, not a complete wallet inventory.
-- **Process locks and diagnostic logs:** keep as filesystem coordination/observability mechanisms; they are not business repositories.
-- **Historical imports:** separate offline, idempotent, source-preserving work; no import is currently wired.
+1. Add fill-level history only if a concrete query need is established and the provider fill identity contract is proven.
+2. Add filtered account snapshot history only with explicit provenance and completeness semantics.
+3. Design offline, idempotent historical imports from verified source evidence.
+4. Define backup schedules, retention, permissions, disk monitoring, corruption/disk-full handling, and tested restore procedures before production deployment.
 
-### Environment isolation and operational constraints
-
-Current SQLite files are selected only by validated `TRADING_MODE`:
-
-- `live` → `apps/harvester/data/production/harvester.db`
-- `testnet` → `apps/harvester/data/testnet/harvester.db`
-
-`NODE_ENV` does not select the trading environment or database file. `HARVESTER_DATABASE_DIRECTORY` is an optional absolute base directory. The resolver checks path aliases/symlinks/hard-linked environment files. Current paths and process locks are not provider/account-scoped; #1339 must resolve that before multiple accounts/providers are enabled.
-
-Node 24+ and built-in `node:sqlite` are required. SQLite operations are synchronous and block the event loop; SQLite serializes writers; WAL is same-host/local-filesystem only and must not be placed on NFS/SMB. Harvester currently configures a 5,000 ms busy timeout. SQLite transaction callbacks are synchronous. The generic CRUD facade does not expose a provider-neutral migration/backup method; the package's low-level SQLite public API owns those operations. Harvester owns schedules, retention, encryption/offsite policy and restore drills. Production deployment must enforce restrictive file permissions; the current path helper relies on OS defaults/umask.
-
-### Delivery plan
-
-1. **Blueprint and source audit — this #1327 preparation task.** Complete the persistence inventory, candidate classifications, ownership boundaries, environment/operations strategy, and synchronized documentation. No runtime changes.
-2. **Provider/account contract alignment — dependency on #1339.** Define immutable provider-instance/account provenance before broker I/O, collision-safe order/fill identities, account-scoped locks, and whether DB files remain environment-scoped or become account-scoped.
-3. **Order history projection.** Add one read-side repository vertical slice using already-published evidence; keep OrderRegistry authoritative and prove DB failure cannot affect broker submission/readiness.
-4. **Order-event projection — conditional.** Only if Journal scanning does not satisfy a measured query need; preserve Journal as source evidence and carry stable source positions.
-5. **Fill history projection.** After #1339 provenance and a proven provider fill identity/denomination/completeness contract. Bitunix remains blocked by #1185.
-6. **Account snapshot history.** Store explicitly phased, filtered balance/open-order audit records with provenance; do not call them full wallet snapshots.
-7. **Historical import/reporting.** Offline idempotent importer from verified Journal sessions and, only when present, verified ADR-0001 facts. Preserve originals and label incomplete sessions.
-8. **Operational readiness.** Define backup schedules, retention, permissions, disk monitoring, corruption/disk-full handling, restore drills and production runbooks before persistent deployment.
-
-### Acceptance criteria
-
-- Harvester application/domain depend only on Harvester-owned repository contracts; provider selection remains in outer infrastructure.
-- Harvester infrastructure uses only the public `@coinzilla/db` API; no SQL or direct `node:sqlite` in application/domain code.
-- TESTNET/LIVE database paths remain distinct and are tested with real child processes.
-- New order/fill data carries immutable provider/account identity and exact decimal values.
-- SQLite writes remain read-side projections and do not add trading-readiness, Journal, or broker-side-effect barriers.
-- Journal and ADR-0001 guarantees remain unchanged; restart restoration is not enabled.
-- Import, backup, restore, rollback, and operational procedures are verified before production deployment.
-- Exact-head CI and documentation checks pass; skipped integrations are reported as skipped, not passed.
-
-**Explicit exclusions:** no Harvester business models in `packages/db`; no new provider; no big-bang or destructive migration; no Journal/Operational State Store replacement; no change to trading, broker, market-data, or restart-recovery behavior.
+**Explicit exclusions:** no new provider, no big-bang migration, no Journal/ADR-0001 replacement, no recovery restoration, no individual fill/commission ledger in this slice, no strategy or broker API changes, and no exchange operations.
 
 ## Repository-wide quality baseline
 
