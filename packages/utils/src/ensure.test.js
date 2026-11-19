@@ -45,7 +45,6 @@ const expectError = ([target, method, options, errorName, pattern, message]) => 
 }
 
 const normalizeSymbol = (symbol) => symbol.trim().toUpperCase()
-const lowercase = (value) => value.toLowerCase()
 const uppercase = (value) => value.toUpperCase()
 const isEven = (value) => value % 2 === 0
 
@@ -53,6 +52,7 @@ describe("ensure direct assertions", () => {
   it("returns valid primitive values without coercion", () => {
     const callback = () => {}
     assert.equal(ensure.string(namedValue(["", "label"])), "", "string assertion must accept empty strings")
+    assert.equal(ensure.string({ value: "default name" }), "default name", "field names must default to value when omitted")
     assert.equal(ensure.nonEmptyString(namedValue([" BTC ", "symbol"])), " BTC ", "non-empty string assertion must preserve whitespace")
     assert.equal(ensure.boolean(namedValue([false, "enabled"])), false, "boolean assertion must accept false")
     assert.equal(ensure.number(namedValue([0, "amount"])), 0, "finite number assertion must accept zero")
@@ -76,6 +76,7 @@ describe("ensure direct assertions", () => {
     assert.equal(ensure.strings(namedValue([symbols, "symbols"])), symbols, "string-array assertion must preserve identity")
     assert.equal(ensure.nonEmptyStrings(namedValue([symbols, "symbols"])), symbols, "non-empty string-array assertion must preserve identity")
     assert.equal(ensure.unique(namedValue([symbols, "symbols"])), symbols, "unique assertion must preserve identity")
+    assert.equal(ensure.strings(namedValue([[], "symbols"])).length, 0, "string-array assertion must allow empty arrays")
     assert.deepEqual(symbols, ["BTC", "ETH"], "array assertions must not mutate caller-owned arrays")
   })
 
@@ -84,6 +85,7 @@ describe("ensure direct assertions", () => {
     record.value = 1
     assert.equal(ensure.object(namedValue([record, "record"])), record, "object assertion must accept null-prototype objects")
     assert.equal(ensure.plainObject(namedValue([record, "record"])), record, "plain-object assertion must accept null-prototype records")
+    assert.equal(ensure.plainObject(namedValue([{}, "record"])).constructor, Object, "plain-object assertion must accept ordinary object prototypes")
     assert.equal(ensure.defined(namedValue([null, "nullable"])), null, "defined assertion must allow null")
     assert.equal(ensure.notNull(namedValue([false, "enabled"])), false, "not-null assertion must allow false")
     assert.equal(ensure.oneOf(choiceValue(["spot", ["spot", "futures"], "marketType"])), "spot", "choice assertion must return a matching option")
@@ -228,5 +230,77 @@ describe("ensure pipeline errors", () => {
     expectError([numberChain, "trim", undefined, "TypeError", /count must be a string/, "trim must reject non-string values"])
     expectError([numberChain, "uppercase", undefined, "TypeError", /count must be a string/, "uppercase must reject non-string values"])
     expectError([numberChain, "lowercase", undefined, "TypeError", /count must be a string/, "lowercase must reject non-string values"])
+  })
+})
+
+const proxyWithThrowingGet = ([target, property]) => new Proxy(target, {
+  get(...args) {
+    const [receiver, key, proxyReceiver] = args
+    if (key === property) {
+      throw new Error("blocked property read")
+    }
+    return Reflect.get(receiver, key, proxyReceiver)
+  },
+})
+
+const proxyWithThrowingPrototype = (target) => new Proxy(target, {
+  getPrototypeOf() {
+    throw new Error("blocked prototype read")
+  },
+})
+
+const proxyWithThrowingDescriptor = (target) => new Proxy(target, {
+  getOwnPropertyDescriptor() {
+    throw new Error("blocked descriptor read")
+  },
+})
+
+describe("ensure diagnostic formatting", () => {
+  it("describes primitive and non-primitive received values safely", () => {
+    expectError([ensure, "number", namedValue([Symbol("hidden"), "field"]), "TypeError", /field must be a finite number \(received symbol\)/, "symbols must be described without exposing or coercing them"])
+    expectError([ensure, "number", namedValue([2n, "field"]), "TypeError", /field must be a finite number \(received 2\)/, "bigints must be safely described"])
+    expectError([ensure, "number", namedValue([() => {}, "field"]), "TypeError", /received function/, "functions must be described without calling them"])
+    expectError([ensure, "number", namedValue([[], "field"]), "TypeError", /received array/, "arrays must be described safely"])
+    expectError([ensure, "number", namedValue([true, "field"]), "TypeError", /received true/, "booleans must be described"])
+    expectError([ensure, "number", namedValue([null, "field"]), "TypeError", /received null/, "null must be described"])
+    expectError([ensure, "number", namedValue([undefined, "field"]), "TypeError", /received undefined/, "undefined must be described"])
+    const longText = "a".repeat(100)
+    expectError([ensure, "number", namedValue([longText, "field"]), "TypeError", /received "a{77}…"/, "long strings must be truncated in diagnostics"])
+  })
+
+  it("rejects invalid names and safely handles hostile options objects", () => {
+    expectError([ensure, "string", namedValue(["x", 42]), "TypeError", /name must be a non-empty string/, "field labels must be strings"])
+    expectError([ensure, "string", [], "TypeError", /options must be a readable object/, "options arrays must be rejected"])
+    expectError([ensure, "string", new Date(), "TypeError", /options must be a plain object/, "non-plain options objects must be rejected"])
+    expectError([ensure, "string", proxyWithThrowingPrototype({}), "TypeError", /options must be a readable object/, "hostile option prototypes must be rejected safely"])
+    expectError([ensure, "string", proxyWithThrowingDescriptor(namedValue(["x", "field"])), "TypeError", /options must contain readable properties/, "hostile option descriptors must be rejected safely"])
+  })
+})
+
+describe("ensure hostile collections", () => {
+  it("rejects arrays with unreadable length or elements", () => {
+    const unreadableLength = proxyWithThrowingGet([[], "length"])
+    const unreadableElement = proxyWithThrowingGet([["x"], "0"])
+    expectError([ensure, "nonEmptyArray", namedValue([unreadableLength, "items"]), "TypeError", /items must be a readable array/, "non-empty array assertion must safely handle unreadable lengths"])
+    expectError([ensure, "strings", namedValue([unreadableLength, "items"]), "TypeError", /items must be a readable array/, "string-array assertion must safely handle unreadable lengths"])
+    expectError([ensure, "unique", namedValue([unreadableLength, "items"]), "TypeError", /items must be a readable array/, "unique assertion must safely handle unreadable lengths"])
+    expectError([ensure, "strings", namedValue([unreadableElement, "items"]), "TypeError", /items\[0\] must be a readable string/, "string-array assertion must safely handle throwing element getters"])
+    expectError([ensure, "unique", namedValue([unreadableElement, "items"]), "TypeError", /items\[0\] must be a readable value/, "unique assertion must safely handle throwing element getters"])
+  })
+
+  it("rejects unreadable choice arrays and hostile object proxies", () => {
+    const unreadableChoices = proxyWithThrowingGet([["spot"], "length"])
+    const unreadableIncludes = proxyWithThrowingGet([["spot"], "includes"])
+    const revokedProxy = Proxy.revocable({}, {})
+    revokedProxy.revoke()
+    expectError([ensure, "oneOf", choiceValue(["spot", unreadableChoices, "market"]), "TypeError", /values must be a non-empty array/, "choice assertion must safely handle unreadable allowed-value arrays"])
+    expectError([ensure, "oneOf", choiceValue(["spot", unreadableIncludes, "market"]), "TypeError", /values must be a readable array/, "choice assertion must safely handle unreadable membership operations"])
+    expectError([ensure, "object", namedValue([revokedProxy.proxy, "config"]), "TypeError", /config must be an object/, "object assertion must safely reject revoked proxies"])
+    expectError([ensure, "plainObject", namedValue([proxyWithThrowingPrototype({}), "config"]), "TypeError", /config must be a plain object/, "plain-object assertion must safely handle hostile prototype traps"])
+  })
+
+  it("uses SameValueZero equality for uniqueness", () => {
+    expectError([ensure, "unique", namedValue([[NaN, NaN], "values"]), "TypeError", /values must contain unique values/, "duplicate NaN values must be rejected"])
+    expectError([ensure, "unique", namedValue([[-0, 0], "values"]), "TypeError", /values must contain unique values/, "positive and negative zero must count as duplicates"])
   })
 })
