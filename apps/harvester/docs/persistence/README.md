@@ -1,3 +1,19 @@
+## Filled-order history slice — test-first specification
+
+The current task under issue [#1327](https://github.com/45s/coinzilla/issues/1327) replaces the temporary process-ID SQLite smoke test with a non-authoritative projection of canonical order lifecycle events.
+
+The target record identity is the complete tuple \`(environment, providerInstanceId, providerType, accountId, clientOrderId)\`. This prevents different provider instances/accounts from overwriting each other's orders while retaining one database file per environment.
+
+Persist an order only after its cumulative executed quantity is positive. Preserve exact decimal strings, canonical market/asset identity, provider/account provenance, and strategy/position ownership when the runtime already has it. Upsert later partial fills and terminal outcomes into the same record. Include immediate partially/fully filled acknowledgements, stream updates, and partially filled cancellations.
+
+The projection must use a bounded serialized observer queue. It must not add awaited database writes to broker submission, user-data handling, fill application, accounting, Journal, ADR-0001, or trading readiness. Queue overflow and database failures are observable history gaps, not reasons to block trading.
+
+The temporary \`harvester_processes\` row from PR #1430 will be removed in the implementation commit. Neither \`processId\` nor \`runtimeSessionId\` belongs in the order-history record. No individual fill/commission ledger, duplicate event store, snapshots, recovery restoration, or \`packages/db\` changes are part of this slice.
+
+**Status:** tests and acceptance contract are being added before implementation.
+
+---
+
 # Harvester ordinary persistence
 
 **Tracking issue:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)

@@ -40,6 +40,13 @@
   },
   "config": {
     "targetedTestFiles": [
+      "src/domain/order-history/order-history-record.test.js",
+      "src/domain/order-history/order-history-transition.test.js",
+      "src/infrastructure/persistence/order-history-repository.test.js",
+      "src/infrastructure/persistence/order-history-observer.test.js",
+      "src/infrastructure/persistence/order-history-persistence.test.js",
+      "src/index.order-history.test.js",
+      "src/application/events/lifecycle-event-dtos.order-history.test.js",
       "src/domain/trading-session/trading-session.test.js",
       "src/infrastructure/persistence/trading-session-repository.test.js",
       "src/infrastructure/persistence/trading-session-database-isolation.test.js",
