@@ -78,8 +78,14 @@ test("resolves every enabled strategy-market route to exactly one configured pro
 
 test("routes enabled RS markets through explicit provider assignments and deduplicates shared market subscriptions", () => {
   const recoverySellerPairs = {
-    BTCUSDT: { enabled: true, tradingEnvironment: "testnet" },
-    DOGEUSDT: { enabled: true, tradingEnvironment: "testnet" },
+    BTCUSDT: {
+      enabled: true,
+      tradingEnvironment: "testnet",
+    },
+    DOGEUSDT: {
+      enabled: true,
+      tradingEnvironment: "testnet",
+    },
   }
   const routes = [
     ...createRoutes(),
