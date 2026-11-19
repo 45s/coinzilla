@@ -149,10 +149,20 @@ function validateRequest(input = {}) {
     path,
     queryParams = {},
     body,
-    stateChanging = false,
+    stateChanging,
     authenticated = true,
   } = input
   const normalizedMethod = normalizeMethod({ method })
+  if (stateChanging !== undefined && typeof stateChanging !== "boolean") {
+    throw new TypeError("Bitunix REST stateChanging flag must be a boolean")
+  }
+  if (normalizedMethod === "POST" && typeof stateChanging !== "boolean") {
+    throw new TypeError("Bitunix REST POST requests must explicitly set stateChanging to true or false")
+  }
+  if (stateChanging === true && normalizedMethod !== "POST") {
+    throw new TypeError("Bitunix REST state-changing requests must use POST")
+  }
+  const normalizedStateChanging = stateChanging ?? false
   validatePath({ path })
   validateQueryParams({ queryParams })
   validateRequestBody({
@@ -170,7 +180,7 @@ function validateRequest(input = {}) {
     path,
     queryParams,
     body,
-    stateChanging,
+    stateChanging: normalizedStateChanging,
     authenticated,
   }
 }
@@ -378,12 +388,13 @@ function validateHttpResponse({ response, payload, path, stateChanging }) {
   }
 }
 
-function validateResponseEnvelope({ payload, path, response }) {
+function validateResponseEnvelope({ payload, path, response, stateChanging }) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new BitunixRestError({
       message: "Bitunix REST response envelope is malformed",
       kind: "response",
       path,
+      outcomeUnknown: stateChanging,
     })
   }
   const code = normalizeErrorCode({ code: payload.code })
@@ -392,6 +403,7 @@ function validateResponseEnvelope({ payload, path, response }) {
       message: "Bitunix REST response has an invalid error code",
       kind: "response",
       path,
+      outcomeUnknown: stateChanging,
     })
   }
   if (typeof payload.msg !== "string") {
@@ -401,6 +413,7 @@ function validateResponseEnvelope({ payload, path, response }) {
       path,
       exchangeCode: code,
       status: response.status,
+      outcomeUnknown: stateChanging,
     })
   }
   if (code !== "0") {
@@ -426,6 +439,7 @@ function validateResponse({ response, payload, path, stateChanging }) {
     payload,
     path,
     response,
+    stateChanging,
   })
 }
 
