@@ -1089,13 +1089,17 @@ error })
       })
       const result = await this.userDataSession.subscribe({ onEvent: forwardEvent,
         onStatus })
-      return toResult({
-        data: {
-          ...result.data,
-          deliveryMode: "NATIVE_EVENTS",
-          nativePush: true,
+      Object.defineProperties(result.data, {
+        deliveryMode: {
+          enumerable: true,
+          value: "NATIVE_EVENTS",
+        },
+        nativePush: {
+          enumerable: true,
+          value: true,
         },
       })
+      return toResult(result)
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.subscribeForUserData()",
         error })
