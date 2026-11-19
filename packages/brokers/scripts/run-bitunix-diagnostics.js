@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { resolve } from "node:path"
 import { pathToFileURL } from "node:url"
+import { BitunixRestClient } from "../src/infrastructure/bitunix/api/rest-client.js"
 import { runBitunixDiagnostics } from "./diagnostic-runner.js"
 import { sanitizeDiagnosticError } from "./diagnostics.js"
 
@@ -53,7 +54,9 @@ async function main() {
     return
   }
   process.stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot API account using read-only requests.\n")
-  const report = await runBitunixDiagnostics()
+  const report = await runBitunixDiagnostics({
+    brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
+  })
   const outputPath = createOutputPath({ now: Date.now })
   await writeReport({
     report,
