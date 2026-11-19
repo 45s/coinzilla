@@ -9,15 +9,15 @@ import {
   createSqliteProvider,
 } from "@coinzilla/db"
 import {
-  assertTradingSessionDatabaseIsolation,
-  resolveTradingSessionDatabaseFilename,
-} from "./resolve-trading-session-database-filename.js"
+  assertHarvesterDatabaseIsolation,
+  resolveHarvesterDatabaseFilename,
+} from "./resolve-harvester-database-filename.js"
 
 const CHILD_SCRIPT = `
 import { createDatabase, createSqliteProvider } from "@coinzilla/db"
-import { assertTradingSessionDatabaseIsolation } from "./src/infrastructure/persistence/resolve-trading-session-database-filename.js"
+import { assertHarvesterDatabaseIsolation } from "./src/infrastructure/persistence/resolve-harvester-database-filename.js"
 
-const filename = await assertTradingSessionDatabaseIsolation({
+const filename = await assertHarvesterDatabaseIsolation({
   tradingMode: process.env.TRADING_MODE,
   env: process.env,
 })
@@ -30,9 +30,9 @@ const database = createDatabase({
 await database.connect()
 try {
   await database.create({
-    collection: "process_isolation",
+    collection: "environment_isolation",
     record: {
-      id: "same-runtime-session-id",
+      id: "same-isolation-marker",
       environment: process.env.TRADING_MODE,
       marker: process.env.TRADING_MODE,
     },
@@ -80,7 +80,7 @@ function runDatabaseProcess({ tradingMode, nodeEnvironment, directory }) {
   })
 }
 
-async function readProcessRecord({ filename }) {
+async function readIsolationRecord({ filename }) {
   const database = createDatabase({
     provider: createSqliteProvider({
       filename,
@@ -90,8 +90,8 @@ async function readProcessRecord({ filename }) {
   await database.connect()
   try {
     return await database.readOne({
-      collection: "process_isolation",
-      id: "same-runtime-session-id",
+      collection: "environment_isolation",
+      id: "same-isolation-marker",
     })
   } finally {
     await database.close()
@@ -100,14 +100,14 @@ async function readProcessRecord({ filename }) {
 
 test("resolves database files from explicit TRADING_MODE, never NODE_ENV", () => {
   const directory = path.join(os.tmpdir(), "harvester-database-root")
-  const liveFilename = resolveTradingSessionDatabaseFilename({
+  const liveFilename = resolveHarvesterDatabaseFilename({
     tradingMode: "live",
     env: {
       HARVESTER_DATABASE_DIRECTORY: directory,
       NODE_ENV: "test",
     },
   })
-  const testnetFilename = resolveTradingSessionDatabaseFilename({
+  const testnetFilename = resolveHarvesterDatabaseFilename({
     tradingMode: "testnet",
     env: {
       HARVESTER_DATABASE_DIRECTORY: directory,
@@ -122,7 +122,7 @@ test("resolves database files from explicit TRADING_MODE, never NODE_ENV", () =>
 
 test("rejects invalid trading modes and unsafe configured database paths", () => {
   assert.throws(
-    () => resolveTradingSessionDatabaseFilename({
+    () => resolveHarvesterDatabaseFilename({
       tradingMode: "development",
       env: {},
     }),
@@ -130,7 +130,7 @@ test("rejects invalid trading modes and unsafe configured database paths", () =>
     "An unrecognized trading mode must never select a database environment.",
   )
   assert.throws(
-    () => resolveTradingSessionDatabaseFilename({
+    () => resolveHarvesterDatabaseFilename({
       tradingMode: "live",
       env: {
         HARVESTER_DATABASE_DIRECTORY: "relative/database/path",
@@ -140,7 +140,7 @@ test("rejects invalid trading modes and unsafe configured database paths", () =>
     "A relative database directory must be rejected instead of depending on the shell working directory.",
   )
   assert.throws(
-    () => resolveTradingSessionDatabaseFilename({
+    () => resolveHarvesterDatabaseFilename({
       tradingMode: "testnet",
       env: {
         HARVESTER_DATABASE_DIRECTORY: path.parse(process.cwd()).root,
@@ -163,7 +163,7 @@ test("rejects aliased Production and Testnet directories", async (t) => {
   await symlink(testnetDirectory, productionDirectory, "dir")
 
   await assert.rejects(
-    assertTradingSessionDatabaseIsolation({
+    assertHarvesterDatabaseIsolation({
       tradingMode: "live",
       env: {
         HARVESTER_DATABASE_DIRECTORY: directory,
@@ -192,7 +192,7 @@ test("rejects hard-linked Production and Testnet database files", async (t) => {
   await link(productionFilename, testnetFilename)
 
   await assert.rejects(
-    assertTradingSessionDatabaseIsolation({
+    assertHarvesterDatabaseIsolation({
       tradingMode: "testnet",
       env: {
         HARVESTER_DATABASE_DIRECTORY: directory,
@@ -228,13 +228,13 @@ test("isolates production and Testnet databases across two real Node.js processe
   assert.equal(path.basename(path.dirname(testnetProcess.filename)), "testnet", "The Testnet process must write only to the Testnet database directory.")
 
   const [liveRecord, testnetRecord] = await Promise.all([
-    readProcessRecord({
+    readIsolationRecord({
       filename: liveProcess.filename,
     }),
-    readProcessRecord({
+    readIsolationRecord({
       filename: testnetProcess.filename,
     }),
   ])
-  assert.equal(liveRecord.environment, "live", "The production database must contain only the live process's session marker.")
-  assert.equal(testnetRecord.environment, "testnet", "The Testnet database must contain only the Testnet process's session marker.")
+  assert.equal(liveRecord.environment, "live", "The production database must contain only the live process's environment marker.")
+  assert.equal(testnetRecord.environment, "testnet", "The Testnet database must contain only the Testnet process's environment marker.")
 })
