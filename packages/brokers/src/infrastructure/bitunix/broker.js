@@ -535,8 +535,8 @@ function validateSpotOrderInput({ input }) {
   if (type !== "LIMIT" && type !== "MARKET") {
     throw new TypeError("Bitunix Spot single-order REST supports only LIMIT and MARKET orders")
   }
-  if (type === "MARKET" && input.price !== undefined && String(input.price) !== "0") {
-    throw new TypeError("Bitunix Spot MARKET orders must use the documented zero price")
+  if (type === "MARKET" && input.price !== undefined) {
+    throw new TypeError("Bitunix Spot MARKET orders derive their required zero price; omit price")
   }
   return { symbol, side, type }
 }
@@ -601,17 +601,17 @@ function validateSpotOrderPlacementResponse({ response, symbol, side, type }) {
   if (!response || typeof response !== "object" || Array.isArray(response)) {
     throw new TypeError("Bitunix Spot place-order response must be an object")
   }
-  if (String(response.symbol).toUpperCase() !== symbol) {
-    throw new TypeError("Bitunix Spot place-order response symbol does not match the request")
-  }
-  if (String(response.side) !== String(side) || String(response.type) !== String(type)) {
-    throw new TypeError("Bitunix Spot place-order response side or type does not match the request")
-  }
   if (String(response.placeStatus) !== "1") {
     throw Object.assign(
       new Error("Bitunix Spot rejected the order placement"),
       { kind: "exchange" },
     )
+  }
+  if (String(response.symbol).toUpperCase() !== symbol) {
+    throw new TypeError("Bitunix Spot place-order response symbol does not match the request")
+  }
+  if (String(response.side) !== String(side) || String(response.type) !== String(type)) {
+    throw new TypeError("Bitunix Spot place-order response side or type does not match the request")
   }
   return {
     ...response,
