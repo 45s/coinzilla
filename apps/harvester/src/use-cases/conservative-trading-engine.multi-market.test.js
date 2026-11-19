@@ -307,7 +307,7 @@ accountedFills,
 cancelledOrderIds }
 }
 
-async function startBothMarkets(engine, symbols = markets.map((market) => market.symbol)) {
+async function startBothMarkets({ engine, symbols = markets.map((market) => market.symbol) } = {}) {
   for (const market of markets.filter((candidate) => symbols.includes(candidate.symbol))) {
     const result = await engine.processMarketPrice({
       symbol: market.symbol,
@@ -360,7 +360,7 @@ async function createReconciliationHarness({ symbols = markets.map((market) => m
   }
   const harness = await createHarness({ brokerOverrides })
   harnessState.engine = harness.engine
-  await startBothMarkets(harnessState.engine, symbols)
+  await startBothMarkets({ engine: harnessState.engine, symbols })
   return harness
 }
 
@@ -496,7 +496,7 @@ test("a newly observed external order triggers symbol-scoped reconciliation with
       })
     },
   })
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
   const unownedSolOrder = createUnownedSolOrder()
 
@@ -1114,7 +1114,7 @@ data: { durable: true } }
 
 test("tracks Conservative shutdown safety independently for every market", async () => {
   const harness = await createHarness()
-  await startBothMarkets(harness.engine)
+  await startBothMarkets({ engine: harness.engine })
   harness.engine.beginShutdown()
 
   const dogeCancellation = await harness.engine.cancelOwnedBuyOrdersForShutdown({
