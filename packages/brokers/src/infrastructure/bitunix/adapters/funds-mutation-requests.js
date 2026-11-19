@@ -122,6 +122,52 @@ export function createCancelWithdrawalRequest({ input }) {
   }
 }
 
+function createTransferRecipient({ input }) {
+  if (input.toType === "uid") {
+    rejectUnusedRecipientFields({
+      input,
+      allowed: ["toUid"],
+    })
+    return {
+      toType: "uid",
+      toUid: requireUid({
+        value: input.toUid,
+      }),
+    }
+  }
+  if (input.toType === "phone") {
+    rejectUnusedRecipientFields({
+      input,
+      allowed: ["toPhoneCountryCode", "toPhoneNumber"],
+    })
+    return {
+      toType: "phone",
+      toPhoneCountryCode: requireNonEmptyString({
+        value: input.toPhoneCountryCode,
+        field: "toPhoneCountryCode",
+      }),
+      toPhoneNumber: requireNonEmptyString({
+        value: input.toPhoneNumber,
+        field: "toPhoneNumber",
+      }),
+    }
+  }
+  if (input.toType === "email") {
+    rejectUnusedRecipientFields({
+      input,
+      allowed: ["toEmail"],
+    })
+    return {
+      toType: "email",
+      toEmail: requireNonEmptyString({
+        value: input.toEmail,
+        field: "toEmail",
+      }),
+    }
+  }
+  throw new TypeError('Bitunix Spot internal transfer toType must be "uid", "phone", or "email"')
+}
+
 /**
  * Build the exact request body for Bitunix Spot internal user-to-user transfer.
  * UID routing accepts only safely representable numeric IDs; phone/email routes support larger identity spaces.
@@ -141,41 +187,7 @@ export function createInternalTransferRequest({ input }) {
     amount: requirePositiveAmount({
       value: input.amount,
     }),
-    toType: input.toType,
-  }
-
-  if (input.toType === "uid") {
-    rejectUnusedRecipientFields({
-      input,
-      allowed: ["toUid"],
-    })
-    body.toUid = requireUid({
-      value: input.toUid,
-    })
-  } else if (input.toType === "phone") {
-    rejectUnusedRecipientFields({
-      input,
-      allowed: ["toPhoneCountryCode", "toPhoneNumber"],
-    })
-    body.toPhoneCountryCode = requireNonEmptyString({
-      value: input.toPhoneCountryCode,
-      field: "toPhoneCountryCode",
-    })
-    body.toPhoneNumber = requireNonEmptyString({
-      value: input.toPhoneNumber,
-      field: "toPhoneNumber",
-    })
-  } else if (input.toType === "email") {
-    rejectUnusedRecipientFields({
-      input,
-      allowed: ["toEmail"],
-    })
-    body.toEmail = requireNonEmptyString({
-      value: input.toEmail,
-      field: "toEmail",
-    })
-  } else {
-    throw new TypeError('Bitunix Spot internal transfer toType must be "uid", "phone", or "email"')
+    ...createTransferRecipient({ input }),
   }
 
   const outBizId = requireOptionalString({
