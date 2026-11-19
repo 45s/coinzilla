@@ -137,6 +137,9 @@ try {
 - `getTokenNetworks()` — `common.coin.coin_network.list`
 - `getAccount()` — `user.account`
 - `getUserInfo()` — `user.info`
+- `getOpenOrders({ symbol })` — `order.pending.list`
+- `getOrderHistory({ symbol, page?, pageSize?, startTime?, endTime?, status?, side?, type? })` — `order.history.page`
+- `getMatchingOrderDetails({ orderId, symbol })` — `order.deal.list`
 
 The client correlates concurrent responses by echoed request ID, validates response envelopes, applies the official Spot WebSocket double-SHA256 signature (separate from REST signing), and never automatically retries a request. Account balance numeric tokens are returned as exact decimal strings; unsafe int64 user IDs are preserved as strings. A timeout or disconnect rejects unresolved RPCs. After a connection closes, call `connect()` again to create a fresh transport and listener set on the same client instance. Concurrent reconnect calls share one connection attempt; interrupted RPCs are rejected and never replayed. Reconnection is explicit and caller-controlled—there is no automatic retry/backoff, subscription restoration, or missed-event replay. Bitunix documents a 24-hour connection lifetime.
 
@@ -161,7 +164,7 @@ try {
 }
 ```
 
-These are one-shot RPC reads, not streaming subscriptions. No continuous public price/depth/K-line feed or private order/execution/balance event stream is implemented. The existing `BitunixSpotBroker` REST methods are unchanged and do not silently switch transports.
+These are one-shot RPC reads, not streaming subscriptions. The official Spot WebSocket order interface also documents `order.place_order`, `order.place_order.batch`, and `order.cancel`; Coinzilla deliberately keeps mutations on the existing REST-backed broker path, where the established order safety gate and read-after-write verification apply. No continuous public price/depth/K-line feed or private order/execution/balance event stream is documented for Spot. The existing `BitunixSpotBroker` REST methods do not silently switch transports.
 
 ## Canonical order placement response
 
