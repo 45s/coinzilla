@@ -315,10 +315,18 @@ function normalizeOrderType(record) {
 }
 
 function adaptOrderRows(data, { listField, path }) {
-  return adaptPage(data, {
-    listField,
-    spec: ORDER_SPEC,
-    path,
+  requireRecord(data, path)
+  const rows = requireArray(data[listField], `${path}.${listField}`)
+  const items = Object.freeze(rows.map((row, index) => (
+    validateRecord(normalizeOrderType(row), {
+      ...ORDER_SPEC,
+      path: `${path}.${listField}[${index}]`,
+    })
+  )))
+  requireInt64(data, "total", path)
+  return Object.freeze({
+    ...data,
+    [listField]: items,
   })
 }
 
