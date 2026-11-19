@@ -1878,6 +1878,7 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     getPortfolio: dependencies.getPortfolio,
     getRecoveryLedger: dependencies.getRecoveryLedger,
     pairs: context.pairs,
+    recoverySellerPairs: dependencies.recoverySellerPairs,
     settings: context.settings,
     logger: dependencies.logger,
     strategyPolicy: dependencies.strategyPolicy,

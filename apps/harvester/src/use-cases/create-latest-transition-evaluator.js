@@ -371,9 +371,22 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
   return async function evaluateLatestTransition(options = {}) {
     const conservativeResult = await evaluateConservativeLatestTransition(options)
     if (!conservativeResult?.ok ||
-        typeof dependencies.evaluateRecoverySellerTransition !== "function" ||
         options.preflightOnly === true ||
         options.shutdownRecoveryOnly === true) {
+      return conservativeResult
+    }
+    const hasRecoverySellerRoute = Object.hasOwn(
+      dependencies.recoverySellerPairs ?? {},
+      options.symbol,
+    )
+    if (typeof dependencies.evaluateRecoverySellerTransition !== "function") {
+      if (hasRecoverySellerRoute) {
+        return toResult({
+          error: new Error(
+            "Recovery Seller execution route is configured but no production transition evaluator is registered",
+          ),
+        })
+      }
       return conservativeResult
     }
     try {
