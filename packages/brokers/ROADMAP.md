@@ -1448,3 +1448,13 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Updated the polling contract and production-readiness matrix to distinguish this recovery guarantee from authoritative event/fill reconciliation.
 - No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
 - Required CI must pass on the exact final PR head before this item is marked complete.
+
+## Bitunix Spot history request-adapter decomposition (#1517)
+
+**Status: Implemented in [PR #1518](https://github.com/45s/coinzilla/pull/1518); all seven required workflows passed on exact head `aadde0c035f73c81a129a7d5454a2427383e8762`.**
+
+- Preserve request body fields, exchange filter codes, time conversion, validation messages and page-envelope behavior exactly.
+- Keep the Broker facade responsible for endpoint I/O and result envelopes.
+- Add direct deterministic adapter tests while retaining existing broker-level characterization tests.
+- No endpoint semantics, public Broker contract, pagination guarantees or execution-history claims change.
+- No new shared utility; these are Bitunix-specific protocol adapters.
