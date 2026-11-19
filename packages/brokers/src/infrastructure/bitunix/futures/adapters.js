@@ -91,11 +91,14 @@ function validateRecord(record, {
 
 function adaptRows(data, spec, path) {
   return Object.freeze(requireArray(data, path).map((row, index) => (
-    validateRecord(row, { ...spec, path: `${path}[${index}]` })
+    validateRecord(row, { ...spec,
+      path: `${path}[${index}]` })
   )))
 }
 
-function adaptPage(data, { listField, spec, path }) {
+function adaptPage(data, { listField,
+  spec,
+  path }) {
   requireRecord(data, path)
   const items = adaptRows(data[listField], spec, `${path}.${listField}`)
   requireInt64(data, "total", path)
@@ -314,7 +317,8 @@ function normalizeOrderType(record) {
   }
 }
 
-function adaptOrderRows(data, { listField, path }) {
+function adaptOrderRows(data, { listField,
+  path }) {
   requireRecord(data, path)
   const rows = requireArray(data[listField], `${path}.${listField}`)
   const items = Object.freeze(rows.map((row, index) => (
