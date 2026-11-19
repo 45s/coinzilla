@@ -51,7 +51,7 @@ test("Bitunix Spot capability declarations preserve canonical lifecycle blockers
   }
 
   assert.match(
-    capabilities.getCapability({ type: "PLACE_LIMIT_ORDER" }).limitation,
-    /client order ID|OUTCOME_UNKNOWN/i,
+    capabilities.getCapability({ type: "PLACE_LIMIT_ORDER" }).reason,
+    /disabled by default/i,
   )
 })
