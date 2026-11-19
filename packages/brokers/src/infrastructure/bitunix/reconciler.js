@@ -436,7 +436,7 @@ export class BitunixSpotReconciler {
   stop() {
     this.running = false
     this.generation += 1
-    const timer = this.timer
+    const { timer } = this
     this.timer = null
     this.lastFingerprint = null
     if (timer !== null) {
