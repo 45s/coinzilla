@@ -215,11 +215,14 @@ function createRecoverySellerSubmissionHandler({ execute, onSellReserved } = {})
       if (!result.ok) {
         return result
       }
+      const submittedOrders = Array.isArray(result.data?.submittedOrders)
+        ? result.data.submittedOrders
+        : []
       return toResult({
         data: {
-          submitted: true,
+          submitted: submittedOrders.length > 0,
           decision: lifecycleDecision,
-          submittedOrders: result.data.submittedOrders,
+          submittedOrders,
         },
       })
     } catch (error) {
