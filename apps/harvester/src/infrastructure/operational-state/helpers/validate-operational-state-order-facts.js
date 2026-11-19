@@ -51,8 +51,9 @@ function validatePersistedRecoveryOrderOwnership({ canonicalData, supplied } = {
   if (canonicalData.purpose === "RECOVERY_SELL" && supplied.length === 0) {
     return
   }
+  const minimumOwnershipFields = canonicalData.strategyId === "RS_recoverySeller" ? 3 : 2
   if (!["RECOVERY_BUY", "RECOVERY_SELL"].includes(canonicalData.purpose) ||
-      supplied.length < 2 ||
+      supplied.length < minimumOwnershipFields ||
       !["CG_coinGrabber", "RS_recoverySeller"].includes(canonicalData.strategyId)) {
     throw new TypeError("Recovery order facts require complete strategy, positionId and cycleId ownership")
   }
