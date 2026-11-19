@@ -9,12 +9,12 @@ import { createSqliteDatabase, restoreSqliteDatabase } from "../../index.js"
 function createRelationalMigration() {
   return {
     version: 1,
-    name: "create-relational-orders",
+    name: "create-sample-entities",
     up(transaction) {
       transaction.exec(`
-        CREATE TABLE relational_orders (
+        CREATE TABLE sample_entities (
           id INTEGER PRIMARY KEY,
-          exchange_order_id TEXT NOT NULL UNIQUE
+          external_key TEXT NOT NULL UNIQUE
         )
       `)
     },
@@ -34,8 +34,8 @@ async function createMigratedBackup({ sourceFilename, backupFilename, migration 
       "A fresh file-backed database must apply its initial relational schema migration",
     )
     database.prepare(
-      "INSERT INTO relational_orders (id, exchange_order_id) VALUES (?, ?)",
-    ).run(42, "exchange-order-42")
+      "INSERT INTO sample_entities (id, external_key) VALUES (?, ?)",
+    ).run(42, "sample-key-42")
     await database.backup({
       destination: backupFilename,
     })
@@ -63,11 +63,11 @@ async function assertRestoredSchema({ backupFilename, restoredFilename, migratio
     )
     assert.deepEqual(
       database.prepare(
-        "SELECT id, exchange_order_id FROM relational_orders",
+        "SELECT id, external_key FROM sample_entities",
       ).all().map((row) => ({ ...row })),
       [{
         id: 42,
-        exchange_order_id: "exchange-order-42",
+        external_key: "sample-key-42",
       }],
       "Restoring a migrated backup must preserve application-owned relational table data",
     )
