@@ -180,7 +180,7 @@ function getPortfolioBaseBalanceContext({ dependencies, accountSnapshot, portfol
   }
 }
 
-function getPortfolioBalanceContext({ dependencies, context } = {}) {
+export function getPortfolioBalanceContext({ dependencies, context } = {}) {
   const { metadata, portfolioBefore, activeOrdersBefore, excludedActiveOrderClientId } = context
   const accountSnapshot = dependencies.getAccountSnapshot()
   if (!accountSnapshot) {
@@ -260,7 +260,7 @@ function createStrategyOrderCommitmentInput({ balances, metadata, pairConfig, ac
   }
 }
 
-function allocateEvaluationActions({ dependencies, context, balances } = {}) {
+export function allocateEvaluationActions({ dependencies, context, balances } = {}) {
   const { allocateOrderCommitments, pairs } = dependencies
   const {
     symbol,
@@ -314,7 +314,7 @@ function allocateEvaluationActions({ dependencies, context, balances } = {}) {
   return allocation.data
 }
 
-function logOrderAllocation({ dependencies, context, balances, allocation } = {}) {
+export function logOrderAllocation({ dependencies, context, balances, allocation } = {}) {
   const { logger } = dependencies
   const { evaluationId, symbol, metadata } = context
   const {

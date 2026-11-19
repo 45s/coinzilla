@@ -1,4 +1,14 @@
 import { toResult } from "@coinzilla/utils"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { completeDustRecoveryIfNeeded } from "./complete-conservative-dust-recovery.js"
+import {
+  allocateEvaluationActions,
+  getPortfolioBalanceContext,
+  logOrderAllocation,
+  publishStrategyDecision,
+} from "./strategy-order-commitments.js"
+import { allocateStrategyOrderCommitments } from "./strategy-order-commitments.js"
+import { handleEvaluationFailure, submitConservativeTransition } from "./submit-conservative-transition.js"
 
 function hasShutdownRecoveryBlocker({ state, symbol } = {}) {
   const marketBlockers = [
@@ -189,8 +199,6 @@ function prepareEvaluationContext({ dependencies, options } = {}) {
   return context
 }
 
-import { completeDustRecoveryIfNeeded } from "./complete-conservative-dust-recovery.js"
-
 function handleNoEffectiveActions({ dependencies, context } = {}) {
   const { logger } = dependencies
   const { preflightOnly, decision, evaluationId, symbol, activeOrdersBefore, operatorSuppressedActions, effectiveActions } = context
@@ -210,14 +218,6 @@ function handleNoEffectiveActions({ dependencies, context } = {}) {
     submittedOrders: [],
     operatorSuppressedActions } })
 }
-
-import {
-  allocateEvaluationActions,
-  getPortfolioBalanceContext,
-  logOrderAllocation,
-  publishStrategyDecision,
-} from "./strategy-order-commitments.js"
-export { allocateStrategyOrderCommitments } from "./strategy-order-commitments.js"
 
 function handleNoExecutableActions({ dependencies, context, allocation } = {}) {
   void dependencies
@@ -239,52 +239,6 @@ function handleNoExecutableActions({ dependencies, context, allocation } = {}) {
     },
   })
 }
-
-function publishStrategyDecision({ dependencies, context, balances, allocation } = {}) {
-  const { eventPublisher, pairs } = dependencies
-  const { decision, symbol, marketPrice, activeOrdersBefore } = context
-  const { position, portfolioBaseBalance, quoteBalance, baseBalance, quoteCashFlow, committedQuote, committedQuoteBalance, committedBase, committedBaseBalance } = balances
-  const { executableActions } = allocation
-  publishLifecycleEvent({
-    eventPublisher,
-    eventName: HARVESTER_EVENT_NAMES.STRATEGY_DECISION,
-    dataResult: mapStrategyDecisionData({
-      strategy: decision.strategy,
-      symbol,
-      referencePrice: marketPrice.price,
-      reason: decision.reason ?? executableActions[0]?.reason,
-      inputs: {
-        lastBuyPrice: context.lastBuyPrice ?? null,
-        activeOrderCount: activeOrdersBefore.length,
-        activeBuyCount: activeOrdersBefore.filter((order) => order.side === "BUY").length,
-        activeSellCount: activeOrdersBefore.filter((order) => order.side === "SELL").length,
-        activeBaseQuantity: position?.baseQuantity.amount ?? "0",
-        portfolioBaseBalance,
-        freeQuoteBalance: quoteBalance.amount,
-        freeBaseBalance: baseBalance.amount,
-        quoteCashFlow,
-        committedQuote,
-        committedQuoteBalance,
-        committedBase,
-        committedBaseBalance,
-        outstandingRecoveryAmount: context.recoveryLedgerBefore?.outstandingRecoveryAmount ?? "0",
-        investmentLimit: String(pairs[symbol].investment),
-        orderQuantity: String(pairs[symbol].orderQuantity),
-        keepQuantity: String(pairs[symbol].keepQuantity),
-        priceStepPercent: String(pairs[symbol].priceStepPercent),
-        makerPercent: String(pairs[symbol].makerPercent),
-        takerPercent: String(pairs[symbol].takerPercent),
-        minProfit: String(pairs[symbol].minProfit),
-      },
-      actions: executableActions,
-    }),
-  })
-}
-
-import {
-  handleEvaluationFailure,
-  submitConservativeTransition,
-} from "./submit-conservative-transition.js"
 
 function prepareConservativeTransitionAllocation({ dependencies, context, excludedActiveOrderClientId } = {}) {
   const balances = getPortfolioBalanceContext({
