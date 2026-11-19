@@ -31,7 +31,7 @@ The ADA recovery lifecycle work below remains a separate active trading-safety o
 
 **Status:** The generic `@coinzilla/db` provider-neutral CRUD/query, lifecycle, transaction, SQLite provider, backup/restore primitives and conformance infrastructure are implemented and hardened. The package-specific DB ESLint cleanup is complete.
 
-**Existing trading-session history:** The original Harvester-owned ordinary trading-session history from PR #1369 remains intact. It is historical reporting data, not a recovery store and not a trading-readiness gate.
+**Previous persistence scope:** The trading-session-ID history projection from PR #1369 and the temporary `harvester_processes` process-ID smoke-test write are removed in this slice, as explicitly requested. The replacement history record is an executed-order projection; it does not use process or runtime-session identity.
 
 **Current slice — filled-order history:** PR #1469 adds a non-authoritative `harvester_orders` projection. Persist an order as soon as cumulative executed quantity is positive, including immediate partial/fully filled acknowledgements, later partial/final fills, and partial-fill cancellation outcomes. Further lifecycle snapshots update the same row. Identity is `(environment, providerInstanceId, providerType, accountId, clientOrderId)`; exact decimal strings, canonical market/asset facts, provider/account provenance, and available strategy/position ownership are retained.
 
