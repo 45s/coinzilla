@@ -1989,7 +1989,7 @@ function getEventRecordMarketSymbol({ record }) {
 }
 
 function getUserDataEventSymbolCandidates({ event = {} } = {}) {
-  const { executedOrder, order, fill, market, symbol, s } = event
+  const { executedOrder, order, fill, market, symbol, s } = event ?? {}
   return [
     getEventRecordMarketSymbol({ record: executedOrder }),
     getEventRecordMarketSymbol({ record: order }),
@@ -3148,7 +3148,10 @@ async function applyTrailingBuyFillHistory({ context, symbol, order, fills }) {
   let reconciledQuantity = "0"
   const seenFillIds = new Set()
   for (const fill of fills) {
-    if (!matchesTrailingBuyFillIdentity({ fill, order })) {
+    if (!matchesTrailingBuyFillIdentity({
+      fill,
+      order,
+    })) {
       await context.pause({
         symbol,
         reason: "TRAILING_BUY_FILL_IDENTITY_MISMATCH",
@@ -3525,8 +3528,12 @@ async function getTrailingBuyReplacementCandidate({ context, symbol, marketPrice
 }
 
 async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice }) {
-  const candidate = await getTrailingBuyReplacementCandidate({ context, symbol, marketPrice })
-  if (candidate.result) {
+  const candidate = await getTrailingBuyReplacementCandidate({
+    context,
+    symbol,
+    marketPrice,
+  })
+  if (Object.hasOwn(candidate, "result")) {
     return candidate.result
   }
   const preparationFailure = await prepareTrailingBuyReplacement({
@@ -3935,7 +3942,10 @@ function validateOwnedBuyExecutionHistory({ order, fillsResult, reasonPrefix }) 
   }
   const fillsById = new Map()
   for (const fill of fillsResult.data) {
-    if (!matchesOwnedBuyExecutionIdentity({ fill, order })) {
+    if (!matchesOwnedBuyExecutionIdentity({
+      fill,
+      order,
+    })) {
       return {
         ok: false,
         error: new Error(`BUY execution history contains a fill for a different order during ${  reasonPrefix}`),
