@@ -390,6 +390,61 @@ function validateStrategyOrderCommitmentInput({
   ensure.array({ value: actions, name: "actions" })
 }
 
+function prepareStrategyOrderCommitmentContext({
+  dependencies,
+  strategyId,
+  symbol,
+  metadata,
+  portfolio,
+  activeOrders,
+  pairConfig,
+  positionId,
+  activeBaseQuantity,
+  outstandingRecoveryAmount,
+  actions,
+} = {}) {
+  validateStrategyOrderCommitmentInput({
+    dependencies,
+    strategyId,
+    symbol,
+    metadata,
+    portfolio,
+    activeOrders,
+    pairConfig,
+    actions,
+  })
+  const strategyDependencies = {
+    ...dependencies,
+    strategyId,
+  }
+  const context = {
+    symbol,
+    metadata,
+    portfolioBefore: portfolio,
+    activeOrdersBefore: activeOrders,
+    pairConfig,
+    positionId,
+    activeBaseQuantity,
+    outstandingRecoveryAmount,
+  }
+  const balances = getPortfolioBalanceContext({
+    dependencies: strategyDependencies,
+    context,
+  })
+  return {
+    strategyDependencies,
+    context,
+    balances,
+  }
+}
+
+/**
+ * Allocate one strategy's candidate actions against shared account balances and
+ * account-wide reservations while keeping pair commitments strategy-owned.
+ *
+ * @param {object} input Strategy, Portfolio, market, active orders and actions.
+ * @returns {object} Allocation result with the exact balance context used.
+ */
 export function allocateStrategyOrderCommitments({
   dependencies,
   strategyId,
@@ -404,7 +459,7 @@ export function allocateStrategyOrderCommitments({
   actions,
 } = {}) {
   try {
-    validateStrategyOrderCommitmentInput({
+    const prepared = prepareStrategyOrderCommitmentContext({
       dependencies,
       strategyId,
       symbol,
@@ -412,29 +467,14 @@ export function allocateStrategyOrderCommitments({
       portfolio,
       activeOrders,
       pairConfig,
-      actions,
-    })
-    const strategyDependencies = {
-      ...dependencies,
-      strategyId,
-    }
-    const context = {
-      symbol,
-      metadata,
-      portfolioBefore: portfolio,
-      activeOrdersBefore: activeOrders,
-      pairConfig,
       positionId,
       activeBaseQuantity,
       outstandingRecoveryAmount,
-    }
-    const balances = getPortfolioBalanceContext({
-      dependencies: strategyDependencies,
-      context,
+      actions,
     })
     const allocation = dependencies.allocateOrderCommitments(
       createStrategyOrderCommitmentInput({
-        balances,
+        balances: prepared.balances,
         metadata,
         pairConfig,
         activeBaseQuantity,
@@ -448,11 +488,10 @@ export function allocateStrategyOrderCommitments({
     return toResult({
       data: Object.freeze({
         allocation: allocation.data,
-        balances,
+        balances: prepared.balances,
       }),
     })
   } catch (error) {
     return toResult({ error })
   }
 }
-
