@@ -1867,6 +1867,37 @@ export class BitunixSpotBroker {
     onEvent,
     onObservation,
     onStatus,
+  } = {}) {
+    try {
+      if (!this.connected) {
+        throw new Error("Bitunix Spot broker must be connected before subscribing to user-data observations")
+      }
+      if (onEvent !== undefined && typeof onEvent !== "function") {
+        throw new TypeError("Bitunix Spot onEvent must be a function when supplied")
+      }
+      if (typeof onObservation !== "function") {
+        throw new TypeError("Bitunix Spot onObservation must be a function")
+      }
+      if (onStatus !== undefined && typeof onStatus !== "function") {
+        throw new TypeError("Bitunix Spot onStatus must be a function when supplied")
+      }
+      const subscription = startBitunixUserDataObservationPolling({
+        broker: this,
+        symbols,
+        trackedOrders,
+        intervalMs,
+        onObservation,
+        onStatus,
+      })
+      return toResult({ data: subscription })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.subscribeForUserData()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
 
   async subscribeForBookTicker() {
     return toResult({
