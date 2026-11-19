@@ -170,7 +170,7 @@ const assertions = [
     values: ["known"],
     errMsg: customMessage,
   }), "TypeError"],
-  ]
+]
 
 test("every direct assertion replaces its validation diagnostic and preserves error class", () => {
   for (const [assertionName, assertion, errorName] of assertions) {
