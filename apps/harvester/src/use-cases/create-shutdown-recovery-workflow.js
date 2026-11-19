@@ -152,9 +152,8 @@ function buildShutdownRecoveryInventory({
 }
 
 function getShutdownRecoveryInventory({ dependencies, symbol } = {}) {
-  const metadataResult = getShutdownRecoveryMetadata({ dependencies,
+  const { metadata, error: metadataError } = getShutdownRecoveryMetadata({ dependencies,
     symbol })
-  const metadata = metadataResult.metadata
   const portfolio = dependencies.getPortfolio()
   const { activeSellsForSymbol, positionBySymbol } = getShutdownRecoveryOrders({ dependencies,
     symbol,
@@ -165,7 +164,7 @@ function getShutdownRecoveryInventory({ dependencies, symbol } = {}) {
       symbol,
       portfolio,
       metadata,
-      metadataError: metadataResult.error,
+      metadataError,
       positionBySymbol,
       activeSells: activeSellsForSymbol,
     })
