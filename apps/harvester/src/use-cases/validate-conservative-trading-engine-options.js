@@ -25,10 +25,6 @@ function validateOptionalCallbacks({
   if (getVolatilityData !== undefined && typeof getVolatilityData !== "function") {
     throw new TypeError("getVolatilityData must be a function when provided")
   }
-  if (evaluateRecoverySellerTransition !== undefined &&
-      typeof evaluateRecoverySellerTransition !== "function") {
-    throw new TypeError("evaluateRecoverySellerTransition must be a function when provided")
-  }
   if (typeof isMarketPriceFresh !== "function") {
     throw new TypeError("isMarketPriceFresh must be a function")
   }
@@ -53,6 +49,13 @@ function validateOptionalCallbacks({
   }
   if (typeof isMarketBookFresh !== "function") {
     throw new TypeError("isMarketBookFresh must be a function")
+  }
+}
+
+function validateRecoverySellerEvaluator({ evaluateRecoverySellerTransition } = {}) {
+  if (evaluateRecoverySellerTransition !== undefined &&
+      typeof evaluateRecoverySellerTransition !== "function") {
+    throw new TypeError("evaluateRecoverySellerTransition must be a function when provided")
   }
 }
 
@@ -110,7 +113,7 @@ export function validateConservativeTradingEngineOptions({
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
     hasUnownedOpenOrdersForSymbol,
-    evaluateRecoverySellerTransition,
   })
+  validateRecoverySellerEvaluator({ evaluateRecoverySellerTransition })
   validateInitialState({ initialState })
 }
