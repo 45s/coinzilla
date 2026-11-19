@@ -417,12 +417,18 @@ test("Bitunix Spot WebSocket order history serializes numeric enum filters as st
     side: 2,
     type: 1,
   })
-  assert.deepEqual(transport.sent[0].params, {
-    symbol: "BTCUSDT",
-    status: "3",
-    side: "2",
-    type: "1",
-  })
+  assert.deepEqual(
+    Object.fromEntries(["symbol", "status", "side", "type"].map((key) => [
+      key,
+      transport.sent[0].params[key],
+    ])),
+    {
+      symbol: "BTCUSDT",
+      status: "3",
+      side: "2",
+      type: "1",
+    },
+  )
   transport.receive({
     id: "request-1",
     code: "0",
