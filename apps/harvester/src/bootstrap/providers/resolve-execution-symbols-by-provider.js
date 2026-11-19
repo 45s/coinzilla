@@ -60,7 +60,10 @@ function isStrategyEnabled({
 function getEnabledStrategyPairs({ appConfig, allowMissingLegacyCg = false } = {}) {
   const pairsByStrategy = new Map()
   for (const strategyId of EXECUTABLE_STRATEGY_IDS) {
-    if (!isStrategyEnabled({ appConfig, strategyId })) {
+    if (!isStrategyEnabled({
+      appConfig,
+      strategyId,
+    })) {
       continue
     }
     pairsByStrategy.set(strategyId, getStrategyPairs({
