@@ -271,7 +271,7 @@ test("start republishes a full snapshot after a failed polling cycle", async () 
     return originalGetOrderHistory(input)
   }
   const scheduled = []
-  let snapshots = 0
+  const snapshots = []
   let errors = 0
   const reconciler = new BitunixSpotReconciler({
     broker,
@@ -284,8 +284,8 @@ test("start republishes a full snapshot after a failed polling cycle", async () 
   const session = reconciler.start({
     symbols: ["BTCUSDT"],
     intervalMs: 500,
-    onSnapshot: () => {
-      snapshots += 1
+    onSnapshot: (snapshot) => {
+      snapshots.push(snapshot)
     },
     onError: () => {
       errors += 1
@@ -293,16 +293,20 @@ test("start republishes a full snapshot after a failed polling cycle", async () 
   })
 
   await new Promise((resolve) => setImmediate(resolve))
-  assert.equal(snapshots, 1)
+  assert.equal(snapshots.length, 1, "the first successful poll must publish one complete observation")
+  assert.equal(scheduled.length, 1, "the first completed poll must schedule exactly one next cycle")
   scheduled[0].callback()
   await new Promise((resolve) => setImmediate(resolve))
-  assert.equal(errors, 1)
-  assert.equal(scheduled[1].delay, 1000)
+  assert.equal(errors, 1, "a failed read cycle must report its failure to the error callback")
+  assert.equal(snapshots.length, 1, "a failed read cycle must not publish a partial observation")
+  assert.equal(scheduled[1].delay, 1000, "the first failed cycle must apply the configured exponential backoff")
   scheduled[1].callback()
   await new Promise((resolve) => setImmediate(resolve))
 
-  assert.equal(snapshots, 2, "recovery must republish even an unchanged full snapshot")
-  assert.equal(scheduled[2].delay, 500)
+  assert.equal(snapshots.length, 2, "recovery must republish even an unchanged full observation")
+  assert.deepEqual(snapshots[1].balances, snapshots[0].balances, "recovery must contain unchanged balance data when exchange state is unchanged")
+  assert.deepEqual(snapshots[1].symbols, snapshots[0].symbols, "recovery must contain unchanged symbol data when exchange state is unchanged")
+  assert.equal(scheduled[2].delay, 500, "a successful recovery cycle must reset the polling delay to its base interval")
   session.stop()
 })
 
