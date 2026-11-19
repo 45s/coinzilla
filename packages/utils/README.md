@@ -13,8 +13,7 @@ Import the supported API from the package entry point:
 - `Logger`, `defaultLogger`: structured logger with `trace`, `debug`, `info`, `warn`, `error`, `success`, and `system` methods, independently filtered output transports, runtime threshold changes, opt-in structured context, and safe structured-data redaction. `success` and `system` are semantic methods with `info` severity.
 - `captureBuildMetadata`: one-time, allowlisted application build provenance capture from Git, with explicit `COINZILLA_BUILD_*` environment fallback.
 - `EM`: shared error-message factories.
-- `ensure`: generic input validation/assertions with direct helpers and an optional fluent pipeline. Every method takes one options object; direct methods return the validated value. See [validation and compatibility](#validation-and-compatibility).
-- `Validator`, `VR`: deprecated declarative-validation compatibility API. Do not add new callers; existing exports and predicate-helper semantics are retained during migration.
+- `ensure`: generic input validation/assertions with direct helpers and an optional fluent pipeline. Every method takes one options object; direct methods return the validated value. Optional `errMsg` customizes assertion failures while preserving `TypeError` or `RangeError`. See [validation](#validation).
 - `NH`: numeric helpers (`round`, `fix`, `precise`).
 - `calculateTimeDiff`: signed, fractional difference between `Date` instances in seconds, minutes, or hours (default: hours); omitted `end` defaults to the current time, and an earlier end produces a negative result.
 - `formatTimeRelatively`: English relative-time formatting via `Intl.RelativeTimeFormat` (default unit: hours; callers may select another supported unit).
@@ -227,9 +226,25 @@ The base preserves native `cause` identity and freezes a detached context record
 
 The Logger continues to serialize only standard Error diagnostics. Pass custom `code`, `context`, and `retryable` as explicit structured fields when they are needed in logs.
 
-## Validation and compatibility
+## Validation
 
-Prefer `ensure` for new generic input validation. It replaces repeated `typeof`, array-shape, range and uniqueness checks with small reusable assertions. All methods accept one options object (required by the repository's `max-params: 1` rule); `name` is optional and defaults to `value`. Values are validated without coercion, and successful direct assertions return the original value.
+Prefer `ensure` for generic input validation. It replaces repeated `typeof`, array-shape, range and uniqueness checks with small reusable assertions. All methods accept one options object (required by the repository's `max-params: 1` rule); `name` is optional and defaults to `value`. Values are validated without coercion, and successful direct assertions return the original value. `errMsg` is an optional non-empty string that replaces a validation-failure diagnostic while retaining the original error class. Invalid assertion configuration (such as malformed range bounds or allowed-values arrays) keeps its configuration-specific error.
+
+### Custom diagnostics
+
+Use `errMsg` when a generic assertion must preserve a domain-specific failure message:
+
+```js
+const accounting = { verified: true }
+
+ensure.object({
+  value: accounting,
+  name: "accounting",
+  errMsg: "Recovery Seller STOP reset requires accounting must be verified",
+})
+```
+
+The assertion still rejects arrays, null, and primitives. It throws the same error class as the underlying assertion (`TypeError` for an invalid object shape, `RangeError` for an out-of-range number); only the diagnostic message is replaced. Successful assertions return the original validated value. Omit `errMsg` to retain the default field-specific diagnostics. Empty or non-string messages are rejected with `TypeError`.
 
 ### Direct assertions
 
@@ -276,7 +291,7 @@ symbols must contain unique values (duplicate at index 2; first seen at index 0)
 
 ### Fluent pipelines
 
-Use `ensure.chain({ value, name })` when a value needs several checks or transformations. Each operation returns a new chain. Validation methods preserve the current value; `map` and `filter` return new arrays and do not mutate the source. Filtering is an explicit transformation, not a way to silently validate or discard malformed inputs.
+Use `ensure.chain({ value, name, errMsg })` when a value needs several checks or transformations. A chain-level `errMsg` is propagated to validation steps; errors thrown by user-supplied transformation or predicate callbacks are not rewritten. Each operation returns a new chain. Validation methods preserve the current value; `map` and `filter` return new arrays and do not mutate the source. Filtering is an explicit transformation, not a way to silently validate or discard malformed inputs.
 
 ```js
 const normalizedSymbols = ensure
@@ -295,27 +310,6 @@ const normalizedSymbols = ensure
 ```
 
 Available chain methods: `.array()`, `.string()`, `.integer()`, `.nonEmpty()`, `.strings()`, `.nonEmptyStrings()`, `.integers()`, `.map({ transform })`, `.filter({ predicate })`, `.unique()`, `.between({ min, max })`, `.trim()`, `.uppercase()`, `.lowercase()`, and the final `.value` getter.
-
-### Legacy compatibility
-
-`Validator.validate({ items, isSoft = true })` is deprecated. It accepts tuples of `[value, rules, fieldName?]`; success returns `undefined`, default soft mode returns structured error records, and `isSoft: false` throws the collected error array. Existing rule semantics remain supported while consumers migrate; do not add new usages of `Validator` or `VR`.
-
-The legacy `Validator.isRequiredNumberValid` predicate accepts only finite, non-zero numbers, and `Validator.isRequiredNotEmptyString` accepts only strings with non-whitespace content. They remain for existing consumers and are not equivalent to the throwing `ensure` assertions.
-
-Legacy rule meanings remain unchanged:
-
-| Rule | Contract |
-| --- | --- |
-| `VR.required` | JavaScript truthiness; rejects zero, false, empty string, null and undefined. Whitespace-only strings pass. |
-| `VR.notEmptyString` | String with non-whitespace content after trimming. |
-| `VR.num` | Finite number; zero is valid, NaN and infinities fail. |
-| `VR.str` | String; empty is allowed. |
-| `VR.fn` | Function. |
-| `VR.notUndefined` | Rejects only undefined; null passes. |
-| `VR.arr` | Array. |
-| `VR.notEmptyArr` | Non-empty array. |
-
-Legacy rules must exactly match exported `VR` values. Invalid tuple/rule configuration is rejected before values are evaluated. `isSoft` defaults to `true` and must be boolean when supplied.
 
 ## Development
 

@@ -1,7 +1,26 @@
-import { capitalize, Validator } from "@coinzilla/utils"
+import { capitalize } from "@coinzilla/utils"
 import { errMsgs } from "./err-msgs.js"
 
 const supportedTypes = ["LIMIT", "LIMIT_MAKER", "MARKET"]
+
+function assertValidPrice({ price }) {
+  if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
+    throw new Error(errMsgs.price)
+  }
+}
+
+function assertValidRequiredString({ value, errorMessage }) {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(errorMessage)
+  }
+}
+
+function assertValidOptionalString({ value, errorMessage }) {
+  if (value !== undefined && value !== null &&
+      (typeof value !== "string" || value.trim() === "")) {
+    throw new Error(errorMessage)
+  }
+}
 
 export class Order {
   #id
@@ -45,20 +64,19 @@ export class Order {
     }
     this.#quantity = quantity
 
-    if (!Validator.isRequiredNumberValid(price) || price < 0) {
-      throw new Error(errMsgs.price)
-    }
+    assertValidPrice({ price })
     this.#price = price
 
-    if (!Validator.isRequiredNotEmptyString(id)) {
-      throw new Error(errMsgs.id)
-    }
+    assertValidRequiredString({
+      value: id,
+      errorMessage: errMsgs.id,
+    })
     this.#id = id
 
-    if (clientOrderId !== undefined && clientOrderId !== null &&
-        !Validator.isRequiredNotEmptyString(clientOrderId)) {
-      throw new Error(errMsgs.clientOrderId)
-    }
+    assertValidOptionalString({
+      value: clientOrderId,
+      errorMessage: errMsgs.clientOrderId,
+    })
     this.#clientOrderId = clientOrderId ?? undefined
   }
 
