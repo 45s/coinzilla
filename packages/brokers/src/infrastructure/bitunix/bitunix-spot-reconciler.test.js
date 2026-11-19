@@ -219,7 +219,7 @@ test("start retries a snapshot after callback failure and backs off the failed c
       })
       return scheduled.length
     },
-    cancel: () => {},
+    cancel: () => undefined,
   })
   const session = reconciler.start({
     symbols: ["BTCUSDT"],
