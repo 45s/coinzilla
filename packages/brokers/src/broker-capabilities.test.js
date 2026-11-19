@@ -17,11 +17,12 @@ function createBinanceBroker({ tradingMode = "testnet" } = {}) {
   })
 }
 
-function createBitunixBroker() {
+function createBitunixBroker({ allowLiveOrderMutations = false } = {}) {
   return new BitunixSpotBroker({
     apiKey: "capability-test-key",
     apiSecret: "capability-test-secret",
     tradingMode: "live",
+    allowLiveOrderMutations,
   })
 }
 
@@ -184,12 +185,12 @@ test("Bitunix Spot read capabilities preserve incomplete-evidence boundaries", (
   assertCapability({
     declaration: capabilities,
     type: "PLACE_LIMIT_ORDER",
-    status: "SUPPORTED",
+    status: "UNSUPPORTED",
   })
   assertCapability({
     declaration: capabilities,
     type: "PLACE_MARKET_ORDER",
-    status: "SUPPORTED",
+    status: "UNSUPPORTED",
   })
   assertCapability({
     declaration: capabilities,
@@ -204,8 +205,46 @@ test("Bitunix Spot read capabilities preserve incomplete-evidence boundaries", (
   assert.ok(capabilities.getCapability({ type: "READ_OPEN_ORDERS" }).conditions.length > 0)
 })
 
-test("Bitunix Spot declares single-order and symbol-scoped bulk cancellation supported", () => {
+test("Bitunix Spot live mutations remain unsupported until explicitly opted in", () => {
   const { capabilities } = createBitunixBroker()
+
+  for (const type of [
+    "PLACE_LIMIT_ORDER",
+    "PLACE_MARKET_ORDER",
+    "CANCEL_ORDER",
+    "CANCEL_ALL_ORDERS",
+  ]) {
+    assertCapability({
+      declaration: capabilities,
+      type,
+      status: "UNSUPPORTED",
+    })
+  }
+})
+
+test("Bitunix Spot declares implemented mutations when explicit live opt-in is enabled", () => {
+  const { capabilities } = createBitunixBroker({
+    allowLiveOrderMutations: true,
+  })
+
+  for (const type of [
+    "PLACE_LIMIT_ORDER",
+    "PLACE_MARKET_ORDER",
+    "CANCEL_ORDER",
+    "CANCEL_ALL_ORDERS",
+  ]) {
+    assertCapability({
+      declaration: capabilities,
+      type,
+      status: "SUPPORTED",
+    })
+  }
+})
+
+test("Bitunix Spot declares single-order and symbol-scoped bulk cancellation supported after opt-in", () => {
+  const { capabilities } = createBitunixBroker({
+    allowLiveOrderMutations: true,
+  })
 
   assertCapability({
     declaration: capabilities,

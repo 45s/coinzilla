@@ -721,7 +721,7 @@ async function cancelOpenOrdersForSymbol({ broker, symbol, orders }) {
 
 export class BitunixSpotBroker extends CoreBroker {
   /**
-   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, logger?: object, dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient}}} input
+   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, allowLiveOrderMutations?: boolean, logger?: object, dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient}}} input
    */
   constructor(input = {}) {
     const {
@@ -733,7 +733,7 @@ export class BitunixSpotBroker extends CoreBroker {
     this.config = new BitunixSpotConfig(configInput)
     Object.defineProperty(this, "capabilities", {
       enumerable: true,
-      value: createBitunixBrokerCapabilities(),
+      value: createBitunixBrokerCapabilities({ allowLiveOrderMutations: this.config.allowLiveOrderMutations }),
     })
     this.restClient = restClientFactory(this.config)
     this.connected = false
@@ -1292,6 +1292,12 @@ export class BitunixSpotBroker extends CoreBroker {
    * @param {{symbol: string, side: "BUY"|"SELL", type: "LIMIT"|"MARKET", quantity: string|number, price?: string|number}} input
    */
   async createOrder(input = {}) {
+    if (!this.config.allowLiveOrderMutations) {
+      return unsupportedMutationResult({
+        operation: "createOrder",
+        reason: "live Bitunix order mutations are disabled by default; set allowLiveOrderMutations: true only after independent live-account authorization",
+      })
+    }
     let requestDispatched = false
     try {
       const order = createSpotOrderRequest({ input })
@@ -1348,6 +1354,15 @@ export class BitunixSpotBroker extends CoreBroker {
    * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string, cancellationOutcome?: string}>}
    */
   async cancelOrder({ symbol, orderId } = {}) {
+    if (!this.config.allowLiveOrderMutations) {
+      return {
+        ...unsupportedMutationResult({
+          operation: "cancelOrder",
+          reason: "live Bitunix order mutations are disabled by default; set allowLiveOrderMutations: true only after independent live-account authorization",
+        }),
+        cancellationOutcome: "NOT_SENT",
+      }
+    }
     let requestDispatched = false
     let cancelAcknowledged = false
     try {
@@ -1408,6 +1423,15 @@ export class BitunixSpotBroker extends CoreBroker {
    * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string, cancellationOutcome: string}>}
    */
   async cancelAllOpenOrders({ symbol } = {}) {
+    if (!this.config.allowLiveOrderMutations) {
+      return {
+        ...unsupportedMutationResult({
+          operation: "cancelAllOpenOrders",
+          reason: "live Bitunix order mutations are disabled by default; set allowLiveOrderMutations: true only after independent live-account authorization",
+        }),
+        cancellationOutcome: "NOT_SENT",
+      }
+    }
     let normalizedSymbol
     try {
       normalizedSymbol = requireSymbol({

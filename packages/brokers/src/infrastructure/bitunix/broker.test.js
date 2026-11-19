@@ -3,7 +3,7 @@ import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
 import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
 
-function createBroker({ responses = {} } = {}) {
+function createBroker({ responses = {}, allowLiveOrderMutations = true } = {}) {
   const calls = []
   const restClient = {
     async request(input = {}) {
@@ -24,6 +24,7 @@ function createBroker({ responses = {} } = {}) {
     apiKey: "key",
     apiSecret: "secret",
     tradingMode: "live",
+    allowLiveOrderMutations,
     dependencies: {
       restClientFactory: () => restClient,
     },
@@ -150,6 +151,38 @@ test("Bitunix Spot fill lookup stays unsupported until execution semantics are p
   assert.equal(result.ok, false, "unproven matching-order semantics cannot be exposed as canonical fills")
   assert.match(result.errors[0].message, /not supported safely.*quantity denomination.*execution completeness/i)
   assert.equal(calls.length, 0, "unsupported fill lookup must not issue partial or misleading reads")
+})
+
+test("Bitunix Spot live order mutations stay disabled by default and send no requests", async () => {
+  const { broker, calls } = createBroker({
+    allowLiveOrderMutations: false,
+  })
+
+  const created = await broker.createOrder({
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    quantity: "1",
+    price: "100",
+  })
+  const cancelled = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "123",
+  })
+  const cancelledAll = await broker.cancelAllOpenOrders({
+    symbol: "BTCUSDT",
+  })
+
+  for (const result of [created, cancelled, cancelledAll]) {
+    assert.equal(result.ok, false)
+    assert.equal(result.mutationOutcome, "NOT_SENT")
+    assert.match(result.errors[0].message, /disabled by default/i)
+  }
+  assert.equal(cancelled.cancellationOutcome, "NOT_SENT")
+  assert.equal(cancelledAll.cancellationOutcome, "NOT_SENT")
+  assert.equal(broker.capabilities.getStatus({ type: "PLACE_LIMIT_ORDER" }), "UNSUPPORTED")
+  assert.equal(broker.capabilities.getStatus({ type: "CANCEL_ORDER" }), "UNSUPPORTED")
+  assert.equal(calls.length, 0)
 })
 
 test("Bitunix Spot LIMIT placement converts base quantity to quote volume on single-order REST", async () => {

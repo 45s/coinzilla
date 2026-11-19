@@ -27,6 +27,29 @@ test("BitunixSpotConfig selects the documented Spot REST endpoint", () => {
   assert.equal(config.requestTimeout, 10_000)
 })
 
+test("BitunixSpotConfig disables live order mutations unless explicitly opted in", () => {
+  const disabled = new BitunixSpotConfig({
+    apiKey: "key",
+    apiSecret: "secret",
+    tradingMode: "live",
+  })
+  const enabled = new BitunixSpotConfig({
+    apiKey: "key",
+    apiSecret: "secret",
+    tradingMode: "live",
+    allowLiveOrderMutations: true,
+  })
+
+  assert.equal(disabled.allowLiveOrderMutations, false)
+  assert.equal(enabled.allowLiveOrderMutations, true)
+  assert.throws(() => new BitunixSpotConfig({
+    apiKey: "key",
+    apiSecret: "secret",
+    tradingMode: "live",
+    allowLiveOrderMutations: "true",
+  }), /must be a boolean/i)
+})
+
 test("BitunixSpotConfig validates endpoint overrides and timeout", () => {
   assert.throws(() => new BitunixSpotConfig({
     apiKey: "key",
