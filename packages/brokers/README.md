@@ -27,6 +27,15 @@ See the detailed [Binance WebSocket contract](../../docs/brokers-websocket-contr
 
 The `@coinzilla/brokers` entry point exports:
 
+- `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
+- `BinanceWebSocketConfig` — validated Binance broker configuration.
+- `BitunixSpotBroker` and `BitunixSpotConfig` — the partial Bitunix Spot REST broker implementation and its validated configuration.
+- `BitunixSpotWebSocketClient` and `BitunixWebSocketError` — a separately managed, authenticated Spot WebSocket request/response RPC client; it does not add subscriptions or order mutations.
+- `normalizeBinanceId` — exact non-negative Binance identifier normalization, exported for package consumers that need the same identifier contract.
+- `BrokerCapabilities`, `BROKER_CAPABILITY_TYPES`, `BROKER_CAPABILITY_STATUSES` — the canonical immutable provider capability declaration contract.
+- `BrokerUnsupportedOperationError` — stable typed error for explicitly unsupported operations.
+- `BROKER_METHODS`, `BROKER_COMPATIBILITY_METHODS`, `BROKER_MUTATION_OUTCOMES`, `assertBrokerContract`, `getBrokerMutationOutcome` — structural API, compatibility, and mutation-outcome contract helpers.
+
 ## Exchange-neutral Broker API
 
 Both providers expose an immutable `BrokerCapabilities` declaration. The canonical three statuses are `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; environment selection and runtime readiness are metadata/conditions, never a fourth status. Supported declarations require method and guarantee evidence; unsupported/unknown declarations require reasons.

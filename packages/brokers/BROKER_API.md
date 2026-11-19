@@ -159,6 +159,11 @@ HTTP/RPC conflicts and server failures, timeouts, connection loss after dispatch
 
 ## 5. Lifecycle and cleanup
 
+- `connect()` and `disconnect()` are idempotent lifecycle hooks, not a universal proof of current network health.
+- Binance owns the WebSocket API and public Streams resources; disconnect must close provider-owned connections and stop subscriptions/user-data lifecycle resources.
+- Bitunix Spot uses stateless signed/unsigned REST requests for its supported operations. Its lifecycle flag is local adapter state; it does not create a persistent exchange connection.
+- Every successful subscription exposes cleanup. Disconnect cleans up provider-owned subscriptions. Unsupported Bitunix subscriptions return an explicit failed result and create no resource.
+
 ## 6. Safety and ownership boundaries
 
 - Bitunix Spot does not yet implement the complete order, fill, and account lifecycle required for trading. This API work does not authorize speculative placement, cancellation, or fill support; preserve all blockers in [#1185](https://github.com/45s/coinzilla).

@@ -89,6 +89,8 @@ The lifecycle implementation and its direct unit tests live together in `src/app
 
 The legacy REST broker, REST signing/query helpers, REST listen-key stream client, and historical-price REST script remain removed. The pure event adapters under `helpers/adapters/` are retained because the active WebSocket user-data session uses their data-mapping behavior; they do not restore the legacy transport or REST flow.
 
+- `apps/harvester`, which wraps `BinanceWebSocketBroker` in its own infrastructure adapter and implements Harvester's application-owned `BrokerPort`.
+
 ## Bitunix Spot capability contract
 
 The package exports `BitunixSpotBroker`, `BitunixSpotConfig`, and the separate `BitunixSpotWebSocketClient`. The REST-backed broker exposes a partial query surface plus direct single-order REST placement and cancellation. The complete canonical execution lifecycle, client-order-ID support, and continuous market/private event streams remain unsupported. Its supported operations and explicit boundaries are:
@@ -229,6 +231,19 @@ The first DDD/TDD tranche established deterministic tests, selected ports, and f
 **Scope:** `@coinzilla/brokers` owns the broker domain, broker application workflows, ports, and exchange infrastructure adapters. It does not own portfolio/position policy, trading strategies, or bot product behavior. Those concerns remain outside this package; this is not a reason to exclude broker-owned domain/application concepts from it.
 
 ### Current implementation (verified source tree)
+
+| Current module | Current responsibility | Refactoring consideration |
+|---|---|---|
+| `src/index.js`, `src/infrastructure/binance/index.js`, `src/infrastructure/binance/broker-websocket/index.js` | Public exports and Binance infrastructure module composition | Keep public API/composition thin while preserving compatibility |
+| `infrastructure/binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only a demonstrated composition seam or distinct cohesive responsibility |
+| `src/domain/user-data-recovery-policy.js` | Pure exchange-neutral recovery-completion policy | Correctly placed in Domain; keep it free of infrastructure/application imports |
+| `src/application/ports/user-data-client-port.js` | Application-owned user-data client capability contract and assertion | Correctly placed under Application Ports; implemented by Binance Infrastructure |
+| `src/application/user-data-session.js` and `src/application/user-data-session.test.js` | Application subscriber lifecycle, reconnect/recovery coordination, reconciliation acknowledgement, and direct tests through an injected client port | Correctly placed in Application; keep direct tests independent of Binance and preserve state-machine cohesion |
+| `src/infrastructure/binance/user-data-client-adapter.js` | Adapts Binance RPC/event details to the application-owned user-data port | Correctly placed in Infrastructure; keep Binance request/event vocabulary here |
+| `infrastructure/binance/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Keep Binance request construction and protocol-specific event mapping in Infrastructure; promote a rule only when it is demonstrably exchange-neutral and independently owned |
+| `src/infrastructure/binance/adapters/` | Maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs | Correctly placed in Infrastructure; canonical shared entity invariants remain in `@coinzilla/entities` |
+| `config/`, `constants/`, `utils/` | Binance configuration, endpoints, transport, RPC, Streams, signing, runtime guards | Infrastructure implementation; must not become dependencies of domain/application code |
+| `test-helpers/`, colocated tests, `tests/` | Deterministic fakes, unit tests, broker contract tests | Separate domain/application tests from infrastructure/contract/integration tests as boundaries emerge |
 
 ### Phase 9 target architecture
 

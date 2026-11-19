@@ -252,6 +252,18 @@ The Phase A source audit was read-only. The subsequent PR #693 final-head CI pas
 
 ### Verified ownership map
 
+| Current path | Verified responsibility | Architectural status / likely destination |
+| --- | --- | --- |
+| `domain/user-data-recovery-policy.js` | Pure recovery-completion policy | Correctly placed in Domain |
+| `application/user-data-session.js` | Subscriber/session lifecycle and recovery coordination | Application coordinator; retain state ownership and test behavior |
+| `application/ports/user-data-client-port.js` | Exchange-neutral user-data client contract and runtime assertion | Correctly placed under Application; infrastructure implements it |
+| `infrastructure/binance/user-data-client-adapter.js` | Binance RPC/event adaptation to user-data port | Correctly placed in Infrastructure |
+| `infrastructure/binance/broker-websocket/broker.js` | Public broker facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only demonstrated composition or cohesive responsibilities |
+| `infrastructure/binance/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; physically grouped under `src/infrastructure/binance/` by PR #697 |
+| `infrastructure/binance/broker-websocket/helpers/adapters/*` | Binance request/response/event DTO mapping | Infrastructure adapters |
+| `infrastructure/binance/adapters/adapt-canonical-*.js` | Binance DTO to canonical Entities conversion | Infrastructure adapters; preserve exact decimal contracts |
+| `infrastructure/binance/adapters/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
+
 `application/user-data-session.js` is a cohesive stateful lifecycle coordinator with private state, injected client/port factories, and controlled timer dependencies. Its size triggers a modularity review under repository standards, but it must not be fragmented mechanically: first determine whether its state transitions can be separated without splitting ownership of the recovery state machine.
 
 The broker facade warrants review because its constructor and imports reveal both composition and exchange-operation responsibilities. The existing package roadmap records a concrete reason to keep simple RPC methods cohesive there. No code movement is authorized by this snapshot alone; identify a genuine dependency inversion or cohesive responsibility before extracting anything.
@@ -259,6 +271,19 @@ The broker facade warrants review because its constructor and imports reveal bot
 ## Existing code: initial responsibility map
 
 This map is a starting hypothesis based on the current tree. Validate each module and its import graph before moving it.
+
+| Existing module / area | Primary responsibility | Target owner |
+| --- | --- | --- |
+| `src/infrastructure/binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC methods plus client/session wiring | Retain simple RPC operations; extract only a demonstrated composition seam or cohesive responsibility, never one wrapper per RPC |
+| `utils/rpc-client.js` | WebSocket API RPC mechanics | Infrastructure / Binance API |
+| `utils/streams-client.js`, `utils/streams-protocol.js` | Public stream protocol and subscription lifecycle | Infrastructure / Binance Streams |
+| `utils/transport.js`, `utils/runtime.js` | Native socket and runtime mechanics | Infrastructure / transport |
+| `application/user-data-session.js` | User-data subscriber/recovery lifecycle coordinator | Existing Application layer; injected port and domain policy already separate |
+| `utils/signature.js`, `helpers/history-query-params.js`, endpoint/config modules | Binance signing, request construction, protocol configuration | Infrastructure / Binance API |
+| `shared/adapt-canonical-*.js` | Binance DTO to canonical Entities adaptation | Infrastructure / Binance adapters; canonical output does not make Binance mapping domain logic |
+| `shared/adapt-*.js`, `helpers/adapters/*` | External response/event mapping | Infrastructure adapters unless proven protocol-neutral |
+| `helpers/user-data-event-deduplicator.js` | Binance user-data event identity/deduplication | Infrastructure adapter/session support until a protocol-neutral policy is demonstrated |
+| `test-helpers/*`, `*.test.js`, `tests/*` | Deterministic fixtures and behavioral specifications | Stay near the unit under test; shared fixtures remain test-only |
 
 Do not move a file based on its name alone. Inspect imports, callers, state ownership, side effects, and the meaning of each exported function. A single current file may contain responsibilities for more than one target layer.
 

@@ -123,15 +123,42 @@ This is an initial source-tree and targeted implementation scan, not a claim tha
 
 The original three application decimal modules were not interchangeable as-is:
 
+- application-local had the broadest operation set, including division, rescaling, increment rounding, and bounded exponent parsing. Its old `formatDecimal()` returned a JavaScript Number; that lossy formatter was not carried into the shared API.
+- Harvester had a smaller signed decimal-string API.
+- Entities had independent canonicalization and subtraction implementations; both now delegate to shared primitives while preserving the existing `toResult` contract.
+
 The shared API accepts decimal strings (and bigint for parsing) and intentionally rejects JavaScript Number operands. It defines bounded precision, explicit division/rescaling rounding, and exact string outputs. The migration removes duplicate arithmetic implementations without changing domain-level trading/accounting decisions. The standalone Harvester TESTNET sell helper now uses shared decimal primitives; Binance filter selection and operator-facing quantity policy remain domain-local.
 
 ## Audit and migration plan
+
+- [~] Inventory application and package helper/utility modules and classify candidates. The source-tree/helper inventory and current dispositions are recorded below; routine console-use verification and any future candidates remain.
+- [~] Review direct console use and application logger adapters; Harvester's default logger was migrated and existing shared logger consumers were confirmed. A repository-wide automated guard remains.
+- [x] Design and test the shared exact decimal API with explicit bounds and rounding behavior.
+- [x] Migrate the standalone Harvester TESTNET sell helper from local BigInt arithmetic to shared decimal primitives in merged [PR #946](https://github.com/45s/coinzilla/pull/946); preserve CLI validation, filter selection, min/max rules, and output precision.
+- [x] Identify and extract additional generic helpers (percentage calculations, keyed task queue, object-input assertion); classify remaining package helpers by domain ownership.
+- [x] Update package READMEs, exports, consumer tests, and domain roadmaps for the extracted capabilities.
+- [ ] Add automated checks where reliable (for example, detecting direct console usage outside approved infrastructure/CLI paths).
 
 The audit is complete only when every identified candidate has a recorded disposition and the migration status is supported by tests and merged PRs.
 
 ## Repository-wide audit disposition (implementation pass)
 
 The source-tree audit covers the applications and workspace packages present in the repository. The classification below is based on module responsibilities and observed imports; it does not claim that every line of every module has been formally reviewed.
+
+| Area | Audit disposition |
+| --- | --- |
+| application-local exact arithmetic | [x] Removed app-local decimal engine; imports shared arithmetic from `@coinzilla/utils`. Trading/accounting calculations remain in application-local. |
+| Harvester portfolio arithmetic | [x] Removed app-local decimal engine and its duplicate unit suite; position accounting imports shared arithmetic. Position and fill invariants remain in Harvester/Entities. |
+| Harvester TESTNET sell quantity | [x] Replaced the local BigInt decimal implementation in `apps/harvester/scripts/testnet-sell-utils.js` with shared parsing, increment rounding, comparison, and precision restoration in merged PR #946; exchange filter selection and quantity policy remain local. |
+| Entities decimal values | [x] Canonical decimal normalization and subtraction delegate to shared primitives; `toResult` and entity validation behavior remain in Entities. |
+| Generic percentage, queue, and input helpers | [x] Percentage arithmetic and keyed task serialization were extracted from application-local; generic object-input assertion was extracted from EventBus. App-specific trading thresholds, subscription cleanup, and event contracts remain local. |
+| Logging | [x] Harvester uses the public `defaultLogger` API. The former Coin Farmer adapter observation is historical only; that application is not present in the current `develop` workspace. |
+| Brokers | Keep Binance signing, protocol payloads, stream adapters, and broker-specific normalization in `packages/brokers`; they depend on exchange contracts. |
+| Event Bus | Keep event-name validation, payload rules, queue capacity, and delivery semantics in `packages/event-bus`; they define event-bus contracts. |
+| Notifiers | Keep Telegram formatting, Telegram API validation, and Telegram delivery behavior in `packages/notifiers`; these are channel-specific. |
+| Journal | Keep persistence, journal lifecycle, and record contracts in `packages/journal`; these are storage-domain behavior. |
+| Applications | Keep configuration schemas, trading strategies, order planning, portfolio policy, market-history schema, and simulator matching rules with their owning application/domain. |
+| Existing general utilities | Reuse existing logger, result, validation, UUID, time, wait, feature-flag, and numeric helpers through the public `@coinzilla/utils` API. `NH` remains Number-based and must not be used for exact financial arithmetic. |
 
 ### Remaining audit work
 
@@ -144,4 +171,15 @@ The source-tree audit covers the applications and workspace packages present in 
 
 The following helper groups were inspected and retained because their behavior belongs to a domain or protocol rather than to general-purpose utilities:
 
+| Location | Examples | Why it stays local |
+| --- | --- | --- |
+| `packages/brokers/src/infrastructure/binance/broker-websocket/helpers` and `utils` | Binance message/trade adapters, history query parameters, user-data event deduplication, RPC/stream protocol, signing, transport | These encode Binance wire formats, authentication, or broker lifecycle contracts. |
+| `packages/brokers/**/test-helpers` | Fake broker clients, fake clock, fake WebSocket | Test doubles are scoped to broker protocol tests; they are not production runtime utilities. |
+| `packages/event-bus/src/helpers` | Event-name validation, payload/options validation, delivery capacity | These define EventBus-specific contracts. The one generic object-shape assertion was extracted. |
+| `packages/notifiers/src/telegram` | Telegram request/message validation and token-aware safe error formatting | These depend on Telegram API behavior and token handling. |
+| Application-local trading helpers | Exchange result handling, fee/accounting, order planning, trading-rule validation, price thresholds, config validation | These depend on application-local strategy, broker results, or trading constraints. Generic decimal/percentage/queue primitives were extracted. |
+| `apps/harvester/src/domain` | Position fill accounting, portfolio transitions, strategy decisions | These enforce Harvester domain invariants and policies. Only arithmetic primitives were extracted. |
+| `apps/harvester/scripts/testnet-sell-utils.js` | Binance `MARKET_LOT_SIZE`/`LOT_SIZE` selection, minimum/maximum enforcement, and operator-facing errors | Keep exchange-filter and CLI policy local; reuse shared exact-decimal parsing/rounding/comparison/rescaling (PR #946 merged). |
+
 The shared package already contained and continues to own the general-purpose logger, result normalization, validators, UUID generation, date/time formatting and differences, waits, feature flags, event emitter, file append helper, log formatting/redaction, string capitalization, and Number-based convenience helpers. The new decimal, percentage, keyed queue, and object-input modules extend that existing public utility set.
+

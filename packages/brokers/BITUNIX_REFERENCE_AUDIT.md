@@ -223,6 +223,13 @@ It validates symbol, interval, decimals, OHLC invariants and timezone-qualified 
 
 [Issue #1331](https://github.com/45s/coinzilla/issues/1331) tracked the public Spot exchange-rate read. The replacement test-first implementation merged into `develop` through [PR #1370](https://github.com/45s/coinzilla/pull/1370) as `55694b837c869878d22346dfd6b0f12c9b0f3269`; all six required `develop-core` checks passed on exact PR head `0f7fbaa332eea5b45a176a25eae4ba529495893a`. The original [PR #1332](https://github.com/45s/coinzilla/pull/1332) was closed as superseded; its branch was retained as historical evidence.
 
+- **Official contract:** [Spot Query rate data](https://www.bitunix.com/api-docs/spots/en_us/public/#6-query-rate-data) documents `GET /api/spot/v1/common/rate/list`, no request parameters, and `data` as an optional array whose `baseSymbol`, `quoteSymbol`, and `rate` fields are individually optional. The [Open API introduction](https://www.bitunix.com/api-docs/) says public REST requests do not require authentication.
+- **Primary .NET reference:** at JKorf/Bitunix.Net commit `57e1fce668b98804a441dea1c8df803da0437c4f`, `BitunixRestClientSpotApiExchangeData.GetExchangeRatesAsync()` requests the same path with its public/unauthenticated request definition. The matching `BitunixExchangeRate` model maps `baseSymbol`, `quoteSymbol`, and `rate`; its decimal model is not copied because Coinzilla must preserve the exchange's decimal text exactly.
+- **Fixture evidence:** `Bitunix.Net.UnitTests/Endpoints/Spot/ExchangeData/GetExchangeRates.txt` records GET, the exact path, no URI parameters, an unauthenticated request flag, and a rate string such as `1.4452976228500000`. `RestRequestTests.ValidateSpotExchangeDataCalls` includes `GetExchangeRatesAsync()`.
+- **Independent Python reference:** at commit `28cefd924b6580a0ef46618ad0b7c387488526bb`, `bitunix/client.py:get_rate_data()` calls the same path through the public `_get()` helper without authentication headers. No endpoint-specific test/fixture was found in that client.
+- **TypeScript MCP:** at commit `6bf5d9f915bdf865394ac02f97c50b689ab9e8e7`, `src/tools/spot.ts` does not expose a rate-list tool. This is absence of coverage, not contrary protocol evidence.
+- **Safety:** the REST client signs requests by default. Unsigned mode is explicit and limited to GET requests without a body or state-changing flag; it omits API authentication headers. Unauthenticated mutations are rejected before network I/O. No live API call or order/account mutation was performed.
+
 ## 5. What we should use, pick and implement
 
 ### Recommended next safe work
