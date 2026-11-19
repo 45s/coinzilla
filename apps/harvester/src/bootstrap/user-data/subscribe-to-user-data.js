@@ -155,22 +155,10 @@ function assertNoUserDataAccountingFailure(state) {
  * the PREFLIGHT account/open-order checks that must precede trading readiness.
  */
 export async function subscribeToUserData({
-  broker,
-  brokerName,
-  eventPublisher,
-  logger,
-  state,
-  tradingMode,
-  tradingEnabled,
-  enabledSymbols,
-  trackedOrders = [],
-  onEvent,
-  onObservation,
-  onStatus,
-  onSubscriptionEstablished,
-  publishAccountSnapshot,
-  publishOpenOrdersSnapshot,
-  getAccountSnapshot,
+  broker, brokerName, eventPublisher, logger, state,
+  tradingMode, tradingEnabled, enabledSymbols, trackedOrders = [],
+  onEvent, onObservation, onStatus, onSubscriptionEstablished,
+  publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSnapshot,
   resumeDeferredStrategyEvaluations,
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"

@@ -276,3 +276,6 @@ After subscription establishment, bootstrap explicitly returns readiness to `AUT
 
 
 The bootstrap helper keeps the accounting-failure check ahead of the PREFLIGHT open-orders read. The separate observation callback does not participate in that gate and cannot change its state.
+
+
+The callback options are part of one generic application-port method; delivery semantics are carried by the subscription metadata and callback channel, not by provider-specific method selection.
