@@ -52,9 +52,21 @@ async function assertLegacyUpgrade({ database, migrations }) {
 
   assert.equal(
     history[0].checksum,
-    null,
-    "Existing migration rows without fingerprints must remain intact and explicitly unverified",
+    "legacy-unverified",
+    "Existing migration rows must retain an explicit marker when their original fingerprints cannot be reconstructed",
   )
+  database.prepare(
+    "UPDATE schema_migrations SET checksum = NULL WHERE version = ?",
+  ).run(1)
+  await assert.rejects(
+    database.migrate(migrations),
+    /checksum mismatch at version 1/,
+    "Clearing a legacy migration marker must not bypass migration-history validation",
+  )
+  database.prepare(
+    "UPDATE schema_migrations SET checksum = ? WHERE version = ?",
+  ).run("legacy-unverified", 1)
+
   assert.match(
     history[1].checksum,
     /^[a-f0-9]{64}$/,
