@@ -38,7 +38,10 @@ export function describeValue({ value }) {
  * @param {{ name: string, expectation: string, value: unknown }} options
  * @returns {TypeError}
  */
-export function typeError({ name, expectation, value }) {
+export function typeError({ name, expectation, value, errMsg }) {
+  if (errMsg !== undefined) {
+    return new TypeError(errMsg)
+  }
   return new TypeError(`${name} must be ${expectation} (received ${describeValue({ value })})`)
 }
 
@@ -47,12 +50,13 @@ export function typeError({ name, expectation, value }) {
  * @param {{ value: unknown, name: string }} options
  * @returns {number}
  */
-export function requireFiniteNumber({ value, name }) {
+export function requireFiniteNumber({ value, name, errMsg }) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw typeError({
       name,
       expectation: "a finite number",
       value,
+      errMsg,
     })
   }
   return value
