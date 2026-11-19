@@ -183,7 +183,11 @@ test("Bitunix Spot funds transfer supports both documented account directions", 
   assert.equal(toFutures.data.transferId, "1909902180506972162")
   assert.equal(toSpot.ok, true)
   assert.equal(toSpot.data.transferId, "1909902180506972162")
-  assert.deepEqual(calls.map(({ method, path, options }) => ({ method, path, body: options.body })), [
+  assert.deepEqual(calls.map(({ method, path, options }) => ({
+    method,
+    path,
+    body: options.body,
+  })), [
     {
       method: "POST",
       path: FUNDS_TRANSFER_PATH,
@@ -510,4 +514,46 @@ test("Bitunix Spot cancellation rejects a missing acknowledgement payload instea
     "a malformed internal-transfer cancellation acknowledgement must not be reported as confirmed",
   )
   assert.equal(calls.length, 2, "each malformed acknowledgement must correspond to exactly one dispatched request")
+})
+
+test("Bitunix Spot cancellation accepts a matching ID acknowledgement object documented by the API table", async () => {
+  const withdrawalId = "1909879608889339906"
+  const internalTransferId = "1909921053381820417"
+  const { broker } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [CANCEL_WITHDRAW_PATH]: {
+        withdrawId: withdrawalId,
+      },
+      [CANCEL_INTERNAL_TRANSFER_PATH]: {
+        insideTransferId: internalTransferId,
+      },
+    },
+  })
+
+  const withdrawalResult = await broker.cancelWithdrawal({ withdrawId: withdrawalId })
+  const transferResult = await broker.cancelInternalTransfer({
+    insideTransferId: internalTransferId,
+  })
+
+  assert.equal(
+    withdrawalResult.ok,
+    true,
+    "a documented cancellation response object must be accepted when it confirms the requested withdrawal ID",
+  )
+  assert.equal(
+    withdrawalResult.data.withdrawId,
+    withdrawalId,
+    "withdrawal cancellation must preserve the exact acknowledged withdrawal ID",
+  )
+  assert.equal(
+    transferResult.ok,
+    true,
+    "a documented cancellation response object must be accepted when it confirms the requested internal-transfer ID",
+  )
+  assert.equal(
+    transferResult.data.insideTransferId,
+    internalTransferId,
+    "internal-transfer cancellation must preserve the exact acknowledged transfer ID",
+  )
 })
