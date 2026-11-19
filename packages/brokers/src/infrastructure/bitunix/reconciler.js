@@ -74,22 +74,22 @@ function stableSerialize({ value }) {
     `${JSON.stringify(key)}:${stableSerialize({ value: value[key] })}`).join(",")}}`
 }
 
+function cloneAndFreeze({ value }) {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((entry) => cloneAndFreeze({ value: entry })))
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.freeze(Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, cloneAndFreeze({ value: entry })]),
+    ))
+  }
+  return value
+}
+
 function freezeSnapshot({ snapshot }) {
-  const symbols = snapshot.symbols.map((entry) => Object.freeze({
-    ...entry,
-    openOrders: Object.freeze([...entry.openOrders]),
-    firstHistoryPage: Object.freeze([...entry.firstHistoryPage]),
-  }))
-  const matchingOrderObservations = snapshot.matchingOrderObservations.map((entry) => Object.freeze({
-    ...entry,
-    data: entry.data && Object.freeze({ ...entry.data }),
-  }))
-  return Object.freeze({
-    ...snapshot,
-    balances: Object.freeze([...snapshot.balances]),
-    symbols: Object.freeze(symbols),
-    matchingOrderObservations: Object.freeze(matchingOrderObservations),
-  })
+  // API payloads are JSON-shaped. Clone before freezing so the observation is
+  // immutable without freezing objects owned by the broker or its caller.
+  return cloneAndFreeze({ value: snapshot })
 }
 
 export class BitunixSpotReconciler {
