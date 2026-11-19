@@ -148,6 +148,9 @@ Funds mutation methods are implemented as real Bitunix operations but are opt-in
 | `getTokenNetworks()` | `common.coin.coin_network.list` | Token/network metadata lookup. |
 | `getAccount()` | `user.account` | Private account-balance lookup; no source update timestamp is added. |
 | `getUserInfo()` | `user.info` | Private API-key user identity lookup; nullable UID remains exchange data. |
+| `getOpenOrders({ symbol })` | `order.pending.list` | Private current-order lookup for one required symbol; no account-wide coverage is implied. |
+| `getOrderHistory(input)` | `order.history.page` | Private one-page history lookup; validates symbol, page, pageSize, time bounds and documented status/side/type codes. No automatic pagination or completeness claim. |
+| `getMatchingOrderDetails({ orderId, symbol })` | `order.deal.list` | Private matching-order lookup for one known order; this is not canonical fill history. |
 
 The WebSocket signature is not the REST header signature. It sorts all method parameters except `apiKey`, `timestamp`, `nonce`, and `sign` by key, concatenates each key with its value, computes SHA-256 of `nonce + timestamp + apiKey + serializedParams`, then SHA-256 of `digest + secretKey`. The client keeps this signing implementation separate from REST signing. For `user.account`, raw numeric `balance` and `balanceLocked` tokens are preserved as exact decimal strings; unsafe int64 `user.info.uid` values are preserved as strings instead of being rounded by JavaScript `Number`.
 
