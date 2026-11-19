@@ -688,7 +688,10 @@ async function executeWebSocketRequest({
       startedAt,
       now,
       status: "passed",
-      request: { method: definition.operation, params: args },
+      request: {
+        method: definition.operation,
+        params: args,
+      },
       response,
       privateResponse: definition.privateResponse,
       includePublicPayloads,
@@ -706,7 +709,10 @@ async function executeWebSocketRequest({
       startedAt,
       now,
       status: "failed",
-      request: { method: definition.operation, params: args },
+      request: {
+        method: definition.operation,
+        params: args,
+      },
       error,
       includePublicPayloads,
       secrets,
