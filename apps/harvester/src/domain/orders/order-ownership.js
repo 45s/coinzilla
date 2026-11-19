@@ -64,7 +64,10 @@ function validateOwnershipIdentity({ ownership, clientOrderId, brokerOrderId } =
  * @returns {object} Immutable order ownership record.
  */
 export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId, orderQuantity } = {}) {
-  const sellAllocation = validateOwnershipShape({ ownership, orderQuantity })
+  const sellAllocation = validateOwnershipShape({
+    ownership,
+    orderQuantity,
+  })
   validateOwnershipIdentity({
     ownership,
     clientOrderId,
