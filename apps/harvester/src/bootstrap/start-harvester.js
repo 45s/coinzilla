@@ -9,6 +9,7 @@ import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createRecoverySellerAccountingWorkflow } from "../use-cases/create-recovery-seller-accounting-workflow.js"
+import { createRecoverySellerStopWorkflow } from "../use-cases/create-recovery-seller-stop-workflow.js"
 import { createLegacyPosition, createLegacyPositionAccounting } from "../domain/strategies/recovery-seller/legacy-position.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
@@ -268,8 +269,10 @@ function createCoinGrabberMarketPriceErrorHandler({ logger } = {}) {
 
 async function resolveStartupOptionsForProcessRecovery({ resolved,
   operationalStateStore,
-  logger } = {}) {
-  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
+  logger,
+  recoverySellerEnabled = false } = {}) {
+  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true ||
+    recoverySellerEnabled
   const operationalState = await verifyOperationalStateStore({
     operationalStateStore,
     recoveryEnabled,
@@ -302,7 +305,7 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
   }
 }
 
-async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
+export async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
   const {
     env,
     runtimeSessionId,
@@ -323,11 +326,27 @@ async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
     logger,
   })
   const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
+  const recoverySellerEnabled = Object.keys(resolved.recoverySellerPairs ?? {}).length > 0
   const startupOptions = await resolveStartupOptionsForProcessRecovery({
     resolved,
     operationalStateStore,
     logger,
+    recoverySellerEnabled,
   })
+  let recoverySellerStopWorkflow
+  if (recoverySellerEnabled) {
+    if (!operationalStateStore) {
+      throw new Error("Configured Recovery Seller routes require a verified durable Operational State Store")
+    }
+    const stopWorkflowResult = await createRecoverySellerStopWorkflow({
+      operationalStateStore,
+    })
+    if (stopWorkflowResult?.ok !== true) {
+      throw stopWorkflowResult?.errors?.[0] ??
+        new Error("Recovery Seller durable STOP state could not be restored before process start")
+    }
+    recoverySellerStopWorkflow = stopWorkflowResult.data
+  }
   await persistHarvesterProcessStart({
     operationalStateStore,
     appConfig: startupOptions.appConfig,
@@ -426,6 +445,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     strategyShutdownParticipants: dependencies.strategyShutdownParticipants,
     operatorControlLifecycle: startupState.operatorControlLifecycle,
     operationalStateStore: startupState.operationalStateStore,
+    recoverySellerStopWorkflow: startupState.recoverySellerStopWorkflow,
     accountSnapshotManagerRef,
     onCommissionAsset,
     ...operationalStateCallbacks,
@@ -821,6 +841,7 @@ async function startHarvesterPreflightServices({ startup,
     getRecoveryLedger: portfolio.getRecoveryLedger,
     getAccountSnapshot: portfolio.getAccountSnapshot,
     getOpenOrders: () => resources.broker.getOpenOrders(),
+    recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
   })
   await startHarvesterUserDataServices({
     startup,
