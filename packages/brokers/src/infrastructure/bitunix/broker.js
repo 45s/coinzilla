@@ -528,8 +528,11 @@ function validateOrderDetailResponse({ response, orderId, symbol }) {
   if (!response.data || typeof response.data !== "object" || Array.isArray(response.data)) {
     throw new TypeError("Bitunix Spot order detail response must be an object")
   }
+  if (typeof response.data.symbol !== "string" || !response.data.symbol.trim()) {
+    throw new TypeError("Bitunix Spot order detail response must contain its exchange symbol")
+  }
   if (String(response.data.orderId) !== orderId ||
-      String(response.data.symbol).toUpperCase() !== symbol) {
+      (symbol !== undefined && response.data.symbol.trim().toUpperCase() !== symbol)) {
     throw new TypeError("Bitunix Spot order detail does not match the requested order identity")
   }
   return response.data
@@ -996,10 +999,13 @@ export class BitunixSpotBroker extends CoreBroker {
       if (unsupportedResult) {
         return unsupportedResult
       }
-      const normalizedSymbol = requireSymbol({
-        symbol,
-        operation: "getOrder()",
-      })
+      let normalizedSymbol
+      if (symbol !== undefined) {
+        normalizedSymbol = requireSymbol({
+          symbol,
+          operation: "getOrder()",
+        })
+      }
       const normalizedOrderId = validateOrderId({ orderId })
       const response = await this.restClient.request({
         method: "GET",
