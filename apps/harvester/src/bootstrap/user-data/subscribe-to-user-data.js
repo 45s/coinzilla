@@ -143,6 +143,13 @@ function activateTradingEngine({
  * The caller owns failure cleanup; this module owns subscription evidence and
  * the PREFLIGHT account/open-order checks that must precede trading readiness.
  */
+function markUserDataReconciliationRequired(state) {
+  state.ready = false
+  state.status = state.accountingFailed
+    ? "EXECUTION_ACCOUNTING_FAILED"
+    : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+}
+
 export async function subscribeToUserData({
   broker,
   brokerName,
@@ -163,8 +170,7 @@ export async function subscribeToUserData({
   resumeDeferredStrategyEvaluations,
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
-  logSystem({ logger,
-message: "Subscribing to broker user-data delivery" })
+  logSystem({ logger, message: "Subscribing to broker user-data delivery" })
 
   const userDataSubscription = await createUserDataSubscription({
     broker,
@@ -177,13 +183,9 @@ message: "Subscribing to broker user-data delivery" })
     onStatus,
   })
   onSubscriptionEstablished?.(userDataSubscription)
-  logSystem({ logger,
-message: "Broker user-data delivery established" })
+  logSystem({ logger, message: "Broker user-data delivery established" })
 
-  state.ready = false
-  state.status = state.accountingFailed
-    ? "EXECUTION_ACCOUNTING_FAILED"
-    : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+  markUserDataReconciliationRequired(state)
 
   await publishInitialAccountSnapshot({ state,
 publishAccountSnapshot })

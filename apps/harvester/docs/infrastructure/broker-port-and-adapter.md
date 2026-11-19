@@ -270,3 +270,6 @@ The broker's returned `deliveryMode` and `nativePush` metadata describe the actu
 
 
 The Binance infrastructure adapter forwards the complete callback object unchanged. Binance emits native user-data messages through `onEvent`; the optional `onObservation` callback is accepted by the common adapter contract but is not used by the native Binance stream.
+
+
+After subscription establishment, bootstrap explicitly returns readiness to `AUTHORITATIVE_RECONCILIATION_REQUIRED` (or preserves the execution-accounting failure state). Polling observations do not alter this state; only the existing authoritative snapshot and native event/reconciliation gates can permit trading.
