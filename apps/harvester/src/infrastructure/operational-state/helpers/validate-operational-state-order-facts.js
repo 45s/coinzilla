@@ -1,5 +1,6 @@
 import { requireNonEmptyString } from "../operational-state-canonical.js"
 import { MAX_FACT_ID_LENGTH } from "./operational-state-fact-schema.js"
+import { addDecimal, compareDecimal } from "@coinzilla/utils"
 import {
   isCanonicalDecimalString,
   isPositiveCanonicalDecimalString,
@@ -80,19 +81,38 @@ function validatePersistedRecoveryOrderOwnership({ canonicalData, supplied } = {
   })
 }
 
+function validatePersistedSellAllocation({ canonicalData } = {}) {
+  const allocation = canonicalData.sellAllocation
+  const isRecoverySellerSell = canonicalData.strategyId === "RS_recoverySeller" &&
+    canonicalData.purpose === "RECOVERY_SELL"
+  if (!isRecoverySellerSell) {
+    if (allocation !== undefined) {
+      throw new TypeError("Only Recovery Seller SELL ownership may contain a mixed SELL allocation")
+    }
+    return
+  }
+  if (!allocation || typeof allocation !== "object" || Array.isArray(allocation) ||
+      Object.keys(allocation).length !== 2 ||
+      !isPositiveCanonicalDecimalString({ value: allocation.recoverySellQuantity }) ||
+      !isCanonicalDecimalString({ value: allocation.legacySellQuantity }) ||
+      compareDecimal({ left: allocation.legacySellQuantity, right: "0" }) < 0 ||
+      compareDecimal({
+        left: addDecimal({ left: allocation.recoverySellQuantity, right: allocation.legacySellQuantity }),
+        right: canonicalData.quantity,
+      }) !== 0) {
+    throw new TypeError("Persisted Recovery Seller SELL allocation must be canonical and equal the order quantity")
+  }
+}
+
 function validatePersistedOrderOwnership({ canonicalData } = {}) {
   const fields = ["strategyId", "positionId", "cycleId"]
   const supplied = fields.filter((field) => canonicalData[field] !== undefined)
   if (canonicalData.purpose === null) {
-    return validatePurposeFreePersistedOwnership({
-      canonicalData,
-      supplied,
-    })
+    validatePurposeFreePersistedOwnership({ canonicalData, supplied })
+  } else {
+    validatePersistedRecoveryOrderOwnership({ canonicalData, supplied })
   }
-  return validatePersistedRecoveryOrderOwnership({
-    canonicalData,
-    supplied,
-  })
+  validatePersistedSellAllocation({ canonicalData })
 }
 
 function factIdForOrderIntent(clientOrderId) {
@@ -133,6 +153,7 @@ function validateOrderSubmissionIntentFields({ canonicalData }) {
     "strategyId",
     "positionId",
     "cycleId",
+    "sellAllocation",
   ])
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Order-submission intent fact contains unsupported fields")

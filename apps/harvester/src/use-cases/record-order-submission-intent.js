@@ -1,5 +1,5 @@
 import { CanonicalOrder } from "@coinzilla/entities"
-import { toResult } from "@coinzilla/utils"
+import { addDecimal, compareDecimal, isCanonicalDecimalString, isPositiveCanonicalDecimalString, toResult } from "@coinzilla/utils"
 
 const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
 
@@ -76,6 +76,31 @@ function validateRecoveryBuyOwnership({ purpose, ownership } = {}) {
   }
 }
 
+function validateRecoverySellAllocation({ purpose, ownership, quantity } = {}) {
+  if (purpose !== "RECOVERY_SELL" || ownership.strategyId !== "RS_recoverySeller") {
+    if (ownership.sellAllocation !== undefined) {
+      throw new TypeError("Only Recovery Seller SELL ownership may contain a mixed SELL allocation")
+    }
+    return {}
+  }
+  const allocation = ownership.sellAllocation
+  if (!allocation || typeof allocation !== "object" || Array.isArray(allocation) ||
+      Object.keys(allocation).length !== 2 ||
+      !isPositiveCanonicalDecimalString({ value: allocation.recoverySellQuantity }) ||
+      !isCanonicalDecimalString({ value: allocation.legacySellQuantity }) ||
+      compareDecimal({ left: allocation.legacySellQuantity, right: "0" }) < 0 ||
+      compareDecimal({
+        left: addDecimal({ left: allocation.recoverySellQuantity, right: allocation.legacySellQuantity }),
+        right: quantity,
+      }) !== 0) {
+    throw new TypeError("Recovery Seller SELL requires an exact recovery/legacy allocation equal to the canonical order quantity")
+  }
+  return { sellAllocation: Object.freeze({
+    recoverySellQuantity: allocation.recoverySellQuantity,
+    legacySellQuantity: allocation.legacySellQuantity,
+  }) }
+}
+
 function validateRecoveryPurposeSide({ purpose, side } = {}) {
   const expectedSide = purpose === "RECOVERY_BUY" ? "BUY" : "SELL"
   if (side !== expectedSide) {
@@ -83,7 +108,7 @@ function validateRecoveryPurposeSide({ purpose, side } = {}) {
   }
 }
 
-function validatePurposeOwnership({ purpose, ownership, side } = {}) {
+function validatePurposeOwnership({ purpose, ownership, side, quantity } = {}) {
   const hasCycleId = hasNonEmptyValue(ownership?.cycleId)
   validateStrategyPositionOwnership({
     purpose,
@@ -99,15 +124,17 @@ function validatePurposeOwnership({ purpose, ownership, side } = {}) {
   validateRecoveryPurposeSide({
     purpose,
     side,
+    quantity,
   })
   return {
     strategyId: ownership.strategyId,
     positionId: ownership.positionId,
     ...(hasCycleId ? { cycleId: ownership.cycleId } : {}),
+    ...validateRecoverySellAllocation({ purpose, ownership, quantity }),
   }
 }
 
-function validateSubmissionOwnership({ purpose, ownership, side } = {}) {
+function validateSubmissionOwnership({ purpose, ownership, side, quantity } = {}) {
   if (purpose === null) {
     return validatePurposeFreeOwnership({
       ownership,
@@ -153,6 +180,7 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose, owner
       purpose,
       ownership,
       side: order.side,
+      quantity,
     }),
   }
 }

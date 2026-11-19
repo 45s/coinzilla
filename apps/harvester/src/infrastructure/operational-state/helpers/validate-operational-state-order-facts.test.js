@@ -114,8 +114,12 @@ test("accepts canonical order-submission intents and recovery-sell purpose", () 
       strategyId: "RS_recoverySeller",
       positionId: "rs-position-1",
       cycleId: "rs-cycle-1",
+      sellAllocation: {
+        recoverySellQuantity: "1.5",
+        legacySellQuantity: "0.5",
+      },
     })),
-    "A recovery SELL intent must preserve its complete strategy, position and cycle ownership.",
+    "A recovery SELL intent must preserve its complete strategy, position, cycle and allocation ownership.",
   )
   assert.doesNotThrow(
     () => validateOrderSubmissionIntentFact(makeSubmissionIntent({
