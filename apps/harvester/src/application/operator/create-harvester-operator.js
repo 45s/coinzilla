@@ -19,7 +19,7 @@ import { createReadOperatorTradingState } from "../../use-cases/operator-control
  * @param {Function} [options.getRuntimeSnapshot] - Read-only process runtime snapshot provider.
  * @returns {Readonly<object>} Explicit operator command and query methods.
  */
-export function createHarvesterOperator({ engine, operationalStateStore, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
+export function createHarvesterOperator({ engine, operationalStateStore, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders, recoverySellerStopWorkflow } = {}) {
   const pauseBuys = createPauseBuys({ engine,
     operationalStateStore })
   const resumeBuys = createResumeBuys({ engine,
@@ -33,6 +33,7 @@ export function createHarvesterOperator({ engine, operationalStateStore, getRunt
       operationalStateStore }),
     resumeAllBuys: createResumeAllBuys({ engine,
       operationalStateStore }),
+    getRecoverySellerStopState: () => recoverySellerStopWorkflow?.getStopState?.() ?? null,
   }
   if (getRuntimeSnapshot !== undefined) {
     const readState = createReadOperatorState({ engine,

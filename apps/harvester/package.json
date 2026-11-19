@@ -96,7 +96,9 @@
       "src/infrastructure/telegram/operator/callbacks.test.js",
       "src/infrastructure/telegram/operator/pages.test.js",
       "src/infrastructure/telegram/operator/controls.test.js",
-      "src/infrastructure/telegram/operator/diagnostics.test.js"
+      "src/infrastructure/telegram/operator/diagnostics.test.js",
+      "src/use-cases/order-event-workflow.test.js",
+      "src/use-cases/create-recovery-seller-order-submitter.test.js"
     ]
   }
 }
