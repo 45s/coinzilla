@@ -1,13 +1,24 @@
 import assert from "node:assert/strict"
-import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { execFile } from "node:child_process"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { promisify } from "node:util"
 import test from "node:test"
 import { publishBitunixDiagnostics } from "./bitunix-health-publisher.js"
 
+const execFileAsync = promisify(execFile)
 const fixedTimestamp = Date.parse("2026-11-19T08:30:00.000Z")
 const apiKey = "private-test-api-key"
 const apiSecret = "private-test-api-secret"
+
+async function executeGit({ cwd, args }) {
+  const { stdout } = await execFileAsync("git", args, {
+    cwd,
+    encoding: "utf8",
+  })
+  return stdout.trim()
+}
 
 function createFakeGit({ repositoryRoot, failPush = false } = {}) {
   const calls = []
@@ -336,6 +347,86 @@ test("fails the health check when a required authenticated operation is skipped"
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "an incomplete health report must still return the checkout to develop")
   } finally {
     await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+
+test("runs the real Git branch, report-only commit, push and return workflow", async () => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "bitunix-health-git-"))
+  const repositoryRoot = join(temporaryDirectory, "working")
+  const remotePath = join(temporaryDirectory, "origin.git")
+  try {
+    await executeGit({
+      cwd: temporaryDirectory,
+      args: ["init", "--bare", "--initial-branch=develop", remotePath],
+    })
+    await executeGit({
+      cwd: temporaryDirectory,
+      args: ["init", "--initial-branch=develop", repositoryRoot],
+    })
+    await executeGit({
+      cwd: repositoryRoot,
+      args: ["config", "user.name", "Bitunix Health Test"],
+    })
+    await executeGit({
+      cwd: repositoryRoot,
+      args: ["config", "user.email", "bitunix-health@example.invalid"],
+    })
+    await writeFile(join(repositoryRoot, ".gitignore"), "packages/brokers/.diagnostics/\n")
+    await writeFile(join(repositoryRoot, "seed.txt"), "initial develop content\n")
+    await executeGit({
+      cwd: repositoryRoot,
+      args: ["add", ".gitignore", "seed.txt"],
+    })
+    await executeGit({
+      cwd: repositoryRoot,
+      args: ["commit", "-m", "initial develop commit"],
+    })
+    await executeGit({
+      cwd: repositoryRoot,
+      args: ["remote", "add", "origin", remotePath],
+    })
+    await executeGit({
+      cwd: repositoryRoot,
+      args: ["push", "--set-upstream", "origin", "develop"],
+    })
+
+    const result = await publishBitunixDiagnostics({
+      repositoryRoot,
+      runDiagnostics: async () => createDiagnosticReport(),
+      env: {
+        BITUNIX_API_KEY: apiKey,
+        BITUNIX_API_SECRET: apiSecret,
+      },
+      now: () => fixedTimestamp,
+    })
+    const currentBranch = await executeGit({
+      cwd: repositoryRoot,
+      args: ["branch", "--show-current"],
+    })
+    const remoteBranches = await executeGit({
+      cwd: temporaryDirectory,
+      args: ["--git-dir", remotePath, "branch", "--list", result.branch],
+    })
+    const committedFiles = await executeGit({
+      cwd: repositoryRoot,
+      args: ["diff-tree", "--no-commit-id", "--name-only", "-r", result.commitSha],
+    })
+    const status = await executeGit({
+      cwd: repositoryRoot,
+      args: ["status", "--porcelain", "--untracked-files=all"],
+    })
+
+    assert.equal(currentBranch, "develop", "the actual Git workflow must return the user's checkout to develop")
+    assert.equal(remoteBranches, result.branch, "the report branch must exist on the configured remote")
+    assert.equal(committedFiles, result.reportPath, "the pushed commit must contain exactly the sanitized report")
+    assert.equal(status, "", "the ignored local diagnostic report must not dirty the returned develop worktree")
+    assert.equal(result.exitCode, 0, "a complete successful report must return a zero exit code")
+  } finally {
+    await rm(temporaryDirectory, {
       recursive: true,
       force: true,
     })
