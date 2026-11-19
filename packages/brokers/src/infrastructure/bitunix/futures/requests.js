@@ -26,9 +26,12 @@ function normalizeSymbols({ symbols }) {
     return undefined
   }
 
-  const values = Array.isArray(symbols) ? symbols : (
-    typeof symbols === "string" ? symbols.split(",") : null
-  )
+  let values
+  if (Array.isArray(symbols)) {
+    values = symbols
+  } else if (typeof symbols === "string") {
+    values = symbols.split(",")
+  }
   if (!values || values.length === 0) {
     throw new TypeError("Bitunix Futures symbols must be a non-empty array or comma-separated string")
   }
@@ -161,11 +164,10 @@ function normalizeKlinePriceType({ type }) {
   return type
 }
 
-function normalizePageQuery(input, maximum = MAX_PAGE_SIZE) {
+function normalizePageQuery(input) {
   return normalizePagination({
     skip: input.skip,
     limit: input.limit,
-    maximum,
   })
 }
 
@@ -182,10 +184,11 @@ function normalizeHistoryOrderRange({ input,
   const maxAge = queryCanceled ? 3 * 24 * 60 * 60 * 1000 : 90 * 24 * 60 * 60 * 1000
   const earliestAllowed = BigInt(Math.max(0, now - maxAge))
   const latestAllowed = BigInt(now)
-  if ((range.startTime !== undefined && BigInt(range.startTime) < earliestAllowed) ||
-      (range.endTime !== undefined && (
-        BigInt(range.endTime) < earliestAllowed || BigInt(range.endTime) > latestAllowed
-      ))) {
+  if ((range.startTime !== undefined && (
+    BigInt(range.startTime) < earliestAllowed || BigInt(range.startTime) > latestAllowed
+  )) || (range.endTime !== undefined && (
+    BigInt(range.endTime) < earliestAllowed || BigInt(range.endTime) > latestAllowed
+  ))) {
     throw new RangeError(
       `Bitunix Futures ${queryCanceled ? "canceled" : "non-canceled"} order history is limited to the last ${queryCanceled ? "3" : "90"} days`,
     )
@@ -336,7 +339,7 @@ export function createPendingOrdersQuery(input = {}) {
   })
 }
 
-export function createHistoryOrdersQuery(input = {}, { now = Date.now() } = {}) {
+export function createHistoryOrdersQuery({ input = {}, now = Date.now() } = {}) {
   const range = normalizeHistoryOrderRange({ input,
     now })
   return compactQuery({
