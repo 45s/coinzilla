@@ -1437,9 +1437,21 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitunix documentation index](./docs/README.md).
 
+## 2026-11-19 — Bitunix polling recovery delivery (#1516)
+
+**Status: In progress.** PR [#1516](https://github.com/45s/coinzilla/pull/1516) closes a delivery gap in the existing read-only observation lifecycle.
+
+- A failed polling cycle invalidates the previous semantic fingerprint; the next successful cycle republishes a complete observation even when exchange data is unchanged.
+- Recovery resets the exponential backoff to the configured interval. Failed cycles and callback failures do not publish partial snapshots.
+- Added regression coverage for success → failed read → unchanged successful recovery, including unchanged balance/symbol data and retry-delay reset.
+- Added a failure-path regression for scheduler cancellation: local stop state and cleanup remain idempotent even when the injected cancel function throws.
+- Updated the polling contract and production-readiness matrix to distinguish this recovery guarantee from authoritative event/fill reconciliation.
+- No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
+- Required CI must pass on the exact final PR head before this item is marked complete.
+
 ## Bitunix Spot history request-adapter decomposition (#1517)
 
-**Status: In progress.** Extract the pure order/deposit/withdrawal history request construction and order-history page validation from the Bitunix broker facade into a cohesive infrastructure adapter module.
+**Status: Implemented in [PR #1518](https://github.com/45s/coinzilla/pull/1518); all seven required workflows passed on exact head `aadde0c035f73c81a129a7d5454a2427383e8762`.**
 
 - Preserve request body fields, exchange filter codes, time conversion, validation messages and page-envelope behavior exactly.
 - Keep the Broker facade responsible for endpoint I/O and result envelopes.
