@@ -1467,3 +1467,12 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Added direct deterministic adapter tests for LIMIT quote-volume conversion, MARKET base-volume preservation, scientific-notation expansion, unsupported fields/client IDs, response identity mismatches, and exact signed detail/cancel request envelopes.
 - Kept live-mutation opt-in, dispatch tracking, mutation outcome classification, no-retry behavior, placement reconciliation, cancellation/fill-race handling, and per-symbol cancel-all orchestration in the Broker facade.
 - No public Broker API, exchange endpoint, request body, retry behavior, Harvester, Binance, or shared utility changes.
+
+## Bitunix read-only Broker diagnostics expansion (#1519)
+
+**Status: Implemented in [PR #1520](https://github.com/45s/coinzilla/pull/1520); exact-head CI verification is tracked on the pull request.** Extend the diagnostic run through the public `Broker` facade to include public symbol-filter metadata and an authenticated, symbol-scoped first page of order history.
+
+- Add schema inspection for the order-history page envelope without recording private response values.
+- Preserve public-only mode: symbol filters remain public; authenticated order history is skipped without the full credential pair.
+- Keep order history page-bounded; do not imply complete history or canonical fills.
+- No order/funds mutations or Harvester changes.
