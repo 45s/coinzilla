@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { createAccountRuntimeRegistry } from "./account-runtime-registry.js"
+import { createPortfolioWorkflow } from "../../use-cases/create-portfolio-workflow.js"
+import { createRecoverySellerAccountingWorkflow } from "../../use-cases/create-recovery-seller-accounting-workflow.js"
 
 const providers = [
   {
@@ -92,4 +94,21 @@ test("rejects duplicate provider instance ids and unknown account lookups", () =
     /not registered/,
     "Unknown provider instances must not silently receive an account runtime.",
   )
+})
+
+
+test("shares one account Portfolio, OrderRegistry, and serialized queue across CG and RS workflows", () => {
+  const accountRuntime = createAccountRuntimeRegistry({ providers }).get("binance-testnet-one")
+  const conservative = createPortfolioWorkflow({ sharedState: accountRuntime.state })
+  const recoverySeller = createRecoverySellerAccountingWorkflow({ sharedState: accountRuntime.state })
+
+  assert.equal(conservative.getPortfolio(), accountRuntime.state.portfolio)
+  assert.equal(recoverySeller.getPortfolio(), accountRuntime.state.portfolio)
+  assert.equal(recoverySeller.getOrderRegistry(), accountRuntime.state.orderRegistry)
+  assert.equal(accountRuntime.state.legacyPositions, accountRuntime.state.legacyPositions)
+
+  const queuedTransition = Promise.resolve()
+  accountRuntime.state.updateQueue = queuedTransition
+  assert.equal(accountRuntime.state.updateQueue, queuedTransition)
+  assert.equal(Object.isFrozen(accountRuntime.state), true)
 })
