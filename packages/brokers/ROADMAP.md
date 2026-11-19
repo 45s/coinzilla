@@ -1449,7 +1449,6 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
 - Required CI must pass on the exact final PR head before this item is marked complete.
 
-
 ## 2026-11-19 — Bitunix polling generation isolation (#1521)
 
 - [x] Detach a stopped generation's in-flight read from the active coalescing slot so an immediate restart can begin a fresh read even when the old network request has not settled.
