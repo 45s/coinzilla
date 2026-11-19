@@ -531,7 +531,7 @@ function validateSpotOrderInput({ input }) {
     operation: "createOrder()",
   })
   const { side, type: inputType } = input
-  const type = inputType ?? "LIMIT"
+  const type = inputType
   if (side !== "BUY" && side !== "SELL") {
     throw new TypeError("Bitunix Spot createOrder() side must be BUY or SELL")
   }
@@ -1266,7 +1266,7 @@ export class BitunixSpotBroker extends CoreBroker {
    * quantity remains base volume. A lost response is OUTCOME_UNKNOWN and is
    * never retried because Bitunix does not accept a client order ID.
    *
-   * @param {{symbol: string, side: "BUY"|"SELL", type?: "LIMIT"|"MARKET", quantity: string|number, price?: string|number}} input
+   * @param {{symbol: string, side: "BUY"|"SELL", type: "LIMIT"|"MARKET", quantity: string|number, price?: string|number}} input
    */
   async createOrder(input = {}) {
     let requestDispatched = false
