@@ -144,7 +144,7 @@ This section contains only work owned by `@coinzilla/brokers`. Consumer applicat
 
 **Completed broker capability references:** normalized candle history/live Kline ([PR #1017](https://github.com/45s/coinzilla/pull/1017)); complete Binance order acknowledgements ([PR #961](https://github.com/45s/coinzilla/pull/961)); explicit Binance environment selection ([PR #841](https://github.com/45s/coinzilla/pull/841)); cancellation outcome classification ([PR #786](https://github.com/45s/coinzilla/pull/786)); and public-stream liveness/recovery ([PR #1272](https://github.com/45s/coinzilla/pull/1272)). Detailed historical evidence remains below.
 
-### Bitunix Spot REST API gap reduction — implementation branch `work/bitunix-complete`
+### Bitunix Spot REST API gap reduction — PR #1470 (in progress)
 
 - Implement the public token/network catalog and signed API-key identity lookup without changing the existing balance projection or exchange-neutral Broker contract.
 - Implement signed, paginated Tax Filing history with the documented UTC/365-day range and 1000-record page limits; preserve exact record strings and let callers paginate explicitly.
