@@ -63,7 +63,6 @@ const API = Object.freeze({
   depositAddress: "/api/spot/v1/deposit/address",
   withdrawalHistory: "/api/spot/v1/withdraw_transfer/page",
   matchingOrderDetails: "/api/spot/v1/order/deal/list",
-  cancelOrder: BITUNIX_SPOT_ORDER_API.cancelOrder,
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({

@@ -465,3 +465,7 @@ For user-data `executionReport` TRADE events, canonical Fill execution time is B
 The method name is shared; the delivery guarantee is not. Binance declares `SUBSCRIBE_USER_DATA: SUPPORTED`, returns `deliveryMode: "NATIVE_EVENTS"` / `nativePush: true`, and forwards authenticated exchange events through `onEvent`. Bitunix declares `OBSERVE_USER_DATA: SUPPORTED` while native `SUBSCRIBE_USER_DATA` remains unsupported; it returns `deliveryMode: "POLLING_OBSERVATIONS"` / `nativePush: false` and sends changed, explicitly scoped snapshots only through `onObservation`.
 
 Do not convert observations into execution reports, canonical fills, or account snapshots. Polling cannot replay transient states or prove complete history. Harvester keeps Bitunix outside provider registration until issue #1185's native lifecycle, authoritative snapshot, canonical fill, and recovery prerequisites are met. See [the shared Broker API contract](./BROKER_API.md#user-data-delivery-channels).
+
+### Bitunix Spot order request adapters
+
+Bitunix Spot order request/response mapping lives in the Bitunix infrastructure `adapters/order-requests.js` module and has direct offline tests. It owns exact LIMIT quote-volume / MARKET base-volume request construction, order identity correlation, and the explicit signed detail/cancel request envelopes. The broker facade retains mutation opt-in, dispatch tracking, reconciliation, unknown-outcome classification, and cancellation/fill-race orchestration. This separation does not change the public Broker API or enable live mutations.

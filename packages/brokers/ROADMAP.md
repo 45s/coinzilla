@@ -1448,3 +1448,12 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Updated the polling contract and production-readiness matrix to distinguish this recovery guarantee from authoritative event/fill reconciliation.
 - No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
 - Required CI must pass on the exact final PR head before this item is marked complete.
+
+## 2026-11-19 — Bitunix Spot order request adapter decomposition (#1525)
+
+**Status: Implemented in [PR #1526](https://github.com/45s/coinzilla/pull/1526); exact-head CI verification is pending.**
+
+- Extracted exact order input/decimal normalization, single-order REST payload construction, placement response identity validation, order-detail correlation, and cancel/detail request envelopes into `adapters/order-requests.js`.
+- Added direct deterministic adapter tests for LIMIT quote-volume conversion, MARKET base-volume preservation, scientific-notation expansion, unsupported fields/client IDs, response identity mismatches, and exact signed detail/cancel request envelopes.
+- Kept live-mutation opt-in, dispatch tracking, mutation outcome classification, placement reconciliation, cancellation/fill-race handling, and per-symbol cancel-all orchestration in the Broker facade.
+- No public Broker API, exchange endpoint, request body, retry behavior, Harvester, Binance, or shared utility changes.
