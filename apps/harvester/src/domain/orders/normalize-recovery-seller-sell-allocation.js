@@ -27,10 +27,12 @@ function assertAllocationQuantities({ sellAllocation, quantity } = {}) {
     value: sellAllocation.legacySellQuantity,
     field: "sellAllocation.legacySellQuantity",
   })
-  assertDecimalString({
-    value: quantity,
-    field: "order quantity",
-  })
+  if (quantity !== undefined) {
+    assertDecimalString({
+      value: quantity,
+      field: "order quantity",
+    })
+  }
   if (compareDecimal({
     left: sellAllocation.recoverySellQuantity,
     right: "0",
@@ -43,15 +45,17 @@ function assertAllocationQuantities({ sellAllocation, quantity } = {}) {
   }) < 0) {
     throw new RangeError("legacySellQuantity must be non-negative")
   }
-  const allocatedQuantity = addDecimal({
-    left: sellAllocation.recoverySellQuantity,
-    right: sellAllocation.legacySellQuantity,
-  })
-  if (compareDecimal({
-    left: allocatedQuantity,
-    right: quantity,
-  }) !== 0) {
-    throw new RangeError("Recovery Seller SELL allocation must equal the canonical order quantity")
+  if (quantity !== undefined) {
+    const allocatedQuantity = addDecimal({
+      left: sellAllocation.recoverySellQuantity,
+      right: sellAllocation.legacySellQuantity,
+    })
+    if (compareDecimal({
+      left: allocatedQuantity,
+      right: quantity,
+    }) !== 0) {
+      throw new RangeError("Recovery Seller SELL allocation must equal the canonical order quantity")
+    }
   }
 }
 
