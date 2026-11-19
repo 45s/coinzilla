@@ -64,6 +64,18 @@ function createAccountStateCollections() {
   }
 }
 
+function createSerializedAccountTransitionQueue() {
+  let transitionTail = Promise.resolve()
+  return ({ task } = {}) => {
+    if (typeof task !== "function") {
+      return Promise.reject(new TypeError("Account transition queue requires a task"))
+    }
+    const current = transitionTail.then(task)
+    transitionTail = current.catch(() => undefined)
+    return current
+  }
+}
+
 function createAccountTradingState() {
   // CG and RS accounting share one account-level serialization queue and canonical state.
   let portfolio = new Portfolio()
@@ -72,6 +84,7 @@ function createAccountTradingState() {
   let legacyPositions = new Map()
   let updateQueue = Promise.resolve()
   const state = createAccountStateCollections()
+  state.runTransition = createSerializedAccountTransitionQueue()
   defineValidatedStateProperty({
     state,
     property: "portfolio",
