@@ -415,7 +415,10 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
 
     await signalHandlers.get("SIGTERM")()
     assert.equal(process.exitCode, 0)
-    assertTelegramDeliveryFailure({ loggerErrors, loggerInfos })
+    assertTelegramDeliveryFailure({
+      loggerErrors,
+      loggerInfos,
+    })
   } finally {
     process.exitCode = previousExitCode
   }
@@ -674,7 +677,10 @@ async function runTelegramProfileScenario({ scenario }) {
       TELEGRAM_CHAT_ID: "test-chat",
     },
     loadConfig: async () => createTestAppConfig({
-      telegram: { enabled: true, profile: scenario.profile },
+      telegram: {
+        enabled: true,
+        profile: scenario.profile,
+      },
     }),
     createTelegramNotifier: () => ({
       async sendMessage(message) {
@@ -697,10 +703,16 @@ async function runTelegramProfileScenario({ scenario }) {
       const [signal, handler] = args
       signalHandlers.set(signal, handler)
     },
-    logger: { info() {}, error() {} },
+    logger: {
+      info() {},
+      error() {},
+    },
   })
   await signalHandlers.get("SIGTERM")()
-  assertTelegramProfileMessages({ scenario, sentMessages })
+  assertTelegramProfileMessages({
+    scenario,
+    sentMessages,
+  })
 }
 
 function assertTelegramProfileMessages({ scenario, sentMessages }) {

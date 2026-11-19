@@ -1314,8 +1314,14 @@ const captureProcessProvenanceScenario = async () => {
   const contexts = []
   const processIdentity = createProcessProvenanceIdentity()
   let journalFlushCalls = 0
-  const eventBus = createProvenanceEventBus({ events, operations })
-  const logger = createProvenanceLogger({ contexts, operations })
+  const eventBus = createProvenanceEventBus({
+    events,
+    operations,
+  })
+  const logger = createProvenanceLogger({
+    contexts,
+    operations,
+  })
 
   await main({
     processIdentity,
@@ -1523,7 +1529,10 @@ test("requires Journal readiness and publishes process provenance before trading
   const events = []
   const processStarted = new Promise((resolve) => { resolveProcessStarted = resolve })
   const journalService = createDelayedJournalService({ onReady: (resolve) => { resolveJournalReady = resolve } })
-  const eventBus = createProcessStartedEventBus({ events, resolveProcessStarted })
+  const eventBus = createProcessStartedEventBus({
+    events,
+    resolveProcessStarted,
+  })
 
   const pending = main({
     processIdentity: {
@@ -2067,7 +2076,13 @@ function createTestProcessLock({ sequence }) {
     assert.equal(tradingMode, "testnet")
     return {
       ok: true,
-      release: async () => { sequence.push("release"); return { ok: true, released: true } },
+      release: async () => {
+        sequence.push("release")
+        return {
+          ok: true,
+          released: true,
+        }
+      },
     }
   }
 }
@@ -2077,10 +2092,16 @@ function createProvenanceEventBus({ events, operations }) {
     publish(event) {
       events.push(event)
       operations.push(`publish:${event.name}`)
-      return { ok: true, event }
+      return {
+        ok: true,
+        event,
+      }
     },
     flush: async () => ({ ok: true }),
-    close: async () => ({ ok: true, closed: true }),
+    close: async () => ({
+      ok: true,
+      closed: true,
+    }),
   }
 }
 
@@ -2099,8 +2120,14 @@ function createProvenanceLogger({ contexts, operations }) {
 function createDelayedJournalService({ onReady }) {
   return {
     ready: new Promise(onReady),
-    status: { state: "starting", enabled: true },
-    flush: async () => ({ ok: true, durable: true }),
+    status: {
+      state: "starting",
+      enabled: true,
+    },
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
     close: async () => ({ ok: true, closed: true }),
   }
 }
