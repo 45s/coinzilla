@@ -32,9 +32,34 @@ function createUnresolvedSubmissionCallback({ onUnresolvedSubmission } = {}) {
   }
 }
 
+function createDurableSubmissionIntentCallbacks({ onDurableSubmissionIntent } = {}) {
+  const precommittedByClientOrderId = new Map()
+  return Object.freeze({
+    persistBeforeSellReservation: async (input = {}) => {
+      const result = await onDurableSubmissionIntent(input)
+      if (result?.ok !== true || result.data?.durable !== true) {
+        throw result?.errors?.[0] ??
+          new Error("Recovery Seller SELL intent was not durably acknowledged before cycle reservation")
+      }
+      precommittedByClientOrderId.set(input.order.clientOrderId, result)
+      return result
+    },
+    onDurableSubmissionIntent: async (input = {}) => {
+      const clientOrderId = input.order?.clientOrderId
+      if (precommittedByClientOrderId.has(clientOrderId)) {
+        const result = precommittedByClientOrderId.get(clientOrderId)
+        precommittedByClientOrderId.delete(clientOrderId)
+        return result
+      }
+      return onDurableSubmissionIntent(input)
+    },
+  })
+}
+
 function createPendingOrderCallback({
   executionCallbacks,
   onSellReserved,
+  persistBeforeSellReservation,
   latchUnresolvedSubmission,
 } = {}) {
   return async (input = {}) => {
@@ -42,6 +67,10 @@ function createPendingOrderCallback({
       return executionCallbacks.onPendingOrder(input)
     }
     try {
+      await persistBeforeSellReservation({
+        ...input,
+        purpose: input.purpose ?? input.ownership?.purpose ?? null,
+      })
       const reserved = await onSellReserved({
         order: input.order,
         ownership: input.ownership,
@@ -150,6 +179,9 @@ function createRecoverySellerExecutor({
   onSellReserved,
 } = {}) {
   const executionCallbacks = recoverySellerAccountingWorkflow.getExecutionCallbacks()
+  const durableSubmissionIntent = createDurableSubmissionIntentCallbacks({
+    onDurableSubmissionIntent,
+  })
   const latchUnresolvedSubmission = createUnresolvedSubmissionCallback({
     onUnresolvedSubmission,
   })
@@ -159,6 +191,7 @@ function createRecoverySellerExecutor({
     onPendingOrder: createPendingOrderCallback({
       executionCallbacks,
       onSellReserved,
+      persistBeforeSellReservation: durableSubmissionIntent.persistBeforeSellReservation,
       latchUnresolvedSubmission,
     }),
     onSubmissionDeferred: createSubmissionDeferredCallback({
@@ -169,7 +202,7 @@ function createRecoverySellerExecutor({
       executionCallbacks,
       onUnresolvedSubmission,
     }),
-    onDurableSubmissionIntent,
+    onDurableSubmissionIntent: durableSubmissionIntent.onDurableSubmissionIntent,
     onDurableSubmissionOutcome,
     onOrderValidationFailure,
     canSubmit,
