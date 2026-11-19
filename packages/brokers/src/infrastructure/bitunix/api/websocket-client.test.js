@@ -72,6 +72,52 @@ function createClient(options = {}) {
     transport }
 }
 
+function assertOrderQueryRpcParameters({ transport }) {
+  assert.equal(transport.sent[0].params.symbol, "BTCUSDT")
+  assert.deepEqual(
+    Object.fromEntries(["symbol", "page", "pageSize", "startTime", "endTime", "status", "side", "type"].map((key) => [
+      key,
+      transport.sent[1].params[key],
+    ])),
+    {
+      symbol: "BTCUSDT",
+      page: 2,
+      pageSize: 25,
+      startTime: "2026-01-01T00:00:00Z",
+      endTime: "2026-01-02T00:00:00Z",
+      status: "3",
+      side: "2",
+      type: "1",
+    },
+  )
+  assert.deepEqual(
+    {
+      orderId: transport.sent[2].params.orderId,
+      symbol: transport.sent[2].params.symbol,
+    },
+    {
+      orderId: "123456",
+      symbol: "BTCUSDT",
+    },
+  )
+}
+
+async function resolveRpcResponses({ pending, transport }) {
+  for (let index = 0; index < pending.length; index += 1) {
+    transport.receive({
+      id: `rpc-${index + 1}`,
+      code: "0",
+      msg: "success",
+      data: { index },
+    })
+  }
+  const expected = []
+  for (let index = 0; index < pending.length; index += 1) {
+    expected.push({ index })
+  }
+  return Promise.all(pending).then((results) => assert.deepEqual(results, expected))
+}
+
 test("Bitunix Spot WebSocket client sends authenticated public RPC using the official signature", async () => {
   const { client, transport } = createClient()
   await client.connect()
@@ -311,51 +357,12 @@ test("Bitunix Spot WebSocket client dispatches documented order read RPCs", asyn
   assert.deepEqual(
     transport.sent.map((request) => request.method),
     ["order.pending.list", "order.history.page", "order.deal.list"],
-    "order reads must use documented Spot RPC method names",
   )
-  assert.equal(transport.sent[0].params.symbol, "BTCUSDT")
-  assert.deepEqual(
-    Object.fromEntries(["symbol", "page", "pageSize", "startTime", "endTime", "status", "side", "type"].map((key) => [
-      key,
-      transport.sent[1].params[key],
-    ])),
-    {
-      symbol: "BTCUSDT",
-      page: 2,
-      pageSize: 25,
-      startTime: "2026-01-01T00:00:00Z",
-      endTime: "2026-01-02T00:00:00Z",
-      status: "3",
-      side: "2",
-      type: "1",
-    },
-  )
-  assert.deepEqual(
-    {
-      orderId: transport.sent[2].params.orderId,
-      symbol: transport.sent[2].params.symbol,
-    },
-    {
-      orderId: "123456",
-      symbol: "BTCUSDT",
-    },
-  )
-  for (let index = 0; index < pending.length; index += 1) {
-    transport.receive({
-      id: `rpc-${index + 1}`,
-      code: "0",
-      msg: "success",
-      data: { index },
-    })
-  }
-  const expected = []
-  for (let index = 0; index < pending.length; index += 1) {
-    expected.push({ index })
-  }
-  assert.deepEqual(
-    await Promise.all(pending),
-    expected,
-  )
+  assertOrderQueryRpcParameters({ transport })
+  await resolveRpcResponses({
+    pending,
+    transport,
+  })
   await client.disconnect()
 })
 
