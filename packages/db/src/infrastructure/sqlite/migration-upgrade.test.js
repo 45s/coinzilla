@@ -137,3 +137,56 @@ test("legacy migration history upgrades without losing applied rows or applicati
     })
   }
 })
+
+test("failed migration rolls back the legacy history-table upgrade", async () => {
+  const database = createSqliteDatabase({
+    filename: ":memory:",
+  })
+  await database.connect()
+
+  try {
+    createLegacySchema({
+      database,
+    })
+
+    await assert.rejects(
+      database.migrate([
+        {
+          version: 1,
+          name: "create-legacy-accounts",
+          up() {},
+        },
+        {
+          version: 2,
+          name: "fail-after-history-upgrade",
+          up(transaction) {
+            transaction.exec("CREATE TABLE partial_schema (id INTEGER PRIMARY KEY)")
+            throw new Error("legacy migration batch failed")
+          },
+        },
+      ]),
+      /legacy migration batch failed/,
+      "A failed migration must roll back both its schema changes and the legacy history-table upgrade",
+    )
+
+    assert.equal(
+      database.prepare("PRAGMA table_info(schema_migrations)").all()
+        .some(({ name }) => name === "checksum"),
+      false,
+      "The checksum column must not remain after the migration transaction rolls back",
+    )
+    assert.deepEqual(
+      database.prepare("SELECT version FROM schema_migrations ORDER BY version").all()
+        .map(({ version }) => version),
+      [1],
+      "A failed upgrade must preserve the original applied migration history",
+    )
+    assert.equal(
+      database.prepare("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = 'partial_schema'").get().count,
+      0,
+      "A failed upgrade must remove application schema changes made by the failed migration",
+    )
+  } finally {
+    await database.close()
+  }
+})
