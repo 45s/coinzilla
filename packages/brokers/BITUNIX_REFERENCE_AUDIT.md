@@ -515,3 +515,13 @@ The intended longer-term scope is full Bitunix broker and Harvester provider sup
 - The Bitunix Spot WebSocket client remains authenticated RPC-only. Although methods are grouped under the official Public Interface, the docs require API key, timestamp, nonce and signature on every request. The runner now checks the documented `ping` RPC and makes one explicit fresh-client reconnect probe after a successful first session. It records subscription restoration as skipped because no subscription methods are documented. This does not simulate the documented 24-hour connection expiry, implement automatic reconnect, or test protocol-level control-frame heartbeats. The runner records response latency and sanitized structure but applies no stale-data threshold because the API reference defines no maximum data age; it tests RPC response correlation rather than stream sequence ordering. See the [official WebSocket introduction](https://www.bitunix.com/api-docs/spots/en_us/ws/) and [public RPC methods](https://www.bitunix.com/api-docs/spots/en_us/public-ws/).
 
 This follow-up adds offline regression tests; exact-head CI and an actual operator-local network run must be reported separately. No live Bitunix request or account-changing operation is implied by this source change.
+
+## 9. Bitunix Spot order-detail lookup — .NET parity follow-up (2026-11-19)
+
+**Reference inspected:** `JKorf/Bitunix.Net/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiTrading.cs`, `GetOrderAsync(string id)`, and `Bitunix.Net/Objects/Models/BitunixOrder.cs`.
+
+The .NET REST implementation sends `GET /api/spot/v1/order/detail` with only the `orderId` query parameter. Its `BitunixOrder` response model contains both `OrderId` and `Symbol`; the symbol is response data, not a required request parameter. Coinzilla's previous `getOrder({ symbol, orderId })` validation imposed an unnecessary symbol requirement. PR #1481 adds the RED regression test and changes Bitunix `getOrder({ orderId })` to use the response symbol, while preserving strict comparison when an optional symbol is supplied. Missing response symbols remain invalid.
+
+**Reference defect not copied:** the inspected .NET `GetUserTradesAsync` implementation currently sends `/api/spot/v1/order/pending/list`, although its interface documents `/api/spot/v1/order/deal/list`. Coinzilla's existing `getMatchingOrderDetails()` continues to use the latter documented endpoint. This does not establish complete canonical fills or account-wide trade history.
+
+This compatibility improvement does not change the canonical-order, fill-completeness, private-event, or Harvester-admission blockers in issue #1185. No live order mutation is enabled or tested.
