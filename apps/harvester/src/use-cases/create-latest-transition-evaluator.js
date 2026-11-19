@@ -6,10 +6,10 @@ import {
   allocateStrategyOrderCommitments,
   getPortfolioBalanceContext,
   logOrderAllocation,
-  publishStrategyDecision,
 } from "./strategy-order-commitments.js"
 export { allocateStrategyOrderCommitments } from "./strategy-order-commitments.js"
 import { handleEvaluationFailure, submitConservativeTransition } from "./submit-conservative-transition.js"
+import { publishStrategyDecision } from "./publish-strategy-decision.js"
 
 function hasShutdownRecoveryBlocker({ state, symbol } = {}) {
   const marketBlockers = [
