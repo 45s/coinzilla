@@ -26,6 +26,12 @@ const dogeAsset = new Asset({ id: "asset:DOGE",
 code: "DOGE" })
 const solAsset = new Asset({ id: "asset:SOL",
 code: "SOL" })
+const adaAsset = new Asset({ id: "asset:ADA",
+code: "ADA" })
+const linkAsset = new Asset({ id: "asset:LINK",
+code: "LINK" })
+const zroAsset = new Asset({ id: "asset:ZRO",
+code: "ZRO" })
 const markets = [
   new Market({ venue: "binance",
 symbol: "DOGEUSDT",
@@ -35,6 +41,18 @@ quoteAsset }),
 symbol: "SOLUSDT",
 baseAsset: solAsset,
 quoteAsset }),
+  new Market({ venue: "binance",
+symbol: "ADAUSDT",
+baseAsset: adaAsset,
+quoteAsset }),
+  new Market({ venue: "binance",
+symbol: "LINKUSDT",
+baseAsset: linkAsset,
+quoteAsset }),
+  new Market({ venue: "binance",
+symbol: "ZROUSDT",
+baseAsset: zroAsset,
+quoteAsset }),
 ]
 const marketsBySymbol = new Map(markets.map((market) => [market.symbol, market]))
 const marketsById = new Map(markets.map((market) => [market.id, market]))
@@ -43,6 +61,9 @@ const assetsById = new Map([
   [feeAsset.id, feeAsset],
   [dogeAsset.id, dogeAsset],
   [solAsset.id, solAsset],
+  [adaAsset.id, adaAsset],
+  [linkAsset.id, linkAsset],
+  [zroAsset.id, zroAsset],
 ])
 
 function makeMarketMetadata(market) {
@@ -311,7 +332,7 @@ accountedFills,
 cancelledOrderIds }
 }
 
-async function startBothMarkets({ engine, symbols = markets.map((market) => market.symbol) } = {}) {
+async function startBothMarkets({ engine, symbols = ["DOGEUSDT", "SOLUSDT"] } = {}) {
   for (const market of markets.filter((candidate) => symbols.includes(candidate.symbol))) {
     const result = await engine.processMarketPrice({
       symbol: market.symbol,
@@ -340,7 +361,7 @@ function makeOpenOrderSnapshot({ ownedOrder }) {
   return openOrder
 }
 
-async function createReconciliationHarness({ symbols = markets.map((market) => market.symbol) } = {}) {
+async function createReconciliationHarness({ symbols = ["DOGEUSDT", "SOLUSDT"] } = {}) {
   const harnessState = { engine: undefined }
   const brokerOverrides = {
     getOpenOrders: async ({ symbol }) => ({
@@ -1594,6 +1615,32 @@ test("resuming the global BUY pause does not clear a market-specific BUY pause",
   assert.equal(marketResume.data.stillPaused, false, "The market gate clears only after its own resume command.")
 })
 
+
+test("the four-market incident fixture reconciles one market without pausing the other three", async () => {
+  const symbols = ["ADAUSDT", "DOGEUSDT", "LINKUSDT", "ZROUSDT"]
+  const { engine } = await createReconciliationHarness({ symbols })
+
+  assert.deepEqual(
+    engine.getOrders().map((order) => order.market.symbol).sort(),
+    [...symbols].sort(),
+    "The incident fixture must begin with an owned order in each of ADA, DOGE, LINK and ZRO.",
+  )
+
+  const result = await engine.reconcileOwnedOrders({
+    symbol: "DOGEUSDT",
+  })
+
+  assert.equal(
+    result.ok,
+    true,
+    "A DOGE-only REST snapshot must not be rejected because ADA, LINK and ZRO orders remain in the global registry.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    [],
+    "Unrelated markets in the four-market incident fixture must not trigger a false registry-race pause.",
+  )
+})
 
 test("symbol-scoped REST reconciliation ignores owned orders from unrelated markets", async () => {
   const { engine } = await createReconciliationHarness()
