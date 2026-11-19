@@ -4,7 +4,7 @@ Coinzilla is a monorepo with independently maintained application and package do
 
 | Domain | Owned path | Responsibility |
 | --- | --- | --- |
-| Market Simulator | `packages/market-simulator/` | Deterministic historical simulation, market data and simulated order matching |
+| Market Simulator | `packages/market-simulator/` | Offline historical-candle simulation and simulated order matching; candle-matching/accounting rules are deterministic, while lifecycle timestamps use wall-clock time |
 | Harvester | `apps/harvester/` | Portfolio/position workflows, strategies, use cases and application composition |
 | Entities | `packages/entities/` | Exchange-neutral domain entities, identity, exact value contracts, lifecycle/value semantics |
 | Brokers | `packages/brokers/` | Broker contracts/adapters, exchange API integration, normalization, market/account/order I/O |
@@ -12,7 +12,7 @@ Coinzilla is a monorepo with independently maintained application and package do
 | Utils | `packages/utils/` | Domain-neutral reusable helpers, logging and generic utilities |
 | Event bus | `packages/event-bus/` | Event publication, subscription, delivery and event-bus reliability |
 | Journal | `packages/journal/` | Journal records, persistence boundaries and journal-specific behavior |
-| Database Infrastructure | `packages/db/` | Provider-neutral database lifecycle/transaction boundary and concrete database infrastructure adapters |
+| Database Infrastructure | `packages/db/` | Provider-neutral record CRUD/query contracts, database lifecycle/transactions, and concrete database infrastructure adapters |
 | Notifiers | `packages/notifiers/` | Telegram notification formatting, delivery and lifecycle safety |
 
 ## Indicators domain

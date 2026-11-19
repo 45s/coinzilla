@@ -5,9 +5,11 @@ import assert from "node:assert/strict"
 import {
   Asset,
   CanonicalOrder,
+  Commission,
   Fill,
   Market,
   Money,
+  Order,
   Quantity,
   TradingRules,
 } from "@coinzilla/entities"
@@ -18,10 +20,18 @@ import { conservativeStrategyPolicy } from "../domain/strategies/conservative/st
 
 const quoteAsset = new Asset({ id: "asset:USDT",
 code: "USDT" })
+const feeAsset = new Asset({ id: "asset:BNB",
+code: "BNB" })
 const dogeAsset = new Asset({ id: "asset:DOGE",
 code: "DOGE" })
 const solAsset = new Asset({ id: "asset:SOL",
 code: "SOL" })
+const adaAsset = new Asset({ id: "asset:ADA",
+code: "ADA" })
+const linkAsset = new Asset({ id: "asset:LINK",
+code: "LINK" })
+const zroAsset = new Asset({ id: "asset:ZRO",
+code: "ZRO" })
 const markets = [
   new Market({ venue: "binance",
 symbol: "DOGEUSDT",
@@ -31,13 +41,29 @@ quoteAsset }),
 symbol: "SOLUSDT",
 baseAsset: solAsset,
 quoteAsset }),
+  new Market({ venue: "binance",
+symbol: "ADAUSDT",
+baseAsset: adaAsset,
+quoteAsset }),
+  new Market({ venue: "binance",
+symbol: "LINKUSDT",
+baseAsset: linkAsset,
+quoteAsset }),
+  new Market({ venue: "binance",
+symbol: "ZROUSDT",
+baseAsset: zroAsset,
+quoteAsset }),
 ]
 const marketsBySymbol = new Map(markets.map((market) => [market.symbol, market]))
 const marketsById = new Map(markets.map((market) => [market.id, market]))
 const assetsById = new Map([
   [quoteAsset.id, quoteAsset],
+  [feeAsset.id, feeAsset],
   [dogeAsset.id, dogeAsset],
   [solAsset.id, solAsset],
+  [adaAsset.id, adaAsset],
+  [linkAsset.id, linkAsset],
+  [zroAsset.id, zroAsset],
 ])
 
 function makeMarketMetadata(market) {
@@ -70,14 +96,17 @@ asset: quoteAsset }) },
   }
 }
 
-function createHarnessAppConfig({ externalOrdersPolicyBySymbol = {} } = {}) {
+function createHarnessAppConfig({
+  externalOrdersPolicyBySymbol = {},
+  symbols = ["DOGEUSDT", "SOLUSDT"],
+} = {}) {
   return {
     strategies: {
       [StrategyId.COIN_GRABBER]: {
         enabled: true,
         settings: { conservative: { enabled: true },
 aggressive: { enabled: false } },
-        pairs: Object.fromEntries(markets.map((market) => [market.symbol, {
+        pairs: Object.fromEntries(markets.filter((market) => symbols.includes(market.symbol)).map((market) => [market.symbol, {
           enabled: true,
           ...(externalOrdersPolicyBySymbol[market.symbol] === undefined
             ? {}
@@ -95,7 +124,7 @@ aggressive: { enabled: false } },
   }
 }
 
-function createHarnessBroker({ orders, cancelledOrderIds } = {}) {
+function createHarnessBroker({ orders, cancelledOrderIds, brokerOverrides = {} } = {}) {
   return {
     placeOrder: async ({ order }) => {
       orders.push(order)
@@ -144,14 +173,12 @@ asset: market.baseAsset }),
     },
     getFills: async () => ({ ok: true,
 data: [] }),
+    ...brokerOverrides,
   }
 }
 
-function createHarnessEngine({
-  broker,
+function createHarnessEnginePorts({
   portfolio,
-  strategyPolicy,
-  appConfig,
   recoveryLedgersByMarket,
   metadataBySymbol,
   quoteFreeBalance,
@@ -160,14 +187,8 @@ function createHarnessEngine({
   pauses,
   volatilityProtectionEnabled,
   onUnownedExternalOrderObserved,
-  initialState,
-  eventPublisher,
-} = {}) {
-  return makeConservativeTradingEngine({
-    broker,
-    strategyPolicy,
-    appConfig,
-    eventPublisher,
+}) {
+  return {
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId }) =>
       recoveryLedgersByMarket.get(marketId) ?? RecoveryLedger.empty({ market: marketsById.get(marketId) }),
@@ -210,12 +231,47 @@ reason }),
       ? () => ({ ok: false,
 error: new Error("test volatility snapshot unavailable") })
       : undefined,
+  }
+}
+
+function createHarnessEngine({
+  broker,
+  portfolio,
+  strategyPolicy,
+  appConfig,
+  recoveryLedgersByMarket,
+  metadataBySymbol,
+  quoteFreeBalance,
+  accountedFillIds,
+  accountedFills,
+  pauses,
+  volatilityProtectionEnabled,
+  onUnownedExternalOrderObserved,
+  initialState,
+  eventPublisher,
+} = {}) {
+  return makeConservativeTradingEngine({
+    broker,
+    strategyPolicy,
+    appConfig,
+    eventPublisher,
+    ...createHarnessEnginePorts({
+      portfolio,
+      recoveryLedgersByMarket,
+      metadataBySymbol,
+      quoteFreeBalance,
+      accountedFillIds,
+      accountedFills,
+      pauses,
+      volatilityProtectionEnabled,
+      onUnownedExternalOrderObserved,
+    }),
     initialState,
   })
 }
 
-async function initializeHarnessBooks({ engine } = {}) {
-  for (const market of markets) {
+async function initializeHarnessBooks({ engine, symbols = ["DOGEUSDT", "SOLUSDT"] } = {}) {
+  for (const market of markets.filter((candidate) => symbols.includes(candidate.symbol))) {
     await engine.processBookTicker({
       symbol: market.symbol,
       bookTicker: {
@@ -240,6 +296,8 @@ async function createHarness({
   externalOrdersPolicyBySymbol = {},
   onUnownedExternalOrderObserved,
   eventPublisher,
+  brokerOverrides,
+  symbols = ["DOGEUSDT", "SOLUSDT"],
 } = {}) {
   const orders = []
   const cancelledOrderIds = []
@@ -247,11 +305,16 @@ async function createHarness({
   const accountedFillIds = new Set()
   const accountedFills = []
   const portfolio = initialPortfolio ?? new Portfolio()
-  const metadataBySymbol = new Map(markets.map((market) => [market.symbol, makeMarketMetadata(market)]))
-  const appConfig = createHarnessAppConfig({ externalOrdersPolicyBySymbol })
+  const metadataBySymbol = new Map(markets.filter((market) => symbols.includes(market.symbol))
+    .map((market) => [market.symbol, makeMarketMetadata(market)]))
+  const appConfig = createHarnessAppConfig({
+    externalOrdersPolicyBySymbol,
+    symbols,
+  })
   const broker = createHarnessBroker({
     orders,
     cancelledOrderIds,
+    brokerOverrides,
   })
   const engine = createHarnessEngine({
     broker,
@@ -269,16 +332,21 @@ async function createHarness({
     initialState,
     eventPublisher,
   })
-  await initializeHarnessBooks({ engine })
-  return { engine,
-orders,
-pauses,
-accountedFills,
-cancelledOrderIds }
+  await initializeHarnessBooks({
+    engine,
+    symbols,
+  })
+  return {
+    engine,
+    orders,
+    pauses,
+    accountedFills,
+    cancelledOrderIds,
+  }
 }
 
-async function startBothMarkets(engine) {
-  for (const market of markets) {
+async function startBothMarkets({ engine, symbols = ["DOGEUSDT", "SOLUSDT"] } = {}) {
+  for (const market of markets.filter((candidate) => symbols.includes(candidate.symbol))) {
     const result = await engine.processMarketPrice({
       symbol: market.symbol,
       priceEvent: { symbol: market.symbol,
@@ -289,7 +357,81 @@ timestamp: 1 },
   }
 }
 
-function makePartialFillEvent({ order, tradeId, quantity, quoteQuantity }) {
+
+function makeOpenOrderSnapshot({ ownedOrder }) {
+  const openOrder = new Order({
+    symbol: ownedOrder.market.symbol,
+    type: ownedOrder.type,
+    side: ownedOrder.side,
+    quantity: Number(ownedOrder.originalQuantity.amount),
+    price: Number(ownedOrder.limitPrice.amount),
+    id: ownedOrder.brokerOrderId,
+    clientOrderId: ownedOrder.clientOrderId,
+  })
+  openOrder.originalQuantity = ownedOrder.originalQuantity.amount
+  openOrder.executedQuantity = ownedOrder.executedQuantity.amount
+  openOrder.status = ownedOrder.executedQuantity.amount === "0" ? "NEW" : "PARTIALLY_FILLED"
+  return openOrder
+}
+
+async function createReconciliationHarness({
+  symbols = ["DOGEUSDT", "SOLUSDT"],
+  startSymbols = symbols,
+} = {}) {
+  const harnessState = { engine: undefined }
+  const brokerOverrides = {
+    getOpenOrders: async ({ symbol }) => ({
+      ok: true,
+      data: harnessState.engine.getOrders()
+        .filter((ownedOrder) => ownedOrder.market.symbol === symbol)
+        .map((ownedOrder) => makeOpenOrderSnapshot({ ownedOrder })),
+    }),
+    getCanonicalOrderHistory: async ({ symbol, orderId }) => {
+      const ownedOrder = harnessState.engine.getOrders().find((order) =>
+        order.market.symbol === symbol && order.brokerOrderId === orderId)
+      return {
+        ok: true,
+        data: ownedOrder ? [ownedOrder] : [],
+      }
+    },
+    getFills: async () => ({
+      ok: true,
+      data: [],
+    }),
+  }
+  const harness = await createHarness({
+    brokerOverrides,
+    symbols,
+  })
+  harnessState.engine = harness.engine
+  await startBothMarkets({
+    engine: harnessState.engine,
+    symbols: startSymbols,
+  })
+  return harness
+}
+
+function createUnownedSolOrder() {
+  return new CanonicalOrder({
+    clientOrderId: "manual-sol-client",
+    brokerOrderId: "manual-sol-order",
+    market: marketsBySymbol.get("SOLUSDT"),
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "99.95",
+asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: solAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: solAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+function makePartialFillEvent({ order, tradeId, quantity, quoteQuantity, commissionAmount = "0.01", commissionAsset = feeAsset }) {
   const executedOrder = new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
@@ -316,7 +458,12 @@ asset: order.market.baseAsset }),
 asset: order.market.baseAsset }),
     quoteQuantity: new Money({ amount: quoteQuantity,
 asset: order.market.quoteAsset }),
-    commissions: [],
+    commissions: [new Commission({
+      amount: new Money({
+        amount: commissionAmount,
+        asset: commissionAsset,
+      }),
+    })],
     commissionStatus: "COMPLETE",
     executedAt: 2,
   })
@@ -401,26 +548,9 @@ test("a newly observed external order triggers symbol-scoped reconciliation with
       })
     },
   })
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
-  const solMarket = marketsBySymbol.get("SOLUSDT")
-  const unownedSolOrder = new CanonicalOrder({
-    clientOrderId: "manual-sol-client",
-    brokerOrderId: "manual-sol-order",
-    market: solMarket,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "99.95",
-asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1",
-asset: solAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: solAsset }),
-    status: "OPEN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
-  })
+  const unownedSolOrder = createUnownedSolOrder()
 
   const unowned = await engine.processUserDataEvent({
     event: { eventType: "executionReport",
@@ -461,7 +591,7 @@ executedOrder: unownedSolOrder },
 
 test("accounts the same broker trade ID independently for different markets", async () => {
   const { engine, accountedFills } = await createHarness()
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
   const solOrder = engine.getOrders().find((order) => order.market.symbol === "SOLUSDT")
   const dogeEvent = makePartialFillEvent({
@@ -515,7 +645,7 @@ tradeId: "shared-trade-id" },
 
 test("duplicate fills and stale order updates do not double-account across markets", async () => {
   const { engine, pauses, accountedFills } = await createHarness()
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
   const solOrder = engine.getOrders().find((order) => order.market.symbol === "SOLUSDT")
   const dogeEvent = makePartialFillEvent({
@@ -598,7 +728,7 @@ data: { durable: true } }),
     "An operator pause must not be represented as or overwrite a safety pause.",
   )
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({ symbol,
@@ -651,7 +781,7 @@ test("operator pause does not change in-memory state when the durable fact commi
     "A failed durable-fact append must leave the operator-pause projection unchanged.",
   )
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({ symbol,
@@ -668,7 +798,7 @@ side: "BUY" },
 
 test("operator pause leaves existing exchange orders untouched and suppresses trailing-BUY replacement", async () => {
   const { engine, orders } = await createHarness()
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   const beforePause = engine.getOrders().map(({ clientOrderId, status, market }) => ({
     clientOrderId,
     status,
@@ -736,7 +866,7 @@ test("operator pause restored from durable facts is active before the first mark
     "A restored operator pause must be available before any market event is evaluated.",
   )
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({ symbol,
@@ -811,6 +941,154 @@ function createOperatorPauseStrategyPolicy() {
   }
 }
 
+
+function createFilledCancellationOrder({ order }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market: order.market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: order.originalQuantity,
+    status: "FILLED",
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+}
+
+function createCancellationRaceFill({ order }) {
+  return new Fill({
+    tradeId: "doge-cancel-race",
+    brokerOrderId: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+    market: order.market,
+    side: "BUY",
+    price: order.limitPrice,
+    quantity: order.originalQuantity,
+    quoteQuantity: new Money({
+      amount: "99.95",
+      asset: order.market.quoteAsset,
+    }),
+    commissions: [new Commission({
+      amount: new Money({
+        amount: "0.01",
+        asset: feeAsset,
+      }),
+    })],
+    commissionStatus: "COMPLETE",
+    executedAt: 2,
+  })
+}
+
+function createCancellationRaceBrokerOverrides({ harnessState }) {
+  return {
+    cancelOrder: async ({ order }) => ({
+      ok: true,
+      data: createFilledCancellationOrder({ order }),
+    }),
+    getFills: async ({ symbol, orderId }) => {
+      const order = harnessState.engine.getOrders().find((candidate) =>
+        candidate.market.symbol === symbol && candidate.brokerOrderId === orderId)
+      return {
+        ok: true,
+        data: [createCancellationRaceFill({ order })],
+      }
+    },
+  }
+}
+
+test("a fill racing owned-BUY cancellation is applied once with its actual commission facts", async () => {
+  const harnessState = { engine: undefined }
+  const brokerOverrides = createCancellationRaceBrokerOverrides({ harnessState })
+  const harness = await createHarness({ brokerOverrides })
+  harnessState.engine = harness.engine
+  await startBothMarkets({
+    engine: harnessState.engine,
+    symbols: ["DOGEUSDT"],
+  })
+  const result = await harnessState.engine.cancelOwnedBuyOrdersForShutdown({
+    symbol: "DOGEUSDT",
+  })
+
+  assert.equal(result.ok, true, "A FILLED cancellation race must complete after authoritative fill reconciliation.")
+  assert.equal(harness.accountedFills.length, 1, "The terminal cancellation fill must be applied exactly once.")
+  assert.equal(harness.accountedFills[0].tradeId, "doge-cancel-race")
+  assert.equal(harness.accountedFills[0].commissions[0].amount.asset.id, feeAsset.id)
+  assert.equal(harness.accountedFills[0].commissions[0].amount.amount, "0.01")
+  assert.equal(
+    harnessState.engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT").status,
+    "FILLED",
+  )
+})
+
+function compareActiveOrderDescriptions(...entries) {
+  const [left, right] = entries
+  return `${left.symbol}:${left.side}`.localeCompare(`${right.symbol}:${right.side}`)
+}
+
+function describeActiveOrders({ engine }) {
+  return engine.getActiveOrders()
+    .map((order) => ({
+      symbol: order.market.symbol,
+      side: order.side,
+    }))
+    .sort(compareActiveOrderDescriptions)
+}
+
+async function createShutdownSellCancellationHarness() {
+  const dogeMarket = marketsBySymbol.get("DOGEUSDT")
+  const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market: dogeMarket })
+  const strategyPolicy = createOperatorPauseStrategyPolicy()
+  const { engine } = await createHarness({
+    portfolio,
+    strategyPolicy,
+    recoveryLedgersByMarket: new Map([[dogeMarket.id, recoveryLedger]]),
+  })
+  await startBothMarkets({ engine })
+  engine.beginShutdown()
+  return engine
+}
+
+test("shutdown owned-BUY cancellation leaves an active recovery SELL untouched", async () => {
+  const engine = await createShutdownSellCancellationHarness()
+  const before = describeActiveOrders({ engine })
+  assert.deepEqual(before, [
+    {
+      symbol: "DOGEUSDT",
+      side: "BUY",
+    },
+    {
+      symbol: "DOGEUSDT",
+      side: "SELL",
+    },
+    {
+      symbol: "SOLUSDT",
+      side: "BUY",
+    },
+  ])
+
+  const cancellation = await engine.cancelOwnedBuyOrdersForShutdown({
+    symbol: "DOGEUSDT",
+  })
+
+  assert.equal(cancellation.ok, true)
+  assert.equal(cancellation.data.canceled, 1)
+  assert.deepEqual(describeActiveOrders({ engine }), [
+    {
+      symbol: "DOGEUSDT",
+      side: "SELL",
+    },
+    {
+      symbol: "SOLUSDT",
+      side: "BUY",
+    },
+  ])
+})
+
 test("operator pause preserves recovery SELL execution while suppressing the same market's BUY", async () => {
   const dogeMarket = marketsBySymbol.get("DOGEUSDT")
   const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market: dogeMarket })
@@ -838,7 +1116,7 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
   )
   
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   
   assert.deepEqual(
@@ -961,7 +1239,7 @@ data: { durable: true } }
     "The in-memory operator pause may be removed only after durable resume acknowledgement.",
   )
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({ symbol,
@@ -1036,7 +1314,7 @@ data: { durable: true } }
 
 test("tracks Conservative shutdown safety independently for every market", async () => {
   const harness = await createHarness()
-  await startBothMarkets(harness.engine)
+  await startBothMarkets({ engine: harness.engine })
   harness.engine.beginShutdown()
 
   const dogeCancellation = await harness.engine.cancelOwnedBuyOrdersForShutdown({
@@ -1093,7 +1371,7 @@ test("per-market emergency BUY pause cancels only that market's owned BUY and le
       }),
     },
   })
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   const paused = await engine.pauseBuys({
     symbol: "DOGEUSDT",
@@ -1145,7 +1423,7 @@ test("global emergency BUY pause cancels all owned BUYs and suppresses new BUYs 
       }),
     },
   })
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   const paused = await engine.pauseBuys({
     beforeApply: async () => ({
@@ -1158,7 +1436,7 @@ test("global emergency BUY pause cancels all owned BUYs and suppresses new BUYs 
   assert.equal(paused.data.canceled, 2, "The global BUY pause must cancel both markets' active owned BUY orders.")
   assert.equal(engine.getActiveOrders().filter((order) => order.side === "BUY").length, 0, "No active owned BUY may remain after a successful global emergency pause.")
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.equal(orders.length, 2, "A global BUY pause must prevent both markets from submitting replacement BUY orders.")
   assert.equal(engine.getOperatorBuyPauseState().allBuysPaused, true, "The global BUY pause state must remain visible until explicitly resumed.")
@@ -1199,7 +1477,7 @@ test("global and market BUY pauses remain independent when either scope is resum
   assert.equal(globalResume.ok, true, "The global BUY pause must be independently resumable.")
   assert.deepEqual(engine.getOperatorBuyPauseState().pausedMarkets, [], "Resuming both scopes must leave no emergency market BUY pause active.")
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   assert.equal(orders.length, 2, "BUY submissions may resume only after both independent pause scopes have been cleared.")
 })
 
@@ -1228,7 +1506,7 @@ test("emergency BUY pause preserves recovery SELL submission while blocking the 
   })
   assert.equal(paused.ok, true, "The emergency BUY gate must be active before the recovery decision is evaluated.")
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({
@@ -1261,7 +1539,7 @@ test("global emergency BUY pause never cancels an unowned external order", async
       }),
     },
   })
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   const solMarket = marketsBySymbol.get("SOLUSDT")
   const externalOrder = new CanonicalOrder({
     clientOrderId: "manual-sol-client",
@@ -1340,4 +1618,220 @@ test("resuming the global BUY pause does not clear a market-specific BUY pause",
   })
   assert.equal(marketResume.ok, true)
   assert.equal(marketResume.data.stillPaused, false, "The market gate clears only after its own resume command.")
+})
+
+
+test("the four-market incident fixture reconciles one market without pausing the other three", async () => {
+  const symbols = ["ADAUSDT", "DOGEUSDT", "LINKUSDT", "ZROUSDT"]
+  const { engine } = await createReconciliationHarness({ symbols })
+
+  assert.deepEqual(
+    engine.getOrders().map((order) => order.market.symbol).sort(),
+    [...symbols].sort(),
+    "The incident fixture must begin with an owned order in each of ADA, DOGE, LINK and ZRO.",
+  )
+
+  const result = await engine.reconcileOwnedOrders({
+    symbol: "DOGEUSDT",
+  })
+
+  assert.equal(
+    result.ok,
+    true,
+    "A DOGE-only REST snapshot must not be rejected because ADA, LINK and ZRO orders remain in the global registry.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    [],
+    "Unrelated markets in the four-market incident fixture must not trigger a false registry-race pause.",
+  )
+})
+
+test("symbol-scoped REST reconciliation ignores owned orders from unrelated markets", async () => {
+  const { engine } = await createReconciliationHarness()
+
+  const result = await engine.reconcileOwnedOrders({
+    symbol: "DOGEUSDT",
+  })
+
+  assert.equal(
+    result.ok,
+    true,
+    "DOGEUSDT reconciliation must succeed while an unrelated SOLUSDT owned order remains in the global registry.",
+  )
+  assert.equal(
+    result.data.reconciled,
+    1,
+    "A DOGEUSDT snapshot must reconcile only the one owned DOGEUSDT order.",
+  )
+  assert.deepEqual(
+    result.data.symbols,
+    ["DOGEUSDT"],
+    "A symbol-scoped reconciliation result must retain only the requested market.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    [],
+    "An unrelated SOLUSDT registry entry must not pause either market during DOGEUSDT reconciliation.",
+  )
+})
+
+test("concurrent symbol-scoped REST reconciliations do not invalidate each other's snapshots", async () => {
+  const { engine } = await createReconciliationHarness()
+
+  const [dogeResult, solResult] = await Promise.all([
+    engine.reconcileOwnedOrders({ symbol: "DOGEUSDT" }),
+    engine.reconcileOwnedOrders({ symbol: "SOLUSDT" }),
+  ])
+
+  assert.equal(
+    dogeResult.ok,
+    true,
+    "The DOGEUSDT snapshot must apply even while SOLUSDT has an independent reconciliation in flight.",
+  )
+  assert.equal(
+    solResult.ok,
+    true,
+    "The SOLUSDT snapshot must apply even while DOGEUSDT has an independent reconciliation in flight.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    [],
+    "Concurrent reconciliation of different markets must not create a false REST_STREAM_REGISTRY_RACE pause.",
+  )
+})
+
+test("symbol-scoped REST reconciliation still rejects a same-market fill racing snapshot application", async () => {
+  const { engine, accountedFills } = await createReconciliationHarness()
+  const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
+
+  const result = await engine.reconcileOwnedOrders({
+    symbol: "DOGEUSDT",
+    beforeApply: async () => {
+      const fillEvent = makePartialFillEvent({
+        order: dogeOrder,
+        tradeId: "doge-snapshot-race",
+        quantity: "0.4",
+        quoteQuantity: "39.98",
+      })
+      const fillResult = await engine.processUserDataEvent({ event: fillEvent })
+      assert.equal(
+        fillResult.ok,
+        true,
+        "The same-market stream fill must be accepted before the previously collected REST snapshot is applied.",
+      )
+    },
+  })
+
+  assert.equal(
+    result.ok,
+    false,
+    "A REST snapshot collected before a same-market execution must fail closed rather than overwrite newer registry state.",
+  )
+  assert.match(
+    result.errors[0].message,
+    /REST order history is behind the registered cumulative execution quantity/,
+    "The failure must identify the stale same-market REST execution quantity.",
+  )
+  assert.deepEqual(
+    accountedFills.map((fill) => fill.tradeId),
+    ["doge-snapshot-race"],
+    "The stream execution racing reconciliation must be applied exactly once before the stale REST snapshot is rejected.",
+  )
+  assert.equal(
+    accountedFills[0].commissions[0].amount.asset.id,
+    feeAsset.id,
+    "The execution racing reconciliation must retain its actual third-asset commission identity.",
+  )
+  assert.equal(
+    accountedFills[0].commissions[0].amount.amount,
+    "0.01",
+    "The execution racing reconciliation must retain its actual commission amount.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    ["DOGEUSDT"],
+    "Only the market whose REST snapshot became stale must enter the reconciliation safety pause.",
+  )
+})
+
+
+test("explicit reconciliation scope detects an order added in a requested market absent from the initial snapshot", async () => {
+  const { engine } = await createReconciliationHarness({
+    symbols: ["DOGEUSDT", "SOLUSDT"],
+    startSymbols: ["DOGEUSDT"],
+  })
+
+  const result = await engine.reconcileOwnedOrders({
+    symbols: ["DOGEUSDT", "SOLUSDT"],
+    beforeApply: async () => {
+      const added = await engine.processMarketPrice({
+        symbol: "SOLUSDT",
+        priceEvent: {
+          symbol: "SOLUSDT",
+          price: "100",
+          timestamp: 2,
+        },
+      })
+      assert.equal(
+        added.ok,
+        true,
+        "The requested but initially empty SOLUSDT market must be able to register an order during the REST collection window.",
+      )
+    },
+  })
+
+  assert.equal(
+    result.ok,
+    false,
+    "A newly registered SOLUSDT order must invalidate a snapshot scoped to both DOGEUSDT and SOLUSDT even though the initial snapshot contained only DOGEUSDT.",
+  )
+  assert.match(
+    result.errors[0].message,
+    /Order registry changed while REST reconciliation was in progress/,
+    "The new same-scope order must fail the registry-membership parity check.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    ["SOLUSDT"],
+    "The registry race must pause the market where the new owned order appeared.",
+  )
+})
+
+test("unfiltered REST reconciliation retains global registry race detection", async () => {
+  const { engine } = await createReconciliationHarness()
+  const solOrder = engine.getOrders().find((order) => order.market.symbol === "SOLUSDT")
+
+  const result = await engine.reconcileOwnedOrders({
+    beforeApply: async () => {
+      const fillEvent = makePartialFillEvent({
+        order: solOrder,
+        tradeId: "sol-global-snapshot-race",
+        quantity: "0.4",
+        quoteQuantity: "39.98",
+      })
+      const fillResult = await engine.processUserDataEvent({ event: fillEvent })
+      assert.equal(
+        fillResult.ok,
+        true,
+        "The SOL stream fill must be accepted before an unfiltered REST snapshot is applied.",
+      )
+    },
+  })
+
+  assert.equal(
+    result.ok,
+    false,
+    "An unfiltered reconciliation must still compare every market in the global registry.",
+  )
+  assert.match(
+    result.errors[0].message,
+    /REST order history is behind the registered cumulative execution quantity/,
+    "The global snapshot must reject a newer SOL execution fact.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    ["SOLUSDT"],
+    "A global reconciliation failure must identify and pause the market with the newer execution fact.",
+  )
 })

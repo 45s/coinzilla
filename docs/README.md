@@ -1,6 +1,6 @@
 # Repository documentation
 
-This index is the entry point for maintained repository documentation. The repository-wide migration/adoption work is tracked in [#795](https://github.com/45s/coinzilla/issues/795). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
+This index is the entry point for maintained repository documentation. The governance foundation and umbrella tracking live in [#795](https://github.com/45s/coinzilla/issues/795). Full-tree Markdown style and maintained-source anchor enforcement is complete in [#1402](https://github.com/45s/coinzilla/issues/1402) (implemented in [PR #1434](https://github.com/45s/coinzilla/pull/1434)); remaining work is split into the maintained-content audit [#1401](https://github.com/45s/coinzilla/issues/1401) and reference/consolidation audit [#1403](https://github.com/45s/coinzilla/issues/1403). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
 
 ## Start here
 
@@ -12,13 +12,15 @@ This index is the entry point for maintained repository documentation. The repos
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
 - [Markdown style standard](MARKDOWN_STYLE.md) — consistent formatting and authoring conventions
-- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (currently 147 tracked Markdown/MDX files on `develop`; PR #1267 adds one pending Harvester ADR)
+- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (160 tracked Markdown/MDX files on `develop` at `543753d`; 89 under Harvester and 71 elsewhere)
 
 ## Repository-wide engineering
 
 - [Engineering documentation index](engineering/README.md)
 - [Architecture and decisions](architecture/README.md)
 - [ADR-0002: Explicit Binance trading environment](architecture/decisions/ADR-0002-explicit-binance-trading-environment.md)
+- [ADR-0003: Explicit multi-provider execution and market-data routing](architecture/decisions/ADR-0003-multi-provider-routing.md)
+- [Multi-provider migration audit and implementation plan](architecture/multi-provider-migration-plan.md) — source-verified audit, capability matrix, persistence assessment and implementation phases for #1339.
 - [Domain ownership](engineering/DOMAIN_OWNERSHIP.md)
 - [Task workflows](engineering/TASK_WORKFLOWS.md)
 - [AI refactoring and code audit standard](engineering/AI_REFACTORING_AUDIT_STANDARD.md)
@@ -54,7 +56,7 @@ Each active application/package owns its local README, agent instructions, roadm
 ## Shared package entry points
 
 - [Brokers](../packages/brokers/README.md) — exchange integration and broker operations
-- [Database](../packages/db/README.md) — SQLite persistence infrastructure
+- [Database](../packages/db/README.md) — provider-neutral CRUD infrastructure with built-in SQLite provider
 - [Entities](../packages/entities/README.md) — exchange-neutral domain contracts and financial value objects
 - [Event Bus](../packages/event-bus/README.md) — bounded in-process event delivery
 - [Indicators](../packages/indicators/README.md) — exchange-neutral technical indicator calculations

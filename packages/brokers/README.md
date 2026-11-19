@@ -1,8 +1,8 @@
-# Binance WebSocket broker operations
+# Broker provider operations
 
-For mandatory Bitunix reference-project audits before implementing any Spot capability, read [Brokers agent instructions — Bitunix Spot development](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit). The reference projects are [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) (primary C# implementation and tests) and [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp) (secondary TypeScript REST/signing example); official Bitunix documentation remains authoritative.
+For every Bitunix Spot capability, follow the [mandatory reference-first workflow](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit) and consult the maintained [Bitunix external implementation reference audit](./BITUNIX_REFERENCE_AUDIT.md). Start with [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) and [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp); search additional C#, TypeScript, Python, Go and Ruby implementations when coverage is missing or references disagree. The audit records source paths, fixtures, known defects, parity status and safe implementation picks. Official Bitunix Spot documentation remains authoritative.
 
-For the package's target DDD structure, dependency rules, responsibility map, and migration phases, see [Architecture](./ARCHITECTURE.md) and the execution status in [Roadmap](./ROADMAP.md#14-mandatory-autonomous-ddd-refactoring-execution).
+For the package's target DDD structure and ownership boundaries, see [Architecture](./ARCHITECTURE.md). The exchange-neutral public method, result, error, capability, and compatibility contracts are specified in [BROKER_API.md](./BROKER_API.md); execution status is in [Roadmap](./ROADMAP.md).
 
 The active Binance implementation is `BinanceWebSocketBroker`. It uses two independent native Node.js WebSocket connections:
 
@@ -19,7 +19,7 @@ The public Streams client monitors both connection and logical market-stream del
 - Each `subscribeForPrices()` subscription listens to the symbol's `aggTrade` stream and the shared `!ticker_1h@arr` all-market rolling-window ticker stream. It compares the ticker's last raw trade ID (`L`) with the aggregate stream's last covered trade ID (`l`).
 - If `L` advances beyond `l`, the broker waits five seconds for delivery to catch up. It then resubscribes only the affected symbol's `aggTrade` stream, with a maximum of three attempts per 60 seconds. Further attempts require a genuinely newer ticker trade ID; repeated updates with the same ID do not retry. A recovered stream resets its attempt budget.
 - No new ticker trade ID means no evidence of a missed trade, so an inactive market is not automatically treated as a broken stream. No ticker price fallback or REST fallback is used.
-- `BinanceStreamsClient.diagnostics` reports connection state/generation, heartbeat age, desired/confirmed subscriptions, and per-stream last-message receipt age. Harvester still owns the fail-closed price-freshness gate and all trading decisions.
+- `BinanceStreamsClient.diagnostics` reports connection state/generation, heartbeat age, desired/confirmed subscriptions, and per-stream last-message receipt age. Consumers own fail-closed price-freshness gates and all trading decisions.
 
 See the detailed [Binance WebSocket contract](../../docs/brokers-websocket-contract.md#public-market-data-liveness-and-recovery) for protocol details and known limits.
 
@@ -29,18 +29,64 @@ The `@coinzilla/brokers` entry point exports:
 
 - `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
+- `BitunixSpotBroker` and `BitunixSpotConfig` — the partial Bitunix Spot REST broker implementation and its validated configuration.
+- `BitunixSpotWebSocketClient` and `BitunixWebSocketError` — a separately managed, authenticated Spot WebSocket request/response RPC client; it does not add subscriptions or order mutations.
 - `CoreBroker` — the existing compatibility base class; it is not a formal application-owned broker port.
-- `normalizeBinanceId` — exact non-negative Binance identifier normalization, also used by the Harvester infrastructure adapter.
+- `normalizeBinanceId` — exact non-negative Binance identifier normalization, exported for package consumers that need the same identifier contract.
+- `BrokerCapabilities`, `BROKER_CAPABILITY_TYPES`, `BROKER_CAPABILITY_STATUSES` — the canonical immutable provider capability declaration contract.
+- `BrokerUnsupportedOperationError` — stable typed error for explicitly unsupported operations.
+- `BROKER_METHODS`, `BROKER_COMPATIBILITY_METHODS`, `BROKER_MUTATION_OUTCOMES`, `assertBrokerContract`, `getBrokerMutationOutcome` — structural API, compatibility, and mutation-outcome contract helpers.
 
-Keep exchange-specific operations behind the Binance adapter. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
+## Exchange-neutral Broker API
+
+Both `BinanceWebSocketBroker` and `BitunixSpotBroker` expose the same structural method surface. The public contract does not require `CoreBroker` inheritance; `CoreBroker` remains a compatibility base for existing consumers, including Market Simulator.
+
+Both providers expose an immutable `BrokerCapabilities` declaration. The canonical three statuses are `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; environment selection and runtime readiness are metadata/conditions, never a fourth status. Supported declarations require method and guarantee evidence; unsupported/unknown declarations require reasons.
+
+Unsupported methods remain present and return a typed `BrokerUnsupportedOperationError` inside a failed result. They never silently no-op or fabricate successful empty data. State-changing methods expose `mutationOutcome` so callers can distinguish `NOT_SENT`, `REJECTED`, `CONFIRMED`, and `OUTCOME_UNKNOWN`.
+
+The public Brokers capability exports are compatibility re-exports of the canonical `BrokerCapabilities` contract from `@coinzilla/entities`. Provider adapters supply provider/product/environment identity and evidence metadata through that shared class. There is one capability vocabulary, three-state status model, validator, lookup implementation, and serializer; Brokers does not maintain a competing capability class.
+
+See [BROKER_API.md](./BROKER_API.md) for the full method-by-method Binance/Bitunix matrix, canonical and compatibility operations, result/error semantics, decimal/timestamp guarantees, pagination, lifecycle, and safety boundaries.
+
+### Provider instances and routing ownership
+
+The package exposes exchange-specific broker implementations; it does not select which exchange a strategy or market should use. A consuming application owns its application port and composition root, constructs the named provider instances it needs, and owns any strategy/market execution routing and independent market-data routing.
+
+Multiple instances of one provider type may represent different accounts or supported environments. Keep provider-specific options and endpoint selection inside the matching implementation. Binance requires explicit `TRADING_MODE=testnet|live`; this rule does not define another exchange's environment support.
+
+Application-specific provider selection, registries, account isolation, and execution/market-data routing belong to each consuming application and are outside this package. The Binance capability-declaration slice is delivered by [PR #1366](https://github.com/45s/coinzilla/pull/1366). The Bitunix Spot class does not yet implement the complete order, fill, and account lifecycle; do not infer order capability from the public class or `CoreBroker` methods.
+Keep exchange-specific operations behind their provider adapters. Consumers should depend on their own narrow application port rather than treating `CoreBroker` as a complete cross-exchange contract.
 
 ## Bitunix Spot integration
 
-The Bitunix implementation is currently **read-only**. It supports market catalog/metadata, canonical balances (`getBalances()`), legacy non-zero `Coin` values (`getAssets()`), latest-price lookup, per-symbol pending orders and order history, and order detail. Pending-order reads accept the documented single-object and array row shapes, preserve an explicit empty array as no open orders, and reject missing or `null` response data rather than treating an undocumented response as an empty account. Bitunix documents broker `orderId` values as strings; Coinzilla also retains compatibility with safe-integer numeric IDs, but rejects unsafe numeric IDs before order lookup or order adaptation to avoid silently rounded identities. `getAssets()` reads the same account endpoint, combines free and locked amounts exactly before converting to the legacy JavaScript `Number`-based `Coin.value` shape, and omits exact zero balances. Use `getBalances()` for exact decimal amounts and financial calculations; the legacy `getAssets()` result is compatibility-only. `getFills()` deliberately returns an unsupported result without making a request: the Spot `order/deal/list` response does not define whether `volume` is base or quote quantity, whether one object covers every partial execution, or whether `id` is stable/unique for durable deduplication. A canonical Fill cannot be constructed safely until Bitunix clarifies those semantics. PR #1205 previously added a `dealVolume`/response-presence guard and PR #1220 rejected undocumented array responses, but neither proved fill completeness or quantity denomination. Order-history queries accept the canonical `status`, `side`, and `type` filters; the adapter translates them to Bitunix's numeric API codes. The adapter validates the non-negative `total`, positive integer `pageNum` (string or number), and returned page identity; an omitted `data` array is normalized only when `total` is zero. It still returns one page and does not sort or auto-paginate because Bitunix does not document ordering, snapshot consistency, or completion semantics. Bitunix's Spot pair catalog does not include a symbol field, so the adapter derives the exchange symbol by concatenating the documented base and quote codes (for example, BTC + USDT → BTCUSDT); order/price APIs use that pair form. The active catalog includes only pairs explicitly marked open; missing or unknown open-state values are excluded. The last-price endpoint must return a strictly positive decimal string; the adapter preserves that string exactly in the Binance-compatible `{ symbol, price }` response shape. The REST account response documents balances as JSON numbers; the transport preserves the raw numeric tokens as decimal strings before entity construction to avoid JavaScript number rounding. Order-history queries accept the canonical `status`, `side`, and `type` filters; the adapter translates them to Bitunix's numeric API codes. The adapter validates the non-negative `total`, positive integer `pageNum` (string or number), and returned page identity; an omitted `data` array is normalized only when `total` is zero. It still returns one page and does not sort or auto-paginate because Bitunix does not document ordering, snapshot consistency, or completion semantics. Bitunix's Spot pair catalog does not include a symbol field, so the adapter derives the exchange symbol by concatenating the documented base and quote codes (for example, BTC + USDT → BTCUSDT); order/price APIs use that pair form. The active catalog includes only pairs explicitly marked open; missing or unknown open-state values are excluded. The last-price endpoint must return a strictly positive decimal string; the adapter preserves that string exactly in the Binance-compatible `{ symbol, price }` response shape. The REST account response documents balances as JSON numbers; the transport preserves the raw numeric tokens as decimal strings before entity construction to avoid JavaScript number rounding.
+The Spot pair catalog is a public, unsigned `GET /api/spot/v1/common/coin_pair/list` used by both `getExchangeMarkets()` and `getSymbolFilters({ symbol })`. The market list includes only pairs explicitly marked open; unknown/closed statuses are excluded. Symbol-filter lookup returns the unique matching raw Bitunix metadata row plus the normalized `symbol`, not a Binance filter DTO. It requires valid `base`/`quote` identity, rejects duplicate rows and a supplied non-matching symbol, and validates documented optional numeric metadata without converting its raw representation. `minPrice` and `minVolume` must be exact non-negative decimal strings when supplied; missing/null values remain unknown and explicit zero is preserved. `basePrecision`/`quotePrecision` are safe non-negative precision counts, and `precisions` is retained as a validated decimal-string list. None of these precision fields is treated as `tickSize`, `stepSize`, or a depth aggregation increment. Undocumented maximum fields found only in third-party fixtures are preserved but not promoted to canonical limits. Application-specific metadata mapping is outside this package. Unsupported increments and maxima remain unknown.
 
-It intentionally does not support order placement or cancellation, canonical order lookup/history, account snapshots, server time, or continuous price subscriptions. The documented Spot API has no exchange-side client order ID, no private order/execution push stream, no account source timestamp, and no account-wide pending-order query. The single-order REST endpoint says limit `volume` is quote quantity and market `volume` is base quantity; the REST batch-order endpoint and WebSocket order API document the inverse. The inconsistency exists within the REST docs as well as across transports. No Spot TESTNET endpoint is documented.
+The Bitunix adapter also exposes three one-shot public market-data reads:
 
-These are hard lifecycle constraints, not missing convenience methods. Unsupported mutations do not send requests. Do not enable Bitunix for Harvester trading until stable order identity, private lifecycle/reconciliation, and order quantity semantics are confirmed. See [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) and [Bitunix Spot API docs](https://www.bitunix.com/api-docs/spots/en_us/).
+- `getOrderBook({ symbol, precision })` calls the documented Spot depth endpoint. The caller must supply the required numeric precision; Coinzilla does not guess which aggregation precision to select. Source level prices/volumes remain exact decimal strings, and the optional source timestamp is preserved as text.
+- `getKlines({ symbol, interval })` reads the current OHLC row. `getKlineHistory({ symbol, interval, endTime, limit })` reads one historical page; `endTime` is Unix seconds and `limit` is 1–500. The history endpoint does not document `startTime` or cursor pagination.
+- These Bitunix-specific methods return validated OHLC/depth data, not Binance-normalized streams. The official Spot K-line schema omits volume, so `getCandles()` remains unsupported rather than fabricating OHLCV candles. No continuous book-ticker or price subscription is implied.
+
+The Bitunix-only `getExchangeRates()` extension reads `GET /api/spot/v1/common/rate/list` without authentication or query parameters. It returns a frozen array of frozen `{ baseSymbol, quoteSymbol, rate }` records, preserves positive decimal-string rates exactly, accepts an explicit empty array, and rejects missing or incomplete data. The official response schema marks `data` and its row fields optional; this adapter deliberately applies the stricter fail-closed Coinzilla contract rather than treating missing fields as valid rates.
+
+The Bitunix-only `getDeposits({ id?, coin?, type?, transactionHash?, startTime?, endTime?, limit? })` extension reads one signed page query from `POST /api/spot/v1/deposit/page`. It accepts the documented `deposit` and `inside_transfer_in` type filters, requires an explicit `type: "deposit"` when filtering by transaction hash, and accepts Unix-millisecond time bounds plus a limit from 1 to 100 (exchange default 100). The endpoint exposes no cursor or page-number parameter, so the method never paginates or claims complete history. Records are immutable; IDs and decimal amounts are preserved as strings even when the JSON response encodes them as numbers. Raw type/status strings and address/UID strings are retained without guessed normalization. The official schema describes `data` as an object while its example and JKorf's DTO/fixture use an array; the adapter accepts either shape and returns an array. This is a Bitunix-only account-history extension, not Binance parity and not a withdrawal, funds-transfer, or order-mutation capability.
+
+The Bitunix-only `getDepositAddress({ coin, network })` extension reads the address list for one explicitly selected coin/network using a signed `POST /api/spot/v1/deposit/address`. Both non-empty string inputs are required; the adapter does not guess or auto-select a network. It returns an immutable array, accepts an explicit empty array, and rejects missing/null/non-array data, malformed rows, or records whose coin/network differ from the request. Every returned address is preserved exactly; optional memo values remain omitted, null, or string (including an empty string) exactly as received. The endpoint documents a 10 requests/second per-IP limit; Coinzilla sends one request per invocation, does not paginate or retry, and callers must avoid polling above that limit. Addresses and memos are caller-visible sensitive values and are never logged or persisted. This method only retrieves existing deposit details; it does not generate an address, deposit funds, or move funds. It is a Bitunix-only extension, not Binance parity.
+
+The Bitunix-only `getWithdrawalHistory({ id?, outBizId?, coin?, type?, transactionHash?, startTime?, endTime?, remark?, limit? })` extension reads one signed page query from `POST /api/spot/v1/withdraw_transfer/page`, which includes on-chain withdrawals and internal-transfer-out records. It accepts the documented `withdraw` and `inside_transfer_out` types; a transaction-hash filter requires explicit `type: "withdraw"`. Time bounds are Unix milliseconds and the limit is 1–100 (exchange default 100). No cursor/page parameter is documented, so the method never paginates or claims complete history. The official schema says `data` is an object while the example and JKorf model/fixture use an array; both are accepted. The schema uses `toAddress`, while the example/JKorf use `address`; the raw `address` field is retained and copied exactly to `toAddress` when that alias is needed. Fee and fee-coin fields remain nullable as shown by the example. Numeric IDs, recipient UIDs and decimal amount/fee tokens are preserved losslessly as strings. Recipient addresses, UIDs, phone numbers, email addresses and remarks are caller-visible opaque data and are never logged or persisted by this method. This is a Bitunix-only query extension, not a withdrawal/transfer mutation or Binance parity.
+
+The Bitunix-only `getMatchingOrderDetails({ orderId, symbol })` extension makes one signed `POST /api/spot/v1/order/deal/list` for a known order and returns the immutable exchange-native `{ volume, price, fee, feeCoin, role, ctime, id }` record. An explicit `data: null` remains `null`; missing data, arrays, incomplete records and malformed decimals/timestamps fail closed. Raw numeric ID, role and decimal tokens are preserved as strings before JSON parsing can round them. This lookup does not interpret `volume` units, promote `id` to a canonical execution ID, or claim that the record covers every partial execution. It is not `getFills()` or `getMyTrades()`, and does not satisfy the full order/fill lifecycle contract.
+
+The current Bitunix implementation exposes market catalog/metadata, canonical balances (`getBalances()`), legacy non-zero `Coin` values (`getAssets()`), latest-price and exchange-rate lookup, deposit-address and deposit/withdrawal history queries, raw per-order matching-order details, per-symbol pending orders and order history, and order detail. Direct legacy `createOrder()` supports LIMIT/MARKET on the single-order REST endpoint; `cancelOrder()` and symbol-scoped `cancelAllOpenOrders({ symbol })` are implemented with post-mutation order-detail verification. All live order mutations are disabled by default and require `allowLiveOrderMutations: true` in `BitunixSpotConfig` to opt in explicitly. Canonical placement, canonical fills, and the complete private-event/account lifecycle required for Harvester execution remain unsupported. Pending-order reads accept the documented single-object and array row shapes, preserve an explicit empty array as no open orders, and reject missing or `null` response data rather than treating an undocumented response as an empty account. Unknown non-empty order status codes are normalized to `UNKNOWN` and retained in `exchangeStatus`; missing or malformed status values remain invalid. Bitunix documents broker `orderId` values as strings; Coinzilla also retains compatibility with safe-integer numeric IDs, but rejects unsafe numeric IDs before order lookup or order adaptation to avoid silently rounded identities. `getAssets()` reads the same account endpoint, combines free and locked amounts exactly before converting to the legacy JavaScript `Number`-based `Coin.value` shape, and omits exact zero balances. Use `getBalances()` for exact decimal amounts and financial calculations; the legacy `getAssets()` result is compatibility-only. `getFills()` deliberately returns an unsupported result without making a request: the Spot `order/deal/list` response does not define whether `volume` is base or quote quantity, whether one object covers every partial execution, or whether `id` is stable/unique for durable deduplication. A canonical Fill cannot be constructed safely until Bitunix clarifies those semantics. PR #1205 previously added a `dealVolume`/response-presence guard and PR #1220 rejected undocumented array responses, but neither proved fill completeness or quantity denomination. Order-history queries accept the canonical `status`, `side`, and `type` filters; the adapter translates them to Bitunix's numeric API codes. The adapter requires positive safe-integer request `page` and optional `limit` values before I/O, then validates the non-negative `total`, positive integer `pageNum` (string or number), and returned page identity; an omitted `data` array is normalized only when `total` is zero. It still returns one page and does not sort or auto-paginate because Bitunix does not document ordering, snapshot consistency, or completion semantics. Bitunix's Spot pair catalog does not include a symbol field, so the adapter derives the exchange symbol by concatenating the documented base and quote codes (for example, BTC + USDT → BTCUSDT); order/price APIs use that pair form. If an optional `symbol` field is present, it must match that derived pair identity; contradictory metadata is rejected. If an optional `symbol` field is present (as in the JKorf reference fixture), it must match that derived pair identity; contradictory metadata is rejected. The active catalog includes only pairs explicitly marked open; missing or unknown open-state values are excluded. The last-price endpoint must return a strictly positive decimal string; the adapter preserves that string exactly in the Binance-compatible `{ symbol, price }` response shape. The REST account response documents balances as JSON numbers; the transport preserves the raw numeric tokens as decimal strings before entity construction to avoid JavaScript number rounding. Order-history queries accept the canonical `status`, `side`, and `type` filters; the adapter translates them to Bitunix's numeric API codes. The adapter requires positive safe-integer request `page` and optional `limit` values before I/O, then validates the non-negative `total`, positive integer `pageNum` (string or number), and returned page identity; an omitted `data` array is normalized only when `total` is zero. It still returns one page and does not sort or auto-paginate because Bitunix does not document ordering, snapshot consistency, or completion semantics. Bitunix's Spot pair catalog does not include a symbol field, so the adapter derives the exchange symbol by concatenating the documented base and quote codes (for example, BTC + USDT → BTCUSDT); order/price APIs use that pair form. The active catalog includes only pairs explicitly marked open; missing or unknown open-state values are excluded. The last-price endpoint must return a strictly positive decimal string; the adapter preserves that string exactly in the Binance-compatible `{ symbol, price }` response shape. The REST account response documents balances as JSON numbers; the transport preserves the raw numeric tokens as decimal strings before entity construction to avoid JavaScript number rounding.
+
+All adapted Bitunix order rows (pending orders, order history, and order detail) require non-empty string `ctime` and `utime` fields. The adapter preserves these source strings exactly and does not assume a timezone, timestamp precision, or ordering rule that the official order-history schema does not define.
+
+The REST boundary reports `BitunixRestError` (a `SystemCustomError` subclass) with `kind` set to `transport`, `http`, `exchange`, or `response`. Its `code` is a stable Coinzilla diagnostic code; the exchange's non-zero API code is retained separately as `exchangeCode` and is not mapped to guessed meanings. The original transport or response-parsing failure is preserved as native `cause`. HTTP status failures are distinguished from HTTP-success exchange rejections. Successful HTTP envelopes require a scalar safe-integer number or integer-string `code` equal to zero and a string `msg`; `data` remains optional. Malformed code types and missing messages fail closed. No retryability classification is inferred because no authoritative, comprehensive Spot-specific error-code mapping was verified.
+
+It intentionally does not support canonical order placement/lookup/history, canonical fills, account snapshots, server time, or continuous price/private execution subscriptions. Direct legacy order placement uses only the single-order REST endpoint: LIMIT `volume` is quote quantity and MARKET `volume` is base quantity. Batch REST and WebSocket order APIs document the inverse and are not used. Bitunix does not accept a caller-supplied client order ID; dispatched transport failures therefore remain `OUTCOME_UNKNOWN` and are never retried automatically. No Spot TESTNET endpoint is documented. Keep `allowLiveOrderMutations` false until independent live-account authorization and a safe acceptance plan are approved.
+
+These are hard lifecycle constraints, not missing convenience methods. Unsupported canonical mutations do not send requests. Direct legacy REST placement/cancellation is available to explicit broker callers, but unknown outcomes require manual reconciliation. Do not admit Bitunix to Harvester trading until stable canonical order identity, private execution lifecycle/reconciliation, complete fills, and recovery guarantees are implemented. See [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) and [Bitunix Spot API docs](https://www.bitunix.com/api-docs/spots/en_us/).
 
 Example:
 
@@ -63,13 +109,51 @@ try {
 }
 ```
 
+## Bitunix Spot WebSocket RPC
+
+`BitunixSpotWebSocketClient` implements the documented Spot WebSocket request/response API at `wss://openapi.bitunix.com:443/ws-api/v1`. Every RPC is authenticated, including market-data and catalog lookups. It exposes these query methods:
+
+- `getLastPrice({ symbol })` — `market.last_price`
+- `getDepth({ symbol, precision })` — `market.depth`; precision is required and supplied by the caller.
+- `getKline({ symbol, interval })` — `market.kline`
+- `getTradingPairs()` — `common.coin_pair.list`
+- `getExchangeRates()` — `common.rate.list`
+- `getTokenNetworks()` — `common.coin.coin_network.list`
+- `getAccount()` — `user.account`
+- `getUserInfo()` — `user.info`
+
+The client correlates concurrent responses by echoed request ID, validates response envelopes, applies the official Spot WebSocket double-SHA256 signature (separate from REST signing), and never automatically retries a request. Account balance numeric tokens are returned as exact decimal strings; unsafe int64 user IDs are preserved as strings. A timeout or disconnect rejects unresolved RPCs. After a connection closes, call `connect()` again to create a fresh transport and listener set on the same client instance. Concurrent reconnect calls share one connection attempt; interrupted RPCs are rejected and never replayed. Reconnection is explicit and caller-controlled—there is no automatic retry/backoff, subscription restoration, or missed-event replay. Bitunix documents a 24-hour connection lifetime.
+
+```js
+import { BitunixSpotWebSocketClient } from "@coinzilla/brokers"
+
+const client = new BitunixSpotWebSocketClient({
+  apiKey: process.env.BITUNIX_API_KEY,
+  apiSecret: process.env.BITUNIX_API_SECRET,
+})
+
+await client.connect()
+try {
+  const [price, balances, markets] = await Promise.all([
+    client.getLastPrice({ symbol: "BTCUSDT" }),
+    client.getAccount(),
+    client.getTradingPairs(),
+  ])
+  // Each result is the corresponding Bitunix response data.
+} finally {
+  await client.disconnect()
+}
+```
+
+These are one-shot RPC reads, not streaming subscriptions. No continuous public price/depth/K-line feed or private order/execution/balance event stream is implemented. The existing `BitunixSpotBroker` REST methods are unchanged and do not silently switch transports.
+
 ## Canonical order placement response
 
 The canonical `createCanonicalOrder()` contract requires the complete exchange order facts (exchange order ID, client order ID, type, side, original/executed quantities, price and status) to construct a `CanonicalOrder`. Binance Spot defaults `LIMIT` and `MARKET` to `FULL`, but defaults other order types such as `LIMIT_MAKER` to the minimal `ACK` response. ACK contains identifiers and transaction time only; it is not sufficient for canonical ownership tracking.
 
 Canonical placement therefore explicitly sends `newOrderRespType: "RESULT"`. RESULT returns the order facts required by the canonical adapter without requesting the additional `fills` array. This applies to canonical placement regardless of order type; the ordinary `createOrder()` compatibility method retains its existing response contract.
 
-Do not infer a successful canonical order from a minimal ACK, synthesize missing order facts, or automatically retry a state-changing placement after an uncertain response. If the request outcome is ambiguous, Harvester must resolve the original client order ID through authoritative user-data or broker reconciliation before any further order action.
+Do not infer a successful canonical order from a minimal ACK, synthesize missing order facts, or automatically retry a state-changing placement after an uncertain response. If the request outcome is ambiguous, the consumer must resolve the original client order ID through authoritative user-data or broker reconciliation before any further order action.
 
 ## JavaScript editor types
 
@@ -142,7 +226,7 @@ For user data:
 
 The recommended reconciliation inputs are:
 
-- `getAccountSnapshot()` for current balances and the account snapshot's source timestamp.
+- `getAccountSnapshot()` for current balances and the account snapshot source timestamp.
 - `getOpenOrders()` for the current open-order set.
 - `getExchangeMarkets()` for the complete symbol catalog returned by Binance `exchangeInfo`; this read-only method returns canonical `Market` values and primes the broker's canonical market cache. It includes the symbols in the current exchange catalog, not delisted symbols.
 
@@ -156,9 +240,9 @@ The `onEvent` callback contract remains `onEvent({ event })`. Status notificatio
 
 ## Order safety and uncertain outcomes
 
-The broker blocks new order-changing calls while user data is unavailable or recovery is awaiting acknowledgement. This includes `createOrder()`, `cancelOrder()`, and `cancelAllOpenOrders()`.
+Bitunix Spot supports single-order cancellation through the signed REST API and verifies the final status with an order-detail read. A lost acknowledgement or non-terminal follow-up status is reported as `OUTCOME_UNKNOWN`; never blindly retry. `cancelAllOpenOrders({ symbol })` is supported for one explicit symbol; account-wide cancellation remains unavailable because Bitunix does not document account-wide open-order enumeration. Direct `createOrder()` now supports LIMIT and MARKET through the single-order REST endpoint only. LIMIT uses quote volume (exact base-quantity × price conversion); MARKET uses base quantity. Bitunix does not accept a caller-supplied client order ID, so transport timeouts return `OUTCOME_UNKNOWN` and are never retried; canonical placement remains unsupported.
 
-A failed `cancelOrder()` result includes `cancellationOutcome`: **`NOT_SENT`** means the local user-data-availability guard rejected the call before invoking `order.cancel`; **`OUTCOME_UNKNOWN`** means the broker invoked the RPC but could not return an authoritative canonical order result. Treat missing or unknown classifications conservatively. Harvester trusts `NOT_SENT` only when the broker result is unsuccessful (`ok: false`); contradictory success-shaped metadata remains unconfirmed. A successful result carries the broker order response; consumers that require canonical cancellation must still verify canonical order history and actual fills.
+A failed `cancelOrder()` result includes `cancellationOutcome`: **`NOT_SENT`** means the local user-data-availability guard rejected the call before invoking `order.cancel`; **`OUTCOME_UNKNOWN`** means the broker invoked the RPC but could not return an authoritative canonical order result. Treat missing or unknown classifications conservatively. Consumers must trust `NOT_SENT` only when the broker result is unsuccessful (`ok: false`); contradictory success-shaped metadata remains unconfirmed. A successful result carries the broker order response; consumers that require canonical cancellation must still verify canonical order history and actual fills.
 
 A timeout or connection loss during a state-changing RPC can mean Binance accepted the operation but the response was lost. Such an outcome is **unknown**, not proof of failure. Do not blindly submit the same order or cancellation again. `getCanonicalOrder({ symbol, orderId })` and `getCanonicalOrder({ symbol, clientOrderId })` perform read-only `order.status` lookups and return an exact-decimal `CanonicalOrder`; the client-ID form maps to Binance's `origClientOrderId` request parameter. A lookup result is only an identity/status observation: callers must still reconcile canonical order history and actual fills. A not-found response or lookup failure is not permission to retry.
 
@@ -176,7 +260,7 @@ These reconnect guarantees apply to the public stream subscription set; they do 
 
 ### Historical and live candles
 
-The Binance WebSocket broker now exposes normalized historical candles and live Kline updates for Harvester issue [#1016](https://github.com/45s/coinzilla/issues/1016):
+The Binance WebSocket broker exposes normalized historical candles and live Kline updates, delivered in [PR #1017](https://github.com/45s/coinzilla/pull/1017):
 
 - **getCandles({ symbol, interval, limit = 500, startTime?, endTime? })** — uses the unsigned WebSocket API time and klines methods, returns immutable candles in strictly ascending open-time order, and supports 1–1000 rows.
 - **subscribeForCandles({ symbol, interval, onCandle })** — subscribes to the public Kline stream and returns an unsubscribe handle.
@@ -188,6 +272,61 @@ Malformed rows, invalid timestamps/prices/volume, inconsistent OHLC values, dupl
 The implementation uses the existing native WebSocket API klines request and public Kline Streams subscription. It adds no REST fallback or third-party SDK. The Streams protocol already recognized Kline stream names; PR #1017 adds the public normalized adapter and broker methods.
 
 Protocol references: [Binance Spot WebSocket API — Klines](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-api.md#klines) and [Binance Spot Kline Streams](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#klinecandlestick-streams-for-utc).
+
+## Bitunix Spot local diagnostics
+
+The Bitunix diagnostic runner is an explicitly invoked, non-mutating local tool for checking REST connectivity/authentication, authenticated Spot WebSocket RPC, request/response correlation, latency, exchange errors, transport failures, and cleanup. It uses the existing Bitunix clients; it does not change broker runtime composition or enable trading.
+
+Bitunix documents Spot WebSocket as authenticated request/response RPC: every request, including methods listed under the Public Interface, carries API key, timestamp, nonce and signature. The connection is documented as valid for 24 hours, and the API exposes a `ping` RPC connection test. It does **not** document continuous market subscriptions or private order/execution event streams. A successful RPC is not proof of a live stream. See the [official WebSocket introduction](https://www.bitunix.com/api-docs/spots/en_us/ws/) and [public RPC methods](https://www.bitunix.com/api-docs/spots/en_us/public-ws/).
+
+### Configure and run
+
+Create packages/brokers/.env.development locally (never commit it). Credentials are optional for public-only checks:
+
+~~~dotenv
+# Optional: uncomment and configure both to enable private account/open-order reads and authenticated WebSocket RPC.
+# BITUNIX_API_KEY=your_diagnostic_api_key
+# BITUNIX_API_SECRET=your_api_secret
+# Optional: leave unset to skip REST and WebSocket depth checks; choose only a value you have verified for your market.
+# BITUNIX_DIAGNOSTICS_DEPTH_PRECISION=
+~~~
+
+From the repository root:
+
+~~~sh
+pnpm --filter @coinzilla/brokers diagnose:bitunix
+~~~
+
+The source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` constant is the explicit acknowledgement gate because Bitunix Spot has no documented TESTNET environment. It defaults to `true`; set it to `false` in `scripts/bitunix-diagnostic-runner.js` to prevent the runner from making requests. The runner contacts the configured LIVE Spot endpoint and performs non-mutating query requests only.
+
+Both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` are optional for public-only diagnostics. With neither credential configured—or with only one configured—the runner executes the unsigned public REST catalog and latest-price GET requests, then marks private account and all authenticated WebSocket RPC checks as skipped. Configure **both** variables to enable signed account/open-order reads and authenticated WebSocket RPC. A private REST request without credentials fails closed with `BITUNIX_REST_AUTHENTICATION_REQUIRED`; the REST client never fabricates credentials. The two values are treated as one credential pair.
+
+When enabling private diagnostics, use a dedicated API key with account-read permission and **without** trading or withdrawal permission. Do not use production mutation-enabled keys for diagnostics.
+
+The runner checks these documented Spot REST operations:
+
+- Public trading-pair catalog, latest price, exchange rates, and token/network metadata.
+- Public order-book depth when `BITUNIX_DIAGNOSTICS_DEPTH_PRECISION` is explicitly configured.
+- Current K-line and one historical K-line sample using the constant `1min` interval.
+- Private account balances.
+- Private current open orders via `POST /api/spot/v1/order/pending/list`. Although the HTTP method is POST, Bitunix documents this as **Query current orders**; the diagnostic sends only the symbol, sets `stateChanging: false`, and never places or cancels orders.
+
+The official [Spot public REST reference](https://www.bitunix.com/api-docs/spots/en_us/public/) does not document a server-time or general recent-trades endpoint, so neither is invented or probed. The [Spot order reference](https://www.bitunix.com/api-docs/spots/en_us/order/) documents the current-orders query separately from place/cancel operations.
+
+It then connects to the authenticated Spot WebSocket RPC endpoint and checks:
+
+- `ping` (the documented authenticated connection-test RPC).
+- `market.last_price`, `market.depth`, and `market.kline`.
+- `common.coin_pair.list`, `common.rate.list`, and `common.coin.coin_network.list`.
+- `user.account` and `user.info`.
+
+After a successful initial RPC session, it disconnects and explicitly reconnects the same client instance, then verifies the replacement transport with another authenticated `ping`. This is not an automatic retry loop and does not simulate the documented 24-hour server expiry. Subscription restoration is explicitly skipped because the official Spot API reference defines one-shot request/response methods and no subscription channels.
+
+REST and WebSocket depth checks are skipped unless `BITUNIX_DIAGNOSTICS_DEPTH_PRECISION` is explicitly supplied; the runner does not infer depth aggregation precision from basePrecision, quotePrecision, or precisions[].
+
+Each operation receives its own pass/fail/skip result and duration. The named `DIAGNOSTIC_CONFIG` constants in `scripts/bitunix-diagnostic-runner.js` set the symbol (`BTCUSDT`), K-line interval (`1min`), request/connect/close timeout (`10_000` ms), and public-payload capture policy (`false`). Change these values in code when needed; they are not environment settings. Public response payloads are omitted by default. The optional depth precision remains an environment setting because its value must be explicitly chosen rather than inferred. The report is written to packages/brokers/.diagnostics/ (ignored by Git) with restrictive file permissions. Outbound WS messages are captured only after credential/signature/nonce redaction. Private account responses are summarized by shape and field names; private balances, UIDs and other sensitive values are never persisted.
+
+This is an operator diagnostic, not a trading test, exchange acceptance certificate, TESTNET substitute, or proof of trading readiness. It never places/cancels orders, withdraws/transfers funds, retries failed requests, or automatically reconnects after an unexpected failure. Its single controlled same-client reconnect probe runs only after the first session completes successfully. It does not test protocol-level control-frame heartbeats or simulate 24-hour expiry. The report records response latency and sanitized response structure, but does not impose a stale-data threshold because Bitunix does not document a maximum market-data age; RPC response correlation is tested, but there is no stream sequence-ordering or subscription-restoration test. Default unit tests remain offline and do not execute this command.
 
 ## Offline tests and coverage
 

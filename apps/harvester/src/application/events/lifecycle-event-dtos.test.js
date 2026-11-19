@@ -511,6 +511,48 @@ test("maps order request and acknowledgement without leaking extra order propert
   })
 })
 
+test("rejects partial provider provenance and preserves a complete identity in order lifecycle DTOs", () => {
+  const partialProviderValues = {
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+  }
+  for (const [field, value] of Object.entries(partialProviderValues)) {
+    assert.equal(
+      mapOrderSubmissionRequestedData({
+        order: {
+          ...canonicalOrderFacts,
+          [field]: value,
+        },
+      }).ok,
+      false,
+      `partial provider identity containing only ${field} must not be silently discarded`,
+    )
+  }
+  assert.deepEqual(
+    mapOrderSubmissionRequestedData({
+      order: {
+        ...canonicalOrderFacts,
+        providerInstanceId: "binanceTestnet",
+        providerType: "binance",
+        accountId: "binance-primary",
+      },
+    }).data,
+    {
+      clientOrderId: "h-DOGEUSDT-1",
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+      symbol: "DOGEUSDT",
+      side: "BUY",
+      type: "LIMIT_MAKER",
+      price: "99.9500",
+      quantity: "1.00",
+      status: "OPEN",
+    },
+  )
+})
+
 test("maps local submission deferrals with a bounded reason and exact client-order identity", () => {
   const result = mapOrderSubmissionDeferredData({
     order: canonicalOrderFacts,
@@ -663,7 +705,7 @@ test("maps an unknown recovery SELL cancellation state safely", () => {
 })
 
 
-test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", () => {
+function createCanonicalAppliedFill() {
   const { baseAsset, quoteAsset, feeAsset, market } = createFillTestMarket()
   const fill = new Fill({
     tradeId: "trade-42",
@@ -671,67 +713,87 @@ test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", ()
     clientOrderId: "harvester-order-42",
     market,
     side: "BUY",
-    price: new Money({ amount: "99.9500",
-      asset: quoteAsset }),
-    quantity: new Quantity({ amount: "0.500",
-      asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "49.97500",
-      asset: quoteAsset }),
+    price: new Money({
+      amount: "99.9500",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "0.500",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "49.97500",
+      asset: quoteAsset,
+    }),
     liquidityRole: "MAKER",
     executedAt: 123,
     commissions: [
       new Commission({
-        amount: new Money({ amount: "0.0005",
-          asset: baseAsset }),
+        amount: new Money({
+          amount: "0.0005",
+          asset: baseAsset,
+        }),
       }),
       new Commission({
-        amount: new Money({ amount: "0.0001",
-          asset: feeAsset }),
-        quoteValue: new Money({ amount: "0.123456789012345678",
-          asset: quoteAsset }),
+        amount: new Money({
+          amount: "0.0001",
+          asset: feeAsset,
+        }),
+        quoteValue: new Money({
+          amount: "0.123456789012345678",
+          asset: quoteAsset,
+        }),
       }),
     ],
     commissionStatus: "COMPLETE",
   })
+  return { fill }
+}
+
+function createCanonicalAppliedFillExpectedData({ fill }) {
+  return {
+    fillId: fill.id,
+    tradeId: "trade-42",
+    brokerOrderId: "broker-order-42",
+    clientOrderId: "harvester-order-42",
+    symbol: "DOGEUSDT",
+    side: "BUY",
+    price: "99.95",
+    quantity: "0.5",
+    quoteQuantity: "49.975",
+    liquidityRole: "MAKER",
+    executedAt: 123,
+    commissions: [
+      {
+        amount: "0.0005",
+        assetId: "asset:DOGE",
+        asset: "DOGE",
+      },
+      {
+        amount: "0.0001",
+        assetId: "asset:BNB",
+        asset: "BNB",
+        quoteValue: {
+          amount: "0.123456789012345678",
+          assetId: "asset:USDT",
+          asset: "USDT",
+        },
+      },
+    ],
+    commissionStatus: "COMPLETE",
+  }
+}
+
+test("maps canonical applied Fill facts to an allowlisted exact-decimal DTO", () => {
+  const { fill } = createCanonicalAppliedFill()
   const result = mapFillAppliedData({
     fill,
     apiSecret: "must-not-be-copied",
     accountSnapshot: { balance: "private" },
   })
-
   assert.deepEqual(result, {
     ok: true,
-    data: {
-      fillId: fill.id,
-      tradeId: "trade-42",
-      brokerOrderId: "broker-order-42",
-      clientOrderId: "harvester-order-42",
-      symbol: "DOGEUSDT",
-      side: "BUY",
-      price: "99.95",
-      quantity: "0.5",
-      quoteQuantity: "49.975",
-      liquidityRole: "MAKER",
-      executedAt: 123,
-      commissions: [
-        {
-          amount: "0.0005",
-          assetId: "asset:DOGE",
-          asset: "DOGE",
-        },
-        {
-          amount: "0.0001",
-          assetId: "asset:BNB",
-          asset: "BNB",
-          quoteValue: {
-            amount: "0.123456789012345678",
-            assetId: "asset:USDT",
-            asset: "USDT",
-          },
-        },
-      ],
-      commissionStatus: "COMPLETE",
-    },
+    data: createCanonicalAppliedFillExpectedData({ fill }),
   })
   assert.equal(mapFillAppliedData({ fill: {} }).ok, false)
 })
@@ -846,52 +908,97 @@ test("validates third-asset quote valuation and accepts zero fees", () => {
   assert.equal(zeroThirdAssetFee.ok, true)
 })
 
-test("maps invalid, unowned, and accounting-failed execution facts safely", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE",
-    code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT",
-    code: "USDT" })
-  const market = new Market({ venue: "binance",
+function createExecutionFactMarket() {
+  const baseAsset = new Asset({
+    id: "asset:DOGE",
+    code: "DOGE",
+  })
+  const quoteAsset = new Asset({
+    id: "asset:USDT",
+    code: "USDT",
+  })
+  const market = new Market({
+    venue: "binance",
     symbol: "DOGEUSDT",
     baseAsset,
-    quoteAsset })
-  const order = new CanonicalOrder({
+    quoteAsset,
+  })
+  return {
+    baseAsset,
+    quoteAsset,
+    market,
+  }
+}
+
+function createExecutionFactOrder({ market, quoteAsset, baseAsset }) {
+  return new CanonicalOrder({
     clientOrderId: "harvester-client-1",
     brokerOrderId: "broker-order-1",
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "99.95",
-      asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1",
-      asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0.5",
-      asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "99.95",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0.5",
+      asset: baseAsset,
+    }),
     status: "PARTIALLY_FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 2,
   })
-  const fill = new Fill({
+}
+
+function createExecutionFactFill({ market, quoteAsset, baseAsset }) {
+  return new Fill({
     tradeId: "trade-1",
     brokerOrderId: "broker-order-1",
     clientOrderId: "harvester-client-1",
     market,
     side: "BUY",
-    price: new Money({ amount: "99.95",
-      asset: quoteAsset }),
-    quantity: new Quantity({ amount: "0.5",
-      asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "49.975",
-      asset: quoteAsset }),
+    price: new Money({
+      amount: "99.95",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "0.5",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "49.975",
+      asset: quoteAsset,
+    }),
     liquidityRole: "MAKER",
     executedAt: 2,
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  assert.equal(mapExecutionUnownedOrderData({ order,
-    apiSecret: "private" }).data.reason,
-  "UNKNOWN_OR_EXTERNAL_ORDER_EVENT")
+}
+
+function createExecutionFactFixtures() {
+  const assets = createExecutionFactMarket()
+  return {
+    order: createExecutionFactOrder(assets),
+    fill: createExecutionFactFill(assets),
+  }
+}
+
+test("maps invalid, unowned, and accounting-failed execution facts safely", () => {
+  const { order, fill } = createExecutionFactFixtures()
+  assert.equal(
+    mapExecutionUnownedOrderData({
+      order,
+      apiSecret: "private",
+    }).data.reason,
+    "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+  )
   assert.deepEqual(mapExecutionInvalidFillData({
     order,
     fill,
@@ -908,8 +1015,10 @@ test("maps invalid, unowned, and accounting-failed execution facts safely", () =
     fillBrokerOrderId: "broker-order-1",
     fillSymbol: "DOGEUSDT",
     fillSide: "BUY",
-    error: { name: "Error",
-      message: "token=[REDACTED]" },
+    error: {
+      name: "Error",
+      message: "token=[REDACTED]",
+    },
   })
   assert.equal(mapExecutionAccountingFailedData({
     order,
@@ -917,7 +1026,6 @@ test("maps invalid, unowned, and accounting-failed execution facts safely", () =
     error: new Error("commission rejected"),
   }).data.fillId, fill.id)
 })
-
 
 test("maps exact dust quantity and limiting filter into the durable completion event", () => {
   const result = mapRecoveryCycleCompletedData({
@@ -1123,6 +1231,39 @@ test("rejects invalid account snapshot phase, decimals, duplicate assets and inc
 })
 
 
+function assertAccountOpenOrderReadiness({ order }) {
+  const cases = [
+    {
+      orders: [],
+      readiness: "READY",
+      expected: true,
+    },
+    {
+      orders: [order],
+      readiness: "READY",
+      expected: false,
+    },
+    {
+      orders: [order],
+      readiness: "RECONCILED",
+      expected: true,
+    },
+    {
+      orders: [],
+      readiness: "RECONCILED",
+      expected: false,
+    },
+  ]
+  for (const scenario of cases) {
+    assert.equal(mapAccountOpenOrdersCapturedData({
+      phase: "OPENING",
+      observedAt: 1,
+      orders: scenario.orders,
+      readiness: scenario.readiness,
+    }).ok, scenario.expected)
+  }
+}
+
 test("maps complete account-wide open orders and classifies unowned orders without adopting them", () => {
   const order = {
     clientOrderId: "manual-order-1",
@@ -1163,32 +1304,8 @@ test("maps complete account-wide open orders and classifies unowned orders witho
       blockReasons: ["UNOWNED_OPEN_ORDERS:1"],
     },
   })
-  assert.equal(mapAccountOpenOrdersCapturedData({
-    phase: "OPENING",
-    observedAt: 1,
-    orders: [],
-    readiness: "READY",
-  }).ok, true)
-  assert.equal(mapAccountOpenOrdersCapturedData({
-    phase: "OPENING",
-    observedAt: 1,
-    orders: [order],
-    readiness: "READY",
-  }).ok, false)
-  assert.equal(mapAccountOpenOrdersCapturedData({
-    phase: "OPENING",
-    observedAt: 1,
-    orders: [order],
-    readiness: "RECONCILED",
-  }).ok, true)
-  assert.equal(mapAccountOpenOrdersCapturedData({
-    phase: "OPENING",
-    observedAt: 1,
-    orders: [],
-    readiness: "RECONCILED",
-  }).ok, false)
+  assertAccountOpenOrderReadiness({ order })
 })
-
 
 test("maps versioned broker execution evidence and rejects untrusted payloads", () => {
   const result = mapBrokerExecutionReportData({ evidence: {
@@ -1403,53 +1520,81 @@ test("keeps missing build provenance explicit and rejects malformed process iden
 })
 
 
-test("rejects lossy order and fill timestamps at the Journal DTO boundary", () => {
-  const baseAsset = new Asset({ id: "asset:DOGE",
-    code: "DOGE" })
-  const quoteAsset = new Asset({ id: "asset:USDT",
-    code: "USDT" })
-  const market = new Market({ venue: "binance",
-    symbol: "DOGEUSDT",
-    baseAsset,
-    quoteAsset })
-  const makeOrder = (updatedAt) => new CanonicalOrder({
+function createTimestampTestOrder({ market, quoteAsset, baseAsset, updatedAt }) {
+  return new CanonicalOrder({
     clientOrderId: "harvester-client-timestamp",
     brokerOrderId: "broker-order-timestamp",
     market,
     side: "BUY",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "99.95",
-      asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1",
-      asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-      asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "99.95",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
     status: "OPEN",
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt,
   })
-  const makeFill = (executedAt) => new Fill({
+}
+
+function createTimestampTestFill({ market, quoteAsset, baseAsset, executedAt }) {
+  return new Fill({
     tradeId: "trade-timestamp",
     brokerOrderId: "broker-order-timestamp",
     clientOrderId: "harvester-client-timestamp",
     market,
     side: "BUY",
-    price: new Money({ amount: "99.95",
-      asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1",
-      asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "99.95",
-      asset: quoteAsset }),
+    price: new Money({
+      amount: "99.95",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "99.95",
+      asset: quoteAsset,
+    }),
     liquidityRole: "MAKER",
     executedAt,
     commissions: [],
     commissionStatus: "COMPLETE",
   })
+}
 
+test("rejects lossy order and fill timestamps at the Journal DTO boundary", () => {
+  const baseAsset = new Asset({
+    id: "asset:DOGE",
+    code: "DOGE",
+  })
+  const quoteAsset = new Asset({
+    id: "asset:USDT",
+    code: "USDT",
+  })
+  const market = new Market({
+    venue: "binance",
+    symbol: "DOGEUSDT",
+    baseAsset,
+    quoteAsset,
+  })
   for (const transactionTime of INVALID_TRANSACTION_TIMESTAMPS) {
     const result = mapOrderUpdatedData({
-      order: makeOrder(0),
+      order: createTimestampTestOrder({
+        market,
+        quoteAsset,
+        baseAsset,
+        updatedAt: 0,
+      }),
       evidence: { transactionTime },
     })
     assert.equal(
@@ -1458,14 +1603,27 @@ test("rejects lossy order and fill timestamps at the Journal DTO boundary", () =
       `broker transactionTime ${String(transactionTime)} must not be emitted as a Journal-bound numeric field.`,
     )
   }
-
   assert.equal(
-    mapOrderUpdatedData({ order: makeOrder(-0) }).ok,
+    mapOrderUpdatedData({
+      order: createTimestampTestOrder({
+        market,
+        quoteAsset,
+        baseAsset,
+        updatedAt: -0,
+      }),
+    }).ok,
     false,
     "Canonical order updatedAt must reject negative zero even when the shared entity constructor accepts it.",
   )
   assert.equal(
-    mapFillAppliedData({ fill: makeFill(-0) }).ok,
+    mapFillAppliedData({
+      fill: createTimestampTestFill({
+        market,
+        quoteAsset,
+        baseAsset,
+        executedAt: -0,
+      }),
+    }).ok,
     false,
     "Canonical fill executedAt must reject negative zero before the fill DTO is published.",
   )
@@ -1701,4 +1859,28 @@ test("maps explicit residual sell-through and blocked recovery-cycle outcomes", 
   assert.equal(mapRecoveryCycleNotCompletedData({ ...base,
     outcome: "BLOCKED",
     reason: "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH" }).ok, false)
+})
+
+
+test("rejects malformed provider identity tokens in lifecycle DTOs", () => {
+  const invalidIdentifiers = [
+    "",
+    "contains space",
+    "contains/slash",
+    "x".repeat(129),
+  ]
+  for (const invalidIdentifier of invalidIdentifiers) {
+    assert.equal(
+      mapOrderSubmissionRequestedData({
+        order: {
+          ...canonicalOrderFacts,
+          providerInstanceId: invalidIdentifier,
+          providerType: "binance",
+          accountId: "binance-primary",
+        },
+      }).ok,
+      false,
+      `malformed provider identity token ${JSON.stringify(invalidIdentifier)} must be rejected`,
+    )
+  }
 })

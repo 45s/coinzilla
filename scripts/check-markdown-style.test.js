@@ -2,9 +2,11 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import {
+  analyzeFullTreeMarkdownStyle,
   analyzeMarkdownStyleDocuments,
   parseChangedMarkdownDiff,
   GIT_DIFF_MAX_BUFFER_BYTES,
+  isHistoricalPath,
 } from "./check-markdown-style.js"
 
 function getLineNumbers(content) {
@@ -83,48 +85,51 @@ test("enforces whitespace and heading rules when the affected lines change", () 
   ])
 })
 
+function createStyleExceptionFixture() {
+  const documents = [
+    {
+      path: "docs/new.md",
+      content: "# New  \n\n\n### Skipped",
+    },
+    {
+      path: "apps/harvester/AUDIT_2026-11-09.md",
+      content: "# Historical  \n\n\nEvidence",
+    },
+    {
+      path: "docs/ai-agent/repository-engineering-audit.md",
+      content: "# Historical task brief  \n\n\nEvidence",
+    },
+    {
+      path: "apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md",
+      content: "# Superseded plan  \n\n\nEvidence",
+    },
+    {
+      path: ".github/PULL_REQUEST_TEMPLATE.md",
+      content: "## Summary\n\nDescription  \n",
+    },
+    {
+      path: ".github/ISSUE_TEMPLATE/cross-domain-request.md",
+      content: "## Summary\n\nDescription.\n- item\n\n## Context\n\nDescription.\n",
+    },
+  ]
+  const changesByPath = new Map(documents.map(({ path, content }) => [
+    path,
+    {
+      lines: new Set(getLineNumbers(content)),
+      isNewFile: true,
+    },
+  ]))
+  return {
+    documents,
+    changesByPath,
+  }
+}
+
 test("checks new files fully while preserving historical, superseded and GitHub template exceptions", () => {
+  const { documents, changesByPath } = createStyleExceptionFixture()
   const result = analyzeMarkdownStyleDocuments({
-    documents: [
-      {
-        path: "docs/new.md",
-        content: "# New  \n\n\n### Skipped",
-      },
-      {
-        path: "apps/harvester/AUDIT_2026-11-09.md",
-        content: "# Historical  \n\n\nEvidence",
-      },
-      {
-        path: "docs/ai-agent/repository-engineering-audit.md",
-        content: "# Historical task brief  \n\n\nEvidence",
-      },
-      {
-        path: "apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md",
-        content: "# Superseded plan  \n\n\nEvidence",
-      },
-      {
-        path: ".github/PULL_REQUEST_TEMPLATE.md",
-        content: "## Summary\n\nDescription  \n",
-      },
-      {
-        path: ".github/ISSUE_TEMPLATE/cross-domain-request.md",
-        content: "## Summary\n\nDescription.\n- item\n\n## Context\n\nDescription.\n",
-      },
-    ],
-    changesByPath: new Map([
-      ["docs/new.md", { lines: new Set([1, 2, 3, 4]),
-        isNewFile: true }],
-      ["apps/harvester/AUDIT_2026-11-09.md", { lines: new Set([1, 2, 3, 4]),
-        isNewFile: true }],
-      ["docs/ai-agent/repository-engineering-audit.md", { lines: new Set([1, 2, 3, 4]),
-        isNewFile: true }],
-      ["apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md", { lines: new Set([1, 2, 3, 4]),
-        isNewFile: true }],
-      [".github/PULL_REQUEST_TEMPLATE.md", { lines: new Set([1, 2, 3]),
-        isNewFile: true }],
-      [".github/ISSUE_TEMPLATE/cross-domain-request.md", { lines: new Set([1, 2, 3, 4, 5]),
-        isNewFile: true }],
-    ]),
+    documents,
+    changesByPath,
   })
 
   assert.equal(result.scannedFiles, 3, 'only maintained documents and GitHub templates should be scanned')
@@ -213,7 +218,7 @@ test("enforces every existing style rule for new maintained documents", () => {
   }
 })
 
-test("keeps non-spacing list and table structure metrics report-only after list-spacing migration", () => {
+test("enforces list and table structure metrics on changed maintained documents", () => {
   const content = [
     "# Title",
     "Paragraph",
@@ -227,8 +232,10 @@ test("keeps non-spacing list and table structure metrics report-only after list-
     "",
   ].join("\n")
   const result = analyzeMarkdownStyleDocuments({
-    documents: [{ path: "docs/new-list-table.md",
-content }],
+    documents: [{
+      path: "docs/new-list-table.md",
+      content,
+    }],
     changesByPath: new Map([["docs/new-list-table.md", {
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
@@ -242,8 +249,93 @@ content }],
     "tableColumnMismatches",
     "tableSpacing",
   ]) {
-    assert.deepEqual(result.violations[rule], [], `${rule} remains report-only`)
+    assert.ok(
+      result.violations[rule].some((entry) => entry.path === "docs/new-list-table.md"),
+      `${rule} must be enforced`,
+    )
   }
+})
+
+function createFullTreeStyleResult() {
+  const maintainedContent = [
+    "# Guide",
+    "* item",
+    "   - nested",
+    "| A | B |",
+    "| -- | --- |",
+    "| one | two | extra |",
+  ].join("\n")
+  const templateContent = [
+    "## Pull request",
+    "#### Details",
+    "* item",
+  ].join("\n")
+  const historicalContent = "## Old report  \n* historical marker"
+
+  return analyzeFullTreeMarkdownStyle({
+    documents: [
+      {
+        path: "docs/guide.md",
+        content: maintainedContent,
+      },
+      {
+        path: ".github/PULL_REQUEST_TEMPLATE.md",
+        content: templateContent,
+      },
+      {
+        path: "apps/harvester/docs/audits/reports/legacy.md",
+        content: historicalContent,
+      },
+    ],
+  })
+}
+
+function assertFullTreeStyleFindings(result) {
+  assert.equal(result.scannedFiles, 2, "maintained documents and templates must be included in full-tree enforcement")
+  assert.equal(result.skippedHistorical, 1, "historical evidence must be excluded from blocking style enforcement")
+
+  for (const rule of [
+    "unorderedListMarkers",
+    "nestedListIndentation",
+    "malformedTableDelimiters",
+    "tableColumnMismatches",
+  ]) {
+    assert.ok(
+      result.violations[rule].some((entry) => entry.path === "docs/guide.md"),
+      `${rule} must be enforced in the full-tree analysis`,
+    )
+  }
+
+  assert.ok(
+    result.violations.unorderedListMarkers.some(
+      (entry) => entry.path === ".github/PULL_REQUEST_TEMPLATE.md",
+    ),
+    "GitHub templates retain non-heading style enforcement",
+  )
+  assert.equal(
+    result.violations.missingH1.some(
+      (entry) => entry.path === ".github/PULL_REQUEST_TEMPLATE.md",
+    ),
+    false,
+    "GitHub templates must remain exempt from the H1 requirement",
+  )
+  assert.equal(
+    result.violations.headingLevelSkips.some(
+      (entry) => entry.path === ".github/PULL_REQUEST_TEMPLATE.md",
+    ),
+    false,
+    "GitHub templates must remain exempt from heading hierarchy checks",
+  )
+  assert.equal(
+    Object.values(result.violations).flat().some((entry) => entry.path.includes("legacy.md")),
+    false,
+    "historical evidence must not produce blocking full-tree style findings",
+  )
+}
+
+test("full-tree analysis skips historical evidence but keeps template style checks", () => {
+  const result = createFullTreeStyleResult()
+  assertFullTreeStyleFindings(result)
 })
 
 test("enforces blank lines before and after list blocks in changed maintained documents", () => {
@@ -294,9 +386,9 @@ test("excludes historical documents from every changed-file style rule", () => {
   const fence = String.fromCharCode(96).repeat(3)
   const content = `# Historical  \r\n\n\n### Skipped\r\n# Second H1\r\n${fence}\ncode\n${fence}\nParagraph\n- item\n`
   const result = analyzeMarkdownStyleDocuments({
-    documents: [{ path: "apps/harvester/docs/audits/legacy-style.md",
+    documents: [{ path: "apps/harvester/docs/audits/reports/legacy-style.md",
 content }],
-    changesByPath: new Map([["apps/harvester/docs/audits/legacy-style.md", {
+    changesByPath: new Map([["apps/harvester/docs/audits/reports/legacy-style.md", {
       lines: new Set(getLineNumbers(content)),
       isNewFile: true,
     }]]),
@@ -305,4 +397,82 @@ content }],
   assert.equal(result.scannedFiles, 0)
   assert.equal(result.skippedHistorical, 1)
   assert.deepEqual(Object.values(result.violations).flat(), [])
+})
+
+
+test("ignores indented code blocks in changed-file Markdown enforcement", () => {
+  const content = [
+    "# Architecture",
+    "",
+    "Intro paragraph.",
+    "",
+    "    Binance WebSocket API",
+    "    - list-looking code with trailing whitespace  ",
+    "",
+    "",
+    "    | Name | Value |",
+    "    | --- | -- |",
+    "    | one | two | extra |",
+    "",
+    "After the diagram.",
+    "",
+  ].join("\n")
+  const result = analyzeMarkdownStyleDocuments({
+    documents: [{
+      path: "docs/indented-code.md",
+      content,
+    }],
+    changesByPath: new Map([["docs/indented-code.md", {
+      lines: new Set(getLineNumbers(content)),
+      isNewFile: true,
+    }]]),
+  })
+
+  assert.deepEqual(
+    Object.values(result.violations).flat(),
+    [],
+    "indented code must not trigger blocking changed-file style rules",
+  )
+})
+
+test("classifies every historical path family without excluding adjacent living documents", () => {
+  const historicalPaths = [
+    "apps/harvester/AUDIT.md",
+    "apps/harvester/AUDIT_2026-11-06.md",
+    "apps/harvester/docs/audits/reports/AUDIT.md",
+    "apps/harvester/docs/incidents/2026-11-05-user-data-stream-recovery.md",
+    "apps/harvester/docs/tasks/AI_TASK_JOURNAL_INTEGRATION.md",
+    "apps/harvester/docs/DDD_CLEAN_ARCHITECTURE_AUDIT.md",
+    "apps/harvester/docs/DOMAIN_FIRST_DELIVERY_PLAN.md",
+    "docs/audits/repository-engineering-audit.md",
+    "docs/ai-agent/repository-engineering-audit.md",
+  ]
+
+  for (const path of historicalPaths) {
+    assert.equal(isHistoricalPath(path), true, `${path} is preserved historical evidence and must not be forced through changed-file cleanup`)
+  }
+
+  const maintainedPaths = [
+    "README.md",
+    "apps/harvester/README.md",
+    "apps/harvester/ROADMAP.md",
+    "apps/harvester/docs/CONSERVATIVE_SESSION_AUDIT.md",
+    "apps/harvester/docs/domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md",
+    "apps/harvester/docs/plans/HARVESTER_DOCUMENTATION_INVENTORY.md",
+    "apps/harvester/docs/audits/README.md",
+    "apps/harvester/docs/audits/INVESTIGATION_TEMPLATE.md",
+    "apps/harvester/docs/audits/reports/README.md",
+    "apps/harvester/docs/audits/sessions/README.md",
+    "apps/harvester/docs/audits/evidence/README.md",
+    "apps/harvester/docs/incidents/README.md",
+    "apps/harvester/docs/tasks/README.md",
+    "docs/README.md",
+    "docs/audits/README.md",
+    "docs/ai-agent/README.md",
+    "docs/architecture/README.md",
+  ]
+
+  for (const path of maintainedPaths) {
+    assert.equal(isHistoricalPath(path), false, `${path} is maintained guidance or an index and must remain subject to changed-file enforcement`)
+  }
 })

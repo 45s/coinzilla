@@ -407,9 +407,22 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
     assert.equal(process.exitCode, 0, "Telegram transport failure must not change Harvester's shutdown result")
     const deliveryFailure = loggerErrors.find((entry) => entry.message === "Telegram notification delivery failed")
     assert.ok(deliveryFailure, "A Telegram delivery failure must remain visible in the application logger.")
-    assert.equal(deliveryFailure.notificationDiagnostics.failedCount, 1, "Failure logs must include delivery counters after the failed send.")
+    assert.equal(deliveryFailure.eventName, "bot.started", "Failure evidence must identify the notification event that could not be delivered.")
+    assert.equal(deliveryFailure.failureCategory, "NETWORK", "The Harvester logger must retain the safe network-failure category.")
+    assert.deepEqual(deliveryFailure.delivery, {
+      acceptedCount: 1,
+      deliveredCount: 0,
+      failedCount: 1,
+      overflowCount: 0,
+      pendingCount: 1,
+      closed: false,
+    }, "The failure log must capture immutable delivery counters at the failed-send boundary.")
+    assert.equal(deliveryFailure.notificationDiagnostics.failedCount, 1, "Harvester must also retain its notifier diagnostics snapshot.")
     const deliverySummary = loggerInfos.find((entry) => entry.message === "Telegram notification delivery summary")
+    assert.equal(deliverySummary.acceptedCount, 2, "The shutdown summary must include the startup and final stop notifications.")
+    assert.equal(deliverySummary.deliveredCount, 0, "The shutdown summary must not count failed API sends as delivered.")
     assert.equal(deliverySummary.failedCount, 2, "Shutdown must report every failed API send, including the final stop notification.")
+    assert.equal(deliverySummary.overflowCount, 0, "The shutdown summary must keep queue overflow separate from failed sends.")
     assert.equal(deliverySummary.pendingCount, 0, "The final delivery summary must be captured after accepted sends drain.")
     assert.equal(deliverySummary.closed, true, "The final delivery summary must confirm the subscriber is closed.")
   } finally {

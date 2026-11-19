@@ -1,8 +1,8 @@
 # JavaScript and JSDoc standard
 
-**Status:** Repository-wide engineering standard  
-**Applies to:** Applications and packages in the Coinzilla workspace  
-**Default:** JavaScript-first; JSDoc where it adds useful information
+- **Status:** Repository-wide engineering standard
+- **Applies to:** Applications and packages in the Coinzilla workspace
+- **Default:** JavaScript-first; JSDoc where it adds useful information
 
 ## 1. Language direction
 

@@ -42,6 +42,59 @@ function assertOrderQuantities({ volume, dealVolume }) {
   }
 }
 
+function assertRequiredTimestamp({ value, field }) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new TypeError(`Bitunix Spot order ${field} must be a non-empty string`)
+  }
+}
+
+function validateOrderIdentity({ orderId, symbol, ctime, utime }) {
+  if ((typeof orderId !== "string" && typeof orderId !== "number") ||
+      (typeof orderId === "string" && orderId.trim() === "") ||
+      (typeof orderId === "number" && !Number.isSafeInteger(orderId))) {
+    throw new TypeError("Bitunix Spot order ID must be a non-empty string or safe integer")
+  }
+  if (typeof symbol !== "string" || !symbol.trim()) {
+    throw new TypeError("Bitunix Spot order is missing symbol")
+  }
+  assertRequiredTimestamp({
+    value: ctime,
+    field: "ctime",
+  })
+  assertRequiredTimestamp({
+    value: utime,
+    field: "utime",
+  })
+}
+
+function normalizeOrderStatus({ status }) {
+  if ((typeof status !== "string" && typeof status !== "number") || String(status).trim() === "") {
+    throw new TypeError("Bitunix Spot order status must be a non-empty string or number")
+  }
+  const exchangeStatus = String(status)
+  return {
+    exchangeStatus,
+    normalizedStatus: STATUS_MAP[exchangeStatus] ?? "UNKNOWN",
+  }
+}
+
+function validateOrderPrice({ normalizedType, price, avgPrice }) {
+  const executionPrice = normalizedType === "MARKET" ? avgPrice : price
+  assertDecimalString({
+    value: executionPrice,
+    field: normalizedType === "MARKET"
+      ? "Bitunix Spot market average price"
+      : "Bitunix Spot limit price",
+  })
+  if (compareDecimal({
+    left: executionPrice,
+    right: "0",
+  }) <= 0) {
+    throw new TypeError("Bitunix Spot normalized order price must be greater than zero")
+  }
+  return executionPrice
+}
+
 function validateOrder({ bitunixOrder }) {
   if (!bitunixOrder || typeof bitunixOrder !== "object" || Array.isArray(bitunixOrder)) {
     throw new TypeError("Bitunix Spot order should be an object")
@@ -55,38 +108,35 @@ function validateOrder({ bitunixOrder }) {
     volume,
     dealVolume,
     price,
+    avgPrice,
+    ctime,
+    utime,
   } = bitunixOrder
-  if ((typeof orderId !== "string" && typeof orderId !== "number") ||
-      (typeof orderId === "string" && orderId.trim() === "") ||
-      (typeof orderId === "number" && !Number.isSafeInteger(orderId))) {
-    throw new TypeError("Bitunix Spot order ID must be a non-empty string or safe integer")
-  }
-  if (typeof symbol !== "string" || !symbol.trim()) {
-    throw new TypeError("Bitunix Spot order is missing symbol")
-  }
+  validateOrderIdentity({
+    orderId,
+    symbol,
+    ctime,
+    utime,
+  })
 
   const normalizedSide = SIDE_MAP[String(side)]
   const normalizedType = TYPE_MAP[String(type ?? bitunixOrder.orderType)]
-  const normalizedStatus = STATUS_MAP[String(status)]
+  const { exchangeStatus, normalizedStatus } = normalizeOrderStatus({ status })
   if (!normalizedSide) {
     throw new TypeError("Bitunix Spot order side is unsupported")
   }
   if (!normalizedType) {
     throw new TypeError("Bitunix Spot order type is unsupported")
   }
-  if (!normalizedStatus) {
-    throw new TypeError("Bitunix Spot order status is unsupported")
-  }
   assertOrderQuantities({
     volume,
     dealVolume,
   })
-  if (normalizedType === "LIMIT") {
-    assertDecimalString({
-      value: price,
-      field: "Bitunix Spot limit price",
-    })
-  }
+  const executionPrice = validateOrderPrice({
+    normalizedType,
+    price,
+    avgPrice,
+  })
 
   return {
     orderId,
@@ -94,9 +144,10 @@ function validateOrder({ bitunixOrder }) {
     normalizedSide,
     normalizedType,
     normalizedStatus,
+    exchangeStatus,
     volume,
     dealVolume,
-    price,
+    price: executionPrice,
   }
 }
 
@@ -113,6 +164,7 @@ export function adaptOrder(bitunixOrder) {
     normalizedSide,
     normalizedType,
     normalizedStatus,
+    exchangeStatus,
     volume,
     dealVolume,
     price,
@@ -126,7 +178,7 @@ export function adaptOrder(bitunixOrder) {
     side: normalizedSide,
     symbol: symbol.trim().toUpperCase(),
     quantity: Number(remainingQuantity),
-    price: normalizedType === "MARKET" ? 0 : Number(price),
+    price: Number(price),
     id: String(orderId),
   })
 
@@ -135,6 +187,9 @@ export function adaptOrder(bitunixOrder) {
   order.executedQuantity = String(dealVolume)
   order.remainingQuantity = remainingQuantity
   order.status = normalizedStatus
+  if (normalizedStatus === "UNKNOWN") {
+    order.exchangeStatus = exchangeStatus
+  }
   order.createdAt = bitunixOrder.ctime
   order.updatedAt = bitunixOrder.utime
   return order

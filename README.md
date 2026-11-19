@@ -12,6 +12,18 @@ See the [documentation index](docs/README.md) for repository-wide guidance, appl
 
 See the [architecture documentation](docs/architecture/README.md) for Coinzilla-wide architecture principles and decisions.
 
+## Synchronizing the dedicated main worktree
+
+The separate `harvy-main` worktree uses the local `main-work` branch to track `origin/main`. From the repository root of that worktree, run:
+
+```sh
+pnpm run sync:main
+```
+
+The command fetches `origin/main` and fast-forwards `main-work` only when the worktree is clean and the local history is an ancestor of the fetched remote history. It requires the current branch to be exactly `main-work`; it never switches branches, stashes changes, resets commits, or cleans files.
+
+If the worktree is dirty, the branch is detached or incorrect, the fetch fails, or local commits are ahead/diverged, the command stops with an explanation. Commit or move your changes, or reconcile the history manually, before retrying. Ignored files are not treated as untracked changes by Git.
+
 ## Requirements
 
 - Node.js 24 or newer
@@ -93,7 +105,7 @@ formatTimeRelatively({ value: -5, unit: 'minute' }) // '5 minutes ago'
 
 GitHub Actions runs the repository's checks on Node.js 24.x (the supported Node.js line):
 
-- **JavaScript Syntax** runs actionlint, JavaScript syntax checks, and agent-policy checks.
+- **JavaScript Syntax** runs workspace ESLint, JavaScript syntax, agent-policy and documentation checks; pull requests to `develop` also run strict changed-file ESLint. **actionlint** is a separate required status context in the same workflow.
 - **Unit Tests** installs dependencies with `pnpm install --frozen-lockfile` and runs `pnpm test`.
 - **Utils Unit Tests** independently runs `node --test packages/utils/src/*.test.js`.
 - **Test Coverage** runs workspace coverage and enforces package-specific coverage thresholds.

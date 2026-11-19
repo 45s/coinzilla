@@ -2,172 +2,184 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { calculateRecoverySellerProfitability } from "./calculate-profitability.js"
 
-const validProfitabilityInput = {
+const validInput = {
   recoveryCostBasis: "10",
-  recoveryNetQuoteProceeds: "10.25",
-  minProfit: "0.2",
+  recoveryNetQuoteProceeds: "10.15",
+  minProfit: "0.01",
   legacyAverageCost: "2",
   legacyBaseDebit: "0.1",
   legacyNetQuoteProceeds: "0.19",
 }
 
-function calculateProfitability(overrides = {}) {
-  return calculateRecoverySellerProfitability({
-    ...validProfitabilityInput,
-    ...overrides,
-  })
-}
+test("rejects a mixed SELL when recovery profit would subsidize a legacy loss", () => {
+  const result = calculateRecoverySellerProfitability(validInput)
 
-test("rejects a legacy loss even when the recovery tranche independently meets minProfit", () => {
-  const result = calculateProfitability()
-
-  assert.equal(result.recovery.netProfit, "0.25", "The recovery allocation must retain its independently calculated net profit.")
-  assert.equal(result.recovery.eligible, true, "The recovery allocation must pass when its net profit meets minProfit.")
-  assert.equal(result.legacy.costBasis, "0.2", "The legacy cost basis must use the fixed average cost multiplied by the actual legacy base debit.")
-  assert.equal(result.legacy.netProfit, "-0.01", "The legacy allocation must expose its own loss without offsetting it against recovery profit.")
-  assert.equal(result.legacy.eligible, false, "A loss on the legacy allocation must fail its independent profitability gate.")
-  assert.equal(result.eligible, false, "Overall eligibility must fail whenever either applicable profitability gate fails.")
+  assert.equal(result.recovery.netProfit, "0.15",
+    "The recovery allocation must retain its independently calculated net profit.")
+  assert.equal(result.recovery.eligible, true,
+    "Recovery allocation passes its own minimum-profit requirement.")
+  assert.equal(result.legacy.costBasis, "0.2",
+    "Legacy cost basis must use the fixed historical average cost.")
+  assert.equal(result.legacy.netProfit, "-0.01",
+    "Legacy allocation must retain its independently calculated loss.")
+  assert.equal(result.legacy.eligible, false,
+    "A legacy loss must fail its independent non-loss gate.")
+  assert.equal(result.cycle.costBasis, "10.2",
+    "Combined cycle cost must include recovery and legacy cost bases.")
+  assert.equal(result.cycle.netQuoteProceeds, "10.34",
+    "Combined cycle proceeds must include both independently allocated proceeds.")
+  assert.equal(result.cycle.netProfit, "0.14",
+    "The combined cycle result must remain visible even when one allocation fails.")
+  assert.equal(result.cycle.minProfit, "0.01",
+    "The combined cycle must retain the configured minimum-profit requirement.")
+  assert.equal(result.cycle.eligible, true,
+    "The combined cycle may pass while the legacy allocation independently fails.")
+  assert.equal(result.eligible, false,
+    "Overall SELL eligibility must require every applicable profitability gate.")
 })
 
-test("accepts a break-even legacy allocation when the recovery tranche meets minProfit", () => {
-  const result = calculateProfitability({
-    recoveryNetQuoteProceeds: "10.1",
-    minProfit: "0.1",
-    legacyBaseDebit: "0.5",
-    legacyNetQuoteProceeds: "1",
+test("rejects a mixed SELL when legacy profit would subsidize a recovery loss", () => {
+  const result = calculateRecoverySellerProfitability({
+    ...validInput,
+    recoveryNetQuoteProceeds: "9.995",
+    legacyNetQuoteProceeds: "0.3",
   })
 
-  assert.equal(result.recovery.eligible, true, "The recovery allocation must pass at exact minProfit equality.")
-  assert.equal(result.legacy.netProfit, "0", "The legacy allocation must report exact break-even after its historical cost basis.")
-  assert.equal(result.legacy.eligible, true, "A legacy allocation that fully recovers its own basis and costs must pass the no-loss gate.")
-  assert.equal(result.eligible, true, "Both independently applicable gates must pass for the combined SELL to be eligible.")
+  assert.equal(result.recovery.netProfit, "-0.005",
+    "Recovery allocation must expose its loss without netting legacy profit against it.")
+  assert.equal(result.recovery.eligible, false,
+    "A recovery loss must fail its independent minimum-profit requirement.")
+  assert.equal(result.legacy.netProfit, "0.1",
+    "Legacy allocation must retain its independent profit.")
+  assert.equal(result.legacy.eligible, true,
+    "A profitable legacy allocation passes its non-loss requirement.")
+  assert.equal(result.cycle.netProfit, "0.095",
+    "Combined cycle profit must remain independently calculated.")
+  assert.equal(result.cycle.eligible, true,
+    "The combined cycle can pass even though the recovery allocation fails.")
+  assert.equal(result.eligible, false,
+    "Overall SELL eligibility must reject a recovery loss despite profitable legacy proceeds.")
 })
 
-test("continues recovery-only eligibility after the authorized legacy inventory is exhausted", () => {
-  const result = calculateProfitability({
-    recoveryNetQuoteProceeds: "10.2",
-    minProfit: "0.2",
+test("accepts a mixed SELL only when recovery, legacy and combined gates all pass", () => {
+  const result = calculateRecoverySellerProfitability({
+    ...validInput,
+    legacyNetQuoteProceeds: "0.21",
+  })
+
+  assert.equal(result.recovery.eligible, true,
+    "Recovery profit must meet the configured minimum-profit requirement.")
+  assert.equal(result.legacy.netProfit, "0.01",
+    "Legacy profit must be calculated against its historical cost basis.")
+  assert.equal(result.legacy.eligible, true,
+    "Legacy allocation must be non-loss-making.")
+  assert.equal(result.cycle.eligible, true,
+    "Combined cycle profit must meet pair-level minProfit.")
+  assert.equal(result.eligible, true,
+    "Overall eligibility passes only after every applicable gate passes.")
+})
+
+test("accepts a break-even legacy allocation when recovery and combined gates pass", () => {
+  const result = calculateRecoverySellerProfitability({
+    ...validInput,
+    legacyNetQuoteProceeds: "0.2",
+  })
+
+  assert.equal(result.legacy.netProfit, "0",
+    "Legacy proceeds equal to historical cost must be represented as break-even.")
+  assert.equal(result.legacy.eligible, true,
+    "The legacy non-loss gate accepts exact break-even proceeds.")
+  assert.equal(result.eligible, true,
+    "A break-even legacy slice is allowed when recovery and combined gates pass.")
+})
+
+test("combined cycle gate rejects proceeds below minProfit", () => {
+  const result = calculateRecoverySellerProfitability({
+    ...validInput,
+    recoveryNetQuoteProceeds: "10.019",
+    legacyNetQuoteProceeds: "0.19",
+  })
+
+  assert.equal(result.recovery.netProfit, "0.019",
+    "Recovery allocation profit must remain separate from combined cycle profit.")
+  assert.equal(result.recovery.eligible, true,
+    "Recovery allocation meets its minimum-profit threshold.")
+  assert.equal(result.legacy.eligible, false,
+    "Legacy loss must independently fail.")
+  assert.equal(result.cycle.netProfit, "0.009",
+    "Combined cycle net profit must be calculated without rounding away the shortfall.")
+  assert.equal(result.cycle.eligible, false,
+    "The combined cycle must fail when net profit is below minProfit.")
+  assert.equal(result.eligible, false,
+    "Overall eligibility must remain false when the combined gate fails.")
+})
+
+test("recovery-only cycles require recovery and combined gates without a legacy gate", () => {
+  const profitable = calculateRecoverySellerProfitability({
+    ...validInput,
+    recoveryNetQuoteProceeds: "10.01",
+    legacyBaseDebit: "0",
+    legacyNetQuoteProceeds: "0",
+  })
+  const unprofitable = calculateRecoverySellerProfitability({
+    ...validInput,
+    recoveryNetQuoteProceeds: "10.009",
     legacyBaseDebit: "0",
     legacyNetQuoteProceeds: "0",
   })
 
-  assert.equal(result.recovery.eligible, true, "Recovery-only cycles must continue to use the existing pair-level minProfit.")
-  assert.equal(result.legacy.applicable, false, "The legacy gate must be inapplicable when no legacy base quantity is debited.")
-  assert.equal(result.legacy.eligible, true, "An exhausted legacy position must not block an otherwise profitable recovery-only cycle.")
-  assert.equal(result.eligible, true, "Recovery-only eligibility must depend on the recovery gate after legacy exhaustion.")
+  assert.equal(profitable.legacy.applicable, false,
+    "An exhausted legacy allocation must not be treated as an active zero-cost Position.")
+  assert.equal(profitable.legacy.eligible, true,
+    "An inapplicable legacy allocation must not block recovery-only operation.")
+  assert.equal(profitable.eligible, true,
+    "Recovery-only operation passes when recovery and combined minimum-profit gates pass.")
+  assert.equal(unprofitable.recovery.eligible, false,
+    "Recovery-only operation must fail when recovery profit is below minProfit.")
+  assert.equal(unprofitable.cycle.eligible, false,
+    "The combined recovery-only cycle must also fail below minProfit.")
+  assert.equal(unprofitable.eligible, false,
+    "Recovery-only operation must not bypass either applicable profitability gate.")
 })
 
-test("includes the legacy-allocated base SELL commission in the historical cost basis", () => {
-  const legacyBaseDebitIncludingAllocatedCommission = "0.0101"
-  const result = calculateProfitability({
-    recoveryNetQuoteProceeds: "10.2",
-    minProfit: "0.2",
-    legacyBaseDebit: legacyBaseDebitIncludingAllocatedCommission,
-    legacyNetQuoteProceeds: "0.0201",
-  })
-
-  assert.equal(result.legacy.costBasis, "0.0202", "Legacy historical cost must include the base units consumed by the SELL commission.")
-  assert.equal(result.legacy.netProfit, "-0.0001", "The legacy net result must use the full base debit, including base commission.")
-  assert.equal(result.legacy.eligible, false, "A base commission that makes the legacy slice loss-making must fail its independent gate.")
-})
-
-test("rejects legacy quote proceeds when no legacy base quantity was debited", () => {
+test("rejects legacy proceeds when no legacy base quantity was debited", () => {
   assert.throws(
-    () => calculateProfitability({
+    () => calculateRecoverySellerProfitability({
+      ...validInput,
       legacyBaseDebit: "0",
       legacyNetQuoteProceeds: "0.01",
     }),
     /Legacy quote proceeds require a positive legacy base debit/,
-    "Legacy proceeds must never be attributed to a zero-quantity legacy allocation.",
+    "Legacy proceeds without a corresponding legacy base debit are invalid.",
   )
 })
 
-test("rejects negative recovery net quote proceeds", () => {
+test("rejects missing legacy cost basis when legacy inventory is debited", () => {
   assert.throws(
-    () => calculateProfitability({
-      recoveryNetQuoteProceeds: "-0.01",
-    }),
-    /non-negative/,
-    "Negative net recovery proceeds are invalid evidence and must fail closed before profitability is calculated.",
-  )
-})
-
-test("rejects negative legacy net quote proceeds", () => {
-  assert.throws(
-    () => calculateProfitability({
-      legacyNetQuoteProceeds: "-0.01",
-    }),
-    /non-negative/,
-    "Negative net legacy proceeds are invalid evidence and must fail closed before profitability is calculated.",
-  )
-})
-
-test("rejects a negative recovery cost basis", () => {
-  assert.throws(
-    () => calculateProfitability({
-      recoveryCostBasis: "-1",
-    }),
-    /non-negative/,
-    "A negative recovery cost basis is invalid and must not produce a profitability decision.",
-  )
-})
-
-test("rejects a zero recovery cost basis", () => {
-  assert.throws(
-    () => calculateProfitability({
-      recoveryCostBasis: "0",
-    }),
-    /recoveryCostBasis must be positive/,
-    "A recovery tranche without a positive acquired cost basis must be rejected.",
-  )
-})
-
-test("rejects a zero minimum recovery profit threshold", () => {
-  assert.throws(
-    () => calculateProfitability({
-      minProfit: "0",
-    }),
-    /minProfit must be positive|greater than zero/,
-    "The existing pair-level minProfit must remain strictly positive.",
-  )
-})
-
-test("rejects a negative minimum recovery profit threshold", () => {
-  assert.throws(
-    () => calculateProfitability({
-      minProfit: "-0.01",
-    }),
-    /non-negative/,
-    "A negative pair-level minProfit must not weaken the recovery profitability gate.",
-  )
-})
-
-test("rejects a negative legacy average cost even when the legacy allocation is otherwise valid", () => {
-  assert.throws(
-    () => calculateProfitability({
-      legacyAverageCost: "-2",
-    }),
-    /non-negative/,
-    "A negative fixed legacy average acquisition cost is invalid and must fail closed.",
-  )
-})
-
-test("rejects a negative legacy base debit", () => {
-  assert.throws(
-    () => calculateProfitability({
-      legacyBaseDebit: "-0.1",
-    }),
-    /non-negative/,
-    "A negative legacy base debit is invalid evidence and must not be used for historical cost accounting.",
-  )
-})
-
-test("rejects a zero legacy average cost when legacy inventory is debited", () => {
-  assert.throws(
-    () => calculateProfitability({
+    () => calculateRecoverySellerProfitability({
+      ...validInput,
       legacyAverageCost: "0",
     }),
     /legacyAverageCost must be positive when legacy base is debited/,
-    "A positive legacy base debit requires a positive fixed original average acquisition cost.",
+    "Legacy liquidation must fail closed when historical cost basis is missing.",
+  )
+})
+
+test("rejects negative proceeds and invalid recovery cost inputs", () => {
+  assert.throws(
+    () => calculateRecoverySellerProfitability({
+      ...validInput,
+      legacyNetQuoteProceeds: "-0.01",
+    }),
+    /non-negative/,
+    "Negative allocated proceeds must not be accepted as a valid profitability input.",
+  )
+  assert.throws(
+    () => calculateRecoverySellerProfitability({
+      ...validInput,
+      recoveryCostBasis: "0",
+    }),
+    /recoveryCostBasis must be positive/,
+    "Recovery profitability requires a positive authoritative BUY cost basis.",
   )
 })

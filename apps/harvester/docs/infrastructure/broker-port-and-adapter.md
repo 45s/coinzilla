@@ -25,11 +25,72 @@ Binance WebSocket API and Streams
 
 The port belongs to Harvester because it describes the capabilities this application needs. The adapter belongs to infrastructure because it knows how to satisfy those needs with a concrete broker. Domain policies, Portfolio, and use cases must not import `@coinzilla/brokers`, `CoreBroker`, Binance classes, exchange SDK types, or raw exchange payloads.
 
+## Multi-provider target architecture — issue #1339
+
+The current implementation below is still a single Binance adapter. The accepted target permits multiple named provider instances in one Harvester process. Harvester bootstrap constructs each configured instance and assembles an application-owned registry/router; the Brokers package supplies exchange clients and verified capabilities but does not own strategy/market routing. The source-verified current-state assessment, provenance gaps and ordered implementation prerequisites are maintained in the [multi-provider migration audit and implementation plan](../../../../docs/architecture/multi-provider-migration-plan.md).
+
+Execution and market-data resolution are separate:
+
+```text
+Strategy policy (strategyId + symbol; no provider knowledge)
+        |
+        v
+Trading Engine / application workflow
+        |
+        +---- execution route: (strategyId, symbol) -> providerInstanceId
+        |                          |
+        |                          v
+        |                  provider registry
+        |                          |
+        |                          v
+        |                 Harvester BrokerPort
+        |
+        +---- market-data route: symbol -> providerInstanceId
+                                   |
+                                   v
+                           provider registry
+                                   |
+                                   v
+                          Harvester BrokerPort
+```
+
+Example target configuration (illustrative; not accepted by today's validator):
+
+```js
+const executionRoutes = [
+  { strategyId: "RS_recoverySeller", symbol: "STRKUSDT", providerInstanceId: "bitunixSpotPrimary" },
+  { strategyId: "CG_coinGrabber", symbol: "LINKUSDT", providerInstanceId: "binanceTestnet" },
+]
+
+const marketDataRoutes = [
+  { symbol: "STRKUSDT", providerInstanceId: "binanceTestnet" },
+  { symbol: "LINKUSDT", providerInstanceId: "binanceTestnet" },
+]
+```
+
+The route table is exact: no implicit default, wildcard, priority list, or failover. Every enabled executable strategy/market pair resolves to exactly one provider. The market-data source is configured independently and is never inferred from the execution route. Duplicate or missing routes and unsupported provider capabilities fail closed.
+
+The router is an application capability injected by bootstrap. Strategy/domain policies receive normalized prices and make strategy decisions; they do not receive provider IDs or concrete broker clients. Provider construction is a composition responsibility, while route resolution is a Harvester application concern.
+
+### Immutable order provenance
+
+Before a state-changing order request, retain the selected `providerInstanceId`, provider type, stable non-secret account identity, strategy ID, and symbol with the order's client identity. Once submitted, the order remains pinned to that provider/account for acknowledgement, cancellation, lookup, fills, user-data events, reconciliation and recovery. A later route-table change affects new intents only.
+
+A provider/account identity must not be inferred from the current route when processing an existing order. Equal exchange-native IDs from different providers are distinct and must be namespaced. Do not persist or log credentials.
+
+### Account and lifecycle isolation
+
+Account snapshots, balances, open orders, reservations, readiness, user-data recovery and process locks must be scoped by provider instance/account/environment. Different exchange accounts are not one spendable wallet. A disconnect or failed recovery for one provider must not silently transfer orders to another provider or mark unrelated providers unavailable.
+
+A state-changing timeout remains an unknown outcome. Never retry it on another provider. Cross-provider fallback could duplicate an order.
+
+The durable routing contract is [ADR-0003](../../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md), and Bitunix admission is governed by [ADR-0004](../../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md); this file remains the Harvester-specific port/adapter guide.
+
 ## Why not depend on CoreBroker directly?
 
 `CoreBroker` is currently a base class whose methods throw when not implemented; it is not a formal, capability-checked application port. Depending on it couples Harvester to the broker package's class hierarchy instead of the small set of operations its use cases require.
 
-There is also a current naming mismatch: `CoreBroker` declares `getPrice()`, while `BinanceWebSocketBroker` implements `getPrices({ symbol })`. Keep such package-specific differences inside the adapter and resolve the shared contract mismatch when formalizing the cross-broker contract.
+The Brokers package now exposes `getPrice()` as a compatibility alias for `getPrices({ symbol })` on both Binance and Bitunix. New application ports should prefer `getPrices()` as the canonical one-shot market-price operation; the alias does not make `CoreBroker` a formal Harvester application port.
 
 Owning the port does not mean copying shared entities. Reuse canonical Order, Fill, Market, Quantity, Balance, BrokerResult, and utility contracts from `@coinzilla/entities` / `@coinzilla/utils` wherever they fit.
 
@@ -158,7 +219,7 @@ export const createHarvesterServices = ({ config, logger }) => {
 }
 ```
 
-Bootstrap always selects Binance, requires `TRADING_MODE` to be exactly `testnet` or `live`, and requires `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`. `testnet` selects Binance Spot TESTNET; `live` selects Binance Spot LIVE and permits real order execution. Trading is enabled in either mode; missing or invalid mode fails startup. `.env.development` supplies `TRADING_MODE=testnet`, while production `.env` supplies `TRADING_MODE=live`. `NODE_ENV` does not select the exchange. Bootstrap connects once and exposes an idempotent `stop()` used by the CLI's SIGINT/SIGTERM handlers. The `@coinzilla/brokers` workspace dependency is declared in Harvester and the lockfile.
+Bootstrap always selects Binance, requires `TRADING_MODE` to be exactly `testnet` or `live`, and requires `BINANCE_API_KEY` and `BINANCE_API_SECRET_KEY`. `testnet` selects Binance Spot TESTNET; `live` selects Binance Spot LIVE and permits real order execution. Trading is enabled in either mode; missing or invalid mode fails startup. `.env.development` supplies `TRADING_MODE=testnet`, while production `.env` supplies `TRADING_MODE=live`. `NODE_ENV` does not select the exchange. Host-shared process locks are scoped by provider and trading mode, allowing Testnet and LIVE to coexist while preserving one writer per environment. Bootstrap connects once and exposes an idempotent `stop()` used by the CLI SIGINT/SIGTERM handlers. The `@coinzilla/brokers` workspace dependency is declared in Harvester and the lockfile.
 
 ## Reliability rules
 
@@ -202,6 +263,6 @@ The Harvester broker port exposes `subscribeForBookTicker({ symbol, onBookTicker
 
 For Conservative, order-type selection, POST-ONLY crossing constraints, and fail-closed behavior are defined exclusively in [CONSERVATIVE_DOMAIN_SPECIFICATION.md](../domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md). The engine requires fresh same-symbol book data before a LIMIT_MAKER submission; this document records the adapter boundary and implementation only. The Binance adapter only classifies the exact Spot `-2010` POST-ONLY matching-engine response as definite when the response is not marked `outcomeUnknown`; all uncertain outcomes retain the existing fail-closed pause behavior.
 
-## Bitunix Spot metadata boundary
+## Bitunix provider boundary
 
-The current application broker port and runtime composition remain Binance-only. The Bitunix Spot market-metadata helper (`src/infrastructure/brokers/bitunix-market-metadata.js`) is a pure read-side transformation; it is not a broker adapter, does not satisfy the full Harvester broker port, and is not wired into bootstrap. It maps only `minVolume` and `minPrice` into canonical minimum constraints; precision increments remain UNKNOWN. Do not use it to enable Bitunix trading while issue #1185 remains open.
+Bitunix Spot is not a registered Harvester provider. The partial query operations in `@coinzilla/brokers` do not yet satisfy the complete order, fill, account-lifecycle, private-event/reconciliation, market-constraint and environment-safety contract in [issue #1185](https://github.com/45s/coinzilla/issues/1185). Keep Bitunix outside the provider registry and all execution/market-data routes until that work is complete. Do not add a temporary observer or partial provider facade. Future integration must use the same complete provider-instance, BrokerPort, capability, account-lifecycle and routing contracts as every other provider. Exchange-specific Bitunix market normalization belongs in `@coinzilla/brokers`, not in a Harvester-specific metadata helper.

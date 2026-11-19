@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto"
 import { toResult } from "@coinzilla/utils"
 import { recordSafetyBlockerResolved } from "./record-safety-control-facts.js"
-import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
 import { reconcileRecoveredMarketState } from "./reconcile-recovered-market-state.js"
 import { restoreHarvesterJournalState } from "./restore-harvester-journal-state.js"
 
@@ -36,7 +35,7 @@ function createReconciliationEvidenceDigest({ targetMarket, historyRetentionEvid
     .digest("hex")
 }
 
-async function readVerifiedProjection({ operationalStateStore }) {
+async function readVerifiedProjection({ operationalStateStore, projectOperationalState }) {
   const read = await operationalStateStore.readAll()
   if (read?.ok !== true || read.data?.durableWriteSupported !== true || !Array.isArray(read.data.records)) {
     return toResult({
@@ -45,7 +44,7 @@ async function readVerifiedProjection({ operationalStateStore }) {
         : [new Error("Durable-fact stream is not verified and durably readable")],
     })
   }
-  return projectHarvesterOperationalState({ records: read.data.records })
+  return projectOperationalState({ records: read.data.records })
 }
 
 function createHistoryRetentionEvidence({ projection, targetMarket }) {
@@ -147,7 +146,7 @@ async function resolveTargetMarketBlockers({
   return { resolvedSafetyBlockerIds }
 }
 
-async function readUnresolvedSafetyBlockers({ operationalStateStore, resolvedSafetyBlockerIds, unresolvedSafetyBlockers }) {
+async function readUnresolvedSafetyBlockers({ operationalStateStore, projectOperationalState, resolvedSafetyBlockerIds, unresolvedSafetyBlockers }) {
   if (resolvedSafetyBlockerIds.length === 0) {
     return unresolvedSafetyBlockers
   }
@@ -161,7 +160,7 @@ async function readUnresolvedSafetyBlockers({ operationalStateStore, resolvedSaf
         : [new Error("Resolved safety blockers could not be verified in the Operational State Store")],
     })
   }
-  const verifiedProjection = projectHarvesterOperationalState({ records: readback.data.records })
+  const verifiedProjection = projectOperationalState({ records: readback.data.records })
   if (verifiedProjection?.ok !== true) {
     return verifiedProjection
   }
@@ -170,6 +169,7 @@ async function readUnresolvedSafetyBlockers({ operationalStateStore, resolvedSaf
 
 async function resolveMarketSafetyBlockers({
   operationalStateStore,
+  projectOperationalState,
   projection,
   targetMarket,
   historyRetentionEvidence,
@@ -188,6 +188,7 @@ async function resolveMarketSafetyBlockers({
   }
   const remainingBlockers = await readUnresolvedSafetyBlockers({
     operationalStateStore,
+    projectOperationalState,
     resolvedSafetyBlockerIds: resolution.resolvedSafetyBlockerIds,
     unresolvedSafetyBlockers,
   })
@@ -203,11 +204,15 @@ async function resolveMarketSafetyBlockers({
 function validateCandidateReconciliationInput(options) {
   const {
     operationalStateStore,
+    projectOperationalState,
     reconcileOwnedOrders,
     getRecoveredState,
   } = options
   if (typeof operationalStateStore?.readAll !== "function") {
     throw new TypeError("Durable-fact candidate reconciliation requires an initialized read port")
+  }
+  if (typeof projectOperationalState !== "function") {
+    throw new TypeError("Durable-fact candidate reconciliation requires an injected Operational State projector")
   }
   if (typeof reconcileOwnedOrders !== "function" || typeof getRecoveredState !== "function") {
     throw new TypeError("Durable-fact candidate reconciliation requires a candidate-bound owned-order reconciler and state reader")
@@ -258,6 +263,7 @@ function createCandidateReconciliationResult({
 async function runCandidateMarketReconciliation({ input, projection, candidate }) {
   const {
     operationalStateStore,
+    projectOperationalState,
     markets,
     targetMarket,
     reconcileOwnedOrders,
@@ -288,6 +294,7 @@ async function runCandidateMarketReconciliation({ input, projection, candidate }
 
   const safetyBlockers = await resolveMarketSafetyBlockers({
     operationalStateStore,
+    projectOperationalState,
     projection,
     targetMarket,
     historyRetentionEvidence,
@@ -316,6 +323,7 @@ export async function reconcileHarvesterOperationalStateCandidate(options = {}) 
     const input = validateCandidateReconciliationInput(options)
     const projection = await readVerifiedProjection({
       operationalStateStore: input.operationalStateStore,
+      projectOperationalState: input.projectOperationalState,
     })
     if (projection?.ok !== true) {
       return projection

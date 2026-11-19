@@ -151,9 +151,18 @@ test("bounds queued work and reports capacity overflow without blocking later ev
     data: {},
   })
 
-  assert.equal(sent.length, 1)
-  assert.equal(errors.length, 1)
+  assert.equal(sent.length, 1, "Queue overflow must not start an additional Telegram request")
+  assert.equal(errors.length, 1, "Queue overflow must produce one operational diagnostic")
   assert.match(errors[0].error.message, /queue capacity exceeded/)
+  assert.equal(errors[0].failureCategory, "QUEUE_OVERFLOW", "Queue capacity failures must have a stable safe category")
+  assert.deepEqual(errors[0].delivery, {
+    acceptedCount: 1,
+    deliveredCount: 0,
+    failedCount: 0,
+    overflowCount: 1,
+    pendingCount: 1,
+    closed: false,
+  }, "Queue overflow evidence must distinguish rejected work from accepted delivery failures")
 
   gate.resolve()
   await first
@@ -195,10 +204,56 @@ test("reports delivery failures once and continues processing later events", asy
   await eventBus.handlers.get("bot.stopped")({ name: "bot.stopped",
     data: {} })
 
-  assert.equal(errors.length, 1)
-  assert.equal(calls, 2)
-  assert.equal(errors[0].eventName, "bot.started")
+  assert.equal(errors.length, 1, "A failed Telegram delivery must be reported exactly once")
+  assert.equal(calls, 2, "A failed delivery must not poison the serialized queue")
+  assert.equal(errors[0].eventName, "bot.started", "Failure evidence must identify the notification event")
+  assert.equal(errors[0].failureCategory, "NETWORK", "Network failures must use a safe stable category")
+  assert.deepEqual(errors[0].delivery, {
+    acceptedCount: 1,
+    deliveredCount: 0,
+    failedCount: 1,
+    overflowCount: 0,
+    pendingCount: 1,
+    closed: false,
+  }, "Failure evidence must include the exact delivery counters at the failure boundary")
   await subscriber.close()
+})
+
+test("classifies timeout, HTTP, Telegram API, and unknown delivery failures safely", async () => {
+  const abortError = new Error("request aborted")
+  abortError.name = "AbortError"
+  const scenarios = [
+    [new Error("request timed out"), "TIMEOUT"],
+    [abortError, "TIMEOUT"],
+    [new Error("Telegram API HTTP request failed with status 503"), "HTTP"],
+    [new Error("Telegram API rejected the request"), "TELEGRAM_API"],
+    [new Error("unexpected provider failure"), "UNKNOWN"],
+  ]
+
+  for (const [failure, expectedCategory] of scenarios) {
+    const eventBus = createEventBus()
+    const errors = []
+    const subscriber = subscribeTelegramNotifications({
+      eventBus,
+      notifier: {
+        async sendMessage() {
+          throw failure
+        },
+      },
+      logger: { error(entry) { errors.push(entry) } },
+    })
+
+    await eventBus.handlers.get("bot.started")({
+      name: "bot.started",
+      data: {},
+    })
+    assert.equal(
+      errors[0].failureCategory,
+      expectedCategory,
+      `Delivery failure ${failure.message} must be represented by the safe ${expectedCategory} category.`,
+    )
+    await subscriber.close()
+  }
 })
 
 test("leaves failures observable to the event bus when no logger is configured", async () => {

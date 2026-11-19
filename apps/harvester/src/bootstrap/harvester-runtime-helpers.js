@@ -108,14 +108,70 @@ export function handleHarvesterUserDataStatus({
   return result
 }
 
-export function isHarvesterMarketPriceFresh({ marketPrice, isMarketDataFresh, now } = {}) {
+export function isHarvesterMarketPriceFresh({ marketPrice,
+  isMarketDataFresh,
+  now } = {}) {
   return isMarketDataFresh({ timestamp: marketPrice.timestamp,
     now: now() })
 }
 
-export function isHarvesterMarketBookFresh({ marketBook, isMarketDataFresh, now } = {}) {
+export function isHarvesterMarketBookFresh({ marketBook,
+  isMarketDataFresh,
+  now } = {}) {
   return isMarketDataFresh({ timestamp: marketBook.timestamp,
     now: now() })
+}
+
+function resolveCandleHistoryBroker({
+  broker,
+  getMarketDataBroker,
+  symbol,
+}) {
+  const sourceBroker = typeof getMarketDataBroker === "function"
+    ? getMarketDataBroker({ symbol })
+    : broker
+  if (
+    !sourceBroker ||
+    typeof sourceBroker.getCandles !== "function" ||
+    typeof sourceBroker.subscribeForCandles !== "function"
+  ) {
+    throw new TypeError(`Candle market-data source for ${symbol} does not expose the required BrokerPort methods`)
+  }
+  return sourceBroker
+}
+
+function createCandleHistoryBroker({ broker,
+  getMarketDataBroker }) {
+  return Object.freeze({
+    getCandles: (input = {}) => resolveCandleHistoryBroker({
+      broker,
+      getMarketDataBroker,
+      symbol: input.symbol,
+    }).getCandles(input),
+    subscribeForCandles: (input = {}) => resolveCandleHistoryBroker({
+      broker,
+      getMarketDataBroker,
+      symbol: input.symbol,
+    }).subscribeForCandles(input),
+  })
+}
+
+function attachMarketDataIdentityToSnapshot({
+  snapshot,
+  symbol,
+  marketDataProviderIdentities,
+}) {
+  const sourceIdentity = marketDataProviderIdentities[symbol]
+  if (!snapshot?.ok || !snapshot.data || !sourceIdentity) {
+    return snapshot
+  }
+  return {
+    ...snapshot,
+    data: Object.freeze({
+      ...snapshot.data,
+      ...sourceIdentity,
+    }),
+  }
 }
 
 export function createHarvesterCandleHistoryService({
@@ -124,16 +180,27 @@ export function createHarvesterCandleHistoryService({
   logger,
   now,
   getTradingEngine,
+  getMarketDataBroker,
+  marketDataProviderIdentities = {},
 } = {}) {
-  return createCandleHistoryService({
-    broker,
+  const service = createCandleHistoryService({
+    broker: createCandleHistoryBroker({ broker,
+  getMarketDataBroker }),
     logger,
     now,
-    onSnapshot: async ({ symbol, snapshot } = {}) => {
-      const result = await getTradingEngine()?.processVolatilitySnapshot({ symbol,
-        snapshot })
+    onSnapshot: async ({ symbol,
+  snapshot } = {}) => {
+      const sourceAwareSnapshot = attachMarketDataIdentityToSnapshot({
+        snapshot,
+        symbol,
+        marketDataProviderIdentities,
+      })
+      const result = await getTradingEngine()?.processVolatilitySnapshot({
+        symbol,
+        snapshot: sourceAwareSnapshot,
+      })
       if (result && !result.ok) {
-        logger.error?.({
+        logger?.error?.({
           message: "Harvester volatility protection update failed",
           symbol,
           error: result.error,
@@ -142,6 +209,57 @@ export function createHarvesterCandleHistoryService({
       }
     },
   })
+  return Object.freeze({
+    ...service,
+    getSnapshot: ({ symbol } = {}) => attachMarketDataIdentityToSnapshot({
+      snapshot: service.getSnapshot({ symbol }),
+      symbol,
+      marketDataProviderIdentities,
+    }),
+  })
+}
+
+function createRecoveredTradingEngineState(recoveredState) {
+  return {
+    orderRegistry: recoveredState.orderRegistry,
+    journalFills: recoveredState.journalFills,
+    pausedMarkets: recoveredState.pausedMarkets,
+    durablePausedMarkets: recoveredState.durablePausedMarkets,
+    recoveryManagedPausedMarkets: recoveredState.recoveryManagedPausedMarkets,
+    recoveryManagedCancellationClientOrderIds: recoveredState.recoveryManagedCancellationClientOrderIds,
+    unrequestedTerminalOrderClientIds: recoveredState.unrequestedTerminalOrderClientIds,
+    replacementIntents: recoveredState.replacementIntents,
+    trailingBuyRepriceIntents: recoveredState.trailingBuyRepriceIntents,
+    completedOrderClientIds: recoveredState.completedOrderClientIds,
+    trailingBuySymbols: recoveredState.trailingBuySymbols,
+  }
+}
+
+function createHarvesterTradingEngineSafetyCallbacks({
+  userDataState,
+  accountSnapshotManagerRef,
+  logger,
+}) {
+  return {
+    canTrade: () => userDataState.ready,
+    hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
+    onUnownedExternalOrderObserved: ({ order } = {}) => {
+      const manager = accountSnapshotManagerRef.current
+      if (typeof manager?.observeExternalOrder !== "function") {
+        throw new Error("Account snapshot manager cannot reconcile a newly observed external order")
+      }
+      return manager.observeExternalOrder({ symbol: order.market.symbol })
+    },
+    isStopping: () => userDataState.stopped || userDataState.shutdownRequested,
+    onPause: async ({ symbol, reason, error } = {}) => {
+      logger.error?.({
+        message: "paused a trading pair",
+        symbol,
+        reason,
+        error,
+      })
+    },
+  }
 }
 
 export function createHarvesterTradingEngine({
@@ -180,15 +298,11 @@ export function createHarvesterTradingEngine({
     getAccountSnapshot,
     updateTradingAccounting,
     completeRecoveryCycle,
-    canTrade: () => userDataState.ready,
-    hasUnownedOpenOrdersForSymbol: accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
-    onUnownedExternalOrderObserved: ({ order } = {}) => {
-      const manager = accountSnapshotManagerRef.current
-      if (typeof manager?.observeExternalOrder !== "function") {
-        throw new Error("Account snapshot manager cannot reconcile a newly observed external order")
-      }
-      return manager.observeExternalOrder({ symbol: order.market.symbol })
-    },
+    ...createHarvesterTradingEngineSafetyCallbacks({
+      userDataState,
+      accountSnapshotManagerRef,
+      logger,
+    }),
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
@@ -198,38 +312,26 @@ export function createHarvesterTradingEngine({
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
     logger,
-    initialState: {
-      orderRegistry: recoveredState.orderRegistry,
-      journalFills: recoveredState.journalFills,
-      pausedMarkets: recoveredState.pausedMarkets,
-      durablePausedMarkets: recoveredState.durablePausedMarkets,
-      recoveryManagedPausedMarkets: recoveredState.recoveryManagedPausedMarkets,
-      recoveryManagedCancellationClientOrderIds: recoveredState.recoveryManagedCancellationClientOrderIds,
-      unrequestedTerminalOrderClientIds: recoveredState.unrequestedTerminalOrderClientIds,
-      replacementIntents: recoveredState.replacementIntents,
-      trailingBuyRepriceIntents: recoveredState.trailingBuyRepriceIntents,
-      completedOrderClientIds: recoveredState.completedOrderClientIds,
-      trailingBuySymbols: recoveredState.trailingBuySymbols,
-    },
-    isStopping: () => userDataState.stopped || userDataState.shutdownRequested,
-    onPause: async ({ symbol, reason, error } = {}) => {
-      logger.error?.({ message: "paused a trading pair",
-        symbol,
-        reason,
-        error })
-    },
+    initialState: createRecoveredTradingEngineState(recoveredState),
   })
 }
 
 
-function createExecutionFillCallback({ store, recordExecutionFill } = {}) {
+function createExecutionFillCallback({ store,
+  recordExecutionFill } = {}) {
   return store ? ({ fill }) => recordExecutionFill({ operationalStateStore: store,
     fill }) : undefined
 }
 
-function createRecoveryCycleCompletedCallback({ store, recordRecoveryCycleCompleted } = {}) {
+function createRecoveryCycleCompletedCallback({ store,
+  recordRecoveryCycleCompleted } = {}) {
   return store
-    ? ({ recoveryLedger, position, sellOrder, completion, minProfit, inventoryDisposition }) =>
+    ? ({ recoveryLedger,
+  position,
+  sellOrder,
+  completion,
+  minProfit,
+  inventoryDisposition }) =>
       recordRecoveryCycleCompleted({
         operationalStateStore: store,
         recoveryLedger,
@@ -242,9 +344,14 @@ function createRecoveryCycleCompletedCallback({ store, recordRecoveryCycleComple
     : undefined
 }
 
-function createRecoveryCycleNotCompletedCallback({ store, recordRecoveryCycleNotCompleted } = {}) {
+function createRecoveryCycleNotCompletedCallback({ store,
+  recordRecoveryCycleNotCompleted } = {}) {
   return store
-    ? ({ recoveryLedger, position, sellOrder, completion, minProfit }) =>
+    ? ({ recoveryLedger,
+  position,
+  sellOrder,
+  completion,
+  minProfit }) =>
       recordRecoveryCycleNotCompleted({
         operationalStateStore: store,
         recoveryLedger,
@@ -256,30 +363,40 @@ function createRecoveryCycleNotCompletedCallback({ store, recordRecoveryCycleNot
     : undefined
 }
 
-function createSubmissionIntentCallback({ store, recordOrderSubmissionIntent } = {}) {
-  return store ? ({ order, purpose }) => recordOrderSubmissionIntent({ operationalStateStore: store,
+function createSubmissionIntentCallback({ store,
+  recordOrderSubmissionIntent } = {}) {
+  return store ? ({ order,
+  purpose }) => recordOrderSubmissionIntent({ operationalStateStore: store,
     order,
     purpose }) : undefined
 }
 
-function createSubmissionOutcomeCallback({ store, recordOrderSubmissionOutcome } = {}) {
+function createSubmissionOutcomeCallback({ store,
+  recordOrderSubmissionOutcome } = {}) {
   return store
-    ? ({ order, outcome, purpose }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
+    ? ({ order,
+  outcome,
+  purpose }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
       order,
       outcome,
       purpose })
     : undefined
 }
 
-function createCancellationIntentCallback({ store, recordOrderCancellationIntent } = {}) {
-  return store ? ({ order, reason }) => recordOrderCancellationIntent({ operationalStateStore: store,
+function createCancellationIntentCallback({ store,
+  recordOrderCancellationIntent } = {}) {
+  return store ? ({ order,
+  reason }) => recordOrderCancellationIntent({ operationalStateStore: store,
     order,
     reason }) : undefined
 }
 
-function createStrategyMarketPausedCallback({ store, recordStrategyMarketControl, sequence } = {}) {
+function createStrategyMarketPausedCallback({ store,
+  recordStrategyMarketControl,
+  sequence } = {}) {
   return store
-    ? ({ symbol, reason }) => recordStrategyMarketControl({
+    ? ({ symbol,
+  reason }) => recordStrategyMarketControl({
       operationalStateStore: store,
       action: "PAUSE",
       transitionId: `${store.runtimeSessionId}:${++sequence.value}`,
@@ -289,9 +406,14 @@ function createStrategyMarketPausedCallback({ store, recordStrategyMarketControl
     : undefined
 }
 
-function createSafetyBlockerCallback({ store, recordSafetyBlockerRaised, createHash: hashFactory } = {}) {
+function createSafetyBlockerCallback({ store,
+  recordSafetyBlockerRaised,
+  createHash: hashFactory } = {}) {
   return store
-    ? ({ scope, symbol, reason, evidence }) => {
+    ? ({ scope,
+  symbol,
+  reason,
+  evidence }) => {
       const canonicalEvidence = Object.fromEntries(
         Object.keys(evidence).sort().map((key) => [key, evidence[key]]),
       )
@@ -307,9 +429,13 @@ function createSafetyBlockerCallback({ store, recordSafetyBlockerRaised, createH
     : undefined
 }
 
-function createCancellationOutcomeCallback({ store, recordOrderCancellationOutcome } = {}) {
+function createCancellationOutcomeCallback({ store,
+  recordOrderCancellationOutcome } = {}) {
   return store
-    ? ({ order, canceledOrder, reason, outcome }) =>
+    ? ({ order,
+  canceledOrder,
+  reason,
+  outcome }) =>
       recordOrderCancellationOutcome({ operationalStateStore: store,
         order,
         canceledOrder,

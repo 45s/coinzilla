@@ -14,7 +14,7 @@ Provide one Harvester-owned application capability that authorized operators can
 - The Conservative engine exposes a serialized operator-pause boundary separate from safety pause state; the implementation and regression tests are in [PR #1045](https://github.com/45s/coinzilla/pull/1045).
 - `src/application/operator/create-harvester-operator.js` composes explicit pause/resume use cases with actor-role authorization and an optional Operational State Store append port (ADR-0001 record contract).
 - When the store is supplied, use cases pass its append callback into the engine transition; the engine changes in-memory state only after a confirmed durable commit. Without a store, the engine applies its process-local operator pause directly.
-- `src/infrastructure/telegram/telegram-operator-adapter.js` implements the private-chat allowlist, command parser, serial Long Polling, stable update request IDs, retry behavior, graceful stop and correlated lifecycle diagnostics. PR #1067 wires its lifecycle into Harvester bootstrap; the current default is enabled.
+- The Telegram Command Center is a feature module under `src/infrastructure/telegram/operator/`. Its `index.js` exposes the public factory/parser, and `adapter.js` composes validation, transport, handlers, polling and lifecycle. The parent `telegram-operator-adapter.js` remains a compatibility re-export so existing bootstrap imports do not change. Effectful responsibilities (transport, polling, routing, callback/control execution and lifecycle) remain at the feature root; pure command/interaction mapping and formatting remain independently testable. These modules remain infrastructure-owned and do not introduce Telegram dependencies into application/domain layers. PR #1067 wires the adapter lifecycle into Harvester bootstrap; the current default is enabled.
 - The Operational State Store adapter and integrity checks are composed for restart recovery when configured. Telegram-only control does not create or require the store; never create a second writer for an explicitly supplied store. **Restart restoration is out of scope:** the initial operator pause lasts only for the current process and is not replayed after restart. A prior process session is handled by the recovery workflow only when restart recovery is enabled.
 
 ## DDD ownership and source layout
@@ -38,7 +38,37 @@ apps/harvester/src/
       operator-buy-cancellation-incomplete-error.js
   infrastructure/
     telegram/
-      telegram-operator-adapter.js       # implemented; optional runtime wiring is active
+      telegram-operator-adapter.js       # backwards-compatible public re-export
+      telegram-operator-keyboard.test.js # established targeted integration suite
+      format-telegram-operator-response.test.js # established targeted formatter suite
+      operator/
+        index.js                          # public feature exports
+        adapter.js                        # validation and dependency composition
+        lifecycle.js                      # startup, command registration, stop and cancellation
+        handlers.js                       # injected handler composition and diagnostics
+        routing.js                        # authorized message/callback dispatch
+        commands.js                       # command vocabulary and pure parsing
+        interaction.js                    # identity normalization and authorization
+        callbacks.js                      # confirmation, cancellation and navigation
+        messages.js                       # authorized text-command dispatch
+        keyboard.js                       # persistent/inline keyboard and help
+        pages.js                          # read-only query execution and rendering
+        controls.js                       # application control invocation and replies
+        transport.js                      # Telegram Bot API and message transport
+        updates.js                        # update processing, serial polling and retry
+        diagnostics.js                    # safe correlated interaction diagnostics
+        format-response.js                # operator snapshot formatting
+        adapter.test.js                   # public adapter integration contracts
+        commands.test.js
+        interaction.test.js
+        callbacks.test.js
+        controls.test.js
+        pages.test.js
+        routing.test.js
+        transport.test.js
+        updates.test.js
+        lifecycle.test.js
+        diagnostics.test.js
   bootstrap/
     operator-control/
       prepare-telegram-operator-control.js # runtime lifecycle composition
@@ -47,6 +77,16 @@ apps/harvester/src/
 The engine remains under `src/use-cases/conservative-trading-engine.js` because it coordinates existing application workflows and serialized broker/market transitions. Domain strategy policies remain transport- and persistence-independent.
 
 Do not create `packages/operator`, `packages/operators` or `packages/commands` now. Extract a shared package only after a second real application proves that actor, authorization, request/result and idempotency semantics are genuinely shared without Harvester trading dependencies.
+
+## Telegram adapter test boundaries
+
+The adapter contract is verified offline at two levels:
+
+- Public-adapter integration tests preserve command dispatch, private-chat authorization, callback confirmation/replay, query/control routing, serial polling, retry behavior, startup and shutdown.
+- Focused module tests exercise command parsing, Telegram identity/interaction normalization, callback confirmation consumption, application-control mapping, read-only page queries, Bot API transport semantics, update polling and lifecycle cancellation.
+- Dedicated keyboard, diagnostics and response-formatting suites preserve the persistent/inline keyboard contract, safe correlated error reporting, and operator snapshot presentation.
+
+These are offline characterization tests; this checkpoint changes no runtime behavior. Their source follows the repository's zero-warning ESLint rules without suppressions. All Telegram transport and application dependencies are injected or mocked. The tests do not call the live Telegram API, place exchange orders, or require TESTNET/LIVE credentials. Keep focused tests beside the operator feature modules and retain public-adapter integration coverage for cross-module behavior. The established keyboard and response-formatting targeted-test entry points remain at the parent Telegram path because Harvester's configured targeted-test list references those exact paths.
 
 ## Architecture flow
 
@@ -98,15 +138,16 @@ A pause transition commits its fact from inside the engine's serialized transiti
 sequenceDiagram
   participant T as Inbound adapter
   participant O as HarvesterOperator
-  participant U as pauseMarket use case
+  participant U as market BUY pause use case
   participant E as Conservative engine
   participant F as Operational State Store port
   T->>O: pauseMarket(actor, requestId, symbol)
   O->>U: authorize trusted actor
-  U->>E: pauseMarket(symbol, beforeApply)
-  E->>F: append OPERATOR_MARKET_PAUSED
+  U->>E: pauseBuys(symbol, beforeApply)
+  E->>F: append OPERATOR_MARKET_BUYS_PAUSED
   F-->>E: committed durable fact
-  E->>E: add operatorPausedMarkets
+  E->>E: activate market BUY gate
+  E->>E: cancel owned BUYs and reconcile racing fills
   E-->>U: structured result
   U-->>O: application result
   O-->>T: transport response
@@ -142,7 +183,7 @@ The application writes through the Operational State Store port. It does not use
 ```js
 {
   factId: "operator-control:telegram:1001",
-  factType: "OPERATOR_MARKET_PAUSED",
+  factType: "OPERATOR_MARKET_BUYS_PAUSED",
   data: {
     requestId: "telegram:1001",
     actorId: "telegram-user:12345",
@@ -216,23 +257,24 @@ A successful emergency BUY pause additionally reports the number of confirmed ow
 
 If cancellation cannot be confirmed, the result uses `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; the gate remains active and the Telegram adapter warns that cancellation is unresolved.
 
-## Existing market pause semantics
+## Market-scoped BUY pause semantics
 
-The existing `pauseMarket` / Telegram `/pause SYMBOL` control is market-scoped and separate from safety/recovery pause ownership.
+The public `pauseMarket` / `resumeMarket` facade methods, Telegram `/pause SYMBOL` / `/resume SYMBOL` commands, and confirmed keyboard Pause/Resume actions all use the same market-scoped BUY-only control as `pauseBuys({ symbol })` / `resumeBuys({ symbol })`. The facade names remain stable for transport compatibility; they no longer invoke the legacy non-canceling engine market-pause operation.
 
-- Block new strategy BUY intents for the selected market.
-- Suppress trailing-BUY replacement/repricing for that market.
-- Allow Conservative recovery SELL decisions.
+- Activate the market BUY gate inside the serialized engine transition before starting cancellation.
+- Block new BUY decisions, trailing-BUY replacement/repricing and final BUY submissions for the selected market.
+- Cancel active BUY orders owned by the current process through the existing cancellation/reconciliation workflow.
+- Reconcile and account cancellation-racing fills before reporting successful completion.
+- Allow Conservative recovery SELL decisions and submissions.
 - Continue market prices, broker/user-data intake, fill accounting and reconciliation.
-- Leave all existing exchange orders untouched. A resting BUY may still fill after this pause; its fill is accounted and recovery SELL behavior remains available.
-- Do not cancel, adopt or modify orders, and do not mutate broker or OrderRegistry state outside the existing engine workflows.
-- Do not affect unrelated markets.
+- Do not cancel, adopt or modify startup-snapshot, manual, external or prior-process orders under ADR-0004.
+- Do not affect unrelated markets. A global BUY pause remains an independent scope.
 
-This is not an exchange kill switch. The existing `/pause SYMBOL` response must continue to state that already-open orders remain open and may still fill.
+A successful response requires no current-process-owned active BUY to remain in the requested market scope. If cancellation is unresolved, the BUY gate remains active and the operation returns `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; the operator must inspect `/orders` and diagnostics. This is not an exchange-wide kill switch. The pause is process-local and is not restored after restart.
 
-## Emergency BUY pause semantics
+## Global emergency BUY pause semantics
 
-The separate emergency BUY controls are exposed by the application facade as `pauseAllBuys()`, `resumeAllBuys()`, `pauseBuys({ symbol })`, and `resumeBuys({ symbol })`.
+The global emergency BUY controls remain exposed as `pauseAllBuys()` and `resumeAllBuys()`. The market-scoped `pauseBuys({ symbol })` / `resumeBuys({ symbol })` methods remain available as compatibility application aliases for the public `pauseMarket` / `resumeMarket` facade methods.
 
 - Global pause blocks every new BUY decision, BUY replacement/repricing and final BUY submission across configured markets.
 - Market pause applies the same BUY-only gate to one configured market.
@@ -250,7 +292,7 @@ This is a BUY-side emergency exposure control, not a market shutdown or exchange
 
 The Telegram adapter exposes `/start`, `/help`, `/status`, `/markets`, `/pause <SYMBOL>`, `/resume <SYMBOL>`, `/pauseallbuys`, `/resumeallbuys`, `/pausebuys <SYMBOL>`, and `/resumebuys <SYMBOL>`. Telegram command names are lowercase; the application facade uses camelCase methods. Read commands use the same authorized application facade as state-changing commands; they never call the broker or mutate trading state.
 
-`/resume SYMBOL` removes only the legacy operator-owned market pause and retains its existing safety-blocker refusal. `resumeBuys({ symbol })` and `resumeAllBuys()` remove only their matching emergency BUY-pause scope; they do not clear any strategy, safety, recovery, volatility or startup-readiness blocker. A remaining global or market BUY-pause scope continues to block BUYs.
+`/resume SYMBOL` removes only the market-scoped operator BUY gate. It does not clear strategy, safety, recovery, volatility or startup-readiness blockers; those gates remain active and continue to block BUYs. A remaining global BUY-pause scope also continues to block BUYs.
 
 ## First transport: Telegram
 
@@ -290,15 +332,15 @@ The initial `/pause <SYMBOL>` adapter is the foundation, not the finished operat
 3. **CC-3 — Proactive alerts:** lifecycle/readiness, safety blockers, execution/recovery events and Telegram health; reuse `@coinzilla/notifiers` and never block trading transitions.
 4. **CC-4 — Usability and hardening:** Telegram command menu, authorized inline navigation/refresh, one-time confirmations for inline pause/resume controls, callback authorization/idempotency/retry/outage/shutdown coverage and an operator runbook.
 
-The adapter exposes `/start` and `/help`, routes `/resume <SYMBOL>` through the existing safe application use case, and exposes `/status` and `/markets` through the read-only query facade. Resume clears only the operator-owned pause. A safety, recovery or volatility blocker causes a refusal before durable append; the transport explains that the blocker remains active. Status/market query failures are reported as unavailable and never trigger a trading action.
+The adapter exposes `/start` and `/help`, routes `/pause <SYMBOL>` and `/resume <SYMBOL>` through the market BUY pause/resume use cases, and exposes `/status` and `/markets` through the read-only query facade. Resume clears only the operator BUY gate; other safety, recovery, volatility and startup-readiness blockers remain active and continue to block BUYs. Status/market query failures are reported as unavailable and never trigger a trading action.
 
-The initial `/pause` semantics remain unchanged: it does not cancel existing orders, and a resting order may still fill. The separate emergency BUY commands cancel only current-process-owned BUY orders through the engine workflow; they do not cancel recovery SELLs or external orders. No account-wide cancel-all, order-placement, configuration-edit, strategy-edit, arbitrary command execution, safety bypass or HTTP server is included. ADR-0001 Steps 8–9 remain deferred and do not block CC. The operator pause remains process-lifetime only and is not restored after restart.
+The normal market `/pause SYMBOL` command and confirmed Pause button activate the market BUY gate and cancel only current-process-owned BUY orders through the engine workflow. The matching Resume actions clear only that market BUY gate. Recovery SELLs and accounting continue; startup-snapshot/manual/external/prior-process orders remain untouched. Global BUY commands remain separate. No account-wide cancel-all, arbitrary order placement, configuration/strategy edit, arbitrary command execution, safety bypass or HTTP server is included. ADR-0001 Steps 8–9 remain deferred and do not block CC. The operator BUY pause remains process-lifetime only and is not restored after restart.
 
 ## Inline Command Center interaction (CC-4)
 
 Telegram startup registers the supported text-command menu through `setMyCommands`; registration is best-effort and does not affect adapter authorization or text-command availability. Long polling explicitly requests both `message` and `callback_query` updates. Inline navigation and refresh call only the existing authorized application read queries and edit the current private-chat message; they never call broker APIs or mutate trading state.
 
-Market rows expose an inline pause or resume request according to the current read-only operator-pause snapshot. Selecting a control displays a confirmation prompt and performs no application call. The pending confirmation is bound to the allowlisted Telegram user ID, private chat ID, originating message ID, exact action and market, and expires after five minutes. A valid confirmation is consumed before dispatch and uses the callback query ID as its stable application request ID. Stale, replayed, malformed, mismatched and unauthorized callbacks do not reach operator use cases. Cancel removes the pending request without changing operator state. Telegram callback acknowledgements and message edits are transport-only; application authorization remains authoritative, and durable-before-apply applies when an Operational State Store is supplied.
+Market rows expose an inline pause or resume request according to the current read-only `operatorBuysPaused` snapshot field. Selecting a control displays a confirmation prompt and performs no application call. The pending confirmation is bound to the allowlisted Telegram user ID, private chat ID, originating message ID, exact action and market, and expires after five minutes. A valid confirmation is consumed before dispatch and uses the callback query ID as its stable application request ID. Stale, replayed, malformed, mismatched and unauthorized callbacks do not reach operator use cases. Cancel removes the pending request without changing operator state. Telegram callback acknowledgements and message edits are transport-only; application authorization remains authoritative, and durable-before-apply applies when an Operational State Store is supplied.
 
 Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations and retain their existing stable update-derived request IDs. All other pages remain read-only. The adapter clears pending inline confirmations during shutdown.
 
@@ -311,15 +353,15 @@ Typed `/pause SYMBOL` and `/resume SYMBOL` remain explicit command invocations a
 | Unknown configured market | Engine rejects before applying state. |
 | Durable fact write failed or uncertain (when a store is supplied) | No state transition and no successful acknowledgement. |
 | Process restart after a pause | The initial scope does not replay operator facts. The process starts without the operator pause; the operator must issue `/pause <SYMBOL>` again if needed. |
-| Existing BUY fills after `/pause SYMBOL` | Apply the fill normally; continue risk-reducing recovery SELL behavior; suppress new BUY intents. |
+| Existing BUY fills during `/pause SYMBOL` cancellation | Reconcile and account the fill normally; keep the BUY gate active; continue recovery SELL behavior; suppress new BUY intents. |
 | Emergency BUY cancellation is unresolved | Keep the requested BUY gate active; return `OPERATOR_BUY_CANCELLATION_INCOMPLETE`; tell the operator to inspect `/orders` and diagnostics. Never claim the emergency pause fully canceled all owned BUYs. |
 | Global/market BUY pauses overlap | Effective BUY gate remains active until both applicable scopes are resumed. |
-| Resume while safety/recovery blocker exists | Reject before writing a resume fact; preserve the blocker. |
+| Resume while another safety/recovery blocker exists | Remove only the operator BUY pause; preserve the other blocker, which continues to block BUYs. |
 | Telegram transport failure | Log actionable diagnostics; never mutate trading state outside the application use case. |
 
 ## TDD and delivery sequence
 
-1. **Engine semantics — implemented:** RED/GREEN tests cover market isolation, BUY suppression, recovery SELL continuity, no cancellation/repricing of existing orders, durable-before-apply, initial-state restoration, idempotent pause and safety-blocked resume.
+1. **Engine semantics — implemented:** RED/GREEN tests cover market isolation, BUY suppression, owned-BUY cancellation, cancellation-racing fill reconciliation, recovery SELL continuity, external-order isolation, durable-before-apply and independent global/market pause scopes.
 2. **Application capability — implemented:** tests cover actor-role authorization, stable fact identity/payload, durable append ordering, failed persistence and transport-neutral facade.
 3. **Durable append — implemented foundation:** use the existing ADR-0001 append-only stream and committed-head contract for pause/resume acknowledgements. Do not create an operator-specific store.
 4. **Restart restoration — explicitly out of scope:** the initial operator pause is process-lifetime only. Do not add projection, recovery replay or a startup-readiness dependency to this operator-control task. Track full restart recovery separately under ADR-0001 / issue #654.

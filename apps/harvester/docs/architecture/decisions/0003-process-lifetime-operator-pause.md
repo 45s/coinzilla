@@ -53,7 +53,7 @@ The initial operator-pause capability is **process-lifetime only**.
 - [ADR-0002 — Transport-independent operator control](./0002-transport-independent-operator-control.md)
 - [ADR-0001 — Application-owned durable facts](./0001-application-owned-recovery-facts.md)
 - [Operator-control implementation contract](../OPERATOR_CONTROL_DESIGN.md)
-- [Operator-control roadmap](../../../ROADMAP.md#operator-control--initial-telegram-pause)
+- [Operator-control roadmap](../../../ROADMAP.md#operator-control--telegram-command-center)
 - [Process-restart recovery issue #654](https://github.com/45s/coinzilla/issues/654)
 
 ## Emergency BUY pause scope

@@ -1,0 +1,281 @@
+import test from "node:test"
+import assert from "node:assert/strict"
+import {
+  applyRecoverySellerLifecycleTransition,
+  createRecoverySellerLifecycleDecision,
+  createRecoverySellerStopAndReconcileDecision,
+} from "./lifecycle-decision.js"
+import {
+  createRecoverySellerStopDecision,
+  createRecoverySellerStopState,
+  latchRecoverySellerStop,
+  RECOVERY_SELLER_STOP_REASON_CODE,
+} from "./stop-decision.js"
+
+function makeDecision({ outcome, reasonCode = `TEST_${outcome}`, orderIdentity } = {}) {
+  return createRecoverySellerLifecycleDecision({
+    outcome,
+    reasonCode,
+    explanation: `Test lifecycle decision for ${outcome}`,
+    ...(orderIdentity === undefined ? {} : { orderIdentity }),
+  })
+}
+
+test("creates distinct immutable SUBMIT, WAIT, BLOCK and RECONCILE decisions", () => {
+  const submit = makeDecision({ outcome: "SUBMIT" })
+  const wait = makeDecision({
+    outcome: "WAIT",
+    orderIdentity: {
+      clientOrderId: "h-existing-order",
+      brokerOrderId: "exchange-123",
+    },
+  })
+  const block = makeDecision({ outcome: "BLOCK" })
+  const reconcile = makeDecision({
+    outcome: "RECONCILE",
+    orderIdentity: { clientOrderId: "h-unknown-submit" },
+  })
+
+  assert.equal(submit.outcome, "SUBMIT", "SUBMIT must represent permission to hand one new approved order intent to the shared engine.")
+  assert.equal(wait.outcome, "WAIT", "WAIT must represent an already-known active order that remains untouched pending its next authoritative update.")
+  assert.equal(block.outcome, "BLOCK", "BLOCK must represent a deterministic refusal to initiate a trading action.")
+  assert.equal(reconcile.outcome, "RECONCILE", "RECONCILE must represent non-trading resolution of an existing order whose authoritative outcome is not yet known.")
+  assert.deepEqual(wait.orderIdentity, {
+    clientOrderId: "h-existing-order",
+    brokerOrderId: "exchange-123",
+  }, "WAIT must retain both identities for an acknowledged existing order.")
+  assert.deepEqual(reconcile.orderIdentity, {
+    clientOrderId: "h-unknown-submit",
+  }, "RECONCILE must retain the client identity even when the broker acknowledgement identity is unknown.")
+  assert.equal(Object.isFrozen(submit), true, "Lifecycle decisions must be immutable values.")
+  assert.equal(Object.isFrozen(wait.orderIdentity), true, "Existing-order identity must be immutable while waiting.")
+})
+
+test("rejects unsupported outcomes, missing reason codes and incomplete order identities", () => {
+  assert.throws(
+    () => createRecoverySellerLifecycleDecision({
+      outcome: "CANCEL",
+      reasonCode: "UNAPPROVED_CANCEL",
+      explanation: "Cancellation is not an approved lifecycle outcome",
+    }),
+    /outcome must be one of SUBMIT, WAIT, BLOCK, RECONCILE/,
+    "An unsupported action must not be represented as a lifecycle outcome.",
+  )
+  assert.throws(
+    () => createRecoverySellerLifecycleDecision({
+      outcome: "SUBMIT",
+      reasonCode: " ",
+      explanation: "Missing reason code",
+    }),
+    /reasonCode must be a non-empty string/,
+    "Every lifecycle outcome must expose a stable non-empty reason code.",
+  )
+  assert.throws(
+    () => createRecoverySellerLifecycleDecision({
+      outcome: "WAIT",
+      reasonCode: "WAIT_EXISTING",
+      explanation: "The broker identity is missing",
+      orderIdentity: { clientOrderId: "h-existing-order" },
+    }),
+    /WAIT requires clientOrderId and brokerOrderId/,
+    "WAIT must identify an acknowledged active order rather than an unknown submission.",
+  )
+  assert.throws(
+    () => createRecoverySellerLifecycleDecision({
+      outcome: "RECONCILE",
+      reasonCode: "RECONCILE_UNKNOWN",
+      explanation: "The client identity is missing",
+      orderIdentity: {},
+    }),
+    /RECONCILE requires clientOrderId/,
+    "RECONCILE must preserve the original client order identity before attempting non-trading reconciliation.",
+  )
+})
+
+test("allows only the documented transitions within one recovery cycle", () => {
+  const validTransitions = [
+    ["SUBMIT", "WAIT"],
+    ["SUBMIT", "RECONCILE"],
+    ["SUBMIT", "BLOCK"],
+    ["WAIT", "WAIT"],
+    ["WAIT", "RECONCILE"],
+    ["WAIT", "BLOCK"],
+    ["RECONCILE", "RECONCILE"],
+    ["RECONCILE", "WAIT"],
+    ["RECONCILE", "BLOCK"],
+    ["BLOCK", "BLOCK"],
+    ["BLOCK", "WAIT"],
+    ["BLOCK", "RECONCILE"],
+  ]
+
+  for (const [previousOutcome, nextOutcome] of validTransitions) {
+    const previousDecision = makeDecision({
+      outcome: previousOutcome,
+      ...(previousOutcome === "WAIT" ? { orderIdentity: {
+        clientOrderId: "h-order",
+        brokerOrderId: "exchange-123",
+      } } : {}),
+      ...(previousOutcome === "RECONCILE" ? { orderIdentity: { clientOrderId: "h-order" } } : {}),
+    })
+    const nextDecision = makeDecision({
+      outcome: nextOutcome,
+      ...(nextOutcome === "WAIT" ? { orderIdentity: {
+        clientOrderId: "h-order",
+        brokerOrderId: "exchange-123",
+      } } : {}),
+      ...(nextOutcome === "RECONCILE" ? { orderIdentity: { clientOrderId: "h-order" } } : {}),
+    })
+    const result = applyRecoverySellerLifecycleTransition({
+      stopState: createRecoverySellerStopState(),
+      previousDecision,
+      nextDecision,
+    })
+
+    assert.equal(result.decision, nextDecision, `The ${previousOutcome} → ${nextOutcome} transition must preserve its approved lifecycle decision.`)
+    assert.equal(result.stopState.status, "CLEAR", `The approved ${previousOutcome} → ${nextOutcome} transition must not create an unrelated global STOP.`)
+  }
+})
+
+test("allows a new order lifecycle but never a direct duplicate SUBMIT within one order lifecycle", () => {
+  const initialSubmit = makeDecision({ outcome: "SUBMIT" })
+  const initialResult = applyRecoverySellerLifecycleTransition({
+    stopState: createRecoverySellerStopState(),
+    nextDecision: initialSubmit,
+  })
+  const previousSubmit = makeDecision({ outcome: "SUBMIT" })
+  const repeatedSubmit = makeDecision({ outcome: "SUBMIT" })
+  const repeatedResult = applyRecoverySellerLifecycleTransition({
+    stopState: createRecoverySellerStopState(),
+    previousDecision: previousSubmit,
+    nextDecision: repeatedSubmit,
+  })
+
+  assert.equal(initialResult.decision, initialSubmit, "A new order lifecycle may submit after the caller has proven prior-order terminal reconciliation and its separate policy gates pass.")
+  assert.equal(repeatedResult.decision.outcome, "BLOCK", "A second SUBMIT inside the same order lifecycle must be blocked instead of duplicating an order.")
+  assert.equal(repeatedResult.decision.reasonCode, RECOVERY_SELLER_STOP_REASON_CODE, "An unsupported repeated submission must establish the stable global STOP reason.")
+  assert.equal(repeatedResult.stopState.status, "STOPPED", "An unsupported repeated submission must latch STOP for the remainder of the unresolved cycle.")
+})
+
+test("turns an unsupported transition back to SUBMIT into sticky global STOP", () => {
+  const previousDecision = makeDecision({
+    outcome: "WAIT",
+    orderIdentity: {
+      clientOrderId: "h-existing-order",
+      brokerOrderId: "exchange-123",
+    },
+  })
+  const nextDecision = makeDecision({ outcome: "SUBMIT" })
+  const result = applyRecoverySellerLifecycleTransition({
+    stopState: createRecoverySellerStopState(),
+    previousDecision,
+    nextDecision,
+  })
+
+  assert.equal(result.decision.outcome, "BLOCK", "A WAIT lifecycle must not transition directly into a new trading submission.")
+  assert.equal(result.decision.reasonCode, RECOVERY_SELLER_STOP_REASON_CODE, "An unsupported transition must use the stable global STOP reason code.")
+  assert.equal(result.stopState.status, "STOPPED", "An unsupported lifecycle transition must latch STOP rather than silently starting another order.")
+})
+
+test("keeps a latched STOP active while permitting only WAIT or RECONCILE transitions", () => {
+  const stopDecision = createRecoverySellerStopDecision({
+    explanation: "The exchange returned an unmodeled order status",
+  })
+  const stoppedState = latchRecoverySellerStop({
+    state: createRecoverySellerStopState(),
+    decision: stopDecision,
+  })
+  const waitDecision = makeDecision({
+    outcome: "WAIT",
+    orderIdentity: {
+      clientOrderId: "h-existing-order",
+      brokerOrderId: "exchange-123",
+    },
+  })
+  const reconcileDecision = makeDecision({
+    outcome: "RECONCILE",
+    orderIdentity: { clientOrderId: "h-unknown-submit" },
+  })
+  const submitDecision = makeDecision({ outcome: "SUBMIT" })
+  const waitResult = applyRecoverySellerLifecycleTransition({
+    stopState: stoppedState,
+    previousDecision: makeDecision({ outcome: "BLOCK" }),
+    nextDecision: waitDecision,
+  })
+  const reconcileResult = applyRecoverySellerLifecycleTransition({
+    stopState: stoppedState,
+    previousDecision: makeDecision({ outcome: "BLOCK" }),
+    nextDecision: reconcileDecision,
+  })
+  const submitResult = applyRecoverySellerLifecycleTransition({
+    stopState: stoppedState,
+    previousDecision: makeDecision({ outcome: "BLOCK" }),
+    nextDecision: submitDecision,
+  })
+
+  assert.equal(waitResult.decision, waitDecision, "Waiting for an existing acknowledged order must remain available during global STOP.")
+  assert.equal(reconcileResult.decision, reconcileDecision, "Reconciling an existing unknown order outcome must remain available during global STOP.")
+  assert.equal(submitResult.decision, stopDecision, "A latched STOP must reject every new trading submission, even if the candidate decision is otherwise eligible.")
+  assert.equal(submitResult.stopState, stoppedState, "A blocked submission must not clear or replace the existing STOP state.")
+})
+
+
+test("latches global STOP while preserving RECONCILE for an unknown existing submission", () => {
+  const result = createRecoverySellerStopAndReconcileDecision({
+    stopState: createRecoverySellerStopState(),
+    orderIdentity: {
+      clientOrderId: "h-unknown-submit",
+    },
+    explanation: "The submission acknowledgement was lost and the broker outcome is unknown",
+  })
+
+  assert.equal(result.stopState.status, "STOPPED",
+    "An unknown submission outcome must latch global STOP before any later trading decision.")
+  assert.equal(result.stopDecision.outcome, "BLOCK",
+    "The global STOP decision must independently block every new trading action.")
+  assert.equal(result.stopState.decision, result.stopDecision,
+    "The STOP latch must retain the original evidence.")
+  assert.equal(result.decision.outcome, "RECONCILE",
+    "The original unresolved order must remain eligible for non-trading reconciliation.")
+  assert.deepEqual(result.decision.orderIdentity, {
+    clientOrderId: "h-unknown-submit",
+  }, "Reconciliation must retain the original Harvester client identity when broker acknowledgement is missing.")
+  assert.equal(result.stopDecision.reconciliationRequired, true,
+    "The STOP decision must explicitly require reconciliation.")
+})
+
+test("rejects a STOP-and-reconcile transition without an existing order identity", () => {
+  assert.throws(
+    () => createRecoverySellerStopAndReconcileDecision({
+      stopState: createRecoverySellerStopState(),
+      orderIdentity: {},
+      explanation: "Unknown submission outcome",
+    }),
+    /RECONCILE requires clientOrderId/,
+    "An unknown outcome must never create an anonymous reconciliation action.",
+  )
+})
+
+
+test("allows sequential BUY tranches in one recovery cycle as distinct reconciled order lifecycles", () => {
+  const firstTranche = makeDecision({
+    outcome: "SUBMIT",
+  })
+  const secondTranche = makeDecision({
+    outcome: "SUBMIT",
+  })
+  const firstOrderLifecycle = applyRecoverySellerLifecycleTransition({
+    stopState: createRecoverySellerStopState(),
+    nextDecision: firstTranche,
+  })
+  const nextOrderLifecycle = applyRecoverySellerLifecycleTransition({
+    stopState: firstOrderLifecycle.stopState,
+    nextDecision: secondTranche,
+  })
+
+  assert.equal(firstOrderLifecycle.decision, firstTranche,
+    "The first BUY tranche may be submitted when its policy gates pass.")
+  assert.equal(nextOrderLifecycle.decision, secondTranche,
+    "A later BUY tranche in the same recovery cycle may start a new order lifecycle only after the caller has reconciled the prior order.")
+  assert.equal(nextOrderLifecycle.stopState.status, "CLEAR",
+    "A separately reconciled BUY tranche must not be mistaken for a duplicate submission within the same order lifecycle.")
+})

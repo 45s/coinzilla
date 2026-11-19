@@ -6,6 +6,7 @@
 - [Domain glossary](DOMAIN_GLOSSARY.md) — domain terms and ownership boundaries.
 - [Portfolio domain](portfolio.md) — Portfolio concepts, fill application and domain boundaries.
 - [Conservative behavior baseline](CONSERVATIVE_BEHAVIOR_BASELINE.md) — superseded historical pointer only; never use as current rules.
+- [Recovery Seller policy blocker audit](RECOVERY_SELLER_POLICY_BLOCKERS.md) — source-based CG comparison, current RS gaps, owner decisions and execution gates.
 
 - [Recovery Seller Domain Specification](recovery-seller-domain-specification.md) — draft RS contract, legacy accounting and profitability invariants, and concurrent operation with CG.
 - [Recovery Seller Implementation Roadmap](recovery-seller-implementation-roadmap.md) — six phases from the CG reuse audit through concurrent integration and offline lifecycle verification.

@@ -2,6 +2,10 @@
 
 This is the entry point for Harvester-specific documentation. Repository-wide rules remain authoritative where applicable; see [Coinzilla Documentation Governance](../../../docs/DOCUMENTATION_GOVERNANCE.md).
 
+## Current Harvester priority
+
+**Multi-provider execution and independent market-data routing (#1339): Phases 1–6 are complete and merged.** Harvester now supports multiple configured Binance account runtimes, explicit per-symbol market-data source routing, and explicit `(strategyId, symbol)` execution routing with immutable provider/account provenance. See the [migration plan](../../../docs/architecture/multi-provider-migration-plan.md), [provider-instance registry](infrastructure/provider-instance-registry.md), and [execution-routing contract](infrastructure/execution-routing.md). The production adapter catalog remains Binance-only: Bitunix is not registered until [#1185](https://github.com/45s/coinzilla/issues/1185) is resolved and the complete standard provider contract is satisfied. Recovery Seller execution and process-restart recovery remain separate deferred workstreams.
+
 ## Start here
 
 - [Application configuration and Telegram notification profiles](../README.md#configuration) — the named `appConfig` export composed from named modules, including `config/operator-control.js` and `config/notifications-tg-profiles.js`; profile behavior, event overrides, and environment-only credentials.
@@ -11,13 +15,19 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Harvester agent instructions](../AGENTS.md) — mandatory preflight and domain-specific constraints
 - [Harvester roadmap](../ROADMAP.md) — current domain work and status
 - [Startup open-order ownership (ADR-0004)](architecture/decisions/0004-startup-open-orders-are-external.md) — accepted and implemented ownership rule for startup-snapshot orders
-- [Emergency BUY pause (ADR-0005)](architecture/decisions/0005-emergency-buy-pause.md) — global and market-scoped BUY-only controls; existing market pause remains unchanged
+- [Emergency BUY pause (ADR-0005)](architecture/decisions/0005-emergency-buy-pause.md) — global BUY controls and owned-BUY cancellation workflow; market command split is superseded by ADR-0006
+- [Market Pause cancels owned BUYs (ADR-0006)](architecture/decisions/0006-market-pause-cancels-owned-buys.md) — current market Pause/Resume behavior, cancellation ordering, ownership boundary and recovery SELL continuity
 - [Startup open-order boundary plan](plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md) — completed design and implementation record for #1157
 - [Trading First](TRADING_FIRST.md) — authoritative trading priority and exchange-safety requirements
 
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
+- [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — source-verified persistence inventory, target architecture, repository contracts, TESTNET/LIVE isolation, operations and phased migration.
+- [Ordinary persistence and trading-session repository contract](persistence/README.md) — merged trading-session history implementation and lifecycle contract.
+- [ADR-0003: Multi-provider execution and market-data routing](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) — accepted target architecture; implementation is tracked by [#1339](https://github.com/45s/coinzilla/issues/1339).
+- [ADR-0004: Complete Bitunix provider integration](../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md) — Bitunix admission requires a complete Brokers and Harvester provider contract; no interim partial facade.
+- [Multi-provider migration audit and implementation plan](../../../docs/architecture/multi-provider-migration-plan.md) — source-verified Harvester composition, order provenance, account isolation, recovery prerequisites and phased implementation plan.
 - [Operator control](operator-control/README.md) — Telegram Command Center commands, authorized read-only queries, confirmed controls and process-lifetime pause boundary
 - [Telegram Command Center runbook](operations/telegram-command-center.md) — safe menu navigation, refresh, confirmations, authorization and troubleshooting
 - [Volatility Protection](volatility-protection.md) — per-market protection, required explicit pair-level policy and order gate; provisional thresholds still require offline historical calibration
@@ -29,6 +39,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Accounting invariants](domain/ACCOUNTING_INVARIANTS.md)
 - [Portfolio domain](domain/portfolio.md)
 - [Broker port and adapter](infrastructure/broker-port-and-adapter.md)
+- [Provider-instance identity and registry](infrastructure/provider-instance-registry.md) — explicit non-secret identity, capability validation, account isolation, independent market-data and execution routes, and lifecycle behavior.
+- [Multi-provider execution routing](infrastructure/execution-routing.md) — exact strategy/market execution routes, independent market-data source selection, provenance, and no-fallback safety rules.
 - [Trading strategies overview](trading-strategies.md) — Conservative rules remain in the canonical specification; Aggressive material is exploratory discussion, not an approved executable contract
 - [Recovery Seller Domain Specification](domain/recovery-seller-domain-specification.md) — draft RS accounting, legacy authorization, independent profitability gates, and concurrent CG/RS invariants
 - [Recovery Seller Implementation Roadmap](domain/recovery-seller-implementation-roadmap.md) — six delivery phases from Conservative source audit to concurrent integration and offline lifecycle proof
@@ -49,6 +61,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Conservative session audit checklist](CONSERVATIVE_SESSION_AUDIT.md)
 
 ## Audit process
+
+- [Conservative Recovery Lifecycle Audit](CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md) — acceptance evidence, confirmed outcomes, and the remaining recovery-SELL filter-freshness gap for #1359/#1362.
 
 - [Harvester audit working rules](AUDIT_WORKING_RULES.md) — scope pointer to the repository-wide agent workflow and Harvester-specific audit boundaries.
 - [Harvester audit records index](audits/README.md) — historical evidence and investigation records.

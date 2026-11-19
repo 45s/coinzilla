@@ -1,3 +1,5 @@
+import { OPERATOR_ACTOR_ROLES } from "./constants.js"
+
 /**
  * Authorize a trusted application actor for trading-control operations.
  *
@@ -17,7 +19,7 @@ export function authorizeOperatorActor({ actor } = {}) {
     error.code = "INVALID_OPERATOR_ACTOR"
     throw error
   }
-  if (!Array.isArray(actor.roles) || !actor.roles.includes("trading-operator")) {
+  if (!Array.isArray(actor.roles) || !actor.roles.includes(OPERATOR_ACTOR_ROLES.TRADING_OPERATOR)) {
     const error = new Error("Actor is not authorized for trading control")
     error.code = "OPERATOR_UNAUTHORIZED"
     throw error

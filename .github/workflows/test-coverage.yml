@@ -24,7 +24,7 @@ jobs:
       matrix:
         include:
           - package: "@coinzilla/harvester"
-            has_coverage_script: false
+            has_coverage_script: true
           - package: "@coinzilla/brokers"
             has_coverage_script: true
           - package: "@coinzilla/db"

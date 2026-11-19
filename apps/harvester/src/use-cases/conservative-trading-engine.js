@@ -158,23 +158,41 @@ function createProcessedFillTracker({ state } = {}) {
   }
 }
 
-function createExecutionFillAccounting({ state, rememberProcessedFill } = {}) {
-  const recordBuyExecutionFill = ({ fill }) => {
+function createExecutionFillRecorder({
+  rememberProcessedFill,
+  totalsByOrder,
+  includeQuoteQuantity = false,
+} = {}) {
+  return ({ fill }) => {
     if (!rememberProcessedFill({ fill })) {
       return
     }
-    const current = state.buyExecutionTotals.get(fill.brokerOrderId) ?? {
+    const current = totalsByOrder.get(fill.brokerOrderId) ?? {
       quantity: "0",
-      quoteQuantity: "0",
+      ...(includeQuoteQuantity ? { quoteQuantity: "0" } : {}),
       fillIds: new Set(),
     }
     current.quantity = addDecimal({ left: current.quantity,
 right: fill.quantity.amount })
-    current.quoteQuantity = addDecimal({ left: current.quoteQuantity,
+    if (includeQuoteQuantity) {
+      current.quoteQuantity = addDecimal({ left: current.quoteQuantity,
 right: fill.quoteQuantity.amount })
+    }
     current.fillIds.add(fill.id)
-    state.buyExecutionTotals.set(fill.brokerOrderId, current)
+    totalsByOrder.set(fill.brokerOrderId, current)
   }
+}
+
+function createExecutionFillAccounting({ state, rememberProcessedFill } = {}) {
+  const recordBuyExecutionFill = createExecutionFillRecorder({
+    rememberProcessedFill,
+    totalsByOrder: state.buyExecutionTotals,
+    includeQuoteQuantity: true,
+  })
+  const recordSellExecutionFill = createExecutionFillRecorder({
+    rememberProcessedFill,
+    totalsByOrder: state.sellExecutionTotals,
+  })
   const getReconciledBuyExecutionPrice = ({ order }) => {
     const totals = state.buyExecutionTotals.get(order.brokerOrderId)
     if (!totals ||
@@ -190,19 +208,6 @@ right: order.originalQuantity.amount }) !== 0) {
       scale: 18,
       rounding: "half-up",
     })
-  }
-  const recordSellExecutionFill = ({ fill }) => {
-    if (!rememberProcessedFill({ fill })) {
-      return
-    }
-    const current = state.sellExecutionTotals.get(fill.brokerOrderId) ?? {
-      quantity: "0",
-      fillIds: new Set(),
-    }
-    current.quantity = addDecimal({ left: current.quantity,
-right: fill.quantity.amount })
-    current.fillIds.add(fill.id)
-    state.sellExecutionTotals.set(fill.brokerOrderId, current)
   }
   const assertReconciledSellExecution = ({ order }) => {
     const totals = state.sellExecutionTotals.get(order.brokerOrderId)
@@ -222,52 +227,153 @@ right: order.originalQuantity.amount }) !== 0) {
   }
 }
 
-function createDurableIntentPublisher({ eventPublisher, logger } = {}) {
-  return async ({ eventName, dataResult } = {}) => {
-    const published = publishLifecycleEvent({ eventPublisher,
-eventName,
-dataResult })
-    if (published && typeof published.then === "function") {
-      Promise.resolve(published).then(
-        (result) => {
-          if (result?.ok === false) {
-            logger?.error?.({
-              message: "Harvester durable intent publication was rejected asynchronously",
-              eventName,
-              errors: result.errors,
-            })
-          }
-        },
-        (error) => logger?.error?.({
-          message: "Harvester durable intent publication promise rejected",
-          eventName,
-          error,
-        }),
-      )
-    } else {
-      if (published?.ok === false) {
-        return published
-      }
-      if (published?.skipped === true) {
-        return toResult({ data: { skipped: true } })
-      }
+function observeDurableIntentPublication({ published, eventName, logger }) {
+  if (published && typeof published.then === "function") {
+    Promise.resolve(published).then(
+      (result) => {
+        if (result?.ok === false) {
+          logger?.error?.({
+            message: "Harvester durable intent publication was rejected asynchronously",
+            eventName,
+            errors: result.errors,
+          })
+        }
+      },
+      (error) => logger?.error?.({
+        message: "Harvester durable intent publication promise rejected",
+        eventName,
+        error,
+      }),
+    )
+    return undefined
+  }
+  if (published?.ok === false) {
+    return published
+  }
+  if (published?.skipped === true) {
+    return toResult({ data: { skipped: true } })
+  }
+  return undefined
+}
+
+async function flushDurableIntent({ eventPublisher }) {
+  if (typeof eventPublisher?.flush !== "function") {
+    return toResult({
+      error: new TypeError("Trading intent requires a durable Journal flush capability"),
+    })
+  }
+  try {
+    const flushed = await eventPublisher.flush()
+    if (flushed?.ok !== true || flushed?.durable !== true) {
+      return flushed?.ok === false
+        ? flushed
+        : toResult({ error: new Error("Trading intent was published but not durably journaled") })
     }
-    if (typeof eventPublisher?.flush !== "function") {
-      return toResult({ error: new TypeError("Trading intent requires a durable Journal flush capability") })
-    }
-    try {
-      const flushed = await eventPublisher.flush()
-      if (flushed?.ok !== true || flushed?.durable !== true) {
-        return flushed?.ok === false
-          ? flushed
-          : toResult({ error: new Error("Trading intent was published but not durably journaled") })
-      }
-      return toResult({ data: { durable: true } })
-    } catch (error) {
-      return toResult({ error })
-    }
+    return toResult({ data: { durable: true } })
+  } catch (error) {
+    return toResult({ error })
   }
 }
+
+function createDurableIntentPublisher({ eventPublisher, logger } = {}) {
+  return async ({ eventName, dataResult } = {}) => {
+    const published = publishLifecycleEvent({
+      eventPublisher,
+      eventName,
+      dataResult,
+    })
+    const publicationResult = observeDurableIntentPublication({
+      published,
+      eventName,
+      logger,
+    })
+    if (publicationResult) {
+      return publicationResult
+    }
+    return flushDurableIntent({ eventPublisher })
+  }
+}
+
+
+function createRecoveryCycleNotCompletedFacts({
+  data,
+  order,
+  getPortfolio,
+  getRecoveryLedger,
+  pairs,
+}) {
+  const marketId = order.market.id
+  const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
+  const position = portfolio?.getPosition({
+    strategyId: StrategyId.COIN_GRABBER,
+    marketId,
+  })
+  const recoveryLedger = typeof getRecoveryLedger === "function"
+    ? getRecoveryLedger({ marketId })
+    : undefined
+  const realizedNetProfit = data.realizedNetProfit ?? (
+    position && recoveryLedger
+      ? subtractDecimal({
+        left: recoveryLedger.netSellProceeds,
+        right: position.spent.amount,
+      })
+      : undefined
+  )
+  return {
+    marketId,
+    realizedNetProfit,
+    activeQuantity: data.activeQuantity ?? position?.baseQuantity.amount,
+    keepQuantity: data.keepQuantity ?? String(pairs[order.market.symbol].keepQuantity),
+    minProfit: data.minProfit ?? String(pairs[order.market.symbol].minProfit),
+  }
+}
+
+function getRecoveryCycleNotCompletedOutcome({ data }) {
+  const continueReasons = [
+    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+  ]
+  return data.pause === false && continueReasons.includes(data.reason)
+    ? "CONTINUE_SELL_THROUGH"
+    : "BLOCKED"
+}
+
+function createRecoveryCycleNotCompletedData({
+  order,
+  completion,
+  getPortfolio,
+  getRecoveryLedger,
+  pairs,
+}) {
+  const data = completion?.data
+  if (!data) {
+    return undefined
+  }
+  const facts = createRecoveryCycleNotCompletedFacts({
+    data,
+    order,
+    getPortfolio,
+    getRecoveryLedger,
+    pairs,
+  })
+  if ([facts.realizedNetProfit, facts.activeQuantity, facts.keepQuantity, facts.minProfit]
+    .some((value) => value === undefined)) {
+    return undefined
+  }
+  return mapRecoveryCycleNotCompletedData({
+    symbol: order.market.symbol,
+    marketId: facts.marketId,
+    sellOrderClientId: order.clientOrderId,
+    sellOrderBrokerOrderId: order.brokerOrderId,
+    outcome: getRecoveryCycleNotCompletedOutcome({ data }),
+    reason: data.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
+    realizedNetProfit: facts.realizedNetProfit,
+    activeQuantity: facts.activeQuantity,
+    keepQuantity: facts.keepQuantity,
+    minProfit: facts.minProfit,
+  })
+}
+
 
 function createRecoveryCycleNotCompletedPublisher({
   eventPublisher,
@@ -276,53 +382,24 @@ function createRecoveryCycleNotCompletedPublisher({
   pairs,
 } = {}) {
   return ({ order, completion }) => {
-    const data = completion?.data
-    if (!data) {
+    const dataResult = createRecoveryCycleNotCompletedData({
+      order,
+      completion,
+      getPortfolio,
+      getRecoveryLedger,
+      pairs,
+    })
+    if (!dataResult) {
       return undefined
     }
-    const marketId = order.market.id
-    const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
-    const position = portfolio?.getPosition({ strategyId: StrategyId.COIN_GRABBER,
-marketId })
-    const recoveryLedger = typeof getRecoveryLedger === "function" ? getRecoveryLedger({ marketId }) : undefined
-    const realizedNetProfit = data.realizedNetProfit ??
-      (position && recoveryLedger
-        ? subtractDecimal({
-          left: recoveryLedger.netSellProceeds,
-          right: position.spent.amount,
-        })
-        : undefined)
-    const activeQuantity = data.activeQuantity ?? position?.baseQuantity.amount
-    const keepQuantity = data.keepQuantity ?? String(pairs[order.market.symbol].keepQuantity)
-    const minProfit = data.minProfit ?? String(pairs[order.market.symbol].minProfit)
-    if ([realizedNetProfit, activeQuantity, keepQuantity, minProfit].some((value) => value === undefined)) {
-      return undefined
-    }
-    const continueReasons = [
-      "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
-      "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
-    ]
-    const outcome = data.pause === false && continueReasons.includes(data.reason)
-      ? "CONTINUE_SELL_THROUGH"
-      : "BLOCKED"
     return publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_NOT_COMPLETED,
-      dataResult: mapRecoveryCycleNotCompletedData({
-        symbol: order.market.symbol,
-        marketId,
-        sellOrderClientId: order.clientOrderId,
-        sellOrderBrokerOrderId: order.brokerOrderId,
-        outcome,
-        reason: data.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
-        realizedNetProfit,
-        activeQuantity,
-        keepQuantity,
-        minProfit,
-      }),
+      dataResult,
     })
   }
 }
+
 
 function createPauseHandler({
   state,
@@ -402,14 +479,8 @@ error }),
   }
 }
 
-function createCancellationFailureHandlers({ state, pause, publishOrderCancelFailed } = {}) {
-  const markCancellationUnknown = async ({
-    symbol,
-    order,
-    reason,
-    error,
-    pauseOnFailure = true,
-  } = {}) => {
+function createMarkCancellationUnknownHandler({ state, pause, publishOrderCancelFailed } = {}) {
+  return async ({ symbol, order, reason, error, pauseOnFailure = true } = {}) => {
     const result = state.registry.markCancellationUnknown({ clientOrderId: order.clientOrderId })
     if (!result.ok) {
       const registryError = result.errors?.[0] ?? new Error("Unable to retain an unconfirmed cancellation as UNKNOWN")
@@ -429,13 +500,10 @@ error })
     }
     return toResult({ error: error ?? new Error("Broker cancellation outcome is unconfirmed") })
   }
-  const markCancellationNotSent = async ({
-    symbol,
-    order,
-    reason,
-    error,
-    pauseOnFailure = true,
-  } = {}) => {
+}
+
+function createMarkCancellationNotSentHandler({ pause, publishOrderCancelFailed } = {}) {
+  return async ({ symbol, order, reason, error, pauseOnFailure = true } = {}) => {
     publishOrderCancelFailed({ order,
 outcome: "NOT_SENT",
 error })
@@ -447,7 +515,10 @@ error })
     }
     return toResult({ error: error ?? new Error("Broker cancellation request was not sent") })
   }
-  const markCancellationFailure = async ({
+}
+
+function createMarkCancellationFailureHandler({ markCancellationUnknown, markCancellationNotSent } = {}) {
+  return async ({
     symbol,
     order,
     reason,
@@ -469,9 +540,26 @@ reason,
 error,
 pauseOnFailure })
   }
-  return { markCancellationUnknown,
-markCancellationNotSent,
-markCancellationFailure }
+}
+
+function createCancellationFailureHandlers({ state, pause, publishOrderCancelFailed } = {}) {
+  const markCancellationUnknown = createMarkCancellationUnknownHandler({
+    state,
+    pause,
+    publishOrderCancelFailed,
+  })
+  const markCancellationNotSent = createMarkCancellationNotSentHandler({
+    pause,
+    publishOrderCancelFailed,
+  })
+  return {
+    markCancellationUnknown,
+    markCancellationNotSent,
+    markCancellationFailure: createMarkCancellationFailureHandler({
+      markCancellationUnknown,
+      markCancellationNotSent,
+    }),
+  }
 }
 
 function createMarketBookTransitionHandler({ state, isMarketBookFresh, evaluateLatestTransition } = {}) {
@@ -942,59 +1030,115 @@ function createSubmissionLifecycleCallbacks({
   }
 }
 
+function classifySubmissionFailure({ order, error }) {
+  const definitePostOnlyRejection = order.type === "LIMIT_MAKER" &&
+    error?.code === "POST_ONLY_WOULD_TAKE"
+  const definiteFilterRejection = error?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
+    error?.outcomeUnknown !== true
+  return {
+    definitePostOnlyRejection,
+    definiteRejection: definitePostOnlyRejection || definiteFilterRejection,
+  }
+}
+
+function publishSubmissionFailure({ eventPublisher, order, outcome, error }) {
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED,
+    dataResult: mapOrderSubmissionFailedData({
+      order,
+      outcome,
+      error,
+    }),
+  })
+}
+
+function handleDefiniteSubmissionRejection({
+  state,
+  order,
+  ownership,
+  logger,
+  definitePostOnlyRejection,
+}) {
+  const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
+  if (!removal.removed) {
+    throw new Error("Cannot remove a definitively rejected pending order")
+  }
+  state.registry = removal.registry
+  logOrderLifecycle({
+    logger,
+    order,
+    ownership,
+    status: "REJECTED",
+  })
+  if (definitePostOnlyRejection) {
+    state.books.delete(order.market.symbol)
+  }
+  state.deferredEvaluations.add(order.market.symbol)
+}
+
+async function handleUnknownSubmissionFailure({
+  state,
+  order,
+  outcome,
+  submissionError,
+  ownership,
+  logger,
+  pause,
+}) {
+  const unknownResult = state.registry.markUnknown({ clientOrderId: order.clientOrderId })
+  if (!unknownResult.ok) {
+    throw unknownResult.errors[0] ?? new Error("Unable to retain an uncertain submission as UNKNOWN")
+  }
+  state.registry = unknownResult.data.registry
+  const unknownOrder = state.registry.getOrder({ clientOrderId: order.clientOrderId }) ??
+    unknownResult.data.order ?? order
+  logOrderLifecycle({
+    logger,
+    order: unknownOrder,
+    ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }) ?? ownership,
+    status: "UNKNOWN",
+  })
+  await pause({
+    symbol: order.market.symbol,
+    reason: `ORDER_SUBMISSION_${outcome}`,
+    error: submissionError,
+  })
+}
+
 function createSubmissionFailureCallbacks({ state, pause, eventPublisher, logger } = {}) {
   return {
     onSubmissionFailure: async ({ order, error, errors, outcome }) => {
       const submissionError = error ?? errors?.[0]
-      const definitePostOnlyRejection = order.type === "LIMIT_MAKER" &&
-        submissionError?.code === "POST_ONLY_WOULD_TAKE"
-      const definiteFilterRejection = submissionError?.code === "DEFINITE_EXCHANGE_FILTER_REJECTED" &&
-        submissionError?.outcomeUnknown !== true
-      const definiteRejection = definitePostOnlyRejection || definiteFilterRejection
-      const ownership = state.registry.getOwnership({ clientOrderId: order.clientOrderId })
-      const failureOutcome = definiteRejection ? "REJECTED" : outcome
-      publishLifecycleEvent({
-        eventPublisher,
-        eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMISSION_FAILED,
-        dataResult: mapOrderSubmissionFailedData({
-          order,
-          outcome: failureOutcome,
-          error: submissionError,
-        }),
+      const classification = classifySubmissionFailure({
+        order,
+        error: submissionError,
       })
-      if (definiteRejection) {
-        const removal = state.registry.removePending({ clientOrderId: order.clientOrderId })
-        if (!removal.removed) {
-          throw new Error("Cannot remove a definitively rejected pending order")
-        }
-        state.registry = removal.registry
-        logOrderLifecycle({ logger,
-order,
-ownership,
-status: "REJECTED" })
-        if (definitePostOnlyRejection) {
-          state.books.delete(order.market.symbol)
-        }
-        state.deferredEvaluations.add(order.market.symbol)
+      const ownership = state.registry.getOwnership({ clientOrderId: order.clientOrderId })
+      publishSubmissionFailure({
+        eventPublisher,
+        order,
+        outcome: classification.definiteRejection ? "REJECTED" : outcome,
+        error: submissionError,
+      })
+      if (classification.definiteRejection) {
+        handleDefiniteSubmissionRejection({
+          state,
+          order,
+          ownership,
+          logger,
+          definitePostOnlyRejection: classification.definitePostOnlyRejection,
+        })
         return
       }
-      const unknownResult = state.registry.markUnknown({ clientOrderId: order.clientOrderId })
-      if (!unknownResult.ok) {
-        throw unknownResult.errors[0] ?? new Error("Unable to retain an uncertain submission as UNKNOWN")
-      }
-      state.registry = unknownResult.data.registry
-      const unknownOrder = state.registry.getOrder({ clientOrderId: order.clientOrderId }) ??
-        unknownResult.data.order ?? order
-      logOrderLifecycle({
+      await handleUnknownSubmissionFailure({
+        state,
+        order,
+        outcome,
+        submissionError,
+        ownership,
         logger,
-        order: unknownOrder,
-        ownership: state.registry.getOwnership({ clientOrderId: order.clientOrderId }) ?? ownership,
-        status: "UNKNOWN",
-      })
-      await pause({
-        symbol: order.market.symbol,
-        reason: `ORDER_SUBMISSION_${outcome}`,
-        error: submissionError,
+        pause,
       })
     },
   }
@@ -1025,16 +1169,30 @@ function validateInitialEngineState({ initialState, pairs } = {}) {
   return initialRegistry
 }
 
-function createInitialEngineState({ initialState, pairs, initialRegistry } = {}) {
+function createInitialJournalFillIndex({ journalFills } = {}) {
   const journalFillsById = new Map()
-  for (const journalFill of initialState.journalFills ?? []) {
+  for (const journalFill of journalFills ?? []) {
     if (typeof journalFill?.fillId !== "string" || !journalFill.fillId.trim() ||
         journalFillsById.has(journalFill.fillId)) {
       throw new TypeError("initialState.journalFills must contain unique canonical fill IDs")
     }
     journalFillsById.set(journalFill.fillId, journalFill)
   }
-  const state = {
+  return journalFillsById
+}
+
+function getInitialStateArray({ initialState, key }) {
+  return initialState[key] ?? []
+}
+
+function createInitialVolatilityProtection({ pairs }) {
+  return new Map(Object.entries(pairs)
+    .filter(([, pairConfig]) => pairConfig?.enabled === true && pairConfig?.enableVolatilityProtection !== false)
+    .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })]))
+}
+
+function createInitialEngineStateCore({ initialRegistry, journalFillsById }) {
+  return {
     registry: initialRegistry,
     journalFillsById,
     prices: new Map(),
@@ -1046,29 +1204,78 @@ function createInitialEngineState({ initialState, pairs, initialRegistry } = {})
     processedFillsByOrder: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
-    trailingBuy: new Map([...(initialState.trailingBuySymbols ?? [])].map((symbol) => [symbol, true])),
-    paused: new Set(initialState.pausedMarkets ?? []),
-    operatorPausedMarkets: new Set(initialState.operatorPausedMarkets ?? []),
+    deferredEvaluations: new Set(),
     operatorAllBuysPaused: false,
     operatorBuyPausedMarkets: new Set(),
-    durablePausedMarkets: new Set(initialState.durablePausedMarkets ?? []),
-    recoveryManagedPausedMarkets: new Set(initialState.recoveryManagedPausedMarkets ?? []),
-    recoveryManagedCancellationClientOrderIds: new Set(initialState.recoveryManagedCancellationClientOrderIds ?? []),
-    unrequestedTerminalOrderClientIds: new Set(initialState.unrequestedTerminalOrderClientIds ?? []),
-    replacementIntents: new Set(initialState.replacementIntents ?? []),
-    trailingBuyRepriceIntents: new Set(initialState.trailingBuyRepriceIntents ?? []),
-    deferredEvaluations: new Set(),
-    completedOrderTransitions: new Set(initialState.completedOrderClientIds ?? []),
     completedRecoverySellSymbols: new Set(),
     completedRecoverySellOrdersBySymbol: new Map(),
     shutdownRecoveryReplanSymbols: new Set(),
-    reconciledTerminalOrderClientIds: new Set(initialState.reconciledTerminalOrderClientIds ?? []),
     marketPriceEventIds: new Map(),
-    volatilityProtection: new Map(Object.entries(pairs)
-      .filter(([, pairConfig]) => pairConfig?.enabled === true && pairConfig?.enableVolatilityProtection !== false)
-      .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })])),
     volatilityCancellationAttemptBySymbol: new Map(),
     volatilitySnapshotSignatureBySymbol: new Map(),
+  }
+}
+
+function createInitialEngineTrackingState({ initialState }) {
+  return {
+    trailingBuy: new Map([...getInitialStateArray({
+      initialState,
+      key: "trailingBuySymbols",
+    })].map((symbol) => [symbol, true])),
+    paused: new Set(getInitialStateArray({
+      initialState,
+      key: "pausedMarkets",
+    })),
+    operatorPausedMarkets: new Set(getInitialStateArray({
+      initialState,
+      key: "operatorPausedMarkets",
+    })),
+    durablePausedMarkets: new Set(getInitialStateArray({
+      initialState,
+      key: "durablePausedMarkets",
+    })),
+    recoveryManagedPausedMarkets: new Set(getInitialStateArray({
+      initialState,
+      key: "recoveryManagedPausedMarkets",
+    })),
+    recoveryManagedCancellationClientOrderIds: new Set(getInitialStateArray({
+      initialState,
+      key: "recoveryManagedCancellationClientOrderIds",
+    })),
+    unrequestedTerminalOrderClientIds: new Set(getInitialStateArray({
+      initialState,
+      key: "unrequestedTerminalOrderClientIds",
+    })),
+    replacementIntents: new Set(getInitialStateArray({
+      initialState,
+      key: "replacementIntents",
+    })),
+    trailingBuyRepriceIntents: new Set(getInitialStateArray({
+      initialState,
+      key: "trailingBuyRepriceIntents",
+    })),
+    completedOrderTransitions: new Set(getInitialStateArray({
+      initialState,
+      key: "completedOrderClientIds",
+    })),
+    reconciledTerminalOrderClientIds: new Set(getInitialStateArray({
+      initialState,
+      key: "reconciledTerminalOrderClientIds",
+    })),
+  }
+}
+
+function createInitialEngineState({ initialState = {}, pairs, initialRegistry } = {}) {
+  const journalFillsById = createInitialJournalFillIndex({
+    journalFills: initialState.journalFills,
+  })
+  const state = {
+    ...createInitialEngineStateCore({
+      initialRegistry,
+      journalFillsById,
+    }),
+    ...createInitialEngineTrackingState({ initialState }),
+    volatilityProtection: createInitialVolatilityProtection({ pairs }),
   }
   return { journalFillsById,
 state }
@@ -1092,20 +1299,12 @@ function createSerializedTransitionQueue() {
   }
 }
 
-function createOwnedOrderManagementHandlers({
+function createOwnedOrderSnapshotHandlers({
   state,
   broker,
   processExecutionFillTransition,
   processUserDataEventTransition,
   pause,
-  ensureCancellationEligible,
-  publishDurableIntent,
-  cancelOrderWithOperationalState,
-  markCancellationUnknown,
-  markCancellationFailure,
-  publishOrderCancelled,
-  publishOrderCancelFailed,
-  runTransition,
 } = {}) {
   const collectOwnedOrderSnapshots = makeCollectOwnedOrderSnapshots({
     broker,
@@ -1121,6 +1320,26 @@ function createOwnedOrderManagementHandlers({
     },
     ...options,
   })
+  return {
+    collectOwnedOrderSnapshots,
+    applyOwnedOrderSnapshotsTransition,
+  }
+}
+
+function createOwnedOrderCancellationHandlers({
+  state,
+  broker,
+  processExecutionFillTransition,
+  pause,
+  ensureCancellationEligible,
+  publishDurableIntent,
+  cancelOrderWithOperationalState,
+  markCancellationUnknown,
+  markCancellationFailure,
+  publishOrderCancelled,
+  publishOrderCancelFailed,
+  runTransition,
+} = {}) {
   const cancelOwnedBuyOrders = (options = {}) => runTransition({
     task: () => cancelOwnedBuyOrdersTransition({
       context: {
@@ -1139,9 +1358,22 @@ function createOwnedOrderManagementHandlers({
       options,
     }),
   })
-  const cancelOwnedBuyOrdersForShutdown = (options = {}) => cancelOwnedBuyOrders(options)
-  const cancelOwnedBuyOrdersForSafetyHalt = () => cancelOwnedBuyOrders({ reason: "ACCOUNT_INTEGRITY_FAILURE" })
-  const reconcileOwnedOrders = (options = {}) => reconcileOwnedOrdersTransition({
+  return {
+    cancelOwnedBuyOrders,
+    cancelOwnedBuyOrdersForShutdown: (options = {}) => cancelOwnedBuyOrders(options),
+    cancelOwnedBuyOrdersForSafetyHalt: () => cancelOwnedBuyOrders({ reason: "ACCOUNT_INTEGRITY_FAILURE" }),
+  }
+}
+
+function createOwnedOrderReconciliationHandler({
+  state,
+  broker,
+  runTransition,
+  pause,
+  collectOwnedOrderSnapshots,
+  applyOwnedOrderSnapshotsTransition,
+} = {}) {
+  return (options = {}) => reconcileOwnedOrdersTransition({
     context: {
       state,
       broker,
@@ -1152,12 +1384,18 @@ function createOwnedOrderManagementHandlers({
     },
     options,
   })
+}
+
+function createOwnedOrderManagementHandlers(options = {}) {
+  const snapshotHandlers = createOwnedOrderSnapshotHandlers(options)
+  const cancellationHandlers = createOwnedOrderCancellationHandlers(options)
+  const reconcileOwnedOrders = createOwnedOrderReconciliationHandler({
+    ...options,
+    ...snapshotHandlers,
+  })
   return {
-    collectOwnedOrderSnapshots,
-    applyOwnedOrderSnapshotsTransition,
-    cancelOwnedBuyOrders,
-    cancelOwnedBuyOrdersForShutdown,
-    cancelOwnedBuyOrdersForSafetyHalt,
+    ...snapshotHandlers,
+    ...cancellationHandlers,
     reconcileOwnedOrders,
   }
 }
@@ -1216,7 +1454,52 @@ function createOperatorMarketBlockers({
   return blockers
 }
 
-function createOperatorMarketSnapshot({
+function createOperatorVolatilityProtectionSnapshot({ volatilityState }) {
+  if (!volatilityState) {
+    return null
+  }
+  return Object.freeze({
+    mode: volatilityState.mode,
+    reason: volatilityState.reason,
+    stableCandleCount: volatilityState.stableCandleCount,
+    volatilityRatio: volatilityState.volatilityRatio,
+    natr: volatilityState.natr,
+    referenceNatr: volatilityState.referenceNatr,
+    atr: volatilityState.atr,
+  })
+}
+
+function createOperatorMarketSnapshotBlockers({
+  pairConfig,
+  metadata,
+  marketPrice,
+  priceFresh,
+  safetyPaused,
+  operatorPaused,
+  operatorBuyPaused,
+  recoveryManagedPaused,
+  replacementPending,
+  trailingBuyRepricePending,
+  volatilityState,
+  openOrderBlockerActive,
+}) {
+  return createOperatorMarketBlockers({
+    pairConfig,
+    metadata,
+    marketPrice,
+    priceFresh,
+    safetyPaused,
+    operatorPaused,
+    operatorBuyPaused,
+    recoveryManagedPaused,
+    replacementPending,
+    trailingBuyRepricePending,
+    volatilityState,
+    openOrderBlockerActive,
+  })
+}
+
+function createOperatorMarketSnapshotFacts({
   state,
   symbol,
   pairConfig,
@@ -1238,12 +1521,11 @@ function createOperatorMarketSnapshot({
   const recoveryManagedPaused = state.recoveryManagedPausedMarkets.has(symbol)
   const replacementPending = state.replacementIntents.has(symbol)
   const trailingBuyRepricePending = state.trailingBuyRepriceIntents.has(symbol)
-  const openOrderBlockerActive = pairConfig.enabled === true &&
-    hasBlockingOpenOrdersForSymbol({ symbol })
+  const openOrderBlockerActive = pairConfig.enabled === true && hasBlockingOpenOrdersForSymbol({ symbol })
   const volatilityState = isVolatilityProtectionEnabledForSymbol(symbol)
     ? state.volatilityProtection.get(symbol)
     : undefined
-  const blockers = createOperatorMarketBlockers({
+  const blockers = createOperatorMarketSnapshotBlockers({
     pairConfig,
     metadata,
     marketPrice,
@@ -1257,38 +1539,50 @@ function createOperatorMarketSnapshot({
     volatilityState,
     openOrderBlockerActive,
   })
-  const market = metadata?.market
-  const volatilityProtection = volatilityState
-    ? Object.freeze({
-      mode: volatilityState.mode,
-      reason: volatilityState.reason,
-      stableCandleCount: volatilityState.stableCandleCount,
-      volatilityRatio: volatilityState.volatilityRatio,
-      natr: volatilityState.natr,
-      referenceNatr: volatilityState.referenceNatr,
-      atr: volatilityState.atr,
-    })
-    : null
-  return Object.freeze({
-    symbol,
-    enabled: pairConfig.enabled === true,
-    baseAsset: market?.baseAsset?.code ?? null,
-    quoteAsset: market?.quoteAsset?.code ?? null,
-    marketMetadataReady: Boolean(market),
-    latestPrice: marketPrice?.price ?? null,
-    priceTimestamp: marketPrice?.timestamp ?? null,
+  const volatilityProtection = createOperatorVolatilityProtectionSnapshot({
+    volatilityState,
+  })
+  return {
+    metadata,
+    marketPrice,
     priceFresh,
     operatorPaused,
-    operatorBuysPaused: operatorBuyPaused,
+    operatorBuyPaused,
     safetyPaused,
     recoveryManagedPaused,
     replacementPending,
     trailingBuyRepricePending,
     openOrderBlockerActive,
     volatilityProtection,
-    blockers: Object.freeze(blockers),
+    blockers,
+  }
+}
+
+function createOperatorMarketSnapshot(options) {
+  const { symbol, pairConfig } = options
+  const facts = createOperatorMarketSnapshotFacts(options)
+  const market = facts.metadata?.market
+  return Object.freeze({
+    symbol,
+    enabled: pairConfig.enabled === true,
+    baseAsset: market?.baseAsset?.code ?? null,
+    quoteAsset: market?.quoteAsset?.code ?? null,
+    marketMetadataReady: Boolean(market),
+    latestPrice: facts.marketPrice?.price ?? null,
+    priceTimestamp: facts.marketPrice?.timestamp ?? null,
+    priceFresh: facts.priceFresh,
+    operatorPaused: facts.operatorPaused,
+    operatorBuysPaused: facts.operatorBuyPaused,
+    safetyPaused: facts.safetyPaused,
+    recoveryManagedPaused: facts.recoveryManagedPaused,
+    replacementPending: facts.replacementPending,
+    trailingBuyRepricePending: facts.trailingBuyRepricePending,
+    openOrderBlockerActive: facts.openOrderBlockerActive,
+    volatilityProtection: facts.volatilityProtection,
+    blockers: Object.freeze(facts.blockers),
   })
 }
+
 
 function createOperatorMarketSnapshotsGetter({
   state,
@@ -1690,13 +1984,25 @@ function createConservativeEngineProtectionContext({ context } = {}) {
   })
 }
 
+function getEventRecordMarketSymbol({ record }) {
+  return record?.market?.symbol
+}
+
+function getUserDataEventSymbolCandidates({ event = {} } = {}) {
+  const { executedOrder, order, fill, market, symbol, s } = event ?? {}
+  return [
+    getEventRecordMarketSymbol({ record: executedOrder }),
+    getEventRecordMarketSymbol({ record: order }),
+    getEventRecordMarketSymbol({ record: fill }),
+    market?.symbol,
+    symbol,
+    s,
+  ]
+}
+
 function getUserDataEventSymbol(event) {
-  return event?.executedOrder?.market?.symbol ??
-    event?.order?.market?.symbol ??
-    event?.fill?.market?.symbol ??
-    event?.market?.symbol ??
-    event?.symbol ??
-    event?.s
+  return getUserDataEventSymbolCandidates({ event })
+    .find((symbol) => symbol !== undefined && symbol !== null)
 }
 
 function createMarketEventOperations({ context } = {}) {
@@ -1849,61 +2155,21 @@ function createConservativeEnginePublicApi({ context } = {}) {
   })
 }
 
-export function makeConservativeTradingEngine({
-  broker,
-  strategyPolicy,
-  appConfig,
-  getPortfolio,
-  getRecoveryLedger,
-  getMarketMetadata,
-  getAccountSnapshot,
-  getAdditionalTrackedBaseQuantity = () => [],
-  getAdditionalTrackedQuoteCashFlow = () => [],
-  updateTradingAccounting,
-  completeRecoveryCycle,
-  canTrade,
-  onPause,
-  isStopping,
-  eventPublisher,
-  hasUnownedOpenOrdersForSymbol = () => false,
-  isMarketPriceFresh,
-  isMarketBookFresh = () => false,
-  getVolatilityData,
-  onOperationalStateSubmissionIntent,
-  onOperationalStateSubmissionOutcome,
-  onOperationalStateCancellationIntent,
-  onOperationalStateCancellationOutcome,
-  onOperationalStateStrategyMarketPaused,
-  onUnownedExternalOrderObserved,
-  logger,
-  initialState = {},
-} = {}) {
-  const dependencies = {
-    broker,
-    strategyPolicy,
-    appConfig,
-    getPortfolio,
-    getRecoveryLedger,
-    getMarketMetadata,
-    getAccountSnapshot,
+function createConservativeTradingEngineDependencies({ options = {} } = {}) {
+  const {
+    getAdditionalTrackedBaseQuantity = () => [],
+    getAdditionalTrackedQuoteCashFlow = () => [],
+    hasUnownedOpenOrdersForSymbol = () => false,
+    isMarketBookFresh = () => false,
+    logger,
+    initialState = {},
+  } = options
+  return {
+    ...options,
     getAdditionalTrackedBaseQuantity,
     getAdditionalTrackedQuoteCashFlow,
-    updateTradingAccounting,
-    completeRecoveryCycle,
-    canTrade,
-    onPause,
-    isStopping,
-    eventPublisher,
     hasUnownedOpenOrdersForSymbol,
-    isMarketPriceFresh,
     isMarketBookFresh,
-    getVolatilityData,
-    onOperationalStateSubmissionIntent,
-    onOperationalStateSubmissionOutcome,
-    onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome,
-    onOperationalStateStrategyMarketPaused,
-    onUnownedExternalOrderObserved,
     logger: logger
       ? createStrategyLogger({
         logger,
@@ -1912,6 +2178,11 @@ export function makeConservativeTradingEngine({
       : logger,
     initialState,
   }
+}
+
+
+export function makeConservativeTradingEngine(options = {}) {
+  const dependencies = createConservativeTradingEngineDependencies({ options })
   validateConservativeTradingEngineOptions(dependencies)
   const context = createConservativeEngineBaseContext({ dependencies })
   createConservativeEnginePublishingContext({ context })
@@ -1925,6 +2196,7 @@ export function makeConservativeTradingEngine({
   createConservativeEngineRuntimeOperations({ context })
   return createConservativeEnginePublicApi({ context })
 }
+
 
 function inspectAcknowledgedFillHistory({ order, fills }) {
   const fillsById = new Map()
@@ -2159,7 +2431,10 @@ async function persistCancellationOutcome({ callback, order, canceledOrder, reas
   }
 }
 
-function classifyCancellationResponse({ cancelResult, order }) {
+function classifyCancellationResponse({
+    cancelResult,
+    order,
+  }) {
   let outcome
   let canceledOrder
   if (cancelResult?.ok === true && cancelResult.data instanceof CanonicalOrder) {
@@ -2206,53 +2481,21 @@ async function handleCancellationRpcException({ error, callback, order, reason }
   }
 }
 
-async function cancelOrderWithOperationalStateTransition({ dependencies, order, reason }) {
-  const {
-    broker,
-    onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome,
-    logger,
-    state,
-  } = dependencies
-  const intentFailure = await persistCancellationIntent({
-    callback: onOperationalStateCancellationIntent,
-    order,
-    reason,
-  })
-  if (intentFailure) {
-    return intentFailure
-  }
-
-  logOrderLifecycle({
-    logger,
-    order,
-    ownership: state?.registry?.getOwnership?.({ clientOrderId: order.clientOrderId }),
-    status: "CANCEL_REQUESTED",
-  })
-
-  let cancelResult
-  try {
-    cancelResult = await broker.cancelOrder({
-      order,
-    })
-  } catch (error) {
-    return handleCancellationRpcException({
-      error,
-      callback: onOperationalStateCancellationOutcome,
-      order,
-      reason,
-    })
-  }
-  if (!onOperationalStateCancellationOutcome) {
+async function persistCancellationClassification({
+  callback,
+  order,
+  reason,
+  cancelResult,
+}) {
+  if (!callback) {
     return cancelResult
   }
-
   const classification = classifyCancellationResponse({
     cancelResult,
     order,
   })
   const outcomeFailure = await persistCancellationOutcome({
-    callback: onOperationalStateCancellationOutcome,
+    callback,
     order,
     canceledOrder: classification.canceledOrder,
     reason,
@@ -2269,6 +2512,47 @@ async function cancelOrderWithOperationalStateTransition({ dependencies, order, 
     }
   }
   return cancelResult
+}
+
+async function cancelOrderWithOperationalStateTransition({ dependencies, order, reason }) {
+  const {
+    broker,
+    onOperationalStateCancellationIntent,
+    onOperationalStateCancellationOutcome,
+    logger,
+    state,
+  } = dependencies
+  const intentFailure = await persistCancellationIntent({
+    callback: onOperationalStateCancellationIntent,
+    order,
+    reason,
+  })
+  if (intentFailure) {
+    return intentFailure
+  }
+  logOrderLifecycle({
+    logger,
+    order,
+    ownership: state?.registry?.getOwnership?.({ clientOrderId: order.clientOrderId }),
+    status: "CANCEL_REQUESTED",
+  })
+  let cancelResult
+  try {
+    cancelResult = await broker.cancelOrder({ order })
+  } catch (error) {
+    return handleCancellationRpcException({
+      error,
+      callback: onOperationalStateCancellationOutcome,
+      order,
+      reason,
+    })
+  }
+  return persistCancellationClassification({
+    callback: onOperationalStateCancellationOutcome,
+    order,
+    reason,
+    cancelResult,
+  })
 }
 
 
@@ -2382,6 +2666,26 @@ async function requestRecoverySellCancellation({ context, order, symbol }) {
   })
 }
 
+function getRecoveryCycleCompletionFailure({ completion }) {
+  if (!completion?.ok) {
+    return {
+      reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED",
+      errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")],
+    }
+  }
+  const allowedContinuationReasons = [
+    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
+    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
+  ]
+  if (completion.data?.eligible || allowedContinuationReasons.includes(completion.data?.reason)) {
+    return undefined
+  }
+  return {
+    reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
+    error: new Error("Recovery cycle completion was not eligible after terminal FILLED reconciliation"),
+  }
+}
+
 async function completeFilledRecoverySellCycle({ context, order, symbol }) {
   const completion = await context.completeRecoveryCycle({
     marketId: order.market.id,
@@ -2389,40 +2693,29 @@ async function completeFilledRecoverySellCycle({ context, order, symbol }) {
     minProfit: String(context.pairs[symbol].minProfit),
     sellOrder: order,
   })
-  if (!completion?.ok) {
-    await context.pause({
-      symbol,
-      reason: completion?.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_FAILED",
-      error: completion?.errors?.[0],
-    })
-    return toResult({
-      errors: completion?.errors ?? [new Error("Recovery cycle completion evaluation failed")],
-    })
-  }
-  if (!completion.data?.eligible) {
+  if (completion?.ok && !completion.data?.eligible) {
     context.publishRecoveryCycleNotCompleted({
       order,
       completion,
     })
   }
-  const allowedContinuationReasons = [
-    "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
-    "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
-  ]
-  if (!completion.data?.eligible && !allowedContinuationReasons.includes(completion.data?.reason)) {
+  const failure = getRecoveryCycleCompletionFailure({ completion })
+  if (failure) {
     await context.pause({
       symbol,
-      reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
+      reason: failure.reason,
+      error: failure.errors?.[0] ?? failure.error,
     })
-    return toResult({
-      error: new Error("Recovery cycle completion was not eligible after terminal FILLED reconciliation"),
-    })
+    return failure.errors
+      ? toResult({ errors: failure.errors })
+      : toResult({ error: failure.error })
   }
   return {
     ok: true,
     data: completion.data,
   }
 }
+
 
 function publishCompletedRecoverySellCycle({ context, order, symbol, completion }) {
   if (!completion.eligible) {
@@ -2568,6 +2861,39 @@ async function resolveRecoverySellCancellationOrder({ context, order, canceledOr
   })
 }
 
+async function rejectUnconfirmedRecoverySellCancellation({ context, order, symbol }) {
+  const error = new Error("Recovery SELL did not reach an authoritative terminal state")
+  context.publishOrderCancelFailed({
+    order,
+    outcome: "CANCELLATION_UNCONFIRMED",
+    error,
+  })
+  await context.pause({
+    symbol,
+    reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
+    error,
+  })
+  return recoverySellFailure({
+    error: new Error("Recovery SELL cancellation did not reach a terminal state"),
+  })
+}
+
+async function rejectRecoverySellQuantityMismatch({ context, symbol }) {
+  const error = new Error("Non-FILLED terminal recovery SELL reports its full original quantity as executed")
+  await context.pause({
+    symbol,
+    reason: "RECOVERY_SELL_TERMINAL_STATUS_QUANTITY_MISMATCH",
+  })
+  return toResult({ error })
+}
+
+function hasFullRecoverySellExecution({ order }) {
+  return compareDecimal({
+    left: order.executedQuantity.amount,
+    right: order.originalQuantity.amount,
+  }) === 0
+}
+
 async function applyRecoverySellCancellation({ context, order, canceledOrder, symbol }) {
   const resolution = await resolveRecoverySellCancellationOrder({
     context,
@@ -2581,17 +2907,10 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
   const effectiveCanceledOrder = resolution.data.canceledOrder
   const terminalStatuses = new Set(["CANCELED", "FILLED", "EXPIRED", "REJECTED"])
   if (!terminalStatuses.has(effectiveCanceledOrder.status)) {
-    context.publishOrderCancelFailed({
+    return rejectUnconfirmedRecoverySellCancellation({
+      context,
       order: effectiveCanceledOrder,
-      outcome: "CANCELLATION_UNCONFIRMED",
-      error: new Error("Recovery SELL did not reach an authoritative terminal state"),
-    })
-    await context.pause({
       symbol,
-      reason: "RECOVERY_SELL_CANCELLATION_UNCONFIRMED",
-    })
-    return recoverySellFailure({
-      error: new Error("Recovery SELL cancellation did not reach a terminal state"),
     })
   }
   publishRecoverySellCancellationOutcome({
@@ -2615,16 +2934,10 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
       symbol,
     })
   }
-  if (compareDecimal({
-    left: effectiveCanceledOrder.executedQuantity.amount,
-    right: effectiveCanceledOrder.originalQuantity.amount,
-  }) === 0) {
-    await context.pause({
+  if (hasFullRecoverySellExecution({ order: effectiveCanceledOrder })) {
+    return rejectRecoverySellQuantityMismatch({
+      context,
       symbol,
-      reason: "RECOVERY_SELL_TERMINAL_STATUS_QUANTITY_MISMATCH",
-    })
-    return toResult({
-      error: new Error("Non-FILLED terminal recovery SELL reports its full original quantity as executed"),
     })
   }
   return toResult({
@@ -2633,6 +2946,7 @@ async function applyRecoverySellCancellation({ context, order, canceledOrder, sy
     },
   })
 }
+
 
 async function processRecoverySellCancellation({ context, order, symbol }) {
   if (order.status === "PENDING") {
@@ -2809,12 +3123,64 @@ async function cancelTrailingBuyOrder({ context, symbol, order }) {
   })
 }
 
-function matchesTrailingBuyFillIdentity({ fill, order }) {
+function matchesOwnedBuyExecutionIdentity({
+      fill,
+      order,
+    }) {
   return fill instanceof Fill &&
     fill.market.id === order.market.id &&
     fill.side === "BUY" &&
     fill.brokerOrderId === order.brokerOrderId &&
     (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
+}
+
+function matchesTrailingBuyFillIdentity({
+      fill,
+      order,
+    }) {
+  return matchesOwnedBuyExecutionIdentity({
+    fill,
+    order,
+  })
+}
+
+async function applyTrailingBuyFillHistory({ context, symbol, order, fills }) {
+  let reconciledQuantity = "0"
+  const seenFillIds = new Set()
+  for (const fill of fills) {
+    if (!matchesTrailingBuyFillIdentity({
+      fill,
+      order,
+    })) {
+      await context.pause({
+        symbol,
+        reason: "TRAILING_BUY_FILL_IDENTITY_MISMATCH",
+      })
+      return toResult({
+        error: new Error("Recovered BUY fill does not match the canceled order"),
+      })
+    }
+    const accounting = await context.updateTradingAccounting({
+      fill,
+    })
+    if (!accounting?.ok) {
+      const errors = accounting?.errors ?? [new Error("Recovered BUY fill accounting failed")]
+      await context.pause({
+        symbol,
+        reason: "TRAILING_BUY_FILL_ACCOUNTING_FAILED",
+        error: errors[0],
+      })
+      return toResult({ errors })
+    }
+    if (!seenFillIds.has(fill.id)) {
+      reconciledQuantity = addDecimal({
+        left: reconciledQuantity,
+        right: fill.quantity.amount,
+      })
+      seenFillIds.add(fill.id)
+    }
+  }
+  return toResult({ data: { reconciledQuantity } })
 }
 
 async function reconcileTrailingBuyFills({ context, symbol, order, canceledOrder }) {
@@ -2829,47 +3195,18 @@ async function reconcileTrailingBuyFills({ context, symbol, order, canceledOrder
       reason: "TRAILING_BUY_FILL_RECONCILIATION_FAILED",
       error: errors[0],
     })
-    return toResult({
-      errors,
-    })
+    return toResult({ errors })
   }
-  let reconciledQuantity = "0"
-  const seenFillIds = new Set()
-  for (const fill of fillsResult.data) {
-    const identityMatches = matchesTrailingBuyFillIdentity({
-      fill,
-      order,
-    })
-    if (!identityMatches) {
-      await context.pause({
-        symbol,
-        reason: "TRAILING_BUY_FILL_IDENTITY_MISMATCH",
-      })
-      return toResult({
-        error: new Error("Recovered BUY fill does not match the canceled order"),
-      })
-    }
-    const accounting = await context.updateTradingAccounting({
-      fill,
-    })
-    if (!accounting?.ok) {
-      await context.pause({
-        symbol,
-        reason: "TRAILING_BUY_FILL_ACCOUNTING_FAILED",
-        error: accounting?.errors?.[0],
-      })
-      return toResult({
-        errors: accounting?.errors ?? [new Error("Recovered BUY fill accounting failed")],
-      })
-    }
-    if (!seenFillIds.has(fill.id)) {
-      reconciledQuantity = addDecimal({
-        left: reconciledQuantity,
-        right: fill.quantity.amount,
-      })
-      seenFillIds.add(fill.id)
-    }
+  const reconciliation = await applyTrailingBuyFillHistory({
+    context,
+    symbol,
+    order,
+    fills: fillsResult.data,
+  })
+  if (!reconciliation.ok) {
+    return reconciliation
   }
+  const { reconciledQuantity } = reconciliation.data
   if (compareDecimal({
     left: reconciledQuantity,
     right: canceledOrder.executedQuantity.amount,
@@ -2882,12 +3219,9 @@ async function reconcileTrailingBuyFills({ context, symbol, order, canceledOrder
       error: new Error("Canceled BUY cumulative execution does not match reconciled fills"),
     })
   }
-  return toResult({
-    data: {
-      reconciledQuantity,
-    },
-  })
+  return reconciliation
 }
+
 
 async function cancelAndReconcileTrailingBuyTransition({ context, symbol, order }) {
   const cancellation = await cancelTrailingBuyOrder({
@@ -2928,7 +3262,10 @@ async function cancelAndReconcileTrailingBuyTransition({ context, symbol, order 
 }
 
 
-function getTrailingBuyContext({ context, symbol }) {
+function getTrailingBuyContext({
+    context,
+    symbol,
+  }) {
   const metadata = context.getCurrentMarketMetadata({
     symbol,
   })
@@ -2954,7 +3291,11 @@ function logTrailingBuyActivePosition({ context, symbol, metadata, position, act
   })
 }
 
-function getTrailingBuyActivePositionSkip({ context, symbol, metadata }) {
+function getTrailingBuyActivePositionSkip({
+    context,
+    symbol,
+    metadata,
+  }) {
   const position = context.getPortfolio().getPosition({ strategyId: StrategyId.COIN_GRABBER,
     marketId: metadata.market.id,
   })
@@ -3126,33 +3467,29 @@ async function prepareTrailingBuyReplacement({ context, symbol, pairConfig, meta
   })
 }
 
-async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice }) {
+async function getTrailingBuyReplacementCandidate({ context, symbol, marketPrice }) {
   if (context.state.shutdownBuyGate === true) {
-    return toResult({
-      data: {
-        skipped: true,
-        reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
-      },
-    })
+    return {
+      result: toResult({
+        data: {
+          skipped: true,
+          reason: "CONSERVATIVE_SHUTDOWN_BUY_GATE_ACTIVE",
+        },
+      }),
+    }
   }
   if (isOperatorBuyPauseActive({
     state: context.state,
     symbol,
   })) {
-    return context.evaluateLatestTransition({ symbol })
+    return { result: await context.evaluateLatestTransition({ symbol }) }
   }
-  const {
-    metadata,
-    pairConfig,
-    activeBuy,
-  } = getTrailingBuyContext({
+  const { metadata, pairConfig, activeBuy } = getTrailingBuyContext({
     context,
     symbol,
   })
   if (!activeBuy || context.state.trailingBuy.get(symbol) === false) {
-    return context.evaluateLatestTransition({
-      symbol,
-    })
+    return { result: await context.evaluateLatestTransition({ symbol }) }
   }
   const positionSkip = getTrailingBuyActivePositionSkip({
     context,
@@ -3160,7 +3497,7 @@ async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice 
     metadata,
   })
   if (positionSkip) {
-    return positionSkip
+    return { result: positionSkip }
   }
   const trigger = evaluateTrailingBuyTrigger({
     context,
@@ -3170,24 +3507,41 @@ async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice 
     activeBuy,
   })
   if (!trigger.shouldReplace) {
-    return context.evaluateLatestTransition({
-      symbol,
-    })
+    return { result: await context.evaluateLatestTransition({ symbol }) }
   }
   if (context.isStopping?.()) {
-    return toResult({
-      data: {
-        skipped: true,
-        reason: "STOPPING",
-      },
-    })
+    return {
+      result: toResult({
+        data: {
+          skipped: true,
+          reason: "STOPPING",
+        },
+      }),
+    }
+  }
+  return {
+    metadata,
+    pairConfig,
+    activeBuy,
+    trigger,
+  }
+}
+
+async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice }) {
+  const candidate = await getTrailingBuyReplacementCandidate({
+    context,
+    symbol,
+    marketPrice,
+  })
+  if (Object.hasOwn(candidate, "result")) {
+    return candidate.result
   }
   const preparationFailure = await prepareTrailingBuyReplacement({
     context,
     symbol,
-    pairConfig,
-    metadata,
-    activeBuy,
+    pairConfig: candidate.pairConfig,
+    metadata: candidate.metadata,
+    activeBuy: candidate.activeBuy,
     marketPrice,
   })
   if (preparationFailure) {
@@ -3196,16 +3550,19 @@ async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice 
   return replaceTrailingBuy({
     context,
     symbol,
-    activeBuy,
+    activeBuy: candidate.activeBuy,
     marketPrice,
-    trigger,
+    trigger: candidate.trigger,
   })
 }
 
 
-function validateOwnedOrderSnapshotParity({ context, snapshots }) {
+function validateOwnedOrderSnapshotParity({ context, snapshots, requestedSymbols = null }) {
   const snapshotOrderIds = new Set(snapshots.map(({ ownedOrder }) => ownedOrder.brokerOrderId))
-  for (const currentOrder of context.state.registry.orders) {
+  const currentOrders = context.state.registry.orders.filter((order) =>
+    requestedSymbols === null || requestedSymbols.has(order.market.symbol))
+  for (const currentOrder of currentOrders) {
+    context.affectedSymbol = currentOrder.market.symbol
     if (!currentOrder.brokerOrderId || !snapshotOrderIds.has(currentOrder.brokerOrderId)) {
       throw recoveryFailureError(
         new Error("Order registry changed while REST reconciliation was in progress"),
@@ -3258,70 +3615,24 @@ function validateOwnedOrderSnapshotParity({ context, snapshots }) {
   }
 }
 
-async function applyOwnedOrderSnapshotTransitions({ context, snapshots, recoveryMode }) {
-  for (const snapshot of snapshots) {
-    const {
-      ownedOrder,
-      historyOrder,
-      fills,
-    } = snapshot
-    context.affectedSymbol = ownedOrder.market.symbol
-    const currentOrder = context.state.registry.getOrder({
-      clientOrderId: ownedOrder.clientOrderId,
+async function applyOwnedOrderSnapshotFills({ context, ownedOrder, currentOrder, fills }) {
+  for (const fill of fills) {
+    const processed = await context.processExecutionFillTransition({
+      order: currentOrder,
+      fill,
     })
-    if (!currentOrder) {
-      throw recoveryFailureError(
-        new Error(`Owned order disappeared before REST fill accounting: ${  ownedOrder.brokerOrderId}`),
-        "OWNERSHIP_INTEGRITY",
-        "REST_FILL_ORDER_OWNERSHIP",
-        false,
-      )
-    }
-    for (const fill of fills) {
-      const processed = await context.processExecutionFillTransition({
-        order: currentOrder,
-        fill,
-      })
-      if (!processed.ok) {
-        const error = processed.errors?.[0] ?? new Error("Recovered fill could not be applied")
-        await context.pause({
-          symbol: ownedOrder.market.symbol,
-          reason: "REST_FILL_RECONCILIATION_FAILED",
-          error,
-        })
-        return withFailure(
-          toResult({
-            errors: processed.errors ?? [error],
-          }),
-          processed.failure ?? {
-            category: "ACCOUNTING_INTEGRITY",
-            stage: "REST_FILL_ACCOUNTING",
-            retryable: false,
-          },
-        )
-      }
-    }
-    const processedOrder = await context.processUserDataEventTransition({
-      event: {
-        executedOrder: historyOrder,
-      },
-      recoveryMode,
-      terminalFillsReconciled: true,
-    })
-    if (!processedOrder.ok) {
-      const error = processedOrder.errors?.[0] ?? new Error("Recovered order state could not be applied")
+    if (!processed.ok) {
+      const error = processed.errors?.[0] ?? new Error("Recovered fill could not be applied")
       await context.pause({
         symbol: ownedOrder.market.symbol,
-        reason: "REST_ORDER_RECONCILIATION_FAILED",
+        reason: "REST_FILL_RECONCILIATION_FAILED",
         error,
       })
       return withFailure(
-        toResult({
-          errors: processedOrder.errors ?? [error],
-        }),
-        processedOrder.failure ?? {
+        toResult({ errors: processed.errors ?? [error] }),
+        processed.failure ?? {
           category: "ACCOUNTING_INTEGRITY",
-          stage: "REST_ORDER_STATE_APPLICATION",
+          stage: "REST_FILL_ACCOUNTING",
           retryable: false,
         },
       )
@@ -3330,13 +3641,85 @@ async function applyOwnedOrderSnapshotTransitions({ context, snapshots, recovery
   return undefined
 }
 
-async function applyOwnedOrderSnapshots({ context, snapshots, symbols, recoveryMode }) {
+async function applyOwnedOrderSnapshotState({ context, ownedOrder, historyOrder, recoveryMode }) {
+  const processedOrder = await context.processUserDataEventTransition({
+    event: { executedOrder: historyOrder },
+    recoveryMode,
+    terminalFillsReconciled: true,
+  })
+  if (processedOrder.ok) {
+    return undefined
+  }
+  const error = processedOrder.errors?.[0] ?? new Error("Recovered order state could not be applied")
+  await context.pause({
+    symbol: ownedOrder.market.symbol,
+    reason: "REST_ORDER_RECONCILIATION_FAILED",
+    error,
+  })
+  return withFailure(
+    toResult({ errors: processedOrder.errors ?? [error] }),
+    processedOrder.failure ?? {
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "REST_ORDER_STATE_APPLICATION",
+      retryable: false,
+    },
+  )
+}
+
+async function applyOwnedOrderSnapshotTransition({ context, snapshot, recoveryMode }) {
+  const { ownedOrder, historyOrder, fills } = snapshot
+  context.affectedSymbol = ownedOrder.market.symbol
+  const currentOrder = context.state.registry.getOrder({
+    clientOrderId: ownedOrder.clientOrderId,
+  })
+  if (!currentOrder) {
+    throw recoveryFailureError(
+      new Error(`Owned order disappeared before REST fill accounting: ${  ownedOrder.brokerOrderId}`),
+      "OWNERSHIP_INTEGRITY",
+      "REST_FILL_ORDER_OWNERSHIP",
+      false,
+    )
+  }
+  const fillResult = await applyOwnedOrderSnapshotFills({
+    context,
+    ownedOrder,
+    currentOrder,
+    fills,
+  })
+  if (fillResult) {
+    return fillResult
+  }
+  return applyOwnedOrderSnapshotState({
+    context,
+    ownedOrder,
+    historyOrder,
+    recoveryMode,
+  })
+}
+
+async function applyOwnedOrderSnapshotTransitions({ context, snapshots, recoveryMode }) {
+  for (const snapshot of snapshots) {
+    const result = await applyOwnedOrderSnapshotTransition({
+      context,
+      snapshot,
+      recoveryMode,
+    })
+    if (result) {
+      return result
+    }
+  }
+  return undefined
+}
+
+
+async function applyOwnedOrderSnapshots({ context, snapshots, symbols, recoveryMode, requestedSymbols = null }) {
   const [firstSymbol] = symbols
   context.affectedSymbol = firstSymbol
   try {
     validateOwnedOrderSnapshotParity({
       context,
       snapshots,
+      requestedSymbols,
     })
     const result = await applyOwnedOrderSnapshotTransitions({
       context,
@@ -3559,12 +3942,10 @@ function validateOwnedBuyExecutionHistory({ order, fillsResult, reasonPrefix }) 
   }
   const fillsById = new Map()
   for (const fill of fillsResult.data) {
-    const identityMatches = fill instanceof Fill &&
-      fill.market.id === order.market.id &&
-      fill.side === "BUY" &&
-      fill.brokerOrderId === order.brokerOrderId &&
-      (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
-    if (!identityMatches) {
+    if (!matchesOwnedBuyExecutionIdentity({
+      fill,
+      order,
+    })) {
       return {
         ok: false,
         error: new Error(`BUY execution history contains a fill for a different order during ${  reasonPrefix}`),
@@ -3596,7 +3977,7 @@ function validateOwnedBuyExecutionHistory({ order, fillsResult, reasonPrefix }) 
     fills,
   }
 }
-  
+
 
 function getOwnedBuyReconciledQuantity({ fills }) {
   return fills.reduce((...entries) => {
@@ -3676,6 +4057,29 @@ async function reconcileOwnedBuyCancellationFills({ context, order, reconciledOr
   })
 }
 
+function publishOwnedBuyCancellationResult({ context, reconciledOrder, fills, reasonPrefix }) {
+  if (reconciledOrder.status === "CANCELED") {
+    context.publishOrderCancelled({ order: reconciledOrder })
+    return toResult({
+      data: {
+        canceled: 1,
+        reconciled: fills.data?.reconciled ?? 0,
+      },
+    })
+  }
+  context.publishOrderCancelFailed({
+    order: reconciledOrder,
+    outcome: `${reconciledOrder.status  }_DURING_${  reasonPrefix}`,
+    error: new Error(`The BUY order reached ${  reconciledOrder.status  } before ${  reasonPrefix  } cancellation completed`),
+  })
+  return toResult({
+    data: {
+      canceled: 0,
+      reconciled: fills.data?.reconciled ?? 0,
+    },
+  })
+}
+
 async function cancelSingleOwnedBuyOrder({ context, order, reason, reasonPrefix, pauseOnFailure }) {
   const prepared = await prepareOwnedBuyCancellation({
     context,
@@ -3724,29 +4128,14 @@ async function cancelSingleOwnedBuyOrder({ context, order, reason, reasonPrefix,
   if (!fills.ok) {
     return fills
   }
-  if (reconciledOrder.status === "CANCELED") {
-    context.publishOrderCancelled({
-      order: reconciledOrder,
-    })
-    return toResult({
-      data: {
-        canceled: 1,
-        reconciled: fills.data?.reconciled ?? 0,
-      },
-    })
-  }
-  context.publishOrderCancelFailed({
-    order: reconciledOrder,
-    outcome: `${reconciledOrder.status  }_DURING_${  reasonPrefix}`,
-    error: new Error(`The BUY order reached ${  reconciledOrder.status  } before ${  reasonPrefix  } cancellation completed`),
-  })
-  return toResult({
-    data: {
-      canceled: 0,
-      reconciled: fills.data?.reconciled ?? 0,
-    },
+  return publishOwnedBuyCancellationResult({
+    context,
+    reconciledOrder,
+    fills,
+    reasonPrefix,
   })
 }
+
 
 async function cancelOwnedBuyOrdersTransition({ context, options }) {
   const reason = options.reason === undefined ? "PROCESS_SHUTDOWN" : options.reason
@@ -3989,7 +4378,7 @@ async function reconcilePendingOwnedOrders({ context, pendingOrders }) {
   return undefined
 }
 
-async function collectAndApplyOwnedOrderSnapshots({ context, ownedOrders, symbols, recoveryMode, beforeApply }) {
+async function collectAndApplyOwnedOrderSnapshots({ context, ownedOrders, symbols, recoveryMode, beforeApply, requestedSymbols }) {
   let snapshots
   try {
     snapshots = await context.collectOwnedOrderSnapshots({
@@ -4019,6 +4408,7 @@ async function collectAndApplyOwnedOrderSnapshots({ context, ownedOrders, symbol
     task: () => context.applyOwnedOrderSnapshotsTransition({
       ...snapshots,
       recoveryMode,
+      requestedSymbols,
     }),
   })
 }
@@ -4080,6 +4470,7 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
     context,
     ownedOrders,
     symbols,
+    requestedSymbols,
     recoveryMode: options.recoveryMode === undefined ? false : options.recoveryMode,
     beforeApply: options.beforeApply,
   })

@@ -6,10 +6,10 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 | Workflow file | Triggers | Purpose and principal checks | Ruleset requirement (`main` + `develop`) |
 | --- | --- | --- | --- |
-| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`, JavaScript syntax, and strict full-workspace ESLint (`pnpm lint`, zero errors and warnings) in the required `Check JavaScript syntax` job, plus agent-policy/domain-ownership checks, the report-only Markdown formatting baseline, changed-file Markdown style enforcement, and mocked external-link checker unit tests. The agent-policy command also prints the report-only heading-anchor baseline. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
+| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`; an independent workspace-quality job with JavaScript syntax and strict full-workspace ESLint (`pnpm lint`, zero errors and warnings); and, for PRs targeting `develop`, an independent `Check strict ESLint for changed files` job. The required `Check JavaScript syntax` aggregator fails unless the workspace job and every applicable changed-file check succeed. The workflow also runs agent-policy/domain-ownership checks, the report-only full-tree baseline, the blocking full-tree maintained Markdown style gate, the blocking maintained-source local-anchor gate, changed-file Markdown style enforcement, and mocked external-link checker unit tests. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
 | `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace package-test matrix offline. Manual `develop` dispatch can explicitly opt into read-only Binance TESTNET integration. | `Run package tests` in both active rulesets. |
-| `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace test-coverage matrix and writes the coverage command output to the Actions step summary. | `Workspace test coverage` in both active rulesets. |
-| `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the focused Utils package test command (`node --test packages/utils`). | `packages/utils tests` in both active rulesets. |
+| `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the Node.js test-coverage matrix for all workspace packages and enforces package-specific thresholds where a `test:coverage` script exists (Entities has no separate threshold script). | `Workspace test coverage` in both active rulesets. |
+| `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the focused Utils package test command (`node --test packages/utils/src/*.test.js`). | `packages/utils tests` in both active rulesets. |
 | `dependency-audit.yml` (**Dependency Audit**) | Pull requests; pushes to `main`/`develop`; manual dispatch; weekly schedule | Audits production dependencies with the high-severity threshold. | `Audit production dependencies` in both active rulesets. |
 | `harvester-targeted-tests.yml` (**Harvester Targeted Tests**) | Pull requests; manual dispatch | Runs `pnpm --filter @coinzilla/harvester test:targeted`. | Additional PR workflow; not required by either active ruleset. |
 | `harvester-process-lock.yml` (**Harvester Process Lock**) | Path-filtered pull requests/pushes; manual dispatch | Runs the process-lock regression test on Ubuntu and Windows when process-lock code, Harvester entrypoint, or this workflow changes. | Additional path-filtered workflow; not required by either active ruleset. |
@@ -21,7 +21,7 @@ The version-update schedule, ecosystem grouping, open-PR limits and target branc
 
 ## Required status contexts on `develop`
 
-As verified against the active repository ruleset `develop-core` on 2026-11-10, strict required-status freshness is enabled and the ruleset requires exactly these six contexts:
+As verified against the active repository ruleset `develop-core` on 2026-11-18, strict required-status freshness is enabled and the ruleset requires exactly these six contexts:
 
 1. `Run package tests`
 2. `Workspace test coverage`
@@ -30,19 +30,17 @@ As verified against the active repository ruleset `develop-core` on 2026-11-10, 
 5. `Audit production dependencies`
 6. `actionlint`
 
-The two Harvester workflows and External Documentation Links run as additional checks but are not required contexts in this ruleset. A workflow trigger starting a run does not, by itself, make that check a merge requirement. Re-read the live ruleset before changing workflow names, job names, or required contexts; never infer required contexts from workflow names. The required `Check JavaScript syntax` context also runs strict full-workspace ESLint via `pnpm lint`; any error or warning therefore blocks the pull request. No migration baseline or changed-file-only lint exception remains.
-
-The Unit Tests and Test Coverage package matrices explicitly list workspace packages. When adding a package, update both matrices in the same PR; the Indicators package is included in both. Indicators coverage runs the package's 90% line / 85% branch threshold script.
+The two Harvester workflows and External Documentation Links run as additional checks but are not required contexts in this ruleset. A workflow trigger starting a run does not, by itself, make that check a merge requirement. Re-read the live ruleset before changing workflow names, job names, or required contexts; never infer required contexts from workflow names. The required `Check JavaScript syntax` context is an aggregator: it requires the independent workspace-quality job (including `pnpm lint`) and, for PRs targeting `develop`, the independent `Check strict ESLint for changed files` job. Either failure blocks the PR. The changed-file job fetches the target branch and complete history, computes the merge base with the PR head, and runs `pnpm lint:changed`; missing history or a missing merge base fails closed. The existing six ruleset contexts are unchanged because the required aggregator retains the existing `Check JavaScript syntax` name.
 
 The Unit Tests and Test Coverage package matrices explicitly list workspace packages. When adding a package, update both matrices in the same PR; the Indicators package is included in both. Indicators coverage runs the package's 90% line / 85% branch threshold script.
 
 ## Markdown and documentation checks
 
-The required JavaScript Syntax workflow runs these documentation checks:
+The workspace-quality job in the required JavaScript Syntax workflow runs these documentation checks:
 
-- `check-agent-policy.js` enforces ownership maps, required roadmaps and entry points, balanced Markdown fences, and relative local-path existence for inline links and reference definitions. Code examples and HTML comments are excluded; malformed percent-encoded paths are reported as controlled findings. It also prints unresolved local heading-anchor findings using GitHub-style slugs for inline links and reference definitions; **heading-anchor findings are report-only and do not fail the check**.
-- `markdown-style-baseline.js` reports full-tree formatting/heading/fence metrics without failing on existing findings or rewriting files.
-- On pull requests, `check-markdown-style.js` enforces the changed-line/file-level Markdown style rules against the exact PR base SHA. This is a blocking check within `Check JavaScript syntax`, not a separate status context.
+- `check-agent-policy.js` enforces ownership maps, required roadmaps and entry points, balanced Markdown fences, and relative local-path existence for inline links and reference definitions. Code examples and HTML comments are excluded; malformed percent-encoded paths are reported as controlled findings. It also prints the full-tree local heading-anchor baseline as report-only. The separate `check-maintained-markdown-anchors.js` step blocks unresolved anchors from maintained source documents and leaves historical-source findings report-only; its tests cover GitHub-compatible slugs, URL-encoded paths/fragments, maintained indexes, templates and historical snapshots.
+- `markdown-style-baseline.js` reports full-tree formatting/heading/fence metrics without failing on existing findings or rewriting files. `check-markdown-style.js --all-maintained` blocks all 14 style metrics across maintained Markdown/MDX paths (132 files at the 160-file checkpoint); 28 historical paths are excluded. GitHub templates are exempt only from H1 and heading-hierarchy findings. The shared scanner excludes fenced and four-space-indented code blocks from prose/list/table metrics while continuing to analyze valid nested lists.
+- On pull requests, `check-markdown-style.js` also enforces changed-line/file-level Markdown style rules against the exact PR base SHA. This is a blocking step within `Check JavaScript syntax`, not a separate status context.
 - `check-external-links.test.js` exercises the external URL checker with mocked fetch responses. These tests run in required CI but make no network requests.
 
 The networked **External Documentation Links** workflow is an advisory check for changed maintained Markdown/MDX on pull requests to `develop`; weekly and manual runs report on the full `develop` tree. It resolves and validates every A/AAAA answer, pins each HTTP(S) connection to vetted addresses, and revalidates redirects. It sends no credentials and is not one of the six required contexts. The CLI and workflow follow the [documented reliability policy](MARKDOWN_STYLE.md); required CI remains network-free.
@@ -61,7 +59,7 @@ Pull-request package tests do not contact Binance or any exchange endpoint. The 
 
 ## Active repository rulesets
 
-Live GitHub rulesets were verified on 2026-11-10:
+Live GitHub rulesets were verified on 2026-11-18:
 
 | Ruleset | Target branch | Required status contexts |
 | --- | --- | --- |
@@ -87,15 +85,23 @@ pnpm lint
 pnpm lint:fix
 
 # Local aggregate: workspace tests, strict full-workspace ESLint, syntax, agent-policy, and mocked external-link tests
-# (does not run the report-only Markdown baseline, changed-file Markdown style gate, or live URL checks)
+# (does not run the report-only Markdown baseline, maintained Markdown gates, changed-file style gate, or live URL checks)
 pnpm run quality
 
 # Report-only full-tree Markdown formatting baseline
 node --test scripts/markdown-style-baseline.test.js
 node scripts/markdown-style-baseline.js
 
-# Agent policy (includes the report-only heading-anchor scan)
+# Agent policy (includes the report-only full-tree heading-anchor scan)
 pnpm run check:agent-policy
+
+# Full-tree maintained Markdown style gate (all 14 style metrics)
+node --test scripts/markdown-path-policy.test.js scripts/check-markdown-style.test.js
+node scripts/check-markdown-style.js --all-maintained
+
+# Maintained-source local heading-anchor gate (historical sources report-only)
+node --test scripts/check-maintained-markdown-anchors.test.js
+node scripts/check-maintained-markdown-anchors.js
 
 # Offline external-link checker unit tests (mocked responses; no network)
 pnpm run test:external-links
@@ -132,4 +138,4 @@ The package test commands and pull-request workflow remain deterministic, creden
 4. Fix the underlying issue rather than skipping, weakening, or masking the check.
 5. Re-run the relevant tests and checks, then confirm the pull request's checks have completed successfully.
 
-The coverage workflow writes its command output to the GitHub Actions step summary to make the report easier to inspect. A failed coverage command still fails the job.
+The coverage workflow emits command output in the Actions job log; it does not write a custom step summary. A failed coverage command still fails the job.

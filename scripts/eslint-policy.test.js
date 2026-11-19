@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { ESLint } from "eslint";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,7 +30,543 @@ test("the required JavaScript quality gate runs strict workspace lint", () => {
   );
 });
 
-test("the root package exposes no baseline-tolerant lint commands", () => {
-  assert.equal(Object.hasOwn(packageJson.scripts, "lint:changed"), false);
-  assert.equal(Object.hasOwn(packageJson.scripts, "lint:report"), false);
+test("the root package preserves workspace lint and exposes strict changed-file lint", () => {
+  assert.equal(
+    packageJson.scripts.lint,
+    "eslint . --max-warnings 0",
+    "The existing full-workspace lint command must remain unchanged.",
+  );
+  assert.equal(
+    packageJson.scripts["lint:changed"],
+    "node scripts/lint-changed.js",
+    "The separate strict changed-file command must invoke the progressive runner.",
+  );
+  assert.equal(
+    Object.hasOwn(packageJson.scripts, "lint:report"),
+    false,
+    "A baseline-tolerant reporting command must not replace either enforcement gate.",
+  );
+});
+
+test("the workspace complexity policy retains its evidence-based threshold", async () => {
+  const eslint = new ESLint();
+  const config = await eslint.calculateConfigForFile("apps/harvester/src/index.js");
+
+  assert.deepEqual(
+    config.rules.complexity,
+    [2, { max: 20 }],
+    "Do not lower complexity to 15 while the workspace has a broad existing cleanup burden.",
+  );
+});
+
+test("the required JavaScript quality context aggregates both independent lint jobs", () => {
+  assert.ok(
+    qualityWorkflow.includes("strict-changed:\n    name: Check strict ESLint for changed files"),
+    "The workflow must expose a separate changed-file strict ESLint job.",
+  );
+  assert.ok(
+    qualityWorkflow.includes("required-javascript-quality:\n    name: Check JavaScript syntax"),
+    "The existing required JavaScript status context must remain as an aggregator.",
+  );
+  assert.ok(
+    qualityWorkflow.includes("      - workspace-quality\n      - strict-changed"),
+    "The required context must depend on both independent lint jobs.",
+  );
+});
+
+test("direct console usage is an error while explicit CLI output remains allowed", async () => {
+  const eslint = new ESLint();
+  const [directConsole] = await eslint.lintText(
+    'console.log("diagnostic");\n',
+    { filePath: "scripts/eslint-policy-fixture.js" },
+  );
+  const [cliOutput] = await eslint.lintText(
+    'process.stdout.write("diagnostic");\n',
+    { filePath: "scripts/eslint-policy-fixture.js" },
+  );
+
+  assert.equal(
+    directConsole.messages.find((message) => message.ruleId === "no-console")?.severity,
+    2,
+    "Direct console usage must be rejected as an error.",
+  );
+  assert.equal(
+    cliOutput.messages.filter((message) => message.ruleId === "no-console").length,
+    0,
+    "Explicit process stream output remains available for intentional CLI diagnostics.",
+  );
+});
+
+test("implicit coercion is an error while explicit conversions remain available", async () => {
+  const eslint = new ESLint();
+  const [implicitCoercion] = await eslint.lintText(
+    'const value = "1";\nconst numeric = +value;\nconst enabled = !!value;\n',
+    { filePath: "apps/harvester/src/domain/implicit-coercion-fixture.js" },
+  );
+  const [explicitConversion] = await eslint.lintText(
+    'const value = "1";\nconst numeric = Number(value);\nconst enabled = Boolean(value);\n',
+    { filePath: "apps/harvester/src/domain/explicit-conversion-fixture.js" },
+  );
+
+  assert.ok(
+    implicitCoercion.messages.some((message) => (
+      message.ruleId === "no-implicit-coercion" && message.severity === 2
+    )),
+    "Implicit unary numeric and boolean coercions must be rejected as errors.",
+  );
+  assert.equal(
+    explicitConversion.messages.filter((message) => message.ruleId === "no-implicit-coercion").length,
+    0,
+    "Explicit conversion functions remain available at intentional boundaries.",
+  );
+});
+
+test("require-atomic-updates remains deferred until concurrency findings are classified", async () => {
+  const eslint = new ESLint();
+  const config = await eslint.calculateConfigForFile(
+    "apps/harvester/src/use-cases/create-portfolio-workflow.js",
+  );
+  const rule = config.rules["require-atomic-updates"];
+  const severity = Array.isArray(rule) ? rule[0] : rule ?? 0;
+
+  assert.equal(
+    severity,
+    0,
+    "Do not enable require-atomic-updates until its 47 workspace findings receive targeted concurrency review.",
+  );
+});
+
+
+function createFunctionQualityAuditEslint() {
+  return new ESLint({
+    overrideConfig: [
+      {
+        rules: {
+          complexity: ["error", { max: 15 }],
+          "max-lines-per-function": [
+            "error",
+            {
+              max: 50,
+              skipBlankLines: true,
+              skipComments: true,
+            },
+          ],
+          "max-statements": ["error", 15],
+          "max-depth": ["error", 3],
+          "max-nested-callbacks": ["error", 2],
+          "max-params": ["error", 1],
+          "default-param-last": "error",
+        },
+      },
+    ],
+  });
+}
+
+function createFunctionQualityMeasurements() {
+  return [
+    {
+      ruleId: "complexity",
+      key: "complexity",
+      pattern: /complexity of (\d+)/i,
+    },
+    {
+      ruleId: "max-lines-per-function",
+      key: "maxLines",
+      pattern: /too many lines \((\d+)\)/i,
+    },
+    {
+      ruleId: "max-statements",
+      key: "maxStatements",
+      pattern: /too many statements \((\d+)\)/i,
+    },
+    {
+      ruleId: "max-depth",
+      key: "maxDepth",
+      pattern: /nested too deeply \((\d+)\)/i,
+    },
+    {
+      ruleId: "max-params",
+      key: "maxParams",
+      pattern: /too many parameters \((\d+)\)/i,
+    },
+    {
+      ruleId: "max-nested-callbacks",
+      key: "maxNestedCallbacks",
+      pattern: /too many nested callbacks \((\d+)\)/i,
+    },
+    {
+      ruleId: "default-param-last",
+      key: "defaultParamLast",
+      pattern: null,
+    },
+  ];
+}
+
+function createMeasuredFunctionFinding({ measurement, result, message }) {
+  const value = measurement.pattern
+    ? Number(message.message.match(measurement.pattern)?.[1])
+    : null;
+
+  assert.ok(
+    !measurement.pattern || Number.isFinite(value),
+    `The ${message.ruleId} audit must extract the measured value: ${message.message}`,
+  );
+  return {
+    filePath: result.filePath,
+    line: message.line,
+    value,
+    message: message.message,
+  };
+}
+
+function collectFunctionQualityFindings({ results }) {
+  const metrics = {
+    complexity: [],
+    maxLines: [],
+    maxStatements: [],
+    maxDepth: [],
+    maxParams: [],
+    maxNestedCallbacks: [],
+    defaultParamLast: [],
+  };
+  const measurements = createFunctionQualityMeasurements();
+
+  for (const result of results) {
+    for (const message of result.messages) {
+      const measurement = measurements.find((candidate) => (
+        candidate.ruleId === message.ruleId
+      ));
+      if (measurement) {
+        metrics[measurement.key].push(
+          createMeasuredFunctionFinding({
+            measurement,
+            result,
+            message,
+          }),
+        );
+      }
+    }
+  }
+
+  return metrics;
+}
+
+function compareFindingsByValue(...findings) {
+  const [left, right] = findings;
+  return right.value - left.value;
+}
+
+function countFindingsAboveThreshold({ findings, threshold }) {
+  return findings.filter((finding) => finding.value > threshold);
+}
+
+function sortPackageCounts({ packageCounts }) {
+  const packages = [...packageCounts.entries()].map(([name, functions]) => ({
+    name,
+    functions,
+  }));
+
+  for (let index = 1; index < packages.length; index += 1) {
+    const current = packages[index];
+    let insertionIndex = index;
+    while (
+      insertionIndex > 0
+      && packages[insertionIndex - 1].functions < current.functions
+    ) {
+      packages[insertionIndex] = packages[insertionIndex - 1];
+      insertionIndex -= 1;
+    }
+    packages[insertionIndex] = current;
+  }
+
+  return packages;
+}
+
+function summarizeThresholdImpact({ findings, threshold }) {
+  const affected = countFindingsAboveThreshold({
+    findings,
+    threshold,
+  });
+  const packageCounts = new Map();
+  for (const finding of affected) {
+    const relativePath = finding.filePath.replace(`${repositoryRoot}/`, "");
+    const [scope, name] = relativePath.split("/");
+    const packageName = scope === "apps" || scope === "packages"
+      ? `${scope}/${name}`
+      : "repository tooling";
+    packageCounts.set(packageName, (packageCounts.get(packageName) ?? 0) + 1);
+  }
+
+  return {
+    functions: affected.length,
+    files: new Set(affected.map((finding) => finding.filePath)).size,
+    packages: sortPackageCounts({ packageCounts }),
+    largest: affected
+      .toSorted(compareFindingsByValue)
+      .slice(0, 5)
+      .map(({ filePath, line, value }) => ({
+        file: filePath.replace(`${repositoryRoot}/`, ""),
+        line,
+        value,
+      })),
+  };
+}
+
+function listThresholdOffenders({ findings, threshold }) {
+  return countFindingsAboveThreshold({
+    findings,
+    threshold,
+  })
+    .toSorted(compareFindingsByValue)
+    .map((finding) => ({
+      file: finding.filePath.replace(`${repositoryRoot}/`, ""),
+      line: finding.line,
+      value: finding.value,
+      message: finding.message,
+    }));
+}
+
+function createThresholdReport({ findings, thresholds }) {
+  return Object.fromEntries(
+    thresholds.map((threshold) => [
+      threshold,
+      summarizeThresholdImpact({
+        findings,
+        threshold,
+      }),
+    ]),
+  );
+}
+
+function createFunctionQualityAuditReport({ metrics }) {
+  return {
+    complexity: createThresholdReport({
+      findings: metrics.complexity,
+      thresholds: [15],
+    }),
+    maxLines: createThresholdReport({
+      findings: metrics.maxLines,
+      thresholds: [60, 50],
+    }),
+    maxStatements: createThresholdReport({
+      findings: metrics.maxStatements,
+      thresholds: [30, 25, 20, 15],
+    }),
+    maxParams: createThresholdReport({
+      findings: metrics.maxParams,
+      thresholds: [1],
+    }),
+    maxNestedCallbacks: createThresholdReport({
+      findings: metrics.maxNestedCallbacks,
+      thresholds: [2],
+    }),
+    maxDepth: createThresholdReport({
+      findings: metrics.maxDepth,
+      thresholds: [3, 4],
+    }),
+    maxParamsOffendersAt1: listThresholdOffenders({
+      findings: metrics.maxParams,
+      threshold: 1,
+    }),
+    maxNestedCallbacksOffendersAt2: listThresholdOffenders({
+      findings: metrics.maxNestedCallbacks,
+      threshold: 2,
+    }),
+    maxDepthOffendersAt3: listThresholdOffenders({
+      findings: metrics.maxDepth,
+      threshold: 3,
+    }),
+    maxStatementsOffendersAt30: listThresholdOffenders({
+      findings: metrics.maxStatements,
+      threshold: 30,
+    }),
+    defaultParamLast: {
+      violations: metrics.defaultParamLast.length,
+      files: new Set(metrics.defaultParamLast.map((finding) => finding.filePath)).size,
+      examples: metrics.defaultParamLast.slice(0, 10).map((finding) => ({
+        file: finding.filePath.replace(`${repositoryRoot}/`, ""),
+        line: finding.line,
+        message: finding.message,
+      })),
+    },
+  };
+}
+
+async function auditFunctionQualityThresholds() {
+  const eslint = createFunctionQualityAuditEslint();
+  const results = await eslint.lintFiles(["."]);
+  const measuredResults = results.filter((result) => (
+    result.filePath !== fileURLToPath(import.meta.url)
+  ));
+  const metrics = collectFunctionQualityFindings({ results: measuredResults });
+
+  return {
+    inspectedFiles: results.length,
+    measuredFiles: measuredResults.length,
+    report: createFunctionQualityAuditReport({ metrics }),
+  };
+}
+
+test("audits candidate function-quality thresholds across the complete workspace", async () => {
+  const audit = await auditFunctionQualityThresholds();
+
+  process.stdout.write(
+    `\nESLint function-quality candidate audit:\n${JSON.stringify(audit, null, 2)}\n`,
+  );
+  assert.ok(
+    audit.inspectedFiles > 0 && audit.measuredFiles === audit.inspectedFiles - 1,
+    "The audit must inspect the full workspace while excluding only its own harness from candidate counts.",
+  );
+});
+
+test("max-depth rejects control flow nested beyond four blocks", async () => {
+  const eslint = new ESLint();
+  const config = await eslint.calculateConfigForFile("apps/harvester/src/index.js");
+
+  assert.deepEqual(
+    config.rules["max-depth"],
+    [2, 4],
+    "The workspace must reject control-flow nesting deeper than four blocks.",
+  );
+
+  const [tooDeep] = await eslint.lintText(
+    `function evaluate({ first, second, third, fourth, fifth }) {
+      if (first) {
+        if (second) {
+          if (third) {
+            if (fourth) {
+              if (fifth) {
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    }`,
+    { filePath: "scripts/eslint-depth-fixture.js" },
+  );
+  const [withinLimit] = await eslint.lintText(
+    `function evaluate({ first, second, third, fourth }) {
+      if (first) {
+        if (second) {
+          if (third) {
+            if (fourth) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }`,
+    { filePath: "scripts/eslint-depth-fixture.js" },
+  );
+
+  assert.ok(
+    tooDeep.messages.some((message) => (
+      message.ruleId === "max-depth" && message.severity === 2
+    )),
+    "A function with five nested control-flow blocks must fail the depth policy.",
+  );
+  assert.equal(
+    withinLimit.messages.filter((message) => message.ruleId === "max-depth").length,
+    0,
+    "A function with exactly four nested control-flow blocks must remain valid.",
+  );
+});
+
+function getRuleSeverity({ rule }) {
+  const [severity] = Array.isArray(rule) ? rule : [rule];
+  return severity ?? 0;
+}
+
+test("preserves existing function-quality thresholds without adapter exceptions", async () => {
+  const eslint = new ESLint();
+  const config = await eslint.calculateConfigForFile("apps/harvester/src/index.js");
+  const adapterConfig = await eslint.calculateConfigForFile(
+    "apps/harvester/src/infrastructure/telegram/operator/adapter.js",
+  );
+
+  assert.deepEqual(config.rules.complexity, [2, { max: 20 }]);
+  assert.deepEqual(config.rules["max-depth"], [2, 4]);
+  assert.deepEqual(config.rules["max-params"], [2, 1]);
+  assert.deepEqual(config.rules["max-lines-per-function"], [
+    1,
+    {
+      max: 80,
+      skipBlankLines: true,
+      skipComments: true,
+    },
+  ]);
+  assert.deepEqual(config.rules["max-statements"], [1, 50]);
+  assert.deepEqual(config.rules["max-nested-callbacks"], [2, 3]);
+  assert.deepEqual(adapterConfig.rules["max-lines-per-function"], [
+    1,
+    {
+      max: 80,
+      skipBlankLines: true,
+      skipComments: true,
+    },
+  ]);
+
+  for (const ruleId of [
+    "no-param-reassign",
+    "no-nested-ternary",
+    "consistent-return",
+    "no-else-return",
+  ]) {
+    assert.equal(
+      getRuleSeverity({ rule: config.rules[ruleId] }),
+      2,
+      `The existing ${ruleId} error-level enforcement must remain active.`,
+    );
+  }
+});
+
+test("function-quality rules reject excess parameters and callbacks and report size warnings", async () => {
+  const eslint = new ESLint();
+  const [parameterFindings] = await eslint.lintText(
+    "function combine(first, second) { return first + second; }",
+    { filePath: "scripts/eslint-parameter-fixture.js" },
+  );
+  const [callbackFindings] = await eslint.lintText(
+    "const task = Promise.resolve().then(() => Promise.resolve().then(() => Promise.resolve().then(() => Promise.resolve().then(() => true)))); process.stdout.write(String(task));",
+    { filePath: "scripts/eslint-callback-fixture.js" },
+  );
+  let longFunctionSource = "function countOperations() {\n  let total = 0;\n";
+
+  for (let index = 0; index < 81; index += 1) {
+    longFunctionSource += "  total += 1;\n";
+  }
+  longFunctionSource += "  return total;\n}\n";
+
+  const [sizeFindings] = await eslint.lintText(
+    longFunctionSource,
+    { filePath: "scripts/eslint-size-fixture.js" },
+  );
+
+  assert.ok(
+    parameterFindings.messages.some((message) => (
+      message.ruleId === "max-params" && message.severity === 2
+    )),
+    "More than one function parameter must remain an error.",
+  );
+  assert.ok(
+    callbackFindings.messages.some((message) => (
+      message.ruleId === "max-nested-callbacks" && message.severity === 2
+    )),
+    "More than three nested callbacks must remain an error.",
+  );
+  assert.ok(
+    sizeFindings.messages.some((message) => (
+      message.ruleId === "max-lines-per-function" && message.severity === 1
+    )),
+    "Function length above 80 lines must remain a warning rejected by strict workspace lint.",
+  );
+  assert.ok(
+    sizeFindings.messages.some((message) => (
+      message.ruleId === "max-statements" && message.severity === 1
+    )),
+    "Function statement count above 50 must remain a warning rejected by strict workspace lint.",
+  );
 });

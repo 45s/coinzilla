@@ -34,7 +34,7 @@ The historical/live candle methods are required by the Harvester port and forwar
 | `makeConservativeTradingEngine()` | Coordinates serialized market and user-data transitions, strategy evaluation, safety checks, order submission, and fill processing. |
 | Conservative strategy policy | Chooses BUY, SELL, or NO_ACTION from the current price, configuration, Portfolio, RecoveryLedger, and active-order state. It does not call the broker. |
 | `updateTradingAccounting({ fill })` | Applies an actual canonical fill to Portfolio and RecoveryLedger. |
-| Volatility protection state machine and submission gate | `processVolatilitySnapshot()` and the central `canSubmit` gate | Maintains per-market protection state, cancels eligible owned BUYs, blocks ordinary submissions while data is unavailable or protection is active, and permits only explicitly marked recovery SELLs through the volatility gate. |
+| Volatility protection state machine and submission gate (`processVolatilitySnapshot()`, central `canSubmit` gate) | Maintains per-market protection state, cancels eligible owned BUYs, blocks ordinary submissions while data is unavailable or protection is active, and permits only explicitly marked recovery SELLs through the volatility gate. |
 
 ## End-to-end flow
 

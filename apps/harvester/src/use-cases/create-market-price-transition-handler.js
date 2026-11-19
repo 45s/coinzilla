@@ -123,6 +123,20 @@ function acceptFreshMarketPriceTransition({
   }
 }
 
+function invalidateSafeShutdownMarkerForAcceptedPrice({ state, symbol } = {}) {
+  if (
+    state.shutdownBuyGate !== true ||
+    state.shutdownSafetyBySymbol?.get(symbol)?.status !== "SAFE_TO_SHUTDOWN" ||
+    typeof state.invalidateShutdownSafety !== "function"
+  ) {
+    return
+  }
+  state.invalidateShutdownSafety({
+    symbol,
+    reason: "LATE_MARKET_PRICE_EVIDENCE",
+  })
+}
+
 /** Dispatch an accepted price through the existing trailing or evaluation workflow. */
 function dispatchAcceptedMarketPriceTransition({
   state,
@@ -194,6 +208,11 @@ export function createMarketPriceTransitionHandler({
       if (!acceptance.accepted) {
         return acceptance.result
       }
+
+      invalidateSafeShutdownMarkerForAcceptedPrice({
+        state,
+        symbol,
+      })
 
       return dispatchAcceptedMarketPriceTransition({
         state,

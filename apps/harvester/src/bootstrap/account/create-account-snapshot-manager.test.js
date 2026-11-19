@@ -1255,3 +1255,4 @@ test("captures separately tracked legacy quote proceeds in the shared snapshot c
     "The shared account snapshot must include net quote proceeds from tracked legacy inventory outside Portfolio.",
   )
 })
+

@@ -181,6 +181,9 @@ importers:
 
   apps/harvester:
     dependencies:
+      '@coinzilla/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@coinzilla/brokers':
         specifier: workspace:*
         version: link:../../packages/brokers
@@ -248,7 +251,11 @@ importers:
         specifier: workspace:*
         version: link:../utils
 
-  packages/db: {}
+  packages/db:
+    dependencies:
+      '@coinzilla/utils':
+        specifier: workspace:*
+        version: link:../utils
 
   packages/notifiers: {}
 

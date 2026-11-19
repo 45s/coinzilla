@@ -25,11 +25,13 @@ test("initializes operational state only while holding the broker-wide and Journ
     directory: "/tmp/recovery-facts",
     processLockDirectory: "/tmp/process-locks",
     runtimeSessionId: "initializer-session",
+    tradingMode: "testnet",
     acquireProcessLock: async (input) => {
       sequence.push("lock")
       assert.equal(input.journalDirectory, "/tmp/process-locks")
       assert.equal(input.globalDirectory, "/tmp/process-locks")
       assert.equal(input.broker, "binance")
+      assert.equal(input.tradingMode, "testnet")
       return { ok: true,
 release: async () => { sequence.push("release"); return { ok: true } } }
     },
@@ -56,6 +58,8 @@ test("does not claim successful initialization when the store refuses to overwri
   let released = false
   const result = await initializeHarvesterOperationalStateStore({
     confirmed: true,
+    directory: "/tmp/recovery-facts",
+    processLockDirectory: "/tmp/process-locks",
     acquireProcessLock: async () => ({ ok: true,
 release: async () => { released = true; return { ok: true } } }),
     createStore: () => ({ initialize: async () => ({ ok: false,
@@ -69,6 +73,8 @@ errors: [new Error("refuses to overwrite existing ledger")] }) }),
 test("does not claim genesis success if the process lock cannot be released", async () => {
   const result = await initializeHarvesterOperationalStateStore({
     confirmed: true,
+    directory: "/tmp/recovery-facts",
+    processLockDirectory: "/tmp/process-locks",
     acquireProcessLock: async () => ({
       ok: true,
       release: async () => ({ ok: false,
@@ -82,4 +88,22 @@ digest: "a".repeat(64) } } }),
     }),
   })
   assert.equal(result.ok, false, "A committed genesis must not be reported as fully initialized while the exclusive process lock remains uncertain.")
+})
+
+
+test("requires the composition root to inject storage and process-lock adapters", async () => {
+  const result = await initializeHarvesterOperationalStateStore({
+    confirmed: true,
+    directory: "/tmp/unused-operational-state",
+    processLockDirectory: "/tmp/unused-process-locks",
+    createStore: null,
+    acquireProcessLock: null,
+  })
+
+  assert.equal(result.ok, false, "Initialization must not silently select infrastructure adapters from the use-case layer.")
+  assert.match(
+    result.errors[0].message,
+    /requires.*(createStore|acquireProcessLock)/i,
+    "Missing infrastructure adapters must produce an actionable dependency error.",
+  )
 })

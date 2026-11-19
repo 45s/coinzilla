@@ -160,16 +160,22 @@ test("invalid JSON rejects pending requests and reports a protocol error", async
   assert.equal(context.clock.pendingCount, 0)
 })
 
-test("send failures reject and remove the pending request timer", async () => {
+test("send failures preserve their cause and mark dispatched mutations as unknown", async () => {
   const context = createClient()
   await connectClient(context)
+  const cause = new Error("socket send failed")
   context.transport.send = () => {
-    throw new Error("socket send failed")
+    throw cause
   }
 
   await assert.rejects(
-    context.client.request("ticker.price", {}),
-    /Failed to send Binance WebSocket API request/,
+    context.client.request("order.place", {}, { stateChanging: true }),
+    (error) => {
+      assert.match(error.message, /Failed to send Binance WebSocket API request/)
+      assert.equal(error.cause, cause)
+      assert.equal(error.outcomeUnknown, true)
+      return true
+    },
   )
   assert.equal(context.client.pendingCount, 0)
   assert.equal(context.clock.pendingCount, 0)
@@ -276,3 +282,69 @@ msg: "Cancel-replace partially failed" },
   })
 })
 
+
+test("state-changing validation and signing failures are NOT_SENT", async () => {
+  const context = createClient()
+  await connectClient(context)
+
+  assert.throws(
+    () => context.client.request("order.place", [], { stateChanging: true }),
+    (error) => {
+      assert.equal(error.outcomeUnknown, false)
+      return true
+    },
+  )
+  await assert.rejects(
+    context.client.request("order.place", {}, {
+      signed: true,
+      stateChanging: true,
+    }),
+    (error) => {
+      assert.equal(error.outcomeUnknown, false)
+      return true
+    },
+  )
+  await assert.rejects(
+    context.client.request("order.place", { quantity: 1n }, {
+      stateChanging: true,
+    }),
+    (error) => {
+      assert.equal(error.outcomeUnknown, false)
+      return true
+    },
+  )
+
+  assert.equal(context.sockets[0].sent.length, 0)
+  assert.equal(context.client.pendingCount, 0)
+  assert.equal(context.clock.pendingCount, 0)
+})
+
+test("state-changing requests rejected before dispatch are NOT_SENT", async () => {
+  const context = createClient()
+
+  await assert.rejects(
+    context.client.request("order.place", {}, { stateChanging: true }),
+    (error) => {
+      assert.equal(error.name, "BinanceRpcConnectionError")
+      assert.equal(error.outcomeUnknown, false)
+      return true
+    },
+  )
+})
+
+test("malformed responses for dispatched state-changing requests have unknown outcomes", async () => {
+  const context = createClient()
+  await connectClient(context)
+
+  const pending = context.client.request("order.place", {}, { stateChanging: true })
+  context.sockets[0].receive(JSON.stringify({
+    id: "request-1",
+    result: {},
+  }))
+
+  await assert.rejects(pending, (error) => {
+    assert.equal(error.name, "BinanceRpcProtocolError")
+    assert.equal(error.outcomeUnknown, true)
+    return true
+  })
+})

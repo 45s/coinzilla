@@ -53,6 +53,7 @@ export default defineConfig([
 
       // Complexity and function boundaries
       complexity: ["error", { max: 20 }],
+      "max-depth": ["error", 4],
       "max-params": ["error", 1],
       "max-lines-per-function": [
         "warn",
@@ -83,7 +84,7 @@ export default defineConfig([
       "consistent-return": "error",
       "default-case": "error",
       "no-else-return": "error",
-      "no-implicit-coercion": "warn",
+      "no-implicit-coercion": "error",
 
       // Modern JavaScript
       "prefer-template": "error",
@@ -126,22 +127,8 @@ export default defineConfig([
       ],
 
       // Debugging and logging
-      "no-console": "warn",
+      "no-console": "error",
       "symbol-description": "error",
-    },
-  },
-  {
-    files: ["apps/harvester/src/infrastructure/telegram/telegram-operator-adapter.js"],
-    rules: {
-      // Keep the existing stateful Telegram transport orchestrator cohesive; extract it in a separate refactor.
-      "max-lines-per-function": [
-        "warn",
-        {
-          max: 520,
-          skipBlankLines: true,
-          skipComments: true,
-        },
-      ],
     },
   },
   {
