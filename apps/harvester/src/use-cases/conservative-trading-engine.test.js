@@ -461,7 +461,12 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     }),
     canTrade: canTradeOverride,
     isStopping: isStoppingOverride,
-    initialState,
+    initialState: options.sharedAccountState
+      ? {
+        ...initialState,
+        orderRegistry: options.sharedAccountState.orderRegistry,
+      }
+      : initialState,
     sharedAccountState: options.sharedAccountState,
   })
 }

@@ -27,7 +27,7 @@ Bootstrap now creates the Conservative Portfolio workflow and RS accounting work
 
 Shared-state constructor validation is isolated in small helpers to keep the use-case entry points within the repository's complexity/length standards. The same commit also removes strict-lint violations from changed bootstrap/provider and notification fixtures without disabling rules.
 
-The Conservative Trading Engine now binds its internal OrderRegistry to the account runtime's validated shared `orderRegistry` accessor. Pending registration, acknowledgement, cancellation and terminal reconciliation replace the shared registry snapshot through that accessor, so the RS accounting workflow sees the same current registry rather than a startup-only copy. A deterministic offline engine test proves that a submitted Conservative BUY is visible through the shared account registry. This closes the shared-registry foundation only; strategy-owned RS dispatch and RS order/fill lifecycle are still outstanding.
+The Conservative Trading Engine now binds its internal OrderRegistry to the account runtime's validated shared `orderRegistry` accessor. Pending registration, acknowledgement, cancellation and terminal reconciliation replace the shared registry snapshot through that accessor, so the RS accounting workflow sees the same current registry rather than a startup-only copy. A deterministic offline engine test seeds the engine from the account registry and proves that a submitted Conservative BUY is visible through the RS accounting workflow's shared registry accessor. This closes the shared-registry foundation only; strategy-owned RS dispatch and RS order/fill lifecycle are still outstanding.
 
 ## Objective and delivery order
 
