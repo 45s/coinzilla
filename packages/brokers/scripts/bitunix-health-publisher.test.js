@@ -354,48 +354,80 @@ test("fails the health check when a required authenticated operation is skipped"
 })
 
 
-test("runs the real Git branch, report-only commit, push and return workflow", async () => {
-  const temporaryDirectory = await mkdtemp(join(tmpdir(), "bitunix-health-git-"))
+async function createGitFixture({ temporaryDirectory }) {
   const repositoryRoot = join(temporaryDirectory, "working")
   const remotePath = join(temporaryDirectory, "origin.git")
-  try {
-    await executeGit({
-      cwd: temporaryDirectory,
-      args: ["init", "--bare", "--initial-branch=develop", remotePath],
-    })
-    await executeGit({
-      cwd: temporaryDirectory,
-      args: ["init", "--initial-branch=develop", repositoryRoot],
-    })
-    await executeGit({
-      cwd: repositoryRoot,
-      args: ["config", "user.name", "Bitunix Health Test"],
-    })
-    await executeGit({
-      cwd: repositoryRoot,
-      args: ["config", "user.email", "bitunix-health@example.invalid"],
-    })
-    await writeFile(join(repositoryRoot, ".gitignore"), "packages/brokers/.diagnostics/\n")
-    await writeFile(join(repositoryRoot, "seed.txt"), "initial develop content\n")
-    await executeGit({
-      cwd: repositoryRoot,
-      args: ["add", ".gitignore", "seed.txt"],
-    })
-    await executeGit({
-      cwd: repositoryRoot,
-      args: ["commit", "-m", "initial develop commit"],
-    })
-    await executeGit({
-      cwd: repositoryRoot,
-      args: ["remote", "add", "origin", remotePath],
-    })
-    await executeGit({
-      cwd: repositoryRoot,
-      args: ["push", "--set-upstream", "origin", "develop"],
-    })
+  await executeGit({
+    cwd: temporaryDirectory,
+    args: ["init", "--bare", "--initial-branch=develop", remotePath],
+  })
+  await executeGit({
+    cwd: temporaryDirectory,
+    args: ["init", "--initial-branch=develop", repositoryRoot],
+  })
+  await executeGit({
+    cwd: repositoryRoot,
+    args: ["config", "user.name", "Bitunix Health Test"],
+  })
+  await executeGit({
+    cwd: repositoryRoot,
+    args: ["config", "user.email", "bitunix-health@example.invalid"],
+  })
+  await writeFile(join(repositoryRoot, ".gitignore"), "packages/brokers/.diagnostics/\n")
+  await writeFile(join(repositoryRoot, "seed.txt"), "initial develop content\n")
+  await executeGit({
+    cwd: repositoryRoot,
+    args: ["add", ".gitignore", "seed.txt"],
+  })
+  await executeGit({
+    cwd: repositoryRoot,
+    args: ["commit", "-m", "initial develop commit"],
+  })
+  await executeGit({
+    cwd: repositoryRoot,
+    args: ["remote", "add", "origin", remotePath],
+  })
+  await executeGit({
+    cwd: repositoryRoot,
+    args: ["push", "--set-upstream", "origin", "develop"],
+  })
+  return {
+    repositoryRoot,
+    remotePath,
+  }
+}
 
+async function verifyGitPublication({ repositoryRoot, remotePath, temporaryDirectory, result }) {
+  const currentBranch = await executeGit({
+    cwd: repositoryRoot,
+    args: ["branch", "--show-current"],
+  })
+  const remoteBranches = await executeGit({
+    cwd: temporaryDirectory,
+    args: ["--git-dir", remotePath, "branch", "--list", result.branch],
+  })
+  const committedFiles = await executeGit({
+    cwd: repositoryRoot,
+    args: ["diff-tree", "--no-commit-id", "--name-only", "-r", result.commitSha],
+  })
+  const status = await executeGit({
+    cwd: repositoryRoot,
+    args: ["status", "--porcelain", "--untracked-files=all"],
+  })
+
+  assert.equal(currentBranch, "develop", "the actual Git workflow must return the user's checkout to develop")
+  assert.equal(remoteBranches, result.branch, "the report branch must exist on the configured remote")
+  assert.equal(committedFiles, result.reportPath, "the pushed commit must contain exactly the sanitized report")
+  assert.equal(status, "", "the ignored local diagnostic report must not dirty the returned develop worktree")
+  assert.equal(result.exitCode, 0, "a complete successful report must return a zero exit code")
+}
+
+test("runs the real Git branch, report-only commit, push and return workflow", async () => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "bitunix-health-git-"))
+  try {
+    const fixture = await createGitFixture({ temporaryDirectory })
     const result = await publishBitunixDiagnostics({
-      repositoryRoot,
+      repositoryRoot: fixture.repositoryRoot,
       runDiagnostics: async () => createDiagnosticReport(),
       env: {
         BITUNIX_API_KEY: apiKey,
@@ -403,28 +435,11 @@ test("runs the real Git branch, report-only commit, push and return workflow", a
       },
       now: () => fixedTimestamp,
     })
-    const currentBranch = await executeGit({
-      cwd: repositoryRoot,
-      args: ["branch", "--show-current"],
+    await verifyGitPublication({
+      ...fixture,
+      temporaryDirectory,
+      result,
     })
-    const remoteBranches = await executeGit({
-      cwd: temporaryDirectory,
-      args: ["--git-dir", remotePath, "branch", "--list", result.branch],
-    })
-    const committedFiles = await executeGit({
-      cwd: repositoryRoot,
-      args: ["diff-tree", "--no-commit-id", "--name-only", "-r", result.commitSha],
-    })
-    const status = await executeGit({
-      cwd: repositoryRoot,
-      args: ["status", "--porcelain", "--untracked-files=all"],
-    })
-
-    assert.equal(currentBranch, "develop", "the actual Git workflow must return the user's checkout to develop")
-    assert.equal(remoteBranches, result.branch, "the report branch must exist on the configured remote")
-    assert.equal(committedFiles, result.reportPath, "the pushed commit must contain exactly the sanitized report")
-    assert.equal(status, "", "the ignored local diagnostic report must not dirty the returned develop worktree")
-    assert.equal(result.exitCode, 0, "a complete successful report must return a zero exit code")
   } finally {
     await rm(temporaryDirectory, {
       recursive: true,
