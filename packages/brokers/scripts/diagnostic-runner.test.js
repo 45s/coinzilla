@@ -689,7 +689,7 @@ function createDepositDiagnosticResponse({ invalidSchema = false } = {}) {
   return {
     data: [{
       id: "deposit-1",
-      transactionHash: null,
+      transactionHash: "deposit-hash-must-not-be-persisted",
       coin: "USDT",
       network: null,
       type: "deposit",
@@ -720,7 +720,7 @@ function createWithdrawalDiagnosticResponse({ invalidSchema = false } = {}) {
       memo: null,
       address: "withdrawal-address-must-not-be-persisted",
       toType: "1",
-      toUid: 123,
+      toUid: 987654321,
       toPhoneCountryCode: "+1",
       toPhoneNumber: "withdrawal-phone-must-not-be-persisted",
       toEmail: "withdrawal-email-must-not-be-persisted",
@@ -881,6 +881,10 @@ function assertBrokerApiSchemaAndPrivacy({ report }) {
   const serializedReport = JSON.stringify(report)
   for (const privateValue of [
     "must-not-be-persisted",
+    "deposit-1",
+    "withdrawal-1",
+    "withdrawal-business-id",
+    "987654321",
     "987654.321",
     "9876.54321",
     "123.456",
