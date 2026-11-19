@@ -2093,6 +2093,22 @@ test("Bitunix Spot broker passes tax data type filters and explicit pagination u
   }, "tax type filters and pagination must be sent exactly as requested")
 })
 
+test("Bitunix Spot broker accepts UTC ISO-8601 timestamps with a zero offset", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [TAX_FILING_PATH]: createTaxFilingPage(),
+    },
+  })
+
+  const result = await broker.getTaxFilingHistory({
+    startTime: "2024-01-01T00:00:00+00:00",
+    endTime: "2024-01-02T00:00:00+00:00",
+  })
+
+  assert.equal(result.ok, true, "an explicit zero UTC offset is a valid UTC ISO-8601 timestamp")
+  assert.equal(calls[0].options.body.startTime, "2024-01-01T00:00:00+00:00", "valid UTC offsets must be preserved exactly")
+})
+
 test("Bitunix Spot broker accepts an empty tax type filter as all transaction types", async () => {
   const { broker, calls } = createBroker({
     responses: {
