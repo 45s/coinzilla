@@ -132,7 +132,7 @@ function createStopLatch({
       state: current.stopState,
       decision,
     })
-    const blockerId = persisted.data.record.data.blockerId
+    const { blockerId } = persisted.data.record.data
     setStopSnapshot({
       stopState,
       blockerId,
