@@ -299,3 +299,92 @@ test("rechecks a market immediately when late evidence invalidates it during ano
     "DOGEUSDT must be audited again after its safety marker is invalidated.",
   )
 })
+
+test("keeps recovery-input failures separate from owned order and fill reconciliation", async () => {
+  const calls = []
+  const engine = createFakeEngine({ calls })
+  engine.reconcileRecoverySellsForShutdown = async ({ symbols } = {}) => {
+    const [symbol] = symbols
+    calls.push(`recovery:${symbol}`)
+    if (symbol === "DOGEUSDT") {
+      return {
+        ok: false,
+        errors: [Object.assign(new Error("Shutdown recovery price is unavailable"), {
+          code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+        })],
+      }
+    }
+    return { ok: true }
+  }
+  const participant = createParticipant({ engine, calls })
+
+  participant.beginShutdown()
+  await assert.rejects(
+    participant.waitUntilSafe(),
+    (error) => {
+      const market = error.shutdownDiagnostics.markets.find((entry) => entry.symbol === "DOGEUSDT")
+      assert.ok(
+        market.blockers.includes("RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE"),
+        "The market must retain the exact recovery-input failure.",
+      )
+      assert.equal(
+        market.blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
+        false,
+        "A recovery-input failure must not be reported as incomplete owned-order/fill reconciliation.",
+      )
+      return true
+    },
+    "Recovery-input failure must block shutdown without falsifying the order/fill reconciliation result.",
+  )
+  assert.equal(
+    calls.filter((call) => call === "reconcile:DOGEUSDT").length,
+    2,
+    "Both required owned-order reconciliation passes must complete before the independent recovery-input failure.",
+  )
+})
+
+test("keeps stale recovery-price coverage separate from owned order and fill reconciliation", async () => {
+  const calls = []
+  const engine = createFakeEngine({ calls })
+  const auditCoverage = engine.auditShutdownRecoverySellCoverage
+  engine.auditShutdownRecoverySellCoverage = async ({ symbols } = {}) => {
+    const [symbol] = symbols
+    calls.push(`coverage:${symbol}`)
+    if (symbol === "DOGEUSDT") {
+      return {
+        ok: true,
+        data: {
+          covered: false,
+          findings: [{ symbol, reason: "STALE_MARKET_PRICE" }],
+        },
+      }
+    }
+    return auditCoverage({ symbols })
+  }
+  const participant = createParticipant({ engine, calls })
+
+  participant.beginShutdown()
+  await assert.rejects(
+    participant.waitUntilSafe(),
+    (error) => {
+      const market = error.shutdownDiagnostics.markets.find((entry) => entry.symbol === "DOGEUSDT")
+      assert.ok(
+        market.blockers.includes("RECOVERY_SELL_COVERAGE:STALE_MARKET_PRICE"),
+        "The market must retain the exact stale-price coverage finding.",
+      )
+      assert.equal(
+        market.blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
+        false,
+        "A stale recovery price must not be reported as incomplete owned-order/fill reconciliation.",
+      )
+      return true
+    },
+    "Stale recovery-price evidence must block shutdown without falsifying order/fill reconciliation.",
+  )
+  assert.equal(
+    calls.filter((call) => call === "reconcile:DOGEUSDT").length,
+    3,
+    "Pre-cancel, post-cancel and post-recovery owned-order reconciliation must all remain required.",
+  )
+})
+
