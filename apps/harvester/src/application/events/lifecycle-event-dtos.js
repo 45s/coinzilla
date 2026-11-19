@@ -938,9 +938,33 @@ function mapFillIdentityData({ fill }) {
 
 function mapFillExecutionData({ fill }) {
   return {
+    marketId: requireString({
+      value: fill.market.id,
+      field: "marketId",
+    }),
+    marketVenue: requireString({
+      value: fill.market.venue,
+      field: "marketVenue",
+    }),
     symbol: requireString({
       value: fill.market.symbol,
       field: "symbol",
+    }),
+    baseAssetId: requireString({
+      value: fill.market.baseAsset?.id,
+      field: "baseAssetId",
+    }),
+    baseAssetCode: requireString({
+      value: fill.market.baseAsset?.code,
+      field: "baseAssetCode",
+    }),
+    quoteAssetId: requireString({
+      value: fill.market.quoteAsset?.id,
+      field: "quoteAssetId",
+    }),
+    quoteAssetCode: requireString({
+      value: fill.market.quoteAsset?.code,
+      field: "quoteAssetCode",
     }),
     side: requireFillSide({ fill }),
     price: requireDecimalString({

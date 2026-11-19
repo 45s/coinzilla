@@ -175,7 +175,7 @@ function createAppliedFillEvent() {
     commissions: [{
       amount: "0.000012340000000001",
       assetId: "bnb",
-      assetCode: "BNB",
+      asset: "BNB",
       quoteValue: null,
     }],
     commissionStatus: "COMPLETE",
