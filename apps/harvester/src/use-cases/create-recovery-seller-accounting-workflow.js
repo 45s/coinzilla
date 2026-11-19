@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill, Market } from "@coinzilla/entities"
-import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, ensure, subtractDecimal, toResult }
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
@@ -47,9 +47,17 @@ function assertLegacyPositionAmounts(position) {
 }
 
 function assertLegacyAccountingFillIdentityShape(accounting) {
-  if (!Array.isArray(accounting.appliedFillIds) ||
-      !Array.isArray(accounting.appliedFillFingerprints) ||
-      accounting.appliedFillIds.length !== accounting.appliedFillFingerprints.length) {
+  ensure.array({
+    value: accounting.appliedFillIds,
+    name: "legacyAccounting.appliedFillIds",
+    errMsg: "Recovery Seller legacy Fill identity history is invalid",
+  })
+  ensure.array({
+    value: accounting.appliedFillFingerprints,
+    name: "legacyAccounting.appliedFillFingerprints",
+    errMsg: "Recovery Seller legacy Fill identity history is invalid",
+  })
+  if (accounting.appliedFillIds.length !== accounting.appliedFillFingerprints.length) {
     throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
   }
 }
@@ -57,15 +65,27 @@ function assertLegacyAccountingFillIdentityShape(accounting) {
 function assertLegacyAccountingFillIdentityRecords(accounting) {
   const seenFillIds = new Set()
   for (const [index, item] of accounting.appliedFillFingerprints.entries()) {
-    if (!item ||
-        typeof item.id !== "string" ||
-        !item.id.trim() ||
-        typeof item.fillFingerprint !== "string" ||
-        !item.fillFingerprint.trim() ||
-        typeof item.allocationFingerprint !== "string" ||
-        !item.allocationFingerprint.trim() ||
-        item.id !== accounting.appliedFillIds[index] ||
-        seenFillIds.has(item.id)) {
+    ensure.object({
+      value: item,
+      name: "legacyAccounting.appliedFillFingerprints[]",
+      errMsg: "Recovery Seller legacy Fill identity history is invalid",
+    })
+    ensure.nonEmptyString({
+      value: item.id,
+      name: "legacyAccounting.appliedFillFingerprints[].id",
+      errMsg: "Recovery Seller legacy Fill identity history is invalid",
+    })
+    ensure.nonEmptyString({
+      value: item.fillFingerprint,
+      name: "legacyAccounting.appliedFillFingerprints[].fillFingerprint",
+      errMsg: "Recovery Seller legacy Fill identity history is invalid",
+    })
+    ensure.nonEmptyString({
+      value: item.allocationFingerprint,
+      name: "legacyAccounting.appliedFillFingerprints[].allocationFingerprint",
+      errMsg: "Recovery Seller legacy Fill identity history is invalid",
+    })
+    if (item.id !== accounting.appliedFillIds[index] || seenFillIds.has(item.id)) {
       throw new TypeError("Recovery Seller legacy Fill identity history is invalid")
     }
     seenFillIds.add(item.id)
@@ -103,20 +123,33 @@ function assertLegacyAccountingState(accounting) {
 }
 
 function assertLegacyPositionRecord(record) {
-  if (!record || typeof record !== "object" || Array.isArray(record) ||
-      !(record.market instanceof Market) ||
-      !record.position || typeof record.position !== "object" ||
-      !record.accounting || typeof record.accounting !== "object") {
+  ensure.object({
+    value: record,
+    name: "initialLegacyPositions[]",
+    errMsg: "Recovery Seller initialLegacyPositions must contain market, position and accounting records",
+  })
+  if (!(record.market instanceof Market)) {
     throw new TypeError("Recovery Seller initialLegacyPositions must contain market, position and accounting records")
   }
+  ensure.object({
+    value: record.position,
+    name: "initialLegacyPositions[].position",
+    errMsg: "Recovery Seller initialLegacyPositions must contain market, position and accounting records",
+  })
+  ensure.object({
+    value: record.accounting,
+    name: "initialLegacyPositions[].accounting",
+    errMsg: "Recovery Seller initialLegacyPositions must contain market, position and accounting records",
+  })
   assertLegacyPositionAmounts(record.position)
   assertLegacyAccountingState(record.accounting)
 }
 
 function createLegacyPositionMap(records) {
-  if (!Array.isArray(records)) {
-    throw new TypeError("initialLegacyPositions must be an array")
-  }
+  ensure.array({
+    value: records,
+    name: "initialLegacyPositions",
+  })
   const positions = new Map()
   for (const record of records) {
     assertLegacyPositionRecord(record)
@@ -133,9 +166,11 @@ function createLegacyPositionMap(records) {
 }
 
 function initializeLegacyPositionsTransition({ state, records } = {}) {
-  if (!Array.isArray(records)) {
-    throw new TypeError("Recovery Seller legacy Position initialization requires a records array")
-  }
+  ensure.array({
+    value: records,
+    name: "records",
+    errMsg: "Recovery Seller legacy Position initialization requires a records array",
+  })
   const nextLegacyPositions = new Map(state.legacyPositions)
   for (const record of records) {
     assertLegacyPositionRecord(record)
@@ -155,9 +190,11 @@ function initializeLegacyPositionsTransition({ state, records } = {}) {
 }
 
 function getLegacyPositionRecord({ state, marketId }) {
-  if (typeof marketId !== "string" || !marketId.trim()) {
-    throw new TypeError("Recovery Seller legacy Position lookup requires marketId")
-  }
+  ensure.nonEmptyString({
+    value: marketId,
+    name: "marketId",
+    errMsg: "Recovery Seller legacy Position lookup requires marketId",
+  })
   const record = state.legacyPositions.get(marketId)
   if (!record) {
     throw new TypeError(`Recovery Seller legacy Position is not configured for market ${marketId}`)
@@ -633,9 +670,11 @@ function validateSharedRecoverySellerWorkflowState({
   if (sharedState === undefined) {
     return
   }
-  if (!sharedState) {
-    throw new TypeError("sharedState must be an account workflow state object")
-  }
+  ensure.object({
+    value: sharedState,
+    name: "sharedState",
+    errMsg: "sharedState must be an account workflow state object",
+  })
   if (!(sharedState.portfolio instanceof Portfolio)) {
     throw new TypeError("sharedState.portfolio must be a Portfolio")
   }
@@ -693,9 +732,11 @@ export function createRecoverySellerAccountingWorkflow({
   onOperationalStateExecutionFill,
   sharedState,
 } = {}) {
-  if (onOperationalStateExecutionFill !== undefined &&
-      typeof onOperationalStateExecutionFill !== "function") {
-    throw new TypeError("onOperationalStateExecutionFill must be a function")
+  if (onOperationalStateExecutionFill !== undefined) {
+    ensure.function({
+      value: onOperationalStateExecutionFill,
+      name: "onOperationalStateExecutionFill",
+    })
   }
   const state = createRecoverySellerWorkflowState({
     sharedState,

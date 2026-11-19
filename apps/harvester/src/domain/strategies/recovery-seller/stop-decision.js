@@ -1,3 +1,5 @@
+import { ensure } from "@coinzilla/utils"
+
 /**
  * Stable lifecycle outcomes shared by the pure Recovery Seller policy.
  */
@@ -30,14 +32,15 @@ const VALID_OUTCOMES = new Set(Object.values(RECOVERY_SELLER_LIFECYCLE_OUTCOMES)
  * @returns {object} Immutable global STOP decision.
  */
 export function createRecoverySellerStopDecision({ explanation } = {}) {
-  if (typeof explanation !== "string" || explanation.trim().length === 0) {
-    throw new TypeError("explanation must be a non-empty string")
-  }
+  const validatedExplanation = ensure.nonEmptyString({
+    value: explanation,
+    name: "explanation",
+  })
 
   return Object.freeze({
     outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.BLOCK,
     reasonCode: RECOVERY_SELLER_STOP_REASON_CODE,
-    explanation: explanation.trim(),
+    explanation: validatedExplanation.trim(),
     blocksNewTradingActions: true,
     reconciliationRequired: true,
     operatorReviewRequired: true,
@@ -78,9 +81,11 @@ function isValidStopDecision(decision) {
 }
 
 function assertStopState({ state } = {}) {
-  if (!state || typeof state !== "object" || Array.isArray(state)) {
-    throw new TypeError("Recovery Seller STOP gate requires a valid STOP state")
-  }
+  ensure.object({
+    value: state,
+    name: "state",
+    errMsg: "Recovery Seller STOP gate requires a valid STOP state",
+  })
   if (state.status === "CLEAR" && state.decision === null) {
     return
   }
@@ -140,23 +145,34 @@ export function latchRecoverySellerStop({ state, decision } = {}) {
 
 
 function assertCanonicalOperatorIdentity({ value, field }) {
-  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) {
+  const identity = ensure.nonEmptyString({
+    value,
+    name: field,
+    errMsg: `Recovery Seller STOP reset requires a canonical ${field}`,
+  })
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(identity)) {
     throw new TypeError(`Recovery Seller STOP reset requires a canonical ${field}`)
   }
 }
 
 function assertZeroCount({ value, field }) {
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new TypeError(`Recovery Seller STOP reset requires a non-negative safe integer for ${field}`)
-  }
+  ensure.nonNegativeInteger({
+    value,
+    name: field,
+    errMsg: `Recovery Seller STOP reset requires a non-negative safe integer for ${field}`,
+  })
   if (value !== 0) {
     throw new Error(`Recovery Seller STOP reset is blocked by unresolved ${field}`)
   }
 }
 
 function assertStopReconciliationEvidence({ reconciliation }) {
-  if (!reconciliation || typeof reconciliation !== "object" || Array.isArray(reconciliation) ||
-      reconciliation.ordersReconciled !== true ||
+  ensure.object({
+    value: reconciliation,
+    name: "reconciliation",
+    errMsg: "Recovery Seller STOP reset requires authoritative order, fill and balance reconciliation",
+  })
+  if (reconciliation.ordersReconciled !== true ||
       reconciliation.fillsReconciled !== true ||
       reconciliation.balancesReconciled !== true) {
     throw new Error("Recovery Seller STOP reset requires authoritative order, fill and balance reconciliation")
@@ -176,8 +192,12 @@ function assertStopReconciliationEvidence({ reconciliation }) {
 }
 
 function assertStopAccountingEvidence({ accounting }) {
-  if (!accounting || typeof accounting !== "object" || Array.isArray(accounting) ||
-      accounting.verified !== true) {
+  ensure.object({
+    value: accounting,
+    name: "accounting",
+    errMsg: "Recovery Seller STOP reset requires accounting must be verified",
+  })
+  if (accounting.verified !== true) {
     throw new Error("Recovery Seller STOP reset requires accounting must be verified")
   }
   for (const field of ["portfolioConsistent", "legacyConsistent", "reservationsConsistent"]) {

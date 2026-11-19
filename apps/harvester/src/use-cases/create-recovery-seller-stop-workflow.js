@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { toResult } from "@coinzilla/utils"
+import { ensure, toResult } from "@coinzilla/utils"
 import {
   createRecoverySellerStopDecision,
   createRecoverySellerStopState,
@@ -11,16 +11,29 @@ import { resolveRecoverySellerStop } from "./resolve-recovery-seller-stop.js"
 const RECOVERY_SELLER_STOP_REASON = "RECOVERY_SELLER_UNEXPECTED_CONDITION"
 
 function validateOperationalStateStore({ operationalStateStore } = {}) {
-  if (typeof operationalStateStore?.append !== "function" ||
-      typeof operationalStateStore?.readAll !== "function") {
-    throw new TypeError("Recovery Seller STOP workflow requires Operational State Store append/read capabilities")
-  }
+  ensure.object({
+    value: operationalStateStore,
+    name: "operationalStateStore",
+    errMsg: "Recovery Seller STOP workflow requires Operational State Store append/read capabilities",
+  })
+  ensure.function({
+    value: operationalStateStore.append,
+    name: "operationalStateStore.append",
+    errMsg: "Recovery Seller STOP workflow requires Operational State Store append/read capabilities",
+  })
+  ensure.function({
+    value: operationalStateStore.readAll,
+    name: "operationalStateStore.readAll",
+    errMsg: "Recovery Seller STOP workflow requires Operational State Store append/read capabilities",
+  })
 }
 
 function resolveActiveRecoverySellerBlocker({ records } = {}) {
-  if (!Array.isArray(records)) {
-    throw new TypeError("Operational State Store records must be an array")
-  }
+  ensure.array({
+    value: records,
+    name: "records",
+    errMsg: "Operational State Store records must be an array",
+  })
   const resolvedBlockerIds = new Set(records
     .filter((record) => record.factType === "SAFETY_BLOCKER_RESOLVED")
     .map((record) => record.data?.blockerId))
@@ -53,12 +66,22 @@ function normalizeOrderIdentity({ orderIdentity } = {}) {
   if (orderIdentity === undefined) {
     return null
   }
-  if (!orderIdentity || typeof orderIdentity !== "object" ||
-      typeof orderIdentity.clientOrderId !== "string" ||
-      !orderIdentity.clientOrderId.trim() ||
-      (orderIdentity.brokerOrderId !== undefined &&
-       (typeof orderIdentity.brokerOrderId !== "string" || !orderIdentity.brokerOrderId.trim()))) {
-    throw new TypeError("Recovery Seller STOP evidence requires a canonical order identity")
+  ensure.object({
+    value: orderIdentity,
+    name: "orderIdentity",
+    errMsg: "Recovery Seller STOP evidence requires a canonical order identity",
+  })
+  ensure.nonEmptyString({
+    value: orderIdentity.clientOrderId,
+    name: "orderIdentity.clientOrderId",
+    errMsg: "Recovery Seller STOP evidence requires a canonical order identity",
+  })
+  if (orderIdentity.brokerOrderId !== undefined) {
+    ensure.nonEmptyString({
+      value: orderIdentity.brokerOrderId,
+      name: "orderIdentity.brokerOrderId",
+      errMsg: "Recovery Seller STOP evidence requires a canonical order identity",
+    })
   }
   return Object.freeze({
     clientOrderId: orderIdentity.clientOrderId,

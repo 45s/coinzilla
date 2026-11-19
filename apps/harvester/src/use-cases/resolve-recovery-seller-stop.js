@@ -1,9 +1,17 @@
 import { createHash } from "node:crypto"
-import { toResult } from "@coinzilla/utils"
+import { ensure, toResult } from "@coinzilla/utils"
 import { resolveRecoverySellerStopState } from "../domain/strategies/recovery-seller/stop-decision.js"
 import { recordSafetyBlockerResolved } from "./record-safety-control-facts.js"
 
 function createResolutionEvidence({ operatorId, actionId, causeFixed, reconciliation, accounting }) {
+  ensure.object({
+    value: reconciliation,
+    name: "reconciliation",
+  })
+  ensure.object({
+    value: accounting,
+    name: "accounting",
+  })
   return {
     operatorId,
     actionId,
