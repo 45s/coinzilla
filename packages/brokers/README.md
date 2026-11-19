@@ -292,12 +292,11 @@ Bitunix documents Spot WebSocket as authenticated request/response RPC: every re
 
 ### Configure and run
 
-Create packages/brokers/.env.development locally (never commit it). Credentials are optional for public-only checks:
+Create `.env.development` in the repository root (never commit it; the root `.gitignore` already excludes it). The published health check requires both private API credentials; the lower-level diagnostic command still supports public-only checks:
 
 ~~~dotenv
-# Optional: uncomment and configure both to enable private account, open-order, and order-history reads plus authenticated WebSocket RPC.
-# BITUNIX_API_KEY=your_diagnostic_api_key
-# BITUNIX_API_SECRET=your_api_secret
+BITUNIX_API_KEY=your_read_only_diagnostic_api_key
+BITUNIX_API_SECRET=your_api_secret
 # Optional: leave unset to skip REST and WebSocket depth checks; choose only a value you have verified for your market.
 # BITUNIX_DIAGNOSTICS_DEPTH_PRECISION=
 ~~~
@@ -305,8 +304,10 @@ Create packages/brokers/.env.development locally (never commit it). Credentials 
 From the repository root:
 
 ~~~sh
-pnpm --filter @coinzilla/brokers diagnose:bitunix
+pnpm bitunix:health
 ~~~
+
+For public-only diagnostics without private credentials, use `pnpm --filter @coinzilla/brokers diagnose:bitunix`; this command does not create or push a report branch. The publisher rejects missing or blank credentials before fetching or creating a branch, so it cannot label a public-only run as a successful authenticated health check.
 
 The source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` constant is the explicit acknowledgement gate because Bitunix Spot has no documented TESTNET environment. It defaults to `true`; set it to `false` in `scripts/bitunix-diagnostic-runner.js` to prevent the runner from making requests. The runner contacts the configured LIVE Spot endpoint and performs non-mutating query requests only.
 
@@ -339,6 +340,18 @@ REST and WebSocket depth checks are skipped unless `BITUNIX_DIAGNOSTICS_DEPTH_PR
 Each operation receives its own pass/fail/skip result and duration. The named `DIAGNOSTIC_CONFIG` constants in `scripts/bitunix-diagnostic-runner.js` set the symbol (`BTCUSDT`), K-line interval (`1min`), request/connect/close timeout (`10_000` ms), and public-payload capture policy (`false`). Change these values in code when needed; they are not environment settings. Public response payloads are omitted by default. The optional depth precision remains an environment setting because its value must be explicitly chosen rather than inferred. The report is written to packages/brokers/.diagnostics/ (ignored by Git) with restrictive file permissions. Outbound WS messages are captured only after credential/signature/nonce redaction. Private account responses are summarized by shape and field names; private balances, UIDs and other sensitive values are never persisted.
 
 This is an operator diagnostic, not a trading test, exchange acceptance certificate, TESTNET substitute, or proof of trading readiness. It never places/cancels orders, withdraws/transfers funds, retries failed requests, or automatically reconnects after an unexpected failure. Its single controlled same-client reconnect probe runs only after the first session completes successfully. It does not test protocol-level control-frame heartbeats or simulate 24-hour expiry. The report records response latency and sanitized response structure, but does not impose a stale-data threshold because Bitunix does not document a maximum market-data age; RPC response correlation is tested, but there is no stream sequence-ordering or subscription-restoration test. Default unit tests remain offline and do not execute this command.
+
+### One-command report publishing
+
+Run `pnpm bitunix:health` from a clean local checkout on `develop`. The command loads the repository-root `.env.development`, fetches `origin/develop`, creates a timestamped `diagnostics/bitunix-health-<timestamp>` branch, and reuses the read-only diagnostics above. It writes the local report under `packages/brokers/.diagnostics/` and commits/pushes only the sanitized report under `packages/brokers/diagnostics/reports/`. It then switches the local checkout back to `develop`.
+
+A healthy verdict requires successful `diagnostic safety confirmation`, `diagnostic configuration`, REST private account-balance retrieval, authenticated WebSocket connection and `ping`, plus `user.account` and `user.info`. Optional probes may be skipped when their inputs are not configured, but any failed operation or any required operation that did not pass makes the overall health check fail. The failure report is still pushed when Git permits.
+
+The publisher refuses to start when the worktree is dirty, the current branch is not `develop`, or the `origin` remote is missing. It never stashes, resets, force-pushes, deletes branches, creates a PR, or stages files other than the generated report. The report branch remains on GitHub so it can be inspected independently. The published JSON is built with a strict allowlist: operation names, pass/fail status, duration, aggregate check counts, the overall health verdict, and selected error classifications (name/code/kind/status/exchange code). It contains no request objects, response objects, API credentials, signatures, account identifiers, balances, addresses, request IDs, or free-form error messages. Unexpected fields from Bitunix responses are excluded by construction, not merely redacted. The ignored local report is also sanitized, but treat it as private and never commit or share it. The local report requests owner-only `0600` permissions on POSIX; on Windows it inherits the repository folder's ACL, so keep that folder private. Free-form exchange error messages are withheld from the local report as well; only structured error classifications and codes are retained. The pushed report withholds those messages.
+
+If Bitunix requests fail, the failure report is still committed and pushed when Git permits, the command returns a non-zero exit code, and the checkout is switched back to `develop`. If pushing fails, the command reports the local branch/commit details and still attempts to return to `develop`. Git must have a configured user name/email and a working `origin` push credential. No GitHub Actions secrets or workflows are involved.
+
+Use a dedicated API key with account-read permission only. The health check contacts the configured LIVE Bitunix Spot API and never places/cancels orders, withdraws, transfers, or changes account state. A successful check verifies the currently documented read-only REST/RPC calls; it does not establish TESTNET availability, continuous private events, or Harvester trading readiness.
 
 ## Offline tests and coverage
 
