@@ -2,13 +2,42 @@ import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 
 const OUTCOMES = new Set(["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
-const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
+const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
+
+function validateSubmissionOwnership({ purpose, ownership, side } = {}) {
+  if (purpose === null) {
+    if (ownership !== undefined && ownership !== null) {
+      throw new TypeError("Conservative order submission cannot contain Recovery Seller ownership")
+    }
+    return {}
+  }
+  if (
+    ownership?.strategyId !== "RECOVERY_SELLER" ||
+    ownership.purpose !== purpose ||
+    typeof ownership.positionId !== "string" ||
+    !ownership.positionId.trim() ||
+    typeof ownership.cycleId !== "string" ||
+    !ownership.cycleId.trim()
+  ) {
+    throw new TypeError("Recovery Seller order submission requires complete strategy, positionId, purpose and cycleId ownership")
+  }
+  if ((purpose === "RECOVERY_BUY" && side !== "BUY") ||
+      (purpose === "RECOVERY_SELL" && side !== "SELL")) {
+    throw new TypeError("Recovery Seller order purpose must match the canonical order side")
+  }
+  return {
+    strategyId: ownership.strategyId,
+    positionId: ownership.positionId,
+    cycleId: ownership.cycleId,
+  }
+}
 
 function validateSubmissionStoreAndOrder({
     operationalStateStore,
     order,
     outcome,
     purpose,
+    ownership,
   }) {
   if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("recordOrderSubmissionOutcome requires a Operational State Store append capability")
@@ -20,8 +49,13 @@ function validateSubmissionStoreAndOrder({
     throw new TypeError("recordOrderSubmissionOutcome requires a supported submission outcome")
   }
   if (!SUPPORTED_PURPOSES.has(purpose)) {
-    throw new TypeError("Order-submission outcome purpose must be null or RECOVERY_SELL")
+    throw new TypeError("Order-submission outcome purpose must be null, RECOVERY_BUY or RECOVERY_SELL")
   }
+  return validateSubmissionOwnership({
+    purpose,
+    ownership,
+    side: order.side,
+  })
 }
 
 function validateSubmissionAcknowledgement({
@@ -60,11 +94,12 @@ function validateSubmissionOrderType({ order }) {
 
 function validateSubmissionOutcome(options) {
   const { operationalStateStore, order, outcome, purpose } = options
-  validateSubmissionStoreAndOrder({
+  const ownershipFields = validateSubmissionStoreAndOrder({
     operationalStateStore,
     order,
     outcome,
     purpose,
+    ownership: options.ownership,
   })
   const acknowledged = validateSubmissionAcknowledgement({
     order,
@@ -84,6 +119,7 @@ function validateSubmissionOutcome(options) {
     market,
     clientOrderId: order.clientOrderId,
     acknowledged,
+    ownership: ownershipFields,
   }
 }
 
@@ -100,7 +136,7 @@ function validateSubmissionOutcome(options) {
 export async function recordOrderSubmissionOutcome(options = {}) {
   try {
     const { operationalStateStore, order, outcome, purpose = null } = options
-    const { market, clientOrderId, acknowledged } = validateSubmissionOutcome({
+    const { market, clientOrderId, acknowledged, ownership } = validateSubmissionOutcome({
       ...options,
       purpose,
     })
@@ -123,6 +159,7 @@ export async function recordOrderSubmissionOutcome(options = {}) {
         quantity: order.originalQuantity.amount,
         executedQuantity: order.executedQuantity.amount,
         purpose,
+        ...ownership,
         outcome,
         brokerOrderId: acknowledged ? order.brokerOrderId : null,
         status: order.status,

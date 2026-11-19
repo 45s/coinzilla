@@ -1,7 +1,7 @@
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
 
-const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
+const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
 
 function validateCanonicalMarketIdentity({ market }) {
   const requiredMarketValues = [
@@ -32,7 +32,35 @@ function validateSubmissionOrderFields({ order }) {
   }
 }
 
-function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
+function validateSubmissionOwnership({ purpose, ownership, side } = {}) {
+  if (purpose === null) {
+    if (ownership !== undefined && ownership !== null) {
+      throw new TypeError("Conservative order submission cannot contain Recovery Seller ownership")
+    }
+    return {}
+  }
+  if (
+    ownership?.strategyId !== "RECOVERY_SELLER" ||
+    ownership.purpose !== purpose ||
+    typeof ownership.positionId !== "string" ||
+    !ownership.positionId.trim() ||
+    typeof ownership.cycleId !== "string" ||
+    !ownership.cycleId.trim()
+  ) {
+    throw new TypeError("Recovery Seller order submission requires complete strategy, positionId, purpose and cycleId ownership")
+  }
+  if ((purpose === "RECOVERY_BUY" && side !== "BUY") ||
+      (purpose === "RECOVERY_SELL" && side !== "SELL")) {
+    throw new TypeError("Recovery Seller order purpose must match the canonical order side")
+  }
+  return {
+    strategyId: ownership.strategyId,
+    positionId: ownership.positionId,
+    cycleId: ownership.cycleId,
+  }
+}
+
+function validateSubmissionIntent({ operationalStateStore, order, purpose, ownership }) {
   if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("recordOrderSubmissionIntent requires a Operational State Store append capability")
   }
@@ -58,6 +86,11 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
     clientOrderId: order.clientOrderId,
     price,
     quantity,
+    ownership: validateSubmissionOwnership({
+      purpose,
+      ownership,
+      side: order.side,
+    }),
   }
 }
 
@@ -73,7 +106,7 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
 export async function recordOrderSubmissionIntent(options = {}) {
   try {
     const { operationalStateStore, order, purpose = null } = options
-    const { market, clientOrderId, price, quantity } = validateSubmissionIntent({
+    const { market, clientOrderId, price, quantity, ownership } = validateSubmissionIntent({
       ...options,
       purpose,
     })
@@ -95,6 +128,7 @@ export async function recordOrderSubmissionIntent(options = {}) {
         price,
         quantity,
         purpose,
+        ...ownership,
       },
     })
     if (result?.ok !== true || result.data?.durable !== true) {
