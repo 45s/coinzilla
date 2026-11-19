@@ -273,9 +273,13 @@ test("Bitunix Spot WebSocket client dispatches documented market and account rea
       data: { index },
     })
   }
+  const expected = []
+  for (let index = 0; index < pending.length; index += 1) {
+    expected.push({ index })
+  }
   assert.deepEqual(
     await Promise.all(pending),
-    pending.map((_, index) => ({ index })),
+    expected,
     "market and account RPCs must return their correlated response data",
   )
   await client.disconnect()
@@ -344,9 +348,13 @@ test("Bitunix Spot WebSocket client dispatches documented order read RPCs", asyn
       data: { index },
     })
   }
+  const expected = []
+  for (let index = 0; index < pending.length; index += 1) {
+    expected.push({ index })
+  }
   assert.deepEqual(
     await Promise.all(pending),
-    pending.map((_, index) => ({ index })),
+    expected,
   )
   await client.disconnect()
 })
