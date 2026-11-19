@@ -126,8 +126,14 @@ test("rejects an RS route unless the RS strategy is explicitly enabled", async (
       ...fixture.input,
       executionSymbols: ["BTCUSDT", "ETHUSDT"],
       executionRoutes: [
-        { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
-        { strategyId: "RS_recoverySeller", symbol: "ETHUSDT" },
+        {
+          strategyId: "CG_coinGrabber",
+          symbol: "BTCUSDT",
+        },
+        {
+          strategyId: "RS_recoverySeller",
+          symbol: "ETHUSDT",
+        },
       ],
     }),
     /RS_recoverySeller strategy must be explicitly enabled/i,

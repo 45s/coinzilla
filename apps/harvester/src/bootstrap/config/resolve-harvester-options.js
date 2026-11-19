@@ -311,24 +311,14 @@ function publishConfigurationEvidence({
   })
 }
 
-export async function resolveHarvesterOptions({
-  configSource,
-  appConfig: suppliedAppConfig,
-  loadConfig,
-  env = process.env,
-  eventPublisher,
-  logger,
+function createResolvedHarvesterRuntime({
+  configuredAppConfig,
+  env,
   executionSymbols,
   executionRoutes,
 } = {}) {
-  const loadedAppConfig = suppliedAppConfig ?? await loadConfig(configSource)
-  const configuredAppConfig = resolveTelegramOperatorConfig({
-    appConfig: loadedAppConfig,
-    env,
-  })
   const strategyConfig = configuredAppConfig.strategies?.CG_coinGrabber
   assertSupportedStrategyConfig(strategyConfig)
-
   const runtime = resolveRuntimeConfig({
     tradingMode: env.TRADING_MODE,
     environment: env.NODE_ENV,
@@ -356,27 +346,65 @@ export async function resolveHarvesterOptions({
     tradingMode: runtime.tradingMode,
     tradingEnabled: runtime.tradingEnabled,
   })
+  return {
+    appConfig,
+    strategyConfig,
+    runtime,
+    resolvedPairs,
+    evidence,
+  }
+}
+
+function createResolvedHarvesterOptions({ resolved, eventPublisher, logger, executionRoutes } = {}) {
   publishConfigurationEvidence({
     eventPublisher,
     logger,
-    runtime,
-    evidence,
+    runtime: resolved.runtime,
+    evidence: resolved.evidence,
   })
-
   return Object.freeze({
-    appConfig,
-    settings: strategyConfig.settings,
-    pairs: Object.freeze(resolvedPairs.marketPairs),
-    conservativePairs: Object.freeze(resolvedPairs.conservativePairs),
-    recoverySellerPairs: Object.freeze(resolvedPairs.recoverySellerPairs),
-    enabledSymbols: Object.freeze(evidence.enabledSymbols),
-    marketSymbols: Object.freeze(Object.keys(resolvedPairs.marketPairs)),
-    executionSymbols: Object.freeze(resolvedPairs.executionSymbols),
-    configurationFingerprint: evidence.effectiveConfiguration.fingerprint,
-    environment: runtime.environment,
-    brokerName: runtime.brokerName,
-    tradingMode: runtime.tradingMode,
-    tradingEnabled: runtime.tradingEnabled && evidence.enabledSymbols.length > 0,
+    appConfig: resolved.appConfig,
+    settings: resolved.strategyConfig.settings,
+    pairs: Object.freeze(resolved.resolvedPairs.marketPairs),
+    conservativePairs: Object.freeze(resolved.resolvedPairs.conservativePairs),
+    recoverySellerPairs: Object.freeze(resolved.resolvedPairs.recoverySellerPairs),
+    enabledSymbols: Object.freeze(resolved.evidence.enabledSymbols),
+    marketSymbols: Object.freeze(Object.keys(resolved.resolvedPairs.marketPairs)),
+    executionSymbols: Object.freeze(resolved.resolvedPairs.executionSymbols),
+    configurationFingerprint: resolved.evidence.effectiveConfiguration.fingerprint,
+    environment: resolved.runtime.environment,
+    brokerName: resolved.runtime.brokerName,
+    tradingMode: resolved.runtime.tradingMode,
+    tradingEnabled: resolved.runtime.tradingEnabled && resolved.evidence.enabledSymbols.length > 0,
     executionRoutes: Object.freeze([...(executionRoutes ?? [])]),
+  })
+}
+
+export async function resolveHarvesterOptions({
+  configSource,
+  appConfig: suppliedAppConfig,
+  loadConfig,
+  env = process.env,
+  eventPublisher,
+  logger,
+  executionSymbols,
+  executionRoutes,
+} = {}) {
+  const loadedAppConfig = suppliedAppConfig ?? await loadConfig(configSource)
+  const configuredAppConfig = resolveTelegramOperatorConfig({
+    appConfig: loadedAppConfig,
+    env,
+  })
+  const resolved = createResolvedHarvesterRuntime({
+    configuredAppConfig,
+    env,
+    executionSymbols,
+    executionRoutes,
+  })
+  return createResolvedHarvesterOptions({
+    resolved,
+    eventPublisher,
+    logger,
+    executionRoutes,
   })
 }

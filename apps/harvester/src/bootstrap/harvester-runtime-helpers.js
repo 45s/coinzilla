@@ -262,38 +262,38 @@ function createHarvesterTradingEngineSafetyCallbacks({
   }
 }
 
-export function createHarvesterTradingEngine({
-  makeConservativeTradingEngine,
-  broker,
-  conservativeStrategyPolicy,
-  eventPublisher,
-  appConfig,
-  getPortfolio,
-  getRecoveryLedger,
-  getMarketMetadata,
-  getAccountSnapshot,
-  getAdditionalTrackedBaseQuantity,
-  getAdditionalTrackedQuoteCashFlow,
-  recoverySellerPairs,
-  recoverySellerWorkflow,
-  getRecoverySellerMarketMetadata,
-  updateTradingAccounting,
-  completeRecoveryCycle,
-  userDataState,
-  accountSnapshotManagerRef,
-  candleHistoryService,
-  onOperationalStateSubmissionIntent,
-  onOperationalStateSubmissionOutcome,
-  onOperationalStateCancellationIntent,
-  onOperationalStateCancellationOutcome,
-  onOperationalStateStrategyMarketPaused,
-  logger,
-  recoveredState,
-  sharedAccountState,
-  isMarketPriceFresh,
-  isMarketBookFresh,
-} = {}) {
-  return makeConservativeTradingEngine({
+function createHarvesterTradingEngineOptions(options = {}) {
+  const {
+    broker,
+    conservativeStrategyPolicy,
+    eventPublisher,
+    appConfig,
+    getPortfolio,
+    getRecoveryLedger,
+    getMarketMetadata,
+    getAccountSnapshot,
+    getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow,
+    recoverySellerPairs,
+    recoverySellerWorkflow,
+    getRecoverySellerMarketMetadata,
+    updateTradingAccounting,
+    completeRecoveryCycle,
+    userDataState,
+    accountSnapshotManagerRef,
+    candleHistoryService,
+    onOperationalStateSubmissionIntent,
+    onOperationalStateSubmissionOutcome,
+    onOperationalStateCancellationIntent,
+    onOperationalStateCancellationOutcome,
+    onOperationalStateStrategyMarketPaused,
+    logger,
+    recoveredState,
+    sharedAccountState,
+    isMarketPriceFresh,
+    isMarketBookFresh,
+  } = options
+  return {
     broker,
     strategyPolicy: conservativeStrategyPolicy,
     eventPublisher,
@@ -325,7 +325,11 @@ export function createHarvesterTradingEngine({
     logger,
     sharedAccountState,
     initialState: createRecoveredTradingEngineState(recoveredState),
-  })
+  }
+}
+
+export function createHarvesterTradingEngine(options = {}) {
+  return options.makeConservativeTradingEngine(createHarvesterTradingEngineOptions(options))
 }
 
 

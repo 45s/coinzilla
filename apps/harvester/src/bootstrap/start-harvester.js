@@ -702,13 +702,7 @@ function createHarvesterTradingEngineActivator({ startup,
   }
 }
 
-async function startHarvesterPreflightServices({ startup,
-  portfolio,
-  resources,
-  accountSnapshots,
-  userDataEvents,
-  recoveryRuntime,
-  activateTradingEngine } = {}) {
+async function initializeHarvesterMarketMetadata({ startup, portfolio, resources } = {}) {
   await loadMarketMetadata({
     broker: resources.broker,
     pairs: startup.pairs,
@@ -716,19 +710,18 @@ async function startHarvesterPreflightServices({ startup,
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
   })
-  const legacyPositionRecords = []
+  const records = []
   for (const [symbol, pairConfig] of Object.entries(startup.recoverySellerPairs ?? {})) {
     const metadata = portfolio.marketMetadata.get(symbol)
     if (!metadata) {
       throw new Error(`Recovery Seller market metadata is unavailable for ${symbol}`)
     }
-    const recoverySellerMetadata = validateMarketTradingReadiness({
+    portfolio.recoverySellerMarketMetadata.set(symbol, validateMarketTradingReadiness({
       symbol,
       pairConfig,
       marketMetadata: metadata,
-    })
-    portfolio.recoverySellerMarketMetadata.set(symbol, recoverySellerMetadata)
-    legacyPositionRecords.push({
+    }))
+    records.push({
       market: metadata.market,
       position: createLegacyPosition({
         invested: String(pairConfig.legacyPosition.invested),
@@ -737,23 +730,17 @@ async function startHarvesterPreflightServices({ startup,
       accounting: createLegacyPositionAccounting(),
     })
   }
-  const legacyInitialization = await portfolio.recoverySellerWorkflow.initializeLegacyPositions({
-    records: legacyPositionRecords,
+  const initialized = await portfolio.recoverySellerWorkflow.initializeLegacyPositions({
+    records,
   })
-  if (legacyInitialization?.ok !== true) {
-    throw legacyInitialization?.errors?.[0] ??
+  if (initialized?.ok !== true) {
+    throw initialized?.errors?.[0] ??
       new Error("Recovery Seller legacy basis initialization was not committed")
   }
-  activateTradingEngine()
-  await startup.operatorControlLifecycle.start({
-    engine: resources.tradingEngine,
-    getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
-    getPortfolio: portfolio.getPortfolio,
-    getRecoveryLedger: portfolio.getRecoveryLedger,
-    getAccountSnapshot: portfolio.getAccountSnapshot,
-    getOpenOrders: () => resources.broker.getOpenOrders(),
-  })
-  portfolio.portfolioWorkflow = createPortfolioWorkflow({
+}
+
+function createHarvesterPortfolioWorkflow({ startup, portfolio } = {}) {
+  return createPortfolioWorkflow({
     sharedState: portfolio.accountRuntime.state,
     evaluateStrategy: startup.evaluateStrategy,
     logger: createStrategyLogger({
@@ -764,6 +751,20 @@ async function startHarvesterPreflightServices({ startup,
     onOperationalStateExecutionFill: startup.onOperationalStateExecutionFill,
     onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
     onOperationalStateRecoveryCycleNotCompleted: startup.onOperationalStateRecoveryCycleNotCompleted,
+  })
+}
+
+async function startHarvesterUserDataServices({
+  startup,
+  portfolio,
+  resources,
+  accountSnapshots,
+  userDataEvents,
+  recoveryRuntime,
+} = {}) {
+  portfolio.portfolioWorkflow = createHarvesterPortfolioWorkflow({
+    startup,
+    portfolio,
   })
   resources.userDataSubscription = await subscribeToUserData({
     broker: resources.broker,
@@ -788,6 +789,37 @@ async function startHarvesterPreflightServices({ startup,
     eventPublisher: startup.eventPublisher,
     brokerName: startup.brokerName,
     userDataState: resources.userDataState,
+  })
+}
+
+async function startHarvesterPreflightServices({ startup,
+  portfolio,
+  resources,
+  accountSnapshots,
+  userDataEvents,
+  recoveryRuntime,
+  activateTradingEngine } = {}) {
+  await initializeHarvesterMarketMetadata({
+    startup,
+    portfolio,
+    resources,
+  })
+  activateTradingEngine()
+  await startup.operatorControlLifecycle.start({
+    engine: resources.tradingEngine,
+    getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
+    getPortfolio: portfolio.getPortfolio,
+    getRecoveryLedger: portfolio.getRecoveryLedger,
+    getAccountSnapshot: portfolio.getAccountSnapshot,
+    getOpenOrders: () => resources.broker.getOpenOrders(),
+  })
+  await startHarvesterUserDataServices({
+    startup,
+    portfolio,
+    resources,
+    accountSnapshots,
+    userDataEvents,
+    recoveryRuntime,
   })
 }
 

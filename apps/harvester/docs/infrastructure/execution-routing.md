@@ -65,3 +65,11 @@ When brokers.instances, executionRouting, and marketDataRouting are absent, the 
 ## Deferred boundaries
 
 Process-restart restoration remains disabled under issue #654. Recovery Seller remains non-executable while RS-4/RS-5 are incomplete; implementation is tracked in [issue #1475](https://github.com/45s/coinzilla/issues/1475). This Phase 6 contract does not enable live or TESTNET order mutations during engineering verification; integrated tests use deterministic in-memory BrokerPort fakes.
+
+## Recovery Seller account routes
+
+Provider routing preserves the `{ strategyId, symbol }` owner while market and user-data subscriptions are deduplicated by symbol. A provider account with CG routes may also receive explicitly configured RS routes; the effective runtime keeps CG and RS pair maps separate and builds a union market map for canonical exchange metadata and subscriptions.
+
+RS routes are rejected unless `strategies.RS_recoverySeller.enabled` is true and every routed market is enabled for the selected `TRADING_MODE`. RS markets require an explicit positive per-market `investment` budget and an operator-declared legacy `invested` basis, original `quantity`, and per-cycle `sellQuantity`. An RS-only provider account remains rejected until the shared engine can be composed without a CG route.
+
+At startup, canonical exchange metadata is loaded before the RS legacy basis is initialized in the provider-account state. The RS pair is validated against its own order quantity, investment, precision, and order-type requirements even when CG owns the same market. The declared legacy quantity is not treated as available inventory: the account snapshot and shared reservation accounting must independently prove unreserved Spot custody before an RS SELL can be authorized. RS remains disabled by default.
