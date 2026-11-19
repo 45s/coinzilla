@@ -22,4 +22,3 @@ This is a focused index of Bitunix Spot lifecycle work. The authoritative packag
 - Improve read-side validation only where official contracts or independently verified fixtures support it.
 - Preserve fail-closed capability declarations for canonical lifecycle methods.
 - Do not emit synthetic Binance events, enable Harvester trading, or run live mutations without explicit authorization and the required evidence.
-
