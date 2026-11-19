@@ -241,8 +241,10 @@ test("Bitunix Spot declares implemented mutations when explicit live opt-in is e
   }
 })
 
-test("Bitunix Spot declares single-order and symbol-scoped bulk cancellation supported", () => {
-  const { capabilities } = createBitunixBroker()
+test("Bitunix Spot declares single-order and symbol-scoped bulk cancellation supported after opt-in", () => {
+  const { capabilities } = createBitunixBroker({
+    allowLiveOrderMutations: true,
+  })
 
   assertCapability({
     declaration: capabilities,
