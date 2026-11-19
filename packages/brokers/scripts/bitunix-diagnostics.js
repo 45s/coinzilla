@@ -148,10 +148,8 @@ export function sanitizeDiagnosticError({ error, secrets = [] } = {}) {
   const source = error instanceof Error ? error : new Error(String(error))
   const result = {
     name: source.name,
-    message: redactKnownSecrets({
-      value: String(source.message).slice(0, 2_000),
-      secrets,
-    }),
+    // Free-form errors can echo private account data or credentials. Never persist them.
+    message: "[error message withheld]",
   }
   for (const field of ["code", "kind", "status", "exchangeCode", "method", "path", "requestId"]) {
     if (source[field] !== undefined && source[field] !== null) {
@@ -164,10 +162,7 @@ export function sanitizeDiagnosticError({ error, secrets = [] } = {}) {
   if (source.cause instanceof Error) {
     result.cause = {
       name: source.cause.name,
-      message: redactKnownSecrets({
-        value: source.cause.message.slice(0, 1_000),
-        secrets,
-      }),
+      message: "[nested error message withheld]",
     }
   }
   return result
