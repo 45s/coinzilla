@@ -216,11 +216,13 @@ test("submits one RS order through the shared executor and registers immutable R
   assert.equal(durableFacts.length, 2)
   assert.equal(unresolved.length, 0)
   assert.equal(workflow.getActiveOrders().length, 1)
+  const submittedOrder = result.data.submittedOrders[0]
   assert.deepEqual(
     workflow.getOrderRegistry().getOwnership({
-      clientOrderId: result.data.submittedOrders[0].clientOrderId,
+      clientOrderId: submittedOrder.clientOrderId,
     }),
     {
+      clientOrderId: submittedOrder.clientOrderId,
       strategyId: "RS_recoverySeller",
       positionId: "rs-position-1",
       purpose: "RECOVERY_BUY",
