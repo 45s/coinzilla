@@ -776,7 +776,10 @@ test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fill
   const fills = makeRecoverySellerVwapFills({ buyOrder })
 
   for (const fill of fills) {
-    const result = await workflow.applyBuyFill({ order: buyOrder, fill })
+    const result = await workflow.applyBuyFill({
+      order: buyOrder,
+      fill,
+    })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
   }
   const duplicateFill = await workflow.applyBuyFill({
