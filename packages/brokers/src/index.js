@@ -17,4 +17,3 @@ export {
   assertBrokerContract,
   getBrokerMutationOutcome,
 } from "./broker/broker-contract.js"
-export { BitunixSpotReconciler } from "./infrastructure/bitunix/bitunix-spot-reconciler.js"
