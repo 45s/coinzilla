@@ -115,6 +115,12 @@ function makeOwnership(overrides = {}) {
   if (overrides.cycleId !== null) {
     ownership.cycleId = overrides.cycleId ?? "rs-cycle-1"
   }
+  if (overrides.sellAllocation !== null) {
+    ownership.sellAllocation = overrides.sellAllocation ?? {
+      recoverySellQuantity: "5",
+      legacySellQuantity: "0.01",
+    }
+  }
   return createOrderOwnership({
     ownership,
     clientOrderId: overrides.clientOrderId ?? "harvester-rs-sell",
