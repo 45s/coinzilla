@@ -509,6 +509,8 @@ function getRestSkipReason({ endpoint, depthPrecision, credentialsConfigured }) 
   return null
 }
 
+// The per-probe result and progress handling intentionally stay together.
+// eslint-disable-next-line max-lines-per-function
 async function runRestOperation({
   client,
   endpoint,
@@ -523,7 +525,12 @@ async function runRestOperation({
   onProgress,
 }) {
   const startedAt = now()
-  emitProgress({ onProgress, area: "REST", operation: endpoint.operation, status: "RUNNING" })
+emitProgress({
+    onProgress,
+    area: "REST",
+    operation: endpoint.operation,
+    status: "RUNNING",
+  })
   const skipReason = getRestSkipReason({
     endpoint,
     depthPrecision,
@@ -538,7 +545,12 @@ async function runRestOperation({
       secrets,
       ...skipReason,
     })
-    emitProgress({ onProgress, area: "REST", operation: endpoint.operation, status: "SKIPPED" })
+emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "SKIPPED",
+    })
     return
   }
   const request = createRestDiagnosticRequest({
@@ -559,7 +571,12 @@ async function runRestOperation({
       includePublicPayloads,
       secrets,
     })
-    emitProgress({ onProgress, area: "REST", operation: endpoint.operation, status: "PASS" })
+emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "PASS",
+    })
   } catch (error) {
     recordRestFailure({
       endpoint,
@@ -571,7 +588,12 @@ async function runRestOperation({
       includePublicPayloads,
       secrets,
     })
-    emitProgress({ onProgress, area: "REST", operation: endpoint.operation, status: "FAIL" })
+emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "FAIL",
+    })
   }
 }
 
@@ -611,6 +633,8 @@ async function runRestChecks({
   }
 }
 
+// The per-probe result and progress handling intentionally stay together.
+// eslint-disable-next-line max-lines-per-function
 async function runWebSocketOperation({
   client,
   definition,
@@ -622,7 +646,12 @@ async function runWebSocketOperation({
   onProgress,
 }) {
   const startedAt = now()
-  emitProgress({ onProgress, area: "WebSocket", operation: definition.operation, status: "RUNNING" })
+emitProgress({
+    onProgress,
+    area: "WebSocket",
+    operation: definition.operation,
+    status: "RUNNING",
+  })
   if (definition.requiresDepthPrecision && context.depthPrecision === null) {
     results.push(createResult({
       operation: definition.operation,
@@ -636,7 +665,12 @@ async function runWebSocketOperation({
       includePublicPayloads,
       secrets,
     }))
-    emitProgress({ onProgress, area: "WebSocket", operation: definition.operation, status: "SKIPPED" })
+emitProgress({
+      onProgress,
+      area: "WebSocket",
+      operation: definition.operation,
+      status: "SKIPPED",
+    })
     return
   }
   const args = definition.getArguments(context)
@@ -656,7 +690,12 @@ async function runWebSocketOperation({
       includePublicPayloads,
       secrets,
     }))
-    emitProgress({ onProgress, area: "WebSocket", operation: definition.operation, status: "PASS" })
+emitProgress({
+      onProgress,
+      area: "WebSocket",
+      operation: definition.operation,
+      status: "PASS",
+    })
   } catch (error) {
     results.push(createResult({
       operation: definition.operation,
@@ -671,7 +710,12 @@ async function runWebSocketOperation({
       includePublicPayloads,
       secrets,
     }))
-    emitProgress({ onProgress, area: "WebSocket", operation: definition.operation, status: "FAIL" })
+emitProgress({
+      onProgress,
+      area: "WebSocket",
+      operation: definition.operation,
+      status: "FAIL",
+    })
   }
 }
 
