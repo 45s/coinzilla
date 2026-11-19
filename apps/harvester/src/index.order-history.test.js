@@ -20,6 +20,7 @@ function createMainOptions({ eventBus, database, observer, setPreparedEventBus }
       BINANCE_API_SECRET_KEY: "test-api-secret",
       NODE_ENV: "test",
     },
+    loadConfig: async () => ({}),
     createEventBus: () => eventBus,
     createJournalService: disabledJournalService,
     acquireProcessLock: async () => ({
