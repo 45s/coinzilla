@@ -15,6 +15,9 @@ Each poll reads account balances, symbol-scoped open orders, the first order-his
 ## Guarantees and limitations
 
 - A poll publishes only after every requested read succeeds; partial snapshots are rejected.
+- A failed polling cycle never publishes a partial snapshot. It invalidates the last published fingerprint, so the next successful cycle republishes a complete observation even when exchange data is unchanged; consumers therefore receive an explicit recovery baseline after an outage.
+- Consecutive failed cycles use bounded exponential backoff (up to 60 seconds). A successful cycle resets the delay to the configured interval. A failed observation callback also invalidates the fingerprint and is retried as a fresh full observation.
+- Status callback failures are isolated and reported through `onError`; errors thrown by `onError` do not terminate the polling loop.
 - `observedAt` and freshness are local observation metadata, never exchange source timestamps.
 - Semantic deduplication ignores the changing local observation timestamp.
 - Order history is page 1 only. Open orders are symbol-scoped. Neither establishes account-wide completeness.
