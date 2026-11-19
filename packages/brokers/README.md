@@ -34,7 +34,7 @@ The `@coinzilla/brokers` entry point exports:
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
 - `BitunixSpotBroker` and `BitunixSpotConfig` — the partial Bitunix Spot REST broker implementation and its validated configuration.
 - `BitunixSpotWebSocketClient` and `BitunixWebSocketError` — a separately managed, authenticated Spot WebSocket request/response RPC client; it does not add subscriptions or order mutations.
-- Bitunix polling reconciliation is a private infrastructure helper, not a public package export or a Harvester user-data subscription. See [the polling boundary](./docs/BITUNIX_SPOT_POLLING.md).
+- Bitunix polling reconciliation remains a private infrastructure helper, but the public `subscribeForUserData()` method exposes its explicitly scoped snapshots through `onObservation` and the `OBSERVE_USER_DATA` capability. This is not a native user-data stream, canonical fill feed, authoritative account snapshot, or Harvester provider. See [the polling boundary](./docs/BITUNIX_SPOT_POLLING.md).
 - `normalizeBinanceId` — exact non-negative Binance identifier normalization, exported for package consumers that need the same identifier contract.
 - `BrokerCapabilities`, `BROKER_CAPABILITY_TYPES`, `BROKER_CAPABILITY_STATUSES` — the canonical immutable provider capability declaration contract.
 - `BrokerUnsupportedOperationError` — stable typed error for explicitly unsupported operations.
@@ -245,7 +245,7 @@ A separate, explicitly authorized local TESTNET order-lifecycle test is differen
 
 For user data:
 
-1. Call `subscribeForUserData({ onEvent, onStatus })` after `connect()`.
+1. Call the common `subscribeForUserData({ symbols?, trackedOrders?, onEvent, onObservation, onStatus })` method after `connect()`. Binance uses `onEvent` for native exchange events; Bitunix Spot uses `onObservation` for non-authoritative polling snapshots.
 2. The broker uses `userDataStream.subscribe.signature` on the WebSocket API connection. It uses the existing HMAC API key/secret flow; it does not require Ed25519 or `session.logon`.
 3. Multiple local subscribers share one remote subscription on the API connection.
 4. The returned subscription data provides `disconnect()`, the legacy `acknowledgeRecovery()` boolean, and the additive `acknowledgeRecoveryResult()` result contract.
@@ -459,3 +459,10 @@ The public `normalizeBinanceId(value, name?)` helper validates Binance identifie
 ## Canonical Binance execution fill timestamps
 
 For user-data `executionReport` TRADE events, canonical Fill execution time is Binance transaction time `T`. Event publication time `E` remains event/order-update metadata and must not be used as the execution timestamp. This matches the WebSocket API `myTrades.time` field, so the same exchange trade has identical canonical facts whether it is first observed in a history response or an `executionReport` user-data stream event. Preserve strict duplicate-fill conflict detection: identical facts are idempotent; conflicting facts reusing a Fill ID remain errors.
+
+
+### User-data delivery modes
+
+The method name is shared; the delivery guarantee is not. Binance declares `SUBSCRIBE_USER_DATA: SUPPORTED`, returns `deliveryMode: "NATIVE_EVENTS"` / `nativePush: true`, and forwards authenticated exchange events through `onEvent`. Bitunix declares `OBSERVE_USER_DATA: SUPPORTED` while native `SUBSCRIBE_USER_DATA` remains unsupported; it returns `deliveryMode: "POLLING_OBSERVATIONS"` / `nativePush: false` and sends changed, explicitly scoped snapshots only through `onObservation`.
+
+Do not convert observations into execution reports, canonical fills, or account snapshots. Polling cannot replay transient states or prove complete history. Harvester keeps Bitunix outside provider registration until issue #1185's native lifecycle, authoritative snapshot, canonical fill, and recovery prerequisites are met. See [the shared Broker API contract](./BROKER_API.md#user-data-delivery-channels).
