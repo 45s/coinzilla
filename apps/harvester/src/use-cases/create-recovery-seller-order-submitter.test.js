@@ -392,6 +392,7 @@ test("durably reserves the sole RS SELL cycle before registry registration and b
   assert.equal(reservedOrder.ownership.strategyId, "RS_recoverySeller")
   assert.equal(reservedOrder.ownership.purpose, "RECOVERY_SELL")
   assert.equal(pendingWasRegisteredAtBroker, true)
+  assert.equal(durableFacts.filter((fact) => fact.type === "INTENT").length, 1, "The shared executor must reuse the already committed SELL intent instead of appending a duplicate.")
   assert.equal(unresolved.length, 0)
 })
 
