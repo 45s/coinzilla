@@ -26,13 +26,6 @@ owner: utils
 - **Merged:** PR #1505 into `develop` at `eb235e630ca7e59727343bc6819741af6ab69e11`; verified PR head `8c47d506113550bb10a42b7646064a583a23ae80`.
 - **Verification:** exact-head Utils tests, workspace tests/coverage, strict and workspace ESLint, syntax, actionlint, dependency audit, Harvester regression, and external documentation links all passed. Utils coverage reported 99.02% line / 97.31% branch overall (coverage run 237 tests, 0 failures).
 
-
-
-- Introduces the domain-neutral public `ensure` assertions and optional immutable chain while retaining legacy `Validator`/`VR` exports and predicate semantics.
-- Organizes implementation as a feature module under `src/ensure/`: assertion service, chain service, thin feature index, cohesive pure `helpers/`, and adjacent tests.
-- No consumer-wide migration or business-invariant relocation is included.
-- Package tests, recursive coverage, strict lint, workspace tests and required CI must pass on the exact PR head before marking complete.
-
 ## Priority execution plan — current develop direction (2026-11-10)
 
 ### COMPLETED — build and runtime provenance (issue #763)
