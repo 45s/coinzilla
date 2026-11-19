@@ -3,7 +3,7 @@ import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
 import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
 
-function createBroker({ responses = {}, allowLiveOrderMutations = true } = {}) {
+function createBroker({ responses = {}, allowLiveOrderMutations = true, allowLiveFundsMutations = false } = {}) {
   const calls = []
   const restClient = {
     async request(input = {}) {
@@ -25,6 +25,7 @@ function createBroker({ responses = {}, allowLiveOrderMutations = true } = {}) {
     apiSecret: "secret",
     tradingMode: "live",
     allowLiveOrderMutations,
+    allowLiveFundsMutations,
     dependencies: {
       restClientFactory: () => restClient,
     },
@@ -2142,11 +2143,21 @@ function createInvalidTaxFilingDateQueries({ valid }) {
   return [
     null,
     {},
-    { ...valid, startTime: "2024-01-01" },
-    { ...valid, endTime: "2024-01-02T00:00:00+01:00" },
-    { ...valid, startTime: "not-a-date" },
-    { ...valid, startTime: "2024-02-30T00:00:00Z" },
-    { ...valid, startTime: "2024-01-03T00:00:00Z" },
+    { ...valid,
+      startTime: "2024-01-01",
+    },
+    { ...valid,
+      endTime: "2024-01-02T00:00:00+01:00",
+    },
+    { ...valid,
+      startTime: "not-a-date",
+    },
+    { ...valid,
+      startTime: "2024-02-30T00:00:00Z",
+    },
+    { ...valid,
+      startTime: "2024-01-03T00:00:00Z",
+    },
     {
       startTime: "2024-01-01T00:00:00Z",
       endTime: "2025-01-02T00:00:00Z",
@@ -2156,19 +2167,35 @@ function createInvalidTaxFilingDateQueries({ valid }) {
 
 function createInvalidTaxFilingPaginationQueries({ valid }) {
   return [
-    { ...valid, page: 0 },
-    { ...valid, page: 1.5 },
-    { ...valid, pageSize: 0 },
-    { ...valid, pageSize: 1001 },
+    { ...valid,
+      page: 0,
+    },
+    { ...valid,
+      page: 1.5,
+    },
+    { ...valid,
+      pageSize: 0,
+    },
+    { ...valid,
+      pageSize: 1001,
+    },
   ]
 }
 
 function createInvalidTaxFilingTypeQueries({ valid }) {
   return [
-    { ...valid, dataTypeCodes: "BUY_ORDER" },
-    { ...valid, dataTypeCodes: [""] },
-    { ...valid, dataTypeCodes: [null] },
-    { ...valid, dataTypeCodes: null },
+    { ...valid,
+      dataTypeCodes: "BUY_ORDER",
+    },
+    { ...valid,
+      dataTypeCodes: [""],
+    },
+    { ...valid,
+      dataTypeCodes: [null],
+    },
+    { ...valid,
+      dataTypeCodes: null,
+    },
   ]
 }
 
@@ -2356,14 +2383,55 @@ test("Bitunix Spot withdrawal sends the documented signed request and preserves 
 
 test("Bitunix Spot withdrawal rejects invalid amounts and destination data before dispatch", async () => {
   const invalidRequests = [
-    { coin: "USDT", network: "TRC-20", address: "TAddress", amount: "0" },
-    { coin: "USDT", network: "TRC-20", address: "TAddress", amount: "-1" },
-    { coin: "USDT", network: "TRC-20", address: "TAddress", amount: 1.25 },
-    { coin: "USDT", network: "TRC-20", address: "TAddress", amount: "1e-8" },
-    { coin: "", network: "TRC-20", address: "TAddress", amount: "1" },
-    { coin: "USDT", network: "", address: "TAddress", amount: "1" },
-    { coin: "USDT", network: "TRC-20", address: "", amount: "1" },
-    { coin: "USDT", network: "TRC-20", address: "TAddress", amount: "1", memo: 7 },
+    {
+      coin: "USDT",
+      network: "TRC-20",
+      address: "TAddress",
+      amount: "0",
+    },
+    {
+      coin: "USDT",
+      network: "TRC-20",
+      address: "TAddress",
+      amount: "-1",
+    },
+    {
+      coin: "USDT",
+      network: "TRC-20",
+      address: "TAddress",
+      amount: 1.25,
+    },
+    {
+      coin: "USDT",
+      network: "TRC-20",
+      address: "TAddress",
+      amount: "1e-8",
+    },
+    {
+      coin: "",
+      network: "TRC-20",
+      address: "TAddress",
+      amount: "1",
+    },
+    {
+      coin: "USDT",
+      network: "",
+      address: "TAddress",
+      amount: "1",
+    },
+    {
+      coin: "USDT",
+      network: "TRC-20",
+      address: "",
+      amount: "1",
+    },
+    {
+      coin: "USDT",
+      network: "TRC-20",
+      address: "TAddress",
+      amount: "1",
+      memo: 7,
+    },
   ]
   for (const request of invalidRequests) {
     const { broker, calls } = createBroker({
@@ -2516,11 +2584,31 @@ test("Bitunix Spot funds transfer is separately gated and submits exact decimal 
 
 test("Bitunix Spot funds transfer rejects invalid asset, direction, and quantity before dispatch", async () => {
   const invalidRequests = [
-    { type: "unknown", coin: "USDT", amount: "1" },
-    { type: "spot_futures", coin: "", amount: "1" },
-    { type: "spot_futures", coin: "USDT", amount: "0" },
-    { type: "futures_spot", coin: "USDT", amount: "-1" },
-    { type: "futures_spot", coin: "USDT", amount: 1 },
+    {
+      type: "unknown",
+      coin: "USDT",
+      amount: "1",
+    },
+    {
+      type: "spot_futures",
+      coin: "",
+      amount: "1",
+    },
+    {
+      type: "spot_futures",
+      coin: "USDT",
+      amount: "0",
+    },
+    {
+      type: "futures_spot",
+      coin: "USDT",
+      amount: "-1",
+    },
+    {
+      type: "futures_spot",
+      coin: "USDT",
+      amount: 1,
+    },
   ]
   for (const request of invalidRequests) {
     const { broker, calls } = createBroker({
