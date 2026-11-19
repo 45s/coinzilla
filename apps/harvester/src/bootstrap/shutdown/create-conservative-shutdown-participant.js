@@ -243,7 +243,10 @@ async function reconcileRecoverySells({
           signal,
         })
       } catch (error) {
-        return createRecoveryPriceRefreshFailure({ symbol, error })
+        return createRecoveryPriceRefreshFailure({
+          symbol,
+          error,
+        })
       }
 
       throwIfShutdownAborted(signal)
