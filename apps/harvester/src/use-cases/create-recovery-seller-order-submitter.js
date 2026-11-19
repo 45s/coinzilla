@@ -113,6 +113,21 @@ function createSubmissionFailureCallback({
   }
 }
 
+function resolveSubmitterStopCallbacks({
+  recoverySellerStopCallbacks,
+  onUnresolvedSubmission,
+  onOrderValidationFailure,
+  canSubmit,
+} = {}) {
+  return {
+    onUnresolvedSubmission:
+      onUnresolvedSubmission ?? recoverySellerStopCallbacks?.onUnresolvedSubmission,
+    onOrderValidationFailure:
+      onOrderValidationFailure ?? recoverySellerStopCallbacks?.onOrderValidationFailure,
+    canSubmit: canSubmit ?? recoverySellerStopCallbacks?.canSubmit,
+  }
+}
+
 function validateSubmitterOptions({
   recoverySellerAccountingWorkflow,
   onDurableSubmissionIntent,
@@ -221,14 +236,21 @@ export function createRecoverySellerOrderSubmitter({
   onUnresolvedSubmission,
   onOrderValidationFailure,
   canSubmit,
+  recoverySellerStopCallbacks,
   onSellReserved,
 } = {}) {
+  const stopCallbacks = resolveSubmitterStopCallbacks({
+    recoverySellerStopCallbacks,
+    onUnresolvedSubmission,
+    onOrderValidationFailure,
+    canSubmit,
+  })
   validateSubmitterOptions({
     recoverySellerAccountingWorkflow,
     onDurableSubmissionIntent,
     onDurableSubmissionOutcome,
-    onUnresolvedSubmission,
-    canSubmit,
+    onUnresolvedSubmission: stopCallbacks.onUnresolvedSubmission,
+    canSubmit: stopCallbacks.canSubmit,
     onSellReserved,
   })
   const execute = createRecoverySellerExecutor({
@@ -236,9 +258,9 @@ export function createRecoverySellerOrderSubmitter({
     recoverySellerAccountingWorkflow,
     onDurableSubmissionIntent,
     onDurableSubmissionOutcome,
-    onUnresolvedSubmission,
-    onOrderValidationFailure,
-    canSubmit,
+    onUnresolvedSubmission: stopCallbacks.onUnresolvedSubmission,
+    onOrderValidationFailure: stopCallbacks.onOrderValidationFailure,
+    canSubmit: stopCallbacks.canSubmit,
     onSellReserved,
   })
   return createRecoverySellerSubmissionHandler({
