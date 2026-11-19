@@ -28,7 +28,11 @@ function assertProviderInstances(providers) {
   return providerById
 }
 
-function getStrategyPairs({ appConfig, strategyId = StrategyId.COIN_GRABBER, allowMissing = false } = {}) {
+function getStrategyPairs({
+  appConfig,
+  strategyId = StrategyId.COIN_GRABBER,
+  allowMissing = false,
+} = {}) {
   const pairs = appConfig?.strategies?.[strategyId]?.pairs
   if (allowMissing && pairs === undefined) {
     return {}
@@ -89,12 +93,14 @@ function createRouteKey({ strategyId,
   return JSON.stringify([strategyId, symbol])
 }
 
-function addConfiguredRoute({ route,
+function addConfiguredRoute({
+  route,
   index,
   pairsByStrategy,
   appConfig,
   providerById,
-  routeByStrategyMarket }) {
+  routeByStrategyMarket,
+}) {
   assertRouteShape({ route,
   index })
   if (!EXECUTABLE_STRATEGY_IDS.has(route.strategyId)) {
@@ -107,7 +113,7 @@ function addConfiguredRoute({ route,
   }
   const pairs = pairsByStrategy.get(route.strategyId)
   if (!pairs || !Object.hasOwn(pairs, route.symbol)) {
-    throw new TypeError(`Execution route references unconfigured ${route.strategyId} market ${route.symbol}`)
+    throw new TypeError(`Execution route references unconfigured symbol ${route.symbol} for ${route.strategyId}`)
   }
   if (pairs[route.symbol]?.enabled !== true) {
     throw new TypeError(`Execution route references disabled market ${route.symbol}`)
@@ -162,8 +168,10 @@ function resolveConfiguredRoutes({ configuredRouting,
   return routeByStrategyMarket
 }
 
-function assertEnabledMarketsAreRouted({ pairsByStrategy,
-  routeByStrategyMarket }) {
+function assertEnabledMarketsAreRouted({
+  pairsByStrategy,
+  routeByStrategyMarket,
+}) {
   const missingMarkets = []
   for (const [strategyId, pairs] of pairsByStrategy) {
     for (const [symbol, pair] of Object.entries(pairs)) {
