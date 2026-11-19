@@ -22,7 +22,15 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 - Document public contract changes and consumer migration impact.
 - Update this domain's roadmap when work is accepted, blocked, deferred, or merged. Mark work complete only after it is merged into `develop` and required checks pass.
 
-## Generic validation\n\n- Use the public `ensure` API for new generic input/type/range/collection checks. Search for an existing helper before duplicating a check.\n- Prefer a direct `ensure.*` assertion for one constraint; use `ensure.chain({ value, name })` only when composing multiple validations or transformations improves readability.\n- All calls use a single options object. Do not introduce positional validator arguments, validation DSLs, or coercion.\n- Keep strategy, exchange, entity and other domain invariants local. Do not replace existing boolean predicates with throwing assertions when semantics differ.\n- `Validator`/`VR` are legacy compatibility APIs; do not add new callers.\n\n## Workflow\n
+## Generic validation
+
+- Use the public `ensure` API for new generic input/type/range/collection checks. Search for an existing helper before duplicating a check.
+- Prefer a direct `ensure.*` assertion for one constraint; use `ensure.chain({ value, name })` only when composing multiple validations or transformations improves readability.
+- All calls use a single options object. Do not introduce positional validator arguments, validation DSLs, or coercion.
+- Keep strategy, exchange, entity and other domain invariants local. Do not replace existing boolean predicates with throwing assertions when semantics differ.
+- `Validator`/`VR` are legacy compatibility APIs; do not add new callers.
+
+## Workflow\n
 Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch creation, PR targets, synchronization, merge gates, branch cleanup, and releases.
 
 ## Required package check
