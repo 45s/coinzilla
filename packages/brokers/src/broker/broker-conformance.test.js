@@ -80,6 +80,11 @@ function createBinanceBroker() {
     apiKey: "offline-contract-key",
     apiSecret: "offline-contract-secret",
     tradingMode: "testnet",
+    logger: {
+      error() {},
+      warn() {},
+      info() {},
+    },
     providerOptions: {
       dependencies: {
         apiClientFactory: () => createBinanceApiClient({ calls }),
@@ -98,11 +103,6 @@ function createBinanceBroker() {
             })
           },
         }),
-        logger: {
-          error() {},
-          warn() {},
-          info() {},
-        },
         setTimeoutFn: () => 1,
         clearTimeoutFn: () => {},
       },

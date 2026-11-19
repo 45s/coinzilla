@@ -83,9 +83,13 @@ export class Broker {
       logger,
       providerOptions = {},
     } = input
+    const {
+      dependencies,
+      ...exchangeOptions
+    } = providerOptions
 
     const providerInput = {
-      ...providerOptions,
+      ...exchangeOptions,
       apiKey,
       apiSecret,
       tradingMode,
@@ -96,9 +100,12 @@ export class Broker {
 
     let broker
     if (provider === "binance") {
-      broker = new BinanceWebSocketBroker(providerInput)
+      broker = new BinanceWebSocketBroker(providerInput, dependencies)
     } else {
-      broker = new BitunixSpotBroker(providerInput)
+      broker = new BitunixSpotBroker({
+        ...providerInput,
+        ...(dependencies === undefined ? {} : { dependencies }),
+      })
     }
 
     return assertBrokerContract({ broker })
