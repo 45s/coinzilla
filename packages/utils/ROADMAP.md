@@ -20,18 +20,18 @@ owner: utils
 
 ## COMPLETED — generic validation API ([issue #1504](https://github.com/45s/coinzilla/issues/1504), [PR #1505](https://github.com/45s/coinzilla/pull/1505))
 
-- Introduced the domain-neutral public `ensure` assertions and optional immutable chain. The initial PR temporarily retained legacy `Validator`/`VR` exports and predicate semantics; the coordinated follow-up removes them (see #1507/#1508).
+- Introduced the domain-neutral public `ensure` assertions and optional immutable chain. The initial PR temporarily retained legacy `Validator`/`VR` exports and predicate semantics; the coordinated follow-up PR #1509 removed them and migrated the remaining consumers.
 - Organizes implementation as a feature module under `src/ensure/`: assertion service, chain service, thin feature index, cohesive pure `helpers/`, and adjacent tests.
 - No consumer-wide migration or business-invariant relocation is included.
 - **Merged:** PR #1505 into `develop` at `eb235e630ca7e59727343bc6819741af6ab69e11`; verified PR head `8c47d506113550bb10a42b7646064a583a23ae80`.
 - **Verification:** exact-head Utils tests, workspace tests/coverage, strict and workspace ESLint, syntax, actionlint, dependency audit, Harvester regression, and external documentation links all passed. Utils coverage reported 99.02% line / 97.31% branch overall (coverage run 237 tests, 0 failures).
 
-## In progress — custom ensure diagnostics and remove legacy Validator/VR ([#1507](https://github.com/45s/coinzilla/issues/1507), [#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
+## Completed — custom ensure diagnostics and remove legacy Validator/VR ([#1507](https://github.com/45s/coinzilla/issues/1507), [#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
 
 - Add optional `errMsg` to direct `ensure` assertions and fluent chains. Custom diagnostics preserve the original `TypeError` / `RangeError` class; successful assertions still return the original value.
 - Remove the deprecated `Validator` / `VR` public exports, declarative implementation, and tests. Migrate current `Coin` and `Order` consumers in Entities while preserving accepted values and their domain-specific `Error` messages.
 - Fix the dedicated Utils Unit Tests workflow to discover nested `ensure` tests; the prior root-only glob omitted `src/ensure/ensure.test.js`.
-- **Status:** test-first RED observed on PR #1509 test-only head; implementation and final exact-head verification are in progress.
+- **Verification:** merged as `ab77568acfcd286560270aaac325bf65301efb0c`. Required exact-head CI passed: Utils 225 tests (223 passed, 0 failed, 2 skipped), Entities 145/145, workspace tests and coverage, JavaScript syntax/strict lint/Markdown/policy, dependency audit and Harvester targeted tests. External documentation links also passed.
 
 ## Priority execution plan — current develop direction (2026-11-10)
 
@@ -77,7 +77,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
 
-> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and ensure validation modernization are complete. The legacy Validator/VR removal is in PR #1509 (pending merge). The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
+> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and ensure validation modernization are complete. The legacy Validator/VR removal is complete in merged PR #1509. The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
 
 **Owner:** `packages/utils/`
 
