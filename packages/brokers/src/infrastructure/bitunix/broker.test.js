@@ -2126,12 +2126,12 @@ test("Bitunix Spot broker accepts an empty tax type filter as all transaction ty
   assert.deepEqual(calls[0].options.body.dataTypeCodes, [], "an explicit empty type list must not be rewritten")
 })
 
-test("Bitunix Spot broker rejects invalid tax-filing query ranges and pagination before I/O", async () => {
+function createInvalidTaxFilingQueries() {
   const valid = {
     startTime: "2024-01-01T00:00:00Z",
     endTime: "2024-01-02T00:00:00Z",
   }
-  const invalidQueries = [
+  return [
     null,
     {},
     {
@@ -2191,8 +2191,10 @@ test("Bitunix Spot broker rejects invalid tax-filing query ranges and pagination
       dataTypeCodes: null,
     },
   ]
+}
 
-  for (const query of invalidQueries) {
+test("Bitunix Spot broker rejects invalid tax-filing query ranges and pagination before I/O", async () => {
+  for (const query of createInvalidTaxFilingQueries()) {
     const { broker, calls } = createBroker()
     const result = await broker.getTaxFilingHistory(query)
 
@@ -2201,12 +2203,8 @@ test("Bitunix Spot broker rejects invalid tax-filing query ranges and pagination
   }
 })
 
-test("Bitunix Spot broker rejects malformed tax-filing pagination and records", async () => {
-  const validQuery = {
-    startTime: "2024-01-01T00:00:00Z",
-    endTime: "2024-01-02T00:00:00Z",
-  }
-  const invalidPages = [
+function createInvalidTaxFilingPages() {
+  return [
     null,
     [],
     {},
@@ -2258,8 +2256,14 @@ test("Bitunix Spot broker rejects malformed tax-filing pagination and records", 
       records: [null],
     },
   ]
+}
 
-  for (const page of invalidPages) {
+test("Bitunix Spot broker rejects malformed tax-filing pagination and records", async () => {
+  const validQuery = {
+    startTime: "2024-01-01T00:00:00Z",
+    endTime: "2024-01-02T00:00:00Z",
+  }
+  for (const page of createInvalidTaxFilingPages()) {
     const { broker } = createBroker({
       responses: {
         [TAX_FILING_PATH]: page,
