@@ -22,7 +22,9 @@ export function findPendingMigrations(...migrationLists) {
       )
     }
 
-    if (applied.checksum && applied.checksum !== registered.checksum) {
+    const hasLegacyChecksum = applied.checksum === null
+      || applied.checksum === undefined
+    if (!hasLegacyChecksum && applied.checksum !== registered.checksum) {
       throw new Error(
         `Migration checksum mismatch at version ${applied.version}`,
       )
