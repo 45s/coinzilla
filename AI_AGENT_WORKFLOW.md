@@ -357,6 +357,7 @@ Every AI agent and coding assistant MUST execute clear user requests to implemen
 - Include relevant tests, documentation, and verification as part of implementation. Report what actually changed and which checks actually ran.
 - Be honest about limits: never claim success for an action that did not complete. If permissions, tools, external dependencies, or a genuine safety requirement prevent completion, identify the precise blocker and complete whatever safe work remains.
 - This execution-first rule does not override security, privacy, domain ownership, financial/production safeguards, required tests, branch protection, or explicit approval gates for destructive actions and releases.
+
 **Expected behavior: act first, deliver the working change, and keep discussion limited to essential decisions and material blockers.**
 
 ## 15. Pull-request draft and ready-for-review lifecycle — mandatory
