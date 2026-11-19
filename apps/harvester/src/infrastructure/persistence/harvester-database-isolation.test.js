@@ -30,9 +30,9 @@ const database = createDatabase({
 await database.connect()
 try {
   await database.create({
-    collection: "environment_isolation",
+    collection: "database_isolation",
     record: {
-      id: "same-isolation-marker",
+      id: "same-record-id",
       environment: process.env.TRADING_MODE,
       marker: process.env.TRADING_MODE,
     },
@@ -80,7 +80,7 @@ function runDatabaseProcess({ tradingMode, nodeEnvironment, directory }) {
   })
 }
 
-async function readIsolationRecord({ filename }) {
+async function readProcessRecord({ filename }) {
   const database = createDatabase({
     provider: createSqliteProvider({
       filename,
@@ -90,8 +90,8 @@ async function readIsolationRecord({ filename }) {
   await database.connect()
   try {
     return await database.readOne({
-      collection: "environment_isolation",
-      id: "same-isolation-marker",
+      collection: "database_isolation",
+      id: "same-record-id",
     })
   } finally {
     await database.close()
@@ -228,13 +228,13 @@ test("isolates production and Testnet databases across two real Node.js processe
   assert.equal(path.basename(path.dirname(testnetProcess.filename)), "testnet", "The Testnet process must write only to the Testnet database directory.")
 
   const [liveRecord, testnetRecord] = await Promise.all([
-    readIsolationRecord({
+    readProcessRecord({
       filename: liveProcess.filename,
     }),
-    readIsolationRecord({
+    readProcessRecord({
       filename: testnetProcess.filename,
     }),
   ])
-  assert.equal(liveRecord.environment, "live", "The production database must contain only the live process's environment marker.")
-  assert.equal(testnetRecord.environment, "testnet", "The Testnet database must contain only the Testnet process's environment marker.")
+  assert.equal(liveRecord.environment, "live", "The production database must contain only the live process's session marker.")
+  assert.equal(testnetRecord.environment, "testnet", "The Testnet database must contain only the Testnet process's session marker.")
 })

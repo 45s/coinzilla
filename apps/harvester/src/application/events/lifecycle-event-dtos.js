@@ -741,7 +741,10 @@ export const mapOrderCancelFailedData = (input = {}) =>
         throw new TypeError("outcome must describe an unconfirmed or unsuccessful cancellation")
       }
       const facts = order instanceof CanonicalOrder
-        ? requireOrderHistoryFacts({ order, ownership })
+        ? requireOrderHistoryFacts({
+          order,
+          ownership,
+        })
         : {
           clientOrderId: requireString({
             value: order?.clientOrderId,
@@ -1830,7 +1833,10 @@ export const mapOrderUpdatedData = (input = {}) =>
     input,
     operation: "Order-updated event mapping",
     mapper: ({ order, executionType, evidence, ownership }) => ({
-      ...requireOrderHistoryFacts({ order, ownership }),
+      ...requireOrderHistoryFacts({
+        order,
+        ownership,
+      }),
       ...(executionType === undefined ? {} : {
         executionType: requireString({
           value: executionType,
