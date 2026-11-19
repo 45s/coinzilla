@@ -13,7 +13,7 @@ last_verified: 2026-11-19
 
 Preserve the architecture discussion and agreed direction for making Harvester extensible across trading strategies without breaking the existing Coin Grabber (CG / Conservative) behavior or the proposed Recovery Seller (RS) behavior.
 
-This document is a **design discussion record and audit plan**, not an accepted implementation contract. It records the current source observations, the direction that appears preferable, decisions made during discussion, and questions that must be answered by the source audit before implementation.
+This document preserves the strategy architecture discussion and audit plan. The owner-approved implementation direction for RS-4 / PR #1476 is recorded in §5.2 and is authoritative for that work. The remaining source audit and exact implementation contracts must still be verified against code; this document does not claim that the target runtime is already implemented.
 
 The goal is not to add a framework for hypothetical strategies. The goal is to make the existing strategy boundaries and shared trading capabilities clear, and to determine whether and how the current CG and RS work can fit a safe, maintainable architecture.
 
@@ -46,7 +46,7 @@ The agreed sequence is:
 3. **S-3 — Strategy onboarding template.** Document the steps and requirements for adding a strategy, including configuration, domain policy, runtime/lifecycle integration, execution, ownership, accounting, tests, simulation and safety.
 4. **S-4 — Prove the framework with existing CG and RS.** Demonstrate that the design accommodates the existing strategies and their different lifecycle/accounting requirements. No new strategy is introduced.
 
-Do not skip S-1 and jump directly to generalized interfaces. S-1 evidence must drive S-2.
+S-1 source mapping remains necessary to keep implementation evidence-based, but it is not a reason to pause the explicitly approved RS-4 work in PR #1476. The owner has approved the architectural direction in §5.2; derive only the concrete contracts required by the existing CG/RS source and acceptance tests. Do not create generalized interfaces speculatively.
 
 ## 4. Architectural principles
 
@@ -99,9 +99,7 @@ The concepts must be separated:
 - **Shared application runtime/coordinator** may coordinate common lifecycle and capabilities, if the audit proves the responsibilities are genuinely common.
 - **Shared execution pipeline** provides common validation, routing, submission safety and provider interaction where the existing contracts support it.
 
-The preferred hypothesis is a shared application/runtime foundation with composed strategy-specific policy and lifecycle components—not a complete duplicated engine for every strategy.
-
-However, this is **not yet an approved design**. CG and RS may have materially different lifecycle semantics. A common runtime must not flatten those differences into generic hooks or force RS into Conservative's lifecycle. If source evidence shows that some workflows cannot safely share an orchestrator, a small specialized workflow may remain. The audit must justify that boundary.
+The owner has approved a shared account-level application/runtime foundation with composed strategy-specific policy and lifecycle components—not a complete duplicated engine for every strategy. CG and RS may have materially different lifecycle semantics. The shared coordinator must not flatten those differences into generic hooks or force RS into Conservative's lifecycle. A specialized workflow may remain where source and tests prove the behavior is genuinely strategy-specific; it must still participate in the shared account-level coordination and safety boundaries.
 
 ### 5.1 Current versus possible future shape
 
@@ -134,6 +132,20 @@ Bootstrap / composition root
 ```
 
 This diagram is conceptual. It does not prescribe new files, rename current modules, or assert that a generic runtime already exists.
+
+### 5.2 Approved implementation direction — 2026-11-19 (PR #1476 / issue #1475)
+
+The strategy owner approved the following direction. It is the architecture decision for the current RS-4 integration; it is not merely a proposal awaiting another discussion.
+
+1. **One account-level execution coordinator.** CG and RS participate in one provider-account runtime and one shared execution coordination path. Do not create competing independent engines for each strategy.
+2. **Explicit strategy routing.** Preserve and dispatch each assignment by the pair `{ strategyId, symbol }` from provider startup through policy evaluation, decision handling, order ownership and canonical fill attribution. Deduplicate market-data subscriptions without discarding strategy ownership.
+3. **Policy and lifecycle remain strategy-owned.** Each strategy decides WHAT under its own domain rules and retains its own cycle state, lifecycle semantics, accounting and budget. The application coordinates HOW; infrastructure performs provider operations.
+4. **Shared account resources and safeguards.** Reuse the account Portfolio, canonical order/fill facts, OrderRegistry, broker submission path and account-wide quote/base reservation controls. Keep strategy Positions, attribution and configured investment budgets independent. A fill updates the shared aggregate exactly once and the owning strategy projection exactly once.
+5. **One serialized account-level decision/order-transition path.** Serialize competing strategy decisions, intent allocation, order submission/acknowledgement transitions and canonical order/fill processing through the shared account coordinator. A shared accounting-update queue alone is insufficient if decisions and order transitions can still race in separate queues.
+6. **Preserve Conservative behavior.** CG is the regression baseline. Do not change its approved financial rules or lifecycle behavior merely to make the two strategies symmetrical. Reuse only capabilities with demonstrated common semantics.
+7. **Fail closed and keep RS gated.** Unknown or ambiguous exchange outcomes retain ownership and reservations and require reconciliation; no blind retries or speculative replacement. Missing third-asset commission valuation remains a blocker, never zero. RS stays disabled/non-executable until the complete RS-4 integration and RS-5 offline lifecycle acceptance pass.
+
+This approval does not authorize a universal `BaseStrategy`, a speculative strategy framework, a second broker/execution implementation, broker-package changes, exchange TESTNET/LIVE mutations, or early RS enablement. Exact DTOs, module boundaries and queue APIs are implementation details to derive from the existing source and prove with deterministic offline tests—not new architecture decisions to reopen the approved direction.
 
 ## 6. Configuration ownership: app root loads and composes; domain receives validated inputs
 
@@ -331,7 +343,7 @@ S-4 is an architecture proof and safety verification, not a feature expansion.
 
 ## 13. Decision status
 
-### Agreed discussion direction
+### Owner-approved direction — 2026-11-19
 
 - Keep the strategy/domain boundary: **strategy decides WHAT; application orchestrates HOW; infrastructure performs external operations**.
 - Keep configuration loading/composition at the application root/bootstrap boundary; inject validated settings into strategy/domain components.
@@ -340,20 +352,20 @@ S-4 is an architecture proof and safety verification, not a feature expansion.
 - Prefer a shared runtime/coordinator for responsibilities proven common, composed with strategy-specific policy and lifecycle/workflow components where behavior differs.
 - Do not force CG and RS into identical lifecycle semantics.
 - Current CG engine may remain specialized during the audit; any extraction must be evidence-based and incremental.
-- S-1 source audit precedes S-2 contract design; architecture discussion precedes implementation.
-- S-3 onboarding template and S-4 proof with CG/RS only follow the design work.
+- The approved RS-4 direction is one shared account-level execution coordinator with explicit `{ strategyId, symbol }` dispatch and a single serialized decision/order-transition path across strategies.
+- Strategy policy, cycle/lifecycle semantics, accounting attribution and investment budgets remain strategy-specific; shared account custody, Portfolio aggregate, order/fill facts, execution submission and quote/base reservations remain coordinated account-wide.
+- Preserve CG behavior; do not add a parallel engine, universal base class or speculative framework.
+- Source audit and implementation decomposition must remain evidence-based, but they do not reopen the approved direction or block the explicitly authorized PR #1476 work.
+- RS remains disabled/non-executable until RS-4 integration and RS-5 offline acceptance are complete.
 
-### Not yet decided
+### Implementation details still to derive from source
 
-- Exact strategy contract or interface.
-- Whether a shared runtime/coordinator should be introduced, and its exact responsibility.
-- Exact division between strategy policy, strategy lifecycle/workflow, and shared application services.
-- Any file moves, renames, or new runtime modules.
-- Whether the existing CG engine should be extracted, retained, or partially decomposed.
-- RS runtime integration design.
-- Event/decision DTO shape and configuration API.
+- Exact strategy decision/intent DTO shape and minimal capability contracts.
+- Exact module boundaries and how existing CG engine responsibilities are decomposed or retained.
+- Exact account coordinator and queue API, provided it serializes the full decision/order-transition path rather than accounting alone.
+- Exact event/decision wiring and configuration API, consistent with existing validated configuration.
 
-These items must remain open until S-1 evidence is reviewed and S-2 is discussed.
+These are implementation details, not unresolved approval questions. Resolve them from current source, tests and #1475 acceptance criteria; do not reopen the approved architecture direction.
 
 ## 14. Continuation instructions
 
@@ -361,7 +373,8 @@ When continuing this work:
 
 1. Re-read repository and Harvester agent instructions and the applicable documentation preflight.
 2. Verify the current `develop` source and current CG/RS roadmap/status; do not rely solely on this discussion snapshot.
-3. Continue with **S-1 only** unless the user explicitly changes scope.
-4. Provide a source-backed audit and discuss findings before proposing implementation.
-5. Do not implement, merge, or introduce a new strategy without explicit instruction.
-6. Keep the user's review/merge ownership: task PRs target `develop`; leave PRs open for user review.
+3. Continue the owner-approved RS-4 implementation in PR #1476 against issue #1475. Use S-1 source mapping as an implementation aid, not as a gate that suspends the approved task.
+4. Implement the shared account-level coordinator and explicit strategy routing incrementally, with RED → GREEN offline tests and source-backed module boundaries.
+5. Preserve CG behavior and RS-specific lifecycle/accounting. Keep RS disabled/non-executable until RS-4 and RS-5 acceptance pass.
+6. Do not change broker packages or perform TESTNET/LIVE exchange mutations as part of this work.
+7. Keep the user's review/merge ownership: task PRs target `develop`; leave PRs open for user review.

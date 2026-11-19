@@ -328,78 +328,101 @@ function prepareTradingAccounting({
   }
 }
 
-async function runUpdateTradingAccounting({
+async function persistTradingAccountingEffects({
+  fill,
+  result,
+  thirdAssetCommissions,
+  onCommissionAsset,
+  onOperationalStateExecutionFill,
+  logger,
+}) {
+  if (!result.ok || result.data.applied !== true) {
+    return undefined
+  }
+  if (thirdAssetCommissions.size > 0) {
+    await captureThirdAssetCommissionBaselines({
+      onCommissionAsset,
+      logger,
+      fill,
+      commissions: thirdAssetCommissions,
+    })
+  }
+  if (!onOperationalStateExecutionFill) {
+    return undefined
+  }
+  return persistExecutionFill({ onOperationalStateExecutionFill,
+    fill })
+}
+
+function publishTradingAccountingResult({ state, fill, logger, result, prepared } = {}) {
+  if (result.ok) {
+    state.portfolio = result.data.portfolio
+    state.recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
+    const nextPosition = state.portfolio.getPosition({
+      marketId: fill.market.id,
+      strategyId: StrategyId.COIN_GRABBER,
+    })
+    logExecutionAccounted({
+      logger,
+      fill,
+      result,
+      previousPosition: prepared.previousPosition,
+      currentLedger: prepared.currentLedger,
+      nextPosition,
+      nextLedger: result.data.recoveryLedger,
+    })
+    return
+  }
+  logExecutionRejected({
+    logger,
+    fill,
+    result,
+    previousPortfolio: prepared.previousPortfolio,
+    currentLedger: prepared.currentLedger,
+  })
+}
+
+async function runTradingAccountingTransition({
   state,
   fill,
   logger,
   onCommissionAsset,
   onOperationalStateExecutionFill,
 }) {
-  return enqueueAccountingTransition({
-    state,
-    transition: async () => {
-      const prepared = prepareTradingAccounting({
-        state,
-        fill,
-        logger,
-      })
-      if (prepared.result) {
-        return prepared.result
-      }
-      const {
-        thirdAssetCommissions,
-        previousPortfolio,
-        currentLedger,
-        previousPosition,
-      } = prepared
+  const prepared = prepareTradingAccounting({ state,
+    fill,
+    logger })
+  if (prepared.result) {
+    return prepared.result
+  }
+  const result = applyTradingAccounting({
+    portfolio: state.portfolio,
+    recoveryLedger: prepared.currentLedger,
+    fill,
+  })
+  const durableFailure = await persistTradingAccountingEffects({
+    fill,
+    result,
+    thirdAssetCommissions: prepared.thirdAssetCommissions,
+    onCommissionAsset,
+    onOperationalStateExecutionFill,
+    logger,
+  })
+  if (durableFailure) {
+    return durableFailure
+  }
+  publishTradingAccountingResult({ state,
+    fill,
+    logger,
+    result,
+    prepared })
+  return result
+}
 
-      const result = applyTradingAccounting({
-        portfolio: state.portfolio,
-        recoveryLedger: currentLedger,
-        fill,
-      })
-      if (result.ok && result.data.applied === true && thirdAssetCommissions.size > 0) {
-        await captureThirdAssetCommissionBaselines({
-          onCommissionAsset,
-          logger,
-          fill,
-          commissions: thirdAssetCommissions,
-        })
-      }
-      if (result.ok && result.data.applied === true && onOperationalStateExecutionFill) {
-        const durableFailure = await persistExecutionFill({ onOperationalStateExecutionFill, 
-          fill })
-        if (durableFailure) {
-          return durableFailure
-        }
-      }
-      if (result.ok) {
-        state.portfolio = result.data.portfolio
-        state.recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
-        const nextPosition = state.portfolio.getPosition({
-          marketId: fill.market.id,
-          strategyId: StrategyId.COIN_GRABBER,
-        })
-        logExecutionAccounted({
-          logger,
-          fill,
-          result,
-          previousPosition,
-          currentLedger,
-          nextPosition,
-          nextLedger: result.data.recoveryLedger,
-        })
-      } else {
-        logExecutionRejected({
-          logger,
-          fill,
-          result,
-          previousPortfolio,
-          currentLedger,
-        })
-      }
-      return result
-    },
+async function runUpdateTradingAccounting(input = {}) {
+  return enqueueAccountingTransition({
+    state: input.state,
+    transition: () => runTradingAccountingTransition(input),
   })
 }
 
@@ -644,17 +667,45 @@ async function recordIneligibleRecoveryCycle({
   return undefined
 }
 
-async function runCompleteRecoveryCycle({
+async function recordRecoveryCycleEvaluation({
   state,
   marketId,
-  keepQuantity,
-  minProfit,
-  inventoryDisposition,
+  position,
+  recoveryLedger,
   sellOrder,
+  completion,
+  minProfit,
   logger,
   onOperationalStateRecoveryCycleCompleted,
   onOperationalStateRecoveryCycleNotCompleted,
 }) {
+  if (completion.eligible) {
+    return completeEligibleRecoveryCycle({
+      state,
+      marketId,
+      position,
+      recoveryLedger,
+      sellOrder,
+      completion,
+      minProfit,
+      logger,
+      onOperationalStateRecoveryCycleCompleted,
+    })
+  }
+  return recordIneligibleRecoveryCycle({
+    marketId,
+    position,
+    recoveryLedger,
+    sellOrder,
+    completion,
+    minProfit,
+    logger,
+    onOperationalStateRecoveryCycleNotCompleted,
+  })
+}
+
+async function runCompleteRecoveryCycle(input = {}) {
+  const { state, marketId } = input
   const recoveryLedger = state.recoveryLedgers.get(marketId)
   const position = state.portfolio.getPosition({
     marketId,
@@ -664,51 +715,29 @@ async function runCompleteRecoveryCycle({
     return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
   }
   try {
-    assertTerminalRecoverySellOrder({ sellOrder, 
+    assertTerminalRecoverySellOrder({ sellOrder: input.sellOrder,
       marketId })
     const completion = evaluatePortfolioRecoveryCompletion({
-      logger,
+      logger: input.logger,
       marketId,
       position,
       recoveryLedger,
-      keepQuantity,
-      minProfit,
-      inventoryDisposition,
+      keepQuantity: input.keepQuantity,
+      minProfit: input.minProfit,
+      inventoryDisposition: input.inventoryDisposition,
     })
-    let failure
-    if (completion.eligible) {
-      failure = await completeEligibleRecoveryCycle({
-        state,
-        marketId,
-        position,
-        recoveryLedger,
-        sellOrder,
-        completion,
-        minProfit,
-        logger,
-        onOperationalStateRecoveryCycleCompleted,
-      })
-    } else {
-      failure = await recordIneligibleRecoveryCycle({
-        marketId,
-        position,
-        recoveryLedger,
-        sellOrder,
-        completion,
-        minProfit,
-        logger,
-        onOperationalStateRecoveryCycleNotCompleted,
-      })
-    }
-    if (failure) {
-      return failure
-    }
-    return toResult({ data: completion })
+    const failure = await recordRecoveryCycleEvaluation({
+      ...input,
+      position,
+      recoveryLedger,
+      completion,
+    })
+    return failure ?? toResult({ data: completion })
   } catch (error) {
-    logRecoveryCompletionFailure({ logger, 
-      state, 
-      marketId, 
-      error, 
+    logRecoveryCompletionFailure({ logger: input.logger,
+      state,
+      marketId,
+      error,
       recoveryLedger })
     return toResult({ error })
   }
@@ -728,34 +757,78 @@ async function runCompleteRecoveryCycle({
  * @param {Map<string, RecoveryLedger>} [options.initialRecoveryLedgers] Initial market recovery ledgers.
  * @returns {object} Portfolio, accounting, recovery completion, and market-price workflow operations.
  */
-export const createPortfolioWorkflow = ({
-  evaluateStrategy,
-  logger,
+function validateSharedPortfolioWorkflowState({
+  sharedState,
   initialPortfolio,
   initialRecoveryLedgers,
-  onCommissionAsset,
-  onOperationalStateExecutionFill,
-  onOperationalStateRecoveryCycleCompleted,
-  onOperationalStateRecoveryCycleNotCompleted,
-} = {}) => {
+} = {}) {
+  if (sharedState === undefined) {
+    return
+  }
+  if (!sharedState) {
+    throw new TypeError("sharedState must be an account workflow state object")
+  }
+  if (!(sharedState.portfolio instanceof Portfolio)) {
+    throw new TypeError("sharedState.portfolio must be a Portfolio")
+  }
+  if (!(sharedState.recoveryLedgers instanceof Map)) {
+    throw new TypeError("sharedState.recoveryLedgers must be a Map")
+  }
+  if (typeof sharedState.updateQueue?.then !== "function") {
+    throw new TypeError("sharedState.updateQueue must be a Promise-like queue")
+  }
+  if (initialPortfolio !== undefined && initialPortfolio !== sharedState.portfolio) {
+    throw new TypeError("initialPortfolio must match sharedState.portfolio")
+  }
+  if (initialRecoveryLedgers !== undefined && initialRecoveryLedgers !== sharedState.recoveryLedgers) {
+    throw new TypeError("initialRecoveryLedgers must match sharedState.recoveryLedgers")
+  }
+}
+
+function createPortfolioWorkflowState({
+  sharedState,
+  initialPortfolio,
+  initialRecoveryLedgers,
+} = {}) {
+  validateSharedPortfolioWorkflowState({
+    sharedState,
+    initialPortfolio,
+    initialRecoveryLedgers,
+  })
   if (initialPortfolio !== undefined && !(initialPortfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
   if (initialRecoveryLedgers !== undefined && !(initialRecoveryLedgers instanceof Map)) {
     throw new TypeError("initialRecoveryLedgers must be a Map")
   }
+  return sharedState ?? {
+    portfolio: initialPortfolio ?? new Portfolio(),
+    recoveryLedgers: new Map(initialRecoveryLedgers ?? []),
+    updateQueue: Promise.resolve(),
+  }
+}
+
+function validatePortfolioWorkflowCallbacks({
+  onOperationalStateExecutionFill,
+  onOperationalStateRecoveryCycleCompleted,
+} = {}) {
   if (onOperationalStateExecutionFill !== undefined && typeof onOperationalStateExecutionFill !== "function") {
     throw new TypeError("onOperationalStateExecutionFill must be a function")
   }
   if (onOperationalStateRecoveryCycleCompleted !== undefined && typeof onOperationalStateRecoveryCycleCompleted !== "function") {
     throw new TypeError("onOperationalStateRecoveryCycleCompleted must be a function")
   }
+}
 
-  const state = {
-    portfolio: initialPortfolio ?? new Portfolio(),
-    recoveryLedgers: new Map(initialRecoveryLedgers ?? []),
-    updateQueue: Promise.resolve(),
-  }
+function createPortfolioWorkflowApi({
+  state,
+  evaluateStrategy,
+  logger,
+  onCommissionAsset,
+  onOperationalStateExecutionFill,
+  onOperationalStateRecoveryCycleCompleted,
+  onOperationalStateRecoveryCycleNotCompleted,
+}) {
   const tracedEvaluateStrategy = (input = {}) => evaluateStrategyWithPortfolioState({
     state,
     evaluateStrategy,
@@ -770,34 +843,30 @@ export const createPortfolioWorkflow = ({
     onCommissionAsset,
     onOperationalStateExecutionFill,
   })
-  const completeRecoveryCycle = ({
-    marketId,
-    keepQuantity,
-    minProfit,
-    inventoryDisposition,
-    sellOrder,
-  } = {}) => enqueueAccountingTransition({
+  const completeRecoveryCycle = (input = {}) => enqueueAccountingTransition({
     state,
     transition: () => runCompleteRecoveryCycle({
+      ...input,
       state,
-      marketId,
-      keepQuantity,
-      minProfit,
-      inventoryDisposition,
-      sellOrder,
       logger,
       onOperationalStateRecoveryCycleCompleted,
       onOperationalStateRecoveryCycleNotCompleted,
     }),
   })
-
   return {
     updatePortfolio: updateTradingAccounting,
     updateTradingAccounting,
-    processMarketPrice: (input = {}) => processMarketPrice({ ...input, 
+    processMarketPrice: (input = {}) => processMarketPrice({ ...input,
       portfolio: state.portfolio }),
     getPortfolio: () => state.portfolio,
     getRecoveryLedger: ({ marketId } = {}) => state.recoveryLedgers.get(marketId),
     completeRecoveryCycle,
   }
+}
+
+export const createPortfolioWorkflow = (input = {}) => {
+  validatePortfolioWorkflowCallbacks(input)
+  const state = createPortfolioWorkflowState(input)
+  return createPortfolioWorkflowApi({ ...input,
+    state })
 }

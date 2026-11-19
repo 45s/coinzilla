@@ -263,3 +263,63 @@ tokenSpecificationsPath }),
     "An ESM module with an invalid appConfig shape must fail runtime validation before startup.",
   )
 })
+
+
+test("resolves Recovery Seller pair precision from the same token registry as CG", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "app-config-rs-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const configPath = join(directory, "config.mjs")
+  const config = createValidConfig()
+  config.strategies.RS_recoverySeller = {
+    enabled: true,
+    pairs: {
+      ZROUSDT: {
+        enabled: true,
+        tradingEnvironment: "testnet",
+        enableVolatilityProtection: true,
+        investment: 100,
+        orderQuantity: 5,
+        sellQuantity: 0.01,
+        minProfit: 0.01,
+        priceStepPercent: 0.05,
+        makerPercent: 0,
+        takerPercent: 0.1,
+        legacyPosition: {
+          invested: 100,
+          quantity: 50,
+        },
+      },
+    },
+  }
+  await writeFile(configPath, createConfigModule(config), "utf8")
+  const tokenSpecificationsPath = await writeTokenSpecifications({
+    directory,
+    specifications: {
+      ...createTokenSpecifications(),
+      ZRO: {
+        baseAsset: "ZRO",
+        markets: {
+          ZROUSDT: {
+            quoteAsset: "USDT",
+            pricePrecision: 3,
+            quantityPrecision: 1,
+          },
+        },
+      },
+    },
+  })
+
+  const loaded = await loadAppConfig({
+    source: configPath,
+    tokenSpecificationsPath,
+  })
+  const pair = loaded.strategies.RS_recoverySeller.pairs.ZROUSDT
+
+  assert.equal(pair.pricePrecision, 3, "RS price precision must come from the shared token registry.")
+  assert.equal(pair.quantityPrecision, 1, "RS quantity precision must come from the shared token registry.")
+  assert.equal(pair.legacyPosition.invested, 100, "The operator-declared original quote investment must be preserved.")
+  assert.equal(pair.legacyPosition.quantity, 50, "The operator-declared original base quantity must be preserved.")
+})

@@ -1,4 +1,4 @@
-import test from "node:test"
+import test, { after } from "node:test"
 import assert from "node:assert/strict"
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises"
 import os from "node:os"
@@ -6,6 +6,7 @@ import os from "node:os"
 import path, { isAbsolute as pathIsAbsolute } from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
+import { appConfig as defaultAppConfig } from "../config/index.js"
 import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
@@ -58,27 +59,20 @@ const main = (options = {}) => {
 }
 const runMain = (options = {}) => main(options)
 
+const createTestAppConfig = ({ operatorControlEnabled = false, allowedUserIds = [] } = {}) => {
+  const config = structuredClone(defaultAppConfig)
+  config.operatorControl.telegram = {
+    enabled: operatorControlEnabled,
+    allowedUserIds,
+  }
+  return config
+}
+
 test("does not create or inject durable recovery facts while recovery is disabled", async () => {
   let storeCreated = false
   let startupInput
   await runMain({
-    loadConfig: async () => ({
-      operatorControl: {
-        telegram: {
-          enabled: false,
-          allowedUserIds: [],
-        },
-      },
-      strategies: {
-        CG_coinGrabber: {
-          settings: {
-            recovery: {
-              enabled: false,
-            },
-          },
-        },
-      },
-    }),
+    loadConfig: async () => createTestAppConfig(),
     createOperationalStateStore: () => {
       storeCreated = true
       throw new Error("disabled recovery and operator control must not construct a Operational State Store")
@@ -99,23 +93,10 @@ test("does not create or inject durable recovery facts while recovery is disable
 })
 
 test("does not create or inject recovery storage when Telegram operator control is enabled without recovery", async () => {
-  const configuredApp = {
-    operatorControl: {
-      telegram: {
-        enabled: true,
-        allowedUserIds: ["12345"],
-      },
-    },
-    strategies: {
-      CG_coinGrabber: {
-        settings: {
-          recovery: {
-            enabled: false,
-          },
-        },
-      },
-    },
-  }
+  const configuredApp = createTestAppConfig({
+    operatorControlEnabled: true,
+    allowedUserIds: ["12345"],
+  })
   let storeFactoryCalls = 0
   let startupInput
 
@@ -776,22 +757,7 @@ test("writes and durably closes a JSONL session in the injected Journal director
   process.exitCode = 0
   try {
     const eventBus = new EventBus()
-    const processIdentity = {
-      application: "harvester",
-      version: "1.0.001",
-      runtimeSessionId: "journal-integration-test",
-      processId: process.pid,
-      startedAt: "2026-11-09T12:34:56.789Z",
-      source: {
-        branch: null,
-        commit: null,
-        shortCommit: null,
-        commitMessage: null,
-        commitDate: null,
-        workingTree: "unknown",
-        metadataSource: "unavailable",
-      },
-    }
+    const processIdentity = createJournalIntegrationProcessIdentity()
     const result = await main({
       processIdentity,
       createEventBus: () => eventBus,
@@ -820,19 +786,7 @@ test("writes and durably closes a JSONL session in the injected Journal director
     assert.equal(result.journalService.status.state, "closed")
     assert.equal(result.journalService.status.closed, true)
 
-    const sessionDirectory = path.join(
-      directory,
-      "sessions",
-      "2026-11-09_12-34-56-journal-integration-test",
-    )
-    const files = await readdir(sessionDirectory)
-    assert.equal(files.length, 1)
-    assert.equal(files[0], "2026-11-09_12-34-56-journal-integration-test.jsonl")
-    const content = await readFile(path.join(sessionDirectory, files[0]), "utf8")
-    const records = content.trim().split("\n").map((line) => JSON.parse(line))
-    assert.ok(records.some((record) => record.name === "harvester.stopped"))
-    assert.ok(records.every((record) => record.__coinzillaJournal?.schemaVersion === 1))
-    assert.doesNotMatch(content, /apiKey|apiSecret|accessToken|password/)
+    await assertDurableJournalSession({ directory })
   } finally {
     process.exitCode = previousExitCode
     await rm(directory, { recursive: true,
@@ -1110,20 +1064,7 @@ test("acquires the process lock before starting Journal and releases it after cl
       env: {
         NODE_ENV: "development",
       },
-      acquireProcessLock: async ({ journalDirectory, globalDirectory, broker, tradingMode }) => {
-        sequence.push("lock")
-        assert.equal(typeof journalDirectory, "string")
-        assert.ok(pathIsAbsolute(journalDirectory))
-        assert.ok(globalDirectory.includes(".coinzilla"))
-        assert.ok(globalDirectory.endsWith("process-locks"))
-        assert.equal(broker, "binance")
-        assert.equal(tradingMode, "testnet")
-        return {
-          ok: true,
-          release: async () => { sequence.push("release"); return { ok: true,
-              released: true } },
-        }
-      },
+      acquireProcessLock: createTestProcessLock({ sequence }),
       createJournalService: () => {
         sequence.push("journal")
         return {
@@ -1373,26 +1314,14 @@ const captureProcessProvenanceScenario = async () => {
   const contexts = []
   const processIdentity = createProcessProvenanceIdentity()
   let journalFlushCalls = 0
-  const eventBus = {
-    publish(event) {
-      events.push(event)
-      operations.push(`publish:${event.name}`)
-      return { ok: true,
-        event }
-    },
-    flush: async () => ({ ok: true }),
-    close: async () => ({ ok: true,
-      closed: true }),
-  }
-  const logger = {
-    setContext(context) {
-      contexts.push(context)
-      operations.push("logger.context")
-    },
-    info() {},
-    system() {},
-    error() {},
-  }
+  const eventBus = createProvenanceEventBus({
+    events,
+    operations,
+  })
+  const logger = createProvenanceLogger({
+    contexts,
+    operations,
+  })
 
   await main({
     processIdentity,
@@ -1407,20 +1336,10 @@ const captureProcessProvenanceScenario = async () => {
         release: async () => ({ ok: true,
           released: true }) }
     },
-    createJournalService: () => {
-      operations.push("journal.create")
-      return {
-        ready: Promise.resolve({ ok: true }),
-        flush: async () => {
-          journalFlushCalls += 1
-          return { ok: true,
-            durable: true }
-        },
-        close: async () => ({ ok: true,
-          closed: true,
-          durable: true }),
-      }
-    },
+    createJournalService: () => createProvenanceJournal({
+      operations,
+      onFlush: () => { journalFlushCalls += 1 },
+    }),
     start: async ({ eventPublisher }) => {
       operations.push("runtime.start")
       await eventPublisher.flush()
@@ -1599,46 +1518,14 @@ test("requires Journal readiness and publishes process provenance before trading
   const contexts = []
   const events = []
   const processStarted = new Promise((resolve) => { resolveProcessStarted = resolve })
-  const journalService = {
-    ready: new Promise((resolve) => { resolveJournalReady = resolve }),
-    status: { state: "starting",
-      enabled: true },
-    flush: async () => ({ ok: true,
-      durable: true }),
-    close: async () => ({ ok: true,
-      closed: true }),
-  }
-  const eventBus = {
-    publish(event) {
-      events.push(event)
-      if (event.name === "harvester.process_started") {
-        resolveProcessStarted(event)
-      }
-      return { ok: true,
-        event }
-    },
-    flush: async () => ({ ok: true }),
-    close: async () => ({ ok: true,
-      closed: true }),
-  }
+  const journalService = createDelayedJournalService({ onReady: (resolve) => { resolveJournalReady = resolve } })
+  const eventBus = createProcessStartedEventBus({
+    events,
+    resolveProcessStarted,
+  })
 
   const pending = main({
-    processIdentity: {
-      application: "harvester",
-      version: "1.0.001",
-      runtimeSessionId: "delayed-journal-session",
-      processId: 54321,
-      startedAt: "2026-11-09T10:15:30.000Z",
-      source: {
-        branch: null,
-        commit: null,
-        shortCommit: null,
-        commitMessage: null,
-        commitDate: null,
-        workingTree: "unknown",
-        metadataSource: "unavailable",
-      },
-    },
+    processIdentity: createDelayedJournalProcessIdentity(),
     logger: {
       setContext: (context) => contexts.push(context),
       info() {},
@@ -1676,13 +1563,7 @@ test("requires Journal readiness and publishes process provenance before trading
 test("retains immediate logger provenance when the optional Journal is disabled", async () => {
   const contexts = []
   const events = []
-  const eventBus = {
-    publish(event) {
-      events.push(event)
-      return { ok: true,
-        event }
-    },
-  }
+  const eventBus = createRecordingEventBus({ events })
 
   await main({
     processIdentity: {
@@ -1785,22 +1666,7 @@ test("fails closed when required Journal readiness fails", async () => {
   }
 
   await main({
-    processIdentity: {
-      application: "harvester",
-      version: "1.0.001",
-      runtimeSessionId: "journal-unavailable-session",
-      processId: 679,
-      startedAt: "2026-11-09T10:15:30.000Z",
-      source: {
-        branch: null,
-        commit: null,
-        shortCommit: null,
-        commitMessage: null,
-        commitDate: null,
-        workingTree: "unknown",
-        metadataSource: "unavailable",
-      },
-    },
+    processIdentity: createUnavailableJournalProcessIdentity(),
     logger: {
       setContext: (context) => contexts.push(context),
       warn() {},
@@ -1903,7 +1769,7 @@ test("fails before acquiring a lock when TRADING_MODE is missing", async () => {
 
 
 test("uses TRADING_MODE=live for Binance LIVE and acquires the single-writer lock", async () => {
-  const appConfig = { strategies: { CG_coinGrabber: { enabled: true } } }
+  const appConfig = createTestAppConfig()
   let lockCalls = 0
   let startInput
   await main({
@@ -2031,23 +1897,7 @@ test("does not construct, verify, or inject Operational State Store records even
   let journalCreated = false
   let runtimeStarted = false
   await runMain({
-    loadConfig: async () => ({
-      operatorControl: {
-        telegram: {
-          enabled: false,
-          allowedUserIds: [],
-        },
-      },
-      strategies: {
-        CG_coinGrabber: {
-          settings: {
-            recovery: {
-              enabled: false,
-            },
-          },
-        },
-      },
-    }),
+    loadConfig: async () => createTestAppConfig(),
     env: { OPERATIONAL_STATE_DIRECTORY: "relative/recovery-facts" },
     createOperationalStateStore: () => {
       storeCreated = true
@@ -2156,4 +2006,204 @@ test("retains Journal, EventBus, process lock and logger when strategy shutdown 
   } finally {
     process.exitCode = previousExitCode
   }
+})
+
+
+function createJournalIntegrationProcessIdentity() {
+  return {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "journal-integration-test",
+    processId: process.pid,
+    startedAt: "2026-11-09T12:34:56.789Z",
+    source: {
+      branch: null,
+      commit: null,
+      shortCommit: null,
+      commitMessage: null,
+      commitDate: null,
+      workingTree: "unknown",
+      metadataSource: "unavailable",
+    },
+  }
+}
+
+async function assertDurableJournalSession({ directory }) {
+  const sessionDirectory = path.join(directory, "sessions", "2026-11-09_12-34-56-journal-integration-test")
+  const files = await readdir(sessionDirectory)
+  assert.equal(files.length, 1)
+  assert.equal(files[0], "2026-11-09_12-34-56-journal-integration-test.jsonl")
+  const content = await readFile(path.join(sessionDirectory, files[0]), "utf8")
+  const records = content.trim().split("\n").map((line) => JSON.parse(line))
+  assert.ok(records.some((record) => record.name === "harvester.stopped"))
+  assert.ok(records.every((record) => record.__coinzillaJournal?.schemaVersion === 1))
+  assert.doesNotMatch(content, /apiKey|apiSecret|accessToken|password/)
+}
+
+function createTestProcessLock({ sequence }) {
+  return async ({ journalDirectory, globalDirectory, broker, tradingMode }) => {
+    sequence.push("lock")
+    assert.equal(typeof journalDirectory, "string")
+    assert.ok(pathIsAbsolute(journalDirectory))
+    assert.ok(globalDirectory.includes(".coinzilla"))
+    assert.ok(globalDirectory.endsWith("process-locks"))
+    assert.equal(broker, "binance")
+    assert.equal(tradingMode, "testnet")
+    return {
+      ok: true,
+      release: async () => {
+        sequence.push("release")
+        return {
+          ok: true,
+          released: true,
+        }
+      },
+    }
+  }
+}
+
+function createProvenanceEventBus({ events, operations }) {
+  return {
+    publish(event) {
+      events.push(event)
+      operations.push(`publish:${event.name}`)
+      return {
+        ok: true,
+        event,
+      }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({
+      ok: true,
+      closed: true,
+    }),
+  }
+}
+
+function createProvenanceLogger({ contexts, operations }) {
+  return {
+    setContext(context) {
+      contexts.push(context)
+      operations.push("logger.context")
+    },
+    info() {},
+    system() {},
+    error() {},
+  }
+}
+
+function createDelayedJournalService({ onReady }) {
+  return {
+    ready: new Promise(onReady),
+    status: {
+      state: "starting",
+      enabled: true,
+    },
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
+    close: async () => ({
+      ok: true,
+      closed: true,
+    }),
+  }
+}
+
+function createProcessStartedEventBus({ events, resolveProcessStarted }) {
+  return {
+    publish(event) {
+      events.push(event)
+      if (event.name === "harvester.process_started") {
+        resolveProcessStarted(event)
+      }
+      return {
+        ok: true,
+        event,
+      }
+    },
+    flush: async () => ({ ok: true }),
+    close: async () => ({
+      ok: true,
+      closed: true,
+    }),
+  }
+}
+
+function createUnavailableJournalProcessIdentity() {
+  return {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "journal-unavailable-session",
+    processId: 679,
+    startedAt: "2026-11-09T10:15:30.000Z",
+    source: {
+      branch: null,
+      commit: null,
+      shortCommit: null,
+      commitMessage: null,
+      commitDate: null,
+      workingTree: "unknown",
+      metadataSource: "unavailable",
+    },
+  }
+}
+
+function createRecordingEventBus({ events }) {
+  return {
+    publish(event) {
+      events.push(event)
+      return {
+        ok: true,
+        event,
+      }
+    },
+  }
+}
+
+
+function createProvenanceJournal({ operations, onFlush }) {
+  operations.push("journal.create")
+  return {
+    ready: Promise.resolve({ ok: true }),
+    flush: async () => {
+      onFlush()
+      return {
+        ok: true,
+        durable: true,
+      }
+    },
+    close: async () => ({
+      ok: true,
+      closed: true,
+      durable: true,
+    }),
+  }
+}
+
+function createDelayedJournalProcessIdentity() {
+  return {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "delayed-journal-session",
+    processId: 54321,
+    startedAt: "2026-11-09T10:15:30.000Z",
+    source: {
+      branch: null,
+      commit: null,
+      shortCommit: null,
+      commitMessage: null,
+      commitDate: null,
+      workingTree: "unknown",
+      metadataSource: "unavailable",
+    },
+  }
+}
+
+
+after(() => {
+  // Tests exercise startup failures that intentionally set the process exit code.
+  // Clear application side effects after all assertions; the test runner still
+  // reports assertion failures independently.
+  process.exitCode = undefined
 })

@@ -1,6 +1,7 @@
 import { NOTIFICATIONS_TG_PROFILES } from "./notifications-tg-profiles.js";
 import { OPERATOR_CONTROL_CONFIG } from "./operator-control.js";
 import { CG_COIN_GRABBER_CONFIG } from "./strategies/cg-coin-grabber.js";
+import { RS_RECOVERY_SELLER_CONFIG } from "./strategies/rs-recovery-seller.js";
 
 export const appConfig = {
   notifications: {
@@ -14,5 +15,6 @@ export const appConfig = {
   operatorControl: OPERATOR_CONTROL_CONFIG,
   strategies: {
     CG_coinGrabber: CG_COIN_GRABBER_CONFIG,
+    RS_recoverySeller: RS_RECOVERY_SELLER_CONFIG,
   },
 };

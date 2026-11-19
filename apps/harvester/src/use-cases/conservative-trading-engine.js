@@ -1612,6 +1612,30 @@ function createOperatorMarketSnapshotsGetter({
 }
 
 
+function bindSharedAccountOrderRegistry({ state, sharedAccountState } = {}) {
+  if (sharedAccountState === undefined) {
+    return
+  }
+  if (!sharedAccountState ||
+      typeof sharedAccountState !== "object" ||
+      !(sharedAccountState.orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("sharedAccountState must expose an OrderRegistry")
+  }
+  if (state.registry !== sharedAccountState.orderRegistry) {
+    throw new TypeError("initialState.orderRegistry must match sharedAccountState.orderRegistry")
+  }
+  Object.defineProperty(state, "registry", {
+    enumerable: true,
+    get: () => sharedAccountState.orderRegistry,
+    set: (registry) => {
+      if (!(registry instanceof OrderRegistry)) {
+        throw new TypeError("sharedAccountState.orderRegistry must remain an OrderRegistry")
+      }
+      sharedAccountState.orderRegistry = registry
+    },
+  })
+}
+
 function createConservativeEngineBaseContext({ dependencies } = {}) {
   const {
     appConfig,
@@ -1619,6 +1643,7 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     initialState,
     getVolatilityData,
     hasUnownedOpenOrdersForSymbol,
+    sharedAccountState,
   } = dependencies
   const { settings, pairs } = appConfig.strategies[StrategyId.COIN_GRABBER]
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
@@ -1634,7 +1659,11 @@ pairs })
   const { state } = createInitialEngineState({ initialState,
 pairs,
 initialRegistry })
-  const runTransition = createSerializedTransitionQueue()
+  bindSharedAccountOrderRegistry({
+    state,
+    sharedAccountState,
+  })
+  const runTransition = sharedAccountState?.runTransition ?? createSerializedTransitionQueue()
   const shutdownSafety = createConservativeShutdownSafety({
     state,
     pairs,
@@ -1852,6 +1881,7 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     settings: context.settings,
     logger: dependencies.logger,
     strategyPolicy: dependencies.strategyPolicy,
+    evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
     pause: context.pause,
     completeRecoveryCycle: dependencies.completeRecoveryCycle,
     eventPublisher: dependencies.eventPublisher,
@@ -1921,6 +1951,7 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
     logger: dependencies.logger,
     pairs: context.pairs,
     updateTradingAccounting: dependencies.updateTradingAccounting,
+    updateRecoverySellerAccounting: dependencies.updateRecoverySellerAccounting,
     recordBuyExecutionFill: context.recordBuyExecutionFill,
     recordSellExecutionFill: context.recordSellExecutionFill,
     pause: context.pause,
