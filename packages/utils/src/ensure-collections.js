@@ -34,7 +34,7 @@ export function requireNonEmptyArray({ value, name }) {
   })
   let length
   try {
-    length = array.length
+    length = Reflect.get(array, "length")
   } catch {
     throw typeError({
       name,
