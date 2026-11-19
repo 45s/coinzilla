@@ -54,6 +54,7 @@ const LOSSLESS_NUMERIC_FIELDS = Object.freeze({
   "/api/spot/v1/deposit/page": Object.freeze(["id", "amount"]),
   "/api/spot/v1/withdraw_transfer/page": Object.freeze(["id", "toUid", "amount", "fee"]),
   "/api/spot/v1/order/deal/list": Object.freeze(["id", "volume", "price", "fee", "role"]),
+  "/api/spot/v1/user/info": Object.freeze(["uid"]),
 })
 
 function stringifyNumericJsonFields({ text, fields }) {
