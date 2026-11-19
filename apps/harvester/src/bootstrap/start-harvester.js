@@ -302,7 +302,7 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
   }
 }
 
-async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
+export async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
   const {
     env,
     runtimeSessionId,

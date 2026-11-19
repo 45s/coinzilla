@@ -27,9 +27,13 @@ The first full-workspace run after the queue wiring exposed one stale test fixtu
 
 ## RS order-event accounting ownership — implementation checkpoint
 
+The streamed RS SELL path now stages canonical fills without applying either accounting projection. The terminal reconciliation hook is covered by a strategy-ownership regression and is invoked only after the complete distinct canonical REST/stream fill set passes quantity reconciliation; its implementation was split into a dedicated helper to keep the terminal reconciliation operation within the Harvester function-size standard. Terminal fill-history reconciliation exposes the complete distinct canonical fill set to an RS-specific terminal reconciler; a terminal RS SELL without a successful mixed-SELL commit fails closed and never enters Conservative recovery-cycle completion. Production construction of that reconciler and its atomic accounting/cycle/STOP transition remain required before RS can execute.
+
 Canonical streamed RS BUY fills now dispatch through the RS accounting workflow based on immutable OrderRegistry ownership. RS BUYs do not enter Conservative accounting or Conservative execution totals. RS SELL fills remain fail-closed in the streamed-fill path and must be handled by terminal mixed-SELL reconciliation; they are not applied as standalone CG fills.
 
 ## RS-4 production evaluator dispatch — callback path connected
+
+A RED bootstrap regression now requires the durable RS STOP workflow to restore its account-scoped blocker from the verified Operational State Store before the current `PROCESS_STARTED` fact is appended. The current bootstrap does not yet compose this workflow.
 
 - `createLatestTransitionEvaluator` already supports a strategy-owned RS transition callback after Conservative evaluation.
 - The production Conservative engine now injects that callback into the evaluator, and bootstrap/runtime composition preserves it from startup options to the engine.
@@ -83,7 +87,7 @@ The STOP workflow's blocker-ID extraction now follows the repository's destructu
 
 The real-STOP integration test now records the unresolved order identity in a multiline object literal to satisfy the use-case ESLint suite. This is a test-only formatting correction; the assertions still require one durable STOP fact and an UNKNOWN registered order.
 
-The RS submission adapter now refuses SELL when no durable sole-cycle reservation callback is supplied. When supplied, it runs that reservation before pending-order registration and broker I/O. Any post-reservation deferral, rejection, or unknown outcome latches durable STOP; BUY known rejection remains distinct. Offline coverage proves SELL cannot bypass reservation and that a reserved SELL deferred by failed durable submission intent is removed from active orders and STOPped. The callback still must be wired to the durable cycle-state transition in the eventual runtime; the adapter does not invent that transition itself.
+The RS submission adapter now refuses SELL when no durable sole-cycle reservation callback is supplied. For SELL, it now persists the canonical order intent before reserving the sole cycle and before PENDING registry registration. The shared executor reuses that acknowledged intent write rather than appending a duplicate; a regression verifies intent → reservation → registration → broker ordering. When supplied, it runs that reservation before pending-order registration and broker I/O. Any post-reservation deferral, rejection, or unknown outcome latches durable STOP; BUY known rejection remains distinct. Offline coverage proves SELL cannot bypass reservation and that a reserved SELL deferred by failed durable submission intent is removed from active orders and STOPped. The callback still must be wired to the durable cycle-state transition in the eventual runtime; the adapter does not invent that transition itself.
 
 ## Objective and delivery order
 
