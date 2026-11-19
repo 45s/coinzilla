@@ -138,11 +138,6 @@ function activateTradingEngine({
   })
 }
 
-/**
- * Subscribe to broker user-data delivery and complete the authoritative account audit gate.
- * The caller owns failure cleanup; this module owns subscription evidence and
- * the PREFLIGHT account/open-order checks that must precede trading readiness.
- */
 function markUserDataReconciliationRequired(state) {
   state.ready = false
   state.status = state.accountingFailed
@@ -150,6 +145,15 @@ function markUserDataReconciliationRequired(state) {
     : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
 }
 
+function assertNoUserDataAccountingFailure(state) {
+  assertNoUserDataAccountingFailure(state)
+}
+
+/**
+ * Subscribe to broker user-data delivery and complete the authoritative account audit gate.
+ * The caller owns failure cleanup; this module owns subscription evidence and
+ * the PREFLIGHT account/open-order checks that must precede trading readiness.
+ */
 export async function subscribeToUserData({
   broker,
   brokerName,
@@ -187,8 +191,10 @@ export async function subscribeToUserData({
 
   markUserDataReconciliationRequired(state)
 
-  await publishInitialAccountSnapshot({ state,
-publishAccountSnapshot })
+  await publishInitialAccountSnapshot({
+    state,
+    publishAccountSnapshot,
+  })
 
   if (!tradingEnabled) {
     await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })

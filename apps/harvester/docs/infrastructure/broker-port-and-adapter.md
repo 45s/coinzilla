@@ -273,3 +273,6 @@ The Binance infrastructure adapter forwards the complete callback object unchang
 
 
 After subscription establishment, bootstrap explicitly returns readiness to `AUTHORITATIVE_RECONCILIATION_REQUIRED` (or preserves the execution-accounting failure state). Polling observations do not alter this state; only the existing authoritative snapshot and native event/reconciliation gates can permit trading.
+
+
+The bootstrap helper keeps the accounting-failure check ahead of the PREFLIGHT open-orders read. The separate observation callback does not participate in that gate and cannot change its state.
