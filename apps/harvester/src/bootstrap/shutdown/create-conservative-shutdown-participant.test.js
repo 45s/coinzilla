@@ -346,7 +346,7 @@ test("rechecks a market immediately when late evidence invalidates it during ano
 })
 
 function getMarketBlockersFromShutdownError({ error, symbol } = {}) {
-  return error.shutdownDiagnostics.markets.find((entry) => entry.symbol === symbol)?.blockers ?? []
+  return error?.shutdownDiagnostics?.markets?.find((entry) => entry.symbol === symbol)?.blockers ?? []
 }
 
 function hasBlockerContaining({ blockers, fragment } = {}) {
@@ -827,9 +827,10 @@ test("bounds repeated late-evidence safety re-evaluations and fails closed", asy
   await assert.rejects(
     participant.waitUntilSafe({ signal: controller.signal }),
     (error) => {
-      const blockers = error.shutdownDiagnostics?.markets?.find(
-        (market) => market.symbol === "DOGEUSDT",
-      )?.blockers ?? []
+      const blockers = getMarketBlockersFromShutdownError({
+        error,
+        symbol: "DOGEUSDT",
+      })
       assert.ok(
         blockers.includes("SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED:2"),
         "Repeated marker invalidation must terminate with an explicit bounded-progress blocker.",
