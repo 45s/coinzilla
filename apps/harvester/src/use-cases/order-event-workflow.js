@@ -76,15 +76,52 @@ async function failRecoverySellerTerminalReconciliation({
   return toResult({ error })
 }
 
+async function pauseAndLatchRecoverySellerTerminalFailure({
+  pause,
+  latchRecoverySellerStop,
+  order,
+  reason,
+  error,
+} = {}) {
+  let failure = error
+  try {
+    if (typeof latchRecoverySellerStop !== "function") {
+      throw new Error("Recovery Seller terminal reconciliation requires the durable global STOP workflow")
+    }
+    const stopped = await latchRecoverySellerStop({
+      order,
+      reason,
+      error,
+    })
+    if (stopped?.ok !== true || stopped.data?.durable !== true) {
+      throw stopped?.errors?.[0] ??
+        new Error("Recovery Seller terminal reconciliation STOP was not durably acknowledged")
+    }
+  } catch (stopError) {
+    failure = new AggregateError(
+      [error, stopError],
+      "Recovery Seller terminal reconciliation failed and its global STOP could not be confirmed",
+    )
+  }
+  await pause({
+    symbol: order.market.symbol,
+    reason,
+    error: failure,
+  })
+  return toResult({ error: failure })
+}
+
 async function reconcileRecoverySellerTerminalSell({
   order,
   canonicalFills,
   pause,
+  latchRecoverySellerStop,
   reconcileRecoverySellerMixedSell,
 } = {}) {
   if (typeof reconcileRecoverySellerMixedSell !== "function") {
-    return failRecoverySellerTerminalReconciliation({
+    return pauseAndLatchRecoverySellerTerminalFailure({
       pause,
+      latchRecoverySellerStop,
       order,
       reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_UNAVAILABLE",
       error: new Error("Recovery Seller terminal SELL requires the mixed-SELL accounting workflow"),
@@ -97,13 +134,13 @@ async function reconcileRecoverySellerTerminalSell({
   if (result?.ok === true) {
     return result
   }
-  await pause({
-    symbol: order.market.symbol,
+  return pauseAndLatchRecoverySellerTerminalFailure({
+    pause,
+    latchRecoverySellerStop,
+    order,
     reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_FAILED",
-    error: result?.errors?.[0],
-  })
-  return result ?? toResult({
-    error: new Error("Recovery Seller terminal mixed-SELL reconciliation failed"),
+    error: result?.errors?.[0] ??
+      new Error("Recovery Seller terminal mixed-SELL reconciliation failed"),
   })
 }
 
@@ -111,6 +148,7 @@ function createRecoverySellerTerminalOrderReconciler({
   state,
   pause,
   reconcileRecoverySellerMixedSell,
+  latchRecoverySellerStop,
 } = {}) {
   return async ({ order, canonicalFills } = {}) => {
     const ownership = state.registry?.getOwnership?.({
@@ -131,6 +169,7 @@ function createRecoverySellerTerminalOrderReconciler({
       order,
       canonicalFills,
       pause,
+      latchRecoverySellerStop,
       reconcileRecoverySellerMixedSell,
     })
     if (result?.ok === true) {
