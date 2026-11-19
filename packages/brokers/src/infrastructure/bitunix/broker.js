@@ -1108,14 +1108,17 @@ export class BitunixSpotBroker extends CoreBroker {
         where: "BitunixSpotBroker.cancelOrder()",
         error,
       })
-      const outcome = cancelAcknowledged
-        ? "CONFIRMED"
-        : error?.kind === "exchange"
-          ? "REJECTED"
-          : getBrokerMutationOutcome({
-            error,
-            requestDispatched,
-          })
+      let outcome
+      if (cancelAcknowledged) {
+        outcome = "CONFIRMED"
+      } else if (error?.kind === "exchange") {
+        outcome = "REJECTED"
+      } else {
+        outcome = getBrokerMutationOutcome({
+          error,
+          requestDispatched,
+        })
+      }
       return {
         ...toResult({ errors: [error] }),
         mutationOutcome: outcome,
