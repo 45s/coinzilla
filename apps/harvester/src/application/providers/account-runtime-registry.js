@@ -82,6 +82,7 @@ function createAccountTradingState() {
   let recoveryLedgers = new Map()
   let orderRegistry = OrderRegistry.empty()
   let legacyPositions = new Map()
+  let recoverySellerBuyExecutionByCycle = new Map()
   let updateQueue = Promise.resolve()
   const state = createAccountStateCollections()
   state.runTransition = createSerializedAccountTransitionQueue()
@@ -116,6 +117,14 @@ function createAccountTradingState() {
     setValue: (value) => { legacyPositions = value },
     isValid: (value) => value instanceof Map,
     errorMessage: "Account workflow legacyPositions must be a Map",
+  })
+  defineValidatedStateProperty({
+    state,
+    property: "recoverySellerBuyExecutionByCycle",
+    getValue: () => recoverySellerBuyExecutionByCycle,
+    setValue: (value) => { recoverySellerBuyExecutionByCycle = value },
+    isValid: (value) => value instanceof Map,
+    errorMessage: "Account workflow recoverySellerBuyExecutionByCycle must be a Map",
   })
   defineValidatedStateProperty({
     state,

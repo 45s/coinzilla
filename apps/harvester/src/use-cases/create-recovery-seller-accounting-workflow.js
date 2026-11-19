@@ -448,9 +448,6 @@ function createRecoverySellerWorkflowState({
   if (!(state.orderRegistry instanceof OrderRegistry)) {
     throw new TypeError("initialOrderRegistry must be an OrderRegistry")
   }
-  if (state.recoverySellerBuyExecutionByCycle === undefined) {
-    state.recoverySellerBuyExecutionByCycle = new Map()
-  }
   if (!(state.recoverySellerBuyExecutionByCycle instanceof Map)) {
     throw new TypeError("sharedState.recoverySellerBuyExecutionByCycle must be a Map")
   }
