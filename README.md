@@ -74,7 +74,7 @@ pnpm --filter @coinzilla/utils test:watch
 
 ## Bitunix Spot health check
 
-To run the local, read-only Bitunix Spot health check and publish a sanitized diagnostic report, configure `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` in the repository-root `.env.development`, then run:
+To run the authenticated, read-only Bitunix Spot health check and publish a sanitized diagnostic report, configure both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` in the repository-root `.env.development`, then run:
 
 ```sh
 pnpm bitunix:health
