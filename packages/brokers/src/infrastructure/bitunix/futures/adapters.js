@@ -148,7 +148,9 @@ function adaptOrderBook(data) {
 }
 
 export function adaptFuturesTradingPairs(data) {
-  return adaptRows(data, {
+  return adaptRows({
+    data,
+    spec: {
     strings: ["symbol", "base", "quote", "symbolStatus"],
     decimals: [
       "minTradeVolume",
@@ -164,15 +166,21 @@ export function adaptFuturesTradingPairs(data) {
     int64: ["launchTime", "delistTime"],
     booleans: ["isApiSupported"],
     path: "market/trading_pairs",
-  }, "market/trading_pairs")
+  },
+    path: "market/trading_pairs",
+  })
 }
 
 export function adaptFuturesTickers(data) {
-  return adaptRows(data, {
+  return adaptRows({
+    data,
+    spec: {
     strings: ["symbol"],
     decimals: ["markPrice", "lastPrice", "open", "last", "quoteVol", "baseVol", "high", "low"],
     path: "market/tickers",
-  }, "market/tickers")
+  },
+    path: "market/tickers",
+  })
 }
 
 export function adaptFuturesDepth(data) {
@@ -180,16 +188,22 @@ export function adaptFuturesDepth(data) {
 }
 
 export function adaptFuturesKlines(data) {
-  return adaptRows(data, {
+  return adaptRows({
+    data,
+    spec: {
     strings: ["type"],
     decimals: ["open", "high", "low", "close", "quoteVol", "baseVol"],
     int64: ["time"],
     path: "market/kline",
-  }, "market/kline")
+  },
+    path: "market/kline",
+  })
 }
 
 export function adaptFuturesFundingRates(data) {
-  return adaptRows(data, {
+  return adaptRows({
+    data,
+    spec: {
     strings: ["symbol"],
     decimals: [
       "markPrice",
@@ -202,28 +216,40 @@ export function adaptFuturesFundingRates(data) {
     integers: ["fundingInterval"],
     int64: ["nextFundingTime"],
     path: "market/funding_rate",
-  }, "market/funding_rate")
+  },
+    path: "market/funding_rate",
+  })
 }
 
 export function adaptFuturesFundingHistory(data) {
-  return adaptRows(data, {
+  return adaptRows({
+    data,
+    spec: {
     decimals: ["fundingRate", "markPrice"],
     int64: ["fundingTime"],
     path: "market/funding_rate/history",
-  }, "market/funding_rate/history")
+  },
+    path: "market/funding_rate/history",
+  })
 }
 
 export function adaptFuturesPositionTiers(data) {
-  return adaptRows(data, {
+  return adaptRows({
+    data,
+    spec: {
     strings: ["symbol"],
     decimals: ["startValue", "endValue", "maintenanceMarginRate"],
     integers: ["level", "leverage"],
     path: "position/tiers",
-  }, "position/tiers")
+  },
+    path: "position/tiers",
+  })
 }
 
 export function adaptFuturesAccounts(data) {
-  return adaptRows(data, {
+  return adaptRows({
+    data,
+    spec: {
     strings: ["marginCoin", "positionMode"],
     decimals: [
       "available",
@@ -235,19 +261,26 @@ export function adaptFuturesAccounts(data) {
       "bonus",
     ],
     path: "account",
-  }, "account")
+  },
+    path: "account",
+  })
 }
 
 export function adaptFuturesTradingSettings(data) {
-  return adaptRows(data, {
+  return adaptRows({
+    data,
+    spec: {
     strings: ["symbol", "marginCoin", "marginMode"],
     integers: ["leverage", "longLeverage", "shortLeverage"],
     path: "account/trading_settings",
-  }, "account/trading_settings")
+  },
+    path: "account/trading_settings",
+  })
 }
 
 export function adaptFuturesLeverageMarginMode(data) {
-  return validateRecord(data, {
+  return validateRecord({
+    record: data,
     strings: ["symbol", "marginCoin", "marginMode"],
     integers: ["leverage"],
     path: "account/get_leverage_margin_mode",
@@ -255,14 +288,17 @@ export function adaptFuturesLeverageMarginMode(data) {
 }
 
 export function adaptFuturesPositionMode(data) {
-  return validateRecord(data, {
+  return validateRecord({
+    record: data,
     strings: ["positionMode"],
     path: "account/position_mode",
   })
 }
 
 export function adaptFuturesPendingPositions(data) {
-  return adaptRows(data, {
+  return adaptRows({
+    data,
+    spec: {
     strings: ["positionId", "symbol", "side", "marginMode", "positionMode"],
     decimals: [
       "qty",
@@ -279,11 +315,14 @@ export function adaptFuturesPendingPositions(data) {
     integers: ["leverage"],
     int64: ["ctime", "mtime", "subAccountId"],
     path: "position/get_pending_positions",
-  }, "position/get_pending_positions")
+  },
+    path: "position/get_pending_positions",
+  })
 }
 
 export function adaptFuturesHistoryPositions(data) {
-  return adaptPage(data, {
+  return adaptPage({
+    data,
     listField: "positionList",
     spec: {
       strings: ["positionId", "symbol", "side", "marginMode", "positionMode"],
@@ -334,12 +373,12 @@ function normalizeOrderType(record) {
   }
 }
 
-function adaptOrderRows(data, { listField,
-  path }) {
+function adaptOrderRows({ data, listField, path }) {
   requireRecord(data, path)
   const rows = requireArray(data[listField], `${path}.${listField}`)
   const items = Object.freeze(rows.map((row, index) => (
-    validateRecord(normalizeOrderType(row), {
+    validateRecord({
+      record: normalizeOrderType(row),
       ...ORDER_SPEC,
       path: `${path}.${listField}[${index}]`,
     })
@@ -352,14 +391,16 @@ function adaptOrderRows(data, { listField,
 }
 
 export function adaptFuturesPendingOrders(data) {
-  return adaptOrderRows(data, {
+  return adaptOrderRows({
+    data,
     listField: "orderList",
     path: "trade/get_pending_orders",
   })
 }
 
 export function adaptFuturesHistoryOrders(data) {
-  return adaptOrderRows(data, {
+  return adaptOrderRows({
+    data,
     listField: "orderList",
     path: "trade/get_history_orders",
   })
@@ -369,15 +410,16 @@ export function adaptFuturesOrderDetail(data) {
   if (data === null) {
     return null
   }
-  return validateRecord(normalizeOrderType(data), {
+  return validateRecord({
+    record: normalizeOrderType(data),
     ...ORDER_SPEC,
     path: "trade/get_order_detail",
   })
 }
 
 export function adaptFuturesHistoryTrades(data) {
-  requireRecord(data, "trade/get_history_trades")
-  const trades = requireArray(data.tradeList, "trade/get_history_trades.tradeList")
+  requireRecord({ value: data, field: "trade/get_history_trades" })
+  const trades = requireArray({ value: data.tradeList, field: "trade/get_history_trades.tradeList" })
   const tradeList = Object.freeze(trades.map((trade, index) => {
     const normalized = normalizeOrderType(trade)
     return validateRecord(normalized, {
@@ -390,7 +432,7 @@ export function adaptFuturesHistoryTrades(data) {
       booleans: ["reduceOnly"],
     })
   }))
-  requireInt64(data, "total", "trade/get_history_trades")
+  requireInt64({ record: data, field: "total", path: "trade/get_history_trades" })
   return Object.freeze({
     ...data,
     tradeList,
@@ -404,20 +446,29 @@ const TP_SL_SPEC = Object.freeze({
 })
 
 export function adaptFuturesPendingTpSlOrders(data) {
-  return adaptRows(data, {
+  return adaptRows({
+    data,
+    spec: {
     ...TP_SL_SPEC,
     path: "tpsl/get_pending_orders",
-  }, "tpsl/get_pending_orders")
+  },
+    path: "tpsl/get_pending_orders",
+  })
 }
 
 export function adaptFuturesHistoryTpSlOrders(data) {
   if (Array.isArray(data)) {
-    return adaptRows(data, {
+    return adaptRows({
+    data,
+    spec: {
       ...TP_SL_SPEC,
       path: "tpsl/get_history_orders",
-    }, "tpsl/get_history_orders")
+    },
+    path: "tpsl/get_history_orders",
+  })
   }
-  return adaptPage(data, {
+  return adaptPage({
+    data,
     listField: "orderList",
     spec: TP_SL_SPEC,
     path: "tpsl/get_history_orders",
@@ -425,7 +476,8 @@ export function adaptFuturesHistoryTpSlOrders(data) {
 }
 
 export function adaptFuturesCopyTradingAssets(data) {
-  return validateRecord(data, {
+  return validateRecord({
+    record: data,
     decimals: ["available", "maxTransfer"],
     path: "copyTrading/asset/query",
   })
