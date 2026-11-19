@@ -472,3 +472,42 @@ test("Bitunix Spot funds mutations classify malformed success IDs as outcome unk
   assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
   assert.equal(calls.length, 1)
 })
+
+test("Bitunix Spot cancellation rejects a missing acknowledgement payload instead of confirming it", async () => {
+  const { broker, calls } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [CANCEL_WITHDRAW_PATH]: undefined,
+      [CANCEL_INTERNAL_TRANSFER_PATH]: undefined,
+    },
+  })
+
+  const withdrawalResult = await broker.cancelWithdrawal({
+    withdrawId: "1909879608889339906",
+  })
+  const transferResult = await broker.cancelInternalTransfer({
+    insideTransferId: "1909921053381820417",
+  })
+
+  assert.equal(
+    withdrawalResult.ok,
+    false,
+    "withdrawal cancellation must reject a response that omits the documented null data field",
+  )
+  assert.equal(
+    withdrawalResult.mutationOutcome,
+    "OUTCOME_UNKNOWN",
+    "a malformed withdrawal cancellation acknowledgement must not be reported as confirmed",
+  )
+  assert.equal(
+    transferResult.ok,
+    false,
+    "internal-transfer cancellation must reject a response that omits the documented null data field",
+  )
+  assert.equal(
+    transferResult.mutationOutcome,
+    "OUTCOME_UNKNOWN",
+    "a malformed internal-transfer cancellation acknowledgement must not be reported as confirmed",
+  )
+  assert.equal(calls.length, 2, "each malformed acknowledgement must correspond to exactly one dispatched request")
+})
