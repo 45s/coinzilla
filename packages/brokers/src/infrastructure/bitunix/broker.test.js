@@ -2624,3 +2624,246 @@ test("Bitunix Spot funds transfer rejects invalid asset, direction, and quantity
     assert.equal(calls.length, 0, "invalid funds-transfer input must not reach the exchange")
   }
 })
+
+
+const INTERNAL_TRANSFER_PATH = "/api/spot/v1/inside_transfer"
+const CANCEL_INTERNAL_TRANSFER_PATH = "/api/spot/v1/inside_transfer/cancel"
+
+test("Bitunix Spot internal transfer is separately gated and preserves an int64 recipient UID", async () => {
+  const { broker: disabledBroker, calls: disabledCalls } = createBroker({
+    allowLiveOrderMutations: true,
+  })
+  const disabled = await disabledBroker.requestInternalTransfer({
+    coin: "USDT",
+    amount: "10.00000000",
+    toType: "uid",
+    toUid: "9223372036854775807",
+  })
+
+  assert.equal(disabled.ok, false, "internal transfers must not inherit the order-mutation opt-in")
+  assert.equal(disabled.mutationOutcome, "NOT_SENT", "a disabled internal transfer must be classified as not sent")
+  assert.equal(disabledCalls.length, 0, "a disabled internal transfer must not contact the exchange")
+
+  const { broker, calls } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [INTERNAL_TRANSFER_PATH]: "1909921053381820417",
+    },
+  })
+  const result = await broker.requestInternalTransfer({
+    outBizId: "coinzilla-transfer-001",
+    coin: "USDT",
+    amount: "10.00000000",
+    toType: "uid",
+    toUid: "9223372036854775807",
+    remark: "account rebalance",
+  })
+
+  assert.equal(result.ok, true, "a successful Bitunix internal-transfer acknowledgement must return success")
+  assert.equal(result.data.insideTransferId, "1909921053381820417", "the exchange transfer ID must be preserved exactly")
+  assert.equal(result.data.outBizId, "coinzilla-transfer-001", "the caller's idempotency key must be returned for reconciliation")
+  assert.equal(result.mutationOutcome, "CONFIRMED", "a successful internal-transfer acknowledgement must be classified as confirmed")
+  assert.deepEqual(calls, [{
+    method: "POST",
+    path: INTERNAL_TRANSFER_PATH,
+    options: {
+      body: {
+        outBizId: "coinzilla-transfer-001",
+        coin: "USDT",
+        amount: "10.00000000",
+        toType: "uid",
+        toUid: "9223372036854775807",
+        remark: "account rebalance",
+      },
+      authenticated: true,
+      stateChanging: true,
+    },
+  }], "internal transfer must use one signed state-changing request with the exact UID and idempotency key")
+})
+
+test("Bitunix Spot internal transfer supports phone and email recipient modes", async () => {
+  const requests = [
+    {
+      input: {
+        coin: "USDT",
+        amount: "1",
+        toType: "phone",
+        toPhoneCountryCode: "+1",
+        toPhoneNumber: "5551234567",
+      },
+      body: {
+        coin: "USDT",
+        amount: "1",
+        toType: "phone",
+        toPhoneCountryCode: "+1",
+        toPhoneNumber: "5551234567",
+      },
+    },
+    {
+      input: {
+        coin: "USDT",
+        amount: "2",
+        toType: "email",
+        toEmail: "recipient@example.com",
+      },
+      body: {
+        coin: "USDT",
+        amount: "2",
+        toType: "email",
+        toEmail: "recipient@example.com",
+      },
+    },
+  ]
+
+  for (const { input, body } of requests) {
+    const { broker, calls } = createBroker({
+      allowLiveFundsMutations: true,
+      responses: {
+        [INTERNAL_TRANSFER_PATH]: "1909921053381820417",
+      },
+    })
+    const result = await broker.requestInternalTransfer(input)
+
+    assert.equal(result.ok, true, `valid ${input.toType} recipient transfer must succeed`)
+    assert.deepEqual(calls[0].options.body, body, `the ${input.toType} recipient fields must be sent unchanged`)
+  }
+})
+
+test("Bitunix Spot internal transfer rejects mismatched recipients, malformed idempotency keys and amounts before dispatch", async () => {
+  const invalidRequests = [
+    {
+      coin: "USDT",
+      amount: "1",
+      toType: "uid",
+    },
+    {
+      coin: "USDT",
+      amount: "1",
+      toType: "uid",
+      toUid: "not-a-uid",
+    },
+    {
+      coin: "USDT",
+      amount: "1",
+      toType: "uid",
+      toUid: "9223372036854775807",
+      toEmail: "unexpected@example.com",
+    },
+    {
+      coin: "USDT",
+      amount: "1",
+      toType: "phone",
+      toPhoneNumber: "5551234567",
+    },
+    {
+      coin: "USDT",
+      amount: "1",
+      toType: "email",
+      toEmail: "",
+    },
+    {
+      outBizId: "x".repeat(33),
+      coin: "USDT",
+      amount: "1",
+      toType: "email",
+      toEmail: "recipient@example.com",
+    },
+    {
+      coin: "USDT",
+      amount: "0",
+      toType: "email",
+      toEmail: "recipient@example.com",
+    },
+    {
+      coin: "USDT",
+      amount: "1e-8",
+      toType: "email",
+      toEmail: "recipient@example.com",
+    },
+  ]
+
+  for (const request of invalidRequests) {
+    const { broker, calls } = createBroker({
+      allowLiveFundsMutations: true,
+    })
+    const result = await broker.requestInternalTransfer(request)
+
+    assert.equal(result.ok, false, `invalid internal-transfer input must fail locally: ${JSON.stringify(request)}`)
+    assert.equal(result.mutationOutcome, "NOT_SENT", "invalid internal-transfer input must be classified as not sent")
+    assert.equal(calls.length, 0, "invalid internal-transfer input must not reach the exchange")
+  }
+})
+
+test("Bitunix Spot internal transfer cancellation verifies the final cancelled history state", async () => {
+  const insideTransferId = "1909921053381820417"
+  const { broker, calls } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [CANCEL_INTERNAL_TRANSFER_PATH]: null,
+      [WITHDRAWAL_HISTORY_PATH]: [{
+        id: insideTransferId,
+        type: "inside_transfer_out",
+        coin: "USDT",
+        amount: "10.00000000",
+        status: "cancelled",
+        ctime: 1744191503000,
+      }],
+    },
+  })
+
+  const result = await broker.cancelInternalTransfer({
+    insideTransferId,
+  })
+
+  assert.equal(result.ok, true, "a history-confirmed internal-transfer cancellation must return success")
+  assert.equal(result.data.status, "cancelled", "the authoritative cancelled state must be returned")
+  assert.equal(result.mutationOutcome, "CONFIRMED", "a history-confirmed cancellation must be classified as confirmed")
+  assert.deepEqual(calls, [
+    {
+      method: "POST",
+      path: CANCEL_INTERNAL_TRANSFER_PATH,
+      options: {
+        body: { insideTransferId },
+        authenticated: true,
+        stateChanging: true,
+      },
+    },
+    {
+      method: "POST",
+      path: WITHDRAWAL_HISTORY_PATH,
+      options: {
+        body: {
+          id: insideTransferId,
+          type: "inside_transfer_out",
+        },
+        authenticated: true,
+        stateChanging: false,
+      },
+    },
+  ], "internal-transfer cancellation must be followed by one signed history verification")
+})
+
+test("Bitunix Spot internal-transfer cancellation remains unknown until history confirms cancellation", async () => {
+  const insideTransferId = "1909921053381820417"
+  const { broker } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [CANCEL_INTERNAL_TRANSFER_PATH]: null,
+      [WITHDRAWAL_HISTORY_PATH]: [{
+        id: insideTransferId,
+        type: "inside_transfer_out",
+        coin: "USDT",
+        amount: "10.00000000",
+        status: "pending",
+        ctime: 1744191503000,
+      }],
+    },
+  })
+
+  const result = await broker.cancelInternalTransfer({
+    insideTransferId,
+  })
+
+  assert.equal(result.ok, false, "a non-cancelled transfer history row must not be reported as cancelled")
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN", "an unconfirmed internal-transfer cancellation must remain unknown")
+})
