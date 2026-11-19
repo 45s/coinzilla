@@ -116,6 +116,14 @@ test("shares one account Portfolio, OrderRegistry, and serialized queue across C
     accountRuntime.state.portfolio = {}
   }, /must be a Portfolio/)
 
+  const nextRecoveryLedgers = new Map()
+  accountRuntime.state.recoveryLedgers = nextRecoveryLedgers
+  assert.equal(conservative.getRecoveryLedger({ marketId: "BTCUSDT" }), undefined)
+  assert.equal(accountRuntime.state.recoveryLedgers, nextRecoveryLedgers)
+  assert.throws(() => {
+    accountRuntime.state.recoveryLedgers = []
+  }, /must be a Map/)
+
   const queuedTransition = Promise.resolve()
   accountRuntime.state.updateQueue = queuedTransition
   assert.equal(accountRuntime.state.updateQueue, queuedTransition)
