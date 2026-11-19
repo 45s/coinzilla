@@ -566,3 +566,34 @@ test("Bitunix Spot WebSocket client reconnects the same instance with a fresh tr
 
   await client.disconnect()
 })
+
+
+test("Bitunix Spot WebSocket client can reconnect after a synchronous transport connect failure", async () => {
+  const transports = []
+  const client = new BitunixSpotWebSocketClient({
+    apiKey: "key",
+    apiSecret: "secret",
+    transportFactory: () => {
+      const transport = new FakeTransport()
+      if (transports.length === 0) {
+        transport.connect = () => {
+          throw new Error("synchronous transport connect failure")
+        }
+      }
+      transports.push(transport)
+      return transport
+    },
+  })
+
+  await assert.rejects(client.connect(), (error) => {
+    assert.ok(error instanceof BitunixWebSocketError, "synchronous transport failures must use the broker-owned error type")
+    assert.equal(error.cause?.message, "synchronous transport connect failure", "the synchronous transport failure must remain the native cause")
+    return true
+  })
+  assert.equal(client.state, "closed", "a synchronous connect failure must leave the client closed")
+
+  await client.connect()
+  assert.equal(transports.length, 2, "a subsequent connect must create a fresh transport after the failed attempt")
+  assert.equal(client.state, "open", "the client must recover after a synchronous transport connect failure")
+  await client.disconnect()
+})
