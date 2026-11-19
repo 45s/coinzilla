@@ -251,6 +251,9 @@ const LIVE_MUTATION_TYPES = new Set([
  * @returns {BrokerCapabilities}
  */
 export function createBitunixBrokerCapabilities({ allowLiveOrderMutations = false } = {}) {
+  if (typeof allowLiveOrderMutations !== "boolean") {
+    throw new TypeError("Bitunix Spot allowLiveOrderMutations must be a boolean")
+  }
   const capabilities = BITUNIX_SPOT_CAPABILITIES.map((capability) => {
     if (!LIVE_MUTATION_TYPES.has(capability.type) || allowLiveOrderMutations) {
       return capability
