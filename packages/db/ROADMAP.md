@@ -14,7 +14,7 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 ## Application-owned relational schema infrastructure — #1486
 
-**Status: Implementation complete.** [PR #1489](https://github.com/45s/coinzilla/pull/1489) records the audit, compatibility-preserving implementation, regression tests and required verification. Merging it into `develop` closes this roadmap item; the completion policy below remains the merge gate.
+**Status: Done.** [PR #1489](https://github.com/45s/coinzilla/pull/1489) merged into `develop` on 2026-11-19 as `ee38250521d6386ce53b080b4fb6414812cf9e91`. All required checks passed on the exact final PR head before merge.
 
 The audit confirmed that the low-level SQL, prepared-statement, transaction, migration, backup and restore APIs already exist. The demonstrated gaps are migration callback mutation detection and rejection of a pending lower version after a higher version has already been applied.
 
