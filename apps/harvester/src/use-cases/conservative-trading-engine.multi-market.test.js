@@ -366,7 +366,10 @@ function makeOpenOrderSnapshot({ ownedOrder }) {
   return openOrder
 }
 
-async function createReconciliationHarness({ symbols = ["DOGEUSDT", "SOLUSDT"] } = {}) {
+async function createReconciliationHarness({
+  symbols = ["DOGEUSDT", "SOLUSDT"],
+  startSymbols = symbols,
+} = {}) {
   const harnessState = { engine: undefined }
   const brokerOverrides = {
     getOpenOrders: async ({ symbol }) => ({
@@ -392,7 +395,7 @@ async function createReconciliationHarness({ symbols = ["DOGEUSDT", "SOLUSDT"] }
   harnessState.engine = harness.engine
   await startBothMarkets({
     engine: harnessState.engine,
-    symbols,
+    symbols: startSymbols,
   })
   return harness
 }
@@ -1758,7 +1761,8 @@ test("symbol-scoped REST reconciliation still rejects a same-market fill racing 
 
 test("explicit reconciliation scope detects an order added in a requested market absent from the initial snapshot", async () => {
   const { engine } = await createReconciliationHarness({
-    symbols: ["DOGEUSDT"],
+    symbols: ["DOGEUSDT", "SOLUSDT"],
+    startSymbols: ["DOGEUSDT"],
   })
 
   const result = await engine.reconcileOwnedOrders({
