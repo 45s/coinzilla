@@ -199,6 +199,38 @@ describe("ensure custom error messages", () => {
     }
   })
 
+  it("does not replace assertion-configuration errors with errMsg", () => {
+    assert.throws(
+      () => ensure.integerInRange({
+        value: 1,
+        min: 2,
+        max: 1,
+        errMsg: "Domain validation failed",
+      }),
+      {
+        name: "TypeError",
+        message: "min must be less than or equal to max",
+      },
+      "Invalid range configuration must keep its own diagnostic instead of being disguised as a value-validation failure",
+    )
+  })
+
+  it("does not rewrite errors thrown by chain callbacks", () => {
+    const callbackError = new Error("transform callback failed")
+    assert.throws(
+      () => ensure.chain({
+        value: [1],
+        errMsg: "Domain validation failed",
+      }).map({
+        transform() {
+          throw callbackError
+        },
+      }),
+      (error) => error === callbackError,
+      "Custom validation diagnostics must not replace the original error thrown by a caller-owned transformation",
+    )
+  })
+
   it("retains default diagnostics when no custom message is supplied", () => {
     assert.throws(
       () => ensure.object({
