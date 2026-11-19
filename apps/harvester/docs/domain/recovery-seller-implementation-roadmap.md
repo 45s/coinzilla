@@ -327,3 +327,17 @@ flowchart TD
 ~~~
 
 The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged in PR #1276; PR #1379 adds independent profitability gates and allocation-safe SELL price planning; PR #1127 completes the pure pre-submission SELL evaluator and owner-approved filter/order-type/fee policy. RS remains non-executable. RS-4 must wire the policy into the shared engine, and RS-5 must prove the offline lifecycle before runtime registration or exchange operations. Advanced lifecycle functionality remains deferred under FITDIB.
+
+
+## RS-4 configuration boundary — PR #1476
+
+- [x] Add a separate operator-owned `recoverySellerPairs` map; keep it empty by default.
+- [x] Register `RS_recoverySeller` in the single application config with `enabled: false`.
+- [x] Validate explicit per-market legacy historical basis, additive `sellQuantity`, strategy BUY sizing/budget, fee and environment settings.
+- [x] Resolve RS exchange precision from the same token specification registry as CG.
+- [ ] Route RS strategy/market intents into the shared serialized Trading Engine.
+- [ ] Share account Portfolio, OrderRegistry, snapshot, reservations and canonical fill processing without sharing strategy budgets/Positions.
+- [ ] Prove same-market and different-market CG+RS concurrency offline.
+- [ ] Complete RS-5 full lifecycle, failure, replay and STOP-reset acceptance tests.
+
+RS configuration is not execution permission by itself. Keep RS disabled until the full RS-4/RS-5 acceptance is complete.
