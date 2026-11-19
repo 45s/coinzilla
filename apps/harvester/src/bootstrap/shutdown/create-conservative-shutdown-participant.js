@@ -457,16 +457,83 @@ function throwForUnsafeConservativeMarkets({ failedMarkets } = {}) {
   throw error
 }
 
+async function secureUnsafeMarket({
+  engine,
+  eventPublisher,
+  drainUserDataEvents,
+  getShutdownBlockers,
+  logger,
+  symbol,
+  initialDrainBlockers,
+  signal,
+} = {}) {
+  try {
+    throwIfShutdownAborted(signal)
+    const result = await secureMarket({
+      engine,
+      eventPublisher,
+      drainUserDataEvents,
+      getShutdownBlockers,
+      logger,
+      symbol,
+      initialDrainBlockers,
+      signal,
+    })
+    return {
+      symbol,
+      result,
+    }
+  } catch (error) {
+    return {
+      symbol,
+      result: {
+        ok: false,
+        blockers: [error?.code ?? error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"],
+        error,
+      },
+    }
+  }
+}
+
+async function secureUnsafeMarkets({
+  engine,
+  snapshot,
+  eventPublisher,
+  drainUserDataEvents,
+  getShutdownBlockers,
+  logger,
+  initialDrainBlockers,
+  signal,
+} = {}) {
+  const unsafeMarkets = initialDrainBlockers.length > 0
+    ? snapshot.markets
+    : snapshot.markets.filter((market) => market.status !== "SAFE_TO_SHUTDOWN")
+  const results = await Promise.all(unsafeMarkets.map(({ symbol }) => secureUnsafeMarket({
+    engine,
+    eventPublisher,
+    drainUserDataEvents,
+    getShutdownBlockers,
+    logger,
+    symbol,
+    initialDrainBlockers,
+    signal,
+  })))
+  const failedMarkets = results
+    .filter(({ result }) => result.ok !== true)
+    .map(({ symbol, result }) => createMarketFailure({ symbol, result }))
+  throwForUnsafeConservativeMarkets({ failedMarkets })
+  return engine.getShutdownSafetySnapshot()
+}
+
 async function waitForConservativeMarkets({
-engine,
-eventPublisher,
-drainUserDataEvents,
-getShutdownBlockers,
-logger,
-signal,
+  engine,
+  eventPublisher,
+  drainUserDataEvents,
+  getShutdownBlockers,
+  logger,
+  signal,
 } = {}) {
   throwIfShutdownAborted(signal)
-  // Start cancelling every known owned BUY before any service is stopped.
   await runStage({
     stage: "INITIAL_OWNED_BUY_CANCELLATION",
     operation: () => engine.cancelOwnedBuyOrdersForShutdown(),
@@ -477,57 +544,16 @@ signal,
 
   while (true) {
     throwIfShutdownAborted(signal)
-    const unsafeMarkets = snapshot.markets.filter((market) =>
-      market.status !== "SAFE_TO_SHUTDOWN")
-    if (unsafeMarkets.length === 0) {
-      return {
-        ok: true,
-        data: {
-          markets: snapshot.markets,
-          revision: snapshot.revision,
-        },
-      }
-    }
-
-    const results = await Promise.all(unsafeMarkets.map(async (market) => {
-      try {
-        throwIfShutdownAborted(signal)
-        const result = await secureMarket({
-          engine,
-          eventPublisher,
-          drainUserDataEvents,
-          getShutdownBlockers,
-          logger,
-          symbol: market.symbol,
-          initialDrainBlockers,
-          signal,
-        })
-        return {
-          symbol: market.symbol,
-          result,
-        }
-      } catch (error) {
-        return {
-          symbol: market.symbol,
-          result: {
-            ok: false,
-            blockers: [error?.code ?? error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"],
-            error,
-          },
-        }
-      }
-    }))
-
-    const failedMarkets = results
-      .filter(({ result }) => result.ok !== true)
-      .map(({ symbol, result }) => createMarketFailure({ symbol,
-        result }))
-    snapshot = engine.getShutdownSafetySnapshot()
-
-    throwForUnsafeConservativeMarkets({ failedMarkets })
-
-    // Late execution evidence can invalidate a market while another market
-    // is being audited. Re-evaluate it immediately; never use a quiet timer.
+    snapshot = await secureUnsafeMarkets({
+      engine,
+      snapshot,
+      eventPublisher,
+      drainUserDataEvents,
+      getShutdownBlockers,
+      logger,
+      initialDrainBlockers,
+      signal,
+    })
     if (snapshot.markets.every((market) => market.status === "SAFE_TO_SHUTDOWN")) {
       return {
         ok: true,
