@@ -255,6 +255,13 @@ It validates symbol, interval, decimals, OHLC invariants and timezone-qualified 
 - **Reference audit:** the inspected JKorf/Bitunix.Net, `samanzamani/bitunix-mcp`, `0xCherryBlueZu/bitunix`, and StockSharp sources did not expose a matching REST user-info method/fixture. The existing Coinzilla `BitunixSpotWebSocketClient.getUserInfo()` uses the documented `user.info` RPC, but it is a separate transport and does not provide the REST broker method.
 - **Coinzilla mapping:** `BitunixSpotBroker.getUserInfo()` is a provider-specific signed GET extension. The REST parser converts raw numeric `uid` tokens to strings before `JSON.parse`; the adapter preserves null/omitted values, normalizes safe numeric IDs to strings, and rejects malformed or out-of-range signed-int64 IDs. The result is not a balance/account snapshot and has no source timestamp.
 
+### Tax filing and historical reporting reference record — PR #1468
+
+- **Official protocol:** [Spot Tax Filing Interface](https://www.bitunix.com/api-docs/spots/en_us/tax-filing/) documents signed `POST /api/spot/v1/tax/filing/page`. UTC ISO-8601 ranges may span at most 365 days; page starts at 1; default/max page size is 1000. The response contains `records`, `total`, `current`, `size`, and `pages`.
+- **Official data types:** [Tax data type codes](https://www.bitunix.com/api-docs/spots/en_us/tax_data_type_codes/) includes Spot `BUY_ORDER`/`SELL_ORDER`, `DEPOSIT`, `WITHDRAWAL`, `INTERNAL_TRANSFER`, `TRANSFER`, and futures `PNL`/`FUNDING_COST` among other platform types. Only enabled type codes are supported; Coinzilla passes codes through rather than freezing a stale enum list.
+- **Reference audit:** no matching `tax/filing/page` method or endpoint fixture was found in the inspected JKorf/Bitunix.Net, `samanzamani/bitunix-mcp`, `0xCherryBlueZu/bitunix`, or StockSharp source snapshots. This is an official-documentation-only implementation, not evidence that the endpoint is unsupported.
+- **Coinzilla mapping:** `BitunixSpotBroker.getTaxFilingHistory()` sends one signed, explicitly read-only POST per call. It validates UTC time bounds and the 365-day limit, validates page/pageSize and optional dataTypeCodes, validates the pagination envelope and all documented record fields, preserves exact financial strings and `—` placeholders, and freezes returned page/records. It does not auto-fetch subsequent pages or invent a complete history from one response.
+
 These are Bitunix-only REST extensions, not Binance parity methods. Keep exact decimal fields as strings; do not treat descriptive precision fields as tick/step filters. Token/network metadata is not authorization to implement transfers or withdrawals.
 
 ### Later, only after a separate contract review
