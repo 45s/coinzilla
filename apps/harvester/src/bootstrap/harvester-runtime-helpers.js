@@ -286,6 +286,7 @@ export function createHarvesterTradingEngine({
   onOperationalStateStrategyMarketPaused,
   logger,
   recoveredState,
+  sharedAccountState,
   isMarketPriceFresh,
   isMarketBookFresh,
 } = {}) {
@@ -316,6 +317,7 @@ export function createHarvesterTradingEngine({
     onOperationalStateCancellationOutcome,
     onOperationalStateStrategyMarketPaused,
     logger,
+    sharedAccountState,
     initialState: createRecoveredTradingEngineState(recoveredState),
   })
 }

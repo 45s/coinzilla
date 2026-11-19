@@ -23,6 +23,7 @@ import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { createAccountIntegritySafetyHalt } from "./create-account-integrity-safety-halt.js"
 import { createHarnessBroker } from "./conservative-trading-engine-harness.js"
 import { conservativeStrategyPolicy } from "../domain/strategies/conservative/strategy-policy.js"
+import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
 import { addDecimal, compareDecimal, multiplyDecimal, subtractDecimal } from "@coinzilla/utils"
 import { evaluateConservativeStrategy } from "../domain/strategies/conservative/strategy.js"
 
@@ -461,6 +462,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     canTrade: canTradeOverride,
     isStopping: isStoppingOverride,
     initialState,
+    sharedAccountState: options.sharedAccountState,
   })
 }
 
@@ -495,6 +497,48 @@ brokerState,
 state })
 }
 
+
+test("publishes Conservative OrderRegistry transitions to the shared RS account registry", async () => {
+  const sharedAccountState = {
+    portfolio: new Portfolio(),
+    recoveryLedgers: new Map(),
+    orderRegistry: OrderRegistry.empty(),
+    legacyPositions: new Map(),
+    updateQueue: Promise.resolve(),
+  }
+  const initialAccountRegistry = sharedAccountState.orderRegistry
+  const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
+    sharedState: sharedAccountState,
+  })
+  const harness = await createHarness({
+    sharedAccountState,
+  })
+  const evaluation = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: Date.now(),
+    },
+  })
+
+  assert.equal(evaluation.ok, true, "A valid Conservative evaluation must complete.")
+  assert.notEqual(
+    sharedAccountState.orderRegistry,
+    initialAccountRegistry,
+    "The engine must publish its pending-order registry transition into shared account state.",
+  )
+  assert.equal(
+    sharedAccountState.orderRegistry.getActiveOrders().length,
+    1,
+    "The first market evaluation must register its BUY in the shared account registry.",
+  )
+  assert.equal(
+    recoverySellerWorkflow.getOrderRegistry(),
+    sharedAccountState.orderRegistry,
+    "The RS accounting workflow must observe the same live OrderRegistry snapshot as the CG engine.",
+  )
+})
 
 test("ignores manual external open orders under the default per-pair policy", async () => {
   const harness = await createHarness({

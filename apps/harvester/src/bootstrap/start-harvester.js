@@ -683,6 +683,7 @@ function createHarvesterTradingEngineActivator({ startup,
       onOperationalStateStrategyMarketPaused: startup.onOperationalStateStrategyMarketPaused,
       logger: startup.logger,
       recoveredState: portfolio.recoveredState,
+      sharedAccountState: portfolio.accountRuntime.state,
       isMarketPriceFresh: freshness.isMarketPriceFresh,
       isMarketBookFresh: freshness.isMarketBookFresh,
     })

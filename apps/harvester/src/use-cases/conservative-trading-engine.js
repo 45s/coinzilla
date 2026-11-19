@@ -1612,6 +1612,30 @@ function createOperatorMarketSnapshotsGetter({
 }
 
 
+function bindSharedAccountOrderRegistry({ state, sharedAccountState } = {}) {
+  if (sharedAccountState === undefined) {
+    return
+  }
+  if (!sharedAccountState ||
+      typeof sharedAccountState !== "object" ||
+      !(sharedAccountState.orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("sharedAccountState must expose an OrderRegistry")
+  }
+  if (state.registry !== sharedAccountState.orderRegistry) {
+    throw new TypeError("initialState.orderRegistry must match sharedAccountState.orderRegistry")
+  }
+  Object.defineProperty(state, "registry", {
+    enumerable: true,
+    get: () => sharedAccountState.orderRegistry,
+    set: (registry) => {
+      if (!(registry instanceof OrderRegistry)) {
+        throw new TypeError("sharedAccountState.orderRegistry must remain an OrderRegistry")
+      }
+      sharedAccountState.orderRegistry = registry
+    },
+  })
+}
+
 function createConservativeEngineBaseContext({ dependencies } = {}) {
   const {
     appConfig,
@@ -1619,6 +1643,7 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     initialState,
     getVolatilityData,
     hasUnownedOpenOrdersForSymbol,
+    sharedAccountState,
   } = dependencies
   const { settings, pairs } = appConfig.strategies[StrategyId.COIN_GRABBER]
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
@@ -1634,6 +1659,10 @@ pairs })
   const { state } = createInitialEngineState({ initialState,
 pairs,
 initialRegistry })
+  bindSharedAccountOrderRegistry({
+    state,
+    sharedAccountState,
+  })
   const runTransition = createSerializedTransitionQueue()
   const shutdownSafety = createConservativeShutdownSafety({
     state,
