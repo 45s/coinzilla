@@ -186,7 +186,7 @@ test("Bitunix Spot live order mutations stay disabled by default and send no req
   assert.equal(calls.length, 0)
 })
 
-test("Bitunix Spot LIMIT placement converts base quantity to quote volume on single-order REST", async () => {
+test("Bitunix Spot LIMIT placement sends base quantity as REST volume", async () => {
   const detail = {
     orderId: "123",
     symbol: "BTCUSDT",
@@ -206,7 +206,7 @@ test("Bitunix Spot LIMIT placement converts base quantity to quote volume on sin
         symbol: "BTCUSDT",
         side: 2,
         type: 1,
-        volume: "100",
+        volume: "1",
         price: "100",
         placeStatus: "1",
       },
@@ -230,7 +230,7 @@ test("Bitunix Spot LIMIT placement converts base quantity to quote volume on sin
     symbol: "BTCUSDT",
     side: 2,
     type: 1,
-    volume: "100",
+    volume: "1",
     price: "100",
   })
   assert.equal(calls[0].path, "/api/spot/v1/order/place_order")
@@ -238,26 +238,26 @@ test("Bitunix Spot LIMIT placement converts base quantity to quote volume on sin
   assert.deepEqual(calls[1].options.queryParams, { orderId: "123" })
 })
 
-test("Bitunix Spot MARKET placement submits base quantity and zero price on single-order REST", async () => {
+test("Bitunix Spot MARKET placement sends quoteQuantity as quote volume", async () => {
   const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/order/place_order": {
         orderId: "124",
         symbol: "BTCUSDT",
-        side: 1,
+        side: 2,
         type: 2,
-        volume: "0.01",
+        volume: "100",
         price: "0",
         placeStatus: "1",
       },
       "/api/spot/v1/order/detail": {
         orderId: "124",
         symbol: "BTCUSDT",
-        side: "1",
+        side: "2",
         type: "2",
         status: "2",
-        volume: "0.01",
-        dealVolume: "0.01",
+        volume: "1",
+        dealVolume: "1",
         price: "100",
         ctime: "2026-11-15T12:00:00Z",
         utime: "2026-11-15T12:00:01Z",
@@ -268,24 +268,41 @@ test("Bitunix Spot MARKET placement submits base quantity and zero price on sing
 
   const result = await broker.createOrder({
     symbol: "BTCUSDT",
-    side: "SELL",
+    side: "BUY",
     type: "MARKET",
-    quantity: "0.01",
+    quoteQuantity: "100",
   })
 
   assert.equal(result.ok, true)
   assert.equal(result.data.status, "FILLED")
+  assert.equal(result.data.quantity, "1")
   assert.equal(result.mutationOutcome, "CONFIRMED")
   assert.deepEqual(calls[0].options.body, {
     symbol: "BTCUSDT",
-    side: 1,
+    side: 2,
     type: 2,
-    volume: "0.01",
+    volume: "100",
     price: "0",
   })
 })
 
-test("Bitunix Spot numeric scientific-notation quantities are expanded before exact REST serialization", async () => {
+test("Bitunix Spot MARKET placement rejects base quantity before dispatch", async () => {
+  const { broker, calls } = createBroker()
+
+  const result = await broker.createOrder({
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "MARKET",
+    quantity: "0.01",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.match(result.errors[0].message, /requires quoteQuantity/i)
+  assert.equal(calls.length, 0)
+})
+
+test("Bitunix Spot quote quantities in scientific notation are expanded before exact REST serialization", async () => {
   const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/order/place_order": {
@@ -317,7 +334,7 @@ test("Bitunix Spot numeric scientific-notation quantities are expanded before ex
     symbol: "BTCUSDT",
     side: "BUY",
     type: "MARKET",
-    quantity: 1e-8,
+    quoteQuantity: 1e-8,
   })
 
   assert.equal(result.ok, true)
@@ -332,7 +349,7 @@ test("Bitunix Spot placement reports exchange rejection as REJECTED", async () =
         symbol: "BTCUSDT",
         side: 2,
         type: 1,
-        volume: "100",
+        volume: "1",
         price: "100",
         placeStatus: "0",
       },
@@ -399,7 +416,7 @@ test("Bitunix Spot placement reports unknown after a dispatched transport failur
     symbol: "BTCUSDT",
     side: "BUY",
     type: "MARKET",
-    quantity: "0.001",
+    quoteQuantity: "100",
   })
 
   assert.equal(result.ok, false)
@@ -415,7 +432,7 @@ test("Bitunix Spot placement reports confirmed acceptance if order-detail reconc
         symbol: "BTCUSDT",
         side: 2,
         type: 1,
-        volume: "100",
+        volume: "1",
         price: "100",
         placeStatus: "1",
       },
