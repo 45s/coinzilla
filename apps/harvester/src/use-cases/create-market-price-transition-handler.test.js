@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
+import { createFreshMarketPriceWaiter, createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
 
 const activeBuyOrder = Object.freeze({
   side: "BUY",
@@ -77,6 +77,7 @@ function createTransitionActionPorts({ state, trace }) {
       trace.push("event-id")
       return 8
     },
+    notifyFreshMarketPrice,
   }
 }
 
@@ -93,7 +94,7 @@ function createTransitionLogger(trace) {
   }
 }
 
-function createHandler({ state, trace, isFresh, canTrade } = {}) {
+function createHandler({ state, trace, isFresh, canTrade, notifyFreshMarketPrice } = {}) {
   return createMarketPriceTransitionHandler({
     state,
     isMarketPriceFresh: () => {
@@ -347,3 +348,131 @@ test("invalidates a safe shutdown marker when a later accepted price arrives", a
     "The invalidated marker must explain why a new recovery proof is required.",
   )
 })
+
+test("resolves a fresh-price waiter only after an accepted market stream event", async () => {
+  const state = createState()
+  const timerHandles = []
+  const waiter = createFreshMarketPriceWaiter({
+    state,
+    isMarketPriceFresh: (price) => price.timestamp === validPriceEvent.timestamp,
+    setTimeoutFn: (callback, timeoutMs) => {
+      const handle = { callback, timeoutMs, cleared: false }
+      timerHandles.push(handle)
+      return handle
+    },
+    clearTimeoutFn: (handle) => {
+      handle.cleared = true
+    },
+  })
+  const pending = waiter.waitForFreshMarketPrice({
+    symbol: "DOGEUSDT",
+    timeoutMs: 5_000,
+  })
+  const trace = []
+  const handler = createHandler({
+    state,
+    trace,
+    isFresh: true,
+    canTrade: false,
+    notifyFreshMarketPrice: waiter.notifyFreshMarketPrice,
+  })
+
+  await handler({
+    symbol: "DOGEUSDT",
+    priceEvent: validPriceEvent,
+  })
+
+  assert.equal(await pending, state.prices.get("DOGEUSDT"))
+  assert.equal(timerHandles.length, 1)
+  assert.equal(timerHandles[0].timeoutMs, 5_000)
+  assert.equal(timerHandles[0].cleared, true, "Resolving the waiter must cancel its deadline timer.")
+})
+
+test("does not resolve a fresh-price waiter for a rejected stale event", async () => {
+  const state = createState()
+  const waiter = createFreshMarketPriceWaiter({
+    state,
+    isMarketPriceFresh: (price) => price.timestamp === validPriceEvent.timestamp,
+    setTimeoutFn: () => 1,
+    clearTimeoutFn: () => {},
+  })
+  const pending = waiter.waitForFreshMarketPrice({
+    symbol: "DOGEUSDT",
+    timeoutMs: 5_000,
+  }).then(() => "resolved")
+  waiter.notifyFreshMarketPrice({
+    symbol: "DOGEUSDT",
+    price: {
+      ...validPriceEvent,
+      timestamp: validPriceEvent.timestamp - 1,
+    },
+  })
+
+  assert.equal(
+    await Promise.race([pending, Promise.resolve("pending")]),
+    "pending",
+    "A stale event must not satisfy the fresh-price wait.",
+  )
+  waiter.notifyFreshMarketPrice({
+    symbol: "DOGEUSDT",
+    price: validPriceEvent,
+  })
+  assert.equal(await pending, "resolved")
+})
+
+test("fails a fresh-price wait with a specific timeout and removes the waiter", async () => {
+  const state = createState()
+  let timeoutCallback
+  let cleared = false
+  const waiter = createFreshMarketPriceWaiter({
+    state,
+    isMarketPriceFresh: () => false,
+    setTimeoutFn: (callback, timeoutMs) => {
+      assert.equal(timeoutMs, 5_000)
+      timeoutCallback = callback
+      return "timer"
+    },
+    clearTimeoutFn: (handle) => {
+      assert.equal(handle, "timer")
+      cleared = true
+    },
+  })
+  const pending = waiter.waitForFreshMarketPrice({
+    symbol: "DOGEUSDT",
+    timeoutMs: 5_000,
+  })
+
+  timeoutCallback()
+  await assert.rejects(
+    pending,
+    (error) => error.code === "MARKET_PRICE_REFRESH_TIMEOUT" && error.symbol === "DOGEUSDT",
+  )
+  assert.equal(cleared, true, "Timeout cleanup must clear the deadline timer.")
+})
+
+test("cancels a fresh-price wait when its shutdown signal is aborted", async () => {
+  const state = createState()
+  let cleared = false
+  const controller = new AbortController()
+  const waiter = createFreshMarketPriceWaiter({
+    state,
+    isMarketPriceFresh: () => false,
+    setTimeoutFn: () => "timer",
+    clearTimeoutFn: () => {
+      cleared = true
+    },
+  })
+  const pending = waiter.waitForFreshMarketPrice({
+    symbol: "DOGEUSDT",
+    timeoutMs: 5_000,
+    signal: controller.signal,
+  })
+
+  controller.abort(new Error("shutdown cancelled"))
+  await assert.rejects(
+    pending,
+    (error) => error.code === "MARKET_PRICE_REFRESH_ABORTED",
+  )
+  assert.equal(cleared, true, "Aborting the wait must clear the deadline timer.")
+})
+
