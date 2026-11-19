@@ -14,7 +14,7 @@ const ERROR_CODES = Object.freeze({
   authentication: "BITUNIX_REST_AUTHENTICATION_REQUIRED",
 })
 
-/** Error returned by the Bitunix Spot REST API or transport boundary. */
+/** Error returned by the Bitunix REST API or transport boundary. */
 export class BitunixRestError extends SystemCustomError {
   /**
    * @param {{
@@ -140,11 +140,10 @@ const LOSSLESS_ARRAY_NUMBER_PATHS = new Set([
   "/api/v1/futures/market/depth",
 ])
 
-function stringifyNumericJsonFields({ text,
-  fields }) {
+function stringifyNumericJsonFields({ text, fields }) {
   const fieldPattern = fields.join("|")
   const numericFieldPattern = new RegExp(
-    '("(?:' + fieldPattern + ')"\\s*:\\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])',
+    String.raw`("(?:${fieldPattern})"\\s*:\\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])`,
     "g",
   )
   return text.replace(
@@ -158,14 +157,13 @@ function stringifyNumericJsonFields({ text,
 
 function stringifyNumericArrayValues({ text }) {
   return text.replace(
-    /([\[,]\s*)(-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)(?=\s*(?:,|\]))/g,
+    /(\\[|,)\\s*(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*(?:,|\\]))/g,
     (...matches) => {
       const [, prefix, value] = matches
       return prefix + JSON.stringify(value)
     },
   )
 }
-
 function parseResponseText({ text,
   path }) {
   let losslessText = text
