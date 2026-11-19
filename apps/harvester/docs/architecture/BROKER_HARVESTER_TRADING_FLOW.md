@@ -203,7 +203,6 @@ end
 - [Harvester Broker Port and Adapter](../infrastructure/broker-port-and-adapter.md)
 - [Harvester Architecture](../architecture.md)
 
-
 ## Native events versus polling observations
 
 The generic Broker API exposes one `subscribeForUserData()` method with independent `onEvent`, `onObservation`, and `onStatus` callbacks. Harvester does not inspect provider identity or implementation source to choose a delivery path.

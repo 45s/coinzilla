@@ -257,7 +257,6 @@ For Conservative, order-type selection, POST-ONLY crossing constraints, and fail
 
 Bitunix Spot is not a registered Harvester provider. The partial query operations in `@coinzilla/brokers` do not yet satisfy the complete order, fill, account-lifecycle, private-event/reconciliation, market-constraint and environment-safety contract in [issue #1185](https://github.com/45s/coinzilla/issues/1185). Keep Bitunix outside the provider registry and all execution/market-data routes until that work is complete. Do not add a temporary observer or partial provider facade. Future integration must use the same complete provider-instance, BrokerPort, capability, account-lifecycle and routing contracts as every other provider. Exchange-specific Bitunix market normalization belongs in `@coinzilla/brokers`, not in a Harvester-specific metadata helper.
 
-
 ## User-data callback separation
 
 Harvester supplies both callback channels through the same application-owned BrokerPort:
@@ -268,17 +267,12 @@ Harvester supplies both callback channels through the same application-owned Bro
 
 The broker's returned `deliveryMode` and `nativePush` metadata describe the actual delivery semantics. Harvester does not inspect provider source code or branch on provider identity. Bitunix remains excluded from the provider registry while its native user-data, authoritative snapshot, and canonical-fill capabilities remain unsupported.
 
-
 The Binance infrastructure adapter forwards the complete callback object unchanged. Binance emits native user-data messages through `onEvent`; the optional `onObservation` callback is accepted by the common adapter contract but is not used by the native Binance stream.
-
 
 After subscription establishment, bootstrap explicitly returns readiness to `AUTHORITATIVE_RECONCILIATION_REQUIRED` (or preserves the execution-accounting failure state). Polling observations do not alter this state; only the existing authoritative snapshot and native event/reconciliation gates can permit trading.
 
-
 The bootstrap helper keeps the accounting-failure check ahead of the PREFLIGHT open-orders read. The separate observation callback does not participate in that gate and cannot change its state.
 
-
 The callback options are part of one generic application-port method; delivery semantics are carried by the subscription metadata and callback channel, not by provider-specific method selection.
-
 
 The startup and established log messages are emitted by small helpers; the readiness state transition remains explicit and unchanged.

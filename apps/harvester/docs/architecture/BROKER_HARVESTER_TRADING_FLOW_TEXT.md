@@ -121,7 +121,6 @@ Sometimes the submission acknowledgement already reports the order as FILLED. In
 - [Volatility protection state-machine tests](../../src/domain/market/volatility-protection-state.test.js)
 - [Harvester Broker Port and Adapter](../infrastructure/broker-port-and-adapter.md)
 
-
 ## Native events versus polling observations
 
 The generic Broker API exposes one `subscribeForUserData()` method with independent `onEvent`, `onObservation`, and `onStatus` callbacks. Harvester does not inspect provider identity or implementation source to choose a delivery path.
