@@ -27,8 +27,13 @@ function canEvaluateShutdownRecoveryThroughManagedPause({ state, symbol, shutdow
       state.recoveryManagedPausedMarkets?.has(symbol) !== true) {
     return false
   }
-  return !hasShutdownRecoveryBlocker({ state, symbol }) &&
-    !hasPendingManagedCancellation({ state, symbol })
+  return !hasShutdownRecoveryBlocker({
+    state,
+    symbol,
+  }) && !hasPendingManagedCancellation({
+    state,
+    symbol,
+  })
 }
 
 function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
@@ -194,7 +199,11 @@ function isDustRecoveryCompletionRequired({ state, symbol, decision } = {}) {
 }
 
 async function pauseForDustCompletionFailure({ pause, symbol, reason, error } = {}) {
-  await pause({ symbol, reason, error })
+  await pause({
+    symbol,
+    reason,
+    error,
+  })
 }
 
 function publishDustRecoveryCompleted({ eventPublisher, symbol, metadata, pairs, completion } = {}) {
@@ -226,7 +235,10 @@ async function handleDustCompletionFailure({ pause, symbol, completion } = {}) {
 async function handleIncompleteDustCompletion({ dependencies, context, completedSellOrder, completion } = {}) {
   const { pause, publishRecoveryCycleNotCompleted } = dependencies
   const { symbol } = context
-  publishRecoveryCycleNotCompleted({ order: completedSellOrder, completion })
+  publishRecoveryCycleNotCompleted({
+    order: completedSellOrder,
+    completion,
+  })
   if (completion.data?.pause === false) {
     return null
   }
@@ -248,7 +260,11 @@ async function completeDustRecoveryIfNeeded({ dependencies, context } = {}) {
     pairs,
   } = dependencies
   const { symbol, metadata, decision, effectiveActions } = context
-  if (!isDustRecoveryCompletionRequired({ state, symbol, decision })) {
+  if (!isDustRecoveryCompletionRequired({
+    state,
+    symbol,
+    decision,
+  })) {
     return null
   }
   const completedSellOrder = state.completedRecoverySellOrdersBySymbol.get(symbol)
@@ -268,7 +284,11 @@ async function completeDustRecoveryIfNeeded({ dependencies, context } = {}) {
     sellOrder: completedSellOrder,
   })
   if (!completion?.ok) {
-    return handleDustCompletionFailure({ pause, symbol, completion })
+    return handleDustCompletionFailure({
+      pause,
+      symbol,
+      completion,
+    })
   }
   if (!completion.data?.eligible) {
     return handleIncompleteDustCompletion({
@@ -278,7 +298,13 @@ async function completeDustRecoveryIfNeeded({ dependencies, context } = {}) {
       completion,
     })
   }
-  publishDustRecoveryCompleted({ eventPublisher, symbol, metadata, pairs, completion })
+  publishDustRecoveryCompleted({
+    eventPublisher,
+    symbol,
+    metadata,
+    pairs,
+    completion,
+  })
   state.completedRecoverySellSymbols.delete(symbol)
   state.completedRecoverySellOrdersBySymbol.delete(symbol)
   state.trailingBuy.set(symbol, true)
@@ -452,7 +478,10 @@ function getPortfolioCashFlowContext({ dependencies, accountSnapshot, portfolio,
     additionalQuoteCashFlow,
     quoteCashFlowBaseline,
     quoteCashFlow: subtractDecimal({
-      left: addDecimal({ left: portfolioQuoteCashFlow, right: additionalQuoteCashFlow }),
+      left: addDecimal({
+        left: portfolioQuoteCashFlow,
+        right: additionalQuoteCashFlow,
+      }),
       right: quoteCashFlowBaseline,
     }),
   }
@@ -682,7 +711,10 @@ export function allocateStrategyOrderCommitments({
   actions,
 } = {}) {
   try {
-    const strategyDependencies = { ...dependencies, strategyId }
+    const strategyDependencies = {
+      ...dependencies,
+      strategyId,
+    }
     const context = {
       symbol,
       metadata,
@@ -710,7 +742,12 @@ export function allocateStrategyOrderCommitments({
     if (!allocation?.ok) {
       return allocation
     }
-    return toResult({ data: Object.freeze({ allocation: allocation.data, balances }) })
+    return toResult({
+      data: Object.freeze({
+        allocation: allocation.data,
+        balances,
+      }),
+    })
   } catch (error) {
     return toResult({ error })
   }
@@ -896,6 +933,15 @@ async function handleEvaluationFailure({ dependencies, symbol, error } = {}) {
   return toResult({ error })
 }
 
+async function submitConservativeTransition({ dependencies, context, allocation, balances } = {}) {
+  return submitConservativeTransition({
+    dependencies,
+    context,
+    allocation,
+    balances,
+  })
+}
+
 async function executeConservativeLatestTransition({ dependencies, options, gate } = {}) {
   const {
     symbol,
@@ -915,25 +961,52 @@ async function executeConservativeLatestTransition({ dependencies, options, gate
       marketPrice: gate.marketPrice,
     },
   })
-  const dustResult = await completeDustRecoveryIfNeeded({ dependencies, context })
+  const dustResult = await completeDustRecoveryIfNeeded({
+    dependencies,
+    context,
+  })
   if (dustResult) {
     return dustResult
   }
-  const noActions = handleNoEffectiveActions({ dependencies, context })
+  const noActions = handleNoEffectiveActions({
+    dependencies,
+    context,
+  })
   if (noActions) {
     return noActions
   }
   const balances = getPortfolioBalanceContext({
     dependencies,
-    context: { ...context, excludedActiveOrderClientId },
+    context: {
+      ...context,
+      excludedActiveOrderClientId,
+    },
   })
-  const allocation = allocateEvaluationActions({ dependencies, context, balances })
-  logOrderAllocation({ dependencies, context, balances, allocation })
-  const noExecutableActions = handleNoExecutableActions({ dependencies, context, allocation })
+  const allocation = allocateEvaluationActions({
+    dependencies,
+    context,
+    balances,
+  })
+  logOrderAllocation({
+    dependencies,
+    context,
+    balances,
+    allocation,
+  })
+  const noExecutableActions = handleNoExecutableActions({
+    dependencies,
+    context,
+    allocation,
+  })
   if (noExecutableActions) {
     return noExecutableActions
   }
-  publishStrategyDecision({ dependencies, context, balances, allocation })
+  publishStrategyDecision({
+    dependencies,
+    context,
+    balances,
+    allocation,
+  })
   const executableDecision = Object.freeze({
     ...context.decision,
     actions: Object.freeze(allocation.executableActions),
@@ -952,7 +1025,11 @@ async function executeConservativeLatestTransition({ dependencies, options, gate
     executableDecision,
     balances,
   })
-  logSubmissionResult({ dependencies, context, result })
+  logSubmissionResult({
+    dependencies,
+    context,
+    result,
+  })
   return finalizeSubmissionResult({
     dependencies,
     context,
@@ -966,17 +1043,32 @@ function createConservativeLatestTransitionEvaluator(dependencies = {}) {
     const { symbol, shutdownRecoveryOnly = false } = options
     if (!dependencies.pairs?.[symbol]) {
       return toResult({
-        data: { skipped: true, reason: "NO_CONSERVATIVE_EXECUTION_ROUTE" },
+        data: {
+          skipped: true,
+          reason: "NO_CONSERVATIVE_EXECUTION_ROUTE",
+        },
       })
     }
-    const gate = getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly })
+    const gate = getEvaluationGateResult({
+      dependencies,
+      symbol,
+      shutdownRecoveryOnly,
+    })
     if (gate?.data || gate?.errors) {
       return gate
     }
     try {
-      return await executeConservativeLatestTransition({ dependencies, options, gate })
+      return await executeConservativeLatestTransition({
+        dependencies,
+        options,
+        gate,
+      })
     } catch (error) {
-      return handleEvaluationFailure({ dependencies, symbol, error })
+      return handleEvaluationFailure({
+        dependencies,
+        symbol,
+        error,
+      })
     }
   }
 }
