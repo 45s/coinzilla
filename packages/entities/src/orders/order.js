@@ -1,4 +1,4 @@
-import { capitalize, Validator } from "@coinzilla/utils"
+import { capitalize } from "@coinzilla/utils"
 import { errMsgs } from "./err-msgs.js"
 
 const supportedTypes = ["LIMIT", "LIMIT_MAKER", "MARKET"]
@@ -45,18 +45,18 @@ export class Order {
     }
     this.#quantity = quantity
 
-    if (!Validator.isRequiredNumberValid(price) || price < 0) {
+    if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) {
       throw new Error(errMsgs.price)
     }
     this.#price = price
 
-    if (!Validator.isRequiredNotEmptyString(id)) {
+    if (typeof id !== "string" || id.trim() === "") {
       throw new Error(errMsgs.id)
     }
     this.#id = id
 
     if (clientOrderId !== undefined && clientOrderId !== null &&
-        !Validator.isRequiredNotEmptyString(clientOrderId)) {
+        (typeof clientOrderId !== "string" || clientOrderId.trim() === "")) {
       throw new Error(errMsgs.clientOrderId)
     }
     this.#clientOrderId = clientOrderId ?? undefined
