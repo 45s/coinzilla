@@ -1571,6 +1571,46 @@ function recordLatestBrokerApiSchemaResult({ definition, schemaObservations, now
   })
 }
 
+
+function recordBrokerApiOperationResult({
+  definition,
+  result,
+  startedAt,
+  now,
+  results,
+  secrets,
+  onProgress,
+}) {
+  if (!result || result.ok !== true) {
+    recordBrokerApiOperationFailure({
+      method: definition.method,
+      args: definition.args,
+      error: result?.errors?.[0] ?? new Error("Broker read returned no successful result envelope"),
+      startedAt,
+      now,
+      results,
+      secrets,
+      onProgress,
+    })
+    return
+  }
+  recordBrokerApiSuccess({
+    method: definition.method,
+    args: definition.args,
+    result,
+    privateResponse: definition.privateResponse,
+    startedAt,
+    now,
+    results,
+    secrets,
+  })
+  emitBrokerApiProgress({
+    method: definition.method,
+    status: "PASS",
+    onProgress,
+  })
+}
+
 async function runBrokerApiOperation({
   broker,
   definition,
@@ -1588,34 +1628,15 @@ async function runBrokerApiOperation({
   })
   try {
     const result = await broker[definition.method](...definition.args)
-    if (!result || result.ok !== true) {
-      recordBrokerApiOperationFailure({
-        method: definition.method,
-        args: definition.args,
-        error: result?.errors?.[0] ?? new Error("Broker read returned no successful result envelope"),
-        startedAt,
-        now,
-        results,
-        secrets,
-        onProgress,
-      })
-    } else {
-      recordBrokerApiSuccess({
-        method: definition.method,
-        args: definition.args,
-        result,
-        privateResponse: definition.privateResponse,
-        startedAt,
-        now,
-        results,
-        secrets,
-      })
-      emitBrokerApiProgress({
-        method: definition.method,
-        status: "PASS",
-        onProgress,
-      })
-    }
+    recordBrokerApiOperationResult({
+      definition,
+      result,
+      startedAt,
+      now,
+      results,
+      secrets,
+      onProgress,
+    })
   } catch (error) {
     recordBrokerApiOperationFailure({
       method: definition.method,
