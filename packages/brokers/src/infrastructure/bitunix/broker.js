@@ -73,6 +73,13 @@ function requireSymbol({ symbol, operation }) {
   return symbol.trim().toUpperCase()
 }
 
+function requireArray({ value, operation }) {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`Bitunix Spot ${operation} response must be an array`)
+  }
+  return value
+}
+
 function normalizeOrderRows({ value }) {
   if (Array.isArray(value)) {
     return value
@@ -749,7 +756,10 @@ export class BitunixSpotBroker {
 
   async getOrderHistory(input = {}) {
     try {
-      const { body } = createHistoryRequest({ input })
+      const { body } = createHistoryRequest({
+        input,
+        requireSymbol,
+      })
       const response = await this.restClient.request({
         method: "POST",
         path: API.orderHistory,
