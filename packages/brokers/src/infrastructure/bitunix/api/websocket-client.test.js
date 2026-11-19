@@ -229,13 +229,11 @@ test("Bitunix Spot WebSocket client exposes only documented read-only operations
   assert.equal(typeof client.subscribeForPrices, "undefined", "the Spot RPC protocol must not be mistaken for a continuous subscription API")
 })
 
-test("Bitunix Spot WebSocket client dispatches every documented read-only RPC method", async () => {
-  let nextId = 0
+test("Bitunix Spot WebSocket client dispatches documented market and account read RPCs", async () => {
   const { client, transport } = createClient({
-    idFactory: () => `rpc-${++nextId}`,
+    idFactory: (index) => `rpc-${index}`,
   })
   await client.connect()
-
   const pending = [
     client.getLastPrice({ symbol: "BTCUSDT" }),
     client.getDepth({
@@ -251,6 +249,43 @@ test("Bitunix Spot WebSocket client dispatches every documented read-only RPC me
     client.getTokenNetworks(),
     client.getAccount(),
     client.getUserInfo(),
+  ]
+  assert.deepEqual(
+    transport.sent.map((request) => request.method),
+    [
+      "market.last_price",
+      "market.depth",
+      "market.kline",
+      "common.coin_pair.list",
+      "common.rate.list",
+      "common.coin.coin_network.list",
+      "user.account",
+      "user.info",
+    ],
+    "market and account reads must use documented Spot RPC method names",
+  )
+  for (let index = 0; index < pending.length; index += 1) {
+    transport.receive({
+      id: `rpc-${index + 1}`,
+      code: "0",
+      msg: "success",
+      data: { index },
+    })
+  }
+  assert.deepEqual(
+    await Promise.all(pending),
+    pending.map((_, index) => ({ index })),
+    "market and account RPCs must return their correlated response data",
+  )
+  await client.disconnect()
+})
+
+test("Bitunix Spot WebSocket client dispatches documented order read RPCs", async () => {
+  const { client, transport } = createClient({
+    idFactory: (index) => `rpc-${index}`,
+  })
+  await client.connect()
+  const pending = [
     client.getOpenOrders({ symbol: "BTCUSDT" }),
     client.getOrderHistory({
       symbol: "BTCUSDT",
@@ -269,26 +304,14 @@ test("Bitunix Spot WebSocket client dispatches every documented read-only RPC me
   ]
   assert.deepEqual(
     transport.sent.map((request) => request.method),
-    [
-      "market.last_price",
-      "market.depth",
-      "market.kline",
-      "common.coin_pair.list",
-      "common.rate.list",
-      "common.coin.coin_network.list",
-      "user.account",
-      "user.info",
-      "order.pending.list",
-      "order.history.page",
-      "order.deal.list",
-    ],
-    "every documented Spot read must use its official RPC method name",
+    ["order.pending.list", "order.history.page", "order.deal.list"],
+    "order reads must use documented Spot RPC method names",
   )
-  assert.equal(transport.sent[8].params.symbol, "BTCUSDT", "current-order RPC must preserve its symbol filter")
+  assert.equal(transport.sent[0].params.symbol, "BTCUSDT")
   assert.deepEqual(
     Object.fromEntries(["symbol", "page", "pageSize", "startTime", "endTime", "status", "side", "type"].map((key) => [
       key,
-      transport.sent[9].params[key],
+      transport.sent[1].params[key],
     ])),
     {
       symbol: "BTCUSDT",
@@ -300,20 +323,17 @@ test("Bitunix Spot WebSocket client dispatches every documented read-only RPC me
       side: "2",
       type: "1",
     },
-    "order-history RPC must preserve documented pagination and filter arguments",
   )
   assert.deepEqual(
     {
-      orderId: transport.sent[10].params.orderId,
-      symbol: transport.sent[10].params.symbol,
+      orderId: transport.sent[2].params.orderId,
+      symbol: transport.sent[2].params.symbol,
     },
     {
       orderId: "123456",
       symbol: "BTCUSDT",
     },
-    "matching-order RPC must preserve the exact exchange order ID and symbol",
   )
-
   for (let index = 0; index < pending.length; index += 1) {
     transport.receive({
       id: `rpc-${index + 1}`,
@@ -324,80 +344,50 @@ test("Bitunix Spot WebSocket client dispatches every documented read-only RPC me
   }
   assert.deepEqual(
     await Promise.all(pending),
-    Array.from({ length: pending.length }, (...args) => {
-      const [, index] = args
-      return { index }
-    }),
-    "all documented read RPCs must return their matching response data",
+    pending.map((_, index) => ({ index })),
   )
   await client.disconnect()
 })
 
-test("Bitunix Spot WebSocket client validates order-history and matching-order RPC parameters", async () => {
+test("Bitunix Spot WebSocket client validates order-history symbol and pagination filters", async () => {
   const { client, transport } = createClient()
   await client.connect()
+  assert.throws(() => client.getOpenOrders(), /symbol/i)
+  assert.throws(() => client.getOrderHistory({
+    symbol: "BTCUSDT",
+    page: 0,
+  }), /page/i)
+  assert.throws(() => client.getOrderHistory({
+    symbol: "BTCUSDT",
+    pageSize: 1.5,
+  }), /pageSize/i)
+  assert.throws(() => client.getOrderHistory({
+    symbol: "BTCUSDT",
+    status: "99",
+  }), /status/i)
+  assert.equal(transport.sent.length, 0, "invalid order filters must not reach the socket")
+  await client.disconnect()
+})
 
-  assert.throws(
-    () => client.getOpenOrders(),
-    /symbol/i,
-    "current-order lookup requires a symbol",
-  )
-  assert.throws(
-    () => client.getOrderHistory({
-      symbol: "BTCUSDT",
-      page: 0,
-    }),
-    /page/i,
-    "order-history page must be positive",
-  )
-  assert.throws(
-    () => client.getOrderHistory({
-      symbol: "BTCUSDT",
-      pageSize: 1.5,
-    }),
-    /pageSize/i,
-    "order-history pageSize must be a positive integer",
-  )
-  assert.throws(
-    () => client.getOrderHistory({
-      symbol: "BTCUSDT",
-      status: "99",
-    }),
-    /status/i,
-    "unknown order-history status codes must be rejected",
-  )
-  assert.throws(
-    () => client.getOrderHistory({
-      symbol: "BTCUSDT",
-      side: "3",
-    }),
-    /side/i,
-    "unknown order-history side codes must be rejected",
-  )
-  assert.throws(
-    () => client.getOrderHistory({
-      symbol: "BTCUSDT",
-      type: "3",
-    }),
-    /type/i,
-    "unknown order-history type codes must be rejected",
-  )
-  assert.throws(
-    () => client.getOrderHistory({
-      symbol: "BTCUSDT",
-      startTime: "not-a-date",
-    }),
-    /startTime/i,
-    "order-history timestamps must be valid ISO-8601 values",
-  )
-  assert.throws(
-    () => client.getMatchingOrderDetails({
-      symbol: "BTCUSDT",
-    }),
-    /orderId/i,
-    "matching-order lookup requires an exchange order ID",
-  )
-  assert.equal(transport.sent.length, 0, "invalid order RPC parameters must not reach the socket")
+test("Bitunix Spot WebSocket client validates order-history codes and matching-order IDs", async () => {
+  const { client, transport } = createClient()
+  await client.connect()
+  assert.throws(() => client.getOrderHistory({
+    symbol: "BTCUSDT",
+    side: "3",
+  }), /side/i)
+  assert.throws(() => client.getOrderHistory({
+    symbol: "BTCUSDT",
+    type: "3",
+  }), /type/i)
+  assert.throws(() => client.getOrderHistory({
+    symbol: "BTCUSDT",
+    startTime: "not-a-date",
+  }), /startTime/i)
+  assert.throws(() => client.getMatchingOrderDetails({
+    symbol: "BTCUSDT",
+  }), /orderId/i)
+  assert.equal(transport.sent.length, 0, "invalid order-history and matching-order requests must not reach the socket")
   await client.disconnect()
 })
 
