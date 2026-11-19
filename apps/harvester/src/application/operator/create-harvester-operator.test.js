@@ -101,7 +101,16 @@ test("creates an immutable Harvester operator facade without a generic command d
     engine,
   })
 
-  assert.deepEqual(Object.keys(operator), ["pauseMarket", "resumeMarket", "pauseBuys", "resumeBuys", "pauseAllBuys", "resumeAllBuys"])
+  assert.deepEqual(Object.keys(operator), [
+    "pauseMarket",
+    "resumeMarket",
+    "pauseBuys",
+    "resumeBuys",
+    "pauseAllBuys",
+    "resumeAllBuys",
+    "getRecoverySellerStopState",
+    "resolveRecoverySellerStop",
+  ])
   assert.equal(Object.isFrozen(operator), true)
   assert.equal(typeof operator.pauseMarket, "function")
   assert.equal(typeof operator.resumeMarket, "function")
@@ -412,4 +421,125 @@ test("rejects a supplied Operational State Store without an append boundary befo
     "A supplied but invalid store must fail closed instead of silently downgrading to process-local pause semantics.",
   )
   assert.deepEqual(calls, [], "Invalid persistence configuration must not reach the trading engine.")
+})
+
+test("Recovery Seller STOP state is exposed only to an authorized operator", async () => {
+  const calls = []
+  const recoverySellerStopWorkflow = {
+    getStopState: () => Object.freeze({ status: "STOPPED" }),
+    getBlockerId: () => "rs-stop-blocker-1",
+    resolve: async (evidence) => {
+      calls.push(evidence)
+      return {
+        ok: true,
+        data: {
+          stopState: Object.freeze({ status: "RUNNING" }),
+          record: { factType: "SAFETY_BLOCKER_RESOLVED" },
+        },
+      }
+    },
+  }
+  const { engine } = createHarness()
+  const operator = createHarvesterOperator({
+    engine,
+    recoverySellerStopWorkflow,
+  })
+
+  const status = await operator.getRecoverySellerStopState({ actor })
+  assert.equal(status.ok, true)
+  assert.equal(status.data.stopState.status, "STOPPED")
+  assert.equal(status.data.blockerId, "rs-stop-blocker-1")
+
+  const unauthorized = await operator.getRecoverySellerStopState({
+    actor: { id: "telegram-user:untrusted", roles: [] },
+  })
+  assert.equal(unauthorized.ok, false)
+  assert.equal(unauthorized.errors[0].code, "OPERATOR_UNAUTHORIZED")
+  assert.deepEqual(calls, [])
+})
+
+test("Recovery Seller STOP resolution binds operator identity and action ID and forwards evidence", async () => {
+  const calls = []
+  const recoverySellerStopWorkflow = {
+    getStopState: () => Object.freeze({ status: "STOPPED" }),
+    getBlockerId: () => "rs-stop-blocker-2",
+    resolve: async (evidence) => {
+      calls.push(evidence)
+      return {
+        ok: true,
+        data: {
+          stopState: Object.freeze({ status: "RUNNING" }),
+          record: { factType: "SAFETY_BLOCKER_RESOLVED" },
+        },
+      }
+    },
+  }
+  const { engine } = createHarness()
+  const operator = createHarvesterOperator({
+    engine,
+    recoverySellerStopWorkflow,
+  })
+  const reconciliation = {
+    ordersReconciled: true,
+    fillsReconciled: true,
+    balancesReconciled: true,
+    unresolvedOrderCount: 0,
+    unresolvedFillCount: 0,
+    balanceDiscrepancyCount: 0,
+  }
+  const accounting = {
+    verified: true,
+    portfolioConsistent: true,
+    legacyConsistent: true,
+    reservationsConsistent: true,
+  }
+
+  const result = await operator.resolveRecoverySellerStop({
+    actor,
+    requestId: "telegram:rs-stop-reset:1",
+    causeFixed: true,
+    reconciliation,
+    accounting,
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(calls, [{
+    operatorId: actor.id,
+    actionId: "telegram:rs-stop-reset:1",
+    causeFixed: true,
+    reconciliation,
+    accounting,
+  }])
+})
+
+test("Recovery Seller STOP resolution rejects unauthorized actors and missing action IDs", async () => {
+  const calls = []
+  const recoverySellerStopWorkflow = {
+    getStopState: () => Object.freeze({ status: "STOPPED" }),
+    getBlockerId: () => "rs-stop-blocker-3",
+    resolve: async (evidence) => {
+      calls.push(evidence)
+      return { ok: true, data: {} }
+    },
+  }
+  const { engine } = createHarness()
+  const operator = createHarvesterOperator({
+    engine,
+    recoverySellerStopWorkflow,
+  })
+
+  const unauthorized = await operator.resolveRecoverySellerStop({
+    actor: { id: "telegram-user:untrusted", roles: [] },
+    requestId: "telegram:rs-stop-reset:2",
+  })
+  const missingActionId = await operator.resolveRecoverySellerStop({
+    actor,
+    causeFixed: true,
+  })
+
+  assert.equal(unauthorized.ok, false)
+  assert.equal(unauthorized.errors[0].code, "OPERATOR_UNAUTHORIZED")
+  assert.equal(missingActionId.ok, false)
+  assert.equal(missingActionId.errors[0].code, "INVALID_OPERATOR_REQUEST_ID")
+  assert.deepEqual(calls, [])
 })

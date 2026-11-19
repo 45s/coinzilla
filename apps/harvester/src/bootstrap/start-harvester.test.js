@@ -5190,14 +5190,27 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
     recursive: true,
     force: true,
   }))
-  const store = createFileOperationalStateStore({
+  const previousStore = createFileOperationalStateStore({
     directory,
-    runtimeSessionId: "rs-stop-bootstrap-test",
+    runtimeSessionId: "rs-stop-bootstrap-previous-session",
   })
-  const initialized = await store.initialize()
+  const initialized = await previousStore.initialize()
   assert.equal(initialized.ok, true, initialized.errors?.[0]?.message)
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore: previousStore,
+    appConfig,
+  })
+  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+  const previousProcess = await recordProcessStarted({
+    operationalStateStore: previousStore,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled: true,
+  })
+  assert.equal(previousProcess.ok, true, previousProcess.errors?.[0]?.message)
   const seedWorkflow = await createRecoverySellerStopWorkflow({
-    operationalStateStore: store,
+    operationalStateStore: previousStore,
   })
   assert.equal(seedWorkflow.ok, true, seedWorkflow.errors?.[0]?.message)
   const blocker = await seedWorkflow.data.latch({
@@ -5207,18 +5220,28 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
     },
   })
   assert.equal(blocker.ok, true, blocker.errors?.[0]?.message)
+  const previousProcessStopped = await recordProcessStopped({
+    operationalStateStore: previousStore,
+    reason: "NORMAL",
+    clean: true,
+  })
+  assert.equal(previousProcessStopped.ok, true, previousProcessStopped.errors?.[0]?.message)
 
+  const currentStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "rs-stop-bootstrap-current-session",
+  })
   const calls = []
   const operationalStateStore = {
-    runtimeSessionId: store.runtimeSessionId,
+    runtimeSessionId: currentStore.runtimeSessionId,
     append: async (input) => {
       calls.push(input.factType)
-      return store.append(input)
+      return currentStore.append(input)
     },
-    verify: async (...args) => store.verify(...args),
+    verify: async (...args) => currentStore.verify(...args),
     readAll: async (...args) => {
       calls.push("READ_ALL")
-      return store.readAll(...args)
+      return currentStore.readAll(...args)
     },
   }
   const baseResolved = await resolveHarvesterOptions({
@@ -5253,7 +5276,7 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
   const startup = await prepareHarvesterStartupState({
     dependencies: {
       env: binanceEnv,
-      runtimeSessionId: "rs-stop-bootstrap-test",
+      runtimeSessionId: "rs-stop-bootstrap-current-session",
       suppliedOperationalStateStore: operationalStateStore,
       logger: {},
     },
@@ -5262,6 +5285,7 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
 
   assert.equal(startup.recoverySellerStopWorkflow.getStopState().status, "STOPPED")
   assert.equal(startup.recoverySellerStopWorkflow.getBlockerId(), blocker.data.record.data.blockerId)
+  assert.equal(startup.startupOptions.tradingEnabled, false, "A prior-process RS STOP may restart only in observation-only mode.")
   const processStartIndex = calls.indexOf("PROCESS_STARTED")
   const lastReadIndex = calls.lastIndexOf("READ_ALL")
   assert.ok(processStartIndex >= 0, "The current process boundary must be persisted.")
