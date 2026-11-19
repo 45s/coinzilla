@@ -779,3 +779,33 @@ test("fails closed for an RS SELL fill until terminal mixed-SELL reconciliation"
   assert.deepEqual(recoverySellerAccountingCalls, [], "The RS mixed-SELL accounting workflow must not be invoked with an isolated streamed fill.")
   assert.equal(calls.pauses[0]?.reason, "EXECUTION_ACCOUNTING_FAILED", "Unsupported RS SELL accounting must pause the affected market fail-closed.")
 })
+
+
+test("fails closed for a registered order owned by an unsupported strategy", async () => {
+  const unsupportedOrder = makeOrder({
+    clientOrderId: "h-dogeusdt-future-strategy-buy-1",
+  })
+  const unsupportedFill = makeFill({
+    clientOrderId: unsupportedOrder.clientOrderId,
+  })
+  const ownership = {
+    clientOrderId: unsupportedOrder.clientOrderId,
+    strategyId: "FUTURE_strategy",
+    positionId: "future-strategy-position",
+    purpose: "FUTURE_BUY",
+  }
+  const registry = createLifecycleRegistry({
+    currentOrder: unsupportedOrder,
+    ownership,
+  })
+  const { workflow, calls } = makeWorkflow({ registry })
+
+  const result = await workflow.processExecutionFillTransition({
+    order: unsupportedOrder,
+    fill: unsupportedFill,
+  })
+
+  assert.equal(result.ok, false, "Unsupported strategy ownership must not fall through to Conservative accounting.")
+  assert.deepEqual(calls.accounting, [], "An unsupported strategy fill must not mutate Conservative accounting.")
+  assert.equal(calls.pauses[0]?.reason, "EXECUTION_ACCOUNTING_FAILED", "Unsupported attribution must fail closed.")
+})

@@ -428,3 +428,7 @@ The first callback composition attempt placed the callback in the options destru
 ### Engine callback composition correction — checkpoint
 
 The RS BUY accounting callback is now exposed from the engine-options return object, not the input destructuring. GitHub Actions caught and verified the startup syntax error from the prior attempt. The exact corrected head is under remote targeted and full verification.
+
+### Unsupported strategy fill attribution — test-first checkpoint
+
+The order-event workflow must not treat an explicitly registered non-CG/non-RS order as Conservative-owned. Unsupported strategy ownership must fail closed before any accounting projection is mutated. The regression test is committed before the production dispatch change.
