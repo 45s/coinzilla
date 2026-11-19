@@ -148,7 +148,7 @@ test("Binance environment selection is metadata, not a capability status", () =>
   })
 })
 
-test("Bitunix Spot capabilities preserve read-only and incomplete-evidence boundaries", () => {
+test("Bitunix Spot capabilities declare implemented cancellation and incomplete remaining evidence", () => {
   const { capabilities } = createBitunixBroker()
 
   assertCapability({
@@ -194,7 +194,12 @@ test("Bitunix Spot capabilities preserve read-only and incomplete-evidence bound
   assertCapability({
     declaration: capabilities,
     type: "CANCEL_ORDER",
-    status: "UNSUPPORTED",
+    status: "SUPPORTED",
+  })
+  assertCapability({
+    declaration: capabilities,
+    type: "CANCEL_ALL_ORDERS",
+    status: "SUPPORTED",
   })
   assertCapability({
     declaration: capabilities,
