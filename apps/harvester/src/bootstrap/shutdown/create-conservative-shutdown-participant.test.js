@@ -669,3 +669,92 @@ test("rechecks recovery safety when the refreshed price becomes stale before rec
   assert.equal(refreshAttempts, 1, "A market may receive only one bounded refresh wait per safety attempt.")
 })
 
+test("re-audits previously safe markers when the initial user-data drain fails", async () => {
+  const calls = []
+  const market = {
+    symbol: "DOGEUSDT",
+    status: "SAFE_TO_SHUTDOWN",
+    blockers: [],
+    revision: 0,
+  }
+  const engine = {
+    beginShutdown() {
+      calls.push("buy-gate")
+      return { ok: true }
+    },
+    async cancelOwnedBuyOrdersForShutdown() {
+      calls.push("cancel:all")
+      return { ok: true }
+    },
+    async reconcileOwnedOrders() {
+      calls.push("reconcile")
+      return { ok: true }
+    },
+    async reconcileRecoverySellsForShutdown() {
+      calls.push("recovery")
+      return { ok: true }
+    },
+    async auditShutdownRecoverySellCoverage() {
+      return { ok: true, data: { covered: true, findings: [] } }
+    },
+    async auditShutdownSafety({ symbol, reconciliationComplete, externalBlockers }) {
+      calls.push("audit:" + symbol)
+      const blockers = [...externalBlockers]
+      if (!reconciliationComplete) {
+        blockers.push("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE")
+      }
+      market.status = blockers.length === 0 ? "SAFE_TO_SHUTDOWN" : "UNSAFE"
+      market.blockers = blockers
+      market.revision += 1
+      return {
+        ok: true,
+        data: {
+          markets: [market],
+          revision: market.revision,
+        },
+      }
+    },
+    getShutdownSafetySnapshot() {
+      return {
+        markets: [market],
+        revision: market.revision,
+      }
+    },
+  }
+  const participant = createConservativeShutdownParticipant({
+    engine,
+    eventPublisher: {
+      flush: async () => ({ ok: true, durable: true }),
+    },
+    drainUserDataEvents: async () => ({
+      ok: false,
+      errors: [Object.assign(
+        new Error("Accepted user-data callbacks remain undrained"),
+        {
+          code: "USER_DATA_DRAIN_FAILED",
+        },
+      )],
+    }),
+    logger: {
+      info() {},
+      error() {},
+    },
+  })
+
+  participant.beginShutdown()
+  await assert.rejects(
+    participant.waitUntilSafe(),
+    (error) => {
+      const blockers = getMarketBlockersFromShutdownError({
+        error,
+        symbol: "DOGEUSDT",
+      })
+      assert.ok(blockers.includes("USER_DATA_DRAIN_FAILED"))
+      assert.ok(blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"))
+      return true
+    },
+    "A previously safe marker cannot bypass a failed initial user-data drain.",
+  )
+  assert.ok(calls.includes("audit:DOGEUSDT"), "The shared drain failure must force every enabled market through the safety audit.")
+})
+
