@@ -12,36 +12,93 @@ const validOrderInput = {
   id: "order-id-1",
 }
 const invalidPriceInputs = [
-  { price: undefined, description: "missing price" },
-  { price: "1", description: "string price" },
-  { price: NaN, description: "NaN price" },
-  { price: Infinity, description: "infinite price" },
-  { price: 0, description: "zero price" },
-  { price: -1, description: "negative price" },
+  {
+    price: undefined,
+    description: "missing price",
+  },
+  {
+    price: "1",
+    description: "string price",
+  },
+  {
+    price: NaN,
+    description: "NaN price",
+  },
+  {
+    price: Infinity,
+    description: "infinite price",
+  },
+  {
+    price: 0,
+    description: "zero price",
+  },
+  {
+    price: -1,
+    description: "negative price",
+  },
 ]
 const invalidRequiredIdInputs = [
-  { id: undefined, description: "missing order ID" },
-  { id: null, description: "null order ID" },
-  { id: 42, description: "numeric order ID" },
-  { id: "", description: "empty order ID" },
-  { id: "   ", description: "whitespace-only order ID" },
+  {
+    id: undefined,
+    description: "missing order ID",
+  },
+  {
+    id: null,
+    description: "null order ID",
+  },
+  {
+    id: 42,
+    description: "numeric order ID",
+  },
+  {
+    id: "",
+    description: "empty order ID",
+  },
+  {
+    id: "   ",
+    description: "whitespace-only order ID",
+  },
 ]
 const invalidOptionalIdInputs = [
-  { clientOrderId: "", description: "empty client order ID" },
-  { clientOrderId: "   ", description: "whitespace-only client order ID" },
-  { clientOrderId: 42, description: "numeric client order ID" },
+  {
+    clientOrderId: "",
+    description: "empty client order ID",
+  },
+  {
+    clientOrderId: "   ",
+    description: "whitespace-only client order ID",
+  },
+  {
+    clientOrderId: 42,
+    description: "numeric client order ID",
+  },
 ]
 const invalidQuantityInputs = [
-  { quantity: "0.1", description: "string quantity" },
-  { quantity: NaN, description: "NaN quantity" },
-  { quantity: Infinity, description: "infinite quantity" },
-  { quantity: -1, description: "negative quantity" },
+  {
+    quantity: "0.1",
+    description: "string quantity",
+  },
+  {
+    quantity: NaN,
+    description: "NaN quantity",
+  },
+  {
+    quantity: Infinity,
+    description: "infinite quantity",
+  },
+  {
+    quantity: -1,
+    description: "negative quantity",
+  },
 ]
 
 test("Order constructor rejects invalid prices with its domain Error", () => {
   for (const { price, description } of invalidPriceInputs) {
     assert.throws(
-      () => new Order({ ...validOrderInput, price }),
+      () => new Order({
+        ...validOrderInput,
+        price,
+      }),
       {
         name: "Error",
         message: errMsgs.price,
@@ -54,7 +111,10 @@ test("Order constructor rejects invalid prices with its domain Error", () => {
 test("Order constructor rejects invalid required IDs with its domain Error", () => {
   for (const { id, description } of invalidRequiredIdInputs) {
     assert.throws(
-      () => new Order({ ...validOrderInput, id }),
+      () => new Order({
+        ...validOrderInput,
+        id,
+      }),
       {
         name: "Error",
         message: errMsgs.id,
@@ -67,7 +127,10 @@ test("Order constructor rejects invalid required IDs with its domain Error", () 
 test("Order constructor rejects invalid optional client IDs with its domain Error", () => {
   for (const { clientOrderId, description } of invalidOptionalIdInputs) {
     assert.throws(
-      () => new Order({ ...validOrderInput, clientOrderId }),
+      () => new Order({
+        ...validOrderInput,
+        clientOrderId,
+      }),
       {
         name: "Error",
         message: errMsgs.clientOrderId,
@@ -80,7 +143,10 @@ test("Order constructor rejects invalid optional client IDs with its domain Erro
 test("Order constructor rejects invalid quantities with its domain Error", () => {
   for (const { quantity, description } of invalidQuantityInputs) {
     assert.throws(
-      () => new Order({ ...validOrderInput, quantity }),
+      () => new Order({
+        ...validOrderInput,
+        quantity,
+      }),
       {
         name: "Error",
         message: errMsgs.quantity,
