@@ -253,7 +253,10 @@ export class BitunixSpotReconciler {
     try {
       onStatus(status)
     } catch (error) {
-      this.#reportError({ error, onError })
+      this.#reportError({
+        error,
+        onError,
+      })
     }
   }
 
@@ -267,7 +270,10 @@ export class BitunixSpotReconciler {
 
   async #runCycle({ generation, symbols, trackedOrders, intervalMs, onSnapshot, onStatus, onError }) {
     try {
-      const result = await this.pollOnce({ symbols, trackedOrders })
+      const result = await this.pollOnce({
+        symbols,
+        trackedOrders,
+      })
       if (!this.running || generation !== this.generation) {
         return
       }
@@ -303,30 +309,49 @@ export class BitunixSpotReconciler {
         onStatus,
         onError,
       })
-      this.#reportError({ error, onError })
+      this.#reportError({
+        error,
+        onError,
+      })
     } finally {
-      if (this.running && generation === this.generation) {
-        const backoffMs = Math.min(intervalMs * (2 ** Math.min(this.failureCount, 5)), 60_000)
-        try {
-          this.timer = this.schedule({
-            callback: () => {
-              void this.#runCycle({
-                generation,
-                symbols,
-                trackedOrders,
-                intervalMs,
-                onSnapshot,
-                onStatus,
-                onError,
-              })
-            },
-            delay: backoffMs,
+      this.#scheduleNextCycle({
+        generation,
+        symbols,
+        trackedOrders,
+        intervalMs,
+        onSnapshot,
+        onStatus,
+        onError,
+      })
+    }
+  }
+
+  #scheduleNextCycle({ generation, symbols, trackedOrders, intervalMs, onSnapshot, onStatus, onError }) {
+    if (!this.running || generation !== this.generation) {
+      return
+    }
+    const backoffMs = Math.min(intervalMs * (2 ** Math.min(this.failureCount, 5)), 60_000)
+    try {
+      this.timer = this.schedule({
+        callback: () => {
+          void this.#runCycle({
+            generation,
+            symbols,
+            trackedOrders,
+            intervalMs,
+            onSnapshot,
+            onStatus,
+            onError,
           })
-        } catch (error) {
-          this.running = false
-          this.#reportError({ error, onError })
-        }
-      }
+        },
+        delay: backoffMs,
+      })
+    } catch (error) {
+      this.running = false
+      this.#reportError({
+        error,
+        onError,
+      })
     }
   }
 
