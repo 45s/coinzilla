@@ -1,4 +1,5 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { linkSharedAccountOrderRegistry } from "../application/providers/account-runtime-registry.js"
 import { createPositionId } from "../domain/portfolio/position.js"
 import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
@@ -1263,21 +1264,6 @@ function createInitialEngineTrackingState({ initialState }) {
       key: "reconciledTerminalOrderClientIds",
     })),
   }
-}
-
-function linkSharedAccountOrderRegistry({ state, initialState } = {}) {
-  const descriptor = Object.getOwnPropertyDescriptor(initialState, "orderRegistry")
-  if (!descriptor ||
-      (typeof descriptor.set !== "function" && descriptor.writable !== true)) {
-    return
-  }
-  Object.defineProperty(state, "registry", {
-    enumerable: true,
-    get: () => initialState.orderRegistry,
-    set: (registry) => {
-      initialState.orderRegistry = registry
-    },
-  })
 }
 
 function createInitialEngineState({ initialState = {}, pairs, initialRegistry } = {}) {
