@@ -1,6 +1,22 @@
 import { StrategyId } from "../strategies/strategy-ids.js"
 import { normalizeRecoverySellerSellAllocation } from "./normalize-recovery-seller-sell-allocation.js"
 
+function isRecoverySellerSellOwnership({ ownership } = {}) {
+  return ownership.strategyId === StrategyId.RECOVERY_SELLER &&
+    ownership.purpose === "RECOVERY_SELL"
+}
+
+function validateSellAllocationOwnership({ ownership, orderQuantity, isRecoverySellerSell } = {}) {
+  if (!isRecoverySellerSell && ownership.sellAllocation !== undefined) {
+    throw new TypeError("Only Recovery Seller SELL ownership may contain a mixed SELL allocation")
+  }
+  return normalizeRecoverySellerSellAllocation({
+    sellAllocation: ownership.sellAllocation,
+    quantity: orderQuantity,
+    required: isRecoverySellerSell,
+  })
+}
+
 function validateOwnershipShape({ ownership, orderQuantity } = {}) {
   if (!ownership || typeof ownership !== "object" || Array.isArray(ownership)) {
     throw new TypeError("Order ownership must be an object")
@@ -17,15 +33,10 @@ function validateOwnershipShape({ ownership, orderQuantity } = {}) {
       (typeof ownership.cycleId !== "string" || !ownership.cycleId.trim())) {
     throw new TypeError("Order ownership cycleId must be a non-empty string when provided")
   }
-  const isRecoverySellerSell = ownership.strategyId === StrategyId.RECOVERY_SELLER &&
-    ownership.purpose === "RECOVERY_SELL"
-  if (!isRecoverySellerSell && ownership.sellAllocation !== undefined) {
-    throw new TypeError("Only Recovery Seller SELL ownership may contain a mixed SELL allocation")
-  }
-  return normalizeRecoverySellerSellAllocation({
-    sellAllocation: ownership.sellAllocation,
-    quantity: orderQuantity,
-    required: isRecoverySellerSell,
+  return validateSellAllocationOwnership({
+    ownership,
+    orderQuantity,
+    isRecoverySellerSell: isRecoverySellerSellOwnership({ ownership }),
   })
 }
 
@@ -122,7 +133,7 @@ export function validateOrderOwnerships({ orders, ownerships } = {}) {
  * @param {string} [options.brokerOrderId]
  * @returns {object|undefined} Matching immutable ownership record.
  */
-export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId } = {}) {
+function validateOwnershipLookupIdentity({ clientOrderId, brokerOrderId } = {}) {
   if (clientOrderId === undefined && brokerOrderId === undefined) {
     throw new TypeError("OrderRegistry.getOwnership requires clientOrderId or brokerOrderId")
   }
@@ -132,7 +143,10 @@ export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId } 
   if (brokerOrderId !== undefined && (typeof brokerOrderId !== "string" || !brokerOrderId.trim())) {
     throw new TypeError("OrderRegistry.getOwnership brokerOrderId must be a non-empty string")
   }
+}
 
+export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId } = {}) {
+  validateOwnershipLookupIdentity({ clientOrderId, brokerOrderId })
   const byClientOrderId = clientOrderId === undefined
     ? undefined
     : ownerships.find((ownership) => ownership.clientOrderId === clientOrderId)

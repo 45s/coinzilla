@@ -156,6 +156,7 @@ function createPendingOrderCandidate({ action, marketMetadata, clientOrderId, pr
       positionId: action.positionId,
       purpose: action.purpose,
       cycleId: action.cycleId,
+      ...(action.sellAllocation === undefined ? {} : { sellAllocation: action.sellAllocation }),
     })
     : undefined
   return Object.freeze({

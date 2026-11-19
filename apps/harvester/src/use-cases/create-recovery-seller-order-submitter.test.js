@@ -203,6 +203,12 @@ function createAction({ side = "BUY" } = {}) {
     type: "LIMIT_MAKER",
     price: "1.999",
     quantity: "5",
+    ...(side === "SELL" ? {
+      sellAllocation: {
+        recoverySellQuantity: "5",
+        legacySellQuantity: "0",
+      },
+    } : {}),
   }
 }
 

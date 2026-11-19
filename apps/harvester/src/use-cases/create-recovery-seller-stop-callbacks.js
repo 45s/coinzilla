@@ -9,6 +9,16 @@ function markSellCycleUnknown({ cycleCoordinator, input } = {}) {
       typeof order.market?.id !== "string") {
     return
   }
+  const cycleState = cycleCoordinator.getCycleState({
+    marketId: order.market.id,
+  })
+  const reservedIdentity = cycleState?.sellOrderIdentity
+  if (cycleState?.cycleId !== ownership.cycleId ||
+      reservedIdentity?.clientOrderId !== order.clientOrderId ||
+      (reservedIdentity.brokerOrderId !== undefined && order.brokerOrderId !== undefined &&
+        reservedIdentity.brokerOrderId !== order.brokerOrderId)) {
+    return
+  }
   cycleCoordinator.markSellUnknown({
     marketId: order.market.id,
     cycleId: ownership.cycleId,

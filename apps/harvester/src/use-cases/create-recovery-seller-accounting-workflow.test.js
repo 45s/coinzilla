@@ -93,6 +93,10 @@ function makeRegistry(order) {
       positionId,
       purpose: "RECOVERY_SELL",
       cycleId: "rs-cycle-1",
+      sellAllocation: {
+        recoverySellQuantity: order.originalQuantity.amount,
+        legacySellQuantity: "0",
+      },
     },
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,

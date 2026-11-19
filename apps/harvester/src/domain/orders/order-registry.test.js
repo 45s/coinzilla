@@ -870,6 +870,10 @@ function createCanceledRSSellRegistry() {
     positionId: "rs-position-1",
     purpose: "RECOVERY_SELL",
     cycleId: "rs-cycle-1",
+    sellAllocation: {
+      recoverySellQuantity: "100",
+      legacySellQuantity: "0",
+    },
   }
   const registered = OrderRegistry.empty().registerPending({
     order: makeOrder({
