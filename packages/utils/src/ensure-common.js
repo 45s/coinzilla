@@ -39,21 +39,19 @@ export function describeValue({ value }) {
  * @returns {unknown}
  */
 export function readOption({ record, key }) {
+  let descriptor
   try {
-    const descriptor = Object.getOwnPropertyDescriptor(record, key)
-    if (descriptor === undefined) {
-      return undefined
-    }
-    if (!Object.hasOwn(descriptor, "value")) {
-      throw new TypeError(`options.${key} must not be an accessor`)
-    }
-    return descriptor.value
-  } catch (error) {
-    if (error instanceof TypeError && error.message.startsWith("options.")) {
-      throw error
-    }
+    descriptor = Object.getOwnPropertyDescriptor(record, key)
+  } catch {
     throw new TypeError("options must contain readable properties")
   }
+  if (descriptor === undefined) {
+    return undefined
+  }
+  if (!Object.hasOwn(descriptor, "value")) {
+    throw new TypeError(`options.${key} must not be an accessor`)
+  }
+  return descriptor.value
 }
 
 /**
