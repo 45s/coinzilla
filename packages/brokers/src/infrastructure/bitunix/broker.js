@@ -8,6 +8,7 @@ import { adaptAssets } from "./adapters/adapt-assets.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
 import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, createBitunixKlineHistoryQuery, normalizeBitunixKlineInterval } from "./adapters/adapt-market-data.js"
 import { adaptExchangeRates } from "./adapters/adapt-exchange-rates.js"
+import { adaptTokenNetworks } from "./adapters/adapt-token-networks.js"
 import { adaptDepositAddresses } from "./adapters/adapt-deposit-addresses.js"
 import { adaptDeposits } from "./adapters/adapt-deposits.js"
 import { BitunixDepositAddressError } from "./errors/bitunix-deposit-address-error.js"
@@ -27,6 +28,7 @@ const API = Object.freeze({
   placeOrder: "/api/spot/v1/order/place_order",
   lastPrice: "/api/spot/v1/market/last_price",
   exchangeRates: "/api/spot/v1/common/rate/list",
+  tokenNetworks: "/api/spot/v1/common/coin/coin_network/list",
   depth: "/api/spot/v1/market/depth",
   kline: "/api/spot/v1/market/kline",
   klineHistory: "/api/spot/v1/market/kline/history",
@@ -1124,6 +1126,34 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getExchangeRates()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read the documented public Bitunix Spot token and network metadata catalog.
+   * Includes exchange-reported deposit/withdrawal availability and network limits;
+   * it does not initiate deposits, withdrawals, or transfers.
+   *
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getTokenNetworks() {
+    try {
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.tokenNetworks,
+        authenticated: false,
+      })
+      return toResult({
+        data: adaptTokenNetworks({
+          value: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getTokenNetworks()",
         error,
       })
       return toResult({ errors: [error] })
