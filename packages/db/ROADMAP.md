@@ -12,6 +12,22 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 `@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
+## Generic SQLite relational-schema readiness — #1486
+
+**Status: Planned / audit in progress.** Before expanding Harvester persistence, verify and complete the generic infrastructure needed for consumer-owned relational SQLite schemas. The existing provider-neutral CRUD API intentionally stores JSON records in the physical `db_records` table; this remains a supported generic storage model, not the required representation for every application dataset.
+
+The package already exposes the low-level `createSqliteDatabase(...)` API with `exec`, `prepare`, synchronous `transaction` / `readTransaction`, and ordered `migrate(migrations)` support. Issue [#1486](https://github.com/45s/coinzilla/issues/1486) audits whether this API is sufficient, safe, documented, and usable through supported package exports for application-owned tables. Implement only concrete generic infrastructure gaps demonstrated by that audit.
+
+**Ownership boundary — unchanged:**
+
+- `packages/db` owns generic SQLite lifecycle, transaction, migration-history, backup/restore and provider infrastructure.
+- Each consumer owns its own relational table names, domain schema, constraints, indexes, repositories, record mapping and application-specific migrations.
+- No `sessions`, `orders`, `fills`, `errors`, Harvester entities, or Harvester repositories belong in this package.
+- Preserve the provider-neutral CRUD API and existing `db_records` behavior for consumers that need generic JSON collections.
+- No ORM, schema DSL, query builder, third-party driver, or speculative database provider.
+
+**Acceptance:** a consumer can create/open a file-backed SQLite database, apply its own immutable ordered migrations atomically, use the documented SQL/transaction boundary without importing `node:sqlite` or internal package paths, reconnect safely, and preserve existing data/API behavior. Migration failures must leave schema and migration history consistent. Package tests, coverage and exact-head CI are required.
+
 ## SQLite infrastructure audit and hardening — #1395
 
 **Status: Done.** [PR #1396](https://github.com/45s/coinzilla/pull/1396) merged into `develop` on 2026-11-18 as `81669ce2be6794b9bd03067f89b57f8fdb55f957`. The audit hardened SQLite connection lifecycle and cleanup, concurrent WAL initialization, transaction-handle lifetime, backup/restore failure preservation, and filesystem error classification. All implementation remains within this package's infrastructure boundary.
