@@ -1347,3 +1347,21 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [ ] PR #1481 CI and merge verification pending.
 
 **Reference note:** JKorf's `GetUserTradesAsync` interface documents `/api/spot/v1/order/deal/list`, but the inspected REST implementation currently sends `/api/spot/v1/order/pending/list`. Coinzilla retains its already-correct documented matching-order path and does not copy that reference defect.
+
+
+## 16. One-command local Bitunix health report publishing — PR #1484
+
+**Status: IN PROGRESS.** Extends the existing read-only diagnostic runner from issue [#1426](https://github.com/45s/coinzilla/issues/1426) and PRs [#1427](https://github.com/45s/coinzilla/pull/1427) / [#1439](https://github.com/45s/coinzilla/pull/1439). This is an operator/developer workflow, not a broker capability or Harvester readiness milestone.
+
+- [x] Add a one-command root entry point: `pnpm bitunix:health`.
+- [x] Reuse the existing Bitunix Spot REST and authenticated WebSocket RPC diagnostic runner; no second API client is introduced.
+- [x] Require a clean worktree, current branch `develop`, and configured `origin` before making any branch or network changes.
+- [x] Fetch `origin/develop` and create a unique timestamped `diagnostics/bitunix-health-<timestamp>` report branch from that remote tip.
+- [x] Save a local diagnostic report in ignored `packages/brokers/.diagnostics/` and a separately staged, sanitized report in `packages/brokers/diagnostics/reports/`.
+- [x] Stage only the generated report, commit it, push without force, and attempt to switch the checkout back to `develop` on all post-branch paths.
+- [x] Preserve failed API checks in the published report and return a non-zero process exit code; preserve push failures and still attempt cleanup.
+- [x] Add offline tests for clean-tree/branch guards, redaction, exact report staging, failed API results, push failure, and return-to-develop behavior.
+- [x] Document the command, root `.env.development` loading, required read-only API permissions, report privacy boundary, and Git prerequisites in the root and Brokers READMEs.
+- [ ] Run Brokers package tests and coverage, strict changed-file/workspace lint, syntax and required CI on the exact final PR head; merge only after all required checks pass.
+
+**Privacy and safety boundary:** only sanitized diagnostic metadata and private response shape summaries are committed. API keys, signatures, nonces, UIDs, account identifiers, balances, addresses, memos, and raw private responses must never appear in published reports. Local report files remain ignored and are written with restrictive permissions. The command uses the configured LIVE Spot API for read-only requests only; it never places/cancels orders, withdraws, transfers, force-pushes, deletes branches, or creates a PR for the generated report. Bitunix Futures remains out of scope and issue #1185 remains the Harvester lifecycle blocker.
