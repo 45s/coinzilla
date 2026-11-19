@@ -176,35 +176,7 @@ function createRecoverySellerExecutor({
   })
 }
 
-export function createRecoverySellerOrderSubmitter({
-  broker,
-  recoverySellerAccountingWorkflow,
-  onDurableSubmissionIntent,
-  onDurableSubmissionOutcome,
-  onUnresolvedSubmission,
-  onOrderValidationFailure,
-  canSubmit,
-  onSellReserved,
-} = {}) {
-  validateSubmitterOptions({
-    recoverySellerAccountingWorkflow,
-    onDurableSubmissionIntent,
-    onDurableSubmissionOutcome,
-    onUnresolvedSubmission,
-    canSubmit,
-    onSellReserved,
-  })
-  const execute = createRecoverySellerExecutor({
-    broker,
-    recoverySellerAccountingWorkflow,
-    onDurableSubmissionIntent,
-    onDurableSubmissionOutcome,
-    onUnresolvedSubmission,
-    onOrderValidationFailure,
-    canSubmit,
-    onSellReserved,
-  })
-
+function createRecoverySellerSubmissionHandler({ execute, onSellReserved } = {}) {
   return async ({ lifecycleDecision, action, marketMetadata } = {}) => {
     try {
       if (lifecycleDecision?.outcome !== "SUBMIT") {
@@ -239,4 +211,38 @@ export function createRecoverySellerOrderSubmitter({
       return toResult({ error })
     }
   }
+}
+
+export function createRecoverySellerOrderSubmitter({
+  broker,
+  recoverySellerAccountingWorkflow,
+  onDurableSubmissionIntent,
+  onDurableSubmissionOutcome,
+  onUnresolvedSubmission,
+  onOrderValidationFailure,
+  canSubmit,
+  onSellReserved,
+} = {}) {
+  validateSubmitterOptions({
+    recoverySellerAccountingWorkflow,
+    onDurableSubmissionIntent,
+    onDurableSubmissionOutcome,
+    onUnresolvedSubmission,
+    canSubmit,
+    onSellReserved,
+  })
+  const execute = createRecoverySellerExecutor({
+    broker,
+    recoverySellerAccountingWorkflow,
+    onDurableSubmissionIntent,
+    onDurableSubmissionOutcome,
+    onUnresolvedSubmission,
+    onOrderValidationFailure,
+    canSubmit,
+    onSellReserved,
+  })
+  return createRecoverySellerSubmissionHandler({
+    execute,
+    onSellReserved,
+  })
 }
