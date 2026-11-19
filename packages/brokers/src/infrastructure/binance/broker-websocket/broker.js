@@ -1,5 +1,4 @@
-import { handleErr, toResult } from "@coinzilla/utils"
-import { CoreBroker } from "../../../broker.core.js"
+import { defaultLogger, handleErr, toResult } from "@coinzilla/utils"
 import { getBrokerMutationOutcome } from "../../../broker/broker-contract.js"
 import { adaptCanonicalFill, adaptCanonicalOrder, adaptOrder, adaptSpotAsset, adaptSpotBalance, adaptTrade, createCanonicalMarket } from "../adapters/index.js"
 import { adaptOrderRequestParams } from "./helpers/adapters/order-request-params.js"
@@ -327,7 +326,7 @@ function createUserDataEventForwarder({ broker, onEvent, onStatus, logger }) {
  *
  * @property {ReturnType<typeof createBinanceBrokerCapabilities>} capabilities - Immutable, instance-specific capability declaration.
  */
-export class BinanceWebSocketBroker extends CoreBroker {
+export class BinanceWebSocketBroker {
   /**
    * @param {{apiKey: string, apiSecret: string, websocketApiUrl?: string, websocketStreamsUrl?: string, reconnectDelay?: number, logger?: object}} [input]
    * @param {{apiClientFactory?: (config: BinanceWebSocketConfig) => BinanceWebSocketApiClient, marketClientFactory?: (config: BinanceWebSocketConfig, logger: object) => BinanceStreamsClient, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, nowFn?: () => number, marketStreamStallTimeoutMs?: number, marketStreamRecoveryWindowMs?: number, marketStreamMaxRecoveryAttempts?: number, userDataRecoveryWarningThreshold?: number}} [dependencies]
@@ -345,7 +344,7 @@ export class BinanceWebSocketBroker extends CoreBroker {
       marketStreamMaxRecoveryAttempts = 3,
       userDataRecoveryWarningThreshold = 5,
     } = dependencies
-    super(input)
+    this.logger = input.logger || defaultLogger
 
     this.config = new BinanceWebSocketConfig(input)
     Object.defineProperty(this, "capabilities", {

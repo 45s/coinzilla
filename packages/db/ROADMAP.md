@@ -12,7 +12,6 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 `@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
-
 ## Generic SQLite relational-schema readiness — #1486
 
 **Status: Planned / audit in progress.** Before expanding Harvester persistence, verify and complete the generic infrastructure needed for consumer-owned relational SQLite schemas. The existing provider-neutral CRUD API intentionally stores JSON records in the physical `db_records` table; this remains a supported generic storage model, not the required representation for every application dataset.
@@ -29,7 +28,6 @@ The package already exposes the low-level `createSqliteDatabase(...)` API with `
 
 **Acceptance:** a consumer can create/open a file-backed SQLite database, apply its own immutable ordered migrations atomically, use the documented SQL/transaction boundary without importing `node:sqlite` or internal package paths, reconnect safely, and preserve existing data/API behavior. Migration failures must leave schema and migration history consistent. Package tests, coverage and exact-head CI are required.
 
-
 ## SQLite infrastructure audit and hardening — #1395
 
 **Status: Done.** [PR #1396](https://github.com/45s/coinzilla/pull/1396) merged into `develop` on 2026-11-18 as `81669ce2be6794b9bd03067f89b57f8fdb55f957`. The audit hardened SQLite connection lifecycle and cleanup, concurrent WAL initialization, transaction-handle lifetime, backup/restore failure preservation, and filesystem error classification. All implementation remains within this package's infrastructure boundary.
@@ -45,7 +43,7 @@ The merged commit retains the validated source tree. Detailed defect evidence an
 
 **Operational limits remain:** SQLite serializes writers; WAL is same-host only (not NFS/SMB); synchronous `DatabaseSync` calls block the Node.js event loop; restore publication requires hard-link support. Disk-full, power-loss and hardware I/O behavior cannot be fully reproduced in shared CI. Backup schedules, retention, encryption, off-site storage, deployment paths, restore drills and runbooks remain application-owned.
 
-**Next DB infrastructure milestone:** complete [#1486](https://github.com/45s/coinzilla/issues/1486), the focused audit of the existing low-level SQLite migration/transaction API for consumer-owned relational schemas. Do not add application-specific tables here. After #1486 is accepted, Harvester can implement its own readable tables and repositories under [#1327](https://github.com/45s/coinzilla/issues/1327). Other consumers follow the same ownership boundary. Add generic DB capabilities only when a concrete consumer requirement demonstrates a real infrastructure gap.
+**Next work is evidence-driven, not another speculative DB feature.** Consumer repository/schema integration belongs to the consumer domain and remains tracked by [umbrella issue #1327](https://github.com/45s/coinzilla/issues/1327). Add generic DB capabilities only when a concrete consumer requirement demonstrates a provider-neutral contract gap.
 
 ## Provider-neutral CRUD API — core implementation and hardening merged
 

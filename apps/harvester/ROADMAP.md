@@ -37,7 +37,6 @@ The ADA recovery lifecycle work below remains a separate active trading-safety o
 
 The migration must preserve existing `harvester_orders` history, with a verified, idempotent conversion and a rollback/backup plan before cutover. The current best-effort, non-blocking observer semantics and TESTNET/LIVE file separation remain mandatory. No Journal/ADR-0001 replacement, restart restoration, or trading-state authority is introduced.
 
-
 **Previous persistence scope:** The trading-session-ID history projection from PR #1369 and the temporary `harvester_processes` process-ID smoke-test write are removed in this slice, as explicitly requested. The replacement history record is an executed-order projection; it does not use process or runtime-session identity.
 
 **Filled-order history — MERGED:** [PR #1469](https://github.com/45s/coinzilla/pull/1469) merged into `develop` as `39f098000d6c20cb596a9e6700250faa00bbd80e` (exact validated PR head `6d11d883e2d8250c2b3fab9f6d5a40d6178996bb`). It delivers a non-authoritative `harvester_orders` projection. Persist an order as soon as cumulative executed quantity is positive, including immediate partial/fully filled acknowledgements, later partial/final fills, and partial-fill cancellation outcomes. Further lifecycle snapshots update the same row. Identity is `(environment, providerInstanceId, providerType, accountId, clientOrderId)`; exact decimal strings, canonical market/asset facts, provider/account provenance, and available strategy/position ownership are retained.
