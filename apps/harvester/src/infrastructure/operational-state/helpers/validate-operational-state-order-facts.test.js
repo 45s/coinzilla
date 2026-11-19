@@ -137,9 +137,23 @@ test("rejects malformed order-submission intent identity, fields, classification
     ["non-canonical quantity", { quantity: "01" }, /price and quantity must be positive/],
     ["unsupported purpose", { purpose: "MANUAL" }, /purpose must be null, RECOVERY_BUY or RECOVERY_SELL/],
     ["RS purpose without ownership", { purpose: "RECOVERY_BUY" }, /complete strategy.*positionId.*cycleId ownership/],
-    ["partial RS ownership", { purpose: "RECOVERY_BUY", strategyId: "RECOVERY_SELLER", positionId: "rs-position-1" }, /complete strategy.*positionId.*cycleId ownership/],
-    ["RS purpose/side mismatch", { purpose: "RECOVERY_BUY", strategyId: "RECOVERY_SELLER", positionId: "rs-position-1", cycleId: "rs-cycle-1", side: "SELL" }, /purpose must match its canonical side/],
-    ["Conservative fact with RS ownership", { strategyId: "RECOVERY_SELLER", positionId: "rs-position-1", cycleId: "rs-cycle-1" }, /cannot contain Recovery Seller ownership/],
+    ["partial RS ownership", {
+      purpose: "RECOVERY_BUY",
+      strategyId: "RECOVERY_SELLER",
+      positionId: "rs-position-1",
+    }, /complete strategy.*positionId.*cycleId ownership/],
+    ["RS purpose/side mismatch", {
+      purpose: "RECOVERY_BUY",
+      strategyId: "RECOVERY_SELLER",
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+      side: "SELL",
+    }, /purpose must match its canonical side/],
+    ["Conservative fact with RS ownership", {
+      strategyId: "RECOVERY_SELLER",
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    }, /Purpose-free order ownership must be complete Coin Grabber ownership/],
   ]
 
   for (const [description, changes, expectedError] of invalidCases) {
@@ -214,7 +228,13 @@ test("rejects order-submission outcomes with inconsistent identity, amounts, or 
     ["invalid outcome", { outcome: "SENT" }, /classification is unsupported/],
     ["invalid purpose", { purpose: "MANUAL" }, /purpose must be null, RECOVERY_BUY or RECOVERY_SELL/],
     ["RS purpose without ownership", { purpose: "RECOVERY_BUY" }, /complete strategy.*positionId.*cycleId ownership/],
-    ["RS purpose/side mismatch", { purpose: "RECOVERY_BUY", strategyId: "RECOVERY_SELLER", positionId: "rs-position-1", cycleId: "rs-cycle-1", side: "SELL" }, /purpose must match its canonical side/],
+    ["RS purpose/side mismatch", {
+      purpose: "RECOVERY_BUY",
+      strategyId: "RECOVERY_SELLER",
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+      side: "SELL",
+    }, /purpose must match its canonical side/],
     ["unacknowledged order with broker identity", { brokerOrderId: "broker-order-1" }, /PENDING order without broker identity/],
     ["unacknowledged order with non-pending status", { status: "NEW" }, /PENDING order without broker identity/],
     ["unacknowledged order with execution", { executedQuantity: "0.1" }, /PENDING order without broker identity/],

@@ -16,37 +16,45 @@ function validateProviderIdentity({ canonicalData }) {
   }
 }
 
-function validatePersistedOrderOwnership({ canonicalData } = {}) {
-  const fields = ["strategyId", "positionId", "cycleId"]
-  const supplied = fields.filter((field) => canonicalData[field] !== undefined)
-  if (canonicalData.purpose === null) {
-    if (supplied.length === 0) {
-      return
-    }
-    if (canonicalData.strategyId !== "COIN_GRABBER" || supplied.length < 2) {
-      throw new TypeError("Purpose-free order ownership must be complete Coin Grabber ownership")
-    }
-    requireNonEmptyString({
-      value: canonicalData.positionId,
-      field: "data.positionId",
-      maxLength: MAX_FACT_ID_LENGTH,
-    })
-    if (canonicalData.cycleId !== undefined) {
-      requireNonEmptyString({
-        value: canonicalData.cycleId,
-        field: "data.cycleId",
-        maxLength: MAX_FACT_ID_LENGTH,
-      })
-    }
+function validatePurposeFreePersistedOwnership({ canonicalData, supplied } = {}) {
+  if (supplied.length === 0) {
     return
   }
+  if (canonicalData.strategyId !== "COIN_GRABBER" || supplied.length < 2) {
+    throw new TypeError("Purpose-free order ownership must be complete Coin Grabber ownership")
+  }
+  requireNonEmptyString({
+    value: canonicalData.positionId,
+    field: "data.positionId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  if (canonicalData.cycleId !== undefined) {
+    requireNonEmptyString({
+      value: canonicalData.cycleId,
+      field: "data.cycleId",
+      maxLength: MAX_FACT_ID_LENGTH,
+    })
+  }
+}
+
+function validatePersistedRecoveryOrderSide({ canonicalData } = {}) {
+  if (canonicalData.purpose === "RECOVERY_BUY" && canonicalData.strategyId !== "RECOVERY_SELLER") {
+    throw new TypeError("RECOVERY_BUY ownership must belong to Recovery Seller")
+  }
+  if ((canonicalData.purpose === "RECOVERY_BUY" && canonicalData.side !== "BUY") ||
+      (canonicalData.purpose === "RECOVERY_SELL" && canonicalData.side !== "SELL")) {
+    throw new TypeError("Recovery order purpose must match its canonical side")
+  }
+}
+
+function validatePersistedRecoveryOrderOwnership({ canonicalData, supplied } = {}) {
   if (canonicalData.purpose === "RECOVERY_SELL" && supplied.length === 0) {
     return
   }
   if (!["RECOVERY_BUY", "RECOVERY_SELL"].includes(canonicalData.purpose) ||
       supplied.length < 2 ||
       !["COIN_GRABBER", "RECOVERY_SELLER"].includes(canonicalData.strategyId)) {
-    throw new TypeError("Recovery order facts require complete strategy and position ownership")
+    throw new TypeError("Recovery order facts require complete strategy, positionId and cycleId ownership")
   }
   requireNonEmptyString({
     value: canonicalData.positionId,
@@ -66,10 +74,24 @@ function validatePersistedOrderOwnership({ canonicalData } = {}) {
       maxLength: MAX_FACT_ID_LENGTH,
     })
   }
-  if ((canonicalData.purpose === "RECOVERY_BUY" && canonicalData.side !== "BUY") ||
-      (canonicalData.purpose === "RECOVERY_SELL" && canonicalData.side !== "SELL")) {
-    throw new TypeError("Recovery order purpose must match its canonical side")
+  validatePersistedRecoveryOrderSide({
+    canonicalData,
+  })
+}
+
+function validatePersistedOrderOwnership({ canonicalData } = {}) {
+  const fields = ["strategyId", "positionId", "cycleId"]
+  const supplied = fields.filter((field) => canonicalData[field] !== undefined)
+  if (canonicalData.purpose === null) {
+    return validatePurposeFreePersistedOwnership({
+      canonicalData,
+      supplied,
+    })
   }
+  return validatePersistedRecoveryOrderOwnership({
+    canonicalData,
+    supplied,
+  })
 }
 
 function factIdForOrderIntent(clientOrderId) {

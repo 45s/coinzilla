@@ -32,22 +32,35 @@ function validateSubmissionOrderFields({ order }) {
   }
 }
 
-function validateSubmissionOwnership({ purpose, ownership, side } = {}) {
-  const hasOwnership = ownership !== undefined && ownership !== null
-  if (purpose === null && !hasOwnership) {
+function hasNonEmptyValue(value) {
+  return typeof value === "string" && value.trim().length > 0
+}
+
+function validatePurposeFreeOwnership({ ownership } = {}) {
+  if (!ownership) {
     return {}
   }
-  if (purpose === null && ownership.strategyId !== "COIN_GRABBER") {
-    throw new TypeError("Purpose-free order ownership must belong to Coin Grabber")
+  const hasValidCycleId = ownership.cycleId === undefined || hasNonEmptyValue(ownership.cycleId)
+  if (ownership.strategyId !== "COIN_GRABBER" ||
+      ownership.purpose !== null ||
+      !hasNonEmptyValue(ownership.positionId) ||
+      !hasValidCycleId) {
+    throw new TypeError("Purpose-free order ownership must be complete Coin Grabber ownership")
   }
-  if (purpose === "RECOVERY_SELL" && !hasOwnership) {
-    return {}
+  return {
+    strategyId: ownership.strategyId,
+    positionId: ownership.positionId,
+    ...(ownership.cycleId ? { cycleId: ownership.cycleId } : {}),
   }
+}
+
+function validatePurposeOwnership({ purpose, ownership, side } = {}) {
   const isSupportedStrategy = ["COIN_GRABBER", "RECOVERY_SELLER"].includes(ownership?.strategyId)
-  const hasPositionId = typeof ownership?.positionId === "string" && ownership.positionId.trim()
-  const hasCycleId = typeof ownership?.cycleId === "string" && ownership.cycleId.trim()
-  if (!isSupportedStrategy || ownership.purpose !== purpose || !hasPositionId) {
-    throw new TypeError("Strategy order submission requires complete strategy, positionId and purpose ownership")
+  const hasCycleId = hasNonEmptyValue(ownership?.cycleId)
+  if (!isSupportedStrategy ||
+      ownership.purpose !== purpose ||
+      !hasNonEmptyValue(ownership.positionId)) {
+    throw new TypeError("Strategy order submission requires complete strategy and position ownership")
   }
   if (ownership.strategyId === "RECOVERY_SELLER" && !hasCycleId) {
     throw new TypeError("Recovery Seller order submission requires its immutable cycleId")
@@ -64,6 +77,22 @@ function validateSubmissionOwnership({ purpose, ownership, side } = {}) {
     positionId: ownership.positionId,
     ...(hasCycleId ? { cycleId: ownership.cycleId } : {}),
   }
+}
+
+function validateSubmissionOwnership({ purpose, ownership, side } = {}) {
+  if (purpose === null) {
+    return validatePurposeFreeOwnership({
+      ownership,
+    })
+  }
+  if (purpose === "RECOVERY_SELL" && !ownership) {
+    return {}
+  }
+  return validatePurposeOwnership({
+    purpose,
+    ownership,
+    side,
+  })
 }
 
 function validateSubmissionIntent({ operationalStateStore, order, purpose, ownership }) {
