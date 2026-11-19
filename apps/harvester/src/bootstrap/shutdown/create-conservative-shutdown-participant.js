@@ -44,7 +44,14 @@ function throwIfShutdownAborted(signal) {
 
 function createStageBlocker({ stage, error } = {}) {
   const reason = error?.code ?? error?.message ?? "FAILED"
-  const detail = error?.reason
+  const message = typeof error?.message === "string" ? error.message : ""
+  const separatorIndex = message.lastIndexOf(": ")
+  const messageDetail = separatorIndex >= 0 ? message.slice(separatorIndex + 2) : undefined
+  const detail = error?.reason ?? (
+    ["SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE", "SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE"].includes(error?.code)
+      ? messageDetail
+      : undefined
+  )
   return `${stage}:${reason}${detail ? `:${detail}` : ""}`
 }
 
