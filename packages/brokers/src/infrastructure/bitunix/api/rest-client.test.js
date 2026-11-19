@@ -769,9 +769,25 @@ async function assertMalformedEnvelopeOutcome({ payload, stateChanging, name }) 
 
 test("Bitunix REST malformed success envelopes preserve unknown mutation outcomes", async () => {
   const malformedPayloads = [
-    { name: "non-object envelope", payload: null },
-    { name: "invalid exchange code", payload: { code: ["0"], msg: "success", data: [] } },
-    { name: "missing message", payload: { code: "0", data: [] } },
+    {
+      name: "non-object envelope",
+      payload: null,
+    },
+    {
+      name: "invalid exchange code",
+      payload: {
+        code: ["0"],
+        msg: "success",
+        data: [],
+      },
+    },
+    {
+      name: "missing message",
+      payload: {
+        code: "0",
+        data: [],
+      },
+    },
   ]
 
   for (const { name, payload } of malformedPayloads) {
