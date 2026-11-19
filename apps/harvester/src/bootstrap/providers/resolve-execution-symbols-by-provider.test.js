@@ -103,13 +103,17 @@ test("routes enabled RS markets through explicit provider assignments and dedupl
   const result = resolveExecutionSymbolsByProvider({
     appConfig: createAppConfig({
       strategies: {
-        CG_coinGrabber: { pairs },
+        CG_coinGrabber: {
+          pairs,
+        },
         RS_recoverySeller: {
           enabled: true,
           pairs: recoverySellerPairs,
         },
       },
-      executionRouting: { routes },
+      executionRouting: {
+        routes,
+      },
     }),
     providers,
   })
@@ -301,8 +305,14 @@ test("rejects configured provider instances with no execution markets", () => {
 
 function createSameMarketCgAndRsRouteFixture() {
   const recoverySellerPairs = {
-    BTCUSDT: { enabled: true, tradingEnvironment: "testnet" },
-    DOGEUSDT: { enabled: true, tradingEnvironment: "testnet" },
+    BTCUSDT: {
+      enabled: true,
+      tradingEnvironment: "testnet",
+    },
+    DOGEUSDT: {
+      enabled: true,
+      tradingEnvironment: "testnet",
+    },
   }
   const routes = [
     ...createRoutes(),
@@ -320,10 +330,17 @@ function createSameMarketCgAndRsRouteFixture() {
   return {
     appConfig: createAppConfig({
       strategies: {
-        CG_coinGrabber: { pairs },
-        RS_recoverySeller: { enabled: true, pairs: recoverySellerPairs },
+        CG_coinGrabber: {
+          pairs,
+        },
+        RS_recoverySeller: {
+          enabled: true,
+          pairs: recoverySellerPairs,
+        },
       },
-      executionRouting: { routes },
+      executionRouting: {
+        routes,
+      },
     }),
     expectedRoutes: [
       ["binance-testnet-primary", [

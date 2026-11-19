@@ -29,7 +29,10 @@ env: { TRADING_MODE: "testnet",
 
 const createTestAppConfig = ({ telegram } = {}) => {
   const config = structuredClone(defaultAppConfig)
-  config.notifications.telegram = { ...config.notifications.telegram, ...telegram }
+  config.notifications.telegram = {
+    ...config.notifications.telegram,
+    ...telegram,
+  }
   return config
 }
 
@@ -446,7 +449,11 @@ test("applies custom Telegram event overrides and market filters while preservin
       enabled: true,
       profile: "custom",
       markets: ["LINKUSDT"],
-      events: { fillReceived: true, pairPaused: false, recoveryCompleted: false },
+      events: {
+        fillReceived: true,
+        pairPaused: false,
+        recoveryCompleted: false,
+      },
     },
   })
 
@@ -513,7 +520,10 @@ test("does not construct Telegram transport when the unified config disables not
       TELEGRAM_CHAT_ID: "test-chat-id",
     },
     loadConfig: async () => createTestAppConfig({
-      telegram: { enabled: false, profile: "trader" },
+      telegram: {
+        enabled: false,
+        profile: "trader",
+      },
     }),
     createTelegramNotifier: () => {
       notifierCreations += 1
@@ -562,8 +572,10 @@ test("provides distinct minimal, trader, and verbose Telegram profile presets", 
     const sentMessages = []
     const signalHandlers = new Map()
     await runMain({
-      env: { TELEGRAM_BOT_TOKEN: "test-token",
-TELEGRAM_CHAT_ID: "test-chat" },
+      env: {
+        TELEGRAM_BOT_TOKEN: "test-token",
+        TELEGRAM_CHAT_ID: "test-chat",
+      },
       loadConfig: async () => createTestAppConfig({
         telegram: { enabled: true, profile: scenario.profile },
       }),
@@ -618,7 +630,12 @@ TELEGRAM_CHAT_ID: "test-chat" },
         enabled: true,
         profile: "custom",
         markets: ["LINKUSDT"],
-        events: { startupFailed: false, brokerDisconnected: false, orderFailed: false, accountSafetyAlert: false },
+        events: {
+          startupFailed: false,
+          brokerDisconnected: false,
+          orderFailed: false,
+          accountSafetyAlert: false,
+        },
       },
     }),
     createTelegramNotifier: () => ({ async sendMessage(message) { sentMessages.push(message) } }),

@@ -460,7 +460,10 @@ function createProviderAccountStartInput({
   deferMarketDataStart,
 }) {
   const executionSymbols = executionSymbolsByProvider.get(provider.providerInstanceId) ?? []
-  const executionRoutes = resolveExecutionRoutesByProvider({ appConfig, providers })
+  const executionRoutes = resolveExecutionRoutesByProvider({
+    appConfig,
+    providers,
+  })
     .get(provider.providerInstanceId) ?? []
   const marketDataProviderMetadata = createMarketDataProviderMetadata({
     executionSymbols,

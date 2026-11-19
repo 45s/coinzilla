@@ -247,9 +247,18 @@ function assertAccountStartupInputs({
     ["SOLUSDT"],
   ])
   assert.deepEqual(inputs.map((entry) => entry.executionRoutes), [
-    [{ strategyId: "CG_coinGrabber", symbol: "BTCUSDT" }],
-    [{ strategyId: "CG_coinGrabber", symbol: "ETHUSDT" }],
-    [{ strategyId: "CG_coinGrabber", symbol: "SOLUSDT" }],
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "BTCUSDT",
+    }],
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "ETHUSDT",
+    }],
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "SOLUSDT",
+    }],
   ], "Provider startup must retain strategy ownership instead of receiving only deduplicated market symbols")
   assert.deepEqual(inputs.map((entry) => entry.marketDataSymbols), [
     ["BTCUSDT"],

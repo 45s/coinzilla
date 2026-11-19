@@ -17,6 +17,8 @@ created: 2026-11-14
 
 The exact `{ strategyId, symbol }` assignments now survive provider-account startup and are returned in provider runtime metadata, separately from deduplicated `executionSymbols`. This preserves both owners when CG and RS share a market while subscribing once. This is still routing metadata only: it does not register RS, create an RS engine, or authorize execution. RS remains disabled/non-executable.
 
+The strict ESLint findings in the already changed route and Telegram test fixtures were corrected as formatting-only changes; no test coverage or lint rules were weakened, and runtime behavior is unchanged.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.
