@@ -1718,3 +1718,130 @@ test("Bitunix canonical order placement remains unsupported because client order
   assert.ok(result.errors[0] instanceof BrokerUnsupportedOperationError)
   assert.equal(calls.length, 0)
 })
+const TOKEN_NETWORK_PATH = "/api/spot/v1/common/coin/coin_network/list"
+
+test("Bitunix Spot token-network metadata uses one unsigned public REST request and preserves exact source fields", async () => {
+  const tokenMetadata = [{
+    name: "USDT",
+    fullName: "Tether",
+    quotePrecision: "6",
+    withdrawOpen: 1,
+    withdrawMin: "0.000001",
+    withdrawMax: null,
+    networks: [{
+      contractPrecision: 6,
+      contractAddress: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+      requireMemo: 0,
+      chain: "TRON",
+      network: "Tron (TRC-20)",
+      isOpen: 1,
+      depositOpen: 1,
+      withdrawOpen: 1,
+      withdrawMin: "0.000001",
+      withdrawMax: "3000000",
+      depositMin: "0.000001",
+    }],
+  }]
+  const { broker, calls } = createBroker({
+    responses: {
+      [TOKEN_NETWORK_PATH]: tokenMetadata,
+    },
+  })
+
+  const result = await broker.getTokenNetworks()
+
+  assert.equal(result.ok, true, "a valid token-network catalog must return a successful result")
+  assert.deepEqual(result.data, tokenMetadata, "the adapter must preserve source fields and exact decimal strings without coercion")
+  assert.equal(Object.isFrozen(result.data), true, "the token-network catalog must be immutable")
+  assert.equal(Object.isFrozen(result.data[0]), true, "each token metadata record must be immutable")
+  assert.equal(Object.isFrozen(result.data[0].networks), true, "each token's network collection must be immutable")
+  assert.equal(Object.isFrozen(result.data[0].networks[0]), true, "each network metadata record must be immutable")
+  assert.deepEqual(calls, [{
+    method: "GET",
+    path: TOKEN_NETWORK_PATH,
+    options: {
+      authenticated: false,
+    },
+  }], "token-network metadata must use one unsigned public GET request")
+})
+
+test("Bitunix Spot token-network metadata accepts an explicit empty catalog", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [TOKEN_NETWORK_PATH]: [],
+    },
+  })
+
+  const result = await broker.getTokenNetworks()
+
+  assert.equal(result.ok, true, "an explicitly empty token-network catalog is a valid exchange response")
+  assert.deepEqual(result.data, [], "an empty token-network catalog must remain empty")
+  assert.equal(calls.length, 1, "an empty catalog read must make exactly one REST request")
+})
+
+test("Bitunix Spot token-network metadata preserves omitted and null optional values", async () => {
+  const tokenMetadata = [{
+    name: "USDT",
+    networks: [{
+      network: "Tron (TRC-20)",
+      withdrawMax: null,
+    }],
+  }]
+  const { broker } = createBroker({
+    responses: {
+      [TOKEN_NETWORK_PATH]: tokenMetadata,
+    },
+  })
+
+  const result = await broker.getTokenNetworks()
+
+  assert.equal(result.ok, true, "documented optional token and network metadata may be absent or null")
+  assert.equal(Object.hasOwn(result.data[0], "fullName"), false, "omitted token metadata must not be synthesized")
+  assert.equal(result.data[0].networks[0].withdrawMax, null, "an explicit null withdrawal maximum must remain null")
+  assert.equal(Object.hasOwn(result.data[0].networks[0], "depositMin"), false, "omitted network deposit minimum must remain unknown")
+})
+
+test("Bitunix Spot token-network metadata rejects malformed catalog rows and decimal constraints", async () => {
+  const invalidResponses = [
+    null,
+    {},
+    [null],
+    [{ name: " " }],
+    [{ name: "USDT", networks: {} }],
+    [{ name: "USDT", withdrawMin: 0.000001 }],
+    [{ name: "USDT", withdrawMax: "NaN" }],
+    [{ name: "USDT", networks: [null] }],
+    [{ name: "USDT", networks: [{ network: "TRC-20", depositMin: "-0.1" }] }],
+  ]
+
+  for (const invalidResponse of invalidResponses) {
+    const { broker } = createBroker({
+      responses: {
+        [TOKEN_NETWORK_PATH]: invalidResponse,
+      },
+    })
+    const result = await broker.getTokenNetworks()
+
+    assert.equal(
+      result.ok,
+      false,
+      `malformed token-network metadata must fail closed: ${JSON.stringify(invalidResponse)}`,
+    )
+    assert.ok(result.errors?.[0] instanceof Error, "invalid token-network metadata must include a diagnostic error")
+  }
+})
+
+test("Bitunix Spot token-network metadata propagates REST failures without retrying", async () => {
+  const transportFailure = new Error("token-network endpoint unavailable")
+  const { broker, calls } = createBroker({
+    responses: {
+      [TOKEN_NETWORK_PATH]: transportFailure,
+    },
+  })
+
+  const result = await broker.getTokenNetworks()
+
+  assert.equal(result.ok, false, "a failed token-network request must never appear as a successful empty catalog")
+  assert.equal(result.errors[0], transportFailure, "the original token-network transport error must remain available")
+  assert.equal(calls.length, 1, "a failed token-network read must not be retried implicitly")
+})
