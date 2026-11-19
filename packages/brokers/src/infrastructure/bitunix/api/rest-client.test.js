@@ -792,7 +792,11 @@ test("Bitunix REST malformed success envelopes preserve unknown mutation outcome
 
   for (const { name, payload } of malformedPayloads) {
     for (const stateChanging of [false, true]) {
-      await assertMalformedEnvelopeOutcome({ payload, stateChanging, name })
+      await assertMalformedEnvelopeOutcome({
+        payload,
+        stateChanging,
+        name,
+      })
     }
   }
 })

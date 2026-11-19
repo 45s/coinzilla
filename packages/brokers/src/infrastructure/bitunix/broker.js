@@ -701,6 +701,7 @@ export class BitunixSpotBroker {
         method: "POST",
         path: API.deposits,
         body,
+        stateChanging: false,
       })
       return toResult({
         data: adaptDeposits({
