@@ -55,6 +55,7 @@ function createAccountStateCollections() {
     durablePausedMarkets: new Set(),
     recoveryManagedPausedMarkets: new Set(),
     recoveryManagedCancellationClientOrderIds: new Set(),
+    recoverySellerBuyFillsByCycle: new Map(),
     unrequestedTerminalOrderClientIds: new Set(),
     replacementIntents: new Set(),
     trailingBuyRepriceIntents: new Set(),
