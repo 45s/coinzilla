@@ -29,7 +29,7 @@ function createFakeGit({ repositoryRoot, failPush = false } = {}) {
       return "report-commit-sha"
     }
     if (args[0] === "push" && failPush) {
-      throw new Error("simulated push failure")
+      throw new Error(`simulated push failure ${apiSecret}`)
     }
     return ""
   }
@@ -190,12 +190,16 @@ test("push failure still switches the local checkout back to develop", async () 
       repositoryRoot,
       runGit,
       runDiagnostics: async () => createDiagnosticReport(),
-      env: {},
+      env: {
+        BITUNIX_API_KEY: apiKey,
+        BITUNIX_API_SECRET: apiSecret,
+      },
       now: () => fixedTimestamp,
     })
 
     assert.equal(result.exitCode, 1, "a failed report push must make the command fail rather than claiming publication")
     assert.match(result.pushError, /simulated push failure/, "the push failure must remain visible for troubleshooting")
+    assert.equal(result.pushError.includes(apiSecret), false, "Git error text must not leak configured credentials into terminal output")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "a failed push must not leave the user's checkout on the report branch")
   } finally {
     await rm(repositoryRoot, {
