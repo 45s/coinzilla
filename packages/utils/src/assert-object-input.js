@@ -1,3 +1,5 @@
+import { ensure } from "./ensure.js"
+
 /**
  * Assert that an operation received a non-null, non-array object.
  * This helper deliberately does not read properties; callers own property
@@ -8,10 +10,12 @@
  * @throws {TypeError} If the operation label or input shape is invalid.
  */
 export function assertObjectInput({ input, operation = "Operation" } = {}) {
-  if (typeof operation !== "string" || operation.trim() === "") {
-    throw new TypeError("operation must be a non-empty string")
-  }
-  if (input === null || typeof input !== "object" || Array.isArray(input)) {
-    throw new TypeError(`${operation  } input must be an object`)
-  }
+  ensure.nonEmptyString({
+    value: operation,
+    name: "operation",
+  })
+  ensure.object({
+    value: input,
+    name: `${operation} input`,
+  })
 }
