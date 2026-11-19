@@ -13,6 +13,7 @@ import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
 import { createRecoverySellerOrderSubmitter } from "./create-recovery-seller-order-submitter.js"
 import { createRecoverySellerStopWorkflow } from "./create-recovery-seller-stop-workflow.js"
+import { createRecoverySellerStopCallbacks } from "./create-recovery-seller-stop-callbacks.js"
 
 const baseAsset = new Asset({
   id: "zro",
@@ -477,4 +478,61 @@ test("does not call the broker when the RS lifecycle decision is not SUBMIT", as
   assert.equal(result.ok, true)
   assert.equal(result.data.submitted, false)
   assert.equal(placeOrderCalls, 0)
+})
+
+test("uses durable STOP callbacks to block further RS submissions after an unknown acknowledgement", async () => {
+  const sharedState = createSharedState()
+  const operationalStateStore = createMemoryOperationalStateStore()
+  const stopWorkflowResult = await createRecoverySellerStopWorkflow({
+    operationalStateStore,
+  })
+  const recoverySellerStopCallbacks = createRecoverySellerStopCallbacks({
+    stopWorkflow: stopWorkflowResult.data,
+  })
+  let placeOrderCalls = 0
+  const broker = createBroker({
+    onPlaceOrder: () => {
+      placeOrderCalls += 1
+    },
+    placeOrderFailure: true,
+  })
+  const durable = async () => ({
+    ok: true,
+    data: {
+      durable: true,
+    },
+  })
+  const submit = createRecoverySellerOrderSubmitter({
+    broker,
+    recoverySellerAccountingWorkflow: createRecoverySellerAccountingWorkflow({
+      sharedState,
+    }),
+    onDurableSubmissionIntent: durable,
+    onDurableSubmissionOutcome: durable,
+    recoverySellerStopCallbacks,
+  })
+
+  const first = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "BUY_TRANCHE_ELIGIBLE",
+    },
+    action: createAction(),
+    marketMetadata,
+  })
+  const second = await submit({
+    lifecycleDecision: {
+      outcome: "SUBMIT",
+      reasonCode: "BUY_TRANCHE_ELIGIBLE",
+    },
+    action: createAction(),
+    marketMetadata,
+  })
+
+  assert.equal(first.ok, false)
+  assert.equal(second.ok, false)
+  assert.equal(placeOrderCalls, 1)
+  assert.equal(recoverySellerStopCallbacks.canSubmit(), false)
+  assert.equal(stopWorkflowResult.data.getStopState().status, "STOPPED")
+  assert.equal(operationalStateStore.records.length, 1)
 })
