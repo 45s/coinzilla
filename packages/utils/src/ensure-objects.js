@@ -7,16 +7,24 @@ import { typeError } from "./ensure-common.js"
  */
 export function requireObject({ value, name }) {
   if (value === null || typeof value !== "object") {
-    throw typeError({ name, expectation: "an object", value })
+    throw typeError({
+      name,
+      expectation: "an object",
+      value,
+    })
   }
-  let isArray = false
+  let isArray
   try {
     isArray = Array.isArray(value)
   } catch {
     isArray = true
   }
   if (isArray) {
-    throw typeError({ name, expectation: "an object", value })
+    throw typeError({
+      name,
+      expectation: "an object",
+      value,
+    })
   }
   return value
 }
@@ -27,15 +35,26 @@ export function requireObject({ value, name }) {
  * @returns {object}
  */
 export function requirePlainObject({ value, name }) {
-  requireObject({ value, name })
+  requireObject({
+    value,
+    name,
+  })
   let prototype
   try {
     prototype = Object.getPrototypeOf(value)
   } catch {
-    throw typeError({ name, expectation: "a plain object", value })
+    throw typeError({
+      name,
+      expectation: "a plain object",
+      value,
+    })
   }
   if (prototype !== Object.prototype && prototype !== null) {
-    throw typeError({ name, expectation: "a plain object", value })
+    throw typeError({
+      name,
+      expectation: "a plain object",
+      value,
+    })
   }
   return value
 }
