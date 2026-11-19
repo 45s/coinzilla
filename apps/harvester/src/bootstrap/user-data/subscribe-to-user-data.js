@@ -36,7 +36,16 @@ function publishUserDataSubscriptionFailure({ eventPublisher, brokerName, error 
   })
 }
 
-async function createUserDataSubscription({ broker, brokerName, eventPublisher, symbols, trackedOrders, onEvent, onObservation, onStatus }) {
+async function createUserDataSubscription({
+  broker,
+  brokerName,
+  eventPublisher,
+  symbols,
+  trackedOrders,
+  onEvent,
+  onObservation,
+  onStatus,
+}) {
   let result
   try {
     result = await broker.subscribeForUserData({

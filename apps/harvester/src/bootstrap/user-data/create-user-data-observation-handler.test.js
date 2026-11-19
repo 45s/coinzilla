@@ -21,7 +21,7 @@ test("records only non-authoritative observation metadata without touching execu
     },
   })
 
-  assert.deepEqual(logs, [{
+  const expectedLog = {
     message: "Received non-authoritative broker user-data observation",
     deliveryMode: "POLLING_OBSERVATIONS",
     observedAt: 1234,
@@ -29,7 +29,8 @@ test("records only non-authoritative observation metadata without touching execu
     symbols: ["BTCUSDT"],
     balanceCount: 1,
     trackedOrderCount: 1,
-  }], "Only safe observation metadata may be logged.")
+  }
+  assert.deepEqual(logs, [expectedLog], "Only safe observation metadata may be logged.")
   assert.equal(JSON.stringify(logs).includes("secret-account-data"), false, "Financial payloads must not be logged.")
   assert.equal(JSON.stringify(logs).includes("private-order-id"), false, "Private order identities must not be logged.")
 })
