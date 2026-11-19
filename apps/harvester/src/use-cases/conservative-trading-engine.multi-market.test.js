@@ -96,14 +96,17 @@ asset: quoteAsset }) },
   }
 }
 
-function createHarnessAppConfig({ externalOrdersPolicyBySymbol = {} } = {}) {
+function createHarnessAppConfig({
+  externalOrdersPolicyBySymbol = {},
+  symbols = ["DOGEUSDT", "SOLUSDT"],
+} = {}) {
   return {
     strategies: {
       [StrategyId.COIN_GRABBER]: {
         enabled: true,
         settings: { conservative: { enabled: true },
 aggressive: { enabled: false } },
-        pairs: Object.fromEntries(markets.map((market) => [market.symbol, {
+        pairs: Object.fromEntries(markets.filter((market) => symbols.includes(market.symbol)).map((market) => [market.symbol, {
           enabled: true,
           ...(externalOrdersPolicyBySymbol[market.symbol] === undefined
             ? {}
@@ -267,8 +270,8 @@ function createHarnessEngine({
   })
 }
 
-async function initializeHarnessBooks({ engine } = {}) {
-  for (const market of markets) {
+async function initializeHarnessBooks({ engine, symbols = ["DOGEUSDT", "SOLUSDT"] } = {}) {
+  for (const market of markets.filter((candidate) => symbols.includes(candidate.symbol))) {
     await engine.processBookTicker({
       symbol: market.symbol,
       bookTicker: {
@@ -294,6 +297,7 @@ async function createHarness({
   onUnownedExternalOrderObserved,
   eventPublisher,
   brokerOverrides,
+  symbols = ["DOGEUSDT", "SOLUSDT"],
 } = {}) {
   const orders = []
   const cancelledOrderIds = []
@@ -301,8 +305,9 @@ async function createHarness({
   const accountedFillIds = new Set()
   const accountedFills = []
   const portfolio = initialPortfolio ?? new Portfolio()
-  const metadataBySymbol = new Map(markets.map((market) => [market.symbol, makeMarketMetadata(market)]))
-  const appConfig = createHarnessAppConfig({ externalOrdersPolicyBySymbol })
+  const metadataBySymbol = new Map(markets.filter((market) => symbols.includes(market.symbol))
+    .map((market) => [market.symbol, makeMarketMetadata(market)]))
+  const appConfig = createHarnessAppConfig({ externalOrdersPolicyBySymbol, symbols })
   const broker = createHarnessBroker({
     orders,
     cancelledOrderIds,
@@ -324,7 +329,7 @@ async function createHarness({
     initialState,
     eventPublisher,
   })
-  await initializeHarnessBooks({ engine })
+  await initializeHarnessBooks({ engine, symbols })
   return { engine,
 orders,
 pauses,
@@ -383,7 +388,7 @@ async function createReconciliationHarness({ symbols = ["DOGEUSDT", "SOLUSDT"] }
       data: [],
     }),
   }
-  const harness = await createHarness({ brokerOverrides })
+  const harness = await createHarness({ brokerOverrides, symbols })
   harnessState.engine = harness.engine
   await startBothMarkets({
     engine: harnessState.engine,
