@@ -438,9 +438,15 @@ function createHarvesterPortfolioContext({ startup } = {}) {
     }],
   })
   const accountRuntime = accountRuntimeRegistry.get(providerIdentity.providerInstanceId)
+  const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
+    sharedState: accountRuntime.state,
+  })
   const context = {
     accountRuntime,
     accountRuntimeRegistry,
+    recoverySellerWorkflow,
+    getAdditionalTrackedBaseQuantity: (...args) => recoverySellerWorkflow.getAdditionalTrackedBaseQuantity(...args),
+    getAdditionalTrackedQuoteCashFlow: () => recoverySellerWorkflow.getAdditionalTrackedQuoteCashFlow(),
     portfolioWorkflow: createPortfolioWorkflow({
       sharedState: accountRuntime.state,
       evaluateStrategy: startup.evaluateStrategy,
@@ -452,9 +458,6 @@ function createHarvesterPortfolioContext({ startup } = {}) {
       onOperationalStateExecutionFill: startup.onOperationalStateExecutionFill,
       onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
       onOperationalStateRecoveryCycleNotCompleted: startup.onOperationalStateRecoveryCycleNotCompleted,
-    }),
-    recoverySellerWorkflow: createRecoverySellerAccountingWorkflow({
-      sharedState: accountRuntime.state,
     }),
     recoveredState: accountRuntime.state,
     marketMetadata: accountRuntime.marketMetadata,
@@ -526,6 +529,8 @@ function createHarvesterAccountSnapshotRuntime({ startup,
     eventPublisher: startup.eventPublisher,
     marketMetadata: portfolio.marketMetadata,
     getPortfolio: portfolio.getPortfolio,
+    getAdditionalTrackedBaseQuantity: portfolio.getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
     getTradingEngine: () => resources.tradingEngine,
     getRecoveredState: () => portfolio.recoveredState,
     getHasCanonicalOwnershipReconciliation: () => resources.hasCanonicalOwnershipReconciliation,
@@ -664,6 +669,8 @@ function createHarvesterTradingEngineActivator({ startup,
       getRecoveryLedger: portfolio.getRecoveryLedger,
       getMarketMetadata: portfolio.getMarketMetadata,
       getAccountSnapshot: portfolio.getAccountSnapshot,
+      getAdditionalTrackedBaseQuantity: portfolio.getAdditionalTrackedBaseQuantity,
+      getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
       updateTradingAccounting: portfolio.updateTradingAccounting,
       completeRecoveryCycle: portfolio.completeRecoveryCycle,
       userDataState: resources.userDataState,

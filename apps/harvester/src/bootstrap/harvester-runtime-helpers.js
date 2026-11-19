@@ -272,6 +272,8 @@ export function createHarvesterTradingEngine({
   getRecoveryLedger,
   getMarketMetadata,
   getAccountSnapshot,
+  getAdditionalTrackedBaseQuantity,
+  getAdditionalTrackedQuoteCashFlow,
   updateTradingAccounting,
   completeRecoveryCycle,
   userDataState,
@@ -296,6 +298,8 @@ export function createHarvesterTradingEngine({
     getRecoveryLedger,
     getMarketMetadata,
     getAccountSnapshot,
+    getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow,
     updateTradingAccounting,
     completeRecoveryCycle,
     ...createHarvesterTradingEngineSafetyCallbacks({
