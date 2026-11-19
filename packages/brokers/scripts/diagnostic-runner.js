@@ -1385,7 +1385,7 @@ function recordBrokerApiSchemaResult({ method, observation, now, results, secret
   if (!observation || !Object.hasOwn(observation, "schemaValid")) {
     return
   }
-  const schemaValid = observation.schemaValid
+  const { schemaValid } = observation
   const error = schemaValid
     ? undefined
     : new Error(`Bitunix response schema mismatch: ${observation.schemaIssues.join(", ")}`)
