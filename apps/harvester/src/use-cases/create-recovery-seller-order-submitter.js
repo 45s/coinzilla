@@ -157,7 +157,7 @@ function validateSubmitterOptions({
     throw new TypeError("recoverySellerAccountingWorkflow must expose getExecutionCallbacks")
   }
   for (const [name, callback] of Object.entries({
-    onDurableSubmissionIntent: durableSubmissionIntent.onDurableSubmissionIntent,
+    onDurableSubmissionIntent,
     onDurableSubmissionOutcome,
     onUnresolvedSubmission,
     canSubmit,
@@ -202,7 +202,7 @@ function createRecoverySellerExecutor({
       executionCallbacks,
       onUnresolvedSubmission,
     }),
-    onDurableSubmissionIntent,
+    onDurableSubmissionIntent: durableSubmissionIntent.onDurableSubmissionIntent,
     onDurableSubmissionOutcome,
     onOrderValidationFailure,
     canSubmit,
