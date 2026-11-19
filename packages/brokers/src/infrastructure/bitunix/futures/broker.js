@@ -68,7 +68,7 @@ const FUTURES_ENDPOINTS = Object.freeze({
   historyTrades: "/api/v1/futures/trade/get_history_trades",
   pendingTpSlOrders: "/api/v1/futures/tpsl/get_pending_orders",
   historyTpSlOrders: "/api/v1/futures/tpsl/get_history_orders",
-  copyTradingAssets: "/api/v1/futures/copyTrading/asset/query",
+  copyTradingAssets: "/api/v1/cp/asset/query",
 })
 
 /**
@@ -447,12 +447,9 @@ export class BitunixFuturesBroker extends CoreBroker {
    * @param {{assetType?: "SPOT" | "FUTURES"}} [input]
    * @returns {Promise<object>}
    */
-  getCopyTradingAssets(input = {}) {
+  getCopyTradingAssets() {
     return this.#read({
       path: FUTURES_ENDPOINTS.copyTradingAssets,
-      queryFactory: () => ({
-        ...(input.assetType === undefined ? {} : { assetType: input.assetType }),
-      }),
       authenticated: true,
       adapter: adaptFuturesCopyTradingAssets,
     })
