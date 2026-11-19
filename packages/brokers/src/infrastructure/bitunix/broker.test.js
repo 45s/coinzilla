@@ -161,11 +161,8 @@ test("Bitunix Spot placement remains blocked while order identity and quantity c
     symbol: "BTCUSDT",
     clientOrderId: "caller-order-1",
   })
-  const cancelledAll = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
-
   assert.equal(created.ok, false)
   assert.equal(canonicalCreated.ok, false)
-  assert.equal(cancelledAll.ok, false)
   assert.match(created.errors[0].message, /client order identity/i)
   assert.match(canonicalCreated.errors[0].message, /clientOrderId/i)
   assert.equal(calls.length, 0)
@@ -247,6 +244,62 @@ test("Bitunix Spot cancellation validates identity before sending a mutation", a
   const { broker, calls } = createBroker()
 
   const result = await broker.cancelOrder({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(result.cancellationOutcome, "NOT_SENT")
+  assert.equal(calls.length, 0)
+})
+
+test("Bitunix Spot cancelAllOpenOrders cancels and verifies every open order for one symbol", async () => {
+  const order = (orderId) => ({
+    orderId,
+    symbol: "BTCUSDT",
+    side: "2",
+    type: "1",
+    status: "1",
+    volume: "1",
+    dealVolume: "0",
+    price: "10",
+    ctime: "2026-11-15T12:00:00Z",
+    utime: "2026-11-15T12:00:01Z",
+  })
+  const cancelled = (orderId) => ({
+    ...order(orderId),
+    status: "4",
+    utime: "2026-11-15T12:01:00Z",
+  })
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/order/pending/list": [order("101"), order("102")],
+      "/api/spot/v1/order/cancel": null,
+      "/api/spot/v1/order/detail": cancelled("102"),
+    },
+  })
+  let detailReads = 0
+  const originalRequest = broker.restClient.request.bind(broker.restClient)
+  broker.restClient.request = async (input) => {
+    if (input.path === "/api/spot/v1/order/detail") {
+      detailReads += 1
+      return { data: cancelled(detailReads === 1 ? "101" : "102") }
+    }
+    return originalRequest(input)
+  }
+
+  const result = await broker.cancelAllOpenOrders({ symbol: "btcusdt" })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.length, 2)
+  assert.deepEqual(result.data.map((item) => item.status), ["CANCELED", "CANCELED"])
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.cancellationOutcome, "CONFIRMED")
+  assert.equal(calls.filter((call) => call.path === "/api/spot/v1/order/cancel").length, 2)
+})
+
+test("Bitunix Spot cancelAllOpenOrders requires a symbol and sends no request", async () => {
+  const { broker, calls } = createBroker()
+
+  const result = await broker.cancelAllOpenOrders()
 
   assert.equal(result.ok, false)
   assert.equal(result.mutationOutcome, "NOT_SENT")
