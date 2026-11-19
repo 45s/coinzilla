@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { BitunixSpotWebSocketClient } from "../../../index.js"
+import { BitunixSpotWebSocketClient, BitunixWebSocketError } from "../../../index.js"
 
 class FakeTransport {
   listeners = {
@@ -454,4 +454,57 @@ test("Bitunix Spot WebSocket client sends the documented authenticated ping RPC"
 
   assert.equal(await pending, "pong", "the matching ping response must resolve the connection test")
   await client.disconnect()
+})
+
+
+test("Bitunix Spot WebSocket client wraps handshake failures and preserves their cause", async () => {
+  const { client, transport } = createClient()
+  const handshakeError = new Error("handshake rejected by upstream")
+  transport.connect = async () => {
+    throw handshakeError
+  }
+
+  await assert.rejects(client.connect(), (error) => {
+    assert.ok(
+      error instanceof BitunixWebSocketError,
+      "connect() must expose the broker-owned WebSocket error type instead of leaking a raw transport error",
+    )
+    assert.equal(
+      error.code,
+      "BITUNIX_WEBSOCKET_CONNECTION_FAILED",
+      "handshake failures must expose the stable broker-owned connection error code",
+    )
+    assert.equal(
+      error.kind,
+      "connection",
+      "handshake failures must retain the connection error classification",
+    )
+    assert.equal(
+      error.cause,
+      handshakeError,
+      "the original transport handshake error must remain available as the native cause",
+    )
+    return true
+  })
+
+  assert.equal(
+    client.state,
+    "closed",
+    "a failed initial handshake must leave the WebSocket client in its terminal closed state",
+  )
+  assert.equal(
+    transport.listeners.message.size,
+    0,
+    "failed connection setup must remove the message listener during cleanup",
+  )
+  assert.equal(
+    transport.listeners.close.size,
+    0,
+    "failed connection setup must remove the close listener during cleanup",
+  )
+  assert.equal(
+    transport.listeners.error.size,
+    0,
+    "failed connection setup must remove the error listener during cleanup",
+  )
 })
