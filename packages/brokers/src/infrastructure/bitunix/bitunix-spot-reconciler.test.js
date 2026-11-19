@@ -287,7 +287,10 @@ test("start rejects tracked orders outside its polling symbol scope before sched
 
   assert.throws(() => reconciler.start({
     symbols: ["BTCUSDT"],
-    trackedOrders: [{ symbol: "ETHUSDT", orderId: "order-1" }],
+    trackedOrders: [{
+      symbol: "ETHUSDT",
+      orderId: "order-1",
+    }],
     onSnapshot: () => {},
   }), /Tracked order symbol ETHUSDT is not in polling symbols/)
   assert.equal(calls.length, 0)
