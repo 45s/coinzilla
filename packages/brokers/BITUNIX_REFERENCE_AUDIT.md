@@ -255,7 +255,7 @@ It validates symbol, interval, decimals, OHLC invariants and timezone-qualified 
 - **Reference audit:** the inspected JKorf/Bitunix.Net, `samanzamani/bitunix-mcp`, `0xCherryBlueZu/bitunix`, and StockSharp sources did not expose a matching REST user-info method/fixture. The existing Coinzilla `BitunixSpotWebSocketClient.getUserInfo()` uses the documented `user.info` RPC, but it is a separate transport and does not provide the REST broker method.
 - **Coinzilla mapping:** `BitunixSpotBroker.getUserInfo()` is a provider-specific signed GET extension. The REST parser converts raw numeric `uid` tokens to strings before `JSON.parse`; the adapter preserves null/omitted values, normalizes safe numeric IDs to strings, and rejects malformed or out-of-range signed-int64 IDs. The result is not a balance/account snapshot and has no source timestamp.
 
-These are Bitunix-only public extensions, not Binance parity methods. Keep exact decimal fields as strings; do not treat descriptive precision fields as tick/step filters. Token/network metadata is not authorization to implement transfers or withdrawals.
+These are Bitunix-only REST extensions, not Binance parity methods. Keep exact decimal fields as strings; do not treat descriptive precision fields as tick/step filters. Token/network metadata is not authorization to implement transfers or withdrawals.
 
 ### Later, only after a separate contract review
 
