@@ -395,7 +395,6 @@ The legacy `cancelOrder()` field `cancellationOutcome` remains for compatibility
 
 A successful result carries the broker order response in `data`; consumers that require a canonical cancellation must still verify canonical order history and actual fills. The Harvester consumer accepts legacy `NOT_SENT` only on an unsuccessful result (`ok: false`); contradictory success-shaped metadata remains unconfirmed. These classifications do not bypass the user-data readiness gate or authorize automatic retries.
 
-
 ## Shared user-data callback contract
 
 Harvester calls the same broker method for every provider and supplies independent callback channels:

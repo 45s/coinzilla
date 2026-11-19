@@ -292,7 +292,6 @@ The current checker classifies **132 paths as maintained** and **28 as historica
 
 The Harvester documentation index and persistence index link the new blueprint. This is a path-completeness update only; it does not claim that all 160 documents have passed the maintained-document factual audit tracked by #1401, the full-tree Markdown classification/enforcement work tracked by #1402, or the reference-tracing work tracked by #1403.
 
-
 ## User-data delivery architecture addition (2026-11-19)
 
 | Added path | Purpose |
