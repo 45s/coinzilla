@@ -76,6 +76,45 @@ test("allows shutdown recovery evaluation through a recovery-managed pause", asy
   assert.notEqual(result.data?.skipped, true)
 })
 
+test("evaluates RS-owned symbols through the shared transition when CG has no route", async () => {
+  const dependencies = createDependencies()
+  let recoverySellerCalls = 0
+  dependencies.evaluateRecoverySellerTransition = async ({ symbol }) => {
+    recoverySellerCalls += 1
+    return {
+      ok: true,
+      data: {
+        symbol,
+        submitted: true,
+      },
+    }
+  }
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  const result = await evaluate({ symbol: "RSUSDT" })
+
+  assert.equal(recoverySellerCalls, 1)
+  assert.equal(result.ok, true)
+  assert.equal(result.data?.submitted, true)
+})
+
+test("does not evaluate RS while the shared engine performs a preflight", async () => {
+  const dependencies = createDependencies()
+  let recoverySellerCalls = 0
+  dependencies.evaluateRecoverySellerTransition = async () => {
+    recoverySellerCalls += 1
+    return { ok: true, data: {} }
+  }
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  await evaluate({
+    symbol: "DOGEUSDT",
+    preflightOnly: true,
+  })
+
+  assert.equal(recoverySellerCalls, 0)
+})
+
 test("keeps a durable safety pause fail-closed during shutdown recovery", async () => {
   const evaluate = createLatestTransitionEvaluator(createDependencies({
     hardPause: true,
