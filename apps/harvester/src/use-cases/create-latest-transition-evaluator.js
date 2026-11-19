@@ -568,7 +568,10 @@ function createStrategyOrderCommitmentInput({ balances, metadata, pairConfig, ac
     additionalTrackedBaseBalanceBaseline: balances.additionalTrackedBaseBalanceBaseline,
     outstandingRecoveryAmount: outstandingRecoveryAmount ?? maxDecimal({
       left: "0",
-      right: subtractDecimal({ left: position?.spent.amount ?? "0", right: "0" }),
+      right: subtractDecimal({
+        left: position?.spent.amount ?? "0",
+        right: "0",
+      }),
     }),
     committedQuote: balances.committedQuote,
     committedQuoteBalance: balances.committedQuoteBalance,
@@ -998,7 +1001,10 @@ function prepareConservativeTransitionAllocation({ dependencies, context, exclud
     balances,
     allocation,
   })
-  return { balances, allocation }
+  return {
+    balances,
+    allocation,
+  }
 }
 
 async function executeConservativeLatestTransition({ dependencies, options, gate } = {}) {
