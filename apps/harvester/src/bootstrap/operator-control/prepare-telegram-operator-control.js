@@ -47,7 +47,7 @@ export async function prepareTelegramOperatorControl({
   return Object.freeze({
     enabled: true,
     operationalStateStore,
-    async start({ engine, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
+    async start({ engine, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders, recoverySellerStopWorkflow } = {}) {
       if (adapter) {
         return Object.freeze({ started: true,
 alreadyStarted: true })
@@ -58,7 +58,8 @@ getRuntimeSnapshot,
 getPortfolio,
 getRecoveryLedger,
 getAccountSnapshot,
-getOpenOrders })
+getOpenOrders,
+recoverySellerStopWorkflow })
       try {
         adapter = createAdapter({ botToken,
 allowedUserIds: telegramConfig.allowedUserIds,

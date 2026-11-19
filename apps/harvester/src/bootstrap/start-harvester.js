@@ -443,6 +443,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     strategyShutdownParticipants: dependencies.strategyShutdownParticipants,
     operatorControlLifecycle: startupState.operatorControlLifecycle,
     operationalStateStore: startupState.operationalStateStore,
+    recoverySellerStopWorkflow: startupState.recoverySellerStopWorkflow,
     accountSnapshotManagerRef,
     onCommissionAsset,
     ...operationalStateCallbacks,

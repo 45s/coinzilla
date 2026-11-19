@@ -1882,6 +1882,7 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     logger: dependencies.logger,
     strategyPolicy: dependencies.strategyPolicy,
     evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
+    recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
     pause: context.pause,
     completeRecoveryCycle: dependencies.completeRecoveryCycle,
     eventPublisher: dependencies.eventPublisher,

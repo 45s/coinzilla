@@ -33,7 +33,7 @@ Canonical streamed RS BUY fills now dispatch through the RS accounting workflow 
 
 ## RS-4 production evaluator dispatch — callback path connected
 
-The bootstrap now treats configured RS routes as recovery-enabled for the ADR-0001 restart gate, restores the account-scoped durable STOP workflow from the verified Operational State Store, and does so before appending the current `PROCESS_STARTED` fact. Missing/unverified storage blocks configured RS startup. The operator status snapshot also exposes the restored RS STOP state.
+The bootstrap now treats configured RS routes as recovery-enabled for the ADR-0001 restart gate, restores the account-scoped durable STOP workflow from the verified Operational State Store, and does so before appending the current `PROCESS_STARTED` fact. Missing/unverified storage blocks configured RS startup. The operator status snapshot also exposes the restored RS STOP state. The restored workflow is now carried through the startup context into the trading-engine composition and operator facade.
 
 - `createLatestTransitionEvaluator` already supports a strategy-owned RS transition callback after Conservative evaluation.
 - The production Conservative engine now injects that callback into the evaluator, and bootstrap/runtime composition preserves it from startup options to the engine.
