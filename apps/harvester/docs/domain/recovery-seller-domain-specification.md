@@ -8,7 +8,7 @@ created: 2026-11-14
 
 # Recovery Seller (RS) — Domain Specification
 
-**Status: DRAFT — RS-3 pure SELL policy is implemented and verified on PR #1127; RS remains non-executable pending separate RS-4/RS-5 work.**
+**Status: DRAFT — RS-3 pure SELL policy is implemented; RS-4 configuration validation has begun in PR #1476. RS remains non-executable pending shared-engine integration and RS-5 offline lifecycle proof.**
 
 **Authority:** This draft becomes the canonical RS contract after formal acceptance. Until then it records the agreed direction, hard safety invariants, accounting boundaries, and remaining implementation requirements. It does not amend the [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
@@ -127,7 +127,7 @@ Example for ZROUSDT:
 - RS-calculated average historical cost = `100 / 50 = 2` USDT per ZRO.
 - `sellQuantity = 0.01` ZRO per successfully completed cycle.
 
-The names above describe the proposed configuration shape, not a runtime schema. The existing recovery-tranche `investment` setting is separate and must not be confused with the legacy position's historical `invested` amount. The configured legacy invested amount and original quantity establish the aggregate historical basis; they do not assert that the full quantity is currently in the Spot wallet.
+The names above now define the RS-4 runtime configuration shape: `apps/harvester/rs-recovery-seller.js` exports the operator-maintained `recoverySellerPairs` map, imported through the single application-wide `appConfig`. RS remains disabled by default in `config/strategies/rs-recovery-seller.js`. Each enabled pair requires `legacyPosition.invested`, `legacyPosition.quantity`, `sellQuantity`, `orderQuantity`, `minProfit`, `priceStepPercent`, maker/taker fee settings, an explicit trading environment and an explicit volatility-protection flag. Exchange precision is resolved from the shared token specification registry. This configuration authorizes a logical legacy basis only; Spot custody and sellable quantity still require authoritative runtime verification. The existing recovery-tranche `investment` setting is separate and must not be confused with the legacy position's historical `invested` amount. The configured legacy invested amount and original quantity establish the aggregate historical basis; they do not assert that the full quantity is currently in the Spot wallet.
 
 **Spot custody is separate from logical legacy ownership and cost basis.** The operator may keep only 0.5 ZRO in Spot to support 50 cycles of 0.01 ZRO legacy releases and hold/transfer the remaining 49.5 ZRO to EARN. RS retains the configured logical legacy position and its $2 average cost basis; it must not infer that only 0.5 ZRO was originally acquired merely because that is the amount currently in Spot. Conversely, EARN-held quantity is not Spot-available inventory and must never be counted as immediately sellable or used to satisfy an exchange order's balance check. Each cycle may consume only the configured legacy slice that is actually available and unreserved in Spot, alongside its recovery inventory. Further cycles requiring legacy quantity must wait until the required quantity is again available in Spot (for example, after the operator redeems/transfers it from EARN).
 
