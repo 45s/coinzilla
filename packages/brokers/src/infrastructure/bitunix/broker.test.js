@@ -188,7 +188,10 @@ test("Bitunix Spot cancels a known order and verifies its terminal exchange stat
     },
   })
 
-  const result = await broker.cancelOrder({ symbol: "btcusdt", orderId: "123" })
+  const result = await broker.cancelOrder({
+    symbol: "btcusdt",
+    orderId: "123",
+  })
 
   assert.equal(result.ok, true)
   assert.equal(result.data.status, "CANCELED")
@@ -200,7 +203,10 @@ test("Bitunix Spot cancels a known order and verifies its terminal exchange stat
     path: "/api/spot/v1/order/cancel",
     options: {
       body: {
-        orderIdList: [{ orderId: "123", symbol: "BTCUSDT" }],
+        orderIdList: [{
+          orderId: "123",
+          symbol: "BTCUSDT",
+        }],
       },
       authenticated: true,
       stateChanging: true,
@@ -231,7 +237,10 @@ test("Bitunix Spot cancellation reports unknown when the order remains open afte
     },
   })
 
-  const result = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: "123" })
+  const result = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "123",
+  })
 
   assert.equal(result.ok, false)
   assert.equal(result.data.status, "OPEN")
@@ -1369,13 +1378,11 @@ test("Bitunix Spot broker reports unsupported client-order-ID lookup explicitly"
   assert.equal(calls.length, 0)
 })
 
-test("Bitunix unsupported order mutations are explicit and guaranteed NOT_SENT", async () => {
+test("Bitunix order placement remains explicitly unsupported and guaranteed NOT_SENT", async () => {
   const { broker, calls } = createBroker()
   const results = await Promise.all([
     broker.createOrder(),
     broker.createCanonicalOrder(),
-    broker.cancelOrder(),
-    broker.cancelAllOpenOrders(),
   ])
 
   for (const result of results) {
@@ -1383,6 +1390,5 @@ test("Bitunix unsupported order mutations are explicit and guaranteed NOT_SENT",
     assert.equal(result.mutationOutcome, "NOT_SENT")
     assert.ok(result.errors[0] instanceof BrokerUnsupportedOperationError)
   }
-  assert.equal(results[2].cancellationOutcome, "NOT_SENT")
   assert.equal(calls.length, 0)
 })
