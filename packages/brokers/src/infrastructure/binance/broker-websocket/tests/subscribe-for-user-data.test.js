@@ -522,3 +522,18 @@ it("removes local observers when remote unsubscribe fails and does not replay it
   await result.data.disconnect()
   assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
 })
+
+
+it("returns explicit native-event delivery metadata", async () => {
+  const { broker } = createBroker(() => ({ subscriptionId: 58 }))
+  broker.connected = true
+
+  const result = await broker.subscribeForUserData({
+    onEvent() {},
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.deliveryMode, "NATIVE_EVENTS")
+  assert.equal(result.data.nativePush, true)
+  await result.data.disconnect()
+})
