@@ -4,6 +4,10 @@
 
 **Current implementation:** filled-order history projection merged in [PR #1469](https://github.com/45s/coinzilla/pull/1469) as `39f098000d6c20cb596a9e6700250faa00bbd80e`.
 
+
+
+**Relational trading history — implementation in progress:** [#1554](https://github.com/45s/coinzilla/issues/1554) delivers versioned physical `orders` and `fills` tables, source-preserving migration of the existing collection, and non-blocking persistence of canonical applied fills. Until migration verification and cutover are complete, the existing `harvester_orders` observer remains active. Startup exchange-history synchronization is explicitly deferred.
+
 ## Filled-order history
 
 Harvester persists one record in the `harvester_orders` collection when a Harvester-owned order first has a positive cumulative executed quantity. This includes immediately partially/fully filled broker acknowledgements, later partial/final execution updates, and partially filled cancellation outcomes.
