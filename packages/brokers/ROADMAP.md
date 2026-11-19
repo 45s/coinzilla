@@ -163,6 +163,13 @@ This section contains only work owned by `@coinzilla/brokers`. Consumer applicat
 - Official documentation is the protocol source; the inspected .NET, TypeScript MCP, Python, and additional GitHub references do not provide matching operation fixtures. Record that absence rather than inventing reference coverage.
 - This does not satisfy or weaken #1185's separate order identity, fill completeness, private-event, recovery, or Harvester execution blockers.
 
+### Bitunix Spot WebSocket RPC order queries — PR #1468 (in progress)
+
+- Expose the official Spot RPC reads `order.pending.list`, `order.history.page`, and `order.deal.list` from `BitunixSpotWebSocketClient`.
+- Keep the WebSocket client request/response-only. The official Spot public/user WebSocket docs do not define continuous market or private event subscriptions; Futures push channels must not be copied into Spot.
+- Keep WebSocket order mutations on the existing REST-backed broker path so the established order mutation gate and verification remain authoritative.
+- This does not satisfy #1185's canonical order/fill/private-event lifecycle or enable Harvester execution.
+
 ## 1. Mission and definition of done
 
 ### Mission
