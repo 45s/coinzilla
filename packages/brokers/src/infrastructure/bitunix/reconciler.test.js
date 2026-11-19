@@ -300,7 +300,10 @@ test("start republishes a full snapshot after a failed polling cycle", async () 
   const reconciler = new BitunixSpotReconciler({
     broker,
     schedule: ({ callback, delay }) => {
-      scheduled.push({ callback, delay })
+      scheduled.push({
+        callback,
+        delay,
+      })
       return scheduled.length
     },
     cancel: () => undefined,
