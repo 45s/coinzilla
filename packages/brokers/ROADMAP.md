@@ -1355,6 +1355,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 - [x] Add a one-command root entry point: `pnpm bitunix:health`.
 - [x] Reuse the existing Bitunix Spot REST and authenticated WebSocket RPC diagnostic runner; no second API client is introduced.
+- [x] Require both non-empty `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` values so the health command cannot report a public-only run as authenticated.
 - [x] Require a clean worktree, current branch `develop`, and configured `origin` before making any branch or network changes.
 - [x] Fetch `origin/develop` and create a unique timestamped `diagnostics/bitunix-health-<timestamp>` report branch from that remote tip.
 - [x] Save a local diagnostic report in ignored `packages/brokers/.diagnostics/` and a separately staged, sanitized report in `packages/brokers/diagnostics/reports/`.
