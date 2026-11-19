@@ -216,6 +216,7 @@ async function reconcileRecoverySells({
   if (blockers.length > 0) {
     return
   }
+  throwIfShutdownAborted(signal)
 
   const recoveryBlockers = await runStage({
     stage: "RECOVERY_SELL_RECONCILIATION",
