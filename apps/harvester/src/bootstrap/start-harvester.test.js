@@ -5220,40 +5220,33 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
       return store.readAll(...args)
     },
   }
-  const resolved = await resolveHarvesterOptions({
-    appConfig: {
-      ...appConfig,
-      strategies: {
-        ...appConfig.strategies,
-        RS_recoverySeller: {
-          enabled: true,
-          pairs: {
-            BTCUSDT: {
-              enabled: true,
-              tradingEnvironment: "both",
-              investment: 100,
-              orderQuantity: 0.01,
-              sellQuantity: 0.001,
-              minProfit: 0.01,
-              priceStepPercent: 0.05,
-              makerPercent: 0,
-              takerPercent: 0,
-              legacyPosition: {
-                invested: 65,
-                quantity: 0.001,
-              },
-            },
-          },
-        },
-      },
-    },
+  const baseResolved = await resolveHarvesterOptions({
+    appConfig,
     env: binanceEnv,
     eventPublisher: testEventPublisher,
     logger: {},
     executionRoutes: [
       { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
-      { strategyId: "RS_recoverySeller", symbol: "BTCUSDT" },
     ],
+  })
+  const resolved = Object.freeze({
+    ...baseResolved,
+    recoverySellerPairs: {
+      BTCUSDT: {
+        enabled: true,
+        investment: 100,
+        orderQuantity: 0.01,
+        sellQuantity: 0.001,
+        minProfit: 0.01,
+        priceStepPercent: 0.05,
+        makerPercent: 0,
+        takerPercent: 0,
+        legacyPosition: {
+          invested: 65,
+          quantity: 0.001,
+        },
+      },
+    },
   })
 
   const startup = await prepareHarvesterStartupState({
