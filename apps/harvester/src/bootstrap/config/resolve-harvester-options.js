@@ -3,6 +3,7 @@ import { publishLifecycleEvent } from "../../application/events/publish-lifecycl
 import { mapConfigValidatedData } from "../../application/events/lifecycle-event-dtos.js"
 import { resolveRuntimeConfig, selectPairsForTradingMode } from "../../domain/app-config.js"
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { TRADING_ENVIRONMENTS } from "../../domain/trading-environment.js"
 import {
   createEffectiveStrategyConfigurationFingerprint,
   EffectiveConfigurationError,
@@ -23,39 +24,115 @@ function assertSupportedStrategyConfig(strategyConfig) {
   }
 }
 
-function resolveConservativeExecutionSymbols({ executionRoutes, executionSymbols } = {}) {
+function validateExecutionRoute({ route } = {}) {
+  if (!route || typeof route !== "object" ||
+      typeof route.strategyId !== "string" ||
+      typeof route.symbol !== "string" ||
+      !route.symbol.trim()) {
+    throw new TypeError("executionRoutes must contain strategyId and non-empty symbol values")
+  }
+  if (![StrategyId.COIN_GRABBER, StrategyId.RECOVERY_SELLER].includes(route.strategyId)) {
+    throw new TypeError(`Unsupported execution strategy route: ${route.strategyId}`)
+  }
+  return route
+}
+
+function validateExecutionSymbolList({ executionSymbols, routeSymbols } = {}) {
+  if (executionSymbols === undefined) {
+    return
+  }
+  if (!Array.isArray(executionSymbols)) {
+    throw new TypeError("executionSymbols must be an array when executionRoutes are supplied")
+  }
+  const supplied = new Set(executionSymbols)
+  if (supplied.size !== executionSymbols.length ||
+      executionSymbols.some((symbol) => typeof symbol !== "string" || !symbol.trim()) ||
+      supplied.size !== routeSymbols.length ||
+      routeSymbols.some((symbol) => !supplied.has(symbol))) {
+    throw new TypeError("executionSymbols must match the deduplicated symbols in executionRoutes")
+  }
+}
+
+function resolveExecutionRouteSymbols({ executionRoutes, executionSymbols } = {}) {
   if (executionRoutes === undefined) {
-    return executionSymbols
+    return {
+      conservativeExecutionSymbols: executionSymbols,
+      recoverySellerExecutionSymbols: undefined,
+      executionSymbols,
+    }
   }
   if (!Array.isArray(executionRoutes)) {
     throw new TypeError("executionRoutes must be an array when supplied")
   }
-  const symbols = []
-  const seenSymbols = new Set()
-  for (const route of executionRoutes) {
-    if (!route || typeof route !== "object" ||
-        typeof route.strategyId !== "string" ||
-        typeof route.symbol !== "string" || !route.symbol.trim()) {
-      throw new TypeError("executionRoutes must contain strategyId and non-empty symbol values")
+  const symbolsByStrategy = new Map([
+    [StrategyId.COIN_GRABBER, []],
+    [StrategyId.RECOVERY_SELLER, []],
+  ])
+  const seenByStrategy = new Map([
+    [StrategyId.COIN_GRABBER, new Set()],
+    [StrategyId.RECOVERY_SELLER, new Set()],
+  ])
+  for (const input of executionRoutes) {
+    const route = validateExecutionRoute({ route: input })
+    const symbols = symbolsByStrategy.get(route.strategyId)
+    const seen = seenByStrategy.get(route.strategyId)
+    if (seen.has(route.symbol)) {
+      const strategyName = route.strategyId === StrategyId.COIN_GRABBER ? "CG" : "RS"
+      throw new TypeError(`Execution routes contain a duplicate ${strategyName} market: ${route.symbol}`)
     }
-    if (route.strategyId === StrategyId.RECOVERY_SELLER) {
-      continue
-    }
-    if (route.strategyId !== StrategyId.COIN_GRABBER) {
-      throw new TypeError(`Unsupported execution strategy route: ${route.strategyId}`)
-    }
-    if (seenSymbols.has(route.symbol)) {
-      throw new TypeError(`Execution routes contain a duplicate CG market: ${route.symbol}`)
-    }
-    seenSymbols.add(route.symbol)
+    seen.add(route.symbol)
     symbols.push(route.symbol)
   }
-  if (symbols.length === 0) {
+  const conservativeExecutionSymbols = symbolsByStrategy.get(StrategyId.COIN_GRABBER)
+  const recoverySellerExecutionSymbols = symbolsByStrategy.get(StrategyId.RECOVERY_SELLER)
+  if (conservativeExecutionSymbols.length === 0) {
     throw new Error(
       "This provider account has no Conservative execution route; RS-only runtime dispatch is not integrated yet",
     )
   }
-  return symbols
+  const routeSymbols = [...new Set([
+    ...conservativeExecutionSymbols,
+    ...recoverySellerExecutionSymbols,
+  ])]
+  validateExecutionSymbolList({
+    executionSymbols,
+    routeSymbols,
+  })
+  return {
+    conservativeExecutionSymbols,
+    recoverySellerExecutionSymbols,
+    executionSymbols: routeSymbols,
+  }
+}
+
+function resolveRecoverySellerPairs({ strategyConfig, tradingMode, executionSymbols } = {}) {
+  if (executionSymbols === undefined || executionSymbols.length === 0) {
+    return {}
+  }
+  if (strategyConfig?.enabled !== true) {
+    throw new Error("RS_recoverySeller strategy must be explicitly enabled before it can receive execution routes")
+  }
+  if (!strategyConfig.pairs || typeof strategyConfig.pairs !== "object" || Array.isArray(strategyConfig.pairs)) {
+    throw new TypeError("RS_recoverySeller.pairs must be an object")
+  }
+  const selectedPairs = {}
+  for (const symbol of executionSymbols) {
+    const pair = strategyConfig.pairs[symbol]
+    if (!pair || pair.enabled !== true) {
+      throw new Error(`RS execution route references market ${symbol}, which is not explicitly enabled`)
+    }
+    if (![TRADING_ENVIRONMENTS.TESTNET, TRADING_ENVIRONMENTS.LIVE, TRADING_ENVIRONMENTS.BOTH].includes(pair.tradingEnvironment)) {
+      throw new Error(`RS market ${symbol} has an unsupported tradingEnvironment`)
+    }
+    if (pair.tradingEnvironment !== TRADING_ENVIRONMENTS.BOTH &&
+        pair.tradingEnvironment !== tradingMode) {
+      throw new Error(`RS market ${symbol} is not enabled for TRADING_MODE=${tradingMode}`)
+    }
+    selectedPairs[symbol] = Object.fromEntries(
+      Object.entries(pair).filter(([key]) => key !== "tradingEnvironment"),
+    )
+  }
+  return selectedPairs
 }
 
 function selectExecutionPairs({ pairs, executionSymbols }) {
@@ -103,31 +180,61 @@ function resolveEffectivePairs({ strategyConfig, tradingMode, executionSymbols }
 
 function resolveConservativeRuntimePairs({
   strategyConfig,
+  recoverySellerStrategyConfig,
   tradingMode,
   executionSymbols,
   executionRoutes,
 } = {}) {
-  const conservativeExecutionSymbols = resolveConservativeExecutionSymbols({
+  const routes = resolveExecutionRouteSymbols({
     executionRoutes,
     executionSymbols,
   })
-  return resolveEffectivePairs({
+  const conservativePairs = resolveEffectivePairs({
     strategyConfig,
     tradingMode,
-    executionSymbols: conservativeExecutionSymbols,
+    executionSymbols: routes.conservativeExecutionSymbols,
   })
+  const recoverySellerPairs = resolveRecoverySellerPairs({
+    strategyConfig: recoverySellerStrategyConfig,
+    tradingMode,
+    executionSymbols: routes.recoverySellerExecutionSymbols,
+  })
+  const marketPairs = {
+    ...recoverySellerPairs,
+    ...conservativePairs,
+  }
+  return {
+    conservativePairs,
+    recoverySellerPairs,
+    marketPairs,
+    executionSymbols: routes.executionSymbols ?? Object.keys(marketPairs),
+  }
 }
 
-function createEffectiveAppConfig({ configuredAppConfig, strategyConfig, pairs }) {
+function createEffectiveAppConfig({
+  configuredAppConfig,
+  strategyConfig,
+  conservativePairs,
+  recoverySellerStrategyConfig,
+  recoverySellerPairs,
+}) {
+  const strategies = {
+    ...configuredAppConfig.strategies,
+    CG_coinGrabber: {
+      ...strategyConfig,
+      pairs: conservativePairs,
+    },
+  }
+  if (recoverySellerStrategyConfig) {
+    strategies.RS_recoverySeller = {
+      ...recoverySellerStrategyConfig,
+      enabled: Object.keys(recoverySellerPairs).length > 0,
+      pairs: recoverySellerPairs,
+    }
+  }
   return {
     ...configuredAppConfig,
-    strategies: {
-      ...configuredAppConfig.strategies,
-      CG_coinGrabber: {
-        ...strategyConfig,
-        pairs,
-      },
-    },
+    strategies,
   }
 }
 
@@ -222,8 +329,13 @@ export async function resolveHarvesterOptions({
     tradingMode: env.TRADING_MODE,
     environment: env.NODE_ENV,
   })
-  const pairs = resolveConservativeRuntimePairs({
+  const recoverySellerStrategyConfig = configuredAppConfig.strategies?.RS_recoverySeller
+  if (recoverySellerStrategyConfig?.enabled === true && executionRoutes === undefined) {
+    throw new Error("Enabled RS markets require explicit strategy/market execution routes")
+  }
+  const resolvedPairs = resolveConservativeRuntimePairs({
     strategyConfig,
+    recoverySellerStrategyConfig,
     tradingMode: runtime.tradingMode,
     executionSymbols,
     executionRoutes,
@@ -231,7 +343,9 @@ export async function resolveHarvesterOptions({
   const appConfig = createEffectiveAppConfig({
     configuredAppConfig,
     strategyConfig,
-    pairs,
+    conservativePairs: resolvedPairs.conservativePairs,
+    recoverySellerStrategyConfig,
+    recoverySellerPairs: resolvedPairs.recoverySellerPairs,
   })
   const evidence = createConfigurationEvidence({
     appConfig,
@@ -248,9 +362,12 @@ export async function resolveHarvesterOptions({
   return Object.freeze({
     appConfig,
     settings: strategyConfig.settings,
-    pairs,
+    pairs: Object.freeze(resolvedPairs.marketPairs),
+    conservativePairs: Object.freeze(resolvedPairs.conservativePairs),
+    recoverySellerPairs: Object.freeze(resolvedPairs.recoverySellerPairs),
     enabledSymbols: Object.freeze(evidence.enabledSymbols),
-    executionSymbols: Object.freeze(evidence.enabledSymbols),
+    marketSymbols: Object.freeze(Object.keys(resolvedPairs.marketPairs)),
+    executionSymbols: Object.freeze(resolvedPairs.executionSymbols),
     configurationFingerprint: evidence.effectiveConfiguration.fingerprint,
     environment: runtime.environment,
     brokerName: runtime.brokerName,

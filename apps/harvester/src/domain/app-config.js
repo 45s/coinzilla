@@ -493,14 +493,12 @@ function validateRecoverySellerPairTradingSettings({ pair, pairPath }) {
     max: 100,
     exclusiveMax: true,
   })
-  if (pair.investment !== undefined) {
-    requireNumber({
-      value: pair.investment,
-      path: `${pairPath}.investment`,
-      min: 0,
-      exclusiveMin: true,
-    })
-  }
+  requireNumber({
+    value: pair.investment,
+    path: `${pairPath}.investment`,
+    min: 0,
+    exclusiveMin: true,
+  })
 }
 
 function validateRecoverySellerLegacyPosition({ pair, pairPath }) {
