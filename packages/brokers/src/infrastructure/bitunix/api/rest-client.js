@@ -195,7 +195,7 @@ function createSignedRequest({ client, method, path, queryParams, body }) {
     apiKey: client.apiKey,
     secretKey: client.apiSecret,
     queryParams: sortedQuery,
-    ...(bodyText === undefined ? {} : { body: bodyText }),
+    ...(bodyText === undefined ? {} : { body: bodyText, bodyIsSerialized: true }),
   })
   const url = new URL(path, client.baseUrl)
   for (const [key, value] of Object.entries(sortedQuery)) {
