@@ -2,10 +2,10 @@ import { describeValue, typeError } from "./diagnostics.js"
 
 /**
  * Validate an array and preserve its identity.
- * @param {{ value: unknown, name: string }} options
+ * @param {{ value: unknown, name: string, errMsg?: string }} options
  * @returns {Array<unknown>}
  */
-export function requireArray({ value, name }) {
+export function requireArray({ value, name, errMsg }) {
   let isArray
   try {
     isArray = Array.isArray(value)
@@ -17,6 +17,7 @@ export function requireArray({ value, name }) {
       name,
       expectation: "an array",
       value,
+      errMsg,
     })
   }
   return value
@@ -24,13 +25,14 @@ export function requireArray({ value, name }) {
 
 /**
  * Validate a non-empty array.
- * @param {{ value: unknown, name: string }} options
+ * @param {{ value: unknown, name: string, errMsg?: string }} options
  * @returns {Array<unknown>}
  */
-export function requireNonEmptyArray({ value, name }) {
+export function requireNonEmptyArray({ value, name, errMsg }) {
   const array = requireArray({
     value,
     name,
+    errMsg,
   })
   let length
   try {
@@ -40,6 +42,7 @@ export function requireNonEmptyArray({ value, name }) {
       name,
       expectation: "a readable array",
       value,
+      errMsg,
     })
   }
   if (length === 0) {
@@ -47,6 +50,7 @@ export function requireNonEmptyArray({ value, name }) {
       name,
       expectation: "a non-empty array",
       value,
+      errMsg,
     })
   }
   return array
@@ -54,18 +58,20 @@ export function requireNonEmptyArray({ value, name }) {
 
 /**
  * Validate array string elements, optionally requiring non-empty trimmed strings.
- * @param {{ value: unknown, name: string, nonEmpty?: boolean }} options
+ * @param {{ value: unknown, name: string, nonEmpty?: boolean, errMsg?: string }} options
  * @returns {Array<string>}
  */
-export function requireStrings({ value, name, nonEmpty = false }) {
+export function requireStrings({ value, name, nonEmpty = false, errMsg }) {
   const array = nonEmpty
     ? requireNonEmptyArray({
         value,
         name,
+        errMsg,
       })
     : requireArray({
         value,
         name,
+        errMsg,
       })
   let length
   try {
@@ -87,6 +93,7 @@ export function requireStrings({ value, name, nonEmpty = false }) {
         name: elementName,
         expectation: "a readable string",
         value: array,
+        errMsg,
       })
     }
     if (typeof element !== "string") {
@@ -94,6 +101,7 @@ export function requireStrings({ value, name, nonEmpty = false }) {
         name: elementName,
         expectation: "a string",
         value: element,
+        errMsg,
       })
     }
     if (nonEmpty && element.trim() === "") {
@@ -101,6 +109,7 @@ export function requireStrings({ value, name, nonEmpty = false }) {
         name: elementName,
         expectation: "a non-empty string",
         value: element,
+        errMsg,
       })
     }
   }
@@ -109,13 +118,14 @@ export function requireStrings({ value, name, nonEmpty = false }) {
 
 /**
  * Require unique array entries using Map SameValueZero equality.
- * @param {{ value: unknown, name: string }} options
+ * @param {{ value: unknown, name: string, errMsg?: string }} options
  * @returns {Array<unknown>}
  */
-export function requireUnique({ value, name }) {
+export function requireUnique({ value, name, errMsg }) {
   const array = requireArray({
     value,
     name,
+    errMsg,
   })
   let length
   try {
@@ -125,6 +135,7 @@ export function requireUnique({ value, name }) {
       name,
       expectation: "a readable array",
       value,
+      errMsg,
     })
   }
   const firstIndexes = new Map()
@@ -137,10 +148,11 @@ export function requireUnique({ value, name }) {
         name: `${name}[${index}]`,
         expectation: "a readable value",
         value: array,
+        errMsg,
       })
     }
     if (firstIndexes.has(element)) {
-      throw new TypeError(`${name} must contain unique values (duplicate at index ${index}; first seen at index ${firstIndexes.get(element)})`)
+      throw new TypeError(errMsg ?? `${name} must contain unique values (duplicate at index ${index}; first seen at index ${firstIndexes.get(element)})`)
     }
     firstIndexes.set(element, index)
   }
@@ -149,10 +161,10 @@ export function requireUnique({ value, name }) {
 
 /**
  * Validate membership in a non-empty allowed-value array.
- * @param {{ value: unknown, values: unknown, name: string }} options
+ * @param {{ value: unknown, values: unknown, name: string, errMsg?: string }} options
  * @returns {unknown}
  */
-export function requireOneOf({ value, values, name }) {
+export function requireOneOf({ value, values, name, errMsg }) {
   let validArray
   try {
     validArray = Array.isArray(values) && values.length > 0
@@ -169,7 +181,7 @@ export function requireOneOf({ value, values, name }) {
     throw new TypeError("values must be a readable array")
   }
   if (!includesValue) {
-    throw new TypeError(`${name} must be one of the allowed values (received ${describeValue({ value })})`)
+    throw new TypeError(errMsg ?? `${name} must be one of the allowed values (received ${describeValue({ value })})`)
   }
   return value
 }
