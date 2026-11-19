@@ -1251,14 +1251,17 @@ export class BitunixSpotBroker extends CoreBroker {
         where: "BitunixSpotBroker.createOrder()",
         error,
       })
-      const mutationOutcome = placementAcknowledged
-        ? "CONFIRMED"
-        : error?.kind === "exchange"
-          ? "REJECTED"
-          : getBrokerMutationOutcome({
-            error,
-            requestDispatched,
-          })
+      let mutationOutcome
+      if (placementAcknowledged) {
+        mutationOutcome = "CONFIRMED"
+      } else if (error?.kind === "exchange") {
+        mutationOutcome = "REJECTED"
+      } else {
+        mutationOutcome = getBrokerMutationOutcome({
+          error,
+          requestDispatched,
+        })
+      }
       return toResult({
         ...(placementData === undefined ? {} : { data: placementData }),
         errors: [error],
