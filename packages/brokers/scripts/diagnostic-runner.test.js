@@ -723,6 +723,15 @@ function createBrokerApiDiagnosticResponse({ request, invalidSchema }) {
   if (request.path === "/api/spot/v1/order/pending/list") {
     return { data: [] }
   }
+  if (request.path === "/api/spot/v1/order/history/page") {
+    return {
+      data: {
+        pageNum: 1,
+        total: 0,
+        data: [],
+      },
+    }
+  }
   throw new Error(`Unexpected Broker API diagnostic request: ${request.path}`)
 }
 
@@ -829,7 +838,10 @@ test("public-only Broker diagnostics never send the internal placeholder credent
           brokerApiCalls.push(request)
           assert.equal(request.authenticated, false, "public Broker reads must explicitly disable authentication")
           if (request.path === "/api/spot/v1/common/coin_pair/list") {
-            return { data: [] }
+            return createBrokerApiDiagnosticResponse({
+              request,
+              invalidSchema: false,
+            })
           }
           if (request.path === "/api/spot/v1/market/last_price") {
             return { data: "123.4500" }
@@ -847,6 +859,7 @@ test("public-only Broker diagnostics never send the internal placeholder credent
   assert.deepEqual(brokerApiCalls.map((request) => request.path), [
     "/api/spot/v1/common/coin_pair/list",
     "/api/spot/v1/market/last_price",
-  ], "public-only mode must skip all private Broker methods")
+    "/api/spot/v1/common/coin_pair/list",
+  ], "public-only mode must run public market metadata and skip all private Broker methods")
   assert.equal(JSON.stringify(report).includes("READ_ONLY_PUBLIC_DIAGNOSTIC"), false, "the internal placeholder credential must never be persisted")
 })
