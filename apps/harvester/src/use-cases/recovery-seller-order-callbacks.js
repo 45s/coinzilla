@@ -1,4 +1,5 @@
 import { CanonicalOrder } from "@coinzilla/entities"
+import { ensure } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 
 function getRecoverySellerPurposeForSide({ side } = {}) {
@@ -8,18 +9,29 @@ function getRecoverySellerPurposeForSide({ side } = {}) {
 }
 
 function validateRecoverySellerExecutionOwnership({ order, ownership } = {}) {
+  ensure.object({
+    value: ownership,
+    name: "ownership",
+    errMsg: "Recovery Seller submission requires matching RS strategy, Position, purpose and cycle ownership",
+  })
   if (!(order instanceof CanonicalOrder) || order.status !== "PENDING") {
     throw new TypeError("Recovery Seller pending submission requires a PENDING CanonicalOrder")
   }
   const expectedPurpose = getRecoverySellerPurposeForSide({ side: order.side })
-  if (ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
-      typeof ownership.positionId !== "string" ||
-      !ownership.positionId.trim() ||
-      typeof ownership.cycleId !== "string" ||
-      !ownership.cycleId.trim() ||
+  if (ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
       ownership.purpose !== expectedPurpose) {
     throw new Error("Recovery Seller submission requires matching RS strategy, Position, purpose and cycle ownership")
   }
+  ensure.nonEmptyString({
+    value: ownership.positionId,
+    name: "ownership.positionId",
+    errMsg: "Recovery Seller submission requires matching RS strategy, Position, purpose and cycle ownership",
+  })
+  ensure.nonEmptyString({
+    value: ownership.cycleId,
+    name: "ownership.cycleId",
+    errMsg: "Recovery Seller submission requires matching RS strategy, Position, purpose and cycle ownership",
+  })
   return ownership
 }
 
@@ -30,13 +42,19 @@ function resolveRegisteredRecoverySellerOrderOwnership({ registry, order } = {})
   if (!registeredOrder ||
       !ownership ||
       ownership.strategyId !== StrategyId.RECOVERY_SELLER ||
-      ownership.purpose !== expectedPurpose ||
-      typeof ownership.positionId !== "string" ||
-      !ownership.positionId.trim() ||
-      typeof ownership.cycleId !== "string" ||
-      !ownership.cycleId.trim()) {
+      ownership.purpose !== expectedPurpose) {
     throw new Error("Recovery Seller execution callback requires a registered RS-owned order")
   }
+  ensure.nonEmptyString({
+    value: ownership.positionId,
+    name: "ownership.positionId",
+    errMsg: "Recovery Seller execution callback requires a registered RS-owned order",
+  })
+  ensure.nonEmptyString({
+    value: ownership.cycleId,
+    name: "ownership.cycleId",
+    errMsg: "Recovery Seller execution callback requires a registered RS-owned order",
+  })
   return ownership
 }
 
