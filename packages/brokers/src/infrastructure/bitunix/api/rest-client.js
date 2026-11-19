@@ -16,7 +16,16 @@ const ERROR_CODES = Object.freeze({
 /** Error returned by the Bitunix Spot REST API or transport boundary. */
 export class BitunixRestError extends SystemCustomError {
   /**
-   * @param {{message: string, kind?: "transport"|"http"|"exchange"|"response"|"authentication", cause?: unknown, exchangeCode?: string|null, status?: number|null, path?: string|null, outcomeUnknown?: boolean, retryAfterMs?: number|null}} input
+   * @param {{
+   *   message: string,
+   *   kind?: "transport"|"http"|"exchange"|"response"|"authentication",
+   *   cause?: unknown,
+   *   exchangeCode?: string|null,
+   *   status?: number|null,
+   *   path?: string|null,
+   *   outcomeUnknown?: boolean,
+   *   retryAfterMs?: number|null,
+   * }} input
    */
   constructor({
     message,
