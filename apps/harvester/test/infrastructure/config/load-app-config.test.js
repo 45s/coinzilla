@@ -267,7 +267,10 @@ tokenSpecificationsPath }),
 
 test("resolves Recovery Seller pair precision from the same token registry as CG", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "app-config-rs-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const configPath = join(directory, "config.mjs")
   const config = createValidConfig()
   config.strategies.RS_recoverySeller = {
