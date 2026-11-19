@@ -82,6 +82,10 @@ function createDiagnosticReport({ failed = 0, omitOperation } = {}) {
             name: "BitunixApiError",
             message: "private-uid balance 123.456",
             exchangeCode: "ACCOUNT_READ_FAILED",
+            cause: {
+              name: "Error",
+              message: "private-uid nested balance 123.456",
+            },
           }
         }
       }
@@ -267,6 +271,7 @@ test("publishes failed API diagnostics and returns a failing exit code after cle
     assert.equal(result.healthCheck.healthy, false, "a failed required Bitunix probe must fail the overall health check")
     const publicError = result.report.results.find((item) => item.operation === "user.account").error
     assert.equal(publicError.message, "[error message withheld from public report]", "public reports must retain structured error codes but withhold free-form private error text")
+    assert.equal(publicError.cause.message, "[nested error message withheld from public report]", "nested error messages must also be withheld from public reports")
     assert.equal(JSON.stringify(result.report).includes("private-uid"), false, "public reports must not leak account identifiers embedded in exchange error messages")
     assert.equal(JSON.stringify(result.report).includes("123.456"), false, "public reports must not leak balances embedded in exchange error messages")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "failed API diagnostics must still return the checkout to develop")
