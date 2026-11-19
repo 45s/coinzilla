@@ -1948,6 +1948,28 @@ function createConservativeEngineMarketEventContext({ context } = {}) {
   })
 }
 
+async function latchRecoverySellerTerminalFailure({
+  recoverySellerStopWorkflow,
+  order,
+  reason,
+  error,
+} = {}) {
+  if (typeof recoverySellerStopWorkflow?.latch !== "function") {
+    return toResult({
+      error: new Error("Recovery Seller terminal failure requires the durable global STOP workflow"),
+    })
+  }
+  return recoverySellerStopWorkflow.latch({
+    explanation: `Recovery Seller terminal SELL reconciliation failed (${reason}): ${error?.message ?? String(error)}`,
+    orderIdentity: {
+      clientOrderId: order.clientOrderId,
+      ...(typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()
+        ? { brokerOrderId: order.brokerOrderId }
+        : {}),
+    },
+  })
+}
+
 function createConservativeEngineOrderEventContext({ context } = {}) {
   const { dependencies } = context
   const orderEventWorkflow = makeOrderEventWorkflow({
@@ -1970,6 +1992,13 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
     publishRecoveryCycleNotCompleted: context.publishRecoveryCycleNotCompleted,
     isStopping: dependencies.isStopping,
     onUnownedExternalOrderObserved: dependencies.onUnownedExternalOrderObserved,
+    latchRecoverySellerStop: ({ order, reason, error } = {}) =>
+      latchRecoverySellerTerminalFailure({
+        recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+        order,
+        reason,
+        error,
+      }),
   })
   Object.assign(context, orderEventWorkflow)
   const ownedOrderManagement = createOwnedOrderManagementHandlers({
