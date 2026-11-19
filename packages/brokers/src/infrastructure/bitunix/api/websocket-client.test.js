@@ -308,14 +308,66 @@ test("Bitunix Spot WebSocket client validates order-history and matching-order R
   const { client, transport } = createClient()
   await client.connect()
 
-  assert.throws(() => client.getOpenOrders(), /symbol/i, "current-order lookup requires a symbol")
-  assert.throws(() => client.getOrderHistory({ symbol: "BTCUSDT", page: 0 }), /page/i, "order-history page must be positive")
-  assert.throws(() => client.getOrderHistory({ symbol: "BTCUSDT", pageSize: 1.5 }), /pageSize/i, "order-history pageSize must be a positive integer")
-  assert.throws(() => client.getOrderHistory({ symbol: "BTCUSDT", status: "99" }), /status/i, "unknown order-history status codes must be rejected")
-  assert.throws(() => client.getOrderHistory({ symbol: "BTCUSDT", side: "3" }), /side/i, "unknown order-history side codes must be rejected")
-  assert.throws(() => client.getOrderHistory({ symbol: "BTCUSDT", type: "3" }), /type/i, "unknown order-history type codes must be rejected")
-  assert.throws(() => client.getOrderHistory({ symbol: "BTCUSDT", startTime: "not-a-date" }), /startTime/i, "order-history timestamps must be valid ISO-8601 values")
-  assert.throws(() => client.getMatchingOrderDetails({ symbol: "BTCUSDT" }), /orderId/i, "matching-order lookup requires an exchange order ID")
+  assert.throws(
+    () => client.getOpenOrders(),
+    /symbol/i,
+    "current-order lookup requires a symbol",
+  )
+  assert.throws(
+    () => client.getOrderHistory({
+      symbol: "BTCUSDT",
+      page: 0,
+    }),
+    /page/i,
+    "order-history page must be positive",
+  )
+  assert.throws(
+    () => client.getOrderHistory({
+      symbol: "BTCUSDT",
+      pageSize: 1.5,
+    }),
+    /pageSize/i,
+    "order-history pageSize must be a positive integer",
+  )
+  assert.throws(
+    () => client.getOrderHistory({
+      symbol: "BTCUSDT",
+      status: "99",
+    }),
+    /status/i,
+    "unknown order-history status codes must be rejected",
+  )
+  assert.throws(
+    () => client.getOrderHistory({
+      symbol: "BTCUSDT",
+      side: "3",
+    }),
+    /side/i,
+    "unknown order-history side codes must be rejected",
+  )
+  assert.throws(
+    () => client.getOrderHistory({
+      symbol: "BTCUSDT",
+      type: "3",
+    }),
+    /type/i,
+    "unknown order-history type codes must be rejected",
+  )
+  assert.throws(
+    () => client.getOrderHistory({
+      symbol: "BTCUSDT",
+      startTime: "not-a-date",
+    }),
+    /startTime/i,
+    "order-history timestamps must be valid ISO-8601 values",
+  )
+  assert.throws(
+    () => client.getMatchingOrderDetails({
+      symbol: "BTCUSDT",
+    }),
+    /orderId/i,
+    "matching-order lookup requires an exchange order ID",
+  )
   assert.equal(transport.sent.length, 0, "invalid order RPC parameters must not reach the socket")
   await client.disconnect()
 })
