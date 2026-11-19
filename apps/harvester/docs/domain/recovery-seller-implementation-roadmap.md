@@ -21,6 +21,12 @@ The strict ESLint findings in the already changed route and Telegram test fixtur
 
 The latest routing guard and regression tests ensure that a provider account's RS-only symbol is never passed into the CG Conservative pair map. Until the RS runtime is registered, a provider account with no CG-owned route fails startup explicitly rather than silently running an idle or misattributed strategy. This guard is temporary and must be replaced by actual RS strategy dispatch, not relaxed or removed without the dispatch implementation.
 
+## Approved RS-4 architecture direction — 2026-11-19
+
+The owner approved the architecture direction recorded in [Strategy extensibility architecture](../architecture/strategy-extensibility-audit-roadmap.md#approved-implementation-direction--2026-11-19-pr-1476--issue-1475): one shared provider-account execution coordinator, explicit `{ strategyId, symbol }` dispatch, and one serialized account-level decision/order-transition path across CG and RS. Strategy policies, lifecycle semantics, accounting attribution and budgets remain independent; Portfolio custody, canonical order/fill processing, broker submission and quote/base reservations are coordinated account-wide. This is the implementation direction for #1475 / PR #1476, not a pending design question.
+
+Do not interpret the shared accounting queue as satisfying the coordinator requirement: strategy decisions, intent allocation, submissions/acknowledgements and canonical order/fill transitions must also be serialized. Preserve CG behavior. RS remains disabled/non-executable until RS-4 integration and RS-5 offline acceptance pass; no broker-package changes or exchange mutations are part of this work.
+
 ## Next RS-4 checkpoint — shared account workflow state
 
 The account-workflow state is shared by the Conservative Portfolio workflow and the RS accounting workflow. Both accounting workflows serialize fill/accounting updates through the same queue and expose the same immutable Portfolio snapshot. The live OrderRegistry is also reachable from this account state, and the Conservative engine now publishes each registry replacement through its validated accessor. The engine's broader event/decision queue is still separate; one cross-strategy dispatcher must serialize CG and RS decisions and order transitions before RS can execute. A regression covers shared Portfolio visibility and independent strategy-owned Positions. No RS order submission is enabled by this checkpoint.
