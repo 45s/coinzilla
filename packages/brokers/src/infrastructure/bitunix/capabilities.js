@@ -181,9 +181,11 @@ const BITUNIX_SPOT_CAPABILITIES = [
   },
   {
     type: "CANCEL_ALL_ORDERS",
-    status: "UNSUPPORTED",
+    status: "SUPPORTED",
     method: "cancelAllOpenOrders",
-    reason: "No safe Spot order-mutation and reconciliation contract is available.",
+    guarantee: "Cancels and verifies every currently open order returned for one explicitly requested Spot symbol.",
+    conditions: ["A non-empty symbol is required; the Spot API does not document account-wide open-order enumeration."],
+    limitation: "Each order is canceled and reconciled independently. Partial failures and unknown outcomes are returned; callers must not blindly retry.",
   },
   {
     type: "SUBSCRIBE_MARKET_PRICES",
