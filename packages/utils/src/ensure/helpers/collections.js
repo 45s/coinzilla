@@ -81,6 +81,7 @@ export function requireStrings({ value, name, nonEmpty = false, errMsg }) {
       name,
       expectation: "a readable array",
       value,
+      errMsg,
     })
   }
   for (let index = 0; index < length; index += 1) {
