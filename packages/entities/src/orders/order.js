@@ -5,6 +5,28 @@ import { errMsgs } from "./err-msgs.js"
 const supportedTypes = ["LIMIT", "LIMIT_MAKER", "MARKET"]
 const supportedSides = ["BUY", "SELL"]
 
+function assertValidString({ value, name, errorMessage }) {
+  assertWithDomainError({
+    validate: () => ensure.nonEmptyString({
+      value,
+      name,
+      errMsg: errorMessage,
+    }),
+    errorMessage,
+  })
+}
+
+function assertValidNumber({ value, name, errorMessage }) {
+  assertWithDomainError({
+    validate: () => ensure.number({
+      value,
+      name,
+      errMsg: errorMessage,
+    }),
+    errorMessage,
+  })
+}
+
 export class Order {
   #id
   #clientOrderId
@@ -27,22 +49,16 @@ export class Order {
   }
 
   constructor({ symbol, type, side, quantity, price, id, clientOrderId }) {
-    assertWithDomainError({
-      validate: () => ensure.nonEmptyString({
-        value: symbol,
-        name: "symbol",
-        errMsg: errMsgs.symbol,
-      }),
+    assertValidString({
+      value: symbol,
+      name: "symbol",
       errorMessage: errMsgs.symbol,
     })
     this.#symbol = capitalize(symbol.trim())
 
-    assertWithDomainError({
-      validate: () => ensure.string({
-        value: type,
-        name: "type",
-        errMsg: errMsgs.type,
-      }),
+    assertValidString({
+      value: type,
+      name: "type",
       errorMessage: errMsgs.type,
     })
     if (!supportedTypes.includes(type)) {
@@ -50,12 +66,9 @@ export class Order {
     }
     this.#type = type
 
-    assertWithDomainError({
-      validate: () => ensure.string({
-        value: side,
-        name: "side",
-        errMsg: errMsgs.side,
-      }),
+    assertValidString({
+      value: side,
+      name: "side",
       errorMessage: errMsgs.side,
     })
     if (!supportedSides.includes(side)) {
@@ -63,12 +76,9 @@ export class Order {
     }
     this.#side = side
 
-    assertWithDomainError({
-      validate: () => ensure.number({
-        value: quantity,
-        name: "quantity",
-        errMsg: errMsgs.quantity,
-      }),
+    assertValidNumber({
+      value: quantity,
+      name: "quantity",
       errorMessage: errMsgs.quantity,
     })
     if (quantity < 0) {
@@ -76,12 +86,9 @@ export class Order {
     }
     this.#quantity = quantity
 
-    assertWithDomainError({
-      validate: () => ensure.number({
-        value: price,
-        name: "price",
-        errMsg: errMsgs.price,
-      }),
+    assertValidNumber({
+      value: price,
+      name: "price",
       errorMessage: errMsgs.price,
     })
     if (price <= 0) {
@@ -89,23 +96,17 @@ export class Order {
     }
     this.#price = price
 
-    assertWithDomainError({
-      validate: () => ensure.nonEmptyString({
-        value: id,
-        name: "id",
-        errMsg: errMsgs.id,
-      }),
+    assertValidString({
+      value: id,
+      name: "id",
       errorMessage: errMsgs.id,
     })
     this.#id = id
 
     if (clientOrderId !== undefined && clientOrderId !== null) {
-      assertWithDomainError({
-        validate: () => ensure.nonEmptyString({
-          value: clientOrderId,
-          name: "clientOrderId",
-          errMsg: errMsgs.clientOrderId,
-        }),
+      assertValidString({
+        value: clientOrderId,
+        name: "clientOrderId",
         errorMessage: errMsgs.clientOrderId,
       })
     }
