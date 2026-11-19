@@ -1317,3 +1317,16 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [ ] Merge after required checks pass.
 
 **Still blocked:** Spot order placement remains disabled because the documented REST single-order, REST batch and WebSocket order interfaces disagree on `volume` denomination. Bitunix Spot does not document a caller-supplied order ID. Canonical fills, continuous market/private event streams and account-wide order enumeration remain open.
+
+
+## 2026-11-19 — Bitunix Spot single-order REST placement
+
+- [x] Implemented `createOrder()` on the documented `POST /api/spot/v1/order/place_order` endpoint only.
+- [x] LIMIT orders convert the caller's base quantity to quote-coin volume using exact decimal multiplication; MARKET orders submit base quantity. Market price is sent as `0`.
+- [x] Enforce LIMIT/MARKET, BUY/SELL, positive decimal quantity/price, GTC-only behavior, and reject unsupported fields/client IDs before dispatch.
+- [x] Validate the exchange placement response and read back the returned order ID via order detail before returning the normalized order.
+- [x] A dispatched transport failure returns `OUTCOME_UNKNOWN`; no automatic retry. If placement was acknowledged but detail reconciliation fails, return the exchange order ID and `CONFIRMED` mutation outcome for manual follow-up.
+- [x] Added offline tests for LIMIT and MARKET request payloads, exact quantity conversion, identity rejection, unknown transport outcomes, and acknowledged-placement reconciliation failure.
+- [ ] Pass required CI on the exact final PR head before merge.
+
+**Protocol boundary:** This implementation deliberately uses the single-order REST endpoint. Bitunix documents different `volume` denominations for batch REST and WebSocket order methods; neither is used by this method. Bitunix Spot does not accept a caller-supplied client order ID, so canonical order placement and idempotent unknown-outcome recovery remain unsupported.
