@@ -9,6 +9,7 @@ import { adaptBalances } from "./adapters/adapt-balances.js"
 import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, createBitunixKlineHistoryQuery, normalizeBitunixKlineInterval } from "./adapters/adapt-market-data.js"
 import { adaptExchangeRates } from "./adapters/adapt-exchange-rates.js"
 import { adaptTokenNetworks } from "./adapters/adapt-token-networks.js"
+import { adaptUserInfo } from "./adapters/adapt-user-info.js"
 import { adaptDepositAddresses } from "./adapters/adapt-deposit-addresses.js"
 import { adaptDeposits } from "./adapters/adapt-deposits.js"
 import { BitunixDepositAddressError } from "./errors/bitunix-deposit-address-error.js"
@@ -29,6 +30,7 @@ const API = Object.freeze({
   lastPrice: "/api/spot/v1/market/last_price",
   exchangeRates: "/api/spot/v1/common/rate/list",
   tokenNetworks: "/api/spot/v1/common/coin/coin_network/list",
+  userInfo: "/api/spot/v1/user/info",
   depth: "/api/spot/v1/market/depth",
   kline: "/api/spot/v1/market/kline",
   klineHistory: "/api/spot/v1/market/kline/history",
@@ -1154,6 +1156,33 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getTokenNetworks()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read private user identity information bound to the configured API key.
+   * Bitunix may return a null UID; identifiers are normalized to exact strings.
+   *
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getUserInfo() {
+    try {
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.userInfo,
+        authenticated: true,
+      })
+      return toResult({
+        data: adaptUserInfo({
+          value: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getUserInfo()",
         error,
       })
       return toResult({ errors: [error] })
