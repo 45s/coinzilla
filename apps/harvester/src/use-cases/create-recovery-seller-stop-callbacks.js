@@ -1,15 +1,11 @@
 function resolveOrderIdentity({ order } = {}) {
   if (!order || typeof order !== "object" || Array.isArray(order) ||
       typeof order.clientOrderId !== "string" || !order.clientOrderId.trim()) {
-    throw new TypeError("Recovery Seller STOP requires the original clientOrderId")
-  }
-  if (order.brokerOrderId !== undefined &&
-      (typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim())) {
-    throw new TypeError("Recovery Seller STOP brokerOrderId must be non-empty when provided")
+    return undefined
   }
   return Object.freeze({
     clientOrderId: order.clientOrderId,
-    ...(order.brokerOrderId === undefined
+    ...(typeof order.brokerOrderId !== "string" || !order.brokerOrderId.trim()
       ? {}
       : { brokerOrderId: order.brokerOrderId }),
   })
@@ -21,26 +17,33 @@ function resolveOrderSide({ order } = {}) {
     : "order"
 }
 
-function createStopExplanation({ order, outcome } = {}) {
+function createStopExplanation({ order, outcome, orderIdentity } = {}) {
   const side = resolveOrderSide({
     order,
   })
   const safeOutcome = ["UNKNOWN", "REJECTED", "DEFERRED", "VALIDATION_FAILED"].includes(outcome)
     ? outcome
     : "UNRESOLVED"
-  return `Recovery Seller ${side} submission outcome ${safeOutcome} requires authoritative reconciliation`
+  const identityStatus = orderIdentity
+    ? "requires authoritative reconciliation"
+    : "is missing the original clientOrderId and requires account-wide reconciliation"
+  return `Recovery Seller ${side} submission outcome ${safeOutcome} ${identityStatus}`
 }
 
 function createDurableStopLatch({ stopWorkflow } = {}) {
-  return async ({ order, outcome } = {}) => stopWorkflow.latch({
-    explanation: createStopExplanation({
+  return async ({ order, outcome } = {}) => {
+    const orderIdentity = resolveOrderIdentity({
       order,
-      outcome,
-    }),
-    orderIdentity: resolveOrderIdentity({
-      order,
-    }),
-  })
+    })
+    return stopWorkflow.latch({
+      explanation: createStopExplanation({
+        order,
+        outcome,
+        orderIdentity,
+      }),
+      ...(orderIdentity ? { orderIdentity } : {}),
+    })
+  }
 }
 
 export function createRecoverySellerStopCallbacks({ stopWorkflow } = {}) {
