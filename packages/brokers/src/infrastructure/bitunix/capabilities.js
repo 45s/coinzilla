@@ -174,9 +174,10 @@ const BITUNIX_SPOT_CAPABILITIES = [
   },
   {
     type: "CANCEL_ORDER",
-    status: "UNSUPPORTED",
+    status: "SUPPORTED",
     method: "cancelOrder",
-    reason: "Cancellation remains blocked because no private execution stream or verified cancellation-outcome reconciliation contract exists.",
+    guarantee: "Cancels one explicitly identified order through the signed Spot REST endpoint and verifies the final order state through order detail.",
+    limitation: "A lost cancellation acknowledgement or a non-terminal follow-up status is reported as OUTCOME_UNKNOWN; callers must reconcile and must not blindly retry.",
   },
   {
     type: "CANCEL_ALL_ORDERS",
