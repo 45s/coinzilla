@@ -1056,6 +1056,16 @@ function requireOrderHistoryFacts({ order, ownership }) {
       value: order.type,
       field: "order.type",
     }),
+    ...(order.limitPrice === undefined ? {} : {
+      price: requireDecimalString({
+        value: order.limitPrice.amount,
+        field: "order.limitPrice",
+      }),
+    }),
+    quantity: requireDecimalString({
+      value: order.originalQuantity.amount,
+      field: "order.originalQuantity",
+    }),
     market: order.market.value,
     originalQuantity: requireDecimalString({
       value: order.originalQuantity.amount,

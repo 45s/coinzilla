@@ -87,6 +87,8 @@ test("publishes complete canonical facts for immediately filled acknowledgements
 
   assert.equal(result.ok, true, "A canonical filled acknowledgement must map successfully.")
   assert.equal(result.data.executedQuantity, "1", "Canonical decimal normalization must be preserved without floating-point conversion.")
+  assert.equal(result.data.quantity, "1", "Order history facts must preserve the legacy recovery quantity field.")
+  assert.equal(result.data.price, "65000", "Order history facts must preserve the legacy recovery price field.")
   assert.equal(result.data.remainingQuantity, "0", "The submitted event must include remaining quantity.")
   assert.deepEqual(result.data.market, order.market.value, "Order events must carry canonical market and asset identity.")
   assert.deepEqual(result.data.ownership, {
