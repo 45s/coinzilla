@@ -4,7 +4,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Current Harvester priority
 
-**Multi-provider execution and independent market-data routing (#1339) is the primary Harvester architecture/delivery workstream.** Phase 4 account isolation is complete in merged [PR #1445](https://github.com/45s/coinzilla/pull/1445). Phase 5 independent market-data routing and Phase 6 execution routing are implemented in [PR #1455](https://github.com/45s/coinzilla/pull/1455), pending exact-head CI and merge. The production adapter catalog remains Binance-only. Bitunix is not registered as a Harvester provider until [#1185](https://github.com/45s/coinzilla/issues/1185) is resolved; future integration must be complete through the standard provider-instance, BrokerPort, capability, account-lifecycle and routing contracts, with no temporary partial facade.
+**Multi-provider execution and independent market-data routing (#1339): Phases 1–6 are complete and merged.** Harvester now supports multiple configured Binance account runtimes, explicit per-symbol market-data source routing, and explicit `(strategyId, symbol)` execution routing with immutable provider/account provenance. See the [migration plan](../../../docs/architecture/multi-provider-migration-plan.md), [provider-instance registry](infrastructure/provider-instance-registry.md), and [execution-routing contract](infrastructure/execution-routing.md). The production adapter catalog remains Binance-only: Bitunix is not registered until [#1185](https://github.com/45s/coinzilla/issues/1185) is resolved and the complete standard provider contract is satisfied. Recovery Seller execution and process-restart recovery remain separate deferred workstreams.
 
 ## Start here
 
