@@ -48,8 +48,9 @@ export function createRecoverySellerStopDecision({ explanation } = {}) {
 /**
  * Create the initial immutable RS STOP latch.
  *
- * There is intentionally no automatic clear operation. A future clear path
- * requires a separately approved and evidenced resolution contract.
+ * There is intentionally no automatic clear operation. The owner-approved manual
+ * clear path requires a fixed cause, authoritative order/fill/balance reconciliation,
+ * verified accounting and a durable operator-resolution fact.
  *
  * @returns {{ status: "CLEAR", decision: null }} Initial lifecycle STOP state.
  */
@@ -135,6 +136,85 @@ export function latchRecoverySellerStop({ state, decision } = {}) {
     status: "STOPPED",
     decision,
   })
+}
+
+
+function assertCanonicalOperatorIdentity({ value, field }) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value)) {
+    throw new TypeError("Recovery Seller STOP reset requires a canonical " + field)
+  }
+}
+
+function assertZeroCount({ value, field }) {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TypeError("Recovery Seller STOP reset requires a non-negative safe integer for " + field)
+  }
+  if (value !== 0) {
+    throw new Error("Recovery Seller STOP reset is blocked by unresolved " + field)
+  }
+}
+
+/**
+ * Clear a latched STOP only after an explicit operator action and complete
+ * exchange/accounting reconciliation. Persistence of the resolution fact is
+ * owned by the application use case; callers must persist before replacing
+ * their active state with this returned clear state.
+ *
+ * @param {object} input
+ * @param {object} input.state Current immutable STOP state.
+ * @param {string} input.operatorId Stable operator identity.
+ * @param {string} input.actionId Unique operator action identity.
+ * @param {boolean} input.causeFixed True only after the original cause is fixed.
+ * @param {object} input.reconciliation Authoritative order/fill/balance reconciliation result.
+ * @param {object} input.accounting Verified Portfolio, legacy and reservation accounting result.
+ * @returns {{ status: "CLEAR", decision: null }} New immutable clear state.
+ * @throws {TypeError|Error} If any reset prerequisite is missing or unresolved.
+ */
+export function resolveRecoverySellerStopState({
+  state,
+  operatorId,
+  actionId,
+  causeFixed,
+  reconciliation,
+  accounting,
+} = {}) {
+  assertStopState({ state })
+  if (state.status !== "STOPPED") {
+    throw new Error("Only a stopped Recovery Seller state may be resolved")
+  }
+  assertCanonicalOperatorIdentity({ value: operatorId, field: "operator identity" })
+  assertCanonicalOperatorIdentity({ value: actionId, field: "operator action identity" })
+  if (causeFixed !== true) {
+    throw new Error("Recovery Seller STOP reset requires the underlying cause must be fixed")
+  }
+  if (!reconciliation || typeof reconciliation !== "object" || Array.isArray(reconciliation) ||
+      reconciliation.ordersReconciled !== true ||
+      reconciliation.fillsReconciled !== true ||
+      reconciliation.balancesReconciled !== true) {
+    throw new Error("Recovery Seller STOP reset requires authoritative order, fill and balance reconciliation")
+  }
+  assertZeroCount({
+    value: reconciliation.unresolvedOrderCount,
+    field: "orders",
+  })
+  assertZeroCount({
+    value: reconciliation.unresolvedFillCount,
+    field: "fills",
+  })
+  assertZeroCount({
+    value: reconciliation.balanceDiscrepancyCount,
+    field: "balance discrepancies",
+  })
+  if (!accounting || typeof accounting !== "object" || Array.isArray(accounting) ||
+      accounting.verified !== true) {
+    throw new Error("Recovery Seller STOP reset requires accounting must be verified")
+  }
+  for (const field of ["portfolioConsistent", "legacyConsistent", "reservationsConsistent"]) {
+    if (accounting[field] !== true) {
+      throw new Error("Recovery Seller STOP reset requires " + field + " accounting verification")
+    }
+  }
+  return createRecoverySellerStopState()
 }
 
 /**
