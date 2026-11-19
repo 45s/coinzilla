@@ -360,7 +360,10 @@ async function createReconciliationHarness({ symbols = markets.map((market) => m
   }
   const harness = await createHarness({ brokerOverrides })
   harnessState.engine = harness.engine
-  await startBothMarkets({ engine: harnessState.engine, symbols })
+  await startBothMarkets({
+    engine: harnessState.engine,
+    symbols,
+  })
   return harness
 }
 

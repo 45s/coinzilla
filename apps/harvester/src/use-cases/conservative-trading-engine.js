@@ -295,17 +295,13 @@ function createDurableIntentPublisher({ eventPublisher, logger } = {}) {
 }
 
 
-function createRecoveryCycleNotCompletedData({
+function createRecoveryCycleNotCompletedFacts({
+  data,
   order,
-  completion,
   getPortfolio,
   getRecoveryLedger,
   pairs,
 }) {
-  const data = completion?.data
-  if (!data) {
-    return undefined
-  }
   const marketId = order.market.id
   const portfolio = typeof getPortfolio === "function" ? getPortfolio() : undefined
   const position = portfolio?.getPosition({
@@ -323,32 +319,61 @@ function createRecoveryCycleNotCompletedData({
       })
       : undefined
   )
-  const activeQuantity = data.activeQuantity ?? position?.baseQuantity.amount
-  const keepQuantity = data.keepQuantity ?? String(pairs[order.market.symbol].keepQuantity)
-  const minProfit = data.minProfit ?? String(pairs[order.market.symbol].minProfit)
-  if ([realizedNetProfit, activeQuantity, keepQuantity, minProfit].some((value) => value === undefined)) {
-    return undefined
+  return {
+    marketId,
+    realizedNetProfit,
+    activeQuantity: data.activeQuantity ?? position?.baseQuantity.amount,
+    keepQuantity: data.keepQuantity ?? String(pairs[order.market.symbol].keepQuantity),
+    minProfit: data.minProfit ?? String(pairs[order.market.symbol].minProfit),
   }
+}
+
+function getRecoveryCycleNotCompletedOutcome({ data }) {
   const continueReasons = [
     "RESIDUAL_INVENTORY_REQUIRES_SELL_THROUGH",
     "RECOVERY_PROFIT_TARGET_NOT_MET_CONTINUE_RECOVERY",
   ]
-  const outcome = data.pause === false && continueReasons.includes(data.reason)
+  return data.pause === false && continueReasons.includes(data.reason)
     ? "CONTINUE_SELL_THROUGH"
     : "BLOCKED"
+}
+
+function createRecoveryCycleNotCompletedData({
+  order,
+  completion,
+  getPortfolio,
+  getRecoveryLedger,
+  pairs,
+}) {
+  const data = completion?.data
+  if (!data) {
+    return undefined
+  }
+  const facts = createRecoveryCycleNotCompletedFacts({
+    data,
+    order,
+    getPortfolio,
+    getRecoveryLedger,
+    pairs,
+  })
+  if ([facts.realizedNetProfit, facts.activeQuantity, facts.keepQuantity, facts.minProfit]
+    .some((value) => value === undefined)) {
+    return undefined
+  }
   return mapRecoveryCycleNotCompletedData({
     symbol: order.market.symbol,
-    marketId,
+    marketId: facts.marketId,
     sellOrderClientId: order.clientOrderId,
     sellOrderBrokerOrderId: order.brokerOrderId,
-    outcome,
+    outcome: getRecoveryCycleNotCompletedOutcome({ data }),
     reason: data.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
-    realizedNetProfit,
-    activeQuantity,
-    keepQuantity,
-    minProfit,
+    realizedNetProfit: facts.realizedNetProfit,
+    activeQuantity: facts.activeQuantity,
+    keepQuantity: facts.keepQuantity,
+    minProfit: facts.minProfit,
   })
 }
+
 
 function createRecoveryCycleNotCompletedPublisher({
   eventPublisher,
@@ -1085,7 +1110,10 @@ function createSubmissionFailureCallbacks({ state, pause, eventPublisher, logger
   return {
     onSubmissionFailure: async ({ order, error, errors, outcome }) => {
       const submissionError = error ?? errors?.[0]
-      const classification = classifySubmissionFailure({ order, error: submissionError })
+      const classification = classifySubmissionFailure({
+        order,
+        error: submissionError,
+      })
       const ownership = state.registry.getOwnership({ clientOrderId: order.clientOrderId })
       publishSubmissionFailure({
         eventPublisher,
@@ -1163,11 +1191,8 @@ function createInitialVolatilityProtection({ pairs }) {
     .map(([symbol]) => [symbol, createVolatilityProtectionState({ symbol })]))
 }
 
-function createInitialEngineState({ initialState = {}, pairs, initialRegistry } = {}) {
-  const journalFillsById = createInitialJournalFillIndex({
-    journalFills: initialState.journalFills,
-  })
-  const state = {
+function createInitialEngineStateCore({ initialRegistry, journalFillsById }) {
+  return {
     registry: initialRegistry,
     journalFillsById,
     prices: new Map(),
@@ -1179,8 +1204,24 @@ function createInitialEngineState({ initialState = {}, pairs, initialRegistry } 
     processedFillsByOrder: new Map(),
     lastAdjustmentPrices: new Map(),
     buyReferenceOverrides: new Map(),
-    trailingBuy: new Map([...getInitialStateArray({ initialState, key: "trailingBuySymbols" })]
-      .map((symbol) => [symbol, true])),
+    deferredEvaluations: new Set(),
+    operatorAllBuysPaused: false,
+    operatorBuyPausedMarkets: new Set(),
+    completedRecoverySellSymbols: new Set(),
+    completedRecoverySellOrdersBySymbol: new Map(),
+    shutdownRecoveryReplanSymbols: new Set(),
+    marketPriceEventIds: new Map(),
+    volatilityCancellationAttemptBySymbol: new Map(),
+    volatilitySnapshotSignatureBySymbol: new Map(),
+  }
+}
+
+function createInitialEngineTrackingState({ initialState }) {
+  return {
+    trailingBuy: new Map([...getInitialStateArray({
+      initialState,
+      key: "trailingBuySymbols",
+    })].map((symbol) => [symbol, true])),
     paused: new Set(getInitialStateArray({
       initialState,
       key: "pausedMarkets",
@@ -1189,8 +1230,6 @@ function createInitialEngineState({ initialState = {}, pairs, initialRegistry } 
       initialState,
       key: "operatorPausedMarkets",
     })),
-    operatorAllBuysPaused: false,
-    operatorBuyPausedMarkets: new Set(),
     durablePausedMarkets: new Set(getInitialStateArray({
       initialState,
       key: "durablePausedMarkets",
@@ -1215,22 +1254,28 @@ function createInitialEngineState({ initialState = {}, pairs, initialRegistry } 
       initialState,
       key: "trailingBuyRepriceIntents",
     })),
-    deferredEvaluations: new Set(),
     completedOrderTransitions: new Set(getInitialStateArray({
       initialState,
       key: "completedOrderClientIds",
     })),
-    completedRecoverySellSymbols: new Set(),
-    completedRecoverySellOrdersBySymbol: new Map(),
-    shutdownRecoveryReplanSymbols: new Set(),
     reconciledTerminalOrderClientIds: new Set(getInitialStateArray({
       initialState,
       key: "reconciledTerminalOrderClientIds",
     })),
-    marketPriceEventIds: new Map(),
+  }
+}
+
+function createInitialEngineState({ initialState = {}, pairs, initialRegistry } = {}) {
+  const journalFillsById = createInitialJournalFillIndex({
+    journalFills: initialState.journalFills,
+  })
+  const state = {
+    ...createInitialEngineStateCore({
+      initialRegistry,
+      journalFillsById,
+    }),
+    ...createInitialEngineTrackingState({ initialState }),
     volatilityProtection: createInitialVolatilityProtection({ pairs }),
-    volatilityCancellationAttemptBySymbol: new Map(),
-    volatilitySnapshotSignatureBySymbol: new Map(),
   }
   return { journalFillsById,
 state }
@@ -2415,7 +2460,10 @@ async function persistCancellationClassification({
   if (!callback) {
     return cancelResult
   }
-  const classification = classifyCancellationResponse({ cancelResult, order })
+  const classification = classifyCancellationResponse({
+    cancelResult,
+    order,
+  })
   const outcomeFailure = await persistCancellationOutcome({
     callback,
     order,
@@ -3056,8 +3104,14 @@ function matchesOwnedBuyExecutionIdentity({
     (fill.clientOrderId === undefined || fill.clientOrderId === order.clientOrderId)
 }
 
-function matchesTrailingBuyFillIdentity({ fill, order }) {
-  return matchesOwnedBuyExecutionIdentity({ fill, order })
+function matchesTrailingBuyFillIdentity({
+      fill,
+      order,
+    }) {
+  return matchesOwnedBuyExecutionIdentity({
+    fill,
+    order,
+  })
 }
 
 async function applyTrailingBuyFillHistory({ context, symbol, order, fills }) {
@@ -3391,14 +3445,24 @@ async function getTrailingBuyReplacementCandidate({ context, symbol, marketPrice
       }),
     }
   }
-  if (isOperatorBuyPauseActive({ state: context.state, symbol })) {
+  if (isOperatorBuyPauseActive({
+    state: context.state,
+    symbol,
+  })) {
     return { result: await context.evaluateLatestTransition({ symbol }) }
   }
-  const { metadata, pairConfig, activeBuy } = getTrailingBuyContext({ context, symbol })
+  const { metadata, pairConfig, activeBuy } = getTrailingBuyContext({
+    context,
+    symbol,
+  })
   if (!activeBuy || context.state.trailingBuy.get(symbol) === false) {
     return { result: await context.evaluateLatestTransition({ symbol }) }
   }
-  const positionSkip = getTrailingBuyActivePositionSkip({ context, symbol, metadata })
+  const positionSkip = getTrailingBuyActivePositionSkip({
+    context,
+    symbol,
+    metadata,
+  })
   if (positionSkip) {
     return { result: positionSkip }
   }
