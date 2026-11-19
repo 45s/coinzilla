@@ -134,7 +134,7 @@ The previous four-state Binance declaration is superseded. The table below is re
 | Fills | Canonical fill-history query | supported | `getFills()` adapts signed `myTrades` rows into canonical Fill values; test: `get-fills.test.js`. Each call is one symbol-scoped page (maximum 1,000); cursor/time pagination is caller-managed. |
 | Fills | Complete account-wide fill history | unknown | No automatic all-symbol pagination or proof of exhaustive exchange retention-window coverage exists. A bounded trade-history page is not complete fill history. |
 | Fills | Execution updates | supported | `subscribeForUserData()` normalizes `executionReport` events with `x=TRADE` into canonical order/fill updates; test: `subscribe-for-user-data.test.js`. A stream gap still requires reconciliation. |
-| User data | Private user-data stream | supported | Signed `userDataStream.subscribe.signature`, event forwarding, reconnect/resubscribe, and subscriber recovery acknowledgements are implemented in `UserDataSession`; subscription metadata declares `deliveryMode: "NATIVE_EVENTS"` and `nativePush: true`. |\n| User data | Polling observations | unsupported | Binance does not use the non-authoritative polling observation channel; `OBSERVE_USER_DATA` is explicitly unsupported.
+| User data | Private user-data stream | supported | Signed `userDataStream.subscribe.signature`, event forwarding, reconnect/resubscribe, and subscriber recovery acknowledgements are implemented in `UserDataSession`; subscription metadata declares `deliveryMode: "NATIVE_EVENTS"` and `nativePush: true`. |\n| User data | Polling observations | unsupported | Binance does not use the non-authoritative polling observation channel; `OBSERVE_USER_DATA` is explicitly unsupported. |
 | User data | Missed-event replay | unsupported | Reconnection resubscribes but does not replay events missed during disconnection or expose a global exchange event cursor. |
 | Recovery | Same-process recovery | supported | In-memory reconnect/resubscribe uses a monotonic recovery generation; all active subscribers must acknowledge after their reconciliation before state-changing RPCs are unblocked. Test: `user-data-session.reconciliation.test.js`. |
 | Recovery | Process-restart recovery | unsupported | No durable broker-owned session/recovery state or process-restart restoration exists. |
@@ -185,7 +185,7 @@ This section contains only work owned by `@coinzilla/brokers`. Consumer applicat
 | `subscribeForPrices()` | Unsupported | Spot WebSocket exposes request/response RPC, not a continuous price stream. One-shot `getPrices()` is available but is not a subscription. |
 | `subscribeForCandles()` | Unsupported | No continuous Spot candle subscription is documented. |
 | `subscribeForBookTicker()` | Unsupported | No continuous Spot order-book subscription is documented; one-shot `getOrderBook()` is available. |
-| `subscribeForUserData()` | Unsupported | No continuous private order/execution event stream or replay cursor is documented. This blocks event-driven fill/order lifecycle and broker-owned recovery. |
+| Native private user-data event delivery (`onEvent`) | Unsupported | `subscribeForUserData()` exposes only explicitly scoped Bitunix polling observations through `onObservation`; `onEvent` remains unavailable. No continuous native order/execution stream or replay cursor is documented, so this cannot provide canonical fill/order lifecycle or broker-owned recovery. |
 
 #### Compatibility methods and existing operations — do not misclassify as missing
 
@@ -1133,7 +1133,7 @@ The method names below are the concrete Binance broker surface compared with `Bi
 | `subscribeForBookTicker()` | Blocked | Continuous Spot order-book push subscription and documented depth/precision semantics. Current depth RPC precision selection is unclear; no continuous subscription is documented. |
 | `getCandles()` | Blocked | Historical Spot candle endpoint/response with all canonical OHLCV fields, including volume, timestamp units and interval boundaries. Documented Spot kline payload omits volume. |
 | `subscribeForCandles()` | Blocked | Continuous public Spot candle push subscription with complete canonical OHLCV fields and lifecycle semantics. |
-| `subscribeForUserData()` | Blocked | Documented Spot private push stream for order/execution/account events, authentication, subscription lifecycle, stable event/execution IDs, timestamps, reconnect and gap-recovery semantics. Spot user/order WS RPC methods are not push subscriptions. |
+| Native private event delivery (`onEvent`) | Blocked | Documented Spot private push stream for order/execution/account events, authentication, subscription lifecycle, stable event/execution IDs, timestamps, reconnect and gap-recovery semantics. Spot user/order WS RPC methods are not push subscriptions. Polling observations through `onObservation` are available but non-authoritative and do not close this blocker. |
 
 ### Missing canonical fields, keys and guarantees
 
@@ -1425,13 +1425,13 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 ## 2026-11-19 — Bitunix Spot private polling reconciliation
 
-**Status: private read-only observation helper; not a Harvester user-data subscription.**
+**Status: read-only polling observations are exposed through the common Broker `subscribeForUserData()` method; no native private event stream or Harvester provider registration.**
 
 - The polling helper is kept under `src/infrastructure/bitunix/reconciler.js`; its implementation is not exported from the public Brokers package or the Bitunix infrastructure entry point.
 - Regression tests prove semantic deduplication ignores the changing local observation timestamp and that tracked-order symbols are validated synchronously before scheduling.
 - Polling remains explicitly non-authoritative: local `observedAt` is not an exchange `sourceTime`; order history is page 1 only; open orders are symbol-scoped; matching-order detail is not a canonical Fill.
-- `subscribeForUserData()` and `getAccountSnapshot()` remain explicitly unsupported. The helper does not fabricate Binance lifecycle events or claim that transient states between polls are recoverable.
-- Harvester admission and trading remain blocked by [issue #1185](https://github.com/45s/coinzilla/issues/1185) until the required source evidence or a formally accepted alternative contract exists.
+- `OBSERVE_USER_DATA` is supported through `subscribeForUserData()` and the `onObservation` callback. Native `SUBSCRIBE_USER_DATA` (`onEvent`) and `getAccountSnapshot()` remain unsupported. The helper does not fabricate Binance lifecycle events or claim that transient states between polls are recoverable.
+- Harvester remains unregistered and trading remains blocked by [issue #1185](https://github.com/45s/coinzilla/issues/1185). The generic Harvester observation handler is diagnostic-only and cannot create canonical events/fills or satisfy readiness.
 - Read-only only. No live order/funds mutations. TESTNET is not required for offline tests or authenticated read-only verification.
 
 See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitunix documentation index](./docs/README.md).
