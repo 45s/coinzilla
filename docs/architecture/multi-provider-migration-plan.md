@@ -16,7 +16,7 @@ last_verified: 2026-11-18
 
 ## Current source revalidation — 2026-11-18
 
-**Revalidation checkpoint:** `develop` at `636cbc3c6021a59782fa2517447e373883f1af76` (2026-11-18; includes merged PR #1452 Phase 5 independent market-data routing). This section supersedes earlier statements about current delivery status where they differ; historical audit evidence remains unchanged.
+**Revalidation checkpoint:** `develop` at `fdc951468648efa1fa17c93dd8c3f6ea78a23d84` (2026-11-19; includes merged PR #1455 Phase 6 explicit execution routing). This section supersedes earlier statements about current delivery status where they differ; historical audit evidence remains unchanged.
 
 - **Capability contract ownership — reconciled in PR #1455:** `@coinzilla/entities` owns the one shared `BrokerCapabilities` value, vocabulary, statuses, validation, lookup and serialization. `@coinzilla/brokers` owns provider-specific declarations/evidence and re-exports the shared class for compatibility.\n- **Phase 1 — complete:** the immutable Binance provider declaration was delivered in [PR #1366](https://github.com/45s/coinzilla/pull/1366) using the shared capability contract. This is additive capability metadata; it does not enable another provider.
 - **Phase 2 — foundation merged, routing not delivered:** [PR #1383](https://github.com/45s/coinzilla/pull/1383) adds stable Binance provider-instance/account identity, an exchange-neutral provider registry, capability validation, and deterministic connection/rollback lifecycle. It preserves the legacy single-Binance trading runtime.
