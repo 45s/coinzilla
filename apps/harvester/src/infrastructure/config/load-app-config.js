@@ -78,30 +78,36 @@ export async function loadAppConfig(sourceOrOptions = {}) {
 
   const tokenSpecifications = await readTokenSpecifications(resolve(tokenSpecificationsPath))
   const rawConfig = configModule.appConfig
-  const strategy = rawConfig?.strategies?.CG_coinGrabber
-  if (!strategy || typeof strategy !== "object" || Array.isArray(strategy)) {
+  const strategies = rawConfig?.strategies
+  if (!strategies || typeof strategies !== "object" || Array.isArray(strategies)) {
     return validateAppConfig(rawConfig)
   }
 
-  let resolvedPairs
-  try {
-    resolvedPairs = resolvePairSpecifications({
-      pairs: strategy.pairs,
-      tokenSpecifications,
-    })
-  } catch (cause) {
-    throw new Error(`Unable to resolve configured market precision using token specifications at ${resolve(tokenSpecificationsPath)}: ${cause.message}`, { cause })
+  const resolvedStrategies = { ...strategies }
+  for (const strategyId of ["CG_coinGrabber", "RS_recoverySeller"]) {
+    const strategy = strategies[strategyId]
+    if (!strategy || typeof strategy !== "object" || Array.isArray(strategy)) {
+      continue
+    }
+    const pairs = strategy.pairs
+    if (!pairs || typeof pairs !== "object" || Array.isArray(pairs) || Object.keys(pairs).length === 0) {
+      continue
+    }
+    try {
+      resolvedStrategies[strategyId] = {
+        ...strategy,
+        pairs: resolvePairSpecifications({
+          pairs,
+          tokenSpecifications,
+        }),
+      }
+    } catch (cause) {
+      throw new Error(`Unable to resolve configured market precision for ${strategyId} using token specifications at ${resolve(tokenSpecificationsPath)}: ${cause.message}`, { cause })
+    }
   }
 
-  const effectiveConfig = {
+  return validateAppConfig({
     ...rawConfig,
-    strategies: {
-      ...rawConfig.strategies,
-      CG_coinGrabber: {
-        ...strategy,
-        pairs: resolvedPairs,
-      },
-    },
-  }
-  return validateAppConfig(effectiveConfig)
+    strategies: resolvedStrategies,
+  })
 }
