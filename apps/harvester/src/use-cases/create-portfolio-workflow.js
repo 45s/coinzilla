@@ -328,78 +328,101 @@ function prepareTradingAccounting({
   }
 }
 
-async function runUpdateTradingAccounting({
+async function persistTradingAccountingEffects({
+  fill,
+  result,
+  thirdAssetCommissions,
+  onCommissionAsset,
+  onOperationalStateExecutionFill,
+  logger,
+}) {
+  if (!result.ok || result.data.applied !== true) {
+    return undefined
+  }
+  if (thirdAssetCommissions.size > 0) {
+    await captureThirdAssetCommissionBaselines({
+      onCommissionAsset,
+      logger,
+      fill,
+      commissions: thirdAssetCommissions,
+    })
+  }
+  if (!onOperationalStateExecutionFill) {
+    return undefined
+  }
+  return persistExecutionFill({ onOperationalStateExecutionFill,
+    fill })
+}
+
+function publishTradingAccountingResult({ state, fill, logger, result, prepared } = {}) {
+  if (result.ok) {
+    state.portfolio = result.data.portfolio
+    state.recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
+    const nextPosition = state.portfolio.getPosition({
+      marketId: fill.market.id,
+      strategyId: StrategyId.COIN_GRABBER,
+    })
+    logExecutionAccounted({
+      logger,
+      fill,
+      result,
+      previousPosition: prepared.previousPosition,
+      currentLedger: prepared.currentLedger,
+      nextPosition,
+      nextLedger: result.data.recoveryLedger,
+    })
+    return
+  }
+  logExecutionRejected({
+    logger,
+    fill,
+    result,
+    previousPortfolio: prepared.previousPortfolio,
+    currentLedger: prepared.currentLedger,
+  })
+}
+
+async function runTradingAccountingTransition({
   state,
   fill,
   logger,
   onCommissionAsset,
   onOperationalStateExecutionFill,
 }) {
-  return enqueueAccountingTransition({
-    state,
-    transition: async () => {
-      const prepared = prepareTradingAccounting({
-        state,
-        fill,
-        logger,
-      })
-      if (prepared.result) {
-        return prepared.result
-      }
-      const {
-        thirdAssetCommissions,
-        previousPortfolio,
-        currentLedger,
-        previousPosition,
-      } = prepared
+  const prepared = prepareTradingAccounting({ state,
+    fill,
+    logger })
+  if (prepared.result) {
+    return prepared.result
+  }
+  const result = applyTradingAccounting({
+    portfolio: state.portfolio,
+    recoveryLedger: prepared.currentLedger,
+    fill,
+  })
+  const durableFailure = await persistTradingAccountingEffects({
+    fill,
+    result,
+    thirdAssetCommissions: prepared.thirdAssetCommissions,
+    onCommissionAsset,
+    onOperationalStateExecutionFill,
+    logger,
+  })
+  if (durableFailure) {
+    return durableFailure
+  }
+  publishTradingAccountingResult({ state,
+    fill,
+    logger,
+    result,
+    prepared })
+  return result
+}
 
-      const result = applyTradingAccounting({
-        portfolio: state.portfolio,
-        recoveryLedger: currentLedger,
-        fill,
-      })
-      if (result.ok && result.data.applied === true && thirdAssetCommissions.size > 0) {
-        await captureThirdAssetCommissionBaselines({
-          onCommissionAsset,
-          logger,
-          fill,
-          commissions: thirdAssetCommissions,
-        })
-      }
-      if (result.ok && result.data.applied === true && onOperationalStateExecutionFill) {
-        const durableFailure = await persistExecutionFill({ onOperationalStateExecutionFill, 
-          fill })
-        if (durableFailure) {
-          return durableFailure
-        }
-      }
-      if (result.ok) {
-        state.portfolio = result.data.portfolio
-        state.recoveryLedgers.set(fill.market.id, result.data.recoveryLedger)
-        const nextPosition = state.portfolio.getPosition({
-          marketId: fill.market.id,
-          strategyId: StrategyId.COIN_GRABBER,
-        })
-        logExecutionAccounted({
-          logger,
-          fill,
-          result,
-          previousPosition,
-          currentLedger,
-          nextPosition,
-          nextLedger: result.data.recoveryLedger,
-        })
-      } else {
-        logExecutionRejected({
-          logger,
-          fill,
-          result,
-          previousPortfolio,
-          currentLedger,
-        })
-      }
-      return result
-    },
+async function runUpdateTradingAccounting(input = {}) {
+  return enqueueAccountingTransition({
+    state: input.state,
+    transition: () => runTradingAccountingTransition(input),
   })
 }
 
@@ -644,17 +667,45 @@ async function recordIneligibleRecoveryCycle({
   return undefined
 }
 
-async function runCompleteRecoveryCycle({
+async function recordRecoveryCycleEvaluation({
   state,
   marketId,
-  keepQuantity,
-  minProfit,
-  inventoryDisposition,
+  position,
+  recoveryLedger,
   sellOrder,
+  completion,
+  minProfit,
   logger,
   onOperationalStateRecoveryCycleCompleted,
   onOperationalStateRecoveryCycleNotCompleted,
 }) {
+  if (completion.eligible) {
+    return completeEligibleRecoveryCycle({
+      state,
+      marketId,
+      position,
+      recoveryLedger,
+      sellOrder,
+      completion,
+      minProfit,
+      logger,
+      onOperationalStateRecoveryCycleCompleted,
+    })
+  }
+  return recordIneligibleRecoveryCycle({
+    marketId,
+    position,
+    recoveryLedger,
+    sellOrder,
+    completion,
+    minProfit,
+    logger,
+    onOperationalStateRecoveryCycleNotCompleted,
+  })
+}
+
+async function runCompleteRecoveryCycle(input = {}) {
+  const { state, marketId } = input
   const recoveryLedger = state.recoveryLedgers.get(marketId)
   const position = state.portfolio.getPosition({
     marketId,
@@ -664,51 +715,29 @@ async function runCompleteRecoveryCycle({
     return toResult({ error: new Error("Cannot complete a recovery cycle without an active Position and RecoveryLedger") })
   }
   try {
-    assertTerminalRecoverySellOrder({ sellOrder, 
+    assertTerminalRecoverySellOrder({ sellOrder: input.sellOrder,
       marketId })
     const completion = evaluatePortfolioRecoveryCompletion({
-      logger,
+      logger: input.logger,
       marketId,
       position,
       recoveryLedger,
-      keepQuantity,
-      minProfit,
-      inventoryDisposition,
+      keepQuantity: input.keepQuantity,
+      minProfit: input.minProfit,
+      inventoryDisposition: input.inventoryDisposition,
     })
-    let failure
-    if (completion.eligible) {
-      failure = await completeEligibleRecoveryCycle({
-        state,
-        marketId,
-        position,
-        recoveryLedger,
-        sellOrder,
-        completion,
-        minProfit,
-        logger,
-        onOperationalStateRecoveryCycleCompleted,
-      })
-    } else {
-      failure = await recordIneligibleRecoveryCycle({
-        marketId,
-        position,
-        recoveryLedger,
-        sellOrder,
-        completion,
-        minProfit,
-        logger,
-        onOperationalStateRecoveryCycleNotCompleted,
-      })
-    }
-    if (failure) {
-      return failure
-    }
-    return toResult({ data: completion })
+    const failure = await recordRecoveryCycleEvaluation({
+      ...input,
+      position,
+      recoveryLedger,
+      completion,
+    })
+    return failure ?? toResult({ data: completion })
   } catch (error) {
-    logRecoveryCompletionFailure({ logger, 
-      state, 
-      marketId, 
-      error, 
+    logRecoveryCompletionFailure({ logger: input.logger,
+      state,
+      marketId,
+      error,
       recoveryLedger })
     return toResult({ error })
   }
