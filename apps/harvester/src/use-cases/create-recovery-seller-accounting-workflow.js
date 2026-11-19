@@ -132,6 +132,28 @@ function createLegacyPositionMap(records) {
   return positions
 }
 
+function initializeLegacyPositionsTransition({ state, records } = {}) {
+  if (!Array.isArray(records)) {
+    throw new TypeError("Recovery Seller legacy Position initialization requires a records array")
+  }
+  const nextLegacyPositions = new Map(state.legacyPositions)
+  for (const record of records) {
+    assertLegacyPositionRecord(record)
+    if (nextLegacyPositions.has(record.market.id)) {
+      throw new TypeError(`Recovery Seller legacy Position already exists for market ${record.market.id}`)
+    }
+    nextLegacyPositions.set(record.market.id, Object.freeze({
+      market: record.market,
+      position: record.position,
+      accounting: record.accounting,
+    }))
+  }
+  state.legacyPositions = nextLegacyPositions
+  return Object.freeze({
+    initialized: records.length,
+  })
+}
+
 function getLegacyPositionRecord({ state, marketId }) {
   if (typeof marketId !== "string" || !marketId.trim()) {
     throw new TypeError("Recovery Seller legacy Position lookup requires marketId")
@@ -694,9 +716,14 @@ export function createRecoverySellerAccountingWorkflow({
     state,
     transition: reconcileTerminalMixedSellTransition,
   })
+  const initializeLegacyPositions = createSerializedWorkflowOperation({
+    state,
+    transition: initializeLegacyPositionsTransition,
+  })
 
   return Object.freeze({
     applyBuyFill,
+    initializeLegacyPositions,
     getExecutionCallbacks: () => createRecoverySellerExecutionCallbacks({ state }),
     reconcileTerminalMixedSell,
     getPortfolio: () => state.portfolio,
