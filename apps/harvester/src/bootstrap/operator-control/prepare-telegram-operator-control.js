@@ -36,6 +36,7 @@ function createAdapterStartHandler({
   createAdapter,
   fetchImpl,
   logger,
+  operationalStateStore,
 } = {}) {
   return async function startTelegramAdapter({
     engine,
@@ -54,6 +55,7 @@ function createAdapterStartHandler({
     }
     const operator = createHarvesterOperator({
       engine,
+      operationalStateStore,
       getRuntimeSnapshot,
       getPortfolio,
       getRecoveryLedger,
