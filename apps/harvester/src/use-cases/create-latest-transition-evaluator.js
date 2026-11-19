@@ -4,24 +4,31 @@ import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import { mapRecoveryCycleCompletedData, mapStrategyDecisionData } from "../application/events/lifecycle-event-dtos.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 
+function hasShutdownRecoveryBlocker({ state, symbol } = {}) {
+  const marketBlockers = [
+    state.durablePausedMarkets?.has(symbol) === true,
+    state.operatorPausedMarkets?.has(symbol) === true,
+    state.replacementIntents?.has(symbol) === true,
+    state.trailingBuyRepriceIntents?.has(symbol) === true,
+  ]
+  return marketBlockers.some(Boolean) ||
+    state.safetyHaltRequired === true ||
+    state.accountingFailed === true ||
+    state.requiresReconciliation === true
+}
+
+function hasPendingManagedCancellation({ state, symbol } = {}) {
+  return [...(state.recoveryManagedCancellationClientOrderIds ?? [])].some((clientOrderId) =>
+    state.registry.getOrder({ clientOrderId })?.market.symbol === symbol)
+}
+
 function canEvaluateShutdownRecoveryThroughManagedPause({ state, symbol, shutdownRecoveryOnly } = {}) {
   if (shutdownRecoveryOnly !== true ||
       state.recoveryManagedPausedMarkets?.has(symbol) !== true) {
     return false
   }
-  if (
-    state.durablePausedMarkets?.has(symbol) === true ||
-    state.operatorPausedMarkets?.has(symbol) === true ||
-    state.replacementIntents?.has(symbol) === true ||
-    state.trailingBuyRepriceIntents?.has(symbol) === true ||
-    state.safetyHaltRequired === true ||
-    state.accountingFailed === true ||
-    state.requiresReconciliation === true
-  ) {
-    return false
-  }
-  return ![...(state.recoveryManagedCancellationClientOrderIds ?? [])].some((clientOrderId) =>
-    state.registry.getOrder({ clientOrderId })?.market.symbol === symbol)
+  return !hasShutdownRecoveryBlocker({ state, symbol }) &&
+    !hasPendingManagedCancellation({ state, symbol })
 }
 
 function getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly } = {}) {
@@ -181,15 +188,76 @@ function prepareEvaluationContext({ dependencies, options } = {}) {
   return context
 }
 
+function isDustRecoveryCompletionRequired({ state, symbol, decision } = {}) {
+  return decision.inventoryDisposition?.status === "EXCHANGE_CONSTRAINED_DUST" &&
+    state.completedRecoverySellSymbols.has(symbol)
+}
+
+async function pauseForDustCompletionFailure({ pause, symbol, reason, error } = {}) {
+  await pause({ symbol, reason, error })
+}
+
+function publishDustRecoveryCompleted({ eventPublisher, symbol, metadata, pairs, completion } = {}) {
+  publishLifecycleEvent({
+    eventPublisher,
+    eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
+    dataResult: mapRecoveryCycleCompletedData({
+      symbol,
+      marketId: metadata.market.id,
+      freeQuantity: completion.data.freeQuantity,
+      keepQuantity: String(pairs[symbol].keepQuantity),
+      minProfit: String(pairs[symbol].minProfit),
+      realizedNetProfit: completion.data.realizedNetProfit,
+      dust: completion.data.dust,
+    }),
+  })
+}
+
+async function handleDustCompletionFailure({ pause, symbol, completion } = {}) {
+  await pauseForDustCompletionFailure({
+    pause,
+    symbol,
+    reason: "RECOVERY_CYCLE_COMPLETION_FAILED",
+    error: completion?.errors?.[0],
+  })
+  return toResult({ errors: completion?.errors ?? [new Error("Dust recovery completion failed")] })
+}
+
+async function handleIncompleteDustCompletion({ dependencies, context, completedSellOrder, completion } = {}) {
+  const { pause, publishRecoveryCycleNotCompleted } = dependencies
+  const { symbol } = context
+  publishRecoveryCycleNotCompleted({ order: completedSellOrder, completion })
+  if (completion.data?.pause === false) {
+    return null
+  }
+  await pauseForDustCompletionFailure({
+    pause,
+    symbol,
+    reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
+  })
+  return toResult({ error: new Error("Dust recovery cycle completion did not satisfy the Conservative contract") })
+}
+
 async function completeDustRecoveryIfNeeded({ dependencies, context } = {}) {
-  const { state, pause, completeRecoveryCycle, eventPublisher, publishRecoveryCycleNotCompleted, evaluateLatestTransition, pairs } = dependencies
+  const {
+    state,
+    pause,
+    completeRecoveryCycle,
+    eventPublisher,
+    evaluateLatestTransition,
+    pairs,
+  } = dependencies
   const { symbol, metadata, decision, effectiveActions } = context
-  if (decision.inventoryDisposition?.status !== "EXCHANGE_CONSTRAINED_DUST" ||
-      !state.completedRecoverySellSymbols.has(symbol)) {return null}
+  if (!isDustRecoveryCompletionRequired({ state, symbol, decision })) {
+    return null
+  }
   const completedSellOrder = state.completedRecoverySellOrdersBySymbol.get(symbol)
   if (!completedSellOrder) {
-    await pause({ symbol,
-      reason: "RECOVERY_CYCLE_SELL_IDENTITY_MISSING" })
+    await pauseForDustCompletionFailure({
+      pause,
+      symbol,
+      reason: "RECOVERY_CYCLE_SELL_IDENTITY_MISSING",
+    })
     return toResult({ error: new Error("Completed recovery SELL identity is unavailable for dust completion") })
   }
   const completion = await completeRecoveryCycle({
@@ -200,43 +268,21 @@ async function completeDustRecoveryIfNeeded({ dependencies, context } = {}) {
     sellOrder: completedSellOrder,
   })
   if (!completion?.ok) {
-    await pause({
-      symbol,
-      reason: "RECOVERY_CYCLE_COMPLETION_FAILED",
-      error: completion?.errors?.[0],
-    })
-    return toResult({ errors: completion?.errors ?? [new Error("Dust recovery completion failed")] })
+    return handleDustCompletionFailure({ pause, symbol, completion })
   }
-  if (completion.data?.eligible) {
-    publishLifecycleEvent({
-      eventPublisher,
-      eventName: HARVESTER_EVENT_NAMES.RECOVERY_CYCLE_COMPLETED,
-      dataResult: mapRecoveryCycleCompletedData({
-        symbol,
-        marketId: metadata.market.id,
-        freeQuantity: completion.data.freeQuantity,
-        keepQuantity: String(pairs[symbol].keepQuantity),
-        minProfit: String(pairs[symbol].minProfit),
-        realizedNetProfit: completion.data.realizedNetProfit,
-        dust: completion.data.dust,
-      }),
+  if (!completion.data?.eligible) {
+    return handleIncompleteDustCompletion({
+      dependencies,
+      context,
+      completedSellOrder,
+      completion,
     })
-    state.completedRecoverySellSymbols.delete(symbol)
-    state.completedRecoverySellOrdersBySymbol.delete(symbol)
-    state.trailingBuy.set(symbol, true)
-    if (effectiveActions.length > 0) {return evaluateLatestTransition({ symbol })}
-    return null
   }
-  publishRecoveryCycleNotCompleted({ order: completedSellOrder,
-    completion })
-  if (completion.data?.pause !== false) {
-    await pause({
-      symbol,
-      reason: completion.data?.reason ?? "RECOVERY_CYCLE_COMPLETION_BLOCKED",
-    })
-    return toResult({ error: new Error("Dust recovery completion did not satisfy the Conservative contract") })
-  }
-  return null
+  publishDustRecoveryCompleted({ eventPublisher, symbol, metadata, pairs, completion })
+  state.completedRecoverySellSymbols.delete(symbol)
+  state.completedRecoverySellOrdersBySymbol.delete(symbol)
+  state.trailingBuy.set(symbol, true)
+  return effectiveActions.length > 0 ? evaluateLatestTransition({ symbol }) : null
 }
 
 function handleNoEffectiveActions({ dependencies, context } = {}) {
