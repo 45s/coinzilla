@@ -82,6 +82,10 @@ function createEvaluationInputs({
   const recoveryLedgerBefore = getRecoveryLedger({ marketId: metadata.market.id })
   const activeOrdersBefore = state.registry.getActiveOrders({ marketId: metadata.market.id })
     .filter((order) => order.clientOrderId !== excludedActiveOrderClientId)
+    .filter((order) => state.registry.getOwnership?.({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+    })?.strategyId === StrategyId.COIN_GRABBER)
   const lastBuyPrice = shutdownRecoveryOnly
     ? (state.lastBuyPrices.get(symbol) ?? marketPrice.price)
     : referencePriceOverride ?? state.buyReferenceOverrides.get(symbol) ?? state.lastBuyPrices.get(symbol)
@@ -390,8 +394,9 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
     throw new Error("Current account snapshot is unavailable")
   }
   const position = portfolioBefore.getPosition({
-    strategyId: StrategyId.COIN_GRABBER,
+    strategyId: dependencies.strategyId ?? StrategyId.COIN_GRABBER,
     marketId: metadata.market.id,
+    ...(context.positionId === undefined ? {} : { positionId: context.positionId }),
   })
   const allPositions = portfolioBefore.positions
   const portfolioQuoteCashFlow = sumDecimalValues({
@@ -462,7 +467,13 @@ function getPortfolioBalanceContext({ dependencies, context } = {}) {
 
 function allocateEvaluationActions({ dependencies, context, balances } = {}) {
   const { allocateOrderCommitments, pairs } = dependencies
-  const { symbol, effectiveActions, recoveryLedgerBefore, metadata } = context
+  const {
+    symbol,
+    effectiveActions,
+    recoveryLedgerBefore,
+    metadata,
+  } = context
+  const pairConfig = context.pairConfig ?? pairs[symbol]
   const {
     position,
     accountSnapshot,
@@ -482,12 +493,12 @@ function allocateEvaluationActions({ dependencies, context, balances } = {}) {
     quoteFreeBalance: quoteBalance.amount,
     baseFreeBalance: baseBalance.amount,
     quoteCashFlow,
-    activeBaseQuantity: position?.baseQuantity.amount ?? "0",
+    activeBaseQuantity: context.activeBaseQuantity ?? position?.baseQuantity.amount ?? "0",
     portfolioBaseBalance,
     portfolioBaseBalanceBaseline: accountSnapshot.getPortfolioBaseQuantityBaseline({ assetId: metadata.market.baseAsset.id }),
     additionalTrackedBaseBalance,
     additionalTrackedBaseBalanceBaseline,
-    outstandingRecoveryAmount: maxDecimal({
+    outstandingRecoveryAmount: context.outstandingRecoveryAmount ?? maxDecimal({
       left: "0",
       right: subtractDecimal({
         left: position?.spent.amount ?? "0",
@@ -500,7 +511,7 @@ function allocateEvaluationActions({ dependencies, context, balances } = {}) {
     committedBase,
     committedBaseBalance,
     committedBaseBalanceBaseline: accountSnapshot.getCommittedBaseBalanceBaseline({ assetId: metadata.market.baseAsset.id }),
-    investmentLimit: String(pairs[symbol].investment),
+    investmentLimit: String(pairConfig.investment),
   })
   if (!allocation.ok) {
     throw allocation.errors[0] ?? new Error("Unable to allocate strategy order commitments")
@@ -558,6 +569,90 @@ function logOrderAllocation({ dependencies, context, balances, allocation } = {}
     additionalQuoteCashFlow,
     quoteCashFlowBaseline,
   })
+}
+
+/**
+ * Allocate one strategy's candidate actions against shared account balances and
+ * account-wide reservations while keeping pair commitments strategy-owned.
+ *
+ * @param {object} input Strategy, Portfolio, market, active orders and actions.
+ * @returns {object} Allocation result with the exact balance context used.
+ */
+export function allocateStrategyOrderCommitments({
+  dependencies,
+  strategyId,
+  symbol,
+  metadata,
+  portfolio,
+  activeOrders,
+  pairConfig,
+  positionId,
+  activeBaseQuantity,
+  outstandingRecoveryAmount,
+  actions,
+} = {}) {
+  try {
+    const strategyDependencies = {
+      ...dependencies,
+      strategyId,
+    }
+    const context = {
+      symbol,
+      metadata,
+      portfolioBefore: portfolio,
+      activeOrdersBefore: activeOrders,
+      pairConfig,
+      positionId,
+      activeBaseQuantity,
+      outstandingRecoveryAmount,
+    }
+    const balances = getPortfolioBalanceContext({
+      dependencies: strategyDependencies,
+      context,
+    })
+    const allocation = dependencies.allocateOrderCommitments({
+      actions,
+      quoteFreeBalance: balances.quoteBalance.amount,
+      baseFreeBalance: balances.baseBalance.amount,
+      quoteCashFlow: balances.quoteCashFlow,
+      activeBaseQuantity: activeBaseQuantity ?? balances.position?.baseQuantity.amount ?? "0",
+      portfolioBaseBalance: balances.portfolioBaseBalance,
+      portfolioBaseBalanceBaseline: balances.accountSnapshot.getPortfolioBaseQuantityBaseline({
+        assetId: metadata.market.baseAsset.id,
+      }),
+      additionalTrackedBaseBalance: balances.additionalTrackedBaseBalance,
+      additionalTrackedBaseBalanceBaseline: balances.additionalTrackedBaseBalanceBaseline,
+      outstandingRecoveryAmount: outstandingRecoveryAmount ?? maxDecimal({
+        left: "0",
+        right: subtractDecimal({
+          left: balances.position?.spent.amount ?? "0",
+          right: "0",
+        }),
+      }),
+      committedQuote: balances.committedQuote,
+      committedQuoteBalance: balances.committedQuoteBalance,
+      committedQuoteBalanceBaseline: balances.accountSnapshot.getCommittedQuoteBalanceBaseline({
+        assetId: metadata.market.quoteAsset.id,
+      }),
+      committedBase: balances.committedBase,
+      committedBaseBalance: balances.committedBaseBalance,
+      committedBaseBalanceBaseline: balances.accountSnapshot.getCommittedBaseBalanceBaseline({
+        assetId: metadata.market.baseAsset.id,
+      }),
+      investmentLimit: String(pairConfig.investment),
+    })
+    if (!allocation?.ok) {
+      return allocation
+    }
+    return toResult({
+      data: Object.freeze({
+        allocation: allocation.data,
+        balances,
+      }),
+    })
+  } catch (error) {
+    return toResult({ error })
+  }
 }
 
 function handleNoExecutableActions({ dependencies, context, allocation } = {}) {
