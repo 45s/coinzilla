@@ -1,6 +1,7 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
 import { assertProviderIdentityMatches, hasProviderIdentity } from "../domain/orders/provider-provenance.js"
 import { toResult } from "@coinzilla/utils"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
 import {
   mapExecutionInvalidFillData,
