@@ -69,7 +69,7 @@ export function requireStrings({ value, name, nonEmpty = false }) {
       })
   let length
   try {
-    length = array.length
+    length = Reflect.get(array, "length")
   } catch {
     throw typeError({
       name,
@@ -119,7 +119,7 @@ export function requireUnique({ value, name }) {
   })
   let length
   try {
-    length = array.length
+    length = Reflect.get(array, "length")
   } catch {
     throw typeError({
       name,
