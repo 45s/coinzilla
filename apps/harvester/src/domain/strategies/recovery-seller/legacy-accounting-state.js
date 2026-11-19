@@ -1,6 +1,5 @@
 import { Market } from "@coinzilla/entities"
 import { addDecimal, assertDecimalString, compareDecimal, ensure, subtractDecimal } from "@coinzilla/utils"
-import { Portfolio } from "../../portfolio/portfolio.js"
 import { calculateVerifiedLegacySpotAllocation } from "./legacy-spot-allocation.js"
 import { createLegacyPosition } from "./legacy-position.js"
 

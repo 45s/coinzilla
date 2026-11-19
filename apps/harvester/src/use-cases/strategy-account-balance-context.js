@@ -1,4 +1,4 @@
-import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, multiplyDecimal, maxDecimal, ensure } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, multiplyDecimal, ensure } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 
 function sumDecimalValues({ items, getValue } = {}) {

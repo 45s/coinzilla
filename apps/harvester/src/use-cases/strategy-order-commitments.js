@@ -1,4 +1,4 @@
-import { addDecimal, subtractDecimal, multiplyDecimal, ensure, toResult } from "@coinzilla/utils"
+import { subtractDecimal, maxDecimal, ensure, toResult } from "@coinzilla/utils"
 import { getPortfolioBalanceContext } from "./strategy-account-balance-context.js"
 
 function createStrategyOrderCommitmentInput({ balances, metadata, pairConfig, activeBaseQuantity, outstandingRecoveryAmount, actions } = {}) {
