@@ -303,7 +303,7 @@ Bitunix documents Spot WebSocket as authenticated request/response RPC: every re
 Create packages/brokers/.env.development locally (never commit it). Credentials are optional for public-only checks:
 
 ~~~dotenv
-# Optional: uncomment and configure both to enable private account/open-order reads and authenticated WebSocket RPC.
+# Optional: uncomment and configure both to enable private account, open-order, order-history, and authenticated WebSocket RPC reads.
 # BITUNIX_API_KEY=your_diagnostic_api_key
 # BITUNIX_API_SECRET=your_api_secret
 # Optional: leave unset to skip REST and WebSocket depth checks; choose only a value you have verified for your market.
@@ -318,7 +318,7 @@ pnpm --filter @coinzilla/brokers diagnose:bitunix
 
 The source-level `DIAGNOSTIC_CONFIG.confirmLiveReads` constant is the explicit acknowledgement gate because Bitunix Spot has no documented TESTNET environment. It defaults to `true`; set it to `false` in `scripts/bitunix-diagnostic-runner.js` to prevent the runner from making requests. The runner contacts the configured LIVE Spot endpoint and performs non-mutating query requests only.
 
-Both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` are optional for public-only diagnostics. With neither credential configured—or with only one configured—the runner executes the unsigned public REST catalog and latest-price GET requests, then marks private account and all authenticated WebSocket RPC checks as skipped. Configure **both** variables to enable signed account/open-order reads and authenticated WebSocket RPC. A private REST request without credentials fails closed with `BITUNIX_REST_AUTHENTICATION_REQUIRED`; the REST client never fabricates credentials. The two values are treated as one credential pair.
+Both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` are optional for public-only diagnostics. With neither credential configured—or with only one configured—the runner executes the unsigned public REST catalog and latest-price GET requests, then marks private account and all authenticated WebSocket RPC checks as skipped. Configure **both** variables to enable signed account/open-order and order-history reads over REST/WebSocket RPC. A private REST request without credentials fails closed with `BITUNIX_REST_AUTHENTICATION_REQUIRED`; the REST client never fabricates credentials. The two values are treated as one credential pair.
 
 When enabling private diagnostics, use a dedicated API key with account-read permission and **without** trading or withdrawal permission. Do not use production mutation-enabled keys for diagnostics.
 
@@ -328,7 +328,8 @@ The runner checks these documented Spot REST operations:
 - Public order-book depth when `BITUNIX_DIAGNOSTICS_DEPTH_PRECISION` is explicitly configured.
 - Current K-line and one historical K-line sample using the constant `1min` interval.
 - Private account balances.
-- Private current open orders via `POST /api/spot/v1/order/pending/list`. Although the HTTP method is POST, Bitunix documents this as **Query current orders**; the diagnostic sends only the symbol, sets `stateChanging: false`, and never places or cancels orders.
+- Private current open orders via REST `POST /api/spot/v1/order/pending/list` and Spot WebSocket `order.pending.list`.
+- One page of private order history via Spot WebSocket `order.history.page` (page 1, pageSize 1). Private order IDs and order data are summarized by field names only; no order placement or cancellation is attempted.
 
 The official [Spot public REST reference](https://www.bitunix.com/api-docs/spots/en_us/public/) does not document a server-time or general recent-trades endpoint, so neither is invented or probed. The [Spot order reference](https://www.bitunix.com/api-docs/spots/en_us/order/) documents the current-orders query separately from place/cancel operations.
 
