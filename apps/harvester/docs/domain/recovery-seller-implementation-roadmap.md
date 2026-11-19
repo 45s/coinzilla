@@ -441,3 +441,8 @@ Canonical fill accounting now distinguishes RS ownership, explicit CG ownership,
 ### Production evaluator registration — regression checkpoint
 
 A configured Recovery Seller market must never be silently treated as a successful no-op when the shared engine has no production RS transition evaluator. The shared evaluator now has a required fail-closed regression contract for this wiring boundary. This is an integration safety gate, not RS runtime completion: RS remains disabled until a real production evaluator, submission lifecycle, shared reservations, terminal mixed-SELL reconciliation and RS-5 acceptance are implemented.
+
+
+### Startup registration guard — regression checkpoint
+
+Configured RS execution routes must be rejected before process-start facts or broker connection when the production RS transition evaluator is missing. A runtime market-event guard is not sufficient because it permits a misconfigured process to start. The startup regression test is added before the guard implementation. RS remains disabled until production evaluator composition and the remaining RS-4/RS-5 acceptance work are complete.
