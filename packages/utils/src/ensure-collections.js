@@ -81,7 +81,7 @@ export function requireStrings({ value, name, nonEmpty = false }) {
     const elementName = `${name}[${index}]`
     let element
     try {
-      element = array[index]
+      element = Reflect.get(array, index)
     } catch {
       throw typeError({
         name: elementName,
@@ -131,7 +131,7 @@ export function requireUnique({ value, name }) {
   for (let index = 0; index < length; index += 1) {
     let element
     try {
-      element = array[index]
+      element = Reflect.get(array, index)
     } catch {
       throw typeError({
         name: `${name}[${index}]`,
