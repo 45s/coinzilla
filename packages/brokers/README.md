@@ -295,7 +295,7 @@ BITUNIX_API_SECRET=your_api_secret
 # BITUNIX_DIAGNOSTICS_DEPTH_PRECISION=
 ~~~
 
-From the repository root:
+From `packages/brokers`:
 
 ~~~sh
 node scripts/bitunix-healthcheck.js
