@@ -79,25 +79,15 @@ export class BitunixSpotConfig {
     allowLiveOrderMutations = false,
     allowLiveFundsMutations = false,
   } = {}) {
-    if (typeof apiKey !== "string" || !apiKey.trim() ||
-        typeof apiSecret !== "string" || !apiSecret.trim()) {
-      throw new TypeError("Bitunix Spot API credentials are required")
-    }
-    if (tradingMode !== "live") {
-      throw new TypeError('Bitunix Spot tradingMode is unsupported unless explicitly set to "live"; no Spot TESTNET endpoint is documented')
-    }
-    if (typeof baseUrl !== "string" || !baseUrl.startsWith("https://")) {
-      throw new TypeError("Bitunix Spot REST base URL must use https://")
-    }
-    if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
-      throw new RangeError("Bitunix Spot requestTimeout must be a positive integer")
-    }
-    if (typeof allowLiveOrderMutations !== "boolean") {
-      throw new TypeError("Bitunix Spot allowLiveOrderMutations must be a boolean")
-    }
-    if (typeof allowLiveFundsMutations !== "boolean") {
-      throw new TypeError("Bitunix Spot allowLiveFundsMutations must be a boolean")
-    }
+    validateBitunixSpotConfig({
+      apiKey,
+      apiSecret,
+      tradingMode,
+      baseUrl,
+      requestTimeout,
+      allowLiveOrderMutations,
+      allowLiveFundsMutations,
+    })
 
     this.apiKey = apiKey
     this.apiSecret = apiSecret
