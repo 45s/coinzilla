@@ -445,4 +445,4 @@ A configured Recovery Seller market must never be silently treated as a successf
 
 ### Startup registration guard — regression checkpoint
 
-Configured RS execution routes must be rejected before process-start facts or broker connection when the production RS transition evaluator is missing. A runtime market-event guard is not sufficient because it permits a misconfigured process to start. The startup regression test is added before the guard implementation. RS remains disabled until production evaluator composition and the remaining RS-4/RS-5 acceptance work are complete.
+Configured RS execution routes are now rejected before process-start facts or broker connection when the production RS transition evaluator is missing. A runtime market-event guard remains as defense in depth. This is a startup safety boundary, not production evaluator composition: RS remains non-executable until the actual evaluator and remaining RS-4/RS-5 acceptance work are complete.

@@ -45,6 +45,7 @@ import { resolveBinanceProviderIdentity } from "../domain/provider-identity.js"
 import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop } from "./harvester-runtime-helpers.js"
+import { assertRecoverySellerEvaluatorAvailable } from "./assert-recovery-seller-evaluator-available.js"
 
 function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
   if (typeof operationalStateStore?.append !== "function" ||
@@ -385,6 +386,10 @@ async function createHarvesterStartupContext({ options } = {}) {
   const dependencies = resolveHarvesterStartupDependencies({ options })
   const runtimeStartedAt = dependencies.now()
   const { resolved } = await resolveHarvesterStartupConfiguration({ dependencies })
+  assertRecoverySellerEvaluatorAvailable({
+    recoverySellerPairs: resolved.recoverySellerPairs,
+    evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
+  })
   const startupState = await prepareHarvesterStartupState({
     dependencies,
     resolved,
