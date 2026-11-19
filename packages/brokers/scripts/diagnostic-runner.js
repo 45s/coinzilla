@@ -1410,7 +1410,10 @@ function createObservedBrokerRestClientFactory({
   }
 }
 
-function createBrokerApiRequest({ method, args }) {
+function createBrokerApiRequest({
+      method,
+      args,
+    }) {
   return {
     api: "Broker",
     method,
@@ -1434,7 +1437,10 @@ function recordBrokerApiSuccess({
     startedAt,
     now,
     status: "passed",
-    request: createBrokerApiRequest({ method, args }),
+    request: createBrokerApiRequest({
+      method,
+      args,
+    }),
     response: result.data,
     privateResponse,
     secrets,
@@ -1455,7 +1461,10 @@ function recordBrokerApiFailure({
     startedAt,
     now,
     status: "failed",
-    request: createBrokerApiRequest({ method, args }),
+    request: createBrokerApiRequest({
+      method,
+      args,
+    }),
     error,
     secrets,
   }))
