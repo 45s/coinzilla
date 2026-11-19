@@ -249,6 +249,12 @@ It validates symbol, interval, decimals, OHLC invariants and timezone-qualified 
 - **Coinzilla mapping:** `BitunixSpotBroker.getTokenNetworks()` is intentionally named differently from the SDK's `getAssets()` because Coinzilla's existing legacy `getAssets()` means account-balance `Coin[]`. The new method preserves unknown fields and exact decimal text, validates non-negative optional deposit/withdraw limits, freezes token/network records, accepts an explicit empty catalog, and fails closed on missing/malformed catalog rows. No exchange-neutral Broker method or duplicate capability vocabulary is introduced.
 - **Safety boundary:** metadata can inform a caller's explicit coin/network choice; it is not a deposit-address generator, transfer/withdrawal authorization, or evidence that a network is currently available to a particular account. No funds movement or live account mutation is performed.
 
+### REST user identity reference record — PR #1468
+
+- **Official protocol:** [Spot User Interface, Get user information](https://www.bitunix.com/api-docs/spots/en_us/user/) documents signed `GET /api/spot/v1/user/info` with no parameters. `data` is optional and `uid` is optional/null; it is an int64 identifying the user bound to the API key (sub-account keys resolve to the linked master account UID).
+- **Reference audit:** the inspected JKorf/Bitunix.Net, `samanzamani/bitunix-mcp`, `0xCherryBlueZu/bitunix`, and StockSharp sources did not expose a matching REST user-info method/fixture. The existing Coinzilla `BitunixSpotWebSocketClient.getUserInfo()` uses the documented `user.info` RPC, but it is a separate transport and does not provide the REST broker method.
+- **Coinzilla mapping:** `BitunixSpotBroker.getUserInfo()` is a provider-specific signed GET extension. The REST parser converts raw numeric `uid` tokens to strings before `JSON.parse`; the adapter preserves null/omitted values, normalizes safe numeric IDs to strings, and rejects malformed or out-of-range signed-int64 IDs. The result is not a balance/account snapshot and has no source timestamp.
+
 These are Bitunix-only public extensions, not Binance parity methods. Keep exact decimal fields as strings; do not treat descriptive precision fields as tick/step filters. Token/network metadata is not authorization to implement transfers or withdrawals.
 
 ### Later, only after a separate contract review
