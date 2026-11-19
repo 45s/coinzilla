@@ -53,21 +53,33 @@ function throwIfShutdownAborted(signal) {
   )
 }
 
-function createStageBlocker({ stage, error } = {}) {
-  const reason = error?.code ?? error?.message ?? "FAILED"
-  const detail = ["SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE", "SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE"].includes(error?.code)
+function getStageBlockerDetails(error) {
+  const details = []
+  const recoveryCodes = [
+    "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+    "SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE",
+  ]
+  const detail = recoveryCodes.includes(error?.code)
     ? getRecoveryErrorReason(error)
     : error?.reason
   const timeoutMs = error?.timeoutMs ?? error?.cause?.timeoutMs
-  const retryable = error?.retryable
-  const details = [
-    detail,
-    Number.isSafeInteger(timeoutMs) ? `timeoutMs=${timeoutMs}` : undefined,
-    typeof retryable === "boolean" ? `retryable=${retryable}` : undefined,
-  ].filter(Boolean)
-  return `${stage}:${reason}${details.length > 0 ? `:${details.join(":")}` : ""}`
+  if (detail) {
+    details.push(detail)
+  }
+  if (Number.isSafeInteger(timeoutMs)) {
+    details.push(`timeoutMs=${timeoutMs}`)
+  }
+  if (typeof error?.retryable === "boolean") {
+    details.push(`retryable=${error.retryable}`)
+  }
+  return details
 }
 
+function createStageBlocker({ stage, error } = {}) {
+  const reason = error?.code ?? error?.message ?? "FAILED"
+  const details = getStageBlockerDetails(error)
+  return `${stage}:${reason}${details.length > 0 ? `:${details.join(":")}` : ""}`
+}
 async function runStage({ stage, operation } = {}) {
   try {
     const result = await operation()
@@ -90,17 +102,19 @@ async function drainUserData(drainUserDataEvents) {
   try {
     const result = await drainUserDataEvents()
     if (result?.ok === false) {
-      const errors = Array.isArray(result.errors)
-        ? result.errors
-        : result.error
-          ? [result.error]
-          : []
-      return errors.length > 0
-        ? errors.map((error) => createStageBlocker({
+      let errors = []
+      if (Array.isArray(result.errors)) {
+        errors = result.errors
+      } else if (result.error) {
+        errors = [result.error]
+      }
+      if (errors.length > 0) {
+        return errors.map((error) => createStageBlocker({
           stage: "USER_DATA_DRAIN",
           error,
         }))
-        : ["USER_DATA_DRAIN:UNCONFIRMED"]
+      }
+      return ["USER_DATA_DRAIN:UNCONFIRMED"]
     }
     return []
   } catch (error) {
