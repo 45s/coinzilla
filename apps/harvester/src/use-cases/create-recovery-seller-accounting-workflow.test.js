@@ -672,6 +672,116 @@ function makeAcknowledgedRecoveryBuyOrder({ pendingOrder, brokerOrderId = "broke
   })
 }
 
+test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fills", async () => {
+  const buyOrder = new CanonicalOrder({
+    clientOrderId: "rs-buy-vwap-1",
+    brokerOrderId: "broker-rs-buy-vwap-1",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "6",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "3",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 102,
+  })
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-vwap-1",
+    },
+    clientOrderId: buyOrder.clientOrderId,
+    brokerOrderId: buyOrder.brokerOrderId,
+  })
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: new OrderRegistry({
+      orders: [buyOrder],
+      ownerships: [ownership],
+    }),
+    initialLegacyPositions: [],
+    onOperationalStateExecutionFill: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+  })
+  const fills = [
+    new Fill({
+      tradeId: "rs-buy-vwap-fill-1",
+      brokerOrderId: buyOrder.brokerOrderId,
+      clientOrderId: buyOrder.clientOrderId,
+      market,
+      side: "BUY",
+      price: new Money({
+        amount: "5",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "2",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "10",
+        asset: quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    }),
+    new Fill({
+      tradeId: "rs-buy-vwap-fill-2",
+      brokerOrderId: buyOrder.brokerOrderId,
+      clientOrderId: buyOrder.clientOrderId,
+      market,
+      side: "BUY",
+      price: new Money({
+        amount: "6",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "1",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "6",
+        asset: quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    }),
+  ]
+
+  for (const fill of fills) {
+    const result = await workflow.applyBuyFill({
+      order: buyOrder,
+      fill,
+    })
+    assert.equal(result.ok, true, result.errors?.[0]?.message)
+  }
+
+  const duplicateFill = await workflow.applyBuyFill({
+    order: buyOrder,
+    fill: fills[0],
+  })
+  assert.equal(duplicateFill.ok, true, duplicateFill.errors?.[0]?.message)
+
+  assert.equal(workflow.getBuyExecutionQuantity({ cycleId: "rs-cycle-vwap-1" }), "3")
+  assert.equal(workflow.getBuyExecutionVwap({ cycleId: "rs-cycle-vwap-1" }), "5.333333333333333333")
+  assert.equal(workflow.getBuyExecutionVwap({ cycleId: "different-cycle" }), undefined)
+})
+
 test("exposes RS submission callbacks that preserve ownership across acknowledgement, uncertainty, rejection and deferral", () => {
   const ownership = {
     strategyId,
