@@ -11,7 +11,7 @@ export function adaptOrderRequestParams({
 }) {
   const orderInput = { ...input }
   delete orderInput.clientOrderId
-  const quoteQuantity = orderInput.quoteQuantity
+  const { quoteQuantity } = orderInput
   delete orderInput.quoteQuantity
   if (quoteQuantity !== undefined) {
     if (input.type !== "MARKET") {

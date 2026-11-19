@@ -87,6 +87,24 @@ function normalizeOrderDecimal({ value, field }) {
   return normalized
 }
 
+function validateOrderVolumeInput({ input, type }) {
+  if (type === "LIMIT" && input.quoteQuantity !== undefined) {
+    throw new TypeError("Bitunix Spot createOrder() does not accept quoteQuantity for LIMIT orders")
+  }
+  if (type === "MARKET" && input.quantity !== undefined) {
+    throw new TypeError("Bitunix Spot MARKET orders require quoteQuantity; quantity is base-denominated")
+  }
+  if (type === "MARKET" && input.quoteQuantity === undefined) {
+    throw new TypeError("Bitunix Spot MARKET orders require quoteQuantity in quote-coin units")
+  }
+}
+
+function validateOrderPriceInput({ input, type }) {
+  if (type === "MARKET" && input.price !== undefined) {
+    throw new TypeError("Bitunix Spot MARKET orders derive their required zero price; omit price")
+  }
+}
+
 function validateSpotOrderInput({ input }) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("Bitunix Spot createOrder() requires an order object")
@@ -122,18 +140,14 @@ function validateSpotOrderInput({ input }) {
   if (type !== "LIMIT" && type !== "MARKET") {
     throw new TypeError("Bitunix Spot single-order REST supports only LIMIT and MARKET orders")
   }
-  if (type === "LIMIT" && input.quoteQuantity !== undefined) {
-    throw new TypeError("Bitunix Spot createOrder() does not accept quoteQuantity for LIMIT orders")
-  }
-  if (type === "MARKET" && input.quantity !== undefined) {
-    throw new TypeError("Bitunix Spot MARKET orders require quoteQuantity; quantity is base-denominated")
-  }
-  if (type === "MARKET" && input.quoteQuantity === undefined) {
-    throw new TypeError("Bitunix Spot MARKET orders require quoteQuantity in quote-coin units")
-  }
-  if (type === "MARKET" && input.price !== undefined) {
-    throw new TypeError("Bitunix Spot MARKET orders derive their required zero price; omit price")
-  }
+  validateOrderVolumeInput({
+    input,
+    type,
+  })
+  validateOrderPriceInput({
+    input,
+    type,
+  })
   return {
     symbol,
     side,
