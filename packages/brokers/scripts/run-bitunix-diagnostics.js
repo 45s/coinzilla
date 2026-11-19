@@ -32,7 +32,7 @@ function printSummary({
       ? [`Authenticated checks skipped. Configure both BITUNIX_API_KEY and BITUNIX_API_SECRET (missing: ${missingCredentials.join(", ")}).`]
       : []),
     `Report: ${outputPath}`,
-    "No order or withdrawal operations were attempted.",
+    "No order placement/cancellation, withdrawal, or transfer operations were attempted.",
     "",
   ]
   process.stdout.write(lines.join("\n"))
