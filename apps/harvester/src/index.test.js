@@ -2128,7 +2128,10 @@ function createDelayedJournalService({ onReady }) {
       ok: true,
       durable: true,
     }),
-    close: async () => ({ ok: true, closed: true }),
+    close: async () => ({
+      ok: true,
+      closed: true,
+    }),
   }
 }
 
@@ -2139,10 +2142,16 @@ function createProcessStartedEventBus({ events, resolveProcessStarted }) {
       if (event.name === "harvester.process_started") {
         resolveProcessStarted(event)
       }
-      return { ok: true, event }
+      return {
+        ok: true,
+        event,
+      }
     },
     flush: async () => ({ ok: true }),
-    close: async () => ({ ok: true, closed: true }),
+    close: async () => ({
+      ok: true,
+      closed: true,
+    }),
   }
 }
 
@@ -2169,7 +2178,10 @@ function createRecordingEventBus({ events }) {
   return {
     publish(event) {
       events.push(event)
-      return { ok: true, event }
+      return {
+        ok: true,
+        event,
+      }
     },
   }
 }
