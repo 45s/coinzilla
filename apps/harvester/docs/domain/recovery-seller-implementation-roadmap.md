@@ -432,3 +432,7 @@ The RS BUY accounting callback is now exposed from the engine-options return obj
 ### Unsupported strategy fill attribution — test-first checkpoint
 
 The order-event workflow must not treat an explicitly registered non-CG/non-RS order as Conservative-owned. Unsupported strategy ownership must fail closed before any accounting projection is mutated. The regression test is committed before the production dispatch change.
+
+### Explicit unsupported strategy ownership — implementation checkpoint
+
+Canonical fill accounting now distinguishes RS ownership, explicit CG ownership, legacy unowned orders, and unsupported registered strategy ownership. Explicit non-CG/non-RS owners fail closed before any Conservative accounting mutation. Legacy orders without recorded ownership retain the established CG accounting fallback. The regression test covers this unsupported-owner boundary.

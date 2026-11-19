@@ -480,39 +480,70 @@ function attachOrderProviderIdentity({
   })
 }
 
-async function applyValidatedExecutionFill({ dependencies, order, fill }) {
+async function resolveExecutionFillAccounting({ dependencies, order, fill }) {
   const {
     state,
-    eventPublisher,
     updateTradingAccounting,
     updateRecoverySellerAccounting,
-    recordBuyExecutionFill,
-    recordSellExecutionFill,
-    pause,
   } = dependencies
   const ownership = state.registry?.getOwnership?.({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
   })
   const isRecoverySellerOwned = ownership?.strategyId === StrategyId.RECOVERY_SELLER
-  let accounting
   if (isRecoverySellerOwned && fill.side !== "BUY") {
-    accounting = toResult({
-      error: new Error("Recovery Seller SELL fills require terminal mixed-SELL reconciliation and cannot be applied as individual fills"),
-    })
-  } else if (isRecoverySellerOwned && typeof updateRecoverySellerAccounting !== "function") {
-    accounting = toResult({
-      error: new Error("Recovery Seller BUY accounting workflow is unavailable for an RS-owned fill"),
-    })
-  } else if (isRecoverySellerOwned) {
-    accounting = await updateRecoverySellerAccounting({
-      fill,
-      order,
-      ownership,
-    })
-  } else {
-    accounting = await updateTradingAccounting({ fill })
+    return {
+      isRecoverySellerOwned,
+      accounting: toResult({
+        error: new Error("Recovery Seller SELL fills require terminal mixed-SELL reconciliation and cannot be applied as individual fills"),
+      }),
+    }
   }
+  if (isRecoverySellerOwned && typeof updateRecoverySellerAccounting !== "function") {
+    return {
+      isRecoverySellerOwned,
+      accounting: toResult({
+        error: new Error("Recovery Seller BUY accounting workflow is unavailable for an RS-owned fill"),
+      }),
+    }
+  }
+  if (isRecoverySellerOwned) {
+    return {
+      isRecoverySellerOwned,
+      accounting: await updateRecoverySellerAccounting({
+        fill,
+        order,
+        ownership,
+      }),
+    }
+  }
+  if (ownership && ownership.strategyId !== StrategyId.COIN_GRABBER) {
+    return {
+      isRecoverySellerOwned,
+      accounting: toResult({
+        error: new Error(`Execution fill has unsupported registered strategy ownership: ${ownership.strategyId}`),
+      }),
+    }
+  }
+  return {
+    isRecoverySellerOwned,
+    accounting: await updateTradingAccounting({ fill }),
+  }
+}
+
+async function applyValidatedExecutionFill({ dependencies, order, fill }) {
+  const {
+    state,
+    eventPublisher,
+    recordBuyExecutionFill,
+    recordSellExecutionFill,
+    pause,
+  } = dependencies
+  const { accounting, isRecoverySellerOwned } = await resolveExecutionFillAccounting({
+    dependencies,
+    order,
+    fill,
+  })
   if (!accounting?.ok) {
     return handleExecutionAccountingFailure({
       accounting,
