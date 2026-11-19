@@ -5,6 +5,7 @@ import assert from "node:assert/strict"
 import {
   Asset,
   CanonicalOrder,
+  Commission,
   Fill,
   Market,
   Money,
@@ -19,6 +20,8 @@ import { conservativeStrategyPolicy } from "../domain/strategies/conservative/st
 
 const quoteAsset = new Asset({ id: "asset:USDT",
 code: "USDT" })
+const feeAsset = new Asset({ id: "asset:BNB",
+code: "BNB" })
 const dogeAsset = new Asset({ id: "asset:DOGE",
 code: "DOGE" })
 const solAsset = new Asset({ id: "asset:SOL",
@@ -37,6 +40,7 @@ const marketsBySymbol = new Map(markets.map((market) => [market.symbol, market])
 const marketsById = new Map(markets.map((market) => [market.id, market]))
 const assetsById = new Map([
   [quoteAsset.id, quoteAsset],
+  [feeAsset.id, feeAsset],
   [dogeAsset.id, dogeAsset],
   [solAsset.id, solAsset],
 ])
@@ -387,7 +391,7 @@ asset: solAsset }),
   })
 }
 
-function makePartialFillEvent({ order, tradeId, quantity, quoteQuantity }) {
+function makePartialFillEvent({ order, tradeId, quantity, quoteQuantity, commissionAmount = "0.01", commissionAsset = feeAsset }) {
   const executedOrder = new CanonicalOrder({
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,
@@ -414,7 +418,12 @@ asset: order.market.baseAsset }),
 asset: order.market.baseAsset }),
     quoteQuantity: new Money({ amount: quoteQuantity,
 asset: order.market.quoteAsset }),
-    commissions: [],
+    commissions: [new Commission({
+      amount: new Money({
+        amount: commissionAmount,
+        asset: commissionAsset,
+      }),
+    })],
     commissionStatus: "COMPLETE",
     executedAt: 2,
   })
@@ -1514,6 +1523,16 @@ test("symbol-scoped REST reconciliation still rejects a same-market fill racing 
     accountedFills.map((fill) => fill.tradeId),
     ["doge-snapshot-race"],
     "The stream execution racing reconciliation must be applied exactly once before the stale REST snapshot is rejected.",
+  )
+  assert.equal(
+    accountedFills[0].commissions[0].amount.asset.id,
+    feeAsset.id,
+    "The execution racing reconciliation must retain its actual third-asset commission identity.",
+  )
+  assert.equal(
+    accountedFills[0].commissions[0].amount.amount,
+    "0.01",
+    "The execution racing reconciliation must retain its actual commission amount.",
   )
   assert.deepEqual(
     engine.getPausedMarkets(),
