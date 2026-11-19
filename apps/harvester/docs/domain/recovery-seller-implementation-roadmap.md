@@ -25,9 +25,13 @@ The latest routing guard and regression tests ensure that a provider account's R
 
 The first full-workspace run after the queue wiring exposed one stale test fixture: `shared-order-registry.integration.test.js` manually constructed account state without the newly required queue. The fixture now uses the production `createAccountRuntimeRegistry` factory, so the integration test exercises the real account-state contract rather than duplicating it. No production behavior was changed to accommodate the test.
 
-## RS-4 production evaluator dispatch — test-first checkpoint
+## RS-4 production evaluator dispatch — callback path connected
 
-An integration regression now requires the production Conservative engine to invoke the injected RS evaluator for the same market transition while using the provider account's shared transition queue. The evaluator must run exactly once; it must not create a second engine or independent market subscription. The test is intentionally red until the engine and bootstrap composition pass the RS evaluator callback through to `createLatestTransitionEvaluator`.
+- `createLatestTransitionEvaluator` already supports a strategy-owned RS transition callback after Conservative evaluation.
+- The production Conservative engine now injects that callback into the evaluator, and bootstrap/runtime composition preserves it from startup options to the engine.
+- The callback is optional and validated when supplied; existing CG-only startup remains unchanged.
+- The integration regression verifies the callback is invoked once for the market transition under the shared account runtime.
+- This connects the production dispatch seam. The concrete RS policy/lifecycle evaluator and order/fill routing still must be composed before RS execution is permitted.
 
 ## RS-4 account transition queue — shared coordinator foundation
 
