@@ -32,6 +32,14 @@ function getSecrets({ env }) {
   return [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
 }
 
+function validatePrivateCredentials({ env }) {
+  const missing = ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"].filter((name) =>
+    typeof env[name] !== "string" || !env[name].trim())
+  if (missing.length > 0) {
+    throw new Error(`Bitunix health check requires both read-only credentials; missing: ${missing.join(", ")}`)
+  }
+}
+
 async function executeGitCommand({ repositoryRoot, args }) {
   const { stdout } = await execFileAsync("git", args, {
     cwd: repositoryRoot,
@@ -283,6 +291,7 @@ export async function publishBitunixDiagnostics({
     repositoryRoot: root,
     runGit,
   })
+  validatePrivateCredentials({ env })
   const timestamp = createTimestamp({ now })
   const branch = `diagnostics/bitunix-health-${timestamp}`
   const paths = createReportPaths({
