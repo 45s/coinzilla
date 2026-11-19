@@ -332,7 +332,10 @@ async function createHarness({
     initialState,
     eventPublisher,
   })
-  await initializeHarnessBooks({ engine, symbols })
+  await initializeHarnessBooks({
+    engine,
+    symbols,
+  })
   return {
     engine,
     orders,
