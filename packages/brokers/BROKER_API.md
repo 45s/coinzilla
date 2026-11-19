@@ -105,9 +105,9 @@ All methods below are present on both provider facades. An unsupported implement
 | `getFills()` | Supported | Unsupported | Canonical `Fill[]`; Bitunix matching details do not prove stable execution identity or fill completeness. |
 | `getPrices({ symbol })` | Supported | Supported | One-shot ticker result; not a subscription. |
 | `getCandles({ symbol, interval, ... })` | Supported | Unsupported | Bitunix Spot kline data omits volume required by the canonical OHLCV contract. |
-| `createCanonicalOrder(input)` | Supported behind readiness/permission gates | Unsupported | Bitunix mutation blockers in #1185 remain in force. |
-| `cancelOrder({ symbol, orderId })` | Supported behind readiness/permission gates | Unsupported | Mutation outcome is explicit; unknown is never treated as success. |
-| `cancelAllOpenOrders({ symbol })` | Supported behind readiness/permission gates | Unsupported | Symbol-scoped Binance operation. |
+| `createCanonicalOrder(input)` | Supported behind readiness/permission gates | Unsupported | Bitunix lacks the client order identity and recovery guarantees required by the canonical contract; the legacy `createOrder()` path remains separate. |
+| `cancelOrder({ symbol, orderId })` | Supported behind readiness/permission gates | Supported behind `allowLiveOrderMutations` opt-in | Bitunix cancels one known broker order ID and verifies final status through order detail; unknown outcomes are never treated as success. |
+| `cancelAllOpenOrders({ symbol })` | Supported behind readiness/permission gates | Supported behind `allowLiveOrderMutations` opt-in | Bitunix requires an explicit symbol, enumerates that symbol's current orders, and verifies each cancellation independently; it does not claim account-wide coverage. |
 | `subscribeForPrices(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
 | `subscribeForCandles(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
 | `subscribeForBookTicker(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
@@ -124,7 +124,7 @@ These methods remain present on both facades for existing consumers. They are no
 | `getOrderHistory(...)` | Legacy provider history. Binance returns its bounded `allOrders` response; Bitunix returns one symbol-scoped page. Pagination and legacy row shape are not interchangeable. Use `getCanonicalOrderHistory()` when canonical order history is required. |
 | `getMyTrades(...)` | Legacy trade-history operation. Binance supports a bounded symbol-scoped response; Bitunix explicitly reports unsupported. It is not equivalent to canonical `getFills()`. |
 | `getPrice({ symbol })` | Compatibility alias for `getPrices({ symbol })` on both providers. |
-| `createOrder(input)` | Legacy `Order` placement facade. Binance supports it behind the same safety gates; Bitunix reports unsupported. Prefer `createCanonicalOrder()`. |
+| `createOrder(input)` | Legacy `Order` placement facade. Binance and Bitunix support it behind their respective explicit live-order mutation gates. Bitunix supports LIMIT/MARKET only through its single-order REST endpoint; use `createCanonicalOrder()` only where supported. |
 | `getSymbolFilters({ symbol })` | Raw provider metadata retained for existing infrastructure adapters. It is not a normalized `TradingRules` value and is not part of the canonical method catalog. |
 
 There is no `getOrders()` alias. `getOpenOrders()` means the current open-order set; `getOrderHistory()` means a historical provider response. Similar names do not imply equivalent completeness, pagination, or result semantics.
