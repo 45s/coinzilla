@@ -2,6 +2,7 @@
 
 Historical session-specific audit records. Sessions with the same date are not necessarily duplicates; retain their distinct time windows and evidence boundaries.
 
+- [2026-11-19 Binance TESTNET Conservative session audit](AUDIT_SESSION_2026-11-19_02-16-31Z.md) — four-market session; runbook gate violated, external orders observed, shutdown failed closed, and retry outcome missing; not accepted.
 - [2026-11-17 Binance TESTNET Conservative session audit](AUDIT_SESSION_2026-11-17_08-48-56Z.md) — 753 Journal records, 42 applied fills, four ZRO recovery completions, ADA dust-evidence pause, and unresolved shutdown reconciliation; no CLOSING audit supplied.
 - [2026-11-08 reconnect/recovery session](AUDIT_SESSION_2026-11-08.md)
 - [2026-11-08 afternoon session](AUDIT_SESSION_2026-11-08_16-33-33.md) — a distinct session, not a duplicate of the reconnect audit.
