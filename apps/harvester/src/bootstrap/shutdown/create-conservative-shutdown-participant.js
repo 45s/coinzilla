@@ -28,6 +28,8 @@ function createRecoveryPriceRefreshFailure({ symbol, error } = {}) {
       {
         code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
         reason,
+        timeoutMs: error?.timeoutMs ?? MARKET_DATA_MAX_AGE_MS,
+        retryable: error?.code === "MARKET_PRICE_REFRESH_TIMEOUT",
         cause: error,
       },
     )],
@@ -56,7 +58,14 @@ function createStageBlocker({ stage, error } = {}) {
   const detail = ["SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE", "SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE"].includes(error?.code)
     ? getRecoveryErrorReason(error)
     : error?.reason
-  return `${stage}:${reason}${detail ? `:${detail}` : ""}`
+  const timeoutMs = error?.timeoutMs ?? error?.cause?.timeoutMs
+  const retryable = error?.retryable
+  const details = [
+    detail,
+    Number.isSafeInteger(timeoutMs) ? `timeoutMs=${timeoutMs}` : undefined,
+    typeof retryable === "boolean" ? `retryable=${retryable}` : undefined,
+  ].filter(Boolean)
+  return `${stage}:${reason}${details.length > 0 ? `:${details.join(":")}` : ""}`
 }
 
 async function runStage({ stage, operation } = {}) {
