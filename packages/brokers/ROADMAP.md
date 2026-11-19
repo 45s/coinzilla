@@ -1293,7 +1293,6 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [~] Advisory external documentation-link workflow remained in progress at merge; it is not a required ruleset check.
 - **Safety:** Bitunix Spot order placement/cancellation/fill support remains blocked by [#1185](https://github.com/45s/coinzilla/issues/1185). No live mutations are authorized.
 
-
 ## 2026-11-19 — Bitunix Spot WebSocket explicit reconnection (PR #1459)
 
 **Status: Implemented in PR #1459; deterministic offline verification and required repository CI are tracked on the exact PR head.**
