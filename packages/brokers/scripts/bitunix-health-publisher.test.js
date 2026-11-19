@@ -41,13 +41,26 @@ function createDiagnosticReport({ failed = 0 } = {}) {
     schemaVersion: 1,
     startedAt: "2026-11-19T08:29:00.000Z",
     finishedAt: "2026-11-19T08:30:00.000Z",
-    runtime: { node: "v24.0.0" },
-    summary: { total: 2, passed: 2 - failed, failed, skipped: 0 },
+    runtime: {
+      node: "v24.0.0",
+    },
+    summary: {
+      total: 2,
+      passed: 2 - failed,
+      failed,
+      skipped: 0,
+    },
     results: [{
       operation: "user.account",
       status: failed > 0 ? "failed" : "passed",
-      request: { apiKey, sign: "private-signature" },
-      response: { uid: "private-uid", balance: "123.456" },
+      request: {
+        apiKey,
+        sign: "private-signature",
+      },
+      response: {
+        uid: "private-uid",
+        balance: "123.456",
+      },
     }],
     events: [],
   }
@@ -69,22 +82,22 @@ test("publishes only a sanitized report from a fresh diagnostics branch and retu
       now: () => fixedTimestamp,
     })
 
-    assert.equal(result.branch, "diagnostics/bitunix-health-20261119T083000Z", "the report branch must have a unique UTC timestamped name")
+    assert.equal(result.branch, "diagnostics/bitunix-health-20261119T083000000Z", "the report branch must have a unique UTC timestamped name")
     assert.equal(result.commitSha, "report-commit-sha", "the pushed report commit SHA must be returned for inspection")
     assert.equal(result.exitCode, 0, "a fully successful read-only health check must return a successful exit code")
     assert.equal(calls.some((args) => args[0] === "fetch" && args[1] === "origin" && args[2] === "develop"), true, "the report branch must start from the latest fetched origin/develop")
     assert.equal(calls.some((args) => args[0] === "switch" && args[1] === "--create" && args[3] === "--track" && args[4] === "origin/develop"), true, "the script must create a dedicated branch tracking the fetched develop tip")
     assert.equal(calls.some((args) => args[0] === "push" && args[1] === "--set-upstream" && args[2] === "origin"), true, "the report branch must be pushed without force")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "the script must return to develop after publishing the report")
-    const reportPath = join(repositoryRoot, "packages", "brokers", "diagnostics", "reports", "bitunix-health-20261119T083000Z.json")
+    const reportPath = join(repositoryRoot, "packages", "brokers", "diagnostics", "reports", "bitunix-health-20261119T083000000Z.json")
     const report = await readFile(reportPath, "utf8")
     assert.equal(report.includes(apiKey), false, "the committed report must never contain the API key")
     assert.equal(report.includes(apiSecret), false, "the committed report must never contain the API secret")
     assert.equal(report.includes("private-signature"), false, "the committed report must never contain request signatures")
     assert.equal(report.includes("private-uid"), false, "the committed report must never contain account identifiers")
     assert.equal(report.includes("123.456"), false, "the committed report must never contain account balances")
-    assert.equal(result.reportPath.endsWith("bitunix-health-20261119T083000Z.json"), true, "the result must identify the report path to inspect")
-    assert.equal(result.localReportPath.endsWith(".diagnostics/bitunix-health-20261119T083000Z.json"), true, "the full local diagnostic artifact must stay in the ignored diagnostics directory")
+    assert.equal(result.reportPath.endsWith("bitunix-health-20261119T083000000Z.json"), true, "the result must identify the report path to inspect")
+    assert.equal(result.localReportPath.endsWith(".diagnostics/bitunix-health-20261119T083000000Z.json"), true, "the full local diagnostic artifact must stay in the ignored diagnostics directory")
   } finally {
     await rm(repositoryRoot, { recursive: true, force: true })
   }
