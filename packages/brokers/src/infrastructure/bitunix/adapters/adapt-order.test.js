@@ -23,6 +23,22 @@ test("adaptOrder preserves exact original, executed and remaining quantities", (
   assert.equal(order.remainingQuantity, "0.200000000000000001")
 })
 
+test("adaptOrder uses the exchange average execution price for MARKET orders", () => {
+  const order = adaptOrder({
+    ...validOrder,
+    type: "2",
+    status: "2",
+    volume: "0.1",
+    dealVolume: "0.1",
+    price: "0",
+    avgPrice: "10.25",
+  })
+
+  assert.equal(order.type, "MARKET")
+  assert.equal(order.price, 10.25)
+  assert.equal(order.originalPrice, undefined)
+})
+
 test("adaptOrder rejects negative and overfilled quantities", () => {
   assert.throws(() => adaptOrder({ ...validOrder,
     volume: "-1" }), /non-negative|range|decimal/i)

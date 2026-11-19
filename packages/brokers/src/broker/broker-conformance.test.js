@@ -338,22 +338,7 @@ runBrokerConformanceSuite({
       }],
     },
     {
-      method: "createOrder",
-      args: [],
-      mutation: true,
-    },
-    {
       method: "createCanonicalOrder",
-      args: [],
-      mutation: true,
-    },
-    {
-      method: "cancelOrder",
-      args: [],
-      mutation: true,
-    },
-    {
-      method: "cancelAllOpenOrders",
       args: [],
       mutation: true,
     },

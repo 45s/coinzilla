@@ -14,11 +14,12 @@ test("Bitunix Spot capability declaration uses the canonical BrokerCapabilities 
   assert.equal(capabilities.getStatus({ type: "READ_BALANCES" }), "SUPPORTED")
   assert.equal(capabilities.getStatus({ type: "READ_ACCOUNT_SNAPSHOT" }), "UNSUPPORTED")
   assert.equal(capabilities.getStatus({ type: "READ_FILLS" }), "UNSUPPORTED")
-  assert.equal(capabilities.getStatus({ type: "PLACE_LIMIT_ORDER" }), "UNSUPPORTED")
+  assert.equal(capabilities.getStatus({ type: "PLACE_LIMIT_ORDER" }), "SUPPORTED")
+  assert.equal(capabilities.getStatus({ type: "PLACE_MARKET_ORDER" }), "SUPPORTED")
   assert.equal(capabilities.getStatus({ type: "READ_COMPLETE_FILL_HISTORY" }), "UNKNOWN")
 })
 
-test("Bitunix Spot capability declarations preserve read-only lifecycle blockers", () => {
+test("Bitunix Spot capability declarations preserve canonical lifecycle blockers", () => {
   const capabilities = createBitunixBrokerCapabilities()
 
   for (const type of [
@@ -33,7 +34,7 @@ test("Bitunix Spot capability declarations preserve read-only lifecycle blockers
   }
 
   assert.match(
-    capabilities.getCapability({ type: "PLACE_LIMIT_ORDER" }).reason,
-    /client order identity|reconciliation/i,
+    capabilities.getCapability({ type: "PLACE_LIMIT_ORDER" }).limitation,
+    /client order ID|OUTCOME_UNKNOWN/i,
   )
 })

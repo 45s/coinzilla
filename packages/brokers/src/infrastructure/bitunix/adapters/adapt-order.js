@@ -78,6 +78,23 @@ function normalizeOrderStatus({ status }) {
   }
 }
 
+function validateOrderPrice({ normalizedType, price, avgPrice }) {
+  const executionPrice = normalizedType === "MARKET" ? avgPrice : price
+  assertDecimalString({
+    value: executionPrice,
+    field: normalizedType === "MARKET"
+      ? "Bitunix Spot market average price"
+      : "Bitunix Spot limit price",
+  })
+  if (compareDecimal({
+    left: executionPrice,
+    right: "0",
+  }) <= 0) {
+    throw new TypeError("Bitunix Spot normalized order price must be greater than zero")
+  }
+  return executionPrice
+}
+
 function validateOrder({ bitunixOrder }) {
   if (!bitunixOrder || typeof bitunixOrder !== "object" || Array.isArray(bitunixOrder)) {
     throw new TypeError("Bitunix Spot order should be an object")
@@ -91,6 +108,7 @@ function validateOrder({ bitunixOrder }) {
     volume,
     dealVolume,
     price,
+    avgPrice,
     ctime,
     utime,
   } = bitunixOrder
@@ -114,12 +132,11 @@ function validateOrder({ bitunixOrder }) {
     volume,
     dealVolume,
   })
-  if (normalizedType === "LIMIT") {
-    assertDecimalString({
-      value: price,
-      field: "Bitunix Spot limit price",
-    })
-  }
+  const executionPrice = validateOrderPrice({
+    normalizedType,
+    price,
+    avgPrice,
+  })
 
   return {
     orderId,
@@ -130,7 +147,7 @@ function validateOrder({ bitunixOrder }) {
     exchangeStatus,
     volume,
     dealVolume,
-    price,
+    price: executionPrice,
   }
 }
 
@@ -161,7 +178,7 @@ export function adaptOrder(bitunixOrder) {
     side: normalizedSide,
     symbol: symbol.trim().toUpperCase(),
     quantity: Number(remainingQuantity),
-    price: normalizedType === "MARKET" ? 0 : Number(price),
+    price: Number(price),
     id: String(orderId),
   })
 

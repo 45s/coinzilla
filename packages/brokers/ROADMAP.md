@@ -1057,10 +1057,10 @@ The method names below are the concrete Binance broker surface compared with `Bi
 | `getCanonicalOrderHistory({ ... })` | Blocked | Stable client identity and a proven history query contract capable of resolving canonical orders. |
 | `getMyTrades({ ... })` | Blocked | Account-wide trade history endpoint, documented pagination, stable per-execution IDs and time/cursor semantics. |
 | `getFills({ symbol, orderId })` | Blocked | Prove the quantity denomination, complete partial-execution coverage, stable/unique execution identity, fee semantics and ordering before exposing canonical Fill values. |
-| `createOrder()` | Blocked | Written clarification of single-order REST quantity units; client-supplied idempotency identity or authoritative unknown-outcome reconciliation; verified mutation environment. |
+| `createOrder()` | Implemented (single-order REST LIMIT/MARKET) | Exact REST-specific volume conversion, order-ID detail verification, conservative unknown-outcome handling. Client-order-ID and canonical placement remain unsupported. |
 | `createCanonicalOrder()` | Blocked | All placement prerequisites plus canonical response facts and a stable client order ID. |
-| `cancelOrder()` | Blocked | Documented cancellation semantics and a safe way to reconcile timeout/unknown outcomes; private lifecycle evidence or an approved polling contract. |
-| `cancelAllOpenOrders()` | Blocked | Same cancellation guarantees plus complete account-wide open-order enumeration and safe partial-failure reporting. |
+| `cancelOrder()` | Implemented (single known order) | Signed REST cancellation followed by order-detail verification; unknown outcomes require manual reconciliation. |
+| `cancelAllOpenOrders()` | Implemented (one symbol) | Reads open orders for the requested symbol, cancels each order, verifies final state, and returns partial/unknown outcomes. Account-wide cancellation remains unavailable. |
 | `subscribeForPrices()` | Blocked | Continuous public Spot price push subscription with event identity/timestamp, subscription confirmation, heartbeat and reconnect/resubscribe contract. Existing public Spot WS methods are RPC request/response. |
 | `subscribeForBookTicker()` | Blocked | Continuous Spot order-book push subscription and documented depth/precision semantics. Current depth RPC precision selection is unclear; no continuous subscription is documented. |
 | `getCandles()` | Blocked | Historical Spot candle endpoint/response with all canonical OHLCV fields, including volume, timestamp units and interval boundaries. Documented Spot kline payload omits volume. |
@@ -1304,3 +1304,27 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - The diagnostic still marks subscription restoration as skipped: official Spot methods remain request/response RPCs, not continuous public/private streams. This does not implement missed-event replay or 24-hour expiry simulation.
 - No order placement/cancellation, fills, provider registration, Harvester routing, automatic fallback, or live exchange mutations are added. Issue #1185 remains open for the exchange-side order identity, quantity denomination, execution completeness, account freshness, private push-event and isolated mutation-environment blockers.
 - Updated the broker WebSocket contract and package README to document explicit same-instance reconnect semantics and the no-replay guarantee.
+
+## 2026-11-19 — Bitunix Spot order cancellation implementation
+
+- [x] Implement the documented signed REST `POST /api/spot/v1/order/cancel` for one explicit `symbol + orderId`.
+- [x] Verify each cancellation with `GET /api/spot/v1/order/detail`; only `CANCELED` and `PARTIALLY_FILLED_CANCELED` are confirmed.
+- [x] Implement `cancelAllOpenOrders({ symbol })` by enumerating that symbol's pending orders, canceling each independently, and verifying final state.
+- [x] Preserve fill/cancel races and unknown outcomes; never retry automatically.
+- [x] Add offline regressions for cancellation request shape, partial-fill cancellation, non-terminal states, validation-before-I/O, and multi-order cancellation.
+- [ ] Pass required Brokers tests, coverage, strict ESLint and workspace CI on the exact final PR head.
+- [ ] Merge after required checks pass.
+
+**Still blocked:** canonical placement and idempotent recovery remain unavailable because Bitunix Spot does not document a caller-supplied order ID. Canonical fills, continuous market/private event streams and account-wide order enumeration remain open. Direct legacy placement is tracked in the next section.
+
+## 2026-11-19 — Bitunix Spot single-order REST placement
+
+- [x] Implemented `createOrder()` on the documented `POST /api/spot/v1/order/place_order` endpoint only.
+- [x] LIMIT orders convert the caller's base quantity to quote-coin volume using exact decimal multiplication; MARKET orders submit base quantity. Market price is sent as `0`.
+- [x] Enforce LIMIT/MARKET, BUY/SELL, positive decimal quantity/price, explicit order type and reject unsupported time-in-force fields, and reject unsupported fields/client IDs before dispatch.
+- [x] Validate the exchange placement response and read back the returned order ID via order detail before returning the normalized order.
+- [x] A dispatched transport failure returns `OUTCOME_UNKNOWN`; no automatic retry. If placement was acknowledged but detail reconciliation fails, return the exchange order ID and `CONFIRMED` mutation outcome for manual follow-up.
+- [x] Added offline tests for LIMIT and MARKET request payloads, exact quantity conversion, identity rejection, unknown transport outcomes, and acknowledged-placement reconciliation failure.
+- [ ] Pass required CI on the exact final PR head before merge.
+
+**Protocol boundary:** This implementation deliberately uses the single-order REST endpoint. Bitunix documents different `volume` denominations for batch REST and WebSocket order methods; neither is used by this method. Bitunix Spot does not accept a caller-supplied client order ID, so canonical order placement and idempotent unknown-outcome recovery remain unsupported.

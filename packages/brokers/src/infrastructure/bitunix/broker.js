@@ -1,4 +1,5 @@
-import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, handleErr, multiplyDecimal, toResult } from "@coinzilla/utils"
+import { getBrokerMutationOutcome } from "../../broker/broker-contract.js"
 import { CoreBroker } from "../../broker.core.js"
 import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
 import { createBitunixBrokerCapabilities } from "./capabilities.js"
@@ -23,6 +24,7 @@ const API = Object.freeze({
   pendingOrders: "/api/spot/v1/order/pending/list",
   orderHistory: "/api/spot/v1/order/history/page",
   orderDetail: "/api/spot/v1/order/detail",
+  placeOrder: "/api/spot/v1/order/place_order",
   lastPrice: "/api/spot/v1/market/last_price",
   exchangeRates: "/api/spot/v1/common/rate/list",
   depth: "/api/spot/v1/market/depth",
@@ -32,6 +34,7 @@ const API = Object.freeze({
   depositAddress: "/api/spot/v1/deposit/address",
   withdrawalHistory: "/api/spot/v1/withdraw_transfer/page",
   matchingOrderDetails: "/api/spot/v1/order/deal/list",
+  cancelOrder: "/api/spot/v1/order/cancel",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -415,7 +418,7 @@ function createHistoryRequest({ input }) {
   return { body }
 }
 
-/** Bitunix Spot adapter. Capabilities are intentionally read-only until its order lifecycle can be reconciled safely. */
+/** Bitunix Spot adapter with explicitly declared provider-specific capabilities. */
 function unsupportedMutationResult({ operation, reason }) {
   return {
     ...toResult({
@@ -458,6 +461,262 @@ function validateOrderDetailResponse({ response, orderId, symbol }) {
     throw new TypeError("Bitunix Spot order detail does not match the requested order identity")
   }
   return response.data
+}
+
+function expandOrderNumberExponent({ value }) {
+  const [mantissa, exponentText] = value.toLowerCase().split("e")
+  const exponent = Number(exponentText)
+  const negative = mantissa.startsWith("-")
+  const unsigned = negative ? mantissa.slice(1) : mantissa
+  const [integer, fraction = ""] = unsigned.split(".")
+  const digits = integer + fraction
+  const decimalIndex = integer.length + exponent
+  let expanded
+  if (decimalIndex <= 0) {
+    expanded = `0.${"0".repeat(-decimalIndex)}${digits}`
+  } else if (decimalIndex >= digits.length) {
+    expanded = `${digits}${"0".repeat(decimalIndex - digits.length)}`
+  } else {
+    expanded = `${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`
+  }
+  return negative ? `-${expanded}` : expanded
+}
+
+function normalizeOrderDecimal({ value, field }) {
+  let normalized = value
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const numberText = String(value)
+    normalized = numberText.includes("e")
+      ? expandOrderNumberExponent({ value: numberText })
+      : numberText
+  }
+  assertDecimalString({
+    value: normalized,
+    field,
+  })
+  if (compareDecimal({
+    left: normalized,
+    right: "0",
+  }) <= 0) {
+    throw new RangeError(`${field} must be greater than zero`)
+  }
+  return normalized
+}
+
+function validateSpotOrderInput({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot createOrder() requires an order object")
+  }
+  const allowedFields = new Set([
+    "symbol",
+    "side",
+    "type",
+    "quantity",
+    "price",
+    "clientOrderId",
+    "newClientOrderId",
+  ])
+  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field))
+  if (unsupportedFields.length > 0) {
+    throw new TypeError(`Bitunix Spot createOrder() does not support fields: ${unsupportedFields.join(", ")}`)
+  }
+  if (input.clientOrderId !== undefined || input.newClientOrderId !== undefined) {
+    throw unsupported({
+      operation: "createOrder",
+      reason: "Bitunix Spot REST order placement does not accept a caller-supplied client order ID",
+    })
+  }
+  const symbol = requireSymbol({
+    symbol: input.symbol,
+    operation: "createOrder()",
+  })
+  const { side, type: inputType } = input
+  const type = inputType
+  if (side !== "BUY" && side !== "SELL") {
+    throw new TypeError("Bitunix Spot createOrder() side must be BUY or SELL")
+  }
+  if (type !== "LIMIT" && type !== "MARKET") {
+    throw new TypeError("Bitunix Spot single-order REST supports only LIMIT and MARKET orders")
+  }
+  if (type === "MARKET" && input.price !== undefined) {
+    throw new TypeError("Bitunix Spot MARKET orders derive their required zero price; omit price")
+  }
+  return {
+    symbol,
+    side,
+    type,
+  }
+}
+
+function createSpotOrderRequest({ input }) {
+  const { symbol, side, type } = validateSpotOrderInput({ input })
+  const quantity = normalizeOrderDecimal({
+    value: input.quantity,
+    field: "Bitunix Spot order quantity",
+  })
+  const price = type === "LIMIT"
+    ? normalizeOrderDecimal({
+      value: input.price,
+      field: "Bitunix Spot limit price",
+    })
+    : "0"
+  // The single-order REST endpoint uses quote volume for LIMIT and base
+  // volume for MARKET. Batch REST and WebSocket have different contracts.
+  const volume = type === "LIMIT"
+    ? multiplyDecimal({
+      left: quantity,
+      right: price,
+    })
+    : quantity
+  return {
+    symbol,
+    quantity,
+    price,
+    volume,
+    body: {
+      symbol,
+      side: side === "BUY" ? 2 : 1,
+      type: type === "LIMIT" ? 1 : 2,
+      volume,
+      price,
+    },
+  }
+}
+
+async function reconcileSpotOrderPlacement({ restClient, symbol, placementData }) {
+  try {
+    const order = await getBitunixSpotOrderDetail({
+      restClient,
+      symbol,
+      orderId: placementData.orderId,
+    })
+    return toResult({
+      data: order,
+      mutationOutcome: "CONFIRMED",
+    })
+  } catch (error) {
+    handleErr({
+      where: "BitunixSpotBroker.createOrder() detail reconciliation",
+      error,
+    })
+    return toResult({
+      data: placementData,
+      errors: [error],
+      mutationOutcome: "CONFIRMED",
+    })
+  }
+}
+
+function validateSpotOrderPlacementResponse({ response, symbol, side, type }) {
+  if (!response || typeof response !== "object" || Array.isArray(response)) {
+    throw new TypeError("Bitunix Spot place-order response must be an object")
+  }
+  if (String(response.placeStatus) !== "1") {
+    throw Object.assign(
+      new Error("Bitunix Spot rejected the order placement"),
+      { kind: "exchange" },
+    )
+  }
+  if (String(response.symbol).toUpperCase() !== symbol) {
+    throw new TypeError("Bitunix Spot place-order response symbol does not match the request")
+  }
+  if (String(response.side) !== String(side) || String(response.type) !== String(type)) {
+    throw new TypeError("Bitunix Spot place-order response side or type does not match the request")
+  }
+  return {
+    ...response,
+    orderId: validateOrderId({ orderId: response.orderId }),
+  }
+}
+
+async function sendBitunixSpotCancelRequest({ restClient, symbol, orderId }) {
+  return restClient.request({
+    method: "POST",
+    path: API.cancelOrder,
+    body: {
+      orderIdList: [{
+        orderId,
+        symbol,
+      }],
+    },
+    authenticated: true,
+    stateChanging: true,
+  })
+}
+
+async function getBitunixSpotOrderDetail({ restClient, symbol, orderId }) {
+  const response = await restClient.request({
+    method: "GET",
+    path: API.orderDetail,
+    queryParams: { orderId },
+    authenticated: true,
+    stateChanging: false,
+  })
+  return adaptOrder(validateOrderDetailResponse({
+    response,
+    orderId,
+    symbol,
+  }))
+}
+
+function createCancelOrderFailureResult({ error, requestDispatched, cancelAcknowledged }) {
+  let mutationOutcome
+  if (cancelAcknowledged) {
+    mutationOutcome = "CONFIRMED"
+  } else if (error?.kind === "exchange") {
+    mutationOutcome = "REJECTED"
+  } else {
+    mutationOutcome = getBrokerMutationOutcome({
+      error,
+      requestDispatched,
+    })
+  }
+  const cancellationOutcome = cancelAcknowledged ||
+    (requestDispatched && mutationOutcome !== "NOT_SENT")
+    ? "OUTCOME_UNKNOWN"
+    : "NOT_SENT"
+  return toResult({
+    errors: [error],
+    mutationOutcome,
+    cancellationOutcome,
+  })
+}
+
+async function cancelOpenOrdersForSymbol({ broker, symbol, orders }) {
+  const results = []
+  const errors = []
+  let hasUnknownOutcome = false
+  for (const order of orders) {
+    const cancellation = await broker.cancelOrder({
+      symbol,
+      orderId: order.id,
+    })
+    if (cancellation.ok) {
+      results.push(cancellation.data)
+      continue
+    }
+    errors.push(...(cancellation.errors ?? []))
+    results.push(cancellation.data ?? order)
+    if (cancellation.cancellationOutcome === "OUTCOME_UNKNOWN") {
+      hasUnknownOutcome = true
+    }
+  }
+
+  const allConfirmed = errors.length === 0
+  let mutationOutcome = "REJECTED"
+  let cancellationOutcome = "OUTCOME_UNKNOWN"
+  if (hasUnknownOutcome) {
+    mutationOutcome = "OUTCOME_UNKNOWN"
+  } else if (allConfirmed) {
+    mutationOutcome = "CONFIRMED"
+    cancellationOutcome = "CONFIRMED"
+  }
+  return toResult({
+    data: results,
+    ...(errors.length > 0 ? { errors } : {}),
+    mutationOutcome,
+    cancellationOutcome,
+  })
 }
 
 export class BitunixSpotBroker extends CoreBroker {
@@ -1024,34 +1283,164 @@ export class BitunixSpotBroker extends CoreBroker {
     return toResult({ errors: [error] })
   }
 
-  async createOrder() {
-    return unsupportedMutationResult({
-      operation: "createOrder",
-      reason: "Bitunix Spot lacks exchange-side client order identity, so a lost placement response cannot be reconciled idempotently",
-    })
+  /**
+   * Place one Spot order through Bitunix's single-order REST endpoint.
+   * LIMIT quantity is converted from base to quote volume exactly; MARKET
+   * quantity remains base volume. A lost response is OUTCOME_UNKNOWN and is
+   * never retried because Bitunix does not accept a client order ID.
+   *
+   * @param {{symbol: string, side: "BUY"|"SELL", type: "LIMIT"|"MARKET", quantity: string|number, price?: string|number}} input
+   */
+  async createOrder(input = {}) {
+    let requestDispatched = false
+    try {
+      const order = createSpotOrderRequest({ input })
+      requestDispatched = true
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.placeOrder,
+        body: order.body,
+        authenticated: true,
+        stateChanging: true,
+      })
+      const placementData = validateSpotOrderPlacementResponse({
+        response: response.data,
+        symbol: order.symbol,
+        side: order.body.side,
+        type: order.body.type,
+      })
+      return reconcileSpotOrderPlacement({
+        restClient: this.restClient,
+        symbol: order.symbol,
+        placementData,
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.createOrder()",
+        error,
+      })
+      const mutationOutcome = error?.kind === "exchange"
+        ? "REJECTED"
+        : getBrokerMutationOutcome({
+          error,
+          requestDispatched,
+        })
+      return toResult({
+        errors: [error],
+        mutationOutcome,
+      })
+    }
   }
 
   async createCanonicalOrder() {
     return unsupportedMutationResult({
       operation: "createCanonicalOrder",
-      reason: "Bitunix Spot does not expose clientOrderId and placement is disabled until order reconciliation is reliable",
+      reason: "Bitunix Spot does not expose clientOrderId required for canonical order identity and idempotent recovery",
     })
   }
 
-  async cancelOrder() {
-    return {
-      ...unsupportedMutationResult({
-        operation: "cancelOrder",
-        reason: "the adapter has no private order/execution push stream or verified cancellation-outcome reconciliation",
-      }),
-      cancellationOutcome: "NOT_SENT",
+  /**
+   * Cancel one known Spot order and verify the exchange's final order state.
+   * A successful cancel acknowledgement alone is insufficient because a fill
+   * may win the cancellation race; the follow-up detail read is authoritative.
+   *
+   * @param {{symbol: string, orderId: string|number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string, cancellationOutcome?: string}>}
+   */
+  async cancelOrder({ symbol, orderId } = {}) {
+    let requestDispatched = false
+    let cancelAcknowledged = false
+    try {
+      const normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "cancelOrder()",
+      })
+      const normalizedOrderId = validateOrderId({ orderId })
+      requestDispatched = true
+      await sendBitunixSpotCancelRequest({
+        restClient: this.restClient,
+        symbol: normalizedSymbol,
+        orderId: normalizedOrderId,
+      })
+      cancelAcknowledged = true
+      const normalizedOrder = await getBitunixSpotOrderDetail({
+        restClient: this.restClient,
+        symbol: normalizedSymbol,
+        orderId: normalizedOrderId,
+      })
+      const isCancelled = normalizedOrder.status === "CANCELED" ||
+        normalizedOrder.status === "PARTIALLY_FILLED_CANCELED"
+      if (isCancelled) {
+        return toResult({
+          data: normalizedOrder,
+          mutationOutcome: "CONFIRMED",
+          cancellationOutcome: "CONFIRMED",
+        })
+      }
+      return toResult({
+        data: normalizedOrder,
+        errors: [new Error(
+          `Bitunix Spot cancellation was acknowledged but final order status is ${normalizedOrder.status}; reconcile order ${normalizedOrder.id} before retrying`,
+        )],
+        mutationOutcome: "CONFIRMED",
+        cancellationOutcome: "OUTCOME_UNKNOWN",
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.cancelOrder()",
+        error,
+      })
+      return createCancelOrderFailureResult({
+        error,
+        requestDispatched,
+        cancelAcknowledged,
+      })
     }
   }
 
-  async cancelAllOpenOrders() {
-    return unsupportedMutationResult({
-      operation: "cancelAllOpenOrders",
-      reason: "no safe order-mutation reconciliation contract is available",
+  /**
+   * Cancel every open order for one explicitly selected Spot symbol.
+   * The API has no account-wide pending-order query, so symbol is mandatory.
+   * Each cancellation is independently verified; failures never stop later
+   * known orders from being processed and are returned to the caller.
+   *
+   * @param {{symbol: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string, cancellationOutcome: string}>}
+   */
+  async cancelAllOpenOrders({ symbol } = {}) {
+    let normalizedSymbol
+    try {
+      normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "cancelAllOpenOrders()",
+      })
+    } catch (error) {
+      return toResult({
+        errors: [error],
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      })
+    }
+
+    const openOrders = await this.getOpenOrders({ symbol: normalizedSymbol })
+    if (!openOrders.ok) {
+      return toResult({
+        errors: openOrders.errors ?? [],
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      })
+    }
+    if (openOrders.data.length === 0) {
+      return toResult({
+        data: [],
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      })
+    }
+    return cancelOpenOrdersForSymbol({
+      broker: this,
+      symbol: normalizedSymbol,
+      orders: openOrders.data,
     })
   }
 
