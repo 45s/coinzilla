@@ -41,6 +41,9 @@ const API = Object.freeze({
   withdrawalHistory: "/api/spot/v1/withdraw_transfer/page",
   matchingOrderDetails: "/api/spot/v1/order/deal/list",
   cancelOrder: "/api/spot/v1/order/cancel",
+  withdraw: "/api/spot/v1/withdraw",
+  cancelWithdrawal: "/api/spot/v1/withdraw/cancel",
+  fundsTransfer: "/api/spot/v1/funds_transfer",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -305,6 +308,138 @@ function createWithdrawalHistoryRequest({ input }) {
     body,
   })
   return { body }
+}
+
+function requireFundsMutationString({ value, field }) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new TypeError(`Bitunix Spot funds mutation ${field} must be a non-empty string`)
+  }
+  return value
+}
+
+function requirePositiveFundsAmount({ value, operation }) {
+  assertDecimalString({
+    value,
+    field: `Bitunix Spot ${operation} amount`,
+  })
+  if (compareDecimal({
+    left: value,
+    right: "0",
+  }) <= 0) {
+    throw new RangeError(`Bitunix Spot ${operation} amount must be greater than zero`)
+  }
+  return value
+}
+
+function createWithdrawalRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot withdraw() input must be an object")
+  }
+  const allowedFields = new Set(["coin", "network", "address", "amount", "memo"])
+  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field))
+  if (unsupportedFields.length > 0) {
+    throw new TypeError(`Bitunix Spot withdraw() does not support fields: ${unsupportedFields.join(", ")}`)
+  }
+  const body = {
+    coin: requireFundsMutationString({
+      value: input.coin,
+      field: "coin",
+    }),
+    network: requireFundsMutationString({
+      value: input.network,
+      field: "network",
+    }),
+    address: requireFundsMutationString({
+      value: input.address,
+      field: "address",
+    }),
+    amount: requirePositiveFundsAmount({
+      value: input.amount,
+      operation: "withdraw",
+    }),
+  }
+  if (input.memo !== undefined) {
+    body.memo = requireFundsMutationString({
+      value: input.memo,
+      field: "memo",
+    })
+  }
+  return { body }
+}
+
+function createFundsTransferRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot transferFunds() input must be an object")
+  }
+  const allowedFields = new Set(["type", "coin", "amount"])
+  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field))
+  if (unsupportedFields.length > 0) {
+    throw new TypeError(`Bitunix Spot transferFunds() does not support fields: ${unsupportedFields.join(", ")}`)
+  }
+  if (input.type !== "spot_futures" && input.type !== "futures_spot") {
+    throw new TypeError("Bitunix Spot funds transfer type must be spot_futures or futures_spot")
+  }
+  return {
+    body: {
+      type: input.type,
+      coin: requireFundsMutationString({
+        value: input.coin,
+        field: "coin",
+      }),
+      amount: requirePositiveFundsAmount({
+        value: input.amount,
+        operation: "funds transfer",
+      }),
+    },
+  }
+}
+
+function createWithdrawalCancelRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot cancelWithdrawal() input must be an object")
+  }
+  const allowedFields = new Set(["withdrawId"])
+  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field))
+  if (unsupportedFields.length > 0) {
+    throw new TypeError(`Bitunix Spot cancelWithdrawal() does not support fields: ${unsupportedFields.join(", ")}`)
+  }
+  const withdrawId = input.withdrawId
+  if ((typeof withdrawId !== "string" || !withdrawId.trim()) &&
+      !(typeof withdrawId === "number" && Number.isSafeInteger(withdrawId) && withdrawId >= 0)) {
+    throw new TypeError("Bitunix Spot cancelWithdrawal() requires a non-empty string or safe integer withdrawId")
+  }
+  return {
+    body: {
+      withdrawId: String(withdrawId),
+    },
+  }
+}
+
+function normalizeFundsMutationId({ value, field }) {
+  let identifier = value
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    identifier = value[field]
+  }
+  if (typeof identifier === "string" && identifier.trim()) {
+    return identifier
+  }
+  if (typeof identifier === "number" && Number.isSafeInteger(identifier) && identifier >= 0) {
+    return String(identifier)
+  }
+  throw new TypeError(`Bitunix Spot mutation response must contain a valid ${field}`)
+}
+
+function createFundsMutationFailure({ error, requestDispatched }) {
+  const mutationOutcome = error?.kind === "exchange"
+    ? "REJECTED"
+    : getBrokerMutationOutcome({
+      error,
+      requestDispatched,
+    })
+  return toResult({
+    errors: [error],
+    mutationOutcome,
+  })
 }
 
 function createMatchingOrderDetailsRequest({ input }) {
@@ -727,7 +862,7 @@ async function cancelOpenOrdersForSymbol({ broker, symbol, orders }) {
 
 export class BitunixSpotBroker extends CoreBroker {
   /**
-   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, allowLiveOrderMutations?: boolean, logger?: object, dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient}}} input
+   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, allowLiveOrderMutations?: boolean, allowLiveFundsMutations?: boolean, logger?: object, dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient}}} input
    */
   constructor(input = {}) {
     const {
@@ -1106,6 +1241,161 @@ export class BitunixSpotBroker extends CoreBroker {
         error,
       })
       return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Submit an on-chain Spot withdrawal. This is a provider-specific funds operation,
+   * gated independently from order mutations and disabled unless explicitly opted in.
+   * A lost response is OUTCOME_UNKNOWN and is never retried.
+   *
+   * @param {{coin: string, network: string, address: string, amount: string, memo?: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string}>}
+   */
+  async withdraw(input = {}) {
+    if (!this.config.allowLiveFundsMutations) {
+      return unsupportedMutationResult({
+        operation: "withdraw",
+        reason: "live Bitunix funds mutations are disabled by default; set allowLiveFundsMutations: true only after independent withdrawal authorization",
+      })
+    }
+    let requestDispatched = false
+    try {
+      const { body } = createWithdrawalRequest({ input })
+      requestDispatched = true
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.withdraw,
+        body,
+        authenticated: true,
+        stateChanging: true,
+      })
+      const withdrawId = normalizeFundsMutationId({
+        value: response.data,
+        field: "withdrawId",
+      })
+      return toResult({
+        data: Object.freeze({ withdrawId }),
+        mutationOutcome: "CONFIRMED",
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.withdraw()",
+        error,
+      })
+      return createFundsMutationFailure({
+        error,
+        requestDispatched,
+      })
+    }
+  }
+
+  /**
+   * Cancel a withdrawal and verify the final status through the documented history filter.
+   * An acknowledgement without a matching cancelled history row remains OUTCOME_UNKNOWN.
+   *
+   * @param {{withdrawId: string|number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string}>}
+   */
+  async cancelWithdrawal(input = {}) {
+    if (!this.config.allowLiveFundsMutations) {
+      return unsupportedMutationResult({
+        operation: "cancelWithdrawal",
+        reason: "live Bitunix funds mutations are disabled by default; set allowLiveFundsMutations: true only after independent withdrawal-cancellation authorization",
+      })
+    }
+    let requestDispatched = false
+    try {
+      const { body } = createWithdrawalCancelRequest({ input })
+      requestDispatched = true
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.cancelWithdrawal,
+        body,
+        authenticated: true,
+        stateChanging: true,
+      })
+      if (response.data !== null) {
+        throw new TypeError("Bitunix Spot withdrawal cancellation response data must be null")
+      }
+      const history = await this.getWithdrawalHistory({
+        id: body.withdrawId,
+        type: "withdraw",
+      })
+      if (!history.ok) {
+        return toResult({
+          errors: history.errors ?? [new Error("Bitunix Spot withdrawal cancellation could not be verified")],
+          mutationOutcome: "OUTCOME_UNKNOWN",
+        })
+      }
+      const cancelledWithdrawal = history.data.find((withdrawal) =>
+        withdrawal.id === body.withdrawId && withdrawal.status === "cancelled",
+      )
+      if (!cancelledWithdrawal) {
+        return toResult({
+          data: history.data.find((withdrawal) => withdrawal.id === body.withdrawId),
+          errors: [new Error("Bitunix Spot withdrawal cancellation is not confirmed by history; reconcile before retrying")],
+          mutationOutcome: "OUTCOME_UNKNOWN",
+        })
+      }
+      return toResult({
+        data: cancelledWithdrawal,
+        mutationOutcome: "CONFIRMED",
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.cancelWithdrawal()",
+        error,
+      })
+      return createFundsMutationFailure({
+        error,
+        requestDispatched,
+      })
+    }
+  }
+
+  /**
+   * Transfer funds between the Spot and Futures accounts.
+   * The independent funds-mutation gate is disabled by default; uncertain outcomes are never retried.
+   *
+   * @param {{"type": "spot_futures"|"futures_spot", coin: string, amount: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string}>}
+   */
+  async transferFunds(input = {}) {
+    if (!this.config.allowLiveFundsMutations) {
+      return unsupportedMutationResult({
+        operation: "transferFunds",
+        reason: "live Bitunix funds mutations are disabled by default; set allowLiveFundsMutations: true only after independent transfer authorization",
+      })
+    }
+    let requestDispatched = false
+    try {
+      const { body } = createFundsTransferRequest({ input })
+      requestDispatched = true
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.fundsTransfer,
+        body,
+        authenticated: true,
+        stateChanging: true,
+      })
+      const transferId = normalizeFundsMutationId({
+        value: response.data,
+        field: "transferId",
+      })
+      return toResult({
+        data: Object.freeze({ transferId }),
+        mutationOutcome: "CONFIRMED",
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.transferFunds()",
+        error,
+      })
+      return createFundsMutationFailure({
+        error,
+        requestDispatched,
+      })
     }
   }
 
