@@ -1,4 +1,5 @@
-import { handleErr, toResult } from "@coinzilla/utils"
+import { handleErr,
+  toResult } from "@coinzilla/utils"
 
 import { CoreBroker } from "../../../broker.core.js"
 import { BitunixRestClient } from "../api/rest-client.js"
@@ -123,7 +124,10 @@ export class BitunixFuturesBroker extends CoreBroker {
     })
   }
 
-  async #read({ path, queryFactory, authenticated, adapter }) {
+  async #read({ path,
+    queryFactory,
+    authenticated,
+    adapter }) {
     try {
       const queryParams = queryFactory ? queryFactory() : undefined
       const response = await this.restClient.request({
@@ -172,7 +176,8 @@ export class BitunixFuturesBroker extends CoreBroker {
   /**
    * Read a one-shot Futures order book.
    *
-   * @param {{symbol: string, limit?: string | number}} input
+   * @param {{symbol: string,
+     limit?: string | number}} input
    * @returns {Promise<object>}
    */
   getDepth(input) {
@@ -187,7 +192,11 @@ export class BitunixFuturesBroker extends CoreBroker {
   /**
    * Read Futures OHLCV candles.
    *
-   * @param {{symbol: string, interval: string, endTime?: string | number, limit?: number, type?: "LAST_PRICE" | "MARK_PRICE"}} input
+   * @param {{symbol: string,
+     interval: string,
+     endTime?: string | number,
+     limit?: number,
+     type?: "LAST_PRICE" | "MARK_PRICE"}} input
    * @returns {Promise<object>}
    */
   getKlines(input) {
@@ -230,7 +239,10 @@ export class BitunixFuturesBroker extends CoreBroker {
   /**
    * Read historical funding settlements for one Futures symbol.
    *
-   * @param {{symbol: string, startTime?: string | number, endTime?: string | number, limit?: number}} input
+   * @param {{symbol: string,
+     startTime?: string | number,
+     endTime?: string | number,
+     limit?: number}} input
    * @returns {Promise<object>}
    */
   getFundingRateHistory(input) {
@@ -290,7 +302,8 @@ export class BitunixFuturesBroker extends CoreBroker {
   /**
    * Read leverage and margin mode for one symbol and margin coin.
    *
-   * @param {{symbol: string, marginCoin: string}} input
+   * @param {{symbol: string,
+     marginCoin: string}} input
    * @returns {Promise<object>}
    */
   getLeverageMarginMode(input) {
@@ -318,7 +331,10 @@ export class BitunixFuturesBroker extends CoreBroker {
   /**
    * Read currently open Futures positions.
    *
-   * @param {{symbol?: string, positionId?: string, subAccountId?: string | number, includeSubAccounts?: boolean}} [input]
+   * @param {{symbol?: string,
+     positionId?: string,
+     subAccountId?: string | number,
+     includeSubAccounts?: boolean}} [input]
    * @returns {Promise<object>}
    */
   getPendingPositions(input = {}) {
@@ -333,7 +349,13 @@ export class BitunixFuturesBroker extends CoreBroker {
   /**
    * Read one page of historical Futures positions.
    *
-   * @param {{symbol?: string, positionId?: string, startTime?: string | number, endTime?: string | number, skip?: string | number, limit?: number, subAccountId?: string | number}} [input]
+   * @param {{symbol?: string,
+     positionId?: string,
+     startTime?: string | number,
+     endTime?: string | number,
+     skip?: string | number,
+     limit?: number,
+     subAccountId?: string | number}} [input]
    * @returns {Promise<object>}
    */
   getHistoryPositions(input = {}) {
@@ -348,7 +370,14 @@ export class BitunixFuturesBroker extends CoreBroker {
   /**
    * Read one page of pending Futures orders.
    *
-   * @param {{symbol?: string, orderId?: string, clientId?: string, status?: string, startTime?: string | number, endTime?: string | number, skip?: string | number, limit?: number}} [input]
+   * @param {{symbol?: string,
+     orderId?: string,
+     clientId?: string,
+     status?: string,
+     startTime?: string | number,
+     endTime?: string | number,
+     skip?: string | number,
+     limit?: number}} [input]
    * @returns {Promise<object>}
    */
   getPendingOrders(input = {}) {
@@ -366,7 +395,17 @@ export class BitunixFuturesBroker extends CoreBroker {
    * Canceled-order history is limited by the official API to the last 3 days;
    * non-canceled history is limited to the last 90 days.
    *
-   * @param {{symbol?: string, orderId?: string, clientId?: string, status?: string, type?: string, startTime?: string | number, endTime?: string | number, skip?: string | number, limit?: number, queryCanceled?: boolean, subAccountId?: string | number}} [input]
+   * @param {{symbol?: string,
+     orderId?: string,
+     clientId?: string,
+     status?: string,
+     type?: string,
+     startTime?: string | number,
+     endTime?: string | number,
+     skip?: string | number,
+     limit?: number,
+     queryCanceled?: boolean,
+     subAccountId?: string | number}} [input]
    * @returns {Promise<object>}
    */
   getHistoryOrders(input = {}) {
@@ -381,7 +420,8 @@ export class BitunixFuturesBroker extends CoreBroker {
   /**
    * Read one Futures order by exchange orderId or caller-supplied clientId.
    *
-   * @param {{orderId?: string, clientId?: string}} input
+   * @param {{orderId?: string,
+     clientId?: string}} input
    * @returns {Promise<object>}
    */
   getOrderDetail(input) {
@@ -396,7 +436,13 @@ export class BitunixFuturesBroker extends CoreBroker {
   /**
    * Read one page of Futures execution/trade history.
    *
-   * @param {{symbol?: string, orderId?: string, positionId?: string, startTime?: string | number, endTime?: string | number, skip?: string | number, limit?: number}} [input]
+   * @param {{symbol?: string,
+     orderId?: string,
+     positionId?: string,
+     startTime?: string | number,
+     endTime?: string | number,
+     skip?: string | number,
+     limit?: number}} [input]
    * @returns {Promise<object>}
    */
   getHistoryTrades(input = {}) {
@@ -411,7 +457,12 @@ export class BitunixFuturesBroker extends CoreBroker {
   /**
    * Read one page of pending Futures TP/SL orders.
    *
-   * @param {{symbol?: string, positionId?: string, side?: number, positionMode?: number, skip?: string | number, limit?: number}} [input]
+   * @param {{symbol?: string,
+     positionId?: string,
+     side?: number,
+     positionMode?: number,
+     skip?: string | number,
+     limit?: number}} [input]
    * @returns {Promise<object>}
    */
   getPendingTpSlOrders(input = {}) {
@@ -429,7 +480,13 @@ export class BitunixFuturesBroker extends CoreBroker {
    * The official response table documents a paginated orderList, while its
    * example shows an array. The adapter accepts either documented shape.
    *
-   * @param {{symbol?: string, side?: number, positionMode?: number, startTime?: string | number, endTime?: string | number, skip?: string | number, limit?: number}} [input]
+   * @param {{symbol?: string,
+     side?: number,
+     positionMode?: number,
+     startTime?: string | number,
+     endTime?: string | number,
+     skip?: string | number,
+     limit?: number}} [input]
    * @returns {Promise<object>}
    */
   getHistoryTpSlOrders(input = {}) {
