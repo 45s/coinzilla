@@ -316,12 +316,20 @@ test("preserves strategy identity for same-market CG and RS routes on one provid
   const result = resolveExecutionRoutesByProvider({
     appConfig: createAppConfig({
       strategies: {
-        CG_coinGrabber: { pairs },
+        CG_coinGrabber: {
+          pairs,
+        },
         RS_recoverySeller: {
           enabled: true,
           pairs: {
-            BTCUSDT: { enabled: true, tradingEnvironment: "testnet" },
-            DOGEUSDT: { enabled: true, tradingEnvironment: "testnet" },
+            BTCUSDT: {
+              enabled: true,
+              tradingEnvironment: "testnet",
+            },
+            DOGEUSDT: {
+              enabled: true,
+              tradingEnvironment: "testnet",
+            },
           },
         },
       },
@@ -332,12 +340,24 @@ test("preserves strategy identity for same-market CG and RS routes on one provid
 
   assert.deepEqual([...result], [
     ["binance-testnet-primary", [
-      { strategyId: StrategyId.COIN_GRABBER, symbol: "BTCUSDT" },
-      { strategyId: StrategyId.RECOVERY_SELLER, symbol: "BTCUSDT" },
-      { strategyId: StrategyId.RECOVERY_SELLER, symbol: "DOGEUSDT" },
+      {
+        strategyId: StrategyId.COIN_GRABBER,
+        symbol: "BTCUSDT",
+      },
+      {
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "BTCUSDT",
+      },
+      {
+        strategyId: StrategyId.RECOVERY_SELLER,
+        symbol: "DOGEUSDT",
+      },
     ]],
     ["binance-live-secondary", [
-      { strategyId: StrategyId.COIN_GRABBER, symbol: "ETHUSDT" },
+      {
+        strategyId: StrategyId.COIN_GRABBER,
+        symbol: "ETHUSDT",
+      },
     ]],
   ], "The account runtime must retain strategy identity even when its market-data/execution symbol list is deduplicated")
 })
