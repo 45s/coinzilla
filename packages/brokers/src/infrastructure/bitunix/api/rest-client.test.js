@@ -459,3 +459,34 @@ test("Bitunix REST client supports unsigned public reads without configured cred
   )
   assert.equal(requestCount, 1, "a private request without credentials must be rejected before contacting Bitunix")
 })
+
+
+test("Bitunix REST client preserves int64 user UID tokens and nullable UIDs", async () => {
+  const payloads = [
+    '{"code":0,"msg":"success","data":{"uid":9223372036854775807}}',
+    '{"code":0,"msg":"success","data":{"uid":null}}',
+  ]
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async text() {
+        return payloads.shift()
+      },
+    }),
+  })
+
+  const largeUid = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/user/info",
+  })
+  const nullUid = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/user/info",
+  })
+
+  assert.equal(largeUid.data.uid, "9223372036854775807", "an int64 UID must not be rounded by JavaScript Number parsing")
+  assert.equal(nullUid.data.uid, null, "a documented null UID must remain null")
+})
