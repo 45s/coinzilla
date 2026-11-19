@@ -36,7 +36,7 @@ The first full-workspace run after the queue wiring exposed one stale test fixtu
 ## RS-4 account transition queue — shared coordinator foundation
 
 - The provider-account runtime now owns one serialized `runTransition({ task })` queue.
-- The Conservative engine uses that account-owned queue whenever it is composed with shared account state; standalone engine construction retains its existing local queue.
+- The Conservative engine uses that account-owned queue whenever it is composed with a provider-account runtime from `createAccountRuntimeRegistry`. Standalone and legacy test-only shared-state fixtures without the new queue retain their local serialized queue for compatibility.
 - The queue recovers after a rejected task without allowing later transitions to overlap or remain blocked.
 - The offline regression verifies ordered execution and result preservation for two strategy transitions.
 - This establishes the shared serialization primitive; RS evaluation, order/fill routing and reservations still must be wired into the same coordinator before RS can execute.
