@@ -16,7 +16,7 @@ const ERROR_CODES = Object.freeze({
 /** Error returned by the Bitunix Spot REST API or transport boundary. */
 export class BitunixRestError extends SystemCustomError {
   /**
-   * @param {{message: string, kind?: "transport"|"http"|"exchange"|"response"|"authentication", cause?: unknown, exchangeCode?: string|null, status?: number|null, path?: string|null, outcomeUnknown?: boolean}} input
+   * @param {{message: string, kind?: "transport"|"http"|"exchange"|"response"|"authentication", cause?: unknown, exchangeCode?: string|null, status?: number|null, path?: string|null, outcomeUnknown?: boolean, retryAfterMs?: number|null}} input
    */
   constructor({
     message,
@@ -26,6 +26,7 @@ export class BitunixRestError extends SystemCustomError {
     status = null,
     path = null,
     outcomeUnknown = false,
+    retryAfterMs = null,
   } = {}) {
     if (!Object.hasOwn(ERROR_CODES, kind)) {
       throw new TypeError("Bitunix REST error kind is unsupported")
@@ -36,6 +37,7 @@ export class BitunixRestError extends SystemCustomError {
         path,
         status,
         exchangeCode,
+        retryAfterMs,
       },
     }
     if (cause !== undefined) {
@@ -47,6 +49,7 @@ export class BitunixRestError extends SystemCustomError {
     this.status = status
     this.path = path
     this.outcomeUnknown = outcomeUnknown
+    this.retryAfterMs = retryAfterMs
   }
 }
 
@@ -258,6 +261,24 @@ function validateResponseReader({ response, path, stateChanging }) {
   }
 }
 
+function parseRetryAfterMs({ response }) {
+  const value = response?.headers?.get?.("retry-after")
+  if (typeof value !== "string" || !value.trim()) {
+    return null
+  }
+
+  const seconds = Number(value)
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.ceil(seconds * 1000)
+  }
+
+  const timestamp = Date.parse(value)
+  if (!Number.isFinite(timestamp)) {
+    return null
+  }
+  return Math.max(0, timestamp - Date.now())
+}
+
 function createResponseReadError({ error, response, path, stateChanging }) {
   const hasValidMetadata = hasValidHttpMetadata({ response })
   const isHttpFailure = hasValidMetadata && response.ok === false
@@ -276,6 +297,7 @@ function createResponseReadError({ error, response, path, stateChanging }) {
     path,
     status: hasValidMetadata ? response.status : null,
     outcomeUnknown: stateChanging,
+    retryAfterMs: isHttpFailure ? parseRetryAfterMs({ response }) : null,
   })
 }
 
@@ -336,6 +358,7 @@ function validateHttpResponse({ response, payload, path, stateChanging }) {
       status: response.status,
       path,
       outcomeUnknown: stateChanging && response.status >= 500,
+      retryAfterMs: response.status === 429 ? parseRetryAfterMs({ response }) : null,
     })
   }
 }
