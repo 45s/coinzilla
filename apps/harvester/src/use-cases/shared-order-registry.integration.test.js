@@ -161,7 +161,10 @@ function createEngine({ sharedAccountState }) {
     initialState: { orderRegistry: sharedAccountState.orderRegistry },
     sharedAccountState,
   })
-  return { engine, brokerState }
+  return {
+    engine,
+    brokerState,
+  }
 }
 
 test("Conservative engine and RS accounting workflow observe one live account OrderRegistry", async () => {
