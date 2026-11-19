@@ -6,7 +6,7 @@ function normalizeUid({ value }) {
   }
 
   let uid
-  if (typeof value === "string" && /^\\d+$/.test(value)) {
+  if (typeof value === "string" && /^\d+$/.test(value)) {
     uid = value
   } else if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) {
     uid = String(value)
