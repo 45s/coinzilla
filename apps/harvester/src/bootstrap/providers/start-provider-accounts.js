@@ -1,5 +1,5 @@
 import { resolveMarketDataSymbolsByProvider } from "./resolve-market-data-symbols-by-provider.js"
-import { resolveExecutionSymbolsByProvider } from "./resolve-execution-symbols-by-provider.js"
+import { resolveExecutionRoutesByProvider, resolveExecutionSymbolsByProvider } from "./resolve-execution-symbols-by-provider.js"
 
 function createAccountEnvironment({
   env,
@@ -459,6 +459,8 @@ function createProviderAccountStartInput({
   deferMarketDataStart,
 }) {
   const executionSymbols = executionSymbolsByProvider.get(provider.providerInstanceId) ?? []
+  const executionRoutes = resolveExecutionRoutesByProvider({ appConfig, providers })
+    .get(provider.providerInstanceId) ?? []
   const marketDataProviderMetadata = createMarketDataProviderMetadata({
     executionSymbols,
     providers,
@@ -481,6 +483,7 @@ function createProviderAccountStartInput({
     providerIdentity: provider.identity,
     providerRequired: provider.required !== false,
     executionSymbols: Object.freeze([...executionSymbols]),
+    executionRoutes: Object.freeze([...executionRoutes]),
     marketDataSymbols: Object.freeze([...executionSymbols]),
     ...marketDataProviderMetadata,
     requiredCapabilities: requiredCapabilitiesByProvider.get(provider.providerInstanceId) ?? Object.freeze([]),

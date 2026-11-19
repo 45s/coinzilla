@@ -15,7 +15,7 @@ created: 2026-11-14
 
 ## Current RS-4 checkpoint — provider route handoff
 
-The route resolver now retains exact `{ strategyId, symbol }` assignments, while market-data subscription symbols are deduplicated separately. The next runtime integration boundary must pass those strategy-owned assignments into each provider account startup; passing only `executionSymbols` loses ownership when CG and RS share a market. A regression test now asserts that provider startup receives the original strategy route records. This checkpoint does not register RS, create an RS engine, or authorize execution. RS remains disabled/non-executable.
+The provider-account startup boundary now receives the exact `{ strategyId, symbol }` assignments alongside the deduplicated `executionSymbols` subscription list. The regression test verifies that CG and RS routes for one market both reach that boundary while the market is subscribed once. This is routing metadata only: it does not register RS, create an RS engine, or authorize execution. RS remains disabled/non-executable.
 
 ## Objective and delivery order
 

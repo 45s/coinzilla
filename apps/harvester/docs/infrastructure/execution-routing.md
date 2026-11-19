@@ -38,6 +38,10 @@ Every enabled executable strategy/market must have one execution route and one m
 
 Execution routing is defined per `(strategyId, symbol)`. The provider's market-data subscription list is a separate, deduplicated set of symbols and must not replace the strategy route records. When multiple strategies share a market, the runtime startup contract must retain both strategy identities even though the provider subscribes to that symbol once. The runtime integration tracked by [#1475](https://github.com/45s/coinzilla/issues/1475) must preserve these records through provider startup before strategy dispatch is enabled. Until that integration and offline lifecycle proof are complete, RS remains non-executable.
 
+## Strategy route identity at provider startup
+
+The provider-account startup input carries the immutable `executionRoutes` array separately from the deduplicated `executionSymbols` list. The same-market regression verifies that CG and RS both reach the provider boundary while only one market subscription is requested. The subsequent shared-engine work tracked by [#1475](https://github.com/45s/coinzilla/issues/1475) must consume these records before strategy dispatch is enabled. Until that integration and offline lifecycle proof are complete, RS remains non-executable.
+
 ## Account and provider failure policy
 
 Provider identity is immutable and includes provider instance, provider type, account identity, and LIVE/TESTNET environment. All configured providers are required by default. An explicitly optional provider may fail account connection or its deferred market-data startup without terminating unrelated healthy accounts; its execution route is marked unavailable and no other provider is substituted. Partial subscriptions are stopped; if cleanup is unconfirmed, the account lock remains held for safe retry/shutdown. A required-provider failure rolls back every account that already started. If a route depends on an unavailable market-data source, it fails closed rather than selecting another source.
