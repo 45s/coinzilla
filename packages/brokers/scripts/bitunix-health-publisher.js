@@ -11,6 +11,15 @@ import {
 
 const execFileAsync = promisify(execFile)
 const REPORT_COMMIT_MESSAGE = "chore(brokers): publish sanitized Bitunix health report"
+const REQUIRED_HEALTH_OPERATIONS = Object.freeze([
+  "diagnostic safety confirmation",
+  "diagnostic configuration",
+  "REST private account balances",
+  "WebSocket connection",
+  "ping",
+  "user.account",
+  "user.info",
+])
 
 function createTimestamp({ now }) {
   return new Date(now()).toISOString().replaceAll(/[-:.]/g, "")
@@ -188,6 +197,21 @@ async function switchBackToDevelop({ repositoryRoot, runGit }) {
   })
 }
 
+function evaluateHealthCheck({ report }) {
+  const passedOperations = new Set(
+    report.results
+      .filter((result) => result.status === "passed")
+      .map((result) => result.operation),
+  )
+  const missingRequiredOperations = REQUIRED_HEALTH_OPERATIONS.filter((operation) =>
+    !passedOperations.has(operation))
+  return {
+    requiredOperations: REQUIRED_HEALTH_OPERATIONS,
+    missingRequiredOperations,
+    healthy: report.summary.failed === 0 && missingRequiredOperations.length === 0,
+  }
+}
+
 async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now }) {
   const report = await runDiagnosticsSafely({
     runDiagnostics,
@@ -195,9 +219,13 @@ async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publis
     now,
   })
   validateDiagnosticReport({ report })
+  const healthCheck = evaluateHealthCheck({ report })
   const sanitizedReport = await writeReports({
     paths,
-    report,
+    report: {
+      ...report,
+      healthCheck,
+    },
     env,
   })
   const publication = await publishReportBranch({
@@ -209,6 +237,7 @@ async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publis
   })
   return {
     report: sanitizedReport,
+    healthCheck,
     ...publication,
   }
 }
@@ -316,12 +345,13 @@ export async function publishBitunixDiagnostics({
     branch,
     commitSha: execution.commitSha,
     report: execution.report,
+    healthCheck: execution.healthCheck,
     reportPath: publishedReportPath,
     localReportPath: getRelativePath({
       repositoryRoot: root,
       path: paths.local,
     }),
     pushError: execution.pushError,
-    exitCode: execution.report.summary.failed > 0 || execution.pushError ? 1 : 0,
+    exitCode: !execution.healthCheck.healthy || execution.pushError ? 1 : 0,
   }
 }
