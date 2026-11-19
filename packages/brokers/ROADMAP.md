@@ -137,21 +137,22 @@ The declaration's `environment.selectedMode` is the instance's validated `tradin
 
 This section contains only work owned by `@coinzilla/brokers`. Consumer application ports, adapters, routing, and runtime composition are tracked by the owning application.
 
-1. **P1 — Bitunix Spot capability completion (#1185).** Continue only where official Spot contracts and mandatory reference implementations establish safe behavior. Preserve explicit unsupported operations until identity, quantity semantics, execution completeness, account freshness, mutation outcomes, private-event lifecycle and environment safety are source-backed. Do not enable order placement/cancellation while these blockers remain.
+1. **P1 — Bitunix Spot capability completion (#1185).** Continue where official Bitunix API contracts establish supported behavior; use independent reference implementations when available, but do not classify an officially documented endpoint as unsupported merely because an SDK omits it. Preserve explicit unsupported behavior only for genuine API gaps. Keep order placement/cancellation and Harvester execution gated until their lifecycle, execution completeness, account freshness, private-event and environment-safety requirements are source-backed.
 2. **P1 — Binance protocol acceptance and recovery.** Diagnose the outstanding read-only TESTNET handshake/acceptance gap in an eligible environment. Preserve recovery-generation fencing, subscriber acknowledgements, state-changing request gates, and unknown-outcome semantics. Offline tests do not prove live endpoint compatibility.
 3. **P2 — Broker lifecycle maintainability.** Decompose transport, RPC, Streams, and user-data lifecycle modules only in small behavior-preserving slices with characterization tests and cleanup/race coverage.
 4. **Deferred — additional exchanges/transports and performance work.** Add neither a generic transport abstraction nor another exchange without a real broker-contract need and a verified protocol acceptance matrix.
 
 **Completed broker capability references:** normalized candle history/live Kline ([PR #1017](https://github.com/45s/coinzilla/pull/1017)); complete Binance order acknowledgements ([PR #961](https://github.com/45s/coinzilla/pull/961)); explicit Binance environment selection ([PR #841](https://github.com/45s/coinzilla/pull/841)); cancellation outcome classification ([PR #786](https://github.com/45s/coinzilla/pull/786)); and public-stream liveness/recovery ([PR #1272](https://github.com/45s/coinzilla/pull/1272)). Detailed historical evidence remains below.
 
-### Bitunix Spot read-side API coverage — PR #1468 (in progress)
+### Bitunix Spot REST API gap reduction — implementation branch `work/bitunix-complete`
 
-- Implement `BitunixSpotBroker.getTokenNetworks()` as an unsigned, read-only request to the documented Spot token/network catalog.
-- Keep these operations as provider-specific extensions; do not add a competing capability vocabulary or alter the exchange-neutral Broker contract.
-- Preserve exact decimal strings and source metadata, validate malformed token/network rows, and keep `getAssets()` as the existing balance projection.
-- Add the documented signed REST `getUserInfo()` identity lookup; preserve null/omitted UID values and losslessly normalize int64 identifiers to strings.
-- Add the signed paginated Tax Filing read with UTC/365-day and page-size limits, exact record strings, and explicit caller-driven pagination.
-- These additions are reads only; they do not enable transfers, withdrawals, order mutations, or Harvester execution. Issue #1185 remains authoritative for lifecycle and mutation gates.
+- Implement the public token/network catalog and signed API-key identity lookup without changing the existing balance projection or exchange-neutral Broker contract.
+- Implement signed, paginated Tax Filing history with the documented UTC/365-day range and 1000-record page limits; preserve exact record strings and let callers paginate explicitly.
+- Implement real Spot funds operations: withdrawal submission/cancellation, user-to-user internal transfers by UID/phone/email, internal-transfer cancellation, and Spot/Futures account transfers.
+- Keep all new methods as Bitunix-specific extensions; do not introduce a second capability model or Bitunix dependencies into generic Broker contracts.
+- Funds mutations require the separate `BitunixSpotConfig.allowLiveFundsMutations: true` opt-in (default false), are sent with `stateChanging: true`, never auto-retried, and preserve ambiguous outcomes. Withdrawal still requires an API-key permission and a pre-approved quick-withdrawal address.
+- Surface HTTP 429 `Retry-After` hints through `BitunixRestError.retryAfterMs`; do not automatically retry state-changing requests.
+- Keep order placement/cancellation and Harvester execution gated under issue #1185 until their separate lifecycle/readiness requirements are satisfied. No live funds mutation or withdrawal tests are executed; Bitunix does not document a Spot TESTNET.
 - Completion is contingent on exact-head Brokers tests/coverage, workspace CI, and documentation verification.
 
 ## 1. Mission and definition of done
