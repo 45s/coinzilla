@@ -154,6 +154,15 @@ This section contains only work owned by `@coinzilla/brokers`. Consumer applicat
 - These additions are reads only; they do not enable transfers, withdrawals, order mutations, or Harvester execution. Issue #1185 remains authoritative for lifecycle and mutation gates.
 - Completion is contingent on exact-head Brokers tests/coverage, workspace CI, and documentation verification.
 
+### Bitunix Spot funds-operation implementation — PR #1468 (in progress)
+
+- Add the documented withdrawal, withdrawal-cancel, internal-transfer, internal-transfer-cancel, and Spot/Futures transfer endpoints as Bitunix-only extensions.
+- Keep all five operations behind independent `allowLiveFundsMutations: false` by default; never run them in live diagnostics or CI.
+- Use exact decimal strings, signed state-changing requests, caller-supplied `outBizId` idempotency only, no automatic retries, and explicit mutation outcomes.
+- Verify cancellation through withdrawal-history state; a successful cancel acknowledgement alone is not terminal confirmation.
+- Official documentation is the protocol source; the inspected .NET, TypeScript MCP, Python, and additional GitHub references do not provide matching operation fixtures. Record that absence rather than inventing reference coverage.
+- This does not satisfy or weaken #1185's separate order identity, fill completeness, private-event, recovery, or Harvester execution blockers.
+
 ## 1. Mission and definition of done
 
 ### Mission
