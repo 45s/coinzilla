@@ -335,12 +335,21 @@ test("Bitunix Spot placement rejects unsupported identity and order fields befor
     quantity: "1",
     price: "100",
   })
+  const missingType = await broker.createOrder({
+    symbol: "BTCUSDT",
+    side: "BUY",
+    quantity: "1",
+    price: "100",
+  })
 
   assert.equal(withClientId.ok, false)
   assert.equal(withClientId.mutationOutcome, "NOT_SENT")
   assert.match(withClientId.errors[0].message, /does not accept a caller-supplied client order ID/i)
   assert.equal(unsupportedType.ok, false)
   assert.equal(unsupportedType.mutationOutcome, "NOT_SENT")
+  assert.equal(missingType.ok, false)
+  assert.equal(missingType.mutationOutcome, "NOT_SENT")
+  assert.match(missingType.errors[0].message, /type must be LIMIT or MARKET/i)
   assert.equal(calls.length, 0)
 })
 
