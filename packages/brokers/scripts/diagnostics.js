@@ -220,7 +220,7 @@ export function createDiagnosticResult({
   return result
 }
 
-export function createDiagnosticReport({ startedAt, finishedAt, runtime, results, events = [] }) {
+export function createDiagnosticReport({ startedAt, finishedAt, runtime, results, events = [], schemaObservations = [] }) {
   const counts = {}
   for (const result of results) {
     counts[result.status] = (counts[result.status] ?? 0) + 1
@@ -238,6 +238,7 @@ export function createDiagnosticReport({ startedAt, finishedAt, runtime, results
     },
     results,
     events,
+    schemaObservations,
   }
 }
 
@@ -331,6 +332,7 @@ function inspectDiagnosticRow({
  *   expectedFields?: string[],
  *   requiredFields?: string[],
  *   expectedFieldTypes?: Record<string, string|string[]>,
+ *   expectedValueTypes?: string[],
  * }} input
  * @returns {{
  *   valueType: string,
@@ -347,6 +349,7 @@ export function inspectDiagnosticSchema({
   expectedFields = [],
   requiredFields = [],
   expectedFieldTypes = {},
+  expectedValueTypes = [],
 } = {}) {
   const rows = getDiagnosticRows({ value })
   const observedFields = new Set()
@@ -373,7 +376,7 @@ export function inspectDiagnosticSchema({
   const allowedFields = new Set(expectedFields)
   const unexpectedFields = sortedObservedFields.filter((field) => !allowedFields.has(field))
 
-  return {
+  const inspection = {
     valueType: getDiagnosticValueType({ value }),
     itemCount: Array.isArray(value) ? value.length : null,
     observedFields: sortedObservedFields,
@@ -382,4 +385,14 @@ export function inspectDiagnosticSchema({
     unexpectedFieldTypes,
     invalidRowIndexes,
   }
+  if (expectedValueTypes.length > 0) {
+    const expected = expectedValueTypes.slice().sort()
+    if (!expected.includes(inspection.valueType)) {
+      inspection.unexpectedValueType = {
+        expected,
+        actual: inspection.valueType,
+      }
+    }
+  }
+  return inspection
 }
