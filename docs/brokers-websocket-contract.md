@@ -132,6 +132,8 @@ The package exports `BitunixSpotBroker`, `BitunixSpotConfig`, and the separate `
 | `getCandles()` | Blocked; no request is sent | The canonical candle requires volume, but the documented Spot K-line schema exposes OHLC and a start timestamp only. Raw OHLC reads are available through the Bitunix-specific methods above; no volume is fabricated. |
 | `getFills({ symbol, orderId })` | Blocked; no request is sent | The documented matching-order response does not define quantity denomination, complete partial-execution coverage, or stable/unique execution identity. No canonical `Fill` is emitted until Bitunix clarifies these semantics. |
 
+Funds mutation methods are implemented as real Bitunix operations but are opt-in gated separately from order mutations. `BitunixSpotConfig.allowLiveFundsMutations` defaults to false. The REST client exposes HTTP 429 `Retry-After` hints as `BitunixRestError.retryAfterMs` when available and never retries a state-changing request automatically; transport failures after dispatch remain `OUTCOME_UNKNOWN`. A successful withdrawal/transfer or cancellation acknowledgement confirms request acceptance, not final settlement; query the relevant history endpoint.
+
 ### Bitunix Spot WebSocket RPC client
 
 `BitunixSpotWebSocketClient` is a separate authenticated query RPC client. It does not change the REST-backed `BitunixSpotBroker` methods or the broker's lifecycle readiness. Official Spot WebSocket requests use the `id`, `method`, and `params` envelope; every request, including public market/catalog reads, carries `apiKey`, millisecond `timestamp`, random `nonce`, and `sign`.
