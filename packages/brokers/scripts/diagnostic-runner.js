@@ -1761,6 +1761,7 @@ async function runConfiguredDiagnostics({
     now,
     results,
     events,
+    schemaObservations,
   })
 }
 

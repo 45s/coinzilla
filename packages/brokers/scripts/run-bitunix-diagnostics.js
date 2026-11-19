@@ -43,10 +43,11 @@ async function main() {
   if (process.argv.includes("--help")) {
     process.stdout.write([
       "Run read-only Bitunix Spot REST and authenticated WebSocket RPC diagnostics.",
-      "Public-only mode runs unsigned REST checks; authenticated REST and WebSocket RPC checks are skipped unless both credentials are set.",
+      "Public-only mode runs unsigned REST and public Broker API checks; authenticated REST, Broker API, and WebSocket RPC checks are skipped unless both credentials are set.",
       "BITUNIX_API_KEY and BITUNIX_API_SECRET are optional for public-only REST checks.",
       "Configure both credentials to enable private account, open-order, order-history, and authenticated WebSocket RPC reads.",
       "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is optional; without it, REST and WebSocket depth checks are skipped.",
+      "Read-only Broker API checks use the same public constructor as applications; response schema observations report field names and types only.",
       "Live-read confirmation and other diagnostic defaults are source constants.",
       "See packages/brokers/README.md for configuration and safety details.",
       "",
