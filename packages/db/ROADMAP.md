@@ -18,7 +18,7 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 The audit confirmed that the low-level SQL, prepared-statement, transaction, migration, backup and restore APIs already exist. The demonstrated gaps are migration callback mutation detection and rejection of a pending lower version after a higher version has already been applied.
 
-The scoped implementation adds source fingerprints to newly applied migration history, safely upgrades legacy `schema_migrations` tables while preserving their existing rows, rejects modified checksummed migrations and out-of-order pending versions, and adds regression coverage for legacy upgrades, reconnect persistence and migrated-schema backup/restore. Legacy rows retain a null checksum and continue to use version/name validation because their original callback source cannot be reconstructed.
+The scoped implementation adds source fingerprints to newly applied migration history, safely upgrades legacy `schema_migrations` tables while preserving their existing rows, rejects modified checksummed migrations and out-of-order pending versions, and adds regression coverage for legacy upgrades, reconnect persistence and migrated-schema backup/restore. Legacy rows retain an explicit `legacy-unverified` marker and continue to use version/name validation because their original callback source cannot be reconstructed.
 
 The accepted boundary remains unchanged: applications own physical relational schemas, migrations, repositories and business rules; this package owns generic SQLite infrastructure. No Harvester tables or persistence changes belong in this task. Mark complete only after the PR is merged and all required checks pass on its exact final head.
 
