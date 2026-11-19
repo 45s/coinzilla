@@ -1,4 +1,5 @@
 import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
+import { getBrokerMutationOutcome } from "../../broker/broker-contract.js"
 import { CoreBroker } from "../../broker.core.js"
 import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
 import { createBitunixBrokerCapabilities } from "./capabilities.js"
@@ -32,6 +33,7 @@ const API = Object.freeze({
   depositAddress: "/api/spot/v1/deposit/address",
   withdrawalHistory: "/api/spot/v1/withdraw_transfer/page",
   matchingOrderDetails: "/api/spot/v1/order/deal/list",
+  cancelOrder: "/api/spot/v1/order/cancel",
 })
 
 const HISTORY_STATUS_CODES = Object.freeze({
@@ -1038,21 +1040,173 @@ export class BitunixSpotBroker extends CoreBroker {
     })
   }
 
-  async cancelOrder() {
-    return {
-      ...unsupportedMutationResult({
-        operation: "cancelOrder",
-        reason: "the adapter has no private order/execution push stream or verified cancellation-outcome reconciliation",
-      }),
-      cancellationOutcome: "NOT_SENT",
+  /**
+   * Cancel one known Spot order and verify the exchange's final order state.
+   * A successful cancel acknowledgement alone is insufficient because a fill
+   * may win the cancellation race; the follow-up detail read is authoritative.
+   *
+   * @param {{symbol: string, orderId: string|number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string, cancellationOutcome?: string}>}
+   */
+  async cancelOrder({ symbol, orderId } = {}) {
+    let requestDispatched = false
+    let cancelAcknowledged = false
+    try {
+      const normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "cancelOrder()",
+      })
+      const normalizedOrderId = validateOrderId({ orderId })
+      requestDispatched = true
+      await this.restClient.request({
+        method: "POST",
+        path: API.cancelOrder,
+        body: {
+          orderIdList: [{
+            orderId: normalizedOrderId,
+            symbol: normalizedSymbol,
+          }],
+        },
+        authenticated: true,
+        stateChanging: true,
+      })
+      cancelAcknowledged = true
+
+      const detailResponse = await this.restClient.request({
+        method: "GET",
+        path: API.orderDetail,
+        queryParams: { orderId: normalizedOrderId },
+        authenticated: true,
+        stateChanging: false,
+      })
+      const order = validateOrderDetailResponse({
+        response: detailResponse,
+        orderId: normalizedOrderId,
+        symbol: normalizedSymbol,
+      })
+      const normalizedOrder = adaptOrder(order)
+      if (normalizedOrder.status === "CANCELED" ||
+          normalizedOrder.status === "PARTIALLY_FILLED_CANCELED") {
+        return {
+          ...toResult({ data: normalizedOrder }),
+          mutationOutcome: "CONFIRMED",
+          cancellationOutcome: "CONFIRMED",
+        }
+      }
+      return {
+        ...toResult({
+          errors: [new Error(
+            `Bitunix Spot cancellation was acknowledged but final order status is ${normalizedOrder.status}; reconcile order ${normalizedOrder.id} before retrying`,
+          )],
+        }),
+        data: normalizedOrder,
+        mutationOutcome: "CONFIRMED",
+        cancellationOutcome: "OUTCOME_UNKNOWN",
+      }
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.cancelOrder()",
+        error,
+      })
+      let outcome
+      if (cancelAcknowledged) {
+        outcome = "CONFIRMED"
+      } else if (error?.kind === "exchange") {
+        outcome = "REJECTED"
+      } else {
+        outcome = getBrokerMutationOutcome({
+          error,
+          requestDispatched,
+        })
+      }
+      return {
+        ...toResult({ errors: [error] }),
+        mutationOutcome: outcome,
+        cancellationOutcome: cancelAcknowledged ||
+          (requestDispatched && outcome === "OUTCOME_UNKNOWN")
+          ? "OUTCOME_UNKNOWN"
+          : "NOT_SENT",
+      }
     }
   }
 
-  async cancelAllOpenOrders() {
-    return unsupportedMutationResult({
-      operation: "cancelAllOpenOrders",
-      reason: "no safe order-mutation reconciliation contract is available",
-    })
+  /**
+   * Cancel every open order for one explicitly selected Spot symbol.
+   * The API has no account-wide pending-order query, so symbol is mandatory.
+   * Each cancellation is independently verified; failures never stop later
+   * known orders from being processed and are returned to the caller.
+   *
+   * @param {{symbol: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result & {mutationOutcome: string, cancellationOutcome: string}>}
+   */
+  async cancelAllOpenOrders({ symbol } = {}) {
+    let normalizedSymbol
+    try {
+      normalizedSymbol = requireSymbol({
+        symbol,
+        operation: "cancelAllOpenOrders()",
+      })
+    } catch (error) {
+      return {
+        ...toResult({ errors: [error] }),
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      }
+    }
+
+    const openOrders = await this.getOpenOrders({ symbol: normalizedSymbol })
+    if (!openOrders.ok) {
+      return {
+        ...toResult({ errors: openOrders.errors ?? [] }),
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      }
+    }
+    if (openOrders.data.length === 0) {
+      return {
+        ...toResult({ data: [] }),
+        mutationOutcome: "NOT_SENT",
+        cancellationOutcome: "NOT_SENT",
+      }
+    }
+
+    const results = []
+    const errors = []
+    let hasUnknownOutcome = false
+    for (const order of openOrders.data) {
+      const cancellation = await this.cancelOrder({
+        symbol: normalizedSymbol,
+        orderId: order.id,
+      })
+      if (cancellation.ok) {
+        results.push(cancellation.data)
+        continue
+      }
+      errors.push(...(cancellation.errors ?? []))
+      results.push(cancellation.data ?? order)
+      if (cancellation.cancellationOutcome === "OUTCOME_UNKNOWN") {
+        hasUnknownOutcome = true
+      }
+    }
+
+    const allConfirmed = errors.length === 0
+    let mutationOutcome = "REJECTED"
+    let cancellationOutcome = "NOT_SENT"
+    if (hasUnknownOutcome) {
+      mutationOutcome = "OUTCOME_UNKNOWN"
+      cancellationOutcome = "OUTCOME_UNKNOWN"
+    } else if (allConfirmed) {
+      mutationOutcome = "CONFIRMED"
+      cancellationOutcome = "CONFIRMED"
+    }
+    return {
+      ...toResult({
+        data: results,
+        ...(errors.length > 0 ? { errors } : {}),
+      }),
+      mutationOutcome,
+      cancellationOutcome,
+    }
   }
 
   async subscribeForUserData() {
