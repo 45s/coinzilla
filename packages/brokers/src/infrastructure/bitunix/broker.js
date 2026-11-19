@@ -841,8 +841,7 @@ function startBitunixUserDataObservationPolling({
   })
 
   let active = true
-  let subscription
-  subscription = Object.freeze({
+  const subscription = Object.freeze({
     deliveryMode: "POLLING_OBSERVATIONS",
     nativePush: false,
     disconnect: async () => {
@@ -903,7 +902,7 @@ export class BitunixSpotBroker {
     this.connected = true
   }
 
-  /** Mark the stateless REST adapter disconnected. */
+  /** Stop active polling subscriptions and mark the stateless REST adapter disconnected. */
   async disconnect() {
     for (const subscription of [...this.userDataSubscriptions]) {
       await subscription.disconnect()
