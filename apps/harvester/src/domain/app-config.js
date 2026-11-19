@@ -534,14 +534,14 @@ function validateRecoverySellerLegacyPosition({ pair, pairPath }) {
 }
 
 function validateRecoverySellerPairPrecision({ pair, pairPath }) {
-  for (const field of ["pricePrecision", "quantityPrecision"]) {
-    if (Object.hasOwn(pair, field)) {
-      fail({
-        path: `${pairPath}.${field}`,
-        expectation: "must come from the shared token specification, not strategy configuration",
-      })
-    }
-  }
+  requirePrecision({
+    value: pair.pricePrecision,
+    path: `${pairPath}.pricePrecision`,
+  })
+  requirePrecision({
+    value: pair.quantityPrecision,
+    path: `${pairPath}.quantityPrecision`,
+  })
 }
 
 /** Validate one explicitly authorized Recovery Seller market. */
