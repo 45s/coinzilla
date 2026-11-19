@@ -61,7 +61,6 @@ Each active application/package owns its local README, agent instructions, roadm
 - [Event Bus](../packages/event-bus/README.md) — bounded in-process event delivery
 - [Indicators](../packages/indicators/README.md) — exchange-neutral technical indicator calculations
 - [Journal](../packages/journal/README.md) — durable event recording and replay
-- [Market Simulator](../packages/market-simulator/README.md) — offline market simulation
 - [Notifiers](../packages/notifiers/README.md) — optional operational notifications
 - [Utils](../packages/utils/README.md) — shared domain-neutral helpers
 

@@ -352,8 +352,6 @@ const makePlaceOrder = ({ broker, validateOrderRequest }) => {
 
 The example deliberately shows dependency injection and orchestration only. Do not add a new `validateOrderRequest`, `broker.placeOrder`, or result shape if equivalent contracts already exist. Preserve actionable errors and follow the app's established error/result semantics; never catch an error only to disguise it as success.
 
-The Binance adapter owns the translation from the shared order request to exchange-specific parameters. A simulator adapter, if present, should implement the same application-facing broker contract so the use case does not branch on the concrete broker. See [Broker Port and Adapter](./infrastructure/broker-port-and-adapter.md) for the chosen Harvester-owned port boundary, current `@coinzilla/brokers` method mapping, composition example, and recovery requirements.
-
 ### Example: applying an actual fill to Portfolio
 
 `update-portfolio` is a different use case with a different trigger and invariant:
@@ -376,7 +374,6 @@ The Binance adapter owns the translation from the shared order request to exchan
 | Historical/live Kline warm-up, buffering, freshness snapshots and bounded gap backfill | `src/use-cases/create-candle-history-service.js`; uses the application-owned BrokerPort and owns no exchange protocol details |
 | One application goal and coordination of dependencies | Focused module under `src/use-cases/` |
 | Shared contracts/ports required by application workflows | Existing agreed application boundary; coordinate missing shared contracts with their owning package |
-| Binance/simulator request translation and response normalization | `src/infrastructure/` |
 | Dependency construction, configuration, process lifecycle | `src/bootstrap/` and explicit CLI composition roots under `scripts/`; use cases receive injected ports and adapters |
 
 `src/index.js` is the process entry/composition root. It creates the immutable process identity and EventBus, loads and validates configuration, acquires the host/global process locks, verifies the existing ADR-0001 Operational State Store before broker startup, starts the Journal observer, and passes the same Operational State Store into `startHarvester`. A clean `PROCESS_STOPPED` fact is appended only after runtime shutdown is confirmed; Journal close and process-lock release retain their existing failure gates. The Journal is an operational observer, not the restart-recovery authority.

@@ -117,10 +117,6 @@ Relevant source:
 
 Harvester owns the application-facing `BrokerPort`, which is the correct dependency boundary. The current port is a broad application contract covering order, account, market metadata, market-data and user-data operations. The Binance adapter maps package-specific names such as `createOrder()` to the Harvester-facing `placeOrder()`.
 
-`CoreBroker` installs default methods that throw “method should be implemented” errors. Inherited method presence is therefore not proof of support. `assertBrokerPort()` validates method shape, not exchange capability or verified lifecycle support.
-
-**Recommendation:** keep the Harvester-owned port and existing public exports. Add explicit, provider-instance-specific capability metadata and validate routes against it. Do not make `CoreBroker` inheritance the capability system and do not introduce a generic plugin/DI framework.
-
 ### 3.4 Market-data subscriptions
 
 Relevant source:
@@ -256,7 +252,6 @@ Until those acceptance requirements are met, Bitunix must not be enabled for Har
 
 Do not infer capability from:
 
-- Inheritance from `CoreBroker`.
 - Method existence or a broad BrokerPort assertion.
 - A one-shot read being available.
 - A method returning a generic Result envelope.
@@ -346,7 +341,6 @@ The existing Binance implementation is the compatibility baseline. Keep these co
 - User-data session reconnect/recovery generations and state-changing-operation readiness gate.
 - Existing same-process order/fill reconciliation and shutdown sequencing.
 - Existing process-lock atomicity, owner verification, conservative stale-lock handling and retention on uncertain shutdown.
-- Existing public exports, `CoreBroker` compatibility and Harvester BrokerPort behavior.
 
 The first multi-provider deployments should continue to resolve the existing configuration into one Binance instance. No live/testnet environment or credential contract should change as a side effect of registry work.
 
@@ -551,7 +545,6 @@ Tests for Harvester must follow the repository human-readable test standard and 
 | Cross-account Position/Fill collision | P1 | Current IDs omit account; account-scope identities |
 | Duplicate order after uncertain timeout | P1 | Preserve UNKNOWN outcome; never retry on another provider |
 | Same-account concurrent writers during lock migration | P1 | Account-aware lock plus mixed-version transition barrier |
-| False capability from CoreBroker method presence | P1 | Explicit declarations verified against implementation and tests |
 | Partial startup/shutdown leaks provider resources | P2 | Registry-owned lifecycle with failure-injection tests |
 | Market data silently changes venue/source | P2 | Exact explicit route and source-aware freshness |
 | Binance behavior changes during refactor | P1 | Single-provider parity suite and legacy config adapter |

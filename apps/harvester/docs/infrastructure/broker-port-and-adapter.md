@@ -23,8 +23,6 @@ Binance broker adapter (Harvester infrastructure)
 Binance WebSocket API and Streams
 ```
 
-The port belongs to Harvester because it describes the capabilities this application needs. The adapter belongs to infrastructure because it knows how to satisfy those needs with a concrete broker. Domain policies, Portfolio, and use cases must not import `@coinzilla/brokers`, `CoreBroker`, Binance classes, exchange SDK types, or raw exchange payloads.
-
 ## Multi-provider target architecture — issue #1339
 
 The current implementation below is still a single Binance adapter. The accepted target permits multiple named provider instances in one Harvester process. Harvester bootstrap constructs each configured instance and assembles an application-owned registry/router; the Brokers package supplies exchange clients and verified capabilities but does not own strategy/market routing. The source-verified current-state assessment, provenance gaps and ordered implementation prerequisites are maintained in the [multi-provider migration audit and implementation plan](../../../../docs/architecture/multi-provider-migration-plan.md).
@@ -86,12 +84,6 @@ A state-changing timeout remains an unknown outcome. Never retry it on another p
 
 The durable routing contract is [ADR-0003](../../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md), and Bitunix admission is governed by [ADR-0004](../../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md); this file remains the Harvester-specific port/adapter guide.
 
-## Why not depend on CoreBroker directly?
-
-`CoreBroker` is currently a base class whose methods throw when not implemented; it is not a formal, capability-checked application port. Depending on it couples Harvester to the broker package's class hierarchy instead of the small set of operations its use cases require.
-
-The Brokers package now exposes `getPrice()` as a compatibility alias for `getPrices({ symbol })` on both Binance and Bitunix. New application ports should prefer `getPrices()` as the canonical one-shot market-price operation; the alias does not make `CoreBroker` a formal Harvester application port.
-
 Owning the port does not mean copying shared entities. Reuse canonical Order, Fill, Market, Quantity, Balance, BrokerResult, and utility contracts from `@coinzilla/entities` / `@coinzilla/utils` wherever they fit.
 
 ## Responsibilities
@@ -104,8 +96,6 @@ Owning the port does not mean copying shared entities. Reuse canonical Order, Fi
 | Infrastructure adapter | Constructs the concrete broker and maps port operations to package methods |
 | Bootstrap | Loads config, creates adapters, injects dependencies, owns connection/shutdown lifecycle |
 | `@coinzilla/brokers` | Exchange transport, protocol handling, broker-level normalization and recovery behavior |
-
-Do not mirror every `CoreBroker` method automatically. Add a capability only when a Harvester use case needs it.
 
 ## Current `@coinzilla/brokers` methods
 
