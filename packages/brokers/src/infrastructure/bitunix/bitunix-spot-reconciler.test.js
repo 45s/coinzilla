@@ -127,7 +127,7 @@ test("pollOnce invalidates in-flight observations when stopped", async () => {
   const wait = new Promise((resolve) => {
     release = resolve
   })
-  const { broker } = createBroker()
+  const { broker, calls } = createBroker()
   const original = broker.getBalances
   broker.getBalances = async () => {
     await wait
@@ -138,6 +138,7 @@ test("pollOnce invalidates in-flight observations when stopped", async () => {
   reconciler.stop()
   release()
   await assert.rejects(pending, /invalidated by stop/)
+  assert.equal(calls.length, 1, "stop must prevent subsequent endpoint reads")
 })
 
 test("pollOnce rejects a concurrent request with a different symbol scope", async () => {
@@ -163,7 +164,7 @@ test("stop fences an in-flight manual poll even when the scheduler was never sta
   const wait = new Promise((resolve) => {
     release = resolve
   })
-  const { broker } = createBroker()
+  const { broker, calls } = createBroker()
   const original = broker.getBalances
   broker.getBalances = async () => {
     await wait
@@ -174,6 +175,7 @@ test("stop fences an in-flight manual poll even when the scheduler was never sta
   reconciler.stop()
   release()
   await assert.rejects(pending, /invalidated by stop/)
+  assert.equal(calls.length, 1, "stop must prevent subsequent endpoint reads")
 })
 
 test("start publishes the first observation, reports status and stops scheduling", async () => {
