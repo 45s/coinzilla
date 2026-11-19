@@ -1467,3 +1467,11 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Added direct deterministic adapter tests for LIMIT quote-volume conversion, MARKET base-volume preservation, scientific-notation expansion, unsupported fields/client IDs, response identity mismatches, and exact signed detail/cancel request envelopes.
 - Kept live-mutation opt-in, dispatch tracking, mutation outcome classification, no-retry behavior, placement reconciliation, cancellation/fill-race handling, and per-symbol cancel-all orchestration in the Broker facade.
 - No public Broker API, exchange endpoint, request body, retry behavior, Harvester, Binance, or shared utility changes.
+
+## 2026-11-19 — Bitunix polling generation isolation (#1521)
+
+- [x] Detach a stopped generation's in-flight read from the active coalescing slot so an immediate restart can begin a fresh read even when the old network request has not settled.
+- [x] Guard promise cleanup by identity so a late old-generation `finally` cannot clear a newer generation's in-flight promise or scope key.
+- [x] Preserve the honest cancellation boundary: stop fences stale results and callbacks but does not claim to abort a request already dispatched.
+- [x] Add deterministic same-scope and different-scope stop/restart regressions, including late completion from the old generation.
+- [ ] Verify exact-head Brokers tests/coverage, strict lint and all required workspace CI before marking complete.
