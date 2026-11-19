@@ -72,6 +72,16 @@ To keep utility tests running while editing:
 pnpm --filter @coinzilla/utils test:watch
 ```
 
+## Bitunix Spot health check
+
+To run the local, read-only Bitunix Spot health check and publish a sanitized diagnostic report, configure `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` in the repository-root `.env.development`, then run:
+
+```sh
+pnpm bitunix:health
+```
+
+The command must start from a clean `develop` checkout. It creates and pushes a timestamped report-only branch, then returns the local checkout to `develop`. Only sanitized diagnostics are committed; credentials and account values remain local. It does not place/cancel orders or perform withdrawals/transfers. See the [Brokers local diagnostics guide](packages/brokers/README.md#bitunix-spot-local-diagnostics) for permissions, report contents, and failure behavior.
+
 ## Workspace layout
 
 - `apps/*` — application workspaces
