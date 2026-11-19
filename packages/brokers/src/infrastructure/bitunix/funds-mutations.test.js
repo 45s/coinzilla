@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
 import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
+import { serializeBitunixJson } from "./api/json-serializer.js"
 
 const WITHDRAW_PATH = "/api/spot/v1/withdraw"
 const CANCEL_WITHDRAW_PATH = "/api/spot/v1/withdraw/cancel"
@@ -238,30 +239,36 @@ test("Bitunix Spot internal transfer supports UID, phone and email recipients", 
   assert.equal(byUid.ok, true)
   assert.equal(byPhone.ok, true)
   assert.equal(byEmail.ok, true)
-  assert.deepEqual(calls.map(({ options }) => options.body), [
-    {
-      coin: "USDT",
-      amount: "10.00000000",
-      toType: "uid",
-      toUid: 681979174,
-      outBizId: "coinzilla-uid-1",
-    },
-    {
-      coin: "USDT",
-      amount: "11.00000000",
-      toType: "phone",
-      toPhoneCountryCode: "+1",
-      toPhoneNumber: "5550100",
-    },
-    {
-      coin: "USDT",
-      amount: "12.00000000",
-      toType: "email",
-      toEmail: "recipient@example.com",
-      remark: "rebalance",
-    },
+  assert.deepEqual(calls.map(({ options }) => serializeBitunixJson({
+    value: options.body,
+  })), [
+    '{"coin":"USDT","amount":"10.00000000","toType":"uid","toUid":681979174,"outBizId":"coinzilla-uid-1"}',
+    '{"coin":"USDT","amount":"11.00000000","toType":"phone","toPhoneCountryCode":"+1","toPhoneNumber":"5550100"}',
+    '{"coin":"USDT","amount":"12.00000000","toType":"email","toEmail":"recipient@example.com","remark":"rebalance"}',
   ])
   assert.ok(calls.every(({ options }) => options.authenticated === true && options.stateChanging === true))
+})
+
+test("Bitunix Spot internal transfer preserves the full signed int64 UID without Number rounding", async () => {
+  const { broker, calls } = createBroker({
+    allowLiveFundsMutations: true,
+    responses: {
+      [INTERNAL_TRANSFER_PATH]: "1909921053381820417",
+    },
+  })
+
+  const result = await broker.transferInternally({
+    coin: "USDT",
+    amount: "1.00000000",
+    toType: "uid",
+    toUid: "9223372036854775807",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(
+    serializeBitunixJson({ value: calls[0].options.body }),
+    '{"coin":"USDT","amount":"1.00000000","toType":"uid","toUid":9223372036854775807}',
+  )
 })
 
 test("Bitunix Spot internal transfer cancellation reports request acceptance only", async () => {
@@ -360,7 +367,7 @@ test("Bitunix Spot internal transfer validation rejects unsafe or mismatched rec
       coin: "USDT",
       amount: "1",
       toType: "uid",
-      toUid: "9007199254740992",
+      toUid: "9223372036854775808",
     },
     {
       coin: "USDT",
