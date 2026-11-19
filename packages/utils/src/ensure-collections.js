@@ -25,7 +25,13 @@ export function requireArray({ value, name }) {
  */
 export function requireNonEmptyArray({ value, name }) {
   const array = requireArray({ value, name })
-  if (array.length === 0) {
+  let length
+  try {
+    length = array.length
+  } catch {
+    throw typeError({ name, expectation: "a readable array", value })
+  }
+  if (length === 0) {
     throw typeError({ name, expectation: "a non-empty array", value })
   }
   return array
@@ -42,7 +48,12 @@ export function requireStrings({ value, name, nonEmpty = false }) {
     : requireArray({ value, name })
   for (let index = 0; index < array.length; index += 1) {
     const elementName = `${name}[${index}]`
-    const element = array[index]
+    let element
+    try {
+      element = array[index]
+    } catch {
+      throw typeError({ name: elementName, expectation: "a readable string", value: array })
+    }
     if (typeof element !== "string") {
       throw typeError({ name: elementName, expectation: "a string", value: element })
     }
@@ -54,7 +65,7 @@ export function requireStrings({ value, name, nonEmpty = false }) {
 }
 
 /**
- * Require unique array entries using Map/Set SameValueZero equality.
+ * Require unique array entries using Map SameValueZero equality.
  * @param {{ value: unknown, name: string }} options
  * @returns {Array<unknown>}
  */
@@ -62,7 +73,12 @@ export function requireUnique({ value, name }) {
   const array = requireArray({ value, name })
   const firstIndexes = new Map()
   for (let index = 0; index < array.length; index += 1) {
-    const element = array[index]
+    let element
+    try {
+      element = array[index]
+    } catch {
+      throw typeError({ name: `${name}[${index}]`, expectation: "a readable value", value: array })
+    }
     if (firstIndexes.has(element)) {
       throw new TypeError(`${name} must contain unique values (duplicate at index ${index}; first seen at index ${firstIndexes.get(element)})`)
     }
@@ -86,7 +102,13 @@ export function requireOneOf({ value, values, name }) {
   if (!validArray) {
     throw new TypeError("values must be a non-empty array")
   }
-  if (!values.includes(value)) {
+  let includesValue
+  try {
+    includesValue = values.includes(value)
+  } catch {
+    throw new TypeError("values must be a readable array")
+  }
+  if (!includesValue) {
     throw new TypeError(`${name} must be one of the allowed values (received ${describeValue({ value })})`)
   }
   return value
