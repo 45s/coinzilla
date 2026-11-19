@@ -3,11 +3,12 @@ import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { completeDustRecoveryIfNeeded } from "./complete-conservative-dust-recovery.js"
 import {
   allocateEvaluationActions,
+  allocateStrategyOrderCommitments,
   getPortfolioBalanceContext,
   logOrderAllocation,
   publishStrategyDecision,
 } from "./strategy-order-commitments.js"
-import { allocateStrategyOrderCommitments } from "./strategy-order-commitments.js"
+export { allocateStrategyOrderCommitments } from "./strategy-order-commitments.js"
 import { handleEvaluationFailure, submitConservativeTransition } from "./submit-conservative-transition.js"
 
 function hasShutdownRecoveryBlocker({ state, symbol } = {}) {
