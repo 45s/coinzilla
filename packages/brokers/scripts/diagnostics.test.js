@@ -147,3 +147,24 @@ test("schema diagnostics detect unknown fields, missing required fields, and une
   assert.equal(JSON.stringify(inspection).includes("private-value"), false, "Schema diagnostics must never persist unknown field values")
   assert.equal(JSON.stringify(inspection).includes("1.2300"), false, "Schema diagnostics must never persist financial values")
 })
+
+test("schema diagnostics identify an unexpected top-level value type", () => {
+  const inspection = inspectDiagnosticSchema({
+    value: 123.45,
+    expectedValueTypes: ["string"],
+  })
+
+  assert.deepEqual(inspection, {
+    valueType: "number",
+    itemCount: null,
+    observedFields: [],
+    unexpectedFields: [],
+    missingRequiredFields: [],
+    unexpectedFieldTypes: [],
+    invalidRowIndexes: [],
+    unexpectedValueType: {
+      expected: ["string"],
+      actual: "number",
+    },
+  }, "scalar response schema drift must be visible without retaining the scalar value")
+})

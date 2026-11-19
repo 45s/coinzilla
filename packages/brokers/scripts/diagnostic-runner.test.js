@@ -688,9 +688,21 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
           if (request.path === "/api/spot/v1/common/coin_pair/list") {
             return {
               data: [{
+                id: "1",
                 base: "BTC",
                 quote: "USDT",
+                basePrecision: "8",
+                quotePrecision: "8",
+                minPrice: "0.0001",
+                minVolume: "0.0001",
                 isOpen: "1",
+                isHot: "0",
+                isRecommend: "0",
+                isShow: "1",
+                tradeArea: "Spot",
+                sort: "1",
+                openTime: "2026-01-01T00:00:00Z",
+                precisions: ["0.0001"],
                 futureField: "must-not-be-persisted",
               }],
             }
@@ -735,4 +747,45 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
   assert.equal(JSON.stringify(report).includes("must-not-be-persisted"), false, "unknown response field values must never be persisted")
   assert.equal(JSON.stringify(report).includes("987654.321"), false, "private financial values must never be persisted")
   assert.equal(JSON.stringify(report).includes(validEnvironment.BITUNIX_API_SECRET), false, "diagnostic reports must never persist the API secret")
+})
+
+test("public-only Broker diagnostics never send the internal placeholder credential", async () => {
+  const brokerApiCalls = []
+  const report = await runBitunixDiagnostics({
+    env: {},
+    restClientFactory() {
+      return {
+        async request() {
+          return { data: [] }
+        },
+      }
+    },
+    brokerApiRestClientFactory(configuration) {
+      assert.equal(configuration.apiKey, "READ_ONLY_PUBLIC_DIAGNOSTIC", "the internal placeholder is only local config needed to construct the Bitunix Spot broker")
+      assert.equal(configuration.apiSecret, "READ_ONLY_PUBLIC_DIAGNOSTIC", "the internal placeholder must never be used for signed public reads")
+      return {
+        async request(request) {
+          brokerApiCalls.push(request)
+          assert.equal(request.authenticated, false, "public Broker reads must explicitly disable authentication")
+          if (request.path === "/api/spot/v1/common/coin_pair/list") {
+            return { data: [] }
+          }
+          if (request.path === "/api/spot/v1/market/last_price") {
+            return { data: "123.4500" }
+          }
+          throw new Error(`Unexpected public-only Broker request: ${request.path}`)
+        },
+      }
+    },
+    websocketClientFactory() {
+      throw new Error("private WebSocket diagnostics must not be constructed without credentials")
+    },
+  })
+
+  assert.equal(report.summary.failed, 0, "public-only Broker diagnostics must complete without private credentials")
+  assert.deepEqual(brokerApiCalls.map((request) => request.path), [
+    "/api/spot/v1/common/coin_pair/list",
+    "/api/spot/v1/market/last_price",
+  ], "public-only mode must skip all private Broker methods")
+  assert.equal(JSON.stringify(report).includes("READ_ONLY_PUBLIC_DIAGNOSTIC"), false, "the internal placeholder credential must never be persisted")
 })
