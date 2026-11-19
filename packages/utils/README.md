@@ -235,6 +235,8 @@ Prefer `ensure` for generic input validation. It replaces repeated `typeof`, arr
 Use `errMsg` when a generic assertion must preserve a domain-specific failure message:
 
 ```js
+const accounting = { verified: true }
+
 ensure.object({
   value: accounting,
   name: "accounting",
