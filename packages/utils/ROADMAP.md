@@ -101,7 +101,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 - [x] Review helper APIs for consistent input validation, error semantics, and immutable behavior.
 - [x] Keep logging utilities structured, safe, and free of common credential fields in structured payloads; free-form log strings remain caller-owned.
 - [x] Capture build provenance and structured Logger context (issue #763): shared capability merged in PR #767; Harvester process-start consumer integration merged in PR #770. PR #765 was an abandoned test-first draft and is not the delivery reference.
-- [ ] Remove or consolidate genuinely duplicated generic helpers when doing so does not couple unrelated domains.
+- [ ] Remove or consolidate genuinely duplicated generic helpers when doing so does not couple unrelated domains. Use the new `ensure` contract for generic validation as candidates are touched; task #1504 / PR #1505 is modernizing this API and contributor guidance.
 - [x] Review dependency usage and keep the package minimal; no new runtime dependencies introduced.
 
 ## Validation record
