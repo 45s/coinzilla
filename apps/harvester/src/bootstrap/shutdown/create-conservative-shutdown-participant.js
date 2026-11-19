@@ -238,6 +238,7 @@ async function reconcileRecoverySells({
         return createRecoveryPriceRefreshFailure({ symbol, error })
       }
 
+      throwIfShutdownAborted(signal)
       return engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] })
     },
   })
@@ -451,16 +452,20 @@ eventPublisher,
 drainUserDataEvents,
 getShutdownBlockers,
 logger,
+signal,
 } = {}) {
+  throwIfShutdownAborted(signal)
   // Start cancelling every known owned BUY before any service is stopped.
   await runStage({
     stage: "INITIAL_OWNED_BUY_CANCELLATION",
     operation: () => engine.cancelOwnedBuyOrdersForShutdown(),
   })
   const initialDrainBlockers = await drainUserData(drainUserDataEvents)
+  throwIfShutdownAborted(signal)
   let snapshot = engine.getShutdownSafetySnapshot()
 
   while (true) {
+    throwIfShutdownAborted(signal)
     const unsafeMarkets = snapshot.markets.filter((market) =>
       market.status !== "SAFE_TO_SHUTDOWN")
     if (unsafeMarkets.length === 0) {
@@ -475,6 +480,7 @@ logger,
 
     const results = await Promise.all(unsafeMarkets.map(async (market) => {
       try {
+        throwIfShutdownAborted(signal)
         const result = await secureMarket({
           engine,
           eventPublisher,
@@ -483,6 +489,7 @@ logger,
           logger,
           symbol: market.symbol,
           initialDrainBlockers,
+          signal,
         })
         return {
           symbol: market.symbol,
@@ -539,12 +546,13 @@ export function createConservativeShutdownParticipant({
 
   const beginShutdown = () => engine.beginShutdown()
 
-  const waitUntilSafe = () => waitForConservativeMarkets({
+  const waitUntilSafe = ({ signal } = {}) => waitForConservativeMarkets({
     engine,
     eventPublisher,
     drainUserDataEvents,
     getShutdownBlockers,
     logger,
+    signal,
   })
 
   const isSafeToShutdown = () => engine.getShutdownSafetySnapshot().markets
