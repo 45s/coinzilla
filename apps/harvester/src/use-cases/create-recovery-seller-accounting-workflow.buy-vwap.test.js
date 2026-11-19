@@ -184,9 +184,9 @@ test("exposes exact per-cycle BUY execution VWAP", async () => {
 
 test("does not change the cycle VWAP when a canonical BUY fill is replayed", async () => {
   const { workflow, orders } = createWorkflow()
-  const fill = createCycleFills({
+  const [fill] = createCycleFills({
     orders,
-  })[0]
+  })
   await workflow.applyBuyFill({
     fill,
   })
