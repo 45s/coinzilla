@@ -353,13 +353,15 @@ test("blocks RS SELL when no durable single-cycle reservation callback is suppli
   assert.equal(placeOrderCalls, 0)
 })
 
-test("durably reserves the sole RS SELL cycle before registry registration and broker I/O", async () => {
+test("commits the SELL intent before reserving its cycle and registering the pending order", async () => {
   const sharedState = createSharedState()
   const unresolved = []
+  const submissionStages = []
   let reservedOrder
   let pendingWasRegisteredAtBroker = false
   const broker = createBroker({
     onPlaceOrder: ({ order }) => {
+      submissionStages.push("broker")
       pendingWasRegisteredAtBroker = sharedState.orderRegistry.getOrder({
         clientOrderId: order.clientOrderId,
       })?.status === "PENDING"
@@ -369,7 +371,15 @@ test("durably reserves the sole RS SELL cycle before registry registration and b
     sharedState,
     broker,
     unresolved,
+    onDurableSubmissionIntent: async () => {
+      submissionStages.push("durable-intent")
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
     onSellReserved: async ({ order, ownership }) => {
+      submissionStages.push("sell-reserved")
       reservedOrder = {
         order,
         ownership,
@@ -397,13 +407,15 @@ test("durably reserves the sole RS SELL cycle before registry registration and b
   assert.equal(reservedOrder.pendingAlreadyRegistered, false)
   assert.equal(reservedOrder.ownership.strategyId, "RS_recoverySeller")
   assert.equal(reservedOrder.ownership.purpose, "RECOVERY_SELL")
+  assert.deepEqual(submissionStages, ["durable-intent", "sell-reserved", "broker"])
   assert.equal(pendingWasRegisteredAtBroker, true)
   assert.equal(unresolved.length, 0)
 })
 
-test("latches STOP when the reserved sole SELL is deferred before broker submission", async () => {
+test("latches STOP without reserving the sole SELL when its durable intent fails", async () => {
   const sharedState = createSharedState()
   const unresolved = []
+  let reservationCalls = 0
   const operationalStateStore = createMemoryOperationalStateStore()
   const stopWorkflowResult = await createRecoverySellerStopWorkflow({
     operationalStateStore,
@@ -418,10 +430,13 @@ test("latches STOP when the reserved sole SELL is deferred before broker submiss
     sharedState,
     broker,
     unresolved,
-    onSellReserved: async () => ({
-      ok: true,
-      data: { durable: true },
-    }),
+    onSellReserved: async () => {
+      reservationCalls += 1
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
     onDurableSubmissionIntent: async () => ({
       ok: false,
       errors: [new Error("submission intent store unavailable")],
@@ -451,6 +466,7 @@ test("latches STOP when the reserved sole SELL is deferred before broker submiss
 
   assert.equal(result.ok, false)
   assert.equal(placeOrderCalls, 0)
+  assert.equal(reservationCalls, 0)
   assert.equal(workflow.getActiveOrders().length, 0)
   assert.equal(unresolved.length, 1)
   assert.equal(unresolved[0].outcome, "UNKNOWN")
