@@ -150,6 +150,22 @@ const WEBSOCKET_OPERATIONS = Object.freeze([
     privateResponse: true,
     getArguments: () => ({}),
   },
+  {
+    operation: "order.pending.list",
+    method: "getOpenOrders",
+    privateResponse: true,
+    getArguments: ({ symbol }) => ({ symbol }),
+  },
+  {
+    operation: "order.history.page",
+    method: "getOrderHistory",
+    privateResponse: true,
+    getArguments: ({ symbol }) => ({
+      symbol,
+      page: 1,
+      pageSize: 1,
+    }),
+  },
 ])
 
 function getSecrets({ env }) {
@@ -233,7 +249,7 @@ function createObservedSend({ transport, events, secrets, now, methodsByRequestI
 }
 
 function createInboundPayload({ response, method, secrets, includePublicPayloads }) {
-  const isPrivate = method === "user.account" || method === "user.info"
+  const isPrivate = ["user.account", "user.info", "order.pending.list", "order.history.page", "order.deal.list"].includes(method)
   let data
   if (isPrivate || !includePublicPayloads) {
     data = summarizePrivatePayload(response.data)
