@@ -95,7 +95,7 @@ Key source:
 
 - spot_get_pending_orders makes symbol optional and sends {} when omitted, although the official endpoint marks symbol required. This does not prove account-wide open-order support.
 - spot_get_order_history makes symbol optional and locally caps page size at 100. Neither optional symbol nor that local cap is an official exchange guarantee.
-- Its spot_place_order description says LIMIT volume is base quantity and MARKET BUY volume is quote quantity. This is not a safe resolution: the official single-order REST page says LIMIT quote / MARKET base, while the official batch endpoint says the inverse.
+- Its spot_place_order description says LIMIT volume is base quantity and MARKET BUY volume is quote quantity. The current official single-order REST contract revalidated on 2026-11-20 agrees for LIMIT and MARKET volume denomination; older audit notes claiming the inverse are superseded. Other SDKs forward generic volume without clarifying its denomination.
 - It has no Spot WebSocket subscription implementation and no fill-history tool.
 - It is an MCP tool wrapper, not a complete broker SDK. Its repository has CI/smoke coverage for tool registration and the trading-enable gate, but no endpoint-level Spot response fixtures were found in the inspected search. Its user-confirmation/trading-enable guard is useful safety design, not proof of exchange-side idempotency.
 
@@ -177,9 +177,9 @@ The inspected README lists order, cancel, pending/history orders, trade history,
 
 | Topic | Evidence | Decision |
 |---|---|---|
-| Single-order quantity | Official REST place_order: LIMIT volume is quote quantity; MARKET volume is base quantity. | Contradictory with batch contract; no placement. |
-| Batch-order quantity | Official REST place_order/batch: LIMIT volume is base quantity; MARKET volume is quote quantity. | Do not extrapolate batch semantics to single-order endpoint. |
-| Third-party order-volume claims | TypeScript MCP describes LIMIT base / MARKET BUY quote; other clients forward generic volume. | Not authoritative; keep #1185 blocker. |
+| Single-order quantity | Current official REST place_order: LIMIT volume is base quantity; MARKET volume is quote quantity. | Coinzilla sends LIMIT `quantity` unchanged and MARKET `quoteQuantity` unchanged; no price-based conversion. |
+| Batch-order quantity | Current official batch-order docs also describe LIMIT base quantity and MARKET quote quantity. | Coinzilla continues to use the single-order endpoint only; batch behavior is not copied into the provider. |
+| Third-party order-volume claims | TypeScript MCP describes LIMIT base / MARKET BUY quote; JKorf and StockSharp forward generic volume without clarifying denomination. | Corroborates the current official contract for LIMIT and MARKET BUY; official Bitunix docs remain authoritative. |
 | User-trade endpoint | JKorf interface says /order/deal/list, but source calls /order/pending/list; official docs say POST /order/deal/list; StockSharp and Python use that endpoint. | JKorf implementation defect; do not copy it. |
 | Order-book precision | Official Spot depth requires precision; JKorf omits it; MCP and StockSharp pass it. | Caller-provided precision is the current safe boundary; do not infer it from precisions. |
 | Kline response shape | Official Spot docs show a single object for current K-line; clients differ in array/object modeling. | Validate each endpoint's actual documented shape independently. |
@@ -210,10 +210,10 @@ The following is the current method-by-method status from the Binance broker sur
 | getCanonicalOrderHistory() | Blocked | Requires stable client identity and complete order-history reconciliation. |
 | getMyTrades() | Blocked | No account-wide Spot trade-history endpoint with complete paging/cursor semantics. |
 | getFills({ symbol, orderId }) | Blocked | Deal endpoint exists, but quantity denomination, multi-execution completeness, stable/unique execution ID and fee semantics are unresolved. |
-| createOrder() | Blocked | Single-order quantity conflict, no client order ID/idempotency key, no reliable unknown-outcome reconciliation, no TESTNET. |
+| createOrder() | Implemented, gated; legacy only | LIMIT uses base `quantity`; MARKET requires quote `quoteQuantity`. No caller-supplied client order ID/idempotency key, no reliable unknown-outcome recovery, and no TESTNET; not canonical or Harvester-ready. |
 | createCanonicalOrder() | Blocked | All placement blockers plus complete canonical acknowledgement required. |
-| cancelOrder() | Blocked | No safe unknown-outcome cancellation reconciliation or private Spot event stream; no mutation environment. |
-| cancelAllOpenOrders() | Blocked | Requires complete account-wide open-order coverage and safe partial-failure handling. |
+| cancelOrder() | Implemented, gated | Cancels by exchange order ID and verifies final order detail. Unknown outcomes still require manual reconciliation; no private Spot event stream or TESTNET. |
+| cancelAllOpenOrders() | Implemented, gated; symbol-scoped | Attempts each row returned by the current-order query and reports partial/unknown outcomes. The official contract does not prove exhaustive symbol coverage or account-wide enumeration. |
 | getPrices() / getPrice() | Implemented | One-shot last-price lookup; no source timestamp. |
 | getCandles() | Blocked | Spot K-line omits volume required by canonical OHLCV. |
 | getExchangeMarkets() | Implemented | Open Spot pair catalog. |
@@ -222,6 +222,13 @@ The following is the current method-by-method status from the Binance broker sur
 | subscribeForCandles() | Blocked | No Spot push K-line channel and no volume. |
 | subscribeForBookTicker() | Blocked | No continuous Spot book subscription; precision selection unresolved. |
 | subscribeForUserData() | Blocked | No continuous private Spot balance/order/execution event stream or recovery semantics. |
+
+### Order volume contract revalidation — 2026-11-20
+
+- **Official contract:** [Bitunix Spot order interface](https://www.bitunix.com/api-docs/spots/en_us/order/) currently documents LIMIT `volume` in base-coin quantity and MARKET `volume` in quote-coin quantity for the single-order REST endpoint. The earlier audit snapshot recorded the inverse; that statement is superseded by the current official page.
+- **Independent TypeScript cross-check:** [bitunix-mcp Spot tools](https://github.com/samanzamani/bitunix-mcp/blob/6bf5d9f915bdf865394ac02f97c50b689ab9e8e7/src/tools/spot.ts) documents LIMIT base quantity and MARKET BUY quote amount. JKorf/Bitunix.Net and StockSharp forward a generic volume field and do not independently resolve denomination.
+- **Coinzilla mapping:** generic `quantity` is base-asset units; generic `quoteQuantity` is quote-asset units for MARKET orders. Bitunix LIMIT maps `quantity` directly to `volume`; MARKET requires `quoteQuantity` and maps it directly to `volume`. No ticker-price estimate or floating-point conversion is used. Binance maps the same generic field to native `quoteOrderQty`.
+- **Safety:** `allowLiveOrderMutations` remains false by default. No live or testnet order was submitted. Client-order identity, unknown-outcome recovery, canonical fills and Harvester admission remain blocked by #1185.
 
 ### PR #1324 — merged read-only market-data slice (2026-11-17)
 
