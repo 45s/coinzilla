@@ -19,6 +19,39 @@ function isIgnorableExternalOrder({ hasHarvesterIdentity, externalOrdersPolicy }
   return !hasHarvesterIdentity && externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.IGNORE
 }
 
+async function requestExternalOrderReconciliation({
+  dependencies,
+  order,
+  symbol,
+} = {}) {
+  try {
+    dependencies.onUnownedExternalOrderObserved({ order })
+    return {
+      result: toResult({
+        data: {
+          ignored: true,
+          externalOrder: true,
+          externalOrderReconciliationPending: true,
+        },
+      }),
+    }
+  } catch (error) {
+    await dependencies.pause({
+      symbol,
+      reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+      error,
+    })
+    return {
+      result: failureResult({
+        error,
+        category: "OWNERSHIP_INTEGRITY",
+        stage: "EXTERNAL_ORDER_RECONCILIATION_REQUEST",
+        retryable: false,
+      }),
+    }
+  }
+}
+
 async function handleBlockedExternalOrder({
   dependencies,
   order,
@@ -26,7 +59,6 @@ async function handleBlockedExternalOrder({
   hasHarvesterIdentity,
   externalOrdersPolicy,
 } = {}) {
-  const { pause, onUnownedExternalOrderObserved } = dependencies
   if (isIgnorableExternalOrder({
     hasHarvesterIdentity,
     externalOrdersPolicy,
@@ -42,35 +74,14 @@ async function handleBlockedExternalOrder({
   }
   if (!hasHarvesterIdentity &&
       externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
-      typeof onUnownedExternalOrderObserved === "function") {
-    try {
-      onUnownedExternalOrderObserved({ order })
-      return {
-        result: toResult({
-          data: {
-            ignored: true,
-            externalOrder: true,
-            externalOrderReconciliationPending: true,
-          },
-        }),
-      }
-    } catch (error) {
-      await pause({
-        symbol,
-        reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
-        error,
-      })
-      return {
-        result: failureResult({
-          error,
-          category: "OWNERSHIP_INTEGRITY",
-          stage: "EXTERNAL_ORDER_RECONCILIATION_REQUEST",
-          retryable: false,
-        }),
-      }
-    }
+      typeof dependencies.onUnownedExternalOrderObserved === "function") {
+    return requestExternalOrderReconciliation({
+      dependencies,
+      order,
+      symbol,
+    })
   }
-  await pause({
+  await dependencies.pause({
     symbol,
     reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
   })
@@ -874,6 +885,21 @@ async function prepareUserDataEventTransition({
   }
 }
 
+function markCompletedOrderTransition({ state, order } = {}) {
+  if (order.status !== "FILLED") {
+    return null
+  }
+  if (state.completedOrderTransitions.has(order.clientOrderId)) {
+    return toResult({
+      data: {
+        ignored: true,
+      },
+    })
+  }
+  state.completedOrderTransitions.add(order.clientOrderId)
+  return null
+}
+
 function publishOrderLifecycleUpdate({ dependencies, order, previousOrder, update } = {}) {
   if (update.applied !== true) {
     return
@@ -925,15 +951,12 @@ async function processUserDataEventTransition({
       previousOrder,
       update,
     })
-    if (order.status === "FILLED") {
-      if (state.completedOrderTransitions.has(order.clientOrderId)) {
-        return toResult({
-          data: {
-            ignored: true,
-          },
-        })
-      }
-      state.completedOrderTransitions.add(order.clientOrderId)
+    const completedTransition = markCompletedOrderTransition({
+      state,
+      order,
+    })
+    if (completedTransition) {
+      return completedTransition
     }
     const statusResult = await handleOrderStatus({
       dependencies,
