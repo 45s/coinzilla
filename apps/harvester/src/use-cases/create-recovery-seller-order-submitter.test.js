@@ -12,6 +12,7 @@ import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
 import { createRecoverySellerOrderSubmitter } from "./create-recovery-seller-order-submitter.js"
+import { createRecoverySellerStopWorkflow } from "./create-recovery-seller-stop-workflow.js"
 
 const baseAsset = new Asset({
   id: "zro",
@@ -109,7 +110,35 @@ function createAcknowledgedOrder({ order }) {
   })
 }
 
-function createSubmitter({ sharedState, broker, unresolved } = {}) {
+function createMemoryOperationalStateStore() {
+  const records = []
+  return {
+    records,
+    append: async (fact) => {
+      records.push(fact)
+      return {
+        ok: true,
+        data: {
+          durable: true,
+          record: fact,
+        },
+      }
+    },
+    readAll: async () => ({
+      ok: true,
+      data: {
+        records: [...records],
+      },
+    }),
+  }
+}
+
+function createSubmitter({
+  sharedState,
+  broker,
+  unresolved,
+  onUnresolvedSubmission,
+} = {}) {
   const workflow = createRecoverySellerAccountingWorkflow({
     sharedState,
   })
@@ -137,13 +166,13 @@ function createSubmitter({ sharedState, broker, unresolved } = {}) {
         data: { durable: true },
       }
     },
-    onUnresolvedSubmission: async (fact) => {
+    onUnresolvedSubmission: onUnresolvedSubmission ?? (async (fact) => {
       unresolved.push(fact)
       return {
         ok: true,
         data: { durable: true },
       }
-    },
+    }),
     canSubmit: () => true,
   })
   return {
@@ -232,9 +261,14 @@ test("submits one RS order through the shared executor and registers immutable R
   )
 })
 
-test("retains an unknown RS submission and requires durable sticky STOP without retry", async () => {
+test("retains an unknown RS submission and persists sticky STOP without retry", async () => {
   const sharedState = createSharedState()
   const unresolved = []
+  const operationalStateStore = createMemoryOperationalStateStore()
+  const stopWorkflowResult = await createRecoverySellerStopWorkflow({
+    operationalStateStore,
+  })
+  assert.equal(stopWorkflowResult.ok, true)
   const broker = createBroker({
     placeOrderFailure: true,
   })
@@ -242,6 +276,15 @@ test("retains an unknown RS submission and requires durable sticky STOP without 
     sharedState,
     broker,
     unresolved,
+    onUnresolvedSubmission: async ({ order, outcome }) => {
+      unresolved.push({ order, outcome })
+      return stopWorkflowResult.data.latch({
+        explanation: `RS order submission is unresolved: ${outcome}`,
+        orderIdentity: {
+          clientOrderId: order.clientOrderId,
+        },
+      })
+    },
   })
 
   const result = await submit({
@@ -258,6 +301,12 @@ test("retains an unknown RS submission and requires durable sticky STOP without 
   assert.equal(unresolved[0].outcome, "UNKNOWN")
   assert.equal(workflow.getActiveOrders()[0].status, "UNKNOWN")
   assert.equal(workflow.getActiveOrders().length, 1)
+  assert.equal(stopWorkflowResult.data.getStopState().status, "STOPPED")
+  assert.equal(operationalStateStore.records.length, 1)
+  assert.equal(
+    operationalStateStore.records[0].factType,
+    "SAFETY_BLOCKER_RAISED",
+  )
 })
 
 test("does not call the broker when the RS lifecycle decision is not SUBMIT", async () => {

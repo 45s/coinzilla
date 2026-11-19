@@ -47,6 +47,8 @@ A durable RS STOP workflow now restores an unresolved account-scoped RS blocker 
 
 Strict changed-file ESLint caught one prefer-destructuring warning in the submitter integration assertion; it now uses array destructuring. No lint rules or warning thresholds were changed.
 
+The RS submitter integration test now uses the real durable STOP workflow instead of a stub: a broker acknowledgement timeout leaves the order UNKNOWN, appends one `SAFETY_BLOCKER_RAISED` fact, and latches STOP; no retry occurs. This proves the submission adapter's unresolved callback contract against the persisted STOP implementation. Bootstrap still needs to construct and inject this workflow for the live RS runtime.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.
