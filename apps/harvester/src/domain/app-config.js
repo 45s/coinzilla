@@ -424,9 +424,8 @@ function validateProviderInstanceConfig({
 
 
 
-/** Validate one explicitly authorized Recovery Seller market. */
-function validateRecoverySellerPair({ symbol, pair }) {
-  const pairPath = `strategies.RS_recoverySeller.pairs.${symbol}`
+
+function validateRecoverySellerPairIdentity({ symbol, pair, pairPath }) {
   if (!symbol.trim()) {
     fail({
       path: "strategies.RS_recoverySeller.pairs",
@@ -458,16 +457,14 @@ function validateRecoverySellerPair({ symbol, pair }) {
       expectation: Object.values(EXTERNAL_ORDERS_POLICIES).join(" or "),
     })
   }
+}
+
+function validateRecoverySellerPairTradingSettings({ pair, pairPath }) {
   requireNumber({
     value: pair.orderQuantity,
     path: `${pairPath}.orderQuantity`,
     min: 0,
     exclusiveMin: true,
-  })
-  requireNumber({
-    value: pair.sellQuantity,
-    path: `${pairPath}.sellQuantity`,
-    min: 0,
   })
   requireNumber({
     value: pair.minProfit,
@@ -504,6 +501,9 @@ function validateRecoverySellerPair({ symbol, pair }) {
       exclusiveMin: true,
     })
   }
+}
+
+function validateRecoverySellerLegacyPosition({ pair, pairPath }) {
   requireRecord({
     value: pair.legacyPosition,
     path: `${pairPath}.legacyPosition`,
@@ -520,12 +520,20 @@ function validateRecoverySellerPair({ symbol, pair }) {
     min: 0,
     exclusiveMin: true,
   })
+  requireNumber({
+    value: pair.sellQuantity,
+    path: `${pairPath}.sellQuantity`,
+    min: 0,
+  })
   if (pair.sellQuantity > pair.legacyPosition.quantity) {
     fail({
       path: `${pairPath}.sellQuantity`,
       expectation: "no greater than the explicitly authorized original legacy quantity",
     })
   }
+}
+
+function validateRecoverySellerPairPrecision({ pair, pairPath }) {
   for (const field of ["pricePrecision", "quantityPrecision"]) {
     if (Object.hasOwn(pair, field)) {
       fail({
@@ -534,6 +542,28 @@ function validateRecoverySellerPair({ symbol, pair }) {
       })
     }
   }
+}
+
+/** Validate one explicitly authorized Recovery Seller market. */
+function validateRecoverySellerPair({ symbol, pair }) {
+  const pairPath = `strategies.RS_recoverySeller.pairs.${symbol}`
+  validateRecoverySellerPairIdentity({
+    symbol,
+    pair,
+    pairPath,
+  })
+  validateRecoverySellerPairTradingSettings({
+    pair,
+    pairPath,
+  })
+  validateRecoverySellerLegacyPosition({
+    pair,
+    pairPath,
+  })
+  validateRecoverySellerPairPrecision({
+    pair,
+    pairPath,
+  })
 }
 
 function validateRecoverySellerConfig(config) {
