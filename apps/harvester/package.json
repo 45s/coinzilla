@@ -89,7 +89,6 @@
       "src/infrastructure/journal/discover-harvester-journal-sessions.test.js",
       "src/infrastructure/telegram/format-telegram-operator-response.test.js",
       "src/infrastructure/telegram/operator/constants.test.js",
-      "src/infrastructure/persistence/trading-session-persistence-lifecycle.test.js",
       "src/infrastructure/telegram/operator/commands.test.js",
       "src/infrastructure/telegram/operator/interaction.test.js",
       "src/infrastructure/telegram/operator/routing.test.js",

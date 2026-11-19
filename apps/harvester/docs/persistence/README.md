@@ -1,16 +1,19 @@
-## Filled-order history slice — test-first specification
+## Filled-order history projection — implementation
 
-The current task under issue [#1327](https://github.com/45s/coinzilla/issues/1327) replaces the temporary process-ID SQLite smoke test with a non-authoritative projection of canonical order lifecycle events.
+This slice implements the next Harvester-owned persistence consumer under issue [#1327](https://github.com/45s/coinzilla/issues/1327). It stores one order-history record in `harvester_orders` as soon as a Harvester-owned order has a positive cumulative executed quantity.
 
-The target record identity is the complete tuple \`(environment, providerInstanceId, providerType, accountId, clientOrderId)\`. This prevents different provider instances/accounts from overwriting each other's orders while retaining one database file per environment.
+The durable identity is the complete tuple `(environment, providerInstanceId, providerType, accountId, clientOrderId)`. Different provider instances and accounts therefore cannot overwrite one another, even when their client order IDs are equal.
 
-Persist an order only after its cumulative executed quantity is positive. Preserve exact decimal strings, canonical market/asset identity, provider/account provenance, and strategy/position ownership when the runtime already has it. Upsert later partial fills and terminal outcomes into the same record. Include immediate partially/fully filled acknowledgements, stream updates, and partially filled cancellations.
+The projection captures immediate partially/fully filled acknowledgements, subsequent canonical order updates, and partially filled cancellation outcomes. Further fills update the same row. Exact decimal strings, canonical market/asset identity, provider/account provenance, lifecycle status/timestamps, source-event identifiers, and strategy/position ownership when available are preserved.
 
-The projection must use a bounded serialized observer queue. It must not add awaited database writes to broker submission, user-data handling, fill application, accounting, Journal, ADR-0001, or trading readiness. Queue overflow and database failures are observable history gaps, not reasons to block trading.
+The observer consumes the existing `order.submitted`, `order.updated`, `order.cancelled`, and `order.cancel_failed` events through a bounded serialized best-effort queue. It does not await SQLite from broker submission, user-data handling, fill application, accounting, Journal, or trading readiness. Queue overflow and database failures are observable history gaps, not trading failures.
 
-The temporary \`harvester_processes\` row from PR #1430 will be removed in the implementation commit. Neither \`processId\` nor \`runtimeSessionId\` belongs in the order-history record. No individual fill/commission ledger, duplicate event store, snapshots, recovery restoration, or \`packages/db\` changes are part of this slice.
+The projection is non-authoritative: OrderRegistry remains authoritative in-process; Journal remains the ordered lifecycle evidence source; ADR-0001 remains separate and unchanged. There is no restart restoration, second event ledger, individual fill/commission ledger, or `packages/db` change.
 
-**Status:** tests and acceptance contract are being added before implementation.
+The temporary `harvester_processes` process-ID smoke-test write and its obsolete persistence lifecycle helper are removed. Neither process ID nor runtime session ID is part of order-history identity.
+
+**Status:** implementation and regression coverage are in PR [#1469](https://github.com/45s/coinzilla/pull/1469); exact-head CI must pass before merge.
+
 
 ---
 

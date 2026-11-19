@@ -199,11 +199,12 @@ export function createOrderHistoryObserver({
     }
   }
 
-  const subscription = eventBus.subscribeAll({
+  const subscriptionResult = eventBus.subscribeAll({
     handler: handleEvent,
   })
-  if (!subscription || typeof subscription.unsubscribe !== "function") {
-    throw new TypeError("OrderHistoryObserver EventBus subscription must expose unsubscribe()")
+  const subscription = subscriptionResult?.subscription
+  if (subscriptionResult?.ok !== true || !subscription || typeof subscription.unsubscribe !== "function") {
+    throw new TypeError("OrderHistoryObserver EventBus subscribeAll must return a successful subscription")
   }
 
   function close() {
