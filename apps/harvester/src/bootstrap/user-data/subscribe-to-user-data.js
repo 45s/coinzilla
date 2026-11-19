@@ -154,6 +154,20 @@ function assertNoUserDataAccountingFailure(state) {
  * The caller owns failure cleanup; this module owns subscription evidence and
  * the PREFLIGHT account/open-order checks that must precede trading readiness.
  */
+function logUserDataSubscriptionStarting(logger) {
+  logSystem({
+    logger,
+    message: "Subscribing to broker user-data delivery",
+  })
+}
+
+function logUserDataSubscriptionEstablished(logger) {
+  logSystem({
+    logger,
+    message: "Broker user-data delivery established",
+  })
+}
+
 export async function subscribeToUserData({
   broker, brokerName, eventPublisher, logger, state,
   tradingMode, tradingEnabled, enabledSymbols, trackedOrders = [],
@@ -162,7 +176,7 @@ export async function subscribeToUserData({
   resumeDeferredStrategyEvaluations,
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
-  logSystem({ logger, message: "Subscribing to broker user-data delivery" })
+  logUserDataSubscriptionStarting(logger)
 
   const userDataSubscription = await createUserDataSubscription({
     broker,
@@ -175,7 +189,7 @@ export async function subscribeToUserData({
     onStatus,
   })
   onSubscriptionEstablished?.(userDataSubscription)
-  logSystem({ logger, message: "Broker user-data delivery established" })
+  logUserDataSubscriptionEstablished(logger)
 
   markUserDataReconciliationRequired(state)
 

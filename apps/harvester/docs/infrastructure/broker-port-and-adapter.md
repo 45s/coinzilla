@@ -279,3 +279,6 @@ The bootstrap helper keeps the accounting-failure check ahead of the PREFLIGHT o
 
 
 The callback options are part of one generic application-port method; delivery semantics are carried by the subscription metadata and callback channel, not by provider-specific method selection.
+
+
+The startup and established log messages are emitted by small helpers; the readiness state transition remains explicit and unchanged.
