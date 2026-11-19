@@ -30,7 +30,8 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 - Keep strategy, exchange, entity and other domain invariants local. Do not replace existing boolean predicates with throwing assertions when semantics differ.
 - `Validator`/`VR` are legacy compatibility APIs; do not add new callers.
 
-## Workflow\n
+## Workflow
+
 Follow the [mandatory AI-agent workflow](../../AI_AGENT_WORKFLOW.md) for branch creation, PR targets, synchronization, merge gates, branch cleanup, and releases.
 
 ## Required package check
