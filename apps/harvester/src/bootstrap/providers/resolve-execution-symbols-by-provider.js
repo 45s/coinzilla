@@ -199,77 +199,130 @@ function assertEnabledMarketsAreRouted({
   }
 }
 
-function groupSymbolsByProvider({ providers,
-  routeByStrategyMarket }) {
-  const symbolsByProvider = new Map(
-    providers.map(({ providerInstanceId }) => [providerInstanceId, new Set()]),
+
+function groupRoutesByProvider({ providers, routeByStrategyMarket }) {
+  const routesByProvider = new Map(
+    providers.map(({ providerInstanceId }) => [providerInstanceId, []]),
   )
   for (const [key, providerInstanceId] of routeByStrategyMarket) {
-    const [, symbol] = JSON.parse(key)
-    symbolsByProvider.get(providerInstanceId).add(symbol)
+    const [strategyId, symbol] = JSON.parse(key)
+    routesByProvider.get(providerInstanceId).push(Object.freeze({
+      strategyId,
+      symbol,
+    }))
   }
-  return new ReadonlyMap([...symbolsByProvider].map(([providerInstanceId, symbols]) => [
-    providerInstanceId,
-    Object.freeze([...symbols]),
-  ]))
+  return routesByProvider
+}
+
+function createLegacyRouteAssignments({ provider, pairs }) {
+  const assignments = new Map()
+  for (const [symbol, pair] of Object.entries(pairs)) {
+    if (pair?.enabled !== true) {
+      continue
+    }
+    if (pair.tradingEnvironment &&
+        pair.tradingEnvironment !== "both" &&
+        pair.tradingEnvironment !== provider.environment) {
+      continue
+    }
+    assignments.set(createRouteKey({
+      strategyId: StrategyId.COIN_GRABBER,
+      symbol,
+    }), provider.providerInstanceId)
+  }
+  return assignments
+}
+
+function resolveRouteAssignments({ appConfig, providers, pairsByStrategy, providerById }) {
+  if (appConfig.executionRouting !== undefined) {
+    const routeByStrategyMarket = resolveConfiguredRoutes({
+      configuredRouting: appConfig.executionRouting,
+      pairsByStrategy,
+      appConfig,
+      providerById,
+    })
+    assertEnabledMarketsAreRouted({
+      pairsByStrategy,
+      routeByStrategyMarket,
+    })
+    return routeByStrategyMarket
+  }
+  if (providers.length !== 1) {
+    throw new TypeError(
+      "Multi-provider Harvester configuration requires explicit executionRouting.routes",
+    )
+  }
+  if (pairsByStrategy.has(StrategyId.RECOVERY_SELLER)) {
+    throw new TypeError("Recovery Seller requires explicit executionRouting.routes")
+  }
+  const [provider] = providers
+  return createLegacyRouteAssignments({
+    provider,
+    pairs: pairsByStrategy.get(StrategyId.COIN_GRABBER) ?? {},
+  })
+}
+
+function assertEveryProviderHasExecutionRoutes({ providers, routesByProvider }) {
+  for (const provider of providers) {
+    if (routesByProvider.get(provider.providerInstanceId)?.length === 0) {
+      throw new TypeError(
+        `Provider instance ${provider.providerInstanceId} has no execution routes; data-only provider instances are not supported`,
+      )
+    }
+  }
 }
 
 /**
  * Resolve each enabled executable strategy/market pair to one provider account.
  *
- * A legacy one-provider deployment keeps its existing provider assignment.
- * Multi-provider deployments must declare every execution route explicitly.
- * Recovery Seller requires its own explicit enabled configuration and route; it never inherits CG pairs.
+ * Route records retain strategy identity even when multiple strategies share
+ * one symbol on the same provider. Market-data subscriptions are deduplicated
+ * separately by resolveExecutionSymbolsByProvider().
  *
  * @param {{appConfig: object, providers: object[]}} input
- * @returns {ReadonlyMap<string, ReadonlyArray<string>>} Provider instance to execution symbols.
+ * @returns {ReadonlyMap<string, ReadonlyArray<{strategyId: string, symbol: string}>>}
  */
-export function resolveExecutionSymbolsByProvider({ appConfig,
-  providers } = {}) {
+export function resolveExecutionRoutesByProvider({ appConfig, providers } = {}) {
   const providerById = assertProviderInstances(providers)
   const isLegacySingleProvider = appConfig.executionRouting === undefined && providers.length === 1
   const pairsByStrategy = getEnabledStrategyPairs({
     appConfig,
     allowMissingLegacyCg: isLegacySingleProvider,
   })
-  if (appConfig.executionRouting === undefined) {
-    if (providers.length !== 1) {
-      throw new TypeError(
-        "Multi-provider Harvester configuration requires explicit executionRouting.routes",
-      )
-    }
-    if (pairsByStrategy.has(StrategyId.RECOVERY_SELLER)) {
-      throw new TypeError("Recovery Seller requires explicit executionRouting.routes")
-    }
-    const [provider] = providers
-    const pairs = pairsByStrategy.get(StrategyId.COIN_GRABBER) ?? {}
-    const symbols = Object.entries(pairs)
-      .filter(([, pair]) => pair?.enabled === true &&
-        (!pair.tradingEnvironment ||
-          pair.tradingEnvironment === "both" ||
-          pair.tradingEnvironment === provider.environment))
-      .map(([symbol]) => symbol)
-    return new ReadonlyMap([[provider.providerInstanceId, Object.freeze(symbols)]])
-  }
-
-  const routeByStrategyMarket = resolveConfiguredRoutes({
-    configuredRouting: appConfig.executionRouting,
-    pairsByStrategy,
+  const routeByStrategyMarket = resolveRouteAssignments({
     appConfig,
+    providers,
+    pairsByStrategy,
     providerById,
   })
-  assertEnabledMarketsAreRouted({
-    pairsByStrategy,
-    routeByStrategyMarket,
-  })
-  const symbolsByProvider = groupSymbolsByProvider({
+  const routesByProvider = groupRoutesByProvider({
     providers,
     routeByStrategyMarket,
   })
-  for (const provider of providers) {
-    if (symbolsByProvider.get(provider.providerInstanceId)?.length === 0) {
-      throw new TypeError(`Provider instance ${provider.providerInstanceId} has no execution routes; data-only provider instances are not supported`)
-    }
-  }
-  return symbolsByProvider
+  assertEveryProviderHasExecutionRoutes({
+    providers,
+    routesByProvider,
+  })
+  return new ReadonlyMap([...routesByProvider].map(([providerInstanceId, routes]) => [
+    providerInstanceId,
+    Object.freeze(routes),
+  ]))
 }
+
+/**
+ * Resolve the deduplicated market symbols required by each provider.
+ *
+ * @param {{appConfig: object, providers: object[]}} input
+ * @returns {ReadonlyMap<string, ReadonlyArray<string>>}
+ */
+export function resolveExecutionSymbolsByProvider({ appConfig, providers } = {}) {
+  const routesByProvider = resolveExecutionRoutesByProvider({
+    appConfig,
+    providers,
+  })
+  return new ReadonlyMap([...routesByProvider].map(([providerInstanceId, routes]) => [
+    providerInstanceId,
+    Object.freeze([...new Set(routes.map(({ symbol }) => symbol))]),
+  ]))
+}
+
