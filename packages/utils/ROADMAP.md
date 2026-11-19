@@ -49,7 +49,6 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
 4. **Keep shared decimal arithmetic exact and bounded.**
    - **Why:** decimal helpers underpin money, quantity, fees and order filters; accepting floating-point inputs or unbounded precision can create silent financial drift or resource abuse.
    - **Do:** preserve BigInt-backed string arithmetic, explicit rounding, scale/precision bounds and rejection of JavaScript Number operands. Add a helper only when at least one real shared consumer needs it.
-   - **Verify:** retain algebraic/edge-case regressions and consumer tests across Entities, Harvester and Market Simulator.
 
 5. **[x] Harden Validator rule configuration ([issue #892](https://github.com/45s/coinzilla/issues/892)) — completed in merged [PR #918](https://github.com/45s/coinzilla/pull/918).**
    - **Why:** unknown rule identifiers were ignored and non-boolean `isSoft` values were interpreted by truthiness; a typo could silently disable validation.
@@ -138,7 +137,6 @@ The shared policy prohibits direct console calls in business logic and applicati
 ## Repository-wide reuse audit
 
 - [~] Audit every application/package helper and utility for domain-neutral functionality that should be reused from @coinzilla/utils.
-- [x] Consolidate exact decimal-string arithmetic shared by Harvester, Market Simulator, and Entities; shared API and consumer migrations are merged and covered by workspace tests.
 - [x] Audit direct console usage and app-local logger adapters. Current `apps/harvester/src/` uses the shared `defaultLogger`; no application/domain direct console calls or app-local logger adapters were found. Production console references are limited to the exact approved paths in the policy (shared logger, Telegram smoke CLI, and six Harvester operator/test CLIs); root repository-tool scripts remain outside the source guard, and test stubs are excluded. Fatal `process.stderr.write` review remains separate.
 - [ ] Record a disposition for every candidate: reuse existing utility, extend shared utility, keep domain-local, or intentionally duplicate with justification.
 - [ ] Add consumer migration tests and update each owning domain's docs/roadmap as shared capabilities are adopted.
@@ -153,7 +151,6 @@ The initial findings and mandatory agent workflow are in [../../docs/engineering
 - [x] Move the generic object-input assertion from EventBus into the public utils API.
 - [x] Reject JavaScript Number operands to prevent hidden precision loss; accept exact strings and bigint parsing inputs.
 - [x] Add focused tests for signed values, scientific notation bounds, maximum scale/precision, division-by-zero, explicit rounding modes, increment rounding, and deterministic arithmetic identities.
-- [x] Migrate Harvester, Market Simulator, and Entities consumers to the shared API; workspace CI remains the final validation gate.
 - [x] Migrate the standalone Harvester TESTNET sell helper's remaining local BigInt arithmetic to `parseDecimal`, `roundDecimalToIncrement`, `compareDecimal`, and `rescaleDecimal` in merged [PR #946](https://github.com/45s/coinzilla/pull/946); exchange filter selection and operator-facing quantity policy remain in Harvester.
 
 ## Scope guard

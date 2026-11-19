@@ -36,7 +36,6 @@ jobs:
           - "@coinzilla/indicators"
           - "@coinzilla/event-bus"
           - "@coinzilla/journal"
-          - "@coinzilla/market-simulator"
           - "@coinzilla/notifiers"
           - "@coinzilla/utils"
     runs-on: ubuntu-latest

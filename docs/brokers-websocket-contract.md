@@ -89,12 +89,7 @@ The lifecycle implementation and its direct unit tests live together in `src/app
 
 The legacy REST broker, REST signing/query helpers, REST listen-key stream client, and historical-price REST script remain removed. The pure event adapters under `helpers/adapters/` are retained because the active WebSocket user-data session uses their data-mapping behavior; they do not restore the legacy transport or REST flow.
 
-The original Binance/CoreBroker exports remain compatible. The package root additionally exports Bitunix provider classes, the structural Broker method catalog, the canonical `BrokerCapabilities` value/status vocabulary, `BrokerUnsupportedOperationError`, and mutation outcome helpers. The exact public export allow-list is pinned by `src/index.contract.test.js`; the full exchange-neutral contract is documented in [packages/brokers/BROKER_API.md](../packages/brokers/BROKER_API.md). Current workspace consumers are:
-
 - `apps/harvester`, which wraps `BinanceWebSocketBroker` in its own infrastructure adapter and implements Harvester's application-owned `BrokerPort`.
-- `packages/market-simulator`, whose `HistoricalMarketBroker` extends `CoreBroker` and whose `SimulatedExecutionBroker` extends the historical broker.
-
-`CoreBroker` is a live public extension point, not an unused internal base class or a formal application-owned port. `normalizeBinanceId` is used by the Harvester infrastructure adapter. Preserve the original Binance/CoreBroker root exports and their consumer contracts; the Bitunix Spot broker/config and the separately managed authenticated WebSocket query RPC client are explicit additive exports. Do not reintroduce the removed third-party SDK.
 
 ## Bitunix Spot capability contract
 
@@ -198,8 +193,6 @@ The audit identified public exchange-rate and token/network metadata endpoints a
 
 ## Candle market-data public contract
 
-PR #1017 adds two optional market-data capabilities to BinanceWebSocketBroker. They are additive methods on the concrete Binance broker; CoreBroker and the Market Simulator are not changed.
-
 - getCandles({ symbol, interval, limit = 500, startTime?, endTime? }) issues an unsigned time request followed by an unsigned klines request. The limit must be an integer from 1 to 1000; time bounds are non-negative safe integer Unix milliseconds, and startTime cannot exceed endTime.
 - subscribeForCandles({ symbol, interval, onCandle }) subscribes through the existing Streams client to symbol@kline_interval and returns the stream name plus an unsubscribe function.
 - Both paths map to the same immutable candle fields: symbol, interval, openTime, closeTime, open, high, low, close, volume and isClosed. Timestamp fields are Unix milliseconds; OHLCV fields remain exact decimal strings.
@@ -242,7 +235,6 @@ The first DDD/TDD tranche established deterministic tests, selected ports, and f
 | Current module | Current responsibility | Refactoring consideration |
 |---|---|---|
 | `src/index.js`, `src/infrastructure/binance/index.js`, `src/infrastructure/binance/broker-websocket/index.js` | Public exports and Binance infrastructure module composition | Keep public API/composition thin while preserving compatibility |
-| `src/broker.core.js` | Exported shared base class with default unimplemented methods and state maps; Market Simulator extends it | Preserve construction, inherited state, and unsupported-method behavior; any redesign requires a separate consumer migration |
 | `infrastructure/binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only a demonstrated composition seam or distinct cohesive responsibility |
 | `src/domain/user-data-recovery-policy.js` | Pure exchange-neutral recovery-completion policy | Correctly placed in Domain; keep it free of infrastructure/application imports |
 | `src/application/ports/user-data-client-port.js` | Application-owned user-data client capability contract and assertion | Correctly placed under Application Ports; implemented by Binance Infrastructure |

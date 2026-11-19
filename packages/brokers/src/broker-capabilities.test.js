@@ -6,7 +6,6 @@ import {
   BitunixSpotBroker,
   BrokerCapabilities,
   BROKER_CAPABILITY_STATUSES,
-  CoreBroker,
 } from "./index.js"
 
 function createBinanceBroker({ tradingMode = "testnet" } = {}) {
@@ -258,16 +257,6 @@ test("Bitunix Spot declares single-order and symbol-scoped bulk cancellation sup
   })
 })
 
-test("provider facades retain CoreBroker compatibility without inheriting the new contract", () => {
-  const binance = createBinanceBroker()
-  const bitunix = createBitunixBroker()
-
-  assert.ok(binance instanceof CoreBroker)
-  assert.ok(bitunix instanceof CoreBroker)
-  assert.equal(typeof binance.getPrice, "function")
-  assert.equal(typeof bitunix.getPrice, "function")
-  assert.notEqual(binance.getPrice, CoreBroker.prototype.getPrice)
-})
 
 test("public exports expose the canonical capability model", async () => {
   const brokers = await import("./index.js")
