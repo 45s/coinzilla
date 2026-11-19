@@ -19,7 +19,10 @@ export function validateBounds({ min, max, integer = false }) {
   if (min > max) {
     throw new TypeError("min must be less than or equal to max")
   }
-  return { min, max }
+  return {
+    min,
+    max,
+  }
 }
 
 /**
@@ -28,9 +31,17 @@ export function validateBounds({ min, max, integer = false }) {
  * @returns {number}
  */
 export function requireIntegerInRange({ value, min, max, name }) {
-  const bounds = validateBounds({ min, max, integer: true })
+  const bounds = validateBounds({
+    min,
+    max,
+    integer: true,
+  })
   if (!Number.isSafeInteger(value)) {
-    throw typeError({ name, expectation: `an integer between ${bounds.min} and ${bounds.max}`, value })
+    throw typeError({
+      name,
+      expectation: `an integer between ${bounds.min} and ${bounds.max}`,
+      value,
+    })
   }
   if (value < bounds.min || value > bounds.max) {
     throw new RangeError(`${name} must be an integer between ${bounds.min} and ${bounds.max} (received ${describeValue({ value })})`)
@@ -44,8 +55,14 @@ export function requireIntegerInRange({ value, min, max, name }) {
  * @returns {number}
  */
 export function requireNumberInRange({ value, min, max, name }) {
-  const bounds = validateBounds({ min, max })
-  requireFiniteNumber({ value, name })
+  const bounds = validateBounds({
+    min,
+    max,
+  })
+  requireFiniteNumber({
+    value,
+    name,
+  })
   if (value < bounds.min || value > bounds.max) {
     throw new RangeError(`${name} must be a number between ${bounds.min} and ${bounds.max} (received ${describeValue({ value })})`)
   }
