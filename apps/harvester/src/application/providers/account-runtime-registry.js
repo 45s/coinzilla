@@ -33,9 +33,9 @@ function createAccountTradingState() {
   let portfolio = new Portfolio()
   let recoveryLedgers = new Map()
   let orderRegistry = OrderRegistry.empty()
+  let legacyPositions = new Map()
   let updateQueue = Promise.resolve()
   const state = {
-    legacyPositions: new Map(),
     journalFills: [],
     pausedMarkets: new Set(),
     durablePausedMarkets: new Set(),
@@ -76,6 +76,16 @@ function createAccountTradingState() {
         throw new TypeError("Account workflow orderRegistry must be an OrderRegistry")
       }
       orderRegistry = nextOrderRegistry
+    },
+  })
+  Object.defineProperty(state, "legacyPositions", {
+    enumerable: true,
+    get: () => legacyPositions,
+    set: (nextLegacyPositions) => {
+      if (!(nextLegacyPositions instanceof Map)) {
+        throw new TypeError("Account workflow legacyPositions must be a Map")
+      }
+      legacyPositions = nextLegacyPositions
     },
   })
   Object.defineProperty(state, "updateQueue", {
