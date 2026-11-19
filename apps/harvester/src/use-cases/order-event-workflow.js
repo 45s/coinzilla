@@ -185,6 +185,7 @@ function createReconcileTerminalOrderFillsTransition({
   pause,
   processExecutionFillTransition,
   reconcileRecoverySellerMixedSell,
+  latchRecoverySellerStop,
 }) {
   const ordersByBrokerId = new Map()
   const attributedBroker = createProviderAttributedFillHistoryBroker({
@@ -196,6 +197,7 @@ function createReconcileTerminalOrderFillsTransition({
     state,
     pause,
     reconcileRecoverySellerMixedSell,
+    latchRecoverySellerStop,
   })
   const reconcile = makeReconcileTerminalOrderFills({
     broker: attributedBroker,
@@ -317,6 +319,7 @@ export function makeOrderEventWorkflow(options = {}) {
     pause,
     requireProviderProvenance: requireProviderProvenanceOverride,
     reconcileRecoverySellerMixedSell,
+    latchRecoverySellerStop,
   } = options
   const requireProviderProvenance = resolveProviderProvenanceRequirement({
     override: requireProviderProvenanceOverride,
@@ -339,6 +342,7 @@ export function makeOrderEventWorkflow(options = {}) {
     pause,
     processExecutionFillTransition,
     reconcileRecoverySellerMixedSell,
+    latchRecoverySellerStop,
   })
   const processUserDataEventTransition = createWorkflowUserDataEventTransition({
     ...options,
