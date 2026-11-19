@@ -55,7 +55,7 @@ function serializeJsonValue({ value, ancestors }) {
         ancestors,
       }) ?? "null"
     ))
-    serialized = \`[\${entries.join(",")}]\`
+    serialized = `[${entries.join(",")}]`
   } else {
     const entries = []
     for (const [key, member] of Object.entries(value)) {
@@ -64,10 +64,10 @@ function serializeJsonValue({ value, ancestors }) {
         ancestors,
       })
       if (serializedMember !== undefined) {
-        entries.push(\`\${JSON.stringify(key)}:\${serializedMember}\`)
+        entries.push(`${JSON.stringify(key)}:${serializedMember}`)
       }
     }
-    serialized = \`{\${entries.join(",")}}\`
+    serialized = `{${entries.join(",")}}`
   }
   ancestors.delete(value)
   return serialized
