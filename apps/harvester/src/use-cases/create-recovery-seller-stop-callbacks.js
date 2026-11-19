@@ -21,12 +21,19 @@ function matchesReservedSellIdentity({ cycleState, ownership, order } = {}) {
 
 function markSellCycleUnknown({ cycleCoordinator, input } = {}) {
   const { order, ownership } = input ?? {}
-  if (!cycleCoordinator || !hasRecoverySellerSellOwnership({ order, ownership })) {
+  if (!cycleCoordinator || !hasRecoverySellerSellOwnership({
+    order,
+    ownership,
+  })) {
     return
   }
   const marketId = order.market.id
   const cycleState = cycleCoordinator.getCycleState({ marketId })
-  if (!matchesReservedSellIdentity({ cycleState, ownership, order })) {
+  if (!matchesReservedSellIdentity({
+    cycleState,
+    ownership,
+    order,
+  })) {
     return
   }
   cycleCoordinator.markSellUnknown({
