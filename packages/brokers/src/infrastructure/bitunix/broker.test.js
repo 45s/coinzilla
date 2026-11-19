@@ -152,7 +152,7 @@ test("Bitunix Spot fill lookup stays unsupported until execution semantics are p
   assert.equal(calls.length, 0, "unsupported fill lookup must not issue partial or misleading reads")
 })
 
-test("Bitunix Spot broker never submits or cancels orders without safe identity and stream guarantees", async () => {
+test("Bitunix Spot placement remains blocked while order identity and quantity contracts are unresolved", async () => {
   const { broker, calls } = createBroker()
 
   const created = await broker.createOrder({ symbol: "BTCUSDT",
@@ -161,17 +161,96 @@ test("Bitunix Spot broker never submits or cancels orders without safe identity 
     symbol: "BTCUSDT",
     clientOrderId: "caller-order-1",
   })
-  const cancelled = await broker.cancelOrder({ symbol: "BTCUSDT",
-    orderId: "123" })
   const cancelledAll = await broker.cancelAllOpenOrders({ symbol: "BTCUSDT" })
 
   assert.equal(created.ok, false)
   assert.equal(canonicalCreated.ok, false)
-  assert.equal(cancelled.ok, false)
   assert.equal(cancelledAll.ok, false)
   assert.match(created.errors[0].message, /client order identity/i)
   assert.match(canonicalCreated.errors[0].message, /clientOrderId/i)
-  assert.equal(cancelled.cancellationOutcome, "NOT_SENT")
+  assert.equal(calls.length, 0)
+})
+
+test("Bitunix Spot cancels a known order and verifies its terminal exchange status", async () => {
+  const cancelledOrder = {
+    orderId: "123",
+    symbol: "BTCUSDT",
+    side: "2",
+    type: "1",
+    status: "4",
+    volume: "1",
+    dealVolume: "0.25",
+    price: "10",
+    ctime: "2026-11-15T12:00:00Z",
+    utime: "2026-11-15T12:01:00Z",
+  }
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/order/cancel": null,
+      "/api/spot/v1/order/detail": cancelledOrder,
+    },
+  })
+
+  const result = await broker.cancelOrder({ symbol: "btcusdt", orderId: "123" })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.status, "CANCELED")
+  assert.equal(result.data.executedQuantity, "0.25")
+  assert.equal(result.cancellationOutcome, "CONFIRMED")
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.deepEqual(calls[0], {
+    method: "POST",
+    path: "/api/spot/v1/order/cancel",
+    options: {
+      body: {
+        orderIdList: [{ orderId: "123", symbol: "BTCUSDT" }],
+      },
+      authenticated: true,
+      stateChanging: true,
+    },
+  })
+  assert.equal(calls[1].method, "GET")
+  assert.equal(calls[1].path, "/api/spot/v1/order/detail")
+  assert.deepEqual(calls[1].options.queryParams, { orderId: "123" })
+})
+
+test("Bitunix Spot cancellation reports unknown when the order remains open after acknowledgement", async () => {
+  const openOrder = {
+    orderId: "123",
+    symbol: "BTCUSDT",
+    side: "2",
+    type: "1",
+    status: "1",
+    volume: "1",
+    dealVolume: "0",
+    price: "10",
+    ctime: "2026-11-15T12:00:00Z",
+    utime: "2026-11-15T12:01:00Z",
+  }
+  const { broker } = createBroker({
+    responses: {
+      "/api/spot/v1/order/cancel": null,
+      "/api/spot/v1/order/detail": openOrder,
+    },
+  })
+
+  const result = await broker.cancelOrder({ symbol: "BTCUSDT", orderId: "123" })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.data.status, "OPEN")
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN")
+  assert.match(result.errors[0].message, /reconcile order 123/i)
+})
+
+test("Bitunix Spot cancellation validates identity before sending a mutation", async () => {
+  const { broker, calls } = createBroker()
+
+  const result = await broker.cancelOrder({ symbol: "BTCUSDT" })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(result.cancellationOutcome, "NOT_SENT")
   assert.equal(calls.length, 0)
 })
 
