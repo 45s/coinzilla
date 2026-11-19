@@ -8,7 +8,8 @@ const KLINE_INTERVALS = new Set([
 const DEPTH_LIMITS = new Set(["1", "5", "15", "50", "max"])
 const KLINE_PRICE_TYPES = new Set(["LAST_PRICE", "MARK_PRICE"])
 
-function normalizeString({ value, field }) {
+function normalizeString({ value,
+  field }) {
   if (typeof value !== "string" || !value.trim()) {
     throw new TypeError(`Bitunix Futures ${field} must be a non-empty string`)
   }
@@ -16,7 +17,8 @@ function normalizeString({ value, field }) {
 }
 
 function normalizeSymbol({ symbol }) {
-  return normalizeString({ value: symbol, field: "symbol" }).toUpperCase()
+  return normalizeString({ value: symbol,
+    field: "symbol" }).toUpperCase()
 }
 
 function normalizeSymbols({ symbols }) {
@@ -38,7 +40,9 @@ function normalizeSymbols({ symbols }) {
   return normalized.join(",")
 }
 
-function normalizeInt64({ value, field, defaultValue }) {
+function normalizeInt64({ value,
+  field,
+  defaultValue }) {
   if (value === undefined || value === null) {
     return defaultValue
   }
@@ -58,14 +62,17 @@ function normalizeInt64({ value, field, defaultValue }) {
   return normalized
 }
 
-function normalizeOptionalString({ value, field }) {
+function normalizeOptionalString({ value,
+  field }) {
   if (value === undefined || value === null) {
     return undefined
   }
-  return normalizeString({ value, field })
+  return normalizeString({ value,
+    field })
 }
 
-function normalizeOptionalBoolean({ value, field }) {
+function normalizeOptionalBoolean({ value,
+  field }) {
   if (value === undefined || value === null) {
     return undefined
   }
@@ -75,7 +82,10 @@ function normalizeOptionalBoolean({ value, field }) {
   return value
 }
 
-function normalizePositiveInteger({ value, field, defaultValue, maximum }) {
+function normalizePositiveInteger({ value,
+  field,
+  defaultValue,
+  maximum }) {
   const normalized = value === undefined || value === null ? defaultValue : value
   if (!Number.isSafeInteger(normalized) || normalized < 1) {
     throw new TypeError(`Bitunix Futures ${field} must be a positive integer`)
@@ -86,9 +96,13 @@ function normalizePositiveInteger({ value, field, defaultValue, maximum }) {
   return normalized
 }
 
-function normalizePagination({ skip, limit, maximum = MAX_PAGE_SIZE }) {
+function normalizePagination({ skip,
+  limit,
+  maximum = MAX_PAGE_SIZE }) {
   return {
-    skip: normalizeInt64({ value: skip, field: "skip", defaultValue: "0" }),
+    skip: normalizeInt64({ value: skip,
+      field: "skip",
+      defaultValue: "0" }),
     limit: normalizePositiveInteger({
       value: limit,
       field: "limit",
@@ -98,9 +112,12 @@ function normalizePagination({ skip, limit, maximum = MAX_PAGE_SIZE }) {
   }
 }
 
-function normalizeTimeRange({ startTime, endTime }) {
-  const start = normalizeInt64({ value: startTime, field: "startTime" })
-  const end = normalizeInt64({ value: endTime, field: "endTime" })
+function normalizeTimeRange({ startTime,
+  endTime }) {
+  const start = normalizeInt64({ value: startTime,
+    field: "startTime" })
+  const end = normalizeInt64({ value: endTime,
+    field: "endTime" })
   if (start !== undefined && end !== undefined && BigInt(start) > BigInt(end)) {
     throw new RangeError("Bitunix Futures startTime must be less than or equal to endTime")
   }
@@ -126,7 +143,8 @@ function normalizeDepthLimit({ limit }) {
 }
 
 function normalizeKlineInterval({ interval }) {
-  const value = normalizeString({ value: interval, field: "interval" })
+  const value = normalizeString({ value: interval,
+    field: "interval" })
   if (!KLINE_INTERVALS.has(value)) {
     throw new TypeError("Bitunix Futures interval is not documented")
   }
@@ -151,7 +169,8 @@ function normalizePageQuery(input, maximum = MAX_PAGE_SIZE) {
   })
 }
 
-function normalizeHistoryOrderRange({ input, now }) {
+function normalizeHistoryOrderRange({ input,
+  now }) {
   const queryCanceled = normalizeOptionalBoolean({
     value: input.queryCanceled,
     field: "queryCanceled",
@@ -189,18 +208,24 @@ export function createTickersQuery({ symbols } = {}) {
   })
 }
 
-export function createDepthQuery({ symbol, limit } = {}) {
+export function createDepthQuery({ symbol,
+  limit } = {}) {
   return {
     symbol: normalizeSymbol({ symbol }),
     limit: normalizeDepthLimit({ limit }),
   }
 }
 
-export function createKlinesQuery({ symbol, interval, endTime, limit, type } = {}) {
+export function createKlinesQuery({ symbol,
+  interval,
+  endTime,
+  limit,
+  type } = {}) {
   return compactQuery({
     symbol: normalizeSymbol({ symbol }),
     interval: normalizeKlineInterval({ interval }),
-    endTime: normalizeInt64({ value: endTime, field: "endTime" }),
+    endTime: normalizeInt64({ value: endTime,
+      field: "endTime" }),
     limit: normalizePositiveInteger({
       value: limit,
       field: "limit",
@@ -215,10 +240,14 @@ export function createFundingRateQuery({ symbol } = {}) {
   return { symbol: normalizeSymbol({ symbol }) }
 }
 
-export function createFundingHistoryQuery({ symbol, startTime, endTime, limit } = {}) {
+export function createFundingHistoryQuery({ symbol,
+  startTime,
+  endTime,
+  limit } = {}) {
   return {
     symbol: normalizeSymbol({ symbol }),
-    ...normalizeTimeRange({ startTime, endTime }),
+    ...normalizeTimeRange({ startTime,
+      endTime }),
     limit: normalizePositiveInteger({
       value: limit,
       field: "limit",
@@ -233,7 +262,8 @@ export function createPositionTiersQuery({ symbol } = {}) {
 }
 
 export function createAccountQuery({ marginCoin } = {}) {
-  return { marginCoin: normalizeString({ value: marginCoin, field: "marginCoin" }).toUpperCase() }
+  return { marginCoin: normalizeString({ value: marginCoin,
+    field: "marginCoin" }).toUpperCase() }
 }
 
 export function createTradingSettingsQuery({ symbols } = {}) {
@@ -244,10 +274,12 @@ export function createTradingSettingsQuery({ symbols } = {}) {
   return compactQuery({ symbols: normalizedSymbols })
 }
 
-export function createLeverageMarginModeQuery({ symbol, marginCoin } = {}) {
+export function createLeverageMarginModeQuery({ symbol,
+  marginCoin } = {}) {
   return {
     symbol: normalizeSymbol({ symbol }),
-    marginCoin: normalizeString({ value: marginCoin, field: "marginCoin" }).toUpperCase(),
+    marginCoin: normalizeString({ value: marginCoin,
+      field: "marginCoin" }).toUpperCase(),
   }
 }
 
@@ -259,8 +291,10 @@ export function createPendingPositionsQuery({
 } = {}) {
   return compactQuery({
     symbol: symbol === undefined ? undefined : normalizeSymbol({ symbol }),
-    positionId: normalizeOptionalString({ value: positionId, field: "positionId" }),
-    subAccountId: normalizeInt64({ value: subAccountId, field: "subAccountId" }),
+    positionId: normalizeOptionalString({ value: positionId,
+      field: "positionId" }),
+    subAccountId: normalizeInt64({ value: subAccountId,
+      field: "subAccountId" }),
     includeSubAccounts: normalizeOptionalBoolean({
       value: includeSubAccounts,
       field: "includeSubAccounts",
@@ -271,7 +305,8 @@ export function createPendingPositionsQuery({
 export function createHistoryPositionsQuery(input = {}) {
   return compactQuery({
     symbol: input.symbol === undefined ? undefined : normalizeSymbol({ symbol: input.symbol }),
-    positionId: normalizeOptionalString({ value: input.positionId, field: "positionId" }),
+    positionId: normalizeOptionalString({ value: input.positionId,
+      field: "positionId" }),
     ...normalizeTimeRange({
       startTime: input.startTime,
       endTime: input.endTime,
@@ -287,9 +322,12 @@ export function createHistoryPositionsQuery(input = {}) {
 export function createPendingOrdersQuery(input = {}) {
   return compactQuery({
     symbol: input.symbol === undefined ? undefined : normalizeSymbol({ symbol: input.symbol }),
-    orderId: normalizeOptionalString({ value: input.orderId, field: "orderId" }),
-    clientId: normalizeOptionalString({ value: input.clientId, field: "clientId" }),
-    status: normalizeOptionalString({ value: input.status, field: "status" }),
+    orderId: normalizeOptionalString({ value: input.orderId,
+      field: "orderId" }),
+    clientId: normalizeOptionalString({ value: input.clientId,
+      field: "clientId" }),
+    status: normalizeOptionalString({ value: input.status,
+      field: "status" }),
     ...normalizeTimeRange({
       startTime: input.startTime,
       endTime: input.endTime,
@@ -299,13 +337,18 @@ export function createPendingOrdersQuery(input = {}) {
 }
 
 export function createHistoryOrdersQuery(input = {}, { now = Date.now() } = {}) {
-  const range = normalizeHistoryOrderRange({ input, now })
+  const range = normalizeHistoryOrderRange({ input,
+    now })
   return compactQuery({
     symbol: input.symbol === undefined ? undefined : normalizeSymbol({ symbol: input.symbol }),
-    orderId: normalizeOptionalString({ value: input.orderId, field: "orderId" }),
-    clientId: normalizeOptionalString({ value: input.clientId, field: "clientId" }),
-    status: normalizeOptionalString({ value: input.status, field: "status" }),
-    type: normalizeOptionalString({ value: input.type, field: "type" }),
+    orderId: normalizeOptionalString({ value: input.orderId,
+      field: "orderId" }),
+    clientId: normalizeOptionalString({ value: input.clientId,
+      field: "clientId" }),
+    status: normalizeOptionalString({ value: input.status,
+      field: "status" }),
+    type: normalizeOptionalString({ value: input.type,
+      field: "type" }),
     ...range,
     ...normalizePageQuery(input),
     subAccountId: normalizeInt64({
@@ -315,9 +358,12 @@ export function createHistoryOrdersQuery(input = {}, { now = Date.now() } = {}) 
   })
 }
 
-export function createOrderDetailQuery({ orderId, clientId } = {}) {
-  const normalizedOrderId = normalizeOptionalString({ value: orderId, field: "orderId" })
-  const normalizedClientId = normalizeOptionalString({ value: clientId, field: "clientId" })
+export function createOrderDetailQuery({ orderId,
+  clientId } = {}) {
+  const normalizedOrderId = normalizeOptionalString({ value: orderId,
+    field: "orderId" })
+  const normalizedClientId = normalizeOptionalString({ value: clientId,
+    field: "clientId" })
   if (normalizedOrderId === undefined && normalizedClientId === undefined) {
     throw new TypeError("Bitunix Futures order detail requires orderId or clientId")
   }
@@ -330,8 +376,10 @@ export function createOrderDetailQuery({ orderId, clientId } = {}) {
 export function createHistoryTradesQuery(input = {}) {
   return compactQuery({
     symbol: input.symbol === undefined ? undefined : normalizeSymbol({ symbol: input.symbol }),
-    orderId: normalizeOptionalString({ value: input.orderId, field: "orderId" }),
-    positionId: normalizeOptionalString({ value: input.positionId, field: "positionId" }),
+    orderId: normalizeOptionalString({ value: input.orderId,
+      field: "orderId" }),
+    positionId: normalizeOptionalString({ value: input.positionId,
+      field: "positionId" }),
     ...normalizeTimeRange({
       startTime: input.startTime,
       endTime: input.endTime,
@@ -343,7 +391,8 @@ export function createHistoryTradesQuery(input = {}) {
 export function createPendingTpSlQuery(input = {}) {
   return compactQuery({
     symbol: input.symbol === undefined ? undefined : normalizeSymbol({ symbol: input.symbol }),
-    positionId: normalizeOptionalString({ value: input.positionId, field: "positionId" }),
+    positionId: normalizeOptionalString({ value: input.positionId,
+      field: "positionId" }),
     side: input.side === undefined ? undefined : normalizePositiveInteger({
       value: input.side,
       field: "side",
