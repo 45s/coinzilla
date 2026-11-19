@@ -1036,6 +1036,7 @@ export class BitunixSpotBroker {
         method: "GET",
         path: API.lastPrice,
         queryParams: { symbol: normalizedSymbol },
+        authenticated: false,
       })
       assertDecimalString({
         value: response.data,

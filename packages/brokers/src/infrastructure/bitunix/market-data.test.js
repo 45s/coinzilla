@@ -3,6 +3,7 @@ import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
 
 const DEPTH_PATH = "/api/spot/v1/market/depth"
+const LAST_PRICE_PATH = "/api/spot/v1/market/last_price"
 const KLINE_PATH = "/api/spot/v1/market/kline"
 const KLINE_HISTORY_PATH = "/api/spot/v1/market/kline/history"
 
@@ -46,6 +47,35 @@ const validKline = {
   close: "105.00",
   ts: "2026-11-17T12:00:00Z",
 }
+
+
+test("Bitunix Spot price reads use the unsigned public REST path", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [LAST_PRICE_PATH]: "123.4500",
+    },
+  })
+
+  const result = await broker.getPrices({
+    symbol: "btcusdt",
+  })
+
+  assert.equal(result.ok, true, "a valid public ticker response must normalize successfully")
+  assert.deepEqual(result.data, {
+    symbol: "BTCUSDT",
+    price: "123.4500",
+  }, "the public ticker result must preserve the exact exchange decimal string")
+  assert.deepEqual(calls[0], {
+    method: "GET",
+    path: LAST_PRICE_PATH,
+    options: {
+      queryParams: {
+        symbol: "BTCUSDT",
+      },
+      authenticated: false,
+    },
+  }, "public ticker reads must not send API credentials or signatures")
+})
 
 test("Bitunix Spot order book reads require and forward the caller-selected precision", async () => {
   const depth = {
