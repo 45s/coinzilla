@@ -2132,64 +2132,43 @@ function createInvalidTaxFilingQueries() {
     endTime: "2024-01-02T00:00:00Z",
   }
   return [
+    ...createInvalidTaxFilingDateQueries({ valid }),
+    ...createInvalidTaxFilingPaginationQueries({ valid }),
+    ...createInvalidTaxFilingTypeQueries({ valid }),
+  ]
+}
+
+function createInvalidTaxFilingDateQueries({ valid }) {
+  return [
     null,
     {},
-    {
-      ...valid,
-      startTime: "2024-01-01",
-    },
-    {
-      ...valid,
-      endTime: "2024-01-02T00:00:00+01:00",
-    },
-    {
-      ...valid,
-      startTime: "not-a-date",
-    },
-    {
-      ...valid,
-      startTime: "2024-02-30T00:00:00Z",
-    },
-    {
-      ...valid,
-      startTime: "2024-01-03T00:00:00Z",
-    },
+    { ...valid, startTime: "2024-01-01" },
+    { ...valid, endTime: "2024-01-02T00:00:00+01:00" },
+    { ...valid, startTime: "not-a-date" },
+    { ...valid, startTime: "2024-02-30T00:00:00Z" },
+    { ...valid, startTime: "2024-01-03T00:00:00Z" },
     {
       startTime: "2024-01-01T00:00:00Z",
       endTime: "2025-01-02T00:00:00Z",
     },
-    {
-      ...valid,
-      page: 0,
-    },
-    {
-      ...valid,
-      page: 1.5,
-    },
-    {
-      ...valid,
-      pageSize: 0,
-    },
-    {
-      ...valid,
-      pageSize: 1001,
-    },
-    {
-      ...valid,
-      dataTypeCodes: "BUY_ORDER",
-    },
-    {
-      ...valid,
-      dataTypeCodes: [""],
-    },
-    {
-      ...valid,
-      dataTypeCodes: [null],
-    },
-    {
-      ...valid,
-      dataTypeCodes: null,
-    },
+  ]
+}
+
+function createInvalidTaxFilingPaginationQueries({ valid }) {
+  return [
+    { ...valid, page: 0 },
+    { ...valid, page: 1.5 },
+    { ...valid, pageSize: 0 },
+    { ...valid, pageSize: 1001 },
+  ]
+}
+
+function createInvalidTaxFilingTypeQueries({ valid }) {
+  return [
+    { ...valid, dataTypeCodes: "BUY_ORDER" },
+    { ...valid, dataTypeCodes: [""] },
+    { ...valid, dataTypeCodes: [null] },
+    { ...valid, dataTypeCodes: null },
   ]
 }
 
