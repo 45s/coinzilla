@@ -1561,32 +1561,6 @@ function recordBrokerApiOperationFailure({
 }
 
 
-function recordBrokerApiOperationFailure({
-  method,
-  args,
-  error,
-  startedAt,
-  now,
-  results,
-  secrets,
-  onProgress,
-}) {
-  recordBrokerApiFailure({
-    method,
-    args,
-    error,
-    startedAt,
-    now,
-    results,
-    secrets,
-  })
-  emitBrokerApiProgress({
-    method,
-    status: "FAIL",
-    onProgress,
-  })
-}
-
 async function runBrokerApiOperation({
   broker,
   definition,

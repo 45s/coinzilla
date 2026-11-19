@@ -676,7 +676,10 @@ function createBrokerApiDiagnosticRestClientFactory({ calls, expectedApiKey, inv
     return {
       async request(request) {
         calls.push(request)
-        return createBrokerApiDiagnosticResponse({ request, invalidSchema })
+        return createBrokerApiDiagnosticResponse({
+          request,
+          invalidSchema,
+        })
       },
     }
   }
