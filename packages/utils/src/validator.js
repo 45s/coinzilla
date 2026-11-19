@@ -5,7 +5,8 @@ import {
   VR,
 } from './validation.js'
 
-/** @deprecated Declarative validation rules are compatibility-only; use `ensure`. */\nexport { VR }
+/** @deprecated Declarative validation rules are compatibility-only; use `ensure`. */
+export { VR }
 
 /**
  * Public validation facade retained for API compatibility.
@@ -13,7 +14,8 @@ import {
  */
 export class Validator {
   /**
-   * Validate declarative [value, rules, fieldName?] tuples.\n   * @deprecated Use `ensure` for new generic input assertions.
+   * Validate declarative [value, rules, fieldName?] tuples.
+   * @deprecated Use `ensure` for new generic input assertions.
    * @param {{ items: Array<[unknown, string[], string?]>, isSoft?: boolean }} options
    * @returns {Array<{ value: unknown, msgs: string[], fieldName?: string }> | undefined}
    * @throws {Error|TypeError|Array} Invalid input, unsupported rules, or non-boolean isSoft throws; hard mode throws the collected errors array.
