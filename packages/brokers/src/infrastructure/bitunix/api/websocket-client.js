@@ -197,6 +197,11 @@ export class BitunixSpotWebSocketClient {
   #apiKey
   #apiSecret
   #transport
+  #transportFactory
+  #connectTimeout
+  #closeTimeout
+  #connectPromise = null
+  #disconnectPromise = null
   #now
   #nonceFactory
   #idFactory
@@ -238,23 +243,16 @@ export class BitunixSpotWebSocketClient {
     this.requestTimeout = requestTimeout
     this.#apiKey = apiKey
     this.#apiSecret = apiSecret
+    this.#transportFactory = transportFactory
+    this.#connectTimeout = connectTimeout
+    this.#closeTimeout = closeTimeout
     this.#now = now
     this.#nonceFactory = nonceFactory
     this.#idFactory = idFactory
     this.#setTimeout = setTimeoutFn
     this.#clearTimeout = clearTimeoutFn
 
-    this.#transport = transportFactory({
-      url,
-      ...(connectTimeout === undefined ? {} : { connectTimeout }),
-      ...(closeTimeout === undefined ? {} : { closeTimeout }),
-    })
-    validateTransport({ transport: this.#transport })
-    this.#removeListeners = [
-      this.#transport.onMessage((message) => this.#handleMessage(message)),
-      this.#transport.onClose((event) => this.#handleClose(event)),
-      this.#transport.onError((error) => this.#handleError(error)),
-    ].filter((remove) => typeof remove === "function")
+    this.#createTransport()
   }
 
   get state() {
@@ -267,16 +265,40 @@ export class BitunixSpotWebSocketClient {
 
   /** @returns {Promise<BitunixSpotWebSocketClient>} */
   async connect() {
+    if (this.#disconnectPromise) {
+      throw new BitunixWebSocketError({
+        message: "Cannot reconnect Bitunix Spot WebSocket client while disconnect cleanup is in progress",
+        kind: "connection",
+      })
+    }
     if (this.#state === "open") {
       return this
     }
-    if (this.#state !== "idle") {
+    if (this.#connectPromise) {
+      return this.#connectPromise
+    }
+    if (this.#state === "closed") {
+      try {
+        this.#createTransport()
+      } catch (error) {
+        throw new BitunixWebSocketError({
+          message: "Bitunix Spot WebSocket transport could not be recreated",
+          kind: "connection",
+          cause: error,
+        })
+      }
+    } else if (this.#state !== "idle") {
       throw new BitunixWebSocketError({
         message: `Cannot connect Bitunix Spot WebSocket client in state: ${this.#state}`,
         kind: "connection",
       })
     }
     this.#state = "connecting"
+    this.#connectPromise = Promise.resolve().then(() => this.#connectTransport())
+    return this.#connectPromise
+  }
+
+  async #connectTransport() {
     try {
       await this.#transport.connect()
       if (this.#state === "closed") {
@@ -299,6 +321,8 @@ export class BitunixSpotWebSocketClient {
       this.#rejectPending(connectionError)
       this.#removeTransportListeners()
       throw connectionError
+    } finally {
+      this.#connectPromise = null
     }
   }
 
@@ -397,19 +421,31 @@ export class BitunixSpotWebSocketClient {
 
   /** Close the connection and reject every unresolved request. */
   async disconnect() {
+    if (this.#disconnectPromise) {
+      return this.#disconnectPromise
+    }
     if (this.#state === "closed") {
-      return
+      return undefined
     }
     this.#state = "closed"
     this.#rejectPending(new BitunixWebSocketError({
       message: "Bitunix Spot WebSocket connection closed by client",
       kind: "connection",
     }))
-    try {
-      await this.#transport.close()
-    } finally {
-      this.#removeTransportListeners()
-    }
+    const transport = this.#transport
+    const removeListeners = this.#removeListeners
+    this.#removeListeners = []
+    this.#disconnectPromise = (async () => {
+      try {
+        await transport.close()
+      } finally {
+        for (const remove of removeListeners) {
+          remove()
+        }
+        this.#disconnectPromise = null
+      }
+    })()
+    return this.#disconnectPromise
   }
 
   #request({ method, params }) {
@@ -523,6 +559,20 @@ export class BitunixSpotWebSocketClient {
         }))
       }
     })
+  }
+
+  #createTransport() {
+    this.#transport = this.#transportFactory({
+      url: this.url,
+      ...(this.#connectTimeout === undefined ? {} : { connectTimeout: this.#connectTimeout }),
+      ...(this.#closeTimeout === undefined ? {} : { closeTimeout: this.#closeTimeout }),
+    })
+    validateTransport({ transport: this.#transport })
+    this.#removeListeners = [
+      this.#transport.onMessage((message) => this.#handleMessage(message)),
+      this.#transport.onClose((event) => this.#handleClose(event)),
+      this.#transport.onError((error) => this.#handleError(error)),
+    ].filter((remove) => typeof remove === "function")
   }
 
   #handleMessage(message) {

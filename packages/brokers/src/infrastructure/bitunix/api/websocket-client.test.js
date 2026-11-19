@@ -508,3 +508,92 @@ test("Bitunix Spot WebSocket client wraps handshake failures and preserves their
     "failed connection setup must remove the error listener during cleanup",
   )
 })
+
+
+test("Bitunix Spot WebSocket client reconnects the same instance with a fresh transport", async () => {
+  const transports = []
+  const client = new BitunixSpotWebSocketClient({
+    apiKey: "key",
+    apiSecret: "secret",
+    now: () => 1700000000000,
+    nonceFactory: () => `nonce-${transports.length}`,
+    idFactory: () => `request-${transports.length}`,
+    transportFactory: () => {
+      const transport = new FakeTransport()
+      transports.push(transport)
+      return transport
+    },
+  })
+
+  await client.connect()
+  assert.equal(transports.length, 1, "the initial connection must create exactly one transport")
+
+  const interruptedRequest = client.getAccount()
+  assert.equal(transports[0].sent.length, 1, "the first account RPC must be sent exactly once")
+  await transports[0].close()
+  await assert.rejects(
+    interruptedRequest,
+    /connection.*closed/i,
+    "a remote close must reject the in-flight RPC rather than leave it pending",
+  )
+  assert.equal(client.state, "closed", "a remote close must expose the closed state before reconnection")
+
+  const firstReconnect = client.connect()
+  const concurrentReconnect = client.connect()
+  await Promise.all([firstReconnect, concurrentReconnect])
+  assert.equal(transports.length, 2, "concurrent reconnect calls must share one newly created transport")
+  assert.equal(transports[1].sent.length, 0, "an interrupted RPC must never be replayed on the replacement connection")
+
+  const nextRequest = client.getAccount()
+  assert.equal(transports[1].sent.length, 1, "a new RPC must use the replacement transport exactly once")
+  transports[1].receive({
+    id: "request-2",
+    code: "0",
+    msg: "success",
+    data: [{
+      coin: "BTC",
+      balance: "1.25",
+    }],
+  })
+  assert.deepEqual(
+    await nextRequest,
+    [{
+      coin: "BTC",
+      balance: "1.25",
+    }],
+    "the reconnected client must resolve a fresh request using the new transport",
+  )
+
+  await client.disconnect()
+})
+
+
+test("Bitunix Spot WebSocket client can reconnect after a synchronous transport connect failure", async () => {
+  const transports = []
+  const client = new BitunixSpotWebSocketClient({
+    apiKey: "key",
+    apiSecret: "secret",
+    transportFactory: () => {
+      const transport = new FakeTransport()
+      if (transports.length === 0) {
+        transport.connect = () => {
+          throw new Error("synchronous transport connect failure")
+        }
+      }
+      transports.push(transport)
+      return transport
+    },
+  })
+
+  await assert.rejects(client.connect(), (error) => {
+    assert.ok(error instanceof BitunixWebSocketError, "synchronous transport failures must use the broker-owned error type")
+    assert.equal(error.cause?.message, "synchronous transport connect failure", "the synchronous transport failure must remain the native cause")
+    return true
+  })
+  assert.equal(client.state, "closed", "a synchronous connect failure must leave the client closed")
+
+  await client.connect()
+  assert.equal(transports.length, 2, "a subsequent connect must create a fresh transport after the failed attempt")
+  assert.equal(client.state, "open", "the client must recover after a synchronous transport connect failure")
+  await client.disconnect()
+})
