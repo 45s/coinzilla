@@ -87,6 +87,7 @@ test("keeps RS-owned active orders out of Conservative policy inputs", async () 
     clientOrderId: "cg-buy-1",
     side: "BUY",
   }
+  dependencies.state.shutdownBuyGate = false
   dependencies.state.paused.delete(symbol)
   dependencies.state.recoveryManagedPausedMarkets.delete(symbol)
   dependencies.isStopping = () => false
@@ -108,7 +109,11 @@ test("keeps RS-owned active orders out of Conservative policy inputs", async () 
   const result = await evaluate({ symbol })
 
   assert.equal(result.ok, true)
-  assert.deepEqual(receivedOrders, [cgOrder])
+  assert.deepEqual(
+    receivedOrders,
+    [cgOrder],
+    "Conservative policy must receive its own active orders and exclude RS-owned orders",
+  )
 })
 
 test("evaluates RS-owned symbols through the shared transition when CG has no route", async () => {
@@ -138,7 +143,10 @@ test("does not evaluate RS while the shared engine performs a preflight", async 
   let recoverySellerCalls = 0
   dependencies.evaluateRecoverySellerTransition = async () => {
     recoverySellerCalls += 1
-    return { ok: true, data: {} }
+    return {
+      ok: true,
+      data: {},
+    }
   }
   const evaluate = createLatestTransitionEvaluator(dependencies)
 
