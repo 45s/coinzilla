@@ -730,28 +730,34 @@ function createWithdrawalDiagnosticResponse({ invalidSchema = false } = {}) {
   }
 }
 
+function createMarketDiagnosticResponse({ invalidSchema }) {
+  return {
+    data: [{
+      id: "1",
+      base: "BTC",
+      quote: "USDT",
+      basePrecision: "8",
+      quotePrecision: "8",
+      minPrice: "0.0001",
+      minVolume: "0.0001",
+      ...(invalidSchema ? {} : { isOpen: "1" }),
+      isHot: "0",
+      isRecommend: "0",
+      isShow: "1",
+      tradeArea: "Spot",
+      sort: "1",
+      openTime: "2026-01-01T00:00:00Z",
+      precisions: ["0.0001"],
+      futureField: "must-not-be-persisted",
+    }],
+  }
+}
+
 function createBrokerApiDiagnosticResponse({ request, invalidSchema }) {
   if (request.path === "/api/spot/v1/common/coin_pair/list") {
-    return {
-      data: [{
-        id: "1",
-        base: "BTC",
-        quote: "USDT",
-        basePrecision: "8",
-        quotePrecision: "8",
-        minPrice: "0.0001",
-        minVolume: "0.0001",
-        ...(invalidSchema ? {} : { isOpen: "1" }),
-        isHot: "0",
-        isRecommend: "0",
-        isShow: "1",
-        tradeArea: "Spot",
-        sort: "1",
-        openTime: "2026-01-01T00:00:00Z",
-        precisions: ["0.0001"],
-        futureField: "must-not-be-persisted",
-      }],
-    }
+    return createMarketDiagnosticResponse({
+      invalidSchema,
+    })
   }
   if (request.path === "/api/spot/v1/market/last_price") {
     return {
