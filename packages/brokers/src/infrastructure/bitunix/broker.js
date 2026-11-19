@@ -1173,7 +1173,7 @@ export class BitunixSpotBroker extends CoreBroker {
         errors: [error],
         mutationOutcome: outcome,
         cancellationOutcome: cancelAcknowledged ||
-          (requestDispatched && outcome === "OUTCOME_UNKNOWN")
+          (requestDispatched && outcome !== "NOT_SENT")
           ? "OUTCOME_UNKNOWN"
           : "NOT_SENT",
       })
