@@ -463,7 +463,8 @@ async function executeFundsMutation({
   if (!config.allowLiveFundsMutations) {
     return unsupportedMutationResult({
       operation,
-      reason: `live Bitunix funds mutations are disabled by default; set allowLiveFundsMutations: true only after independent funds-operation authorization`,
+      reason: "live Bitunix funds mutations are disabled by default; " +
+        "set allowLiveFundsMutations: true only after independent funds-operation authorization",
     })
   }
 
@@ -792,7 +793,17 @@ async function cancelOpenOrdersForSymbol({ broker, symbol, orders }) {
 
 export class BitunixSpotBroker extends CoreBroker {
   /**
-   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, allowLiveOrderMutations?: boolean, allowLiveFundsMutations?: boolean, logger?: object, dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient}}} input
+   * @param {{
+ *   apiKey: string,
+ *   apiSecret: string,
+ *   tradingMode: "live",
+ *   baseUrl?: string,
+ *   requestTimeout?: number,
+ *   allowLiveOrderMutations?: boolean,
+ *   allowLiveFundsMutations?: boolean,
+ *   logger?: object,
+ *   dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient},
+ * }} input
    */
   constructor(input = {}) {
     const {
@@ -1237,7 +1248,17 @@ export class BitunixSpotBroker extends CoreBroker {
    *
    * Requires allowLiveFundsMutations: true. No automatic retry is performed.
    *
-   * @param {{coin: string, amount: string, toType: "uid"|"phone"|"email", toUid?: string|number, toPhoneCountryCode?: string, toPhoneNumber?: string, toEmail?: string, outBizId?: string, remark?: string}} input
+   * @param {{
+ *   coin: string,
+ *   amount: string,
+ *   toType: "uid"|"phone"|"email",
+ *   toUid?: string|number,
+ *   toPhoneCountryCode?: string,
+ *   toPhoneNumber?: string,
+ *   toEmail?: string,
+ *   outBizId?: string,
+ *   remark?: string,
+ * }} input
    * @returns {Promise<import("@coinzilla/utils").Result>}
    */
   async transferInternally(input = {}) {
