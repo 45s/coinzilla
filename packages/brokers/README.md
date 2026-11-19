@@ -295,7 +295,7 @@ Bitunix documents Spot WebSocket as authenticated request/response RPC: every re
 Create packages/brokers/.env.development locally (never commit it). Credentials are optional for public-only checks:
 
 ~~~dotenv
-# Optional: uncomment and configure both to enable private account/open-order reads and authenticated WebSocket RPC.
+# Optional: uncomment and configure both to enable private account, open-order, and order-history reads plus authenticated WebSocket RPC.
 # BITUNIX_API_KEY=your_diagnostic_api_key
 # BITUNIX_API_SECRET=your_api_secret
 # Optional: leave unset to skip REST and WebSocket depth checks; choose only a value you have verified for your market.
