@@ -120,8 +120,9 @@ function assertFailedHealthReport({ result, calls }) {
   assert.equal(result.report.summary.failed, 1, "the pushed report must preserve the failed Bitunix operation")
   assert.equal(result.healthCheck.healthy, false, "a failed required Bitunix probe must fail the overall health check")
   const publicError = result.report.results.find((item) => item.operation === "user.account").error
-  assert.equal(publicError.message, "[error message withheld from public report]", "public reports must withhold free-form private error text")
-  assert.equal(publicError.cause.message, "[nested error message withheld from public report]", "nested error messages must also be withheld")
+  assert.equal(publicError.message, undefined, "the public allowlist must omit free-form private error text")
+  assert.equal(publicError.cause, undefined, "the public allowlist must omit nested error details")
+  assert.equal(publicError.exchangeCode, "ACCOUNT_READ_FAILED", "the public allowlist must retain structured exchange error codes")
   assert.equal(JSON.stringify(result.report).includes("private-uid"), false, "public reports must not leak account identifiers")
   assert.equal(JSON.stringify(result.report).includes("123.456"), false, "public reports must not leak balances")
   assert.equal(calls.some((args) => args[0] === "push"), true, "a sanitized failure report must still be pushed")
@@ -168,7 +169,7 @@ test("publishes only a sanitized report from a fresh diagnostics branch and retu
     assert.equal(localReport.includes("123.456"), false, "the local report must apply the same account-value redaction as the committed report")
     assert.equal(localReport.includes("private-uid"), false, "local event errors must not persist account identifiers")
     assert.equal(localReport.includes("private error message"), false, "local diagnostic reports must not retain free-form error messages")
-    assert.equal(JSON.stringify(result.report.events).includes("private-uid"), false, "published event errors must not expose account identifiers")
+    assert.equal(Object.hasOwn(result.report, "events"), false, "the public allowlist must exclude raw diagnostic events")
     assert.equal(JSON.stringify(result.report.events).includes("123.456"), false, "published event errors must not expose balance values")
     assert.equal(result.report.events[0].error.message, "[error message withheld]", "published event errors must retain only a safe placeholder")
     assert.equal(result.reportPath.endsWith("bitunix-health-20261119T083000000Z.json"), true, "the result must identify the report path to inspect")
@@ -264,7 +265,7 @@ test("push failure still switches the local checkout back to develop", async () 
     })
 
     assert.equal(result.exitCode, 1, "a failed report push must make the command fail rather than claiming publication")
-    assert.match(result.pushError, /simulated push failure/, "the push failure must remain visible for troubleshooting")
+    assert.equal(result.pushError, "[error message withheld]", "Git failure output must not expose free-form remote error text")
     assert.equal(result.pushError.includes(apiSecret), false, "Git error text must not leak configured credentials into terminal output")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "a failed push must not leave the user's checkout on the report branch")
   } finally {
@@ -289,7 +290,10 @@ test("publishes failed API diagnostics and returns a failing exit code after cle
       },
       now: () => fixedTimestamp,
     })
-    assertFailedHealthReport({ result, calls })
+    assertFailedHealthReport({
+      result,
+      calls,
+    })
   } finally {
     await rm(repositoryRoot, {
       recursive: true,
