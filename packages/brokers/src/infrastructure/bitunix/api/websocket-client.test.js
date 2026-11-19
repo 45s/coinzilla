@@ -284,6 +284,35 @@ test("Bitunix Spot WebSocket client dispatches every documented read-only RPC me
     ],
     "every documented Spot read must use its official RPC method name",
   )
+  assert.equal(transport.sent[8].params.symbol, "BTCUSDT", "current-order RPC must preserve its symbol filter")
+  assert.deepEqual(
+    Object.fromEntries(["symbol", "page", "pageSize", "startTime", "endTime", "status", "side", "type"].map((key) => [
+      key,
+      transport.sent[9].params[key],
+    ])),
+    {
+      symbol: "BTCUSDT",
+      page: 2,
+      pageSize: 25,
+      startTime: "2026-01-01T00:00:00Z",
+      endTime: "2026-01-02T00:00:00Z",
+      status: "3",
+      side: "2",
+      type: "1",
+    },
+    "order-history RPC must preserve documented pagination and filter arguments",
+  )
+  assert.deepEqual(
+    {
+      orderId: transport.sent[10].params.orderId,
+      symbol: transport.sent[10].params.symbol,
+    },
+    {
+      orderId: "123456",
+      symbol: "BTCUSDT",
+    },
+    "matching-order RPC must preserve the exact exchange order ID and symbol",
+  )
 
   for (let index = 0; index < pending.length; index += 1) {
     transport.receive({
@@ -369,6 +398,31 @@ test("Bitunix Spot WebSocket client validates order-history and matching-order R
     "matching-order lookup requires an exchange order ID",
   )
   assert.equal(transport.sent.length, 0, "invalid order RPC parameters must not reach the socket")
+  await client.disconnect()
+})
+
+test("Bitunix Spot WebSocket order history rejects unknown fields and reversed time windows", async () => {
+  const { client, transport } = createClient()
+  await client.connect()
+
+  assert.throws(
+    () => client.getOrderHistory({
+      symbol: "BTCUSDT",
+      cursor: "next",
+    }),
+    /does not support fields/i,
+    "unknown order-history fields must not be silently ignored",
+  )
+  assert.throws(
+    () => client.getOrderHistory({
+      symbol: "BTCUSDT",
+      startTime: "2026-01-02T00:00:00Z",
+      endTime: "2026-01-01T00:00:00Z",
+    }),
+    /startTime.*endTime/i,
+    "a reversed order-history time window must be rejected",
+  )
+  assert.equal(transport.sent.length, 0, "invalid order-history windows must not reach the socket")
   await client.disconnect()
 })
 
