@@ -9,9 +9,6 @@ export function requireArray({ value, name }) {
   let isArray
   try {
     isArray = Array.isArray(value)
-    if (isArray) {
-      value.length
-    }
   } catch {
     isArray = false
   }
@@ -35,7 +32,17 @@ export function requireNonEmptyArray({ value, name }) {
     value,
     name,
   })
-  if (array.length === 0) {
+  let length
+  try {
+    length = array.length
+  } catch {
+    throw typeError({
+      name,
+      expectation: "a readable array",
+      value,
+    })
+  }
+  if (length === 0) {
     throw typeError({
       name,
       expectation: "a non-empty array",
@@ -60,7 +67,17 @@ export function requireStrings({ value, name, nonEmpty = false }) {
         value,
         name,
       })
-  for (let index = 0; index < array.length; index += 1) {
+  let length
+  try {
+    length = array.length
+  } catch {
+    throw typeError({
+      name,
+      expectation: "a readable array",
+      value,
+    })
+  }
+  for (let index = 0; index < length; index += 1) {
     const elementName = `${name}[${index}]`
     let element
     try {
@@ -100,8 +117,18 @@ export function requireUnique({ value, name }) {
     value,
     name,
   })
+  let length
+  try {
+    length = array.length
+  } catch {
+    throw typeError({
+      name,
+      expectation: "a readable array",
+      value,
+    })
+  }
   const firstIndexes = new Map()
-  for (let index = 0; index < array.length; index += 1) {
+  for (let index = 0; index < length; index += 1) {
     let element
     try {
       element = array[index]
@@ -126,12 +153,14 @@ export function requireUnique({ value, name }) {
  * @returns {unknown}
  */
 export function requireOneOf({ value, values, name }) {
+  let validArray
   try {
-    if (!Array.isArray(values) || values.length === 0) {
-      throw new TypeError("values must be a non-empty array")
-    }
+    validArray = Array.isArray(values) && values.length > 0
   } catch {
-    throw new TypeError("values must be a non-empty readable array")
+    validArray = false
+  }
+  if (!validArray) {
+    throw new TypeError("values must be a non-empty array")
   }
   let includesValue
   try {
