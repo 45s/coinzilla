@@ -20,6 +20,7 @@ const testEventPublisher = Object.freeze({
   }),
 })
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
+import { assertRecoverySellerEvaluatorConfigured } from "./harvester-runtime-helpers.js"
 
 // Include the source file in every reporter test name so failures are identifiable
 // even when the spec reporter output is copied without its surrounding file header.
@@ -558,6 +559,27 @@ const createFill = ({
   })
 }
 
+
+test("rejects configured RS routes without a production evaluator during startup preflight", () => {
+  assert.throws(() => assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs: {
+      BTCUSDT: {
+        enabled: true,
+      },
+    },
+  }), /before broker connection/)
+  assert.doesNotThrow(() => assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs: {},
+  }))
+  assert.doesNotThrow(() => assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs: {
+      BTCUSDT: {
+        enabled: true,
+      },
+    },
+    evaluateRecoverySellerTransition: async () => ({ ok: true }),
+  }))
+})
 
 test("rejects enabled Telegram operator control without a bot token before connecting to Binance", async () => {
   const config = {
