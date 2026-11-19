@@ -55,6 +55,106 @@ function toCycleResult(operation) {
   }
 }
 
+function createGetOrCreateCycle({ cycleMap, createId } = {}) {
+  return ({ marketId: inputMarketId, hasExistingRecoveryState = false } = {}) =>
+    toCycleResult(() => {
+      const marketId = assertMarketId(inputMarketId)
+      const existing = cycleMap.get(marketId)
+      if (existing) {
+        return existing
+      }
+      if (hasExistingRecoveryState) {
+        throw new Error("An existing RS Position or order has no cycle state")
+      }
+      const cycleState = createRecoverySellerCycleState({
+        cycleId: createId(),
+        positionId: createPositionId({
+          marketId,
+          strategyId: StrategyId.RECOVERY_SELLER,
+        }),
+      })
+      cycleMap.set(marketId, cycleState)
+      return cycleState
+    })
+}
+
+function createReserveSell({ cycleMap } = {}) {
+  return ({
+    marketId: inputMarketId,
+    cycleId,
+    orderIdentity,
+    durableSubmissionIntent,
+  } = {}) => toCycleResult(() => {
+    const marketId = assertMarketId(inputMarketId)
+    if (durableSubmissionIntent !== true) {
+      throw new Error("Recovery Seller sole SELL reservation requires a durable submission intent")
+    }
+    const current = getCurrentCycle({
+      cycleMap,
+      marketId,
+      cycleId,
+    })
+    const next = recordRecoverySellerCycleSellSubmission({
+      state: current,
+      orderIdentity,
+    })
+    cycleMap.set(marketId, next)
+    return next
+  })
+}
+
+function createMarkSellUnknown({ cycleMap } = {}) {
+  return ({ marketId: inputMarketId, cycleId } = {}) => toCycleResult(() => {
+    const marketId = assertMarketId(inputMarketId)
+    const current = getCurrentCycle({
+      cycleMap,
+      marketId,
+      cycleId,
+    })
+    const next = markRecoverySellerCycleSellUnknown({
+      state: current,
+    })
+    cycleMap.set(marketId, next)
+    return next
+  })
+}
+
+function createReconcileSell({ cycleMap } = {}) {
+  return (input = {}) => toCycleResult(() => {
+    const marketId = assertMarketId(input.marketId)
+    const current = getCurrentCycle({
+      cycleMap,
+      marketId,
+      cycleId: input.cycleId,
+    })
+    const next = reconcileRecoverySellerCycleSell({
+      state: current,
+      orderIdentity: input.orderIdentity,
+      terminalOrderStatus: input.terminalOrderStatus,
+      reconciliationComplete: input.reconciliationComplete,
+      profitabilityEligible: input.profitabilityEligible,
+    })
+    cycleMap.set(marketId, next)
+    return next
+  })
+}
+
+function createStartNextCycle({ cycleMap, createId } = {}) {
+  return ({ marketId: inputMarketId } = {}) => toCycleResult(() => {
+    const marketId = assertMarketId(inputMarketId)
+    const previousState = getCurrentCycle({
+      cycleMap,
+      marketId,
+    })
+    const next = startNextRecoverySellerCycle({
+      previousState,
+      nextCycleId: createId(),
+    })
+    cycleMap.set(marketId, next)
+    return next
+  })
+}
+
 export function createRecoverySellerCycleCoordinator({
   sharedState,
   createId = randomUUID,
@@ -65,123 +165,27 @@ export function createRecoverySellerCycleCoordinator({
   const cycleMap = resolveCycleMap({
     sharedState,
   })
-
-  function getOrCreateCycle({
-    marketId: inputMarketId,
-    hasExistingRecoveryState = false,
-  } = {}) {
-    return toCycleResult(() => {
-      const marketId = assertMarketId(inputMarketId)
-      const existing = cycleMap.get(marketId)
-      if (existing) {
-        return existing
-      }
-      if (hasExistingRecoveryState) {
-        throw new Error("An existing RS Position or order has no cycle state")
-      }
-      const cycleId = createId()
-      const positionId = createPositionId({
-        marketId,
-        strategyId: StrategyId.RECOVERY_SELLER,
-      })
-      const cycleState = createRecoverySellerCycleState({
-        cycleId,
-        positionId,
-      })
-      cycleMap.set(marketId, cycleState)
-      return cycleState
-    })
-  }
-
-  function reserveSell({
-    marketId: inputMarketId,
-    cycleId,
-    orderIdentity,
-    durableSubmissionIntent,
-  } = {}) {
-    return toCycleResult(() => {
-      const marketId = assertMarketId(inputMarketId)
-      if (durableSubmissionIntent !== true) {
-        throw new Error("Recovery Seller sole SELL reservation requires a durable submission intent")
-      }
-      const current = getCurrentCycle({
-        cycleMap,
-        marketId,
-        cycleId,
-      })
-      const next = recordRecoverySellerCycleSellSubmission({
-        state: current,
-        orderIdentity,
-      })
-      cycleMap.set(marketId, next)
-      return next
-    })
-  }
-
-  function markSellUnknown({
-    marketId: inputMarketId,
-    cycleId,
-  } = {}) {
-    return toCycleResult(() => {
-      const marketId = assertMarketId(inputMarketId)
-      const current = getCurrentCycle({
-        cycleMap,
-        marketId,
-        cycleId,
-      })
-      const next = markRecoverySellerCycleSellUnknown({
-        state: current,
-      })
-      cycleMap.set(marketId, next)
-      return next
-    })
-  }
-
-  function reconcileSell(input = {}) {
-    return toCycleResult(() => {
-      const marketId = assertMarketId(input.marketId)
-      const current = getCurrentCycle({
-        cycleMap,
-        marketId,
-        cycleId: input.cycleId,
-      })
-      const next = reconcileRecoverySellerCycleSell({
-        state: current,
-        orderIdentity: input.orderIdentity,
-        terminalOrderStatus: input.terminalOrderStatus,
-        reconciliationComplete: input.reconciliationComplete,
-        profitabilityEligible: input.profitabilityEligible,
-      })
-      cycleMap.set(marketId, next)
-      return next
-    })
-  }
-
-  function startNextCycle({ marketId: inputMarketId } = {}) {
-    return toCycleResult(() => {
-      const marketId = assertMarketId(inputMarketId)
-      const previousState = getCurrentCycle({
-        cycleMap,
-        marketId,
-      })
-      const next = startNextRecoverySellerCycle({
-        previousState,
-        nextCycleId: createId(),
-      })
-      cycleMap.set(marketId, next)
-      return next
-    })
-  }
-
   return Object.freeze({
     getCycleState: ({ marketId: inputMarketId } = {}) => {
       const marketId = assertMarketId(inputMarketId)
       return cycleMap.get(marketId)
     },
-    getOrCreateCycle,
-    reserveSell,
-    markSellUnknown,
-    reconcileSell,
-    startNextCycle,
+    getOrCreateCycle: createGetOrCreateCycle({
+      cycleMap,
+      createId,
+    }),
+    reserveSell: createReserveSell({
+      cycleMap,
+    }),
+    markSellUnknown: createMarkSellUnknown({
+      cycleMap,
+    }),
+    reconcileSell: createReconcileSell({
+      cycleMap,
+    }),
+    startNextCycle: createStartNextCycle({
+      cycleMap,
+      createId,
+    }),
   })
 }
