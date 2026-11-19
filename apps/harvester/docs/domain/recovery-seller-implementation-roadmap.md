@@ -424,3 +424,7 @@ The order-event workflow now resolves immutable OrderRegistry ownership before a
 ### Runtime wiring correction — checkpoint
 
 The first callback composition attempt placed the callback in the options destructuring and caused a startup-module syntax error. GitHub Actions exposed this before delivery. The callback is now composed in the returned engine options, and exact-head targeted verification is rerunning. RS BUY accounting dispatch remains an integration slice; no production RS order execution is enabled.
+
+### Engine callback composition correction — checkpoint
+
+The RS BUY accounting callback is now exposed from the engine-options return object, not the input destructuring. GitHub Actions caught and verified the startup syntax error from the prior attempt. The exact corrected head is under remote targeted and full verification.
