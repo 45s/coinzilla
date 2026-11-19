@@ -585,8 +585,14 @@ test("diagnostics query and sanitize private WebSocket open orders and order his
     page: 1,
     pageSize: 1,
   }, "private order-history RPC must be bounded to one small page")
-  assert.equal(report.results.find((entry) => entry.operation === "order.pending.list").response.type, "array")
-  assert.equal(report.results.find((entry) => entry.operation === "order.history.page").response.type, "array")
+  const openOrdersResult = report.results.find((entry) => entry.operation === "order.pending.list")
+  const orderHistoryResult = report.results.find((entry) => entry.operation === "order.history.page")
+  assert.equal(openOrdersResult.response.type, "array")
+  assert.equal(openOrdersResult.response.itemCount, 1)
+  assert.deepEqual(openOrdersResult.response.fields, ["orderId", "symbol"])
+  assert.equal(orderHistoryResult.response.type, "array")
+  assert.equal(orderHistoryResult.response.itemCount, 1)
+  assert.deepEqual(orderHistoryResult.response.fields, ["orderId", "symbol"])
   assert.equal(JSON.stringify(report).includes("private-order-id"), false, "private order IDs must not be persisted in diagnostic reports")
   assert.equal(JSON.stringify(report).includes("private-history-order-id"), false, "private order-history IDs must not be persisted in diagnostic reports")
 })
