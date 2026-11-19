@@ -77,6 +77,7 @@ function createSharedState() {
     recoveryLedgers: new Map(),
     orderRegistry: OrderRegistry.empty(),
     legacyPositions: new Map(),
+    recoverySellerBuyExecutionByCycle: new Map(),
     updateQueue: Promise.resolve(),
   }
 }
