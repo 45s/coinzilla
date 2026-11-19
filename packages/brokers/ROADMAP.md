@@ -12,7 +12,7 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
-**Status: in progress.** PR #1449 is merged; the common method/result/error contract and provider conformance work continue in [PR #1451](https://github.com/45s/coinzilla/pull/1451). Capability-model duplication was reconciled in [PR #1455](https://github.com/45s/coinzilla/pull/1455): Entities owns the shared value contract, while Brokers owns provider-specific declaration evidence. The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md).
+**Status: COMPLETE.** The common method/result/error contract and shared Binance/Bitunix offline conformance suite were merged in [PR #1451](https://github.com/45s/coinzilla/pull/1451), merge `e6d3e60aaaa26ad23705564ffc17f786c995b3dd`. Capability-model ownership was subsequently reconciled in [PR #1455](https://github.com/45s/coinzilla/pull/1455): `@coinzilla/entities` owns the single shared value contract; Brokers owns provider-specific declarations/evidence and re-exports the shared class for compatibility. The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md). This API completion does not resolve Bitunix's separate Harvester admission blockers in [#1185](https://github.com/45s/coinzilla/issues/1185).
 
 ### Ownership boundary
 
@@ -133,15 +133,14 @@ The previous four-state Binance declaration is superseded. The table below is re
 
 The declaration's `environment.selectedMode` is the instance's validated `tradingMode`; its `supportedModes` are exactly `testnet` and `live`. Order mutations additionally require account trading permission and an open, reconciled user-data session. This metadata describes implementation capability, not a promise that a given account, market, endpoint, or exchange environment is available.
 
-## Priority execution plan — Brokers package (2026-11-18)
+## Priority execution plan — Brokers package (2026-11-19)
 
 This section contains only work owned by `@coinzilla/brokers`. Consumer application ports, adapters, routing, and runtime composition are tracked by the owning application.
 
-1. **P1 — Common Broker API (#1446).** Define the package-owned method catalog and result/error contract, align Binance and Bitunix together, and add shared conformance tests. Do not implement a separate Bitunix interface or a consumer-specific application port.
-2. **P1 — Bitunix Spot capability completion (#1185).** Continue only where official Spot contracts and reference implementations establish safe behavior. Preserve explicit unsupported methods until the exchange provides sufficient evidence for identity, quantity semantics, execution completeness, account freshness, mutation outcomes, and environment safety. Do not enable order placement/cancellation while these blockers remain.
-3. **P1 — Binance protocol acceptance and recovery.** Diagnose the outstanding read-only TESTNET handshake/acceptance gap in an eligible environment. Preserve recovery-generation fencing, subscriber acknowledgements, state-changing request gates, and unknown-outcome semantics. Offline tests do not prove live endpoint compatibility.
-4. **P2 — Broker lifecycle maintainability.** Decompose transport, RPC, Streams, and user-data lifecycle modules only in small behavior-preserving slices with characterization tests and cleanup/race coverage.
-5. **Deferred — additional exchanges/transports and performance work.** Add neither a generic transport abstraction nor another exchange without a real broker-contract need and a verified protocol acceptance matrix.
+1. **P1 — Bitunix Spot capability completion (#1185).** Continue only where official Spot contracts and mandatory reference implementations establish safe behavior. Preserve explicit unsupported operations until identity, quantity semantics, execution completeness, account freshness, mutation outcomes, private-event lifecycle and environment safety are source-backed. Do not enable order placement/cancellation while these blockers remain.
+2. **P1 — Binance protocol acceptance and recovery.** Diagnose the outstanding read-only TESTNET handshake/acceptance gap in an eligible environment. Preserve recovery-generation fencing, subscriber acknowledgements, state-changing request gates, and unknown-outcome semantics. Offline tests do not prove live endpoint compatibility.
+3. **P2 — Broker lifecycle maintainability.** Decompose transport, RPC, Streams, and user-data lifecycle modules only in small behavior-preserving slices with characterization tests and cleanup/race coverage.
+4. **Deferred — additional exchanges/transports and performance work.** Add neither a generic transport abstraction nor another exchange without a real broker-contract need and a verified protocol acceptance matrix.
 
 **Completed broker capability references:** normalized candle history/live Kline ([PR #1017](https://github.com/45s/coinzilla/pull/1017)); complete Binance order acknowledgements ([PR #961](https://github.com/45s/coinzilla/pull/961)); explicit Binance environment selection ([PR #841](https://github.com/45s/coinzilla/pull/841)); cancellation outcome classification ([PR #786](https://github.com/45s/coinzilla/pull/786)); and public-stream liveness/recovery ([PR #1272](https://github.com/45s/coinzilla/pull/1272)). Detailed historical evidence remains below.
 
@@ -186,7 +185,7 @@ The common Broker API is complete only when all of the following are true:
 
 ### Overall status
 
-- **Active package task:** [#1446](https://github.com/45s/coinzilla/issues/1446) defines the shared public Broker API for Binance and Bitunix. Phase 0 is complete; method inventory, common contract, provider implementation, and shared conformance tests are in progress in PR #1451.
+- **Completed package contract:** [#1446](https://github.com/45s/coinzilla/issues/1446) is closed after the common Broker API and shared Binance/Bitunix conformance suite merged in [PR #1451](https://github.com/45s/coinzilla/pull/1451). Capability-model ownership was reconciled in PR #1455; `@coinzilla/entities` owns the shared capability value and Brokers owns provider-specific evidence.
 - **Binance:** the native WebSocket API/Streams implementation and its recovery lifecycle remain the mature reference implementation, subject to the separately documented live TESTNET acceptance gap.
 - **Bitunix:** Spot currently provides a partial broker implementation with several provider-specific query operations. Unsupported operations must remain explicit; order mutations and canonical fills remain blocked by [#1185](https://github.com/45s/coinzilla/issues/1185).
 - **Consumer integration:** each consuming application owns its own ports/adapters, provider selection, routing, and runtime lifecycle. Those are not Brokers-package responsibilities.
@@ -334,10 +333,9 @@ The following modules and test suites are review targets because of state owners
 
 ### Next action
 
-- Implement the common Broker API under [#1446](https://github.com/45s/coinzilla/issues/1446), with Binance and Bitunix aligned against the same method catalog and offline contract suite.
-- Keep unsupported methods explicit and truthful; do not turn unsupported behavior into successful empty data or silent no-ops.
-- Continue Bitunix protocol work only when the official Spot contract and mandatory reference audit establish safe behavior. Preserve the mutation/fill blockers in [#1185](https://github.com/45s/coinzilla/issues/1185).
-- Keep live Binance TESTNET acceptance as a separate operational verification item; it does not change the package API design task.
+- Continue Bitunix Spot capability and lifecycle work only when official Spot contracts and the mandatory reference audit establish safe behavior. Preserve all admission blockers in [#1185](https://github.com/45s/coinzilla/issues/1185); do not register Bitunix in Harvester or enable mutations prematurely.
+- Keep unsupported methods explicit and truthful; never turn unsupported behavior into successful empty data or silent no-ops.
+- Keep live Binance TESTNET acceptance as a separate operational verification item; it does not change the completed common API contract.
 
 ### Historical migration verification notes (2026-11-10)
 

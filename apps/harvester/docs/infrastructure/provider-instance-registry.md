@@ -2,7 +2,7 @@
 
 ## Scope
 
-The Harvester composition boundary resolves either the legacy single-Binance environment or an explicit `brokers.instances` list into stable provider-instance/account identities. Each configured account receives its own BrokerPort connection and independent Harvester runtime. The application-owned provider registry remains provider-neutral; this Phase 4 integration does not introduce execution or market-data route tables.
+The Harvester composition boundary resolves either the legacy single-Binance environment or an explicit `brokers.instances` list into stable provider-instance/account identities. Each configured account receives its own BrokerPort connection and independent Harvester runtime. The application-owned provider registry remains provider-neutral. Phase 4 established account isolation; Phase 5 added independent market-data routing; Phase 6 added explicit strategy/market execution routing. These routing contracts are described in [execution-routing.md](./execution-routing.md).
 
 ## Binance identity
 
@@ -81,7 +81,7 @@ brokers: {
 
 The default production adapter-factory map currently registers Binance only. A configured provider type without a registered adapter factory fails before connection. The factory map is injectable for deterministic tests and for future provider adapters; this does not make Bitunix execution available.
 
-Each configured account is started through a separate invocation of the existing Harvester bootstrap. That gives it its own BrokerPort, Portfolio, OrderRegistry, account snapshot/balances, market metadata, user-data state/readiness, market subscriptions, strategy engine and shutdown lifecycle. Every account receives the current Conservative strategy configuration filtered by its own environment; no strategy/symbol execution route table or independent market-data route table exists yet.
+Each configured account is started through a separate invocation of the existing Harvester bootstrap. That gives it its own BrokerPort, Portfolio, OrderRegistry, account snapshot/balances, market metadata, user-data state/readiness, market subscriptions, strategy engine and shutdown lifecycle. Every account receives only the markets assigned by the explicit execution-routing configuration, while market-data subscriptions resolve independently through `marketDataRouting.routes`. The exact route and failure policy is documented in [execution-routing.md](./execution-routing.md).
 
 The first configured account owns the process-wide Telegram Command Center and optional Operational State Store callbacks. Secondary accounts do not create duplicate Telegram command handlers. A startup failure is isolated to that account: its process lock is released when cleanup is confirmed, and already-started or later accounts continue. If failed-account lock cleanup is uncertain, the failure is exposed in `runtime.failedAccounts` and the lock remains owned until confirmed shutdown cleanup.
 
@@ -89,13 +89,11 @@ Bitunix is not registered here until the complete broker and lifecycle acceptanc
 
 The registry can represent multiple named instances of the same or different provider types when an adapter factory is registered. Phase 4 uses explicit account descriptors and separate runtime instances; it does not turn the registry into a route selector. Explicitly out of scope are:
 
-- strategy/symbol execution-route tables (Phase 6);
-- independent market-data routing (Phase 5);
 - automatic selection, fallback, failover or cross-provider retry;
 - cross-account balance aggregation; and
 - process-restart recovery or restoration.
 
-Phase 5 and Phase 6 are implemented in [PR #1455](https://github.com/45s/coinzilla/pull/1455), pending exact-head CI and merge. The default production adapter map is Binance-only; Bitunix remains outside the registry until #1185 is complete.
+Phase 5 independent market-data routing is complete in [PR #1452](https://github.com/45s/coinzilla/pull/1452), and Phase 6 explicit execution routing is complete in [PR #1455](https://github.com/45s/coinzilla/pull/1455), merge commit `fdc951468648efa1fa17c93dd8c3f6ea78a23d84`. The default production adapter map is Binance-only; Bitunix remains outside the registry until #1185 is complete.
 
 ## Verification
 
@@ -143,7 +141,7 @@ The default production adapter-factory map currently registers Binance only. Mul
 
 ## Phase 6 execution-routing contract
 
-**Status:** implementation and offline integration coverage are present in [PR #1455](https://github.com/45s/coinzilla/pull/1455); exact-head CI and merge remain the release gates.
+**Status:** complete and merged in [PR #1455](https://github.com/45s/coinzilla/pull/1455), merge commit `fdc951468648efa1fa17c93dd8c3f6ea78a23d84`; exact-head CI passed.
 
 Each enabled `(strategyId, symbol)` resolves to exactly one configured execution provider instance. Each execution runtime contains only its assigned markets. Market-data source selection is independent and may resolve to a different configured provider instance. Missing, duplicate, disabled-market, unknown-provider and environment-incompatible routes fail closed; there is no implicit default, fallback, failover or cross-provider retry.
 
