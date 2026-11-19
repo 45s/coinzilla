@@ -96,6 +96,7 @@ describe("ensure error semantics", () => {
     expectError([ensure, "nonEmptyString", namedValue(["  ", "symbol"]), "TypeError", /symbol must be a non-empty string/, "non-empty string assertion must reject whitespace"])
     expectError([ensure, "boolean", namedValue([0, "enabled"]), "TypeError", /enabled must be a boolean/, "boolean assertion must reject numeric values"])
     expectError([ensure, "number", namedValue(["2", "price"]), "TypeError", /price must be a finite number/, "number assertion must not coerce strings"])
+    expectError([ensure, "number", namedValue([Infinity, "price"]), "TypeError", /price must be a finite number/, "number assertion must reject infinite values"])
     expectError([ensure, "integer", namedValue([1.5, "count"]), "TypeError", /count must be an integer/, "integer assertion must reject fractional values"])
     expectError([ensure, "safeInteger", namedValue([Number.MAX_SAFE_INTEGER + 1, "count"]), "TypeError", /count must be a safe integer/, "safe integer assertion must reject precision-unsafe values"])
     expectError([ensure, "function", namedValue([null, "callback"]), "TypeError", /callback must be a function/, "function assertion must reject non-callable values"])
@@ -130,6 +131,7 @@ describe("ensure error semantics", () => {
   it("rejects malformed bounds and assertion options", () => {
     expectError([ensure, "integerInRange", rangedValue([1, 2, 1, "count"]), "TypeError", /min must be less than or equal to max/, "integer range must reject reversed bounds"])
     expectError([ensure, "integerInRange", rangedValue([1, 0.5, 2, "count"]), "TypeError", /min must be a safe integer/, "integer range must reject fractional bounds"])
+    expectError([ensure, "integerInRange", rangedValue([1.5, 0, 2, "count"]), "TypeError", /count must be an integer between 0 and 2/, "integer range must reject fractional values"])
     expectError([ensure, "numberInRange", rangedValue([1, NaN, 2, "ratio"]), "TypeError", /min must be a finite number/, "number range must reject non-finite bounds"])
     expectError([ensure, "oneOf", choiceValue(["x", [], "choice"]), "TypeError", /values must be a non-empty array/, "choice assertion must reject an empty allowed-value list"])
     expectError([ensure, "string", null, "TypeError", /options must be an object/, "assertions must reject null options"])
@@ -147,7 +149,7 @@ describe("ensure error semantics", () => {
   })
 })
 
-describe("ensure fluent pipelines", () => {
+describe("ensure normalization pipelines", () => {
   it("normalizes symbol arrays without mutating the source", () => {
     const source = [" btcusdt ", "ethusdt"]
     const result = ensure
@@ -177,7 +179,7 @@ describe("ensure fluent pipelines", () => {
     assert.equal(ensure.chain(namedValue(["COINZILLA", "name"])).lowercase().value, "coinzilla", "lowercase must transform a valid string")
   })
 
-  it("filters intentionally while preserving the original collection", () => {
+})\n\ndescribe("ensure collection pipelines", () => {\n  it("filters intentionally while preserving the original collection", () => {
     const source = [1, 2, 3, 4]
     const result = ensure
       .chain(namedValue([source, "values"]))
@@ -196,13 +198,13 @@ describe("ensure fluent pipelines", () => {
     assert.deepEqual(second.value, ["BTC"], "transformations must return a distinct chain")
   })
 
-  it("rejects invalid pipeline operations with useful errors", () => {
+})\n\ndescribe("ensure pipeline errors", () => {\n  it("rejects invalid pipeline operations with useful errors", () => {
     const emptyArray = ensure.chain(namedValue([[], "values"]))
     const invalidSymbols = ensure.chain(namedValue([["BTC", 2], "symbols"]))
     const blankSymbols = ensure.chain(namedValue([["BTC", " "], "symbols"]))
     const duplicateSymbols = ensure.chain(namedValue([["x", "x"], "symbols"]))
     const stringChain = ensure.chain(namedValue(["x", "name"]))
-    const numberChain = ensure.chain(namedValue([1, "count"]))
+    const numberChain = ensure.chain(namedValue([1, "count"]))\n    const invalidNumberChain = ensure.chain(namedValue([1.5, "count"]))
     const arrayChain = ensure.chain(namedValue([[1], "values"]))
     expectError([emptyArray, "nonEmpty", undefined, "TypeError", /values must be a non-empty array/, "non-empty pipeline must reject empty arrays"])
     expectError([invalidSymbols, "strings", undefined, "TypeError", /symbols\[1\] must be a string/, "pipeline string validation must identify invalid elements"])
@@ -214,7 +216,7 @@ describe("ensure fluent pipelines", () => {
     expectError([arrayChain, "map", transformOptions(null), "TypeError", /transform must be a function/, "map must reject non-function transforms"])
     expectError([arrayChain, "filter", predicateOptions(1), "TypeError", /predicate must be a function/, "filter must reject non-function predicates"])
     expectError([numberChain, "between", rangeOptions([2, 0]), "TypeError", /min must be less than or equal to max/, "pipeline range must reject reversed bounds"])
-    expectError([numberChain, "trim", undefined, "TypeError", /count must be a string/, "trim must reject non-string values"])
+    expectError([invalidNumberChain, "integer", undefined, "TypeError", /count must be an integer/, "pipeline integer must reject fractional values"])\n    expectError([numberChain, "trim", undefined, "TypeError", /count must be a string/, "trim must reject non-string values"])
     expectError([numberChain, "uppercase", undefined, "TypeError", /count must be a string/, "uppercase must reject non-string values"])
     expectError([numberChain, "lowercase", undefined, "TypeError", /count must be a string/, "lowercase must reject non-string values"])
   })
