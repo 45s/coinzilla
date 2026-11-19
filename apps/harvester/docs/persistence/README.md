@@ -4,6 +4,8 @@
 
 **Current implementation:** filled-order history projection merged in [PR #1469](https://github.com/45s/coinzilla/pull/1469) as `39f098000d6c20cb596a9e6700250faa00bbd80e`.
 
+**Forward plan:** [Trading-history persistence roadmap](./trading-history-roadmap.md) defines the phased relational `orders`/`fills` direction and the Phase 1 implementation brief. It is a plan, not a description of delivered schema or fill persistence.
+
 ## Filled-order history
 
 Harvester persists one record in the `harvester_orders` collection when a Harvester-owned order first has a positive cumulative executed quantity. This includes immediately partially/fully filled broker acknowledgements, later partial/final execution updates, and partially filled cancellation outcomes.
@@ -25,6 +27,7 @@ The observer listens to `order.submitted`, `order.updated`, `order.cancelled`, a
 - Journal retains its existing ordered lifecycle-evidence contract.
 - Harvester ADR-0001 (Application-owned recovery facts) remains separate and unchanged. SQLite does not replace it.
 - No individual fill/commission ledger, second event ledger, recovery restoration, strategy change, broker API change, or exchange operation is introduced.
+- Relational `orders` and `fills` tables are not implemented by PR #1469. Phase 1 is planned; the current `harvester_orders` collection remains an order-level cumulative-execution projection. Never synthesize fill rows from those cumulative snapshots.
 
 ## Removed temporary persistence
 
