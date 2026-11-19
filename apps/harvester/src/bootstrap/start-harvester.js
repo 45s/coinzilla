@@ -46,6 +46,7 @@ import { mapUserDataReadinessChangedData } from "../application/events/user-data
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop } from "./harvester-runtime-helpers.js"
 import { assertRecoverySellerEvaluatorAvailable } from "./assert-recovery-seller-evaluator-available.js"
+import { createRecoverySellerStopRuntime } from "./create-recovery-seller-stop-runtime.js"
 
 function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
   if (typeof operationalStateStore?.append !== "function" ||
@@ -329,6 +330,14 @@ async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
     operationalStateStore,
     logger,
   })
+  const recoverySellerStopRuntime = await createRecoverySellerStopRuntime({
+    recoverySellerPairs: resolved.recoverySellerPairs,
+    operationalStateStore,
+  })
+  if (recoverySellerStopRuntime?.ok !== true) {
+    throw recoverySellerStopRuntime?.errors?.[0] ??
+      new Error("Recovery Seller STOP runtime startup was not confirmed")
+  }
   await persistHarvesterProcessStart({
     operationalStateStore,
     appConfig: startupOptions.appConfig,
@@ -339,6 +348,7 @@ async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
   return {
     operatorControlLifecycle,
     operationalStateStore,
+    recoverySellerStopRuntime: recoverySellerStopRuntime.data,
     startupOptions,
   }
 }
@@ -431,6 +441,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     strategyShutdownParticipants: dependencies.strategyShutdownParticipants,
     operatorControlLifecycle: startupState.operatorControlLifecycle,
     operationalStateStore: startupState.operationalStateStore,
+    recoverySellerStopRuntime: startupState.recoverySellerStopRuntime,
     accountSnapshotManagerRef,
     onCommissionAsset,
     ...operationalStateCallbacks,
@@ -691,6 +702,7 @@ function createHarvesterTradingEngineActivator({ startup,
       getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
       recoverySellerPairs: startup.recoverySellerPairs,
       recoverySellerWorkflow: portfolio.recoverySellerWorkflow,
+      recoverySellerStopWorkflow: startup.recoverySellerStopRuntime.workflow,
       evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
       getRecoverySellerMarketMetadata: portfolio.getRecoverySellerMarketMetadata,
       updateTradingAccounting: portfolio.updateTradingAccounting,
