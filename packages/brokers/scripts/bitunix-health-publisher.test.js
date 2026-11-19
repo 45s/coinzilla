@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promisify } from "node:util"
 import test from "node:test"
-import { publishBitunixDiagnostics } from "./bitunix-health-publisher.js"
+import { createGitEnvironment, publishBitunixDiagnostics } from "./bitunix-health-publisher.js"
 
 const execFileAsync = promisify(execFile)
 const fixedTimestamp = Date.parse("2026-11-19T08:30:00.000Z")
@@ -159,6 +159,22 @@ async function assertReportFilesAreSanitized({ result, repositoryRoot }) {
   assert.equal(Object.hasOwn(publicAccountResult, "response"), false, "the public allowlist must omit response payloads")
   assert.equal(result.reportPath.endsWith("bitunix-health-20261119T083000000Z.json"), true, "the result must identify the report path to inspect")
 }
+
+test("does not pass Bitunix API credentials to Git child processes", () => {
+  const gitEnvironment = createGitEnvironment({
+    env: {
+      PATH: "/usr/bin",
+      BITUNIX_API_KEY: apiKey,
+      BITUNIX_API_SECRET: apiSecret,
+      GH_TOKEN: "github-auth-token",
+    },
+  })
+
+  assert.equal(Object.hasOwn(gitEnvironment, "BITUNIX_API_KEY"), false, "Git child processes must not inherit the Bitunix API key")
+  assert.equal(Object.hasOwn(gitEnvironment, "BITUNIX_API_SECRET"), false, "Git child processes must not inherit the Bitunix API secret")
+  assert.equal(gitEnvironment.PATH, "/usr/bin", "Git child processes must retain the executable search path")
+  assert.equal(gitEnvironment.GH_TOKEN, "github-auth-token", "GitHub authentication must remain available for report push")
+})
 
 test("publishes only a sanitized report from a fresh diagnostics branch and returns to develop", async () => {
   const repositoryRoot = await createRepositoryDirectory()
