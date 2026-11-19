@@ -835,98 +835,93 @@ async function handleEvaluationFailure({ dependencies, symbol, error } = {}) {
   return toResult({ error })
 }
 
-function createConservativeLatestTransitionEvaluator(dependencies = {}) {
-  return async function evaluateConservativeLatestTransition({
+async function executeConservativeLatestTransition({ dependencies, options, gate } = {}) {
+  const {
     symbol,
-    preflightOnly = false,
+    preflightOnly,
     excludedActiveOrderClientId,
     referencePriceOverride,
-    shutdownRecoveryOnly = false,
-  } = {}) {
+    shutdownRecoveryOnly,
+  } = options
+  const context = prepareEvaluationContext({
+    dependencies,
+    options: {
+      symbol,
+      preflightOnly,
+      excludedActiveOrderClientId,
+      referencePriceOverride,
+      shutdownRecoveryOnly,
+      marketPrice: gate.marketPrice,
+    },
+  })
+  const dustResult = await completeDustRecoveryIfNeeded({ dependencies, context })
+  if (dustResult) {
+    return dustResult
+  }
+  const noActions = handleNoEffectiveActions({ dependencies, context })
+  if (noActions) {
+    return noActions
+  }
+  const balances = getPortfolioBalanceContext({
+    dependencies,
+    context: { ...context, excludedActiveOrderClientId },
+  })
+  const allocation = allocateEvaluationActions({ dependencies, context, balances })
+  logOrderAllocation({ dependencies, context, balances, allocation })
+  const noExecutableActions = handleNoExecutableActions({ dependencies, context, allocation })
+  if (noExecutableActions) {
+    return noExecutableActions
+  }
+  publishStrategyDecision({ dependencies, context, balances, allocation })
+  const executableDecision = Object.freeze({
+    ...context.decision,
+    actions: Object.freeze(allocation.executableActions),
+  })
+  const preflightResult = await validatePreflightDecision({
+    dependencies,
+    context,
+    executableDecision,
+  })
+  if (preflightResult) {
+    return preflightResult
+  }
+  const result = await submitExecutableDecision({
+    dependencies,
+    context,
+    executableDecision,
+    balances,
+  })
+  logSubmissionResult({ dependencies, context, result })
+  return finalizeSubmissionResult({
+    dependencies,
+    context,
+    result,
+    deferredActions: allocation.deferredActions,
+  })
+}
+
+function createConservativeLatestTransitionEvaluator(dependencies = {}) {
+  return async function evaluateConservativeLatestTransition(options = {}) {
+    const { symbol, shutdownRecoveryOnly = false } = options
     if (!dependencies.pairs?.[symbol]) {
       return toResult({
-        data: {
-          skipped: true,
-          reason: "NO_CONSERVATIVE_EXECUTION_ROUTE",
-        },
+        data: { skipped: true, reason: "NO_CONSERVATIVE_EXECUTION_ROUTE" },
       })
     }
-    const gate = getEvaluationGateResult({ dependencies,
-      symbol,
-      shutdownRecoveryOnly })
-    if (gate?.data || gate?.errors) {return gate}
+    const gate = getEvaluationGateResult({ dependencies, symbol, shutdownRecoveryOnly })
+    if (gate?.data || gate?.errors) {
+      return gate
+    }
     try {
-      const context = prepareEvaluationContext({
-        dependencies,
-        options: {
-          symbol,
-          preflightOnly,
-          excludedActiveOrderClientId,
-          referencePriceOverride,
-          shutdownRecoveryOnly,
-          marketPrice: gate.marketPrice,
-        },
-      })
-      const dustResult = await completeDustRecoveryIfNeeded({ dependencies,
-        context })
-      if (dustResult) {return dustResult}
-      const noActions = handleNoEffectiveActions({ dependencies,
-        context })
-      if (noActions) {return noActions}
-      const balances = getPortfolioBalanceContext({
-        dependencies,
-        context: {
-          ...context,
-          excludedActiveOrderClientId,
-        },
-      })
-      const allocation = allocateEvaluationActions({ dependencies,
-        context,
-        balances })
-      logOrderAllocation({ dependencies,
-        context,
-        balances,
-        allocation })
-      const noExecutableActions = handleNoExecutableActions({ dependencies,
-        context,
-        allocation })
-      if (noExecutableActions) {return noExecutableActions}
-      publishStrategyDecision({ dependencies,
-        context,
-        balances,
-        allocation })
-      const executableDecision = Object.freeze({
-        ...context.decision,
-        actions: Object.freeze(allocation.executableActions),
-      })
-      const preflightResult = await validatePreflightDecision({ dependencies,
-        context,
-        executableDecision })
-      if (preflightResult) {return preflightResult}
-      const result = await submitExecutableDecision({ dependencies,
-        context,
-        executableDecision,
-        balances })
-      logSubmissionResult({ dependencies,
-        context,
-        result })
-      return finalizeSubmissionResult({ dependencies,
-        context,
-        result,
-        deferredActions: allocation.deferredActions })
+      return await executeConservativeLatestTransition({ dependencies, options, gate })
     } catch (error) {
-      return handleEvaluationFailure({
-        dependencies,
-        symbol,
-        error,
-      })
+      return handleEvaluationFailure({ dependencies, symbol, error })
     }
   }
 }
 
 export function createLatestTransitionEvaluator(dependencies = {}) {
-  let evaluateConservativeLatestTransition
-  evaluateConservativeLatestTransition = createConservativeLatestTransitionEvaluator({
+  const evaluateConservativeLatestTransition = createConservativeLatestTransitionEvaluator({
     ...dependencies,
     evaluateLatestTransition: (options) => evaluateConservativeLatestTransition(options),
   })
