@@ -3,7 +3,11 @@ import test from "node:test"
 
 import { BitunixRestClient } from "../api/rest-client.js"
 
-async function request({ path, body, language, authenticated = false, queryParams }) {
+async function request({ path,
+  body,
+  language,
+  authenticated = false,
+  queryParams }) {
   let capturedRequest
   const client = new BitunixRestClient({
     apiKey: authenticated ? "api-key" : undefined,
@@ -11,7 +15,8 @@ async function request({ path, body, language, authenticated = false, queryParam
     baseUrl: "https://fapi.bitunix.com",
     language,
     fetchFn: async (url, options) => {
-      capturedRequest = { url, options }
+      capturedRequest = { url,
+        options }
       return new Response(body, {
         status: 200,
         headers: {
