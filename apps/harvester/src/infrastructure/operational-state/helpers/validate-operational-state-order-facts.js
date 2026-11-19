@@ -95,9 +95,15 @@ function validatePersistedSellAllocation({ canonicalData } = {}) {
       Object.keys(allocation).length !== 2 ||
       !isPositiveCanonicalDecimalString({ value: allocation.recoverySellQuantity }) ||
       !isCanonicalDecimalString({ value: allocation.legacySellQuantity }) ||
-      compareDecimal({ left: allocation.legacySellQuantity, right: "0" }) < 0 ||
       compareDecimal({
-        left: addDecimal({ left: allocation.recoverySellQuantity, right: allocation.legacySellQuantity }),
+        left: allocation.legacySellQuantity,
+        right: "0",
+      }) < 0 ||
+      compareDecimal({
+        left: addDecimal({
+          left: allocation.recoverySellQuantity,
+          right: allocation.legacySellQuantity,
+        }),
         right: canonicalData.quantity,
       }) !== 0) {
     throw new TypeError("Persisted Recovery Seller SELL allocation must be canonical and equal the order quantity")
@@ -108,9 +114,15 @@ function validatePersistedOrderOwnership({ canonicalData } = {}) {
   const fields = ["strategyId", "positionId", "cycleId"]
   const supplied = fields.filter((field) => canonicalData[field] !== undefined)
   if (canonicalData.purpose === null) {
-    validatePurposeFreePersistedOwnership({ canonicalData, supplied })
+    validatePurposeFreePersistedOwnership({
+      canonicalData,
+      supplied,
+    })
   } else {
-    validatePersistedRecoveryOrderOwnership({ canonicalData, supplied })
+    validatePersistedRecoveryOrderOwnership({
+      canonicalData,
+      supplied,
+    })
   }
   validatePersistedSellAllocation({ canonicalData })
 }
