@@ -363,27 +363,6 @@ function createConservativeLatestTransitionEvaluator(dependencies = {}) {
   }
 }
 
-function shouldSkipRecoverySellerEvaluation({ conservativeResult, options } = {}) {
-  return !conservativeResult?.ok ||
-    options.preflightOnly === true ||
-    options.shutdownRecoveryOnly === true
-}
-
-function getMissingRecoverySellerEvaluatorResult({ dependencies, symbol } = {}) {
-  const hasRecoverySellerRoute = Object.hasOwn(
-    dependencies.recoverySellerPairs ?? {},
-    symbol,
-  )
-  if (typeof dependencies.evaluateRecoverySellerTransition === "function" || !hasRecoverySellerRoute) {
-    return null
-  }
-  return toResult({
-    error: new Error(
-      "Recovery Seller execution route is configured but no production transition evaluator is registered",
-    ),
-  })
-}
-
 export function createLatestTransitionEvaluator(dependencies = {}) {
   const evaluateConservativeLatestTransition = createConservativeLatestTransitionEvaluator({
     ...dependencies,
@@ -391,36 +370,16 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
   })
   return async function evaluateLatestTransition(options = {}) {
     const conservativeResult = await evaluateConservativeLatestTransition(options)
-    if (shouldSkipRecoverySellerEvaluation({
-      conservativeResult,
-      options,
-    })) {
-      return conservativeResult
-    }
-    const missingEvaluator = getMissingRecoverySellerEvaluatorResult({
-      dependencies,
-      symbol: options.symbol,
-    })
-    if (missingEvaluator) {
-      return missingEvaluator
-    }
-    if (typeof dependencies.evaluateRecoverySellerTransition !== "function") {
+    if (!conservativeResult?.ok ||
+        typeof dependencies.evaluateRecoverySellerTransition !== "function" ||
+        options.preflightOnly === true ||
+        options.shutdownRecoveryOnly === true) {
       return conservativeResult
     }
     try {
       const recoverySellerResult = await dependencies.evaluateRecoverySellerTransition({
         ...options,
         state: dependencies.state,
-        recoverySellerPairs: dependencies.recoverySellerPairs,
-        recoverySellerWorkflow: dependencies.recoverySellerWorkflow,
-        recoverySellerCycleCoordinator: dependencies.recoverySellerCycleCoordinator,
-        recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
-        recoverySellerStopCallbacks: dependencies.recoverySellerStopCallbacks,
-        getRecoverySellerMarketMetadata: dependencies.getRecoverySellerMarketMetadata,
-        getAccountSnapshot: dependencies.getAccountSnapshot,
-        getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
-        getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
-        getPortfolio: dependencies.getPortfolio,
       })
       if (recoverySellerResult?.ok !== true) {
         return recoverySellerResult

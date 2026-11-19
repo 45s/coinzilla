@@ -120,10 +120,6 @@ function makeOrderContext({ cycleId = "rs-cycle-1", status = "OPEN", executedQua
       positionId: "rs-position-1",
       purpose: "RECOVERY_SELL",
       cycleId,
-      sellAllocation: {
-        recoverySellQuantity: "5",
-        legacySellQuantity: "0.01",
-      },
     },
     clientOrderId: order.clientOrderId,
     brokerOrderId: order.brokerOrderId,

@@ -276,7 +276,6 @@ ownerships })
           ownership,
           clientOrderId: order.clientOrderId,
           brokerOrderId: order.brokerOrderId,
-          orderQuantity: order.originalQuantity.amount,
         })
     if (existing) {
       if (!sameOrderState({ current: existing,

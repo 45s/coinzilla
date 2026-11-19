@@ -863,22 +863,14 @@ function createFilledRSBuyRegistry() {
   }
 }
 
-function createRSSellOwnership() {
-  return {
+function createCanceledRSSellRegistry() {
+  const clientOrderId = "rs-cycle-sell"
+  const ownership = {
     strategyId: "RS_recoverySeller",
     positionId: "rs-position-1",
     purpose: "RECOVERY_SELL",
     cycleId: "rs-cycle-1",
-    sellAllocation: {
-      recoverySellQuantity: "100",
-      legacySellQuantity: "0",
-    },
   }
-}
-
-function createCanceledRSSellRegistry() {
-  const clientOrderId = "rs-cycle-sell"
-  const ownership = createRSSellOwnership()
   const registered = OrderRegistry.empty().registerPending({
     order: makeOrder({
       clientOrderId,

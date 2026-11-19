@@ -1,13 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import {
-  addDecimal,
-  DEFAULT_DECIMAL_DIVISION_SCALE,
-  DECIMAL_ROUNDING_MODES,
-  divideDecimal,
-  ensure,
-  subtractDecimal,
-  toResult,
-} from "@coinzilla/utils"
+import { addDecimal, ensure, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
@@ -132,53 +124,6 @@ function resolveRecoverySellerBuyOrderOwnership({ registry, fill }) {
   }
 }
 
-function recordRecoverySellerBuyFill({ state, fill, ownership } = {}) {
-  const cycleFills = new Map(
-    state.recoverySellerBuyFillsByCycle.get(ownership.cycleId) ?? [],
-  )
-  cycleFills.set(fill.id, fill)
-  state.recoverySellerBuyFillsByCycle.set(ownership.cycleId, cycleFills)
-}
-
-function calculateRecoverySellerBuyExecutionVwap({ cycleFills } = {}) {
-  let executedBase = "0"
-  let executedQuote = "0"
-  for (const fill of cycleFills.values()) {
-    executedBase = addDecimal({
-      left: executedBase,
-      right: fill.quantity.amount,
-    })
-    executedQuote = addDecimal({
-      left: executedQuote,
-      right: fill.quoteQuantity.amount,
-    })
-  }
-  if (executedBase === "0") {
-    return undefined
-  }
-  return divideDecimal({
-    left: executedQuote,
-    right: executedBase,
-    scale: DEFAULT_DECIMAL_DIVISION_SCALE,
-    rounding: DECIMAL_ROUNDING_MODES.HALF_UP,
-  })
-}
-
-function resolveRecoverySellerBuyFillsByCycle({ state } = {}) {
-  if (state.recoverySellerBuyFillsByCycle instanceof Map) {
-    return state.recoverySellerBuyFillsByCycle
-  }
-  if (!Object.isExtensible(state)) {
-    throw new TypeError("sharedState must expose recoverySellerBuyFillsByCycle")
-  }
-  const fillsByCycle = new Map()
-  Object.defineProperty(state, "recoverySellerBuyFillsByCycle", {
-    value: fillsByCycle,
-    enumerable: true,
-  })
-  return fillsByCycle
-}
-
 async function applyRecoverySellerBuyFillTransition({
   state,
   fill,
@@ -199,13 +144,6 @@ async function applyRecoverySellerBuyFillTransition({
       throw durableResult?.errors?.[0] ??
         new Error("Execution-fill fact append did not confirm durable commitment")
     }
-  }
-  if (result.applied) {
-    recordRecoverySellerBuyFill({
-      state,
-      fill,
-      ownership,
-    })
   }
   state.portfolio = result.portfolio
   return Object.freeze({
@@ -432,10 +370,8 @@ function createRecoverySellerWorkflowState({
     portfolio: initialPortfolio ?? new Portfolio(),
     orderRegistry: initialOrderRegistry ?? OrderRegistry.empty(),
     legacyPositions: createLegacyPositionMap(initialLegacyPositions),
-    recoverySellerBuyFillsByCycle: new Map(),
     updateQueue: Promise.resolve(),
   }
-  resolveRecoverySellerBuyFillsByCycle({ state })
   if (!(state.portfolio instanceof Portfolio)) {
     throw new TypeError("initialPortfolio must be a Portfolio")
   }
@@ -500,17 +436,6 @@ export function createRecoverySellerAccountingWorkflow({
     getPortfolio: () => state.portfolio,
     getOrderRegistry: () => state.orderRegistry,
     getActiveOrders: () => state.orderRegistry.getActiveOrders(),
-    getBuyExecutionVwap: ({ cycleId } = {}) => {
-      ensure.nonEmptyString({
-        value: cycleId,
-        name: "cycleId",
-        errMsg: "Recovery Seller BUY VWAP requires a cycleId",
-      })
-      const cycleFills = state.recoverySellerBuyFillsByCycle.get(cycleId)
-      return cycleFills
-        ? calculateRecoverySellerBuyExecutionVwap({ cycleFills })
-        : undefined
-    },
     getLegacyPosition: ({ marketId } = {}) => getLegacyPositionRecord({
       state,
       marketId,

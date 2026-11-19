@@ -337,10 +337,6 @@ function createSellOrderIntent({ plan, feePolicy }) {
     quoteFeeRate: feePolicy.feeRate,
     baseFeeRate: feePolicy.feeRate,
     reservedRole: feePolicy.reservedRole,
-    sellAllocation: Object.freeze({
-      recoverySellQuantity: plan.recoverySellQuantity,
-      legacySellQuantity: plan.legacySellQuantity,
-    }),
     plan,
   })
 }

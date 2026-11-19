@@ -32,63 +32,9 @@ function createUnresolvedSubmissionCallback({ onUnresolvedSubmission } = {}) {
   }
 }
 
-function createDurableSubmissionIntentWriter({ onDurableSubmissionIntent } = {}) {
-  const writesByOrder = new WeakMap()
-  return async (input = {}) => {
-    if (!input.order || typeof input.order !== "object") {
-      throw new TypeError("Durable submission intent requires a canonical order")
-    }
-    const existing = writesByOrder.get(input.order)
-    if (existing) {
-      return existing
-    }
-    const write = Promise.resolve().then(() => onDurableSubmissionIntent(input))
-    writesByOrder.set(input.order, write)
-    try {
-      const result = await write
-      if (result?.ok !== true || result.data?.durable !== true) {
-        writesByOrder.delete(input.order)
-      }
-      return result
-    } catch (error) {
-      writesByOrder.delete(input.order)
-      throw error
-    }
-  }
-}
-
-function assertDurableResult({ result, message } = {}) {
-  if (result?.ok !== true || result.data?.durable !== true) {
-    throw result?.errors?.[0] ?? new Error(message)
-  }
-}
-
-async function persistAndReserveSell({
-  input,
-  executionCallbacks,
-  onSellReserved,
-  persistDurableSubmissionIntent,
-} = {}) {
-  const intent = await persistDurableSubmissionIntent(input)
-  assertDurableResult({
-    result: intent,
-    message: "Recovery Seller SELL intent was not durably acknowledged before cycle reservation",
-  })
-  const reserved = await onSellReserved({
-    order: input.order,
-    ownership: input.ownership,
-  })
-  assertDurableResult({
-    result: reserved,
-    message: "Recovery Seller sole-SELL cycle reservation was not durably acknowledged",
-  })
-  return executionCallbacks.onPendingOrder(input)
-}
-
 function createPendingOrderCallback({
   executionCallbacks,
   onSellReserved,
-  persistDurableSubmissionIntent,
   latchUnresolvedSubmission,
 } = {}) {
   return async (input = {}) => {
@@ -96,12 +42,15 @@ function createPendingOrderCallback({
       return executionCallbacks.onPendingOrder(input)
     }
     try {
-      return await persistAndReserveSell({
-        input,
-        executionCallbacks,
-        onSellReserved,
-        persistDurableSubmissionIntent,
+      const reserved = await onSellReserved({
+        order: input.order,
+        ownership: input.ownership,
       })
+      if (reserved?.ok !== true || reserved.data?.durable !== true) {
+        throw reserved?.errors?.[0] ??
+          new Error("Recovery Seller sole-SELL cycle reservation was not durably acknowledged")
+      }
+      return await executionCallbacks.onPendingOrder(input)
     } catch (error) {
       await latchUnresolvedSubmission({
         ...input,
@@ -164,47 +113,6 @@ function createSubmissionFailureCallback({
   }
 }
 
-function createCycleSellReservationCallback({ cycleCoordinator } = {}) {
-  if (!cycleCoordinator) {
-    return undefined
-  }
-  return async ({ order, ownership } = {}) => {
-    const result = cycleCoordinator.reserveSell({
-      marketId: order?.market?.id,
-      cycleId: ownership?.cycleId,
-      orderIdentity: {
-        clientOrderId: order?.clientOrderId,
-        ...(order?.brokerOrderId ? { brokerOrderId: order.brokerOrderId } : {}),
-      },
-      durableSubmissionIntent: true,
-    })
-    if (result?.ok !== true) {
-      return result
-    }
-    return toResult({
-      data: {
-        durable: true,
-        cycleState: result.data,
-      },
-    })
-  }
-}
-
-function resolveSubmitterStopCallbacks({
-  recoverySellerStopCallbacks,
-  onUnresolvedSubmission,
-  onOrderValidationFailure,
-  canSubmit,
-} = {}) {
-  return {
-    onUnresolvedSubmission:
-      onUnresolvedSubmission ?? recoverySellerStopCallbacks?.onUnresolvedSubmission,
-    onOrderValidationFailure:
-      onOrderValidationFailure ?? recoverySellerStopCallbacks?.onOrderValidationFailure,
-    canSubmit: canSubmit ?? recoverySellerStopCallbacks?.canSubmit,
-  }
-}
-
 function validateSubmitterOptions({
   recoverySellerAccountingWorkflow,
   onDurableSubmissionIntent,
@@ -245,16 +153,12 @@ function createRecoverySellerExecutor({
   const latchUnresolvedSubmission = createUnresolvedSubmissionCallback({
     onUnresolvedSubmission,
   })
-  const persistDurableSubmissionIntent = createDurableSubmissionIntentWriter({
-    onDurableSubmissionIntent,
-  })
   return makeExecuteStrategyDecision({
     broker,
     ...executionCallbacks,
     onPendingOrder: createPendingOrderCallback({
       executionCallbacks,
       onSellReserved,
-      persistDurableSubmissionIntent,
       latchUnresolvedSubmission,
     }),
     onSubmissionDeferred: createSubmissionDeferredCallback({
@@ -265,7 +169,7 @@ function createRecoverySellerExecutor({
       executionCallbacks,
       onUnresolvedSubmission,
     }),
-    onDurableSubmissionIntent: persistDurableSubmissionIntent,
+    onDurableSubmissionIntent,
     onDurableSubmissionOutcome,
     onOrderValidationFailure,
     canSubmit,
@@ -296,14 +200,11 @@ function createRecoverySellerSubmissionHandler({ execute, onSellReserved } = {})
       if (!result.ok) {
         return result
       }
-      const submittedOrders = Array.isArray(result.data?.submittedOrders)
-        ? result.data.submittedOrders
-        : []
       return toResult({
         data: {
-          submitted: submittedOrders.length > 0,
+          submitted: true,
           decision: lifecycleDecision,
-          submittedOrders,
+          submittedOrders: result.data.submittedOrders,
         },
       })
     } catch (error) {
@@ -320,39 +221,28 @@ export function createRecoverySellerOrderSubmitter({
   onUnresolvedSubmission,
   onOrderValidationFailure,
   canSubmit,
-  recoverySellerStopCallbacks,
-  recoverySellerCycleCoordinator,
   onSellReserved,
 } = {}) {
-  const sellReservationCallback = onSellReserved ?? createCycleSellReservationCallback({
-    cycleCoordinator: recoverySellerCycleCoordinator,
-  })
-  const stopCallbacks = resolveSubmitterStopCallbacks({
-    recoverySellerStopCallbacks,
-    onUnresolvedSubmission,
-    onOrderValidationFailure,
-    canSubmit,
-  })
   validateSubmitterOptions({
     recoverySellerAccountingWorkflow,
     onDurableSubmissionIntent,
     onDurableSubmissionOutcome,
-    onUnresolvedSubmission: stopCallbacks.onUnresolvedSubmission,
-    canSubmit: stopCallbacks.canSubmit,
-    onSellReserved: sellReservationCallback,
+    onUnresolvedSubmission,
+    canSubmit,
+    onSellReserved,
   })
   const execute = createRecoverySellerExecutor({
     broker,
     recoverySellerAccountingWorkflow,
     onDurableSubmissionIntent,
     onDurableSubmissionOutcome,
-    onUnresolvedSubmission: stopCallbacks.onUnresolvedSubmission,
-    onOrderValidationFailure: stopCallbacks.onOrderValidationFailure,
-    canSubmit: stopCallbacks.canSubmit,
-    onSellReserved: sellReservationCallback,
+    onUnresolvedSubmission,
+    onOrderValidationFailure,
+    canSubmit,
+    onSellReserved,
   })
   return createRecoverySellerSubmissionHandler({
     execute,
-    onSellReserved: sellReservationCallback,
+    onSellReserved,
   })
 }

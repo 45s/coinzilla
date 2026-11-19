@@ -272,20 +272,6 @@ function createHarvesterTradingEngineOperationalCallbacks(options = {}) {
   }
 }
 
-function createHarvesterRecoverySellerOptions(options = {}) {
-  return {
-    recoverySellerPairs: options.recoverySellerPairs,
-    recoverySellerWorkflow: options.recoverySellerWorkflow,
-    recoverySellerCycleCoordinator: options.recoverySellerCycleCoordinator,
-    recoverySellerStopWorkflow: options.recoverySellerStopWorkflow,
-    recoverySellerStopCallbacks: options.recoverySellerStopCallbacks,
-    getRecoverySellerMarketMetadata: options.getRecoverySellerMarketMetadata,
-    evaluateRecoverySellerTransition: options.evaluateRecoverySellerTransition,
-    updateTradingAccounting: options.updateTradingAccounting,
-    updateRecoverySellerAccounting: options.recoverySellerWorkflow?.applyBuyFill,
-  }
-}
-
 function createHarvesterTradingEngineOptions(options = {}) {
   const {
     broker,
@@ -298,6 +284,11 @@ function createHarvesterTradingEngineOptions(options = {}) {
     getAccountSnapshot,
     getAdditionalTrackedBaseQuantity,
     getAdditionalTrackedQuoteCashFlow,
+    recoverySellerPairs,
+    recoverySellerWorkflow,
+    getRecoverySellerMarketMetadata,
+    evaluateRecoverySellerTransition,
+    updateTradingAccounting,
     completeRecoveryCycle,
     userDataState,
     accountSnapshotManagerRef,
@@ -319,7 +310,12 @@ function createHarvesterTradingEngineOptions(options = {}) {
     getAccountSnapshot,
     getAdditionalTrackedBaseQuantity,
     getAdditionalTrackedQuoteCashFlow,
-    ...createHarvesterRecoverySellerOptions(options),
+    recoverySellerPairs,
+    recoverySellerWorkflow,
+    getRecoverySellerMarketMetadata,
+    evaluateRecoverySellerTransition,
+    updateTradingAccounting,
+    updateRecoverySellerAccounting: recoverySellerWorkflow?.applyBuyFill,
     completeRecoveryCycle,
     ...createHarvesterTradingEngineSafetyCallbacks({
       userDataState,
@@ -390,11 +386,9 @@ function createRecoveryCycleNotCompletedCallback({ store,
 function createSubmissionIntentCallback({ store,
   recordOrderSubmissionIntent } = {}) {
   return store ? ({ order,
-  purpose,
-  ownership }) => recordOrderSubmissionIntent({ operationalStateStore: store,
+  purpose }) => recordOrderSubmissionIntent({ operationalStateStore: store,
     order,
-    purpose,
-    ownership }) : undefined
+    purpose }) : undefined
 }
 
 function createSubmissionOutcomeCallback({ store,
@@ -402,12 +396,10 @@ function createSubmissionOutcomeCallback({ store,
   return store
     ? ({ order,
   outcome,
-  purpose,
-  ownership }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
+  purpose }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
       order,
       outcome,
-      purpose,
-      ownership })
+      purpose })
     : undefined
 }
 

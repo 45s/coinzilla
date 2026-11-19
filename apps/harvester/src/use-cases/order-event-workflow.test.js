@@ -737,7 +737,7 @@ test("routes Recovery Seller-owned fills to RS accounting without mutating Conse
 })
 
 
-test("fails closed for an RS SELL fill until terminal mixed-SELL reconciliation", async () => {
+test("stages streamed RS SELL fills for complete terminal mixed-SELL reconciliation", async () => {
   const recoverySellerOrder = makeOrder({
     side: "SELL",
     clientOrderId: "h-dogeusdt-rs-sell-1",
@@ -774,10 +774,12 @@ test("fails closed for an RS SELL fill until terminal mixed-SELL reconciliation"
     fill: recoverySellerFill,
   })
 
-  assert.equal(result.ok, false, "An RS SELL fill must wait for terminal mixed-SELL reconciliation instead of committing partial allocation.")
+  assert.equal(result.ok, true, "A canonical streamed RS SELL fill must be staged without committing either accounting projection.")
+  assert.equal(result.data.stagedForTerminalReconciliation, true, "The staged result must make the terminal mixed-SELL barrier explicit.")
+  assert.deepEqual(calls.sellFills, [recoverySellerFill], "The canonical SELL fill must remain available to complete terminal history reconciliation.")
   assert.deepEqual(calls.accounting, [], "An RS SELL fill must never be applied to Conservative accounting.")
-  assert.deepEqual(recoverySellerAccountingCalls, [], "The RS mixed-SELL accounting workflow must not be invoked with an isolated streamed fill.")
-  assert.equal(calls.pauses[0]?.reason, "EXECUTION_ACCOUNTING_FAILED", "Unsupported RS SELL accounting must pause the affected market fail-closed.")
+  assert.deepEqual(recoverySellerAccountingCalls, [], "The RS mixed-SELL accounting workflow must wait for the complete terminal fill history.")
+  assert.deepEqual(calls.pauses, [], "A valid partial RS SELL fill is expected evidence, not an accounting failure.")
 })
 
 

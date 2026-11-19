@@ -13,8 +13,6 @@ import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
 import { createRecoverySellerOrderSubmitter } from "./create-recovery-seller-order-submitter.js"
 import { createRecoverySellerStopWorkflow } from "./create-recovery-seller-stop-workflow.js"
-import { createRecoverySellerStopCallbacks } from "./create-recovery-seller-stop-callbacks.js"
-import { createRecoverySellerCycleCoordinator } from "./create-recovery-seller-cycle-coordinator.js"
 
 const baseAsset = new Asset({
   id: "zro",
@@ -143,8 +141,6 @@ function createSubmitter({
   onSellReserved,
   onDurableSubmissionIntent,
   onDurableSubmissionOutcome,
-  recoverySellerStopCallbacks,
-  recoverySellerCycleCoordinator,
 } = {}) {
   const workflow = createRecoverySellerAccountingWorkflow({
     sharedState,
@@ -173,9 +169,7 @@ function createSubmitter({
         data: { durable: true },
       }
     }),
-    onUnresolvedSubmission: recoverySellerStopCallbacks
-      ? undefined
-      : onUnresolvedSubmission ?? (async (fact) => {
+    onUnresolvedSubmission: onUnresolvedSubmission ?? (async (fact) => {
       unresolved.push(fact)
       return {
         ok: true,
@@ -183,9 +177,7 @@ function createSubmitter({
       }
     }),
     onSellReserved,
-    recoverySellerStopCallbacks,
-    recoverySellerCycleCoordinator,
-    canSubmit: recoverySellerStopCallbacks ? undefined : () => true,
+    canSubmit: () => true,
   })
   return {
     submit,
@@ -203,12 +195,6 @@ function createAction({ side = "BUY" } = {}) {
     type: "LIMIT_MAKER",
     price: "1.999",
     quantity: "5",
-    ...(side === "SELL" ? {
-      sellAllocation: {
-        recoverySellQuantity: "5",
-        legacySellQuantity: "0",
-      },
-    } : {}),
   }
 }
 
@@ -359,15 +345,13 @@ test("blocks RS SELL when no durable single-cycle reservation callback is suppli
   assert.equal(placeOrderCalls, 0)
 })
 
-test("commits the SELL intent before reserving its cycle and registering the pending order", async () => {
+test("durably reserves the sole RS SELL cycle before registry registration and broker I/O", async () => {
   const sharedState = createSharedState()
   const unresolved = []
-  const submissionStages = []
   let reservedOrder
   let pendingWasRegisteredAtBroker = false
   const broker = createBroker({
     onPlaceOrder: ({ order }) => {
-      submissionStages.push("broker")
       pendingWasRegisteredAtBroker = sharedState.orderRegistry.getOrder({
         clientOrderId: order.clientOrderId,
       })?.status === "PENDING"
@@ -377,15 +361,7 @@ test("commits the SELL intent before reserving its cycle and registering the pen
     sharedState,
     broker,
     unresolved,
-    onDurableSubmissionIntent: async () => {
-      submissionStages.push("durable-intent")
-      return {
-        ok: true,
-        data: { durable: true },
-      }
-    },
     onSellReserved: async ({ order, ownership }) => {
-      submissionStages.push("sell-reserved")
       reservedOrder = {
         order,
         ownership,
@@ -413,15 +389,13 @@ test("commits the SELL intent before reserving its cycle and registering the pen
   assert.equal(reservedOrder.pendingAlreadyRegistered, false)
   assert.equal(reservedOrder.ownership.strategyId, "RS_recoverySeller")
   assert.equal(reservedOrder.ownership.purpose, "RECOVERY_SELL")
-  assert.deepEqual(submissionStages, ["durable-intent", "sell-reserved", "broker"])
   assert.equal(pendingWasRegisteredAtBroker, true)
   assert.equal(unresolved.length, 0)
 })
 
-test("latches STOP without reserving the sole SELL when its durable intent fails", async () => {
+test("latches STOP when the reserved sole SELL is deferred before broker submission", async () => {
   const sharedState = createSharedState()
   const unresolved = []
-  let reservationCalls = 0
   const operationalStateStore = createMemoryOperationalStateStore()
   const stopWorkflowResult = await createRecoverySellerStopWorkflow({
     operationalStateStore,
@@ -436,13 +410,10 @@ test("latches STOP without reserving the sole SELL when its durable intent fails
     sharedState,
     broker,
     unresolved,
-    onSellReserved: async () => {
-      reservationCalls += 1
-      return {
-        ok: true,
-        data: { durable: true },
-      }
-    },
+    onSellReserved: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
     onDurableSubmissionIntent: async () => ({
       ok: false,
       errors: [new Error("submission intent store unavailable")],
@@ -472,7 +443,6 @@ test("latches STOP without reserving the sole SELL when its durable intent fails
 
   assert.equal(result.ok, false)
   assert.equal(placeOrderCalls, 0)
-  assert.equal(reservationCalls, 0)
   assert.equal(workflow.getActiveOrders().length, 0)
   assert.equal(unresolved.length, 1)
   assert.equal(unresolved[0].outcome, "UNKNOWN")
@@ -507,244 +477,4 @@ test("does not call the broker when the RS lifecycle decision is not SUBMIT", as
   assert.equal(result.ok, true)
   assert.equal(result.data.submitted, false)
   assert.equal(placeOrderCalls, 0)
-})
-
-test("uses durable STOP callbacks to block further RS submissions after an unknown acknowledgement", async () => {
-  const sharedState = createSharedState()
-  const operationalStateStore = createMemoryOperationalStateStore()
-  const stopWorkflowResult = await createRecoverySellerStopWorkflow({
-    operationalStateStore,
-  })
-  const recoverySellerStopCallbacks = createRecoverySellerStopCallbacks({
-    stopWorkflow: stopWorkflowResult.data,
-  })
-  let placeOrderCalls = 0
-  const broker = createBroker({
-    onPlaceOrder: () => {
-      placeOrderCalls += 1
-    },
-    placeOrderFailure: true,
-  })
-  const durable = async () => ({
-    ok: true,
-    data: {
-      durable: true,
-    },
-  })
-  const submit = createRecoverySellerOrderSubmitter({
-    broker,
-    recoverySellerAccountingWorkflow: createRecoverySellerAccountingWorkflow({
-      sharedState,
-    }),
-    onDurableSubmissionIntent: durable,
-    onDurableSubmissionOutcome: durable,
-    recoverySellerStopCallbacks,
-  })
-
-  const first = await submit({
-    lifecycleDecision: {
-      outcome: "SUBMIT",
-      reasonCode: "BUY_TRANCHE_ELIGIBLE",
-    },
-    action: createAction(),
-    marketMetadata,
-  })
-  const second = await submit({
-    lifecycleDecision: {
-      outcome: "SUBMIT",
-      reasonCode: "BUY_TRANCHE_ELIGIBLE",
-    },
-    action: createAction(),
-    marketMetadata,
-  })
-
-  assert.equal(first.ok, false)
-  assert.equal(second.ok, true)
-  assert.equal(second.data.submitted, false)
-  assert.deepEqual(second.data.submittedOrders, [])
-  assert.equal(placeOrderCalls, 1)
-  assert.equal(recoverySellerStopCallbacks.canSubmit(), false)
-  assert.equal(stopWorkflowResult.data.getStopState().status, "STOPPED")
-  assert.equal(operationalStateStore.records.length, 1)
-})
-
-function createFailingStopStore() {
-  return {
-    append: async () => ({
-      ok: false,
-      errors: [new Error("durable store unavailable")],
-    }),
-    readAll: async () => ({
-      ok: true,
-      data: {
-        records: [],
-      },
-    }),
-  }
-}
-
-function createDurableSubmissionCallback() {
-  return async () => ({
-    ok: true,
-    data: {
-      durable: true,
-    },
-  })
-}
-
-function createStopProtectedSubmitter({ sharedState, broker, recoverySellerStopCallbacks }) {
-  return createRecoverySellerOrderSubmitter({
-    broker,
-    recoverySellerAccountingWorkflow: createRecoverySellerAccountingWorkflow({
-      sharedState,
-    }),
-    onDurableSubmissionIntent: createDurableSubmissionCallback(),
-    onDurableSubmissionOutcome: createDurableSubmissionCallback(),
-    recoverySellerStopCallbacks,
-  })
-}
-
-function createSubmitInput() {
-  return {
-    lifecycleDecision: {
-      outcome: "SUBMIT",
-      reasonCode: "BUY_TRANCHE_ELIGIBLE",
-    },
-    action: createAction(),
-    marketMetadata,
-  }
-}
-
-test("blocks further RS submissions when durable STOP persistence fails", async () => {
-  const sharedState = createSharedState()
-  const operationalStateStore = createFailingStopStore()
-  const stopWorkflowResult = await createRecoverySellerStopWorkflow({
-    operationalStateStore,
-  })
-  const recoverySellerStopCallbacks = createRecoverySellerStopCallbacks({
-    stopWorkflow: stopWorkflowResult.data,
-  })
-  let placeOrderCalls = 0
-  const broker = createBroker({
-    onPlaceOrder: () => {
-      placeOrderCalls += 1
-    },
-    placeOrderFailure: true,
-  })
-  const submit = createStopProtectedSubmitter({
-    sharedState,
-    broker,
-    recoverySellerStopCallbacks,
-  })
-
-  const first = await submit(createSubmitInput())
-  const second = await submit(createSubmitInput())
-
-  assert.equal(first.ok, false)
-  assert.equal(second.ok, true)
-  assert.equal(second.data.submitted, false)
-  assert.equal(placeOrderCalls, 1)
-  assert.equal(recoverySellerStopCallbacks.canSubmit(), false)
-  assert.equal(stopWorkflowResult.data.getStopState().status, "STOPPED")
-})
-
-test("uses the cycle coordinator to reserve the sole SELL before broker I/O", async () => {
-  const sharedState = createSharedState()
-  const cycleCoordinator = createRecoverySellerCycleCoordinator({
-    sharedState,
-    createId: () => "rs-cycle-1",
-  })
-  const cycle = cycleCoordinator.getOrCreateCycle({
-    marketId: market.id,
-  })
-  const stopWorkflow = await createRecoverySellerStopWorkflow({
-    operationalStateStore: createMemoryOperationalStateStore(),
-  })
-  const stopCallbacks = createRecoverySellerStopCallbacks({
-    stopWorkflow: stopWorkflow.data,
-    cycleCoordinator,
-  })
-  let reservedBeforeBroker = false
-  const broker = createBroker({
-    onPlaceOrder: ({ order }) => {
-      const current = cycleCoordinator.getCycleState({
-        marketId: market.id,
-      })
-      reservedBeforeBroker = current.status === "SELL_SUBMITTED" &&
-        current.sellOrderIdentity.clientOrderId === order.clientOrderId
-    },
-  })
-  const { submit } = createSubmitter({
-    sharedState,
-    broker,
-    unresolved: [],
-    recoverySellerStopCallbacks: stopCallbacks,
-    recoverySellerCycleCoordinator: cycleCoordinator,
-  })
-  const result = await submit({
-    lifecycleDecision: {
-      outcome: "SUBMIT",
-      reasonCode: "SELL_CYCLE_ELIGIBLE",
-    },
-    action: {
-      ...createAction({ side: "SELL" }),
-      positionId: cycle.data.positionId,
-      cycleId: cycle.data.cycleId,
-    },
-    marketMetadata,
-  })
-
-  assert.equal(result.ok, true, result.errors?.[0]?.message)
-  assert.equal(result.data.submitted, true)
-  assert.equal(reservedBeforeBroker, true)
-  assert.equal(cycleCoordinator.getCycleState({
-    marketId: market.id,
-  }).status, "SELL_SUBMITTED")
-})
-
-test("marks an unknown SELL cycle unresolved and latches STOP", async () => {
-  const sharedState = createSharedState()
-  const cycleCoordinator = createRecoverySellerCycleCoordinator({
-    sharedState,
-    createId: () => "rs-cycle-1",
-  })
-  const cycle = cycleCoordinator.getOrCreateCycle({
-    marketId: market.id,
-  })
-  const operationalStateStore = createMemoryOperationalStateStore()
-  const stopWorkflow = await createRecoverySellerStopWorkflow({
-    operationalStateStore,
-  })
-  const stopCallbacks = createRecoverySellerStopCallbacks({
-    stopWorkflow: stopWorkflow.data,
-    cycleCoordinator,
-  })
-  const { submit } = createSubmitter({
-    sharedState,
-    broker: createBroker({
-      placeOrderFailure: true,
-    }),
-    unresolved: [],
-    recoverySellerStopCallbacks: stopCallbacks,
-    recoverySellerCycleCoordinator: cycleCoordinator,
-  })
-  const result = await submit({
-    lifecycleDecision: {
-      outcome: "SUBMIT",
-      reasonCode: "SELL_CYCLE_ELIGIBLE",
-    },
-    action: {
-      ...createAction({ side: "SELL" }),
-      positionId: cycle.data.positionId,
-      cycleId: cycle.data.cycleId,
-    },
-    marketMetadata,
-  })
-
-  assert.equal(result.ok, false)
-  assert.equal(cycleCoordinator.getCycleState({
-    marketId: market.id,
-  }).status, "RECONCILIATION_REQUIRED")
-  assert.equal(stopWorkflow.data.getStopState().status, "STOPPED")
-  assert.equal(operationalStateStore.records.length, 1)
 })

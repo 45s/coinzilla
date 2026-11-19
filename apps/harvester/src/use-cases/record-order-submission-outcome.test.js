@@ -15,13 +15,6 @@ const market = new Market({ venue: "binance",
 symbol: "DOGEUSDT",
 baseAsset,
 quoteAsset })
-const recoverySellerBuyOwnership = {
-  strategyId: "RS_recoverySeller",
-  positionId: "rs-position-1",
-  purpose: "RECOVERY_BUY",
-  cycleId: "rs-cycle-1",
-}
-
 const makeOrder = ({ brokerOrderId, status = "PENDING", executedQuantity = "0" } = {}) => new CanonicalOrder({
   clientOrderId: "h-0123456789abcdef012345-1",
   providerInstanceId: "binanceTestnet",
@@ -65,8 +58,7 @@ executedQuantity: "12.5" })
     operationalStateStore,
     order,
     outcome: "ACKNOWLEDGED",
-    purpose: "RECOVERY_BUY",
-    ownership: recoverySellerBuyOwnership,
+    purpose: "RECOVERY_SELL",
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
@@ -88,10 +80,7 @@ executedQuantity: "12.5" })
     price: "0.099",
     quantity: "100",
     executedQuantity: "12.5",
-    purpose: "RECOVERY_BUY",
-    strategyId: "RS_recoverySeller",
-    positionId: "rs-position-1",
-    cycleId: "rs-cycle-1",
+    purpose: "RECOVERY_SELL",
     outcome: "ACKNOWLEDGED",
     brokerOrderId: "broker-1",
     status: "PARTIALLY_FILLED",
@@ -193,31 +182,5 @@ test("rejects a legacy acknowledged order without provider provenance", async ()
   })
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /providerInstanceId.*provenance/i)
-  assert.equal(appendCalls, 0)
-})
-
-test("requires matching RS ownership for a Recovery Seller submission outcome", async () => {
-  let appendCalls = 0
-  const result = await recordOrderSubmissionOutcome({
-    operationalStateStore: {
-      append: async () => {
-        appendCalls += 1
-        return {
-          ok: true,
-          data: { durable: true },
-        }
-      },
-    },
-    order: makeOrder({
-      brokerOrderId: "broker-1",
-      status: "OPEN",
-    }),
-    outcome: "ACKNOWLEDGED",
-    purpose: "RECOVERY_SELL",
-    ownership: recoverySellerBuyOwnership,
-  })
-
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /ownership|purpose|side/i)
   assert.equal(appendCalls, 0)
 })

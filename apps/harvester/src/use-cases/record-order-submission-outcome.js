@@ -1,149 +1,14 @@
 import { CanonicalOrder } from "@coinzilla/entities"
-import { addDecimal, compareDecimal, toResult } from "@coinzilla/utils"
-import {
-  isCanonicalDecimalString,
-  isPositiveCanonicalDecimalString,
-} from "../infrastructure/operational-state/helpers/operational-state-decimal-validation.js"
+import { toResult } from "@coinzilla/utils"
 
 const OUTCOMES = new Set(["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
-const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
-
-function hasNonEmptyValue(value) {
-  return typeof value === "string" && value.trim().length > 0
-}
-
-function validatePurposeFreeOwnership({ ownership } = {}) {
-  if (!ownership) {
-    return {}
-  }
-  const hasValidCycleId = ownership.cycleId === undefined || hasNonEmptyValue(ownership.cycleId)
-  if (ownership.strategyId !== "CG_coinGrabber" ||
-      ownership.purpose !== null ||
-      !hasNonEmptyValue(ownership.positionId) ||
-      !hasValidCycleId) {
-    throw new TypeError("Purpose-free order ownership must be complete Coin Grabber ownership")
-  }
-  return {
-    strategyId: ownership.strategyId,
-    positionId: ownership.positionId,
-    ...(ownership.cycleId ? { cycleId: ownership.cycleId } : {}),
-  }
-}
-
-function validateStrategyPositionOwnership({ purpose, ownership } = {}) {
-  const supportedStrategies = ["CG_coinGrabber", "RS_recoverySeller"]
-  if (!supportedStrategies.includes(ownership?.strategyId) ||
-      ownership.purpose !== purpose ||
-      !hasNonEmptyValue(ownership.positionId)) {
-    throw new TypeError("Strategy order submission requires complete strategy and position ownership")
-  }
-}
-
-function validateRecoverySellerCycleOwnership({ ownership } = {}) {
-  if (ownership.strategyId === "RS_recoverySeller" &&
-      !hasNonEmptyValue(ownership.cycleId)) {
-    throw new TypeError("Recovery Seller order submission requires its immutable cycleId")
-  }
-}
-
-function validateRecoveryBuyOwnership({ purpose, ownership } = {}) {
-  if (purpose === "RECOVERY_BUY" && ownership.strategyId !== "RS_recoverySeller") {
-    throw new TypeError("RECOVERY_BUY ownership must belong to Recovery Seller")
-  }
-}
-
-function validateRecoverySellAllocation({ purpose, ownership, quantity } = {}) {
-  if (purpose !== "RECOVERY_SELL" || ownership.strategyId !== "RS_recoverySeller") {
-    if (ownership.sellAllocation !== undefined) {
-      throw new TypeError("Only Recovery Seller SELL ownership may contain a mixed SELL allocation")
-    }
-    return {}
-  }
-  const allocation = ownership.sellAllocation
-  if (!allocation || typeof allocation !== "object" || Array.isArray(allocation) ||
-      Object.keys(allocation).length !== 2 ||
-      !isPositiveCanonicalDecimalString({ value: allocation.recoverySellQuantity }) ||
-      !isCanonicalDecimalString({ value: allocation.legacySellQuantity }) ||
-      compareDecimal({
-        left: allocation.legacySellQuantity,
-        right: "0",
-      }) < 0 ||
-      compareDecimal({
-        left: addDecimal({
-          left: allocation.recoverySellQuantity,
-          right: allocation.legacySellQuantity,
-        }),
-        right: quantity,
-      }) !== 0) {
-    throw new TypeError("Recovery Seller SELL requires an exact recovery/legacy allocation equal to the canonical order quantity")
-  }
-  return {
-    sellAllocation: Object.freeze({
-      recoverySellQuantity: allocation.recoverySellQuantity,
-      legacySellQuantity: allocation.legacySellQuantity,
-    }),
-  }
-}
-
-function validateRecoveryPurposeSide({ purpose, side } = {}) {
-  const expectedSide = purpose === "RECOVERY_BUY" ? "BUY" : "SELL"
-  if (side !== expectedSide) {
-    throw new TypeError("Recovery order purpose must match the canonical order side")
-  }
-}
-
-function validatePurposeOwnership({ purpose, ownership, side, quantity } = {}) {
-  const hasCycleId = hasNonEmptyValue(ownership?.cycleId)
-  validateStrategyPositionOwnership({
-    purpose,
-    ownership,
-  })
-  validateRecoverySellerCycleOwnership({
-    ownership,
-  })
-  validateRecoveryBuyOwnership({
-    purpose,
-    ownership,
-  })
-  validateRecoveryPurposeSide({
-    purpose,
-    side,
-  })
-  return {
-    strategyId: ownership.strategyId,
-    positionId: ownership.positionId,
-    ...(hasCycleId ? { cycleId: ownership.cycleId } : {}),
-    ...validateRecoverySellAllocation({
-      purpose,
-      ownership,
-      quantity,
-    }),
-  }
-}
-
-function validateSubmissionOwnership({ purpose, ownership, side, quantity } = {}) {
-  if (purpose === null) {
-    return validatePurposeFreeOwnership({
-      ownership,
-    })
-  }
-  if (purpose === "RECOVERY_SELL" && !ownership) {
-    return {}
-  }
-  return validatePurposeOwnership({
-    purpose,
-    ownership,
-    side,
-    quantity,
-  })
-}
+const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
 
 function validateSubmissionStoreAndOrder({
     operationalStateStore,
     order,
     outcome,
     purpose,
-    ownership,
   }) {
   if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("recordOrderSubmissionOutcome requires a Operational State Store append capability")
@@ -155,14 +20,8 @@ function validateSubmissionStoreAndOrder({
     throw new TypeError("recordOrderSubmissionOutcome requires a supported submission outcome")
   }
   if (!SUPPORTED_PURPOSES.has(purpose)) {
-    throw new TypeError("Order-submission outcome purpose must be null, RECOVERY_BUY or RECOVERY_SELL")
+    throw new TypeError("Order-submission outcome purpose must be null or RECOVERY_SELL")
   }
-  return validateSubmissionOwnership({
-    purpose,
-    ownership,
-    side: order.side,
-    quantity: order.originalQuantity.amount,
-  })
 }
 
 function validateSubmissionAcknowledgement({
@@ -201,12 +60,11 @@ function validateSubmissionOrderType({ order }) {
 
 function validateSubmissionOutcome(options) {
   const { operationalStateStore, order, outcome, purpose } = options
-  const ownershipFields = validateSubmissionStoreAndOrder({
+  validateSubmissionStoreAndOrder({
     operationalStateStore,
     order,
     outcome,
     purpose,
-    ownership: options.ownership,
   })
   const acknowledged = validateSubmissionAcknowledgement({
     order,
@@ -226,7 +84,6 @@ function validateSubmissionOutcome(options) {
     market,
     clientOrderId: order.clientOrderId,
     acknowledged,
-    ownership: ownershipFields,
   }
 }
 
@@ -243,7 +100,7 @@ function validateSubmissionOutcome(options) {
 export async function recordOrderSubmissionOutcome(options = {}) {
   try {
     const { operationalStateStore, order, outcome, purpose = null } = options
-    const { market, clientOrderId, acknowledged, ownership } = validateSubmissionOutcome({
+    const { market, clientOrderId, acknowledged } = validateSubmissionOutcome({
       ...options,
       purpose,
     })
@@ -266,7 +123,6 @@ export async function recordOrderSubmissionOutcome(options = {}) {
         quantity: order.originalQuantity.amount,
         executedQuantity: order.executedQuantity.amount,
         purpose,
-        ...ownership,
         outcome,
         brokerOrderId: acknowledged ? order.brokerOrderId : null,
         status: order.status,

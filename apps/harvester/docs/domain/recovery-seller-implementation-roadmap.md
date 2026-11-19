@@ -436,35 +436,3 @@ The order-event workflow must not treat an explicitly registered non-CG/non-RS o
 ### Explicit unsupported strategy ownership — implementation checkpoint
 
 Canonical fill accounting now distinguishes RS ownership, explicit CG ownership, legacy unowned orders, and unsupported registered strategy ownership. Explicit non-CG/non-RS owners fail closed before any Conservative accounting mutation. Legacy orders without recorded ownership retain the established CG accounting fallback. The regression test covers this unsupported-owner boundary.
-
-### Production evaluator registration — regression checkpoint
-
-A configured Recovery Seller market must never be silently treated as a successful no-op when the shared engine has no production RS transition evaluator. The shared evaluator now has a required fail-closed regression contract for this wiring boundary. This is an integration safety gate, not RS runtime completion: RS remains disabled until a real production evaluator, submission lifecycle, shared reservations, terminal mixed-SELL reconciliation and RS-5 acceptance are implemented.
-
-### Startup registration guard — regression checkpoint
-
-Configured RS execution routes are now rejected before process-start facts or broker connection when the production RS transition evaluator is missing. A runtime market-event guard remains as defense in depth. This is a startup safety boundary, not production evaluator composition: RS remains non-executable until the actual evaluator and remaining RS-4/RS-5 acceptance work are complete.
-
-## RS-4 per-cycle BUY execution reference — foundational slice
-
-The RS accounting workflow records each accepted canonical BUY Fill under its immutable OrderRegistry cycle ownership and exposes `getBuyExecutionVwap({ cycleId })`. The reference is calculated exactly as aggregate canonical quote quantity divided by aggregate executed base quantity; it is not derived from a market-price snapshot or Portfolio averages. Duplicate Fill replay does not change the result, and cycle IDs are isolated. This provides the actual execution reference required by the next standing-BUY policy.
-
-The current map is process-local and is not restored from Operational State Store facts. A restarted process must not infer a prior cycle's VWAP from an empty map; durable order/cycle/fill replay remains an RS-4/RS-5 requirement. This slice does not register the production evaluator, authorize order submission, or make RS executable.
-
-## RS-4 durable STOP workflow bootstrap composition
-
-When at least one RS execution route is configured, bootstrap now requires an explicitly supplied Operational State Store and constructs the RS STOP workflow from its verified history before appending the current `PROCESS_STARTED` fact. The workflow restores any unresolved account-scoped RS safety blocker and is passed into the shared engine composition. CG-only startup remains unchanged and does not require an Operational State Store for this RS-specific path.
-
-This closes only STOP workflow construction/restoration. The production RS evaluator and submitter still need to call the latch on unexpected/ambiguous outcomes, the strategy dispatcher must block new RS trading while STOPPED while allowing reconciliation, and the authorized operator adapter must perform the existing evidence-gated durable reset. It does not enable restart restoration: prior process history still follows the existing fail-closed process-restart policy.
-
-### Persisted RS ownership validation correction — 2026-11-19
-
-The exact-head package test exposed that an RS order intent with strategy and Position identity but no cycle identity reached the lower-level string validator and produced the wrong failure contract. Persisted RS BUY/SELL ownership now requires all three immutable identifiers (strategy, Position and cycle) before validating their values; the existing Conservative recovery ownership contract remains unchanged. The existing malformed partial-ownership regression is the RED evidence for this correction. This is a validation fix only and does not complete or enable the RS runtime.
-
-## RS-4 durable SELL intent-before-reservation
-
-The RS order submitter commits the exact durable `ORDER_SUBMISSION_INTENT` before reserving the sole SELL for a cycle. It then registers the pending order and enters the shared broker executor. The executor reuses the same committed intent write, avoiding a duplicate operational fact. If the intent write fails, cycle reservation and broker submission do not occur; the submitter latches STOP.
-
-RS SELL ownership now carries the exact recovery/legacy quantity split from the domain SELL plan through the canonical OrderRegistry record. The same allocation is persisted in submission intent and outcome facts; validation requires canonical non-negative quantities whose sum equals the canonical order quantity. STOP callbacks mark a cycle unresolved only when the callback order identity matches the cycle's reserved SELL identity.
-
-This remains an offline-tested submitter capability, not production evaluator composition. Terminal mixed-SELL reconciliation against canonical terminal broker events, account-wide RS/CG budget integration, durable cycle/fill/reservation replay, operator reset, and deterministic runtime restart restoration remain outstanding. RS stays disabled and non-executable.

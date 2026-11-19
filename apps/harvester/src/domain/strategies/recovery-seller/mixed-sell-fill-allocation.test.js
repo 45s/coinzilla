@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
-import { addDecimal, subtractDecimal } from "@coinzilla/utils"
+import { addDecimal } from "@coinzilla/utils"
 import { StrategyId } from "../strategy-ids.js"
 import { createOrderOwnership } from "../../orders/order-ownership.js"
 import { OrderRegistry } from "../../orders/order-registry.js"
@@ -115,13 +115,6 @@ function makeOwnership(overrides = {}) {
   if (overrides.cycleId !== null) {
     ownership.cycleId = overrides.cycleId ?? "rs-cycle-1"
   }
-  if (ownership.strategyId === StrategyId.RECOVERY_SELLER &&
-      ownership.purpose === "RECOVERY_SELL" && overrides.sellAllocation !== null) {
-    ownership.sellAllocation = overrides.sellAllocation ?? {
-      recoverySellQuantity: "5",
-      legacySellQuantity: "0.01",
-    }
-  }
   return createOrderOwnership({
     ownership,
     clientOrderId: overrides.clientOrderId ?? "harvester-rs-sell",
@@ -132,24 +125,7 @@ function makeOwnership(overrides = {}) {
 function makeInput(overrides = {}) {
   const fill = overrides.fill ?? makeFill()
   const order = overrides.order ?? makeOrder()
-  const orderQuantity = order.originalQuantity.amount
-  const legacyQuantity = overrides.legacyQuantity ??
-    (orderQuantity === "5.01" ? "0.01" : "0")
-  const recoveryQuantity = overrides.recoveryQuantity ?? subtractDecimal({
-    left: orderQuantity,
-    right: legacyQuantity,
-  })
-  const ownershipLegacyQuantity = orderQuantity === "5.01" ? "0.01" : "0"
-  const ownershipRecoveryQuantity = subtractDecimal({
-    left: orderQuantity,
-    right: ownershipLegacyQuantity,
-  })
-  const ownership = overrides.ownership ?? makeOwnership({
-    sellAllocation: {
-      recoverySellQuantity: ownershipRecoveryQuantity,
-      legacySellQuantity: ownershipLegacyQuantity,
-    },
-  })
+  const ownership = overrides.ownership ?? makeOwnership()
   const orderRegistry = overrides.orderRegistry ?? new OrderRegistry({
     orders: [order],
     ownerships: [ownership],
@@ -158,8 +134,8 @@ function makeInput(overrides = {}) {
     fill,
     ownership,
     orderRegistry,
-    recoveryQuantity,
-    legacyQuantity,
+    recoveryQuantity: overrides.recoveryQuantity ?? "5",
+    legacyQuantity: overrides.legacyQuantity ?? "0.01",
   }
 }
 
@@ -262,12 +238,7 @@ test("supports a recovery-only SELL after legacy quantity is exhausted", () => {
   })
   const orderRegistry = new OrderRegistry({
     orders: [order],
-    ownerships: [makeOwnership({
-      sellAllocation: {
-        recoverySellQuantity: "5",
-        legacySellQuantity: "0",
-      },
-    })],
+    ownerships: [makeOwnership()],
   })
   const allocation = createMixedSellFillAllocation({
     fill,

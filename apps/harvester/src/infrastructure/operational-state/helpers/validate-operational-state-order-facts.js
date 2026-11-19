@@ -1,6 +1,5 @@
 import { requireNonEmptyString } from "../operational-state-canonical.js"
 import { MAX_FACT_ID_LENGTH } from "./operational-state-fact-schema.js"
-import { addDecimal, compareDecimal } from "@coinzilla/utils"
 import {
   isCanonicalDecimalString,
   isPositiveCanonicalDecimalString,
@@ -15,116 +14,6 @@ function validateProviderIdentity({ canonicalData }) {
   )) {
     throw new TypeError("Order provider provenance must contain all three stable identifiers")
   }
-}
-
-function validatePurposeFreePersistedOwnership({ canonicalData, supplied } = {}) {
-  if (supplied.length === 0) {
-    return
-  }
-  if (canonicalData.strategyId !== "CG_coinGrabber" || supplied.length < 2) {
-    throw new TypeError("Purpose-free order ownership must be complete Coin Grabber ownership")
-  }
-  requireNonEmptyString({
-    value: canonicalData.positionId,
-    field: "data.positionId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
-  if (canonicalData.cycleId !== undefined) {
-    requireNonEmptyString({
-      value: canonicalData.cycleId,
-      field: "data.cycleId",
-      maxLength: MAX_FACT_ID_LENGTH,
-    })
-  }
-}
-
-function validatePersistedRecoveryOrderSide({ canonicalData } = {}) {
-  if (canonicalData.purpose === "RECOVERY_BUY" && canonicalData.strategyId !== "RS_recoverySeller") {
-    throw new TypeError("RECOVERY_BUY ownership must belong to Recovery Seller")
-  }
-  if ((canonicalData.purpose === "RECOVERY_BUY" && canonicalData.side !== "BUY") ||
-      (canonicalData.purpose === "RECOVERY_SELL" && canonicalData.side !== "SELL")) {
-    throw new TypeError("Recovery order purpose must match its canonical side")
-  }
-}
-
-function validatePersistedRecoveryOrderOwnership({ canonicalData, supplied } = {}) {
-  if (canonicalData.purpose === "RECOVERY_SELL" && supplied.length === 0) {
-    return
-  }
-  const minimumOwnershipFields = canonicalData.strategyId === "RS_recoverySeller" ? 3 : 2
-  if (!["RECOVERY_BUY", "RECOVERY_SELL"].includes(canonicalData.purpose) ||
-      supplied.length < minimumOwnershipFields ||
-      !["CG_coinGrabber", "RS_recoverySeller"].includes(canonicalData.strategyId)) {
-    throw new TypeError("Recovery order facts require complete strategy, positionId and cycleId ownership")
-  }
-  requireNonEmptyString({
-    value: canonicalData.positionId,
-    field: "data.positionId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
-  if (canonicalData.strategyId === "RS_recoverySeller") {
-    requireNonEmptyString({
-      value: canonicalData.cycleId,
-      field: "data.cycleId",
-      maxLength: MAX_FACT_ID_LENGTH,
-    })
-  } else if (canonicalData.cycleId !== undefined) {
-    requireNonEmptyString({
-      value: canonicalData.cycleId,
-      field: "data.cycleId",
-      maxLength: MAX_FACT_ID_LENGTH,
-    })
-  }
-  validatePersistedRecoveryOrderSide({
-    canonicalData,
-  })
-}
-
-function validatePersistedSellAllocation({ canonicalData } = {}) {
-  const allocation = canonicalData.sellAllocation
-  const isRecoverySellerSell = canonicalData.strategyId === "RS_recoverySeller" &&
-    canonicalData.purpose === "RECOVERY_SELL"
-  if (!isRecoverySellerSell) {
-    if (allocation !== undefined) {
-      throw new TypeError("Only Recovery Seller SELL ownership may contain a mixed SELL allocation")
-    }
-    return
-  }
-  if (!allocation || typeof allocation !== "object" || Array.isArray(allocation) ||
-      Object.keys(allocation).length !== 2 ||
-      !isPositiveCanonicalDecimalString({ value: allocation.recoverySellQuantity }) ||
-      !isCanonicalDecimalString({ value: allocation.legacySellQuantity }) ||
-      compareDecimal({
-        left: allocation.legacySellQuantity,
-        right: "0",
-      }) < 0 ||
-      compareDecimal({
-        left: addDecimal({
-          left: allocation.recoverySellQuantity,
-          right: allocation.legacySellQuantity,
-        }),
-        right: canonicalData.quantity,
-      }) !== 0) {
-    throw new TypeError("Persisted Recovery Seller SELL allocation must be canonical and equal the order quantity")
-  }
-}
-
-function validatePersistedOrderOwnership({ canonicalData } = {}) {
-  const fields = ["strategyId", "positionId", "cycleId"]
-  const supplied = fields.filter((field) => canonicalData[field] !== undefined)
-  if (canonicalData.purpose === null) {
-    validatePurposeFreePersistedOwnership({
-      canonicalData,
-      supplied,
-    })
-  } else {
-    validatePersistedRecoveryOrderOwnership({
-      canonicalData,
-      supplied,
-    })
-  }
-  validatePersistedSellAllocation({ canonicalData })
 }
 
 function factIdForOrderIntent(clientOrderId) {
@@ -162,10 +51,6 @@ function validateOrderSubmissionIntentFields({ canonicalData }) {
     "price",
     "quantity",
     "purpose",
-    "strategyId",
-    "positionId",
-    "cycleId",
-    "sellAllocation",
   ])
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Order-submission intent fact contains unsupported fields")
@@ -223,14 +108,9 @@ function validateOrderSubmissionIntentSemantics({
   if (!isPositiveDecimalString(canonicalData.price) || !isPositiveDecimalString(canonicalData.quantity)) {
     throw new TypeError("Order-submission intent price and quantity must be positive exact decimal strings")
   }
-  if (canonicalData.purpose !== null &&
-      canonicalData.purpose !== "RECOVERY_BUY" &&
-      canonicalData.purpose !== "RECOVERY_SELL") {
-    throw new TypeError("Order-submission intent purpose must be null, RECOVERY_BUY or RECOVERY_SELL")
+  if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
+    throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
   }
-  validatePersistedOrderOwnership({
-    canonicalData,
-  })
 }
 
 export function validateOrderSubmissionIntentFact({ factType, canonicalData, factId }) {
@@ -275,14 +155,9 @@ function validateOrderSubmissionOutcomeAmounts({ canonicalData }) {
 }
 
 function validateOrderSubmissionOutcomeState({ canonicalData }) {
-  if (canonicalData.purpose !== null &&
-      canonicalData.purpose !== "RECOVERY_BUY" &&
-      canonicalData.purpose !== "RECOVERY_SELL") {
-    throw new TypeError("Order-submission outcome purpose must be null, RECOVERY_BUY or RECOVERY_SELL")
+  if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
+    throw new TypeError("Order-submission outcome purpose must be null or RECOVERY_SELL")
   }
-  validatePersistedOrderOwnership({
-    canonicalData,
-  })
   if (!["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(canonicalData.outcome)) {
     throw new TypeError("Order-submission outcome classification is unsupported")
   }
@@ -327,10 +202,6 @@ function validateOrderSubmissionOutcomeFields({ canonicalData }) {
     "outcome",
     "brokerOrderId",
     "status",
-    "strategyId",
-    "positionId",
-    "cycleId",
-    "sellAllocation",
   ])
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Order-submission outcome fact contains unsupported fields")
