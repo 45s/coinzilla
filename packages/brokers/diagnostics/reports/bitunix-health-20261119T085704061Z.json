@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-11-19T08:57:04.982Z",
+  "finishedAt": "2026-11-19T08:57:16.878Z",
+  "runtime": {
+    "node": "v26.13.0",
+    "platform": "win32"
+  },
+  "summary": {
+    "total": 25,
+    "passed": 21,
+    "failed": 1,
+    "skipped": 3
+  },
+  "healthCheck": {
+    "requiredOperations": [
+      "diagnostic safety confirmation",
+      "diagnostic configuration",
+      "REST private account balances",
+      "WebSocket connection",
+      "ping",
+      "user.account",
+      "user.info"
+    ],
+    "missingRequiredOperations": [],
+    "healthy": false
+  },
+  "results": [
+    {
+      "operation": "diagnostic safety confirmation",
+      "status": "passed",
+      "durationMs": 1
+    },
+    {
+      "operation": "diagnostic configuration",
+      "status": "passed",
+      "durationMs": 1
+    },
+    {
+      "operation": "REST public market catalog",
+      "status": "passed",
+      "durationMs": 557
+    },
+    {
+      "operation": "REST public last price",
+      "status": "passed",
+      "durationMs": 296
+    },
+    {
+      "operation": "REST public order book depth",
+      "status": "skipped",
+      "durationMs": 0
+    },
+    {
+      "operation": "REST public K-line",
+      "status": "passed",
+      "durationMs": 313
+    },
+    {
+      "operation": "REST public K-line history",
+      "status": "passed",
+      "durationMs": 305
+    },
+    {
+      "operation": "REST public exchange rates",
+      "status": "passed",
+      "durationMs": 309
+    },
+    {
+      "operation": "REST public token networks",
+      "status": "passed",
+      "durationMs": 458
+    },
+    {
+      "operation": "REST private account balances",
+      "status": "passed",
+      "durationMs": 319
+    },
+    {
+      "operation": "REST private open orders",
+      "status": "passed",
+      "durationMs": 310
+    },
+    {
+      "operation": "WebSocket connection",
+      "status": "passed",
+      "durationMs": 1185
+    },
+    {
+      "operation": "ping",
+      "status": "passed",
+      "durationMs": 297
+    },
+    {
+      "operation": "market.last_price",
+      "status": "passed",
+      "durationMs": 291
+    },
+    {
+      "operation": "market.depth",
+      "status": "skipped",
+      "durationMs": 0
+    },
+    {
+      "operation": "market.kline",
+      "status": "failed",
+      "durationMs": 290,
+      "error": {
+        "name": "BitunixWebSocketError",
+        "code": "BITUNIX_WEBSOCKET_EXCHANGE_REJECTED",
+        "kind": "exchange",
+        "exchangeCode": "1"
+      }
+    },
+    {
+      "operation": "common.coin_pair.list",
+      "status": "passed",
+      "durationMs": 642
+    },
+    {
+      "operation": "common.rate.list",
+      "status": "passed",
+      "durationMs": 320
+    },
+    {
+      "operation": "common.coin.coin_network.list",
+      "status": "passed",
+      "durationMs": 706
+    },
+    {
+      "operation": "user.account",
+      "status": "passed",
+      "durationMs": 296
+    },
+    {
+      "operation": "user.info",
+      "status": "passed",
+      "durationMs": 295
+    },
+    {
+      "operation": "order.pending.list",
+      "status": "passed",
+      "durationMs": 293
+    },
+    {
+      "operation": "order.history.page",
+      "status": "passed",
+      "durationMs": 295
+    },
+    {
+      "operation": "WebSocket reconnect",
+      "status": "passed",
+      "durationMs": 1523
+    },
+    {
+      "operation": "WebSocket subscription restoration",
+      "status": "skipped",
+      "durationMs": 0
+    }
+  ]
+}
