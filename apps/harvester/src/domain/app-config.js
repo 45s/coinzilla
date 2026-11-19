@@ -423,33 +423,103 @@ function validateProviderInstanceConfig({
 }
 
 
+
 /** Validate one explicitly authorized Recovery Seller market. */
 function validateRecoverySellerPair({ symbol, pair }) {
   const pairPath = `strategies.RS_recoverySeller.pairs.${symbol}`
   if (!symbol.trim()) {
-    fail({ path: "strategies.RS_recoverySeller.pairs", expectation: "non-empty pair symbols" })
+    fail({
+      path: "strategies.RS_recoverySeller.pairs",
+      expectation: "non-empty pair symbols",
+    })
   }
-  requireRecord({ value: pair, path: pairPath })
-  requireBoolean({ value: pair.enabled, path: `${pairPath}.enabled` })
+  requireRecord({
+    value: pair,
+    path: pairPath,
+  })
+  requireBoolean({
+    value: pair.enabled,
+    path: `${pairPath}.enabled`,
+  })
   if (!TRADING_ENVIRONMENT_SET.has(pair.tradingEnvironment)) {
-    fail({ path: `${pairPath}.tradingEnvironment`, expectation: "testnet, live, or both" })
+    fail({
+      path: `${pairPath}.tradingEnvironment`,
+      expectation: "testnet, live, or both",
+    })
   }
-  requireBoolean({ value: pair.enableVolatilityProtection, path: `${pairPath}.enableVolatilityProtection` })
-  if (pair.externalOrdersPolicy !== undefined && !Object.values(EXTERNAL_ORDERS_POLICIES).includes(pair.externalOrdersPolicy)) {
-    fail({ path: `${pairPath}.externalOrdersPolicy`, expectation: Object.values(EXTERNAL_ORDERS_POLICIES).join(" or ") })
+  requireBoolean({
+    value: pair.enableVolatilityProtection,
+    path: `${pairPath}.enableVolatilityProtection`,
+  })
+  if (pair.externalOrdersPolicy !== undefined &&
+      !Object.values(EXTERNAL_ORDERS_POLICIES).includes(pair.externalOrdersPolicy)) {
+    fail({
+      path: `${pairPath}.externalOrdersPolicy`,
+      expectation: Object.values(EXTERNAL_ORDERS_POLICIES).join(" or "),
+    })
   }
-  requireNumber({ value: pair.orderQuantity, path: `${pairPath}.orderQuantity`, min: 0, exclusiveMin: true })
-  requireNumber({ value: pair.sellQuantity, path: `${pairPath}.sellQuantity`, min: 0 })
-  requireNumber({ value: pair.minProfit, path: `${pairPath}.minProfit`, min: 0.01 })
-  requireNumber({ value: pair.priceStepPercent, path: `${pairPath}.priceStepPercent`, min: 0, exclusiveMin: true, max: 100, exclusiveMax: true })
-  requireNumber({ value: pair.makerPercent, path: `${pairPath}.makerPercent`, min: 0, max: 100, exclusiveMax: true })
-  requireNumber({ value: pair.takerPercent, path: `${pairPath}.takerPercent`, min: 0, max: 100, exclusiveMax: true })
+  requireNumber({
+    value: pair.orderQuantity,
+    path: `${pairPath}.orderQuantity`,
+    min: 0,
+    exclusiveMin: true,
+  })
+  requireNumber({
+    value: pair.sellQuantity,
+    path: `${pairPath}.sellQuantity`,
+    min: 0,
+  })
+  requireNumber({
+    value: pair.minProfit,
+    path: `${pairPath}.minProfit`,
+    min: 0.01,
+  })
+  requireNumber({
+    value: pair.priceStepPercent,
+    path: `${pairPath}.priceStepPercent`,
+    min: 0,
+    exclusiveMin: true,
+    max: 100,
+    exclusiveMax: true,
+  })
+  requireNumber({
+    value: pair.makerPercent,
+    path: `${pairPath}.makerPercent`,
+    min: 0,
+    max: 100,
+    exclusiveMax: true,
+  })
+  requireNumber({
+    value: pair.takerPercent,
+    path: `${pairPath}.takerPercent`,
+    min: 0,
+    max: 100,
+    exclusiveMax: true,
+  })
   if (pair.investment !== undefined) {
-    requireNumber({ value: pair.investment, path: `${pairPath}.investment`, min: 0, exclusiveMin: true })
+    requireNumber({
+      value: pair.investment,
+      path: `${pairPath}.investment`,
+      min: 0,
+      exclusiveMin: true,
+    })
   }
-  requireRecord({ value: pair.legacyPosition, path: `${pairPath}.legacyPosition` })
-  requireNumber({ value: pair.legacyPosition.invested, path: `${pairPath}.legacyPosition.invested`, min: 0, exclusiveMin: true })
-  requireNumber({ value: pair.legacyPosition.quantity, path: `${pairPath}.legacyPosition.quantity`, min: 0, exclusiveMin: true })
+  requireRecord({
+    value: pair.legacyPosition,
+    path: `${pairPath}.legacyPosition`,
+  })
+  requireNumber({
+    value: pair.legacyPosition.invested,
+    path: `${pairPath}.legacyPosition.invested`,
+    min: 0,
+    exclusiveMin: true,
+  })
+  requireNumber({
+    value: pair.legacyPosition.quantity,
+    path: `${pairPath}.legacyPosition.quantity`,
+    min: 0,
+    exclusiveMin: true,
+  })
   if (pair.sellQuantity > pair.legacyPosition.quantity) {
     fail({
       path: `${pairPath}.sellQuantity`,
@@ -472,23 +542,44 @@ function validateRecoverySellerConfig(config) {
     return
   }
   const path = "strategies.RS_recoverySeller"
-  requireRecord({ value: strategy, path })
+  requireRecord({
+    value: strategy,
+    path,
+  })
   for (const key of Object.keys(strategy)) {
     if (key !== "enabled" && key !== "pairs") {
-      fail({ path: `${path}.${key}`, expectation: "only enabled and pairs are supported" })
+      fail({
+        path: `${path}.${key}`,
+        expectation: "only enabled and pairs are supported",
+      })
     }
   }
-  requireBoolean({ value: strategy.enabled, path: `${path}.enabled` })
-  requireRecord({ value: strategy.pairs, path: `${path}.pairs` })
+  requireBoolean({
+    value: strategy.enabled,
+    path: `${path}.enabled`,
+  })
+  requireRecord({
+    value: strategy.pairs,
+    path: `${path}.pairs`,
+  })
   const pairs = Object.entries(strategy.pairs)
   if (strategy.enabled && pairs.length === 0) {
-    fail({ path: `${path}.pairs`, expectation: "at least one explicitly authorized market when RS is enabled" })
+    fail({
+      path: `${path}.pairs`,
+      expectation: "at least one explicitly authorized market when RS is enabled",
+    })
   }
   for (const [symbol, pair] of pairs) {
-    validateRecoverySellerPair({ symbol, pair })
+    validateRecoverySellerPair({
+      symbol,
+      pair,
+    })
   }
   if (strategy.enabled && !pairs.some(([, pair]) => pair.enabled)) {
-    fail({ path: `${path}.pairs`, expectation: "at least one enabled Recovery Seller market" })
+    fail({
+      path: `${path}.pairs`,
+      expectation: "at least one enabled Recovery Seller market",
+    })
   }
 }
 
