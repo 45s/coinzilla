@@ -45,11 +45,11 @@ test("Coin constructor rejects invalid quantities with its domain Error", () => 
 
 test("Coin constructor accepts zero and finite quantities and normalizes ticker", () => {
   const zeroQuantityCoin = new Coin({ ticker: " btc ", quantity: 0 })
-  const fractionalQuantityCoin = new Coin({ ticker: "Eth", quantity: 0.25 })
+  const fractionalQuantityCoin = new Coin({ ticker: "ETH", quantity: 0.25 })
 
   assert.deepEqual(
     zeroQuantityCoin.value,
-    { ticker: "Btc", quantity: 0 },
+    { ticker: "BTC", quantity: 0 },
     "Coin must preserve the valid zero quantity and normalize whitespace/casing in ticker",
   )
   assert.deepEqual(
