@@ -27,6 +27,7 @@ See the detailed [Binance WebSocket contract](../../docs/brokers-websocket-contr
 
 The `@coinzilla/brokers` entry point exports:
 
+- `Broker` — exchange-neutral constructor selecting the existing Binance or Bitunix Spot implementation.
 - `BinanceWebSocketBroker` — the concrete Binance WebSocket API/Streams broker.
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
 - `BitunixSpotBroker` and `BitunixSpotConfig` — the partial Bitunix Spot REST broker implementation and its validated configuration.
@@ -37,6 +38,35 @@ The `@coinzilla/brokers` entry point exports:
 - `BROKER_METHODS`, `BROKER_COMPATIBILITY_METHODS`, `BROKER_MUTATION_OUTCOMES`, `assertBrokerContract`, `getBrokerMutationOutcome` — structural API, compatibility, and mutation-outcome contract helpers.
 
 ## Exchange-neutral Broker API
+
+Construct a provider through the public `Broker` constructor:
+
+```js
+import { Broker } from "@coinzilla/brokers"
+
+const broker = new Broker({
+  provider: "binance",
+  apiKey,
+  apiSecret,
+  tradingMode: "testnet",
+})
+
+// Bitunix Spot uses the same constructor and requires explicit LIVE selection.
+const spotBroker = new Broker({
+  provider: "bitunix",
+  apiKey,
+  apiSecret,
+  tradingMode: "live",
+  providerOptions: {
+    requestTimeout: 10_000,
+  },
+})
+```
+
+The provider must be exactly `"binance"` or `"bitunix"`. Environment selection is explicit: Binance requires `tradingMode: "testnet" | "live"`; Bitunix Spot currently requires `tradingMode: "live"` because no Spot TESTNET endpoint is documented. Provider-specific options (such as `baseUrl`, `websocketApiUrl`, `requestTimeout`, or injected dependencies) belong inside `providerOptions`. Common credentials, environment selection, and the optional logger cannot be overridden there.
+
+The constructor returns the existing concrete provider instance, preserving its behavior and concrete `instanceof` checks. Both instances also satisfy `instanceof Broker` through the shared structural contract. Existing direct constructors remain supported. The factory selects an adapter only; application-specific account/market routing remains with the consuming application.
+
 
 Both providers expose an immutable `BrokerCapabilities` declaration. The canonical three statuses are `SUPPORTED`, `UNSUPPORTED`, and `UNKNOWN`; environment selection and runtime readiness are metadata/conditions, never a fourth status. Supported declarations require method and guarantee evidence; unsupported/unknown declarations require reasons.
 

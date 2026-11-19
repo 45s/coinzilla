@@ -6,6 +6,38 @@
 
 This document defines the exchange-neutral public Broker contract, the compatibility surface retained for existing consumers, and the provider capability declaration model. Provider protocols and DTOs remain private to each provider implementation.
 
+## 0. Public provider constructor
+
+Consumers may select either supported provider without importing an exchange-specific class:
+
+```js
+import { Broker } from "@coinzilla/brokers"
+
+const broker = new Broker({
+  provider: "binance",
+  apiKey,
+  apiSecret,
+  tradingMode: "testnet",
+})
+
+const spotBroker = new Broker({
+  provider: "bitunix",
+  apiKey,
+  apiSecret,
+  tradingMode: "live",
+})
+```
+
+- `provider` is required and must be exactly `"binance"` or `"bitunix"`; missing and unknown providers fail during construction.
+- `apiKey`, `apiSecret`, and `tradingMode` are common top-level options. The selected provider validates credentials and its supported environment.
+- Binance requires explicit `tradingMode: "testnet" | "live"`; `NODE_ENV` never selects exchange endpoints.
+- Bitunix Spot requires explicit `tradingMode: "live"`. No Spot TESTNET endpoint is documented; the constructor does not silently infer LIVE.
+- Provider-specific configuration is namespaced under `providerOptions`. For example, use `providerOptions: { baseUrl, requestTimeout }` for Bitunix or `providerOptions: { websocketApiUrl, websocketStreamsUrl }` for Binance. Provider options cannot override common credentials, logger, or environment selection.
+- The optional common `logger` is passed to the selected adapter. Unknown top-level options fail fast rather than being silently ignored.
+- The constructor returns the selected existing concrete provider instance and validates it against `assertBrokerContract`. Existing `BinanceWebSocketBroker` and `BitunixSpotBroker` constructors remain supported. Concrete provider `instanceof` checks remain valid; both providers also satisfy `instanceof Broker` via the structural contract.
+- `Broker` is a constructor convenience, not an application provider registry or market-routing policy. Consuming applications retain ownership of account/market routing and composition.
+
+
 ## 1. Ownership and capability-model decision
 
 The shared exchange-neutral `BrokerCapabilities` value contract is owned by **Entities** and re-exported by Brokers for compatibility. Brokers owns the provider-specific declarations and the evidence supporting each status; it does not maintain a second capability class, vocabulary, status enum, validator, or lookup implementation.
