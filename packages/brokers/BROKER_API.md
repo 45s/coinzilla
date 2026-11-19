@@ -202,7 +202,6 @@ HTTP/RPC conflicts and server failures, timeouts, connection loss after dispatch
 - Harvester owns its application ports, adapters, registries, orchestration, and trading workflows. Brokers must not import or absorb them.
 - Providers may use different internal REST/WebSocket architectures while satisfying the same structural public contract.
 
-
 ## User-data delivery channels
 
 Both providers expose the same `subscribeForUserData()` method and callback shape. Consumers never inspect provider classes or provider source code to choose a transport:
@@ -225,8 +224,6 @@ await broker.subscribeForUserData({
 
 A successful observation subscription is therefore not evidence that native user-data delivery or trading readiness is available.
 
-
 Binance declares `SUBSCRIBE_USER_DATA: SUPPORTED` and `OBSERVE_USER_DATA: UNSUPPORTED`: its authenticated native WebSocket events use `onEvent`, not a polling observation channel. Bitunix declares the inverse delivery capabilities and remains non-authoritative.
-
 
 The Binance subscription result retains the live `subscriptionId` getter and recovery acknowledgement controls from `UserDataSession`. Delivery metadata is attached without spreading/snapshotting the handle, so reconnects continue to expose the current remote subscription ID.

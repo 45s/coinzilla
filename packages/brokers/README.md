@@ -460,7 +460,6 @@ The public `normalizeBinanceId(value, name?)` helper validates Binance identifie
 
 For user-data `executionReport` TRADE events, canonical Fill execution time is Binance transaction time `T`. Event publication time `E` remains event/order-update metadata and must not be used as the execution timestamp. This matches the WebSocket API `myTrades.time` field, so the same exchange trade has identical canonical facts whether it is first observed in a history response or an `executionReport` user-data stream event. Preserve strict duplicate-fill conflict detection: identical facts are idempotent; conflicting facts reusing a Fill ID remain errors.
 
-
 ### User-data delivery modes
 
 The method name is shared; the delivery guarantee is not. Binance declares `SUBSCRIBE_USER_DATA: SUPPORTED`, returns `deliveryMode: "NATIVE_EVENTS"` / `nativePush: true`, and forwards authenticated exchange events through `onEvent`. Bitunix declares `OBSERVE_USER_DATA: SUPPORTED` while native `SUBSCRIBE_USER_DATA` remains unsupported; it returns `deliveryMode: "POLLING_OBSERVATIONS"` / `nativePush: false` and sends changed, explicitly scoped snapshots only through `onObservation`.

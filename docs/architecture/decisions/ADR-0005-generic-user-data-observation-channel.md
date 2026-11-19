@@ -43,6 +43,7 @@ The project needs one provider-neutral Broker API without pretending these deliv
 ## Verification
 
 Required regression evidence includes:
+
 - Bitunix observations are delivered only through `onObservation`; `onEvent` is never invoked.
 - Binance native events remain delivered through `onEvent` and are declared `NATIVE_EVENTS`.
 - Capability declarations distinguish `OBSERVE_USER_DATA` from `SUBSCRIBE_USER_DATA`.
