@@ -425,7 +425,7 @@ export class BitunixSpotWebSocketClient {
       return this.#disconnectPromise
     }
     if (this.#state === "closed") {
-      return
+      return undefined
     }
     this.#state = "closed"
     this.#rejectPending(new BitunixWebSocketError({
