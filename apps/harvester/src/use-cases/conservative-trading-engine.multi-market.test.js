@@ -307,7 +307,10 @@ async function createHarness({
   const portfolio = initialPortfolio ?? new Portfolio()
   const metadataBySymbol = new Map(markets.filter((market) => symbols.includes(market.symbol))
     .map((market) => [market.symbol, makeMarketMetadata(market)]))
-  const appConfig = createHarnessAppConfig({ externalOrdersPolicyBySymbol, symbols })
+  const appConfig = createHarnessAppConfig({
+    externalOrdersPolicyBySymbol,
+    symbols,
+  })
   const broker = createHarnessBroker({
     orders,
     cancelledOrderIds,
@@ -330,11 +333,13 @@ async function createHarness({
     eventPublisher,
   })
   await initializeHarnessBooks({ engine, symbols })
-  return { engine,
-orders,
-pauses,
-accountedFills,
-cancelledOrderIds }
+  return {
+    engine,
+    orders,
+    pauses,
+    accountedFills,
+    cancelledOrderIds,
+  }
 }
 
 async function startBothMarkets({ engine, symbols = ["DOGEUSDT", "SOLUSDT"] } = {}) {
@@ -391,7 +396,10 @@ async function createReconciliationHarness({
       data: [],
     }),
   }
-  const harness = await createHarness({ brokerOverrides, symbols })
+  const harness = await createHarness({
+    brokerOverrides,
+    symbols,
+  })
   harnessState.engine = harness.engine
   await startBothMarkets({
     engine: harnessState.engine,
@@ -931,100 +939,104 @@ function createOperatorPauseStrategyPolicy() {
 }
 
 
-test("a fill racing owned-BUY cancellation is applied once with its actual commission facts", async () => {
-  const harnessState = { engine: undefined }
-  const brokerOverrides = {
+function createFilledCancellationOrder({ order }) {
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market: order.market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: order.originalQuantity,
+    status: "FILLED",
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: 2,
+    completedAt: 2,
+  })
+}
+
+function createCancellationRaceFill({ order }) {
+  return new Fill({
+    tradeId: "doge-cancel-race",
+    brokerOrderId: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+    market: order.market,
+    side: "BUY",
+    price: order.limitPrice,
+    quantity: order.originalQuantity,
+    quoteQuantity: new Money({
+      amount: "99.95",
+      asset: order.market.quoteAsset,
+    }),
+    commissions: [new Commission({
+      amount: new Money({
+        amount: "0.01",
+        asset: feeAsset,
+      }),
+    })],
+    commissionStatus: "COMPLETE",
+    executedAt: 2,
+  })
+}
+
+function createCancellationRaceBrokerOverrides({ harnessState }) {
+  return {
     cancelOrder: async ({ order }) => ({
       ok: true,
-      data: new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
-        market: order.market,
-        side: order.side,
-        type: order.type,
-        limitPrice: order.limitPrice,
-        originalQuantity: order.originalQuantity,
-        executedQuantity: order.originalQuantity,
-        status: "FILLED",
-        createdAt: order.createdAt,
-        acknowledgedAt: order.acknowledgedAt,
-        updatedAt: 2,
-        completedAt: 2,
-      }),
+      data: createFilledCancellationOrder({ order }),
     }),
     getFills: async ({ symbol, orderId }) => {
       const order = harnessState.engine.getOrders().find((candidate) =>
         candidate.market.symbol === symbol && candidate.brokerOrderId === orderId)
       return {
         ok: true,
-        data: [new Fill({
-          tradeId: "doge-cancel-race",
-          brokerOrderId: order.brokerOrderId,
-          clientOrderId: order.clientOrderId,
-          market: order.market,
-          side: "BUY",
-          price: order.limitPrice,
-          quantity: order.originalQuantity,
-          quoteQuantity: new Money({
-            amount: "99.95",
-            asset: order.market.quoteAsset,
-          }),
-          commissions: [new Commission({
-            amount: new Money({
-              amount: "0.01",
-              asset: feeAsset,
-            }),
-          })],
-          commissionStatus: "COMPLETE",
-          executedAt: 2,
-        })],
+        data: [createCancellationRaceFill({ order })],
       }
     },
   }
+}
+
+test("a fill racing owned-BUY cancellation is applied once with its actual commission facts", async () => {
+  const harnessState = { engine: undefined }
+  const brokerOverrides = createCancellationRaceBrokerOverrides({ harnessState })
   const harness = await createHarness({ brokerOverrides })
   harnessState.engine = harness.engine
   await startBothMarkets({
     engine: harnessState.engine,
     symbols: ["DOGEUSDT"],
   })
-
   const result = await harnessState.engine.cancelOwnedBuyOrdersForShutdown({
     symbol: "DOGEUSDT",
   })
 
-  assert.equal(
-    result.ok,
-    true,
-    "A FILLED cancellation race must complete after authoritative fill reconciliation.",
-  )
-  assert.equal(
-    harness.accountedFills.length,
-    1,
-    "The fill returned by terminal cancellation history must be applied exactly once.",
-  )
-  assert.equal(
-    harness.accountedFills[0].tradeId,
-    "doge-cancel-race",
-    "The reconciled fill must retain its canonical trade identity.",
-  )
-  assert.equal(
-    harness.accountedFills[0].commissions[0].amount.asset.id,
-    feeAsset.id,
-    "The cancellation-racing fill must retain its actual third-asset commission identity.",
-  )
-  assert.equal(
-    harness.accountedFills[0].commissions[0].amount.amount,
-    "0.01",
-    "The cancellation-racing fill must retain its actual commission amount.",
-  )
+  assert.equal(result.ok, true, "A FILLED cancellation race must complete after authoritative fill reconciliation.")
+  assert.equal(harness.accountedFills.length, 1, "The terminal cancellation fill must be applied exactly once.")
+  assert.equal(harness.accountedFills[0].tradeId, "doge-cancel-race")
+  assert.equal(harness.accountedFills[0].commissions[0].amount.asset.id, feeAsset.id)
+  assert.equal(harness.accountedFills[0].commissions[0].amount.amount, "0.01")
   assert.equal(
     harnessState.engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT").status,
     "FILLED",
-    "The canonical terminal FILLED order state must be retained after cancellation reconciliation.",
   )
 })
 
-test("shutdown owned-BUY cancellation leaves an active recovery SELL untouched", async () => {
+function compareActiveOrderDescriptions(...entries) {
+  const [left, right] = entries
+  return `${left.symbol}:${left.side}`.localeCompare(`${right.symbol}:${right.side}`)
+}
+
+function describeActiveOrders({ engine }) {
+  return engine.getActiveOrders()
+    .map((order) => ({
+      symbol: order.market.symbol,
+      side: order.side,
+    }))
+    .sort(compareActiveOrderDescriptions)
+}
+
+async function createShutdownSellCancellationHarness() {
   const dogeMarket = marketsBySymbol.get("DOGEUSDT")
   const { portfolio, recoveryLedger } = createOperatorPauseRecoveryPosition({ market: dogeMarket })
   const strategyPolicy = createOperatorPauseStrategyPolicy()
@@ -1035,61 +1047,43 @@ test("shutdown owned-BUY cancellation leaves an active recovery SELL untouched",
   })
   await startBothMarkets({ engine })
   engine.beginShutdown()
+  return engine
+}
 
-  const describeActiveOrders = () => engine.getActiveOrders()
-    .map((order) => ({
-      symbol: order.market.symbol,
-      side: order.side,
-    }))
-    .sort((left, right) => `${left.symbol}:${left.side}`.localeCompare(`${right.symbol}:${right.side}`))
-  const before = describeActiveOrders()
-  assert.deepEqual(
-    before,
-    [
-      {
-        symbol: "DOGEUSDT",
-        side: "BUY",
-      },
-      {
-        symbol: "DOGEUSDT",
-        side: "SELL",
-      },
-      {
-        symbol: "SOLUSDT",
-        side: "BUY",
-      },
-    ],
-    "The shutdown fixture must contain the recovery SELL and both markets' owned BUY orders.",
-  )
+test("shutdown owned-BUY cancellation leaves an active recovery SELL untouched", async () => {
+  const engine = await createShutdownSellCancellationHarness()
+  const before = describeActiveOrders({ engine })
+  assert.deepEqual(before, [
+    {
+      symbol: "DOGEUSDT",
+      side: "BUY",
+    },
+    {
+      symbol: "DOGEUSDT",
+      side: "SELL",
+    },
+    {
+      symbol: "SOLUSDT",
+      side: "BUY",
+    },
+  ])
 
   const cancellation = await engine.cancelOwnedBuyOrdersForShutdown({
     symbol: "DOGEUSDT",
   })
 
-  assert.equal(
-    cancellation.ok,
-    true,
-    "The scoped owned-BUY shutdown cancellation must complete successfully.",
-  )
-  assert.equal(
-    cancellation.data.canceled,
-    1,
-    "Only the requested market's owned BUY may be canceled.",
-  )
-  assert.deepEqual(
-    describeActiveOrders(),
-    [
-      {
-        symbol: "DOGEUSDT",
-        side: "SELL",
-      },
-      {
-        symbol: "SOLUSDT",
-        side: "BUY",
-      },
-    ],
-    "The recovery SELL and unrelated market BUY must remain active after owned-BUY shutdown cancellation.",
-  )
+  assert.equal(cancellation.ok, true)
+  assert.equal(cancellation.data.canceled, 1)
+  assert.deepEqual(describeActiveOrders({ engine }), [
+    {
+      symbol: "DOGEUSDT",
+      side: "SELL",
+    },
+    {
+      symbol: "SOLUSDT",
+      side: "BUY",
+    },
+  ])
 })
 
 test("operator pause preserves recovery SELL execution while suppressing the same market's BUY", async () => {
