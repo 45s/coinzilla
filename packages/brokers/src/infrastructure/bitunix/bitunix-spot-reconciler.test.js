@@ -4,25 +4,51 @@ import { BitunixSpotReconciler } from "./bitunix-spot-reconciler.js"
 
 function createBroker({ fail = null } = {}) {
   const calls = []
-  const read = (name, data) => async (input) => {
-    calls.push({ name, input })
-    if (fail === name) return { ok: false, errors: [new Error("read failed")] }
-    return { ok: true, data }
+  const read = ({ name, data }) => async (input) => {
+    calls.push({
+      name,
+      input,
+    })
+    if (fail === name) {
+      return {
+        ok: false,
+        errors: [new Error("read failed")],
+      }
+    }
+    return {
+      ok: true,
+      data,
+    }
   }
   return {
     calls,
     broker: {
-      getBalances: read("balances", [{ asset: "USDT", free: "10" }]),
-      getOpenOrders: read("openOrders", []),
-      getOrderHistory: read("history", []),
-      getMatchingOrderDetails: read("matching", { id: "raw-id", volume: "10" }),
+      getBalances: read({
+        name: "balances",
+        data: [{ asset: "USDT", free: "10" }],
+      }),
+      getOpenOrders: read({
+        name: "openOrders",
+        data: [],
+      }),
+      getOrderHistory: read({
+        name: "history",
+        data: [],
+      }),
+      getMatchingOrderDetails: read({
+        name: "matching",
+        data: { id: "raw-id", volume: "10" },
+      }),
     },
   }
 }
 
 test("pollOnce publishes an observed snapshot without inventing source time or canonical fills", async () => {
   const { broker, calls } = createBroker()
-  const reconciler = new BitunixSpotReconciler({ broker, now: () => 1234 })
+  const reconciler = new BitunixSpotReconciler({
+    broker,
+    now: () => 1234,
+  })
   const result = await reconciler.pollOnce({
     symbols: ["btcusdt"],
     trackedOrders: [{ symbol: "BTCUSDT", orderId: "order-1" }],
@@ -37,7 +63,9 @@ test("pollOnce publishes an observed snapshot without inventing source time or c
 })
 
 test("pollOnce rejects failed reads and never publishes a partial snapshot", async () => {
-  const { broker } = createBroker({ fail: "history" })
+  const { broker } = createBroker({
+    fail: "history",
+  })
   const reconciler = new BitunixSpotReconciler({ broker })
   await assert.rejects(reconciler.pollOnce({ symbols: ["BTCUSDT"] }), /order history.*failed/)
   assert.equal(reconciler.getStatus().lastSuccessAt, null)
@@ -53,7 +81,10 @@ test("pollOnce rejects missing or duplicate symbol scope before I/O", async () =
 
 test("pollOnce deduplicates unchanged observations", async () => {
   const { broker } = createBroker()
-  const reconciler = new BitunixSpotReconciler({ broker, now: () => 1234 })
+  const reconciler = new BitunixSpotReconciler({
+    broker,
+    now: () => 1234,
+  })
   const first = await reconciler.pollOnce({ symbols: ["BTCUSDT"] })
   const second = await reconciler.pollOnce({ symbols: ["BTCUSDT"] })
   assert.equal(first.changed, true)
@@ -63,10 +94,16 @@ test("pollOnce deduplicates unchanged observations", async () => {
 test("pollOnce coalesces concurrent cycles into one in-flight read", async () => {
   let release
   let count = 0
-  const wait = new Promise((resolve) => { release = resolve })
+  const wait = new Promise((resolve) => {
+    release = resolve
+  })
   const { broker } = createBroker()
   const original = broker.getBalances
-  broker.getBalances = async () => { count += 1; await wait; return original() }
+  broker.getBalances = async () => {
+    count += 1
+    await wait
+    return original()
+  }
   const reconciler = new BitunixSpotReconciler({ broker })
   const first = reconciler.pollOnce({ symbols: ["BTCUSDT"] })
   const second = reconciler.pollOnce({ symbols: ["BTCUSDT"] })
@@ -78,10 +115,15 @@ test("pollOnce coalesces concurrent cycles into one in-flight read", async () =>
 
 test("pollOnce invalidates in-flight observations when stopped", async () => {
   let release
-  const wait = new Promise((resolve) => { release = resolve })
+  const wait = new Promise((resolve) => {
+    release = resolve
+  })
   const { broker } = createBroker()
   const original = broker.getBalances
-  broker.getBalances = async () => { await wait; return original() }
+  broker.getBalances = async () => {
+    await wait
+    return original()
+  }
   const reconciler = new BitunixSpotReconciler({ broker })
   const pending = reconciler.pollOnce({ symbols: ["BTCUSDT"] })
   reconciler.stop()
@@ -91,10 +133,15 @@ test("pollOnce invalidates in-flight observations when stopped", async () => {
 
 test("pollOnce rejects a concurrent request with a different symbol scope", async () => {
   let release
-  const wait = new Promise((resolve) => { release = resolve })
+  const wait = new Promise((resolve) => {
+    release = resolve
+  })
   const { broker } = createBroker()
   const original = broker.getBalances
-  broker.getBalances = async () => { await wait; return original() }
+  broker.getBalances = async () => {
+    await wait
+    return original()
+  }
   const reconciler = new BitunixSpotReconciler({ broker })
   const pending = reconciler.pollOnce({ symbols: ["BTCUSDT"] })
   await assert.rejects(reconciler.pollOnce({ symbols: ["ETHUSDT"] }), /different scope/)
@@ -104,10 +151,15 @@ test("pollOnce rejects a concurrent request with a different symbol scope", asyn
 
 test("stop fences an in-flight manual poll even when the scheduler was never started", async () => {
   let release
-  const wait = new Promise((resolve) => { release = resolve })
+  const wait = new Promise((resolve) => {
+    release = resolve
+  })
   const { broker } = createBroker()
   const original = broker.getBalances
-  broker.getBalances = async () => { await wait; return original() }
+  broker.getBalances = async () => {
+    await wait
+    return original()
+  }
   const reconciler = new BitunixSpotReconciler({ broker })
   const pending = reconciler.pollOnce({ symbols: ["BTCUSDT"] })
   reconciler.stop()
@@ -123,14 +175,23 @@ test("start publishes the first observation, reports status and stops scheduling
   const reconciler = new BitunixSpotReconciler({
     broker,
     now: () => 1000,
-    schedule: (callback) => { scheduled = callback; return 1 },
-    cancel: () => { scheduled = null },
+    schedule: ({ callback }) => {
+      scheduled = callback
+      return 1
+    },
+    cancel: () => {
+      scheduled = null
+    },
   })
   const session = reconciler.start({
     symbols: ["BTCUSDT"],
     intervalMs: 500,
-    onSnapshot: () => { snapshots += 1 },
-    onStatus: () => { statuses += 1 },
+    onSnapshot: () => {
+      snapshots += 1
+    },
+    onStatus: () => {
+      statuses += 1
+    },
   })
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(snapshots, 1)
@@ -151,7 +212,13 @@ test("start retries a snapshot after callback failure and backs off the failed c
   const reconciler = new BitunixSpotReconciler({
     broker,
     now: () => 1000,
-    schedule: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
+    schedule: ({ callback, delay }) => {
+      scheduled.push({
+        callback,
+        delay,
+      })
+      return scheduled.length
+    },
     cancel: () => {},
   })
   const session = reconciler.start({
@@ -159,9 +226,13 @@ test("start retries a snapshot after callback failure and backs off the failed c
     intervalMs: 500,
     onSnapshot: () => {
       snapshots += 1
-      if (snapshots === 1) throw new Error("consumer unavailable")
+      if (snapshots === 1) {
+        throw new Error("consumer unavailable")
+      }
     },
-    onError: () => { errors += 1 },
+    onError: () => {
+      errors += 1
+    },
   })
   await new Promise((resolve) => setImmediate(resolve))
   assert.equal(errors, 1)
