@@ -934,11 +934,34 @@ async function handleEvaluationFailure({ dependencies, symbol, error } = {}) {
 }
 
 async function submitConservativeTransition({ dependencies, context, allocation, balances } = {}) {
-  return submitConservativeTransition({
+  const executableDecision = Object.freeze({
+    ...context.decision,
+    actions: Object.freeze(allocation.executableActions),
+  })
+  const preflightResult = await validatePreflightDecision({
     dependencies,
     context,
-    allocation,
+    executableDecision,
+  })
+  if (preflightResult) {
+    return preflightResult
+  }
+  const result = await submitExecutableDecision({
+    dependencies,
+    context,
+    executableDecision,
     balances,
+  })
+  logSubmissionResult({
+    dependencies,
+    context,
+    result,
+  })
+  return finalizeSubmissionResult({
+    dependencies,
+    context,
+    result,
+    deferredActions: allocation.deferredActions,
   })
 }
 
@@ -1007,34 +1030,11 @@ async function executeConservativeLatestTransition({ dependencies, options, gate
     balances,
     allocation,
   })
-  const executableDecision = Object.freeze({
-    ...context.decision,
-    actions: Object.freeze(allocation.executableActions),
-  })
-  const preflightResult = await validatePreflightDecision({
+  return submitConservativeTransition({
     dependencies,
     context,
-    executableDecision,
-  })
-  if (preflightResult) {
-    return preflightResult
-  }
-  const result = await submitExecutableDecision({
-    dependencies,
-    context,
-    executableDecision,
+    allocation,
     balances,
-  })
-  logSubmissionResult({
-    dependencies,
-    context,
-    result,
-  })
-  return finalizeSubmissionResult({
-    dependencies,
-    context,
-    result,
-    deferredActions: allocation.deferredActions,
   })
 }
 
