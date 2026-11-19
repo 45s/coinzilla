@@ -16,7 +16,7 @@ The documented Bitunix Spot WebSocket API is authenticated request/response RPC.
 - The history endpoint is symbol-scoped and paginated. This primitive reads page 1 only and explicitly marks `FIRST_PAGE_ONLY`; it does not claim complete account history.
 - Matching-order responses are preserved as `EXCHANGE_NATIVE_UNVERIFIED`. They are not converted into canonical fills or executions.
 - Unchanged snapshots are deduplicated. Errors are surfaced and do not advance `lastSuccessAt`.
-- `stop()` fences in-flight work and prevents callbacks or future scheduled cycles after stop.
+- `stop()` fences in-flight work, prevents subsequent endpoint reads after the currently dispatched request returns, and prevents callbacks or future scheduled cycles. It cannot abort a network request already in flight.
 - Polling cadence is configurable from 250 ms to 60 seconds. Select a production interval only after checking Bitunix rate limits and aggregate symbol/order request volume.
 
 ## Deliberate non-guarantees
