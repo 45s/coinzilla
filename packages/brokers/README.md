@@ -286,7 +286,7 @@ Bitunix documents Spot WebSocket as authenticated request/response RPC: every re
 
 ### Configure and run
 
-Create `.env.development` in the repository root (never commit it; the root `.gitignore` already excludes it). The published health check requires both private API credentials; the lower-level diagnostic command still supports public-only checks:
+Create `packages/brokers/.env.development` (never commit it; the root `.gitignore` already excludes it). The published health check requires both private API credentials; the lower-level diagnostic command still supports public-only checks:
 
 ~~~dotenv
 BITUNIX_API_KEY=your_read_only_diagnostic_api_key
@@ -298,7 +298,7 @@ BITUNIX_API_SECRET=your_api_secret
 From the repository root:
 
 ~~~sh
-pnpm bitunix:health
+node scripts/bitunix-healthcheck.js
 ~~~
 
 For public-only diagnostics without private credentials, use `pnpm --filter @coinzilla/brokers diagnose:bitunix`; this command does not create or push a report branch. The publisher rejects missing or blank credentials before fetching or creating a branch, so it cannot label a public-only run as a successful authenticated health check.
@@ -337,7 +337,7 @@ This is an operator diagnostic, not a trading test, exchange acceptance certific
 
 ### One-command report publishing
 
-Run `pnpm bitunix:health` from a clean local checkout on `develop`. The command loads the repository-root `.env.development`, fetches `origin/develop`, creates a timestamped `diagnostics/bitunix-health-<timestamp>` branch, and reuses the read-only diagnostics above. It writes the local report under `packages/brokers/.diagnostics/` and commits/pushes only the sanitized report under `packages/brokers/diagnostics/reports/`. It then switches the local checkout back to `develop`.
+Run `node scripts/bitunix-healthcheck.js` from a clean local checkout on `develop`. The command loads the `packages/brokers/.env.development`, fetches `origin/develop`, creates a timestamped `diagnostics/bitunix-health-<timestamp>` branch, and reuses the read-only diagnostics above. It writes the local report under `packages/brokers/.diagnostics/` and commits/pushes only the sanitized report under `packages/brokers/diagnostics/reports/`. It then switches the local checkout back to `develop`.
 
 A healthy verdict requires successful `diagnostic safety confirmation`, `diagnostic configuration`, REST private account-balance retrieval, authenticated WebSocket connection and `ping`, plus `user.account` and `user.info`. Optional probes may be skipped when their inputs are not configured, but any failed operation or any required operation that did not pass makes the overall health check fail. The failure report is still pushed when Git permits.
 

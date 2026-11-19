@@ -31,6 +31,12 @@ The ADA recovery lifecycle work below remains a separate active trading-safety o
 
 **Status:** The generic `@coinzilla/db` provider-neutral CRUD/query, lifecycle, transaction, SQLite provider, backup/restore primitives and conformance infrastructure are implemented and hardened. The package-specific DB ESLint cleanup is complete.
 
+**Relational-schema direction — generic prerequisite complete:** [PR #1489](https://github.com/45s/coinzilla/pull/1489) completed the generic SQLite migration audit and hardening tracked by [#1486](https://github.com/45s/coinzilla/issues/1486). The DB package now detects changed applied migration implementations and rejects out-of-order pending migrations while preserving legacy migration history. The DB package still owns generic infrastructure only; Harvester owns its business tables, schema, repositories and migrations.
+
+**Target Harvester layout — design direction, not implemented:** use readable, domain-owned physical tables where they provide stable query/reporting value (initial candidates: `orders`, `fills`, and carefully scoped `errors`). A `sessions` table requires a separately defined business purpose and lifecycle; do not restore the removed process-ID smoke test or old trading-session-ID projection. Error persistence must define safe payload redaction and retention, and must not duplicate Journal or replace diagnostic logs.
+
+Any migration must preserve existing `harvester_orders` history through a verified, idempotent conversion with a rollback/backup plan before cutover. Keep the current best-effort, non-blocking observer semantics and TESTNET/LIVE file separation. No Journal/ADR-0001 replacement, restart restoration, or trading-state authority is introduced.
+
 **Previous persistence scope:** The trading-session-ID history projection from PR #1369 and the temporary `harvester_processes` process-ID smoke-test write are removed in this slice, as explicitly requested. The replacement history record is an executed-order projection; it does not use process or runtime-session identity.
 
 **Filled-order history — MERGED:** [PR #1469](https://github.com/45s/coinzilla/pull/1469) merged into `develop` as `39f098000d6c20cb596a9e6700250faa00bbd80e` (exact validated PR head `6d11d883e2d8250c2b3fab9f6d5a40d6178996bb`). It delivers a non-authoritative `harvester_orders` projection. Persist an order as soon as cumulative executed quantity is positive, including immediate partial/fully filled acknowledgements, later partial/final fills, and partial-fill cancellation outcomes. Further lifecycle snapshots update the same row. Identity is `(environment, providerInstanceId, providerType, accountId, clientOrderId)`; exact decimal strings, canonical market/asset facts, provider/account provenance, and available strategy/position ownership are retained.
@@ -149,14 +155,7 @@ Remaining safety and observability follow-up #1105 remains open; #1103 is comple
 
 ---
 
-
-### RS-4 runtime integration progress — PR #1476
-
-The disabled-by-default RS configuration boundary is now present and validated. RS pair precision uses the shared token registry. Provider route resolution retains `strategyId` and `symbol` per account while deriving deduplicated market symbols separately. The first exact-head CI run exposed a validator-ordering defect and test fixtures that did not satisfy the explicit route precondition; both are corrected without weakening route validation. This remains routing/configuration work only: bootstrap still creates the Conservative engine, and RS is not registered for runtime order evaluation/submission. Keep RS disabled until shared Portfolio/OrderRegistry/Trading Engine integration and RS-5 offline lifecycle acceptance are complete.
-
 ## Proposed strategy — Recovery Seller (RS)
-
-**Current delivery:** RS-4/RS-5 implementation is tracked in [#1475](https://github.com/45s/coinzilla/issues/1475). The owner-approved manual STOP reset domain/application barrier is implemented in the active draft [PR #1476](https://github.com/45s/coinzilla/pull/1476); shared-engine runtime integration and offline lifecycle proof remain outstanding.
 
 **Status: PROPOSED — RS-1, RS-2a and RS-2b accounting are complete; RS-3 pure policy is complete in PR #1127.** PR #1276 merged the isolated RS application accounting workflow into `develop` as `9276b6c01bec62b743727548786c5af4a04b7908` from exact head `19448d63d117f563c31d8ab9422ac73623974782`; the full Harvester suite passed 1,847/1,847 and all required checks passed. The workflow commits terminal recovery/legacy accounting atomically, returns independent recovery/legacy allocation eligibility plus the combined-cycle profitability result, and sets overall eligibility only when all applicable gates pass. PR #1127 adds the pure pre-submission SELL evaluator with pair-configured `minProfit`, Conservative-compatible order type/fee reserve, and sticky STOP on supported exchange-filter violations. RS remains isolated: it is not registered, configured or executable. RS-4 shared-engine integration and RS-5 offline lifecycle proof remain separate phases. The product direction is recorded in [Trading Strategies — Recovery Seller](./docs/trading-strategies.md#recovery-seller-rs--proposed-strategy), the [Recovery Seller Domain Specification](./docs/domain/recovery-seller-domain-specification.md), and the [Recovery Seller Implementation Roadmap](./docs/domain/recovery-seller-implementation-roadmap.md).
 
