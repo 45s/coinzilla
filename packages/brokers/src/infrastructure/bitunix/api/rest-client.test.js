@@ -837,9 +837,7 @@ test("Bitunix REST explicit exchange rejections remain definitive for state-chan
 })
 
 
-
-
-async function assertMutationHttpOutcome({ status, outcomeUnknown }) {
+async function assertMutationHttpOutcome({ status, outcomeUnknown, retryAfterMs = null }) {
   let requestCount = 0
   const client = new BitunixRestClient({
     apiKey: "api-key",
@@ -849,6 +847,13 @@ async function assertMutationHttpOutcome({ status, outcomeUnknown }) {
       return {
         ok: false,
         status,
+        headers: {
+          get(name) {
+            return name === "retry-after" && retryAfterMs !== null
+              ? String(retryAfterMs / 1000)
+              : null
+          },
+        },
         async text() {
           return JSON.stringify({
             code: String(status),
@@ -871,6 +876,9 @@ async function assertMutationHttpOutcome({ status, outcomeUnknown }) {
     (error) => {
       assert.equal(error.status, status, "the HTTP status must remain available for mutation classification")
       assert.equal(error.outcomeUnknown, outcomeUnknown, "REST mutation metadata must match the common Broker HTTP outcome rules")
+      if (retryAfterMs !== null) {
+        assert.equal(error.retryAfterMs, retryAfterMs, "Retry-After must remain available without causing an automatic retry")
+      }
       return true
     },
   )
@@ -894,6 +902,7 @@ test("Bitunix REST client aligns mutation outcome metadata with shared Broker HT
     {
       status: 429,
       outcomeUnknown: false,
+      retryAfterMs: 2000,
     },
     {
       status: 500,
