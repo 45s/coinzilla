@@ -90,15 +90,39 @@ async function readVerifiedOperationalStateHistory({ operationalStateStore } = {
   assertVerifiedOperationalStateHistory({ existingFacts })
   const existingProjection = projectHarvesterOperationalState({ records: existingFacts.data.records })
   assertOperationalStateProjection({ existingProjection })
-  return existingProjection
+  return {
+    projection: existingProjection,
+    records: existingFacts.data.records,
+  }
 }
 
-function assertOperationalStateCanStart({ projection } = {}) {
-  if (projection.data.sessions.length > 0) {
-    throw new Error(
-      "Automatic Harvester process restart is disabled until ADR-0001 Step 9 crash/restart proof and the complete exchange-reconciliation gate are accepted; the durable ledger already contains a prior PROCESS_STARTED session.",
-    )
+function assertOperationalStateCanStart({ projection, records } = {}) {
+  const processStarts = records.filter((record) => record.factType === "PROCESS_STARTED")
+  if (processStarts.length === 0) {
+    return false
   }
+  const stoppedSessionIds = new Set(records
+    .filter((record) => record.factType === "PROCESS_STOPPED")
+    .map((record) => record.runtimeSessionId))
+  const allSessionsStopped = processStarts.every((record) => stoppedSessionIds.has(record.runtimeSessionId))
+  const latestProcessStart = processStarts.at(-1)
+  const stickySafetyBlockers = projection.data.stickySafetyBlockers ?? []
+  const observationOnlyRestart = latestProcessStart.data.tradingEnabled === false &&
+    stickySafetyBlockers.length === 0
+  const singleRecoverySellerStop = stickySafetyBlockers.length === 1 &&
+    stickySafetyBlockers[0].scope === "ACCOUNT" &&
+    stickySafetyBlockers[0].reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  if (
+    projection.data.candidateOnly === true &&
+    projection.data.restorationEnabled === false &&
+    allSessionsStopped &&
+    (observationOnlyRestart || singleRecoverySellerStop)
+  ) {
+    return true
+  }
+  throw new Error(
+    "Automatic Harvester trading-state restoration remains disabled until ADR-0001 Step 9 crash/restart proof and exchange reconciliation are accepted; only a clean prior session with an RS STOP latch or an observation-only session may restart, and trading remains disabled.",
+  )
 }
 
 async function verifyOperationalStateStore({ operationalStateStore,
@@ -109,9 +133,12 @@ async function verifyOperationalStateStore({ operationalStateStore,
   assertOperationalStateStoreInterface({ operationalStateStore })
   await verifyOperationalStateStoreDurability({ operationalStateStore })
   if (recoveryEnabled === true) {
-    const projection = await readVerifiedOperationalStateHistory({ operationalStateStore })
-    assertOperationalStateCanStart({ projection })
-    return { previousProcessStarted: false }
+    const history = await readVerifiedOperationalStateHistory({ operationalStateStore })
+    const previousProcessStarted = assertOperationalStateCanStart({
+      projection: history.projection,
+      records: history.records,
+    })
+    return { previousProcessStarted }
   }
   const existingFacts = await operationalStateStore.readAll()
   if (existingFacts?.ok !== true ||
@@ -358,6 +385,7 @@ export async function prepareHarvesterStartupState({ dependencies, resolved } = 
     operatorControlLifecycle,
     operationalStateStore,
     startupOptions,
+    recoverySellerStopWorkflow,
   }
 }
 
@@ -706,6 +734,7 @@ function createHarvesterTradingEngineActivator({ startup,
       getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
       recoverySellerPairs: startup.recoverySellerPairs,
       recoverySellerWorkflow: portfolio.recoverySellerWorkflow,
+      recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
       evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
       getRecoverySellerMarketMetadata: portfolio.getRecoverySellerMarketMetadata,
       updateTradingAccounting: portfolio.updateTradingAccounting,
