@@ -363,6 +363,27 @@ function createConservativeLatestTransitionEvaluator(dependencies = {}) {
   }
 }
 
+function shouldSkipRecoverySellerEvaluation({ conservativeResult, options } = {}) {
+  return !conservativeResult?.ok ||
+    options.preflightOnly === true ||
+    options.shutdownRecoveryOnly === true
+}
+
+function getMissingRecoverySellerEvaluatorResult({ dependencies, symbol } = {}) {
+  const hasRecoverySellerRoute = Object.hasOwn(
+    dependencies.recoverySellerPairs ?? {},
+    symbol,
+  )
+  if (typeof dependencies.evaluateRecoverySellerTransition === "function" || !hasRecoverySellerRoute) {
+    return null
+  }
+  return toResult({
+    error: new Error(
+      "Recovery Seller execution route is configured but no production transition evaluator is registered",
+    ),
+  })
+}
+
 export function createLatestTransitionEvaluator(dependencies = {}) {
   const evaluateConservativeLatestTransition = createConservativeLatestTransitionEvaluator({
     ...dependencies,
@@ -370,23 +391,17 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
   })
   return async function evaluateLatestTransition(options = {}) {
     const conservativeResult = await evaluateConservativeLatestTransition(options)
-    if (!conservativeResult?.ok ||
-        options.preflightOnly === true ||
-        options.shutdownRecoveryOnly === true) {
+    if (shouldSkipRecoverySellerEvaluation({ conservativeResult, options })) {
       return conservativeResult
     }
-    const hasRecoverySellerRoute = Object.hasOwn(
-      dependencies.recoverySellerPairs ?? {},
-      options.symbol,
-    )
+    const missingEvaluator = getMissingRecoverySellerEvaluatorResult({
+      dependencies,
+      symbol: options.symbol,
+    })
+    if (missingEvaluator) {
+      return missingEvaluator
+    }
     if (typeof dependencies.evaluateRecoverySellerTransition !== "function") {
-      if (hasRecoverySellerRoute) {
-        return toResult({
-          error: new Error(
-            "Recovery Seller execution route is configured but no production transition evaluator is registered",
-          ),
-        })
-      }
       return conservativeResult
     }
     try {
