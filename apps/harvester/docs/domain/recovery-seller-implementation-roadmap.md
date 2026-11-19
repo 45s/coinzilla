@@ -420,3 +420,7 @@ RS configuration is not execution permission by itself. Keep RS disabled until t
 ### Canonical fill ownership dispatch — checkpoint
 
 The order-event workflow now resolves immutable OrderRegistry ownership before accounting. RS BUY fills are routed through the RS accounting workflow and are excluded from CG execution totals. Individual RS SELL fill events fail closed until the terminal mixed-SELL reconciliation workflow can atomically allocate the complete canonical fill set and release the reservation. Regression coverage verifies both paths. This is an integration slice only; it does not satisfy production RS policy dispatch, shared reservation submission, or RS-5 lifecycle acceptance.
+
+### Runtime wiring correction — checkpoint
+
+The first callback composition attempt placed the callback in the options destructuring and caused a startup-module syntax error. GitHub Actions exposed this before delivery. The callback is now composed in the returned engine options, and exact-head targeted verification is rerunning. RS BUY accounting dispatch remains an integration slice; no production RS order execution is enabled.
