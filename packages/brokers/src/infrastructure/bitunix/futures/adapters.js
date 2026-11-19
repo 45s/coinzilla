@@ -374,19 +374,30 @@ function normalizeOrderType(record) {
 }
 
 function adaptOrderRows({ data, listField, path }) {
-  requireRecord(data, path)
-  const rows = requireArray(data[listField], `${path}.${listField}`)
-  const items = Object.freeze(rows.map((row, index) => (
-    validateRecord({
-      record: normalizeOrderType(row),
+  requireRecord({
+    value: data,
+    field: path,
+  })
+  const rows = requireArray({
+    value: data[listField],
+    field: `${path}.${listField}`,
+  })
+  const items = []
+  for (let index = 0; index < rows.length; index += 1) {
+    items.push(validateRecord({
+      record: normalizeOrderType(rows[index]),
       ...ORDER_SPEC,
       path: `${path}.${listField}[${index}]`,
-    })
-  )))
-  requireInt64(data, "total", path)
+    }))
+  }
+  requireInt64({
+    record: data,
+    field: "total",
+    path,
+  })
   return Object.freeze({
     ...data,
-    [listField]: items,
+    [listField]: Object.freeze(items),
   })
 }
 
@@ -419,10 +430,14 @@ export function adaptFuturesOrderDetail(data) {
 
 export function adaptFuturesHistoryTrades(data) {
   requireRecord({ value: data, field: "trade/get_history_trades" })
-  const trades = requireArray({ value: data.tradeList, field: "trade/get_history_trades.tradeList" })
-  const tradeList = Object.freeze(trades.map((trade, index) => {
-    const normalized = normalizeOrderType(trade)
-    return validateRecord(normalized, {
+  const trades = requireArray({
+    value: data.tradeList,
+    field: "trade/get_history_trades.tradeList",
+  })
+  const tradeList = []
+  for (let index = 0; index < trades.length; index += 1) {
+    tradeList.push(validateRecord({
+      record: normalizeOrderType(trades[index]),
       path: `trade/get_history_trades.tradeList[${index}]`,
       strings: ["tradeId", "orderId", "symbol", "side"],
       optionalStrings: ["clientId", "orderType", "type", "effect", "roleType"],
@@ -430,8 +445,8 @@ export function adaptFuturesHistoryTrades(data) {
       integers: ["leverage"],
       int64: ["ctime", "subAccountId"],
       booleans: ["reduceOnly"],
-    })
-  }))
+    }))
+  }
   requireInt64({ record: data, field: "total", path: "trade/get_history_trades" })
   return Object.freeze({
     ...data,
