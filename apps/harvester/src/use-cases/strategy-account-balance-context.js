@@ -1,4 +1,4 @@
-import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, maxDecimal } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, multiplyDecimal, maxDecimal, ensure } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 
 function sumDecimalValues({ items, getValue } = {}) {
@@ -18,14 +18,23 @@ function sumAdditionalTrackedAmount({
   field,
   allowNegative,
 } = {}) {
-  if (!Array.isArray(records)) {
-    throw new TypeError(`${field} provider must return an array`)
-  }
+  ensure.array({
+    value: records,
+    name: field,
+    errMsg: `${field} provider must return an array`,
+  })
   let total = "0"
   for (const item of records) {
-    if (!item || typeof item.assetId !== "string" || !item.assetId.trim()) {
-      throw new TypeError(`${field} requires a canonical asset ID`)
-    }
+    ensure.object({
+      value: item,
+      name: `${field}[]`,
+      errMsg: `${field} requires a canonical asset ID`,
+    })
+    ensure.nonEmptyString({
+      value: item.assetId,
+      name: `${field}[].assetId`,
+      errMsg: `${field} requires a canonical asset ID`,
+    })
     assertDecimalString({
       value: item.amount,
       field: `${field}.amount`,
