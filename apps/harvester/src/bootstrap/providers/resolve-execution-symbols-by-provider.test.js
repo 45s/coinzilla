@@ -76,6 +76,62 @@ test("resolves every enabled strategy-market route to exactly one configured pro
   ], "Each execution account must receive only the markets explicitly assigned to it")
 })
 
+test("routes enabled RS markets through explicit provider assignments and deduplicates shared market subscriptions", () => {
+  const recoverySellerPairs = {
+    BTCUSDT: { enabled: true, tradingEnvironment: "testnet" },
+    DOGEUSDT: { enabled: true, tradingEnvironment: "testnet" },
+  }
+  const routes = [
+    ...createRoutes(),
+    {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "BTCUSDT",
+      providerInstanceId: "binance-testnet-primary",
+    },
+    {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      symbol: "DOGEUSDT",
+      providerInstanceId: "binance-testnet-primary",
+    },
+  ]
+  const result = resolveExecutionSymbolsByProvider({
+    appConfig: createAppConfig({
+      strategies: {
+        CG_coinGrabber: { pairs },
+        RS_recoverySeller: {
+          enabled: true,
+          pairs: recoverySellerPairs,
+        },
+      },
+      executionRouting: { routes },
+    }),
+    providers,
+  })
+
+  assert.deepEqual([...result], [
+    ["binance-testnet-primary", ["BTCUSDT", "DOGEUSDT"]],
+    ["binance-live-secondary", ["ETHUSDT"]],
+  ], "A provider subscribes to each market once even when CG and RS both have explicit routes for that market")
+})
+
+test("rejects an RS route unless RS is explicitly enabled and the market is enabled", () => {
+  const route = {
+    strategyId: StrategyId.RECOVERY_SELLER,
+    symbol: "BTCUSDT",
+    providerInstanceId: "binance-testnet-primary",
+  }
+  assert.throws(
+    () => resolveExecutionSymbolsByProvider({
+      appConfig: createAppConfig({
+        executionRouting: { routes: [...createRoutes(), route] },
+      }),
+      providers,
+    }),
+    /disabled|not enabled|unsupported strategy/i,
+    "An RS route must never implicitly enable RS or adopt the CG pair configuration",
+  )
+})
+
 test("rejects multi-provider configuration without an explicit execution route table", () => {
   assert.throws(
     () => resolveExecutionSymbolsByProvider({
@@ -160,7 +216,7 @@ test("rejects routes for disabled or unconfigured markets and unknown strategy I
     { ...createRoutes()[0],
   symbol: "SOLUSDT" },
     { ...createRoutes()[0],
-  strategyId: StrategyId.RECOVERY_SELLER,
+  strategyId: "UNSUPPORTED_STRATEGY",
   symbol: "BTCUSDT" },
   ]
 

@@ -52,4 +52,4 @@ When brokers.instances, executionRouting, and marketDataRouting are absent, the 
 
 ## Deferred boundaries
 
-Process-restart restoration remains disabled under issue #654. Recovery Seller remains non-executable under #1127. This Phase 6 contract does not enable live or TESTNET order mutations during engineering verification; integrated tests use deterministic in-memory BrokerPort fakes.
+Process-restart restoration remains disabled under issue #654. Recovery Seller remains non-executable while RS-4/RS-5 are incomplete; implementation is tracked in [issue #1475](https://github.com/45s/coinzilla/issues/1475). This Phase 6 contract does not enable live or TESTNET order mutations during engineering verification; integrated tests use deterministic in-memory BrokerPort fakes.
