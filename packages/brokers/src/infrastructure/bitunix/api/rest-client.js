@@ -133,9 +133,7 @@ const LOSSLESS_NUMERIC_FIELDS = Object.freeze({
     "available", "frozen", "margin", "transfer", "crossUnrealizedPNL",
     "isolationUnrealizedPNL", "bonus",
   ]),
-  "/api/v1/futures/copyTrading/asset/query": Object.freeze([
-    "available", "maxTransfer", "balance",
-  ]),
+  "/api/v1/cp/asset/query": Object.freeze(["available", "maxTransfer"]),
 })
 
 const LOSSLESS_ARRAY_NUMBER_PATHS = new Set([
