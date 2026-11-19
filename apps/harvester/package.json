@@ -66,6 +66,7 @@
       "src/domain/account/calculate-account-snapshot-baselines.test.js",
       "src/bootstrap/account/create-account-snapshot-manager.test.js",
       "src/use-cases/create-recovery-seller-accounting-workflow.test.js",
+      "src/use-cases/resolve-recovery-seller-stop.test.js",
       "src/use-cases/execute-strategy-decision.test.js",
       "src/use-cases/conservative-trading-engine.test.js",
       "src/use-cases/conservative-trading-engine.multi-market.test.js",

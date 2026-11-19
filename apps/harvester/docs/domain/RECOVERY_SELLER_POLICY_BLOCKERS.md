@@ -170,7 +170,7 @@ Missing acceptance coverage/work before execution:
 - RS SELL policy decision tests for order-type choice, fee role, all min/max filters, blocked/capped candidate outcomes, and profit revalidation after any filter adjustment.
 - Deterministic post-fill adverse-result and terminal-underfill resolution tests after the owner decisions.
 - Approved third-asset valuation-source/freshness tests.
-- Operator STOP resolution/reset tests for the owner-approved cause-fixed, reconciled, accounting-verified manual reset.
+- Operator STOP resolution/reset tests for the owner-approved cause-fixed, reconciled, accounting-verified manual reset (domain/application barrier now implemented in #1475; runtime wiring remains).
 - RS-4 integration tests for same-market/different-market CG+RS concurrency, order ownership, shared reservations and exact-once fills.
 - RS-5 offline full-cycle tests including EARN return/custody reconciliation, partial fills, fees, unknown outcomes and restart/replay boundaries.
 
@@ -205,6 +205,6 @@ This dated addendum supersedes the pre-merge handoff in §9; it does not rewrite
 
 - The owner-approved pure pre-submission SELL evaluator was merged in PR #1127 as `3fde5cdc0b1ed39bffeb5e21a67f44e0f653e8c3`. The evaluator implements the existing per-pair `minProfit` and 0.01 quote-asset floor, Conservative-compatible order type/fee reserve, supported min/max exchange-filter validation, and sticky STOP for missing required inputs, planning failures or filter violations.
 - Exact implementation head `96315757e74a4851770716b04d8dae5cf9580ece` passed 13/13 focused evaluator tests, 2,101/2,101 Harvester tests, workspace Unit Tests and Test Coverage, strict ESLint, JavaScript quality/syntax, actionlint, Utils tests and dependency audit. The read-only Binance TESTNET integration was skipped; no exchange operations were performed.
-- **RS-3 pure policy is complete.** The remaining blockers are post-fill adverse-result resolution, terminal partial/canceled/rejected/expired SELL resolution, an approved third-asset fee valuation source/freshness contract, and STOP reset/resume semantics. These remain fail-closed; do not invent defaults or authorize a second SELL.
+- **RS-3 pure policy is complete.** The remaining blockers are post-fill adverse-result resolution, terminal partial/canceled/rejected/expired SELL resolution, an approved third-asset fee valuation source/freshness contract, and runtime STOP reset/resume wiring. These remain fail-closed; do not invent defaults or authorize a second SELL.
 - **RS-4 shared Trading Engine integration and RS-5 offline lifecycle acceptance remain incomplete.** RS remains unregistered, unconfigured and non-executable. No TESTNET/LIVE order or exchange action is authorized.
 - The implementation handoff above that asks to continue RS-3 implementation is historical and superseded by this update. Future work starts with the unresolved fail-closed decisions and RS-4/RS-5 acceptance, not by reimplementing the merged evaluator.
