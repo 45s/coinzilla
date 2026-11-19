@@ -137,6 +137,8 @@ The declaration's `environment.selectedMode` is the instance's validated `tradin
 
 This section contains only work owned by `@coinzilla/brokers`. Consumer application ports, adapters, routing, and runtime composition are tracked by the owning application.
 
+**Current Bitunix evidence matrix:** [Bitunix Spot production-readiness gap matrix](./docs/bitunix-production-readiness-gap-matrix.md) (2026-11-19). This snapshot distinguishes repository implementation from live exchange verification and records the protocol evidence required before enabling mutations or Harvester admission.
+
 1. **P1 — Bitunix Spot capability completion (#1185).** Continue only where official Spot contracts and mandatory reference implementations establish safe behavior. Preserve explicit unsupported operations until identity, quantity semantics, execution completeness, account freshness, mutation outcomes, private-event lifecycle and environment safety are source-backed. Do not enable order placement/cancellation while these blockers remain.
 2. **P1 — Binance protocol acceptance and recovery.** Diagnose the outstanding read-only TESTNET handshake/acceptance gap in an eligible environment. Preserve recovery-generation fencing, subscriber acknowledgements, state-changing request gates, and unknown-outcome semantics. Offline tests do not prove live endpoint compatibility.
 3. **P2 — Broker lifecycle maintainability.** Decompose transport, RPC, Streams, and user-data lifecycle modules only in small behavior-preserving slices with characterization tests and cleanup/race coverage.
