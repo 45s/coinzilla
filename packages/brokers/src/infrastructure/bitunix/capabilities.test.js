@@ -19,6 +19,8 @@ test("Bitunix Spot capability declaration uses the canonical BrokerCapabilities 
   assert.equal(capabilities.getStatus({ type: "CANCEL_ORDER" }), "UNSUPPORTED")
   assert.equal(capabilities.getStatus({ type: "CANCEL_ALL_ORDERS" }), "UNSUPPORTED")
   assert.equal(capabilities.getStatus({ type: "READ_COMPLETE_FILL_HISTORY" }), "UNKNOWN")
+  assert.equal(capabilities.getStatus({ type: "OBSERVE_USER_DATA" }), "SUPPORTED")
+  assert.equal(capabilities.getStatus({ type: "SUBSCRIBE_USER_DATA" }), "UNSUPPORTED")
 })
 
 test("Bitunix Spot live mutation capabilities require explicit configuration opt-in", () => {

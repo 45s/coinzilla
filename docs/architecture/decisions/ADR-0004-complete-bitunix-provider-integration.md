@@ -1,10 +1,10 @@
 # ADR-0004: Complete Bitunix provider integration
 
-- Status: Accepted
+- Status: Superseded
 - Date: 2026-11-18
 - Owner: Harvester and Brokers
 - Supersedes: The Bitunix observer-only integration exception described in ADR-0003's historical context and implemented under #1422
-- Superseded by: None
+- Superseded by: [ADR-0005](./ADR-0005-generic-user-data-observation-channel.md)
 
 ## Context
 
@@ -49,3 +49,5 @@ This decision supersedes only the Bitunix observer-only exception. ADR-0003 rema
 - **Tests:** Harvester provider-routing tests remain offline and prove the Binance execution path, account isolation, independent market-data routing, provenance, and lifecycle behavior.
 - **Issues/PRs:** Complete the source-backed Bitunix broker and lifecycle acceptance in [#1185](https://github.com/45s/coinzilla/issues/1185) before adding a Bitunix provider factory or route.
 - **Documentation updated:** ADR-0003 remains authoritative for general routing; this ADR is authoritative for Bitunix admission and sequencing. Harvester and Brokers roadmaps must reflect this boundary.
+
+**Supersession note (2026-11-19):** ADR-0005 introduces a generic callback-level observation channel on the existing Broker contract. It does not permit a Bitunix-specific Harvester runtime, provider registration, execution routing, or readiness bypass. The provider-admission restrictions and fail-closed requirements in this ADR remain in force under ADR-0005.

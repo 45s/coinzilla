@@ -15,7 +15,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
+const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onEvent = () => {}, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
   const calls = []
   const events = []
   const subscription = { disconnect: async () => calls.push("disconnect") }
@@ -36,7 +36,8 @@ data: subscription }
     tradingMode,
     tradingEnabled,
     enabledSymbols: ["BTCUSDT"],
-    onEvent: () => {},
+    onEvent,
+    onObservation,
     onStatus: () => {},
     publishAccountSnapshot: async (input) => {
       calls.push(`account:${  input.phase}`)
@@ -149,9 +150,9 @@ test("logs the user-data stream connection only after the subscription is establ
   await fixture.result
 
   assert.equal(
-    systemLogs.some((entry) => entry.message === "User-data stream connected"),
+    systemLogs.some((entry) => entry.message === "Broker user-data delivery established"),
     true,
-    "A successful broker user-data subscription must produce one explicit connected system message.",
+    "A successful broker user-data subscription must produce one explicit delivery-established system message.",
   )
   assert.equal(
     systemLogs.some((entry) => entry.message === "Binance user-data subscription established"),
@@ -191,4 +192,38 @@ test("LIVE startup failures report LIVE instead of hard-coded TESTNET", async ()
     "A blocked LIVE startup must identify the resolved exchange mode.",
   )
   assert.equal(systemLogs.some((entry) => entry.message.includes("TESTNET")), false, "A LIVE startup failure must never claim TESTNET.")
+})
+
+
+const fixtureSubscription = {
+  disconnect: async () => {},
+}
+
+test("passes polling observations through a separate callback without treating them as execution events", async () => {
+  const observation = Object.freeze({
+    mode: "POLLING",
+    nativePush: false,
+    observedAt: 1234,
+    sourceTime: null,
+  })
+  const received = []
+  const receivedEvents = []
+  const fixture = createFixture({
+    onEvent: (message) => receivedEvents.push(message),
+    onObservation: ({ observation: value }) => received.push(value),
+    subscribe: async (handlers) => {
+      handlers.onObservation({ observation })
+      return {
+        ok: true,
+        data: fixtureSubscription,
+      }
+    },
+  })
+  const subscription = await fixture.result
+
+  assert.deepEqual(received, [observation], "Polling data must arrive through onObservation.")
+  assert.deepEqual(receivedEvents, [], "Polling observations must not enter the native execution-event callback.")
+  assert.equal(fixture.state.ready, false, "An observation must not open trading readiness.")
+  assert.equal(fixture.events.length, 1, "An observation must not publish a canonical broker event.")
+  assert.equal(subscription, fixtureSubscription, "The subscription lifecycle handle must remain available to bootstrap.")
 })

@@ -80,6 +80,10 @@ test("both public broker facades implement the same exchange-neutral method surf
   }
 })
 
+test("Bitunix polling reconciliation remains private to the provider implementation", () => {
+  assert.equal(brokers.BitunixSpotReconciler, undefined)
+})
+
 test("public Bitunix Spot WebSocket client is independently constructible without connecting", () => {
   const client = new brokers.BitunixSpotWebSocketClient({
     apiKey: "contract-test-key",

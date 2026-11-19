@@ -18,6 +18,7 @@ import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
 import { loadMarketMetadata } from "./market/load-market-metadata.js"
 import { createUserDataEventHandler } from "./user-data/create-user-data-event-handler.js"
+import { createUserDataObservationHandler } from "./user-data/create-user-data-observation-handler.js"
 import { createUserDataStatusHandler } from "./user-data/create-user-data-status-handler.js"
 import { createUserDataRecoveryHandler } from "./user-data/create-user-data-recovery-handler.js"
 import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
@@ -593,8 +594,12 @@ function createHarvesterUserDataEventRuntime({ startup,
     resumeDeferredStrategyEvaluations: accountSnapshots.resumeDeferredStrategyEvaluations,
     onSafetyBlockerRaised: startup.onSafetyBlockerRaised,
   })
+  const handleUserDataObservation = createUserDataObservationHandler({
+    logger: startup.logger,
+  })
   return {
     handleUserDataEvent,
+    handleUserDataObservation,
     drainUserDataEvents: () => drainHarvesterUserDataEvents({ userDataState }),
   }
 }
@@ -779,6 +784,7 @@ async function startHarvesterUserDataServices({
     tradingEnabled: startup.tradingEnabled,
     enabledSymbols: startup.marketSymbols ?? startup.enabledSymbols,
     onEvent: userDataEvents.handleUserDataEvent,
+    onObservation: userDataEvents.handleUserDataObservation,
     onStatus: recoveryRuntime.handleUserDataStatus,
     onSubscriptionEstablished: (subscription) => { resources.userDataSubscription = subscription },
     publishAccountSnapshot: accountSnapshots.publishAccountSnapshot,

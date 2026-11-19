@@ -181,6 +181,32 @@ it("filters stale subscriptions and deduplicates repeated execution reports", as
   await result.data.disconnect()
 })
 
+function createFilledExecutionReport() {
+  return {
+    e: "executionReport",
+    s: "BTCUSDT",
+    i: 100,
+    I: 200,
+    x: "TRADE",
+    X: "FILLED",
+    c: "harvester-order-100",
+    S: "BUY",
+    o: "LIMIT_MAKER",
+    q: "1.000",
+    p: "100",
+    z: "1.000",
+    l: "1.000",
+    L: "100",
+    n: "0",
+    N: null,
+    T: 300,
+    O: 299,
+    t: 400,
+    E: 301,
+    Y: "100",
+  }
+}
+
 it("forwards canonical order states and canonical fills for TRADE reports", async () => {
   const { broker, rpc } = createBroker(
     () => ({ subscriptionId: 26 }),
@@ -212,32 +238,12 @@ it("forwards canonical order states and canonical fills for TRADE reports", asyn
     onEvent: (input) => received.push(input),
     onStatus: (status) => statuses.push(status),
   })
+  assert.equal(result.data.deliveryMode, "NATIVE_EVENTS")
+  assert.equal(result.data.nativePush, true)
 
   rpc.emitEvent({
     subscriptionId: 26,
-    event: {
-      e: "executionReport",
-      s: "BTCUSDT",
-      i: 100,
-      I: 200,
-      x: "TRADE",
-      X: "FILLED",
-      c: "harvester-order-100",
-      S: "BUY",
-      o: "LIMIT_MAKER",
-      q: "1.000",
-      p: "100",
-      z: "1.000",
-      l: "1.000",
-      L: "100",
-      n: "0",
-      N: null,
-      T: 300,
-      O: 299,
-      t: 400,
-      E: 301,
-      Y: "100",
-    },
+    event: createFilledExecutionReport(),
   })
   await new Promise((resolve) => setImmediate(resolve))
 
@@ -522,3 +528,6 @@ it("removes local observers when remote unsubscribe fails and does not replay it
   await result.data.disconnect()
   assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
 })
+
+
+

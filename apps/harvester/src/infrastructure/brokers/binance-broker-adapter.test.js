@@ -77,6 +77,14 @@ type: "LIMIT_MAKER" } })
   assert.equal(uncertain.errors[0], unknown, "An unknown submission outcome must never be downgraded to a definite rejection.")
 })
 
+async function assertMarketMetadataIsMapped(broker) {
+  const marketMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
+  assert.equal(marketMetadata.ok, true)
+  assert.ok(marketMetadata.data.market instanceof Market)
+  assert.ok(marketMetadata.data.tradingRules instanceof TradingRules)
+  assert.deepEqual(marketMetadata.data.supportedOrderTypes, ["LIMIT", "LIMIT_MAKER"])
+}
+
 test("maps object-shaped application inputs to the broker package methods", async () => {
   const { calls, client, result } = createClient()
   client.getSymbolFilters = async (input) => {
@@ -106,11 +114,7 @@ orderId: 7 }), result)
 limit: 10 }), result)
   assert.equal(await broker.getAccountSnapshot(), result)
   assert.equal(await broker.getExchangeMarkets(), result)
-  const marketMetadata = await broker.getSymbolFilters({ symbol: "BTCUSDT" })
-  assert.equal(marketMetadata.ok, true)
-  assert.ok(marketMetadata.data.market instanceof Market)
-  assert.ok(marketMetadata.data.tradingRules instanceof TradingRules)
-  assert.deepEqual(marketMetadata.data.supportedOrderTypes, ["LIMIT", "LIMIT_MAKER"])
+  await assertMarketMetadataIsMapped(broker)
   assert.equal(await broker.getPrices({ symbol: "BTCUSDT" }), result)
   const candleRequest = { symbol: "BTCUSDT",
 interval: "1m",
@@ -148,17 +152,20 @@ test("forwards connection and subscription lifecycle methods", async () => {
 brokerFactory: () => client })
   const onPrice = () => {}
   const onEvent = () => {}
+  const onObservation = () => {}
   const onStatus = () => {}
 
   await broker.connect()
   await broker.subscribeForPrices({ symbol: "BTCUSDT",
 onPrice })
   await broker.subscribeForUserData({ onEvent,
+onObservation,
 onStatus })
   await broker.disconnect()
 
   const userDataCall = calls.find(([method]) => method === "subscribeForUserData")
   assert.equal(userDataCall[1].onStatus, onStatus)
+  assert.equal(userDataCall[1].onObservation, onObservation, "The generic broker adapter must forward observation delivery independently from native events.")
   assert.equal(typeof userDataCall[1].onEvent, "function")
   assert.deepEqual(calls.filter(([method]) => method !== "subscribeForUserData"), [
     ["connect"],

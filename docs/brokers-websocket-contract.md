@@ -187,7 +187,7 @@ Official references: [Spot REST API](https://www.bitunix.com/api-docs/spots/en_u
 
 ### External reference audit and Bitunix-only extensions
 
-The source-level comparison of JKorf/Bitunix.Net, the TypeScript MCP, StockSharp and other independent clients is maintained in the [Bitunix external implementation reference audit](../packages/brokers/BITUNIX_REFERENCE_AUDIT.md). It records implementation defects and does not override this contract or official Bitunix documentation.
+The source-level comparison of JKorf/Bitunix.Net, the TypeScript MCP, StockSharp and other independent clients is maintained in the [Bitunix external implementation reference audit](../packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md). It records implementation defects and does not override this contract or official Bitunix documentation.
 
 The audit identified public exchange-rate and token/network metadata endpoints as **Bitunix-specific query extensions**, not Binance parity methods. Exchange rates are already available through the REST broker and the new WebSocket RPC client; token/network metadata is available through the WebSocket RPC client. These are not new Binance-parity broker methods. Do not infer trading filters or authorize wallet mutations from metadata.
 
@@ -394,3 +394,13 @@ The legacy `cancelOrder()` field `cancellationOutcome` remains for compatibility
 - `OUTCOME_UNKNOWN`: the broker invoked or may have dispatched `order.cancel` but could not return an authoritative canonical order result.
 
 A successful result carries the broker order response in `data`; consumers that require a canonical cancellation must still verify canonical order history and actual fills. The Harvester consumer accepts legacy `NOT_SENT` only on an unsuccessful result (`ok: false`); contradictory success-shaped metadata remains unconfirmed. These classifications do not bypass the user-data readiness gate or authorize automatic retries.
+
+## Shared user-data callback contract
+
+Harvester calls the same broker method for every provider and supplies independent callback channels:
+
+- `onEvent`: native exchange events only; Binance forwards authenticated WebSocket lifecycle/execution events here.
+- `onObservation`: non-authoritative, polling-backed observations only; Bitunix Spot publishes reconciler snapshots here.
+- `onStatus`: lifecycle, connection, recovery, freshness, and polling health.
+
+The returned subscription declares `deliveryMode` and `nativePush`. Native events use `NATIVE_EVENTS` / `true`; polling observations use `POLLING_OBSERVATIONS` / `false`. Harvester never inspects a provider implementation to infer the delivery mode and never routes observations into its canonical event handler. Bitunix remains excluded from the provider registry because it does not satisfy the native `SUBSCRIBE_USER_DATA`, authoritative account snapshot, and canonical fill prerequisites.

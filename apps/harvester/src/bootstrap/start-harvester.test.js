@@ -3249,7 +3249,7 @@ function assertLifecycleLogLevels({ calls }) {
   assert.notEqual(targetMarketEvaluation.action, "UNKNOWN")
   for (const message of [
     "App configuration validated",
-    "User-data stream connected",
+    "Broker user-data delivery established",
     "Exchange account snapshot loaded",
     "Conservative TESTNET trading engine activated",
     "Book ticker subscribed",

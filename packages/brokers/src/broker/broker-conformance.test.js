@@ -370,9 +370,5 @@ runBrokerConformanceSuite({
         callback() {},
       }],
     },
-    {
-      method: "subscribeForUserData",
-      args: [],
-    },
   ],
 })
