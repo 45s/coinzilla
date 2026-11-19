@@ -2323,6 +2323,21 @@ test("Bitunix Spot broker propagates tax-filing REST failures without retrying",
   assert.equal(calls.length, 1, "a failed tax-filing read must not be retried implicitly")
 })
 
+async function assertFundsMutationRequestsRejectedBeforeDispatch({ requests, operation, invoke }) {
+  for (const request of requests) {
+    const { broker, calls } = createBroker({
+      allowLiveFundsMutations: true,
+    })
+    const result = await invoke({
+      broker,
+      request,
+    })
+    assert.equal(result.ok, false, `invalid ${operation} input must fail locally: ${JSON.stringify(request)}`)
+    assert.equal(result.mutationOutcome, "NOT_SENT", "invalid funds input must be classified as not sent")
+    assert.equal(calls.length, 0, "invalid funds input must not reach the exchange")
+  }
+}
+
 const WITHDRAW_PATH = "/api/spot/v1/withdraw"
 const CANCEL_WITHDRAW_PATH = "/api/spot/v1/withdraw/cancel"
 const FUNDS_TRANSFER_PATH = "/api/spot/v1/funds_transfer"
@@ -2381,68 +2396,64 @@ test("Bitunix Spot withdrawal sends the documented signed request and preserves 
   }], "withdrawal must use one signed state-changing request with exact amount text")
 })
 
-test("Bitunix Spot withdrawal rejects invalid amounts and destination data before dispatch", async () => {
-  const invalidRequests = [
-    {
-      coin: "USDT",
-      network: "TRC-20",
-      address: "TAddress",
-      amount: "0",
-    },
-    {
-      coin: "USDT",
-      network: "TRC-20",
-      address: "TAddress",
-      amount: "-1",
-    },
-    {
-      coin: "USDT",
-      network: "TRC-20",
-      address: "TAddress",
-      amount: 1.25,
-    },
-    {
-      coin: "USDT",
-      network: "TRC-20",
-      address: "TAddress",
-      amount: "1e-8",
-    },
-    {
-      coin: "",
-      network: "TRC-20",
-      address: "TAddress",
-      amount: "1",
-    },
-    {
-      coin: "USDT",
-      network: "",
-      address: "TAddress",
-      amount: "1",
-    },
-    {
-      coin: "USDT",
-      network: "TRC-20",
-      address: "",
-      amount: "1",
-    },
-    {
-      coin: "USDT",
-      network: "TRC-20",
-      address: "TAddress",
-      amount: "1",
-      memo: 7,
-    },
-  ]
-  for (const request of invalidRequests) {
-    const { broker, calls } = createBroker({
-      allowLiveFundsMutations: true,
-    })
-    const result = await broker.withdraw(request)
+const INVALID_WITHDRAWAL_REQUESTS = [
+  {
+    coin: "USDT",
+    network: "TRC-20",
+    address: "TAddress",
+    amount: "0",
+  },
+  {
+    coin: "USDT",
+    network: "TRC-20",
+    address: "TAddress",
+    amount: "-1",
+  },
+  {
+    coin: "USDT",
+    network: "TRC-20",
+    address: "TAddress",
+    amount: 1.25,
+  },
+  {
+    coin: "USDT",
+    network: "TRC-20",
+    address: "TAddress",
+    amount: "1e-8",
+  },
+  {
+    coin: "",
+    network: "TRC-20",
+    address: "TAddress",
+    amount: "1",
+  },
+  {
+    coin: "USDT",
+    network: "",
+    address: "TAddress",
+    amount: "1",
+  },
+  {
+    coin: "USDT",
+    network: "TRC-20",
+    address: "",
+    amount: "1",
+  },
+  {
+    coin: "USDT",
+    network: "TRC-20",
+    address: "TAddress",
+    amount: "1",
+    memo: 7,
+  },
+]
 
-    assert.equal(result.ok, false, `invalid withdrawal request must fail locally: ${JSON.stringify(request)}`)
-    assert.equal(result.mutationOutcome, "NOT_SENT", `invalid withdrawal input must be classified as not sent: ${JSON.stringify(request)}`)
-    assert.equal(calls.length, 0, "invalid withdrawal input must not reach the exchange")
-  }
+test("Bitunix Spot withdrawal rejects invalid amounts and destination data before dispatch", async () => {
+  await assertFundsMutationRequestsRejectedBeforeDispatch({
+    requests: INVALID_WITHDRAWAL_REQUESTS,
+    operation: "withdrawal",
+    invoke: ({ broker, request }) => broker.withdraw(request),
+  })
 })
 
 test("Bitunix Spot withdrawal reports an unknown outcome after a dispatched transport failure without retrying", async () => {
@@ -2729,69 +2740,64 @@ test("Bitunix Spot internal transfer supports phone and email recipient modes", 
   }
 })
 
+const INVALID_INTERNAL_TRANSFER_REQUESTS = [
+  {
+    coin: "USDT",
+    amount: "1",
+    toType: "uid",
+  },
+  {
+    coin: "USDT",
+    amount: "1",
+    toType: "uid",
+    toUid: "not-a-uid",
+  },
+  {
+    coin: "USDT",
+    amount: "1",
+    toType: "uid",
+    toUid: "9223372036854775807",
+    toEmail: "unexpected@example.com",
+  },
+  {
+    coin: "USDT",
+    amount: "1",
+    toType: "phone",
+    toPhoneNumber: "5551234567",
+  },
+  {
+    coin: "USDT",
+    amount: "1",
+    toType: "email",
+    toEmail: "",
+  },
+  {
+    outBizId: "x".repeat(33),
+    coin: "USDT",
+    amount: "1",
+    toType: "email",
+    toEmail: "recipient@example.com",
+  },
+  {
+    coin: "USDT",
+    amount: "0",
+    toType: "email",
+    toEmail: "recipient@example.com",
+  },
+  {
+    coin: "USDT",
+    amount: "1e-8",
+    toType: "email",
+    toEmail: "recipient@example.com",
+  },
+]
+
 test("Bitunix Spot internal transfer rejects mismatched recipients, malformed idempotency keys and amounts before dispatch", async () => {
-  const invalidRequests = [
-    {
-      coin: "USDT",
-      amount: "1",
-      toType: "uid",
-    },
-    {
-      coin: "USDT",
-      amount: "1",
-      toType: "uid",
-      toUid: "not-a-uid",
-    },
-    {
-      coin: "USDT",
-      amount: "1",
-      toType: "uid",
-      toUid: "9223372036854775807",
-      toEmail: "unexpected@example.com",
-    },
-    {
-      coin: "USDT",
-      amount: "1",
-      toType: "phone",
-      toPhoneNumber: "5551234567",
-    },
-    {
-      coin: "USDT",
-      amount: "1",
-      toType: "email",
-      toEmail: "",
-    },
-    {
-      outBizId: "x".repeat(33),
-      coin: "USDT",
-      amount: "1",
-      toType: "email",
-      toEmail: "recipient@example.com",
-    },
-    {
-      coin: "USDT",
-      amount: "0",
-      toType: "email",
-      toEmail: "recipient@example.com",
-    },
-    {
-      coin: "USDT",
-      amount: "1e-8",
-      toType: "email",
-      toEmail: "recipient@example.com",
-    },
-  ]
-
-  for (const request of invalidRequests) {
-    const { broker, calls } = createBroker({
-      allowLiveFundsMutations: true,
-    })
-    const result = await broker.requestInternalTransfer(request)
-
-    assert.equal(result.ok, false, `invalid internal-transfer input must fail locally: ${JSON.stringify(request)}`)
-    assert.equal(result.mutationOutcome, "NOT_SENT", "invalid internal-transfer input must be classified as not sent")
-    assert.equal(calls.length, 0, "invalid internal-transfer input must not reach the exchange")
-  }
+  await assertFundsMutationRequestsRejectedBeforeDispatch({
+    requests: INVALID_INTERNAL_TRANSFER_REQUESTS,
+    operation: "internal transfer",
+    invoke: ({ broker, request }) => broker.requestInternalTransfer(request),
+  })
 })
 
 test("Bitunix Spot internal transfer cancellation verifies the final cancelled history state", async () => {
