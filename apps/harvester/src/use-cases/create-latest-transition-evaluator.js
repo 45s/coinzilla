@@ -391,7 +391,10 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
   })
   return async function evaluateLatestTransition(options = {}) {
     const conservativeResult = await evaluateConservativeLatestTransition(options)
-    if (shouldSkipRecoverySellerEvaluation({ conservativeResult, options })) {
+    if (shouldSkipRecoverySellerEvaluation({
+      conservativeResult,
+      options,
+    })) {
       return conservativeResult
     }
     const missingEvaluator = getMissingRecoverySellerEvaluatorResult({
