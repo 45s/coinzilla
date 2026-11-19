@@ -135,9 +135,6 @@ export function createFreshMarketPriceWaiter({
     })
   }
   const notifyFreshMarketPrice = ({ symbol, price } = {}) => {
-    if (!isMarketPriceFresh(price)) {
-      return
-    }
     const waiters = waitersBySymbol.get(symbol)
     if (!waiters) {
       return
