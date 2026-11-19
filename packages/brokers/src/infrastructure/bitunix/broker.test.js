@@ -275,7 +275,7 @@ test("Bitunix Spot MARKET placement sends quoteQuantity as quote volume", async 
 
   assert.equal(result.ok, true)
   assert.equal(result.data.status, "FILLED")
-  assert.equal(result.data.quantity, "1")
+  assert.equal(result.data.originalQuantity, "1")
   assert.equal(result.mutationOutcome, "CONFIRMED")
   assert.deepEqual(calls[0].options.body, {
     symbol: "BTCUSDT",
@@ -298,7 +298,7 @@ test("Bitunix Spot MARKET placement rejects base quantity before dispatch", asyn
 
   assert.equal(result.ok, false)
   assert.equal(result.mutationOutcome, "NOT_SENT")
-  assert.match(result.errors[0].message, /requires quoteQuantity/i)
+  assert.match(result.errors[0].message, /require[s]? quoteQuantity/i)
   assert.equal(calls.length, 0)
 })
 

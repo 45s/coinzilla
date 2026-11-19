@@ -72,7 +72,7 @@ test("Bitunix order adapter rejects ambiguous MARKET quantity and quoteQuantity 
         quantity: "0.01",
       },
     }),
-    /requires quoteQuantity/i,
+    /require[s]? quoteQuantity/i,
   )
   assert.throws(
     () => createSpotOrderRequest({

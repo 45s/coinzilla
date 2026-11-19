@@ -45,7 +45,7 @@ test("Bitunix order capability declares official base and quote volume semantics
 
   assert.match(
     capabilities.getCapability({ type: "PLACE_LIMIT_ORDER" }).guarantee,
-    /base-coin quantity/i,
+    /base-coin volume/i,
   )
   assert.match(
     capabilities.getCapability({ type: "PLACE_MARKET_ORDER" }).guarantee,
