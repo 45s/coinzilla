@@ -180,6 +180,29 @@ test("activates the BUY gate and starts owned BUY cancellation before draining u
     true,
     "All enabled markets must be safe after order, fill, commission and recovery SELL reconciliation.",
   )
+  for (const symbol of ["DOGEUSDT", "SOLUSDT"]) {
+    const reconciliations = calls.filter((call) => call === `reconcile:${symbol}`)
+    assert.equal(
+      reconciliations.length,
+      3,
+      `Each market must pass pre-cancel, post-cancel and post-recovery owned-order reconciliation: ${symbol}`,
+    )
+    assert.equal(
+      calls.filter((call) => call === `recovery:${symbol}`).length,
+      1,
+      `Each market must reconcile its recovery SELL coverage exactly once: ${symbol}`,
+    )
+    assert.equal(
+      calls.filter((call) => call === `coverage:${symbol}`).length,
+      1,
+      `Each market must receive a final recovery SELL coverage audit: ${symbol}`,
+    )
+    assert.ok(
+      calls.indexOf(`reconcile:${symbol}`) < calls.indexOf(`cancel:${symbol}`) &&
+        calls.lastIndexOf(`cancel:${symbol}`) < calls.lastIndexOf(`reconcile:${symbol}`),
+      `Owned BUY cancellation must remain between the initial and final reconciliation passes: ${symbol}`,
+    )
+  }
 })
 
 test("keeps each market safety marker independent and blocks the strategy while one market is unsafe", async () => {
