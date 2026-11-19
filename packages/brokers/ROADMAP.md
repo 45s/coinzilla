@@ -1516,7 +1516,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 
 ## 2026-11-20 — Bitunix Spot order volume and generic quote quantity (#1549)
 
-**Status: In progress in [PR #1550](https://github.com/45s/coinzilla/pull/1550); exact-head CI pending.**
+**Status: [x] Complete — merged into `develop` in [PR #1550](https://github.com/45s/coinzilla/pull/1550) as `1f2a4a6c58d843ce7be11b8503635d582cea1b21`; all required checks passed.**
 
 - Current official Bitunix REST docs specify LIMIT volume in base units and MARKET volume in quote units. This supersedes the earlier audit snapshot that recorded the inverse.
 - Generic `quantity` remains base-denominated; new generic `quoteQuantity` expresses quote-denominated MARKET orders.

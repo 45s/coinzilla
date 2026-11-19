@@ -1,10 +1,10 @@
 # Bitunix Spot — external implementation reference audit
 
 **Status:** living engineering reference
-**Last audited:** 2026-11-19
+**Last audited:** 2026-11-20
 **Scope:** Bitunix Spot REST, Spot WebSocket RPC, market/account reads, order lifecycle, and Binance-broker parity
 **Canonical blockers:** [issue #1185](https://github.com/45s/coinzilla/issues/1185)
-**Related in-flight work:** [PR #1324 — read-only market data](https://github.com/45s/coinzilla/pull/1324)
+**Related merged work:** [PR #1324 — read-only market data](https://github.com/45s/coinzilla/pull/1324), [PR #1550 — Bitunix order volume semantics](https://github.com/45s/coinzilla/pull/1550)
 
 This document records what external implementations actually contain, what their source and fixtures prove, what they get wrong or leave unproven, and which capabilities Coinzilla should port. It is not an exchange specification. The official Bitunix Spot documentation remains authoritative; third-party implementations are evidence and implementation examples only.
 
