@@ -57,6 +57,28 @@ function createDurableSubmissionIntentWriter({ onDurableSubmissionIntent } = {})
   }
 }
 
+async function persistAndReserveSell({
+  input,
+  executionCallbacks,
+  onSellReserved,
+  persistDurableSubmissionIntent,
+} = {}) {
+  const intent = await persistDurableSubmissionIntent(input)
+  if (intent?.ok !== true || intent.data?.durable !== true) {
+    throw intent?.errors?.[0] ??
+      new Error("Recovery Seller SELL intent was not durably acknowledged before cycle reservation")
+  }
+  const reserved = await onSellReserved({
+    order: input.order,
+    ownership: input.ownership,
+  })
+  if (reserved?.ok !== true || reserved.data?.durable !== true) {
+    throw reserved?.errors?.[0] ??
+      new Error("Recovery Seller sole-SELL cycle reservation was not durably acknowledged")
+  }
+  return executionCallbacks.onPendingOrder(input)
+}
+
 function createPendingOrderCallback({
   executionCallbacks,
   onSellReserved,
@@ -68,20 +90,12 @@ function createPendingOrderCallback({
       return executionCallbacks.onPendingOrder(input)
     }
     try {
-      const intent = await persistDurableSubmissionIntent(input)
-      if (intent?.ok !== true || intent.data?.durable !== true) {
-        throw intent?.errors?.[0] ??
-          new Error("Recovery Seller SELL intent was not durably acknowledged before cycle reservation")
-      }
-      const reserved = await onSellReserved({
-        order: input.order,
-        ownership: input.ownership,
+      return await persistAndReserveSell({
+        input,
+        executionCallbacks,
+        onSellReserved,
+        persistDurableSubmissionIntent,
       })
-      if (reserved?.ok !== true || reserved.data?.durable !== true) {
-        throw reserved?.errors?.[0] ??
-          new Error("Recovery Seller sole-SELL cycle reservation was not durably acknowledged")
-      }
-      return await executionCallbacks.onPendingOrder(input)
     } catch (error) {
       await latchUnresolvedSubmission({
         ...input,
