@@ -46,7 +46,7 @@ function createBroker({ responses = {}, allowLiveFundsMutations = false } = {}) 
 
 const VALID_WITHDRAWAL = {
   coin: "USDT",
-  network: "Tron (TRC-20)",
+  network: "TRC20",
   address: "TJmW5D1p1LnMdTMmxuY1VELHht7v5HV7rU",
   amount: "1.25000000",
 }
