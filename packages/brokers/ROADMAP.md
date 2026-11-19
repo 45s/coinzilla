@@ -1505,7 +1505,6 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Added deterministic fixtures and assertions for authentication, exact one-record request bounds, schema validity, and private-value redaction.
 - Public-only diagnostics continue to skip private methods. No pagination, address lookup, withdrawal, transfer, cancellation, mutation, Harvester or canonical Fill behavior was added.
 
-
 ## 2026-11-19 — Bitunix REST mutation HTTP outcome alignment (#1547)
 
 **Status: Implemented in [PR #1548](https://github.com/45s/coinzilla/pull/1548); exact-head required CI verification is pending.**
