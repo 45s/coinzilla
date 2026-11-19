@@ -87,6 +87,15 @@ const BITUNIX_RESPONSE_SCHEMAS = Object.freeze({
       feeCoin: "string",
     },
   }),
+  "/api/spot/v1/order/history/page": Object.freeze({
+    expectedFields: ["pageNum", "total", "data"],
+    requiredFields: ["pageNum", "total"],
+    expectedFieldTypes: {
+      pageNum: ["string", "number"],
+      total: "number",
+      data: "array",
+    },
+  }),
 })
 
 const PUBLIC_ONLY_DIAGNOSTIC_CREDENTIAL = "READ_ONLY_PUBLIC_DIAGNOSTIC"
@@ -1719,6 +1728,11 @@ function getBrokerApiOperations({ symbol, credentialsConfigured }) {
       args: [{ symbol }],
       privateResponse: false,
     },
+    {
+      method: "getSymbolFilters",
+      args: [{ symbol }],
+      privateResponse: false,
+    },
   ]
   if (credentialsConfigured) {
     operations.push(
@@ -1730,6 +1744,15 @@ function getBrokerApiOperations({ symbol, credentialsConfigured }) {
       {
         method: "getOpenOrders",
         args: [{ symbol }],
+        privateResponse: true,
+      },
+      {
+        method: "getOrderHistory",
+        args: [{
+          symbol,
+          page: 1,
+          limit: 10,
+        }],
         privateResponse: true,
       },
     )

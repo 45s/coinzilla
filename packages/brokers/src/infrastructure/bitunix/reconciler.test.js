@@ -472,3 +472,101 @@ test("pollOnce deep-freezes an isolated observation snapshot", async () => {
   assert.deepEqual(snapshot.symbols[0].firstHistoryPage[0].details.tags, ["history"])
   assert.equal(snapshot.matchingOrderObservations[0].data.execution.fills[0].quantity, "1")
 })
+
+
+test("stop and immediate same-scope restart isolate the new in-flight polling generation", async () => {
+  let releaseOld
+  let releaseNew
+  const oldWait = new Promise((resolve) => {
+    releaseOld = resolve
+  })
+  const newWait = new Promise((resolve) => {
+    releaseNew = resolve
+  })
+  const { broker } = createBroker()
+  const originalGetBalances = broker.getBalances
+  let balanceCalls = 0
+  broker.getBalances = async () => {
+    balanceCalls += 1
+    if (balanceCalls === 1) {
+      await oldWait
+    } else if (balanceCalls === 2) {
+      await newWait
+    }
+    return originalGetBalances()
+  }
+
+  const snapshots = []
+  const reconciler = new BitunixSpotReconciler({ broker })
+  const firstSession = reconciler.start({
+    symbols: ["BTCUSDT"],
+    onSnapshot: (snapshot) => snapshots.push(snapshot),
+  })
+  assert.equal(balanceCalls, 1, "the first generation must begin its read immediately")
+
+  firstSession.stop()
+  const secondSession = reconciler.start({
+    symbols: ["BTCUSDT"],
+    onSnapshot: (snapshot) => snapshots.push(snapshot),
+  })
+  assert.equal(balanceCalls, 2, "a new generation must not attach to the stopped generation's pending request")
+
+  releaseOld()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  const coalesced = reconciler.pollOnce({ symbols: ["BTCUSDT"] })
+  assert.equal(balanceCalls, 2, "late cleanup from the old generation must not clear the new generation's in-flight promise")
+
+  releaseNew()
+  await coalesced
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(snapshots.length, 1, "only the active generation may publish an observation")
+  assert.equal(reconciler.getStatus().running, true)
+  secondSession.stop()
+})
+
+test("stop and immediate different-scope restart do not inherit the previous generation's scope lock", async () => {
+  let releaseOld
+  let releaseNew
+  const oldWait = new Promise((resolve) => {
+    releaseOld = resolve
+  })
+  const newWait = new Promise((resolve) => {
+    releaseNew = resolve
+  })
+  const { broker } = createBroker()
+  const originalGetBalances = broker.getBalances
+  let balanceCalls = 0
+  broker.getBalances = async () => {
+    balanceCalls += 1
+    if (balanceCalls === 1) {
+      await oldWait
+    } else if (balanceCalls === 2) {
+      await newWait
+    }
+    return originalGetBalances()
+  }
+
+  const snapshots = []
+  const reconciler = new BitunixSpotReconciler({ broker })
+  const firstSession = reconciler.start({
+    symbols: ["BTCUSDT"],
+    onSnapshot: (snapshot) => snapshots.push(snapshot),
+  })
+  firstSession.stop()
+
+  const secondSession = reconciler.start({
+    symbols: ["ETHUSDT"],
+    onSnapshot: (snapshot) => snapshots.push(snapshot),
+  })
+  assert.equal(balanceCalls, 2, "a different scope in the new generation must start without inheriting the old scope lock")
+
+  releaseOld()
+  await new Promise((resolve) => setImmediate(resolve))
+  releaseNew()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(snapshots.length, 1, "the stale BTC generation must not publish after the ETH generation starts")
+  assert.equal(reconciler.getStatus().running, true)
+  secondSession.stop()
+})
