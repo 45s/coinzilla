@@ -127,6 +127,20 @@ The package exports `BitunixSpotBroker`, `BitunixSpotConfig`, and the separate `
 | `getCandles()` | Blocked; no request is sent | The canonical candle requires volume, but the documented Spot K-line schema exposes OHLC and a start timestamp only. Raw OHLC reads are available through the Bitunix-specific methods above; no volume is fabricated. |
 | `getFills({ symbol, orderId })` | Blocked; no request is sent | The documented matching-order response does not define quantity denomination, complete partial-execution coverage, or stable/unique execution identity. No canonical `Fill` is emitted until Bitunix clarifies these semantics. |
 
+### Bitunix Spot funds-operation extensions
+
+The following methods are provider-specific REST extensions, not additions to the exchange-neutral Broker interface or the shared Entities capability vocabulary. They require `allowLiveFundsMutations: true` in `BitunixSpotConfig`; the setting is separate from the order-mutation gate and defaults to false.
+
+| Method | Official Spot REST operation | Safety and result contract |
+|---|---|---|
+| `withdraw({ coin, network, address, amount, memo? })` | Signed `POST /api/spot/v1/withdraw` | Requires a previously saved quick-withdrawal destination and an API key with withdrawal permission. Caller selects coin/network/address; exact positive decimal-string amount. Returns the exact withdrawal ID. A dispatched uncertain request is `OUTCOME_UNKNOWN`; never retried. |
+| `cancelWithdrawal({ withdrawId })` | Signed `POST /api/spot/v1/withdraw/cancel` then signed history read | Confirms only when `getWithdrawalHistory({ id, type: "withdraw" })` returns the same ID with `status: "cancelled"`. Only initially reviewed withdrawals are cancellable. |
+| `requestInternalTransfer({ coin, amount, toType, recipient, outBizId?, remark? })` | Signed `POST /api/spot/v1/inside_transfer` | Supports UID, phone and email recipient modes with mutually exclusive matching fields. Optional `outBizId` (maximum 32 characters) is the exchange idempotency key; never generated or retried automatically. Returns exact internal-transfer ID. |
+| `cancelInternalTransfer({ insideTransferId })` | Signed `POST /api/spot/v1/inside_transfer/cancel` then signed history read | Confirms only when `getWithdrawalHistory({ id, type: "inside_transfer_out" })` returns the same ID with `status: "cancelled"`. Only initially reviewed transfers are cancellable. |
+| `transferFunds({ type, coin, amount })` | Signed `POST /api/spot/v1/funds_transfer` | Moves funds between the caller's Spot and Futures accounts using `spot_futures` or `futures_spot`. Exact positive decimal-string amount. Returns exact transfer ID. |
+
+These operations never run in automated live diagnostics. A successful withdrawal acknowledgement confirms request acceptance, not on-chain completion. Lost acknowledgements are not retried; callers reconcile using the withdrawal/transfer identifier or supplied `outBizId`. No live withdrawal, cancellation or transfer was executed in tests. These methods do not enable Harvester execution or resolve #1185's separate order/fill/private-event lifecycle blockers.
+
 ### Bitunix Spot WebSocket RPC client
 
 `BitunixSpotWebSocketClient` is a separate authenticated query RPC client. It does not change the REST-backed `BitunixSpotBroker` methods or the broker's lifecycle readiness. Official Spot WebSocket requests use the `id`, `method`, and `params` envelope; every request, including public market/catalog reads, carries `apiKey`, millisecond `timestamp`, random `nonce`, and `sign`.
