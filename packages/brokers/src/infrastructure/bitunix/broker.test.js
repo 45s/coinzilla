@@ -2086,7 +2086,7 @@ test("Bitunix Spot broker passes tax data type filters and explicit pagination u
   assert.equal(result.data.records[0].outgoingAmount, "0.012345678901234567", "financial amounts must remain exact strings")
   assert.deepEqual(calls[0].options.body, {
     startTime: "2024-01-01T00:00:00Z",
-    endTime: "2024-12-31T23:59:59Z",
+    endTime: "2024-12-31T00:00:00Z",
     dataTypeCodes: ["BUY_ORDER", "FUNDING_COST"],
     page: 2,
     pageSize: 50,
@@ -2132,22 +2132,64 @@ test("Bitunix Spot broker rejects invalid tax-filing query ranges and pagination
     endTime: "2024-01-02T00:00:00Z",
   }
   const invalidQueries = [
+    null,
     {},
-    { ...valid, startTime: "2024-01-01" },
-    { ...valid, endTime: "2024-01-02T00:00:00+00:00" },
-    { ...valid, startTime: "not-a-date" },
-    { ...valid, startTime: "2024-01-03T00:00:00Z" },
+    {
+      ...valid,
+      startTime: "2024-01-01",
+    },
+    {
+      ...valid,
+      endTime: "2024-01-02T00:00:00+01:00",
+    },
+    {
+      ...valid,
+      startTime: "not-a-date",
+    },
+    {
+      ...valid,
+      startTime: "2024-02-30T00:00:00Z",
+    },
+    {
+      ...valid,
+      startTime: "2024-01-03T00:00:00Z",
+    },
     {
       startTime: "2024-01-01T00:00:00Z",
       endTime: "2025-01-02T00:00:00Z",
     },
-    { ...valid, page: 0 },
-    { ...valid, page: 1.5 },
-    { ...valid, pageSize: 0 },
-    { ...valid, pageSize: 1001 },
-    { ...valid, dataTypeCodes: "BUY_ORDER" },
-    { ...valid, dataTypeCodes: [""] },
-    { ...valid, dataTypeCodes: [null] },
+    {
+      ...valid,
+      page: 0,
+    },
+    {
+      ...valid,
+      page: 1.5,
+    },
+    {
+      ...valid,
+      pageSize: 0,
+    },
+    {
+      ...valid,
+      pageSize: 1001,
+    },
+    {
+      ...valid,
+      dataTypeCodes: "BUY_ORDER",
+    },
+    {
+      ...valid,
+      dataTypeCodes: [""],
+    },
+    {
+      ...valid,
+      dataTypeCodes: [null],
+    },
+    {
+      ...valid,
+      dataTypeCodes: null,
+    },
   ]
 
   for (const query of invalidQueries) {
@@ -2168,13 +2210,53 @@ test("Bitunix Spot broker rejects malformed tax-filing pagination and records", 
     null,
     [],
     {},
-    { ...createTaxFilingPage(), records: {} },
-    { ...createTaxFilingPage(), total: -1 },
-    { ...createTaxFilingPage(), current: 2 },
-    { ...createTaxFilingPage(), size: 1001 },
-    { ...createTaxFilingPage(), pages: -1 },
-    { ...createTaxFilingPage(), records: [{ ...TAX_FILING_RECORD, outgoingAmount: 1 }] },
-    { ...createTaxFilingPage(), records: [null] },
+    {
+      ...createTaxFilingPage(),
+      records: {},
+    },
+    {
+      ...createTaxFilingPage(),
+      total: -1,
+    },
+    {
+      ...createTaxFilingPage(),
+      total: 0,
+    },
+    {
+      ...createTaxFilingPage(),
+      current: 2,
+    },
+    {
+      ...createTaxFilingPage(),
+      current: -1,
+    },
+    {
+      ...createTaxFilingPage(),
+      size: 1001,
+    },
+    {
+      ...createTaxFilingPage(),
+      size: 0,
+    },
+    {
+      ...createTaxFilingPage(),
+      pages: -1,
+    },
+    {
+      ...createTaxFilingPage(),
+      pages: 0,
+    },
+    {
+      ...createTaxFilingPage(),
+      records: [{
+        ...TAX_FILING_RECORD,
+        outgoingAmount: 1,
+      }],
+    },
+    {
+      ...createTaxFilingPage(),
+      records: [null],
+    },
   ]
 
   for (const page of invalidPages) {
