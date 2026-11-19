@@ -176,7 +176,6 @@ function createAppliedFillEvent() {
       amount: "0.000012340000000001",
       assetId: "bnb",
       asset: "BNB",
-      quoteValue: null,
     }],
     commissionStatus: "COMPLETE",
   }

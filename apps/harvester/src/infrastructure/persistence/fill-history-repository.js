@@ -14,7 +14,12 @@ function requireString(value, field) {
 }
 
 function requireDecimal(value, field, positive = false) {
-  const amount = assertDecimalString({ value, field })
+  let amount
+  try {
+    amount = assertDecimalString({ value, field })
+  } catch (cause) {
+    throw new OrderHistoryValidationError({ field, cause })
+  }
   const comparison = compareDecimal({ left: amount, right: "0" })
   if (comparison < 0 || (positive && comparison === 0)) {
     throw new OrderHistoryValidationError({ field })
@@ -55,8 +60,12 @@ function mapCommission(commission, ordinal) {
     quote_value_amount: quoteValue === undefined
       ? null
       : requireDecimal(quoteValue.amount, `commissions[${ordinal}].quoteValue.amount`),
-    quote_value_asset_id: quoteValue?.assetId ?? null,
-    quote_value_asset_code: quoteValue?.asset ?? null,
+    quote_value_asset_id: quoteValue === undefined
+      ? null
+      : requireString(quoteValue.assetId, `commissions[${ordinal}].quoteValue.assetId`),
+    quote_value_asset_code: quoteValue === undefined
+      ? null
+      : requireString(quoteValue.asset, `commissions[${ordinal}].quoteValue.asset`),
   }
 }
 
@@ -213,8 +222,9 @@ function commissionFactsMatch(existing, candidate) {
 function assertDuplicateMatches({ transaction, existing, candidate } = {}) {
   const columns = [
     "canonical_fill_id", "provider_type", "provider_instance_id", "account_id",
-    "environment", "market_id", "symbol", "exchange_trade_id", "exchange_order_id",
-    "client_order_id", "side", "execution_price", "executed_base_quantity",
+    "environment", "market_id", "market_venue", "symbol", "base_asset_id",
+    "base_asset_code", "quote_asset_id", "quote_asset_code", "exchange_trade_id",
+    "exchange_order_id", "client_order_id", "side", "execution_price", "executed_base_quantity",
     "executed_quote_quantity", "liquidity_role", "commission_status", "exchange_executed_at",
   ]
   const factsMatch = columns.every((column) => existing[column] === candidate[column])
