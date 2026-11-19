@@ -1265,6 +1265,21 @@ function createInitialEngineTrackingState({ initialState }) {
   }
 }
 
+function linkSharedAccountOrderRegistry({ state, initialState } = {}) {
+  const descriptor = Object.getOwnPropertyDescriptor(initialState, "orderRegistry")
+  if (!descriptor ||
+      (typeof descriptor.set !== "function" && descriptor.writable !== true)) {
+    return
+  }
+  Object.defineProperty(state, "registry", {
+    enumerable: true,
+    get: () => initialState.orderRegistry,
+    set: (registry) => {
+      initialState.orderRegistry = registry
+    },
+  })
+}
+
 function createInitialEngineState({ initialState = {}, pairs, initialRegistry } = {}) {
   const journalFillsById = createInitialJournalFillIndex({
     journalFills: initialState.journalFills,
@@ -1277,6 +1292,10 @@ function createInitialEngineState({ initialState = {}, pairs, initialRegistry } 
     ...createInitialEngineTrackingState({ initialState }),
     volatilityProtection: createInitialVolatilityProtection({ pairs }),
   }
+  linkSharedAccountOrderRegistry({
+    state,
+    initialState,
+  })
   return { journalFillsById,
 state }
 }
