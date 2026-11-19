@@ -64,7 +64,7 @@ function ensureMigrationChecksumColumn(transaction) {
  * Apply ordered, synchronous SQL migrations atomically.
  *
  * Applied migration checksums identify the source text of each synchronous
- * migration callback. Legacy history rows retain a null checksum because
+ * migration callback. Legacy history rows retain an explicit unverified marker because
  * their original implementation cannot be reconstructed safely.
  *
  * @param {{database: {exec: Function, transaction: Function}, migrations: Array<{version: number, name: string, up: (transaction: {exec: Function, prepare: Function}) => void}>}} options
