@@ -1336,20 +1336,10 @@ const captureProcessProvenanceScenario = async () => {
         release: async () => ({ ok: true,
           released: true }) }
     },
-    createJournalService: () => {
-      operations.push("journal.create")
-      return {
-        ready: Promise.resolve({ ok: true }),
-        flush: async () => {
-          journalFlushCalls += 1
-          return { ok: true,
-            durable: true }
-        },
-        close: async () => ({ ok: true,
-          closed: true,
-          durable: true }),
-      }
-    },
+    createJournalService: () => createProvenanceJournal({
+      operations,
+      onFlush: () => { journalFlushCalls += 1 },
+    }),
     start: async ({ eventPublisher }) => {
       operations.push("runtime.start")
       await eventPublisher.flush()
@@ -1535,22 +1525,7 @@ test("requires Journal readiness and publishes process provenance before trading
   })
 
   const pending = main({
-    processIdentity: {
-      application: "harvester",
-      version: "1.0.001",
-      runtimeSessionId: "delayed-journal-session",
-      processId: 54321,
-      startedAt: "2026-11-09T10:15:30.000Z",
-      source: {
-        branch: null,
-        commit: null,
-        shortCommit: null,
-        commitMessage: null,
-        commitDate: null,
-        workingTree: "unknown",
-        metadataSource: "unavailable",
-      },
-    },
+    processIdentity: createDelayedJournalProcessIdentity(),
     logger: {
       setContext: (context) => contexts.push(context),
       info() {},
@@ -2182,6 +2157,42 @@ function createRecordingEventBus({ events }) {
         ok: true,
         event,
       }
+    },
+  }
+}
+
+
+function createProvenanceJournal({ operations, onFlush }) {
+  operations.push("journal.create")
+  return {
+    ready: Promise.resolve({ ok: true }),
+    flush: async () => {
+      onFlush()
+      return { ok: true, durable: true }
+    },
+    close: async () => ({
+      ok: true,
+      closed: true,
+      durable: true,
+    }),
+  }
+}
+
+function createDelayedJournalProcessIdentity() {
+  return {
+    application: "harvester",
+    version: "1.0.001",
+    runtimeSessionId: "delayed-journal-session",
+    processId: 54321,
+    startedAt: "2026-11-09T10:15:30.000Z",
+    source: {
+      branch: null,
+      commit: null,
+      shortCommit: null,
+      commitMessage: null,
+      commitDate: null,
+      workingTree: "unknown",
+      metadataSource: "unavailable",
     },
   }
 }
