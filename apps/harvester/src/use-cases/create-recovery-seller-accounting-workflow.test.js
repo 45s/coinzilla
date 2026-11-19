@@ -942,6 +942,7 @@ function createSharedAccountWorkflowFixture() {
     recoveryLedgers: new Map(),
     orderRegistry: makeRecoveryBuyRegistry(buyOrder),
     legacyPositions: new Map(),
+    recoverySellerBuyExecutionByCycle: new Map(),
     updateQueue: Promise.resolve(),
   }
   const conservative = createPortfolioWorkflow({
@@ -991,6 +992,7 @@ test("initializes operator-authorized legacy positions once in the shared accoun
     recoveryLedgers: new Map(),
     orderRegistry: OrderRegistry.empty(),
     legacyPositions: new Map(),
+    recoverySellerBuyExecutionByCycle: new Map(),
     updateQueue: Promise.resolve(),
   }
   const workflow = createRecoverySellerAccountingWorkflow({ sharedState })

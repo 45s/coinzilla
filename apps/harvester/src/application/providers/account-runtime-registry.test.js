@@ -29,6 +29,8 @@ test("creates independent in-memory trading state for each provider account", ()
   assert.notEqual(first.state.portfolio, second.state.portfolio, "Accounts must not share Portfolio instances.")
   assert.notEqual(first.state.orderRegistry, second.state.orderRegistry, "Accounts must not share OrderRegistry instances.")
   assert.notEqual(first.state.recoveryLedgers, second.state.recoveryLedgers, "Strategy accounting ledgers must remain account-local.")
+  assert.notEqual(first.state.recoverySellerBuyExecutionByCycle, second.state.recoverySellerBuyExecutionByCycle, "RS BUY execution accumulators must remain account-local.")
+  assert.equal(first.state.recoverySellerBuyExecutionByCycle instanceof Map, true, "RS BUY execution state must be an account-local Map.")
   assert.notEqual(first.state.journalFills, second.state.journalFills, "Applied-fill identities must remain account-local.")
   assert.notEqual(first.state.pausedMarkets, second.state.pausedMarkets, "A pause in one account must not pause another account.")
   assert.notEqual(first.marketMetadata, second.marketMetadata, "Market metadata state must not be shared across account contexts.")
@@ -129,6 +131,13 @@ test("shares one account Portfolio, OrderRegistry, and serialized queue across C
   assert.equal(accountRuntime.state.recoveryLedgers, nextRecoveryLedgers)
   assert.throws(() => {
     accountRuntime.state.recoveryLedgers = []
+  }, /must be a Map/)
+
+  const nextRecoverySellerBuyExecutionByCycle = new Map()
+  accountRuntime.state.recoverySellerBuyExecutionByCycle = nextRecoverySellerBuyExecutionByCycle
+  assert.equal(accountRuntime.state.recoverySellerBuyExecutionByCycle, nextRecoverySellerBuyExecutionByCycle)
+  assert.throws(() => {
+    accountRuntime.state.recoverySellerBuyExecutionByCycle = []
   }, /must be a Map/)
 
   const nextOrderRegistry = OrderRegistry.empty()
