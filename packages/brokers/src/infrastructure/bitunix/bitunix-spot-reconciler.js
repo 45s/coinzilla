@@ -349,10 +349,8 @@ export class BitunixSpotReconciler {
     }
     this.running = true
     this.staleAfterMs = intervalMs * 2
-    const { generation } = this
     this.generation += 1
-    const sessionGeneration = this.generation
-    void generation
+    const { generation: sessionGeneration } = this
     void this.#runCycle({
       generation: sessionGeneration,
       symbols: normalizedSymbols,
