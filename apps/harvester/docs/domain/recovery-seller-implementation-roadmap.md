@@ -33,6 +33,8 @@ The Conservative Trading Engine now binds its internal OrderRegistry to the acco
 
 The RS order-submission adapter now converts one approved RS lifecycle `SUBMIT` decision into the existing `makeExecuteStrategyDecision` workflow. It attaches immutable RS strategy/Position/cycle/purpose ownership, registers PENDING before broker I/O through the shared OrderRegistry callbacks, persists submission intent/outcome, and retains UNKNOWN plus a durably acknowledged sticky-STOP callback on uncertain outcomes. A BLOCK/WAIT/RECONCILE decision never reaches the broker. Offline tests cover pending-before-network ordering, acknowledged RS ownership, unknown acknowledgement timeout with no retry, and non-SUBMIT suppression. This adapter is not yet wired into Harvester bootstrap or user-data fill/terminal reconciliation; RS remains disabled/non-executable until those paths are complete.
 
+The strategy-owned route filter is kept in a small resolver helper so the public startup option function remains within the repository's 60-line function standard. Exact-head CI caught this size regression and it is corrected here; no lint rule is suppressed.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.

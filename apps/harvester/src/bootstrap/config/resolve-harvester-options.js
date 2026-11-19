@@ -101,6 +101,23 @@ function resolveEffectivePairs({ strategyConfig, tradingMode, executionSymbols }
   return pairs
 }
 
+function resolveConservativeRuntimePairs({
+  strategyConfig,
+  tradingMode,
+  executionSymbols,
+  executionRoutes,
+} = {}) {
+  const conservativeExecutionSymbols = resolveConservativeExecutionSymbols({
+    executionRoutes,
+    executionSymbols,
+  })
+  return resolveEffectivePairs({
+    strategyConfig,
+    tradingMode,
+    executionSymbols: conservativeExecutionSymbols,
+  })
+}
+
 function createEffectiveAppConfig({ configuredAppConfig, strategyConfig, pairs }) {
   return {
     ...configuredAppConfig,
@@ -186,14 +203,11 @@ export async function resolveHarvesterOptions({
     tradingMode: env.TRADING_MODE,
     environment: env.NODE_ENV,
   })
-  const conservativeExecutionSymbols = resolveConservativeExecutionSymbols({
-    executionRoutes,
-    executionSymbols,
-  })
-  const pairs = resolveEffectivePairs({
+  const pairs = resolveConservativeRuntimePairs({
     strategyConfig,
     tradingMode: runtime.tradingMode,
-    executionSymbols: conservativeExecutionSymbols,
+    executionSymbols,
+    executionRoutes,
   })
   const appConfig = createEffectiveAppConfig({
     configuredAppConfig,
