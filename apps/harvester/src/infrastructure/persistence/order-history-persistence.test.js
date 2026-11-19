@@ -92,7 +92,12 @@ async function createEnvironmentPersistencePair({ directory, t } = {}) {
       force: true,
     })
   })
-  return { testnet, live, testnetBus, liveBus }
+  return {
+    testnet,
+    live,
+    testnetBus,
+    liveBus,
+  }
 }
 
 test("keeps TESTNET and LIVE order history in separate SQLite files", async (t) => {

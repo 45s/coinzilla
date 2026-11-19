@@ -198,10 +198,16 @@ export function mergeOrderHistoryRecords({ current, candidate } = {}) {
     current,
     candidate,
   })
-  if (isDuplicateSourceEvent({ current, candidate })) {
+  if (isDuplicateSourceEvent({
+    current,
+    candidate,
+  })) {
     return current
   }
-  if (isStaleOrderHistoryUpdate({ current, candidate })) {
+  if (isStaleOrderHistoryUpdate({
+    current,
+    candidate,
+  })) {
     return current
   }
   return createMergedOrderHistoryRecord({

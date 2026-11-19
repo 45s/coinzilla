@@ -71,12 +71,7 @@ async function upsertAsynchronously({ transaction, record } = {}) {
     changes: createOrderChanges(merged),
   })
   if (updated === null || updated === undefined) {
-    throw new OrderHistoryIntegrityError({
-      field: "record",
-      providerInstanceId: record.providerInstanceId,
-      accountId: record.accountId,
-      clientOrderId: record.clientOrderId,
-    })
+    throw createMissingRecordError(record)
   }
   return updated
 }

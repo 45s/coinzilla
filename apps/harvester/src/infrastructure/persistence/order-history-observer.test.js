@@ -6,36 +6,54 @@ import { createOrderHistoryObserver } from "./create-order-history-observer.js"
 import { createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
 
 function publishOrderLifecycleFixtures(eventBus) {
-  const publish = (name, data) => eventBus.publish({
+  const publish = ({ name, data }) => eventBus.publish({
     name,
     source: "harvester",
     data,
   })
-  publish(HARVESTER_EVENT_NAMES.ORDER_SUBMITTED, createOrderHistoryEventData({
+  publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
+    data: createOrderHistoryEventData({
     status: "FILLED",
     executedQuantity: "1.0000",
     remainingQuantity: "0.0000",
-  }))
-  publish(HARVESTER_EVENT_NAMES.ORDER_UPDATED, createOrderHistoryEventData())
-  publish(HARVESTER_EVENT_NAMES.ORDER_UPDATED, createOrderHistoryEventData({
+    }),
+  })
+  publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+    data: createOrderHistoryEventData(),
+  })
+  publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+    data: createOrderHistoryEventData({
     executedQuantity: "1.0000",
     remainingQuantity: "0.0000",
     status: "FILLED",
     updatedAt: 200,
-  }))
-  publish(HARVESTER_EVENT_NAMES.ORDER_CANCELLED, createOrderHistoryEventData({
+    }),
+  })
+  publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
+    data: createOrderHistoryEventData({
     status: "CANCELED",
     executedQuantity: "0.2500",
-  }))
-  publish(HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED, createOrderHistoryEventData({
+    }),
+  })
+  publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
+    data: createOrderHistoryEventData({
     status: "UNKNOWN",
     executedQuantity: "0.2500",
-  }))
-  publish(HARVESTER_EVENT_NAMES.ORDER_SUBMITTED, createOrderHistoryEventData({
+    }),
+  })
+  publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
+    data: createOrderHistoryEventData({
     status: "OPEN",
     executedQuantity: "0.0000",
     remainingQuantity: "1.0000",
-  }))
+    }),
+  })
 }
 
 test("projects immediate acknowledgements, partial fills, final fills, and partial cancellations", async (t) => {

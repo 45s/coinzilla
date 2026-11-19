@@ -710,7 +710,10 @@ export const mapOrderCancelledData = (input = {}) =>
         throw new TypeError("order.status must be CANCELED")
       }
       if (order instanceof CanonicalOrder) {
-        return requireOrderHistoryFacts({ order, ownership })
+        return requireOrderHistoryFacts({
+          order,
+          ownership,
+        })
       }
       const facts = requireOrderFacts({ order })
       return {

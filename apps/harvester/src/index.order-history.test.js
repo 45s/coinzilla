@@ -4,10 +4,22 @@ import { EventBus } from "@coinzilla/event-bus"
 import { main } from "./index.js"
 
 const disabledJournalService = () => ({
-  ready: Promise.resolve({ ok: true, disabled: true }),
-  status: { state: "disabled" },
-  flush: async () => ({ ok: true, durable: true }),
-  close: async () => ({ ok: true, closed: true, disabled: true }),
+  ready: Promise.resolve({
+    ok: true,
+    disabled: true,
+  }),
+  status: {
+    state: "disabled",
+  },
+  flush: async () => ({
+    ok: true,
+    durable: true,
+  }),
+  close: async () => ({
+    ok: true,
+    closed: true,
+    disabled: true,
+  }),
 })
 
 function createMainOptions({ eventBus, database, observer, setPreparedEventBus } = {}) {
@@ -25,11 +37,17 @@ function createMainOptions({ eventBus, database, observer, setPreparedEventBus }
     createJournalService: disabledJournalService,
     acquireProcessLock: async () => ({
       ok: true,
-      release: async () => ({ ok: true, released: true }),
+      release: async () => ({
+        ok: true,
+        released: true,
+      }),
     }),
     prepareOrderHistoryPersistence: async ({ eventBus: suppliedEventBus }) => {
       setPreparedEventBus(suppliedEventBus)
-      return { database, observer }
+      return {
+        database,
+        observer,
+      }
     },
     start: async () => {
       throw new Error("intentional startup failure after persistence preparation")
@@ -57,7 +75,10 @@ test("composes order-history observation before runtime start and closes it afte
   const observer = {
     close: async () => {
       calls.push("observer")
-      return { ok: true, errors: [] }
+      return {
+        ok: true,
+        errors: [],
+      }
     },
   }
   let preparedEventBus
