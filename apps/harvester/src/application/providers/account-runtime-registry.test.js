@@ -143,3 +143,44 @@ test("shares one account Portfolio, OrderRegistry, and serialized queue across C
   assert.equal(accountRuntime.state.updateQueue, queuedTransition)
   assert.equal(Object.isFrozen(accountRuntime.state), true)
 })
+
+test("serializes CG and RS engine transitions through one account-level queue", async () => {
+  const accountRuntime = createAccountRuntimeRegistry({ providers }).get("binance-testnet-one")
+  const events = []
+  let releaseFirst
+  const firstGate = new Promise((resolve) => {
+    releaseFirst = resolve
+  })
+
+  const first = accountRuntime.state.runTransition({
+    task: async () => {
+      events.push("first-started")
+      await firstGate
+      events.push("first-finished")
+      return "first"
+    },
+  })
+  await Promise.resolve()
+  const second = accountRuntime.state.runTransition({
+    task: async () => {
+      events.push("second-started")
+      return "second"
+    },
+  })
+  await Promise.resolve()
+
+  assert.deepEqual(
+    events,
+    ["first-started"],
+    "A second strategy transition must wait while the first account transition is active.",
+  )
+  releaseFirst()
+  const results = await Promise.all([first, second])
+
+  assert.deepEqual(results, ["first", "second"], "The shared account queue must preserve each transition result.")
+  assert.deepEqual(
+    events,
+    ["first-started", "first-finished", "second-started"],
+    "CG and RS transitions must execute in one deterministic account-level order.",
+  )
+})
