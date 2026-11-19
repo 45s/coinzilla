@@ -229,7 +229,7 @@ async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, pat
   try {
     await runGit({
       repositoryRoot,
-      args: ["fetch", "origin", "develop"],
+      args: ["fetch", "origin", "refs/heads/develop:refs/remotes/origin/develop"],
     })
     await runGit({
       repositoryRoot,
