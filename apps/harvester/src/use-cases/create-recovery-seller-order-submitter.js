@@ -79,6 +79,30 @@ function validateSubmitterOptions({
   }
 }
 
+function createRecoverySellerExecutor({
+  broker,
+  recoverySellerAccountingWorkflow,
+  onDurableSubmissionIntent,
+  onDurableSubmissionOutcome,
+  onUnresolvedSubmission,
+  onOrderValidationFailure,
+  canSubmit,
+} = {}) {
+  const executionCallbacks = recoverySellerAccountingWorkflow.getExecutionCallbacks()
+  return makeExecuteStrategyDecision({
+    broker,
+    ...executionCallbacks,
+    onSubmissionFailure: createSubmissionFailureCallback({
+      executionCallbacks,
+      onUnresolvedSubmission,
+    }),
+    onDurableSubmissionIntent,
+    onDurableSubmissionOutcome,
+    onOrderValidationFailure,
+    canSubmit,
+  })
+}
+
 export function createRecoverySellerOrderSubmitter({
   broker,
   recoverySellerAccountingWorkflow,
@@ -95,16 +119,12 @@ export function createRecoverySellerOrderSubmitter({
     onUnresolvedSubmission,
     canSubmit,
   })
-  const executionCallbacks = recoverySellerAccountingWorkflow.getExecutionCallbacks()
-  const execute = makeExecuteStrategyDecision({
+  const execute = createRecoverySellerExecutor({
     broker,
-    ...executionCallbacks,
-    onSubmissionFailure: createSubmissionFailureCallback({
-      executionCallbacks,
-      onUnresolvedSubmission,
-    }),
+    recoverySellerAccountingWorkflow,
     onDurableSubmissionIntent,
     onDurableSubmissionOutcome,
+    onUnresolvedSubmission,
     onOrderValidationFailure,
     canSubmit,
   })
