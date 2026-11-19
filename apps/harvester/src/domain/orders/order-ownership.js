@@ -36,7 +36,9 @@ function validateOwnershipShape({ ownership, orderQuantity } = {}) {
   return validateSellAllocationOwnership({
     ownership,
     orderQuantity,
-    isRecoverySellerSell: isRecoverySellerSellOwnership({ ownership }),
+    isRecoverySellerSell: isRecoverySellerSellOwnership({
+      ownership,
+    }),
   })
 }
 
@@ -146,7 +148,10 @@ function validateOwnershipLookupIdentity({ clientOrderId, brokerOrderId } = {}) 
 }
 
 export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId } = {}) {
-  validateOwnershipLookupIdentity({ clientOrderId, brokerOrderId })
+  validateOwnershipLookupIdentity({
+    clientOrderId,
+    brokerOrderId,
+  })
   const byClientOrderId = clientOrderId === undefined
     ? undefined
     : ownerships.find((ownership) => ownership.clientOrderId === clientOrderId)
