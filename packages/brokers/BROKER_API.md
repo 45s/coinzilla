@@ -140,7 +140,7 @@ All methods below are present on both provider facades. An unsupported implement
 | `subscribeForPrices(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
 | `subscribeForCandles(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
 | `subscribeForBookTicker(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
-| `subscribeForUserData({ onEvent, onObservation, onStatus })` | Supported | Supported for polling observations | Binance emits native authoritative events through `onEvent`; Bitunix emits non-authoritative polling snapshots through `onObservation`. The delivery mode is explicit in the returned subscription metadata. |
+| `subscribeForUserData({ symbols?, trackedOrders?, onEvent, onObservation, onStatus })` | Supported | Supported for polling observations | Binance emits native authoritative events through `onEvent`; Bitunix emits non-authoritative polling snapshots through `onObservation`. The delivery mode is explicit in the returned subscription metadata. |
 
 ### Compatibility methods
 
