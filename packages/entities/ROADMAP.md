@@ -142,12 +142,12 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 
 An item is complete only after its focused tests pass, its PR is merged into `develop`, and affected consumers are identified. Do not implement multiple FR contracts in one broad PR. Coordinate consumer migrations through cross-domain requests.
 
-## In progress — coordinated Utils validation API removal ([#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
+## Completed — coordinated Utils validation API removal ([#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
 
 - Migrates `Coin` and `Order` constructor checks away from the removed `Validator` facade.
 - Preserves accepted values and existing domain-specific `Error` classes/messages; no financial representation or entity contract changes.
 - Regression tests cover the ticker, quantity, price, order ID and optional client-order ID failure contracts.
-- Status: coordinated with the Utils-owned removal; final exact-head CI and merge are pending.
+- **Verification:** merged in PR #1509 (`ab77568acfcd286560270aaac325bf65301efb0c`); Entities tests passed 145/145 and full workspace checks passed.
 
 ## Shared utility reuse
 
