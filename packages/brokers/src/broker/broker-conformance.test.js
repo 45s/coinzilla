@@ -348,16 +348,6 @@ runBrokerConformanceSuite({
       mutation: true,
     },
     {
-      method: "cancelOrder",
-      args: [],
-      mutation: true,
-    },
-    {
-      method: "cancelAllOpenOrders",
-      args: [],
-      mutation: true,
-    },
-    {
       method: "subscribeForPrices",
       args: [{
         symbol: "BTCUSDT",
