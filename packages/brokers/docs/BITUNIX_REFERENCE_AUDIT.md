@@ -539,7 +539,6 @@ The .NET REST implementation sends `GET /api/spot/v1/order/detail` with only the
 
 This compatibility improvement does not change the canonical-order, fill-completeness, private-event, or Harvester-admission blockers in issue #1185. No live order mutation is enabled or tested.
 
-
 ## 10. Bitunix Spot polling-backed observation primitive (2026-11-19)
 
 Coinzilla now has a broker-specific `BitunixSpotReconciler` implementation in `src/infrastructure/bitunix/bitunix-spot-reconciler.js`. It uses existing read-only broker methods and does not create a second REST client or pretend the Spot RPC socket is a push stream.
