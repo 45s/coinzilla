@@ -24,6 +24,7 @@ Each poll reads account balances, symbol-scoped open orders, the first order-his
 - Matching-order detail remains provider-native and unverified; it is not a canonical Fill.
 - Polling cannot replay transient states that occur between cycles.
 - Stop fencing prevents further reads and callbacks after an in-flight request returns; it cannot abort a request already dispatched.
+- Stop clears its local timer handle and observation fingerprint before attempting scheduler cancellation. If the injected cancellation function throws, the error is surfaced but the session remains locally stopped and repeated `stop()` calls remain idempotent; generation fencing prevents a late timer callback from reviving the stopped session.
 - The helper does not fabricate Binance `executionReport` events. The public `subscribeForUserData()` method exposes its output only through `onObservation`; it does not emit native execution events through `onEvent`.
 
 ## Harvester and trading safety
