@@ -861,7 +861,6 @@ function createConfiguredWebSocketClient({
   includePublicPayloads,
   now,
   websocketClientFactory,
-  onProgress,
 }) {
   const transportFactory = createObservedTransportFactory({
     events,
@@ -1167,7 +1166,6 @@ async function runWebSocketChecks({
       includePublicPayloads,
       now,
       websocketClientFactory,
-      onProgress,
     })
   } catch (error) {
     recordWebSocketClientCreationFailure({
