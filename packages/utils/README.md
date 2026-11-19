@@ -229,7 +229,7 @@ The Logger continues to serialize only standard Error diagnostics. Pass custom `
 
 ## Validation and compatibility
 
-Prefer `ensure` for new generic input validation. It replaces repeated `typeof`, array-shape, range and uniqueness checks with small reusable assertions. All methods accept one options object (required by the repository's `max-params: 1` rule); use `name` to make errors identify the input field. Values are validated without coercion, and successful direct assertions return the original value.
+Prefer `ensure` for new generic input validation. It replaces repeated `typeof`, array-shape, range and uniqueness checks with small reusable assertions. All methods accept one options object (required by the repository's `max-params: 1` rule); `name` is optional and defaults to `value`. Values are validated without coercion, and successful direct assertions return the original value.
 
 ### Direct assertions
 
@@ -260,7 +260,7 @@ const symbols = ensure.nonEmptyStrings({
 | `positiveInteger`, `nonNegativeInteger` | Require safe integers greater than zero or at least zero. |
 | `array`, `nonEmptyArray` | Require an array, optionally with at least one element. |
 | `strings`, `nonEmptyStrings` | Require an array of strings; the latter also requires a non-empty array and rejects whitespace-only elements. |
-| `unique` | Require an array with no duplicate values using `Map` SameValueZero equality (including `NaN` and signed zero). |
+| `unique` | Require an array with no duplicate values using `Map` SameValueZero equality (including `NaN` and signed zero; objects compare by identity). |
 | `function` | Require a callable value. |
 | `object`, `plainObject` | Require a non-null non-array object; the latter accepts only `Object.prototype` or null prototypes. |
 | `defined`, `notNull` | Reject `undefined`, or both `null` and `undefined`, respectively. |
