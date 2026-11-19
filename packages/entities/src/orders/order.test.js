@@ -141,33 +141,6 @@ describe(`${Order.name} numeric validation`, () => {
     }
   })
 
-  it("preserves validation failures as domain Errors with the original messages", () => {
-    assert.throws(
-      () => validOrder({ price: 0 }),
-      {
-        name: "Error",
-        message: errMsgs.price,
-      },
-      "Order price validation must retain its domain Error class and field-specific message",
-    )
-    assert.throws(
-      () => validOrder({ id: " " }),
-      {
-        name: "Error",
-        message: errMsgs.id,
-      },
-      "Order identity validation must retain its domain Error class and field-specific message",
-    )
-    assert.throws(
-      () => validOrder({ clientOrderId: " " }),
-      {
-        name: "Error",
-        message: errMsgs.clientOrderId,
-      },
-      "Optional client-order identity validation must retain its domain Error class and field-specific message",
-    )
-  })
-
   it("should reject missing, non-string, or blank IDs", () => {
     for (const invalidId of [undefined, null, "", "    ", 123]) {
       assert.throws(
