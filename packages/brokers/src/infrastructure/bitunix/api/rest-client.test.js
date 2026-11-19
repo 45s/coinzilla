@@ -644,3 +644,89 @@ test("Bitunix REST client sends and signs exact int64 request numbers", async ()
     }),
   )
 })
+
+
+test("Bitunix REST client requires explicit state-changing classification for every POST", async () => {
+  let requestCount = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      requestCount += 1
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            code: "0",
+            msg: "success",
+            data: {},
+          }
+        },
+      }
+    },
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/history/page",
+      body: { symbol: "BTCUSDT" },
+    }),
+    /POST requests must explicitly set stateChanging/i,
+    "a POST without an explicit read/mutation classification must fail before dispatch",
+  )
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/history/page",
+      body: { symbol: "BTCUSDT" },
+      stateChanging: "false",
+    }),
+    /stateChanging flag must be a boolean/i,
+    "string booleans must not silently classify a request as read-only",
+  )
+  await assert.rejects(
+    client.request({
+      method: "GET",
+      path: "/api/spot/v1/market/last_price",
+      stateChanging: true,
+    }),
+    /state-changing requests must use POST/i,
+    "state-changing GET requests must be rejected before dispatch",
+  )
+
+  assert.equal(requestCount, 0, "invalid request classifications must never reach the transport")
+})
+
+test("Bitunix REST client accepts explicitly classified read-only POST requests", async () => {
+  let requestCount = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      requestCount += 1
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return {
+            code: "0",
+            msg: "success",
+            data: [],
+          }
+        },
+      }
+    },
+  })
+
+  const result = await client.request({
+    method: "POST",
+    path: "/api/spot/v1/order/pending/list",
+    body: { symbol: "BTCUSDT" },
+    stateChanging: false,
+  })
+
+  assert.deepEqual(result.data, [])
+  assert.equal(requestCount, 1, "an explicitly read-only POST must still be dispatched once")
+})

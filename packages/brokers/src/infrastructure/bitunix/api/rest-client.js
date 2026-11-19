@@ -149,10 +149,20 @@ function validateRequest(input = {}) {
     path,
     queryParams = {},
     body,
-    stateChanging = false,
+    stateChanging,
     authenticated = true,
   } = input
   const normalizedMethod = normalizeMethod({ method })
+  if (stateChanging !== undefined && typeof stateChanging !== "boolean") {
+    throw new TypeError("Bitunix REST stateChanging flag must be a boolean")
+  }
+  if (normalizedMethod === "POST" && typeof stateChanging !== "boolean") {
+    throw new TypeError("Bitunix REST POST requests must explicitly set stateChanging to true or false")
+  }
+  if (stateChanging === true && normalizedMethod !== "POST") {
+    throw new TypeError("Bitunix REST state-changing requests must use POST")
+  }
+  const normalizedStateChanging = stateChanging ?? false
   validatePath({ path })
   validateQueryParams({ queryParams })
   validateRequestBody({
@@ -170,7 +180,7 @@ function validateRequest(input = {}) {
     path,
     queryParams,
     body,
-    stateChanging,
+    stateChanging: normalizedStateChanging,
     authenticated,
   }
 }

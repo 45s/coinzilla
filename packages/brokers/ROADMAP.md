@@ -1448,3 +1448,12 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Updated the polling contract and production-readiness matrix to distinguish this recovery guarantee from authoritative event/fill reconciliation.
 - No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
 - Required CI must pass on the exact final PR head before this item is marked complete.
+
+
+## 2026-11-19 — Explicit Bitunix REST mutation classification (#1523)
+
+- [x] Require every REST POST call to declare `stateChanging: true` or `stateChanging: false`; do not silently default a POST to read-only.
+- [x] Reject non-boolean classifications and state-changing GET requests before transport.
+- [x] Mark all existing read-only POST operations explicitly, while preserving `true` on order/funds mutation calls.
+- [x] Add deterministic client regressions proving invalid classifications never reach the network and explicit read-only POSTs remain supported.
+- [ ] Verify exact-head Brokers tests/coverage, strict lint and all required workspace CI before marking complete.

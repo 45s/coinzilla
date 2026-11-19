@@ -465,3 +465,8 @@ For user-data `executionReport` TRADE events, canonical Fill execution time is B
 The method name is shared; the delivery guarantee is not. Binance declares `SUBSCRIBE_USER_DATA: SUPPORTED`, returns `deliveryMode: "NATIVE_EVENTS"` / `nativePush: true`, and forwards authenticated exchange events through `onEvent`. Bitunix declares `OBSERVE_USER_DATA: SUPPORTED` while native `SUBSCRIBE_USER_DATA` remains unsupported; it returns `deliveryMode: "POLLING_OBSERVATIONS"` / `nativePush: false` and sends changed, explicitly scoped snapshots only through `onObservation`.
 
 Do not convert observations into execution reports, canonical fills, or account snapshots. Polling cannot replay transient states or prove complete history. Harvester keeps Bitunix outside provider registration until issue #1185's native lifecycle, authoritative snapshot, canonical fill, and recovery prerequisites are met. See [the shared Broker API contract](./BROKER_API.md#user-data-delivery-channels).
+
+
+## Bitunix REST request safety classification
+
+Every Bitunix Spot REST `POST` must explicitly set `stateChanging` to a boolean. Read-only POST queries (for example, symbol-scoped order/deposit history) use `stateChanging: false`; order and funds mutations use `stateChanging: true`. The REST client rejects missing/non-boolean classifications and rejects state-changing GET requests before transport. This classification controls whether an ambiguous post-dispatch failure is reported with an unknown mutation outcome; it never enables automatic retries.
