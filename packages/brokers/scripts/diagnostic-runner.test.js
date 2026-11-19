@@ -668,3 +668,71 @@ test("diagnostics query current open orders through the documented read-only POS
   assert.equal(openOrdersRequest.stateChanging, false, "the current-orders POST is a read-only query, not an account-changing operation")
   assert.equal(report.results.find((entry) => entry.operation === "REST private open orders").status, "passed")
 })
+
+test("live diagnostics exercise Bitunix Spot reads through the public Broker API and report response schema drift", async () => {
+  const rawRestCalls = []
+  const websocketCalls = []
+  const brokerApiCalls = []
+  const factories = createFakeClients({
+    restCalls: rawRestCalls,
+    websocketCalls,
+  })
+  const report = await runBitunixDiagnostics({
+    env: validEnvironment,
+    ...factories,
+    brokerApiRestClientFactory(configuration) {
+      assert.equal(configuration.apiKey, validEnvironment.BITUNIX_API_KEY, "the public Broker diagnostic must receive configured credentials without logging them")
+      return {
+        async request(request) {
+          brokerApiCalls.push(request)
+          if (request.path === "/api/spot/v1/common/coin_pair/list") {
+            return {
+              data: [{
+                base: "BTC",
+                quote: "USDT",
+                isOpen: "1",
+                futureField: "must-not-be-persisted",
+              }],
+            }
+          }
+          if (request.path === "/api/spot/v1/market/last_price") {
+            return { data: "123.4500" }
+          }
+          if (request.path === "/api/spot/v1/user/account") {
+            return {
+              data: [{
+                coin: "BTC",
+                balance: "987654.321",
+                balanceLocked: "0",
+              }],
+            }
+          }
+          if (request.path === "/api/spot/v1/order/pending/list") {
+            return { data: [] }
+          }
+          throw new Error(`Unexpected Broker API diagnostic request: ${request.path}`)
+        },
+      }
+    },
+  })
+
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getExchangeMarkets").status, "passed", "the public Broker must normalize the exchange market catalog")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getPrices").status, "passed", "the public Broker must normalize one-shot prices")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getBalances").status, "passed", "the public Broker must normalize authenticated exact-decimal balances")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getOpenOrders").status, "passed", "the public Broker must exercise the authenticated open-order read")
+  assert.deepEqual(brokerApiCalls.map((request) => request.path), [
+    "/api/spot/v1/common/coin_pair/list",
+    "/api/spot/v1/market/last_price",
+    "/api/spot/v1/user/account",
+    "/api/spot/v1/order/pending/list",
+  ], "the same public Broker instance must exercise public and authenticated read-only operations")
+  assert.equal(brokerApiCalls[0].authenticated, false, "the market catalog must use unsigned public REST")
+  assert.equal(brokerApiCalls[1].authenticated, false, "the public ticker must use unsigned REST")
+  assert.equal(brokerApiCalls[2].authenticated, true, "account balances must use authenticated REST")
+  assert.equal(brokerApiCalls[3].authenticated, true, "open orders must use authenticated REST")
+  assert.deepEqual(report.schemaObservations[0].unexpectedFields, ["futureField"], "unknown exchange fields must be reported without failing otherwise valid normalization")
+  assert.equal(report.schemaObservations[0].missingRequiredFields.length, 0, "the valid market fixture must satisfy required fields")
+  assert.equal(JSON.stringify(report).includes("must-not-be-persisted"), false, "unknown response field values must never be persisted")
+  assert.equal(JSON.stringify(report).includes("987654.321"), false, "private financial values must never be persisted")
+  assert.equal(JSON.stringify(report).includes(validEnvironment.BITUNIX_API_SECRET), false, "diagnostic reports must never persist the API secret")
+})
