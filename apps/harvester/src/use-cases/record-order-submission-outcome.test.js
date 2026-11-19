@@ -16,7 +16,7 @@ symbol: "DOGEUSDT",
 baseAsset,
 quoteAsset })
 const recoverySellerBuyOwnership = {
-  strategyId: "RECOVERY_SELLER",
+  strategyId: "RS_recoverySeller",
   positionId: "rs-position-1",
   purpose: "RECOVERY_BUY",
   cycleId: "rs-cycle-1",
@@ -89,7 +89,7 @@ executedQuantity: "12.5" })
     quantity: "100",
     executedQuantity: "12.5",
     purpose: "RECOVERY_BUY",
-    strategyId: "RECOVERY_SELLER",
+    strategyId: "RS_recoverySeller",
     positionId: "rs-position-1",
     cycleId: "rs-cycle-1",
     outcome: "ACKNOWLEDGED",

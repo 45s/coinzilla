@@ -20,7 +20,7 @@ function validatePurposeFreePersistedOwnership({ canonicalData, supplied } = {})
   if (supplied.length === 0) {
     return
   }
-  if (canonicalData.strategyId !== "COIN_GRABBER" || supplied.length < 2) {
+  if (canonicalData.strategyId !== "CG_coinGrabber" || supplied.length < 2) {
     throw new TypeError("Purpose-free order ownership must be complete Coin Grabber ownership")
   }
   requireNonEmptyString({
@@ -38,7 +38,7 @@ function validatePurposeFreePersistedOwnership({ canonicalData, supplied } = {})
 }
 
 function validatePersistedRecoveryOrderSide({ canonicalData } = {}) {
-  if (canonicalData.purpose === "RECOVERY_BUY" && canonicalData.strategyId !== "RECOVERY_SELLER") {
+  if (canonicalData.purpose === "RECOVERY_BUY" && canonicalData.strategyId !== "RS_recoverySeller") {
     throw new TypeError("RECOVERY_BUY ownership must belong to Recovery Seller")
   }
   if ((canonicalData.purpose === "RECOVERY_BUY" && canonicalData.side !== "BUY") ||
@@ -53,7 +53,7 @@ function validatePersistedRecoveryOrderOwnership({ canonicalData, supplied } = {
   }
   if (!["RECOVERY_BUY", "RECOVERY_SELL"].includes(canonicalData.purpose) ||
       supplied.length < 2 ||
-      !["COIN_GRABBER", "RECOVERY_SELLER"].includes(canonicalData.strategyId)) {
+      !["CG_coinGrabber", "RS_recoverySeller"].includes(canonicalData.strategyId)) {
     throw new TypeError("Recovery order facts require complete strategy, positionId and cycleId ownership")
   }
   requireNonEmptyString({
@@ -61,7 +61,7 @@ function validatePersistedRecoveryOrderOwnership({ canonicalData, supplied } = {
     field: "data.positionId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  if (canonicalData.strategyId === "RECOVERY_SELLER") {
+  if (canonicalData.strategyId === "RS_recoverySeller") {
     requireNonEmptyString({
       value: canonicalData.cycleId,
       field: "data.cycleId",

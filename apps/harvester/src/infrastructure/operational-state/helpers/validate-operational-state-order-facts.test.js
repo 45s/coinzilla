@@ -111,7 +111,7 @@ test("accepts canonical order-submission intents and recovery-sell purpose", () 
       side: "SELL",
       type: "LIMIT_MAKER",
       purpose: "RECOVERY_SELL",
-      strategyId: "RECOVERY_SELLER",
+      strategyId: "RS_recoverySeller",
       positionId: "rs-position-1",
       cycleId: "rs-cycle-1",
     })),
@@ -119,7 +119,7 @@ test("accepts canonical order-submission intents and recovery-sell purpose", () 
   )
   assert.doesNotThrow(
     () => validateOrderSubmissionIntentFact(makeSubmissionIntent({
-      strategyId: "COIN_GRABBER",
+      strategyId: "CG_coinGrabber",
       positionId: "cg-position-1",
     })),
     "Purpose-free Coin Grabber intents may preserve their strategy and position ownership.",
@@ -139,18 +139,18 @@ test("rejects malformed order-submission intent identity, fields, classification
     ["RS purpose without ownership", { purpose: "RECOVERY_BUY" }, /complete strategy.*positionId.*cycleId ownership/],
     ["partial RS ownership", {
       purpose: "RECOVERY_BUY",
-      strategyId: "RECOVERY_SELLER",
+      strategyId: "RS_recoverySeller",
       positionId: "rs-position-1",
     }, /complete strategy.*positionId.*cycleId ownership/],
     ["RS purpose/side mismatch", {
       purpose: "RECOVERY_BUY",
-      strategyId: "RECOVERY_SELLER",
+      strategyId: "RS_recoverySeller",
       positionId: "rs-position-1",
       cycleId: "rs-cycle-1",
       side: "SELL",
     }, /purpose must match its canonical side/],
     ["Conservative fact with RS ownership", {
-      strategyId: "RECOVERY_SELLER",
+      strategyId: "RS_recoverySeller",
       positionId: "rs-position-1",
       cycleId: "rs-cycle-1",
     }, /Purpose-free order ownership must be complete Coin Grabber ownership/],
@@ -202,7 +202,7 @@ test("accepts acknowledged and unacknowledged order-submission outcomes", () => 
   assert.doesNotThrow(
     () => validateOrderSubmissionOutcomeFact(makeSubmissionOutcome({
       purpose: "RECOVERY_BUY",
-      strategyId: "RECOVERY_SELLER",
+      strategyId: "RS_recoverySeller",
       positionId: "rs-position-1",
       cycleId: "rs-cycle-1",
     })),
@@ -210,7 +210,7 @@ test("accepts acknowledged and unacknowledged order-submission outcomes", () => 
   )
   assert.doesNotThrow(
     () => validateOrderSubmissionOutcomeFact(makeSubmissionOutcome({
-      strategyId: "COIN_GRABBER",
+      strategyId: "CG_coinGrabber",
       positionId: "cg-position-1",
     })),
     "Purpose-free Coin Grabber outcomes may preserve their strategy and position ownership.",
@@ -230,7 +230,7 @@ test("rejects order-submission outcomes with inconsistent identity, amounts, or 
     ["RS purpose without ownership", { purpose: "RECOVERY_BUY" }, /complete strategy.*positionId.*cycleId ownership/],
     ["RS purpose/side mismatch", {
       purpose: "RECOVERY_BUY",
-      strategyId: "RECOVERY_SELLER",
+      strategyId: "RS_recoverySeller",
       positionId: "rs-position-1",
       cycleId: "rs-cycle-1",
       side: "SELL",

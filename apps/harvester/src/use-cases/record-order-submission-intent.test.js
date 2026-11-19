@@ -16,7 +16,7 @@ symbol: "DOGEUSDT",
 baseAsset,
 quoteAsset })
 const recoverySellerBuyOwnership = {
-  strategyId: "RECOVERY_SELLER",
+  strategyId: "RS_recoverySeller",
   positionId: "rs-position-1",
   purpose: "RECOVERY_BUY",
   cycleId: "rs-cycle-1",
@@ -80,7 +80,7 @@ test("records the canonical immutable order intent and requires a durable append
     price: "0.099",
     quantity: "100",
     purpose: "RECOVERY_BUY",
-    strategyId: "RECOVERY_SELLER",
+    strategyId: "RS_recoverySeller",
     positionId: "rs-position-1",
     cycleId: "rs-cycle-1",
   }, "The fact must preserve canonical market/order identities, exact decimal strings, and complete RS ownership.")
@@ -256,14 +256,14 @@ test("persists purpose-free Coin Grabber strategy and position ownership", async
     order,
     purpose: null,
     ownership: {
-      strategyId: "COIN_GRABBER",
+      strategyId: "CG_coinGrabber",
       positionId: "cg-position-1",
       purpose: null,
     },
   })
 
   assert.equal(result.ok, true)
-  assert.equal(records[0].data.strategyId, "COIN_GRABBER")
+  assert.equal(records[0].data.strategyId, "CG_coinGrabber")
   assert.equal(records[0].data.positionId, "cg-position-1")
   assert.equal(records[0].data.cycleId, undefined)
 })
