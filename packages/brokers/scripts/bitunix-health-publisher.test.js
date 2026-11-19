@@ -170,8 +170,9 @@ test("publishes only a sanitized report from a fresh diagnostics branch and retu
     assert.equal(localReport.includes("private-uid"), false, "local event errors must not persist account identifiers")
     assert.equal(localReport.includes("private error message"), false, "local diagnostic reports must not retain free-form error messages")
     assert.equal(Object.hasOwn(result.report, "events"), false, "the public allowlist must exclude raw diagnostic events")
-    assert.equal(JSON.stringify(result.report.events).includes("123.456"), false, "published event errors must not expose balance values")
-    assert.equal(result.report.events[0].error.message, "[error message withheld]", "published event errors must retain only a safe placeholder")
+    const publicAccountResult = result.report.results.find((item) => item.operation === "user.account")
+    assert.equal(Object.hasOwn(publicAccountResult, "request"), false, "the public allowlist must omit request payloads")
+    assert.equal(Object.hasOwn(publicAccountResult, "response"), false, "the public allowlist must omit response payloads")
     assert.equal(result.reportPath.endsWith("bitunix-health-20261119T083000000Z.json"), true, "the result must identify the report path to inspect")
     assert.equal(result.localReportPath.endsWith(".diagnostics/bitunix-health-20261119T083000000Z.json"), true, "the full local diagnostic artifact must stay in the ignored diagnostics directory")
   } finally {
