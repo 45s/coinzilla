@@ -269,8 +269,10 @@ function createCoinGrabberMarketPriceErrorHandler({ logger } = {}) {
 
 async function resolveStartupOptionsForProcessRecovery({ resolved,
   operationalStateStore,
-  logger } = {}) {
-  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
+  logger,
+  recoverySellerEnabled = false } = {}) {
+  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true ||
+    recoverySellerEnabled
   const operationalState = await verifyOperationalStateStore({
     operationalStateStore,
     recoveryEnabled,
@@ -839,6 +841,7 @@ async function startHarvesterPreflightServices({ startup,
     getRecoveryLedger: portfolio.getRecoveryLedger,
     getAccountSnapshot: portfolio.getAccountSnapshot,
     getOpenOrders: () => resources.broker.getOpenOrders(),
+    recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
   })
   await startHarvesterUserDataServices({
     startup,
