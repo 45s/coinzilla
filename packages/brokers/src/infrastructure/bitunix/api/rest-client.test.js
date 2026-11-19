@@ -490,3 +490,92 @@ test("Bitunix REST client preserves int64 user UID tokens and nullable UIDs", as
   assert.equal(largeUid.data.uid, "9223372036854775807", "an int64 UID must not be rounded by JavaScript Number parsing")
   assert.equal(nullUid.data.uid, null, "a documented null UID must remain null")
 })
+
+
+test("Bitunix REST client exposes Retry-After for HTTP 429 without automatic retry", async () => {
+  let calls = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      calls += 1
+      return {
+        ok: false,
+        status: 429,
+        headers: {
+          get(name) {
+            return name === "retry-after" ? "2" : null
+          },
+        },
+        async text() {
+          return JSON.stringify({
+            code: 10001,
+            msg: "Too many requests",
+          })
+        },
+      }
+    },
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "GET",
+      path: "/api/spot/v1/user/account",
+    }),
+    (error) => {
+      assert.ok(error instanceof BitunixRestError)
+      assert.equal(error.kind, "http")
+      assert.equal(error.status, 429)
+      assert.equal(error.retryAfterMs, 2000)
+      return true
+    },
+  )
+  assert.equal(calls, 1, "rate-limit responses must not be retried implicitly")
+})
+
+test("Bitunix REST client parses HTTP-date Retry-After and ignores malformed hints", async () => {
+  const retryAfterDate = new Date(Date.now() + 5000).toUTCString()
+  const retryValues = [retryAfterDate, "not-a-date"]
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => ({
+      ok: false,
+      status: 429,
+      headers: {
+        get(name) {
+          return name === "retry-after" ? retryValues.shift() : null
+        },
+      },
+      async text() {
+        return JSON.stringify({
+          code: 10001,
+          msg: "Too many requests",
+        })
+      },
+    }),
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "GET",
+      path: "/api/spot/v1/user/account",
+    }),
+    (error) => {
+      assert.ok(error instanceof BitunixRestError)
+      assert.ok(error.retryAfterMs >= 0 && error.retryAfterMs <= 5000)
+      return true
+    },
+  )
+  await assert.rejects(
+    client.request({
+      method: "GET",
+      path: "/api/spot/v1/user/account",
+    }),
+    (error) => {
+      assert.ok(error instanceof BitunixRestError)
+      assert.equal(error.retryAfterMs, null)
+      return true
+    },
+  )
+})
