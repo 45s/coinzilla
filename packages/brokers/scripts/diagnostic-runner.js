@@ -1471,6 +1471,33 @@ function emitBrokerApiProgress({ method, status, onProgress }) {
   })
 }
 
+
+function recordBrokerApiOperationFailure({
+  method,
+  args,
+  error,
+  startedAt,
+  now,
+  results,
+  secrets,
+  onProgress,
+}) {
+  recordBrokerApiFailure({
+    method,
+    args,
+    error,
+    startedAt,
+    now,
+    results,
+    secrets,
+  })
+  emitBrokerApiProgress({
+    method,
+    status: "FAIL",
+    onProgress,
+  })
+}
+
 async function runBrokerApiOperation({
   broker,
   definition,
@@ -1488,7 +1515,7 @@ async function runBrokerApiOperation({
   try {
     const result = await broker[definition.method](...definition.args)
     if (!result || result.ok !== true) {
-      recordBrokerApiFailure({
+      recordBrokerApiOperationFailure({
         method: definition.method,
         args: definition.args,
         error: result?.errors?.[0] ?? new Error("Broker read returned no successful result envelope"),
@@ -1496,10 +1523,6 @@ async function runBrokerApiOperation({
         now,
         results,
         secrets,
-      })
-      emitBrokerApiProgress({
-        method: definition.method,
-        status: "FAIL",
         onProgress,
       })
       return
@@ -1520,7 +1543,7 @@ async function runBrokerApiOperation({
       onProgress,
     })
   } catch (error) {
-    recordBrokerApiFailure({
+    recordBrokerApiOperationFailure({
       method: definition.method,
       args: definition.args,
       error,
@@ -1528,10 +1551,6 @@ async function runBrokerApiOperation({
       now,
       results,
       secrets,
-    })
-    emitBrokerApiProgress({
-      method: definition.method,
-      status: "FAIL",
       onProgress,
     })
   }
@@ -1615,9 +1634,12 @@ function recordBrokerLifecycle({ method, status, error, now, results, secrets })
     })
     return
   }
-  const response = method === "connect"
-    ? { connected: true }
-    : { disconnected: true }
+  const response = {}
+  if (method === "connect") {
+    response.connected = true
+  } else {
+    response.disconnected = true
+  }
   results.push(createResult({
     operation: `Broker API ${method}`,
     startedAt: now(),

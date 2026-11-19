@@ -669,6 +669,60 @@ test("diagnostics query current open orders through the documented read-only POS
   assert.equal(report.results.find((entry) => entry.operation === "REST private open orders").status, "passed")
 })
 
+
+function createBrokerApiDiagnosticRestClientFactory({ calls, expectedApiKey }) {
+  return (configuration) => {
+    assert.equal(configuration.apiKey, expectedApiKey, "the public Broker diagnostic must receive configured credentials without logging them")
+    return {
+      async request(request) {
+        calls.push(request)
+        return createBrokerApiDiagnosticResponse({ request })
+      },
+    }
+  }
+}
+
+function createBrokerApiDiagnosticResponse({ request }) {
+  if (request.path === "/api/spot/v1/common/coin_pair/list") {
+    return {
+      data: [{
+        id: "1",
+        base: "BTC",
+        quote: "USDT",
+        basePrecision: "8",
+        quotePrecision: "8",
+        minPrice: "0.0001",
+        minVolume: "0.0001",
+        isOpen: "1",
+        isHot: "0",
+        isRecommend: "0",
+        isShow: "1",
+        tradeArea: "Spot",
+        sort: "1",
+        openTime: "2026-01-01T00:00:00Z",
+        precisions: ["0.0001"],
+        futureField: "must-not-be-persisted",
+      }],
+    }
+  }
+  if (request.path === "/api/spot/v1/market/last_price") {
+    return { data: "123.4500" }
+  }
+  if (request.path === "/api/spot/v1/user/account") {
+    return {
+      data: [{
+        coin: "BTC",
+        balance: "987654.321",
+        balanceLocked: "0",
+      }],
+    }
+  }
+  if (request.path === "/api/spot/v1/order/pending/list") {
+    return { data: [] }
+  }
+  throw new Error(`Unexpected Broker API diagnostic request: ${request.path}`)
+}
+
 test("live diagnostics exercise Bitunix Spot reads through the public Broker API and report response schema drift", async () => {
   const rawRestCalls = []
   const websocketCalls = []
