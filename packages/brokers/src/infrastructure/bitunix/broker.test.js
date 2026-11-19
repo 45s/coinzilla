@@ -1807,11 +1807,29 @@ test("Bitunix Spot token-network metadata rejects malformed catalog rows and dec
     {},
     [null],
     [{ name: " " }],
-    [{ name: "USDT", networks: {} }],
-    [{ name: "USDT", withdrawMin: 0.000001 }],
-    [{ name: "USDT", withdrawMax: "NaN" }],
-    [{ name: "USDT", networks: [null] }],
-    [{ name: "USDT", networks: [{ network: "TRC-20", depositMin: "-0.1" }] }],
+    [{
+      name: "USDT",
+      networks: {},
+    }],
+    [{
+      name: "USDT",
+      withdrawMin: 0.000001,
+    }],
+    [{
+      name: "USDT",
+      withdrawMax: "NaN",
+    }],
+    [{
+      name: "USDT",
+      networks: [null],
+    }],
+    [{
+      name: "USDT",
+      networks: [{
+        network: "TRC-20",
+        depositMin: "-0.1",
+      }],
+    }],
   ]
 
   for (const invalidResponse of invalidResponses) {
