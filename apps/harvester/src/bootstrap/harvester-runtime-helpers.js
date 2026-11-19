@@ -287,6 +287,7 @@ function createHarvesterTradingEngineOptions(options = {}) {
     recoverySellerPairs,
     recoverySellerWorkflow,
     getRecoverySellerMarketMetadata,
+    evaluateRecoverySellerTransition,
     updateTradingAccounting,
     completeRecoveryCycle,
     userDataState,
@@ -312,6 +313,7 @@ function createHarvesterTradingEngineOptions(options = {}) {
     recoverySellerPairs,
     recoverySellerWorkflow,
     getRecoverySellerMarketMetadata,
+    evaluateRecoverySellerTransition,
     updateTradingAccounting,
     completeRecoveryCycle,
     ...createHarvesterTradingEngineSafetyCallbacks({
