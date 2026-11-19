@@ -187,11 +187,16 @@ function publishConfigurationEvidence({
   runtime,
   evidence,
 } = {}) {
-  publishConfigurationEvidence({
+  publishValidatedConfiguration({
     eventPublisher,
+    validatedConfigurationData: evidence.validatedConfigurationData,
+  })
+  logValidatedConfiguration({
     logger,
-    runtime,
-    evidence,
+    environment: runtime.environment,
+    brokerName: runtime.brokerName,
+    tradingMode: runtime.tradingMode,
+    enabledSymbols: evidence.enabledSymbols,
   })
 }
 
@@ -233,16 +238,11 @@ export async function resolveHarvesterOptions({
     tradingMode: runtime.tradingMode,
     tradingEnabled: runtime.tradingEnabled,
   })
-  publishValidatedConfiguration({
+  publishConfigurationEvidence({
     eventPublisher,
-    validatedConfigurationData: evidence.validatedConfigurationData,
-  })
-  logValidatedConfiguration({
     logger,
-    environment: runtime.environment,
-    brokerName: runtime.brokerName,
-    tradingMode: runtime.tradingMode,
-    enabledSymbols: evidence.enabledSymbols,
+    runtime,
+    evidence,
   })
 
   return Object.freeze({

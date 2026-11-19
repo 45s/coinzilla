@@ -39,6 +39,8 @@ The order-submission factory delegates shared executor construction to a focused
 
 Configuration evidence publication/logging is isolated in a helper so provider route filtering and effective pair selection remain within the 60-line startup-function limit. The order-submission executor construction is likewise extracted; these are structural quality fixes only.
 
+The initial evidence-helper extraction accidentally left the public resolver calling the helper body recursively and did not shorten the caller. This was caught during exact-head source review before accepting the change; the helper now owns the publish/log operations and the resolver delegates to it. CI must verify this corrected revision.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.
