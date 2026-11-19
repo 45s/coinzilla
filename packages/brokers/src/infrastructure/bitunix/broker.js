@@ -1050,6 +1050,7 @@ export class BitunixSpotBroker extends CoreBroker {
    */
   async cancelOrder({ symbol, orderId } = {}) {
     let requestDispatched = false
+    let cancelAcknowledged = false
     try {
       const normalizedSymbol = requireSymbol({
         symbol,
@@ -1069,6 +1070,7 @@ export class BitunixSpotBroker extends CoreBroker {
         authenticated: true,
         stateChanging: true,
       })
+      cancelAcknowledged = true
 
       const detailResponse = await this.restClient.request({
         method: "GET",
@@ -1106,14 +1108,19 @@ export class BitunixSpotBroker extends CoreBroker {
         where: "BitunixSpotBroker.cancelOrder()",
         error,
       })
-      const outcome = getBrokerMutationOutcome({
-        error,
-        requestDispatched,
-      })
+      const outcome = cancelAcknowledged
+        ? "CONFIRMED"
+        : error?.kind === "exchange"
+          ? "REJECTED"
+          : getBrokerMutationOutcome({
+            error,
+            requestDispatched,
+          })
       return {
         ...toResult({ errors: [error] }),
         mutationOutcome: outcome,
-        cancellationOutcome: requestDispatched && outcome !== "NOT_SENT"
+        cancellationOutcome: cancelAcknowledged ||
+          (requestDispatched && outcome === "OUTCOME_UNKNOWN")
           ? "OUTCOME_UNKNOWN"
           : "NOT_SENT",
       }
