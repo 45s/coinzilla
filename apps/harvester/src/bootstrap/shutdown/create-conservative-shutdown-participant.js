@@ -1,4 +1,46 @@
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { MARKET_DATA_MAX_AGE_MS } from "../../domain/market/is-market-data-fresh.js"
+
+function isRefreshableRecoveryPriceFailure(result) {
+  return result?.ok === false && result.errors?.some((error) =>
+    error?.code === "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE" &&
+    ["MARKET_PRICE_UNAVAILABLE", "STALE_MARKET_PRICE"].includes(error.reason)
+  )
+}
+
+function createRecoveryPriceRefreshFailure({ symbol, error } = {}) {
+  const reason = error?.code === "MARKET_PRICE_REFRESH_TIMEOUT"
+    ? "MARKET_PRICE_REFRESH_TIMEOUT"
+    : "MARKET_PRICE_REFRESH_ABORTED"
+  return {
+    ok: false,
+    errors: [Object.assign(
+      new Error(`Shutdown recovery for ${symbol} could not obtain a fresh market-price event: ${reason}`),
+      {
+        code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+        reason,
+        cause: error,
+      },
+    )],
+  }
+}
+
+function throwIfShutdownAborted(signal) {
+  if (!signal?.aborted) {
+    return
+  }
+  if (signal.reason instanceof Error) {
+    throw signal.reason
+  }
+  throw Object.assign(
+    new Error("Conservative shutdown safety wait was aborted", {
+      cause: signal.reason,
+    }),
+    {
+      code: "SHUTDOWN_SAFETY_ABORTED",
+    },
+  )
+}
 
 function createStageBlocker({ stage, error } = {}) {
   const reason = error?.code ?? error?.message ?? "FAILED"
@@ -169,6 +211,7 @@ async function reconcileRecoverySells({
   blockers,
   reconciliationBlockers,
   drainUserDataEvents,
+  signal,
 } = {}) {
   if (blockers.length > 0) {
     return
@@ -176,7 +219,27 @@ async function reconcileRecoverySells({
 
   const recoveryBlockers = await runStage({
     stage: "RECOVERY_SELL_RECONCILIATION",
-    operation: () => engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] }),
+    operation: async () => {
+      const result = await engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] })
+      if (
+        !isRefreshableRecoveryPriceFailure(result) ||
+        typeof engine.waitForFreshMarketPrice !== "function"
+      ) {
+        return result
+      }
+
+      try {
+        await engine.waitForFreshMarketPrice({
+          symbol,
+          timeoutMs: MARKET_DATA_MAX_AGE_MS,
+          signal,
+        })
+      } catch (error) {
+        return createRecoveryPriceRefreshFailure({ symbol, error })
+      }
+
+      return engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] })
+    },
   })
   blockers.push(...recoveryBlockers)
   await collectDrainBlockers({
@@ -309,6 +372,7 @@ async function secureMarket({
   logger,
   symbol,
   initialDrainBlockers,
+  signal,
 } = {}) {
   const blockers = [...initialDrainBlockers]
   const reconciliationBlockers = [...initialDrainBlockers]
@@ -326,6 +390,7 @@ async function secureMarket({
     blockers,
     reconciliationBlockers,
     drainUserDataEvents,
+    signal,
   })
   const coverageResult = await auditRecoverySellCoverage({
     engine,
