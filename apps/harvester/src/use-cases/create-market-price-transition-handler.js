@@ -2,25 +2,94 @@ import { toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 
 function createMarketPriceRefreshTimeoutError({ symbol, timeoutMs } = {}) {
-  return Object.assign(
-    new Error(`No fresh market-price event arrived for ${symbol} within ${timeoutMs} ms`),
-    {
-      code: "MARKET_PRICE_REFRESH_TIMEOUT",
-      symbol,
-      timeoutMs,
-    },
-  )
+  const error = new Error(`No fresh market-price event arrived for ${symbol} within ${timeoutMs} ms`)
+  error.code = "MARKET_PRICE_REFRESH_TIMEOUT"
+  error.symbol = symbol
+  error.timeoutMs = timeoutMs
+  return error
 }
 
 function createMarketPriceRefreshAbortError({ signal } = {}) {
-  return Object.assign(
-    new Error("Waiting for a fresh market-price event was aborted", {
-      cause: signal?.reason,
-    }),
-    {
-      code: "MARKET_PRICE_REFRESH_ABORTED",
-    },
-  )
+  const error = new Error("Waiting for a fresh market-price event was aborted", {
+    cause: signal?.reason,
+  })
+  error.code = "MARKET_PRICE_REFRESH_ABORTED"
+  return error
+}
+
+function cleanupFreshPriceWaiter({
+  symbol,
+  waiters,
+  waitersBySymbol,
+  waiter,
+  signal,
+  clearTimeoutFn,
+} = {}) {
+  if (waiter.timeoutHandle !== undefined) {
+    clearTimeoutFn(waiter.timeoutHandle)
+  }
+  signal?.removeEventListener?.("abort", waiter.onAbort)
+  waiters.delete(waiter)
+  if (waiters.size === 0) {
+    waitersBySymbol.delete(symbol)
+  }
+}
+
+function createPendingFreshPriceWaiter({
+  symbol,
+  timeoutMs,
+  signal,
+  waitersBySymbol,
+  setTimeoutFn,
+  clearTimeoutFn,
+} = {}) {
+  return new Promise((resolve, reject) => {
+    const waiters = waitersBySymbol.get(symbol) ?? new Set()
+    const settledState = { settled: false }
+    const waiter = {}
+    const cleanup = () => cleanupFreshPriceWaiter({
+      symbol,
+      waiters,
+      waitersBySymbol,
+      waiter,
+      signal,
+      clearTimeoutFn,
+    })
+    const settle = ({ callback, value } = {}) => {
+      if (settledState.settled) {
+        return
+      }
+      settledState.settled = true
+      cleanup()
+      callback(value)
+    }
+    waiter.resolve = (price) => settle({
+      callback: resolve,
+      value: price,
+    })
+    waiter.reject = (error) => settle({
+      callback: reject,
+      value: error,
+    })
+    waiter.onAbort = () => waiter.reject(createMarketPriceRefreshAbortError({ signal }))
+
+    waiters.add(waiter)
+    waitersBySymbol.set(symbol, waiters)
+    try {
+      waiter.timeoutHandle = setTimeoutFn(
+        () => waiter.reject(createMarketPriceRefreshTimeoutError({ symbol, timeoutMs })),
+        timeoutMs,
+      )
+      if (!settledState.settled) {
+        signal?.addEventListener?.("abort", waiter.onAbort, { once: true })
+      }
+      if (signal?.aborted) {
+        waiter.onAbort()
+      }
+    } catch (error) {
+      waiter.reject(error)
+    }
+  })
 }
 
 /**
@@ -37,10 +106,12 @@ export function createFreshMarketPriceWaiter({
   }
 
   const waitersBySymbol = new Map()
-
   const waitForFreshMarketPrice = ({ symbol, timeoutMs, signal } = {}) => {
     if (typeof symbol !== "string" || symbol.length === 0) {
       return Promise.reject(new TypeError("Fresh market-price wait requires a symbol"))
+    }
+    if (signal?.aborted) {
+      return Promise.reject(createMarketPriceRefreshAbortError({ signal }))
     }
     const currentPrice = state.prices.get(symbol)
     if (currentPrice && isMarketPriceFresh(currentPrice)) {
@@ -49,52 +120,16 @@ export function createFreshMarketPriceWaiter({
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
       return Promise.reject(new RangeError("Fresh market-price wait timeout must be a positive safe integer"))
     }
-    if (signal?.aborted) {
-      return Promise.reject(createMarketPriceRefreshAbortError({ signal }))
-    }
 
-    return new Promise((resolve, reject) => {
-      let settled = false
-      let timeoutHandle
-      let waiter
-      const waiters = waitersBySymbol.get(symbol) ?? new Set()
-      const cleanup = () => {
-        if (timeoutHandle !== undefined) {
-          clearTimeoutFn(timeoutHandle)
-        }
-        signal?.removeEventListener?.("abort", onAbort)
-        waiters.delete(waiter)
-        if (waiters.size === 0) {
-          waitersBySymbol.delete(symbol)
-        }
-      }
-      const settle = (callback, value) => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        callback(value)
-      }
-      const onAbort = () => settle(reject, createMarketPriceRefreshAbortError({ signal }))
-      waiter = {
-        resolve: (price) => settle(resolve, price),
-        reject: (error) => settle(reject, error),
-      }
-
-      waiters.add(waiter)
-      waitersBySymbol.set(symbol, waiters)
-      timeoutHandle = setTimeoutFn(
-        () => settle(reject, createMarketPriceRefreshTimeoutError({ symbol, timeoutMs })),
-        timeoutMs,
-      )
-      signal?.addEventListener?.("abort", onAbort, { once: true })
-      if (signal?.aborted) {
-        onAbort()
-      }
+    return createPendingFreshPriceWaiter({
+      symbol,
+      timeoutMs,
+      signal,
+      waitersBySymbol,
+      setTimeoutFn,
+      clearTimeoutFn,
     })
   }
-
   const notifyFreshMarketPrice = ({ symbol, price } = {}) => {
     if (!isMarketPriceFresh(price)) {
       return
@@ -208,6 +243,7 @@ function acceptFreshMarketPriceTransition({
   isMarketPriceFresh,
   logger,
   transition,
+  notifyFreshMarketPrice,
 } = {}) {
   const { symbol, price, marketEventId } = transition
   if (!isMarketPriceFresh(price)) {
@@ -319,6 +355,7 @@ export function createMarketPriceTransitionHandler({
         isMarketPriceFresh,
         logger,
         transition,
+        notifyFreshMarketPrice,
       })
       if (!acceptance.accepted) {
         return acceptance.result
