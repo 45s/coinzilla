@@ -702,11 +702,11 @@ path: "root" })
   validateTelegramOperatorControlConfig(config)
   validateBrokerProviderInstances(config)
   validateExecutionRouting(config)
+  requireRecord({ value: config.strategies,
+path: "strategies" })
   validateRecoverySellerConfig(config)
   if (config.runtime !== undefined) {fail({ path: "runtime",
 expectation: "must not be present; exchange mode is selected by TRADING_MODE" })}
-  requireRecord({ value: config.strategies,
-path: "strategies" })
   requireRecord({ value: config.strategies.CG_coinGrabber,
 path: "strategies.CG_coinGrabber" })
   const strategy = config.strategies.CG_coinGrabber

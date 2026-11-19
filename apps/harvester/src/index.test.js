@@ -6,6 +6,7 @@ import os from "node:os"
 import path, { isAbsolute as pathIsAbsolute } from "node:path"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "./application/events/event-names.js"
+import { appConfig as defaultAppConfig } from "../config/index.js"
 import { main as startMain } from "./index.js"
 import { prepareOptionalJournal } from "./infrastructure/journal/prepare-optional-journal.js"
 import { UnvalidatedMarketExchangeConstraintsError } from "./domain/market/errors/unvalidated-market-exchange-constraints-error.js"
@@ -58,27 +59,17 @@ const main = (options = {}) => {
 }
 const runMain = (options = {}) => main(options)
 
+const createTestAppConfig = ({ operatorControlEnabled = false, allowedUserIds = [] } = {}) => {
+  const config = structuredClone(defaultAppConfig)
+  config.operatorControl.telegram = { enabled: operatorControlEnabled, allowedUserIds }
+  return config
+}
+
 test("does not create or inject durable recovery facts while recovery is disabled", async () => {
   let storeCreated = false
   let startupInput
   await runMain({
-    loadConfig: async () => ({
-      operatorControl: {
-        telegram: {
-          enabled: false,
-          allowedUserIds: [],
-        },
-      },
-      strategies: {
-        CG_coinGrabber: {
-          settings: {
-            recovery: {
-              enabled: false,
-            },
-          },
-        },
-      },
-    }),
+    loadConfig: async () => createTestAppConfig(),
     createOperationalStateStore: () => {
       storeCreated = true
       throw new Error("disabled recovery and operator control must not construct a Operational State Store")
@@ -99,23 +90,7 @@ test("does not create or inject durable recovery facts while recovery is disable
 })
 
 test("does not create or inject recovery storage when Telegram operator control is enabled without recovery", async () => {
-  const configuredApp = {
-    operatorControl: {
-      telegram: {
-        enabled: true,
-        allowedUserIds: ["12345"],
-      },
-    },
-    strategies: {
-      CG_coinGrabber: {
-        settings: {
-          recovery: {
-            enabled: false,
-          },
-        },
-      },
-    },
-  }
+  const configuredApp = createTestAppConfig({ operatorControlEnabled: true, allowedUserIds: ["12345"] })
   let storeFactoryCalls = 0
   let startupInput
 
@@ -1903,7 +1878,7 @@ test("fails before acquiring a lock when TRADING_MODE is missing", async () => {
 
 
 test("uses TRADING_MODE=live for Binance LIVE and acquires the single-writer lock", async () => {
-  const appConfig = { strategies: { CG_coinGrabber: { enabled: true } } }
+  const appConfig = createTestAppConfig()
   let lockCalls = 0
   let startInput
   await main({
@@ -2031,23 +2006,7 @@ test("does not construct, verify, or inject Operational State Store records even
   let journalCreated = false
   let runtimeStarted = false
   await runMain({
-    loadConfig: async () => ({
-      operatorControl: {
-        telegram: {
-          enabled: false,
-          allowedUserIds: [],
-        },
-      },
-      strategies: {
-        CG_coinGrabber: {
-          settings: {
-            recovery: {
-              enabled: false,
-            },
-          },
-        },
-      },
-    }),
+    loadConfig: async () => createTestAppConfig(),
     env: { OPERATIONAL_STATE_DIRECTORY: "relative/recovery-facts" },
     createOperationalStateStore: () => {
       storeCreated = true

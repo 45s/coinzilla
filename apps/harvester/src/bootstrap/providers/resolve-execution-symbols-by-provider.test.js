@@ -299,7 +299,11 @@ test("rejects configured provider instances with no execution markets", () => {
 })
 
 
-test("preserves strategy identity for same-market CG and RS routes on one provider", () => {
+function createSameMarketCgAndRsRouteFixture() {
+  const recoverySellerPairs = {
+    BTCUSDT: { enabled: true, tradingEnvironment: "testnet" },
+    DOGEUSDT: { enabled: true, tradingEnvironment: "testnet" },
+  }
   const routes = [
     ...createRoutes(),
     {
@@ -313,51 +317,37 @@ test("preserves strategy identity for same-market CG and RS routes on one provid
       providerInstanceId: "binance-testnet-primary",
     },
   ]
-  const result = resolveExecutionRoutesByProvider({
+  return {
     appConfig: createAppConfig({
       strategies: {
-        CG_coinGrabber: {
-          pairs,
-        },
-        RS_recoverySeller: {
-          enabled: true,
-          pairs: {
-            BTCUSDT: {
-              enabled: true,
-              tradingEnvironment: "testnet",
-            },
-            DOGEUSDT: {
-              enabled: true,
-              tradingEnvironment: "testnet",
-            },
-          },
-        },
+        CG_coinGrabber: { pairs },
+        RS_recoverySeller: { enabled: true, pairs: recoverySellerPairs },
       },
       executionRouting: { routes },
     }),
+    expectedRoutes: [
+      ["binance-testnet-primary", [
+        { strategyId: StrategyId.COIN_GRABBER, symbol: "BTCUSDT" },
+        { strategyId: StrategyId.RECOVERY_SELLER, symbol: "BTCUSDT" },
+        { strategyId: StrategyId.RECOVERY_SELLER, symbol: "DOGEUSDT" },
+      ]],
+      ["binance-live-secondary", [
+        { strategyId: StrategyId.COIN_GRABBER, symbol: "ETHUSDT" },
+      ]],
+    ],
+  }
+}
+
+test("preserves strategy identity for same-market CG and RS routes on one provider", () => {
+  const fixture = createSameMarketCgAndRsRouteFixture()
+  const result = resolveExecutionRoutesByProvider({
+    appConfig: fixture.appConfig,
     providers,
   })
 
-  assert.deepEqual([...result], [
-    ["binance-testnet-primary", [
-      {
-        strategyId: StrategyId.COIN_GRABBER,
-        symbol: "BTCUSDT",
-      },
-      {
-        strategyId: StrategyId.RECOVERY_SELLER,
-        symbol: "BTCUSDT",
-      },
-      {
-        strategyId: StrategyId.RECOVERY_SELLER,
-        symbol: "DOGEUSDT",
-      },
-    ]],
-    ["binance-live-secondary", [
-      {
-        strategyId: StrategyId.COIN_GRABBER,
-        symbol: "ETHUSDT",
-      },
-    ]],
-  ], "The account runtime must retain strategy identity even when its market-data/execution symbol list is deduplicated")
+  assert.deepEqual(
+    [...result],
+    fixture.expectedRoutes,
+    "The account runtime must retain strategy identity even when its market-data/execution symbol list is deduplicated",
+  )
 })

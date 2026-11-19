@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { appConfig as defaultAppConfig } from "../config/index.js"
 import { main as startMain } from "../src/index.js"
 
 const disabledJournalService = () => ({
@@ -24,6 +25,12 @@ durableWriteSupported: true } }) }),
 ...rest,
 env: { TRADING_MODE: "testnet",
 ...env } })
+}
+
+const createTestAppConfig = ({ telegram } = {}) => {
+  const config = structuredClone(defaultAppConfig)
+  config.notifications.telegram = { ...config.notifications.telegram, ...telegram }
+  return config
 }
 
 const readinessAndRecoveryEvents = [
@@ -434,20 +441,14 @@ test("Telegram delivery failure is logged but does not fail runtime shutdown", a
 test("applies custom Telegram event overrides and market filters while preserving safety alerts", async () => {
   const sentMessages = []
   const signalHandlers = new Map()
-  const config = {
-    notifications: {
-      telegram: {
-        enabled: true,
-        profile: "custom",
-        markets: ["LINKUSDT"],
-        events: {
-          fillReceived: true,
-          pairPaused: false,
-          recoveryCompleted: false,
-        },
-      },
+  const config = createTestAppConfig({
+    telegram: {
+      enabled: true,
+      profile: "custom",
+      markets: ["LINKUSDT"],
+      events: { fillReceived: true, pairPaused: false, recoveryCompleted: false },
     },
-  }
+  })
 
   await runMain({
     env: {
@@ -511,9 +512,8 @@ test("does not construct Telegram transport when the unified config disables not
       TELEGRAM_BOT_TOKEN: "test-telegram-token",
       TELEGRAM_CHAT_ID: "test-chat-id",
     },
-    loadConfig: async () => ({
-      notifications: { telegram: { enabled: false,
-profile: "trader" } },
+    loadConfig: async () => createTestAppConfig({
+      telegram: { enabled: false, profile: "trader" },
     }),
     createTelegramNotifier: () => {
       notifierCreations += 1
@@ -564,8 +564,9 @@ test("provides distinct minimal, trader, and verbose Telegram profile presets", 
     await runMain({
       env: { TELEGRAM_BOT_TOKEN: "test-token",
 TELEGRAM_CHAT_ID: "test-chat" },
-      loadConfig: async () => ({ notifications: { telegram: { enabled: true,
-profile: scenario.profile } } }),
+      loadConfig: async () => createTestAppConfig({
+        telegram: { enabled: true, profile: scenario.profile },
+      }),
       createTelegramNotifier: () => ({ async sendMessage(message) { sentMessages.push(message) } }),
       createJournalService: disabledJournalService,
       start: async ({ eventPublisher }) => {
@@ -612,19 +613,12 @@ test("delivers startup, broker, order, and execution safety failures in custom m
   await runMain({
     env: { TELEGRAM_BOT_TOKEN: "test-token",
 TELEGRAM_CHAT_ID: "test-chat" },
-    loadConfig: async () => ({
-      notifications: {
-        telegram: {
-          enabled: true,
-          profile: "custom",
-          markets: ["LINKUSDT"],
-          events: {
-            startupFailed: false,
-            brokerDisconnected: false,
-            orderFailed: false,
-            accountSafetyAlert: false,
-          },
-        },
+    loadConfig: async () => createTestAppConfig({
+      telegram: {
+        enabled: true,
+        profile: "custom",
+        markets: ["LINKUSDT"],
+        events: { startupFailed: false, brokerDisconnected: false, orderFailed: false, accountSafetyAlert: false },
       },
     }),
     createTelegramNotifier: () => ({ async sendMessage(message) { sentMessages.push(message) } }),
@@ -688,10 +682,14 @@ test("sends readiness, reconnect, and blocked recovery alerts without notifying 
   await runMain({
     env: { TELEGRAM_BOT_TOKEN: "test-token",
 TELEGRAM_CHAT_ID: "test-chat" },
-    loadConfig: async () => ({ notifications: { telegram: { enabled: true,
-profile: "custom",
-markets: ["LINKUSDT"],
-events: { accountSafetyAlert: false } } } }),
+    loadConfig: async () => createTestAppConfig({
+      telegram: {
+        enabled: true,
+        profile: "custom",
+        markets: ["LINKUSDT"],
+        events: { accountSafetyAlert: false },
+      },
+    }),
     createTelegramNotifier: () => ({ async sendMessage(message) { sentMessages.push(message) } }),
     createJournalService: disabledJournalService,
     start: async ({ eventPublisher }) => {
