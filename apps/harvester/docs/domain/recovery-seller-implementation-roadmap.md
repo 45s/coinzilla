@@ -19,6 +19,10 @@ The exact `{ strategyId, symbol }` assignments now survive provider-account star
 
 The strict ESLint findings in the already changed route and Telegram test fixtures were corrected as formatting-only changes; no test coverage or lint rules were weakened, and runtime behavior is unchanged.
 
+## Next RS-4 checkpoint — shared account workflow state
+
+The next integration boundary is one mutable account-workflow state shared by the Conservative Portfolio workflow and the RS accounting workflow. It must serialize updates through the same queue and expose the same immutable Portfolio snapshot after either strategy's fill. The RS OrderRegistry must also be reachable from this account state; engine-owned order-registry mutation still requires explicit integration and is not yet complete. A test-first regression now specifies shared Portfolio visibility and independent strategy-owned Positions. No RS order submission is enabled by this checkpoint.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.

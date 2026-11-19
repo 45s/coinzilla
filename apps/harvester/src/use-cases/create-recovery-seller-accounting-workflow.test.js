@@ -16,6 +16,7 @@ import {
   stageMixedSellFillAllocation,
 } from "../domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.js"
 import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
+import { createPortfolioWorkflow } from "./create-portfolio-workflow.js"
 
 const baseAsset = new Asset({
   id: "binance:ZRO",
@@ -821,4 +822,73 @@ test("does not publish RS BUY accounting when the durable execution-fill append 
   assert.match(result.errors[0].message, /execution fact fsync failed/)
   assert.equal(workflow.getPortfolio().positions.length, 0)
   assert.deepEqual(workflow.getPortfolio().appliedFillIds, [])
+})
+
+
+test("Conservative and RS accounting workflows can share one serialized account Portfolio", async () => {
+  const buyOrder = makeRecoveryBuyOrder()
+  const sharedState = {
+    portfolio: new Portfolio(),
+    recoveryLedgers: new Map(),
+    orderRegistry: makeRecoveryBuyRegistry(buyOrder),
+    legacyPositions: new Map(),
+    updateQueue: Promise.resolve(),
+  }
+  const conservative = createPortfolioWorkflow({
+    sharedState,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+  })
+  const recoverySeller = createRecoverySellerAccountingWorkflow({
+    sharedState,
+  })
+  const recoveryBuyFill = makeRecoveryBuyFill({
+    tradeId: "shared-account-rs-buy",
+    quantity: "5.01",
+    quoteQuantity: "10.02",
+  })
+  const conservativeBuyFill = new Fill({
+    tradeId: "shared-account-cg-buy",
+    brokerOrderId: "broker-shared-cg-buy",
+    clientOrderId: "cg-shared-buy",
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+
+  const rsResult = await recoverySeller.applyBuyFill({ fill: recoveryBuyFill })
+  const cgResult = await conservative.updateTradingAccounting({ fill: conservativeBuyFill })
+
+  assert.equal(rsResult.ok, true, rsResult.errors?.[0]?.message)
+  assert.equal(cgResult.ok, true, cgResult.errors?.[0]?.message)
+  assert.equal(conservative.getPortfolio(), recoverySeller.getPortfolio())
+  assert.equal(conservative.getPortfolio(), sharedState.portfolio)
+  assert.equal(recoverySeller.getOrderRegistry(), sharedState.orderRegistry)
+  assert.equal(
+    conservative.getPortfolio().getPosition({
+      marketId: market.id,
+      strategyId: StrategyId.RECOVERY_SELLER,
+    }).baseQuantity.amount,
+    "5.01",
+  )
+  assert.equal(
+    conservative.getPortfolio().getPosition({
+      marketId: market.id,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).baseQuantity.amount,
+    "1",
+  )
 })
