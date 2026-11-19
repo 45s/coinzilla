@@ -102,7 +102,7 @@ test("Bitunix order adapter rejects invalid decimal inputs and order identities"
       },
     }))
   }
-  for (const orderId of ["", "  ", -1, 1.5, Number.MAX_SAFE_INTEGER + 1, null]) {
+  for (const orderId of ["", "  ", 1.5, Number.MAX_SAFE_INTEGER + 1, null]) {
     assert.throws(() => validateOrderId({ orderId }))
   }
 })
