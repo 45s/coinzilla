@@ -255,6 +255,57 @@ test("start retries a snapshot after callback failure and backs off the failed c
   session.stop()
 })
 
+
+test("start republishes a full snapshot after a failed polling cycle", async () => {
+  const { broker } = createBroker()
+  const originalGetOrderHistory = broker.getOrderHistory
+  let historyCalls = 0
+  broker.getOrderHistory = async (input) => {
+    historyCalls += 1
+    if (historyCalls === 2) {
+      return {
+        ok: false,
+        errors: [new Error("temporary read failure")],
+      }
+    }
+    return originalGetOrderHistory(input)
+  }
+  const scheduled = []
+  let snapshots = 0
+  let errors = 0
+  const reconciler = new BitunixSpotReconciler({
+    broker,
+    schedule: ({ callback, delay }) => {
+      scheduled.push({ callback, delay })
+      return scheduled.length
+    },
+    cancel: () => undefined,
+  })
+  const session = reconciler.start({
+    symbols: ["BTCUSDT"],
+    intervalMs: 500,
+    onSnapshot: () => {
+      snapshots += 1
+    },
+    onError: () => {
+      errors += 1
+    },
+  })
+
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(snapshots, 1)
+  scheduled[0].callback()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(errors, 1)
+  assert.equal(scheduled[1].delay, 1000)
+  scheduled[1].callback()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.equal(snapshots, 2, "recovery must republish even an unchanged full snapshot")
+  assert.equal(scheduled[2].delay, 500)
+  session.stop()
+})
+
 test("pollOnce deduplicates identical exchange data when local observation time advances", async () => {
   const { broker } = createBroker()
   let now = 1234
