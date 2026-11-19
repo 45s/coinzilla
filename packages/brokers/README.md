@@ -129,6 +129,9 @@ try {
 - `getTokenNetworks()` — `common.coin.coin_network.list`
 - `getAccount()` — `user.account`
 - `getUserInfo()` — `user.info`
+- `getOpenOrders({ symbol })` — `order.pending.list`; requires one symbol.
+- `getOrderHistory(input)` — `order.history.page`; returns one validated page.
+- `getMatchingOrderDetails({ orderId, symbol })` — `order.deal.list`; looks up one known order.
 
 The client correlates concurrent responses by echoed request ID, validates response envelopes, applies the official Spot WebSocket double-SHA256 signature (separate from REST signing), and never automatically retries a request. Account balance numeric tokens are returned as exact decimal strings; unsafe int64 user IDs are preserved as strings. A timeout or disconnect rejects unresolved RPCs. After a connection closes, call `connect()` again to create a fresh transport and listener set on the same client instance. Concurrent reconnect calls share one connection attempt; interrupted RPCs are rejected and never replayed. Reconnection is explicit and caller-controlled—there is no automatic retry/backoff, subscription restoration, or missed-event replay. Bitunix documents a 24-hour connection lifetime.
 
