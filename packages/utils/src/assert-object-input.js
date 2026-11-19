@@ -1,4 +1,4 @@
-import { ensure } from "./ensure.js"
+import { ensure } from "./ensure/index.js"
 
 /**
  * Assert that an operation received a non-null, non-array object.
