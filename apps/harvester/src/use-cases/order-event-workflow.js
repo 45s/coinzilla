@@ -58,6 +58,55 @@ function createProviderAttributedFillHistoryBroker({ broker, state, ordersByBrok
   }
 }
 
+function isRecoverySellerTerminalSell({ ownership, order } = {}) {
+  return ownership?.strategyId === StrategyId.RECOVERY_SELLER && order?.side === "SELL"
+}
+
+async function failRecoverySellerTerminalReconciliation({
+  pause,
+  order,
+  reason,
+  error,
+} = {}) {
+  await pause({
+    symbol: order.market.symbol,
+    reason,
+    error,
+  })
+  return toResult({ error })
+}
+
+async function reconcileRecoverySellerTerminalSell({
+  order,
+  canonicalFills,
+  pause,
+  reconcileRecoverySellerMixedSell,
+} = {}) {
+  if (typeof reconcileRecoverySellerMixedSell !== "function") {
+    return failRecoverySellerTerminalReconciliation({
+      pause,
+      order,
+      reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_UNAVAILABLE",
+      error: new Error("Recovery Seller terminal SELL requires the mixed-SELL accounting workflow"),
+    })
+  }
+  const result = await reconcileRecoverySellerMixedSell({
+    order,
+    canonicalFills,
+  })
+  if (result?.ok === true) {
+    return result
+  }
+  await pause({
+    symbol: order.market.symbol,
+    reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_FAILED",
+    error: result?.errors?.[0],
+  })
+  return result ?? toResult({
+    error: new Error("Recovery Seller terminal mixed-SELL reconciliation failed"),
+  })
+}
+
 function createRecoverySellerTerminalOrderReconciler({
   state,
   pause,
@@ -68,33 +117,22 @@ function createRecoverySellerTerminalOrderReconciler({
       clientOrderId: order?.clientOrderId,
       brokerOrderId: order?.brokerOrderId,
     })
-    if (ownership?.strategyId !== StrategyId.RECOVERY_SELLER || order?.side !== "SELL") {
-      return toResult({ data: { skipped: true } })
-    }
-    if (typeof reconcileRecoverySellerMixedSell !== "function") {
-      const error = new Error("Recovery Seller terminal SELL requires the mixed-SELL accounting workflow")
-      await pause({
-        symbol: order.market.symbol,
-        reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_UNAVAILABLE",
-        error,
+    if (!isRecoverySellerTerminalSell({ ownership, order })) {
+      return toResult({
+        data: {
+          skipped: true,
+        },
       })
-      return toResult({ error })
     }
-    const result = await reconcileRecoverySellerMixedSell({
+    const result = await reconcileRecoverySellerTerminalSell({
       order,
       canonicalFills,
+      pause,
+      reconcileRecoverySellerMixedSell,
     })
-    if (result?.ok !== true) {
-      await pause({
-        symbol: order.market.symbol,
-        reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_FAILED",
-        error: result?.errors?.[0],
-      })
-      return result ?? toResult({
-        error: new Error("Recovery Seller terminal mixed-SELL reconciliation failed"),
-      })
+    if (result?.ok === true) {
+      state.reconciledTerminalOrderClientIds.add(order.clientOrderId)
     }
-    state.reconciledTerminalOrderClientIds.add(order.clientOrderId)
     return result
   }
 }
