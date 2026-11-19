@@ -349,7 +349,7 @@ test("Bitunix Spot placement rejects unsupported identity and order fields befor
   assert.equal(unsupportedType.mutationOutcome, "NOT_SENT")
   assert.equal(missingType.ok, false)
   assert.equal(missingType.mutationOutcome, "NOT_SENT")
-  assert.match(missingType.errors[0].message, /type must be LIMIT or MARKET/i)
+  assert.match(missingType.errors[0].message, /supports only LIMIT and MARKET orders/i)
   assert.equal(calls.length, 0)
 })
 
