@@ -2126,11 +2126,7 @@ test("Bitunix Spot broker accepts an empty tax type filter as all transaction ty
   assert.deepEqual(calls[0].options.body.dataTypeCodes, [], "an explicit empty type list must not be rewritten")
 })
 
-function createInvalidTaxFilingQueries() {
-  const valid = {
-    startTime: "2024-01-01T00:00:00Z",
-    endTime: "2024-01-02T00:00:00Z",
-  }
+function createInvalidTaxFilingDateQueries({ valid }) {
   return [
     null,
     {},
@@ -2158,6 +2154,11 @@ function createInvalidTaxFilingQueries() {
       startTime: "2024-01-01T00:00:00Z",
       endTime: "2025-01-02T00:00:00Z",
     },
+  ]
+}
+
+function createInvalidTaxFilingPaginationQueries({ valid }) {
+  return [
     {
       ...valid,
       page: 0,
@@ -2174,6 +2175,11 @@ function createInvalidTaxFilingQueries() {
       ...valid,
       pageSize: 1001,
     },
+  ]
+}
+
+function createInvalidTaxFilingTypeQueries({ valid }) {
+  return [
     {
       ...valid,
       dataTypeCodes: "BUY_ORDER",
@@ -2190,6 +2196,18 @@ function createInvalidTaxFilingQueries() {
       ...valid,
       dataTypeCodes: null,
     },
+  ]
+}
+
+function createInvalidTaxFilingQueries() {
+  const valid = {
+    startTime: "2024-01-01T00:00:00Z",
+    endTime: "2024-01-02T00:00:00Z",
+  }
+  return [
+    ...createInvalidTaxFilingDateQueries({ valid }),
+    ...createInvalidTaxFilingPaginationQueries({ valid }),
+    ...createInvalidTaxFilingTypeQueries({ valid }),
   ]
 }
 
