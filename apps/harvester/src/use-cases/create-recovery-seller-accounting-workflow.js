@@ -1,5 +1,12 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { addDecimal, ensure, subtractDecimal, toResult } from "@coinzilla/utils"
+import {
+  addDecimal,
+  DECIMAL_ROUNDING_MODES,
+  divideDecimal,
+  ensure,
+  subtractDecimal,
+  toResult,
+} from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
@@ -124,6 +131,55 @@ function resolveRecoverySellerBuyOrderOwnership({ registry, fill }) {
   }
 }
 
+function createNextRecoverySellerBuyExecution({ state, fill, ownership } = {}) {
+  const quantity = fill.quantity?.amount
+  const quoteQuantity = fill.quoteQuantity?.amount
+  if (typeof quantity !== "string" || typeof quoteQuantity !== "string" ||
+      fill.quantity.asset.id !== fill.market.baseAsset.id ||
+      fill.quoteQuantity.asset.id !== fill.market.quoteAsset.id) {
+    throw new TypeError("Recovery Seller BUY execution requires canonical base and quote quantities")
+  }
+  const existing = state.recoverySellerBuyExecutionByCycle.get(ownership.cycleId)
+  const identity = {
+    cycleId: ownership.cycleId,
+    marketId: fill.market.id,
+    positionId: ownership.positionId,
+    baseAssetId: fill.market.baseAsset.id,
+    quoteAssetId: fill.market.quoteAsset.id,
+  }
+  if (existing && (
+    existing.marketId !== identity.marketId ||
+    existing.positionId !== identity.positionId ||
+    existing.baseAssetId !== identity.baseAssetId ||
+    existing.quoteAssetId !== identity.quoteAssetId
+  )) {
+    throw new Error("Recovery Seller cycle identity was reused across a different market, Position or asset pair")
+  }
+  return Object.freeze({
+    ...identity,
+    quantity: addDecimal({
+      left: existing?.quantity ?? "0",
+      right: quantity,
+    }),
+    quoteQuantity: addDecimal({
+      left: existing?.quoteQuantity ?? "0",
+      right: quoteQuantity,
+    }),
+  })
+}
+
+function calculateRecoverySellerBuyExecutionVwap({ execution } = {}) {
+  if (!execution) {
+    return undefined
+  }
+  return divideDecimal({
+    left: execution.quoteQuantity,
+    right: execution.quantity,
+    scale: 18,
+    rounding: DECIMAL_ROUNDING_MODES.TOWARD_ZERO,
+  })
+}
+
 async function applyRecoverySellerBuyFillTransition({
   state,
   fill,
@@ -138,21 +194,34 @@ async function applyRecoverySellerBuyFillTransition({
     positionId: ownership.positionId,
     strategyId: ownership.strategyId,
   })
+  const nextBuyExecution = result.applied
+    ? createNextRecoverySellerBuyExecution({
+        state,
+        fill,
+        ownership,
+      })
+    : undefined
   if (result.applied && onOperationalStateExecutionFill) {
-    const durableResult = await onOperationalStateExecutionFill({ fill })
+    const durableResult = await onOperationalStateExecutionFill({
+      fill,
+      order,
+      ownership,
+    })
     if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
       throw durableResult?.errors?.[0] ??
         new Error("Execution-fill fact append did not confirm durable commitment")
     }
   }
   state.portfolio = result.portfolio
+  if (nextBuyExecution) {
+    state.recoverySellerBuyExecutionByCycle.set(ownership.cycleId, nextBuyExecution)
+  }
   return Object.freeze({
     ...result,
     order,
     ownership,
   })
 }
-
 function resolveRecoverySellerOrderOwnership({ registry, order }) {
   const ownership = registry.getOwnership({
     clientOrderId: order.clientOrderId,
@@ -370,6 +439,7 @@ function createRecoverySellerWorkflowState({
     portfolio: initialPortfolio ?? new Portfolio(),
     orderRegistry: initialOrderRegistry ?? OrderRegistry.empty(),
     legacyPositions: createLegacyPositionMap(initialLegacyPositions),
+    recoverySellerBuyExecutionByCycle: new Map(),
     updateQueue: Promise.resolve(),
   }
   if (!(state.portfolio instanceof Portfolio)) {
@@ -377,6 +447,12 @@ function createRecoverySellerWorkflowState({
   }
   if (!(state.orderRegistry instanceof OrderRegistry)) {
     throw new TypeError("initialOrderRegistry must be an OrderRegistry")
+  }
+  if (state.recoverySellerBuyExecutionByCycle === undefined) {
+    state.recoverySellerBuyExecutionByCycle = new Map()
+  }
+  if (!(state.recoverySellerBuyExecutionByCycle instanceof Map)) {
+    throw new TypeError("sharedState.recoverySellerBuyExecutionByCycle must be a Map")
   }
   return state
 }
@@ -433,6 +509,21 @@ export function createRecoverySellerAccountingWorkflow({
   return Object.freeze({
     ...operations,
     getExecutionCallbacks: () => createRecoverySellerExecutionCallbacks({ state }),
+    getBuyExecutionQuantity: ({ cycleId } = {}) =>
+      state.recoverySellerBuyExecutionByCycle.get(cycleId)?.quantity,
+    getBuyExecutionVwap: ({ cycleId } = {}) =>
+      calculateRecoverySellerBuyExecutionVwap({
+        execution: state.recoverySellerBuyExecutionByCycle.get(cycleId),
+      }),
+    getBuyExecutionState: ({ cycleId } = {}) => {
+      const execution = state.recoverySellerBuyExecutionByCycle.get(cycleId)
+      return execution
+        ? Object.freeze({
+            ...execution,
+            vwap: calculateRecoverySellerBuyExecutionVwap({ execution }),
+          })
+        : undefined
+    },
     getPortfolio: () => state.portfolio,
     getOrderRegistry: () => state.orderRegistry,
     getActiveOrders: () => state.orderRegistry.getActiveOrders(),
