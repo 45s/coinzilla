@@ -39,6 +39,11 @@ class EnsureChain {
     return this.#next({ value: this.#value })
   }
 
+  integer() {
+    this.#ensure.integer({ value: this.#value, name: this.#name })
+    return this.#next({ value: this.#value })
+  }
+
   nonEmpty() {
     if (typeof this.#value === "string") {
       this.#ensure.nonEmptyString({ value: this.#value, name: this.#name })
