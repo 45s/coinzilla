@@ -5250,7 +5250,10 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
     eventPublisher: testEventPublisher,
     logger: {},
     executionRoutes: [
-      { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
+      {
+        strategyId: "CG_coinGrabber",
+        symbol: "BTCUSDT",
+      },
     ],
   })
   const resolved = Object.freeze({
