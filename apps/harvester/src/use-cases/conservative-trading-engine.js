@@ -14,7 +14,7 @@ import { createSubmissionGate } from "./create-submission-gate.js"
 import { createShutdownRecoveryWorkflow } from "./create-shutdown-recovery-workflow.js"
 import { createConservativeShutdownSafety } from "./create-conservative-shutdown-safety.js"
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
-import { createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
+import { createFreshMarketPriceWaiter, createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
 import { validateConservativeTradingEngineOptions } from "./validate-conservative-trading-engine-options.js"
 import { failureResult, recoveryFailureError, withFailure } from "./recovery-failure.js"
 import { OperatorBuyCancellationIncompleteError } from "./errors/operator-buy-cancellation-incomplete-error.js"
@@ -1885,6 +1885,13 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
 
 function createConservativeEngineMarketEventContext({ context } = {}) {
   const { dependencies } = context
+  const freshMarketPriceWaiter = createFreshMarketPriceWaiter({
+    state: context.state,
+    isMarketPriceFresh: dependencies.isMarketPriceFresh,
+    setTimeoutFn: dependencies.setTimeoutFn,
+    clearTimeoutFn: dependencies.clearTimeoutFn,
+  })
+  context.waitForFreshMarketPrice = freshMarketPriceWaiter.waitForFreshMarketPrice
   context.processMarketBookTransition = createMarketBookTransitionHandler({
     state: context.state,
     isMarketBookFresh: dependencies.isMarketBookFresh,
@@ -1901,6 +1908,7 @@ function createConservativeEngineMarketEventContext({ context } = {}) {
     maybeReplaceTrailingBuy: context.maybeReplaceTrailingBuy,
     evaluateLatestTransition: context.evaluateLatestTransition,
     nextMarketPriceEventId: context.nextMarketPriceEventId,
+    notifyFreshMarketPrice: freshMarketPriceWaiter.notifyFreshMarketPrice,
   })
 }
 
@@ -2117,6 +2125,7 @@ function createConservativeEngineRuntimeOperations({ context } = {}) {
 function createConservativeEnginePublicApi({ context } = {}) {
   return Object.freeze({
     processMarketPrice: context.processMarketPrice,
+    waitForFreshMarketPrice: context.waitForFreshMarketPrice,
     processBookTicker: context.processBookTicker,
     beginShutdown: context.beginShutdown,
     auditShutdownSafety: context.auditShutdownSafety,
