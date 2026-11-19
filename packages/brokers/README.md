@@ -1,6 +1,8 @@
 # Broker provider operations
 
-For every Bitunix Spot capability, follow the [mandatory reference-first workflow](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit) and consult the maintained [Bitunix external implementation reference audit](./BITUNIX_REFERENCE_AUDIT.md). Start with [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) and [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp); search additional C#, TypeScript, Python, Go and Ruby implementations when coverage is missing or references disagree. The audit records source paths, fixtures, known defects, parity status and safe implementation picks. Official Bitunix Spot documentation remains authoritative.
+Bitunix-specific engineering references and readiness notes are indexed in [docs/README.md](./docs/README.md).
+
+For every Bitunix Spot capability, follow the [mandatory reference-first workflow](./AGENTS.md#bitunix-spot-development--mandatory-reference-audit) and consult the maintained [Bitunix external implementation reference audit](./docs/BITUNIX_REFERENCE_AUDIT.md). Start with [JKorf/Bitunix.Net](https://github.com/JKorf/Bitunix.Net) and [samanzamani/bitunix-mcp](https://github.com/samanzamani/bitunix-mcp); search additional C#, TypeScript, Python, Go and Ruby implementations when coverage is missing or references disagree. The audit records source paths, fixtures, known defects, parity status and safe implementation picks. Official Bitunix Spot documentation remains authoritative.
 
 For the package's target DDD structure and ownership boundaries, see [Architecture](./ARCHITECTURE.md). The exchange-neutral public method, result, error, capability, and compatibility contracts are specified in [BROKER_API.md](./BROKER_API.md); execution status is in [Roadmap](./ROADMAP.md).
 
@@ -32,7 +34,7 @@ The `@coinzilla/brokers` entry point exports:
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
 - `BitunixSpotBroker` and `BitunixSpotConfig` — the partial Bitunix Spot REST broker implementation and its validated configuration.
 - `BitunixSpotWebSocketClient` and `BitunixWebSocketError` — a separately managed, authenticated Spot WebSocket request/response RPC client; it does not add subscriptions or order mutations.
-- `BitunixSpotReconciler` — a separate read-only polling observation primitive; it is not native push and does not provide canonical fills or Harvester admission guarantees. See [BITUNIX_SPOT_POLLING.md](./BITUNIX_SPOT_POLLING.md).
+- Bitunix polling reconciliation is a private infrastructure helper, not a public package export or a Harvester user-data subscription. See [the polling boundary](./docs/BITUNIX_SPOT_POLLING.md).
 - `normalizeBinanceId` — exact non-negative Binance identifier normalization, exported for package consumers that need the same identifier contract.
 - `BrokerCapabilities`, `BROKER_CAPABILITY_TYPES`, `BROKER_CAPABILITY_STATUSES` — the canonical immutable provider capability declaration contract.
 - `BrokerUnsupportedOperationError` — stable typed error for explicitly unsupported operations.
