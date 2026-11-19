@@ -289,21 +289,122 @@ test("Bitunix Spot internal transfer cancellation reports request acceptance onl
 
 test("Bitunix Spot funds mutation validation rejects invalid values before network I/O", async () => {
   const invalidOperations = [
-    ["withdraw", { ...VALID_WITHDRAWAL, amount: "0" }],
-    ["withdraw", { ...VALID_WITHDRAWAL, amount: 1 }],
-    ["withdraw", { ...VALID_WITHDRAWAL, amount: "NaN" }],
-    ["withdraw", { ...VALID_WITHDRAWAL, network: "" }],
-    ["withdraw", { ...VALID_WITHDRAWAL, address: " " }],
-    ["withdraw", { ...VALID_WITHDRAWAL, memo: 123 }],
-    ["cancelWithdrawal", { withdrawId: 123 }],
-    ["transferFunds", { type: "invalid", coin: "USDT", amount: "1" }],
-    ["transferFunds", { type: "spot_futures", coin: "USDT", amount: "-1" }],
-    ["transferInternally", { coin: "USDT", amount: "1", toType: "uid", toUid: "9007199254740992" }],
-    ["transferInternally", { coin: "USDT", amount: "1", toType: "uid", toUid: "abc" }],
-    ["transferInternally", { coin: "USDT", amount: "1", toType: "phone", toPhoneCountryCode: "+1" }],
-    ["transferInternally", { coin: "USDT", amount: "1", toType: "email", toEmail: " " }],
-    ["transferInternally", { coin: "USDT", amount: "1", toType: "email", toEmail: "a@b.c", outBizId: "x".repeat(33) }],
-    ["cancelInternalTransfer", { insideTransferId: "" }],
+    [
+      "withdraw",
+      {
+        ...VALID_WITHDRAWAL,
+        amount: "0",
+      },
+    ],
+    [
+      "withdraw",
+      {
+        ...VALID_WITHDRAWAL,
+        amount: 1,
+      },
+    ],
+    [
+      "withdraw",
+      {
+        ...VALID_WITHDRAWAL,
+        amount: "NaN",
+      },
+    ],
+    [
+      "withdraw",
+      {
+        ...VALID_WITHDRAWAL,
+        network: "",
+      },
+    ],
+    [
+      "withdraw",
+      {
+        ...VALID_WITHDRAWAL,
+        address: " ",
+      },
+    ],
+    [
+      "withdraw",
+      {
+        ...VALID_WITHDRAWAL,
+        memo: 123,
+      },
+    ],
+    [
+      "cancelWithdrawal",
+      {
+        withdrawId: 123,
+      },
+    ],
+    [
+      "transferFunds",
+      {
+        type: "invalid",
+        coin: "USDT",
+        amount: "1",
+      },
+    ],
+    [
+      "transferFunds",
+      {
+        type: "spot_futures",
+        coin: "USDT",
+        amount: "-1",
+      },
+    ],
+    [
+      "transferInternally",
+      {
+        coin: "USDT",
+        amount: "1",
+        toType: "uid",
+        toUid: "9007199254740992",
+      },
+    ],
+    [
+      "transferInternally",
+      {
+        coin: "USDT",
+        amount: "1",
+        toType: "uid",
+        toUid: "abc",
+      },
+    ],
+    [
+      "transferInternally",
+      {
+        coin: "USDT",
+        amount: "1",
+        toType: "phone",
+        toPhoneCountryCode: "+1",
+      },
+    ],
+    [
+      "transferInternally",
+      {
+        coin: "USDT",
+        amount: "1",
+        toType: "email",
+        toEmail: " ",
+      },
+    ],
+    [
+      "transferInternally",
+      {
+        coin: "USDT",
+        amount: "1",
+        toType: "email",
+        toEmail: "a@b.c",
+        outBizId: "x".repeat(33),
+      },
+    ],
+    [
+      "cancelInternalTransfer",
+      {
+        insideTransferId: "",
+      },
+    ],
   ]
 
   for (const [method, input] of invalidOperations) {
