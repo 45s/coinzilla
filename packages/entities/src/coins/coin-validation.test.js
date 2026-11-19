@@ -106,3 +106,26 @@ test("Coin constructor accepts zero and finite quantities and normalizes ticker"
     "Coin must accept a finite fractional quantity without changing its value",
   )
 })
+
+test("Coin preserves ensure assertion causes behind its domain error", () => {
+  assert.throws(
+    () => new Coin({
+      ticker: 42,
+      quantity: 0,
+    }),
+    (error) => error instanceof Error &&
+      error.message === errMsgs.ticker &&
+      error.cause instanceof TypeError,
+    "Coin ticker validation must retain the generic TypeError as cause while exposing the legacy domain Error",
+  )
+  assert.throws(
+    () => new Coin({
+      ticker: "BTC",
+      quantity: "0",
+    }),
+    (error) => error instanceof Error &&
+      error.message === errMsgs.quantity &&
+      error.cause instanceof TypeError,
+    "Coin quantity validation must retain the generic TypeError as cause while exposing the legacy domain Error",
+  )
+})
