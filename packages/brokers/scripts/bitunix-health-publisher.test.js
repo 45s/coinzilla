@@ -133,6 +133,33 @@ async function createRepositoryDirectory() {
   return mkdtemp(join(tmpdir(), "bitunix-health-publisher-"))
 }
 
+function assertReportBranchPublished({ result, calls }) {
+  assert.equal(result.branch, "diagnostics/bitunix-health-20261119T083000000Z", "the report branch must have a unique UTC timestamped name")
+  assert.equal(result.commitSha, "report-commit-sha", "the pushed report commit SHA must be returned for inspection")
+  assert.equal(result.exitCode, 0, "a fully successful read-only health check must return a successful exit code")
+  assert.equal(result.healthCheck.healthy, true, "all required authenticated account and WebSocket probes must pass")
+  assert.equal(calls.some((args) => args[0] === "fetch" && args[1] === "origin" && args[2] === "refs/heads/develop:refs/remotes/origin/develop"), true, "the report branch must start from the latest fetched origin/develop")
+  assert.equal(calls.some((args) => args[0] === "switch" && args[1] === "--create" && args[3] === "--track" && args[4] === "origin/develop"), true, "the script must create a dedicated branch tracking the fetched develop tip")
+  assert.deepEqual(calls.find((args) => args[0] === "add"), ["add", "--", result.reportPath], "only the generated sanitized report may be staged")
+  assert.equal(calls.some((args) => args[0] === "push" && args[1] === "--set-upstream" && args[2] === "origin"), true, "the report branch must be pushed without force")
+  assert.deepEqual(calls.find((args) => args[0] === "commit"), ["commit", "--only", "-m", "chore(brokers): publish sanitized Bitunix health report", "--", result.reportPath], "the commit must include only the generated sanitized report")
+  assert.deepEqual(calls.at(-1), ["switch", "develop"], "the script must return to develop after publishing the report")
+}
+
+async function assertReportFilesAreSanitized({ result, repositoryRoot }) {
+  const report = await readFile(join(repositoryRoot, result.reportPath), "utf8")
+  const localReport = await readFile(join(repositoryRoot, result.localReportPath), "utf8")
+  for (const privateValue of [apiKey, apiSecret, "private-signature", "private-uid", "123.456", "private error message"]) {
+    assert.equal(report.includes(privateValue), false, "the public report must not contain credentials, account values, or private error text")
+    assert.equal(localReport.includes(privateValue), false, "the local report must apply the same credential and account-value redaction")
+  }
+  assert.equal(Object.hasOwn(result.report, "events"), false, "the public allowlist must exclude raw diagnostic events")
+  const publicAccountResult = result.report.results.find((item) => item.operation === "user.account")
+  assert.equal(Object.hasOwn(publicAccountResult, "request"), false, "the public allowlist must omit request payloads")
+  assert.equal(Object.hasOwn(publicAccountResult, "response"), false, "the public allowlist must omit response payloads")
+  assert.equal(result.reportPath.endsWith("bitunix-health-20261119T083000000Z.json"), true, "the result must identify the report path to inspect")
+}
+
 test("publishes only a sanitized report from a fresh diagnostics branch and returns to develop", async () => {
   const repositoryRoot = await createRepositoryDirectory()
   const { calls, runGit } = createFakeGit({ repositoryRoot })
@@ -147,34 +174,14 @@ test("publishes only a sanitized report from a fresh diagnostics branch and retu
       },
       now: () => fixedTimestamp,
     })
-
-    assert.equal(result.branch, "diagnostics/bitunix-health-20261119T083000000Z", "the report branch must have a unique UTC timestamped name")
-    assert.equal(result.commitSha, "report-commit-sha", "the pushed report commit SHA must be returned for inspection")
-    assert.equal(result.exitCode, 0, "a fully successful read-only health check must return a successful exit code")
-    assert.equal(result.healthCheck.healthy, true, "all required authenticated account and WebSocket probes must pass")
-    assert.equal(calls.some((args) => args[0] === "fetch" && args[1] === "origin" && args[2] === "refs/heads/develop:refs/remotes/origin/develop"), true, "the report branch must start from the latest fetched origin/develop")
-    assert.equal(calls.some((args) => args[0] === "switch" && args[1] === "--create" && args[3] === "--track" && args[4] === "origin/develop"), true, "the script must create a dedicated branch tracking the fetched develop tip")
-    assert.deepEqual(calls.find((args) => args[0] === "add"), ["add", "--", result.reportPath], "only the generated sanitized report may be staged for publication")
-    assert.equal(calls.some((args) => args[0] === "push" && args[1] === "--set-upstream" && args[2] === "origin"), true, "the report branch must be pushed without force")
-    assert.deepEqual(calls.find((args) => args[0] === "commit"), ["commit", "--only", "-m", "chore(brokers): publish sanitized Bitunix health report", "--", result.reportPath], "the commit must include only the generated sanitized report even if other files become staged concurrently")
-    assert.deepEqual(calls.at(-1), ["switch", "develop"], "the script must return to develop after publishing the report")
-    const reportPath = join(repositoryRoot, "packages", "brokers", "diagnostics", "reports", "bitunix-health-20261119T083000000Z.json")
-    const report = await readFile(reportPath, "utf8")
-    const localReport = await readFile(join(repositoryRoot, "packages", "brokers", ".diagnostics", "bitunix-health-20261119T083000000Z.json"), "utf8")
-    assert.equal(report.includes(apiKey), false, "the committed report must never contain the API key")
-    assert.equal(report.includes(apiSecret), false, "the committed report must never contain the API secret")
-    assert.equal(report.includes("private-signature"), false, "the committed report must never contain request signatures")
-    assert.equal(report.includes("private-uid"), false, "the committed report must never contain account identifiers")
-    assert.equal(report.includes("123.456"), false, "the committed report must never contain account balances")
-    assert.equal(localReport.includes("123.456"), false, "the local report must apply the same account-value redaction as the committed report")
-    assert.equal(localReport.includes("private-uid"), false, "local event errors must not persist account identifiers")
-    assert.equal(localReport.includes("private error message"), false, "local diagnostic reports must not retain free-form error messages")
-    assert.equal(Object.hasOwn(result.report, "events"), false, "the public allowlist must exclude raw diagnostic events")
-    const publicAccountResult = result.report.results.find((item) => item.operation === "user.account")
-    assert.equal(Object.hasOwn(publicAccountResult, "request"), false, "the public allowlist must omit request payloads")
-    assert.equal(Object.hasOwn(publicAccountResult, "response"), false, "the public allowlist must omit response payloads")
-    assert.equal(result.reportPath.endsWith("bitunix-health-20261119T083000000Z.json"), true, "the result must identify the report path to inspect")
-    assert.equal(result.localReportPath.endsWith(".diagnostics/bitunix-health-20261119T083000000Z.json"), true, "the full local diagnostic artifact must stay in the ignored diagnostics directory")
+    assertReportBranchPublished({
+      result,
+      calls,
+    })
+    await assertReportFilesAreSanitized({
+      result,
+      repositoryRoot,
+    })
   } finally {
     await rm(repositoryRoot, {
       recursive: true,
