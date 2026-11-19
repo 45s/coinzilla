@@ -25,7 +25,10 @@ function createBroker({ fail = null } = {}) {
     broker: {
       getBalances: read({
         name: "balances",
-        data: [{ asset: "USDT", free: "10" }],
+        data: [{
+          asset: "USDT",
+          free: "10",
+        }],
       }),
       getOpenOrders: read({
         name: "openOrders",
@@ -37,7 +40,10 @@ function createBroker({ fail = null } = {}) {
       }),
       getMatchingOrderDetails: read({
         name: "matching",
-        data: { id: "raw-id", volume: "10" },
+        data: {
+          id: "raw-id",
+          volume: "10",
+        },
       }),
     },
   }
@@ -51,7 +57,10 @@ test("pollOnce publishes an observed snapshot without inventing source time or c
   })
   const result = await reconciler.pollOnce({
     symbols: ["btcusdt"],
-    trackedOrders: [{ symbol: "BTCUSDT", orderId: "order-1" }],
+    trackedOrders: [{
+      symbol: "BTCUSDT",
+      orderId: "order-1",
+    }],
   })
   assert.equal(result.snapshot.observedAt, 1234)
   assert.equal(result.snapshot.sourceTime, null)
