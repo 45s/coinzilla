@@ -45,6 +45,8 @@ The first full Harvester run confirmed the shared OrderRegistry ownership record
 
 A durable RS STOP workflow now restores an unresolved account-scoped RS blocker from the Operational State Store, persists the first STOP before exposing the in-memory STOPPED state, keeps the first evidence sticky, and clears it only through the existing explicit operator-resolution use case after full reconciliation/accounting evidence. It fails startup closed if multiple unresolved RS STOP blockers are present rather than choosing one. Offline tests cover persistence-before-latch, restart restoration/idempotency, durable operator resolution, and persistence failure. The submitter's required `onUnresolvedSubmission` callback can now be wired directly to this workflow's `latch`; Harvester bootstrap wiring remains outstanding.
 
+Strict changed-file ESLint caught one prefer-destructuring warning in the submitter integration assertion; it now uses array destructuring. No lint rules or warning thresholds were changed.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.
