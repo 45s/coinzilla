@@ -2403,7 +2403,10 @@ test("Bitunix Spot user-data subscription delivers polling observations separate
   assert.deepEqual(reconcilerInput.symbols, ["BTCUSDT"], "Polling must use only explicitly supplied symbols.")
   assert.deepEqual(
     reconcilerInput.trackedOrders,
-    [{ symbol: "BTCUSDT", orderId: "order-1" }],
+    [{
+      symbol: "BTCUSDT",
+      orderId: "order-1",
+    }],
     "Only explicitly tracked order identities may be queried.",
   )
   assert.deepEqual(events, [], "Polling observations must never be converted into native execution events.")
@@ -2425,6 +2428,6 @@ test("Bitunix Spot polling subscription requires explicit symbol scope", async (
   })
 
   assert.equal(result.ok, false, "Polling must not start without an explicit symbol scope.")
-  assert.match(result.errors[0].message, /symbols/i, "The failure must identify the missing polling scope.")
+  assert.match(result.errors[0].message, /symbol/i, "The failure must identify the missing polling scope.")
   assert.equal(calls.length, 0, "Invalid observation scope must not issue authenticated reads.")
 })
