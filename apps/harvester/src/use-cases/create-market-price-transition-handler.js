@@ -1,3 +1,4 @@
+import { toResult } from "@coinzilla/utils"
 import { createMarketPrice } from "../domain/market-price.js"
 
 function createMarketPriceRefreshTimeoutError({ symbol, timeoutMs } = {}) {
