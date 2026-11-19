@@ -318,7 +318,7 @@ function requireFundsMutationString({ value, field }) {
 }
 
 function requirePositiveFundsAmount({ value, operation }) {
-  if (typeof value !== "string" || !/^-?\\d+(?:\\.\\d+)?$/.test(value)) {
+  if (typeof value !== "string" || !/^-?[0-9]+(?:[.][0-9]+)?$/.test(value)) {
     throw new TypeError(`Bitunix Spot ${operation} amount must be an exact decimal string without exponent notation`)
   }
   assertDecimalString({
