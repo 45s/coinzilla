@@ -181,6 +181,20 @@ function logValidatedConfiguration({ logger, environment, brokerName, tradingMod
   }
 }
 
+function publishConfigurationEvidence({
+  eventPublisher,
+  logger,
+  runtime,
+  evidence,
+} = {}) {
+  publishConfigurationEvidence({
+    eventPublisher,
+    logger,
+    runtime,
+    evidence,
+  })
+}
+
 export async function resolveHarvesterOptions({
   configSource,
   appConfig: suppliedAppConfig,

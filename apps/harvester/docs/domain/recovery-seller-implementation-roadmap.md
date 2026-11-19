@@ -37,6 +37,8 @@ The strategy-owned route filter is kept in a small resolver helper so the public
 
 The order-submission factory delegates shared executor construction to a focused helper so both the route resolver and submitter stay within the 60-line function standard. Exact-head CI exposed these size findings; they are fixed without suppressing lint rules.
 
+Configuration evidence publication/logging is isolated in a helper so provider route filtering and effective pair selection remain within the 60-line startup-function limit. The order-submission executor construction is likewise extracted; these are structural quality fixes only.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.
