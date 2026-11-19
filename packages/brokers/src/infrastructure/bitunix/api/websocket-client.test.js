@@ -230,8 +230,9 @@ test("Bitunix Spot WebSocket client exposes only documented read-only operations
 })
 
 test("Bitunix Spot WebSocket client dispatches documented market and account read RPCs", async () => {
+  let nextId = 0
   const { client, transport } = createClient({
-    idFactory: (index) => `rpc-${index}`,
+    idFactory: () => `rpc-${++nextId}`,
   })
   await client.connect()
   const pending = [
@@ -281,8 +282,9 @@ test("Bitunix Spot WebSocket client dispatches documented market and account rea
 })
 
 test("Bitunix Spot WebSocket client dispatches documented order read RPCs", async () => {
+  let nextId = 0
   const { client, transport } = createClient({
-    idFactory: (index) => `rpc-${index}`,
+    idFactory: () => `rpc-${++nextId}`,
   })
   await client.connect()
   const pending = [
