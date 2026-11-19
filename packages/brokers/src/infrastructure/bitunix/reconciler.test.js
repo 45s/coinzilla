@@ -215,6 +215,30 @@ test("start publishes the first observation, reports status and stops scheduling
   assert.equal(requestCount, 3)
 })
 
+test("stop remains idempotent when scheduler cancellation throws", async () => {
+  const { broker } = createBroker()
+  let cancellationCalls = 0
+  const reconciler = new BitunixSpotReconciler({
+    broker,
+    schedule: () => 1,
+    cancel: () => {
+      cancellationCalls += 1
+      throw new Error("timer cancellation failed")
+    },
+  })
+  const session = reconciler.start({
+    symbols: ["BTCUSDT"],
+    intervalMs: 500,
+    onSnapshot: () => {},
+  })
+
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.throws(() => session.stop(), /timer cancellation failed/, "the first stop must surface a scheduler cleanup failure")
+  assert.equal(session.getStatus().running, false, "a failed timer cancellation must not restore the stopped polling session")
+  assert.doesNotThrow(() => session.stop(), "repeating stop after cleanup failure must remain safe and idempotent")
+  assert.equal(cancellationCalls, 1, "the failed timer handle must not be cancelled repeatedly after local cleanup")
+})
+
 test("start retries a snapshot after callback failure and backs off the failed cycle", async () => {
   const { broker } = createBroker()
   const scheduled = []
