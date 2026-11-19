@@ -96,7 +96,6 @@ Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`
 
 **Runtime environment contract:** `TRADING_MODE` accepts exactly `testnet` or `live` and remains the compatibility selector for the legacy single-Binance configuration. `NODE_ENV` never selects an exchange environment. When `brokers.instances` is configured, each account entry selects its own explicit `environment`; the runtime passes that value into the provider adapter and account-scoped process lock.
 
-
 ### Recovery Seller configuration
 
 RS is explicitly disabled by default. Keep `RS_RECOVERY_SELLER_CONFIG.enabled` false until each enabled market has an explicit legacy basis and the complete RS-4/RS-5 runtime acceptance is merged. The operator-owned market map is `apps/harvester/rs-recovery-seller.js`; it is empty by default.

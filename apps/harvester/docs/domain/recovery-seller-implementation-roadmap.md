@@ -342,7 +342,6 @@ flowchart TD
 
 The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged in PR #1276; PR #1379 adds independent profitability gates and allocation-safe SELL price planning; PR #1127 completes the pure pre-submission SELL evaluator and owner-approved filter/order-type/fee policy. RS remains non-executable. RS-4 must wire the policy into the shared engine, and RS-5 must prove the offline lifecycle before runtime registration or exchange operations. Advanced lifecycle functionality remains deferred under FITDIB.
 
-
 ## RS-4 configuration boundary — PR #1476
 
 - [x] Add a separate operator-owned `recoverySellerPairs` map; keep it empty by default.
