@@ -16,6 +16,7 @@ import {
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { createAccountRuntimeRegistry } from "../application/providers/account-runtime-registry.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
@@ -495,6 +496,38 @@ brokerState,
 state })
 }
 
+
+test("keeps the shared account OrderRegistry synchronized with engine order updates", async () => {
+  const accountRegistry = createAccountRuntimeRegistry({
+    providers: [{
+      providerInstanceId: "binance-testnet",
+      providerType: "binance",
+      accountId: "test-account",
+      environment: "testnet",
+    }],
+  })
+  const accountState = accountRegistry.get("binance-testnet").state
+  const harness = await createHarness({
+    initialState: accountState,
+  })
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(harness.engine.getActiveOrders().length, 1)
+  assert.equal(accountState.orderRegistry.getActiveOrders().length, 1,
+    "The RS accounting workflow must observe the same active order that the shared engine registered.")
+  assert.deepEqual(
+    accountState.orderRegistry.getActiveOrders().map((order) => order.clientOrderId),
+    harness.engine.getActiveOrders().map((order) => order.clientOrderId),
+  )
+})
 
 test("ignores manual external open orders under the default per-pair policy", async () => {
   const harness = await createHarness({
