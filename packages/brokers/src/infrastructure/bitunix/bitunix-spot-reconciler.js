@@ -163,7 +163,13 @@ export class BitunixSpotReconciler {
     return this.inFlight
   }
 
-  async #readSymbolSnapshots({ symbols }) {
+  #assertActive({ generation }) {
+    if (generation !== this.generation) {
+      throw new Error("Bitunix Spot polling cycle was invalidated by stop()")
+    }
+  }
+
+  async #readSymbolSnapshots({ symbols, generation }) {
     const snapshots = []
     for (const symbol of symbols) {
       const [openOrdersResult, historyResult] = await Promise.all([
@@ -174,6 +180,7 @@ export class BitunixSpotReconciler {
           limit: 100,
         }),
       ])
+      this.#assertActive({ generation })
       snapshots.push({
         symbol,
         openOrders: assertSuccessfulRead({
@@ -190,10 +197,11 @@ export class BitunixSpotReconciler {
     return snapshots
   }
 
-  async #readMatchingOrderObservations({ trackedOrders }) {
+  async #readMatchingOrderObservations({ trackedOrders, generation }) {
     const observations = []
     for (const order of trackedOrders) {
       const result = await this.broker.getMatchingOrderDetails(order)
+      this.#assertActive({ generation })
       observations.push({
         ...order,
         data: assertSuccessfulRead({
@@ -215,11 +223,16 @@ export class BitunixSpotReconciler {
       result: await this.broker.getBalances(),
       operation: "balances",
     })
-    const symbolSnapshots = await this.#readSymbolSnapshots({ symbols })
-    const matchingOrderObservations = await this.#readMatchingOrderObservations({ trackedOrders })
-    if (generation !== this.generation) {
-      throw new Error("Bitunix Spot polling cycle was invalidated by stop()")
-    }
+    this.#assertActive({ generation })
+    const symbolSnapshots = await this.#readSymbolSnapshots({
+      symbols,
+      generation,
+    })
+    const matchingOrderObservations = await this.#readMatchingOrderObservations({
+      trackedOrders,
+      generation,
+    })
+    this.#assertActive({ generation })
     const snapshot = freezeSnapshot({
       snapshot: {
         provider: "bitunix",
