@@ -49,9 +49,23 @@ function requireBoolean(record, field, path) {
   }
 }
 
-function validateRecord(record, { path, strings = [], decimals = [], integers = [], int64 = [], booleans = [] }) {
+function validateRecord(record, {
+  path,
+  strings = [],
+  optionalStrings = [],
+  decimals = [],
+  integers = [],
+  int64 = [],
+  booleans = [],
+}) {
   requireRecord(record, path)
   strings.forEach((field) => requireString(record, field, path))
+  optionalStrings.forEach((field) => {
+    if (record[field] !== undefined && record[field] !== null &&
+        typeof record[field] !== "string") {
+      throw new TypeError(`Bitunix Futures ${path}.${field} must be a string when present`)
+    }
+  })
   decimals.forEach((field) => {
     if (record[field] !== undefined && record[field] !== null) {
       requireDecimal(record, field, path)
@@ -271,7 +285,8 @@ export function adaptFuturesHistoryPositions(data) {
 }
 
 const ORDER_SPEC = Object.freeze({
-  strings: ["orderId", "symbol", "positionMode", "marginMode", "side", "orderType", "status"],
+  strings: ["orderId", "symbol", "positionMode", "marginMode", "side", "status"],
+  optionalStrings: ["clientId", "orderType", "type", "effect", "source"],
   decimals: [
     "qty",
     "tradeQty",
@@ -288,21 +303,35 @@ const ORDER_SPEC = Object.freeze({
   booleans: ["reduceOnly"],
 })
 
-export function adaptFuturesPendingOrders(data) {
+function normalizeOrderType(record) {
+  const orderType = record.orderType ?? record.type
+  if (typeof orderType !== "string" || !orderType) {
+    throw new TypeError("Bitunix Futures order record must include orderType or the documented type alias")
+  }
+  return {
+    ...record,
+    orderType,
+  }
+}
+
+function adaptOrderRows(data, { listField, path }) {
   return adaptPage(data, {
-    listField: "orderList",
+    listField,
     spec: ORDER_SPEC,
+    path,
+  })
+}
+
+export function adaptFuturesPendingOrders(data) {
+  return adaptOrderRows(data, {
+    listField: "orderList",
     path: "trade/get_pending_orders",
   })
 }
 
 export function adaptFuturesHistoryOrders(data) {
-  return adaptPage(data, {
+  return adaptOrderRows(data, {
     listField: "orderList",
-    spec: {
-      ...ORDER_SPEC,
-      int64: [...ORDER_SPEC.int64, "total"],
-    },
     path: "trade/get_history_orders",
   })
 }
@@ -311,24 +340,31 @@ export function adaptFuturesOrderDetail(data) {
   if (data === null) {
     return null
   }
-  return validateRecord(data, {
+  return validateRecord(normalizeOrderType(data), {
     ...ORDER_SPEC,
-    strings: [...ORDER_SPEC.strings, "clientId"],
     path: "trade/get_order_detail",
   })
 }
 
 export function adaptFuturesHistoryTrades(data) {
-  return adaptPage(data, {
-    listField: "tradeList",
-    spec: {
-      strings: ["tradeId", "orderId", "symbol", "side", "orderType"],
+  requireRecord(data, "trade/get_history_trades")
+  const trades = requireArray(data.tradeList, "trade/get_history_trades.tradeList")
+  const tradeList = Object.freeze(trades.map((trade, index) => {
+    const normalized = normalizeOrderType(trade)
+    return validateRecord(normalized, {
+      path: `trade/get_history_trades.tradeList[${index}]`,
+      strings: ["tradeId", "orderId", "symbol", "side"],
+      optionalStrings: ["clientId", "orderType", "type", "effect", "roleType"],
       decimals: ["qty", "price", "fee", "realizedPNL"],
       integers: ["leverage"],
       int64: ["ctime", "subAccountId"],
       booleans: ["reduceOnly"],
-    },
-    path: "trade/get_history_trades",
+    })
+  }))
+  requireInt64(data, "total", "trade/get_history_trades")
+  return Object.freeze({
+    ...data,
+    tradeList,
   })
 }
 
