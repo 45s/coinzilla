@@ -18,6 +18,13 @@ owner: utils
 
 - [x] **Package ESLint cleanup — COMPLETE / superseded by the workspace gate.** Issue #1238 is closed. The required full-workspace `pnpm lint` gate checks every in-scope JavaScript file and fails on errors or warnings; progressive strict changed-file enforcement adds tighter thresholds for new and modified files. No package ESLint cleanup remains outstanding. Fix future findings in the PR that introduces them.
 
+## IN PROGRESS — generic validation API ([issue #1504](https://github.com/45s/coinzilla/issues/1504), [PR #1505](https://github.com/45s/coinzilla/pull/1505))
+
+- Introduces the domain-neutral public `ensure` assertions and optional immutable chain while retaining legacy `Validator`/`VR` exports and predicate semantics.
+- Organizes implementation as a feature module under `src/ensure/`: assertion service, chain service, thin feature index, cohesive pure `helpers/`, and adjacent tests.
+- No consumer-wide migration or business-invariant relocation is included.
+- Package tests, recursive coverage, strict lint, workspace tests and required CI must pass on the exact PR head before marking complete.
+
 ## Priority execution plan — current develop direction (2026-11-10)
 
 ### COMPLETED — build and runtime provenance (issue #763)
