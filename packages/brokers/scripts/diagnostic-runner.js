@@ -896,6 +896,7 @@ function createOptionFailure({ error, startedAtIso, now, results, events, secret
     now,
     results,
     events,
+    schemaObservations,
   })
 }
 
