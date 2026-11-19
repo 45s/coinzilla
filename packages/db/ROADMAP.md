@@ -22,7 +22,6 @@ The scoped implementation adds source fingerprints to newly applied migration hi
 
 The accepted boundary remains unchanged: applications own physical relational schemas, migrations, repositories and business rules; this package owns generic SQLite infrastructure. No Harvester tables or persistence changes belong in this task. Mark complete only after the PR is merged and all required checks pass on its exact final head.
 
-
 ## SQLite infrastructure audit and hardening — #1395
 
 **Status: Done.** [PR #1396](https://github.com/45s/coinzilla/pull/1396) merged into `develop` on 2026-11-18 as `81669ce2be6794b9bd03067f89b57f8fdb55f957`. The audit hardened SQLite connection lifecycle and cleanup, concurrent WAL initialization, transaction-handle lifetime, backup/restore failure preservation, and filesystem error classification. All implementation remains within this package's infrastructure boundary.
