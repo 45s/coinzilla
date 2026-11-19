@@ -2,8 +2,8 @@
  * Resolve pending migrations while enforcing applied identity, implementation
  * fingerprints, and ascending migration order.
  *
- * Legacy applied rows with a null checksum retain version/name validation;
- * new rows are checked against their registered migration source fingerprint.
+ * Legacy applied rows retain an explicit unverified marker; new rows are
+ * checked against their registered migration source fingerprint.
  *
  * @param {...Array<{version: number, name: string, checksum?: string|null}>} migrationLists
  * @returns {Array<object>}
@@ -22,8 +22,7 @@ export function findPendingMigrations(...migrationLists) {
       )
     }
 
-    const hasLegacyChecksum = applied.checksum === null
-      || applied.checksum === undefined
+    const hasLegacyChecksum = applied.checksum === "legacy-unverified"
     if (!hasLegacyChecksum && applied.checksum !== registered.checksum) {
       throw new Error(
         `Migration checksum mismatch at version ${applied.version}`,
