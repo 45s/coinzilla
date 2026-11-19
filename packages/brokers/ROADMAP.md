@@ -1498,7 +1498,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 
 ## 2026-11-19 — Bounded Bitunix deposit and withdrawal diagnostics (#1542)
 
-**Status: Implemented in the current PR; exact-head CI verification pending.**
+**Status: [x] Complete — merged into `develop` in [PR #1545](https://github.com/45s/coinzilla/pull/1545); exact-head required CI passed.**
 
 - Added authenticated `getDeposits({ limit: 1 })` and `getWithdrawalHistory({ limit: 1 })` diagnostics through the public Broker facade.
 - Added structural schemas from fields already validated by the deposit/withdrawal adapters.
