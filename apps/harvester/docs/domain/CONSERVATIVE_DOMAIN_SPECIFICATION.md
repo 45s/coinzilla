@@ -329,6 +329,8 @@ On SIGINT or SIGTERM:
 
 There are no arbitrary sleeps, 20-second delays, quiet periods or time-based guesses. A market already meeting every condition is safe immediately. If safety cannot be proven, fail closed: retain the connections and services needed for reconciliation/recovery, report the exact strategy, market and blockers, and do not report STOPPED.
 
+**Shutdown blocker taxonomy:** `ORDER_OR_FILL_RECONCILIATION_INCOMPLETE` is reserved for failed canonical owned-order reconciliation or failed required user-data drains that may contain order/fill evidence. BUY-cancellation failures, recovery SELL input/reconciliation failures, recovery coverage findings, Journal durability failures and external integrity blockers remain separate diagnostics. Each still blocks shutdown when applicable; separating their labels never relaxes the safety proof.
+
 The SAFE_TO_SHUTDOWN marker is a process-local projection, not a durable fact across restarts. On restart, rebuild safety from Journal evidence and authoritative exchange state; never trust a previous process's marker. The Journal must durably flush its published lifecycle/audit evidence before cleanup. Applied fills and order facts remain governed by [ADR-0001](../architecture/decisions/0001-application-owned-recovery-facts.md) and must be persisted before in-memory Portfolio/RecoveryLedger projections change.
 
 The implementation and deterministic regression tests are tracked by [issue #1186](https://github.com/45s/coinzilla/issues/1186).
