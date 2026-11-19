@@ -132,7 +132,14 @@ function makeOwnership(overrides = {}) {
 function makeInput(overrides = {}) {
   const fill = overrides.fill ?? makeFill()
   const order = overrides.order ?? makeOrder()
-  const ownership = overrides.ownership ?? makeOwnership()
+  const recoveryQuantity = overrides.recoveryQuantity ?? "5"
+  const legacyQuantity = overrides.legacyQuantity ?? "0.01"
+  const ownership = overrides.ownership ?? makeOwnership({
+    sellAllocation: {
+      recoverySellQuantity: recoveryQuantity,
+      legacySellQuantity: legacyQuantity,
+    },
+  })
   const orderRegistry = overrides.orderRegistry ?? new OrderRegistry({
     orders: [order],
     ownerships: [ownership],
@@ -141,8 +148,8 @@ function makeInput(overrides = {}) {
     fill,
     ownership,
     orderRegistry,
-    recoveryQuantity: overrides.recoveryQuantity ?? "5",
-    legacyQuantity: overrides.legacyQuantity ?? "0.01",
+    recoveryQuantity,
+    legacyQuantity,
   }
 }
 
