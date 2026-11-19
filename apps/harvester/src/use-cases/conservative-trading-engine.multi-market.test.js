@@ -542,7 +542,7 @@ executedOrder: unownedSolOrder },
 
 test("accounts the same broker trade ID independently for different markets", async () => {
   const { engine, accountedFills } = await createHarness()
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
   const solOrder = engine.getOrders().find((order) => order.market.symbol === "SOLUSDT")
   const dogeEvent = makePartialFillEvent({
@@ -596,7 +596,7 @@ tradeId: "shared-trade-id" },
 
 test("duplicate fills and stale order updates do not double-account across markets", async () => {
   const { engine, pauses, accountedFills } = await createHarness()
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
   const solOrder = engine.getOrders().find((order) => order.market.symbol === "SOLUSDT")
   const dogeEvent = makePartialFillEvent({
@@ -679,7 +679,7 @@ data: { durable: true } }),
     "An operator pause must not be represented as or overwrite a safety pause.",
   )
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({ symbol,
@@ -732,7 +732,7 @@ test("operator pause does not change in-memory state when the durable fact commi
     "A failed durable-fact append must leave the operator-pause projection unchanged.",
   )
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({ symbol,
@@ -749,7 +749,7 @@ side: "BUY" },
 
 test("operator pause leaves existing exchange orders untouched and suppresses trailing-BUY replacement", async () => {
   const { engine, orders } = await createHarness()
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   const beforePause = engine.getOrders().map(({ clientOrderId, status, market }) => ({
     clientOrderId,
     status,
@@ -817,7 +817,7 @@ test("operator pause restored from durable facts is active before the first mark
     "A restored operator pause must be available before any market event is evaluated.",
   )
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({ symbol,
@@ -919,7 +919,7 @@ test("operator pause preserves recovery SELL execution while suppressing the sam
   )
   
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   
   assert.deepEqual(
@@ -1042,7 +1042,7 @@ data: { durable: true } }
     "The in-memory operator pause may be removed only after durable resume acknowledgement.",
   )
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({ symbol,
@@ -1174,7 +1174,7 @@ test("per-market emergency BUY pause cancels only that market's owned BUY and le
       }),
     },
   })
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   const paused = await engine.pauseBuys({
     symbol: "DOGEUSDT",
@@ -1226,7 +1226,7 @@ test("global emergency BUY pause cancels all owned BUYs and suppresses new BUYs 
       }),
     },
   })
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   const paused = await engine.pauseBuys({
     beforeApply: async () => ({
@@ -1239,7 +1239,7 @@ test("global emergency BUY pause cancels all owned BUYs and suppresses new BUYs 
   assert.equal(paused.data.canceled, 2, "The global BUY pause must cancel both markets' active owned BUY orders.")
   assert.equal(engine.getActiveOrders().filter((order) => order.side === "BUY").length, 0, "No active owned BUY may remain after a successful global emergency pause.")
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.equal(orders.length, 2, "A global BUY pause must prevent both markets from submitting replacement BUY orders.")
   assert.equal(engine.getOperatorBuyPauseState().allBuysPaused, true, "The global BUY pause state must remain visible until explicitly resumed.")
@@ -1280,7 +1280,7 @@ test("global and market BUY pauses remain independent when either scope is resum
   assert.equal(globalResume.ok, true, "The global BUY pause must be independently resumable.")
   assert.deepEqual(engine.getOperatorBuyPauseState().pausedMarkets, [], "Resuming both scopes must leave no emergency market BUY pause active.")
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   assert.equal(orders.length, 2, "BUY submissions may resume only after both independent pause scopes have been cleared.")
 })
 
@@ -1309,7 +1309,7 @@ test("emergency BUY pause preserves recovery SELL submission while blocking the 
   })
   assert.equal(paused.ok, true, "The emergency BUY gate must be active before the recovery decision is evaluated.")
 
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
 
   assert.deepEqual(
     orders.map(({ symbol, side }) => ({
@@ -1342,7 +1342,7 @@ test("global emergency BUY pause never cancels an unowned external order", async
       }),
     },
   })
-  await startBothMarkets(engine)
+  await startBothMarkets({ engine })
   const solMarket = marketsBySymbol.get("SOLUSDT")
   const externalOrder = new CanonicalOrder({
     clientOrderId: "manual-sol-client",
