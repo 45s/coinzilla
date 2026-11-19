@@ -143,10 +143,38 @@ async function writeDiagnosticReport({ path, report }) {
   })
 }
 
+function createPublishedReport({ report }) {
+  return {
+    ...report,
+    results: report.results.map((result) => {
+      if (!result.error) {
+        return result
+      }
+      const error = {
+        ...result.error,
+        message: "[error message withheld from public report]",
+      }
+      if (error.cause) {
+        error.cause = {
+          ...error.cause,
+          message: "[nested error message withheld from public report]",
+        }
+      }
+      return {
+        ...result,
+        error,
+      }
+    }),
+  }
+}
+
 async function writeReports({ paths, report, env }) {
   const sanitized = sanitizeDiagnosticValue({
     value: report,
     secrets: getSecrets({ env }),
+  })
+  const published = createPublishedReport({
+    report: sanitized,
   })
   await writeDiagnosticReport({
     path: paths.local,
@@ -154,9 +182,12 @@ async function writeReports({ paths, report, env }) {
   })
   await writeDiagnosticReport({
     path: paths.published,
-    report: sanitized,
+    report: published,
   })
-  return sanitized
+  return {
+    local: sanitized,
+    published,
+  }
 }
 
 async function publishReportBranch({ repositoryRoot, runGit, branch, reportPath, env }) {
@@ -220,7 +251,7 @@ async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publis
   })
   validateDiagnosticReport({ report })
   const healthCheck = evaluateHealthCheck({ report })
-  const sanitizedReport = await writeReports({
+  const reports = await writeReports({
     paths,
     report: {
       ...report,
@@ -236,7 +267,7 @@ async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publis
     env,
   })
   return {
-    report: sanitizedReport,
+    report: reports.published,
     healthCheck,
     ...publication,
   }
