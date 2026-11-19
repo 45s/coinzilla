@@ -377,12 +377,21 @@ These APIs provide database primitives only. Scheduling, backup rotation/retenti
 
 See the [Node.js SQLite API documentation](https://nodejs.org/api/sqlite.html) for runtime details and stability status.
 
-## Schema migrations
+## Application-owned SQLite schema migrations
 
-The low-level SQLite database API supports ordered, atomic migrations:
+Use the low-level SQLite API when an application needs physical relational tables, indexes, constraints, joins, or SQL queries. The application owns the migration definitions and relational schema; `@coinzilla/db` owns the SQLite connection, SQL execution, transaction, migration-history, backup, and restore infrastructure.
+
+The public `createSqliteDatabase` export is sufficient. Consumers do not import `node:sqlite`, internal package paths, or a separate migration runner.
 
 ```js
-await database.migrate([
+import { createSqliteDatabase } from "@coinzilla/db"
+
+const database = createSqliteDatabase({
+  filename: "./data/app.sqlite",
+  timeout: 5_000,
+})
+
+const migrations = [
   {
     version: 1,
     name: "create-accounts",
@@ -390,15 +399,72 @@ await database.migrate([
       transaction.exec(`
         CREATE TABLE accounts (
           id INTEGER PRIMARY KEY,
-          name TEXT NOT NULL UNIQUE
+          email TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL
         )
       `)
+      transaction.exec(
+        "CREATE INDEX accounts_created_at_idx ON accounts(created_at)",
+      )
     },
   },
-])
+  {
+    version: 2,
+    name: "add-account-status",
+    up(transaction) {
+      transaction.exec(
+        "ALTER TABLE accounts ADD COLUMN status TEXT NOT NULL DEFAULT 'active'",
+      )
+    },
+  },
+]
+
+await database.connect()
+
+try {
+  const appliedVersions = await database.migrate(migrations)
+  console.log("Applied SQLite migrations:", appliedVersions)
+
+  await database.transaction((transaction) => {
+    transaction.prepare(
+      "INSERT INTO accounts (email, created_at, status) VALUES (?, ?, ?)",
+    ).run("user@example.test", new Date().toISOString(), "active")
+  })
+
+  const accounts = database.prepare(
+    "SELECT id, email, status FROM accounts ORDER BY id",
+  ).all()
+  console.log(accounts)
+} finally {
+  await database.close()
+}
 ```
 
-Migrations are identified by positive integer version and unique name, and are applied in ascending version order regardless of input order. The `schema_migrations` history table is initialized before the migration transaction; each migration's schema/data changes and its history row are then committed together in one transaction. If a migration fails, all changes made in that migration batch roll back; the empty history table may remain. Re-running an already applied migration list is idempotent. Applied versions must remain in the migration list with the same names; removing or renaming an applied migration causes a history-mismatch error. Never edit a migration after it has been applied; add a new version instead. Migration callbacks must be synchronous. Concurrent migration attempts from independent connections serialize under SQLite write locking: one applies and commits each version, and the others observe that version as already applied.
+The migration callback receives a transaction-scoped SQL handle with `exec(sql)` and `prepare(sql)`. Use prepared statements and bound parameters for values; never interpolate untrusted input into SQL. DDL and DML performed by migrations share the migration transaction, and application SQL can use `transaction(work)` for its own atomic operations.
+
+### Migration identity, history and compatibility
+
+- Every migration has a unique positive safe-integer `version`, a unique non-empty `name`, and a synchronous `up(transaction)` function. Input definitions are sorted by ascending version before execution.
+- `schema_migrations` records each applied version, name, timestamp and implementation checksum. A migration's SHA-256 checksum is calculated from the source text of its `up` callback. Changing an applied callback while retaining its version and name is rejected; add a new version for every subsequent schema change.
+- Keep migration callbacks self-contained. A source checksum cannot include values captured from closures or the implementation of imported helper functions, and it is not a signature against a party able to modify both the database and application code. Do not make migration behavior depend on runtime configuration, mutable closure state, or external services.
+- Existing databases created before checksum tracking are upgraded in the migration transaction. Their existing version/name/timestamp rows and application data are preserved; their new `checksum` values remain `NULL` because the historical callback source cannot be reconstructed safely. Those legacy rows continue to be validated by version and name only. Newly applied migrations receive checksums.
+- Every applied version must still exist in the registered migration list with its original name. Removing or renaming an applied migration causes a history-mismatch error. Changing the source of a checksummed migration causes a checksum-mismatch error.
+- A pending registered migration may not have a lower version than an already-applied version. This prevents an older migration from running after a newer one. Version numbers need not be contiguous, but migrations must be registered in their original history.
+- Migration history validation and all pending migration callbacks execute inside one SQLite write transaction. Schema changes and their history rows commit together. A failure rolls back the entire batch. The `schema_migrations` table itself is initialized before that transaction and may remain empty after a failed first batch.
+- Repeated migration calls are idempotent. Independent connections serialize migration attempts through SQLite write locking; the second connection observes versions committed by the first instead of applying them again.
+- Migration callbacks must be synchronous. An async function or a returned Promise/thenable is rejected and its transaction is rolled back.
+
+Migration validation and history mismatches reject with actionable errors. A failure thrown by an application migration callback is propagated as the original error; if SQLite rollback also fails, the transaction lifecycle reports both failures through an `AggregateError`.
+
+### Generic CRUD versus SQLite-specific SQL
+
+| API | Responsibility |
+| --- | --- |
+| `createDatabase({ provider })` | Provider-neutral JSON record CRUD, generic transactions, and capability declarations. It does not expose SQL or relational migrations. |
+| `createSqliteDatabase({ filename, timeout })` | SQLite-specific connection lifecycle, prepared SQL, explicit transactions, schema migrations, backup and restore. |
+| Application-owned migration callbacks and repositories | Physical tables, indexes, constraints, relational queries, row mapping, and business rules. |
+
+Use `createDatabase({ provider })` when the application needs the portable `db_records` JSON collection contract. Use `createSqliteDatabase` from an application-owned infrastructure adapter when it needs a SQLite relational schema. The two storage models can coexist in the same SQLite database file; creating application tables does not replace or migrate `db_records`.
 
 ## Architecture and DDD boundaries
 
