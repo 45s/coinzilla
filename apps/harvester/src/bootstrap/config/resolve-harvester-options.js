@@ -200,8 +200,12 @@ function resolveConservativeRuntimePairs({
     executionSymbols: routes.recoverySellerExecutionSymbols,
   })
   const marketPairs = {
-    ...recoverySellerPairs,
     ...conservativePairs,
+  }
+  for (const [symbol, pair] of Object.entries(recoverySellerPairs)) {
+    if (!Object.hasOwn(marketPairs, symbol)) {
+      marketPairs[symbol] = pair
+    }
   }
   return {
     conservativePairs,
