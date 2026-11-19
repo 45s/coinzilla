@@ -13,6 +13,10 @@ created: 2026-11-14
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
 
+## Current RS-4 checkpoint — provider route handoff
+
+The route resolver now retains exact `{ strategyId, symbol }` assignments, while market-data subscription symbols are deduplicated separately. The next runtime integration boundary must pass those strategy-owned assignments into each provider account startup; passing only `executionSymbols` loses ownership when CG and RS share a market. A regression test now asserts that provider startup receives the original strategy route records. This checkpoint does not register RS, create an RS engine, or authorize execution. RS remains disabled/non-executable.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.

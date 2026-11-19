@@ -197,6 +197,7 @@ function createAccountRuntimeStarter({
       operatorControlEnabled: input.appConfig.operatorControl.telegram.enabled,
       hasOperationalStateStore: input.operationalStateStore !== undefined,
       executionSymbols: input.executionSymbols,
+      executionRoutes: input.executionRoutes,
       marketDataSymbols: input.marketDataSymbols,
       marketDataSources: input.marketDataSources,
       marketDataProviderTypes: input.marketDataProviderTypes,
@@ -244,6 +245,11 @@ function assertAccountStartupInputs({
     ["ETHUSDT"],
     ["SOLUSDT"],
   ])
+  assert.deepEqual(inputs.map((entry) => entry.executionRoutes), [
+    [{ strategyId: "CG_coinGrabber", symbol: "BTCUSDT" }],
+    [{ strategyId: "CG_coinGrabber", symbol: "ETHUSDT" }],
+    [{ strategyId: "CG_coinGrabber", symbol: "SOLUSDT" }],
+  ], "Provider startup must retain strategy ownership instead of receiving only deduplicated market symbols")
   assert.deepEqual(inputs.map((entry) => entry.marketDataSymbols), [
     ["BTCUSDT"],
     ["ETHUSDT"],
