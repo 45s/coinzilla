@@ -408,6 +408,31 @@ test("Bitunix Spot WebSocket client validates order-history codes and matching-o
   await client.disconnect()
 })
 
+test("Bitunix Spot WebSocket order history serializes numeric enum filters as strings", async () => {
+  const { client, transport } = createClient()
+  await client.connect()
+  const pending = client.getOrderHistory({
+    symbol: "BTCUSDT",
+    status: 3,
+    side: 2,
+    type: 1,
+  })
+  assert.deepEqual(transport.sent[0].params, {
+    symbol: "BTCUSDT",
+    status: "3",
+    side: "2",
+    type: "1",
+  })
+  transport.receive({
+    id: "request-1",
+    code: "0",
+    msg: "success",
+    data: [],
+  })
+  assert.deepEqual(await pending, [])
+  await client.disconnect()
+})
+
 test("Bitunix Spot WebSocket order history rejects unknown fields and reversed time windows", async () => {
   const { client, transport } = createClient()
   await client.connect()
