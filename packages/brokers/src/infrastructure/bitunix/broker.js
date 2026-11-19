@@ -420,49 +420,61 @@ function createWithdrawalCancelRequest({ input }) {
   }
 }
 
+function createUidTransferRecipient({ input }) {
+  const { toUid } = input
+  if ((typeof toUid !== "string" || !/^[0-9]+$/.test(toUid)) &&
+      !(typeof toUid === "number" && Number.isSafeInteger(toUid) && toUid >= 0)) {
+    throw new TypeError("Bitunix Spot internal transfer toUid must be a non-negative integer string or safe integer")
+  }
+  if (input.toPhoneCountryCode !== undefined ||
+      input.toPhoneNumber !== undefined ||
+      input.toEmail !== undefined) {
+    throw new TypeError("Bitunix Spot UID transfer must not include phone or email recipient fields")
+  }
+  return { toUid: String(toUid) }
+}
+
+function createPhoneTransferRecipient({ input }) {
+  if (input.toUid !== undefined || input.toEmail !== undefined) {
+    throw new TypeError("Bitunix Spot phone transfer must not include UID or email recipient fields")
+  }
+  return {
+    toPhoneCountryCode: requireFundsMutationString({
+      value: input.toPhoneCountryCode,
+      field: "toPhoneCountryCode",
+    }),
+    toPhoneNumber: requireFundsMutationString({
+      value: input.toPhoneNumber,
+      field: "toPhoneNumber",
+    }),
+  }
+}
+
+function createEmailTransferRecipient({ input }) {
+  if (input.toUid !== undefined ||
+      input.toPhoneCountryCode !== undefined ||
+      input.toPhoneNumber !== undefined) {
+    throw new TypeError("Bitunix Spot email transfer must not include UID or phone recipient fields")
+  }
+  return {
+    toEmail: requireFundsMutationString({
+      value: input.toEmail,
+      field: "toEmail",
+    }),
+  }
+}
+
 function createInternalTransferRecipient({ input }) {
-  if (input.toType === "uid") {
-    const { toUid } = input
-    if ((typeof toUid !== "string" || !/^[0-9]+$/.test(toUid)) &&
-        !(typeof toUid === "number" && Number.isSafeInteger(toUid) && toUid >= 0)) {
-      throw new TypeError("Bitunix Spot internal transfer toUid must be a non-negative integer string or safe integer")
-    }
-    if (input.toPhoneCountryCode !== undefined ||
-        input.toPhoneNumber !== undefined ||
-        input.toEmail !== undefined) {
-      throw new TypeError("Bitunix Spot UID transfer must not include phone or email recipient fields")
-    }
-    return { toUid: String(toUid) }
+  switch (input.toType) {
+    case "uid":
+      return createUidTransferRecipient({ input })
+    case "phone":
+      return createPhoneTransferRecipient({ input })
+    case "email":
+      return createEmailTransferRecipient({ input })
+    default:
+      throw new TypeError("Bitunix Spot internal transfer toType must be uid, phone, or email")
   }
-  if (input.toType === "phone") {
-    if (input.toUid !== undefined || input.toEmail !== undefined) {
-      throw new TypeError("Bitunix Spot phone transfer must not include UID or email recipient fields")
-    }
-    return {
-      toPhoneCountryCode: requireFundsMutationString({
-        value: input.toPhoneCountryCode,
-        field: "toPhoneCountryCode",
-      }),
-      toPhoneNumber: requireFundsMutationString({
-        value: input.toPhoneNumber,
-        field: "toPhoneNumber",
-      }),
-    }
-  }
-  if (input.toType === "email") {
-    if (input.toUid !== undefined ||
-        input.toPhoneCountryCode !== undefined ||
-        input.toPhoneNumber !== undefined) {
-      throw new TypeError("Bitunix Spot email transfer must not include UID or phone recipient fields")
-    }
-    return {
-      toEmail: requireFundsMutationString({
-        value: input.toEmail,
-        field: "toEmail",
-      }),
-    }
-  }
-  throw new TypeError("Bitunix Spot internal transfer toType must be uid, phone, or email")
 }
 
 function createInternalTransferRequest({ input }) {
