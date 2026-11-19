@@ -162,15 +162,19 @@ const BITUNIX_SPOT_CAPABILITIES = [
   },
   {
     type: "PLACE_LIMIT_ORDER",
-    status: "UNSUPPORTED",
+    status: "SUPPORTED",
     method: "createOrder",
-    reason: "Placement remains blocked because the Spot API does not provide a verified client order identity for safe unknown-outcome reconciliation.",
+    guarantee: "Uses only the documented single-order REST endpoint; converts base quantity to quote-coin volume with exact decimal arithmetic and verifies the returned order ID with order detail.",
+    conditions: ["LIMIT volume is quote-coin quantity on the single-order REST endpoint.", "Only the documented default GTC behavior is supported."],
+    limitation: "Bitunix does not accept a caller-supplied clientOrderId. A transport failure after dispatch returns OUTCOME_UNKNOWN and is never retried; callers must reconcile manually. Exact tick/step constraints remain UNKNOWN and are enforced by the exchange.",
   },
   {
     type: "PLACE_MARKET_ORDER",
-    status: "UNSUPPORTED",
+    status: "SUPPORTED",
     method: "createOrder",
-    reason: "Placement remains blocked by unresolved order identity, quantity semantics, and safe mutation-outcome reconciliation.",
+    guarantee: "Uses only the documented single-order REST endpoint and submits the requested base quantity.",
+    conditions: ["MARKET volume is base-coin quantity on the single-order REST endpoint."],
+    limitation: "Bitunix does not accept a caller-supplied clientOrderId. A transport failure after dispatch returns OUTCOME_UNKNOWN and is never retried; callers must reconcile manually.",
   },
   {
     type: "CANCEL_ORDER",
@@ -246,7 +250,7 @@ export function createBitunixBrokerCapabilities() {
       selector: "tradingMode",
       selectedMode: "live",
       supportedModes: ["live"],
-      notes: "No Bitunix Spot TESTNET is documented; capability evidence covers read-only LIVE API behavior.",
+      notes: "No Bitunix Spot TESTNET is documented. Order mutations use signed LIVE REST endpoints; offline tests do not constitute live exchange acceptance.",
     },
     capabilities: BITUNIX_SPOT_CAPABILITIES,
   })
