@@ -3,7 +3,7 @@ import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
 import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
 
-function createBroker({ responses = {}, allowLiveOrderMutations = true } = {}) {
+function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcilerFactory } = {}) {
   const calls = []
   const restClient = {
     async request(input = {}) {
@@ -27,6 +27,7 @@ function createBroker({ responses = {}, allowLiveOrderMutations = true } = {}) {
     allowLiveOrderMutations,
     dependencies: {
       restClientFactory: () => restClient,
+      ...(reconcilerFactory ? { reconcilerFactory } : {}),
     },
   })
   return { broker,
@@ -736,7 +737,6 @@ test("Bitunix Spot broker keeps lifecycle and unsupported read capabilities expl
     assert.equal(result.ok, false)
   }
   const unsupportedSubscriptions = await Promise.all([
-    broker.subscribeForUserData(),
     broker.subscribeForBookTicker(),
     broker.subscribeForCandles(),
     broker.subscribeForPrices(),
@@ -2333,4 +2333,73 @@ test("Bitunix Spot broker propagates tax-filing REST failures without retrying",
   assert.equal(result.ok, false, "a failed tax-filing request must not appear as a successful empty page")
   assert.equal(result.errors[0], transportFailure, "the original tax-filing transport error must remain available")
   assert.equal(calls.length, 1, "a failed tax-filing read must not be retried implicitly")
+})
+
+
+test("Bitunix Spot user-data subscription delivers polling observations separately from native events", async () => {
+  const observation = Object.freeze({
+    provider: "bitunix",
+    product: "spot",
+    mode: "POLLING",
+    observedAt: 1234,
+    sourceTime: null,
+    balances: Object.freeze([]),
+    symbols: Object.freeze([]),
+    matchingOrderObservations: Object.freeze([]),
+    guarantees: Object.freeze({
+      accountSnapshotAuthoritative: false,
+      historyCoverage: "FIRST_PAGE_ONLY",
+      fillsCanonical: false,
+      nativePush: false,
+    }),
+  })
+  const status = Object.freeze({
+    mode: "POLLING",
+    nativePush: false,
+    running: true,
+    freshness: "FRESH",
+    lastSuccessAt: 1234,
+    ageMs: 0,
+  })
+  let reconcilerInput
+  let stopped = 0
+  const { broker, calls } = createBroker({
+    reconcilerFactory: () => ({
+      start: (input) => {
+        reconcilerInput = input
+        input.onSnapshot(observation)
+        input.onStatus(status)
+        return {
+          stop: () => { stopped += 1 },
+          getStatus: () => status,
+        }
+      },
+    }),
+  })
+  const events = []
+  const observations = []
+  const statuses = []
+  await broker.connect()
+
+  const result = await broker.subscribeForUserData({
+    symbols: ["BTCUSDT"],
+    trackedOrders: [{ symbol: "BTCUSDT", orderId: "order-1" }],
+    intervalMs: 1000,
+    onEvent: ({ event }) => events.push(event),
+    onObservation: ({ observation: received }) => observations.push(received),
+    onStatus: (received) => statuses.push(received),
+  })
+
+  assert.equal(result.ok, true, "A valid polling observation subscription must succeed.")
+  assert.equal(result.data.deliveryMode, "POLLING_OBSERVATIONS", "The subscription must identify its non-native delivery semantics.")
+  assert.equal(result.data.nativePush, false, "Polling observations must never claim native push.")
+  assert.deepEqual(reconcilerInput.symbols, ["BTCUSDT"], "Polling must use only explicitly supplied symbols.")
+  assert.deepEqual(reconcilerInput.trackedOrders, [{ symbol: "BTCUSDT", orderId: "order-1" }], "Only explicitly tracked order identities may be queried.")
+  assert.deepEqual(events, [], "Polling observations must never be converted into native execution events.")
+  assert.deepEqual(observations, [observation], "The snapshot must be delivered only through onObservation.")
+  assert.deepEqual(statuses, [status], "Polling lifecycle status must use the separate status callback.")
+  assert.equal(calls.length, 0, "Subscription setup must not submit or cancel exchange orders.")
+
+  await result.data.disconnect()
+  assert.equal(stopped, 1, "Disconnect must stop the private polling lifecycle.")
 })

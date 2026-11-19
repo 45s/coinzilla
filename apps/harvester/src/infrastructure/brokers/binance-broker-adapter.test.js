@@ -148,17 +148,20 @@ test("forwards connection and subscription lifecycle methods", async () => {
 brokerFactory: () => client })
   const onPrice = () => {}
   const onEvent = () => {}
+  const onObservation = () => {}
   const onStatus = () => {}
 
   await broker.connect()
   await broker.subscribeForPrices({ symbol: "BTCUSDT",
 onPrice })
   await broker.subscribeForUserData({ onEvent,
+onObservation,
 onStatus })
   await broker.disconnect()
 
   const userDataCall = calls.find(([method]) => method === "subscribeForUserData")
   assert.equal(userDataCall[1].onStatus, onStatus)
+  assert.equal(userDataCall[1].onObservation, onObservation, "The generic broker adapter must forward observation delivery independently from native events.")
   assert.equal(typeof userDataCall[1].onEvent, "function")
   assert.deepEqual(calls.filter(([method]) => method !== "subscribeForUserData"), [
     ["connect"],

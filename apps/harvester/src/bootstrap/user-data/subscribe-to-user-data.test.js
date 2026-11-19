@@ -15,7 +15,7 @@ const createState = (overrides = {}) => ({
   ...overrides,
 })
 
-const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
+const createFixture = ({ tradingEnabled = false, tradingMode = "testnet", state = createState(), subscribe, onObservation = () => {}, publishAccountSnapshot, publishOpenOrdersSnapshot, logger = {} } = {}) => {
   const calls = []
   const events = []
   const subscription = { disconnect: async () => calls.push("disconnect") }
@@ -37,6 +37,7 @@ data: subscription }
     tradingEnabled,
     enabledSymbols: ["BTCUSDT"],
     onEvent: () => {},
+    onObservation,
     onStatus: () => {},
     publishAccountSnapshot: async (input) => {
       calls.push(`account:${  input.phase}`)
@@ -192,3 +193,29 @@ test("LIVE startup failures report LIVE instead of hard-coded TESTNET", async ()
   )
   assert.equal(systemLogs.some((entry) => entry.message.includes("TESTNET")), false, "A LIVE startup failure must never claim TESTNET.")
 })
+
+
+test("passes polling observations through a separate callback without treating them as execution events", async () => {
+  const observation = Object.freeze({
+    mode: "POLLING",
+    nativePush: false,
+    observedAt: 1234,
+    sourceTime: null,
+  })
+  const received = []
+  const fixture = createFixture({
+    onObservation: ({ observation: value }) => received.push(value),
+    subscribe: async (handlers) => {
+      handlers.onObservation({ observation })
+      return { ok: true, data: fixtureSubscription }
+    },
+  })
+  const subscription = await fixture.result
+
+  assert.deepEqual(received, [observation], "Polling data must arrive through onObservation.")
+  assert.equal(fixture.state.ready, false, "An observation must not open trading readiness.")
+  assert.equal(fixture.events.length, 1, "An observation must not publish a canonical broker event.")
+  assert.equal(subscription, fixture.subscription, "The subscription lifecycle handle must remain available to bootstrap.")
+})
+
+const fixtureSubscription = { disconnect: async () => {} }
