@@ -2,6 +2,8 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { SystemCustomError } from "@coinzilla/utils"
 import { BitunixRestClient, BitunixRestError } from "./rest-client.js"
+import { createRestSignature } from "../auth/create-rest-signature.js"
+import { createBitunixInt64JsonNumber } from "./json-serializer.js"
 
 test("Bitunix REST client signs authenticated requests and unwraps successful data", async () => {
   let captured
@@ -582,5 +584,61 @@ test("Bitunix REST client parses HTTP-date Retry-After and ignores malformed hin
       assert.equal(error.retryAfterMs, null)
       return true
     },
+  )
+})
+
+
+test("Bitunix REST client sends and signs exact int64 request numbers", async () => {
+  const nonce = "nonce"
+  const timestamp = 1_700_000_000_000
+  let captured
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    now: () => timestamp,
+    nonceFactory: () => nonce,
+    fetchFn: async (url, options) => {
+      captured = {
+        url,
+        options,
+      }
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            code: 0,
+            msg: "success",
+            data: "accepted",
+          })
+        },
+      }
+    },
+  })
+
+  const result = await client.request({
+    method: "POST",
+    path: "/api/spot/v1/inside_transfer",
+    body: {
+      toUid: createBitunixInt64JsonNumber({
+        value: "9223372036854775807",
+      }),
+      amount: "1.000",
+    },
+    stateChanging: true,
+  })
+
+  assert.equal(result.data, "accepted")
+  assert.equal(captured.options.body, '{"toUid":9223372036854775807,"amount":"1.000"}')
+  assert.equal(
+    captured.options.headers.sign,
+    createRestSignature({
+      nonce,
+      timestamp: String(timestamp),
+      apiKey: "api-key",
+      secretKey: "secret",
+      body: captured.options.body,
+      bodyIsSerialized: true,
+    }),
   )
 })
