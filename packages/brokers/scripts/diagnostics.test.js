@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import {
   createDiagnosticResult,
+  inspectDiagnosticSchema,
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
   summarizePrivatePayload,
@@ -101,4 +102,48 @@ test("diagnostic results retain operation timing and safe request/response summa
     type: "object",
     fields: ["price"],
   }, "Responses must be represented by safe shape summaries by default")
+})
+
+test("schema diagnostics detect unknown fields, missing required fields, and unexpected types without values", () => {
+  const inspection = inspectDiagnosticSchema({
+    value: [
+      {
+        coin: "BTC",
+        balance: "1.2300",
+        balanceLocked: "0",
+        futureField: "private-value",
+      },
+      {
+        coin: "ETH",
+        balance: 2,
+      },
+    ],
+    expectedFields: ["coin", "balance", "balanceLocked"],
+    requiredFields: ["coin", "balance", "balanceLocked"],
+    expectedFieldTypes: {
+      coin: ["string"],
+      balance: ["string"],
+      balanceLocked: ["string"],
+    },
+  })
+
+  assert.deepEqual(inspection, {
+    valueType: "array",
+    itemCount: 2,
+    observedFields: ["balance", "coin", "futureField"],
+    unexpectedFields: ["futureField"],
+    missingRequiredFields: [{
+      index: 1,
+      fields: ["balanceLocked"],
+    }],
+    unexpectedFieldTypes: [{
+      index: 1,
+      field: "balance",
+      expected: ["string"],
+      actual: "number",
+    }],
+    invalidRowIndexes: [],
+  }, "Schema diagnostics must report structure mismatches without retaining private response values")
+  assert.equal(JSON.stringify(inspection).includes("private-value"), false, "Schema diagnostics must never persist unknown field values")
+  assert.equal(JSON.stringify(inspection).includes("1.2300"), false, "Schema diagnostics must never persist financial values")
 })
