@@ -338,11 +338,6 @@ runBrokerConformanceSuite({
       }],
     },
     {
-      method: "createOrder",
-      args: [],
-      mutation: true,
-    },
-    {
       method: "createCanonicalOrder",
       args: [],
       mutation: true,
