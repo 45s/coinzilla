@@ -920,28 +920,16 @@ function recordWebSocketReconnectFailure({ error, startedAt, now, results, secre
 }
 
 async function runWebSocketReconnectCheck({
-  env,
-  requestTimeout,
+  client,
   events,
   secrets,
   includePublicPayloads,
   now,
   results,
-  websocketClientFactory,
 }) {
   const startedAt = now()
-  let client
   let isConnected = false
   try {
-    client = createConfiguredWebSocketClient({
-      env,
-      requestTimeout,
-      events,
-      secrets,
-      includePublicPayloads,
-      now,
-      websocketClientFactory,
-    })
     await client.connect()
     isConnected = true
     await recordWebSocketReconnectPing({
@@ -961,16 +949,14 @@ async function runWebSocketReconnectCheck({
       secrets,
     })
   } finally {
-    if (client) {
-      await cleanupWebSocket({
-        client,
-        isConnected,
-        now,
-        results,
-        events,
-        secrets,
-      })
-    }
+    await cleanupWebSocket({
+      client,
+      isConnected,
+      now,
+      results,
+      events,
+      secrets,
+    })
   }
   recordWebSocketSubscriptionSkipped({
     now,
@@ -1061,8 +1047,6 @@ function recordWebSocketClientCreationFailure({ error, now, results, secrets }) 
 
 async function runWebSocketLifecycle({
   client,
-  env,
-  requestTimeout,
   symbol,
   depthPrecision,
   now,
@@ -1070,7 +1054,6 @@ async function runWebSocketLifecycle({
   events,
   secrets,
   includePublicPayloads,
-  websocketClientFactory,
 }) {
   const initialConnectionEstablished = await runWebSocketSession({
     client,
@@ -1097,14 +1080,12 @@ async function runWebSocketLifecycle({
     return
   }
   await runWebSocketReconnectCheck({
-    env,
-    requestTimeout,
+    client,
     events,
     secrets,
     includePublicPayloads,
     now,
     results,
-    websocketClientFactory,
   })
 }
 
@@ -1151,8 +1132,6 @@ async function runWebSocketChecks({
   }
   await runWebSocketLifecycle({
     client,
-    env,
-    requestTimeout,
     symbol,
     depthPrecision,
     now,
@@ -1160,7 +1139,6 @@ async function runWebSocketChecks({
     events,
     secrets,
     includePublicPayloads,
-    websocketClientFactory,
   })
 }
 
