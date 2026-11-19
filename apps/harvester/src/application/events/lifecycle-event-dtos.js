@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { addDecimal, assertDecimalString, assertObjectInput, compareDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, assertObjectInput, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 
 const STRATEGY_MODES = Object.freeze(["read-only", "conservative", "aggressive"])
 const TRADING_MODES = Object.freeze(["testnet", "live"])
@@ -1065,11 +1065,12 @@ function requireOrderHistoryFacts({ order, ownership }) {
       value: order.executedQuantity.amount,
       field: "order.executedQuantity",
     }),
-    ...(order.remainingQuantity === undefined ? {} : {
-      remainingQuantity: requireDecimalString({
-        value: order.remainingQuantity.amount,
-        field: "order.remainingQuantity",
+    remainingQuantity: requireDecimalString({
+      value: order.remainingQuantity?.amount ?? subtractDecimal({
+        left: order.originalQuantity.amount,
+        right: order.executedQuantity.amount,
       }),
+      field: "order.remainingQuantity",
     }),
   }
   if (order.limitPrice !== undefined) {
