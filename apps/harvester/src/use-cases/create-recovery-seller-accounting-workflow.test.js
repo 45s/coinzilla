@@ -875,6 +875,42 @@ function createSharedAccountWorkflowFixture() {
   }
 }
 
+test("initializes operator-authorized legacy positions once in the shared account workflow", async () => {
+  const sharedState = {
+    portfolio: new Portfolio(),
+    recoveryLedgers: new Map(),
+    orderRegistry: OrderRegistry.empty(),
+    legacyPositions: new Map(),
+    updateQueue: Promise.resolve(),
+  }
+  const workflow = createRecoverySellerAccountingWorkflow({ sharedState })
+  const record = {
+    market,
+    position: createLegacyPosition({
+      invested: "50",
+      quantity: "10",
+    }),
+    accounting: createLegacyPositionAccounting(),
+  }
+
+  const initialized = await workflow.initializeLegacyPositions({
+    records: [record],
+  })
+
+  assert.equal(initialized.ok, true, initialized.errors?.[0]?.message)
+  assert.equal(initialized.data.initialized, 1)
+  assert.deepEqual(workflow.getLegacyPosition({ marketId: market.id }), record.position)
+  assert.deepEqual(workflow.getLegacyAccounting({ marketId: market.id }), record.accounting)
+
+  const duplicate = await workflow.initializeLegacyPositions({
+    records: [record],
+  })
+
+  assert.equal(duplicate.ok, false)
+  assert.match(duplicate.errors[0].message, /already exists/i)
+  assert.deepEqual(workflow.getLegacyPosition({ marketId: market.id }), record.position)
+})
+
 test("Conservative and RS accounting workflows can share one serialized account Portfolio", async () => {
   const fixture = createSharedAccountWorkflowFixture()
   const { sharedState, conservative, recoverySeller } = fixture
