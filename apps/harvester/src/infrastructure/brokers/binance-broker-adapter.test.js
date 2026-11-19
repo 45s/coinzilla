@@ -77,6 +77,10 @@ type: "LIMIT_MAKER" } })
   assert.equal(uncertain.errors[0], unknown, "An unknown submission outcome must never be downgraded to a definite rejection.")
 })
 
+async function assertMarketMetadataIsMapped(broker) {
+  await assertMarketMetadataIsMapped(broker)
+}
+
 test("maps object-shaped application inputs to the broker package methods", async () => {
   const { calls, client, result } = createClient()
   client.getSymbolFilters = async (input) => {
