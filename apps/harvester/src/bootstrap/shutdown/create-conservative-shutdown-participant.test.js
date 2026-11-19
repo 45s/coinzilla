@@ -75,34 +75,61 @@ function createFakeEngineOrderOperations({ calls } = {}) {
   }
 }
 
+function getFakeExternalBlockerReasons(externalBlockers = []) {
+  const reasons = []
+  for (const blocker of externalBlockers) {
+    const reason = typeof blocker === "string"
+      ? blocker
+      : blocker?.reason ?? blocker?.code ?? blocker?.message
+    if (reason) {
+      reasons.push(reason)
+    }
+  }
+  return reasons
+}
+
+function getFakeSafetyAuditBlockers({
+  symbol,
+  reconciliationComplete,
+  journalDurable,
+  coverageResult,
+  externalBlockers,
+  unsafeSymbols,
+  state,
+} = {}) {
+  const blockers = []
+  if (!state.gateActive) {
+    blockers.push("CONSERVATIVE_BUY_GATE_INACTIVE")
+  }
+  if (!reconciliationComplete) {
+    blockers.push("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE")
+  }
+  if (!journalDurable) {
+    blockers.push("JOURNAL_NOT_DURABLE")
+  }
+  if (coverageResult?.ok !== true || coverageResult.data?.covered !== true) {
+    blockers.push("RECOVERY_SELL_COVERAGE_UNVERIFIED")
+  }
+  if (unsafeSymbols.includes(symbol)) {
+    blockers.push("OWNED_SELL_ORDER_UNRESOLVED")
+  }
+  blockers.push(...getFakeExternalBlockerReasons(externalBlockers))
+  return blockers
+}
+
 function createFakeEngineSafetyOperations({ calls, unsafeSymbols, onAudit, markets, state, invalidate, snapshot } = {}) {
   return {
     async auditShutdownSafety({ symbol, reconciliationComplete, journalDurable, coverageResult, externalBlockers }) {
       calls.push(`audit:${symbol}`)
-      const blockers = []
-      if (!state.gateActive) {
-        blockers.push("CONSERVATIVE_BUY_GATE_INACTIVE")
-      }
-      if (!reconciliationComplete) {
-        blockers.push("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE")
-      }
-      if (!journalDurable) {
-        blockers.push("JOURNAL_NOT_DURABLE")
-      }
-      if (coverageResult?.ok !== true || coverageResult.data?.covered !== true) {
-        blockers.push("RECOVERY_SELL_COVERAGE_UNVERIFIED")
-      }
-      if (unsafeSymbols.includes(symbol)) {
-        blockers.push("OWNED_SELL_ORDER_UNRESOLVED")
-      }
-      for (const blocker of externalBlockers ?? []) {
-        const reason = typeof blocker === "string"
-          ? blocker
-          : blocker?.reason ?? blocker?.code ?? blocker?.message
-        if (reason) {
-          blockers.push(reason)
-        }
-      }
+      const blockers = getFakeSafetyAuditBlockers({
+        symbol,
+        reconciliationComplete,
+        journalDurable,
+        coverageResult,
+        externalBlockers,
+        unsafeSymbols,
+        state,
+      })
       onAudit?.({
         symbol,
         invalidate,
@@ -120,7 +147,6 @@ function createFakeEngineSafetyOperations({ calls, unsafeSymbols, onAudit, marke
     },
   }
 }
-
 function createFakeEngine({ calls = [], unsafeSymbols = [], onAudit } = {}) {
   const { markets, state, snapshot, invalidate } = createFakeEngineState()
   return {
