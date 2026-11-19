@@ -1,6 +1,8 @@
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { MARKET_DATA_MAX_AGE_MS } from "../../domain/market/is-market-data-fresh.js"
 
+const MAX_CONSERVATIVE_SHUTDOWN_SAFETY_PASSES = 2
+
 function getRecoveryErrorReason(error) {
   if (typeof error?.reason === "string") {
     return error.reason
@@ -570,6 +572,17 @@ async function secureUnsafeMarkets({
   return engine.getShutdownSafetySnapshot()
 }
 
+function createSafetyReevaluationLimitFailures({ snapshot } = {}) {
+  return snapshot.markets
+    .filter((market) => market.status !== "SAFE_TO_SHUTDOWN")
+    .map(({ symbol }) => ({
+      symbol,
+      blockers: [
+        `SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED:${MAX_CONSERVATIVE_SHUTDOWN_SAFETY_PASSES}`,
+      ],
+    }))
+}
+
 async function waitForConservativeMarkets({
   engine,
   eventPublisher,
@@ -586,9 +599,16 @@ async function waitForConservativeMarkets({
   const initialDrainBlockers = await drainUserData(drainUserDataEvents)
   throwIfShutdownAborted(signal)
   let snapshot = engine.getShutdownSafetySnapshot()
+  let safetyPassCount = 0
 
   while (true) {
+    if (safetyPassCount >= MAX_CONSERVATIVE_SHUTDOWN_SAFETY_PASSES) {
+      throwForUnsafeConservativeMarkets({
+        failedMarkets: createSafetyReevaluationLimitFailures({ snapshot }),
+      })
+    }
     throwIfShutdownAborted(signal)
+    safetyPassCount += 1
     snapshot = await secureUnsafeMarkets({
       engine,
       snapshot,
