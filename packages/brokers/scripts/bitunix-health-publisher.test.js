@@ -33,7 +33,10 @@ function createFakeGit({ repositoryRoot, failPush = false } = {}) {
     }
     return ""
   }
-  return { calls, runGit }
+  return {
+    calls,
+    runGit,
+  }
 }
 
 function createDiagnosticReport({ failed = 0 } = {}) {
@@ -78,7 +81,10 @@ test("publishes only a sanitized report from a fresh diagnostics branch and retu
       repositoryRoot,
       runGit,
       runDiagnostics: async () => createDiagnosticReport(),
-      env: { BITUNIX_API_KEY: apiKey, BITUNIX_API_SECRET: apiSecret },
+      env: {
+        BITUNIX_API_KEY: apiKey,
+        BITUNIX_API_SECRET: apiSecret,
+      },
       now: () => fixedTimestamp,
     })
 
@@ -102,7 +108,10 @@ test("publishes only a sanitized report from a fresh diagnostics branch and retu
     assert.equal(result.reportPath.endsWith("bitunix-health-20261119T083000000Z.json"), true, "the result must identify the report path to inspect")
     assert.equal(result.localReportPath.endsWith(".diagnostics/bitunix-health-20261119T083000000Z.json"), true, "the full local diagnostic artifact must stay in the ignored diagnostics directory")
   } finally {
-    await rm(repositoryRoot, { recursive: true, force: true })
+    await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -131,7 +140,10 @@ test("rejects a dirty worktree before fetching, creating a branch or contacting 
     )
     assert.equal(calls.some((args) => args[0] === "fetch"), false, "a dirty worktree must be rejected before network or branch operations")
   } finally {
-    await rm(repositoryRoot, { recursive: true, force: true })
+    await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -160,13 +172,19 @@ test("rejects a starting branch other than develop before contacting Bitunix", a
     )
     assert.equal(calls.some((args) => args[0] === "fetch"), false, "a non-develop starting branch must be rejected before any remote operation")
   } finally {
-    await rm(repositoryRoot, { recursive: true, force: true })
+    await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
 test("push failure still switches the local checkout back to develop", async () => {
   const repositoryRoot = await createRepositoryDirectory()
-  const { calls, runGit } = createFakeGit({ repositoryRoot, failPush: true })
+  const { calls, runGit } = createFakeGit({
+    repositoryRoot,
+    failPush: true,
+  })
   try {
     const result = await publishBitunixDiagnostics({
       repositoryRoot,
@@ -180,7 +198,10 @@ test("push failure still switches the local checkout back to develop", async () 
     assert.match(result.pushError, /simulated push failure/, "the push failure must remain visible for troubleshooting")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "a failed push must not leave the user's checkout on the report branch")
   } finally {
-    await rm(repositoryRoot, { recursive: true, force: true })
+    await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -200,7 +221,10 @@ test("publishes failed API diagnostics and returns a failing exit code after cle
     assert.equal(result.report.summary.failed, 1, "the pushed report must preserve the failed Bitunix operation")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "failed API diagnostics must still return the checkout to develop")
   } finally {
-    await rm(repositoryRoot, { recursive: true, force: true })
+    await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -228,6 +252,9 @@ test("publishes a sanitized failure report when the diagnostic runner throws", a
     assert.equal(calls.some((args) => args[0] === "push"), true, "a sanitized failure report must still be pushed when Git operations succeed")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "a thrown diagnostic exception must still return the checkout to develop")
   } finally {
-    await rm(repositoryRoot, { recursive: true, force: true })
+    await rm(repositoryRoot, {
+      recursive: true,
+      force: true,
+    })
   }
 })
