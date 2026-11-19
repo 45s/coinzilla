@@ -49,12 +49,13 @@ function serializeJsonValue({ value, ancestors }) {
       ancestors,
     })
   } else if (Array.isArray(value)) {
-    const entries = Array.from({ length: value.length }, (_, index) => (
-      serializeJsonValue({
+    const entries = []
+    for (let index = 0; index < value.length; index += 1) {
+      entries.push(serializeJsonValue({
         value: value[index],
         ancestors,
-      }) ?? "null"
-    ))
+      }) ?? "null")
+    }
     serialized = `[${entries.join(",")}]`
   } else {
     const entries = []
