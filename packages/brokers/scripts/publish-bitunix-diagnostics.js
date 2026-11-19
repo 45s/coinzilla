@@ -1,5 +1,6 @@
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import { BitunixRestClient } from "../src/infrastructure/bitunix/api/rest-client.js"
 import { runBitunixDiagnostics } from "./diagnostic-runner.js"
 import { sanitizeDiagnosticError } from "./diagnostics.js"
 import { publishBitunixDiagnostics } from "./health-publisher.js"
@@ -49,6 +50,7 @@ async function main() {
     runDiagnostics: ({ env, onProgress }) => runBitunixDiagnostics({
       env,
       onProgress,
+      brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     }),
     env: process.env,
     onProgress: ({ message }) => process.stdout.write(`${message}\n`),
