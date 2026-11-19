@@ -381,6 +381,30 @@ function createRecoverySellerWorkflowState({
   return state
 }
 
+function createRecoverySellerAccountingOperations({
+  state,
+  onOperationalStateExecutionFill,
+} = {}) {
+  return {
+    applyBuyFill: createSerializedWorkflowOperation({
+      state,
+      transition: ({ state: currentState, fill }) => applyRecoverySellerBuyFillTransition({
+        state: currentState,
+        fill,
+        onOperationalStateExecutionFill,
+      }),
+    }),
+    reconcileTerminalMixedSell: createSerializedWorkflowOperation({
+      state,
+      transition: reconcileTerminalMixedSellTransition,
+    }),
+    initializeLegacyPositions: createSerializedWorkflowOperation({
+      state,
+      transition: initializeLegacyPositionsTransition,
+    }),
+  }
+}
+
 export function createRecoverySellerAccountingWorkflow({
   initialPortfolio,
   initialOrderRegistry,
@@ -401,28 +425,14 @@ export function createRecoverySellerAccountingWorkflow({
     initialLegacyPositions,
   })
 
-  const applyBuyFill = createSerializedWorkflowOperation({
+  const operations = createRecoverySellerAccountingOperations({
     state,
-    transition: ({ state: currentState, fill }) => applyRecoverySellerBuyFillTransition({
-      state: currentState,
-      fill,
-      onOperationalStateExecutionFill,
-    }),
-  })
-  const reconcileTerminalMixedSell = createSerializedWorkflowOperation({
-    state,
-    transition: reconcileTerminalMixedSellTransition,
-  })
-  const initializeLegacyPositions = createSerializedWorkflowOperation({
-    state,
-    transition: initializeLegacyPositionsTransition,
+    onOperationalStateExecutionFill,
   })
 
   return Object.freeze({
-    applyBuyFill,
-    initializeLegacyPositions,
+    ...operations,
     getExecutionCallbacks: () => createRecoverySellerExecutionCallbacks({ state }),
-    reconcileTerminalMixedSell,
     getPortfolio: () => state.portfolio,
     getOrderRegistry: () => state.orderRegistry,
     getActiveOrders: () => state.orderRegistry.getActiveOrders(),

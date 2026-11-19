@@ -370,6 +370,26 @@ export function logOrderAllocation({ dependencies, context, balances, allocation
  * @param {object} input Strategy, Portfolio, market, active orders and actions.
  * @returns {object} Allocation result with the exact balance context used.
  */
+function validateStrategyOrderCommitmentInput({
+  dependencies,
+  strategyId,
+  symbol,
+  metadata,
+  portfolio,
+  activeOrders,
+  pairConfig,
+  actions,
+} = {}) {
+  ensure.object({ value: dependencies, name: "dependencies" })
+  ensure.nonEmptyString({ value: strategyId, name: "strategyId" })
+  ensure.nonEmptyString({ value: symbol, name: "symbol" })
+  ensure.object({ value: metadata, name: "metadata" })
+  ensure.object({ value: portfolio, name: "portfolio" })
+  ensure.array({ value: activeOrders, name: "activeOrders" })
+  ensure.object({ value: pairConfig, name: "pairConfig" })
+  ensure.array({ value: actions, name: "actions" })
+}
+
 export function allocateStrategyOrderCommitments({
   dependencies,
   strategyId,
@@ -384,37 +404,15 @@ export function allocateStrategyOrderCommitments({
   actions,
 } = {}) {
   try {
-    ensure.object({
-      value: dependencies,
-      name: "dependencies",
-    })
-    ensure.nonEmptyString({
-      value: strategyId,
-      name: "strategyId",
-    })
-    ensure.nonEmptyString({
-      value: symbol,
-      name: "symbol",
-    })
-    ensure.object({
-      value: metadata,
-      name: "metadata",
-    })
-    ensure.object({
-      value: portfolio,
-      name: "portfolio",
-    })
-    ensure.array({
-      value: activeOrders,
-      name: "activeOrders",
-    })
-    ensure.object({
-      value: pairConfig,
-      name: "pairConfig",
-    })
-    ensure.array({
-      value: actions,
-      name: "actions",
+    validateStrategyOrderCommitmentInput({
+      dependencies,
+      strategyId,
+      symbol,
+      metadata,
+      portfolio,
+      activeOrders,
+      pairConfig,
+      actions,
     })
     const strategyDependencies = {
       ...dependencies,
