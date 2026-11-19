@@ -67,21 +67,24 @@ test("latches durable STOP with the original client and broker order identity", 
   assert.equal(latchCalls[0].explanation.includes("sensitive provider diagnostic"), false)
 })
 
-test("fails closed when an unresolved submission has no original client order id", async () => {
-  const { workflow } = createStopWorkflow()
+test("latches global STOP when an unresolved submission has no original client order id", async () => {
+  const { workflow, latchCalls } = createStopWorkflow()
   const callbacks = createRecoverySellerStopCallbacks({
     stopWorkflow: workflow,
   })
 
-  await assert.rejects(
-    callbacks.onUnresolvedSubmission({
-      order: {
-        side: "BUY",
-      },
-      outcome: "UNKNOWN",
-    }),
-    /requires the original clientOrderId/,
-  )
+  const result = await callbacks.onUnresolvedSubmission({
+    order: {
+      side: "BUY",
+    },
+    outcome: "UNKNOWN",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.data.durable, true)
+  assert.equal(callbacks.canSubmit(), false)
+  assert.equal(latchCalls[0].orderIdentity, undefined)
+  assert.match(latchCalls[0].explanation, /missing the original clientOrderId/)
 })
 
 test("latches STOP for local order validation failures", async () => {
