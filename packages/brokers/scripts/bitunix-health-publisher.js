@@ -49,11 +49,15 @@ function validatePrivateCredentials({ env }) {
   }
 }
 
-async function executeGitCommand({ repositoryRoot, args }) {
-  const gitEnv = Object.fromEntries(
-    Object.entries(process.env).filter(([name]) =>
+export function createGitEnvironment({ env = process.env } = {}) {
+  return Object.fromEntries(
+    Object.entries(env).filter(([name]) =>
       name !== "BITUNIX_API_KEY" && name !== "BITUNIX_API_SECRET"),
   )
+}
+
+async function executeGitCommand({ repositoryRoot, args }) {
+  const gitEnv = createGitEnvironment({ env: process.env })
   const { stdout } = await execFileAsync("git", args, {
     cwd: repositoryRoot,
     encoding: "utf8",
