@@ -1,5 +1,5 @@
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { addDecimal, assertDecimalString, compareDecimal, ensure, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, ensure, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
@@ -10,7 +10,6 @@ import {
   createLegacyPositionMap,
   initializeLegacyPositionsTransition,
   getLegacyPositionRecord,
-  createLegacySpotPositions,
   createAdditionalTrackedQuoteCashFlow,
   createAdditionalTrackedBaseQuantity,
 } from "../domain/strategies/recovery-seller/legacy-accounting-state.js"

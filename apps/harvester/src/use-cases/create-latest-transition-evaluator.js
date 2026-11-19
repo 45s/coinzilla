@@ -3,7 +3,6 @@ import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { completeDustRecoveryIfNeeded } from "./complete-conservative-dust-recovery.js"
 import {
   allocateEvaluationActions,
-  allocateStrategyOrderCommitments,
   getPortfolioBalanceContext,
   logOrderAllocation,
 } from "./strategy-order-commitments.js"

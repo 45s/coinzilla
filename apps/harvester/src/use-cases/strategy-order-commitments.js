@@ -1,8 +1,5 @@
 import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, multiplyDecimal, maxDecimal, ensure, toResult } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
-import { HARVESTER_EVENT_NAMES } from "../application/events/event-names.js"
-import { mapStrategyDecisionData } from "../application/events/lifecycle-event-dtos.js"
-import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 
 function sumDecimalValues({ items, getValue } = {}) {
   let total = "0"
@@ -387,9 +384,38 @@ export function allocateStrategyOrderCommitments({
   actions,
 } = {}) {
   try {
-    ensure.object({ value: dependencies, name: "dependencies" })
-    ensure.nonEmptyString({ value: strategyId, name: "strategyId" })
-    ensure.nonEmptyString({ value: symbol, name: "symbol" })
+    ensure.object({
+      value: dependencies,
+      name: "dependencies",
+    })
+    ensure.nonEmptyString({
+      value: strategyId,
+      name: "strategyId",
+    })
+    ensure.nonEmptyString({
+      value: symbol,
+      name: "symbol",
+    })
+    ensure.object({
+      value: metadata,
+      name: "metadata",
+    })
+    ensure.object({
+      value: portfolio,
+      name: "portfolio",
+    })
+    ensure.array({
+      value: activeOrders,
+      name: "activeOrders",
+    })
+    ensure.object({
+      value: pairConfig,
+      name: "pairConfig",
+    })
+    ensure.array({
+      value: actions,
+      name: "actions",
+    })
     const strategyDependencies = {
       ...dependencies,
       strategyId,
