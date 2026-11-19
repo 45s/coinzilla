@@ -161,27 +161,40 @@ function withholdFreeFormErrorMessages({ value }) {
 }
 
 function createPublishedReport({ report }) {
+  // Public reports use an allowlist, not recursive redaction. No request or
+  // response payload, arbitrary error text, account identifier, or amount is
+  // eligible for publication.
   return {
-    ...report,
-    results: report.results.map((result) => {
-      if (!result.error) {
-        return result
-      }
-      const error = {
-        ...result.error,
-        message: "[error message withheld from public report]",
-      }
-      if (error.cause) {
-        error.cause = {
-          ...error.cause,
-          message: "[nested error message withheld from public report]",
-        }
-      }
-      return {
-        ...result,
-        error,
-      }
-    }),
+    schemaVersion: report.schemaVersion,
+    startedAt: report.startedAt,
+    finishedAt: report.finishedAt,
+    runtime: {
+      node: report.runtime?.node ?? null,
+      platform: report.runtime?.platform ?? null,
+    },
+    summary: {
+      total: report.summary.total,
+      passed: report.summary.passed,
+      failed: report.summary.failed,
+      skipped: report.summary.skipped,
+    },
+    healthCheck: {
+      requiredOperations: report.healthCheck.requiredOperations,
+      missingRequiredOperations: report.healthCheck.missingRequiredOperations,
+      healthy: report.healthCheck.healthy,
+    },
+    results: report.results.map((result) => ({
+      operation: result.operation,
+      status: result.status,
+      durationMs: result.durationMs ?? null,
+      ...(result.error ? {
+        error: Object.fromEntries(
+          ["name", "code", "kind", "status", "exchangeCode"]
+            .filter((field) => result.error[field] !== undefined && result.error[field] !== null)
+            .map((field) => [field, result.error[field]]),
+        ),
+      } : {}),
+    })),
   }
 }
 
