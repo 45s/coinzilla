@@ -1449,7 +1449,6 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
 - Required CI must pass on the exact final PR head before this item is marked complete.
 
-
 ## 2026-11-19 — Explicit Bitunix REST mutation classification (#1523)
 
 - [x] Require every REST POST call to declare `stateChanging: true` or `stateChanging: false`; do not silently default a POST to read-only.
