@@ -363,7 +363,7 @@ test("keeps recovery-input failures separate from owned order and fill reconcili
       return {
         ok: false,
         errors: [Object.assign(
-          new Error("Shutdown recovery price is unavailable"),
+          new Error("Shutdown recovery price is unavailable: STALE_MARKET_PRICE"),
           {
             code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
           },
@@ -520,7 +520,7 @@ test("waits for a fresh market-price event before retrying shutdown recovery inp
       return {
         ok: false,
         errors: [Object.assign(
-          new Error("Shutdown recovery price is stale"),
+          new Error("Shutdown recovery price is stale: STALE_MARKET_PRICE"),
           {
             code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
             reason: "STALE_MARKET_PRICE",
@@ -562,7 +562,7 @@ test("keeps shutdown unsafe with an explicit blocker when fresh market price doe
       return {
         ok: false,
         errors: [Object.assign(
-          new Error("Shutdown recovery price is stale"),
+          new Error("Shutdown recovery price is stale: STALE_MARKET_PRICE"),
           {
             code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
             reason: "STALE_MARKET_PRICE",
@@ -623,7 +623,7 @@ test("rechecks recovery safety when the refreshed price becomes stale before rec
       return {
         ok: false,
         errors: [Object.assign(
-          new Error("Shutdown recovery price is stale"),
+          new Error("Shutdown recovery price is stale: STALE_MARKET_PRICE"),
           {
             code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
           },
@@ -669,15 +669,14 @@ test("rechecks recovery safety when the refreshed price becomes stale before rec
   assert.equal(refreshAttempts, 1, "A market may receive only one bounded refresh wait per safety attempt.")
 })
 
-test("re-audits previously safe markers when the initial user-data drain fails", async () => {
-  const calls = []
+function createPreviouslySafeDrainFailureEngine({ calls } = {}) {
   const market = {
     symbol: "DOGEUSDT",
     status: "SAFE_TO_SHUTDOWN",
     blockers: [],
     revision: 0,
   }
-  const engine = {
+  return {
     beginShutdown() {
       calls.push("buy-gate")
       return { ok: true }
@@ -695,10 +694,16 @@ test("re-audits previously safe markers when the initial user-data drain fails",
       return { ok: true }
     },
     async auditShutdownRecoverySellCoverage() {
-      return { ok: true, data: { covered: true, findings: [] } }
+      return {
+        ok: true,
+        data: {
+          covered: true,
+          findings: [],
+        },
+      }
     },
     async auditShutdownSafety({ symbol, reconciliationComplete, externalBlockers }) {
-      calls.push("audit:" + symbol)
+      calls.push(`audit:${symbol}`)
       const blockers = [...externalBlockers]
       if (!reconciliationComplete) {
         blockers.push("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE")
@@ -721,10 +726,16 @@ test("re-audits previously safe markers when the initial user-data drain fails",
       }
     },
   }
-  const participant = createConservativeShutdownParticipant({
+}
+
+function createInitialDrainFailureParticipant({ engine } = {}) {
+  return createConservativeShutdownParticipant({
     engine,
     eventPublisher: {
-      flush: async () => ({ ok: true, durable: true }),
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
     },
     drainUserDataEvents: async () => ({
       ok: false,
@@ -740,6 +751,12 @@ test("re-audits previously safe markers when the initial user-data drain fails",
       error() {},
     },
   })
+}
+
+test("re-audits previously safe markers when the initial user-data drain fails", async () => {
+  const calls = []
+  const engine = createPreviouslySafeDrainFailureEngine({ calls })
+  const participant = createInitialDrainFailureParticipant({ engine })
 
   participant.beginShutdown()
   await assert.rejects(
@@ -755,6 +772,8 @@ test("re-audits previously safe markers when the initial user-data drain fails",
     },
     "A previously safe marker cannot bypass a failed initial user-data drain.",
   )
-  assert.ok(calls.includes("audit:DOGEUSDT"), "The shared drain failure must force every enabled market through the safety audit.")
+  assert.ok(
+    calls.includes("audit:DOGEUSDT"),
+    "The shared drain failure must force every enabled market through the safety audit.",
+  )
 })
-
