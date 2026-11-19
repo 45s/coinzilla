@@ -1243,7 +1243,7 @@ export class BitunixSpotBroker extends CoreBroker {
 
   /**
    * Submit an internal Bitunix user-to-user transfer by UID, phone, or email.
-   * UID routing accepts only safe JavaScript integers; use phone/email for larger IDs.
+   * UID routing preserves positive signed int64 IDs as exact JSON integer tokens without JavaScript Number rounding.
    * An optional outBizId is passed through as the exchange idempotency key.
    *
    * Requires allowLiveFundsMutations: true. No automatic retry is performed.
