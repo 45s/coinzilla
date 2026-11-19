@@ -364,6 +364,7 @@ function normalizeErrorCode({ code }) {
   return null
 }
 
+/** Keep this in sync with the common Broker mutation HTTP status contract. */
 function isAmbiguousMutationHttpStatus({ status }) {
   return status === 408 || status === 409 || status >= 500
 }
