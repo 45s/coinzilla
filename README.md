@@ -78,7 +78,7 @@ Store `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` in `packages/brokers/.env.devel
 
 ```sh
 cd packages/brokers
-pnpm diagnose:bitunix:publish
+node scripts/bitunix-healthcheck.js
 ```
 
 The command must start from a clean `develop` checkout. It creates and pushes a timestamped report-only branch, then returns the local checkout to `develop`. Only sanitized diagnostics are committed; credentials and account values remain local. It does not place/cancel orders or perform withdrawals/transfers. See the [Brokers README](packages/brokers/README.md) for permissions, report contents, and failure behavior.
