@@ -541,3 +541,147 @@ export function adaptFuturesCopyTradingAssets(data) {
     path: "copyTrading/asset/query",
   })
 }
+
+
+function adaptMutationOrderIdentity({ record, path }) {
+  requireRecord({
+    value: record,
+    field: path,
+  })
+  const orderId = record.orderId ?? record.id
+  if (typeof orderId !== "string" || !orderId) {
+    throw new TypeError("Bitunix Futures mutation response must include orderId or id")
+  }
+  return Object.freeze({
+    ...record,
+    orderId,
+  })
+}
+
+function adaptMutationOrderList({ data, field, path, required }) {
+  const rows = requireArray({
+    value: data[field],
+    field: path + "." + field,
+  })
+  const items = []
+  for (let index = 0; index < rows.length; index += 1) {
+    const record = rows[index]
+    if (required) {
+      items.push(adaptMutationOrderIdentity({
+        record,
+        path: path + "." + field + "[" + index + "]",
+      }))
+    } else {
+      requireRecord({
+        value: record,
+        field: path + "." + field + "[" + index + "]",
+      })
+      items.push(Object.freeze({ ...record }))
+    }
+  }
+  return Object.freeze(items)
+}
+
+export function adaptFuturesPlaceOrder(data) {
+  return validateRecord({
+    record: data,
+    path: "trade/place_order",
+    strings: ["orderId", "clientId"],
+  })
+}
+
+export function adaptFuturesBatchOrder(data) {
+  requireRecord({
+    value: data,
+    field: "trade/batch_order",
+  })
+  return Object.freeze({
+    successList: adaptMutationOrderList({
+      data,
+      field: "successList",
+      path: "trade/batch_order",
+      required: true,
+    }),
+    failureList: adaptMutationOrderList({
+      data,
+      field: "failureList",
+      path: "trade/batch_order",
+      required: false,
+    }),
+  })
+}
+
+export function adaptFuturesCancelOrders(data) {
+  requireRecord({
+    value: data,
+    field: "trade/cancel_orders",
+  })
+  return Object.freeze({
+    successList: adaptMutationOrderList({
+      data,
+      field: "successList",
+      path: "trade/cancel_orders",
+      required: true,
+    }),
+    failureList: adaptMutationOrderList({
+      data,
+      field: "failureList",
+      path: "trade/cancel_orders",
+      required: false,
+    }),
+  })
+}
+
+export function adaptFuturesChangeLeverage(data) {
+  return adaptRows({
+    data,
+    spec: {
+      strings: ["symbol", "marginCoin"],
+      integers: ["leverage"],
+    },
+    path: "account/change_leverage",
+  })
+}
+
+export function adaptFuturesChangeMarginMode(data) {
+  return validateRecord({
+    record: data,
+    path: "account/change_margin_mode",
+    strings: ["symbol", "marginCoin", "marginMode"],
+  })
+}
+
+export function adaptFuturesChangePositionMode(data) {
+  return adaptRows({
+    data,
+    spec: {
+      strings: ["positionMode"],
+    },
+    path: "account/change_position_mode",
+  })
+}
+
+export function adaptFuturesFlashClosePosition(data) {
+  return validateRecord({
+    record: data,
+    path: "trade/flash_close_position",
+    strings: ["positionId"],
+  })
+}
+
+export function adaptFuturesTpSlMutation(data) {
+  return validateRecord({
+    record: data,
+    path: "tpsl/mutation",
+    strings: ["orderId"],
+  })
+}
+
+export function adaptFuturesEmptyMutation(data) {
+  if (data !== "") {
+    throw new TypeError("Bitunix Futures mutation response must contain an empty data string")
+  }
+  return Object.freeze({
+    accepted: true,
+  })
+}
