@@ -76,7 +76,7 @@ export function resolveErrorMessage({ errMsg }) {
 /**
  * Read value and diagnostic name from a one-argument options object.
  * @param {{ options: unknown }} options
- * @returns {{ value: unknown, name: string, record: object }}
+ * @returns {{ value: unknown, name: string, errMsg?: string, record: object }}
  */
 export function readValueOptions({ options }) {
   const record = readOptions({ options })
