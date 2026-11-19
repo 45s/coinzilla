@@ -20,6 +20,8 @@ Treat the user-named target as the default scope boundary. Do not expand into ad
 
 ## 2. Understand before changing
 
+These audit and refactoring principles apply across languages, frameworks, application types and repository layouts. Follow the applicable language/toolchain and domain standards for implementation-specific details; do not copy one stack's conventions into unrelated code.
+
 - Read the relevant implementation and its callers; do not infer behavior from filenames, comments, types, or tests alone.
 - Establish the current behavior from source, tests, contracts, and observable interfaces.
 - Identify public exports, signatures, defaults, return shapes, error semantics, ordering, timing, persistence, and side effects.
@@ -94,7 +96,24 @@ The [Modularity Standard](MODULARITY_STANDARD.md) is authoritative for extractio
 
 See the [JavaScript and JSDoc Standard](JAVASCRIPT_JSDOC_STANDARD.md) and [Engineering Standards](../../ENGINEERING_STANDARDS.md) for the authoritative details.
 
-## 8. Audit findings must be actionable
+## 8. Audit coverage, evidence and prioritization
+
+A useful audit examines the system as it actually operates, not just source-code appearance. Select the relevant areas for the authorized scope; do not turn this list into a requirement to inspect unrelated subsystems.
+
+- **Architecture and boundaries:** responsibilities, dependency direction, coupling, cohesion, cycles, ownership, public contracts and unnecessary layers.
+- **Correctness and reliability:** invariants, state/lifecycle handling, failure paths, concurrency, idempotency, resource cleanup and error propagation.
+- **Maintainability:** duplicated rules, oversized or multi-responsibility modules, unclear naming, dead code, hidden side effects, excessive indirection and documentation drift.
+- **Testing and quality controls:** meaningful coverage, missing regression cases, flaky or slow tests, lint/static-analysis findings, build/type-check failures and CI gaps.
+- **Performance and bottlenecks:** expensive algorithms, repeated work, blocking I/O, excess allocations, unbounded queues or resource use, contention and avoidable network/storage operations where relevant.
+- **Security and operations:** trust boundaries, authorization, secret exposure, dependency risk, observability, deployment/configuration and operational failure modes.
+
+Do not call a component a performance bottleneck based only on file size, code complexity, intuition or a single anecdotal observation. Support performance claims with a reproducible workload, profiling/benchmark/trace evidence, or clearly label them as hypotheses and state what measurement is needed. Do not optimize without a concrete workload or correctness-preserving reason.
+
+Prioritize findings in this order unless the actual risk justifies otherwise: correctness, security and data integrity; production reliability and compatibility; measured performance/resource constraints; testability and maintainability; then optional style or cleanup. A lint warning or size threshold is evidence to inspect, not proof of a defect by itself.
+
+For each finding, record a disposition: fix in this task, create/link a focused follow-up, accept with rationale, or reject as unsupported/not worth the cost. Do not leave a broad audit as an undifferentiated wish list. Keep implementation scope aligned with the user's request: an audit-only task produces a report; an audit-and-refactor task implements justified, authorized findings in the same task branch and PR.
+
+## 9. Audit findings must be actionable
 
 For every confirmed finding, record:
 
