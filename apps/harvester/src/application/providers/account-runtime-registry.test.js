@@ -105,7 +105,7 @@ test("shares one account Portfolio, OrderRegistry, and serialized queue across C
   assert.equal(conservative.getPortfolio(), accountRuntime.state.portfolio)
   assert.equal(recoverySeller.getPortfolio(), accountRuntime.state.portfolio)
   assert.equal(recoverySeller.getOrderRegistry(), accountRuntime.state.orderRegistry)
-  assert.equal(accountRuntime.state.legacyPositions, accountRuntime.state.legacyPositions)
+  assert.equal(accountRuntime.state.legacyPositions instanceof Map, true)
 
   const queuedTransition = Promise.resolve()
   accountRuntime.state.updateQueue = queuedTransition
