@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { Asset, CanonicalOrder, Commission, Fill, Market, Money, Quantity } from "@coinzilla/entities"
-import { addDecimal } from "@coinzilla/utils"
+import { addDecimal, subtractDecimal } from "@coinzilla/utils"
 import { StrategyId } from "../strategy-ids.js"
 import { createOrderOwnership } from "../../orders/order-ownership.js"
 import { OrderRegistry } from "../../orders/order-registry.js"
@@ -132,8 +132,13 @@ function makeOwnership(overrides = {}) {
 function makeInput(overrides = {}) {
   const fill = overrides.fill ?? makeFill()
   const order = overrides.order ?? makeOrder()
-  const recoveryQuantity = overrides.recoveryQuantity ?? "5"
-  const legacyQuantity = overrides.legacyQuantity ?? "0.01"
+  const orderQuantity = order.originalQuantity.amount
+  const legacyQuantity = overrides.legacyQuantity ??
+    (orderQuantity === "5.01" ? "0.01" : "0")
+  const recoveryQuantity = overrides.recoveryQuantity ?? subtractDecimal({
+    left: orderQuantity,
+    right: legacyQuantity,
+  })
   const ownership = overrides.ownership ?? makeOwnership({
     sellAllocation: {
       recoverySellQuantity: recoveryQuantity,
@@ -252,7 +257,12 @@ test("supports a recovery-only SELL after legacy quantity is exhausted", () => {
   })
   const orderRegistry = new OrderRegistry({
     orders: [order],
-    ownerships: [makeOwnership()],
+    ownerships: [makeOwnership({
+      sellAllocation: {
+        recoverySellQuantity: "5",
+        legacySellQuantity: "0",
+      },
+    })],
   })
   const allocation = createMixedSellFillAllocation({
     fill,
