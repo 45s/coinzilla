@@ -46,7 +46,7 @@ function requireDecimal({ value, field, order } = {}) {
       field,
     })
   } catch (cause) {
-    invalidField({
+    return invalidField({
       field,
       order,
       cause,
@@ -267,29 +267,7 @@ export function createOrderHistoryId(input = {}) {
   ])
 }
 
-/**
- * Map a canonical order lifecycle event into one durable order-history snapshot.
- * Returns null for orders whose cumulative executed quantity is still zero.
- *
- * @param {{order: object, sourceEvent: object, environment: string}} input
- * @returns {object|null}
- * @throws {OrderHistoryValidationError} When filled-order evidence is incomplete or inconsistent.
- */
-export function createOrderHistoryRecord({
-  order,
-  sourceEvent,
-  environment,
-} = {}) {
-  if (!isRecord(order)) {
-    invalidField({
-      field: "order",
-    })
-  }
-  const status = requireString({
-    value: order.status,
-    field: "status",
-    order,
-  })
+function mapExecutionQuantities({ order, status } = {}) {
   const executedQuantity = requireNonNegativeDecimal({
     value: order.executedQuantity,
     field: "executedQuantity",
@@ -299,7 +277,6 @@ export function createOrderHistoryRecord({
     left: executedQuantity,
     right: "0",
   }) > 0
-
   if (!hasExecution) {
     if (["PARTIALLY_FILLED", "FILLED"].includes(status)) {
       invalidField({
@@ -309,7 +286,6 @@ export function createOrderHistoryRecord({
     }
     return null
   }
-
   const originalQuantity = requireNonNegativeDecimal({
     value: order.originalQuantity ?? order.quantity,
     field: "originalQuantity",
@@ -320,7 +296,7 @@ export function createOrderHistoryRecord({
     field: "remainingQuantity",
     order,
   })
-  if (
+  const quantitiesAreInconsistent =
     compareDecimal({
       left: originalQuantity,
       right: "0",
@@ -336,7 +312,7 @@ export function createOrderHistoryRecord({
       }),
       right: originalQuantity,
     }) !== 0
-  ) {
+  if (quantitiesAreInconsistent) {
     invalidField({
       field: "executionQuantities",
       order,
@@ -366,7 +342,143 @@ export function createOrderHistoryRecord({
       order,
     })
   }
+  return {
+    originalQuantity,
+    executedQuantity,
+    remainingQuantity,
+  }
+}
 
+function mapOptionalOrderHistoryFields({ order, record } = {}) {
+  if (order.brokerOrderId !== undefined) {
+    record.brokerOrderId = requireString({
+      value: order.brokerOrderId,
+      field: "brokerOrderId",
+      order,
+    })
+  }
+  if (order.price !== undefined) {
+    record.price = requireNonNegativeDecimal({
+      value: order.price,
+      field: "price",
+      order,
+    })
+  }
+  if (order.ownership !== undefined) {
+    record.ownership = mapOwnership({
+      ownership: order.ownership,
+      order,
+    })
+  }
+  Object.assign(record, mapOptionalTimestamps({ order }))
+  if (order.cumulativeQuoteQuantity !== undefined) {
+    record.cumulativeQuoteQuantity = requireNonNegativeDecimal({
+      value: order.cumulativeQuoteQuantity,
+      field: "cumulativeQuoteQuantity",
+      order,
+    })
+  }
+  if (order.brokerTransactionTime !== undefined) {
+    record.brokerTransactionTime = requireTimestamp({
+      value: order.brokerTransactionTime,
+      field: "brokerTransactionTime",
+      order,
+    })
+  }
+  if (order.executionType !== undefined) {
+    record.lastExecutionType = requireString({
+      value: order.executionType,
+      field: "executionType",
+      order,
+    })
+  }
+}
+
+function createBaseOrderHistoryRecord({
+  environment,
+  providerInstanceId,
+  providerType,
+  accountId,
+  clientOrderId,
+  market,
+  symbol,
+  order,
+  source,
+  quantities,
+} = {}) {
+  return {
+    id: createOrderHistoryId({
+      environment,
+      providerInstanceId,
+      providerType,
+      accountId,
+      clientOrderId,
+    }),
+    schemaVersion: 1,
+    recordKind: "harvester.order-history",
+    environment,
+    providerInstanceId,
+    providerType,
+    accountId,
+    clientOrderId,
+    market,
+    symbol,
+    side: requireString({
+      value: order.side,
+      field: "side",
+      order,
+    }),
+    type: requireString({
+      value: order.type,
+      field: "type",
+      order,
+    }),
+    ...quantities,
+    status: requireString({
+      value: order.status,
+      field: "status",
+      order,
+    }),
+    firstSeenAt: source.timestamp,
+    lastSeenAt: source.timestamp,
+    firstSourceEventId: source.id,
+    lastSourceEventId: source.id,
+    lastSourceEventName: source.name,
+    lastSourceEventSource: source.source,
+    lastSourceEventTimestamp: source.timestamp,
+  }
+}
+
+/**
+ * Map a canonical order lifecycle event into one durable order-history snapshot.
+ * Returns null for orders whose cumulative executed quantity is still zero.
+ *
+ * @param {{order: object, sourceEvent: object, environment: string}} input
+ * @returns {object|null}
+ * @throws {OrderHistoryValidationError} When filled-order evidence is incomplete or inconsistent.
+ */
+export function createOrderHistoryRecord({
+  order,
+  sourceEvent,
+  environment,
+} = {}) {
+  if (!isRecord(order)) {
+    invalidField({
+      field: "order",
+    })
+  }
+  const status = requireString({
+    value: order.status,
+    field: "status",
+    order,
+  })
+  const quantities = mapExecutionQuantities({
+    order,
+    status,
+  })
+  if (quantities === null) {
+    return null
+  }
   const mappedEnvironment = requireString({
     value: environment,
     field: "environment",
@@ -413,21 +525,11 @@ export function createOrderHistoryRecord({
       order,
     })
   }
-
   const source = mapSourceEvent({
     sourceEvent,
     order,
   })
-  const record = {
-    id: createOrderHistoryId({
-      environment: mappedEnvironment,
-      providerInstanceId,
-      providerType,
-      accountId,
-      clientOrderId,
-    }),
-    schemaVersion: 1,
-    recordKind: "harvester.order-history",
+  const record = createBaseOrderHistoryRecord({
     environment: mappedEnvironment,
     providerInstanceId,
     providerType,
@@ -435,71 +537,13 @@ export function createOrderHistoryRecord({
     clientOrderId,
     market,
     symbol,
-    side: requireString({
-      value: order.side,
-      field: "side",
-      order,
-    }),
-    type: requireString({
-      value: order.type,
-      field: "type",
-      order,
-    }),
-    originalQuantity,
-    executedQuantity,
-    remainingQuantity,
-    status,
-    firstSeenAt: source.timestamp,
-    lastSeenAt: source.timestamp,
-    firstSourceEventId: source.id,
-    lastSourceEventId: source.id,
-    lastSourceEventName: source.name,
-    lastSourceEventSource: source.source,
-    lastSourceEventTimestamp: source.timestamp,
-  }
-  if (order.brokerOrderId !== undefined) {
-    record.brokerOrderId = requireString({
-      value: order.brokerOrderId,
-      field: "brokerOrderId",
-      order,
-    })
-  }
-  if (order.price !== undefined) {
-    record.price = requireNonNegativeDecimal({
-      value: order.price,
-      field: "price",
-      order,
-    })
-  }
-  if (order.ownership !== undefined) {
-    record.ownership = mapOwnership({
-      ownership: order.ownership,
-      order,
-    })
-  }
-  for (const [field, value] of Object.entries(mapOptionalTimestamps({ order }))) {
-    record[field] = value
-  }
-  if (order.cumulativeQuoteQuantity !== undefined) {
-    record.cumulativeQuoteQuantity = requireNonNegativeDecimal({
-      value: order.cumulativeQuoteQuantity,
-      field: "cumulativeQuoteQuantity",
-      order,
-    })
-  }
-  if (order.brokerTransactionTime !== undefined) {
-    record.brokerTransactionTime = requireTimestamp({
-      value: order.brokerTransactionTime,
-      field: "brokerTransactionTime",
-      order,
-    })
-  }
-  if (order.executionType !== undefined) {
-    record.lastExecutionType = requireString({
-      value: order.executionType,
-      field: "executionType",
-      order,
-    })
-  }
+    order,
+    source,
+    quantities,
+  })
+  mapOptionalOrderHistoryFields({
+    order,
+    record,
+  })
   return Object.freeze(record)
 }

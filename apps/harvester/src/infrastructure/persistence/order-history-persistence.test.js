@@ -130,8 +130,20 @@ test("keeps TESTNET and LIVE order history in separate SQLite files", async (t) 
     "binance-primary",
     "harvester-BTCUSDT-001",
   ])
-  assert.ok(await testnet.database.readOne({ collection: "harvester_orders", id: testnetId }), "TESTNET order history must be stored in its own database.")
-  assert.ok(await live.database.readOne({ collection: "harvester_orders", id: liveId }), "LIVE order history must be stored in its own database and use a distinct environment identity.")
+  assert.ok(
+    await testnet.database.readOne({
+      collection: "harvester_orders",
+      id: testnetId,
+    }),
+    "TESTNET order history must be stored in its own database.",
+  )
+  assert.ok(
+    await live.database.readOne({
+      collection: "harvester_orders",
+      id: liveId,
+    }),
+    "LIVE order history must be stored in its own database and use a distinct environment identity.",
+  )
 })
 
 test("treats invalid optional persistence configuration as non-fatal", async () => {

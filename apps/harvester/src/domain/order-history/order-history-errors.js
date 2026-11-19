@@ -22,7 +22,7 @@ export class OrderHistoryValidationError extends SystemCustomError {
    * @param {{field: string, cause?: unknown, providerInstanceId?: string, accountId?: string, clientOrderId?: string}} options
    */
   constructor({ field, cause, providerInstanceId, accountId, clientOrderId } = {}) {
-    super("Invalid order-history field: " + field, {
+    super(`Invalid order-history field: ${field}`, {
       code: "HARVESTER_ORDER_HISTORY_RECORD_INVALID",
       context: createErrorContext({
         field,
@@ -42,7 +42,7 @@ export class OrderHistoryIntegrityError extends SystemCustomError {
    * @param {{field: string, cause?: unknown, providerInstanceId?: string, accountId?: string, clientOrderId?: string}} options
    */
   constructor({ field, cause, providerInstanceId, accountId, clientOrderId } = {}) {
-    super("Order-history integrity conflict: " + field, {
+    super(`Order-history integrity conflict: ${field}`, {
       code: "HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT",
       context: createErrorContext({
         field,

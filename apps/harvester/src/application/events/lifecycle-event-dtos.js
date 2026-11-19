@@ -610,35 +610,6 @@ export const mapOrderSubmissionRequestedData = (input = {}) =>
     }),
   })
 
-const requireOrderHistoryFacts = ({ order, ownership }) => {
-  if (!(order instanceof CanonicalOrder)) {
-    throw new TypeError("order must be a canonical Harvester order")
-  }
-  return {
-    ...requireExecutionOrderFacts({ order }),
-    type: requireString({ value: order.type, field: "order.type" }),
-    market: order.market.value,
-    originalQuantity: requireDecimalString({ value: order.originalQuantity.amount, field: "order.originalQuantity" }),
-    executedQuantity: requireDecimalString({ value: order.executedQuantity.amount, field: "order.executedQuantity" }),
-    remainingQuantity: requireDecimalString({ value: order.remainingQuantity.amount, field: "order.remainingQuantity" }),
-    ...(order.limitPrice === undefined ? {} : {
-      price: requireDecimalString({ value: order.limitPrice.amount, field: "order.limitPrice" }),
-    }),
-    ...(order.createdAt === undefined ? {} : { createdAt: requireNonNegativeSafeInteger({ value: order.createdAt, field: "order.createdAt" }) }),
-    ...(order.acknowledgedAt === undefined ? {} : { acknowledgedAt: requireNonNegativeSafeInteger({ value: order.acknowledgedAt, field: "order.acknowledgedAt" }) }),
-    ...(order.updatedAt === undefined ? {} : { updatedAt: requireNonNegativeSafeInteger({ value: order.updatedAt, field: "order.updatedAt" }) }),
-    ...(order.completedAt === undefined ? {} : { completedAt: requireNonNegativeSafeInteger({ value: order.completedAt, field: "order.completedAt" }) }),
-    ...(ownership === undefined ? {} : {
-      ownership: {
-        strategyId: requireString({ value: ownership.strategyId, field: "ownership.strategyId" }),
-        positionId: requireString({ value: ownership.positionId, field: "ownership.positionId" }),
-        purpose: requireString({ value: ownership.purpose, field: "ownership.purpose" }),
-        ...(ownership.cycleId === undefined ? {} : { cycleId: requireString({ value: ownership.cycleId, field: "ownership.cycleId" }) }),
-      },
-    }),
-  }
-}
-
 /** Map only a broker-acknowledged canonical order. */
 export const mapOrderSubmittedData = (input = {}) =>
   mapData({
@@ -648,8 +619,14 @@ export const mapOrderSubmittedData = (input = {}) =>
       ? requireOrderHistoryFacts({ order, ownership })
       : ({
         ...requireOrderFacts({ order }),
-        brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
-        status: requireString({ value: order.status, field: "order.status" }),
+        brokerOrderId: requireString({
+          value: order.brokerOrderId,
+          field: "brokerOrderId",
+        }),
+        status: requireString({
+          value: order.status,
+          field: "order.status",
+        }),
       }),
   })
 
@@ -726,13 +703,23 @@ export const mapOrderCancelledData = (input = {}) =>
     input,
     operation: "Order-cancelled event mapping",
     mapper: ({ order, ownership }) => {
-      if (order.status !== "CANCELED") {throw new TypeError("order.status must be CANCELED")}
-      if (order instanceof CanonicalOrder) return requireOrderHistoryFacts({ order, ownership })
+      if (order.status !== "CANCELED") {
+        throw new TypeError("order.status must be CANCELED")
+      }
+      if (order instanceof CanonicalOrder) {
+        return requireOrderHistoryFacts({ order, ownership })
+      }
       const facts = requireOrderFacts({ order })
       return {
         ...facts,
-        brokerOrderId: requireString({ value: order.brokerOrderId, field: "brokerOrderId" }),
-        executedQuantity: requireDecimalString({ value: order.executedQuantity?.amount, field: "executedQuantity" }),
+        brokerOrderId: requireString({
+          value: order.brokerOrderId,
+          field: "brokerOrderId",
+        }),
+        executedQuantity: requireDecimalString({
+          value: order.executedQuantity?.amount,
+          field: "executedQuantity",
+        }),
         status: "CANCELED",
       }
     },
@@ -750,14 +737,34 @@ export const mapOrderCancelFailedData = (input = {}) =>
       const facts = order instanceof CanonicalOrder
         ? requireOrderHistoryFacts({ order, ownership })
         : {
-          clientOrderId: requireString({ value: order?.clientOrderId, field: "clientOrderId" }),
-          ...mapProviderProvenance({ value: order, field: "order" }),
-          symbol: requireString({ value: order?.market?.symbol, field: "symbol" }),
-          side: order?.side === "BUY" || order?.side === "SELL" ? order.side : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
-          ...(typeof order?.brokerOrderId === "string" && order.brokerOrderId.trim() ? { brokerOrderId: order.brokerOrderId.trim() } : {}),
-          status: requireString({ value: order?.status, field: "order.status" }),
+          clientOrderId: requireString({
+            value: order?.clientOrderId,
+            field: "clientOrderId",
+          }),
+          ...mapProviderProvenance({
+            value: order,
+            field: "order",
+          }),
+          symbol: requireString({
+            value: order?.market?.symbol,
+            field: "symbol",
+          }),
+          side: order?.side === "BUY" || order?.side === "SELL"
+            ? order.side
+            : (() => { throw new TypeError("order.side must be BUY or SELL") })(),
+          ...(typeof order?.brokerOrderId === "string" && order.brokerOrderId.trim()
+            ? { brokerOrderId: order.brokerOrderId.trim() }
+            : {}),
+          status: requireString({
+            value: order?.status,
+            field: "order.status",
+          }),
         }
-      return { ...facts, outcome, ...(error === undefined ? {} : { error: safeError({ error }) }) }
+      return {
+        ...facts,
+        outcome,
+        ...(error === undefined ? {} : { error: safeError({ error }) }),
+      }
     },
   })
 
@@ -1001,6 +1008,72 @@ const requireExecutionOrderFacts = ({ order }) => {
       field: "status" }),
   }
 }
+
+
+function requireOrderHistoryFacts({ order, ownership }) {
+  if (!(order instanceof CanonicalOrder)) {
+    throw new TypeError("order must be a canonical Harvester order")
+  }
+  const facts = {
+    ...requireExecutionOrderFacts({ order }),
+    type: requireString({
+      value: order.type,
+      field: "order.type",
+    }),
+    market: order.market.value,
+    originalQuantity: requireDecimalString({
+      value: order.originalQuantity.amount,
+      field: "order.originalQuantity",
+    }),
+    executedQuantity: requireDecimalString({
+      value: order.executedQuantity.amount,
+      field: "order.executedQuantity",
+    }),
+    remainingQuantity: requireDecimalString({
+      value: order.remainingQuantity.amount,
+      field: "order.remainingQuantity",
+    }),
+  }
+  if (order.limitPrice !== undefined) {
+    facts.price = requireDecimalString({
+      value: order.limitPrice.amount,
+      field: "order.limitPrice",
+    })
+  }
+  const timestampFields = ["createdAt", "acknowledgedAt", "updatedAt", "completedAt"]
+  for (const field of timestampFields) {
+    if (order[field] !== undefined) {
+      facts[field] = requireNonNegativeSafeInteger({
+        value: order[field],
+        field,
+      })
+    }
+  }
+  if (ownership !== undefined) {
+    facts.ownership = {
+      strategyId: requireString({
+        value: ownership.strategyId,
+        field: "ownership.strategyId",
+      }),
+      positionId: requireString({
+        value: ownership.positionId,
+        field: "ownership.positionId",
+      }),
+      purpose: requireString({
+        value: ownership.purpose,
+        field: "ownership.purpose",
+      }),
+    }
+    if (ownership.cycleId !== undefined) {
+      facts.ownership.cycleId = requireString({
+        value: ownership.cycleId,
+        field: "ownership.cycleId",
+      })
+    }
+  }
+  return facts
+}
+
 
 const requireExecutionFillFacts = ({ fill }) => {
   if (!(fill instanceof Fill)) {throw new TypeError("fill must be a canonical Fill")}
@@ -1743,10 +1816,23 @@ export const mapOrderUpdatedData = (input = {}) =>
     operation: "Order-updated event mapping",
     mapper: ({ order, executionType, evidence, ownership }) => ({
       ...requireOrderHistoryFacts({ order, ownership }),
-      ...(executionType === undefined ? {} : { executionType: requireString({ value: executionType, field: "executionType" }) }),
-      ...(typeof evidence?.cumulativeQuoteQuantity === "string" ? { cumulativeQuoteQuantity: requireDecimalString({ value: evidence.cumulativeQuoteQuantity, field: "cumulativeQuoteQuantity" }) } : {}),
+      ...(executionType === undefined ? {} : {
+        executionType: requireString({
+          value: executionType,
+          field: "executionType",
+        }),
+      }),
+      ...(typeof evidence?.cumulativeQuoteQuantity === "string" ? {
+        cumulativeQuoteQuantity: requireDecimalString({
+          value: evidence.cumulativeQuoteQuantity,
+          field: "cumulativeQuoteQuantity",
+        }),
+      } : {}),
       ...(evidence?.transactionTime === undefined ? {} : {
-        brokerTransactionTime: requireNonNegativeSafeInteger({ value: evidence.transactionTime, field: "evidence.transactionTime" }),
+        brokerTransactionTime: requireNonNegativeSafeInteger({
+          value: evidence.transactionTime,
+          field: "evidence.transactionTime",
+        }),
       }),
     }),
   })

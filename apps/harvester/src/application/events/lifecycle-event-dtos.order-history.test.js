@@ -17,7 +17,6 @@ import {
 function createOrder({
   status = "PARTIALLY_FILLED",
   executedQuantity = "0.2500",
-  remainingQuantity = "0.7500",
   updatedAt = 102,
   completedAt,
 } = {}) {

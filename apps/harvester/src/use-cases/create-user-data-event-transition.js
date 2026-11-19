@@ -149,7 +149,10 @@ async function prepareOrderEvent({ dependencies, event } = {}) {
         order,
         executionType: event.executionType,
         evidence: event.brokerEvidence,
-        ownership: state.registry.getOwnership?.({ clientOrderId: order.clientOrderId, brokerOrderId: order.brokerOrderId }),
+        ownership: state.registry.getOwnership?.({
+          clientOrderId: order.clientOrderId,
+          brokerOrderId: order.brokerOrderId,
+        }),
       }),
     })
   }

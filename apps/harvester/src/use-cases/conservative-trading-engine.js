@@ -451,7 +451,12 @@ function createOrderCancellationEventPublishers({ eventPublisher, logger, state 
       return publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
-        dataResult: mapOrderCancelledData({ order, ownership: state?.registry?.getOwnership?.({ clientOrderId: order.clientOrderId }) }),
+        dataResult: mapOrderCancelledData({
+          order,
+          ownership: state?.registry?.getOwnership?.({
+            clientOrderId: order.clientOrderId,
+          }),
+        }),
       })
     },
     publishOrderCancelFailed: ({ order, outcome, error }) => {
@@ -471,7 +476,12 @@ status: lifecycleStatus })
       return publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
-        dataResult: mapOrderCancelFailedData({ order, ownership, outcome, error }),
+        dataResult: mapOrderCancelFailedData({
+          order,
+          ownership,
+          outcome,
+          error,
+        }),
       })
     },
   }
@@ -962,7 +972,10 @@ function createAcknowledgedOrderLifecycleHandler({
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
-      dataResult: mapOrderSubmittedData({ order, ownership }),
+      dataResult: mapOrderSubmittedData({
+        order,
+        ownership,
+      }),
     })
     const acceptedOrder = state.registry.getOrder({
       clientOrderId: order.clientOrderId,

@@ -29,7 +29,7 @@ export class OrderHistoryPersistenceError extends SystemCustomError {
     context,
     retryable,
   } = {}) {
-    super("Order history persistence failed during " + stage, {
+    super(`Order history persistence failed during ${stage}`, {
       code,
       context: createSafeContext({
         stage,

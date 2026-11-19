@@ -595,7 +595,7 @@ async function acquireProcessStartupResources({ options, resources, processStart
     runtimeConfig: resources.runtimeConfig,
     env,
     logger,
-    processId: processStartedDataResult.data?.processId,
+    eventBus: resources.eventBus,
     prepareOrderHistoryPersistence,
   })
   resources.processStartedPublication = publishProcessStartedEvidence({

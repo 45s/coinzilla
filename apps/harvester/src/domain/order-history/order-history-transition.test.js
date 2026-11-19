@@ -43,7 +43,10 @@ test("ignores a stale event that would regress cumulative execution", () => {
   })
 
   assert.equal(
-    mergeOrderHistoryRecords({ current, candidate: stale }),
+    mergeOrderHistoryRecords({
+      current,
+      candidate: stale,
+    }),
     current,
     "Out-of-order event delivery must never reduce the stored executed quantity.",
   )
