@@ -5,6 +5,7 @@ import {
   createRecoverySellerStopDecision,
   createRecoverySellerStopState,
   latchRecoverySellerStop,
+  resolveRecoverySellerStopState,
   RECOVERY_SELLER_STOP_REASON_CODE,
 } from "./stop-decision.js"
 
@@ -153,5 +154,117 @@ test("rejects attempts to latch a non-STOP decision or an invalid state", () => 
     }),
     /requires a valid STOP state/,
     "Malformed lifecycle state must not be accepted as permission to submit an RS trading action.",
+  )
+})
+
+
+test("clears STOP only after an explicit operator action and complete reconciliation/accounting evidence", () => {
+  const stoppedState = latchRecoverySellerStop({
+    state: createRecoverySellerStopState(),
+    decision: createRecoverySellerStopDecision({
+      explanation: "The exchange order outcome required operator review",
+    }),
+  })
+  const resolved = resolveRecoverySellerStopState({
+    state: stoppedState,
+    operatorId: "operator-45s",
+    actionId: "rs-stop-reset-1",
+    causeFixed: true,
+    reconciliation: {
+      ordersReconciled: true,
+      fillsReconciled: true,
+      balancesReconciled: true,
+      unresolvedOrderCount: 0,
+      unresolvedFillCount: 0,
+      balanceDiscrepancyCount: 0,
+    },
+    accounting: {
+      verified: true,
+      portfolioConsistent: true,
+      legacyConsistent: true,
+      reservationsConsistent: true,
+    },
+  })
+
+  assert.deepEqual(resolved, {
+    status: "CLEAR",
+    decision: null,
+  }, "Only an explicit, evidence-backed operator resolution may return RS to CLEAR.")
+  assert.equal(Object.isFrozen(resolved), true, "The resolved STOP state must remain immutable.")
+})
+
+test("refuses STOP reset when the cause, orders, fills, balances, or accounting remain unresolved", () => {
+  const stoppedState = latchRecoverySellerStop({
+    state: createRecoverySellerStopState(),
+    decision: createRecoverySellerStopDecision({
+      explanation: "The order fill set is incomplete",
+    }),
+  })
+  const valid = {
+    state: stoppedState,
+    operatorId: "operator-45s",
+    actionId: "rs-stop-reset-2",
+    causeFixed: true,
+    reconciliation: {
+      ordersReconciled: true,
+      fillsReconciled: true,
+      balancesReconciled: true,
+      unresolvedOrderCount: 0,
+      unresolvedFillCount: 0,
+      balanceDiscrepancyCount: 0,
+    },
+    accounting: {
+      verified: true,
+      portfolioConsistent: true,
+      legacyConsistent: true,
+      reservationsConsistent: true,
+    },
+  }
+
+  assert.throws(
+    () => resolveRecoverySellerStopState({ ...valid, causeFixed: false }),
+    /underlying cause must be fixed/i,
+  )
+  assert.throws(
+    () => resolveRecoverySellerStopState({
+      ...valid,
+      reconciliation: { ...valid.reconciliation, unresolvedOrderCount: 1 },
+    }),
+    /unresolved orders/i,
+  )
+  assert.throws(
+    () => resolveRecoverySellerStopState({
+      ...valid,
+      reconciliation: { ...valid.reconciliation, unresolvedFillCount: 1 },
+    }),
+    /unresolved fills/i,
+  )
+  assert.throws(
+    () => resolveRecoverySellerStopState({
+      ...valid,
+      reconciliation: { ...valid.reconciliation, balanceDiscrepancyCount: 1 },
+    }),
+    /balance discrepancies/i,
+  )
+  assert.throws(
+    () => resolveRecoverySellerStopState({
+      ...valid,
+      accounting: { ...valid.accounting, verified: false },
+    }),
+    /accounting must be verified/i,
+  )
+})
+
+test("does not clear a STOP state that is already clear or malformed", () => {
+  assert.throws(
+    () => resolveRecoverySellerStopState({
+      state: createRecoverySellerStopState(),
+      operatorId: "operator-45s",
+      actionId: "rs-stop-reset-3",
+      causeFixed: true,
+      reconciliation: {},
+      accounting: {},
+    }),
+    /only a stopped Recovery Seller state/i,
   )
 })

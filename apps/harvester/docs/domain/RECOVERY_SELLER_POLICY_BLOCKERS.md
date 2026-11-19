@@ -105,7 +105,7 @@ Focused CG evidence files include `helpers.test.js`, `initial-buy-price.test.js`
 | SELL order type and fee role | CG has order-type and fee-reserve selection | No RS SELL policy selects order type or maker/taker fee role | Owner decision required |
 | SELL exchange filters | Min/max quantity, notional, price, quantity-step/tick and dust dispositions | Planner receives tick/step but does not evaluate the full SELL filter set or disposition | Owner decision + policy implementation required |
 | SELL partial/terminal outcomes | Reconciled continuation/replacement behavior is defined | One SELL lifecycle per RS cycle; terminal underfill/cancel becomes UNRESOLVED | Resolution policy required; current block is safe but not a completed workflow |
-| STOP | CG uses existing pair/order safety gates | Sticky global STOP; WAIT/RECONCILE only while stopped | Safe latch exists; reviewed resolution/resume path is not defined |
+| STOP | CG uses existing pair/order safety gates | Sticky global STOP; WAIT/RECONCILE only while stopped | **OWNER-APPROVED 2026-11-19:** explicit operator reset only after cause fixed, orders/fills/balances reconciled, no unresolved discrepancies, and accounting verified; application reset path is being implemented in #1475 |
 | Third-asset fees | CG requires reliable quote valuation and fails closed | Planner accepts explicit quote valuation; accounting remains fail-closed on incomplete valuation | Approved valuation source/timestamp/freshness contract required |
 | Accounting and ownership | Canonical fill accounting, Portfolio and RecoveryLedger | RS legacy/recovery allocation, canonical-fill binding, staged partials, terminal reconciliation and atomic dual projections | Foundation implemented; integration proof remains |
 | Same-market concurrency | Shared engine/account reservations | Shared-Portfolio architecture contract exists; RS not wired | RS-4 integration and tests required |
@@ -136,7 +136,7 @@ The planner requires an explicit quote-currency value. A missing value is not ze
 
 ### Sticky STOP resolution
 
-The existing global STOP latch is permanent for its policy instance. Only non-trading WAIT/RECONCILE may proceed while stopped. There is no automatic clear on a later market event or process restart; a reset/resume mechanism is not part of this task.
+**Owner-approved 2026-11-19:** STOP remains sticky and never clears on a market event or process restart. An operator may clear it only after the underlying cause is fixed, all owned exchange orders and canonical fills are authoritatively reconciled, balances have no unresolved discrepancy, and Portfolio/legacy/reservation accounting is verified. The resolution must be durably recorded as an explicit `OPERATOR_ACTION` before the in-memory latch is cleared. Missing evidence or a failed durability barrier leaves STOP active. Implementation and offline tests are tracked in [#1475](https://github.com/45s/coinzilla/issues/1475).
 
 ### Trailing BUY behavior
 
@@ -170,7 +170,7 @@ Missing acceptance coverage/work before execution:
 - RS SELL policy decision tests for order-type choice, fee role, all min/max filters, blocked/capped candidate outcomes, and profit revalidation after any filter adjustment.
 - Deterministic post-fill adverse-result and terminal-underfill resolution tests after the owner decisions.
 - Approved third-asset valuation-source/freshness tests.
-- Operator STOP resolution/reset tests after its contract is approved.
+- Operator STOP resolution/reset tests for the owner-approved cause-fixed, reconciled, accounting-verified manual reset.
 - RS-4 integration tests for same-market/different-market CG+RS concurrency, order ownership, shared reservations and exact-once fills.
 - RS-5 offline full-cycle tests including EARN return/custody reconciliation, partial fills, fees, unknown outcomes and restart/replay boundaries.
 
@@ -186,12 +186,12 @@ Missing acceptance coverage/work before execution:
 - CG remains the reference and its behavior must not change as part of RS policy work.
 - RS accounting, BUY policy, independent profitability gates and the owner-approved pre-submission SELL evaluator are implemented and verified on PR head `96315757e74a4851770716b04d8dae5cf9580ece`, merged as `3fde5cdc0b1ed39bffeb5e21a67f44e0f653e8c3`.
 - Owner-approved `minProfit`, order type/fee reserve and exchange-filter STOP decisions are no longer blockers.
-- Post-fill adverse outcomes, terminal partial/canceled/rejected/expired SELLs, third-asset valuation source and STOP reset/resume remain fail-closed. RS-4 and RS-5 remain mandatory separate phases.
+- Post-fill adverse outcomes, terminal partial/canceled/rejected/expired SELLs and third-asset valuation source remain fail-closed. The owner approved the manual STOP reset contract on 2026-11-19; implementation is tracked in #1475. RS-4 and RS-5 remain mandatory separate phases.
 - This follow-up implementation used offline tests only. The read-only Binance TESTNET integration workflow was skipped. No TESTNET/LIVE exchange operation or order was performed.
 
 ## 9. Blocker clarification and implementation handoff
 
-Three decisions were confirmed by the strategy owner on 2026-11-18 and are implemented in the current draft PR: per-pair `minProfit` only, Conservative-compatible order type/fee reserve, and sticky STOP on exchange-filter violations. Do not reopen them.
+Three SELL-policy decisions were confirmed by the strategy owner on 2026-11-18 and are implemented in merged PR #1127: per-pair `minProfit` only, Conservative-compatible order type/fee reserve, and sticky STOP on exchange-filter violations. The manual STOP reset contract was separately approved on 2026-11-19 and is being implemented in #1475.
 
 The remaining cases are deliberately fail-closed rather than assigned speculative defaults: adverse post-fill results, terminal underfill/cancel/reject/expiry, third-asset valuation source/freshness, and STOP reset/resume. Trailing-BUY repricing remains unchanged and outside this SELL-policy slice.
 
