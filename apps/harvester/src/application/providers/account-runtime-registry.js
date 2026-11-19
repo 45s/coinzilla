@@ -197,3 +197,23 @@ export function createAccountRuntimeRegistry({ providers } = {}) {
     list: () => Object.freeze([...accounts.values()].map(({ identity }) => identity)),
   })
 }
+
+/**
+ * Keep the engine's OrderRegistry reference linked to the account-scoped registry.
+ * The account runtime exposes an accessor so every workflow sees replacements,
+ * not only the initial immutable registry snapshot.
+ */
+export function linkSharedAccountOrderRegistry({ state, initialState } = {}) {
+  const descriptor = Object.getOwnPropertyDescriptor(initialState, "orderRegistry")
+  if (!descriptor ||
+      (typeof descriptor.set !== "function" && descriptor.writable !== true)) {
+    return
+  }
+  Object.defineProperty(state, "registry", {
+    enumerable: true,
+    get: () => initialState.orderRegistry,
+    set: (registry) => {
+      initialState.orderRegistry = registry
+    },
+  })
+}
