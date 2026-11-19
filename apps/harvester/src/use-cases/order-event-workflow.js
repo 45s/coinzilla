@@ -80,7 +80,10 @@ function createRecoverySellerTerminalOrderReconciler({
       })
       return toResult({ error })
     }
-    const result = await reconcileRecoverySellerMixedSell({ order, canonicalFills })
+    const result = await reconcileRecoverySellerMixedSell({
+      order,
+      canonicalFills,
+    })
     if (result?.ok !== true) {
       await pause({
         symbol: order.market.symbol,
@@ -122,9 +125,15 @@ function createReconcileTerminalOrderFillsTransition({
     onTerminalOrderReconciled,
   })
   return ({ order, eventFill } = {}) => {
-    const registeredOrder = resolveRegisteredOrder({ state, order })
+    const registeredOrder = resolveRegisteredOrder({
+      state,
+      order,
+    })
     if (!(registeredOrder instanceof CanonicalOrder)) {
-      return reconcile({ order: registeredOrder, eventFill })
+      return reconcile({
+        order: registeredOrder,
+        eventFill,
+      })
     }
     if (typeof registeredOrder.brokerOrderId === "string") {
       ordersByBrokerId.set(registeredOrder.brokerOrderId, registeredOrder)
@@ -641,7 +650,11 @@ async function applyValidatedExecutionFill({ dependencies, order, fill }) {
       recordSellExecutionFill,
     })
   }
-  publishExecutionFillOutcome({ accounting, fill, eventPublisher })
+  publishExecutionFillOutcome({
+    accounting,
+    fill,
+    eventPublisher,
+  })
   return toResult({
     data: {
       applied: accounting.data?.applied === true,
