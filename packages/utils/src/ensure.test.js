@@ -89,6 +89,7 @@ describe("ensure direct assertions", () => {
     assert.throws(() => ensure.string(), TypeError, "assertions must reject missing options instead of silently accepting undefined")
     assert.throws(() => ensure.string({ value: "x", name: "" }), TypeError, "field names must be non-empty strings")
     assert.throws(() => ensure.string(null), TypeError, "assertions must reject null options")
+    assert.throws(() => ensure.string({ get value() { throw new Error("must not run") } }), { name: "TypeError", message: /options must contain readable properties/ }, "assertions must not invoke option getters")
   })
 })
 
@@ -124,7 +125,7 @@ describe("ensure fluent pipelines", () => {
 
   it("supports filtering and preserves the source array", () => {
     const values = [1, 2, 3, 4]
-    const evens = ensure.chain({ value: values, name: "values" }).array().filter({ predicate: (value) => value % 2 === 0 }).value
+    const evens = ensure.chain({ value: values, name: "values" }).array().integers().filter({ predicate: (value) => value % 2 === 0 }).value
     assert.deepEqual(evens, [2, 4], "pipeline filter must intentionally retain matching values")
     assert.deepEqual(values, [1, 2, 3, 4], "pipeline filter must not mutate its source array")
   })
