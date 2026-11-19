@@ -262,6 +262,16 @@ function createHarvesterTradingEngineSafetyCallbacks({
   }
 }
 
+function createHarvesterTradingEngineOperationalCallbacks(options = {}) {
+  return {
+    onOperationalStateSubmissionIntent: options.onOperationalStateSubmissionIntent,
+    onOperationalStateSubmissionOutcome: options.onOperationalStateSubmissionOutcome,
+    onOperationalStateCancellationIntent: options.onOperationalStateCancellationIntent,
+    onOperationalStateCancellationOutcome: options.onOperationalStateCancellationOutcome,
+    onOperationalStateStrategyMarketPaused: options.onOperationalStateStrategyMarketPaused,
+  }
+}
+
 function createHarvesterTradingEngineOptions(options = {}) {
   const {
     broker,
@@ -282,11 +292,6 @@ function createHarvesterTradingEngineOptions(options = {}) {
     userDataState,
     accountSnapshotManagerRef,
     candleHistoryService,
-    onOperationalStateSubmissionIntent,
-    onOperationalStateSubmissionOutcome,
-    onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome,
-    onOperationalStateStrategyMarketPaused,
     logger,
     recoveredState,
     sharedAccountState,
@@ -317,11 +322,7 @@ function createHarvesterTradingEngineOptions(options = {}) {
     isMarketPriceFresh,
     isMarketBookFresh,
     getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
-    onOperationalStateSubmissionIntent,
-    onOperationalStateSubmissionOutcome,
-    onOperationalStateCancellationIntent,
-    onOperationalStateCancellationOutcome,
-    onOperationalStateStrategyMarketPaused,
+    ...createHarvesterTradingEngineOperationalCallbacks(options),
     logger,
     sharedAccountState,
     initialState: createRecoveredTradingEngineState(recoveredState),
