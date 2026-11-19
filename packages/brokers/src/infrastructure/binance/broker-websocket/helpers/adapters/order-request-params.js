@@ -11,6 +11,20 @@ export function adaptOrderRequestParams({
 }) {
   const orderInput = { ...input }
   delete orderInput.clientOrderId
+  const { quoteQuantity } = orderInput
+  delete orderInput.quoteQuantity
+  if (quoteQuantity !== undefined) {
+    if (input.type !== "MARKET") {
+      throw new TypeError("Binance quoteQuantity is only supported for MARKET orders")
+    }
+    if (input.quantity !== undefined) {
+      throw new TypeError("Cannot specify both quantity and quoteQuantity for a MARKET order")
+    }
+    if (input.quoteOrderQty !== undefined) {
+      throw new TypeError("Specify either quoteQuantity or quoteOrderQty, not both")
+    }
+    orderInput.quoteOrderQty = quoteQuantity
+  }
   const params = {
     ...orderInput,
     ...(requireClientOrderId || clientOrderId ? { newClientOrderId: clientOrderId } : {}),

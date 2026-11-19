@@ -11,7 +11,7 @@ import {
   validateSpotOrderPlacementResponse,
 } from "./order-requests.js"
 
-test("Bitunix order adapter builds exact LIMIT quote volume from base quantity and price", () => {
+test("Bitunix order adapter preserves LIMIT base quantity as REST volume", () => {
   const order = createSpotOrderRequest({
     input: {
       symbol: "btcusdt",
@@ -26,40 +26,67 @@ test("Bitunix order adapter builds exact LIMIT quote volume from base quantity a
     symbol: "BTCUSDT",
     quantity: "0.0100",
     price: "25000.50",
-    volume: "250.005",
+    volume: "0.0100",
     body: {
       symbol: "BTCUSDT",
       side: 2,
       type: 1,
-      volume: "250.005",
+      volume: "0.0100",
       price: "25000.50",
     },
   })
 })
 
-test("Bitunix order adapter keeps MARKET volume in base units and expands scientific notation", () => {
+test("Bitunix order adapter uses exact quoteQuantity for MARKET volume", () => {
   const order = createSpotOrderRequest({
     input: {
       symbol: "BTCUSDT",
-      side: "SELL",
+      side: "BUY",
       type: "MARKET",
-      quantity: 1e-8,
+      quoteQuantity: 1e-8,
     },
   })
 
   assert.deepEqual(order, {
     symbol: "BTCUSDT",
-    quantity: "0.00000001",
+    quoteQuantity: "0.00000001",
     price: "0",
     volume: "0.00000001",
     body: {
       symbol: "BTCUSDT",
-      side: 1,
+      side: 2,
       type: 2,
       volume: "0.00000001",
       price: "0",
     },
   })
+})
+
+test("Bitunix order adapter rejects ambiguous MARKET quantity and quoteQuantity on LIMIT", () => {
+  assert.throws(
+    () => createSpotOrderRequest({
+      input: {
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "MARKET",
+        quantity: "0.01",
+      },
+    }),
+    /require[s]? quoteQuantity/i,
+  )
+  assert.throws(
+    () => createSpotOrderRequest({
+      input: {
+        symbol: "BTCUSDT",
+        side: "BUY",
+        type: "LIMIT",
+        quantity: "1",
+        quoteQuantity: "100",
+        price: "100",
+      },
+    }),
+    /does not accept quoteQuantity for LIMIT/i,
+  )
 })
 
 test("Bitunix order adapter rejects unsupported fields and caller-supplied client identities", () => {
@@ -97,8 +124,9 @@ test("Bitunix order adapter rejects invalid decimal inputs and order identities"
       input: {
         symbol: "BTCUSDT",
         side: "BUY",
-        type: "MARKET",
+        type: "LIMIT",
         quantity,
+        price: "1",
       },
     }))
   }

@@ -1070,7 +1070,7 @@ See the [Bitunix WebSocket RPC contract](../../docs/brokers-websocket-contract.m
 - Order quantity adaptation uses shared exact decimal subtraction and retains exact original/executed/remaining strings. Active market discovery now fails closed for missing or unknown `isOpen` values, exposing only explicitly open pairs. No Binance protocol code is reused.
 - Order placement and cancellation are explicitly disabled. Bitunix Spot has no documented client-order ID; a lost placement response therefore cannot be reliably reconciled. Private Spot WebSocket docs do not define continuous order/execution events, and public market WS methods are request/response rather than subscriptions.
 - `getAccountSnapshot()` fails closed because the account response has no source timestamp. Open orders and order history require a symbol. Canonical order methods fail closed because Bitunix does not provide the required client-order identity. The documented `order/deal/list` response is a single matching-order object with no pagination contract; completeness for orders with multiple executions remains unverified.
-- Bitunix's official API repository confirms that no TESTNET environment is currently provided and that there is no clear plan for one ([BitunixOfficial/open-api#4, maintainer response](https://github.com/BitunixOfficial/open-api/issues/4#issuecomment-3434841476)). The single-order REST endpoint says limit `volume` is quote quantity and market `volume` is base quantity, while the REST batch-order and WebSocket order docs say the inverse. No order submission or quantity conversion is attempted until clarified.
+- Bitunix's official API repository confirms that no TESTNET environment is currently provided and that there is no clear plan for one ([BitunixOfficial/open-api#4, maintainer response](https://github.com/BitunixOfficial/open-api/issues/4#issuecomment-3434841476)). Historical note: the earlier audit snapshot recorded the inverse semantics. The current official Spot order docs revalidated 2026-11-20 specify LIMIT `volume` as base quantity and MARKET `volume` as quote quantity; this supersedes the old note. PR #1550 corrects the adapter and introduces generic `quoteQuantity`; no live order submission is performed.
 - Offline tests cover signing, REST transport, lossless account-balance parsing, config, adapters, supported reads, unsupported operations, and exact quantity arithmetic. The first PR CI run exposed four export/assertion expectation mismatches; those were corrected and the suite was expanded. PR #1182 was merged as the initial query-operation foundation; PR [#1183](https://github.com/45s/coinzilla/pull/1183) added canonical order-history filters and fail-closed active-market discovery. On exact PR #1183 head `f7ac16d08a00cfdec7b3b54dec8bfc554254f0fa`, broker/workspace tests and coverage thresholds, syntax/changed-file lint, external documentation links, dependency audit, actionlint, and consumer regression checks passed. Binance TESTNET integration was skipped; no Bitunix live API calls or order mutations were performed.
 - The 2026-11-16 read-side re-audit found no newly documented capability that safely changes the supported surface: order-history pagination/completion semantics, matching-order identity/completeness, depth precision selection, OHLCV volume, source timestamps, and continuous Spot subscriptions remain unresolved. The JKorf Spot `GetUserTradesAsync` implementation also currently targets `order/pending/list` despite its interface documenting `order/deal/list`; it is not valid evidence for fill retrieval. Detailed source findings are tracked in [issue #1185](https://github.com/45s/coinzilla/issues/1185).
 - See the [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) and [package README](./README.md#bitunix-spot-integration).
@@ -1385,7 +1385,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 ## 2026-11-19 — Bitunix Spot single-order REST placement
 
 - [x] Implemented `createOrder()` on the documented `POST /api/spot/v1/order/place_order` endpoint only.
-- [x] LIMIT orders convert the caller's base quantity to quote-coin volume using exact decimal multiplication; MARKET orders submit base quantity. Market price is sent as `0`.
+- [x] (Superseded by PR #1550) LIMIT orders send base `quantity` unchanged; MARKET orders send quote `quoteQuantity` unchanged. No market-price conversion is performed.
 - [x] Enforce LIMIT/MARKET, BUY/SELL, positive decimal quantity/price, explicit order type and reject unsupported time-in-force fields, and reject unsupported fields/client IDs before dispatch.
 - [x] Validate the exchange placement response and read back the returned order ID via order detail before returning the normalized order.
 - [x] A dispatched transport failure returns `OUTCOME_UNKNOWN`; no automatic retry. If placement was acknowledged but detail reconciliation fails, return the exchange order ID and `CONFIRMED` mutation outcome for manual follow-up.
@@ -1464,7 +1464,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 **Status: Implemented in [PR #1529](https://github.com/45s/coinzilla/pull/1529); exact-head CI verification is pending.**
 
 - Extracted exact order input/decimal normalization, single-order REST payload construction, placement response identity validation, order-detail correlation, and cancel/detail request envelopes into `adapters/order-requests.js`.
-- Added direct deterministic adapter tests for LIMIT quote-volume conversion, MARKET base-volume preservation, scientific-notation expansion, unsupported fields/client IDs, response identity mismatches, and exact signed detail/cancel request envelopes.
+- Historical pre-#1550 tests encoded LIMIT quote-volume conversion and MARKET base-volume preservation; PR #1550 replaces those assumptions with current official LIMIT base / MARKET quote semantics and exact-decimal regressions.
 - Kept live-mutation opt-in, dispatch tracking, mutation outcome classification, no-retry behavior, placement reconciliation, cancellation/fill-race handling, and per-symbol cancel-all orchestration in the Broker facade.
 - No public Broker API, exchange endpoint, request body, retry behavior, Harvester, Binance, or shared utility changes.
 
@@ -1507,9 +1507,18 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 
 ## 2026-11-19 — Bitunix REST mutation HTTP outcome alignment (#1547)
 
-**Status: Implemented in [PR #1548](https://github.com/45s/coinzilla/pull/1548); exact-head required CI verification is pending.**
+**Status: [x] Complete — merged into `develop` in [PR #1548](https://github.com/45s/coinzilla/pull/1548) as `3321880f2eb5358341cde4a1f2451efd5ed0a07e`; all six required status checks passed.**
 
 - Align `BitunixRestError.outcomeUnknown` with the common Broker contract for dispatched state-changing requests: HTTP 408, 409, and 5xx are ambiguous; other HTTP 4xx responses, including 429, remain definitive rejections.
 - Preserve read-only response behavior, HTTP status, Retry-After metadata, and the no-automatic-retry boundary.
 - Add deterministic regressions for 408, 409, 400, 429, 500, 502, and read-only 409 responses.
 - No generic Broker API, Harvester, exchange endpoint, authentication, or live mutation behavior changes.
+
+## 2026-11-20 — Bitunix Spot order volume and generic quote quantity (#1549)
+
+**Status: In progress in [PR #1550](https://github.com/45s/coinzilla/pull/1550); exact-head CI pending.**
+
+- Current official Bitunix REST docs specify LIMIT volume in base units and MARKET volume in quote units. This supersedes the earlier audit snapshot that recorded the inverse.
+- Generic `quantity` remains base-denominated; new generic `quoteQuantity` expresses quote-denominated MARKET orders.
+- Binance maps `quoteQuantity` to native `quoteOrderQty`; Bitunix maps LIMIT `quantity` and MARKET `quoteQuantity` directly to REST `volume`.
+- No price-based conversion or automatic estimate is permitted. Live mutations remain disabled by default and all #1185 lifecycle/Harvester blockers remain.

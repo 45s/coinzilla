@@ -164,16 +164,16 @@ const BITUNIX_SPOT_CAPABILITIES = [
     type: "PLACE_LIMIT_ORDER",
     status: "SUPPORTED",
     method: "createOrder",
-    guarantee: "Uses only the documented single-order REST endpoint; converts base quantity to quote-coin volume with exact decimal arithmetic and verifies the returned order ID with order detail.",
-    conditions: ["LIMIT volume is quote-coin quantity on the single-order REST endpoint."],
+    guarantee: "Uses only the documented single-order REST endpoint; sends the exact generic base quantity as base-coin volume and verifies the returned order ID with order detail.",
+    conditions: ["LIMIT volume is base-coin quantity on the current official REST contract."],
     limitation: "Bitunix does not accept a caller-supplied clientOrderId. A transport failure after dispatch returns OUTCOME_UNKNOWN and is never retried; callers must reconcile manually. Exact tick/step constraints remain UNKNOWN and are enforced by the exchange. The REST endpoint documents no time-in-force selector; the exchange default is not asserted.",
   },
   {
     type: "PLACE_MARKET_ORDER",
     status: "SUPPORTED",
     method: "createOrder",
-    guarantee: "Uses only the documented single-order REST endpoint and submits the requested base quantity.",
-    conditions: ["MARKET volume is base-coin quantity on the single-order REST endpoint."],
+    guarantee: "Uses only the documented single-order REST endpoint and sends generic quoteQuantity as quote-coin volume without estimating from a market price.",
+    conditions: ["MARKET volume is quote-coin quantity; quoteQuantity is required."],
     limitation: "Bitunix does not accept a caller-supplied clientOrderId. A transport failure after dispatch returns OUTCOME_UNKNOWN and is never retried; callers must reconcile manually.",
   },
   {
@@ -181,7 +181,7 @@ const BITUNIX_SPOT_CAPABILITIES = [
     status: "SUPPORTED",
     method: "cancelOrder",
     guarantee: "Cancels one explicitly identified order through the signed Spot REST endpoint and verifies the final order state through order detail.",
-    limitation: "A lost cancellation acknowledgement or a non-terminal follow-up status is reported as OUTCOME_UNKNOWN; callers must reconcile and must not blindly retry.",
+    limitation: "A lost cancellation acknowledgement or a non-terminal follow-up status is reported as OUTCOME_UNKNOWN; no private Spot event stream exists, so callers must reconcile manually and must not blindly retry.",
   },
   {
     type: "CANCEL_ALL_ORDERS",
@@ -189,7 +189,7 @@ const BITUNIX_SPOT_CAPABILITIES = [
     method: "cancelAllOpenOrders",
     guarantee: "Cancels and verifies every currently open order returned for one explicitly requested Spot symbol.",
     conditions: ["A non-empty symbol is required; the Spot API does not document account-wide open-order enumeration."],
-    limitation: "Each order is canceled and reconciled independently. Partial failures and unknown outcomes are returned; callers must not blindly retry.",
+    limitation: "Only rows returned by the symbol-scoped current-order query are attempted; response completeness is not established. Partial failures and unknown outcomes are returned; callers must not blindly retry.",
   },
   {
     type: "SUBSCRIBE_MARKET_PRICES",

@@ -81,3 +81,46 @@ test("preserves explicit side, type, timeInForce, and canonical client order ID"
     price: "100",
   })
 })
+
+
+test("maps generic quoteQuantity to Binance quoteOrderQty for MARKET orders", () => {
+  assert.deepEqual(adaptOrderRequestParams({
+    input: {
+      symbol: "BTCUSDT",
+      side: "BUY",
+      type: "MARKET",
+      quoteQuantity: "100",
+    },
+  }), {
+    symbol: "BTCUSDT",
+    quoteOrderQty: "100",
+    side: "BUY",
+    type: "MARKET",
+    timeInForce: "GTC",
+  })
+})
+
+test("rejects conflicting or non-MARKET quoteQuantity inputs", () => {
+  assert.throws(
+    () => adaptOrderRequestParams({
+      input: {
+        symbol: "BTCUSDT",
+        type: "MARKET",
+        quantity: "1",
+        quoteQuantity: "100",
+      },
+    }),
+    /cannot specify both quantity and quoteQuantity/i,
+  )
+  assert.throws(
+    () => adaptOrderRequestParams({
+      input: {
+        symbol: "BTCUSDT",
+        type: "LIMIT",
+        quoteQuantity: "100",
+        price: "100",
+      },
+    }),
+    /quoteQuantity is only supported for MARKET orders/i,
+  )
+})

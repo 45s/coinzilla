@@ -1,4 +1,4 @@
-import { assertDecimalString, compareDecimal, multiplyDecimal } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 
 export const BITUNIX_SPOT_ORDER_API = Object.freeze({
@@ -87,6 +87,24 @@ function normalizeOrderDecimal({ value, field }) {
   return normalized
 }
 
+function validateOrderVolumeInput({ input, type }) {
+  if (type === "LIMIT" && input.quoteQuantity !== undefined) {
+    throw new TypeError("Bitunix Spot createOrder() does not accept quoteQuantity for LIMIT orders")
+  }
+  if (type === "MARKET" && input.quantity !== undefined) {
+    throw new TypeError("Bitunix Spot MARKET orders require quoteQuantity; quantity is base-denominated")
+  }
+  if (type === "MARKET" && input.quoteQuantity === undefined) {
+    throw new TypeError("Bitunix Spot MARKET orders require quoteQuantity in quote-coin units")
+  }
+}
+
+function validateOrderPriceInput({ input, type }) {
+  if (type === "MARKET" && input.price !== undefined) {
+    throw new TypeError("Bitunix Spot MARKET orders derive their required zero price; omit price")
+  }
+}
+
 function validateSpotOrderInput({ input }) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("Bitunix Spot createOrder() requires an order object")
@@ -96,6 +114,7 @@ function validateSpotOrderInput({ input }) {
     "side",
     "type",
     "quantity",
+    "quoteQuantity",
     "price",
     "clientOrderId",
     "newClientOrderId",
@@ -121,9 +140,14 @@ function validateSpotOrderInput({ input }) {
   if (type !== "LIMIT" && type !== "MARKET") {
     throw new TypeError("Bitunix Spot single-order REST supports only LIMIT and MARKET orders")
   }
-  if (type === "MARKET" && input.price !== undefined) {
-    throw new TypeError("Bitunix Spot MARKET orders derive their required zero price; omit price")
-  }
+  validateOrderVolumeInput({
+    input,
+    type,
+  })
+  validateOrderPriceInput({
+    input,
+    type,
+  })
   return {
     symbol,
     side,
@@ -135,27 +159,31 @@ export function createSpotOrderRequest({ input }) {
   const { symbol, side, type } = validateSpotOrderInput({
     input,
   })
-  const quantity = normalizeOrderDecimal({
-    value: input.quantity,
-    field: "Bitunix Spot order quantity",
-  })
+  const quantity = type === "LIMIT"
+    ? normalizeOrderDecimal({
+      value: input.quantity,
+      field: "Bitunix Spot order quantity",
+    })
+    : undefined
+  const quoteQuantity = type === "MARKET"
+    ? normalizeOrderDecimal({
+      value: input.quoteQuantity,
+      field: "Bitunix Spot quote quantity",
+    })
+    : undefined
   const price = type === "LIMIT"
     ? normalizeOrderDecimal({
       value: input.price,
       field: "Bitunix Spot limit price",
     })
     : "0"
-  // The single-order REST endpoint uses quote volume for LIMIT and base volume for MARKET.
-  // Batch REST and WebSocket have different contracts and are deliberately not used.
-  const volume = type === "LIMIT"
-    ? multiplyDecimal({
-      left: quantity,
-      right: price,
-    })
-    : quantity
+  // Bitunix defines LIMIT volume in base units and MARKET volume in quote units.
+  // Do not infer quote quantity from a market price or convert between assets.
+  const volume = quantity ?? quoteQuantity
   return {
     symbol,
-    quantity,
+    ...(quantity === undefined ? {} : { quantity }),
+    ...(quoteQuantity === undefined ? {} : { quoteQuantity }),
     price,
     volume,
     body: {

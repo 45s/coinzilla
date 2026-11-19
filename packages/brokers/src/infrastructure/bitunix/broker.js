@@ -1219,11 +1219,12 @@ export class BitunixSpotBroker {
 
   /**
    * Place one Spot order through Bitunix's single-order REST endpoint.
-   * LIMIT quantity is converted from base to quote volume exactly; MARKET
-   * quantity remains base volume. A lost response is OUTCOME_UNKNOWN and is
-   * never retried because Bitunix does not accept a client order ID.
+   * LIMIT quantity is base-denominated; MARKET quoteQuantity is quote-denominated.
+   * The provider never estimates quote quantity from a market price. A lost
+   * response is OUTCOME_UNKNOWN and is never retried because Bitunix does not
+   * accept a client order ID.
    *
-   * @param {{symbol: string, side: "BUY"|"SELL", type: "LIMIT"|"MARKET", quantity: string|number, price?: string|number}} input
+   * @param {{symbol: string, side: "BUY"|"SELL", type: "LIMIT"|"MARKET", quantity?: string|number, quoteQuantity?: string|number, price?: string|number}} input
    */
   async createOrder(input = {}) {
     if (!this.config.allowLiveOrderMutations) {
