@@ -224,7 +224,7 @@ async function reconcileEventFills({ dependencies, order, event, terminalFillsRe
 }
 
 function logStaleCancellationAfterFill({ dependencies, order, state } = {}) {
-  if (!order.status === "CANCELED") {
+  if (order.status !== "CANCELED") {
     return
   }
   const reconciledOrder = getRegisteredOrder({
@@ -305,12 +305,16 @@ async function handleDuplicateOrStaleUpdate({ dependencies, order, symbol, updat
   if (isUnprocessedFill) {
     return null
   }
-  return await replaceDuplicateStaleSell({
+  const replacement = await replaceDuplicateStaleSell({
     dependencies,
     order,
     symbol,
     recoveryMode,
-  }) ?? toResult({
+  })
+  if (replacement) {
+    return replacement
+  }
+  return toResult({
     data: {
       ignored: true,
     },
