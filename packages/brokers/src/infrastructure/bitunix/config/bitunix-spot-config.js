@@ -40,7 +40,10 @@ function validateBitunixSpotConfig({
   allowLiveOrderMutations,
   allowLiveFundsMutations,
 }) {
-  validateCredentials({ apiKey, apiSecret })
+  validateCredentials({
+    apiKey,
+    apiSecret,
+  })
   validateTradingMode({ tradingMode })
   validateBaseUrl({ baseUrl })
   validateRequestTimeout({ requestTimeout })
