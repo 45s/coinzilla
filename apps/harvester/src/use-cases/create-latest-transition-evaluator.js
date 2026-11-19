@@ -411,6 +411,16 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
       const recoverySellerResult = await dependencies.evaluateRecoverySellerTransition({
         ...options,
         state: dependencies.state,
+        recoverySellerPairs: dependencies.recoverySellerPairs,
+        recoverySellerWorkflow: dependencies.recoverySellerWorkflow,
+        recoverySellerCycleCoordinator: dependencies.recoverySellerCycleCoordinator,
+        recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+        recoverySellerStopCallbacks: dependencies.recoverySellerStopCallbacks,
+        getRecoverySellerMarketMetadata: dependencies.getRecoverySellerMarketMetadata,
+        getAccountSnapshot: dependencies.getAccountSnapshot,
+        getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
+        getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
+        getPortfolio: dependencies.getPortfolio,
       })
       if (recoverySellerResult?.ok !== true) {
         return recoverySellerResult
