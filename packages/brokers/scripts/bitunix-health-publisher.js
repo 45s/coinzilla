@@ -142,7 +142,7 @@ async function writeReports({ paths, report, env }) {
   return sanitized
 }
 
-async function publishReportBranch({ repositoryRoot, runGit, branch, reportPath }) {
+async function publishReportBranch({ repositoryRoot, runGit, branch, reportPath, env }) {
   await runGit({
     repositoryRoot,
     args: ["add", "--", reportPath],
@@ -164,7 +164,7 @@ async function publishReportBranch({ repositoryRoot, runGit, branch, reportPath 
   } catch (error) {
     pushError = sanitizeDiagnosticError({
       error,
-      secrets: [],
+      secrets: getSecrets({ env }),
     }).message
   }
   return {
@@ -238,6 +238,7 @@ export async function publishBitunixDiagnostics({
       runGit,
       branch,
       reportPath: publishedReportPath,
+      env,
     })
     commitSha = publication.commitSha
     pushError = publication.pushError
