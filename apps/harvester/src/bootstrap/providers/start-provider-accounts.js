@@ -272,6 +272,7 @@ function createMultiAccountRuntime({
     required: provider.required !== false,
     executionEnabled: executionEnabled !== false,
     executionSymbols: Object.freeze([...(runtime.executionSymbols ?? [])]),
+    executionRoutes: Object.freeze([...(runtime.executionRoutes ?? [])]),
     marketDataSources: Object.freeze({ ...(runtime.marketDataSources ?? {}) }),
     marketDataProviderTypes: Object.freeze({ ...(runtime.marketDataProviderTypes ?? {}) }),
     marketDataProviderIdentities: Object.freeze({ ...(runtime.marketDataProviderIdentities ?? {}) }),

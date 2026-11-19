@@ -213,6 +213,7 @@ function createAccountRuntimeStarter({
     return {
       ...runtime,
       executionSymbols: [...input.executionSymbols],
+      executionRoutes: [...(input.executionRoutes ?? [])],
       marketDataSources: input.marketDataSources,
       marketDataProviderTypes: input.marketDataProviderTypes,
       subscriptions: [...input.executionSymbols],
@@ -278,6 +279,7 @@ function createShutdownTrackingProviderStarter(shutdownOrder) {
     const { providerInstanceId } = input.providerIdentity
     return {
       executionSymbols: [...input.executionSymbols],
+      executionRoutes: [...(input.executionRoutes ?? [])],
       marketDataSources: input.marketDataSources,
       marketDataProviderTypes: input.marketDataProviderTypes,
       tradingEnabled: true,
@@ -382,6 +384,21 @@ test("starts one independent runtime per configured provider account", async () 
   assertAccountStartupInputs({
     starts,
   })
+  assert.deepEqual(runtime.providerAccounts.map((account) => account.executionRoutes), [
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "BTCUSDT",
+    }],
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "ETHUSDT",
+    }],
+    [{
+      strategyId: "CG_coinGrabber",
+      symbol: "SOLUSDT",
+    }],
+  ], "Multi-account runtime metadata must retain each provider's strategy ownership")
+
   assert.equal(runtime.providerAccounts.length, 3)
   assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
   assert.equal(runtime.connected, true)
@@ -428,6 +445,7 @@ function createSecondAccountFailureStarter({
     const account = startCount === 1 ? "first" : "third"
     return {
       executionSymbols: [...input.executionSymbols],
+      executionRoutes: [...(input.executionRoutes ?? [])],
       marketDataSources: input.marketDataSources,
       marketDataProviderTypes: input.marketDataProviderTypes,
       subscriptions: [...input.executionSymbols],
