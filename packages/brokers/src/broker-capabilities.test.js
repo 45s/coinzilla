@@ -185,12 +185,12 @@ test("Bitunix Spot read capabilities preserve incomplete-evidence boundaries", (
   assertCapability({
     declaration: capabilities,
     type: "PLACE_LIMIT_ORDER",
-    status: "SUPPORTED",
+    status: "UNSUPPORTED",
   })
   assertCapability({
     declaration: capabilities,
     type: "PLACE_MARKET_ORDER",
-    status: "SUPPORTED",
+    status: "UNSUPPORTED",
   })
   assertCapability({
     declaration: capabilities,
