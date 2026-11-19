@@ -38,6 +38,17 @@ function parseUtcTimestamp({ value, field }) {
   return timestamp
 }
 
+function addTaxDataTypeCodes({ input, body }) {
+  if (!Object.hasOwn(input, "dataTypeCodes")) {
+    return
+  }
+  if (!Array.isArray(input.dataTypeCodes) ||
+      input.dataTypeCodes.some((code) => typeof code !== "string" || !code.trim())) {
+    throw new TypeError("Bitunix Spot tax-filing dataTypeCodes must be an array of non-empty strings")
+  }
+  body.dataTypeCodes = [...input.dataTypeCodes]
+}
+
 /**
  * Validate and construct one documented Bitunix Spot tax-filing page request.
  * The exchange limits each query range to 365 days and each page to 1000 records.
@@ -78,13 +89,7 @@ export function createTaxFilingQuery({ input }) {
     startTime: input.startTime,
     endTime: input.endTime,
   }
-  if (Object.hasOwn(input, "dataTypeCodes")) {
-    if (!Array.isArray(input.dataTypeCodes) ||
-        input.dataTypeCodes.some((code) => typeof code !== "string" || !code.trim())) {
-      throw new TypeError("Bitunix Spot tax-filing dataTypeCodes must be an array of non-empty strings")
-    }
-    body.dataTypeCodes = [...input.dataTypeCodes]
-  }
+  addTaxDataTypeCodes({ input, body })
   body.page = page
   body.pageSize = pageSize
 
