@@ -145,7 +145,8 @@ test("Bitunix REST client preserves transport failure causes and classifies the 
       path: "/api/spot/v1/market/last_price",
       status: null,
       exchangeCode: null,
-    }, "transport diagnostics must retain bounded, safe request context")
+      retryAfterMs: null,
+    }, "transport diagnostics must retain bounded, safe request context including the optional retry hint")
     assert.equal(error.kind, "transport", "network failures must remain distinguishable from HTTP and exchange rejections")
     assert.equal(error.cause, transportFailure, "the original transport failure must remain available as the native cause")
     return true
@@ -597,7 +598,8 @@ test("Bitunix REST client sends and signs exact int64 request numbers", async ()
     apiSecret: "secret",
     now: () => timestamp,
     nonceFactory: () => nonce,
-    fetchFn: async (url, options) => {
+    fetchFn: async (...requestArguments) => {
+      const [url, options] = requestArguments
       captured = {
         url,
         options,
