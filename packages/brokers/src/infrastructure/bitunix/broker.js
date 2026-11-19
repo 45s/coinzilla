@@ -1,4 +1,4 @@
-import { assertDecimalString, compareDecimal, handleErr, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, handleErr, multiplyDecimal, toResult } from "@coinzilla/utils"
 import { getBrokerMutationOutcome } from "../../broker/broker-contract.js"
 import { CoreBroker } from "../../broker.core.js"
 import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
@@ -24,6 +24,7 @@ const API = Object.freeze({
   pendingOrders: "/api/spot/v1/order/pending/list",
   orderHistory: "/api/spot/v1/order/history/page",
   orderDetail: "/api/spot/v1/order/detail",
+  placeOrder: "/api/spot/v1/order/place_order",
   lastPrice: "/api/spot/v1/market/last_price",
   exchangeRates: "/api/spot/v1/common/rate/list",
   depth: "/api/spot/v1/market/depth",
@@ -460,6 +461,110 @@ function validateOrderDetailResponse({ response, orderId, symbol }) {
     throw new TypeError("Bitunix Spot order detail does not match the requested order identity")
   }
   return response.data
+}
+
+function normalizeOrderDecimal({ value, field }) {
+  const normalized = typeof value === "number" && Number.isFinite(value)
+    ? String(value)
+    : value
+  assertDecimalString({
+    value: normalized,
+    field,
+  })
+  if (compareDecimal({ left: normalized, right: "0" }) <= 0) {
+    throw new RangeError(`${field} must be greater than zero`)
+  }
+  return normalized
+}
+
+function createSpotOrderRequest({ input }) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    throw new TypeError("Bitunix Spot createOrder() requires an order object")
+  }
+  const allowedFields = new Set([
+    "symbol",
+    "side",
+    "type",
+    "quantity",
+    "price",
+    "timeInForce",
+    "clientOrderId",
+    "newClientOrderId",
+  ])
+  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field))
+  if (unsupportedFields.length > 0) {
+    throw new TypeError(`Bitunix Spot createOrder() does not support fields: ${unsupportedFields.join(", ")}`)
+  }
+  if (input.clientOrderId !== undefined || input.newClientOrderId !== undefined) {
+    throw unsupported({
+      operation: "createOrder",
+      reason: "Bitunix Spot REST order placement does not accept a caller-supplied client order ID",
+    })
+  }
+  if (input.timeInForce !== undefined && input.timeInForce !== "GTC") {
+    throw new TypeError("Bitunix Spot single-order REST supports only its documented default GTC behavior")
+  }
+  const symbol = requireSymbol({
+    symbol: input.symbol,
+    operation: "createOrder()",
+  })
+  const side = input.side
+  const type = input.type ?? "LIMIT"
+  if (side !== "BUY" && side !== "SELL") {
+    throw new TypeError("Bitunix Spot createOrder() side must be BUY or SELL")
+  }
+  if (type !== "LIMIT" && type !== "MARKET") {
+    throw new TypeError("Bitunix Spot single-order REST supports only LIMIT and MARKET orders")
+  }
+  const quantity = normalizeOrderDecimal({
+    value: input.quantity,
+    field: "Bitunix Spot order quantity",
+  })
+  const price = type === "LIMIT"
+    ? normalizeOrderDecimal({
+      value: input.price,
+      field: "Bitunix Spot limit price",
+    })
+    : "0"
+  // The single-order REST endpoint uses quote volume for LIMIT and base
+  // volume for MARKET. Batch REST and WebSocket have different contracts.
+  const volume = type === "LIMIT"
+    ? multiplyDecimal({ left: quantity, right: price })
+    : quantity
+  return {
+    symbol,
+    side: side === "BUY" ? 2 : 1,
+    type: type === "LIMIT" ? 1 : 2,
+    quantity,
+    price,
+    volume,
+    body: {
+      symbol,
+      side: side === "BUY" ? 2 : 1,
+      type: type === "LIMIT" ? 1 : 2,
+      volume,
+      price,
+    },
+  }
+}
+
+function validateSpotOrderPlacementResponse({ response, symbol }) {
+  if (!response || typeof response !== "object" || Array.isArray(response)) {
+    throw new TypeError("Bitunix Spot place-order response must be an object")
+  }
+  if (String(response.symbol).toUpperCase() !== symbol) {
+    throw new TypeError("Bitunix Spot place-order response symbol does not match the request")
+  }
+  if (String(response.placeStatus) !== "1") {
+    throw Object.assign(
+      new Error("Bitunix Spot rejected the order placement"),
+      { kind: "exchange" },
+    )
+  }
+  return {
+    ...response,
+    orderId: validateOrderId({ orderId: response.orderId }),
+  }
 }
 
 async function sendBitunixSpotCancelRequest({ restClient, symbol, orderId }) {
@@ -1093,11 +1198,73 @@ export class BitunixSpotBroker extends CoreBroker {
     return toResult({ errors: [error] })
   }
 
-  async createOrder() {
-    return unsupportedMutationResult({
-      operation: "createOrder",
-      reason: "Bitunix Spot lacks exchange-side client order identity, so a lost placement response cannot be reconciled idempotently",
-    })
+  /**
+   * Place one Spot order through Bitunix's single-order REST endpoint.
+   * LIMIT quantity is converted from base to quote volume exactly; MARKET
+   * quantity remains base volume. A lost response is OUTCOME_UNKNOWN and is
+   * never retried because Bitunix does not accept a client order ID.
+   *
+   * @param {{symbol: string, side: "BUY"|"SELL", type?: "LIMIT"|"MARKET", quantity: string|number, price?: string|number, timeInForce?: "GTC"}} input
+   */
+  async createOrder(input = {}) {
+    let requestDispatched = false
+    let placementAcknowledged = false
+    let placementData
+    try {
+      const order = createSpotOrderRequest({ input })
+      requestDispatched = true
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.placeOrder,
+        body: order.body,
+        authenticated: true,
+        stateChanging: true,
+      })
+      placementData = validateSpotOrderPlacementResponse({
+        response: response.data,
+        symbol: order.symbol,
+      })
+      placementAcknowledged = true
+      try {
+        const normalizedOrder = await getBitunixSpotOrderDetail({
+          restClient: this.restClient,
+          symbol: order.symbol,
+          orderId: placementData.orderId,
+        })
+        return toResult({
+          data: normalizedOrder,
+          mutationOutcome: "CONFIRMED",
+        })
+      } catch (error) {
+        handleErr({
+          where: "BitunixSpotBroker.createOrder() detail reconciliation",
+          error,
+        })
+        return toResult({
+          data: placementData,
+          errors: [error],
+          mutationOutcome: "CONFIRMED",
+        })
+      }
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.createOrder()",
+        error,
+      })
+      const mutationOutcome = placementAcknowledged
+        ? "CONFIRMED"
+        : error?.kind === "exchange"
+          ? "REJECTED"
+          : getBrokerMutationOutcome({
+            error,
+            requestDispatched,
+          })
+      return toResult({
+        ...(placementData === undefined ? {} : { data: placementData }),
+        errors: [error],
+        mutationOutcome,
+      })
+    }
   }
 
   async createCanonicalOrder() {
