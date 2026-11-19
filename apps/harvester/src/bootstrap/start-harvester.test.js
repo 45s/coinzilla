@@ -9,6 +9,7 @@ import { prepareHarvesterStartupState, startHarvester } from "./start-harvester.
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
 import { createRecoverySellerStopWorkflow } from "../use-cases/create-recovery-seller-stop-workflow.js"
 import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
+import { initializeOperationalStateStore } from "../use-cases/initialize-operational-state-store.js"
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
@@ -5194,7 +5195,10 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
     directory,
     runtimeSessionId: "rs-stop-bootstrap-test",
   })
-  await store.initialize()
+  const initialized = await initializeOperationalStateStore({
+    operationalStateStore: store,
+  })
+  assert.equal(initialized.ok, true, initialized.errors?.[0]?.message)
   const seedWorkflow = await createRecoverySellerStopWorkflow({
     operationalStateStore: store,
   })
