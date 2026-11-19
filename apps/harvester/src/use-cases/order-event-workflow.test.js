@@ -735,3 +735,47 @@ test("routes Recovery Seller-owned fills to RS accounting without mutating Conse
   assert.deepEqual(calls.accounting, [], "An RS fill must never mutate Conservative Portfolio/RecoveryLedger accounting.")
   assert.deepEqual(calls.buyFills, [], "RS BUY fills must not enter Conservative BUY execution totals.")
 })
+
+
+test("fails closed for an RS SELL fill until terminal mixed-SELL reconciliation", async () => {
+  const recoverySellerOrder = makeOrder({
+    side: "SELL",
+    clientOrderId: "h-dogeusdt-rs-sell-1",
+  })
+  const recoverySellerFill = makeFill({
+    side: "SELL",
+    clientOrderId: recoverySellerOrder.clientOrderId,
+  })
+  const ownership = {
+    clientOrderId: recoverySellerOrder.clientOrderId,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "doge-recovery-seller-position",
+    purpose: "RECOVERY_SELL",
+    cycleId: "doge-recovery-seller-cycle-1",
+  }
+  const registry = createLifecycleRegistry({
+    currentOrder: recoverySellerOrder,
+    ownership,
+  })
+  const recoverySellerAccountingCalls = []
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    updateRecoverySellerAccounting: async ({ fill }) => {
+      recoverySellerAccountingCalls.push(fill)
+      return toResult({ data: {
+        applied: true,
+        duplicate: false,
+      } })
+    },
+  })
+
+  const result = await workflow.processExecutionFillTransition({
+    order: recoverySellerOrder,
+    fill: recoverySellerFill,
+  })
+
+  assert.equal(result.ok, false, "An RS SELL fill must wait for terminal mixed-SELL reconciliation instead of committing partial allocation.")
+  assert.deepEqual(calls.accounting, [], "An RS SELL fill must never be applied to Conservative accounting.")
+  assert.deepEqual(recoverySellerAccountingCalls, [], "The RS mixed-SELL accounting workflow must not be invoked with an isolated streamed fill.")
+  assert.equal(calls.pauses[0]?.reason, "EXECUTION_ACCOUNTING_FAILED", "Unsupported RS SELL accounting must pause the affected market fail-closed.")
+})

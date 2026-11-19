@@ -416,3 +416,7 @@ The diagrams do not override the [RS Domain Specification](./recovery-seller-dom
 - [ ] Complete RS-5 full lifecycle, failure, replay and STOP-reset acceptance tests.
 
 RS configuration is not execution permission by itself. Keep RS disabled until the full RS-4/RS-5 acceptance is complete.
+
+### Canonical fill ownership dispatch — checkpoint
+
+The order-event workflow now resolves immutable OrderRegistry ownership before accounting. RS BUY fills are routed through the RS accounting workflow and are excluded from CG execution totals. Individual RS SELL fill events fail closed until the terminal mixed-SELL reconciliation workflow can atomically allocate the complete canonical fill set and release the reservation. Regression coverage verifies both paths. This is an integration slice only; it does not satisfy production RS policy dispatch, shared reservation submission, or RS-5 lifecycle acceptance.
