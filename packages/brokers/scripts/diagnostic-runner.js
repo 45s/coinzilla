@@ -89,7 +89,7 @@ const BITUNIX_RESPONSE_SCHEMAS = Object.freeze({
   }),
   "/api/spot/v1/order/history/page": Object.freeze({
     expectedFields: ["pageNum", "total", "data"],
-    requiredFields: ["pageNum", "total", "data"],
+    requiredFields: ["pageNum", "total"],
     expectedFieldTypes: {
       pageNum: ["string", "number"],
       total: "number",
