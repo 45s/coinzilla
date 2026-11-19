@@ -1,8 +1,10 @@
+import { Broker } from "../src/index.js"
 import { BitunixRestClient } from "../src/infrastructure/bitunix/api/rest-client.js"
 import { BitunixSpotWebSocketClient } from "../src/infrastructure/bitunix/api/websocket-client.js"
 import { BitunixWebSocketTransport } from "../src/infrastructure/bitunix/api/websocket-transport.js"
 import {
   createDiagnosticReport,
+  inspectDiagnosticSchema,
   createDiagnosticResult,
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
@@ -19,6 +21,56 @@ const DIAGNOSTIC_CONFIG = Object.freeze({
   timeoutMs: 10_000,
   includePublicPayloads: false,
 })
+
+
+const BITUNIX_RESPONSE_SCHEMAS = Object.freeze({
+  "/api/spot/v1/common/coin_pair/list": Object.freeze({
+    expectedFields: ["base", "quote", "isOpen", "symbol", "minPrice", "minVolume", "basePrecision", "quotePrecision", "precisions"],
+    requiredFields: ["base", "quote", "isOpen"],
+    expectedFieldTypes: {
+      base: "string",
+      quote: "string",
+      isOpen: ["string", "number"],
+      symbol: "string",
+      minPrice: "string",
+      minVolume: "string",
+      basePrecision: ["string", "number"],
+      quotePrecision: ["string", "number"],
+      precisions: "array",
+    },
+  }),
+  "/api/spot/v1/market/last_price": Object.freeze({
+    expectedValueTypes: ["string"],
+  }),
+  "/api/spot/v1/user/account": Object.freeze({
+    expectedFields: ["coin", "balance", "balanceLocked"],
+    requiredFields: ["coin", "balance", "balanceLocked"],
+    expectedFieldTypes: {
+      coin: "string",
+      balance: "string",
+      balanceLocked: "string",
+    },
+  }),
+  "/api/spot/v1/order/pending/list": Object.freeze({
+    expectedFields: ["orderId", "symbol", "side", "type", "status", "volume", "dealVolume", "price", "avgPrice", "ctime", "utime"],
+    requiredFields: ["orderId", "symbol", "side", "type", "status", "volume", "dealVolume", "ctime", "utime"],
+    expectedFieldTypes: {
+      orderId: ["string", "number"],
+      symbol: "string",
+      side: ["string", "number"],
+      type: ["string", "number"],
+      status: ["string", "number"],
+      volume: "string",
+      dealVolume: "string",
+      price: "string",
+      avgPrice: "string",
+      ctime: "string",
+      utime: "string",
+    },
+  }),
+})
+
+const PUBLIC_ONLY_DIAGNOSTIC_CREDENTIAL = "READ_ONLY_PUBLIC_DIAGNOSTIC"
 
 const REST_ENDPOINTS = Object.freeze([
   {
@@ -819,13 +871,14 @@ function createConfigurationResult({ env, startedAt, now, secrets }) {
   })
 }
 
-function createReport({ startedAtIso, now, results, events }) {
+function createReport({ startedAtIso, now, results, events, schemaObservations = [] }) {
   return createDiagnosticReport({
     startedAt: startedAtIso,
     finishedAt: new Date(now()).toISOString(),
     runtime: createRuntimeMetadata(),
     results,
     events,
+    schemaObservations,
   })
 }
 
@@ -1291,6 +1344,303 @@ async function runWebSocketChecks({
   })
 }
 
+
+function createObservedBrokerRestClientFactory({
+  restClientFactory,
+  schemaObservations,
+  secrets,
+  now,
+}) {
+  return (configuration) => {
+    const client = restClientFactory(configuration)
+    return {
+      async request(request) {
+        try {
+          const response = await client.request(request)
+          const schema = BITUNIX_RESPONSE_SCHEMAS[request.path]
+          if (schema) {
+            schemaObservations.push({
+              timestamp: new Date(now()).toISOString(),
+              provider: "bitunix",
+              path: request.path,
+              method: request.method,
+              authenticated: request.authenticated ?? true,
+              stateChanging: request.stateChanging ?? false,
+              ...inspectDiagnosticSchema({
+                value: response.data,
+                ...schema,
+              }),
+            })
+          }
+          return response
+        } catch (error) {
+          schemaObservations.push({
+            timestamp: new Date(now()).toISOString(),
+            provider: "bitunix",
+            path: request.path,
+            method: request.method,
+            authenticated: request.authenticated ?? true,
+            error: sanitizeDiagnosticError({
+              error,
+              secrets,
+            }),
+          })
+          throw error
+        }
+      },
+    }
+  }
+}
+
+function createBrokerApiRequest({ method, args }) {
+  return {
+    api: "Broker",
+    method,
+    params: args[0] ?? {},
+    stateChanging: false,
+  }
+}
+
+function recordBrokerApiSuccess({
+  method,
+  args,
+  result,
+  privateResponse,
+  startedAt,
+  now,
+  results,
+  secrets,
+}) {
+  results.push(createResult({
+    operation: `Broker API ${method}`,
+    startedAt,
+    now,
+    status: "passed",
+    request: createBrokerApiRequest({ method, args }),
+    response: result.data,
+    privateResponse,
+    secrets,
+  }))
+}
+
+function recordBrokerApiFailure({
+  method,
+  args,
+  error,
+  startedAt,
+  now,
+  results,
+  secrets,
+}) {
+  results.push(createResult({
+    operation: `Broker API ${method}`,
+    startedAt,
+    now,
+    status: "failed",
+    request: createBrokerApiRequest({ method, args }),
+    error,
+    secrets,
+  }))
+}
+
+async function runBrokerApiOperation({
+  broker,
+  definition,
+  now,
+  results,
+  secrets,
+  onProgress,
+}) {
+  const startedAt = now()
+  emitProgress({
+    onProgress,
+    area: "Broker API",
+    operation: definition.method,
+    status: "RUNNING",
+  })
+  try {
+    const result = await broker[definition.method](...definition.args)
+    if (!result || result.ok !== true) {
+      const error = result?.errors?.[0] ?? new Error("Broker read returned no successful result envelope")
+      recordBrokerApiFailure({
+        method: definition.method,
+        args: definition.args,
+        error,
+        startedAt,
+        now,
+        results,
+        secrets,
+      })
+      emitProgress({
+        onProgress,
+        area: "Broker API",
+        operation: definition.method,
+        status: "FAIL",
+      })
+      return
+    }
+    recordBrokerApiSuccess({
+      method: definition.method,
+      args: definition.args,
+      result,
+      privateResponse: definition.privateResponse,
+      startedAt,
+      now,
+      results,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "Broker API",
+      operation: definition.method,
+      status: "PASS",
+    })
+  } catch (error) {
+    recordBrokerApiFailure({
+      method: definition.method,
+      args: definition.args,
+      error,
+      startedAt,
+      now,
+      results,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "Broker API",
+      operation: definition.method,
+      status: "FAIL",
+    })
+  }
+}
+
+async function runBrokerApiChecks({
+  env,
+  requestTimeout,
+  symbol,
+  now,
+  results,
+  secrets,
+  credentialsConfigured,
+  brokerApiRestClientFactory,
+  schemaObservations,
+  onProgress,
+}) {
+  const apiKey = credentialsConfigured
+    ? env.BITUNIX_API_KEY
+    : PUBLIC_ONLY_DIAGNOSTIC_CREDENTIAL
+  const apiSecret = credentialsConfigured
+    ? env.BITUNIX_API_SECRET
+    : PUBLIC_ONLY_DIAGNOSTIC_CREDENTIAL
+  const restClientFactory = createObservedBrokerRestClientFactory({
+    restClientFactory: brokerApiRestClientFactory,
+    schemaObservations,
+    secrets,
+    now,
+  })
+  const broker = new Broker({
+    provider: "bitunix",
+    apiKey,
+    apiSecret,
+    tradingMode: "live",
+    providerOptions: {
+      requestTimeout,
+      dependencies: {
+        restClientFactory,
+      },
+    },
+  })
+  try {
+    await broker.connect()
+    results.push(createResult({
+      operation: "Broker API connect",
+      startedAt: now(),
+      now,
+      status: "passed",
+      request: {
+        api: "Broker",
+        method: "connect",
+        networkConnection: false,
+      },
+      response: { connected: true },
+      secrets,
+    }))
+    const operations = [
+      {
+        method: "getExchangeMarkets",
+        args: [],
+        privateResponse: false,
+      },
+      {
+        method: "getPrices",
+        args: [{ symbol }],
+        privateResponse: false,
+      },
+    ]
+    if (credentialsConfigured) {
+      operations.push(
+        {
+          method: "getBalances",
+          args: [],
+          privateResponse: true,
+        },
+        {
+          method: "getOpenOrders",
+          args: [{ symbol }],
+          privateResponse: true,
+        },
+      )
+    }
+    for (const definition of operations) {
+      await runBrokerApiOperation({
+        broker,
+        definition,
+        now,
+        results,
+        secrets,
+        onProgress,
+      })
+    }
+  } catch (error) {
+    recordBrokerApiFailure({
+      method: "connect",
+      args: [],
+      error,
+      startedAt: now(),
+      now,
+      results,
+      secrets,
+    })
+  } finally {
+    try {
+      await broker.disconnect()
+      results.push(createResult({
+        operation: "Broker API disconnect",
+        startedAt: now(),
+        now,
+        status: "passed",
+        request: {
+          api: "Broker",
+          method: "disconnect",
+          networkConnection: false,
+        },
+        response: { disconnected: true },
+        secrets,
+      }))
+    } catch (error) {
+      recordBrokerApiFailure({
+        method: "disconnect",
+        args: [],
+        error,
+        startedAt: now(),
+        now,
+        results,
+        secrets,
+      })
+    }
+  }
+}
+
 async function runConfiguredProbes({
   env,
   requestTimeout,
@@ -1304,6 +1654,8 @@ async function runConfiguredProbes({
   includePublicPayloads,
   credentialsConfigured,
   restClientFactory,
+  brokerApiRestClientFactory,
+  schemaObservations,
   websocketClientFactory,
   onProgress,
 }) {
@@ -1321,6 +1673,20 @@ async function runConfiguredProbes({
     restClientFactory,
     onProgress,
   })
+  if (brokerApiRestClientFactory) {
+    await runBrokerApiChecks({
+      env,
+      requestTimeout,
+      symbol,
+      now,
+      results,
+      secrets,
+      credentialsConfigured,
+      brokerApiRestClientFactory,
+      schemaObservations,
+      onProgress,
+    })
+  }
   await runWebSocketChecks({
     env,
     requestTimeout,
@@ -1346,7 +1712,9 @@ async function runConfiguredDiagnostics({
   secrets,
   includePublicPayloads,
   restClientFactory,
+  brokerApiRestClientFactory,
   websocketClientFactory,
+  schemaObservations,
   onProgress,
 }) {
   const { symbol, klineInterval, timeoutMs: requestTimeout } = DIAGNOSTIC_CONFIG
@@ -1383,6 +1751,8 @@ async function runConfiguredDiagnostics({
     includePublicPayloads,
     credentialsConfigured,
     restClientFactory,
+    brokerApiRestClientFactory,
+    schemaObservations,
     websocketClientFactory,
     onProgress,
   })
@@ -1398,6 +1768,7 @@ export async function runBitunixDiagnostics({
   env = process.env,
   now = Date.now,
   restClientFactory = (options) => new BitunixRestClient(options),
+  brokerApiRestClientFactory,
   websocketClientFactory = (options) => new BitunixSpotWebSocketClient(options),
   onProgress,
 } = {}) {
@@ -1406,6 +1777,7 @@ export async function runBitunixDiagnostics({
   const secrets = getSecrets({ env })
   const results = []
   const events = []
+  const schemaObservations = []
   const { includePublicPayloads } = DIAGNOSTIC_CONFIG
   const safetyConfirmation = createSafetyConfirmationResult({
     startedAt,
@@ -1419,6 +1791,7 @@ export async function runBitunixDiagnostics({
       now,
       results,
       events,
+      schemaObservations,
     })
   }
   const configuration = createConfigurationResult({
@@ -1438,6 +1811,8 @@ export async function runBitunixDiagnostics({
     secrets,
     includePublicPayloads,
     restClientFactory,
+    brokerApiRestClientFactory,
+    schemaObservations,
     websocketClientFactory,
     onProgress,
   })
