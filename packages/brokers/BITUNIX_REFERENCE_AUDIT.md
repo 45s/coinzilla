@@ -164,8 +164,8 @@ The inspected README lists order, cancel, pending/history orders, trade history,
 
 | Topic | Evidence | Decision |
 |---|---|---|
-| Single-order quantity | Official REST place_order: LIMIT volume is quote quantity; MARKET volume is base quantity. | Contradictory with batch contract; no placement. |
-| Batch-order quantity | Official REST place_order/batch: LIMIT volume is base quantity; MARKET volume is quote quantity. | Do not extrapolate batch semantics to single-order endpoint. |
+| Single-order quantity | Official REST place_order: LIMIT volume is quote quantity; MARKET volume is base quantity. | Direct legacy `createOrder()` converts LIMIT base quantity to quote volume exactly and sends MARKET base quantity through the single-order endpoint. Do not extrapolate batch/WS units to this endpoint. Canonical placement remains blocked by missing client order identity. |
+| Batch-order quantity | Official REST place_order/batch: LIMIT volume is base quantity; MARKET volume is quote quantity. | Batch placement remains unused; do not extrapolate batch semantics to the single-order REST endpoint. |
 | Third-party order-volume claims | TypeScript MCP describes LIMIT base / MARKET BUY quote; other clients forward generic volume. | Not authoritative; keep #1185 blocker. |
 | User-trade endpoint | JKorf interface says /order/deal/list, but source calls /order/pending/list; official docs say POST /order/deal/list; StockSharp and Python use that endpoint. | JKorf implementation defect; do not copy it. |
 | Order-book precision | Official Spot depth requires precision; JKorf omits it; MCP and StockSharp pass it. | Caller-provided precision is the current safe boundary; do not infer it from precisions. |
@@ -197,10 +197,10 @@ The following is the current method-by-method status from the Binance broker sur
 | getCanonicalOrderHistory() | Blocked | Requires stable client identity and complete order-history reconciliation. |
 | getMyTrades() | Blocked | No account-wide Spot trade-history endpoint with complete paging/cursor semantics. |
 | getFills({ symbol, orderId }) | Blocked | Deal endpoint exists, but quantity denomination, multi-execution completeness, stable/unique execution ID and fee semantics are unresolved. |
-| createOrder() | Blocked | Single-order quantity conflict, no client order ID/idempotency key, no reliable unknown-outcome reconciliation, no TESTNET. |
+| createOrder() | Implemented behind `allowLiveOrderMutations` | LIMIT/MARKET only through the single-order REST endpoint; exact quantity conversion and order-detail verification. No client order ID/idempotency key; dispatched transport failures remain `OUTCOME_UNKNOWN`; no Spot TESTNET. Canonical placement remains blocked. |
 | createCanonicalOrder() | Blocked | All placement blockers plus complete canonical acknowledgement required. |
-| cancelOrder() | Blocked | No safe unknown-outcome cancellation reconciliation or private Spot event stream; no mutation environment. |
-| cancelAllOpenOrders() | Blocked | Requires complete account-wide open-order coverage and safe partial-failure handling. |
+| cancelOrder() | Implemented behind `allowLiveOrderMutations` | One known broker order ID is canceled and final status is verified through order detail. Acknowledgement without terminal cancellation remains `OUTCOME_UNKNOWN`; no live acceptance test/TESTNET. |
+| cancelAllOpenOrders() | Implemented behind `allowLiveOrderMutations` | Symbol-scoped only; enumerates current orders for the supplied symbol and independently reconciles each cancellation. No account-wide guarantee. |
 | getPrices() / getPrice() | Implemented | One-shot last-price lookup; no source timestamp. |
 | getCandles() | Blocked | Spot K-line omits volume required by canonical OHLCV. |
 | getExchangeMarkets() | Implemented | Open Spot pair catalog. |
@@ -278,7 +278,7 @@ These are Bitunix-only REST extensions, not Binance parity methods. Keep exact d
 
 - **Read-only account history extensions:** deposits (POST /api/spot/v1/deposit/page), withdrawal history (POST /api/spot/v1/withdraw_transfer/page) and deposit-address lookup (POST /api/spot/v1/deposit/address) are implemented as one-page Bitunix-specific reads. Review retention, pagination, statuses, IDs, sensitive address handling and permission requirements before claiming complete history.
 - **Matching-order lookup:** the endpoint is discoverable in official docs, StockSharp and Python. Keep canonical fills blocked until Bitunix clarifies unit, aggregation of partial fills, stable ID uniqueness and fee finality. A raw diagnostic method would need an explicitly non-canonical contract and a real consumer.
-- **Order placement/cancellation:** external clients show request construction, but no implementation resolves the official volume contradiction, client order identity, unknown-outcome recovery or absent TESTNET. Do not implement or enable mutations until #1185 acceptance criteria are met.
+- **Canonical order lifecycle:** direct legacy `createOrder()`, `cancelOrder()`, and symbol-scoped `cancelAllOpenOrders()` are implemented behind `allowLiveOrderMutations` with exact single-order quantity conversion and read-after-write verification. `createCanonicalOrder()` remains unsupported because Bitunix has no client order ID and the broker cannot establish canonical identity/recovery. Do not widen live mutation exposure or enable Harvester until #1185 acceptance criteria are met.
 - **Spot subscriptions:** no Spot push implementation was found in the inspected Spot packages. Futures channels and the official Futures Node demo do not qualify. Revisit only with official Spot push-channel documentation.
 - **Klines/candles:** current and historical Spot K-line reads are covered by PR #1324; canonical OHLCV remains blocked until Bitunix supplies real volume.
 
