@@ -17,6 +17,7 @@ test("creates a provider-account-scoped record without losing exact decimal prec
     environment: "testnet",
   })
 
+  assert.ok(record, "A qualifying filled order must produce a history record.")
   assert.equal(record.id, JSON.stringify([
     "testnet",
     "binanceTestnet",

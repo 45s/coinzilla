@@ -53,6 +53,7 @@ test("upserts partial and final fills into one real SQLite order record", async 
     id: partial.id,
   })
 
+  assert.ok(stored, "The repository must create the first durable SQLite row.")
   assert.deepEqual(updated, stored, "The repository result must match the durable SQLite record.")
   assert.equal(stored.executedQuantity, "1.0000", "Final cumulative execution must be persisted exactly.")
   assert.equal(stored.status, "FILLED", "The same row must advance to FILLED.")
@@ -80,6 +81,7 @@ test("keeps equal client order IDs isolated across provider accounts", async (t)
     id: second.id,
   })
 
+  assert.ok(firstStored && secondStored, "Both provider accounts must have independent durable order rows.")
   assert.notEqual(first.id, second.id, "Provider/account identity must be part of the durable record key.")
   assert.equal(firstStored.accountId, "binance-primary", "The first account must retain its own order.")
   assert.equal(secondStored.accountId, "binance-secondary", "The second account must retain its own order.")
