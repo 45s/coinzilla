@@ -40,8 +40,42 @@ const createFixture = ({ cfg = config(), env = {} } = {}) => {
   }
 }
 
-test("selects only Conservative-owned symbols from provider strategy routes", async () => {
-  const cfg = config({ enabledSymbols: ["BTCUSDT", "ETHUSDT"] })
+function recoverySellerPair(overrides = {}) {
+  return {
+    enabled: true,
+    tradingEnvironment: TRADING_ENVIRONMENTS.BOTH,
+    enableVolatilityProtection: false,
+    externalOrdersPolicy: "BLOCK",
+    investment: 100,
+    orderQuantity: 5,
+    minProfit: 1,
+    priceStepPercent: 1,
+    makerPercent: 0,
+    takerPercent: 0.1,
+    pricePrecision: 4,
+    quantityPrecision: 4,
+    legacyPosition: {
+      invested: 50,
+      quantity: 10,
+    },
+    sellQuantity: 5,
+    ...overrides,
+  }
+}
+
+test("selects CG and RS markets independently while preserving strategy-owned pair maps", async () => {
+  const cfg = {
+    ...config({ enabledSymbols: ["BTCUSDT"] }),
+    strategies: {
+      ...config({ enabledSymbols: ["BTCUSDT"] }).strategies,
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: {
+          ETHUSDT: recoverySellerPair(),
+        },
+      },
+    },
+  }
   const executionRoutes = [
     {
       strategyId: "CG_coinGrabber",
@@ -62,9 +96,42 @@ test("selects only Conservative-owned symbols from provider strategy routes", as
     executionRoutes,
   })
 
-  assert.deepEqual(Object.keys(result.pairs), ["BTCUSDT"])
-  assert.deepEqual(result.executionSymbols, ["BTCUSDT"])
+  assert.deepEqual(Object.keys(result.appConfig.strategies.CG_coinGrabber.pairs), ["BTCUSDT"])
+  assert.deepEqual(Object.keys(result.appConfig.strategies.RS_recoverySeller.pairs), ["ETHUSDT"])
+  assert.deepEqual(Object.keys(result.pairs), ["BTCUSDT", "ETHUSDT"])
+  assert.deepEqual(result.marketSymbols, ["BTCUSDT", "ETHUSDT"])
+  assert.deepEqual(result.executionSymbols, ["BTCUSDT", "ETHUSDT"])
   assert.deepEqual(result.executionRoutes, executionRoutes)
+})
+
+test("rejects an RS route unless the RS strategy is explicitly enabled", async () => {
+  const fixture = createFixture({
+    cfg: {
+      ...config(),
+      strategies: {
+        ...config().strategies,
+        RS_recoverySeller: {
+          enabled: false,
+          pairs: {
+            ETHUSDT: recoverySellerPair(),
+          },
+        },
+      },
+    },
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
+
+  await assert.rejects(
+    resolveHarvesterOptions({
+      ...fixture.input,
+      executionSymbols: ["BTCUSDT", "ETHUSDT"],
+      executionRoutes: [
+        { strategyId: "CG_coinGrabber", symbol: "BTCUSDT" },
+        { strategyId: "RS_recoverySeller", symbol: "ETHUSDT" },
+      ],
+    }),
+    /RS_recoverySeller strategy must be explicitly enabled/i,
+  )
 })
 
 test("fails closed for an RS-only provider until RS runtime dispatch exists", async () => {
