@@ -1,7 +1,7 @@
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { ReadonlyMap } from "./readonly-map.js"
 
-const EXECUTABLE_STRATEGY_IDS = new Set([StrategyId.COIN_GRABBER])
+const EXECUTABLE_STRATEGY_IDS = new Set([StrategyId.COIN_GRABBER, StrategyId.RECOVERY_SELLER])
 const TRADING_ENVIRONMENTS = new Set(["testnet", "live"])
 
 function isRecord(value) {
@@ -28,15 +28,41 @@ function assertProviderInstances(providers) {
   return providerById
 }
 
-function getStrategyPairs({ appConfig, allowMissing = false } = {}) {
-  const pairs = appConfig?.strategies?.[StrategyId.COIN_GRABBER]?.pairs
+function getStrategyPairs({ appConfig, strategyId = StrategyId.COIN_GRABBER, allowMissing = false } = {}) {
+  const pairs = appConfig?.strategies?.[strategyId]?.pairs
   if (allowMissing && pairs === undefined) {
     return {}
   }
   if (!isRecord(pairs)) {
-    throw new TypeError("Execution routing requires the configured CG_coinGrabber pair map")
+    throw new TypeError(`Execution routing requires the configured ${strategyId} pair map`)
   }
   return pairs
+}
+
+function isStrategyEnabled({ appConfig, strategyId }) {
+  const strategy = appConfig?.strategies?.[strategyId]
+  if (!isRecord(strategy)) {
+    return false
+  }
+  if (strategyId === StrategyId.RECOVERY_SELLER) {
+    return strategy.enabled === true
+  }
+  return strategy.enabled !== false
+}
+
+function getEnabledStrategyPairs({ appConfig, allowMissingLegacyCg = false } = {}) {
+  const pairsByStrategy = new Map()
+  for (const strategyId of EXECUTABLE_STRATEGY_IDS) {
+    if (!isStrategyEnabled({ appConfig, strategyId })) {
+      continue
+    }
+    pairsByStrategy.set(strategyId, getStrategyPairs({
+      appConfig,
+      strategyId,
+      allowMissing: allowMissingLegacyCg && strategyId === StrategyId.COIN_GRABBER,
+    }))
+  }
+  return pairsByStrategy
 }
 
 function assertRouteShape({ route,
@@ -65,18 +91,23 @@ function createRouteKey({ strategyId,
 
 function addConfiguredRoute({ route,
   index,
-  pairs,
+  pairsByStrategy,
+  appConfig,
   providerById,
   routeByStrategyMarket }) {
   assertRouteShape({ route,
   index })
   if (!EXECUTABLE_STRATEGY_IDS.has(route.strategyId)) {
     throw new TypeError(
-      `Execution routing contains unsupported strategy ${route.strategyId}; only CG_coinGrabber is executable`,
+      `Execution routing contains unsupported strategy ${route.strategyId}`,
     )
   }
-  if (!Object.hasOwn(pairs, route.symbol)) {
-    throw new TypeError(`Execution route references unconfigured symbol ${route.symbol}`)
+  if (!isStrategyEnabled({ appConfig, strategyId: route.strategyId })) {
+    throw new TypeError(`Execution route references disabled strategy ${route.strategyId}`)
+  }
+  const pairs = pairsByStrategy.get(route.strategyId)
+  if (!pairs || !Object.hasOwn(pairs, route.symbol)) {
+    throw new TypeError(`Execution route references unconfigured ${route.strategyId} market ${route.symbol}`)
   }
   if (pairs[route.symbol]?.enabled !== true) {
     throw new TypeError(`Execution route references disabled market ${route.symbol}`)
@@ -107,7 +138,8 @@ function addConfiguredRoute({ route,
 }
 
 function resolveConfiguredRoutes({ configuredRouting,
-  pairs,
+  pairsByStrategy,
+  appConfig,
   providerById }) {
   if (
     !isRecord(configuredRouting) ||
@@ -121,7 +153,8 @@ function resolveConfiguredRoutes({ configuredRouting,
     addConfiguredRoute({
       route,
       index,
-      pairs,
+      pairsByStrategy,
+      appConfig,
       providerById,
       routeByStrategyMarket,
     })
@@ -129,15 +162,16 @@ function resolveConfiguredRoutes({ configuredRouting,
   return routeByStrategyMarket
 }
 
-function assertEnabledMarketsAreRouted({ pairs,
+function assertEnabledMarketsAreRouted({ pairsByStrategy,
   routeByStrategyMarket }) {
-  const missingMarkets = Object.entries(pairs)
-    .filter(([symbol, pair]) => pair?.enabled === true &&
-      !routeByStrategyMarket.has(createRouteKey({
-        strategyId: StrategyId.COIN_GRABBER,
-        symbol,
-      })))
-    .map(([symbol]) => `${StrategyId.COIN_GRABBER}/${symbol}`)
+  const missingMarkets = []
+  for (const [strategyId, pairs] of pairsByStrategy) {
+    for (const [symbol, pair] of Object.entries(pairs)) {
+      if (pair?.enabled === true && !routeByStrategyMarket.has(createRouteKey({ strategyId, symbol }))) {
+        missingMarkets.push(`${strategyId}/${symbol}`)
+      }
+    }
+  }
   if (missingMarkets.length > 0) {
     throw new TypeError(
       `Execution routing is missing enabled strategy-market routes: ${missingMarkets.join(", ")}`,
@@ -148,15 +182,15 @@ function assertEnabledMarketsAreRouted({ pairs,
 function groupSymbolsByProvider({ providers,
   routeByStrategyMarket }) {
   const symbolsByProvider = new Map(
-    providers.map(({ providerInstanceId }) => [providerInstanceId, []]),
+    providers.map(({ providerInstanceId }) => [providerInstanceId, new Set()]),
   )
   for (const [key, providerInstanceId] of routeByStrategyMarket) {
     const [, symbol] = JSON.parse(key)
-    symbolsByProvider.get(providerInstanceId).push(symbol)
+    symbolsByProvider.get(providerInstanceId).add(symbol)
   }
   return new ReadonlyMap([...symbolsByProvider].map(([providerInstanceId, symbols]) => [
     providerInstanceId,
-    Object.freeze(symbols),
+    Object.freeze([...symbols]),
   ]))
 }
 
@@ -165,7 +199,7 @@ function groupSymbolsByProvider({ providers,
  *
  * A legacy one-provider deployment keeps its existing provider assignment.
  * Multi-provider deployments must declare every execution route explicitly.
- * Recovery Seller is deliberately excluded until its separate integration gates pass.
+ * Recovery Seller requires its own explicit enabled configuration and route; it never inherits CG pairs.
  *
  * @param {{appConfig: object, providers: object[]}} input
  * @returns {ReadonlyMap<string, ReadonlyArray<string>>} Provider instance to execution symbols.
@@ -174,9 +208,9 @@ export function resolveExecutionSymbolsByProvider({ appConfig,
   providers } = {}) {
   const providerById = assertProviderInstances(providers)
   const isLegacySingleProvider = appConfig.executionRouting === undefined && providers.length === 1
-  const pairs = getStrategyPairs({
+  const pairsByStrategy = getEnabledStrategyPairs({
     appConfig,
-    allowMissing: isLegacySingleProvider,
+    allowMissingLegacyCg: isLegacySingleProvider,
   })
   if (appConfig.executionRouting === undefined) {
     if (providers.length !== 1) {
@@ -184,7 +218,11 @@ export function resolveExecutionSymbolsByProvider({ appConfig,
         "Multi-provider Harvester configuration requires explicit executionRouting.routes",
       )
     }
+    if (pairsByStrategy.has(StrategyId.RECOVERY_SELLER)) {
+      throw new TypeError("Recovery Seller requires explicit executionRouting.routes")
+    }
     const [provider] = providers
+    const pairs = pairsByStrategy.get(StrategyId.COIN_GRABBER) ?? {}
     const symbols = Object.entries(pairs)
       .filter(([, pair]) => pair?.enabled === true &&
         (!pair.tradingEnvironment ||
@@ -196,11 +234,12 @@ export function resolveExecutionSymbolsByProvider({ appConfig,
 
   const routeByStrategyMarket = resolveConfiguredRoutes({
     configuredRouting: appConfig.executionRouting,
-    pairs,
+    pairsByStrategy,
+    appConfig,
     providerById,
   })
   assertEnabledMarketsAreRouted({
-    pairs,
+    pairsByStrategy,
     routeByStrategyMarket,
   })
   const symbolsByProvider = groupSymbolsByProvider({
