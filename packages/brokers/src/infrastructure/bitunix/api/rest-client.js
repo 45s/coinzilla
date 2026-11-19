@@ -364,6 +364,10 @@ function normalizeErrorCode({ code }) {
   return null
 }
 
+function isAmbiguousMutationHttpStatus({ status }) {
+  return status === 408 || status === 409 || status >= 500
+}
+
 function validateHttpResponse({ response, payload, path, stateChanging }) {
   if (!hasValidHttpMetadata({ response })) {
     throw new BitunixRestError({
@@ -382,7 +386,7 @@ function validateHttpResponse({ response, payload, path, stateChanging }) {
       kind: "http",
       status: response.status,
       path,
-      outcomeUnknown: stateChanging && response.status >= 500,
+      outcomeUnknown: stateChanging && isAmbiguousMutationHttpStatus({ status: response.status }),
       retryAfterMs: response.status === 429 ? parseRetryAfterMs({ response }) : null,
     })
   }
