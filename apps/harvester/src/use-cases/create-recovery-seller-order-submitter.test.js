@@ -530,7 +530,9 @@ test("uses durable STOP callbacks to block further RS submissions after an unkno
   })
 
   assert.equal(first.ok, false)
-  assert.equal(second.ok, false)
+  assert.equal(second.ok, true)
+  assert.equal(second.data.submitted, false)
+  assert.deepEqual(second.data.submittedOrders, [])
   assert.equal(placeOrderCalls, 1)
   assert.equal(recoverySellerStopCallbacks.canSubmit(), false)
   assert.equal(stopWorkflowResult.data.getStopState().status, "STOPPED")
