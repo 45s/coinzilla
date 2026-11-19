@@ -1323,7 +1323,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 - [x] Implemented `createOrder()` on the documented `POST /api/spot/v1/order/place_order` endpoint only.
 - [x] LIMIT orders convert the caller's base quantity to quote-coin volume using exact decimal multiplication; MARKET orders submit base quantity. Market price is sent as `0`.
-- [x] Enforce LIMIT/MARKET, BUY/SELL, positive decimal quantity/price, GTC-only behavior, and reject unsupported fields/client IDs before dispatch.
+- [x] Enforce LIMIT/MARKET, BUY/SELL, positive decimal quantity/price, documented default time-in-force only, and reject unsupported fields/client IDs before dispatch.
 - [x] Validate the exchange placement response and read back the returned order ID via order detail before returning the normalized order.
 - [x] A dispatched transport failure returns `OUTCOME_UNKNOWN`; no automatic retry. If placement was acknowledged but detail reconciliation fails, return the exchange order ID and `CONFIRMED` mutation outcome for manual follow-up.
 - [x] Added offline tests for LIMIT and MARKET request payloads, exact quantity conversion, identity rejection, unknown transport outcomes, and acknowledged-placement reconciliation failure.
