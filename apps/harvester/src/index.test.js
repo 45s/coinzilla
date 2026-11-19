@@ -2168,7 +2168,10 @@ function createProvenanceJournal({ operations, onFlush }) {
     ready: Promise.resolve({ ok: true }),
     flush: async () => {
       onFlush()
-      return { ok: true, durable: true }
+      return {
+        ok: true,
+        durable: true,
+      }
     },
     close: async () => ({
       ok: true,
