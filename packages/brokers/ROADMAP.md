@@ -144,6 +144,14 @@ This section contains only work owned by `@coinzilla/brokers`. Consumer applicat
 
 **Completed broker capability references:** normalized candle history/live Kline ([PR #1017](https://github.com/45s/coinzilla/pull/1017)); complete Binance order acknowledgements ([PR #961](https://github.com/45s/coinzilla/pull/961)); explicit Binance environment selection ([PR #841](https://github.com/45s/coinzilla/pull/841)); cancellation outcome classification ([PR #786](https://github.com/45s/coinzilla/pull/786)); and public-stream liveness/recovery ([PR #1272](https://github.com/45s/coinzilla/pull/1272)). Detailed historical evidence remains below.
 
+### Bitunix Spot token/network metadata — PR #1468 (in progress)
+
+- Implement `BitunixSpotBroker.getTokenNetworks()` as an unsigned, read-only request to the documented Spot token/network catalog.
+- Keep this as a provider-specific extension; do not add a competing capability vocabulary or alter the exchange-neutral Broker contract.
+- Preserve exact decimal strings and source metadata, validate malformed token/network rows, and keep `getAssets()` as the existing balance projection.
+- This metadata lookup does not enable or implement transfers, withdrawals, order mutations, or Harvester execution. Issue #1185 remains authoritative for lifecycle and mutation gates.
+- Completion is contingent on exact-head Brokers tests/coverage, workspace CI, and documentation verification.
+
 ## 1. Mission and definition of done
 
 ### Mission
