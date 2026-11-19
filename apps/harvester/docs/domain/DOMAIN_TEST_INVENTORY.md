@@ -189,3 +189,11 @@ After each logical area, record exact test/CI evidence and remaining gaps here a
 The latest merged Harvester verification in this initiative is PR [#949](https://github.com/45s/coinzilla/pull/949), exact synchronized head `9300eaa114aed0ab805b7e2e44ff8b542aada58a`: all six required workflows passed, including workspace package tests, coverage, JavaScript syntax, actionlint, Utils tests and dependency audit. The read-only TESTNET integration probe was skipped; no exchange activity occurred. Earlier PR #917, #922 and #937 coverage figures above remain historical evidence.
 
 The active `develop` ruleset requires six contexts: Run package tests, Workspace test coverage, Check JavaScript syntax, packages/utils tests, Audit production dependencies and actionlint. The Harvester coverage workflow measures coverage but does not enforce a Harvester-specific percentage threshold. Preserve all existing checks and thresholds; do not add a threshold without a measured baseline and meaningful enforcement design.
+
+### RS-4 integration safety regressions — 2026-11-20
+
+- `apps/harvester/src/application/providers/account-runtime-registry.test.js`: `keeps engine registry replacements visible to every account workflow` verifies that replacing the engine's immutable OrderRegistry snapshot updates the account-scoped accessor used by RS accounting.
+- `apps/harvester/src/use-cases/order-event-workflow.test.js`: `latches the durable global RS STOP when terminal mixed-SELL reconciliation is unavailable` verifies that a terminal RS SELL cannot degrade to a market-only pause when its production reconciler is absent.
+- `apps/harvester/src/bootstrap/start-harvester.test.js`: `rejects configured RS routes without a production evaluator during startup preflight` verifies that RS configuration cannot proceed without an evaluator registration.
+
+The exact-head Harvester targeted suite passed after these tests were added. Strict changed-file ESLint passed after removing the obsolete terminal-reconciliation helper. Full workspace unit tests, coverage, JavaScript syntax and external documentation-link checks must still pass on the final documentation commit before this checkpoint can be considered verified. These tests establish fail-closed boundaries only; they do not prove a complete RS lifecycle or authorize RS execution.
