@@ -272,6 +272,18 @@ function createHarvesterTradingEngineOperationalCallbacks(options = {}) {
   }
 }
 
+function createHarvesterRecoverySellerOptions(options = {}) {
+  return {
+    recoverySellerPairs: options.recoverySellerPairs,
+    recoverySellerWorkflow: options.recoverySellerWorkflow,
+    recoverySellerStopWorkflow: options.recoverySellerStopWorkflow,
+    getRecoverySellerMarketMetadata: options.getRecoverySellerMarketMetadata,
+    evaluateRecoverySellerTransition: options.evaluateRecoverySellerTransition,
+    updateTradingAccounting: options.updateTradingAccounting,
+    updateRecoverySellerAccounting: options.recoverySellerWorkflow?.applyBuyFill,
+  }
+}
+
 function createHarvesterTradingEngineOptions(options = {}) {
   const {
     broker,
@@ -284,12 +296,6 @@ function createHarvesterTradingEngineOptions(options = {}) {
     getAccountSnapshot,
     getAdditionalTrackedBaseQuantity,
     getAdditionalTrackedQuoteCashFlow,
-    recoverySellerPairs,
-    recoverySellerWorkflow,
-    recoverySellerStopWorkflow,
-    getRecoverySellerMarketMetadata,
-    evaluateRecoverySellerTransition,
-    updateTradingAccounting,
     completeRecoveryCycle,
     userDataState,
     accountSnapshotManagerRef,
@@ -311,13 +317,7 @@ function createHarvesterTradingEngineOptions(options = {}) {
     getAccountSnapshot,
     getAdditionalTrackedBaseQuantity,
     getAdditionalTrackedQuoteCashFlow,
-    recoverySellerPairs,
-    recoverySellerWorkflow,
-    recoverySellerStopWorkflow,
-    getRecoverySellerMarketMetadata,
-    evaluateRecoverySellerTransition,
-    updateTradingAccounting,
-    updateRecoverySellerAccounting: recoverySellerWorkflow?.applyBuyFill,
+    ...createHarvesterRecoverySellerOptions(options),
     completeRecoveryCycle,
     ...createHarvesterTradingEngineSafetyCallbacks({
       userDataState,
