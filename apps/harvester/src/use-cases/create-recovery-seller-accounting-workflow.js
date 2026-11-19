@@ -131,14 +131,31 @@ function resolveRecoverySellerBuyOrderOwnership({ registry, fill }) {
   }
 }
 
-function createNextRecoverySellerBuyExecution({ state, fill, ownership } = {}) {
+function assertCanonicalRecoverySellerBuyFillQuantities({ fill } = {}) {
   const quantity = fill.quantity?.amount
   const quoteQuantity = fill.quoteQuantity?.amount
-  if (typeof quantity !== "string" || typeof quoteQuantity !== "string" ||
-      fill.quantity.asset.id !== fill.market.baseAsset.id ||
-      fill.quoteQuantity.asset.id !== fill.market.quoteAsset.id) {
+  const hasCanonicalQuantities = typeof quantity === "string" &&
+    typeof quoteQuantity === "string" &&
+    fill.quantity.asset.id === fill.market.baseAsset.id &&
+    fill.quoteQuantity.asset.id === fill.market.quoteAsset.id
+  if (!hasCanonicalQuantities) {
     throw new TypeError("Recovery Seller BUY execution requires canonical base and quote quantities")
   }
+  return { quantity, quoteQuantity }
+}
+
+function isRecoverySellerBuyExecutionIdentityCompatible({ existing, identity } = {}) {
+  if (!existing) {
+    return true
+  }
+  return existing.marketId === identity.marketId &&
+    existing.positionId === identity.positionId &&
+    existing.baseAssetId === identity.baseAssetId &&
+    existing.quoteAssetId === identity.quoteAssetId
+}
+
+function createNextRecoverySellerBuyExecution({ state, fill, ownership } = {}) {
+  const { quantity, quoteQuantity } = assertCanonicalRecoverySellerBuyFillQuantities({ fill })
   const existing = state.recoverySellerBuyExecutionByCycle.get(ownership.cycleId)
   const identity = {
     cycleId: ownership.cycleId,
@@ -147,12 +164,7 @@ function createNextRecoverySellerBuyExecution({ state, fill, ownership } = {}) {
     baseAssetId: fill.market.baseAsset.id,
     quoteAssetId: fill.market.quoteAsset.id,
   }
-  if (existing && (
-    existing.marketId !== identity.marketId ||
-    existing.positionId !== identity.positionId ||
-    existing.baseAssetId !== identity.baseAssetId ||
-    existing.quoteAssetId !== identity.quoteAssetId
-  )) {
+  if (!isRecoverySellerBuyExecutionIdentityCompatible({ existing, identity })) {
     throw new Error("Recovery Seller cycle identity was reused across a different market, Position or asset pair")
   }
   return Object.freeze({
@@ -478,12 +490,72 @@ function createRecoverySellerAccountingOperations({
   }
 }
 
+function createRecoverySellerAccountingWorkflowApi({ state, operations } = {}) {
+  return Object.freeze({
+    ...operations,
+    getExecutionCallbacks: () => createRecoverySellerExecutionCallbacks({ state }),
+    getBuyExecutionQuantity: ({ cycleId } = {}) =>
+      state.recoverySellerBuyExecutionByCycle.get(cycleId)?.quantity,
+    getBuyExecutionVwap: ({ cycleId } = {}) =>
+      calculateRecoverySellerBuyExecutionVwap({
+        execution: state.recoverySellerBuyExecutionByCycle.get(cycleId),
+      }),
+    getBuyExecutionState: ({ cycleId } = {}) => {
+      const execution = state.recoverySellerBuyExecutionByCycle.get(cycleId)
+      return execution
+        ? Object.freeze({
+            ...execution,
+            vwap: calculateRecoverySellerBuyExecutionVwap({ execution }),
+          })
+        : undefined
+    },
+    getPortfolio: () => state.portfolio,
+    getOrderRegistry: () => state.orderRegistry,
+    getActiveOrders: () => state.orderRegistry.getActiveOrders(),
+    getLegacyPosition: ({ marketId } = {}) => getLegacyPositionRecord({
+      state,
+      marketId,
+    }).position,
+    getLegacyAccounting: ({ marketId } = {}) => getLegacyPositionRecord({
+      state,
+      marketId,
+    }).accounting,
+    getAdditionalTrackedBaseQuantity: ({ balances, portfolio = state.portfolio } = {}) =>
+      createAdditionalTrackedBaseQuantity({
+        state,
+        balances,
+        portfolio,
+      }),
+    getAdditionalTrackedQuoteCashFlow: () => createAdditionalTrackedQuoteCashFlow({
+      legacyPositions: state.legacyPositions,
+    }),
+  })
+}
+
 export function createRecoverySellerAccountingWorkflow({
   initialPortfolio,
   initialOrderRegistry,
   initialLegacyPositions = [],
   onOperationalStateExecutionFill,
   sharedState,
+} = {}) {
+  if (onOperationalStateExecutionFill !== undefined) {
+    ensure.function({
+      value: onOperationalStateExecutionFill,
+      name: "onOperationalStateExecutionFill",
+    })
+  }
+  const state = createRecoverySellerWorkflowState({
+    sharedState,
+    initialPortfolio,
+    initialOrderRegistry,
+    initialLegacyPositions,
+  })
+  const operations = createRecoverySellerAccountingOperations({
+    state,
+    onOperationalStateExecutionFill,
+  })
+  return createRecoverySellerAccountingWorkflowApi({ state, operations })
 } = {}) {
   if (onOperationalStateExecutionFill !== undefined) {
     ensure.function({

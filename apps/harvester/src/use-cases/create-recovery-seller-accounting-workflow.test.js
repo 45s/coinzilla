@@ -672,8 +672,8 @@ function makeAcknowledgedRecoveryBuyOrder({ pendingOrder, brokerOrderId = "broke
   })
 }
 
-test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fills", async () => {
-  const buyOrder = new CanonicalOrder({
+function makeRecoverySellerVwapBuyOrder() {
+  return new CanonicalOrder({
     clientOrderId: "rs-buy-vwap-1",
     brokerOrderId: "broker-rs-buy-vwap-1",
     market,
@@ -696,6 +696,38 @@ test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fill
     acknowledgedAt: 101,
     updatedAt: 102,
   })
+}
+
+function makeRecoverySellerVwapFills({ buyOrder } = {}) {
+  return [
+    new Fill({
+      tradeId: "rs-buy-vwap-fill-1",
+      brokerOrderId: buyOrder.brokerOrderId,
+      clientOrderId: buyOrder.clientOrderId,
+      market,
+      side: "BUY",
+      price: new Money({ amount: "5", asset: quoteAsset }),
+      quantity: new Quantity({ amount: "2", asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    }),
+    new Fill({
+      tradeId: "rs-buy-vwap-fill-2",
+      brokerOrderId: buyOrder.brokerOrderId,
+      clientOrderId: buyOrder.clientOrderId,
+      market,
+      side: "BUY",
+      price: new Money({ amount: "6", asset: quoteAsset }),
+      quantity: new Quantity({ amount: "1", asset: baseAsset }),
+      quoteQuantity: new Money({ amount: "6", asset: quoteAsset }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    }),
+  ]
+}
+
+function makeRecoverySellerVwapWorkflow({ buyOrder } = {}) {
   const ownership = createOrderOwnership({
     ownership: {
       strategyId,
@@ -706,7 +738,7 @@ test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fill
     clientOrderId: buyOrder.clientOrderId,
     brokerOrderId: buyOrder.brokerOrderId,
   })
-  const workflow = createRecoverySellerAccountingWorkflow({
+  return createRecoverySellerAccountingWorkflow({
     initialPortfolio: new Portfolio(),
     initialOrderRegistry: new OrderRegistry({
       orders: [buyOrder],
@@ -718,65 +750,22 @@ test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fill
       data: { durable: true },
     }),
   })
-  const fills = [
-    new Fill({
-      tradeId: "rs-buy-vwap-fill-1",
-      brokerOrderId: buyOrder.brokerOrderId,
-      clientOrderId: buyOrder.clientOrderId,
-      market,
-      side: "BUY",
-      price: new Money({
-        amount: "5",
-        asset: quoteAsset,
-      }),
-      quantity: new Quantity({
-        amount: "2",
-        asset: baseAsset,
-      }),
-      quoteQuantity: new Money({
-        amount: "10",
-        asset: quoteAsset,
-      }),
-      commissions: [],
-      commissionStatus: "COMPLETE",
-    }),
-    new Fill({
-      tradeId: "rs-buy-vwap-fill-2",
-      brokerOrderId: buyOrder.brokerOrderId,
-      clientOrderId: buyOrder.clientOrderId,
-      market,
-      side: "BUY",
-      price: new Money({
-        amount: "6",
-        asset: quoteAsset,
-      }),
-      quantity: new Quantity({
-        amount: "1",
-        asset: baseAsset,
-      }),
-      quoteQuantity: new Money({
-        amount: "6",
-        asset: quoteAsset,
-      }),
-      commissions: [],
-      commissionStatus: "COMPLETE",
-    }),
-  ]
+}
+
+test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fills", async () => {
+  const buyOrder = makeRecoverySellerVwapBuyOrder()
+  const workflow = makeRecoverySellerVwapWorkflow({ buyOrder })
+  const fills = makeRecoverySellerVwapFills({ buyOrder })
 
   for (const fill of fills) {
-    const result = await workflow.applyBuyFill({
-      order: buyOrder,
-      fill,
-    })
+    const result = await workflow.applyBuyFill({ order: buyOrder, fill })
     assert.equal(result.ok, true, result.errors?.[0]?.message)
   }
-
   const duplicateFill = await workflow.applyBuyFill({
     order: buyOrder,
     fill: fills[0],
   })
   assert.equal(duplicateFill.ok, true, duplicateFill.errors?.[0]?.message)
-
   assert.equal(workflow.getBuyExecutionQuantity({ cycleId: "rs-cycle-vwap-1" }), "3")
   assert.equal(workflow.getBuyExecutionVwap({ cycleId: "rs-cycle-vwap-1" }), "5.333333333333333333")
   assert.equal(workflow.getBuyExecutionVwap({ cycleId: "different-cycle" }), undefined)
