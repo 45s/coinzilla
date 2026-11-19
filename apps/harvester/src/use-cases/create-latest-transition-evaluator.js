@@ -965,6 +965,42 @@ async function submitConservativeTransition({ dependencies, context, allocation,
   })
 }
 
+function prepareConservativeTransitionAllocation({ dependencies, context, excludedActiveOrderClientId } = {}) {
+  const balances = getPortfolioBalanceContext({
+    dependencies,
+    context: {
+      ...context,
+      excludedActiveOrderClientId,
+    },
+  })
+  const allocation = allocateEvaluationActions({
+    dependencies,
+    context,
+    balances,
+  })
+  logOrderAllocation({
+    dependencies,
+    context,
+    balances,
+    allocation,
+  })
+  const noExecutableActions = handleNoExecutableActions({
+    dependencies,
+    context,
+    allocation,
+  })
+  if (noExecutableActions) {
+    return { result: noExecutableActions }
+  }
+  publishStrategyDecision({
+    dependencies,
+    context,
+    balances,
+    allocation,
+  })
+  return { balances, allocation }
+}
+
 async function executeConservativeLatestTransition({ dependencies, options, gate } = {}) {
   const {
     symbol,
@@ -998,43 +1034,19 @@ async function executeConservativeLatestTransition({ dependencies, options, gate
   if (noActions) {
     return noActions
   }
-  const balances = getPortfolioBalanceContext({
-    dependencies,
-    context: {
-      ...context,
-      excludedActiveOrderClientId,
-    },
-  })
-  const allocation = allocateEvaluationActions({
+  const allocation = prepareConservativeTransitionAllocation({
     dependencies,
     context,
-    balances,
+    excludedActiveOrderClientId,
   })
-  logOrderAllocation({
-    dependencies,
-    context,
-    balances,
-    allocation,
-  })
-  const noExecutableActions = handleNoExecutableActions({
-    dependencies,
-    context,
-    allocation,
-  })
-  if (noExecutableActions) {
-    return noExecutableActions
+  if (allocation.result) {
+    return allocation.result
   }
-  publishStrategyDecision({
-    dependencies,
-    context,
-    balances,
-    allocation,
-  })
   return submitConservativeTransition({
     dependencies,
     context,
-    allocation,
-    balances,
+    allocation: allocation.allocation,
+    balances: allocation.balances,
   })
 }
 
