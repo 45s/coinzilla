@@ -1,8 +1,8 @@
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { runBitunixDiagnostics } from "./bitunix-diagnostic-runner.js"
-import { sanitizeDiagnosticError } from "./bitunix-diagnostics.js"
-import { publishBitunixDiagnostics } from "./bitunix-health-publisher.js"
+import { runBitunixDiagnostics } from "./diagnostic-runner.js"
+import { sanitizeDiagnosticError } from "./diagnostics.js"
+import { publishBitunixDiagnostics } from "./health-publisher.js"
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..")
 
