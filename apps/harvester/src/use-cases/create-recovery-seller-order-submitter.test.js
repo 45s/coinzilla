@@ -277,7 +277,10 @@ test("retains an unknown RS submission and persists sticky STOP without retry", 
     broker,
     unresolved,
     onUnresolvedSubmission: async ({ order, outcome }) => {
-      unresolved.push({ order, outcome })
+      unresolved.push({
+        order,
+        outcome,
+      })
       return stopWorkflowResult.data.latch({
         explanation: `RS order submission is unresolved: ${outcome}`,
         orderIdentity: {

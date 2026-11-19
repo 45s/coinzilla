@@ -51,6 +51,8 @@ The RS submitter integration test now uses the real durable STOP workflow instea
 
 The STOP workflow's blocker-ID extraction now follows the repository's destructuring rule. The prior exact-head lint run also included the submitter-test warning already corrected in the immediately following commit; this follow-up removes the remaining STOP-workflow warning without relaxing lint.
 
+The real-STOP integration test now records the unresolved order identity in a multiline object literal to satisfy the use-case ESLint suite. This is a test-only formatting correction; the assertions still require one durable STOP fact and an UNKNOWN registered order.
+
 ## Objective and delivery order
 
 Implement RS as an independent strategy policy using Harvester's existing domain and execution/accounting infrastructure. Preserve CG behavior throughout. Avoid speculative refactoring: extract or generalize CG functionality only when RS has a concrete need for it and tests prove the shared contract.
