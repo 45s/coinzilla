@@ -47,6 +47,7 @@ import { publishLifecycleEvent } from "../application/events/publish-lifecycle-e
 import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop } from "./harvester-runtime-helpers.js"
 import { assertRecoverySellerEvaluatorAvailable } from "./assert-recovery-seller-evaluator-available.js"
 import { createRecoverySellerStopRuntime } from "./create-recovery-seller-stop-runtime.js"
+import { createRecoverySellerCycleCoordinator } from "../use-cases/create-recovery-seller-cycle-coordinator.js"
 
 function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
   if (typeof operationalStateStore?.append !== "function" ||
@@ -468,6 +469,9 @@ function createHarvesterPortfolioContext({ startup } = {}) {
     accountRuntime,
     accountRuntimeRegistry,
     recoverySellerWorkflow,
+    recoverySellerCycleCoordinator: createRecoverySellerCycleCoordinator({
+      sharedState: accountRuntime.state,
+    }),
     recoverySellerMarketMetadata: new Map(),
     getRecoverySellerMarketMetadata: ({ symbol } = {}) => context.recoverySellerMarketMetadata.get(symbol),
     getAdditionalTrackedBaseQuantity: (...args) => recoverySellerWorkflow.getAdditionalTrackedBaseQuantity(...args),
@@ -702,6 +706,7 @@ function createHarvesterTradingEngineActivator({ startup,
       getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
       recoverySellerPairs: startup.recoverySellerPairs,
       recoverySellerWorkflow: portfolio.recoverySellerWorkflow,
+      recoverySellerCycleCoordinator: portfolio.recoverySellerCycleCoordinator,
       recoverySellerStopWorkflow: startup.recoverySellerStopRuntime.workflow,
       recoverySellerStopCallbacks: startup.recoverySellerStopRuntime.callbacks,
       evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,

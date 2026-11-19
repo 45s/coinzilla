@@ -276,6 +276,7 @@ function createHarvesterRecoverySellerOptions(options = {}) {
   return {
     recoverySellerPairs: options.recoverySellerPairs,
     recoverySellerWorkflow: options.recoverySellerWorkflow,
+    recoverySellerCycleCoordinator: options.recoverySellerCycleCoordinator,
     recoverySellerStopWorkflow: options.recoverySellerStopWorkflow,
     recoverySellerStopCallbacks: options.recoverySellerStopCallbacks,
     getRecoverySellerMarketMetadata: options.getRecoverySellerMarketMetadata,
