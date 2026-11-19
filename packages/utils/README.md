@@ -13,7 +13,7 @@ Import the supported API from the package entry point:
 - `Logger`, `defaultLogger`: structured logger with `trace`, `debug`, `info`, `warn`, `error`, `success`, and `system` methods, independently filtered output transports, runtime threshold changes, opt-in structured context, and safe structured-data redaction. `success` and `system` are semantic methods with `info` severity.
 - `captureBuildMetadata`: one-time, allowlisted application build provenance capture from Git, with explicit `COINZILLA_BUILD_*` environment fallback.
 - `EM`: shared error-message factories.
-- `Validator`, `VR`: declarative value validation. `Validator.validate({ items, isSoft = true })` accepts `[value, rules, fieldName?]` tuples; default soft mode returns structured errors and `isSoft: false` throws the collected error array. See [validation rules and compatibility](#validation-and-compatibility) for exact rule semantics and a current configuration limitation.
+- `ensure`: generic input validation/assertions with direct helpers and an optional fluent pipeline. Every method takes one options object; direct methods return the validated value. See [validation and compatibility](#validation-and-compatibility).\n- `Validator`, `VR`: deprecated declarative-validation compatibility API. Do not add new callers; existing exports and predicate-helper semantics are retained during migration.
 - `NH`: numeric helpers (`round`, `fix`, `precise`).
 - `calculateTimeDiff`: signed, fractional difference between `Date` instances in seconds, minutes, or hours (default: hours); omitted `end` defaults to the current time, and an earlier end produces a negative result.
 - `formatTimeRelatively`: English relative-time formatting via `Intl.RelativeTimeFormat` (default unit: hours; callers may select another supported unit).
@@ -23,7 +23,7 @@ Import the supported API from the package entry point:
 - `toResult`: normalizes result objects; an explicit non-null `errors` property takes precedence over `error`, non-array errors are wrapped in an array, `ok` is recomputed from the normalized errors, and other input properties are preserved.
 - `SystemCustomError`: shared native `Error` base for package-owned subclasses; preserves native `cause`, sets the concrete subclass name, and optionally exposes a stable `code`, safe scalar `context`, and boolean `retryable` classification.
 - `createKeyedQueue`: creates independent serialized promise queues per key; tasks sharing a key run in enqueue order, different keys run concurrently, and `drain()` waits for tasks pending when it is called. An optional `onError({ key, error })` reports task failures without poisoning later tasks for that key.
-- `assertObjectInput`: validates that an operation received a non-null, non-array object. It checks only the input shape and deliberately does not read its properties; callers own property access and its error boundary.
+- `assertObjectInput`: compatibility helper for operation input shape; delegates its generic object and operation-label checks to `ensure` and deliberately does not read input properties.
 - `checkIfFeatureEnable`: enables a feature only when its environment variable is exactly `1`; warning diagnostics never include the variable's value.
 - `addTextToFile`: append a string or `Uint8Array` to a file path supplied as a string or `URL`; the file is created when it does not exist.
 - `handleErr`: report structured error context.
@@ -228,32 +228,78 @@ The Logger continues to serialize only standard Error diagnostics. Pass custom `
 
 ## Validation and compatibility
 
-Malformed validator tuple structures are rejected with a descriptive `TypeError`. Existing `Validator`, `VR`, and `NH` APIs remain available through the public entry point.
+Prefer `ensure` for new generic input validation. It replaces repeated `typeof`, array-shape, range and uniqueness checks with small reusable assertions. All methods accept one options object (required by the repository's `max-params: 1` rule); use `name` to make errors identify the input field. Values are validated without coercion, and successful direct assertions return the original value.
 
-### Validator rule contract
+### Direct assertions
 
-`Validator.validate({ items, isSoft = true })` accepts tuples of `[value, rules, fieldName?]`. When every tuple passes, it returns `undefined`. In the default soft mode, invalid tuples are returned as an array of `{ value, msgs, fieldName? }` records. With `isSoft: false`, the same collected array is thrown.
+```js
+import { ensure } from "@coinzilla/utils"
 
-| Rule | Behavior |
+const intervalMs = ensure.integerInRange({
+  value: pollingInterval,
+  min: 250,
+  max: 60000,
+  name: "intervalMs",
+})
+
+const symbols = ensure.nonEmptyStrings({
+  value: configuredSymbols,
+  name: "symbols",
+})
+```
+
+| Method | Contract |
 | --- | --- |
-| `VR.required` | JavaScript truthiness check; rejects `0`, `false`, `""`, `null`, and `undefined`. Whitespace-only strings are truthy and pass this rule. |
-| `VR.notEmptyString` | Requires a string whose trimmed content is non-empty. |
-| `VR.num` | Requires a finite JavaScript number; zero is valid, `NaN` and infinities are not. |
-| `VR.str` | Requires a string; the empty string is allowed. |
-| `VR.fn` | Requires a function. |
-| `VR.notUndefined` | Rejects only `undefined`; `null` passes. |
-| `VR.arr` | Requires an array. |
-| `VR.notEmptyArr` | Requires an array with at least one element. |
+| `string`, `nonEmptyString` | Require a string; non-empty checks trimmed content but returns the original text. |
+| `boolean` | Require a boolean. |
+| `number` | Require a finite JavaScript number. |
+| `integer`, `safeInteger` | Require an integer; the latter also requires safe precision. |
+| `integerInRange` | Require a safe integer within inclusive `min`/`max` bounds. |
+| `numberInRange` | Require a finite number within inclusive bounds. |
+| `positiveInteger`, `nonNegativeInteger` | Require safe integers greater than zero or at least zero. |
+| `array`, `nonEmptyArray` | Require an array, optionally with at least one element. |
+| `strings`, `nonEmptyStrings` | Require an array of strings; the latter also requires a non-empty array and rejects whitespace-only elements. |
+| `unique` | Require an array with no duplicate values using `Map` SameValueZero equality (including `NaN` and signed zero). |
+| `function` | Require a callable value. |
+| `object`, `plainObject` | Require a non-null non-array object; the latter accepts only `Object.prototype` or null prototypes. |
+| `defined`, `notNull` | Reject `undefined`, or both `null` and `undefined`, respectively. |
+| `oneOf` | Require membership in a non-empty allowed-values array. |
 
-`Validator.isRequiredNumberValid` accepts only finite, non-zero numbers. `Validator.isRequiredNotEmptyString` accepts only strings with non-whitespace content after trimming.
+Type/shape failures throw `TypeError`. Validly typed values outside numeric bounds throw `RangeError`. Error messages include the supplied field name and a safe description of the received value; arbitrary objects are never stringified. For example:
 
-Every rule entry must exactly match one of the exported `VR` values. Unknown or non-string rule identifiers throw a descriptive `TypeError` that includes the item and rule indexes; the complete tuple/rule configuration is checked before any values are evaluated. A misspelled rule can no longer silently disable a constraint.
+```text
+intervalMs must be an integer between 250 and 60000 (received 100)
+symbols[2] must be a non-empty string (received " ")
+symbols must contain unique values (duplicate at index 2; first seen at index 0)
+```
 
-When `isSoft` is omitted, soft mode defaults to `true`. If the property is supplied, its value must be a boolean (including rejecting an explicitly supplied `undefined`); non-boolean values throw a `TypeError`. Use `isSoft: false` to throw the collected validation-error array.
+### Fluent pipelines
 
-Existing `Validator`, `VR`, and `NH` APIs remain available through the public entry point. `wait()` rejects invalid timer durations instead of allowing Node.js to silently clamp or reinterpret them.
+Use `ensure.chain({ value, name })` when a value needs several checks or transformations. Each operation returns a new chain. Validation methods preserve the current value; `map` and `filter` return new arrays and do not mutate the source. Filtering is an explicit transformation, not a way to silently validate or discard malformed inputs.
 
-Filesystem and console effects remain at their respective boundaries. Pure numeric, validation, log-formatting, and wait-duration logic lives in independently testable internal modules.
+```js
+const normalizedSymbols = ensure
+  .chain({
+    value: configuredSymbols,
+    name: "symbols",
+  })
+  .array()
+  .nonEmpty()
+  .nonEmptyStrings()
+  .map({
+    transform: (symbol) => symbol.trim().toUpperCase(),
+  })
+  .unique()
+  .value
+```
+
+Available chain methods: `.array()`, `.string()`, `.integer()`, `.nonEmpty()`, `.strings()`, `.nonEmptyStrings()`, `.integers()`, `.map({ transform })`, `.filter({ predicate })`, `.unique()`, `.between({ min, max })`, `.trim()`, `.uppercase()`, `.lowercase()`, and the final `.value` getter.
+
+### Legacy compatibility
+
+`Validator.validate({ items, isSoft = true })` is deprecated. It accepts tuples of `[value, rules, fieldName?]`; success returns `undefined`, default soft mode returns structured error records, and `isSoft: false` throws the collected error array. Existing rule semantics remain supported while consumers migrate; do not add new usages of `Validator` or `VR`.
+
+The legacy `Validator.isRequiredNumberValid` predicate accepts only finite, non-zero numbers, and `Validator.isRequiredNotEmptyString` accepts only strings with non-whitespace content. They remain for existing consumers and are not equivalent to the throwing `ensure` assertions.
 
 ## Development
 
