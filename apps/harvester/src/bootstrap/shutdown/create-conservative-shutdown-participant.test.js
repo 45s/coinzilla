@@ -603,6 +603,8 @@ test("keeps shutdown unsafe with an explicit blocker when fresh market price doe
         false,
         "A missing fresh market price must not be misclassified as order/fill reconciliation failure.",
       )
+      assert.ok(blockers.some((blocker) => blocker.includes("timeoutMs=5000")))
+      assert.ok(blockers.some((blocker) => blocker.includes("retryable=true")))
       return true
     },
     "Shutdown must fail closed when the market stream cannot provide fresh recovery pricing.",
