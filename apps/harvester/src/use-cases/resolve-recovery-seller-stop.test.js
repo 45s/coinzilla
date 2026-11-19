@@ -30,7 +30,10 @@ const validEvidence = Object.freeze({
 
 async function createStore(t) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-rs-stop-resolution-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
   const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "rs-stop-resolution-test-session",

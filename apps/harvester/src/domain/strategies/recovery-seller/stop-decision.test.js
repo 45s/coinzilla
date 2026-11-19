@@ -222,34 +222,49 @@ test("refuses STOP reset when the cause, orders, fills, balances, or accounting 
   }
 
   assert.throws(
-    () => resolveRecoverySellerStopState({ ...valid, causeFixed: false }),
+    () => resolveRecoverySellerStopState({
+      ...valid,
+      causeFixed: false,
+    }),
     /underlying cause must be fixed/i,
   )
   assert.throws(
     () => resolveRecoverySellerStopState({
       ...valid,
-      reconciliation: { ...valid.reconciliation, unresolvedOrderCount: 1 },
+      reconciliation: {
+        ...valid.reconciliation,
+        unresolvedOrderCount: 1,
+      },
     }),
     /unresolved orders/i,
   )
   assert.throws(
     () => resolveRecoverySellerStopState({
       ...valid,
-      reconciliation: { ...valid.reconciliation, unresolvedFillCount: 1 },
+      reconciliation: {
+        ...valid.reconciliation,
+        unresolvedFillCount: 1,
+      },
     }),
     /unresolved fills/i,
   )
   assert.throws(
     () => resolveRecoverySellerStopState({
       ...valid,
-      reconciliation: { ...valid.reconciliation, balanceDiscrepancyCount: 1 },
+      reconciliation: {
+        ...valid.reconciliation,
+        balanceDiscrepancyCount: 1,
+      },
     }),
     /balance discrepancies/i,
   )
   assert.throws(
     () => resolveRecoverySellerStopState({
       ...valid,
-      accounting: { ...valid.accounting, verified: false },
+      accounting: {
+        ...valid.accounting,
+        verified: false,
+      },
     }),
     /accounting must be verified/i,
   )

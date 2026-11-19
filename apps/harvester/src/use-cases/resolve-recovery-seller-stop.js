@@ -74,7 +74,7 @@ export async function resolveRecoverySellerStop({
     const persisted = await recordSafetyBlockerResolved({
       operationalStateStore,
       blockerId,
-      resolvedBy: "operator:" + operatorId + ":" + actionId,
+      resolvedBy: `operator:${operatorId}:${actionId}`,
       resolution: "OPERATOR_ACTION",
       evidenceDigest,
     })
