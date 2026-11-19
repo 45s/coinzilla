@@ -264,14 +264,16 @@ export function normalizeFundsMutationId({ data, field }) {
 }
 
 /**
- * Validate a successful cancellation acknowledgement, whose documented data is null.
+ * Validate a successful cancellation acknowledgement. Official response examples use null;
+ * response tables also document an ID object, which is accepted only when its ID matches.
  *
  * @param {{data: unknown, field: string, id: string}} input
  * @returns {Readonly<object>}
  */
 export function normalizeFundsMutationAcknowledgement({ data, field, id }) {
-  if (data !== null && data !== undefined) {
-    throw new TypeError("Bitunix Spot funds cancellation response data must be null")
+  if (data !== null &&
+      (!data || typeof data !== "object" || Array.isArray(data) || data[field] !== id)) {
+    throw new TypeError("Bitunix Spot funds cancellation response data must be null or contain the matching request ID")
   }
   return Object.freeze({
     [field]: id,
