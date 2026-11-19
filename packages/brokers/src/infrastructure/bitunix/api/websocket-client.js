@@ -289,13 +289,16 @@ export class BitunixSpotWebSocketClient {
       return this
     } catch (error) {
       this.#state = "closed"
-      this.#rejectPending(new BitunixWebSocketError({
-        message: "Bitunix Spot WebSocket connection failed",
-        kind: "connection",
-        cause: error,
-      }))
+      const connectionError = error instanceof BitunixWebSocketError
+        ? error
+        : new BitunixWebSocketError({
+          message: "Bitunix Spot WebSocket connection failed",
+          kind: "connection",
+          cause: error,
+        })
+      this.#rejectPending(connectionError)
       this.#removeTransportListeners()
-      throw error
+      throw connectionError
     }
   }
 
