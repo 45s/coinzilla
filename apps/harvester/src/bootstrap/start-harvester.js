@@ -9,6 +9,8 @@ import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createRecoverySellerAccountingWorkflow } from "../use-cases/create-recovery-seller-accounting-workflow.js"
+import { createLegacyPosition, createLegacyPositionAccounting } from "../domain/strategies/recovery-seller/legacy-position.js"
+import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
 import { EffectiveConfigurationError } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
@@ -400,6 +402,8 @@ async function createHarvesterStartupContext({ options } = {}) {
     marketDataProviderInstanceId: dependencies.marketDataProviderInstanceId,
     marketDataSymbols: dependencies.marketDataSymbols,
     executionSymbols: resolved.executionSymbols,
+    marketSymbols: resolved.marketSymbols,
+    recoverySellerPairs: resolved.recoverySellerPairs,
     executionRoutes: Object.freeze([...(dependencies.executionRoutes ?? [])]),
     marketDataSources: dependencies.marketDataSources,
     marketDataProviderTypes: dependencies.marketDataProviderTypes,
@@ -446,6 +450,8 @@ function createHarvesterPortfolioContext({ startup } = {}) {
     accountRuntime,
     accountRuntimeRegistry,
     recoverySellerWorkflow,
+    recoverySellerMarketMetadata: new Map(),
+    getRecoverySellerMarketMetadata: ({ symbol } = {}) => context.recoverySellerMarketMetadata.get(symbol),
     getAdditionalTrackedBaseQuantity: (...args) => recoverySellerWorkflow.getAdditionalTrackedBaseQuantity(...args),
     getAdditionalTrackedQuoteCashFlow: () => recoverySellerWorkflow.getAdditionalTrackedQuoteCashFlow(),
     portfolioWorkflow: createPortfolioWorkflow({
@@ -707,6 +713,34 @@ async function startHarvesterPreflightServices({ startup,
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
   })
+  const legacyPositionRecords = []
+  for (const [symbol, pairConfig] of Object.entries(startup.recoverySellerPairs ?? {})) {
+    const metadata = portfolio.marketMetadata.get(symbol)
+    if (!metadata) {
+      throw new Error(`Recovery Seller market metadata is unavailable for ${symbol}`)
+    }
+    const recoverySellerMetadata = validateMarketTradingReadiness({
+      symbol,
+      pairConfig,
+      marketMetadata: metadata,
+    })
+    portfolio.recoverySellerMarketMetadata.set(symbol, recoverySellerMetadata)
+    legacyPositionRecords.push({
+      market: metadata.market,
+      position: createLegacyPosition({
+        invested: String(pairConfig.legacyPosition.invested),
+        quantity: String(pairConfig.legacyPosition.quantity),
+      }),
+      accounting: createLegacyPositionAccounting(),
+    })
+  }
+  const legacyInitialization = await portfolio.recoverySellerWorkflow.initializeLegacyPositions({
+    records: legacyPositionRecords,
+  })
+  if (legacyInitialization?.ok !== true) {
+    throw legacyInitialization?.errors?.[0] ??
+      new Error("Recovery Seller legacy basis initialization was not committed")
+  }
   activateTradingEngine()
   await startup.operatorControlLifecycle.start({
     engine: resources.tradingEngine,
@@ -736,7 +770,7 @@ async function startHarvesterPreflightServices({ startup,
     state: resources.userDataState,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled,
-    enabledSymbols: startup.enabledSymbols,
+    enabledSymbols: startup.marketSymbols ?? startup.enabledSymbols,
     onEvent: userDataEvents.handleUserDataEvent,
     onStatus: recoveryRuntime.handleUserDataStatus,
     onSubscriptionEstablished: (subscription) => { resources.userDataSubscription = subscription },
