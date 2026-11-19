@@ -509,8 +509,55 @@ function getRestSkipReason({ endpoint, depthPrecision, credentialsConfigured }) 
   return null
 }
 
-// The per-probe result and progress handling intentionally stay together.
-// eslint-disable-next-line max-lines-per-function
+async function executeRestRequest({
+  client,
+  endpoint,
+  startedAt,
+  now,
+  results,
+  request,
+  includePublicPayloads,
+  secrets,
+  onProgress,
+}) {
+  try {
+    const response = await client.request(request)
+    recordRestSuccess({
+      endpoint,
+      startedAt,
+      now,
+      results,
+      request,
+      response,
+      includePublicPayloads,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "PASS",
+    })
+  } catch (error) {
+    recordRestFailure({
+      endpoint,
+      startedAt,
+      now,
+      results,
+      request,
+      error,
+      includePublicPayloads,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "FAIL",
+    })
+  }
+}
+
 async function runRestOperation({
   client,
   endpoint,
@@ -525,7 +572,7 @@ async function runRestOperation({
   onProgress,
 }) {
   const startedAt = now()
-emitProgress({
+  emitProgress({
     onProgress,
     area: "REST",
     operation: endpoint.operation,
@@ -545,7 +592,7 @@ emitProgress({
       secrets,
       ...skipReason,
     })
-emitProgress({
+    emitProgress({
       onProgress,
       area: "REST",
       operation: endpoint.operation,
@@ -559,42 +606,17 @@ emitProgress({
     depthPrecision,
     klineInterval,
   })
-  try {
-    const response = await client.request(request)
-    recordRestSuccess({
-      endpoint,
-      startedAt,
-      now,
-      results,
-      request,
-      response,
-      includePublicPayloads,
-      secrets,
-    })
-emitProgress({
-      onProgress,
-      area: "REST",
-      operation: endpoint.operation,
-      status: "PASS",
-    })
-  } catch (error) {
-    recordRestFailure({
-      endpoint,
-      startedAt,
-      now,
-      results,
-      request,
-      error,
-      includePublicPayloads,
-      secrets,
-    })
-emitProgress({
-      onProgress,
-      area: "REST",
-      operation: endpoint.operation,
-      status: "FAIL",
-    })
-  }
+  await executeRestRequest({
+    client,
+    endpoint,
+    startedAt,
+    now,
+    results,
+    request,
+    includePublicPayloads,
+    secrets,
+    onProgress,
+  })
 }
 
 async function runRestChecks({
@@ -633,47 +655,32 @@ async function runRestChecks({
   }
 }
 
-// The per-probe result and progress handling intentionally stay together.
-// eslint-disable-next-line max-lines-per-function
-async function runWebSocketOperation({
+function recordWebSocketSkippedOperation({ definition, startedAt, now, results, includePublicPayloads, secrets }) {
+  results.push(createResult({
+    operation: definition.operation,
+    startedAt,
+    now,
+    status: "skipped",
+    request: {
+      method: definition.operation,
+      reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is not configured",
+    },
+    includePublicPayloads,
+    secrets,
+  }))
+}
+
+async function executeWebSocketRequest({
   client,
   definition,
-  context,
+  args,
+  startedAt,
   now,
   results,
   secrets,
   includePublicPayloads,
   onProgress,
 }) {
-  const startedAt = now()
-emitProgress({
-    onProgress,
-    area: "WebSocket",
-    operation: definition.operation,
-    status: "RUNNING",
-  })
-  if (definition.requiresDepthPrecision && context.depthPrecision === null) {
-    results.push(createResult({
-      operation: definition.operation,
-      startedAt,
-      now,
-      status: "skipped",
-      request: {
-        method: definition.operation,
-        reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is not configured",
-      },
-      includePublicPayloads,
-      secrets,
-    }))
-emitProgress({
-      onProgress,
-      area: "WebSocket",
-      operation: definition.operation,
-      status: "SKIPPED",
-    })
-    return
-  }
-  const args = definition.getArguments(context)
   try {
     const response = await client[definition.method](args)
     results.push(createResult({
@@ -681,16 +688,13 @@ emitProgress({
       startedAt,
       now,
       status: "passed",
-      request: {
-        method: definition.operation,
-        params: args,
-      },
+      request: { method: definition.operation, params: args },
       response,
       privateResponse: definition.privateResponse,
       includePublicPayloads,
       secrets,
     }))
-emitProgress({
+    emitProgress({
       onProgress,
       area: "WebSocket",
       operation: definition.operation,
@@ -702,21 +706,65 @@ emitProgress({
       startedAt,
       now,
       status: "failed",
-      request: {
-        method: definition.operation,
-        params: args,
-      },
+      request: { method: definition.operation, params: args },
       error,
       includePublicPayloads,
       secrets,
     }))
-emitProgress({
+    emitProgress({
       onProgress,
       area: "WebSocket",
       operation: definition.operation,
       status: "FAIL",
     })
   }
+}
+
+async function runWebSocketOperation({
+  client,
+  definition,
+  context,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+  onProgress,
+}) {
+  const startedAt = now()
+  emitProgress({
+    onProgress,
+    area: "WebSocket",
+    operation: definition.operation,
+    status: "RUNNING",
+  })
+  if (definition.requiresDepthPrecision && context.depthPrecision === null) {
+    recordWebSocketSkippedOperation({
+      definition,
+      startedAt,
+      now,
+      results,
+      includePublicPayloads,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "WebSocket",
+      operation: definition.operation,
+      status: "SKIPPED",
+    })
+    return
+  }
+  await executeWebSocketRequest({
+    client,
+    definition,
+    args: definition.getArguments(context),
+    startedAt,
+    now,
+    results,
+    secrets,
+    includePublicPayloads,
+    onProgress,
+  })
 }
 
 function createRuntimeMetadata() {
