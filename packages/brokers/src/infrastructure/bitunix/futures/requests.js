@@ -426,3 +426,498 @@ export function createHistoryTpSlQuery(input = {}) {
     ...normalizePageQuery(input),
   })
 }
+
+
+const FUTURES_SIDES = new Set(["BUY", "SELL"])
+const FUTURES_TRADE_SIDES = new Set(["OPEN", "CLOSE"])
+const FUTURES_ORDER_TYPES = new Set(["LIMIT", "MARKET"])
+const FUTURES_ORDER_EFFECTS = new Set(["GTC", "IOC", "FOK", "POST_ONLY"])
+const FUTURES_MARGIN_MODES = new Set(["ISOLATION", "CROSS"])
+const FUTURES_POSITION_MODES = new Set(["ONE_WAY", "HEDGE"])
+const FUTURES_ASSET_TYPES = new Set(["SPOT", "FUTURES"])
+
+function normalizeDecimal({ value, field, allowNegative = false }) {
+  if (typeof value !== "string" || !/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) {
+    throw new TypeError("Bitunix Futures " + field + " must be an exact decimal string")
+  }
+  if (/^-?0(?:\.0+)?$/.test(value)) {
+    throw new RangeError("Bitunix Futures " + field + " must not be zero")
+  }
+  if (!allowNegative && value.startsWith("-")) {
+    throw new RangeError("Bitunix Futures " + field + " must be positive")
+  }
+  return value
+}
+
+function normalizeOptionalDecimal({ value, field, allowNegative = false }) {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  return normalizeDecimal({
+    value,
+    field,
+    allowNegative,
+  })
+}
+
+function normalizeEnum({ value, field, allowed }) {
+  const normalized = normalizeString({ value, field }).toUpperCase()
+  if (!allowed.has(normalized)) {
+    throw new TypeError("Bitunix Futures " + field + " is not a documented value")
+  }
+  return normalized
+}
+
+function normalizeOptionalEnum({ value, field, allowed }) {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  return normalizeEnum({
+    value,
+    field,
+    allowed,
+  })
+}
+
+function normalizeStopType({ value, field }) {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  const aliases = {
+    MARK: "MARK_PRICE",
+    LAST: "LAST_PRICE",
+  }
+  const normalized = normalizeString({ value, field }).toUpperCase()
+  const canonical = aliases[normalized] || normalized
+  if (canonical !== "MARK_PRICE" && canonical !== "LAST_PRICE") {
+    throw new TypeError("Bitunix Futures " + field + " must be MARK_PRICE or LAST_PRICE")
+  }
+  return canonical
+}
+
+function normalizeOptionalStopType({ value, field }) {
+  if (value === undefined || value === null) {
+    return undefined
+  }
+  return normalizeStopType({
+    value,
+    field,
+  })
+}
+
+function normalizeOrderIdentity({ orderId, clientId }) {
+  const normalizedOrderId = normalizeOptionalString({
+    value: orderId,
+    field: "orderId",
+  })
+  const normalizedClientId = normalizeOptionalString({
+    value: clientId,
+    field: "clientId",
+  })
+  if (normalizedOrderId === undefined && normalizedClientId === undefined) {
+    throw new TypeError("Bitunix Futures order identity requires orderId or clientId")
+  }
+  return {
+    ...(normalizedOrderId === undefined ? {} : { orderId: normalizedOrderId }),
+    ...(normalizedClientId === undefined ? {} : { clientId: normalizedClientId }),
+  }
+}
+
+function normalizeTpSlFields({ input, includeQuantity = false, defaultOrderType = false }) {
+  const tpPrice = normalizeOptionalDecimal({
+    value: input.tpPrice,
+    field: "tpPrice",
+  })
+  const slPrice = normalizeOptionalDecimal({
+    value: input.slPrice,
+    field: "slPrice",
+  })
+  const tpStopType = normalizeOptionalStopType({
+    value: input.tpStopType,
+    field: "tpStopType",
+  })
+  const slStopType = normalizeOptionalStopType({
+    value: input.slStopType,
+    field: "slStopType",
+  })
+  const tpOrderType = normalizeOptionalEnum({
+    value: input.tpOrderType ?? (defaultOrderType && tpPrice !== undefined ? "MARKET" : undefined),
+    field: "tpOrderType",
+    allowed: FUTURES_ORDER_TYPES,
+  })
+  const slOrderType = normalizeOptionalEnum({
+    value: input.slOrderType ?? (defaultOrderType && slPrice !== undefined ? "MARKET" : undefined),
+    field: "slOrderType",
+    allowed: FUTURES_ORDER_TYPES,
+  })
+  const tpOrderPrice = normalizeOptionalDecimal({
+    value: input.tpOrderPrice,
+    field: "tpOrderPrice",
+  })
+  const slOrderPrice = normalizeOptionalDecimal({
+    value: input.slOrderPrice,
+    field: "slOrderPrice",
+  })
+  const tpQty = includeQuantity
+    ? normalizeOptionalDecimal({ value: input.tpQty, field: "tpQty" })
+    : undefined
+  const slQty = includeQuantity
+    ? normalizeOptionalDecimal({ value: input.slQty, field: "slQty" })
+    : undefined
+
+  if (tpPrice === undefined && (
+    tpStopType !== undefined || tpOrderType !== undefined || tpOrderPrice !== undefined || tpQty !== undefined
+  )) {
+    throw new TypeError("Bitunix Futures TP order fields require tpPrice")
+  }
+  if (slPrice === undefined && (
+    slStopType !== undefined || slOrderType !== undefined || slOrderPrice !== undefined || slQty !== undefined
+  )) {
+    throw new TypeError("Bitunix Futures SL order fields require slPrice")
+  }
+  if (tpPrice !== undefined && includeQuantity && tpQty === undefined) {
+    throw new TypeError("Bitunix Futures tpQty is required when tpPrice is supplied")
+  }
+  if (slPrice !== undefined && includeQuantity && slQty === undefined) {
+    throw new TypeError("Bitunix Futures slQty is required when slPrice is supplied")
+  }
+  if (tpOrderType === "LIMIT" && tpOrderPrice === undefined) {
+    throw new TypeError("Bitunix Futures tpOrderPrice is required for LIMIT TP orders")
+  }
+  if (slOrderType === "LIMIT" && slOrderPrice === undefined) {
+    throw new TypeError("Bitunix Futures slOrderPrice is required for LIMIT SL orders")
+  }
+  if (tpOrderType === "MARKET" && tpOrderPrice !== undefined) {
+    throw new TypeError("Bitunix Futures tpOrderPrice is not valid for MARKET TP orders")
+  }
+  if (slOrderType === "MARKET" && slOrderPrice !== undefined) {
+    throw new TypeError("Bitunix Futures slOrderPrice is not valid for MARKET SL orders")
+  }
+
+  return compactQuery({
+    tpPrice,
+    tpStopType,
+    tpOrderType,
+    tpOrderPrice,
+    tpQty,
+    slPrice,
+    slStopType,
+    slOrderType,
+    slOrderPrice,
+    slQty,
+  })
+}
+
+function normalizeOrderFields({ input }) {
+  const qty = normalizeDecimal({
+    value: input.qty,
+    field: "qty",
+  })
+  const side = normalizeEnum({
+    value: input.side,
+    field: "side",
+    allowed: FUTURES_SIDES,
+  })
+  const tradeSide = normalizeEnum({
+    value: input.tradeSide,
+    field: "tradeSide",
+    allowed: FUTURES_TRADE_SIDES,
+  })
+  const orderType = normalizeEnum({
+    value: input.orderType,
+    field: "orderType",
+    allowed: FUTURES_ORDER_TYPES,
+  })
+  const positionId = normalizeOptionalString({
+    value: input.positionId,
+    field: "positionId",
+  })
+  const price = normalizeOptionalDecimal({
+    value: input.price,
+    field: "price",
+  })
+  const effect = normalizeOptionalEnum({
+    value: input.effect ?? (orderType === "LIMIT" ? "GTC" : undefined),
+    field: "effect",
+    allowed: FUTURES_ORDER_EFFECTS,
+  })
+  const clientId = normalizeString({
+    value: input.clientId,
+    field: "clientId",
+  })
+  const reduceOnly = normalizeOptionalBoolean({
+    value: input.reduceOnly,
+    field: "reduceOnly",
+  })
+
+  if (tradeSide === "CLOSE" && positionId === undefined) {
+    throw new TypeError("Bitunix Futures close orders require positionId")
+  }
+  if (orderType === "LIMIT" && price === undefined) {
+    throw new TypeError("Bitunix Futures LIMIT orders require price")
+  }
+  if (orderType === "MARKET" && price !== undefined) {
+    throw new TypeError("Bitunix Futures MARKET orders must not include price")
+  }
+  if (orderType === "MARKET" && effect !== undefined) {
+    throw new TypeError("Bitunix Futures MARKET orders must not include effect")
+  }
+
+  return compactQuery({
+    qty,
+    price,
+    side,
+    tradeSide,
+    positionId,
+    orderType,
+    effect,
+    clientId,
+    reduceOnly,
+    ...normalizeTpSlFields({ input }),
+  })
+}
+
+export function createPlaceOrderBody(input = {}) {
+  return {
+    symbol: normalizeSymbol({ symbol: input.symbol }),
+    ...normalizeOrderFields({ input }),
+  }
+}
+
+export function createBatchOrderBody(input = {}) {
+  const symbol = normalizeSymbol({ symbol: input.symbol })
+  if (!Array.isArray(input.orderList) || input.orderList.length < 1 || input.orderList.length > 5) {
+    throw new RangeError("Bitunix Futures batch orderList must contain between 1 and 5 orders")
+  }
+  const orderList = input.orderList.map((order) => normalizeOrderFields({ input: order }))
+  const clientIds = orderList.map((order) => order.clientId)
+  if (new Set(clientIds).size !== clientIds.length) {
+    throw new TypeError("Bitunix Futures batch orders require unique clientId values")
+  }
+  return {
+    symbol,
+    orderList,
+  }
+}
+
+export function createModifyOrderBody(input = {}) {
+  const symbol = normalizeSymbol({ symbol: input.symbol })
+  const orderId = normalizeString({
+    value: input.orderId,
+    field: "orderId",
+  })
+  const qty = normalizeDecimal({
+    value: input.qty,
+    field: "qty",
+  })
+  const price = normalizeDecimal({
+    value: input.price,
+    field: "price",
+  })
+  const clientId = normalizeOptionalString({
+    value: input.clientId,
+    field: "clientId",
+  })
+  const effect = normalizeOptionalEnum({
+    value: input.effect,
+    field: "effect",
+    allowed: FUTURES_ORDER_EFFECTS,
+  })
+  const reduceOnly = normalizeOptionalBoolean({
+    value: input.reduceOnly,
+    field: "reduceOnly",
+  })
+  return compactQuery({
+    symbol,
+    orderId,
+    qty,
+    price,
+    clientId,
+    effect,
+    reduceOnly,
+    ...normalizeTpSlFields({ input }),
+  })
+}
+
+export function createCancelOrdersBody(input = {}) {
+  const symbol = normalizeSymbol({ symbol: input.symbol })
+  if (!Array.isArray(input.orderList) || input.orderList.length === 0) {
+    throw new TypeError("Bitunix Futures cancel orderList must be a non-empty array")
+  }
+  const orderList = input.orderList.map((item) => normalizeOrderIdentity(item))
+  return {
+    symbol,
+    orderList,
+  }
+}
+
+export function createCancelAllOrdersBody({ symbol } = {}) {
+  return compactQuery({
+    symbol: symbol === undefined ? undefined : normalizeSymbol({ symbol }),
+  })
+}
+
+export function createCloseAllPositionBody({ symbol } = {}) {
+  return compactQuery({
+    symbol: symbol === undefined ? undefined : normalizeSymbol({ symbol }),
+  })
+}
+
+export function createFlashClosePositionBody({ positionId } = {}) {
+  return {
+    positionId: normalizeString({
+      value: positionId,
+      field: "positionId",
+    }),
+  }
+}
+
+export function createAdjustPositionMarginBody(input = {}) {
+  const symbol = normalizeSymbol({ symbol: input.symbol })
+  const marginCoin = normalizeString({
+    value: input.marginCoin,
+    field: "marginCoin",
+  }).toUpperCase()
+  const amount = normalizeDecimal({
+    value: input.amount,
+    field: "amount",
+    allowNegative: true,
+  })
+  const side = input.side === undefined || input.side === null
+    ? undefined
+    : normalizeEnum({
+      value: input.side,
+      field: "side",
+      allowed: new Set(["LONG", "SHORT"]),
+    })
+  const positionId = normalizeOptionalString({
+    value: input.positionId,
+    field: "positionId",
+  })
+  if ((side === undefined) === (positionId === undefined)) {
+    throw new TypeError("Bitunix Futures margin adjustment requires exactly one of side or positionId")
+  }
+  return compactQuery({
+    symbol,
+    marginCoin,
+    amount,
+    side,
+    positionId,
+  })
+}
+
+export function createChangeLeverageBody({ symbol, marginCoin, leverage } = {}) {
+  return {
+    symbol: normalizeSymbol({ symbol }),
+    marginCoin: normalizeString({ value: marginCoin, field: "marginCoin" }).toUpperCase(),
+    leverage: normalizePositiveInteger({
+      value: leverage,
+      field: "leverage",
+    }),
+  }
+}
+
+export function createChangeMarginModeBody({ symbol, marginCoin, marginMode } = {}) {
+  return {
+    symbol: normalizeSymbol({ symbol }),
+    marginCoin: normalizeString({ value: marginCoin, field: "marginCoin" }).toUpperCase(),
+    marginMode: normalizeEnum({
+      value: marginMode,
+      field: "marginMode",
+      allowed: FUTURES_MARGIN_MODES,
+    }),
+  }
+}
+
+export function createChangePositionModeBody({ positionMode } = {}) {
+  return {
+    positionMode: normalizeEnum({
+      value: positionMode,
+      field: "positionMode",
+      allowed: FUTURES_POSITION_MODES,
+    }),
+  }
+}
+
+export function createPlacePositionTpSlBody(input = {}) {
+  const symbol = normalizeSymbol({ symbol: input.symbol })
+  const positionId = normalizeString({
+    value: input.positionId,
+    field: "positionId",
+  })
+  const fields = normalizeTpSlFields({ input })
+  if (fields.tpPrice === undefined && fields.slPrice === undefined) {
+    throw new TypeError("Bitunix Futures position TP/SL requires tpPrice or slPrice")
+  }
+  return {
+    symbol,
+    positionId,
+    ...fields,
+  }
+}
+
+export function createPlaceTpSlBody(input = {}) {
+  const symbol = normalizeSymbol({ symbol: input.symbol })
+  const positionId = normalizeString({
+    value: input.positionId,
+    field: "positionId",
+  })
+  const fields = normalizeTpSlFields({
+    input,
+    includeQuantity: true,
+    defaultOrderType: true,
+  })
+  if (fields.tpPrice === undefined && fields.slPrice === undefined) {
+    throw new TypeError("Bitunix Futures TP/SL order requires tpPrice or slPrice")
+  }
+  return {
+    symbol,
+    positionId,
+    ...fields,
+  }
+}
+
+export function createModifyPositionTpSlBody(input = {}) {
+  return createPlacePositionTpSlBody(input)
+}
+
+export function createModifyTpSlBody(input = {}) {
+  const orderId = normalizeString({
+    value: input.orderId,
+    field: "orderId",
+  })
+  const fields = normalizeTpSlFields({
+    input,
+    includeQuantity: true,
+  })
+  if (fields.tpPrice === undefined && fields.slPrice === undefined) {
+    throw new TypeError("Bitunix Futures TP/SL modification requires tpPrice or slPrice")
+  }
+  return {
+    orderId,
+    ...fields,
+  }
+}
+
+export function createCancelTpSlBody({ orderId } = {}) {
+  return {
+    orderId: normalizeString({
+      value: orderId,
+      field: "orderId",
+    }),
+  }
+}
+
+export function createCopyTradingTransferBody({ assetType, amount } = {}) {
+  return {
+    assetType: normalizeEnum({
+      value: assetType,
+      field: "assetType",
+      allowed: FUTURES_ASSET_TYPES,
+    }),
+    amount: normalizeDecimal({
+      value: amount,
+      field: "amount",
+    }),
+  }
+}
