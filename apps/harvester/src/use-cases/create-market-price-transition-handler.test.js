@@ -408,9 +408,16 @@ test("does not resolve a fresh-price waiter for a rejected stale event", async (
     symbol: "DOGEUSDT",
     timeoutMs: 5_000,
   }).then(() => "resolved")
-  waiter.notifyFreshMarketPrice({
+  const staleHandler = createHandler({
+    state,
+    trace: [],
+    isFresh: false,
+    canTrade: false,
+    notifyFreshMarketPrice: waiter.notifyFreshMarketPrice,
+  })
+  await staleHandler({
     symbol: "DOGEUSDT",
-    price: {
+    priceEvent: {
       ...validPriceEvent,
       timestamp: validPriceEvent.timestamp - 1,
     },
@@ -419,11 +426,18 @@ test("does not resolve a fresh-price waiter for a rejected stale event", async (
   assert.equal(
     await Promise.race([pending, Promise.resolve("pending")]),
     "pending",
-    "A stale event must not satisfy the fresh-price wait.",
+    "A rejected stale event must not satisfy the fresh-price wait.",
   )
-  waiter.notifyFreshMarketPrice({
+  const freshHandler = createHandler({
+    state,
+    trace: [],
+    isFresh: true,
+    canTrade: false,
+    notifyFreshMarketPrice: waiter.notifyFreshMarketPrice,
+  })
+  await freshHandler({
     symbol: "DOGEUSDT",
-    price: validPriceEvent,
+    priceEvent: validPriceEvent,
   })
   assert.equal(await pending, "resolved")
 })
