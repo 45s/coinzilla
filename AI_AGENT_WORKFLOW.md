@@ -60,6 +60,24 @@ Commit continuously in coherent increments. A commit should represent one review
 - Do not create empty/progress-only commits. Do not rewrite or squash away the only test-first evidence or commits needed to understand the task. Never force-push shared history.
 - A commit is not proof that the task is complete. Report validation status separately and identify the exact commit/PR head on which it was observed.
 
+### Commit-to-checkpoint loop — mandatory while work is active
+
+A task is not safely resumable only at the end of a session. **Every meaningful increment must become a pushed, understandable checkpoint before the agent moves on to a different increment.** Apply this loop continuously:
+
+1. **Choose one reviewable outcome.** State the behavior, test, refactor, documentation correction, or other result this increment will deliver. Keep unrelated work out of the increment.
+2. **Complete the increment coherently.** Include the tests and the living-documentation changes required to keep the repository truthful about that result. If the increment has no documentation impact, record that reason in the commit or current PR/issue summary; do not manufacture a documentation edit.
+3. **Inspect and validate before committing.** Review the complete diff, check for unrelated changes and whitespace errors, and run the narrowest relevant checks available. For behavior changes, preserve the required RED → GREEN evidence; a deliberate RED checkpoint must say what failed and why.
+4. **Commit with an outcome-focused message.** Use the required Conventional Commit format. A commit must be understandable from its message and diff without the author explaining it in chat. Do not create empty, vague, progress-only, or arbitrary line-count commits.
+5. **Synchronize and push the checkpoint.** Before every push, verify the latest task-PR target and task branch using §6. Merge the latest `develop` into a task branch when required, resolve conflicts on that branch, inspect the complete diff, and push the coherent checkpoint. Do not wait until the end of the task to publish several accumulated commits.
+6. **Refresh the GitHub task record.** After each meaningful pushed checkpoint, update the issue's current-state section with the exact branch/head SHA, completed outcome, current in-progress slice, next action, and validation status. Update the PR description when the review summary, delivered scope, risks, or validation changes materially. Keep the roadmap status accurate when the task's planned/in-progress/blocked/done state changes; do not turn it into a commit diary.
+7. **Check consistency before continuing.** Confirm the issue, branch, PR (if open), roadmap and living documentation do not contradict the pushed code. Then begin the next increment.
+
+The checkpoint is the **combination** of a pushed commit and current GitHub task context—not the commit alone. A pushed commit with stale task status, missing required documentation, an outdated task branch, or an unsupported green-test claim is not a valid handoff checkpoint.
+
+Keep updates proportionate: update the issue's current-state summary for each meaningful increment, but add a dated issue comment only for a handoff, blocker, material decision, or other event that benefits from a durable chronological record. Do not spam comments for every routine commit. The issue body is the current contract/status; comments preserve significant history. The PR body is the current review summary, not a duplicate event log.
+
+If work is interrupted immediately after a commit, another owner must be able to identify from the issue and branch what that commit accomplished, whether its tests are expected to be red or green, what remains, and the next safe action. Never rely on unpushed local changes, hidden chat context, or a later end-of-task cleanup to make the work understandable.
+
 ### Checkpoint and handoff — required whenever work pauses or changes owner
 
 A task is not transferable merely because its branch exists. Before ending a work session, changing agents, or pausing for a blocker, the current owner MUST:
