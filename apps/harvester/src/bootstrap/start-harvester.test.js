@@ -5184,12 +5184,7 @@ test("verifies an injected Operational State Store before connecting to the brok
 })
 
 
-test("restores the durable RS STOP latch before writing PROCESS_STARTED", async (t) => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-rs-stop-bootstrap-"))
-  t.after(() => rm(directory, {
-    recursive: true,
-    force: true,
-  }))
+async function seedRecoverySellerStopStore({ directory } = {}) {
   const previousStore = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "rs-stop-bootstrap-previous-session",
@@ -5209,41 +5204,51 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
     tradingEnabled: true,
   })
   assert.equal(previousProcess.ok, true, previousProcess.errors?.[0]?.message)
-  const seedWorkflow = await createRecoverySellerStopWorkflow({
+  const workflow = await createRecoverySellerStopWorkflow({
     operationalStateStore: previousStore,
   })
-  assert.equal(seedWorkflow.ok, true, seedWorkflow.errors?.[0]?.message)
-  const blocker = await seedWorkflow.data.latch({
+  assert.equal(workflow.ok, true, workflow.errors?.[0]?.message)
+  const blocker = await workflow.data.latch({
     explanation: "Persisted RS test blocker",
     orderIdentity: {
       clientOrderId: "h-btcusdt-rs-stop-test",
     },
   })
   assert.equal(blocker.ok, true, blocker.errors?.[0]?.message)
-  const previousProcessStopped = await recordProcessStopped({
+  const stopped = await recordProcessStopped({
     operationalStateStore: previousStore,
     reason: "NORMAL",
     clean: true,
   })
-  assert.equal(previousProcessStopped.ok, true, previousProcessStopped.errors?.[0]?.message)
+  assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+  return blocker
+}
 
-  const currentStore = createFileOperationalStateStore({
+function createObservedRecoverySellerStore({ directory } = {}) {
+  const store = createFileOperationalStateStore({
     directory,
     runtimeSessionId: "rs-stop-bootstrap-current-session",
   })
   const calls = []
   const operationalStateStore = {
-    runtimeSessionId: currentStore.runtimeSessionId,
+    runtimeSessionId: store.runtimeSessionId,
     append: async (input) => {
       calls.push(input.factType)
-      return currentStore.append(input)
+      return store.append(input)
     },
-    verify: async (...args) => currentStore.verify(...args),
+    verify: async (...args) => store.verify(...args),
     readAll: async (...args) => {
       calls.push("READ_ALL")
-      return currentStore.readAll(...args)
+      return store.readAll(...args)
     },
   }
+  return {
+    calls,
+    operationalStateStore,
+  }
+}
+
+async function createRecoverySellerStartupConfig() {
   const baseResolved = await resolveHarvesterOptions({
     appConfig,
     env: binanceEnv,
@@ -5256,7 +5261,7 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
       },
     ],
   })
-  const resolved = Object.freeze({
+  return Object.freeze({
     ...baseResolved,
     recoverySellerPairs: {
       BTCUSDT: {
@@ -5275,7 +5280,17 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
       },
     },
   })
+}
 
+test("restores the durable RS STOP latch before writing PROCESS_STARTED", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-rs-stop-bootstrap-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const blocker = await seedRecoverySellerStopStore({ directory })
+  const { calls, operationalStateStore } = createObservedRecoverySellerStore({ directory })
+  const resolved = await createRecoverySellerStartupConfig()
   const startup = await prepareHarvesterStartupState({
     dependencies: {
       env: binanceEnv,
