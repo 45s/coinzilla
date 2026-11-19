@@ -1561,6 +1561,16 @@ function recordBrokerApiOperationFailure({
 }
 
 
+function recordLatestBrokerApiSchemaResult({ definition, schemaObservations, now, results, secrets }) {
+  recordLatestBrokerApiSchemaResult({
+    definition,
+    schemaObservations,
+    now,
+    results,
+    secrets,
+  })
+}
+
 async function runBrokerApiOperation({
   broker,
   definition,

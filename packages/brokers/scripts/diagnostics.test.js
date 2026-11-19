@@ -130,7 +130,7 @@ test("schema diagnostics detect unknown fields, missing required fields, and une
   assert.deepEqual(inspection, {
     valueType: "array",
     itemCount: 2,
-    observedFields: ["balance", "coin", "futureField"],
+    observedFields: ["balance", "balanceLocked", "coin", "futureField"],
     unexpectedFields: ["futureField"],
     missingRequiredFields: [{
       index: 1,
