@@ -747,16 +747,29 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
   assert.equal(report.results.find((entry) => entry.operation === "Broker API getPrices").status, "passed", "the public Broker must normalize one-shot prices")
   assert.equal(report.results.find((entry) => entry.operation === "Broker API getBalances").status, "passed", "the public Broker must normalize authenticated exact-decimal balances")
   assert.equal(report.results.find((entry) => entry.operation === "Broker API getOpenOrders").status, "passed", "the public Broker must exercise the authenticated open-order read")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getSymbolFilters").status, "passed", "the public Broker must validate raw symbol-filter metadata")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getOrderHistory").status, "passed", "the public Broker must exercise one authenticated symbol-scoped order-history page")
   assert.deepEqual(brokerApiCalls.map((request) => request.path), [
     "/api/spot/v1/common/coin_pair/list",
     "/api/spot/v1/market/last_price",
+    "/api/spot/v1/common/coin_pair/list",
     "/api/spot/v1/user/account",
     "/api/spot/v1/order/pending/list",
-  ], "the same public Broker instance must exercise public and authenticated read-only operations")
+    "/api/spot/v1/order/history/page",
+  ], "the same public Broker instance must exercise the metadata, ticker, balance, open-order and history reads")
   assert.equal(brokerApiCalls[0].authenticated, false, "the market catalog must use unsigned public REST")
   assert.equal(brokerApiCalls[1].authenticated, false, "the public ticker must use unsigned REST")
-  assert.equal(brokerApiCalls[2].authenticated ?? true, true, "account balances must use authenticated REST")
-  assert.equal(brokerApiCalls[3].authenticated ?? true, true, "open orders must use authenticated REST")
+  assert.equal(brokerApiCalls[2].authenticated, false, "symbol-filter metadata must use unsigned public REST")
+  assert.equal(brokerApiCalls[3].authenticated ?? true, true, "account balances must use authenticated REST")
+  assert.equal(brokerApiCalls[4].authenticated ?? true, true, "open orders must use authenticated REST")
+  assert.equal(brokerApiCalls[5].authenticated ?? true, true, "order history must use authenticated REST")
+  assert.deepEqual(report.results.find((entry) => entry.operation === "Broker API getOrderHistory").request.params, {
+    symbol: "BTCUSDT",
+    page: 1,
+    limit: 10,
+  }, "order history diagnostics must remain symbol-scoped and inspect only the first bounded page")
+  assert.equal(report.schemaObservations.at(-1).path, "/api/spot/v1/order/history/page", "the report must include order-history response-shape observations")
+  assert.equal(report.schemaObservations.at(-1).schemaValid, true, "the order-history envelope must satisfy its documented page schema")
   assert.deepEqual(report.schemaObservations[0].unexpectedFields, ["futureField"], "unknown exchange fields must be reported without failing otherwise valid normalization")
   assert.equal(report.schemaObservations[0].schemaValid, true, "unknown fields alone must not fail the expected response schema")
   assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getExchangeMarkets").status, "passed", "unknown additions must not fail the public Broker response schema check")
