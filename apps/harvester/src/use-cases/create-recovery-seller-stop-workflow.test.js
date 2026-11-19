@@ -118,7 +118,7 @@ test("clears RS STOP only after explicit operator evidence is durably recorded",
   )
 })
 
-test("keeps RS STOP clear when its blocker cannot be durably persisted", async () => {
+test("keeps RS STOP active in memory when its blocker cannot be durably persisted", async () => {
   const store = {
     append: async () => ({
       ok: false,
@@ -135,8 +135,14 @@ test("keeps RS STOP clear when its blocker cannot be durably persisted", async (
   const result = await created.data.latch({
     explanation: "The RS submission outcome is unknown",
   })
+  const repeated = await created.data.latch({
+    explanation: "A later event must not replace the first STOP",
+  })
+  const resolved = await created.data.resolve(validResolutionEvidence())
 
   assert.equal(result.ok, false)
-  assert.equal(created.data.getStopState().status, "CLEAR")
+  assert.equal(repeated.ok, false)
+  assert.equal(resolved.ok, false)
+  assert.equal(created.data.getStopState().status, "STOPPED")
   assert.equal(created.data.getBlockerId(), null)
 })
