@@ -378,6 +378,12 @@ test("Bitunix Spot internal transfer validation rejects unsafe or mismatched rec
     {
       coin: "USDT",
       amount: "1",
+      toType: "uid",
+      toUid: 9007199254740992,
+    },
+    {
+      coin: "USDT",
+      amount: "1",
       toType: "phone",
       toPhoneCountryCode: "+1",
     },
