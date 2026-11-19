@@ -149,6 +149,7 @@ This section contains only work owned by `@coinzilla/brokers`. Consumer applicat
 - Implement `BitunixSpotBroker.getTokenNetworks()` as an unsigned, read-only request to the documented Spot token/network catalog.
 - Keep this as a provider-specific extension; do not add a competing capability vocabulary or alter the exchange-neutral Broker contract.
 - Preserve exact decimal strings and source metadata, validate malformed token/network rows, and keep `getAssets()` as the existing balance projection.
+- Add the documented signed REST `getUserInfo()` identity lookup; preserve null/omitted UID values and losslessly normalize int64 identifiers to strings.
 - This metadata lookup does not enable or implement transfers, withdrawals, order mutations, or Harvester execution. Issue #1185 remains authoritative for lifecycle and mutation gates.
 - Completion is contingent on exact-head Brokers tests/coverage, workspace CI, and documentation verification.
 
