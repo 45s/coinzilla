@@ -3203,9 +3203,12 @@ async function maybeReplaceTrailingBuyTransition({ context, symbol, marketPrice 
 }
 
 
-function validateOwnedOrderSnapshotParity({ context, snapshots }) {
+function validateOwnedOrderSnapshotParity({ context, snapshots, requestedSymbols = null }) {
   const snapshotOrderIds = new Set(snapshots.map(({ ownedOrder }) => ownedOrder.brokerOrderId))
-  for (const currentOrder of context.state.registry.orders) {
+  const currentOrders = context.state.registry.orders.filter((order) =>
+    requestedSymbols === null || requestedSymbols.has(order.market.symbol))
+  for (const currentOrder of currentOrders) {
+    context.affectedSymbol = currentOrder.market.symbol
     if (!currentOrder.brokerOrderId || !snapshotOrderIds.has(currentOrder.brokerOrderId)) {
       throw recoveryFailureError(
         new Error("Order registry changed while REST reconciliation was in progress"),
@@ -3330,13 +3333,14 @@ async function applyOwnedOrderSnapshotTransitions({ context, snapshots, recovery
   return undefined
 }
 
-async function applyOwnedOrderSnapshots({ context, snapshots, symbols, recoveryMode }) {
+async function applyOwnedOrderSnapshots({ context, snapshots, symbols, recoveryMode, requestedSymbols = null }) {
   const [firstSymbol] = symbols
   context.affectedSymbol = firstSymbol
   try {
     validateOwnedOrderSnapshotParity({
       context,
       snapshots,
+      requestedSymbols,
     })
     const result = await applyOwnedOrderSnapshotTransitions({
       context,
@@ -3989,7 +3993,7 @@ async function reconcilePendingOwnedOrders({ context, pendingOrders }) {
   return undefined
 }
 
-async function collectAndApplyOwnedOrderSnapshots({ context, ownedOrders, symbols, recoveryMode, beforeApply }) {
+async function collectAndApplyOwnedOrderSnapshots({ context, ownedOrders, symbols, recoveryMode, beforeApply, requestedSymbols }) {
   let snapshots
   try {
     snapshots = await context.collectOwnedOrderSnapshots({
@@ -4019,6 +4023,7 @@ async function collectAndApplyOwnedOrderSnapshots({ context, ownedOrders, symbol
     task: () => context.applyOwnedOrderSnapshotsTransition({
       ...snapshots,
       recoveryMode,
+      requestedSymbols,
     }),
   })
 }
@@ -4080,6 +4085,7 @@ async function reconcileOwnedOrdersTransition({ context, options }) {
     context,
     ownedOrders,
     symbols,
+    requestedSymbols,
     recoveryMode: options.recoveryMode === undefined ? false : options.recoveryMode,
     beforeApply: options.beforeApply,
   })
