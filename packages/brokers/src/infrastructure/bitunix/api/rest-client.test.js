@@ -519,14 +519,19 @@ test("Bitunix REST client exposes Retry-After for HTTP 429 without automatic ret
 
   await assert.rejects(
     client.request({
-      method: "GET",
-      path: "/api/spot/v1/user/account",
+      method: "POST",
+      path: "/api/spot/v1/withdraw",
+      body: {
+        amount: "1",
+      },
+      stateChanging: true,
     }),
     (error) => {
       assert.ok(error instanceof BitunixRestError)
       assert.equal(error.kind, "http")
       assert.equal(error.status, 429)
       assert.equal(error.retryAfterMs, 2000)
+      assert.equal(error.outcomeUnknown, false, "HTTP 429 confirms the state-changing request was rejected")
       return true
     },
   )
