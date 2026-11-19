@@ -32,6 +32,7 @@ The `@coinzilla/brokers` entry point exports:
 - `BinanceWebSocketConfig` — validated Binance broker configuration.
 - `BitunixSpotBroker` and `BitunixSpotConfig` — the partial Bitunix Spot REST broker implementation and its validated configuration.
 - `BitunixSpotWebSocketClient` and `BitunixWebSocketError` — a separately managed, authenticated Spot WebSocket request/response RPC client; it does not add subscriptions or order mutations.
+- `BitunixSpotReconciler` — a separate read-only polling observation primitive; it is not native push and does not provide canonical fills or Harvester admission guarantees. See [BITUNIX_SPOT_POLLING.md](./BITUNIX_SPOT_POLLING.md).
 - `normalizeBinanceId` — exact non-negative Binance identifier normalization, exported for package consumers that need the same identifier contract.
 - `BrokerCapabilities`, `BROKER_CAPABILITY_TYPES`, `BROKER_CAPABILITY_STATUSES` — the canonical immutable provider capability declaration contract.
 - `BrokerUnsupportedOperationError` — stable typed error for explicitly unsupported operations.
