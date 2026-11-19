@@ -29,11 +29,13 @@ function createAccountScopeKey({ identity }) {
 }
 
 function createAccountTradingState() {
-  // These are in-process Conservative strategy ledgers and controls, not restart-recovery data.
-  return Object.freeze({
+  // CG and RS accounting share one account-level serialization queue and canonical state.
+  let updateQueue = Promise.resolve()
+  const state = {
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
     orderRegistry: OrderRegistry.empty(),
+    legacyPositions: new Map(),
     journalFills: [],
     pausedMarkets: new Set(),
     durablePausedMarkets: new Set(),
@@ -45,7 +47,18 @@ function createAccountTradingState() {
     completedOrderClientIds: new Set(),
     trailingBuySymbols: new Set(),
     requiresExchangeReconciliation: false,
+  }
+  Object.defineProperty(state, "updateQueue", {
+    enumerable: true,
+    get: () => updateQueue,
+    set: (nextQueue) => {
+      if (nextQueue === null || typeof nextQueue?.then !== "function") {
+        throw new TypeError("Account workflow updateQueue must be Promise-like")
+      }
+      updateQueue = nextQueue
+    },
   })
+  return Object.freeze(state)
 }
 
 function createAccountRuntime({ identity }) {
