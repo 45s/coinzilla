@@ -110,6 +110,20 @@ function requireOrderHistoryTime({ value, field }) {
 }
 
 function createOrderHistoryParams({ input }) {
+  const allowedFields = new Set([
+    "symbol",
+    "page",
+    "pageSize",
+    "startTime",
+    "endTime",
+    "status",
+    "side",
+    "type",
+  ])
+  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field))
+  if (unsupportedFields.length > 0) {
+    throw new TypeError(`Bitunix Spot WebSocket order-history does not support fields: ${unsupportedFields.join(", ")}`)
+  }
   const params = {
     symbol: requireSymbol({
       symbol: input.symbol,
