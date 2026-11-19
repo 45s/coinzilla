@@ -1060,7 +1060,7 @@ The method names below are the concrete Binance broker surface compared with `Bi
 | `createOrder()` | Blocked | Written clarification of single-order REST quantity units; client-supplied idempotency identity or authoritative unknown-outcome reconciliation; verified mutation environment. |
 | `createCanonicalOrder()` | Blocked | All placement prerequisites plus canonical response facts and a stable client order ID. |
 | `cancelOrder()` | Implemented (single known order) | Signed REST cancellation followed by order-detail verification; unknown outcomes require manual reconciliation. |
-| `cancelAllOpenOrders()` | Blocked | Same cancellation guarantees plus complete account-wide open-order enumeration and safe partial-failure reporting. |
+| `cancelAllOpenOrders()` | Implemented (one symbol) | Reads open orders for the requested symbol, cancels each order, verifies final state, and returns partial/unknown outcomes. Account-wide cancellation remains unavailable. |
 | `subscribeForPrices()` | Blocked | Continuous public Spot price push subscription with event identity/timestamp, subscription confirmation, heartbeat and reconnect/resubscribe contract. Existing public Spot WS methods are RPC request/response. |
 | `subscribeForBookTicker()` | Blocked | Continuous Spot order-book push subscription and documented depth/precision semantics. Current depth RPC precision selection is unclear; no continuous subscription is documented. |
 | `getCandles()` | Blocked | Historical Spot candle endpoint/response with all canonical OHLCV fields, including volume, timestamp units and interval boundaries. Documented Spot kline payload omits volume. |
@@ -1305,3 +1305,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [ ] Merge only after all required checks pass.
 
 **Still blocked:** Spot order placement and canonical order placement remain disabled. The official single-order REST, batch REST, and WebSocket order descriptions still disagree on the denomination of `volume`; the exchange also does not document a caller-supplied client order ID. Cancellation does not depend on those placement semantics and is now implemented independently. #1185 remains open.
+
+
+- [x] Extend the cancellation workflow to `cancelAllOpenOrders({ symbol })`: enumerate the symbol-scoped pending orders, cancel each known order, verify each final state, and report partial/unknown outcomes without blind retries.
+- [x] Add offline tests for multi-order cancellation and symbol validation.
