@@ -140,7 +140,7 @@ All methods below are present on both provider facades. An unsupported implement
 | `subscribeForPrices(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
 | `subscribeForCandles(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
 | `subscribeForBookTicker(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
-| `subscribeForUserData(...)` | Supported | Unsupported | Binance readiness/recovery acknowledgement is mandatory before mutations. |
+| `subscribeForUserData({ onEvent, onObservation, onStatus })` | Supported | Supported for polling observations | Binance emits native authoritative events through `onEvent`; Bitunix emits non-authoritative polling snapshots through `onObservation`. The delivery mode is explicit in the returned subscription metadata. |
 
 ### Compatibility methods
 
@@ -201,3 +201,26 @@ HTTP/RPC conflicts and server failures, timeouts, connection loss after dispatch
 - REST/WS clients, authentication/signing, DTOs, protocol mapping, and provider-specific errors remain inside each provider infrastructure folder.
 - Harvester owns its application ports, adapters, registries, orchestration, and trading workflows. Brokers must not import or absorb them.
 - Providers may use different internal REST/WebSocket architectures while satisfying the same structural public contract.
+
+
+## User-data delivery channels
+
+Both providers expose the same `subscribeForUserData()` method and callback shape. Consumers never inspect provider classes or provider source code to choose a transport:
+
+```js
+await broker.subscribeForUserData({
+  symbols: ["BTCUSDT"],
+  trackedOrders: [],
+  onEvent,        // native exchange events
+  onObservation,  // non-authoritative polling observations
+  onStatus,       // lifecycle and health
+})
+```
+
+- **`onEvent`** is reserved for native exchange events. Binance uses its authenticated WebSocket user-data stream and returns `deliveryMode: "NATIVE_EVENTS"` with `nativePush: true`.
+- **`onObservation`** is reserved for explicitly scoped, non-authoritative observations. Bitunix Spot uses its private REST polling reconciler and returns `deliveryMode: "POLLING_OBSERVATIONS"` with `nativePush: false`. It requires a non-empty explicit `symbols` list and optionally accepts explicitly tracked order identities.
+- **`onStatus`** reports lifecycle and polling health. A polling status never upgrades observations into native events.
+- Bitunix advertises `OBSERVE_USER_DATA: SUPPORTED` while `SUBSCRIBE_USER_DATA: UNSUPPORTED`. Its `getAccountSnapshot()` remains unsupported. Polling observations are not canonical fills, cannot replay transient states, and cannot satisfy Harvester's authoritative account/user-data readiness gates.
+- Harvester routes the two callback channels independently. Its native event handler owns execution accounting; the observation handler is diagnostic-only and has no access to order accounting, the canonical event publisher, or trading readiness.
+
+A successful observation subscription is therefore not evidence that native user-data delivery or trading readiness is available.

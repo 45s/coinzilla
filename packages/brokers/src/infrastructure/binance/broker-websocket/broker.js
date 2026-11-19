@@ -1069,15 +1069,16 @@ error })
   }
 
   /**
-   * @param {{onEvent: (message: {event: object}) => void|Promise<void>, onStatus?: (status: object) => void}} options
+   * @param {{onEvent: (message: {event: object}) => void|Promise<void>, onObservation?: (message: {observation: object}) => void|Promise<void>, onStatus?: (status: object) => void}} options
    * @returns {Promise<BrokerResult<object>>} Subscription controls including disconnect and recovery acknowledgement.
    */
-  async subscribeForUserData({ onEvent, onStatus }) {
+  async subscribeForUserData({ onEvent, onObservation, onStatus }) {
     try {
       if (!this.connected) {
         throw new Error("Binance broker must be connected before subscribing to user data")
       }
       validateCallback(onEvent, "onEvent")
+      if (onObservation !== undefined) {validateCallback(onObservation, "onObservation")}
       if (onStatus !== undefined) {validateCallback(onStatus, "onStatus")}
 
       const forwardEvent = createUserDataEventForwarder({
@@ -1088,7 +1089,13 @@ error })
       })
       const result = await this.userDataSession.subscribe({ onEvent: forwardEvent,
         onStatus })
-      return toResult(result)
+      return toResult({
+        data: {
+          ...result.data,
+          deliveryMode: "NATIVE_EVENTS",
+          nativePush: true,
+        },
+      })
     } catch (error) {
       handleErr({ where: "BinanceWebSocketBroker.subscribeForUserData()",
         error })

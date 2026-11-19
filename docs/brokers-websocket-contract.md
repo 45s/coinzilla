@@ -394,3 +394,14 @@ The legacy `cancelOrder()` field `cancellationOutcome` remains for compatibility
 - `OUTCOME_UNKNOWN`: the broker invoked or may have dispatched `order.cancel` but could not return an authoritative canonical order result.
 
 A successful result carries the broker order response in `data`; consumers that require a canonical cancellation must still verify canonical order history and actual fills. The Harvester consumer accepts legacy `NOT_SENT` only on an unsuccessful result (`ok: false`); contradictory success-shaped metadata remains unconfirmed. These classifications do not bypass the user-data readiness gate or authorize automatic retries.
+
+
+## Shared user-data callback contract
+
+Harvester calls the same broker method for every provider and supplies independent callback channels:
+
+- `onEvent`: native exchange events only; Binance forwards authenticated WebSocket lifecycle/execution events here.
+- `onObservation`: non-authoritative, polling-backed observations only; Bitunix Spot publishes reconciler snapshots here.
+- `onStatus`: lifecycle, connection, recovery, freshness, and polling health.
+
+The returned subscription declares `deliveryMode` and `nativePush`. Native events use `NATIVE_EVENTS` / `true`; polling observations use `POLLING_OBSERVATIONS` / `false`. Harvester never inspects a provider implementation to infer the delivery mode and never routes observations into its canonical event handler. Bitunix remains excluded from the provider registry because it does not satisfy the native `SUBSCRIBE_USER_DATA`, authoritative account snapshot, and canonical fill prerequisites.
