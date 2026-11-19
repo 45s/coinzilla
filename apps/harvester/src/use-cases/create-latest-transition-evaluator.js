@@ -740,14 +740,22 @@ async function handleEvaluationFailure({ dependencies, symbol, error } = {}) {
   return toResult({ error })
 }
 
-export function createLatestTransitionEvaluator(dependencies = {}) {
-  return async function evaluateLatestTransition({
+function createConservativeLatestTransitionEvaluator(dependencies = {}) {
+  return async function evaluateConservativeLatestTransition({
     symbol,
     preflightOnly = false,
     excludedActiveOrderClientId,
     referencePriceOverride,
     shutdownRecoveryOnly = false,
   } = {}) {
+    if (!dependencies.pairs?.[symbol]) {
+      return toResult({
+        data: {
+          skipped: true,
+          reason: "NO_CONSERVATIVE_EXECUTION_ROUTE",
+        },
+      })
+    }
     const gate = getEvaluationGateResult({ dependencies,
       symbol,
       shutdownRecoveryOnly })
@@ -817,6 +825,46 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
         symbol,
         error,
       })
+    }
+  }
+}
+
+export function createLatestTransitionEvaluator(dependencies = {}) {
+  let evaluateConservativeLatestTransition
+  evaluateConservativeLatestTransition = createConservativeLatestTransitionEvaluator({
+    ...dependencies,
+    evaluateLatestTransition: (options) => evaluateConservativeLatestTransition(options),
+  })
+  return async function evaluateLatestTransition(options = {}) {
+    const conservativeResult = await evaluateConservativeLatestTransition(options)
+    if (!conservativeResult?.ok ||
+        typeof dependencies.evaluateRecoverySellerTransition !== "function" ||
+        options.preflightOnly === true ||
+        options.shutdownRecoveryOnly === true) {
+      return conservativeResult
+    }
+    try {
+      const recoverySellerResult = await dependencies.evaluateRecoverySellerTransition({
+        ...options,
+        state: dependencies.state,
+      })
+      if (recoverySellerResult?.ok !== true) {
+        return recoverySellerResult
+      }
+      if (recoverySellerResult.data?.skipped === true) {
+        return conservativeResult
+      }
+      if (conservativeResult.data?.skipped === true) {
+        return recoverySellerResult
+      }
+      return toResult({
+        data: {
+          ...conservativeResult.data,
+          recoverySeller: recoverySellerResult.data,
+        },
+      })
+    } catch (error) {
+      return toResult({ error })
     }
   }
 }
