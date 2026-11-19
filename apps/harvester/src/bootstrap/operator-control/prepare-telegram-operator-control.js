@@ -49,6 +49,27 @@ async function cleanupFailedTelegramAdapter({ getAdapter, setAdapter, cause } = 
   return failure
 }
 
+function createAndValidateTelegramAdapter({
+  createAdapter,
+  botToken,
+  telegramConfig,
+  operator,
+  fetchImpl,
+  logger,
+} = {}) {
+  const adapter = createAdapter({
+    botToken,
+    allowedUserIds: telegramConfig.allowedUserIds,
+    operator,
+    fetchImpl,
+    logger,
+  })
+  if (typeof adapter?.start !== "function" || typeof adapter?.stop !== "function") {
+    throw new TypeError("Telegram operator adapter must expose start() and stop()")
+  }
+  return adapter
+}
+
 async function startTelegramOperatorAdapter({
   getAdapter,
   setAdapter,
@@ -83,17 +104,15 @@ async function startTelegramOperatorAdapter({
     recoverySellerStopWorkflow,
   })
   try {
-    const adapter = createAdapter({
+    const adapter = createAndValidateTelegramAdapter({
+      createAdapter,
       botToken,
-      allowedUserIds: telegramConfig.allowedUserIds,
+      telegramConfig,
       operator,
       fetchImpl,
       logger,
     })
     setAdapter(adapter)
-    if (typeof adapter?.start !== "function" || typeof adapter?.stop !== "function") {
-      throw new TypeError("Telegram operator adapter must expose start() and stop()")
-    }
     await adapter.start()
     return Object.freeze({
       started: true,
