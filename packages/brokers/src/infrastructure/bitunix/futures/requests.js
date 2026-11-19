@@ -115,7 +115,10 @@ function compactQuery(query) {
 }
 
 function normalizeDepthLimit({ limit }) {
-  const value = limit === undefined || limit === null ? "5" : String(limit)
+  if (limit === undefined || limit === null) {
+    return undefined
+  }
+  const value = String(limit)
   if (!DEPTH_LIMITS.has(value)) {
     throw new TypeError("Bitunix Futures depth limit must be one of 1, 5, 15, 50, or max")
   }
@@ -159,7 +162,11 @@ function normalizeHistoryOrderRange({ input, now }) {
   })
   const maxAge = queryCanceled ? 3 * 24 * 60 * 60 * 1000 : 90 * 24 * 60 * 60 * 1000
   const earliestAllowed = BigInt(Math.max(0, now - maxAge))
-  if (range.startTime !== undefined && BigInt(range.startTime) < earliestAllowed) {
+  const latestAllowed = BigInt(now)
+  if ((range.startTime !== undefined && BigInt(range.startTime) < earliestAllowed) ||
+      (range.endTime !== undefined && (
+        BigInt(range.endTime) < earliestAllowed || BigInt(range.endTime) > latestAllowed
+      ))) {
     throw new RangeError(
       `Bitunix Futures ${queryCanceled ? "canceled" : "non-canceled"} order history is limited to the last ${queryCanceled ? "3" : "90"} days`,
     )
