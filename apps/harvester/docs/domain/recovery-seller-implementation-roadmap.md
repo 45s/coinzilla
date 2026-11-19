@@ -440,3 +440,12 @@ The order-event workflow must not treat an explicitly registered non-CG/non-RS o
 ### Explicit unsupported strategy ownership — implementation checkpoint
 
 Canonical fill accounting now distinguishes RS ownership, explicit CG ownership, legacy unowned orders, and unsupported registered strategy ownership. Explicit non-CG/non-RS owners fail closed before any Conservative accounting mutation. Legacy orders without recorded ownership retain the established CG accounting fallback. The regression test covers this unsupported-owner boundary.
+
+### 2026-11-20 — exact-head integration safety corrections
+
+- The engine's \`registry\` reference now stays linked to the provider-account \`orderRegistry\` accessor when immutable registry snapshots are replaced. This prevents RS accounting from reading a stale startup-only registry.
+- A terminal RS SELL whose mixed-SELL reconciler is missing or fails now attempts to persist the account-wide sticky STOP before pausing the affected market. The failure cannot silently degrade into a market-only pause or Conservative recovery-cycle completion.
+- Configured RS routes now require a production transition evaluator during startup configuration preflight. Missing evaluator registration aborts before \`PROCESS_STARTED\` is persisted and before broker connection.
+- Exact-head Harvester targeted tests and strict changed-file ESLint pass for these corrections. Full workspace checks are still running; no all-checks-passed claim is made.
+
+**Still blocking RS execution:** the concrete production transition evaluator is not implemented; the RS order submitter is not composed into bootstrap; the terminal mixed-SELL callback and its persisted recovery/legacy fill split are not wired; RS cycle state, BUY VWAP, ownership and sole-SELL reservation are not replayed across restart; a reliable fresh third-asset commission valuation source is absent; operator STOP reset/resume and the complete offline lifecycle matrix remain unfinished. Because the mixed-SELL callback is not yet composed, a terminal RS SELL currently fails closed and latches STOP. Keep RS disabled/non-executable and this PR Draft until every blocker is implemented and verified.
