@@ -7,12 +7,11 @@ import {
   requireOneOf,
 } from "./helpers/collections.js"
 import {
-  requireFiniteNumber,
   requireNumberInRange,
   requireIntegerInRange,
 } from "./helpers/numeric.js"
 import { requireObject, requirePlainObject } from "./helpers/objects.js"
-import { typeError } from "./helpers/diagnostics.js"
+import { requireFiniteNumber, typeError } from "./helpers/diagnostics.js"
 import { createEnsureChain } from "./chain.js"
 
 /**
