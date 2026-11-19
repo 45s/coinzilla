@@ -334,6 +334,9 @@ export class BitunixSpotReconciler {
       if (!this.running || generation !== this.generation) {
         return
       }
+      // A successful read after any failed cycle must be re-delivered even if
+      // its data matches the last pre-failure snapshot.
+      this.lastFingerprint = null
       this.failureCount += 1
       this.#reportStatus({
         status: {
@@ -433,10 +436,11 @@ export class BitunixSpotReconciler {
   stop() {
     this.running = false
     this.generation += 1
-    if (this.timer !== null) {
-      this.cancel(this.timer)
-      this.timer = null
-    }
+    const { timer } = this
+    this.timer = null
     this.lastFingerprint = null
+    if (timer !== null) {
+      this.cancel(timer)
+    }
   }
 }
