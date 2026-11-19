@@ -1718,3 +1718,619 @@ test("Bitunix canonical order placement remains unsupported because client order
   assert.ok(result.errors[0] instanceof BrokerUnsupportedOperationError)
   assert.equal(calls.length, 0)
 })
+const TOKEN_NETWORK_PATH = "/api/spot/v1/common/coin/coin_network/list"
+const USER_INFO_PATH = "/api/spot/v1/user/info"
+
+test("Bitunix Spot token-network metadata uses one unsigned public REST request and preserves exact source fields", async () => {
+  const tokenMetadata = [{
+    name: "USDT",
+    fullName: "Tether",
+    quotePrecision: "6",
+    withdrawOpen: 1,
+    withdrawMin: "0.000001",
+    withdrawMax: null,
+    networks: [{
+      contractPrecision: 6,
+      contractAddress: "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t",
+      requireMemo: 0,
+      chain: "TRON",
+      network: "Tron (TRC-20)",
+      isOpen: 1,
+      depositOpen: 1,
+      withdrawOpen: 1,
+      withdrawMin: "0.000001",
+      withdrawMax: "3000000",
+      depositMin: "0.000001",
+    }],
+  }]
+  const { broker, calls } = createBroker({
+    responses: {
+      [TOKEN_NETWORK_PATH]: tokenMetadata,
+    },
+  })
+
+  const result = await broker.getTokenNetworks()
+
+  assert.equal(result.ok, true, "a valid token-network catalog must return a successful result")
+  assert.deepEqual(result.data, tokenMetadata, "the adapter must preserve source fields and exact decimal strings without coercion")
+  assert.equal(Object.isFrozen(result.data), true, "the token-network catalog must be immutable")
+  assert.equal(Object.isFrozen(result.data[0]), true, "each token metadata record must be immutable")
+  assert.equal(Object.isFrozen(result.data[0].networks), true, "each token's network collection must be immutable")
+  assert.equal(Object.isFrozen(result.data[0].networks[0]), true, "each network metadata record must be immutable")
+  assert.deepEqual(calls, [{
+    method: "GET",
+    path: TOKEN_NETWORK_PATH,
+    options: {
+      authenticated: false,
+    },
+  }], "token-network metadata must use one unsigned public GET request")
+})
+
+test("Bitunix Spot token-network metadata accepts an explicit empty catalog", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [TOKEN_NETWORK_PATH]: [],
+    },
+  })
+
+  const result = await broker.getTokenNetworks()
+
+  assert.equal(result.ok, true, "an explicitly empty token-network catalog is a valid exchange response")
+  assert.deepEqual(result.data, [], "an empty token-network catalog must remain empty")
+  assert.equal(calls.length, 1, "an empty catalog read must make exactly one REST request")
+})
+
+test("Bitunix Spot token-network metadata preserves omitted and null optional values", async () => {
+  const tokenMetadata = [{
+    name: "USDT",
+    networks: [{
+      network: "Tron (TRC-20)",
+      withdrawMax: null,
+    }],
+  }]
+  const { broker } = createBroker({
+    responses: {
+      [TOKEN_NETWORK_PATH]: tokenMetadata,
+    },
+  })
+
+  const result = await broker.getTokenNetworks()
+
+  assert.equal(result.ok, true, "documented optional token and network metadata may be absent or null")
+  assert.equal(Object.hasOwn(result.data[0], "fullName"), false, "omitted token metadata must not be synthesized")
+  assert.equal(result.data[0].networks[0].withdrawMax, null, "an explicit null withdrawal maximum must remain null")
+  assert.equal(Object.hasOwn(result.data[0].networks[0], "depositMin"), false, "omitted network deposit minimum must remain unknown")
+})
+
+test("Bitunix Spot token-network metadata rejects malformed catalog rows and decimal constraints", async () => {
+  const invalidResponses = [
+    null,
+    {},
+    [null],
+    [{ name: " " }],
+    [{
+      name: "USDT",
+      networks: {},
+    }],
+    [{
+      name: "USDT",
+      withdrawMin: 0.000001,
+    }],
+    [{
+      name: "USDT",
+      withdrawMax: "NaN",
+    }],
+    [{
+      name: "USDT",
+      networks: [null],
+    }],
+    [{
+      name: "USDT",
+      networks: [{
+        network: "TRC-20",
+        depositMin: "-0.1",
+      }],
+    }],
+  ]
+
+  for (const invalidResponse of invalidResponses) {
+    const { broker } = createBroker({
+      responses: {
+        [TOKEN_NETWORK_PATH]: invalidResponse,
+      },
+    })
+    const result = await broker.getTokenNetworks()
+
+    assert.equal(
+      result.ok,
+      false,
+      `malformed token-network metadata must fail closed: ${JSON.stringify(invalidResponse)}`,
+    )
+    assert.ok(result.errors?.[0] instanceof Error, "invalid token-network metadata must include a diagnostic error")
+  }
+})
+
+test("Bitunix Spot token-network metadata propagates REST failures without retrying", async () => {
+  const transportFailure = new Error("token-network endpoint unavailable")
+  const { broker, calls } = createBroker({
+    responses: {
+      [TOKEN_NETWORK_PATH]: transportFailure,
+    },
+  })
+
+  const result = await broker.getTokenNetworks()
+
+  assert.equal(result.ok, false, "a failed token-network request must never appear as a successful empty catalog")
+  assert.equal(result.errors[0], transportFailure, "the original token-network transport error must remain available")
+  assert.equal(calls.length, 1, "a failed token-network read must not be retried implicitly")
+})
+
+
+test("Bitunix Spot broker reads authenticated user information and preserves UID identity", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: {
+        uid: "9223372036854775807",
+      },
+    },
+  })
+
+  const result = await broker.getUserInfo()
+
+  assert.equal(result.ok, true, "a valid user-info response must return a successful result")
+  assert.deepEqual(result.data, {
+    uid: "9223372036854775807",
+  }, "an int64 UID must remain an exact string identifier")
+  assert.equal(Object.isFrozen(result.data), true, "the user-info record must be immutable")
+  assert.deepEqual(calls, [{
+    method: "GET",
+    path: USER_INFO_PATH,
+    options: {
+      authenticated: true,
+    },
+  }], "user information must use one signed private GET request")
+})
+
+test("Bitunix Spot broker preserves nullable and omitted optional user identity", async () => {
+  const { broker: nullUidBroker } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: {
+        uid: null,
+      },
+    },
+  })
+  const nullUidResult = await nullUidBroker.getUserInfo()
+
+  assert.equal(nullUidResult.ok, true, "a documented null UID must remain a successful user-info result")
+  assert.deepEqual(nullUidResult.data, {
+    uid: null,
+  }, "an explicit null UID must remain null")
+
+  const { broker: omittedUidBroker } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: {},
+    },
+  })
+  const omittedUidResult = await omittedUidBroker.getUserInfo()
+
+  assert.equal(omittedUidResult.ok, true, "the documented optional UID may be omitted")
+  assert.equal(Object.hasOwn(omittedUidResult.data, "uid"), false, "an omitted UID must not be synthesized")
+})
+
+test("Bitunix Spot broker rejects malformed user-info payloads and UID values", async () => {
+  const invalidResponses = [
+    [],
+    "user",
+    { uid: -1 },
+    { uid: 1.5 },
+    { uid: "not-a-uid" },
+    { uid: true },
+    { uid: "9223372036854775808" },
+  ]
+
+  for (const invalidResponse of invalidResponses) {
+    const { broker } = createBroker({
+      responses: {
+        [USER_INFO_PATH]: invalidResponse,
+      },
+    })
+    const result = await broker.getUserInfo()
+
+    assert.equal(result.ok, false, `malformed user information must fail closed: ${JSON.stringify(invalidResponse)}`)
+    assert.ok(result.errors?.[0] instanceof Error, "invalid user-info data must include a diagnostic error")
+  }
+})
+
+test("Bitunix Spot broker normalizes safe numeric UIDs to exact identifier strings", async () => {
+  const { broker } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: {
+        uid: 681979174,
+      },
+    },
+  })
+
+  const result = await broker.getUserInfo()
+
+  assert.equal(result.ok, true, "a safe numeric UID from the official example must be accepted")
+  assert.equal(result.data.uid, "681979174", "UIDs must have one stable string identifier representation")
+})
+
+test("Bitunix Spot broker preserves an absent optional user-info data object as null", async () => {
+  const { broker } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: null,
+    },
+  })
+
+  const result = await broker.getUserInfo()
+
+  assert.equal(result.ok, true, "the optional user-info data object may be null")
+  assert.equal(result.data, null, "an absent user-info object must remain explicitly absent")
+})
+
+test("Bitunix Spot broker propagates user-info REST failures without retrying", async () => {
+  const transportFailure = new Error("user-info endpoint unavailable")
+  const { broker, calls } = createBroker({
+    responses: {
+      [USER_INFO_PATH]: transportFailure,
+    },
+  })
+
+  const result = await broker.getUserInfo()
+
+  assert.equal(result.ok, false, "a failed user-info request must not appear as a successful empty record")
+  assert.equal(result.errors[0], transportFailure, "the original user-info transport error must remain available")
+  assert.equal(calls.length, 1, "a failed user-info read must not be retried implicitly")
+})
+
+
+const TAX_FILING_PATH = "/api/spot/v1/tax/filing/page"
+const TAX_FILING_RECORD = {
+  date: "2024-01-01T00:00:00Z",
+  labelEn: "Buy Order",
+  account: "Spot",
+  outgoingAsset: "USDT",
+  outgoingAmount: "100.00000000",
+  incomingAsset: "BTC",
+  incomingAmount: "0.00100000",
+  feeAsset: "USDT",
+  feeAmount: "0.10000000",
+  typeId: "BUY_ORDER",
+  txId: "—",
+  fromAddress: "—",
+  toAddress: "—",
+  network: "—",
+  referenceId: "order-123",
+  comment: "—",
+}
+
+function createTaxFilingPage({
+  records = [TAX_FILING_RECORD],
+  total = records.length,
+  current = 1,
+  size = 1000,
+  pages = total === 0 ? 0 : 1,
+} = {}) {
+  return {
+    records,
+    total,
+    current,
+    size,
+    pages,
+  }
+}
+
+test("Bitunix Spot broker reads one authenticated tax-filing page and preserves exact records", async () => {
+  const page = createTaxFilingPage()
+  const { broker, calls } = createBroker({
+    responses: {
+      [TAX_FILING_PATH]: page,
+    },
+  })
+
+  const result = await broker.getTaxFilingHistory({
+    startTime: "2024-01-01T00:00:00Z",
+    endTime: "2024-01-31T23:59:59Z",
+  })
+
+  assert.equal(result.ok, true, "a valid tax-filing page must return a successful result")
+  assert.deepEqual(result.data, page, "tax-filing records and pagination metadata must be preserved")
+  assert.equal(Object.isFrozen(result.data), true, "the tax-filing page must be immutable")
+  assert.equal(Object.isFrozen(result.data.records), true, "tax-filing records must be immutable")
+  assert.equal(Object.isFrozen(result.data.records[0]), true, "each tax-filing record must be immutable")
+  assert.deepEqual(calls, [{
+    method: "POST",
+    path: TAX_FILING_PATH,
+    options: {
+      body: {
+        startTime: "2024-01-01T00:00:00Z",
+        endTime: "2024-01-31T23:59:59Z",
+        page: 1,
+        pageSize: 1000,
+      },
+      authenticated: true,
+      stateChanging: false,
+    },
+  }], "tax-filing history must use one signed read-only POST with the documented defaults")
+})
+
+test("Bitunix Spot broker passes tax data type filters and explicit pagination unchanged", async () => {
+  const page = createTaxFilingPage({
+    current: 2,
+    size: 50,
+    total: 101,
+    pages: 3,
+    records: [{
+      ...TAX_FILING_RECORD,
+      typeId: "FUNDING_COST",
+      outgoingAsset: "USDT",
+      outgoingAmount: "0.012345678901234567",
+    }],
+  })
+  const { broker, calls } = createBroker({
+    responses: {
+      [TAX_FILING_PATH]: page,
+    },
+  })
+
+  const result = await broker.getTaxFilingHistory({
+    startTime: "2024-01-01T00:00:00Z",
+    endTime: "2024-12-31T00:00:00Z",
+    dataTypeCodes: ["BUY_ORDER", "FUNDING_COST"],
+    page: 2,
+    pageSize: 50,
+  })
+
+  assert.equal(result.ok, true, "a valid later tax-filing page must be returned")
+  assert.equal(result.data.records[0].outgoingAmount, "0.012345678901234567", "financial amounts must remain exact strings")
+  assert.deepEqual(calls[0].options.body, {
+    startTime: "2024-01-01T00:00:00Z",
+    endTime: "2024-12-31T00:00:00Z",
+    dataTypeCodes: ["BUY_ORDER", "FUNDING_COST"],
+    page: 2,
+    pageSize: 50,
+  }, "tax type filters and pagination must be sent exactly as requested")
+})
+
+test("Bitunix Spot broker accepts UTC ISO-8601 timestamps with a zero offset", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [TAX_FILING_PATH]: createTaxFilingPage(),
+    },
+  })
+
+  const result = await broker.getTaxFilingHistory({
+    startTime: "2024-01-01T00:00:00+00:00",
+    endTime: "2024-01-02T00:00:00+00:00",
+  })
+
+  assert.equal(result.ok, true, "an explicit zero UTC offset is a valid UTC ISO-8601 timestamp")
+  assert.equal(calls[0].options.body.startTime, "2024-01-01T00:00:00+00:00", "valid UTC offsets must be preserved exactly")
+})
+
+test("Bitunix Spot broker accepts an empty tax type filter as all transaction types", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      [TAX_FILING_PATH]: createTaxFilingPage(),
+    },
+  })
+
+  const result = await broker.getTaxFilingHistory({
+    startTime: "2024-01-01T00:00:00Z",
+    endTime: "2024-01-02T00:00:00Z",
+    dataTypeCodes: [],
+  })
+
+  assert.equal(result.ok, true, "an explicit empty dataTypeCodes list is documented as all transaction types")
+  assert.deepEqual(calls[0].options.body.dataTypeCodes, [], "an explicit empty type list must not be rewritten")
+})
+
+function createInvalidTaxFilingDateQueries({ valid }) {
+  return [
+    null,
+    {},
+    {
+      ...valid,
+      startTime: "2024-01-01",
+    },
+    {
+      ...valid,
+      endTime: "2024-01-02T00:00:00+01:00",
+    },
+    {
+      ...valid,
+      startTime: "not-a-date",
+    },
+    {
+      ...valid,
+      startTime: "2024-02-30T00:00:00Z",
+    },
+    {
+      ...valid,
+      startTime: "2024-01-03T00:00:00Z",
+    },
+    {
+      startTime: "2024-01-01T00:00:00Z",
+      endTime: "2025-01-02T00:00:00Z",
+    },
+  ]
+}
+
+function createInvalidTaxFilingPaginationQueries({ valid }) {
+  return [
+    {
+      ...valid,
+      page: 0,
+    },
+    {
+      ...valid,
+      page: 1.5,
+    },
+    {
+      ...valid,
+      pageSize: 0,
+    },
+    {
+      ...valid,
+      pageSize: 1001,
+    },
+  ]
+}
+
+function createInvalidTaxFilingTypeQueries({ valid }) {
+  return [
+    {
+      ...valid,
+      dataTypeCodes: "BUY_ORDER",
+    },
+    {
+      ...valid,
+      dataTypeCodes: [""],
+    },
+    {
+      ...valid,
+      dataTypeCodes: [null],
+    },
+    {
+      ...valid,
+      dataTypeCodes: null,
+    },
+  ]
+}
+
+function createInvalidTaxFilingQueries() {
+  const valid = {
+    startTime: "2024-01-01T00:00:00Z",
+    endTime: "2024-01-02T00:00:00Z",
+  }
+  return [
+    ...createInvalidTaxFilingDateQueries({ valid }),
+    ...createInvalidTaxFilingPaginationQueries({ valid }),
+    ...createInvalidTaxFilingTypeQueries({ valid }),
+  ]
+}
+
+test("Bitunix Spot broker rejects invalid tax-filing query ranges and pagination before I/O", async () => {
+  for (const query of createInvalidTaxFilingQueries()) {
+    const { broker, calls } = createBroker()
+    const result = await broker.getTaxFilingHistory(query)
+
+    assert.equal(result.ok, false, `invalid tax-filing query must fail: ${JSON.stringify(query)}`)
+    assert.equal(calls.length, 0, "invalid tax-filing queries must be rejected before network I/O")
+  }
+})
+
+function createInvalidTaxFilingPages() {
+  return [
+    null,
+    [],
+    {},
+    {
+      ...createTaxFilingPage(),
+      records: {},
+    },
+    {
+      ...createTaxFilingPage(),
+      total: -1,
+    },
+    {
+      ...createTaxFilingPage(),
+      total: 0,
+    },
+    {
+      ...createTaxFilingPage(),
+      current: 2,
+    },
+    {
+      ...createTaxFilingPage(),
+      current: -1,
+    },
+    {
+      ...createTaxFilingPage(),
+      size: 1001,
+    },
+    {
+      ...createTaxFilingPage(),
+      size: 0,
+    },
+    {
+      ...createTaxFilingPage(),
+      pages: -1,
+    },
+    {
+      ...createTaxFilingPage(),
+      pages: 0,
+    },
+    {
+      ...createTaxFilingPage(),
+      records: [{
+        ...TAX_FILING_RECORD,
+        outgoingAmount: 1,
+      }],
+    },
+    {
+      ...createTaxFilingPage(),
+      records: [null],
+    },
+  ]
+}
+
+test("Bitunix Spot broker rejects malformed tax-filing pagination and records", async () => {
+  const validQuery = {
+    startTime: "2024-01-01T00:00:00Z",
+    endTime: "2024-01-02T00:00:00Z",
+  }
+  for (const page of createInvalidTaxFilingPages()) {
+    const { broker } = createBroker({
+      responses: {
+        [TAX_FILING_PATH]: page,
+      },
+    })
+    const result = await broker.getTaxFilingHistory(validQuery)
+
+    assert.equal(result.ok, false, "malformed tax-filing pages must fail closed without partial records")
+    assert.ok(result.errors?.[0] instanceof Error, "invalid tax-filing pages must include a diagnostic error")
+  }
+})
+
+test("Bitunix Spot broker accepts an explicit empty tax-filing page", async () => {
+  const page = createTaxFilingPage({
+    records: [],
+    total: 0,
+    current: 1,
+    size: 1000,
+    pages: 0,
+  })
+  const { broker } = createBroker({
+    responses: {
+      [TAX_FILING_PATH]: page,
+    },
+  })
+
+  const result = await broker.getTaxFilingHistory({
+    startTime: "2024-01-01T00:00:00Z",
+    endTime: "2024-01-02T00:00:00Z",
+  })
+
+  assert.equal(result.ok, true, "an explicit empty tax-filing page must remain a valid response")
+  assert.deepEqual(result.data.records, [], "an empty tax-filing page must not be converted to an error")
+})
+
+test("Bitunix Spot broker propagates tax-filing REST failures without retrying", async () => {
+  const transportFailure = new Error("tax-filing endpoint unavailable")
+  const { broker, calls } = createBroker({
+    responses: {
+      [TAX_FILING_PATH]: transportFailure,
+    },
+  })
+
+  const result = await broker.getTaxFilingHistory({
+    startTime: "2024-01-01T00:00:00Z",
+    endTime: "2024-01-02T00:00:00Z",
+  })
+
+  assert.equal(result.ok, false, "a failed tax-filing request must not appear as a successful empty page")
+  assert.equal(result.errors[0], transportFailure, "the original tax-filing transport error must remain available")
+  assert.equal(calls.length, 1, "a failed tax-filing read must not be retried implicitly")
+})

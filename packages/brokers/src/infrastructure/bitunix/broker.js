@@ -8,6 +8,18 @@ import { adaptAssets } from "./adapters/adapt-assets.js"
 import { adaptBalances } from "./adapters/adapt-balances.js"
 import { adaptBitunixKline, adaptBitunixKlineHistory, adaptBitunixOrderBook, createBitunixKlineHistoryQuery, normalizeBitunixKlineInterval } from "./adapters/adapt-market-data.js"
 import { adaptExchangeRates } from "./adapters/adapt-exchange-rates.js"
+import { adaptTokenNetworks } from "./adapters/adapt-token-networks.js"
+import { adaptUserInfo } from "./adapters/adapt-user-info.js"
+import { adaptTaxFilingPage, createTaxFilingQuery } from "./adapters/adapt-tax-filing.js"
+import {
+  createCancelInternalTransferRequest,
+  createCancelWithdrawalRequest,
+  createFundsTransferRequest,
+  createInternalTransferRequest,
+  createWithdrawalRequest,
+  normalizeFundsMutationAcknowledgement,
+  normalizeFundsMutationId,
+} from "./adapters/funds-mutation-requests.js"
 import { adaptDepositAddresses } from "./adapters/adapt-deposit-addresses.js"
 import { adaptDeposits } from "./adapters/adapt-deposits.js"
 import { BitunixDepositAddressError } from "./errors/bitunix-deposit-address-error.js"
@@ -27,6 +39,14 @@ const API = Object.freeze({
   placeOrder: "/api/spot/v1/order/place_order",
   lastPrice: "/api/spot/v1/market/last_price",
   exchangeRates: "/api/spot/v1/common/rate/list",
+  tokenNetworks: "/api/spot/v1/common/coin/coin_network/list",
+  userInfo: "/api/spot/v1/user/info",
+  taxFiling: "/api/spot/v1/tax/filing/page",
+  withdraw: "/api/spot/v1/withdraw",
+  cancelWithdrawal: "/api/spot/v1/withdraw/cancel",
+  insideTransfer: "/api/spot/v1/inside_transfer",
+  cancelInsideTransfer: "/api/spot/v1/inside_transfer/cancel",
+  fundsTransfer: "/api/spot/v1/funds_transfer",
   depth: "/api/spot/v1/market/depth",
   kline: "/api/spot/v1/market/kline",
   klineHistory: "/api/spot/v1/market/kline/history",
@@ -431,6 +451,58 @@ function unsupportedMutationResult({ operation, reason }) {
   }
 }
 
+async function executeFundsMutation({
+  config,
+  restClient,
+  operation,
+  path,
+  input,
+  buildRequest,
+  normalizeResponse,
+}) {
+  if (!config.allowLiveFundsMutations) {
+    return unsupportedMutationResult({
+      operation,
+      reason: "live Bitunix funds mutations are disabled by default; " +
+        "set allowLiveFundsMutations: true only after independent funds-operation authorization",
+    })
+  }
+
+  let requestDispatched = false
+  try {
+    const body = buildRequest({ input })
+    requestDispatched = true
+    const response = await restClient.request({
+      method: "POST",
+      path,
+      body,
+      authenticated: true,
+      stateChanging: true,
+    })
+    return toResult({
+      data: normalizeResponse({
+        data: response.data,
+        body,
+      }),
+      mutationOutcome: "CONFIRMED",
+    })
+  } catch (error) {
+    handleErr({
+      where: `BitunixSpotBroker.${operation}()`,
+      error,
+    })
+    return toResult({
+      errors: [error],
+      mutationOutcome: error?.kind === "exchange"
+        ? "REJECTED"
+        : getBrokerMutationOutcome({
+          error,
+          requestDispatched,
+        }),
+    })
+  }
+}
+
 function createClientOrderIdUnsupportedResult({ clientOrderId }) {
   if (clientOrderId === undefined || clientOrderId === null) {
     return null
@@ -721,7 +793,17 @@ async function cancelOpenOrdersForSymbol({ broker, symbol, orders }) {
 
 export class BitunixSpotBroker extends CoreBroker {
   /**
-   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, allowLiveOrderMutations?: boolean, logger?: object, dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient}}} input
+   * @param {{
+ *   apiKey: string,
+ *   apiSecret: string,
+ *   tradingMode: "live",
+ *   baseUrl?: string,
+ *   requestTimeout?: number,
+ *   allowLiveOrderMutations?: boolean,
+ *   allowLiveFundsMutations?: boolean,
+ *   logger?: object,
+ *   dependencies?: {restClientFactory?: (config: BitunixSpotConfig) => BitunixRestClient},
+ * }} input
    */
   constructor(input = {}) {
     const {
@@ -1109,6 +1191,139 @@ export class BitunixSpotBroker extends CoreBroker {
    *
    * @returns {Promise<import("@coinzilla/utils").Result>}
    */
+  /**
+   * Submit a Bitunix Spot withdrawal from a pre-approved quick-withdrawal address.
+   * The API key must have withdrawal permission. A successful response confirms
+   * request acceptance, not blockchain settlement; use getWithdrawalHistory() for status.
+   *
+   * Requires allowLiveFundsMutations: true. No automatic retry is performed.
+   *
+   * @param {{coin: string, network: string, address: string, amount: string, memo?: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async withdraw(input = {}) {
+    return executeFundsMutation({
+      config: this.config,
+      restClient: this.restClient,
+      operation: "withdraw",
+      path: API.withdraw,
+      input,
+      buildRequest: createWithdrawalRequest,
+      normalizeResponse: ({ data }) => normalizeFundsMutationId({
+        data,
+        field: "withdrawId",
+      }),
+    })
+  }
+
+  /**
+   * Request cancellation of a Bitunix Spot withdrawal.
+   * The acknowledgement is not a final settlement status; query getWithdrawalHistory().
+   *
+   * Requires allowLiveFundsMutations: true. No automatic retry is performed.
+   *
+   * @param {{withdrawId: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async cancelWithdrawal(input = {}) {
+    return executeFundsMutation({
+      config: this.config,
+      restClient: this.restClient,
+      operation: "cancelWithdrawal",
+      path: API.cancelWithdrawal,
+      input,
+      buildRequest: createCancelWithdrawalRequest,
+      normalizeResponse: ({ data, body }) => normalizeFundsMutationAcknowledgement({
+        data,
+        field: "withdrawId",
+        id: body.withdrawId,
+      }),
+    })
+  }
+
+  /**
+   * Submit an internal Bitunix user-to-user transfer by UID, phone, or email.
+   * UID routing preserves positive signed int64 IDs as exact JSON integer tokens without JavaScript Number rounding.
+   * An optional outBizId is passed through as the exchange idempotency key.
+   *
+   * Requires allowLiveFundsMutations: true. No automatic retry is performed.
+   *
+   * @param {{
+ *   coin: string,
+ *   amount: string,
+ *   toType: "uid"|"phone"|"email",
+ *   toUid?: string|number,
+ *   toPhoneCountryCode?: string,
+ *   toPhoneNumber?: string,
+ *   toEmail?: string,
+ *   outBizId?: string,
+ *   remark?: string,
+ * }} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async transferInternally(input = {}) {
+    return executeFundsMutation({
+      config: this.config,
+      restClient: this.restClient,
+      operation: "transferInternally",
+      path: API.insideTransfer,
+      input,
+      buildRequest: createInternalTransferRequest,
+      normalizeResponse: ({ data }) => normalizeFundsMutationId({
+        data,
+        field: "insideTransferId",
+      }),
+    })
+  }
+
+  /**
+   * Request cancellation of a Bitunix internal transfer.
+   * The acknowledgement is not a final settlement status; query transfer history.
+   *
+   * Requires allowLiveFundsMutations: true. No automatic retry is performed.
+   *
+   * @param {{insideTransferId: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async cancelInternalTransfer(input = {}) {
+    return executeFundsMutation({
+      config: this.config,
+      restClient: this.restClient,
+      operation: "cancelInternalTransfer",
+      path: API.cancelInsideTransfer,
+      input,
+      buildRequest: createCancelInternalTransferRequest,
+      normalizeResponse: ({ data, body }) => normalizeFundsMutationAcknowledgement({
+        data,
+        field: "insideTransferId",
+        id: body.insideTransferId,
+      }),
+    })
+  }
+
+  /**
+   * Transfer funds between the Bitunix Spot and Futures accounts.
+   *
+   * Requires allowLiveFundsMutations: true. No automatic retry is performed.
+   *
+   * @param {{type: "spot_futures"|"futures_spot", coin: string, amount: string}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async transferFunds(input = {}) {
+    return executeFundsMutation({
+      config: this.config,
+      restClient: this.restClient,
+      operation: "transferFunds",
+      path: API.fundsTransfer,
+      input,
+      buildRequest: createFundsTransferRequest,
+      normalizeResponse: ({ data }) => normalizeFundsMutationId({
+        data,
+        field: "transferId",
+      }),
+    })
+  }
+
   async getExchangeRates() {
     try {
       const response = await this.restClient.request({
@@ -1124,6 +1339,94 @@ export class BitunixSpotBroker extends CoreBroker {
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.getExchangeRates()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read the documented public Bitunix Spot token and network metadata catalog.
+   * Includes exchange-reported deposit/withdrawal availability and network limits;
+   * it does not initiate deposits, withdrawals, or transfers.
+   *
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getTokenNetworks() {
+    try {
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.tokenNetworks,
+        authenticated: false,
+      })
+      return toResult({
+        data: adaptTokenNetworks({
+          value: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getTokenNetworks()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read private user identity information bound to the configured API key.
+   * Bitunix may return a null UID; identifiers are normalized to exact strings.
+   *
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getUserInfo() {
+    try {
+      const response = await this.restClient.request({
+        method: "GET",
+        path: API.userInfo,
+        authenticated: true,
+      })
+      return toResult({
+        data: adaptUserInfo({
+          value: response.data,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getUserInfo()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
+  }
+
+  /**
+   * Read one signed page of Bitunix Spot tax-filing records.
+   * The caller controls pagination; each query is limited to a UTC range of 365 days.
+   *
+   * @param {{startTime: string, endTime: string, dataTypeCodes?: string[], page?: number, pageSize?: number}} input
+   * @returns {Promise<import("@coinzilla/utils").Result>}
+   */
+  async getTaxFilingHistory(input = {}) {
+    try {
+      const query = createTaxFilingQuery({ input })
+      const response = await this.restClient.request({
+        method: "POST",
+        path: API.taxFiling,
+        body: query.body,
+        authenticated: true,
+        stateChanging: false,
+      })
+      return toResult({
+        data: adaptTaxFilingPage({
+          value: response.data,
+          page: query.page,
+          pageSize: query.pageSize,
+        }),
+      })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.getTaxFilingHistory()",
         error,
       })
       return toResult({ errors: [error] })

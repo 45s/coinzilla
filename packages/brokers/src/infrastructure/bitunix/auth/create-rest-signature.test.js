@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
 import test from "node:test"
 import { createRestSignature } from "./create-rest-signature.js"
 
@@ -58,5 +59,38 @@ test("createRestSignature preserves whitespace inside JSON string values", () =>
       body: '{ "note": "two words" }' }),
     createRestSignature({ ...options,
       body: { note: "two words" } }),
+  )
+})
+
+
+test("createRestSignature signs the exact serialized JSON body when requested", () => {
+  const options = {
+    nonce: "nonce",
+    timestamp: "1700000000000",
+    apiKey: "api-key",
+    secretKey: "secret",
+  }
+  const body = '{"toUid":9223372036854775807,"amount":"1.000"}'
+  const payload = `${options.nonce}${options.timestamp}${options.apiKey}${body}`
+  const digest = createHash("sha256").update(payload).digest("hex")
+  const expected = createHash("sha256").update(`${digest}${options.secretKey}`).digest("hex")
+
+  assert.equal(
+    createRestSignature({
+      ...options,
+      body,
+      bodyIsSerialized: true,
+    }),
+    expected,
+  )
+  assert.throws(
+    () => createRestSignature({
+      ...options,
+      body: {
+        toUid: "9223372036854775807",
+      },
+      bodyIsSerialized: true,
+    }),
+    /serialized body must be a JSON string/i,
   )
 })

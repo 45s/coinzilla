@@ -2,6 +2,8 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { SystemCustomError } from "@coinzilla/utils"
 import { BitunixRestClient, BitunixRestError } from "./rest-client.js"
+import { createRestSignature } from "../auth/create-rest-signature.js"
+import { createBitunixInt64JsonNumber } from "./json-serializer.js"
 
 test("Bitunix REST client signs authenticated requests and unwraps successful data", async () => {
   let captured
@@ -143,7 +145,8 @@ test("Bitunix REST client preserves transport failure causes and classifies the 
       path: "/api/spot/v1/market/last_price",
       status: null,
       exchangeCode: null,
-    }, "transport diagnostics must retain bounded, safe request context")
+      retryAfterMs: null,
+    }, "transport diagnostics must retain bounded, safe request context including the optional retry hint")
     assert.equal(error.kind, "transport", "network failures must remain distinguishable from HTTP and exchange rejections")
     assert.equal(error.cause, transportFailure, "the original transport failure must remain available as the native cause")
     return true
@@ -458,4 +461,186 @@ test("Bitunix REST client supports unsigned public reads without configured cred
     "private REST reads must fail before I/O when signing credentials are unavailable",
   )
   assert.equal(requestCount, 1, "a private request without credentials must be rejected before contacting Bitunix")
+})
+
+
+test("Bitunix REST client preserves int64 user UID tokens and nullable UIDs", async () => {
+  const payloads = [
+    '{"code":0,"msg":"success","data":{"uid":9223372036854775807}}',
+    '{"code":0,"msg":"success","data":{"uid":null}}',
+  ]
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => ({
+      ok: true,
+      status: 200,
+      async text() {
+        return payloads.shift()
+      },
+    }),
+  })
+
+  const largeUid = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/user/info",
+  })
+  const nullUid = await client.request({
+    method: "GET",
+    path: "/api/spot/v1/user/info",
+  })
+
+  assert.equal(largeUid.data.uid, "9223372036854775807", "an int64 UID must not be rounded by JavaScript Number parsing")
+  assert.equal(nullUid.data.uid, null, "a documented null UID must remain null")
+})
+
+
+test("Bitunix REST client exposes Retry-After for HTTP 429 without automatic retry", async () => {
+  let calls = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      calls += 1
+      return {
+        ok: false,
+        status: 429,
+        headers: {
+          get(name) {
+            return name === "retry-after" ? "2" : null
+          },
+        },
+        async text() {
+          return JSON.stringify({
+            code: 10001,
+            msg: "Too many requests",
+          })
+        },
+      }
+    },
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/withdraw",
+      body: {
+        amount: "1",
+      },
+      stateChanging: true,
+    }),
+    (error) => {
+      assert.ok(error instanceof BitunixRestError)
+      assert.equal(error.kind, "http")
+      assert.equal(error.status, 429)
+      assert.equal(error.retryAfterMs, 2000)
+      assert.equal(error.outcomeUnknown, false, "HTTP 429 confirms the state-changing request was rejected")
+      return true
+    },
+  )
+  assert.equal(calls, 1, "rate-limit responses must not be retried implicitly")
+})
+
+test("Bitunix REST client parses HTTP-date Retry-After and ignores malformed hints", async () => {
+  const retryAfterDate = new Date(Date.now() + 5000).toUTCString()
+  const retryValues = [retryAfterDate, "not-a-date"]
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => ({
+      ok: false,
+      status: 429,
+      headers: {
+        get(name) {
+          return name === "retry-after" ? retryValues.shift() : null
+        },
+      },
+      async text() {
+        return JSON.stringify({
+          code: 10001,
+          msg: "Too many requests",
+        })
+      },
+    }),
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "GET",
+      path: "/api/spot/v1/user/account",
+    }),
+    (error) => {
+      assert.ok(error instanceof BitunixRestError)
+      assert.ok(error.retryAfterMs >= 0 && error.retryAfterMs <= 5000)
+      return true
+    },
+  )
+  await assert.rejects(
+    client.request({
+      method: "GET",
+      path: "/api/spot/v1/user/account",
+    }),
+    (error) => {
+      assert.ok(error instanceof BitunixRestError)
+      assert.equal(error.retryAfterMs, null)
+      return true
+    },
+  )
+})
+
+
+test("Bitunix REST client sends and signs exact int64 request numbers", async () => {
+  const nonce = "nonce"
+  const timestamp = 1_700_000_000_000
+  let captured
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    now: () => timestamp,
+    nonceFactory: () => nonce,
+    fetchFn: async (...requestArguments) => {
+      const [url, options] = requestArguments
+      captured = {
+        url,
+        options,
+      }
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            code: 0,
+            msg: "success",
+            data: "accepted",
+          })
+        },
+      }
+    },
+  })
+
+  const result = await client.request({
+    method: "POST",
+    path: "/api/spot/v1/inside_transfer",
+    body: {
+      toUid: createBitunixInt64JsonNumber({
+        value: "9223372036854775807",
+      }),
+      amount: "1.000",
+    },
+    stateChanging: true,
+  })
+
+  assert.equal(result.data, "accepted")
+  assert.equal(captured.options.body, '{"toUid":9223372036854775807,"amount":"1.000"}')
+  assert.equal(
+    captured.options.headers.sign,
+    createRestSignature({
+      nonce,
+      timestamp: String(timestamp),
+      apiKey: "api-key",
+      secretKey: "secret",
+      body: captured.options.body,
+      bodyIsSerialized: true,
+    }),
+  )
 })

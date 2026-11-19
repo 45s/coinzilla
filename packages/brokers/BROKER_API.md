@@ -131,9 +131,9 @@ There is no `getOrders()` alias. `getOpenOrders()` means the current open-order 
 
 ### Provider-specific extensions
 
-Bitunix-only read operations remain inside `infrastructure/bitunix`: `getDeposits`, `getDepositAddress`, `getMatchingOrderDetails`, `getWithdrawalHistory`, `getExchangeRates`, `getOrderBook`, `getKlines`, and `getKlineHistory`. They are not promoted into the common Broker contract merely to make method names identical.
+Bitunix-only provider operations remain inside `infrastructure/bitunix`: reads `getDeposits`, `getDepositAddress`, `getMatchingOrderDetails`, `getWithdrawalHistory`, `getExchangeRates`, `getTokenNetworks`, `getUserInfo`, `getTaxFilingHistory`, `getOrderBook`, `getKlines`, and `getKlineHistory`; funds mutations `withdraw`, `cancelWithdrawal`, `transferInternally`, `cancelInternalTransfer`, and `transferFunds` are separately gated by `BitunixSpotConfig.allowLiveFundsMutations` (default false). These exchange-specific methods are not promoted into the common Broker contract merely to make method names identical.
 
-The Bitunix WebSocket RPC client is a provider-specific request/response transport. Its existence does not imply a continuous market or private user-data subscription.
+The Bitunix WebSocket RPC client is a provider-specific request/response transport. It exposes authenticated market/account reads plus symbol-scoped current orders, one-page order history, and matching-order detail. It does not imply account-wide order coverage, canonical fill completeness, a continuous market feed, or a private user-data subscription.
 
 ## 3. Results, errors, and mutation outcomes
 

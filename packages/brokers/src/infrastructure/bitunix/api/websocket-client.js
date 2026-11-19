@@ -80,6 +80,97 @@ function requireSymbol({ symbol, operation }) {
   return symbol.trim().toUpperCase()
 }
 
+function requireOrderId({ orderId, operation }) {
+  if (typeof orderId !== "string" || !orderId.trim()) {
+    throw new TypeError(`Bitunix Spot WebSocket ${operation} requires a non-empty string orderId`)
+  }
+  return orderId.trim()
+}
+
+function normalizeOrderHistoryCode({ value, field, allowed }) {
+  if (value === undefined) {
+    return undefined
+  }
+  let normalized = null
+  if (typeof value === "string") {
+    normalized = value
+  } else if (Number.isSafeInteger(value)) {
+    normalized = String(value)
+  }
+  if (!allowed.has(normalized)) {
+    throw new TypeError(`Bitunix Spot WebSocket order-history ${field} is unsupported`)
+  }
+  return normalized
+}
+
+function requireOrderHistoryTime({ value, field }) {
+  if (typeof value !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) ||
+      Number.isNaN(Date.parse(value))) {
+    throw new TypeError(`Bitunix Spot WebSocket order-history ${field} must be an ISO-8601 timestamp with timezone`)
+  }
+  return value
+}
+
+function createOrderHistoryParams({ input }) {
+  const allowedFields = new Set([
+    "symbol",
+    "page",
+    "pageSize",
+    "startTime",
+    "endTime",
+    "status",
+    "side",
+    "type",
+  ])
+  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field))
+  if (unsupportedFields.length > 0) {
+    throw new TypeError(`Bitunix Spot WebSocket order-history does not support fields: ${unsupportedFields.join(", ")}`)
+  }
+  const params = {
+    symbol: requireSymbol({
+      symbol: input.symbol,
+      operation: "getOrderHistory()",
+    }),
+  }
+  for (const field of ["page", "pageSize"]) {
+    const value = input[field]
+    if (value !== undefined) {
+      if (!Number.isSafeInteger(value) || value < 1) {
+        throw new RangeError(`Bitunix Spot WebSocket order-history ${field} must be a positive safe integer`)
+      }
+      params[field] = value
+    }
+  }
+  for (const [field, allowed] of [
+    ["status", new Set(["1", "2", "3", "4", "7"])],
+    ["side", new Set(["1", "2"])],
+    ["type", new Set(["1", "2"])],
+  ]) {
+    const value = normalizeOrderHistoryCode({
+      value: input[field],
+      field,
+      allowed,
+    })
+    if (value !== undefined) {
+      params[field] = value
+    }
+  }
+  for (const field of ["startTime", "endTime"]) {
+    if (input[field] !== undefined) {
+      params[field] = requireOrderHistoryTime({
+        value: input[field],
+        field,
+      })
+    }
+  }
+  if (params.startTime && params.endTime &&
+      Date.parse(params.startTime) > Date.parse(params.endTime)) {
+    throw new RangeError("Bitunix Spot WebSocket order-history startTime must not be after endTime")
+  }
+  return params
+}
+
 function normalizeKlineInterval({ interval }) {
   const value = String(interval)
   if (!KLINE_INTERVALS.has(value)) {
@@ -408,6 +499,47 @@ export class BitunixSpotWebSocketClient {
     return this.#request({
       method: "user.account",
       params: {},
+    })
+  }
+
+  /** Query current Spot orders for one symbol using order.pending.list. */
+  getOpenOrders({ symbol } = {}) {
+    return this.#request({
+      method: "order.pending.list",
+      params: {
+        symbol: requireSymbol({
+          symbol,
+          operation: "getOpenOrders()",
+        }),
+      },
+    })
+  }
+
+  /** Query one page of Spot order history using order.history.page. */
+  getOrderHistory(input = {}) {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      throw new TypeError("Bitunix Spot WebSocket getOrderHistory() input must be an object")
+    }
+    return this.#request({
+      method: "order.history.page",
+      params: createOrderHistoryParams({ input }),
+    })
+  }
+
+  /** Query matching-order details for a known order using order.deal.list. */
+  getMatchingOrderDetails({ orderId, symbol } = {}) {
+    return this.#request({
+      method: "order.deal.list",
+      params: {
+        orderId: requireOrderId({
+          orderId,
+          operation: "getMatchingOrderDetails()",
+        }),
+        symbol: requireSymbol({
+          symbol,
+          operation: "getMatchingOrderDetails()",
+        }),
+      },
     })
   }
 
