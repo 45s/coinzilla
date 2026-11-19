@@ -36,11 +36,16 @@ function publishUserDataSubscriptionFailure({ eventPublisher, brokerName, error 
   })
 }
 
-async function createUserDataSubscription({ broker, brokerName, eventPublisher, onEvent, onStatus }) {
+async function createUserDataSubscription({ broker, brokerName, eventPublisher, symbols, trackedOrders, onEvent, onObservation, onStatus }) {
   let result
   try {
-    result = await broker.subscribeForUserData({ onEvent,
-onStatus })
+    result = await broker.subscribeForUserData({
+      symbols,
+      trackedOrders,
+      onEvent,
+      onObservation,
+      onStatus,
+    })
   } catch (error) {
     publishUserDataSubscriptionFailure({ eventPublisher,
 brokerName,
@@ -125,7 +130,7 @@ function activateTradingEngine({
 }
 
 /**
- * Subscribe to broker user-data events and complete the initial account audit gate.
+ * Subscribe to broker user-data delivery and complete the authoritative account audit gate.
  * The caller owns failure cleanup; this module owns subscription evidence and
  * the PREFLIGHT account/open-order checks that must precede trading readiness.
  */
@@ -138,7 +143,9 @@ export async function subscribeToUserData({
   tradingMode,
   tradingEnabled,
   enabledSymbols,
+  trackedOrders = [],
   onEvent,
+  onObservation,
   onStatus,
   onSubscriptionEstablished,
   publishAccountSnapshot,
@@ -148,18 +155,21 @@ export async function subscribeToUserData({
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
   logSystem({ logger,
-message: "Subscribing to Binance user-data events" })
+message: "Subscribing to broker user-data delivery" })
 
   const userDataSubscription = await createUserDataSubscription({
     broker,
     brokerName,
     eventPublisher,
+    symbols: enabledSymbols,
+    trackedOrders,
     onEvent,
+    onObservation,
     onStatus,
   })
   onSubscriptionEstablished?.(userDataSubscription)
   logSystem({ logger,
-message: "User-data stream connected" })
+message: "Broker user-data delivery established" })
 
   state.ready = false
   state.status = state.accountingFailed

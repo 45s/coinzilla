@@ -150,9 +150,9 @@ test("logs the user-data stream connection only after the subscription is establ
   await fixture.result
 
   assert.equal(
-    systemLogs.some((entry) => entry.message === "User-data stream connected"),
+    systemLogs.some((entry) => entry.message === "Broker user-data delivery established"),
     true,
-    "A successful broker user-data subscription must produce one explicit connected system message.",
+    "A successful broker user-data subscription must produce one explicit delivery-established system message.",
   )
   assert.equal(
     systemLogs.some((entry) => entry.message === "Binance user-data subscription established"),
