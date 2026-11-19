@@ -461,7 +461,6 @@ This closes only STOP workflow construction/restoration. The production RS evalu
 
 The exact-head package test exposed that an RS order intent with strategy and Position identity but no cycle identity reached the lower-level string validator and produced the wrong failure contract. Persisted RS BUY/SELL ownership now requires all three immutable identifiers (strategy, Position and cycle) before validating their values; the existing Conservative recovery ownership contract remains unchanged. The existing malformed partial-ownership regression is the RED evidence for this correction. This is a validation fix only and does not complete or enable the RS runtime.
 
-
 ## RS-4 durable SELL intent-before-reservation
 
 The RS order submitter now commits the exact durable `ORDER_SUBMISSION_INTENT` before reserving the sole SELL for a cycle. It then registers the pending order and enters the shared broker executor. The executor reuses the same committed intent write, avoiding a duplicate operational fact. If the intent write fails, cycle reservation and broker submission do not occur; the submitter latches STOP.
