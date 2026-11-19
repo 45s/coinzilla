@@ -1648,7 +1648,7 @@ test("Bitunix Spot broker exposes immutable canonical capabilities", () => {
   assert.equal(broker.capabilities.provider, "bitunix")
   assert.equal(broker.capabilities.product, "spot")
   assert.equal(broker.capabilities.getStatus({ type: "READ_BALANCES" }), "SUPPORTED")
-  assert.equal(broker.capabilities.getStatus({ type: "PLACE_LIMIT_ORDER" }), "UNSUPPORTED")
+  assert.equal(broker.capabilities.getStatus({ type: "PLACE_LIMIT_ORDER" }), "SUPPORTED")
   assert.equal(Object.isFrozen(broker.capabilities), true)
 })
 
@@ -1665,17 +1665,12 @@ test("Bitunix Spot broker reports unsupported client-order-ID lookup explicitly"
   assert.equal(calls.length, 0)
 })
 
-test("Bitunix order placement remains explicitly unsupported and guaranteed NOT_SENT", async () => {
+test("Bitunix canonical order placement remains unsupported because client order identity is absent", async () => {
   const { broker, calls } = createBroker()
-  const results = await Promise.all([
-    broker.createOrder(),
-    broker.createCanonicalOrder(),
-  ])
+  const result = await broker.createCanonicalOrder()
 
-  for (const result of results) {
-    assert.equal(result.ok, false)
-    assert.equal(result.mutationOutcome, "NOT_SENT")
-    assert.ok(result.errors[0] instanceof BrokerUnsupportedOperationError)
-  }
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.ok(result.errors[0] instanceof BrokerUnsupportedOperationError)
   assert.equal(calls.length, 0)
 })
