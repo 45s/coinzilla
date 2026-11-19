@@ -106,6 +106,7 @@ function createProcessExecutionFillTransition({
   state,
   eventPublisher,
   updateTradingAccounting,
+  updateRecoverySellerAccounting,
   recordBuyExecutionFill,
   recordSellExecutionFill,
   pause,
@@ -115,6 +116,7 @@ function createProcessExecutionFillTransition({
     state,
     eventPublisher,
     updateTradingAccounting,
+    updateRecoverySellerAccounting,
     recordBuyExecutionFill,
     recordSellExecutionFill,
     pause,
@@ -480,11 +482,34 @@ async function applyValidatedExecutionFill({ dependencies, order, fill }) {
     state,
     eventPublisher,
     updateTradingAccounting,
+    updateRecoverySellerAccounting,
     recordBuyExecutionFill,
     recordSellExecutionFill,
     pause,
   } = dependencies
-  const accounting = await updateTradingAccounting({ fill })
+  const ownership = state.registry?.getOwnership?.({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+  })
+  const isRecoverySellerOwned = ownership?.strategyId === StrategyId.RECOVERY_SELLER
+  let accounting
+  if (isRecoverySellerOwned && fill.side !== "BUY") {
+    accounting = toResult({
+      error: new Error("Recovery Seller SELL fills require terminal mixed-SELL reconciliation and cannot be applied as individual fills"),
+    })
+  } else if (isRecoverySellerOwned && typeof updateRecoverySellerAccounting !== "function") {
+    accounting = toResult({
+      error: new Error("Recovery Seller BUY accounting workflow is unavailable for an RS-owned fill"),
+    })
+  } else if (isRecoverySellerOwned) {
+    accounting = await updateRecoverySellerAccounting({
+      fill,
+      order,
+      ownership,
+    })
+  } else {
+    accounting = await updateTradingAccounting({ fill })
+  }
   if (!accounting?.ok) {
     return handleExecutionAccountingFailure({
       accounting,
@@ -494,13 +519,15 @@ async function applyValidatedExecutionFill({ dependencies, order, fill }) {
       eventPublisher,
     })
   }
-  recordExecutionFillIdentity({
-    state,
-    order,
-    fill,
-    recordBuyExecutionFill,
-    recordSellExecutionFill,
-  })
+  if (!isRecoverySellerOwned) {
+    recordExecutionFillIdentity({
+      state,
+      order,
+      fill,
+      recordBuyExecutionFill,
+      recordSellExecutionFill,
+    })
+  }
   publishExecutionFillOutcome({
     accounting,
     fill,

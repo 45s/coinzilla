@@ -1951,6 +1951,7 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
     logger: dependencies.logger,
     pairs: context.pairs,
     updateTradingAccounting: dependencies.updateTradingAccounting,
+    updateRecoverySellerAccounting: dependencies.updateRecoverySellerAccounting,
     recordBuyExecutionFill: context.recordBuyExecutionFill,
     recordSellExecutionFill: context.recordSellExecutionFill,
     pause: context.pause,

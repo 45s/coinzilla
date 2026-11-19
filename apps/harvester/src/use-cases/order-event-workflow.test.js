@@ -189,6 +189,7 @@ function createWorkflowDependencies({
   externalOrdersPolicy,
   isStopping,
   accountingResult,
+  updateRecoverySellerAccounting,
 } = {}) {
   const accountedFillIds = new Set()
   return {
@@ -209,6 +210,7 @@ function createWorkflowDependencies({
       accountedFillIds,
       accountingResult,
     }),
+    updateRecoverySellerAccounting,
     recordBuyExecutionFill: ({ fill }) => calls.buyFills.push(fill),
     recordSellExecutionFill: ({ fill }) => calls.sellFills.push(fill),
     pause: async (input) => calls.pauses.push(input),
@@ -255,6 +257,7 @@ duplicate: false } }),
   logger,
   registry,
   requireProviderProvenance = false,
+  updateRecoverySellerAccounting,
 } = {}) {
   const calls = createWorkflowCalls()
   const state = createWorkflowState({ updateResult,
@@ -270,6 +273,7 @@ activeOrders })
     externalOrdersPolicy,
     isStopping,
     accountingResult,
+    updateRecoverySellerAccounting,
   })
   const workflow = makeOrderEventWorkflow({
     ...dependencies,

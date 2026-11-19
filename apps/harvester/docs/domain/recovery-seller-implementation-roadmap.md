@@ -25,9 +25,9 @@ The latest routing guard and regression tests ensure that a provider account's R
 
 The first full-workspace run after the queue wiring exposed one stale test fixture: `shared-order-registry.integration.test.js` manually constructed account state without the newly required queue. The fixture now uses the production `createAccountRuntimeRegistry` factory, so the integration test exercises the real account-state contract rather than duplicating it. No production behavior was changed to accommodate the test.
 
-## RS order-event accounting ownership — test-first checkpoint
+## RS order-event accounting ownership — implementation checkpoint
 
-The canonical order-event workflow must dispatch fills using immutable OrderRegistry strategy ownership. Recovery Seller-owned fills must use RS accounting and must not mutate Conservative accounting or Conservative execution totals. The regression test is committed before implementation; remote CI must confirm the expected failure.
+Canonical streamed RS BUY fills now dispatch through the RS accounting workflow based on immutable OrderRegistry ownership. RS BUYs do not enter Conservative accounting or Conservative execution totals. RS SELL fills remain fail-closed in the streamed-fill path and must be handled by terminal mixed-SELL reconciliation; they are not applied as standalone CG fills.
 
 ## RS-4 production evaluator dispatch — callback path connected
 
