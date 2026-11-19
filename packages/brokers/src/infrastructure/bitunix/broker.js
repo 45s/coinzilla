@@ -418,7 +418,7 @@ function createHistoryRequest({ input }) {
   return { body }
 }
 
-/** Bitunix Spot adapter. Capabilities are intentionally read-only until its order lifecycle can be reconciled safely. */
+/** Bitunix Spot adapter with explicitly declared provider-specific capabilities. */
 function unsupportedMutationResult({ operation, reason }) {
   return {
     ...toResult({
@@ -477,7 +477,7 @@ function normalizeOrderDecimal({ value, field }) {
   return normalized
 }
 
-function createSpotOrderRequest({ input }) {
+function validateSpotOrderInput({ input }) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("Bitunix Spot createOrder() requires an order object")
   }
@@ -516,6 +516,11 @@ function createSpotOrderRequest({ input }) {
   if (type !== "LIMIT" && type !== "MARKET") {
     throw new TypeError("Bitunix Spot single-order REST supports only LIMIT and MARKET orders")
   }
+  return { symbol, side, type }
+}
+
+function createSpotOrderRequest({ input }) {
+  const { symbol, side, type } = validateSpotOrderInput({ input })
   const quantity = normalizeOrderDecimal({
     value: input.quantity,
     field: "Bitunix Spot order quantity",
@@ -533,8 +538,6 @@ function createSpotOrderRequest({ input }) {
     : quantity
   return {
     symbol,
-    side: side === "BUY" ? 2 : 1,
-    type: type === "LIMIT" ? 1 : 2,
     quantity,
     price,
     volume,
@@ -545,6 +548,30 @@ function createSpotOrderRequest({ input }) {
       volume,
       price,
     },
+  }
+}
+
+async function reconcileSpotOrderPlacement({ restClient, symbol, placementData }) {
+  try {
+    const order = await getBitunixSpotOrderDetail({
+      restClient,
+      symbol,
+      orderId: placementData.orderId,
+    })
+    return toResult({
+      data: order,
+      mutationOutcome: "CONFIRMED",
+    })
+  } catch (error) {
+    handleErr({
+      where: "BitunixSpotBroker.createOrder() detail reconciliation",
+      error,
+    })
+    return toResult({
+      data: placementData,
+      errors: [error],
+      mutationOutcome: "CONFIRMED",
+    })
   }
 }
 
@@ -1208,8 +1235,6 @@ export class BitunixSpotBroker extends CoreBroker {
    */
   async createOrder(input = {}) {
     let requestDispatched = false
-    let placementAcknowledged = false
-    let placementData
     try {
       const order = createSpotOrderRequest({ input })
       requestDispatched = true
@@ -1220,50 +1245,27 @@ export class BitunixSpotBroker extends CoreBroker {
         authenticated: true,
         stateChanging: true,
       })
-      placementData = validateSpotOrderPlacementResponse({
+      const placementData = validateSpotOrderPlacementResponse({
         response: response.data,
         symbol: order.symbol,
       })
-      placementAcknowledged = true
-      try {
-        const normalizedOrder = await getBitunixSpotOrderDetail({
-          restClient: this.restClient,
-          symbol: order.symbol,
-          orderId: placementData.orderId,
-        })
-        return toResult({
-          data: normalizedOrder,
-          mutationOutcome: "CONFIRMED",
-        })
-      } catch (error) {
-        handleErr({
-          where: "BitunixSpotBroker.createOrder() detail reconciliation",
-          error,
-        })
-        return toResult({
-          data: placementData,
-          errors: [error],
-          mutationOutcome: "CONFIRMED",
-        })
-      }
+      return reconcileSpotOrderPlacement({
+        restClient: this.restClient,
+        symbol: order.symbol,
+        placementData,
+      })
     } catch (error) {
       handleErr({
         where: "BitunixSpotBroker.createOrder()",
         error,
       })
-      let mutationOutcome
-      if (placementAcknowledged) {
-        mutationOutcome = "CONFIRMED"
-      } else if (error?.kind === "exchange") {
-        mutationOutcome = "REJECTED"
-      } else {
-        mutationOutcome = getBrokerMutationOutcome({
+      const mutationOutcome = error?.kind === "exchange"
+        ? "REJECTED"
+        : getBrokerMutationOutcome({
           error,
           requestDispatched,
         })
-      }
       return toResult({
-        ...(placementData === undefined ? {} : { data: placementData }),
         errors: [error],
         mutationOutcome,
       })
