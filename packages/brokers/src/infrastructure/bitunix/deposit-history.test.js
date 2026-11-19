@@ -68,6 +68,7 @@ test("Bitunix Spot broker retrieves one filtered deposit page without losing rec
       endTime: 1744191600000,
       limit: 10,
     },
+    stateChanging: false,
   }, "deposit history must send only the documented filters in one signed read-only POST")
   assert.deepEqual(result.data, [depositRecord], "deposit history must preserve exact record fields and the full broker identifier")
   assert.ok(Object.isFrozen(result.data), "the returned deposit collection must be immutable")

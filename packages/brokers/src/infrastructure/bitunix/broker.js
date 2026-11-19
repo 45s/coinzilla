@@ -736,6 +736,7 @@ export class BitunixSpotBroker {
         method: "POST",
         path: API.pendingOrders,
         body: { symbol: normalizedSymbol },
+        stateChanging: false,
       })
       const rows = normalizeOrderRows({ value: response.data })
       return toResult({
@@ -764,6 +765,7 @@ export class BitunixSpotBroker {
         method: "POST",
         path: API.orderHistory,
         body,
+        stateChanging: false,
       })
       const rows = normalizeOrderHistoryPage({
         value: response.data,
@@ -870,6 +872,7 @@ export class BitunixSpotBroker {
         method: "POST",
         path: API.deposits,
         body,
+        stateChanging: false,
       })
       return toResult({
         data: adaptDeposits({
