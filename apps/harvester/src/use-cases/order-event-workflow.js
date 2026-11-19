@@ -117,7 +117,10 @@ function createRecoverySellerTerminalOrderReconciler({
       clientOrderId: order?.clientOrderId,
       brokerOrderId: order?.brokerOrderId,
     })
-    if (!isRecoverySellerTerminalSell({ ownership, order })) {
+    if (!isRecoverySellerTerminalSell({
+      ownership,
+      order,
+    })) {
       return toResult({
         data: {
           skipped: true,
