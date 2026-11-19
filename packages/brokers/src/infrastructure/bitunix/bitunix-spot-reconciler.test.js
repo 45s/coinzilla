@@ -142,3 +142,33 @@ test("start publishes the first observation, reports status and stops scheduling
   assert.equal(reconciler.getStatus().running, false)
   assert.equal(requestCount, 3)
 })
+
+test("start retries a snapshot after callback failure and backs off the failed cycle", async () => {
+  const { broker } = createBroker()
+  const scheduled = []
+  let snapshots = 0
+  let errors = 0
+  const reconciler = new BitunixSpotReconciler({
+    broker,
+    now: () => 1000,
+    schedule: (callback, delay) => { scheduled.push({ callback, delay }); return scheduled.length },
+    cancel: () => {},
+  })
+  const session = reconciler.start({
+    symbols: ["BTCUSDT"],
+    intervalMs: 500,
+    onSnapshot: () => {
+      snapshots += 1
+      if (snapshots === 1) throw new Error("consumer unavailable")
+    },
+    onError: () => { errors += 1 },
+  })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(errors, 1)
+  assert.equal(scheduled[0].delay, 1000)
+  scheduled[0].callback()
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(snapshots, 2)
+  assert.equal(scheduled[1].delay, 500)
+  session.stop()
+})
