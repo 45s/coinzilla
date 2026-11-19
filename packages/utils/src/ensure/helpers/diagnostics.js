@@ -35,7 +35,7 @@ export function describeValue({ value }) {
 
 /**
  * Create a field-specific TypeError without coercing arbitrary objects.
- * @param {{ name: string, expectation: string, value: unknown }} options
+ * @param {{ name: string, expectation: string, value: unknown, errMsg?: string }} options
  * @returns {TypeError}
  */
 export function typeError({ name, expectation, value, errMsg }) {
@@ -47,7 +47,7 @@ export function typeError({ name, expectation, value, errMsg }) {
 
 /**
  * Validate finite numeric input.
- * @param {{ value: unknown, name: string }} options
+ * @param {{ value: unknown, name: string, errMsg?: string }} options
  * @returns {number}
  */
 export function requireFiniteNumber({ value, name, errMsg }) {
