@@ -6,14 +6,21 @@ import { describeValue, typeError } from "./ensure-common.js"
  * @returns {Array<unknown>}
  */
 export function requireArray({ value, name }) {
-  let isArray = false
+  let isArray
   try {
     isArray = Array.isArray(value)
+    if (isArray) {
+      value.length
+    }
   } catch {
     isArray = false
   }
   if (!isArray) {
-    throw typeError({ name, expectation: "an array", value })
+    throw typeError({
+      name,
+      expectation: "an array",
+      value,
+    })
   }
   return value
 }
@@ -24,15 +31,16 @@ export function requireArray({ value, name }) {
  * @returns {Array<unknown>}
  */
 export function requireNonEmptyArray({ value, name }) {
-  const array = requireArray({ value, name })
-  let length
-  try {
-    length = array.length
-  } catch {
-    throw typeError({ name, expectation: "a readable array", value })
-  }
-  if (length === 0) {
-    throw typeError({ name, expectation: "a non-empty array", value })
+  const array = requireArray({
+    value,
+    name,
+  })
+  if (array.length === 0) {
+    throw typeError({
+      name,
+      expectation: "a non-empty array",
+      value,
+    })
   }
   return array
 }
@@ -44,21 +52,39 @@ export function requireNonEmptyArray({ value, name }) {
  */
 export function requireStrings({ value, name, nonEmpty = false }) {
   const array = nonEmpty
-    ? requireNonEmptyArray({ value, name })
-    : requireArray({ value, name })
+    ? requireNonEmptyArray({
+        value,
+        name,
+      })
+    : requireArray({
+        value,
+        name,
+      })
   for (let index = 0; index < array.length; index += 1) {
     const elementName = `${name}[${index}]`
     let element
     try {
       element = array[index]
     } catch {
-      throw typeError({ name: elementName, expectation: "a readable string", value: array })
+      throw typeError({
+        name: elementName,
+        expectation: "a readable string",
+        value: array,
+      })
     }
     if (typeof element !== "string") {
-      throw typeError({ name: elementName, expectation: "a string", value: element })
+      throw typeError({
+        name: elementName,
+        expectation: "a string",
+        value: element,
+      })
     }
     if (nonEmpty && element.trim() === "") {
-      throw typeError({ name: elementName, expectation: "a non-empty string", value: element })
+      throw typeError({
+        name: elementName,
+        expectation: "a non-empty string",
+        value: element,
+      })
     }
   }
   return array
@@ -70,14 +96,21 @@ export function requireStrings({ value, name, nonEmpty = false }) {
  * @returns {Array<unknown>}
  */
 export function requireUnique({ value, name }) {
-  const array = requireArray({ value, name })
+  const array = requireArray({
+    value,
+    name,
+  })
   const firstIndexes = new Map()
   for (let index = 0; index < array.length; index += 1) {
     let element
     try {
       element = array[index]
     } catch {
-      throw typeError({ name: `${name}[${index}]`, expectation: "a readable value", value: array })
+      throw typeError({
+        name: `${name}[${index}]`,
+        expectation: "a readable value",
+        value: array,
+      })
     }
     if (firstIndexes.has(element)) {
       throw new TypeError(`${name} must contain unique values (duplicate at index ${index}; first seen at index ${firstIndexes.get(element)})`)
@@ -93,14 +126,12 @@ export function requireUnique({ value, name }) {
  * @returns {unknown}
  */
 export function requireOneOf({ value, values, name }) {
-  let validArray = false
   try {
-    validArray = Array.isArray(values) && values.length > 0
+    if (!Array.isArray(values) || values.length === 0) {
+      throw new TypeError("values must be a non-empty array")
+    }
   } catch {
-    validArray = false
-  }
-  if (!validArray) {
-    throw new TypeError("values must be a non-empty array")
+    throw new TypeError("values must be a non-empty readable array")
   }
   let includesValue
   try {
