@@ -105,7 +105,13 @@ function createDiagnosticReport({ failed = 0, omitOperation } = {}) {
       skipped: 0,
     },
     results,
-    events: [],
+    events: [{
+      type: "transport_error",
+      error: {
+        name: "Error",
+        message: "private-uid balance 123.456",
+      },
+    }],
   }
 }
 
@@ -147,6 +153,11 @@ test("publishes only a sanitized report from a fresh diagnostics branch and retu
     assert.equal(report.includes("private-uid"), false, "the committed report must never contain account identifiers")
     assert.equal(report.includes("123.456"), false, "the committed report must never contain account balances")
     assert.equal(localReport.includes("123.456"), false, "the local report must apply the same account-value redaction as the committed report")
+    assert.equal(localReport.includes("private-uid"), false, "local event errors must not persist account identifiers")
+    assert.equal(localReport.includes("private error message"), false, "local diagnostic reports must not retain free-form error messages")
+    assert.equal(JSON.stringify(result.report.events).includes("private-uid"), false, "published event errors must not expose account identifiers")
+    assert.equal(JSON.stringify(result.report.events).includes("123.456"), false, "published event errors must not expose balance values")
+    assert.equal(result.report.events[0].error.message, "[error message withheld]", "published event errors must retain only a safe placeholder")
     assert.equal(result.reportPath.endsWith("bitunix-health-20261119T083000000Z.json"), true, "the result must identify the report path to inspect")
     assert.equal(result.localReportPath.endsWith(".diagnostics/bitunix-health-20261119T083000000Z.json"), true, "the full local diagnostic artifact must stay in the ignored diagnostics directory")
   } finally {
