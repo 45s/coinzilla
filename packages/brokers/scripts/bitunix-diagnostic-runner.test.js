@@ -350,7 +350,7 @@ test("observed WebSocket transport captures sanitized request, response, errors 
     itemCount: 1,
     fields: ["balance", "coin"],
   }, "Private WS responses must be summarized without account values")
-  assert.equal(events[2].error.message, "transport failed with [REDACTED]", "Transport errors must be sanitized")
+  assert.equal(events[2].error.message, "[error message withheld]", "Transport error text must never be persisted")
   assert.equal(events[3].close.code, 1006, "The WebSocket close code must remain available for diagnosing abnormal disconnects")
   assert.equal(events[3].close.reason, "closed [REDACTED]", "Close diagnostics must be sanitized")
   assert.equal(JSON.stringify(events).includes("123.45"), false, "Private account values must never enter the event report")
