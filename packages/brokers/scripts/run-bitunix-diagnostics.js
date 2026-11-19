@@ -44,7 +44,7 @@ async function main() {
       "Run read-only Bitunix Spot REST and authenticated WebSocket RPC diagnostics.",
       "Public-only mode runs unsigned REST checks; authenticated REST and WebSocket RPC checks are skipped unless both credentials are set.",
       "BITUNIX_API_KEY and BITUNIX_API_SECRET are optional for public-only REST checks.",
-      "Configure both credentials to enable private account/open-order reads and authenticated WebSocket RPC.",
+      "Configure both credentials to enable private account, open-order, order-history, and authenticated WebSocket RPC reads.",
       "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is optional; without it, REST and WebSocket depth checks are skipped.",
       "Live-read confirmation and other diagnostic defaults are source constants.",
       "See packages/brokers/README.md for configuration and safety details.",
