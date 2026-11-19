@@ -358,8 +358,13 @@ test("resolves a fresh-price waiter only after an accepted market stream event",
   const waiter = createFreshMarketPriceWaiter({
     state,
     isMarketPriceFresh: (price) => price.timestamp === validPriceEvent.timestamp,
-    setTimeoutFn: (callback, timeoutMs) => {
-      const handle = { callback, timeoutMs, cleared: false }
+    setTimeoutFn: (...args) => {
+      const [callback, timeoutMs] = args
+      const handle = {
+        callback,
+        timeoutMs,
+        cleared: false,
+      }
       timerHandles.push(handle)
       return handle
     },
@@ -430,7 +435,8 @@ test("fails a fresh-price wait with a specific timeout and removes the waiter", 
   const waiter = createFreshMarketPriceWaiter({
     state,
     isMarketPriceFresh: () => false,
-    setTimeoutFn: (callback, timeoutMs) => {
+    setTimeoutFn: (...args) => {
+      const [callback, timeoutMs] = args
       assert.equal(timeoutMs, 5_000)
       timeoutCallback = callback
       return "timer"
