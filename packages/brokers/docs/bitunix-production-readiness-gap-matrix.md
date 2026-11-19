@@ -1,7 +1,7 @@
 # Bitunix Spot production-readiness gap matrix
 
-**Baseline:** `develop` as inspected on 2026-11-19  
-**Tracking:** [Issue #1185](https://github.com/45s/coinzilla/issues/1185)  
+**Baseline:** `develop` as inspected on 2026-11-19
+**Tracking:** [Issue #1185](https://github.com/45s/coinzilla/issues/1185)
 **Scope:** `@coinzilla/brokers` implementation and the separately owned Harvester admission boundary.
 
 This is an evidence-oriented snapshot, not a declaration of production readiness. “Implemented” means the repository contains the behavior and deterministic tests; it does not mean live exchange connectivity or exchange-side guarantees have been verified.
