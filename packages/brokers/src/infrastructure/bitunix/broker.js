@@ -1,6 +1,5 @@
-import { assertDecimalString, compareDecimal, handleErr, multiplyDecimal, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, defaultLogger, handleErr, multiplyDecimal, toResult } from "@coinzilla/utils"
 import { getBrokerMutationOutcome } from "../../broker/broker-contract.js"
-import { CoreBroker } from "../../broker.core.js"
 import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
 import { createBitunixBrokerCapabilities } from "./capabilities.js"
 import { BitunixRestClient } from "./api/rest-client.js"
@@ -794,7 +793,7 @@ async function cancelOpenOrdersForSymbol({ broker, symbol, orders }) {
   })
 }
 
-export class BitunixSpotBroker extends CoreBroker {
+export class BitunixSpotBroker {
   /**
    * @param {{
  *   apiKey: string,
@@ -814,7 +813,7 @@ export class BitunixSpotBroker extends CoreBroker {
       ...configInput
     } = input
     const { restClientFactory = createRestClient } = dependencies
-    super(configInput)
+    this.logger = configInput.logger || defaultLogger
     this.config = new BitunixSpotConfig(configInput)
     Object.defineProperty(this, "capabilities", {
       enumerable: true,

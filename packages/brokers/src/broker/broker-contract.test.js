@@ -52,7 +52,7 @@ test("mutation outcomes distinguish local rejection from uncertain exchange resu
   ])
 })
 
-test("assertBrokerContract reports all missing methods without requiring inheritance", () => {
+test("assertBrokerContract reports all missing methods", () => {
   assert.throws(
     () => assertBrokerContract({ broker: {} }),
     /connect, disconnect, getBalances/,

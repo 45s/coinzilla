@@ -18,7 +18,6 @@ test("package entry point exposes only the supported public contracts", () => {
     "BitunixWebSocketError",
     "BrokerCapabilities",
     "BrokerUnsupportedOperationError",
-    "CoreBroker",
     "assertBrokerContract",
     "brokerCapabilitiesErrMsgs",
     "getBrokerMutationOutcome",
@@ -33,7 +32,6 @@ test("public Binance broker can be constructed without opening network connectio
     tradingMode: "testnet",
   })
 
-  assert.ok(broker instanceof brokers.CoreBroker)
   for (const method of [
     "connect",
     "disconnect",

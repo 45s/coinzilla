@@ -125,7 +125,6 @@ The original three application decimal modules were not interchangeable as-is:
 
 - application-local had the broadest operation set, including division, rescaling, increment rounding, and bounded exponent parsing. Its old `formatDecimal()` returned a JavaScript Number; that lossy formatter was not carried into the shared API.
 - Harvester had a smaller signed decimal-string API.
-- Market Simulator had positional arguments and rejected negative subtraction results; its market/order rules remain domain-owned.
 - Entities had independent canonicalization and subtraction implementations; both now delegate to shared primitives while preserving the existing `toResult` contract.
 
 The shared API accepts decimal strings (and bigint for parsing) and intentionally rejects JavaScript Number operands. It defines bounded precision, explicit division/rescaling rounding, and exact string outputs. The migration removes duplicate arithmetic implementations without changing domain-level trading/accounting decisions. The standalone Harvester TESTNET sell helper now uses shared decimal primitives; Binance filter selection and operator-facing quantity policy remain domain-local.
@@ -135,7 +134,6 @@ The shared API accepts decimal strings (and bigint for parsing) and intentionall
 - [~] Inventory application and package helper/utility modules and classify candidates. The source-tree/helper inventory and current dispositions are recorded below; routine console-use verification and any future candidates remain.
 - [~] Review direct console use and application logger adapters; Harvester's default logger was migrated and existing shared logger consumers were confirmed. A repository-wide automated guard remains.
 - [x] Design and test the shared exact decimal API with explicit bounds and rounding behavior.
-- [x] Migrate Harvester domain, Market Simulator, application-local, Entities, and EventBus consumers while keeping business-specific rules local.
 - [x] Migrate the standalone Harvester TESTNET sell helper from local BigInt arithmetic to shared decimal primitives in merged [PR #946](https://github.com/45s/coinzilla/pull/946); preserve CLI validation, filter selection, min/max rules, and output precision.
 - [x] Identify and extract additional generic helpers (percentage calculations, keyed task queue, object-input assertion); classify remaining package helpers by domain ownership.
 - [x] Update package READMEs, exports, consumer tests, and domain roadmaps for the extracted capabilities.
@@ -152,7 +150,6 @@ The source-tree audit covers the applications and workspace packages present in 
 | application-local exact arithmetic | [x] Removed app-local decimal engine; imports shared arithmetic from `@coinzilla/utils`. Trading/accounting calculations remain in application-local. |
 | Harvester portfolio arithmetic | [x] Removed app-local decimal engine and its duplicate unit suite; position accounting imports shared arithmetic. Position and fill invariants remain in Harvester/Entities. |
 | Harvester TESTNET sell quantity | [x] Replaced the local BigInt decimal implementation in `apps/harvester/scripts/testnet-sell-utils.js` with shared parsing, increment rounding, comparison, and precision restoration in merged PR #946; exchange filter selection and quantity policy remain local. |
-| Market Simulator arithmetic | [x] Removed app-local arithmetic engine; order matching uses shared comparison and a thin object-input facade delegates arithmetic while preserving the simulator's non-negative subtraction invariant. Candle validation and fill semantics remain local. |
 | Entities decimal values | [x] Canonical decimal normalization and subtraction delegate to shared primitives; `toResult` and entity validation behavior remain in Entities. |
 | Generic percentage, queue, and input helpers | [x] Percentage arithmetic and keyed task serialization were extracted from application-local; generic object-input assertion was extracted from EventBus. App-specific trading thresholds, subscription cleanup, and event contracts remain local. |
 | Logging | [x] Harvester uses the public `defaultLogger` API. The former Coin Farmer adapter observation is historical only; that application is not present in the current `develop` workspace. |
@@ -183,8 +180,6 @@ The following helper groups were inspected and retained because their behavior b
 | Application-local trading helpers | Exchange result handling, fee/accounting, order planning, trading-rule validation, price thresholds, config validation | These depend on application-local strategy, broker results, or trading constraints. Generic decimal/percentage/queue primitives were extracted. |
 | `apps/harvester/src/domain` | Position fill accounting, portfolio transitions, strategy decisions | These enforce Harvester domain invariants and policies. Only arithmetic primitives were extracted. |
 | `apps/harvester/scripts/testnet-sell-utils.js` | Binance `MARKET_LOT_SIZE`/`LOT_SIZE` selection, minimum/maximum enforcement, and operator-facing errors | Keep exchange-filter and CLI policy local; reuse shared exact-decimal parsing/rounding/comparison/rescaling (PR #946 merged). |
-| `packages/market-simulator/src/domain` | Market history schema and limit-order matching | These define simulator-specific input and matching rules. Its arithmetic facade only preserves the simulator's subtraction invariant. |
 
 The shared package already contained and continues to own the general-purpose logger, result normalization, validators, UUID generation, date/time formatting and differences, waits, feature flags, event emitter, file append helper, log formatting/redaction, string capitalization, and Number-based convenience helpers. The new decimal, percentage, keyed queue, and object-input modules extend that existing public utility set.
 
-**Current-workspace clarification:** the former `apps/bot-coin-farmer` application has been removed from `develop`; its test fixtures are not a current utility candidate. The Market Simulator is now owned by `packages/market-simulator`, and Binance infrastructure lives under `packages/brokers/src/infrastructure/binance/`. The intentionally domain-local inventory above uses those current paths; older paths in prior audit snapshots are historical only.

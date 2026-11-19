@@ -137,7 +137,6 @@
 
 ## DEFERRED — evidence or consumer required
 
-- **Market Simulator correctness and determinism:** intentionally lowest priority until a real application/workflow consumes it. Keep existing behavior/tests intact; do not schedule simulator work ahead of active Harvester or shared-package risks. [Owner roadmap](packages/market-simulator/ROADMAP.md).
 - **Event Bus advanced delivery features:** sequential delivery, retries, dead-letter handling and cooperative cancellation remain demand-driven; preserve the existing bounded delivery and shutdown contract. [Owner roadmap](packages/event-bus/ROADMAP.md).
 - **Additional notification transports/retries/outbox:** require a concrete consumer and explicit duplicate-delivery/storage ownership. The live Telegram smoke test remains operator-controlled. [Owner roadmap](packages/notifiers/ROADMAP.md).
 - **Additional database providers:** reassess only when measured deployment, concurrency, scale or query requirements exceed SQLite.
@@ -160,7 +159,6 @@
 - [Event Bus](packages/event-bus/ROADMAP.md) — bounded delivery and lifecycle guarantees.
 - [Notifiers](packages/notifiers/ROADMAP.md) — optional operational notifications.
 - [Utils](packages/utils/ROADMAP.md) — shared exact arithmetic, Logger and generic helpers.
-- [Market Simulator](packages/market-simulator/ROADMAP.md) — intentionally deferred unused package.
 
 ## Delivery and documentation synchronization rules
 
