@@ -374,8 +374,8 @@ test("Bitunix REST client rejects unauthenticated mutations before network I/O",
       authenticated: false,
       stateChanging: true,
     }),
-    /unauthenticated Bitunix requests must be read-only GET requests/i,
-    "an unauthenticated GET explicitly marked state-changing must be rejected before the network boundary",
+    /state-changing requests must use POST/i,
+    "a GET explicitly marked state-changing must be rejected before the network boundary",
   )
 
   assert.equal(callCount, 0, "no unauthenticated mutation may reach the exchange transport")
