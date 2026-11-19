@@ -520,7 +520,10 @@ async function secureUnsafeMarkets({
   })))
   const failedMarkets = results
     .filter(({ result }) => result.ok !== true)
-    .map(({ symbol, result }) => createMarketFailure({ symbol, result }))
+    .map(({ symbol, result }) => createMarketFailure({
+      symbol,
+      result,
+    }))
   throwForUnsafeConservativeMarkets({ failedMarkets })
   return engine.getShutdownSafetySnapshot()
 }
