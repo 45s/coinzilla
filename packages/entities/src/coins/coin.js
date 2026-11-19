@@ -1,4 +1,4 @@
-import { capitalize, Validator } from "@coinzilla/utils"
+import { capitalize } from "@coinzilla/utils"
 
 export const errMsgs = {
   ticker: "Symbol is required for coin",
@@ -25,7 +25,7 @@ export class Coin {
   }
 
   constructor({ ticker, quantity } = {}) {
-    if (!Validator.isRequiredNotEmptyString(ticker)) {
+    if (typeof ticker !== "string" || ticker.trim() === "") {
       throw new Error(errMsgs.ticker)
     }
     if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity < 0) {

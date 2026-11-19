@@ -27,10 +27,10 @@ export function validateBounds({ min, max, integer = false }) {
 
 /**
  * Validate a safe integer within inclusive bounds.
- * @param {{ value: unknown, min: unknown, max: unknown, name: string }} options
+ * @param {{ value: unknown, min: unknown, max: unknown, name: string, errMsg?: string }} options
  * @returns {number}
  */
-export function requireIntegerInRange({ value, min, max, name }) {
+export function requireIntegerInRange({ value, min, max, name, errMsg }) {
   const bounds = validateBounds({
     min,
     max,
@@ -41,20 +41,21 @@ export function requireIntegerInRange({ value, min, max, name }) {
       name,
       expectation: `an integer between ${bounds.min} and ${bounds.max}`,
       value,
+      errMsg,
     })
   }
   if (value < bounds.min || value > bounds.max) {
-    throw new RangeError(`${name} must be an integer between ${bounds.min} and ${bounds.max} (received ${describeValue({ value })})`)
+    throw new RangeError(errMsg ?? `${name} must be an integer between ${bounds.min} and ${bounds.max} (received ${describeValue({ value })})`)
   }
   return value
 }
 
 /**
  * Validate a finite number within inclusive bounds.
- * @param {{ value: unknown, min: unknown, max: unknown, name: string }} options
+ * @param {{ value: unknown, min: unknown, max: unknown, name: string, errMsg?: string }} options
  * @returns {number}
  */
-export function requireNumberInRange({ value, min, max, name }) {
+export function requireNumberInRange({ value, min, max, name, errMsg }) {
   const bounds = validateBounds({
     min,
     max,
@@ -62,9 +63,10 @@ export function requireNumberInRange({ value, min, max, name }) {
   requireFiniteNumber({
     value,
     name,
+    errMsg,
   })
   if (value < bounds.min || value > bounds.max) {
-    throw new RangeError(`${name} must be a number between ${bounds.min} and ${bounds.max} (received ${describeValue({ value })})`)
+    throw new RangeError(errMsg ?? `${name} must be a number between ${bounds.min} and ${bounds.max} (received ${describeValue({ value })})`)
   }
   return value
 }

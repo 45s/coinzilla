@@ -20,11 +20,18 @@ owner: utils
 
 ## COMPLETED — generic validation API ([issue #1504](https://github.com/45s/coinzilla/issues/1504), [PR #1505](https://github.com/45s/coinzilla/pull/1505))
 
-- Introduces the domain-neutral public `ensure` assertions and optional immutable chain while retaining legacy `Validator`/`VR` exports and predicate semantics.
+- Introduced the domain-neutral public `ensure` assertions and optional immutable chain. The initial PR temporarily retained legacy `Validator`/`VR` exports and predicate semantics; the coordinated follow-up removes them (see #1507/#1508).
 - Organizes implementation as a feature module under `src/ensure/`: assertion service, chain service, thin feature index, cohesive pure `helpers/`, and adjacent tests.
 - No consumer-wide migration or business-invariant relocation is included.
 - **Merged:** PR #1505 into `develop` at `eb235e630ca7e59727343bc6819741af6ab69e11`; verified PR head `8c47d506113550bb10a42b7646064a583a23ae80`.
 - **Verification:** exact-head Utils tests, workspace tests/coverage, strict and workspace ESLint, syntax, actionlint, dependency audit, Harvester regression, and external documentation links all passed. Utils coverage reported 99.02% line / 97.31% branch overall (coverage run 237 tests, 0 failures).
+
+## In progress — custom ensure diagnostics and remove legacy Validator/VR ([#1507](https://github.com/45s/coinzilla/issues/1507), [#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
+
+- Add optional `errMsg` to direct `ensure` assertions and fluent chains. Custom diagnostics preserve the original `TypeError` / `RangeError` class; successful assertions still return the original value.
+- Remove the deprecated `Validator` / `VR` public exports, declarative implementation, and tests. Migrate current `Coin` and `Order` consumers in Entities while preserving accepted values and their domain-specific `Error` messages.
+- Fix the dedicated Utils Unit Tests workflow to discover nested `ensure` tests; the prior root-only glob omitted `src/ensure/ensure.test.js`.
+- **Status:** test-first RED observed on PR #1509 test-only head; implementation and final exact-head verification are in progress.
 
 ## Priority execution plan — current develop direction (2026-11-10)
 
@@ -60,7 +67,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
 
 5. **[x] Harden Validator rule configuration ([issue #892](https://github.com/45s/coinzilla/issues/892)) — completed in merged [PR #918](https://github.com/45s/coinzilla/pull/918).**
    - **Why:** unknown rule identifiers were ignored and non-boolean `isSoft` values were interpreted by truthiness; a typo could silently disable validation.
-   - **Completed:** prevalidate every tuple and rule against the exported `VR` values; reject malformed rule entries and require a boolean `isSoft` when provided. Repository code search found no production callers of `Validator.validate` or `validateItems`; existing production predicate-helper consumers are unaffected.
+   - **Completed historically:** prevalidated every tuple and rule against exported `VR` values; rejected malformed rule entries and required boolean `isSoft`. Follow-up issue #1508 later removed the declarative API and migrated the remaining predicate consumers.
    - **Verify:** 198/198 dedicated Utils tests and 198/198 workspace Utils tests passed. Utils coverage is 98.53% lines, 96.33% branches, and 99.19% functions. All six required exact-head contexts passed; the dedicated Utils workflow now runs `src/*.test.js` rather than treating the package directory as one test module.
 
 ### DEFERRED
@@ -70,7 +77,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
 
-> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and Validator configuration hardening ([PR #918](https://github.com/45s/coinzilla/pull/918), issue [#892](https://github.com/45s/coinzilla/issues/892)) are complete. The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
+> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and ensure validation modernization are complete. The legacy Validator/VR removal is in PR #1509 (pending merge). The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
 
 **Owner:** `packages/utils/`
 
@@ -90,14 +97,14 @@ Read [the utils agent instructions](./AGENTS.md) and [the domain ownership guide
 
 The current audit identified these concrete items:
 
-- [x] Extract pure numeric operations and validation rules into focused modules while preserving `NH`, `Validator`, and `VR` entry points.
+- [x] Extract pure numeric operations and validation into focused modules. `NH` remains public; the temporary `Validator`/`VR` compatibility exports were removed in follow-up PR #1509.
 - [x] Validate wait durations before passing them to Node timers; reject negative, non-finite, non-numeric, and out-of-range values rather than relying on timer coercion.
 - [x] Make log formatting resilient to hostile values whose JSON serialization and string coercion both throw, and redact common credential-bearing fields from structured payloads.
 - [x] Stop including feature-flag environment variable values in warning diagnostics; return a deterministic `false` if warning reporting fails but error reporting succeeds.
 - [x] Remove the filesystem helper's import through the public package index to avoid an unnecessary circular dependency.
 - [x] Add package-specific coverage thresholds and a CI negative self-check, then expand regression coverage for the affected boundaries.
 
-Compatibility constraints: retain existing public exports and the legacy `NH` / `Validator` facade shapes; preserve existing numeric calculations, result structures, event-emitter singleton behavior, and successful filesystem append semantics. No runtime dependencies are required.
+Historical compatibility constraints retained `NH` and `Validator`/`VR` at that checkpoint. The later ensure migration removed the obsolete Validator/VR contract; `NH`, numeric calculations, result structures, event-emitter singleton behavior, and successful filesystem append semantics remain unchanged. No runtime dependencies are required.
 
 ## Roadmap
 
@@ -109,7 +116,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 - [x] Review helper APIs for consistent input validation, error semantics, and immutable behavior.
 - [x] Keep logging utilities structured, safe, and free of common credential fields in structured payloads; free-form log strings remain caller-owned.
 - [x] Capture build provenance and structured Logger context (issue #763): shared capability merged in PR #767; Harvester process-start consumer integration merged in PR #770. PR #765 was an abandoned test-first draft and is not the delivery reference.
-- [ ] Remove or consolidate genuinely duplicated generic helpers when doing so does not couple unrelated domains. Use the new `ensure` contract for generic validation as candidates are touched; task #1504 / PR #1505 is modernizing this API and contributor guidance.
+- [ ] Remove or consolidate genuinely duplicated generic helpers when doing so does not couple unrelated domains. Use the supported `ensure` contract for generic validation; the `Validator`/`VR` facade was removed in PR #1509.
 - [x] Review dependency usage and keep the package minimal; no new runtime dependencies introduced.
 
 ## Validation record
