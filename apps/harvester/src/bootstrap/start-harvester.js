@@ -8,6 +8,7 @@ import { conservativeStrategyPolicy } from "../domain/strategies/conservative/st
 import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
+import { createRecoverySellerAccountingWorkflow } from "../use-cases/create-recovery-seller-accounting-workflow.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
 import { EffectiveConfigurationError } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
@@ -441,6 +442,7 @@ function createHarvesterPortfolioContext({ startup } = {}) {
     accountRuntime,
     accountRuntimeRegistry,
     portfolioWorkflow: createPortfolioWorkflow({
+      sharedState: accountRuntime.state,
       evaluateStrategy: startup.evaluateStrategy,
       logger: createStrategyLogger({
         logger: startup.logger,
@@ -450,6 +452,9 @@ function createHarvesterPortfolioContext({ startup } = {}) {
       onOperationalStateExecutionFill: startup.onOperationalStateExecutionFill,
       onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
       onOperationalStateRecoveryCycleNotCompleted: startup.onOperationalStateRecoveryCycleNotCompleted,
+    }),
+    recoverySellerWorkflow: createRecoverySellerAccountingWorkflow({
+      sharedState: accountRuntime.state,
     }),
     recoveredState: accountRuntime.state,
     marketMetadata: accountRuntime.marketMetadata,
@@ -703,6 +708,7 @@ async function startHarvesterPreflightServices({ startup,
     getOpenOrders: () => resources.broker.getOpenOrders(),
   })
   portfolio.portfolioWorkflow = createPortfolioWorkflow({
+    sharedState: portfolio.accountRuntime.state,
     evaluateStrategy: startup.evaluateStrategy,
     logger: createStrategyLogger({
       logger: startup.logger,
