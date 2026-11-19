@@ -91,9 +91,12 @@ function normalizeOrderHistoryCode({ value, field, allowed }) {
   if (value === undefined) {
     return undefined
   }
-  const normalized = typeof value === "string"
-    ? value
-    : Number.isSafeInteger(value) ? String(value) : null
+  let normalized = null
+  if (typeof value === "string") {
+    normalized = value
+  } else if (Number.isSafeInteger(value)) {
+    normalized = String(value)
+  }
   if (!allowed.has(normalized)) {
     throw new TypeError(`Bitunix Spot WebSocket order-history ${field} is unsupported`)
   }
