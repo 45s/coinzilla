@@ -1,4 +1,4 @@
-import { typeError } from "./ensure-common.js"
+import { typeError } from "./diagnostics.js"
 
 /**
  * Validate a non-null, non-array object.

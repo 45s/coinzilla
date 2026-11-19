@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { ensure } from "./index.js"
+import { ensure } from "../index.js"
 
 const namedValue = ([value, name]) => ({
   value,

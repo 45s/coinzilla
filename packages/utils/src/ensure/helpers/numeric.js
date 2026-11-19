@@ -1,4 +1,4 @@
-import { describeValue, requireFiniteNumber, typeError } from "./ensure-common.js"
+import { describeValue, requireFiniteNumber, typeError } from "./diagnostics.js"
 
 /**
  * Validate numeric range configuration.

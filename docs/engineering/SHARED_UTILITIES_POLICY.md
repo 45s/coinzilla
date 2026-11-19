@@ -126,7 +126,7 @@ This is an initial source-tree and targeted implementation scan, not a claim tha
 | Object input assertion | Previously implemented in packages/event-bus/src/helpers/object-input.js | [x] Generic non-null, non-array object assertion now lives in `@coinzilla/utils`; EventBus still owns its event-specific input semantics. |
 | Numeric helpers | packages/utils/src/number-operations.js, number-helper.js and app-specific numeric calculations | Reuse existing Number-based helpers only for ordinary non-financial calculations. Do not use binary floating-point helpers for exact financial amounts. |
 | Time and wait | packages/utils/src/calculate-time-diff.js, format-time-relatively.js, wait.js, wait-duration.js | Existing shared capability; search before adding alternatives. |
-| Generic validation and results | packages/utils/src/ensure.js, validation.js, validator.js, to-result.js | Prefer the public `ensure` API for generic assertions; legacy `Validator`/`VR` remains compatibility-only. `toResult` retains its separate result contract. |
+| Generic validation and results | packages/utils/src/ensure/, validation.js, validator.js, to-result.js | Prefer the public `ensure` API for generic assertions; legacy `Validator`/`VR` remains compatibility-only. `toResult` retains its separate result contract. |
 | Broker adapters and protocol helpers | packages/brokers/src/**/helpers/**, utils/** | Keep protocol-specific transformations and transport behavior in brokers. Extract only protocol-independent primitives. |
 | Event-bus helpers | packages/event-bus/src/helpers/** | Keep event contract and delivery policy local to the event-bus domain. |
 | Telegram formatting | packages/notifiers/src/telegram/** | Keep Telegram-specific message rules local to notifiers. |

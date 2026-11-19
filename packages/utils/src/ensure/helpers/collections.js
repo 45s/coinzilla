@@ -1,4 +1,4 @@
-import { describeValue, typeError } from "./ensure-common.js"
+import { describeValue, typeError } from "./diagnostics.js"
 
 /**
  * Validate an array and preserve its identity.

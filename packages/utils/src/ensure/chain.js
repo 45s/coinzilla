@@ -1,11 +1,10 @@
+import { readOption, readOptions } from "./helpers/options.js"
 import {
-  readOption,
-  readOptions,
   requireArray,
   requireNonEmptyArray,
   requireStrings,
   requireUnique,
-} from "./ensure-core.js"
+} from "./helpers/collections.js"
 
 /**
  * Immutable fluent chain. Transformations produce new chains and arrays.

@@ -1,19 +1,19 @@
+import { readOption, readValueOptions } from "./helpers/options.js"
 import {
-  readOption,
-  readValueOptions,
   requireArray,
-  requireFiniteNumber,
   requireNonEmptyArray,
-  requireNumberInRange,
-  requireObject,
-  requireOneOf,
-  requirePlainObject,
   requireStrings,
   requireUnique,
+  requireOneOf,
+} from "./helpers/collections.js"
+import {
+  requireFiniteNumber,
+  requireNumberInRange,
   requireIntegerInRange,
-  typeError,
-} from "./ensure-core.js"
-import { createEnsureChain } from "./ensure-chain.js"
+} from "./helpers/numeric.js"
+import { requireObject, requirePlainObject } from "./helpers/objects.js"
+import { typeError } from "./helpers/diagnostics.js"
+import { createEnsureChain } from "./chain.js"
 
 /**
  * Domain-neutral input assertions. Each method takes one options object and

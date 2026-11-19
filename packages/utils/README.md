@@ -317,7 +317,6 @@ Legacy rule meanings remain unchanged:
 
 Legacy rules must exactly match exported `VR` values. Invalid tuple/rule configuration is rejected before values are evaluated. `isSoft` defaults to `true` and must be boolean when supplied.
 
-
 ## Development
 
 ```sh

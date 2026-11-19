@@ -1,4 +1,4 @@
-export { ensure } from "./ensure.js"
+export { ensure } from "./ensure/index.js"
 export { EM } from "./error-messages.js"
 export { Logger, defaultLogger } from "./logger.js"
 export { captureBuildMetadata } from "./build-metadata.js"
