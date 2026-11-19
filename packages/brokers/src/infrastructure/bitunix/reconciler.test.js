@@ -339,10 +339,22 @@ function createNestedObservationSources() {
 test("pollOnce deep-freezes an isolated observation snapshot", async () => {
   const { broker } = createBroker()
   const sources = createNestedObservationSources()
-  broker.getBalances = async () => ({ ok: true, data: [sources.balance] })
-  broker.getOpenOrders = async () => ({ ok: true, data: [sources.order] })
-  broker.getOrderHistory = async () => ({ ok: true, data: [sources.history] })
-  broker.getMatchingOrderDetails = async () => ({ ok: true, data: sources.matching })
+  broker.getBalances = async () => ({
+    ok: true,
+    data: [sources.balance],
+  })
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [sources.order],
+  })
+  broker.getOrderHistory = async () => ({
+    ok: true,
+    data: [sources.history],
+  })
+  broker.getMatchingOrderDetails = async () => ({
+    ok: true,
+    data: sources.matching,
+  })
 
   const reconciler = new BitunixSpotReconciler({
     broker,
