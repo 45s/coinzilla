@@ -6,7 +6,15 @@ const DEFAULT_BASE_URL = "https://openapi.bitunix.com"
  */
 export class BitunixSpotConfig {
   /**
-   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, allowLiveOrderMutations?: boolean, allowLiveFundsMutations?: boolean}} input
+   * @param {{
+   *   apiKey: string,
+   *   apiSecret: string,
+   *   tradingMode: "live",
+   *   baseUrl?: string,
+   *   requestTimeout?: number,
+   *   allowLiveOrderMutations?: boolean,
+   *   allowLiveFundsMutations?: boolean,
+   * }} input
    */
   constructor({
     apiKey,
