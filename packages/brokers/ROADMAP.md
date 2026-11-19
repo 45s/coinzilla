@@ -1470,7 +1470,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 
 ## Bitunix read-only Broker diagnostics expansion (#1519)
 
-**Status: Implemented in consolidated PR #1533; exact-head CI verification is pending.** Extend the diagnostic run through the public `Broker` facade to include public symbol-filter metadata and an authenticated, symbol-scoped first page of order history.
+**Status: Implemented in PR #1536; exact-head CI verification is pending.** Extend the diagnostic run through the public `Broker` facade to include public symbol-filter metadata and an authenticated, symbol-scoped first page of order history.
 
 - Add schema inspection for the order-history page envelope without recording private response values.
 - Preserve public-only mode: symbol filters remain public; authenticated order history is skipped without the full credential pair.
@@ -1479,9 +1479,19 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 
 ## 2026-11-19 — Bitunix polling generation isolation (#1521)
 
-**Status: Implemented in consolidated PR #1533; exact-head CI verification is pending.**
+**Status: Implemented in PR #1536; exact-head CI verification is pending.**
 
 - Detach a stopped generation's in-flight read from the active coalescing slot so an immediate restart can begin a fresh read even when the old network request has not settled.
 - Guard promise cleanup by identity so a late old-generation `finally` cannot clear a newer generation's in-flight promise or scope key.
 - Preserve the honest cancellation boundary: stop fences stale results and callbacks but does not claim to abort a request already dispatched.
 - Add deterministic same-scope and different-scope stop/restart regressions, including late completion from the old generation.
+
+## 2026-11-19 — Bitunix REST mutation outcome classification (#1523)
+
+**Status: Implemented in PR #1538; exact-head CI verification is pending.**
+
+- Require every Bitunix REST POST to declare `stateChanging: true|false`; no implicit mutation classification.
+- Explicitly classify documented read-only POSTs, including current orders, order history, deposit history, withdrawal history, and matching-order detail.
+- Preserve `outcomeUnknown` for transport failures, ambiguous HTTP failures, and malformed success envelopes after a mutation is dispatched.
+- Keep explicit non-zero exchange codes as definitive rejections and never retry mutations automatically.
+- Add REST-client tests for missing/invalid classifications, malformed response envelopes, explicit exchange rejection, and read-only/mutation outcome differences.
