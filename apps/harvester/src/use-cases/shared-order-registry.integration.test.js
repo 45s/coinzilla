@@ -117,7 +117,7 @@ function createSharedAccountState() {
   }).get("test-provider").state
 }
 
-function createEngine({ sharedAccountState }) {
+function createEngine({ sharedAccountState, evaluateRecoverySellerTransition }) {
   const brokerState = createHarnessBroker({
     market,
     baseAsset,
@@ -160,6 +160,7 @@ function createEngine({ sharedAccountState }) {
     hasUnownedOpenOrdersForSymbol: () => false,
     initialState: { orderRegistry: sharedAccountState.orderRegistry },
     sharedAccountState,
+    evaluateRecoverySellerTransition,
   })
   return {
     engine,
@@ -210,5 +211,56 @@ test("Conservative engine and RS accounting workflow observe one live account Or
     recoverySellerWorkflow.getOrderRegistry(),
     sharedAccountState.orderRegistry,
     "The RS accounting workflow must observe the exact current registry snapshot used by the CG engine.",
+  )
+})
+
+
+test("Conservative engine dispatches RS evaluation through the shared account transition", async () => {
+  const sharedAccountState = createSharedAccountState()
+  const evaluatedSymbols = []
+  const { engine } = createEngine({
+    sharedAccountState,
+    evaluateRecoverySellerTransition: async ({ symbol }) => {
+      evaluatedSymbols.push(symbol)
+      return {
+        ok: true,
+        data: {
+          symbol,
+          skipped: true,
+          reason: "RS_POLICY_NOT_READY",
+        },
+      }
+    },
+  })
+
+  await engine.processBookTicker({
+    symbol: "DOGEUSDT",
+    bookTicker: {
+      symbol: "DOGEUSDT",
+      bestBidPrice: "99",
+      bestBidQuantity: "100",
+      bestAskPrice: "101",
+      bestAskQuantity: "100",
+      timestamp: Date.now(),
+    },
+  })
+  await engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: Date.now(),
+    },
+  })
+
+  assert.deepEqual(
+    evaluatedSymbols,
+    ["DOGEUSDT"],
+    "The shared engine must dispatch the same market transition to the configured RS policy exactly once.",
+  )
+  assert.equal(
+    typeof sharedAccountState.runTransition,
+    "function",
+    "RS evaluation must run under the account-owned transition coordinator.",
   )
 })
