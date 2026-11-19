@@ -575,12 +575,15 @@ async function reconcileSpotOrderPlacement({ restClient, symbol, placementData }
   }
 }
 
-function validateSpotOrderPlacementResponse({ response, symbol }) {
+function validateSpotOrderPlacementResponse({ response, symbol, side, type }) {
   if (!response || typeof response !== "object" || Array.isArray(response)) {
     throw new TypeError("Bitunix Spot place-order response must be an object")
   }
   if (String(response.symbol).toUpperCase() !== symbol) {
     throw new TypeError("Bitunix Spot place-order response symbol does not match the request")
+  }
+  if (String(response.side) !== String(side) || String(response.type) !== String(type)) {
+    throw new TypeError("Bitunix Spot place-order response side or type does not match the request")
   }
   if (String(response.placeStatus) !== "1") {
     throw Object.assign(
@@ -1248,6 +1251,8 @@ export class BitunixSpotBroker extends CoreBroker {
       const placementData = validateSpotOrderPlacementResponse({
         response: response.data,
         symbol: order.symbol,
+        side: order.body.side,
+        type: order.body.type,
       })
       return reconcileSpotOrderPlacement({
         restClient: this.restClient,
