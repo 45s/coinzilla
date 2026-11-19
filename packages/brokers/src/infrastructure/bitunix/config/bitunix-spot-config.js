@@ -1,5 +1,14 @@
 const DEFAULT_BASE_URL = "https://openapi.bitunix.com"
 
+function validateMutationPermissions({ allowLiveOrderMutations, allowLiveFundsMutations }) {
+  if (typeof allowLiveOrderMutations !== "boolean") {
+    throw new TypeError("Bitunix Spot allowLiveOrderMutations must be a boolean")
+  }
+  if (typeof allowLiveFundsMutations !== "boolean") {
+    throw new TypeError("Bitunix Spot allowLiveFundsMutations must be a boolean")
+  }
+}
+
 /**
  * Validated Bitunix Spot REST configuration.
  * The published Spot API documents the production REST endpoint only.
@@ -30,12 +39,10 @@ export class BitunixSpotConfig {
     if (!Number.isInteger(requestTimeout) || requestTimeout < 1) {
       throw new RangeError("Bitunix Spot requestTimeout must be a positive integer")
     }
-    if (typeof allowLiveOrderMutations !== "boolean") {
-      throw new TypeError("Bitunix Spot allowLiveOrderMutations must be a boolean")
-    }
-    if (typeof allowLiveFundsMutations !== "boolean") {
-      throw new TypeError("Bitunix Spot allowLiveFundsMutations must be a boolean")
-    }
+    validateMutationPermissions({
+      allowLiveOrderMutations,
+      allowLiveFundsMutations,
+    })
 
     this.apiKey = apiKey
     this.apiSecret = apiSecret
