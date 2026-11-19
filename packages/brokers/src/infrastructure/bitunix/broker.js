@@ -794,6 +794,71 @@ async function cancelOpenOrdersForSymbol({ broker, symbol, orders }) {
   })
 }
 
+function createBitunixUserDataStatusReporter({ onStatus }) {
+  return (status) => {
+    if (typeof onStatus !== "function") {
+      return
+    }
+    try {
+      onStatus(status)
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.subscribeForUserData().onStatus",
+        error,
+      })
+    }
+  }
+}
+
+function startBitunixUserDataObservationPolling({
+  broker,
+  symbols,
+  trackedOrders,
+  intervalMs,
+  onObservation,
+  onStatus,
+}) {
+  const reportStatus = createBitunixUserDataStatusReporter({ onStatus })
+  const reconciler = broker.reconcilerFactory({ broker })
+  const session = reconciler.start({
+    symbols,
+    trackedOrders,
+    intervalMs,
+    onSnapshot: (observation) => onObservation({ observation }),
+    onStatus: reportStatus,
+    onError: (error) => {
+      handleErr({
+        where: "BitunixSpotBroker.subscribeForUserData().poll",
+        error,
+      })
+      reportStatus({
+        type: "pollingError",
+        deliveryMode: "POLLING_OBSERVATIONS",
+        nativePush: false,
+        error,
+      })
+    },
+  })
+
+  let active = true
+  let subscription
+  subscription = Object.freeze({
+    deliveryMode: "POLLING_OBSERVATIONS",
+    nativePush: false,
+    disconnect: async () => {
+      if (!active) {
+        return
+      }
+      active = false
+      session.stop()
+      broker.userDataSubscriptions.delete(subscription)
+    },
+    getStatus: () => session.getStatus(),
+  })
+  broker.userDataSubscriptions.add(subscription)
+  return subscription
+}
+
 export class BitunixSpotBroker {
   /**
    * @param {{
@@ -1802,6 +1867,36 @@ export class BitunixSpotBroker {
     onEvent,
     onObservation,
     onStatus,
+  } = {}) {
+    try {
+      if (!this.connected) {
+        throw new Error("Bitunix Spot broker must be connected before subscribing to user-data observations")
+      }
+      if (onEvent !== undefined && typeof onEvent !== "function") {
+        throw new TypeError("Bitunix Spot onEvent must be a function when supplied")
+      }
+      if (typeof onObservation !== "function") {
+        throw new TypeError("Bitunix Spot onObservation must be a function")
+      }
+      if (onStatus !== undefined && typeof onStatus !== "function") {
+        throw new TypeError("Bitunix Spot onStatus must be a function when supplied")
+      }
+      const subscription = startBitunixUserDataObservationPolling({
+        broker: this,
+        symbols,
+        trackedOrders,
+        intervalMs,
+        onObservation,
+        onStatus,
+      })
+      return toResult({ data: subscription })
+    } catch (error) {
+      handleErr({
+        where: "BitunixSpotBroker.subscribeForUserData()",
+        error,
+      })
+      return toResult({ errors: [error] })
+    }
   } = {}) {
     try {
       if (!this.connected) {
