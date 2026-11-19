@@ -718,7 +718,10 @@ test("routes Recovery Seller-owned fills to RS accounting without mutating Conse
     registry,
     updateRecoverySellerAccounting: async ({ fill }) => {
       recoverySellerAccountingCalls.push(fill)
-      return toResult({ data: { applied: true, duplicate: false } })
+      return toResult({ data: {
+        applied: true,
+        duplicate: false,
+      } })
     },
   })
 
