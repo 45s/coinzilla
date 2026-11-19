@@ -36,6 +36,36 @@ test("applied migration definitions cannot change under the same version and nam
   }
 })
 
+test("tampered migration checksums are rejected", async () => {
+  const database = createSqliteDatabase({
+    filename: ":memory:",
+  })
+  await database.connect()
+
+  try {
+    const migration = {
+      version: 1,
+      name: "create-audit-records",
+      up(transaction) {
+        transaction.exec("CREATE TABLE audit_records (id INTEGER PRIMARY KEY)")
+      },
+    }
+
+    await database.migrate([migration])
+    database.prepare(
+      "UPDATE schema_migrations SET checksum = ? WHERE version = ?",
+    ).run("", 1)
+
+    await assert.rejects(
+      database.migrate([migration]),
+      /checksum mismatch at version 1/,
+      "A non-null but invalid or modified stored migration checksum must not be treated as legacy history",
+    )
+  } finally {
+    await database.close()
+  }
+})
+
 test("pending migrations cannot run before an already-applied higher version", async () => {
   const database = createSqliteDatabase({
     filename: ":memory:",
