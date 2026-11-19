@@ -659,6 +659,29 @@ async function getBitunixSpotOrderDetail({ restClient, symbol, orderId }) {
   }))
 }
 
+function createCancelOrderFailureResult({ error, requestDispatched, cancelAcknowledged }) {
+  let mutationOutcome
+  if (cancelAcknowledged) {
+    mutationOutcome = "CONFIRMED"
+  } else if (error?.kind === "exchange") {
+    mutationOutcome = "REJECTED"
+  } else {
+    mutationOutcome = getBrokerMutationOutcome({
+      error,
+      requestDispatched,
+    })
+  }
+  const cancellationOutcome = cancelAcknowledged ||
+    (requestDispatched && mutationOutcome !== "NOT_SENT")
+    ? "OUTCOME_UNKNOWN"
+    : "NOT_SENT"
+  return toResult({
+    errors: [error],
+    mutationOutcome,
+    cancellationOutcome,
+  })
+}
+
 async function cancelOpenOrdersForSymbol({ broker, symbol, orders }) {
   const results = []
   const errors = []
@@ -1367,24 +1390,10 @@ export class BitunixSpotBroker extends CoreBroker {
         where: "BitunixSpotBroker.cancelOrder()",
         error,
       })
-      let outcome
-      if (cancelAcknowledged) {
-        outcome = "CONFIRMED"
-      } else if (error?.kind === "exchange") {
-        outcome = "REJECTED"
-      } else {
-        outcome = getBrokerMutationOutcome({
-          error,
-          requestDispatched,
-        })
-      }
-      return toResult({
-        errors: [error],
-        mutationOutcome: outcome,
-        cancellationOutcome: cancelAcknowledged ||
-          (requestDispatched && outcome !== "NOT_SENT")
-          ? "OUTCOME_UNKNOWN"
-          : "NOT_SENT",
+      return createCancelOrderFailureResult({
+        error,
+        requestDispatched,
+        cancelAcknowledged,
       })
     }
   }
