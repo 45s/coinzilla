@@ -18,6 +18,8 @@ import { createEnsureChain } from "./chain.js"
  * Domain-neutral input assertions. Each method takes one options object and
  * returns the validated value without coercion or mutation. Optional errMsg
  * replaces validation diagnostics while preserving TypeError or RangeError.
+ * Assertion options support { value, name?, errMsg? }; range and membership
+ * assertions additionally require their corresponding constraint options.
  *
  * @example
  * ensure.integerInRange({ value: 500, min: 250, max: 60000, name: "intervalMs" })
