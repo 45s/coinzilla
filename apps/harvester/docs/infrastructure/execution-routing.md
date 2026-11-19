@@ -40,11 +40,11 @@ Execution routing is defined per `(strategyId, symbol)`. The provider's market-d
 
 ## Strategy route identity at provider startup
 
-The provider-account startup input carries the immutable `executionRoutes` array separately from the deduplicated `executionSymbols` list. The same-market regression verifies that CG and RS both reach the provider boundary while only one market subscription is requested. The subsequent shared-engine work tracked by [#1475](https://github.com/45s/coinzilla/issues/1475) must consume these records before strategy dispatch is enabled. Until that integration and offline lifecycle proof are complete, RS remains non-executable.
+The provider-account startup input carries the immutable `executionRoutes` array separately from the deduplicated `executionSymbols` list. The same-market regression verifies that CG and RS both reach the provider boundary while only one market subscription is requested. PR #1476 now consumes these records for disabled-by-default RS configuration, shared account composition and RS BUY fill ownership dispatch. Production RS policy/order lifecycle, terminal mixed-SELL integration, shared reservations and offline lifecycle proof remain incomplete; route metadata does not authorize RS execution.
 
 ## Strategy route identity through runtime metadata
 
-Provider startup receives and returns the immutable strategy-owned `executionRoutes` separately from deduplicated `executionSymbols`. Multi-account runtime metadata preserves each provider's route assignments as well. This metadata is the input contract for the next Harvester bootstrap/strategy-dispatch integration; it does not by itself enable RS execution.
+Provider startup receives and returns the immutable strategy-owned `executionRoutes` separately from deduplicated `executionSymbols`. Multi-account runtime metadata preserves each provider's route assignments as well. PR #1476 consumes this metadata for RS route resolution and shared accounting composition, but the concrete RS policy/lifecycle evaluator and order/fill management are still incomplete. Route metadata does not enable RS execution.
 
 ## Account and provider failure policy
 
