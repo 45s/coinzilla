@@ -1,10 +1,19 @@
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { MARKET_DATA_MAX_AGE_MS } from "../../domain/market/is-market-data-fresh.js"
 
+function getRecoveryErrorReason(error) {
+  if (typeof error?.reason === "string") {
+    return error.reason
+  }
+  const message = typeof error?.message === "string" ? error.message : ""
+  const separatorIndex = message.lastIndexOf(": ")
+  return separatorIndex >= 0 ? message.slice(separatorIndex + 2) : undefined
+}
+
 function isRefreshableRecoveryPriceFailure(result) {
   return result?.ok === false && result.errors?.some((error) =>
     error?.code === "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE" &&
-    ["MARKET_PRICE_UNAVAILABLE", "STALE_MARKET_PRICE"].includes(error.reason)
+    ["MARKET_PRICE_UNAVAILABLE", "STALE_MARKET_PRICE"].includes(getRecoveryErrorReason(error))
   )
 }
 
@@ -44,14 +53,9 @@ function throwIfShutdownAborted(signal) {
 
 function createStageBlocker({ stage, error } = {}) {
   const reason = error?.code ?? error?.message ?? "FAILED"
-  const message = typeof error?.message === "string" ? error.message : ""
-  const separatorIndex = message.lastIndexOf(": ")
-  const messageDetail = separatorIndex >= 0 ? message.slice(separatorIndex + 2) : undefined
-  const detail = error?.reason ?? (
-    ["SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE", "SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE"].includes(error?.code)
-      ? messageDetail
-      : undefined
-  )
+  const detail = ["SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE", "SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE"].includes(error?.code)
+    ? getRecoveryErrorReason(error)
+    : error?.reason
   return `${stage}:${reason}${detail ? `:${detail}` : ""}`
 }
 
@@ -75,7 +79,20 @@ async function runStage({ stage, operation } = {}) {
 
 async function drainUserData(drainUserDataEvents) {
   try {
-    await drainUserDataEvents()
+    const result = await drainUserDataEvents()
+    if (result?.ok === false) {
+      const errors = Array.isArray(result.errors)
+        ? result.errors
+        : result.error
+          ? [result.error]
+          : []
+      return errors.length > 0
+        ? errors.map((error) => createStageBlocker({
+          stage: "USER_DATA_DRAIN",
+          error,
+        }))
+        : ["USER_DATA_DRAIN:UNCONFIRMED"]
+    }
     return []
   } catch (error) {
     return [createStageBlocker({
