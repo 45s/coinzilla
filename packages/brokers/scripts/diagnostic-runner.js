@@ -15,7 +15,7 @@ const DIAGNOSTIC_CONFIG = Object.freeze({
   // REST Spot uses numeric minute intervals; WebSocket RPC documents the "1min" form and base-coin symbol.
   klineInterval: "1",
   websocketKlineSymbol: "BTC",
-  websocketKlineInterval: "1min",
+  websocketKlineInterval: "1",
   timeoutMs: 10_000,
   includePublicPayloads: false,
 })
