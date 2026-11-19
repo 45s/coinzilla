@@ -453,7 +453,10 @@ test("Recovery Seller STOP state is exposed only to an authorized operator", asy
   assert.equal(status.data.blockerId, "rs-stop-blocker-1")
 
   const unauthorized = await operator.getRecoverySellerStopState({
-    actor: { id: "telegram-user:untrusted", roles: [] },
+    actor: {
+      id: "telegram-user:untrusted",
+      roles: [],
+    },
   })
   assert.equal(unauthorized.ok, false)
   assert.equal(unauthorized.errors[0].code, "OPERATOR_UNAUTHORIZED")
