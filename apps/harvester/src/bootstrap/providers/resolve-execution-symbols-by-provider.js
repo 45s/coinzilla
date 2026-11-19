@@ -43,7 +43,10 @@ function getStrategyPairs({
   return pairs
 }
 
-function isStrategyEnabled({ appConfig, strategyId }) {
+function isStrategyEnabled({
+      appConfig,
+      strategyId,
+    }) {
   const strategy = appConfig?.strategies?.[strategyId]
   if (!isRecord(strategy)) {
     return false
@@ -108,7 +111,10 @@ function addConfiguredRoute({
       `Execution routing contains unsupported strategy ${route.strategyId}`,
     )
   }
-  if (!isStrategyEnabled({ appConfig, strategyId: route.strategyId })) {
+  if (!isStrategyEnabled({
+    appConfig,
+    strategyId: route.strategyId,
+  })) {
     throw new TypeError(`Execution route references disabled strategy ${route.strategyId}`)
   }
   const pairs = pairsByStrategy.get(route.strategyId)
@@ -175,7 +181,10 @@ function assertEnabledMarketsAreRouted({
   const missingMarkets = []
   for (const [strategyId, pairs] of pairsByStrategy) {
     for (const [symbol, pair] of Object.entries(pairs)) {
-      if (pair?.enabled === true && !routeByStrategyMarket.has(createRouteKey({ strategyId, symbol }))) {
+      if (pair?.enabled === true && !routeByStrategyMarket.has(createRouteKey({
+        strategyId,
+        symbol,
+      }))) {
         missingMarkets.push(`${strategyId}/${symbol}`)
       }
     }
