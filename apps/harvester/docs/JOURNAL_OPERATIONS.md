@@ -189,7 +189,6 @@ Use the original requested scope, not only the symbols represented by orders at 
 
 This scope correction only isolates unrelated markets. It does not weaken canonical client/broker identity, complete paginated fill history, exactly-once fill/commission accounting, or the durable Journal barriers. Both Conservative shutdown reconciliation passes retain the same requested market scope; keep user-data intake and broker connectivity alive until the existing safety and shared-service barriers pass. For a registry-race failure, inspect the requested symbol set and the affected market's order/stream history; never retry blindly, adopt an external order, or bypass the market pause.
 
-
 ### Ambiguous orders and fail-closed behavior
 
 Keep the original client order ID for an ambiguous placement. Reconcile by canonical identity; never retry placement or submit a duplicate recovery SELL just because an acknowledgement timed out. Never cancel an order unless canonical ownership is proven. An external/manual open order is never adopted, canceled or modified; its presence alone does not block shutdown safety. An actual unowned execution or unresolved account-wide ownership/balance discrepancy remains a separate integrity blocker. If an owned BUY/SELL remains UNKNOWN, terminal fill history is incomplete, recovery coverage is insufficient, accounting is unsafe, or Journal durability cannot be proven, report the exact strategy/market/blocker, keep required services connected and do not publish STOPPED.

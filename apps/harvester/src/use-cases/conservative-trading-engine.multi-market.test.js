@@ -307,8 +307,8 @@ accountedFills,
 cancelledOrderIds }
 }
 
-async function startBothMarkets(engine) {
-  for (const market of markets) {
+async function startBothMarkets(engine, symbols = markets.map((market) => market.symbol)) {
+  for (const market of markets.filter((candidate) => symbols.includes(candidate.symbol))) {
     const result = await engine.processMarketPrice({
       symbol: market.symbol,
       priceEvent: { symbol: market.symbol,
@@ -336,7 +336,7 @@ function makeOpenOrderSnapshot({ ownedOrder }) {
   return openOrder
 }
 
-async function createReconciliationHarness() {
+async function createReconciliationHarness({ symbols = markets.map((market) => market.symbol) } = {}) {
   const harnessState = { engine: undefined }
   const brokerOverrides = {
     getOpenOrders: async ({ symbol }) => ({
@@ -360,7 +360,7 @@ async function createReconciliationHarness() {
   }
   const harness = await createHarness({ brokerOverrides })
   harnessState.engine = harness.engine
-  await startBothMarkets(harnessState.engine)
+  await startBothMarkets(harnessState.engine, symbols)
   return harness
 }
 
@@ -1516,5 +1516,85 @@ test("symbol-scoped REST reconciliation still rejects a same-market fill racing 
     engine.getPausedMarkets(),
     ["DOGEUSDT"],
     "Only the market whose REST snapshot became stale must enter the reconciliation safety pause.",
+  )
+})
+
+
+test("explicit reconciliation scope detects an order added in a requested market absent from the initial snapshot", async () => {
+  const { engine } = await createReconciliationHarness({
+    symbols: ["DOGEUSDT"],
+  })
+
+  const result = await engine.reconcileOwnedOrders({
+    symbols: ["DOGEUSDT", "SOLUSDT"],
+    beforeApply: async () => {
+      const added = await engine.processMarketPrice({
+        symbol: "SOLUSDT",
+        priceEvent: {
+          symbol: "SOLUSDT",
+          price: "100",
+          timestamp: 2,
+        },
+      })
+      assert.equal(
+        added.ok,
+        true,
+        "The requested but initially empty SOLUSDT market must be able to register an order during the REST collection window.",
+      )
+    },
+  })
+
+  assert.equal(
+    result.ok,
+    false,
+    "A newly registered SOLUSDT order must invalidate a snapshot scoped to both DOGEUSDT and SOLUSDT even though the initial snapshot contained only DOGEUSDT.",
+  )
+  assert.match(
+    result.errors[0].message,
+    /Order registry changed while REST reconciliation was in progress/,
+    "The new same-scope order must fail the registry-membership parity check.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    ["SOLUSDT"],
+    "The registry race must pause the market where the new owned order appeared.",
+  )
+})
+
+test("unfiltered REST reconciliation retains global registry race detection", async () => {
+  const { engine } = await createReconciliationHarness()
+  const solOrder = engine.getOrders().find((order) => order.market.symbol === "SOLUSDT")
+
+  const result = await engine.reconcileOwnedOrders({
+    beforeApply: async () => {
+      const fillEvent = makePartialFillEvent({
+        order: solOrder,
+        tradeId: "sol-global-snapshot-race",
+        quantity: "0.4",
+        quoteQuantity: "39.98",
+      })
+      const fillResult = await engine.processUserDataEvent({ event: fillEvent })
+      assert.equal(
+        fillResult.ok,
+        true,
+        "The SOL stream fill must be accepted before an unfiltered REST snapshot is applied.",
+      )
+    },
+  })
+
+  assert.equal(
+    result.ok,
+    false,
+    "An unfiltered reconciliation must still compare every market in the global registry.",
+  )
+  assert.match(
+    result.errors[0].message,
+    /REST order history is behind the registered cumulative execution quantity/,
+    "The global snapshot must reject a newer SOL execution fact.",
+  )
+  assert.deepEqual(
+    engine.getPausedMarkets(),
+    ["SOLUSDT"],
+    "A global reconciliation failure must identify and pause the market with the newer execution fact.",
   )
 })
