@@ -37,3 +37,12 @@ test("Binance mutation capability conditions remain explicit", () => {
   assert.ok(cancellation.limitation)
   assert.equal(capabilities.environment.selectedMode, "live")
 })
+
+
+
+it("declares native event delivery and does not advertise polling observations", () => {
+  const capabilities = createBinanceBrokerCapabilities({ tradingMode: "testnet" })
+
+  assert.equal(capabilities.getStatus({ type: "SUBSCRIBE_USER_DATA" }), "SUPPORTED")
+  assert.equal(capabilities.getStatus({ type: "OBSERVE_USER_DATA" }), "UNSUPPORTED")
+})

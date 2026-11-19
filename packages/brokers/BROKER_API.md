@@ -224,3 +224,6 @@ await broker.subscribeForUserData({
 - Harvester routes the two callback channels independently. Its native event handler owns execution accounting; the observation handler is diagnostic-only and has no access to order accounting, the canonical event publisher, or trading readiness.
 
 A successful observation subscription is therefore not evidence that native user-data delivery or trading readiness is available.
+
+
+Binance declares `SUBSCRIBE_USER_DATA: SUPPORTED` and `OBSERVE_USER_DATA: UNSUPPORTED`: its authenticated native WebSocket events use `onEvent`, not a polling observation channel. Bitunix declares the inverse delivery capabilities and remains non-authoritative.

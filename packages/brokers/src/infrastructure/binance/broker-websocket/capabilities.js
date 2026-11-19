@@ -143,6 +143,11 @@ const BINANCE_SPOT_CAPABILITIES = [
     guarantee: "Subscribes to the public best-bid/best-ask update stream and returns an unsubscribe handle.",
   },
   {
+    type: "OBSERVE_USER_DATA",
+    status: "UNSUPPORTED",
+    reason: "Binance delivers native authenticated user-data events instead of polling-backed observations.",
+  },
+  {
     type: "SUBSCRIBE_USER_DATA",
     status: "SUPPORTED",
     method: "subscribeForUserData",
