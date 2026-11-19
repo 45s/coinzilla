@@ -294,7 +294,7 @@ export class BitunixSpotWebSocketClient {
       })
     }
     this.#state = "connecting"
-    this.#connectPromise = this.#connectTransport()
+    this.#connectPromise = Promise.resolve().then(() => this.#connectTransport())
     return this.#connectPromise
   }
 
