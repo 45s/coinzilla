@@ -140,7 +140,8 @@ const LOSSLESS_ARRAY_NUMBER_PATHS = new Set([
   "/api/v1/futures/market/depth",
 ])
 
-function stringifyNumericJsonFields({ text, fields }) {
+function stringifyNumericJsonFields({ text,
+  fields }) {
   const fieldPattern = fields.join("|")
   const numericFieldPattern = new RegExp(
     '("(?:' + fieldPattern + ')"\\s*:\\s*)(-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)(?=\\s*[,}])',
@@ -165,7 +166,8 @@ function stringifyNumericArrayValues({ text }) {
   )
 }
 
-function parseResponseText({ text, path }) {
+function parseResponseText({ text,
+  path }) {
   let losslessText = text
 
   if (LOSSLESS_ARRAY_NUMBER_PATHS.has(path)) {
@@ -209,7 +211,8 @@ function validateQueryParams({ queryParams }) {
   }
 }
 
-function validateRequestBody({ method, body }) {
+function validateRequestBody({ method,
+  body }) {
   if (body !== undefined && (!body || typeof body !== "object" || Array.isArray(body))) {
     throw new TypeError("Bitunix REST body must be an object")
   }
@@ -218,7 +221,10 @@ function validateRequestBody({ method, body }) {
   }
 }
 
-function validateAuthentication({ authenticated, method, body, stateChanging }) {
+function validateAuthentication({ authenticated,
+  method,
+  body,
+  stateChanging }) {
   if (typeof authenticated !== "boolean") {
     throw new TypeError("Bitunix REST authenticated flag must be a boolean")
   }
@@ -259,7 +265,11 @@ function validateRequest(input = {}) {
   }
 }
 
-function createSignedRequest({ client, method, path, queryParams, body }) {
+function createSignedRequest({ client,
+  method,
+  path,
+  queryParams,
+  body }) {
   const nonce = client.nonceFactory()
   const timestamp = String(client.now())
   if (typeof nonce !== "string" || !nonce.trim()) {
@@ -309,7 +319,10 @@ function createSignedRequest({ client, method, path, queryParams, body }) {
   }
 }
 
-function createPublicRequest({ client, method, path, queryParams }) {
+function createPublicRequest({ client,
+  method,
+  path,
+  queryParams }) {
   const sortedQuery = Object.fromEntries(
     Object.keys(queryParams).sort().map((key) => [key, queryParams[key]]),
   )
@@ -327,7 +340,10 @@ function createPublicRequest({ client, method, path, queryParams }) {
   }
 }
 
-async function sendRequest({ client, request, path, stateChanging }) {
+async function sendRequest({ client,
+  request,
+  path,
+  stateChanging }) {
   try {
     return await client.fetch(request.url, request.options)
   } catch (error) {
@@ -348,7 +364,9 @@ function hasValidHttpMetadata({ response }) {
     response.status <= 599
 }
 
-function validateResponseReader({ response, path, stateChanging }) {
+function validateResponseReader({ response,
+  path,
+  stateChanging }) {
   if (!response ||
       (typeof response.json !== "function" && typeof response.text !== "function")) {
     throw new BitunixRestError({
@@ -379,7 +397,10 @@ function parseRetryAfterMs({ response }) {
   return Math.max(0, timestamp - Date.now())
 }
 
-function createResponseReadError({ error, response, path, stateChanging }) {
+function createResponseReadError({ error,
+  response,
+  path,
+  stateChanging }) {
   const hasValidMetadata = hasValidHttpMetadata({ response })
   const isHttpFailure = hasValidMetadata && response.ok === false
   let message = `Bitunix REST response JSON is invalid: ${error.message}`
@@ -401,7 +422,9 @@ function createResponseReadError({ error, response, path, stateChanging }) {
   })
 }
 
-async function readResponsePayload({ response, path, stateChanging }) {
+async function readResponsePayload({ response,
+  path,
+  stateChanging }) {
   validateResponseReader({
     response,
     path,
@@ -439,7 +462,10 @@ function normalizeErrorCode({ code }) {
   return null
 }
 
-function validateHttpResponse({ response, payload, path, stateChanging }) {
+function validateHttpResponse({ response,
+  payload,
+  path,
+  stateChanging }) {
   if (!hasValidHttpMetadata({ response })) {
     throw new BitunixRestError({
       message: "Bitunix REST HTTP response metadata is malformed",
@@ -463,7 +489,9 @@ function validateHttpResponse({ response, payload, path, stateChanging }) {
   }
 }
 
-function validateResponseEnvelope({ payload, path, response }) {
+function validateResponseEnvelope({ payload,
+  path,
+  response }) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new BitunixRestError({
       message: "Bitunix REST response envelope is malformed",
@@ -500,7 +528,10 @@ function validateResponseEnvelope({ payload, path, response }) {
   return { data: payload.data }
 }
 
-function validateResponse({ response, payload, path, stateChanging }) {
+function validateResponse({ response,
+  payload,
+  path,
+  stateChanging }) {
   validateHttpResponse({
     response,
     payload,
@@ -514,7 +545,8 @@ function validateResponse({ response, payload, path, stateChanging }) {
   })
 }
 
-function validateCredentials({ apiKey, apiSecret }) {
+function validateCredentials({ apiKey,
+  apiSecret }) {
   const hasApiKey = apiKey !== undefined && apiKey !== null && apiKey !== ""
   const hasApiSecret = apiSecret !== undefined && apiSecret !== null && apiSecret !== ""
   if (hasApiKey || hasApiSecret) {
@@ -561,7 +593,13 @@ function validateClientOptions({
  */
 export class BitunixRestClient {
   /**
-   * @param {{apiKey?: string, apiSecret?: string, baseUrl?: string, requestTimeout?: number, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string}} options
+   * @param {{apiKey?: string,
+     apiSecret?: string,
+     baseUrl?: string,
+     requestTimeout?: number,
+     fetchFn?: typeof fetch,
+     now?: () => number,
+     nonceFactory?: () => string}} options
    */
   constructor(options = {}) {
     const {
@@ -598,7 +636,13 @@ export class BitunixRestClient {
   /**
    * Send one Bitunix Spot REST request.
    *
-   * @param {{method: "GET"|"POST", path: string, queryParams?: Record<string, string|number|boolean>, body?: object, stateChanging?: boolean, authenticated?: boolean}} input
+   * @param {{method: "GET"|"POST",
+     path: string,
+     queryParams?: Record<string,
+     string|number|boolean>,
+     body?: object,
+     stateChanging?: boolean,
+     authenticated?: boolean}} input
    * @returns {Promise<{data: unknown}>}
    */
   async request(input = {}) {
@@ -651,4 +695,5 @@ export class BitunixRestClient {
   }
 }
 
-export { DEFAULT_BASE_URL, DEFAULT_REQUEST_TIMEOUT }
+export { DEFAULT_BASE_URL,
+  DEFAULT_REQUEST_TIMEOUT }
