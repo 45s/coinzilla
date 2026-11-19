@@ -82,10 +82,37 @@ test("Broker forwards provider options without rewriting provider configuration"
     provider: "bitunix",
     ...credentials,
     tradingMode: "live",
-    baseUrl: "https://spot.example.test",
-    requestTimeout: 2500,
+    providerOptions: {
+      baseUrl: "https://spot.example.test",
+      requestTimeout: 2500,
+    },
   })
 
   assert.equal(broker.config.baseUrl, "https://spot.example.test", "Bitunix-specific REST configuration must reach the existing provider config")
   assert.equal(broker.config.requestTimeout, 2500, "provider request timeout must remain unchanged")
+})
+
+test("Broker rejects provider-specific settings outside providerOptions", () => {
+  assert.throws(
+    () => new Broker({
+      provider: "bitunix",
+      ...credentials,
+      tradingMode: "live",
+      baseUrl: "https://spot.example.test",
+    }),
+    /unsupported top-level options: baseUrl/,
+    "provider-specific settings must be explicitly namespaced",
+  )
+  assert.throws(
+    () => new Broker({
+      provider: "bitunix",
+      ...credentials,
+      tradingMode: "live",
+      providerOptions: {
+        apiSecret: "overridden-secret",
+      },
+    }),
+    /cannot override common options: apiSecret/,
+    "provider options must not override common credentials or environment selection",
+  )
 })

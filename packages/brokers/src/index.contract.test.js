@@ -10,6 +10,7 @@ test("package entry point exposes only the supported public contracts", () => {
     "BROKER_COMPATIBILITY_METHODS",
     "BROKER_METHODS",
     "BROKER_MUTATION_OUTCOMES",
+    "Broker",
     "BinanceWebSocketBroker",
     "BinanceWebSocketConfig",
     "BitunixSpotBroker",
