@@ -240,7 +240,7 @@ The `onEvent` callback contract remains `onEvent({ event })`. Status notificatio
 
 ## Order safety and uncertain outcomes
 
-Bitunix Spot supports single-order cancellation through the signed REST API and verifies the final status with an order-detail read. A lost acknowledgement or non-terminal follow-up status is reported as `OUTCOME_UNKNOWN`; never blindly retry. `createOrder()` and `cancelAllOpenOrders()` remain unsupported pending placement identity/quantity semantics and complete open-order enumeration.
+Bitunix Spot supports single-order cancellation through the signed REST API and verifies the final status with an order-detail read. A lost acknowledgement or non-terminal follow-up status is reported as `OUTCOME_UNKNOWN`; never blindly retry. `createOrder()` remains unsupported pending placement identity/quantity semantics. `cancelAllOpenOrders({ symbol })` is supported for one explicit symbol; account-wide cancellation remains unavailable because Bitunix does not document account-wide open-order enumeration.
 
 A failed `cancelOrder()` result includes `cancellationOutcome`: **`NOT_SENT`** means the local user-data-availability guard rejected the call before invoking `order.cancel`; **`OUTCOME_UNKNOWN`** means the broker invoked the RPC but could not return an authoritative canonical order result. Treat missing or unknown classifications conservatively. Consumers must trust `NOT_SENT` only when the broker result is unsuccessful (`ok: false`); contradictory success-shaped metadata remains unconfirmed. A successful result carries the broker order response; consumers that require canonical cancellation must still verify canonical order history and actual fills.
 
