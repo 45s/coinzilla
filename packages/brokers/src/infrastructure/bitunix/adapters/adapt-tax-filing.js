@@ -27,7 +27,7 @@ function requireRecord({ value, field }) {
 
 function parseUtcTimestamp({ value, field }) {
   if (typeof value !== "string" ||
-      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(value)) {
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|\+00:00)$/.test(value)) {
     throw new TypeError(`Bitunix Spot tax-filing ${field} must be a UTC ISO-8601 timestamp`)
   }
   const timestamp = Date.parse(value)
