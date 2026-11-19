@@ -109,8 +109,9 @@ function createFakeAccountMethods({ websocketCalls }) {
   }
 }
 
-function createFakeWebSocketClientFactory({ websocketCalls, options }) {
+function createFakeWebSocketClientFactory({ websocketCalls, options, clientCreations = [] }) {
   return (configuration) => {
+    clientCreations.push(configuration)
     assert.equal(typeof configuration.transportFactory, "function", "The real WebSocket transport must be wrapped to capture sanitized input and output")
     return {
       state: "idle",
@@ -135,7 +136,7 @@ function createFakeWebSocketClientFactory({ websocketCalls, options }) {
   }
 }
 
-function createFakeClients({ restCalls, websocketCalls, options = {} }) {
+function createFakeClients({ restCalls, websocketCalls, options = {}, clientCreations = [] }) {
   return {
     restClientFactory: createFakeRestClientFactory({
       restCalls,
@@ -144,7 +145,9 @@ function createFakeClients({ restCalls, websocketCalls, options = {} }) {
     websocketClientFactory: createFakeWebSocketClientFactory({
       websocketCalls,
       options,
+      clientCreations,
     }),
+    clientCreations,
   }
 }
 
@@ -529,12 +532,14 @@ test("partial Bitunix credentials fall back to public-only diagnostics without e
 })
 
 
-test("diagnostics verify authenticated ping and one explicit reconnect without claiming subscription restoration", async () => {
+test("diagnostics reconnect the same authenticated client and do not claim subscription restoration", async () => {
   const restCalls = []
   const websocketCalls = []
+  const clientCreations = []
   const factories = createFakeClients({
     restCalls,
     websocketCalls,
+    clientCreations,
   })
   const report = await runBitunixDiagnostics({
     env: validEnvironment,
@@ -542,9 +547,19 @@ test("diagnostics verify authenticated ping and one explicit reconnect without c
   })
 
   assert.equal(
+    clientCreations.length,
+    1,
+    "the reconnect probe must reuse the original WebSocket client instance instead of creating a second client",
+  )
+  assert.equal(
     websocketCalls.filter((entry) => entry === "connect").length,
     2,
     "the runner must make one explicit second connection after the initial RPC session closes",
+  )
+  assert.equal(
+    websocketCalls.filter((entry) => entry === "disconnect").length,
+    2,
+    "the runner must cleanly close both the initial and reconnected sessions",
   )
   assert.equal(
     report.results.find((entry) => entry.operation === "ping").status,
