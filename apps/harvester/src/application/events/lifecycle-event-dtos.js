@@ -616,7 +616,10 @@ export const mapOrderSubmittedData = (input = {}) =>
     input,
     operation: "Order-submitted event mapping",
     mapper: ({ order, ownership }) => order instanceof CanonicalOrder
-      ? requireOrderHistoryFacts({ order, ownership })
+      ? requireOrderHistoryFacts({
+          order,
+          ownership,
+        })
       : ({
         ...requireOrderFacts({ order }),
         brokerOrderId: requireString({
@@ -1010,6 +1013,33 @@ const requireExecutionOrderFacts = ({ order }) => {
 }
 
 
+function mapOrderHistoryOwnership({ ownership } = {}) {
+  if (ownership === undefined) {
+    return undefined
+  }
+  const mapped = {
+    strategyId: requireString({
+      value: ownership.strategyId,
+      field: "ownership.strategyId",
+    }),
+    positionId: requireString({
+      value: ownership.positionId,
+      field: "ownership.positionId",
+    }),
+    purpose: requireString({
+      value: ownership.purpose,
+      field: "ownership.purpose",
+    }),
+  }
+  if (ownership.cycleId !== undefined) {
+    mapped.cycleId = requireString({
+      value: ownership.cycleId,
+      field: "ownership.cycleId",
+    })
+  }
+  return mapped
+}
+
 function requireOrderHistoryFacts({ order, ownership }) {
   if (!(order instanceof CanonicalOrder)) {
     throw new TypeError("order must be a canonical Harvester order")
@@ -1049,27 +1079,9 @@ function requireOrderHistoryFacts({ order, ownership }) {
       })
     }
   }
-  if (ownership !== undefined) {
-    facts.ownership = {
-      strategyId: requireString({
-        value: ownership.strategyId,
-        field: "ownership.strategyId",
-      }),
-      positionId: requireString({
-        value: ownership.positionId,
-        field: "ownership.positionId",
-      }),
-      purpose: requireString({
-        value: ownership.purpose,
-        field: "ownership.purpose",
-      }),
-    }
-    if (ownership.cycleId !== undefined) {
-      facts.ownership.cycleId = requireString({
-        value: ownership.cycleId,
-        field: "ownership.cycleId",
-      })
-    }
+  const mappedOwnership = mapOrderHistoryOwnership({ ownership })
+  if (mappedOwnership !== undefined) {
+    facts.ownership = mappedOwnership
   }
   return facts
 }

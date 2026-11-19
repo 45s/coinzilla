@@ -61,8 +61,7 @@ test("connects SQLite, stores filled orders, and omits the temporary process-ID 
   assert.equal(temporaryProcessRecord, null, "The temporary process-ID smoke-test collection must be removed when real persistence begins.")
 })
 
-test("keeps TESTNET and LIVE order history in separate SQLite files", async (t) => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-order-history-isolation-"))
+async function createEnvironmentPersistencePair({ directory, t } = {}) {
   const testnetBus = new EventBus()
   const liveBus = new EventBus()
   const options = {
@@ -93,7 +92,15 @@ test("keeps TESTNET and LIVE order history in separate SQLite files", async (t) 
       force: true,
     })
   })
+  return { testnet, live, testnetBus, liveBus }
+}
 
+test("keeps TESTNET and LIVE order history in separate SQLite files", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-order-history-isolation-"))
+  const { testnet, live, testnetBus, liveBus } = await createEnvironmentPersistencePair({
+    directory,
+    t,
+  })
   assert.ok(testnet && live, "Both isolated environments must be independently prepared.")
   testnetBus.publish({
     name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
@@ -107,15 +114,8 @@ test("keeps TESTNET and LIVE order history in separate SQLite files", async (t) 
       providerInstanceId: "binanceLive",
     }),
   })
-  await Promise.all([
-    testnetBus.flush(),
-    liveBus.flush(),
-  ])
-  await Promise.all([
-    testnet.observer.flush(),
-    live.observer.flush(),
-  ])
-
+  await Promise.all([testnetBus.flush(), liveBus.flush()])
+  await Promise.all([testnet.observer.flush(), live.observer.flush()])
   const testnetId = JSON.stringify([
     "testnet",
     "binanceTestnet",

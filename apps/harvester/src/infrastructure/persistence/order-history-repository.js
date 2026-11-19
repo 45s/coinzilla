@@ -128,35 +128,46 @@ export function createOrderHistoryRepository({ database } = {}) {
     }))
   }
 
-  async function upsert(record) {
-    if (!record || typeof record.id !== "string" || record.id.trim() === "") {
-      throw new TypeError("OrderHistoryRepository.upsert requires a record with a stable ID")
-    }
-    try {
-      return await executeTransaction(record)
-    } catch (error) {
-      if (error instanceof DatabaseConflictError) {
-        try {
-          return await executeTransaction(record)
-        } catch (retryError) {
-          if (isOrderHistoryDomainError(retryError)) {
-            throw retryError
-          }
-          throw createOrderHistoryPersistenceError({
-            cause: retryError,
-            record,
-          })
-        }
-      }
-      if (isOrderHistoryDomainError(error)) {
-        throw error
-      }
-      throw createOrderHistoryPersistenceError({
-        cause: error,
+  function normalizeOrderHistoryWriteError({ error, record } = {}) {
+  if (isOrderHistoryDomainError(error)) {
+    return error
+  }
+  return createOrderHistoryPersistenceError({
+    cause: error,
+    record,
+  })
+}
+
+async function retryConflictedOrderHistoryWrite({ executeTransaction, record } = {}) {
+  try {
+    return await executeTransaction(record)
+  } catch (error) {
+    throw normalizeOrderHistoryWriteError({
+      error,
+      record,
+    })
+  }
+}
+
+async function upsert(record) {
+  if (!record || typeof record.id !== "string" || record.id.trim() === "") {
+    throw new TypeError("OrderHistoryRepository.upsert requires a record with a stable ID")
+  }
+  try {
+    return await executeTransaction(record)
+  } catch (error) {
+    if (error instanceof DatabaseConflictError) {
+      return retryConflictedOrderHistoryWrite({
+        executeTransaction,
         record,
       })
     }
+    throw normalizeOrderHistoryWriteError({
+      error,
+      record,
+    })
   }
+}
 
   return Object.freeze({
     upsert,

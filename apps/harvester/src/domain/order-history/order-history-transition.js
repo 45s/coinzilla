@@ -124,6 +124,60 @@ function isStaleOrderHistoryUpdate({ current, candidate } = {}) {
     (STATUS_PRIORITY[candidate.status] ?? 0) < (STATUS_PRIORITY[current.status] ?? 0)
 }
 
+function isDuplicateSourceEvent({ current, candidate } = {}) {
+  if (current.lastSourceEventId !== candidate.lastSourceEventId) {
+    return false
+  }
+  if (
+    current.executedQuantity !== candidate.executedQuantity ||
+    current.status !== candidate.status
+  ) {
+    integrityError({
+      field: "sourceEventId",
+      current,
+    })
+  }
+  return true
+}
+
+function preserveCumulativeQuoteQuantity({ current, candidate, merged } = {}) {
+  if (
+    current.cumulativeQuoteQuantity === undefined ||
+    candidate.cumulativeQuoteQuantity === undefined
+  ) {
+    return
+  }
+  const comparison = compareDecimal({
+    left: candidate.cumulativeQuoteQuantity,
+    right: current.cumulativeQuoteQuantity,
+  })
+  if (comparison < 0) {
+    merged.cumulativeQuoteQuantity = current.cumulativeQuoteQuantity
+  }
+}
+
+function createMergedOrderHistoryRecord({ current, candidate } = {}) {
+  const merged = {
+    ...current,
+    ...candidate,
+    brokerOrderId: candidate.brokerOrderId ?? current.brokerOrderId,
+    ownership: candidate.ownership ?? current.ownership,
+    createdAt: current.createdAt ?? candidate.createdAt,
+    acknowledgedAt: current.acknowledgedAt ?? candidate.acknowledgedAt,
+    firstSeenAt: current.firstSeenAt,
+    firstSourceEventId: current.firstSourceEventId,
+    lastSeenAt: candidate.lastSeenAt > current.lastSeenAt
+      ? candidate.lastSeenAt
+      : current.lastSeenAt,
+  }
+  preserveCumulativeQuoteQuantity({
+    current,
+    candidate,
+    merged,
+  })
+  return Object.freeze(merged)
+}
+
 /**
  * Merge a newer canonical order snapshot without allowing stale events to regress it.
  *
@@ -144,47 +198,14 @@ export function mergeOrderHistoryRecords({ current, candidate } = {}) {
     current,
     candidate,
   })
-  if (current.lastSourceEventId === candidate.lastSourceEventId) {
-    if (
-      current.executedQuantity !== candidate.executedQuantity ||
-      current.status !== candidate.status
-    ) {
-      integrityError({
-        field: "sourceEventId",
-        current,
-      })
-    }
+  if (isDuplicateSourceEvent({ current, candidate })) {
     return current
   }
-  if (isStaleOrderHistoryUpdate({
+  if (isStaleOrderHistoryUpdate({ current, candidate })) {
+    return current
+  }
+  return createMergedOrderHistoryRecord({
     current,
     candidate,
-  })) {
-    return current
-  }
-
-  const merged = {
-    ...current,
-    ...candidate,
-    brokerOrderId: candidate.brokerOrderId ?? current.brokerOrderId,
-    ownership: candidate.ownership ?? current.ownership,
-    createdAt: current.createdAt ?? candidate.createdAt,
-    acknowledgedAt: current.acknowledgedAt ?? candidate.acknowledgedAt,
-    firstSeenAt: current.firstSeenAt,
-    firstSourceEventId: current.firstSourceEventId,
-    lastSeenAt: candidate.lastSeenAt > current.lastSeenAt
-      ? candidate.lastSeenAt
-      : current.lastSeenAt,
-  }
-  if (
-    current.cumulativeQuoteQuantity !== undefined &&
-    candidate.cumulativeQuoteQuantity !== undefined &&
-    compareDecimal({
-      left: candidate.cumulativeQuoteQuantity,
-      right: current.cumulativeQuoteQuantity,
-    }) < 0
-  ) {
-    merged.cumulativeQuoteQuantity = current.cumulativeQuoteQuantity
-  }
-  return Object.freeze(merged)
+  })
 }

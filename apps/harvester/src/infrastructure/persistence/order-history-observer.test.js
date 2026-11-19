@@ -5,6 +5,39 @@ import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { createOrderHistoryObserver } from "./create-order-history-observer.js"
 import { createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
 
+function publishOrderLifecycleFixtures(eventBus) {
+  const publish = (name, data) => eventBus.publish({
+    name,
+    source: "harvester",
+    data,
+  })
+  publish(HARVESTER_EVENT_NAMES.ORDER_SUBMITTED, createOrderHistoryEventData({
+    status: "FILLED",
+    executedQuantity: "1.0000",
+    remainingQuantity: "0.0000",
+  }))
+  publish(HARVESTER_EVENT_NAMES.ORDER_UPDATED, createOrderHistoryEventData())
+  publish(HARVESTER_EVENT_NAMES.ORDER_UPDATED, createOrderHistoryEventData({
+    executedQuantity: "1.0000",
+    remainingQuantity: "0.0000",
+    status: "FILLED",
+    updatedAt: 200,
+  }))
+  publish(HARVESTER_EVENT_NAMES.ORDER_CANCELLED, createOrderHistoryEventData({
+    status: "CANCELED",
+    executedQuantity: "0.2500",
+  }))
+  publish(HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED, createOrderHistoryEventData({
+    status: "UNKNOWN",
+    executedQuantity: "0.2500",
+  }))
+  publish(HARVESTER_EVENT_NAMES.ORDER_SUBMITTED, createOrderHistoryEventData({
+    status: "OPEN",
+    executedQuantity: "0.0000",
+    remainingQuantity: "1.0000",
+  }))
+}
+
 test("projects immediate acknowledgements, partial fills, final fills, and partial cancellations", async (t) => {
   const eventBus = new EventBus()
   const records = []
@@ -24,55 +57,7 @@ test("projects immediate acknowledgements, partial fills, final fills, and parti
     await eventBus.close()
   })
 
-  eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
-    source: "harvester",
-    data: createOrderHistoryEventData({
-      status: "FILLED",
-      executedQuantity: "1.0000",
-      remainingQuantity: "0.0000",
-    }),
-  })
-  eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
-    source: "harvester",
-    data: createOrderHistoryEventData(),
-  })
-  eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
-    source: "harvester",
-    data: createOrderHistoryEventData({
-      executedQuantity: "1.0000",
-      remainingQuantity: "0.0000",
-      status: "FILLED",
-      updatedAt: 200,
-    }),
-  })
-  eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
-    source: "harvester",
-    data: createOrderHistoryEventData({
-      status: "CANCELED",
-      executedQuantity: "0.2500",
-    }),
-  })
-  eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
-    source: "harvester",
-    data: createOrderHistoryEventData({
-      status: "UNKNOWN",
-      executedQuantity: "0.2500",
-    }),
-  })
-  eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
-    source: "harvester",
-    data: createOrderHistoryEventData({
-      status: "OPEN",
-      executedQuantity: "0.0000",
-      remainingQuantity: "1.0000",
-    }),
-  })
+  publishOrderLifecycleFixtures(eventBus)
 
   await eventBus.flush()
   const result = await observer.flush()
