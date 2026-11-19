@@ -149,11 +149,8 @@ data: [] }),
   }
 }
 
-function createHarnessEngine({
-  broker,
+function createHarnessEnginePorts({
   portfolio,
-  strategyPolicy,
-  appConfig,
   recoveryLedgersByMarket,
   metadataBySymbol,
   quoteFreeBalance,
@@ -162,14 +159,8 @@ function createHarnessEngine({
   pauses,
   volatilityProtectionEnabled,
   onUnownedExternalOrderObserved,
-  initialState,
-  eventPublisher,
-} = {}) {
-  return makeConservativeTradingEngine({
-    broker,
-    strategyPolicy,
-    appConfig,
-    eventPublisher,
+}) {
+  return {
     getPortfolio: () => portfolio,
     getRecoveryLedger: ({ marketId }) =>
       recoveryLedgersByMarket.get(marketId) ?? RecoveryLedger.empty({ market: marketsById.get(marketId) }),
@@ -212,6 +203,41 @@ reason }),
       ? () => ({ ok: false,
 error: new Error("test volatility snapshot unavailable") })
       : undefined,
+  }
+}
+
+function createHarnessEngine({
+  broker,
+  portfolio,
+  strategyPolicy,
+  appConfig,
+  recoveryLedgersByMarket,
+  metadataBySymbol,
+  quoteFreeBalance,
+  accountedFillIds,
+  accountedFills,
+  pauses,
+  volatilityProtectionEnabled,
+  onUnownedExternalOrderObserved,
+  initialState,
+  eventPublisher,
+} = {}) {
+  return makeConservativeTradingEngine({
+    broker,
+    strategyPolicy,
+    appConfig,
+    eventPublisher,
+    ...createHarnessEnginePorts({
+      portfolio,
+      recoveryLedgersByMarket,
+      metadataBySymbol,
+      quoteFreeBalance,
+      accountedFillIds,
+      accountedFills,
+      pauses,
+      volatilityProtectionEnabled,
+      onUnownedExternalOrderObserved,
+    }),
     initialState,
   })
 }
@@ -311,16 +337,16 @@ function makeOpenOrderSnapshot({ ownedOrder }) {
 }
 
 async function createReconciliationHarness() {
-  let engine
+  const harnessState = { engine: undefined }
   const brokerOverrides = {
     getOpenOrders: async ({ symbol }) => ({
       ok: true,
-      data: engine.getOrders()
+      data: harnessState.engine.getOrders()
         .filter((ownedOrder) => ownedOrder.market.symbol === symbol)
         .map((ownedOrder) => makeOpenOrderSnapshot({ ownedOrder })),
     }),
     getCanonicalOrderHistory: async ({ symbol, orderId }) => {
-      const ownedOrder = engine.getOrders().find((order) =>
+      const ownedOrder = harnessState.engine.getOrders().find((order) =>
         order.market.symbol === symbol && order.brokerOrderId === orderId)
       return {
         ok: true,
@@ -333,9 +359,29 @@ async function createReconciliationHarness() {
     }),
   }
   const harness = await createHarness({ brokerOverrides })
-  engine = harness.engine
-  await startBothMarkets(engine)
+  harnessState.engine = harness.engine
+  await startBothMarkets(harnessState.engine)
   return harness
+}
+
+function createUnownedSolOrder() {
+  return new CanonicalOrder({
+    clientOrderId: "manual-sol-client",
+    brokerOrderId: "manual-sol-order",
+    market: marketsBySymbol.get("SOLUSDT"),
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({ amount: "99.95",
+asset: quoteAsset }),
+    originalQuantity: new Quantity({ amount: "1",
+asset: solAsset }),
+    executedQuantity: new Quantity({ amount: "0",
+asset: solAsset }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
 }
 
 function makePartialFillEvent({ order, tradeId, quantity, quoteQuantity }) {
@@ -452,24 +498,7 @@ test("a newly observed external order triggers symbol-scoped reconciliation with
   })
   await startBothMarkets(engine)
   const dogeOrder = engine.getOrders().find((order) => order.market.symbol === "DOGEUSDT")
-  const solMarket = marketsBySymbol.get("SOLUSDT")
-  const unownedSolOrder = new CanonicalOrder({
-    clientOrderId: "manual-sol-client",
-    brokerOrderId: "manual-sol-order",
-    market: solMarket,
-    side: "BUY",
-    type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "99.95",
-asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1",
-asset: solAsset }),
-    executedQuantity: new Quantity({ amount: "0",
-asset: solAsset }),
-    status: "OPEN",
-    createdAt: 1,
-    acknowledgedAt: 1,
-    updatedAt: 1,
-  })
+  const unownedSolOrder = createUnownedSolOrder()
 
   const unowned = await engine.processUserDataEvent({
     event: { eventType: "executionReport",
