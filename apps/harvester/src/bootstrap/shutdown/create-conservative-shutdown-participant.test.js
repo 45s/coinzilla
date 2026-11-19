@@ -796,3 +796,49 @@ test("re-audits previously safe markers when the initial user-data drain fails",
     "The shared drain failure must force every enabled market through the safety audit.",
   )
 })
+
+test("bounds repeated late-evidence safety re-evaluations and fails closed", async () => {
+  const calls = []
+  const engine = createFakeEngine({ calls })
+  const getSnapshot = engine.getShutdownSafetySnapshot
+  const controller = new AbortController()
+  let snapshotCalls = 0
+  engine.getShutdownSafetySnapshot = () => {
+    snapshotCalls += 1
+    const snapshot = getSnapshot()
+    if (snapshotCalls === 3) {
+      controller.abort(new Error("Test stop after two complete safety passes"))
+    }
+    return {
+      ...snapshot,
+      markets: snapshot.markets.map((market) => ({
+        ...market,
+        status: "UNSAFE",
+        blockers: ["LATE_EVIDENCE_INVALIDATED_SAFETY_MARKER"],
+      })),
+    }
+  }
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
+
+  participant.beginShutdown()
+  await assert.rejects(
+    participant.waitUntilSafe({ signal: controller.signal }),
+    (error) => {
+      const blockers = getMarketBlockersFromShutdownError({
+        error,
+        symbol: "DOGEUSDT",
+      })
+      assert.ok(
+        blockers.includes("SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED:2"),
+        "Repeated marker invalidation must terminate with an explicit bounded-progress blocker.",
+      )
+      return true
+    },
+    "The participant must not loop indefinitely when accepted evidence repeatedly invalidates safety.",
+  )
+  assert.equal(snapshotCalls, 3, "The initial snapshot and two bounded safety passes must be sufficient.")
+})
+
