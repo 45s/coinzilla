@@ -149,7 +149,7 @@ async function publishReportBranch({ repositoryRoot, runGit, branch, reportPath,
   })
   await runGit({
     repositoryRoot,
-    args: ["commit", "-m", REPORT_COMMIT_MESSAGE],
+    args: ["commit", "--only", "-m", REPORT_COMMIT_MESSAGE, "--", reportPath],
   })
   const commitSha = await runGit({
     repositoryRoot,
