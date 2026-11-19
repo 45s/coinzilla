@@ -15,8 +15,7 @@
     "lint:changed": "node scripts/lint-changed.js",
     "lint:fix": "eslint . --fix",
     "test:sync-main": "node --test scripts/sync-main.test.js",
-    "sync:main": "node scripts/sync-main.js",
-    "bitunix:health": "pnpm --filter @coinzilla/brokers diagnose:bitunix:publish"
+    "sync:main": "node scripts/sync-main.js"
   },
   "keywords": [],
   "author": "",
