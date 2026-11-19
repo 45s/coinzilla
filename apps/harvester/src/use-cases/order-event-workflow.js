@@ -62,20 +62,6 @@ function isRecoverySellerTerminalSell({ ownership, order } = {}) {
   return ownership?.strategyId === StrategyId.RECOVERY_SELLER && order?.side === "SELL"
 }
 
-async function failRecoverySellerTerminalReconciliation({
-  pause,
-  order,
-  reason,
-  error,
-} = {}) {
-  await pause({
-    symbol: order.market.symbol,
-    reason,
-    error,
-  })
-  return toResult({ error })
-}
-
 async function pauseAndLatchRecoverySellerTerminalFailure({
   pause,
   latchRecoverySellerStop,
