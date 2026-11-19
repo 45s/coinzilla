@@ -245,6 +245,7 @@ ensure.object({
 ```
 
 The assertion still rejects arrays, null, and primitives. It throws the same error class as the underlying assertion (`TypeError` for an invalid object shape, `RangeError` for an out-of-range number); only the diagnostic message is replaced. Successful assertions return the original validated value. Omit `errMsg` to retain the default field-specific diagnostics. Empty or non-string messages are rejected with `TypeError`.
+
 ### Direct assertions
 
 ```js
