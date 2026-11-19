@@ -1436,3 +1436,13 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - Read-only only. No live order/funds mutations. TESTNET is not required for offline tests or authenticated read-only verification.
 
 See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitunix documentation index](./docs/README.md).
+
+## Bitunix Spot history request-adapter decomposition (#1517)
+
+**Status: In progress.** Extract the pure order/deposit/withdrawal history request construction and order-history page validation from the Bitunix broker facade into a cohesive infrastructure adapter module.
+
+- Preserve request body fields, exchange filter codes, time conversion, validation messages and page-envelope behavior exactly.
+- Keep the Broker facade responsible for endpoint I/O and result envelopes.
+- Add direct deterministic adapter tests while retaining existing broker-level characterization tests.
+- No endpoint semantics, public Broker contract, pagination guarantees or execution-history claims change.
+- No new shared utility; these are Bitunix-specific protocol adapters.
