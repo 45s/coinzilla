@@ -27,7 +27,7 @@ The first full-workspace run after the queue wiring exposed one stale test fixtu
 
 ## RS order-event accounting ownership — implementation checkpoint
 
-The streamed RS SELL path now stages canonical fills without applying either accounting projection. Terminal fill-history reconciliation exposes the complete distinct canonical fill set to an RS-specific terminal reconciler; a terminal RS SELL without a successful mixed-SELL commit fails closed and never enters Conservative recovery-cycle completion. Production construction of that reconciler and its atomic accounting/cycle/STOP transition remain required before RS can execute.
+The streamed RS SELL path now stages canonical fills without applying either accounting projection. The terminal reconciliation hook is covered by a strategy-ownership regression; its implementation was split into a dedicated helper to keep the terminal reconciliation operation within the Harvester function-size standard. Terminal fill-history reconciliation exposes the complete distinct canonical fill set to an RS-specific terminal reconciler; a terminal RS SELL without a successful mixed-SELL commit fails closed and never enters Conservative recovery-cycle completion. Production construction of that reconciler and its atomic accounting/cycle/STOP transition remain required before RS can execute.
 
 Canonical streamed RS BUY fills now dispatch through the RS accounting workflow based on immutable OrderRegistry ownership. RS BUYs do not enter Conservative accounting or Conservative execution totals. RS SELL fills remain fail-closed in the streamed-fill path and must be handled by terminal mixed-SELL reconciliation; they are not applied as standalone CG fills.
 

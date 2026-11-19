@@ -278,6 +278,26 @@ async function applyTerminalFills({ fills, order, processExecutionFillTransition
  *
  * The caller invokes this workflow from its serialized engine transition.
  */
+async function reconcileTerminalOrderTransition({
+  onTerminalOrderReconciled,
+  order,
+  canonicalFills,
+} = {}) {
+  if (typeof onTerminalOrderReconciled !== "function") {
+    return toResult({ data: { skipped: true } })
+  }
+  const result = await onTerminalOrderReconciled({
+    order,
+    canonicalFills,
+  })
+  if (result?.ok !== true) {
+    return result ?? toResult({
+      error: new Error("Terminal order transition was not explicitly reconciled"),
+    })
+  }
+  return result
+}
+
 export function makeReconcileTerminalOrderFills(options = {}) {
   const { broker, processedFillsByOrder, pause, processExecutionFillTransition, onTerminalOrderReconciled } = options
   return async function reconcileTerminalOrderFills({ order, eventFill } = {}) {
@@ -345,16 +365,13 @@ export function makeReconcileTerminalOrderFills(options = {}) {
     if (applyResult) {
       return applyResult
     }
-    if (typeof onTerminalOrderReconciled === "function") {
-      const terminalTransition = await onTerminalOrderReconciled({
-        order,
-        canonicalFills: fills,
-      })
-      if (terminalTransition?.ok !== true) {
-        return terminalTransition ?? toResult({
-          error: new Error("Terminal order transition was not explicitly reconciled"),
-        })
-      }
+    const terminalTransition = await reconcileTerminalOrderTransition({
+      onTerminalOrderReconciled,
+      order,
+      canonicalFills: fills,
+    })
+    if (!terminalTransition.ok) {
+      return terminalTransition
     }
     return toResult({
       data: {
