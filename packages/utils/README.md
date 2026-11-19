@@ -311,7 +311,6 @@ const normalizedSymbols = ensure
 
 Available chain methods: `.array()`, `.string()`, `.integer()`, `.nonEmpty()`, `.strings()`, `.nonEmptyStrings()`, `.integers()`, `.map({ transform })`, `.filter({ predicate })`, `.unique()`, `.between({ min, max })`, `.trim()`, `.uppercase()`, `.lowercase()`, and the final `.value` getter.
 
-
 ## Development
 
 ```sh
