@@ -298,3 +298,30 @@ test("start rejects tracked orders outside its polling symbol scope before sched
   assert.equal(reconciler.getStatus().running, false)
 })
 
+
+
+test("pollOnce deep-freezes an isolated observation snapshot", async () => {
+  const { broker } = createBroker()
+  const sourceBalance = { asset: "USDT", free: "10" }
+  const sourceOrder = { orderId: "order-1", status: "FILLED" }
+  broker.getBalances = async () => ({ ok: true, data: [sourceBalance] })
+  broker.getOpenOrders = async () => ({ ok: true, data: [sourceOrder] })
+
+  const reconciler = new BitunixSpotReconciler({ broker, now: () => 1234 })
+  const result = await reconciler.pollOnce({ symbols: ["BTCUSDT"] })
+  const snapshot = result.snapshot
+
+  assert.equal(Object.isFrozen(snapshot), true)
+  assert.equal(Object.isFrozen(snapshot.balances), true)
+  assert.equal(Object.isFrozen(snapshot.balances[0]), true)
+  assert.equal(Object.isFrozen(snapshot.symbols[0]), true)
+  assert.equal(Object.isFrozen(snapshot.symbols[0].openOrders[0]), true)
+  assert.equal(Object.isFrozen(snapshot.guarantees), true)
+
+  assert.equal(Object.isFrozen(sourceBalance), false)
+  assert.equal(Object.isFrozen(sourceOrder), false)
+  sourceBalance.free = "11"
+  sourceOrder.status = "CANCELED"
+  assert.equal(snapshot.balances[0].free, "10")
+  assert.equal(snapshot.symbols[0].openOrders[0].status, "FILLED")
+})
