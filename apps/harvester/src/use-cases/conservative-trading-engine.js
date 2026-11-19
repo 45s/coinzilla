@@ -1469,6 +1469,36 @@ function createOperatorVolatilityProtectionSnapshot({ volatilityState }) {
   })
 }
 
+function createOperatorMarketSnapshotBlockers({
+  pairConfig,
+  metadata,
+  marketPrice,
+  priceFresh,
+  safetyPaused,
+  operatorPaused,
+  operatorBuyPaused,
+  recoveryManagedPaused,
+  replacementPending,
+  trailingBuyRepricePending,
+  volatilityState,
+  openOrderBlockerActive,
+}) {
+  return createOperatorMarketBlockers({
+    pairConfig,
+    metadata,
+    marketPrice,
+    priceFresh,
+    safetyPaused,
+    operatorPaused,
+    operatorBuyPaused,
+    recoveryManagedPaused,
+    replacementPending,
+    trailingBuyRepricePending,
+    volatilityState,
+    openOrderBlockerActive,
+  })
+}
+
 function createOperatorMarketSnapshotFacts({
   state,
   symbol,
@@ -1495,7 +1525,7 @@ function createOperatorMarketSnapshotFacts({
   const volatilityState = isVolatilityProtectionEnabledForSymbol(symbol)
     ? state.volatilityProtection.get(symbol)
     : undefined
-  const blockers = createOperatorMarketBlockers({
+  const blockers = createOperatorMarketSnapshotBlockers({
     pairConfig,
     metadata,
     marketPrice,
