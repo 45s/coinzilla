@@ -1,55 +1,56 @@
 const DECIMAL_PATTERN = /^-?\\d+(?:\\.\\d+)?$/
 const INT64_PATTERN = /^(?:0|[1-9]\\d*)$/
 
-function requireRecord(value, field) {
+function requireRecord({ value, field }) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(`Bitunix Futures ${field} must be an object`)
   }
   return value
 }
 
-function requireArray(value, field) {
+function requireArray({ value, field }) {
   if (!Array.isArray(value)) {
     throw new TypeError(`Bitunix Futures ${field} must be an array`)
   }
   return value
 }
 
-function requireString(record, field, path) {
+function requireString({ record, field, path }) {
   const value = record[field]
   if (typeof value !== "string" || !value.trim()) {
     throw new TypeError(`Bitunix Futures ${path}.${field} must be a non-empty string`)
   }
 }
 
-function requireDecimal(record, field, path) {
+function requireDecimal({ record, field, path }) {
   const value = record[field]
   if (typeof value !== "string" || !DECIMAL_PATTERN.test(value)) {
     throw new TypeError(`Bitunix Futures ${path}.${field} must be an exact decimal string`)
   }
 }
 
-function requireInteger(record, field, path) {
+function requireInteger({ record, field, path }) {
   const value = record[field]
   if (!Number.isSafeInteger(value)) {
     throw new TypeError(`Bitunix Futures ${path}.${field} must be a safe integer`)
   }
 }
 
-function requireInt64(record, field, path) {
+function requireInt64({ record, field, path }) {
   const value = record[field]
   if (typeof value !== "string" || !INT64_PATTERN.test(value)) {
     throw new TypeError(`Bitunix Futures ${path}.${field} must be an exact non-negative int64 string`)
   }
 }
 
-function requireBoolean(record, field, path) {
+function requireBoolean({ record, field, path }) {
   if (typeof record[field] !== "boolean") {
     throw new TypeError(`Bitunix Futures ${path}.${field} must be a boolean`)
   }
 }
 
-function validateRecord(record, {
+function validateRecord({
+  record,
   path,
   strings = [],
   optionalStrings = [],
@@ -58,8 +59,8 @@ function validateRecord(record, {
   int64 = [],
   booleans = [],
 }) {
-  requireRecord(record, path)
-  strings.forEach((field) => requireString(record, field, path))
+  requireRecord({ value: record, field: path })
+  strings.forEach((field) => requireString({ record, field, path }))
   optionalStrings.forEach((field) => {
     if (record[field] !== undefined && record[field] !== null &&
         typeof record[field] !== "string") {
@@ -68,40 +69,48 @@ function validateRecord(record, {
   })
   decimals.forEach((field) => {
     if (record[field] !== undefined && record[field] !== null) {
-      requireDecimal(record, field, path)
+      requireDecimal({ record, field, path })
     }
   })
   integers.forEach((field) => {
     if (record[field] !== undefined && record[field] !== null) {
-      requireInteger(record, field, path)
+      requireInteger({ record, field, path })
     }
   })
   int64.forEach((field) => {
     if (record[field] !== undefined && record[field] !== null) {
-      requireInt64(record, field, path)
+      requireInt64({ record, field, path })
     }
   })
   booleans.forEach((field) => {
     if (record[field] !== undefined && record[field] !== null) {
-      requireBoolean(record, field, path)
+      requireBoolean({ record, field, path })
     }
   })
   return Object.freeze({ ...record })
 }
 
-function adaptRows(data, spec, path) {
-  return Object.freeze(requireArray(data, path).map((row, index) => (
-    validateRecord(row, { ...spec,
-      path: `${path}[${index}]` })
-  )))
+function adaptRows({ data, spec, path }) {
+  const rows = requireArray({ value: data, field: path })
+  const items = []
+  for (let index = 0; index < rows.length; index += 1) {
+    items.push(validateRecord({
+      record: rows[index],
+      ...spec,
+      path: `${path}[${index}]`,
+    }))
+  }
+  return Object.freeze(items)
 }
 
-function adaptPage(data, { listField,
-  spec,
-  path }) {
-  requireRecord(data, path)
-  const items = adaptRows(data[listField], spec, `${path}.${listField}`)
-  requireInt64(data, "total", path)
+function adaptPage({ data, listField, spec, path }) {
+  requireRecord({ value: data, field: path })
+  const items = adaptRows({
+    data: data[listField],
+    spec,
+    path: `${path}.${listField}`,
+  })
+  requireInt64({ record: data, field: "total", path })
   return Object.freeze({
     ...data,
     [listField]: items,
@@ -109,19 +118,27 @@ function adaptPage(data, { listField,
 }
 
 function adaptOrderBook(data) {
-  requireRecord(data, "market/depth data")
+  requireRecord({
+    value: data,
+    field: "market/depth data",
+  })
   for (const side of ["asks", "bids"]) {
-    const levels = requireArray(data[side], `market/depth ${side}`)
-    levels.forEach((level, index) => {
+    const levels = requireArray({
+      value: data[side],
+      field: `market/depth ${side}`,
+    })
+    for (let index = 0; index < levels.length; index += 1) {
+      const level = levels[index]
       if (!Array.isArray(level) || level.length !== 2) {
         throw new TypeError(`Bitunix Futures market/depth ${side}[${index}] must be a [price, quantity] pair`)
       }
-      level.forEach((value, valueIndex) => {
+      for (let valueIndex = 0; valueIndex < level.length; valueIndex += 1) {
+        const value = level[valueIndex]
         if (typeof value !== "string" || !DECIMAL_PATTERN.test(value)) {
           throw new TypeError(`Bitunix Futures market/depth ${side}[${index}][${valueIndex}] must be an exact decimal string`)
         }
-      })
-    })
+      }
+    }
   }
   return Object.freeze({
     ...data,
