@@ -335,7 +335,7 @@ The diagrams do not override the [RS Domain Specification](./recovery-seller-dom
 - [x] Register `RS_recoverySeller` in the single application config with `enabled: false`.
 - [x] Validate explicit per-market legacy historical basis, additive `sellQuantity`, strategy BUY sizing/budget, fee and environment settings.
 - [x] Resolve RS exchange precision from the same token specification registry as CG.
-- [ ] Route RS strategy/market intents into the shared serialized Trading Engine.
+- [x] Preserve strategy identity in provider execution routes while keeping market subscriptions deduplicated (resolver contract only).\n- [ ] Route RS strategy/market intents into the shared serialized Trading Engine.
 - [ ] Share account Portfolio, OrderRegistry, snapshot, reservations and canonical fill processing without sharing strategy budgets/Positions.
 - [ ] Prove same-market and different-market CG+RS concurrency offline.
 - [ ] Complete RS-5 full lifecycle, failure, replay and STOP-reset acceptance tests.
