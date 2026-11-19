@@ -1562,9 +1562,9 @@ function recordBrokerApiOperationFailure({
 
 
 function recordLatestBrokerApiSchemaResult({ definition, schemaObservations, now, results, secrets }) {
-  recordLatestBrokerApiSchemaResult({
-    definition,
-    schemaObservations,
+  recordBrokerApiSchemaResult({
+    method: definition.method,
+    observation: schemaObservations.at(-1),
     now,
     results,
     secrets,
