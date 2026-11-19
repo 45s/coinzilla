@@ -6,7 +6,15 @@ const DEFAULT_BASE_URL = "https://openapi.bitunix.com"
  */
 export class BitunixSpotConfig {
   /**
-   * @param {{apiKey: string, apiSecret: string, tradingMode: "live", baseUrl?: string, requestTimeout?: number, allowLiveOrderMutations?: boolean}} input
+   * @param {{
+   *   apiKey: string,
+   *   apiSecret: string,
+   *   tradingMode: "live",
+   *   baseUrl?: string,
+   *   requestTimeout?: number,
+   *   allowLiveOrderMutations?: boolean,
+   *   allowLiveFundsMutations?: boolean,
+   * }} input
    */
   constructor({
     apiKey,
@@ -15,6 +23,7 @@ export class BitunixSpotConfig {
     baseUrl = DEFAULT_BASE_URL,
     requestTimeout = 10_000,
     allowLiveOrderMutations = false,
+    allowLiveFundsMutations = false,
   } = {}) {
     if (typeof apiKey !== "string" || !apiKey.trim() ||
         typeof apiSecret !== "string" || !apiSecret.trim()) {
@@ -32,6 +41,9 @@ export class BitunixSpotConfig {
     if (typeof allowLiveOrderMutations !== "boolean") {
       throw new TypeError("Bitunix Spot allowLiveOrderMutations must be a boolean")
     }
+    if (typeof allowLiveFundsMutations !== "boolean") {
+      throw new TypeError("Bitunix Spot allowLiveFundsMutations must be a boolean")
+    }
 
     this.apiKey = apiKey
     this.apiSecret = apiSecret
@@ -39,6 +51,7 @@ export class BitunixSpotConfig {
     this.baseUrl = baseUrl.replace(/\/$/, "")
     this.requestTimeout = requestTimeout
     this.allowLiveOrderMutations = allowLiveOrderMutations
+    this.allowLiveFundsMutations = allowLiveFundsMutations
     Object.freeze(this)
   }
 }
