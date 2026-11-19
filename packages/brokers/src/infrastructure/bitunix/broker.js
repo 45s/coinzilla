@@ -1312,7 +1312,7 @@ export class BitunixSpotBroker extends CoreBroker {
   async createCanonicalOrder() {
     return unsupportedMutationResult({
       operation: "createCanonicalOrder",
-      reason: "Bitunix Spot does not expose clientOrderId and placement is disabled until order reconciliation is reliable",
+      reason: "Bitunix Spot does not expose clientOrderId required for canonical order identity and idempotent recovery",
     })
   }
 
