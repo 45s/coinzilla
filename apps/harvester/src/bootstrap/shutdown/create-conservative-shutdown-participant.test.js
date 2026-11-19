@@ -413,7 +413,10 @@ test("keeps stale recovery-price coverage separate from owned order and fill rec
   await assert.rejects(
     participant.waitUntilSafe(),
     (error) => {
-      const blockers = getMarketBlockersFromShutdownError({ error, symbol: "DOGEUSDT" })
+      const blockers = getMarketBlockersFromShutdownError({
+        error,
+        symbol: "DOGEUSDT",
+      })
       assert.ok(
         blockers.includes("RECOVERY_SELL_COVERAGE:STALE_MARKET_PRICE"),
         "The market must retain the exact stale-price coverage finding.",
@@ -461,7 +464,10 @@ test("retains the order and fill blocker when canonical owned-order reconciliati
   await assert.rejects(
     participant.waitUntilSafe(),
     (error) => {
-      const blockers = getMarketBlockersFromShutdownError({ error, symbol: "DOGEUSDT" })
+      const blockers = getMarketBlockersFromShutdownError({
+        error,
+        symbol: "DOGEUSDT",
+      })
       assert.ok(
         blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
         "An unsuccessful canonical owned-order reconciliation must retain the order/fill blocker.",
