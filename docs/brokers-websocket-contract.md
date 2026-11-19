@@ -163,17 +163,17 @@ The official Spot documentation does not currently provide a sufficiently verifi
 
 Bitunix documents broker order IDs as strings. For compatibility, Coinzilla accepts string IDs and safely representable integer numbers; fractional, non-finite, and unsafe numeric IDs are rejected before a lookup request or order adaptation. This cannot recover precision already lost by a caller before passing a numeric value, so string IDs remain the authoritative form.
 
-Mutations and lifecycle-dependent methods are deliberately unavailable:
+The following canonical lifecycle capabilities remain unavailable:
 
 - Fill history is blocked: the matching-order response does not define base/quote quantity denomination, complete partial-execution coverage, or stable/unique execution identity; `getFills()` returns unsupported without a request.
-- Order placement has no exchange-side client order ID, so a lost response cannot be reliably reconciled.
+- Canonical placement is blocked because the Spot API has no caller-supplied client order ID. Direct legacy placement can report `OUTCOME_UNKNOWN`, but cannot guarantee idempotent recovery after a lost response.
 - Private Spot WebSocket documentation does not define a continuous order/execution event stream.
 - Public WebSocket market methods are request/response RPC, not continuous subscriptions.
 - The account response has no source timestamp; account-wide pending-order lookup is not documented.
 - The canonical order entity requires a client order ID not provided by the Spot API.
 - No Spot server-time or TESTNET endpoint is documented.
 
-The single-order REST endpoint says limit `volume` is quote quantity and market `volume` is base quantity; the REST batch-order endpoint and WebSocket order API document the inverse. The inconsistency exists within the REST docs as well as across transports. No placement implementation is enabled until Bitunix clarifies the REST semantics and the conversion is covered by tests.
+The single-order REST endpoint says LIMIT `volume` is quote quantity and MARKET `volume` is base quantity; direct legacy `createOrder()` uses this endpoint and exact decimal conversion only. The REST batch-order endpoint and WebSocket order API document the inverse and remain unused. The direct placement implementation is covered by offline request/response tests, but live exchange acceptance is unverified.
 
 Official references: [Spot REST API](https://www.bitunix.com/api-docs/spots/en_us/), [Spot order API](https://www.bitunix.com/api-docs/spots/en_us/order/), [Spot WebSocket API](https://www.bitunix.com/api-docs/spots/en_us/ws/), [Spot WebSocket order API](https://www.bitunix.com/api-docs/spots/en_us/order-ws/).
 
