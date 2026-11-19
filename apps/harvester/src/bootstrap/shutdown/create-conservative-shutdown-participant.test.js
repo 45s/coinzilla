@@ -583,4 +583,63 @@ test("keeps shutdown unsafe with an explicit blocker when fresh market price doe
   )
   assert.ok(calls.includes("wait-price:DOGEUSDT"), "The bounded event wait must be attempted.")
 })
+ 
+test("rechecks recovery safety when the refreshed price becomes stale before reconciliation completes", async () => {
+  const calls = []
+  const recoveryAttempts = new Map()
+  let refreshAttempts = 0
+  const engine = createFakeEngine({ calls })
+  engine.reconcileRecoverySellsForShutdown = async ({ symbols } = {}) => {
+    const [symbol] = symbols
+    const attempts = (recoveryAttempts.get(symbol) ?? 0) + 1
+    recoveryAttempts.set(symbol, attempts)
+    if (symbol === "DOGEUSDT") {
+      return {
+        ok: false,
+        errors: [Object.assign(
+          new Error("Shutdown recovery price is stale"),
+          {
+            code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+          },
+        )],
+      }
+    }
+    return { ok: true }
+  }
+  engine.waitForFreshMarketPrice = async ({ symbol } = {}) => {
+    refreshAttempts += 1
+    calls.push(`wait-price:${symbol}`)
+    return {
+      symbol,
+      price: "0.124",
+      timestamp: 10_001,
+    }
+  }
+  const participant = createParticipant({
+    engine,
+    calls,
+  })
+
+  participant.beginShutdown()
+  await assert.rejects(
+    participant.waitUntilSafe(),
+    (error) => {
+      const blockers = getMarketBlockersFromShutdownError({
+        error,
+        symbol: "DOGEUSDT",
+      })
+      assert.ok(
+        hasBlockerWithPrefix({
+          blockers,
+          prefix: "RECOVERY_SELL_RECONCILIATION:SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE:STALE_MARKET_PRICE",
+        }),
+        "The second evaluation must retain the stale-price blocker if the refreshed price is no longer fresh.",
+      )
+      return true
+    },
+    "A fresh event is not a safety proof if its price is stale when recovery is re-evaluated.",
+  )
+  assert.equal(recoveryAttempts.get("DOGEUSDT"), 2, "Recovery must be re-evaluated exactly once after the fresh event.")
+  assert.equal(refreshAttempts, 1, "A market may receive only one bounded refresh wait per safety attempt.")
+})
 
