@@ -36,6 +36,12 @@ test("Bitunix Spot live mutation capabilities require explicit configuration opt
   }
 })
 
+test("Bitunix Spot capability factory rejects non-boolean live mutation opt-in", () => {
+  assert.throws(() => createBitunixBrokerCapabilities({
+    allowLiveOrderMutations: "true",
+  }), /must be a boolean/i)
+})
+
 test("Bitunix Spot capability declarations preserve canonical lifecycle blockers", () => {
   const capabilities = createBitunixBrokerCapabilities()
 
