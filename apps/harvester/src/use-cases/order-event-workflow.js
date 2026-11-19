@@ -63,6 +63,7 @@ function createReconcileTerminalOrderFillsTransition({
   state,
   pause,
   processExecutionFillTransition,
+  reconcileRecoverySellerMixedSell,
 }) {
   const ordersByBrokerId = new Map()
   const attributedBroker = createProviderAttributedFillHistoryBroker({
@@ -75,6 +76,40 @@ function createReconcileTerminalOrderFillsTransition({
     processedFillsByOrder: state.processedFillsByOrder,
     pause,
     processExecutionFillTransition,
+    onTerminalOrderReconciled: async ({ order, canonicalFills } = {}) => {
+      const ownership = state.registry?.getOwnership?.({
+        clientOrderId: order?.clientOrderId,
+        brokerOrderId: order?.brokerOrderId,
+      })
+      if (ownership?.strategyId !== StrategyId.RECOVERY_SELLER || order?.side !== "SELL") {
+        return toResult({ data: { skipped: true } })
+      }
+      if (typeof reconcileRecoverySellerMixedSell !== "function") {
+        const error = new Error("Recovery Seller terminal SELL requires the mixed-SELL accounting workflow")
+        await pause({
+          symbol: order.market.symbol,
+          reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_UNAVAILABLE",
+          error,
+        })
+        return toResult({ error })
+      }
+      const result = await reconcileRecoverySellerMixedSell({
+        order,
+        canonicalFills,
+      })
+      if (result?.ok !== true) {
+        await pause({
+          symbol: order.market.symbol,
+          reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_FAILED",
+          error: result?.errors?.[0],
+        })
+        return result ?? toResult({
+          error: new Error("Recovery Seller terminal mixed-SELL reconciliation failed"),
+        })
+      }
+      state.reconciledTerminalOrderClientIds.add(order.clientOrderId)
+      return result
+    },
   })
   return ({ order, eventFill } = {}) => {
     const registeredOrder = resolveRegisteredOrder({
@@ -146,6 +181,7 @@ function createWorkflowUserDataEventTransition({
   onUnownedExternalOrderObserved,
   processExecutionFillTransition,
   reconcileTerminalOrderFills,
+  reconcileRecoverySellerMixedSell,
 }) {
   return createUserDataEventTransition({
     state,
@@ -164,6 +200,7 @@ function createWorkflowUserDataEventTransition({
     onUnownedExternalOrderObserved,
     processExecutionFillTransition,
     reconcileTerminalOrderFills,
+    reconcileRecoverySellerMixedSell,
   })
 }
 
@@ -187,6 +224,7 @@ export function makeOrderEventWorkflow(options = {}) {
     recordSellExecutionFill,
     pause,
     requireProviderProvenance: requireProviderProvenanceOverride,
+    reconcileRecoverySellerMixedSell,
   } = options
   const requireProviderProvenance = resolveProviderProvenanceRequirement({
     override: requireProviderProvenanceOverride,
@@ -208,6 +246,7 @@ export function makeOrderEventWorkflow(options = {}) {
     state,
     pause,
     processExecutionFillTransition,
+    reconcileRecoverySellerMixedSell,
   })
   const processUserDataEventTransition = createWorkflowUserDataEventTransition({
     ...options,

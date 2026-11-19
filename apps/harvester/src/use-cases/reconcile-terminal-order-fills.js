@@ -279,7 +279,7 @@ async function applyTerminalFills({ fills, order, processExecutionFillTransition
  * The caller invokes this workflow from its serialized engine transition.
  */
 export function makeReconcileTerminalOrderFills(options = {}) {
-  const { broker, processedFillsByOrder, pause, processExecutionFillTransition } = options
+  const { broker, processedFillsByOrder, pause, processExecutionFillTransition, onTerminalOrderReconciled } = options
   return async function reconcileTerminalOrderFills({ order, eventFill } = {}) {
     const symbol = order?.market?.symbol
     const invalidOrder = validateTerminalOrder({ order })
@@ -344,6 +344,17 @@ export function makeReconcileTerminalOrderFills(options = {}) {
     })
     if (applyResult) {
       return applyResult
+    }
+    if (typeof onTerminalOrderReconciled === "function") {
+      const terminalTransition = await onTerminalOrderReconciled({
+        order,
+        canonicalFills: fills,
+      })
+      if (terminalTransition?.ok !== true) {
+        return terminalTransition ?? toResult({
+          error: new Error("Terminal order transition was not explicitly reconciled"),
+        })
+      }
     }
     return toResult({
       data: {

@@ -1,4 +1,5 @@
 import { CanonicalOrder } from "@coinzilla/entities"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { getOrderLifecycleStatus, logOrderLifecycle } from "../application/logging/order-lifecycle-log.js"
 import { compareDecimal, toResult } from "@coinzilla/utils"
 import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
@@ -640,7 +641,72 @@ async function handleSellFilled({ dependencies, order, symbol, recoveryMode } = 
   return null
 }
 
+async function handleRecoverySellerOrderStatus({ dependencies, order, symbol } = {}) {
+  const { state, pause } = dependencies
+  const ownership = state.registry.getOwnership?.({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+  })
+  if (ownership?.strategyId !== StrategyId.RECOVERY_SELLER) {
+    return null
+  }
+
+  if (order.side === "SELL" &&
+      ["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
+      !state.reconciledTerminalOrderClientIds.has(order.clientOrderId)) {
+    const error = new Error("Recovery Seller terminal SELL has no committed mixed-SELL reconciliation")
+    await pause({
+      symbol,
+      reason: "RS_TERMINAL_SELL_RECONCILIATION_MISSING",
+      error,
+    })
+    return failureResult({
+      error,
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "RS_TERMINAL_SELL_RECONCILIATION",
+      retryable: false,
+    })
+  }
+
+  if (order.side === "BUY" &&
+      ["CANCELED", "EXPIRED", "REJECTED"].includes(order.status) &&
+      compareDecimal({
+        left: order.executedQuantity.amount,
+        right: "0",
+      }) > 0) {
+    const error = new Error("Partially filled Recovery Seller BUY reached a terminal non-FILLED state")
+    await pause({
+      symbol,
+      reason: "RS_PARTIALLY_FILLED_BUY_TERMINAL",
+      error,
+    })
+    return failureResult({
+      error,
+      category: "ACCOUNTING_INTEGRITY",
+      stage: "RS_PARTIAL_BUY_TERMINAL",
+      retryable: false,
+    })
+  }
+
+  return toResult({
+    data: {
+      order,
+      recoverySellerOrder: true,
+      waitingForTerminalState: !["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status),
+      terminalFillHistoryReconciled: ["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(order.status),
+    },
+  })
+}
+
 async function handleOrderStatus({ dependencies, order, symbol, recoveryMode } = {}) {
+  const recoverySellerResult = await handleRecoverySellerOrderStatus({
+    dependencies,
+    order,
+    symbol,
+  })
+  if (recoverySellerResult) {
+    return recoverySellerResult
+  }
   const handlers = [
     handleOpenSellReplacement,
     handlePartialBuyDuringShutdown,
