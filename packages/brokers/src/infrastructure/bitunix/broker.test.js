@@ -249,6 +249,37 @@ test("Bitunix Spot cancellation reports unknown when the order remains open afte
   assert.match(result.errors[0].message, /reconcile order 123/i)
 })
 
+test("Bitunix Spot cancellation reports an exchange rejection after dispatch without claiming NOT_SENT", async () => {
+  const { broker, calls } = createBroker()
+  broker.restClient.request = async (input) => {
+    calls.push({
+      method: input.method,
+      path: input.path,
+      options: {
+        ...(input.body === undefined ? {} : { body: input.body }),
+        authenticated: input.authenticated,
+        stateChanging: input.stateChanging,
+      },
+    })
+    if (input.path === "/api/spot/v1/order/cancel") {
+      throw Object.assign(new Error("exchange rejected cancellation"), {
+        kind: "exchange",
+      })
+    }
+    throw new Error("unexpected request")
+  }
+
+  const result = await broker.cancelOrder({
+    symbol: "BTCUSDT",
+    orderId: "123",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "REJECTED")
+  assert.equal(result.cancellationOutcome, "OUTCOME_UNKNOWN")
+  assert.equal(calls.length, 1)
+})
+
 test("Bitunix Spot cancellation preserves acknowledged mutation when detail verification fails", async () => {
   const { broker } = createBroker({
     responses: {
