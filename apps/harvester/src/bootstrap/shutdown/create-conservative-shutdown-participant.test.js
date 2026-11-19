@@ -275,12 +275,12 @@ test("does not mark a market safe when Journal durability cannot be proven", asy
   for (const market of participant.getSafetySnapshot().markets) {
     assert.ok(
       market.blockers.includes("JOURNAL_NOT_DURABLE"),
-      "The Journal durability failure must remain explicit for " + market.symbol + ".",
+      `The Journal durability failure must remain explicit for ${market.symbol}.`,
     )
     assert.equal(
       market.blockers.includes("ORDER_OR_FILL_RECONCILIATION_INCOMPLETE"),
       false,
-      "A Journal failure must not be misclassified as order/fill reconciliation failure for " + market.symbol + ".",
+      `A Journal failure must not be misclassified as order/fill reconciliation failure for ${market.symbol}.`,
     )
   }
 })
@@ -356,7 +356,10 @@ test("keeps recovery-input failures separate from owned order and fill reconcili
   await assert.rejects(
     participant.waitUntilSafe(),
     (error) => {
-      const blockers = getMarketBlockersFromShutdownError({ error, symbol: "DOGEUSDT" })
+      const blockers = getMarketBlockersFromShutdownError({
+        error,
+        symbol: "DOGEUSDT",
+      })
       assert.ok(
         hasBlockerWithPrefix({
           blockers,
@@ -435,7 +438,7 @@ test("retains the order and fill blocker when canonical owned-order reconciliati
   const calls = []
   const engine = createFakeEngine({ calls })
   engine.reconcileOwnedOrders = async ({ symbol } = {}) => {
-    calls.push("reconcile:" + symbol)
+    calls.push(`reconcile:${symbol}`)
     if (symbol === "DOGEUSDT") {
       return {
         ok: false,
