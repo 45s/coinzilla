@@ -139,10 +139,15 @@ function makeInput(overrides = {}) {
     left: orderQuantity,
     right: legacyQuantity,
   })
+  const ownershipLegacyQuantity = orderQuantity === "5.01" ? "0.01" : "0"
+  const ownershipRecoveryQuantity = subtractDecimal({
+    left: orderQuantity,
+    right: ownershipLegacyQuantity,
+  })
   const ownership = overrides.ownership ?? makeOwnership({
     sellAllocation: {
-      recoverySellQuantity: recoveryQuantity,
-      legacySellQuantity: legacyQuantity,
+      recoverySellQuantity: ownershipRecoveryQuantity,
+      legacySellQuantity: ownershipLegacyQuantity,
     },
   })
   const orderRegistry = overrides.orderRegistry ?? new OrderRegistry({
