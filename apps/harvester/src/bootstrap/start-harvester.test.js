@@ -5210,6 +5210,7 @@ test("restores the durable RS STOP latch before writing PROCESS_STARTED", async 
 
   const calls = []
   const operationalStateStore = {
+    runtimeSessionId: store.runtimeSessionId,
     append: async (input) => {
       calls.push(input.factType)
       return store.append(input)
