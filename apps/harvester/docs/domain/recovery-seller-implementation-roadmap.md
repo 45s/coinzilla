@@ -451,3 +451,10 @@ Configured RS execution routes are now rejected before process-start facts or br
 The RS accounting workflow records each accepted canonical BUY Fill under its immutable OrderRegistry cycle ownership and exposes `getBuyExecutionVwap({ cycleId })`. The reference is calculated exactly as aggregate canonical quote quantity divided by aggregate executed base quantity; it is not derived from a market-price snapshot or Portfolio averages. Duplicate Fill replay does not change the result, and cycle IDs are isolated. This provides the actual execution reference required by the next standing-BUY policy.
 
 The current map is process-local and is not restored from Operational State Store facts. A restarted process must not infer a prior cycle's VWAP from an empty map; durable order/cycle/fill replay remains an RS-4/RS-5 requirement. This slice does not register the production evaluator, authorize order submission, or make RS executable.
+
+
+## RS-4 durable STOP workflow bootstrap composition
+
+When at least one RS execution route is configured, bootstrap now requires an explicitly supplied Operational State Store and constructs the RS STOP workflow from its verified history before appending the current `PROCESS_STARTED` fact. The workflow restores any unresolved account-scoped RS safety blocker and is passed into the shared engine composition. CG-only startup remains unchanged and does not require an Operational State Store for this RS-specific path.
+
+This closes only STOP workflow construction/restoration. The production RS evaluator and submitter still need to call the latch on unexpected/ambiguous outcomes, the strategy dispatcher must block new RS trading while STOPPED while allowing reconciliation, and the authorized operator adapter must perform the existing evidence-gated durable reset. It does not enable restart restoration: prior process history still follows the existing fail-closed process-restart policy.
