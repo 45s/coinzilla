@@ -510,7 +510,6 @@ function validateSpotOrderInput({ input }) {
     "type",
     "quantity",
     "price",
-    "timeInForce",
     "clientOrderId",
     "newClientOrderId",
   ])
@@ -523,9 +522,6 @@ function validateSpotOrderInput({ input }) {
       operation: "createOrder",
       reason: "Bitunix Spot REST order placement does not accept a caller-supplied client order ID",
     })
-  }
-  if (input.timeInForce !== undefined && input.timeInForce !== "GTC") {
-    throw new TypeError("Bitunix Spot single-order REST supports only its documented default GTC behavior")
   }
   const symbol = requireSymbol({
     symbol: input.symbol,
@@ -1260,7 +1256,7 @@ export class BitunixSpotBroker extends CoreBroker {
    * quantity remains base volume. A lost response is OUTCOME_UNKNOWN and is
    * never retried because Bitunix does not accept a client order ID.
    *
-   * @param {{symbol: string, side: "BUY"|"SELL", type?: "LIMIT"|"MARKET", quantity: string|number, price?: string|number, timeInForce?: "GTC"}} input
+   * @param {{symbol: string, side: "BUY"|"SELL", type?: "LIMIT"|"MARKET", quantity: string|number, price?: string|number}} input
    */
   async createOrder(input = {}) {
     let requestDispatched = false
