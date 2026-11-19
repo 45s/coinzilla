@@ -148,7 +148,7 @@ test("Binance environment selection is metadata, not a capability status", () =>
   })
 })
 
-test("Bitunix Spot capabilities declare implemented cancellation and incomplete remaining evidence", () => {
+test("Bitunix Spot read capabilities preserve incomplete-evidence boundaries", () => {
   const { capabilities } = createBitunixBroker()
 
   assertCapability({
@@ -193,16 +193,6 @@ test("Bitunix Spot capabilities declare implemented cancellation and incomplete 
   })
   assertCapability({
     declaration: capabilities,
-    type: "CANCEL_ORDER",
-    status: "SUPPORTED",
-  })
-  assertCapability({
-    declaration: capabilities,
-    type: "CANCEL_ALL_ORDERS",
-    status: "SUPPORTED",
-  })
-  assertCapability({
-    declaration: capabilities,
     type: "SUBSCRIBE_USER_DATA",
     status: "UNSUPPORTED",
   })
@@ -211,8 +201,22 @@ test("Bitunix Spot capabilities declare implemented cancellation and incomplete 
     type: "READ_COMPLETE_FILL_HISTORY",
     status: "UNKNOWN",
   })
-
   assert.ok(capabilities.getCapability({ type: "READ_OPEN_ORDERS" }).conditions.length > 0)
+})
+
+test("Bitunix Spot declares single-order and symbol-scoped bulk cancellation supported", () => {
+  const { capabilities } = createBitunixBroker()
+
+  assertCapability({
+    declaration: capabilities,
+    type: "CANCEL_ORDER",
+    status: "SUPPORTED",
+  })
+  assertCapability({
+    declaration: capabilities,
+    type: "CANCEL_ALL_ORDERS",
+    status: "SUPPORTED",
+  })
 })
 
 test("provider facades retain CoreBroker compatibility without inheriting the new contract", () => {
