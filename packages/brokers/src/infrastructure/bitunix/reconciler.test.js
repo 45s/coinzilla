@@ -298,3 +298,95 @@ test("start rejects tracked orders outside its polling symbol scope before sched
   assert.equal(reconciler.getStatus().running, false)
 })
 
+
+
+function createNestedObservationSources() {
+  return {
+    balance: {
+      asset: "USDT",
+      free: "10",
+      metadata: {
+        labels: ["spot"],
+      },
+    },
+    order: {
+      orderId: "order-1",
+      status: "FILLED",
+      execution: {
+        fees: [{
+          asset: "USDT",
+          amount: "0.1",
+        }],
+      },
+    },
+    history: {
+      orderId: "order-2",
+      details: {
+        tags: ["history"],
+      },
+    },
+    matching: {
+      id: "raw-id",
+      execution: {
+        fills: [{
+          quantity: "1",
+        }],
+      },
+    },
+  }
+}
+
+test("pollOnce deep-freezes an isolated observation snapshot", async () => {
+  const { broker } = createBroker()
+  const sources = createNestedObservationSources()
+  broker.getBalances = async () => ({
+    ok: true,
+    data: [sources.balance],
+  })
+  broker.getOpenOrders = async () => ({
+    ok: true,
+    data: [sources.order],
+  })
+  broker.getOrderHistory = async () => ({
+    ok: true,
+    data: [sources.history],
+  })
+  broker.getMatchingOrderDetails = async () => ({
+    ok: true,
+    data: sources.matching,
+  })
+
+  const reconciler = new BitunixSpotReconciler({
+    broker,
+    now: () => 1234,
+  })
+  const { snapshot } = await reconciler.pollOnce({
+    symbols: ["BTCUSDT"],
+    trackedOrders: [{
+      symbol: "BTCUSDT",
+      orderId: "order-3",
+    }],
+  })
+
+  assert.equal(Object.isFrozen(snapshot), true)
+  assert.equal(Object.isFrozen(snapshot.balances), true)
+  assert.equal(Object.isFrozen(snapshot.balances[0].metadata.labels), true)
+  assert.equal(Object.isFrozen(snapshot.symbols[0]), true)
+  assert.equal(Object.isFrozen(snapshot.symbols[0].openOrders[0].execution.fees[0]), true)
+  assert.equal(Object.isFrozen(snapshot.symbols[0].firstHistoryPage[0].details.tags), true)
+  assert.equal(Object.isFrozen(snapshot.matchingOrderObservations[0].data.execution.fills[0]), true)
+  assert.equal(Object.isFrozen(snapshot.guarantees), true)
+
+  for (const source of Object.values(sources)) {
+    assert.equal(Object.isFrozen(source), false)
+  }
+  sources.balance.metadata.labels.push("mutated")
+  sources.order.execution.fees[0].amount = "9"
+  sources.history.details.tags[0] = "mutated"
+  sources.matching.execution.fills[0].quantity = "9"
+
+  assert.deepEqual(snapshot.balances[0].metadata.labels, ["spot"])
+  assert.equal(snapshot.symbols[0].openOrders[0].execution.fees[0].amount, "0.1")
+  assert.deepEqual(snapshot.symbols[0].firstHistoryPage[0].details.tags, ["history"])
+  assert.equal(snapshot.matchingOrderObservations[0].data.execution.fills[0].quantity, "1")
+})
