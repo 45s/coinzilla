@@ -13,6 +13,7 @@ test("package entry point exposes only the supported public contracts", () => {
     "BinanceWebSocketBroker",
     "BinanceWebSocketConfig",
     "BitunixSpotBroker",
+    "BitunixSpotReconciler",
     "BitunixSpotConfig",
     "BitunixSpotWebSocketClient",
     "BitunixWebSocketError",
@@ -78,6 +79,10 @@ test("both public broker facades implement the same exchange-neutral method surf
     assert.ok(broker.capabilities instanceof brokers.BrokerCapabilities)
     assert.equal(broker.capabilities.provider, broker instanceof brokers.BinanceWebSocketBroker ? "binance" : "bitunix")
   }
+})
+
+test("public Bitunix Spot reconciler is exported as a separate polling primitive", () => {
+  assert.equal(typeof brokers.BitunixSpotReconciler, "function")
 })
 
 test("public Bitunix Spot WebSocket client is independently constructible without connecting", () => {
