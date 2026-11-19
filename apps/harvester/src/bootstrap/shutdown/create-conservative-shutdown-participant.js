@@ -103,12 +103,12 @@ async function drainUserData(drainUserDataEvents) {
   try {
     const result = await drainUserDataEvents()
     if (result?.ok === false) {
-      const { errors: resultErrors, error } = result
+      const { errors: resultErrors, error: resultError } = result
       let errors = []
       if (Array.isArray(resultErrors)) {
         errors = resultErrors
-      } else if (error) {
-        errors = [error]
+      } else if (resultError) {
+        errors = [resultError]
       }
       if (errors.length > 0) {
         return errors.map((error) => createStageBlocker({
