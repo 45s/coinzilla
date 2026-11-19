@@ -23,8 +23,8 @@ import { configureHarvesterLogging } from "./infrastructure/logging/configure-ha
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
 import { prepareProcessOperationalStateStore } from "./bootstrap/operational-state/prepare-process-operational-state-store.js"
-import { prepareTradingSessionPersistence as prepareTradingSessionPersistenceDefault } from "./infrastructure/persistence/prepare-trading-session-persistence.js"
-import { closeTradingSessionPersistence } from "./infrastructure/persistence/close-trading-session-persistence.js"
+import { prepareOrderHistoryPersistence as prepareOrderHistoryPersistenceDefault } from "./infrastructure/persistence/prepare-order-history-persistence.js"
+import { closeHarvesterPersistence } from "./infrastructure/persistence/close-harvester-persistence.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 const PROCESS_IDENTITY = createHarvesterProcessIdentity()
@@ -184,14 +184,16 @@ async function closeObservability({
   journalService,
   eventBus,
   processLock,
-  processIdDatabase,
+  orderHistoryPersistence,
   allowProcessLockRelease = true,
   logger,
 } = {}) {
   const journalResult = await closeJournalService({ journalService })
   const eventBusErrors = await closeEventBus({ eventBus })
-  const databaseErrors = await closeTradingSessionPersistence({
-    database: processIdDatabase,
+  const databaseErrors = await closeHarvesterPersistence({
+    observer: orderHistoryPersistence?.observer,
+    database: orderHistoryPersistence?.database,
+    logger,
   })
   const processLockErrors = await releaseProcessLock({
     processLock,
@@ -290,20 +292,32 @@ function publishProcessStartedEvidence({ processStartedDataResult, resources, lo
     })
 }
 
-async function prepareProcessIdDatabase({
+async function prepareOrderHistoryPersistenceResources({
   runtimeConfig,
   env,
   logger,
-  processId,
-  prepareTradingSessionPersistence,
+  eventBus,
+  prepareOrderHistoryPersistence,
 }) {
-  const persistence = await prepareTradingSessionPersistence({
-    tradingMode: runtimeConfig.tradingMode,
-    env,
-    logger,
-    processId,
-  })
-  return persistence?.database ?? null
+  try {
+    return await prepareOrderHistoryPersistence({
+      tradingMode: runtimeConfig.tradingMode,
+      env,
+      logger,
+      eventBus,
+    })
+  } catch (error) {
+    try {
+      logger?.error?.({
+        message: "Order history persistence is unavailable",
+        errorName: error?.name ?? "Error",
+        errorCode: error?.code ?? "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+      })
+    } catch {
+      // Optional history persistence must never prevent Harvester startup.
+    }
+    return null
+  }
 }
 
 async function acquireEnvironmentProcessLock({ provider, acquireProcessLock, logger }) {
@@ -548,7 +562,7 @@ async function acquireProcessStartupResources({ options, resources, processStart
     processIdentity,
     createOperationalStateStore,
     createJournalService,
-    prepareTradingSessionPersistence,
+    prepareOrderHistoryPersistence,
     providerAdapterFactories,
   } = options
   resources.eventBus = createEventBus({ logger })
@@ -577,12 +591,12 @@ async function acquireProcessStartupResources({ options, resources, processStart
     journalService: resources.journalService,
     resources,
   })
-  resources.processIdDatabase = await prepareProcessIdDatabase({
+  resources.orderHistoryPersistence = await prepareOrderHistoryPersistenceResources({
     runtimeConfig: resources.runtimeConfig,
     env,
     logger,
-    processId: processStartedDataResult.data?.processId,
-    prepareTradingSessionPersistence,
+    eventBus: resources.eventBus,
+    prepareOrderHistoryPersistence,
   })
   resources.processStartedPublication = publishProcessStartedEvidence({
     processStartedDataResult,
@@ -806,7 +820,7 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
       closeLogger: options.closeLogger,
       closeObservability: (cleanupOptions) => closeObservability({
         ...cleanupOptions,
-        processIdDatabase: resources.processIdDatabase,
+        orderHistoryPersistence: resources.orderHistoryPersistence,
       }),
       logTelegramNotificationSummary,
     })
@@ -899,7 +913,7 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
     journalService: resources.journalService,
     eventBus: resources.eventBus,
     processLock: resources.processLock,
-    processIdDatabase: resources.processIdDatabase,
+    orderHistoryPersistence: resources.orderHistoryPersistence,
     allowProcessLockRelease: !resources.runtimeStartAttempted,
     logger,
   })
@@ -913,7 +927,7 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
   process.exitCode = 1
 }
 
-function resolveTradingSessionPersistencePreparer({
+function resolveOrderHistoryPersistencePreparer({
   start,
   override,
   logger,
@@ -922,11 +936,11 @@ function resolveTradingSessionPersistencePreparer({
     return override
   }
   if (start === startHarvester) {
-    return prepareTradingSessionPersistenceDefault
+    return prepareOrderHistoryPersistenceDefault
   }
   try {
     logger?.warn?.({
-      message: "Ordinary trading-session history is disabled for a custom start adapter unless an explicit persistence preparer is supplied.",
+      message: "Filled-order history is disabled for a custom start adapter unless an explicit persistence preparer is supplied.",
     })
   } catch {
     // Optional configuration diagnostics must not affect startup.
@@ -948,7 +962,7 @@ function createMainDependencies({ options }) {
     closeLogger = async () => {},
     createTelegramNotifier = (notifierOptions) => new TelegramNotifier(notifierOptions),
     createOperationalStateStore,
-    prepareTradingSessionPersistence: prepareOverride,
+    prepareOrderHistoryPersistence: prepareOverride,
     processIdentity = PROCESS_IDENTITY,
   } = options
   return {
@@ -964,7 +978,7 @@ function createMainDependencies({ options }) {
     closeLogger,
     createTelegramNotifier,
     createOperationalStateStore,
-    prepareTradingSessionPersistence: resolveTradingSessionPersistencePreparer({
+    prepareOrderHistoryPersistence: resolveOrderHistoryPersistencePreparer({
       start,
       override: prepareOverride,
       logger,
@@ -984,7 +998,7 @@ function createInitialProcessResources() {
       skipped: true,
     }),
     runtimeStartAttempted: false,
-    processIdDatabase: null,
+    orderHistoryPersistence: null,
   }
 }
 

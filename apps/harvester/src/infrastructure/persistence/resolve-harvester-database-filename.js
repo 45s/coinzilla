@@ -100,7 +100,14 @@ function assertDistinctDatabaseFiles({ productionStats, testnetStats } = {}) {
   }
 }
 
-export function resolveTradingSessionDatabaseFilename({ tradingMode, env = process.env } = {}) {
+/**
+ * Resolve the Harvester SQLite file for an explicit trading environment.
+ *
+ * @param {{tradingMode: string, env?: object}} input
+ * @returns {string}
+ * @throws {TypeError|Error} When the environment or configured path is unsafe.
+ */
+export function resolveHarvesterDatabaseFilename({ tradingMode, env = process.env } = {}) {
   const paths = createDatabasePaths({
     tradingMode,
     env,
@@ -112,7 +119,14 @@ export function resolveTradingSessionDatabaseFilename({ tradingMode, env = proce
   return paths.filename
 }
 
-export async function assertTradingSessionDatabaseIsolation({ tradingMode, env = process.env } = {}) {
+/**
+ * Create and verify separate Production and Testnet database locations.
+ *
+ * @param {{tradingMode: string, env?: object}} input
+ * @returns {Promise<string>} The validated filename for the requested environment.
+ * @throws {Error} When the two environment paths alias or cannot be validated.
+ */
+export async function assertHarvesterDatabaseIsolation({ tradingMode, env = process.env } = {}) {
   const paths = createDatabasePaths({
     tradingMode,
     env,
