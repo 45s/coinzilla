@@ -104,3 +104,47 @@ test("latches STOP for local order validation failures", async () => {
   assert.equal(callbacks.canSubmit(), false)
   assert.equal(latchCalls[0].orderIdentity.clientOrderId, "h-rs-buy-1")
 })
+
+test("does not mark a different SELL order identity unresolved in the current cycle", async () => {
+  const { workflow } = createStopWorkflow()
+  let markCalls = 0
+  const cycleCoordinator = {
+    getCycleState: () => ({
+      cycleId: "rs-cycle-1",
+      status: "SELL_SUBMITTED",
+      sellOrderIdentity: {
+        clientOrderId: "h-rs-sell-2",
+      },
+    }),
+    markSellUnknown: () => {
+      markCalls += 1
+      return {
+        ok: true,
+        data: {},
+      }
+    },
+  }
+  const callbacks = createRecoverySellerStopCallbacks({
+    stopWorkflow: workflow,
+    cycleCoordinator,
+  })
+
+  const result = await callbacks.onUnresolvedSubmission({
+    order: {
+      side: "SELL",
+      clientOrderId: "h-rs-sell-1",
+      market: {
+        id: "dogeusdt",
+      },
+    },
+    ownership: {
+      strategyId: "RS_recoverySeller",
+      cycleId: "rs-cycle-1",
+    },
+    outcome: "UNKNOWN",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(markCalls, 0)
+  assert.equal(callbacks.canSubmit(), false)
+})
