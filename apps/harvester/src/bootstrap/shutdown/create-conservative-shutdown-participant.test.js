@@ -340,7 +340,6 @@ test("keeps recovery-input failures separate from owned order and fill reconcili
           new Error("Shutdown recovery price is unavailable"),
           {
             code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
-            reason: "STALE_MARKET_PRICE",
           },
         )],
       }
