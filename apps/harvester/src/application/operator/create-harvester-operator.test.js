@@ -539,7 +539,10 @@ test("Recovery Seller STOP resolution rejects unauthorized actors and missing ac
   })
 
   const unauthorized = await operator.resolveRecoverySellerStop({
-    actor: { id: "telegram-user:untrusted", roles: [] },
+    actor: {
+      id: "telegram-user:untrusted",
+      roles: [],
+    },
     requestId: "telegram:rs-stop-reset:2",
   })
   const missingActionId = await operator.resolveRecoverySellerStop({
