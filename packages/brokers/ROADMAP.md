@@ -1448,3 +1448,50 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Updated the polling contract and production-readiness matrix to distinguish this recovery guarantee from authoritative event/fill reconciliation.
 - No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
 - Required CI must pass on the exact final PR head before this item is marked complete.
+
+## Bitunix Spot history request-adapter decomposition (#1517)
+
+**Status: Implemented in [PR #1518](https://github.com/45s/coinzilla/pull/1518); all seven required workflows passed on exact head `aadde0c035f73c81a129a7d5454a2427383e8762`.**
+
+- Preserve request body fields, exchange filter codes, time conversion, validation messages and page-envelope behavior exactly.
+- Keep the Broker facade responsible for endpoint I/O and result envelopes.
+- Add direct deterministic adapter tests while retaining existing broker-level characterization tests.
+- No endpoint semantics, public Broker contract, pagination guarantees or execution-history claims change.
+- No new shared utility; these are Bitunix-specific protocol adapters.
+
+## 2026-11-19 — Bitunix Spot order request adapter decomposition (#1525)
+
+**Status: Implemented in [PR #1529](https://github.com/45s/coinzilla/pull/1529); exact-head CI verification is pending.**
+
+- Extracted exact order input/decimal normalization, single-order REST payload construction, placement response identity validation, order-detail correlation, and cancel/detail request envelopes into `adapters/order-requests.js`.
+- Added direct deterministic adapter tests for LIMIT quote-volume conversion, MARKET base-volume preservation, scientific-notation expansion, unsupported fields/client IDs, response identity mismatches, and exact signed detail/cancel request envelopes.
+- Kept live-mutation opt-in, dispatch tracking, mutation outcome classification, no-retry behavior, placement reconciliation, cancellation/fill-race handling, and per-symbol cancel-all orchestration in the Broker facade.
+- No public Broker API, exchange endpoint, request body, retry behavior, Harvester, Binance, or shared utility changes.
+
+## Bitunix read-only Broker diagnostics expansion (#1519)
+
+**Status: Implemented in PR #1536; exact-head CI verification is pending.** Extend the diagnostic run through the public `Broker` facade to include public symbol-filter metadata and an authenticated, symbol-scoped first page of order history.
+
+- Add schema inspection for the order-history page envelope without recording private response values.
+- Preserve public-only mode: symbol filters remain public; authenticated order history is skipped without the full credential pair.
+- Keep order history page-bounded; do not imply complete history or canonical fills.
+- No order/funds mutations or Harvester changes.
+
+## 2026-11-19 — Bitunix polling generation isolation (#1521)
+
+**Status: Implemented in PR #1536; exact-head CI verification is pending.**
+
+- Detach a stopped generation's in-flight read from the active coalescing slot so an immediate restart can begin a fresh read even when the old network request has not settled.
+- Guard promise cleanup by identity so a late old-generation `finally` cannot clear a newer generation's in-flight promise or scope key.
+- Preserve the honest cancellation boundary: stop fences stale results and callbacks but does not claim to abort a request already dispatched.
+- Add deterministic same-scope and different-scope stop/restart regressions, including late completion from the old generation.
+
+## 2026-11-19 — Bitunix REST mutation outcome classification (#1523)
+
+**Status: Implemented in PR #1538; exact-head CI verification is pending.**
+
+- Require every Bitunix REST POST to declare `stateChanging: true|false`; no implicit mutation classification.
+- Explicitly classify documented read-only POSTs, including current orders, order history, deposit history, withdrawal history, and matching-order detail.
+- Preserve `outcomeUnknown` for transport failures, ambiguous HTTP failures, and malformed success envelopes after a mutation is dispatched.
+- Keep explicit non-zero exchange codes as definitive rejections and never retry mutations automatically.
+- Add REST-client tests for missing/invalid classifications, malformed response envelopes, explicit exchange rejection, and read-only/mutation outcome differences.

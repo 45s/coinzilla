@@ -1,4 +1,4 @@
-import { assertDecimalString, compareDecimal, defaultLogger, handleErr, multiplyDecimal, toResult } from "@coinzilla/utils"
+import { assertDecimalString, compareDecimal, defaultLogger, handleErr, toResult } from "@coinzilla/utils"
 import { getBrokerMutationOutcome } from "../../broker/broker-contract.js"
 import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
 import { createBitunixBrokerCapabilities } from "./capabilities.js"
@@ -27,16 +27,26 @@ import { adaptMatchingOrderDetails } from "./adapters/adapt-matching-order-detai
 import { adaptOrder } from "./adapters/adapt-order.js"
 import { createCanonicalMarket, getBitunixSymbol } from "./adapters/create-canonical-market.js"
 import { validateBitunixSymbolFilterMetadata } from "./adapters/validate-symbol-filter-metadata.js"
+import { createDepositRequest, createHistoryRequest, createWithdrawalHistoryRequest, normalizeOrderHistoryPage } from "./adapters/history-requests.js"
 import { BitunixSpotConfig } from "./config/bitunix-spot-config.js"
 import { BitunixSpotReconciler } from "./reconciler.js"
+import {
+  BITUNIX_SPOT_ORDER_API,
+  createSpotCancelRequest,
+  createSpotOrderDetailRequest,
+  createSpotOrderRequest,
+  validateOrderDetailResponse,
+  validateOrderId,
+  validateSpotOrderPlacementResponse,
+} from "./adapters/order-requests.js"
 
 const API = Object.freeze({
   markets: "/api/spot/v1/common/coin_pair/list",
   balances: "/api/spot/v1/user/account",
   pendingOrders: "/api/spot/v1/order/pending/list",
   orderHistory: "/api/spot/v1/order/history/page",
-  orderDetail: "/api/spot/v1/order/detail",
-  placeOrder: "/api/spot/v1/order/place_order",
+  orderDetail: BITUNIX_SPOT_ORDER_API.orderDetail,
+  placeOrder: BITUNIX_SPOT_ORDER_API.placeOrder,
   lastPrice: "/api/spot/v1/market/last_price",
   exchangeRates: "/api/spot/v1/common/rate/list",
   tokenNetworks: "/api/spot/v1/common/coin/coin_network/list",
@@ -54,23 +64,6 @@ const API = Object.freeze({
   depositAddress: "/api/spot/v1/deposit/address",
   withdrawalHistory: "/api/spot/v1/withdraw_transfer/page",
   matchingOrderDetails: "/api/spot/v1/order/deal/list",
-  cancelOrder: "/api/spot/v1/order/cancel",
-})
-
-const HISTORY_STATUS_CODES = Object.freeze({
-  OPEN: "1",
-  FILLED: "2",
-  PARTIALLY_FILLED: "3",
-  CANCELED: "4",
-  PARTIALLY_FILLED_CANCELED: "7",
-})
-const HISTORY_SIDE_CODES = Object.freeze({
-  SELL: "1",
-  BUY: "2",
-})
-const HISTORY_TYPE_CODES = Object.freeze({
-  LIMIT: "1",
-  MARKET: "2",
 })
 
 function unsupported({ operation, reason }) {
@@ -118,81 +111,6 @@ function isOpenMarket({ symbolInfo }) {
   return symbolInfo?.isOpen === "1" || symbolInfo?.isOpen === 1
 }
 
-function validateHistoryTimeRange({ startTime, endTime }) {
-  for (const [field, value] of [["startTime", startTime], ["endTime", endTime]]) {
-    if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
-      throw new RangeError(`Bitunix Spot ${field} must be a non-negative safe integer`)
-    }
-  }
-  if (startTime !== undefined && endTime !== undefined && startTime > endTime) {
-    throw new RangeError("Bitunix Spot startTime must not be after endTime")
-  }
-}
-
-function applyHistoryFilters({ body, status, side, type }) {
-  for (const [field, value, codes] of [
-    ["status", status, HISTORY_STATUS_CODES],
-    ["side", side, HISTORY_SIDE_CODES],
-    ["type", type, HISTORY_TYPE_CODES],
-  ]) {
-    if (value === undefined) {
-      continue
-    }
-    if (typeof value !== "string" || !Object.hasOwn(codes, value)) {
-      throw new TypeError(`Bitunix Spot order history ${field} filter is unsupported`)
-    }
-    body[field] = codes[value]
-  }
-}
-
-function addDepositStringFilters({ input, body }) {
-  for (const field of ["id", "coin", "transactionHash"]) {
-    if (input[field] === undefined) {
-      continue
-    }
-    if (typeof input[field] !== "string" || !input[field].trim()) {
-      throw new TypeError(`Bitunix Spot deposit ${field} filter must be a non-empty string`)
-    }
-    body[field] = input[field]
-  }
-}
-
-function addDepositTypeFilter({ input, body }) {
-  if (input.transactionHash !== undefined && input.type !== "deposit") {
-    throw new TypeError("Bitunix Spot transactionHash filter requires type=deposit")
-  }
-  if (input.type === undefined) {
-    return
-  }
-  if (input.type !== "deposit" && input.type !== "inside_transfer_in") {
-    throw new TypeError("Bitunix Spot deposit type filter is unsupported")
-  }
-  body.type = input.type
-}
-
-function addDepositTimeFilters({ input, body }) {
-  validateHistoryTimeRange({
-    startTime: input.startTime,
-    endTime: input.endTime,
-  })
-  if (input.startTime !== undefined) {
-    body.startTime = input.startTime
-  }
-  if (input.endTime !== undefined) {
-    body.endTime = input.endTime
-  }
-}
-
-function addDepositLimitFilter({ input, body }) {
-  if (input.limit === undefined) {
-    return
-  }
-  if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100) {
-    throw new RangeError("Bitunix Spot deposit limit must be an integer between 1 and 100")
-  }
-  body.limit = input.limit
-}
-
 function requireDepositAddressInput({ value, field }) {
   if (typeof value !== "string" || !value.trim()) {
     throw new BitunixDepositAddressError({
@@ -225,102 +143,6 @@ function createDepositAddressRequest({ input }) {
   return { body }
 }
 
-function createDepositRequest({ input }) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new TypeError("Bitunix Spot getDeposits() input must be an object")
-  }
-  const body = {}
-  addDepositStringFilters({
-    input,
-    body,
-  })
-  addDepositTypeFilter({
-    input,
-    body,
-  })
-  addDepositTimeFilters({
-    input,
-    body,
-  })
-  addDepositLimitFilter({
-    input,
-    body,
-  })
-  return { body }
-}
-
-function addWithdrawalStringFilters({ input, body }) {
-  for (const field of ["id", "outBizId", "coin", "transactionHash", "remark"]) {
-    if (input[field] === undefined) {
-      continue
-    }
-    if (typeof input[field] !== "string" || !input[field].trim()) {
-      throw new TypeError(`Bitunix Spot withdrawal ${field} filter must be a non-empty string`)
-    }
-    body[field] = input[field]
-  }
-}
-
-function addWithdrawalTypeFilter({ input, body }) {
-  if (input.transactionHash !== undefined && input.type !== "withdraw") {
-    throw new TypeError("Bitunix Spot withdrawal transactionHash filter requires type=withdraw")
-  }
-  if (input.type === undefined) {
-    return
-  }
-  if (input.type !== "withdraw" && input.type !== "inside_transfer_out") {
-    throw new TypeError("Bitunix Spot withdrawal type filter is unsupported")
-  }
-  body.type = input.type
-}
-
-function addWithdrawalTimeFilters({ input, body }) {
-  validateHistoryTimeRange({
-    startTime: input.startTime,
-    endTime: input.endTime,
-  })
-  if (input.startTime !== undefined) {
-    body.startTime = input.startTime
-  }
-  if (input.endTime !== undefined) {
-    body.endTime = input.endTime
-  }
-}
-
-function addWithdrawalLimitFilter({ input, body }) {
-  if (input.limit === undefined) {
-    return
-  }
-  if (!Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 100) {
-    throw new RangeError("Bitunix Spot withdrawal limit must be an integer between 1 and 100")
-  }
-  body.limit = input.limit
-}
-
-function createWithdrawalHistoryRequest({ input }) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new TypeError("Bitunix Spot getWithdrawalHistory() input must be an object")
-  }
-  const body = {}
-  addWithdrawalStringFilters({
-    input,
-    body,
-  })
-  addWithdrawalTypeFilter({
-    input,
-    body,
-  })
-  addWithdrawalTimeFilters({
-    input,
-    body,
-  })
-  addWithdrawalLimitFilter({
-    input,
-    body,
-  })
-  return { body }
-}
-
 function createMatchingOrderDetailsRequest({ input }) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("Bitunix Spot getMatchingOrderDetails() input must be an object")
@@ -339,106 +161,6 @@ function createMatchingOrderDetailsRequest({ input }) {
   }
 }
 
-function normalizeReturnedHistoryPage({ pageNum, requestedPage }) {
-  const pageNumIsNumber = typeof pageNum === "number" && Number.isSafeInteger(pageNum)
-  const pageNumIsString = typeof pageNum === "string" && /^[0-9]+$/.test(pageNum)
-  if (!pageNumIsNumber && !pageNumIsString) {
-    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
-  }
-
-  const returnedPage = Number(pageNum)
-  if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
-    throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
-  }
-  if (returnedPage !== requestedPage) {
-    throw new TypeError("Bitunix Spot order history returned pageNum does not match the requested page")
-  }
-}
-
-function normalizeHistoryRows({ data, total }) {
-  if (data === undefined && total !== 0) {
-    throw new TypeError("Bitunix Spot order history data is required when total is positive")
-  }
-  const rows = data === undefined ? [] : requireArray({
-    value: data,
-    operation: "order history",
-  })
-  if (rows.length > total) {
-    throw new TypeError("Bitunix Spot order history data row count exceeds total")
-  }
-  return rows
-}
-
-function normalizeOrderHistoryPage({ value, requestedPage }) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new TypeError("Bitunix Spot order history response must be an object")
-  }
-  if (!Number.isSafeInteger(value.total) || value.total < 0) {
-    throw new TypeError("Bitunix Spot order history total must be a non-negative safe integer")
-  }
-  normalizeReturnedHistoryPage({
-    pageNum: value.pageNum,
-    requestedPage,
-  })
-  return normalizeHistoryRows({
-    data: value.data,
-    total: value.total,
-  })
-}
-
-function createHistoryRequest({ input }) {
-  const {
-    symbol,
-    orderId,
-    startTime,
-    endTime,
-    limit,
-    page = 1,
-    status,
-    side,
-    type,
-  } = input
-  const normalizedSymbol = requireSymbol({
-    symbol,
-    operation: "getOrderHistory()",
-  })
-  if (!Number.isSafeInteger(page) || page < 1) {
-    throw new RangeError("Bitunix Spot order history page must be a positive safe integer")
-  }
-  if (limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1)) {
-    throw new RangeError("Bitunix Spot order history limit must be a positive safe integer")
-  }
-  if (orderId !== undefined && orderId !== null) {
-    throw new TypeError("Bitunix Spot order history does not support exact orderId filtering")
-  }
-  validateHistoryTimeRange({
-    startTime,
-    endTime,
-  })
-
-  const body = {
-    symbol: normalizedSymbol,
-    page,
-  }
-  if (limit !== undefined) {
-    body.pageSize = limit
-  }
-  if (startTime !== undefined) {
-    body.startTime = new Date(startTime).toISOString()
-  }
-  if (endTime !== undefined) {
-    body.endTime = new Date(endTime).toISOString()
-  }
-  applyHistoryFilters({
-    body,
-    status,
-    side,
-    type,
-  })
-  return { body }
-}
-
-/** Bitunix Spot adapter with explicitly declared provider-specific capabilities. */
 function unsupportedMutationResult({ operation, reason }) {
   return {
     ...toResult({
@@ -515,149 +237,6 @@ function createClientOrderIdUnsupportedResult({ clientOrderId }) {
   })
 }
 
-function validateOrderId({ orderId }) {
-  if ((typeof orderId !== "string" && typeof orderId !== "number") ||
-      (typeof orderId === "string" && !orderId.trim()) ||
-      (typeof orderId === "number" && !Number.isSafeInteger(orderId))) {
-    throw new TypeError("Bitunix Spot getOrder() requires a non-empty string or safe integer orderId")
-  }
-  return String(orderId)
-}
-
-function validateOrderDetailResponse({ response, orderId, symbol }) {
-  if (!response.data || typeof response.data !== "object" || Array.isArray(response.data)) {
-    throw new TypeError("Bitunix Spot order detail response must be an object")
-  }
-  if (typeof response.data.symbol !== "string" || !response.data.symbol.trim()) {
-    throw new TypeError("Bitunix Spot order detail response must contain its exchange symbol")
-  }
-  if (String(response.data.orderId) !== orderId ||
-      (symbol !== undefined && response.data.symbol.trim().toUpperCase() !== symbol)) {
-    throw new TypeError("Bitunix Spot order detail does not match the requested order identity")
-  }
-  return response.data
-}
-
-function expandOrderNumberExponent({ value }) {
-  const [mantissa, exponentText] = value.toLowerCase().split("e")
-  const exponent = Number(exponentText)
-  const negative = mantissa.startsWith("-")
-  const unsigned = negative ? mantissa.slice(1) : mantissa
-  const [integer, fraction = ""] = unsigned.split(".")
-  const digits = integer + fraction
-  const decimalIndex = integer.length + exponent
-  let expanded
-  if (decimalIndex <= 0) {
-    expanded = `0.${"0".repeat(-decimalIndex)}${digits}`
-  } else if (decimalIndex >= digits.length) {
-    expanded = `${digits}${"0".repeat(decimalIndex - digits.length)}`
-  } else {
-    expanded = `${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`
-  }
-  return negative ? `-${expanded}` : expanded
-}
-
-function normalizeOrderDecimal({ value, field }) {
-  let normalized = value
-  if (typeof value === "number" && Number.isFinite(value)) {
-    const numberText = String(value)
-    normalized = numberText.includes("e")
-      ? expandOrderNumberExponent({ value: numberText })
-      : numberText
-  }
-  assertDecimalString({
-    value: normalized,
-    field,
-  })
-  if (compareDecimal({
-    left: normalized,
-    right: "0",
-  }) <= 0) {
-    throw new RangeError(`${field} must be greater than zero`)
-  }
-  return normalized
-}
-
-function validateSpotOrderInput({ input }) {
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-    throw new TypeError("Bitunix Spot createOrder() requires an order object")
-  }
-  const allowedFields = new Set([
-    "symbol",
-    "side",
-    "type",
-    "quantity",
-    "price",
-    "clientOrderId",
-    "newClientOrderId",
-  ])
-  const unsupportedFields = Object.keys(input).filter((field) => !allowedFields.has(field))
-  if (unsupportedFields.length > 0) {
-    throw new TypeError(`Bitunix Spot createOrder() does not support fields: ${unsupportedFields.join(", ")}`)
-  }
-  if (input.clientOrderId !== undefined || input.newClientOrderId !== undefined) {
-    throw unsupported({
-      operation: "createOrder",
-      reason: "Bitunix Spot REST order placement does not accept a caller-supplied client order ID",
-    })
-  }
-  const symbol = requireSymbol({
-    symbol: input.symbol,
-    operation: "createOrder()",
-  })
-  const { side, type: inputType } = input
-  const type = inputType
-  if (side !== "BUY" && side !== "SELL") {
-    throw new TypeError("Bitunix Spot createOrder() side must be BUY or SELL")
-  }
-  if (type !== "LIMIT" && type !== "MARKET") {
-    throw new TypeError("Bitunix Spot single-order REST supports only LIMIT and MARKET orders")
-  }
-  if (type === "MARKET" && input.price !== undefined) {
-    throw new TypeError("Bitunix Spot MARKET orders derive their required zero price; omit price")
-  }
-  return {
-    symbol,
-    side,
-    type,
-  }
-}
-
-function createSpotOrderRequest({ input }) {
-  const { symbol, side, type } = validateSpotOrderInput({ input })
-  const quantity = normalizeOrderDecimal({
-    value: input.quantity,
-    field: "Bitunix Spot order quantity",
-  })
-  const price = type === "LIMIT"
-    ? normalizeOrderDecimal({
-      value: input.price,
-      field: "Bitunix Spot limit price",
-    })
-    : "0"
-  // The single-order REST endpoint uses quote volume for LIMIT and base
-  // volume for MARKET. Batch REST and WebSocket have different contracts.
-  const volume = type === "LIMIT"
-    ? multiplyDecimal({
-      left: quantity,
-      right: price,
-    })
-    : quantity
-  return {
-    symbol,
-    quantity,
-    price,
-    volume,
-    body: {
-      symbol,
-      side: side === "BUY" ? 2 : 1,
-      type: type === "LIMIT" ? 1 : 2,
-      volume,
-      price,
-    },
-  }
-}
-
 async function reconcileSpotOrderPlacement({ restClient, symbol, placementData }) {
   try {
     const order = await getBitunixSpotOrderDetail({
@@ -682,51 +261,15 @@ async function reconcileSpotOrderPlacement({ restClient, symbol, placementData }
   }
 }
 
-function validateSpotOrderPlacementResponse({ response, symbol, side, type }) {
-  if (!response || typeof response !== "object" || Array.isArray(response)) {
-    throw new TypeError("Bitunix Spot place-order response must be an object")
-  }
-  if (String(response.placeStatus) !== "1") {
-    throw Object.assign(
-      new Error("Bitunix Spot rejected the order placement"),
-      { kind: "exchange" },
-    )
-  }
-  if (String(response.symbol).toUpperCase() !== symbol) {
-    throw new TypeError("Bitunix Spot place-order response symbol does not match the request")
-  }
-  if (String(response.side) !== String(side) || String(response.type) !== String(type)) {
-    throw new TypeError("Bitunix Spot place-order response side or type does not match the request")
-  }
-  return {
-    ...response,
-    orderId: validateOrderId({ orderId: response.orderId }),
-  }
-}
-
 async function sendBitunixSpotCancelRequest({ restClient, symbol, orderId }) {
-  return restClient.request({
-    method: "POST",
-    path: API.cancelOrder,
-    body: {
-      orderIdList: [{
-        orderId,
-        symbol,
-      }],
-    },
-    authenticated: true,
-    stateChanging: true,
-  })
+  return restClient.request(createSpotCancelRequest({
+    symbol,
+    orderId,
+  }))
 }
 
 async function getBitunixSpotOrderDetail({ restClient, symbol, orderId }) {
-  const response = await restClient.request({
-    method: "GET",
-    path: API.orderDetail,
-    queryParams: { orderId },
-    authenticated: true,
-    stateChanging: false,
-  })
+  const response = await restClient.request(createSpotOrderDetailRequest({ orderId }))
   return adaptOrder(validateOrderDetailResponse({
     response,
     orderId,
@@ -1022,6 +565,7 @@ export class BitunixSpotBroker {
         method: "POST",
         path: API.pendingOrders,
         body: { symbol: normalizedSymbol },
+        stateChanging: false,
       })
       const rows = normalizeOrderRows({ value: response.data })
       return toResult({
@@ -1042,11 +586,15 @@ export class BitunixSpotBroker {
 
   async getOrderHistory(input = {}) {
     try {
-      const { body } = createHistoryRequest({ input })
+      const { body } = createHistoryRequest({
+        input,
+        requireSymbol,
+      })
       const response = await this.restClient.request({
         method: "POST",
         path: API.orderHistory,
         body,
+        stateChanging: false,
       })
       const rows = normalizeOrderHistoryPage({
         value: response.data,
@@ -1153,6 +701,7 @@ export class BitunixSpotBroker {
         method: "POST",
         path: API.deposits,
         body,
+        stateChanging: false,
       })
       return toResult({
         data: adaptDeposits({
