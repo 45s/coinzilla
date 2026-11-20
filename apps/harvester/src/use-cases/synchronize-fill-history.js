@@ -100,6 +100,7 @@ async function persistCanonicalFill({
   providerIdentity,
   environment,
   observedAt,
+  broker,
   requestDelayMs,
   sleep,
   now,
@@ -116,7 +117,7 @@ async function persistCanonicalFill({
     })
     if (clientOrderId === null && !state.ordersWithoutHistory.has(orderKey)) {
       const lookup = await fetchAndPersistOrderByExchangeId({
-        broker: state.broker,
+        broker,
         symbol: fill.market.symbol,
         brokerOrderId: fill.brokerOrderId,
         repositories,
@@ -233,6 +234,7 @@ function validateFillPage({ page, symbol, lastTradeId, state }) {
 
 async function persistFillPage({
   fills,
+  broker,
   repositories,
   providerIdentity,
   environment,
@@ -244,6 +246,7 @@ async function persistFillPage({
   for (const fill of fills) {
     await persistCanonicalFill({
       fill,
+      broker,
       repositories,
       providerIdentity,
       environment,
@@ -289,7 +292,6 @@ export async function synchronizeFillHistoryForMarket({
   now,
   state,
 }) {
-  state.broker = broker
   const { fromId: initialFromId, lastTradeId: initialTradeId } = await resolveTradeHistoryCursor({
     repositories,
     providerIdentity,
@@ -316,6 +318,7 @@ export async function synchronizeFillHistoryForMarket({
     })
     await persistFillPage({
       fills: validated.fills,
+      broker,
       repositories,
       providerIdentity,
       environment,
