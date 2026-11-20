@@ -6,24 +6,7 @@ import test from "node:test"
 
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-test("Undici does not emit a socket_error diagnostic for every abnormal 1006 close", {
-  timeout: 5_000,
-  skip: typeof globalThis.WebSocket !== "function",
-}, async (t) => {
-  const socketErrors = []
-  const opened = []
-  const closed = []
-  const socketErrorChannel = channel("undici:websocket:socket_error")
-  const openChannel = channel("undici:websocket:open")
-  const closeChannel = channel("undici:websocket:close")
-  const onSocketError = (error) => socketErrors.push(error)
-  const onOpen = (event) => opened.push(event)
-  const onClose = (event) => closed.push(event)
-
-  socketErrorChannel.subscribe(onSocketError)
-  openChannel.subscribe(onOpen)
-  closeChannel.subscribe(onClose)
-
+function createAbnormalCloseServer() {
   const server = createServer()
   let serverSocket = null
   server.on("upgrade", (...args) => {
@@ -39,49 +22,93 @@ test("Undici does not emit a socket_error diagnostic for every abnormal 1006 clo
       `Sec-WebSocket-Accept: ${accept}`,
       "",
       "",
-    ].join("\r\n"))
-
-    // Force an established-socket loss without sending a WebSocket close frame.
+    ].join("\\r\\n"))
     setTimeout(() => socket.destroy(), 25)
   })
+  return {
+    server,
+    get serverSocket() {
+      return serverSocket
+    },
+  }
+}
 
-  await new Promise((...args) => {
+function listen(server) {
+  return new Promise((...args) => {
     const [resolve, reject] = args
     server.once("error", reject)
     server.listen(0, "127.0.0.1", resolve)
   })
+}
 
-  const address = server.address()
-  const websocket = new globalThis.WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+function closeServer(server) {
+  return new Promise((resolve) => server.close(resolve))
+}
 
-  t.after(async () => {
-    socketErrorChannel.unsubscribe(onSocketError)
-    openChannel.unsubscribe(onOpen)
-    closeChannel.unsubscribe(onClose)
-    websocket.close()
-    serverSocket?.destroy()
-    await new Promise((resolve) => server.close(resolve))
-  })
+function subscribeDiagnosticChannels() {
+  const socketErrors = []
+  const opened = []
+  const closed = []
+  const socketErrorChannel = channel("undici:websocket:socket_error")
+  const openChannel = channel("undici:websocket:open")
+  const closeChannel = channel("undici:websocket:close")
+  const onSocketError = (error) => socketErrors.push(error)
+  const onOpen = (event) => opened.push(event)
+  const onClose = (event) => closed.push(event)
+  socketErrorChannel.subscribe(onSocketError)
+  openChannel.subscribe(onOpen)
+  closeChannel.subscribe(onClose)
+  return {
+    socketErrors,
+    opened,
+    closed,
+    unsubscribe() {
+      socketErrorChannel.unsubscribe(onSocketError)
+      openChannel.unsubscribe(onOpen)
+      closeChannel.unsubscribe(onClose)
+    },
+  }
+}
 
-  await new Promise((...args) => {
+function waitForWebSocketOpen(websocket) {
+  return new Promise((...args) => {
     const [resolve, reject] = args
     websocket.addEventListener("open", resolve, { once: true })
     websocket.addEventListener("error", (event) => {
       reject(event.error ?? new Error(event.message || "WebSocket failed before opening"))
     }, { once: true })
   })
+}
 
-  const closeEvent = await new Promise((resolve) => {
+function waitForWebSocketClose(websocket) {
+  return new Promise((resolve) => {
     websocket.addEventListener("close", resolve, { once: true })
   })
+}
 
+async function runSocketErrorDiagnosticTest(t) {
+  const diagnostics = subscribeDiagnosticChannels()
+  const fixture = createAbnormalCloseServer()
+  await listen(fixture.server)
+  const address = fixture.server.address()
+  const websocket = new globalThis.WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+  t.after(async () => {
+    diagnostics.unsubscribe()
+    websocket.close()
+    fixture.serverSocket?.destroy()
+    await closeServer(fixture.server)
+  })
+  await waitForWebSocketOpen(websocket)
+  const closeEvent = await waitForWebSocketClose(websocket)
   assert.equal(closeEvent.code, 1006)
-  assert.equal(opened.length, 1)
-  assert.equal(opened[0].websocket, websocket)
-  assert.equal(closed.length, 1)
-  assert.equal(closed[0].websocket, websocket)
+  assert.equal(diagnostics.opened.length, 1)
+  assert.equal(diagnostics.opened[0].websocket, websocket)
+  assert.equal(diagnostics.closed.length, 1)
+  assert.equal(diagnostics.closed[0].websocket, websocket)
+  assert.equal(diagnostics.socketErrors.length, 0)
+}
 
-  // A peer reset can produce close code 1006 without a client-side socket error.
-  // In that case the socket_error diagnostics channel emits nothing to correlate.
-  assert.equal(socketErrors.length, 0)
-})
+test("Undici does not emit a socket_error diagnostic for every abnormal 1006 close", {
+  timeout: 5_000,
+  skip: typeof globalThis.WebSocket !== "function",
+}, runSocketErrorDiagnosticTest)

@@ -77,10 +77,16 @@ function matchesSymbolStreamType({
 function matchesRawStream(...args) {
   const [stream, message] = args
   if (Array.isArray(message)) {return message.some((item) => matchesRawStream(stream, item))}
-  if (stream.startsWith("!")) {return matchesAllMarketStream({ stream, message })}
+  if (stream.startsWith("!")) {return matchesAllMarketStream({
+    stream,
+    message,
+  })}
   const [streamSymbol, streamType] = stream.split("@")
   const symbol = typeof message.s === "string" ? message.s.toLowerCase() : null
-  return symbol === streamSymbol && matchesSymbolStreamType({ streamType, message })
+  return symbol === streamSymbol && matchesSymbolStreamType({
+    streamType,
+    message,
+  })
 }
 
 /**

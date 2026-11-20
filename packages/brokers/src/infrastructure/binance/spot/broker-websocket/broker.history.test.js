@@ -235,10 +235,8 @@ limit: 2 })
 second }
 }
 
-function createHistoryCursorFixture() {
-  let tradePage = 0
-  let orderPage = 0
-  const tradePages = [
+function createTradeHistoryPages() {
+  return [
     [
       {
         id: 10,
@@ -283,15 +281,34 @@ function createHistoryCursorFixture() {
       },
     ],
   ]
-  const orderPages = [
+}
+
+function createOrderHistoryPages() {
+  return [
     [
-      { symbol: "DOGEFDUSD", orderId: 10 },
-      { symbol: "DOGEFDUSD", orderId: 11 },
+      {
+        symbol: "DOGEFDUSD",
+        orderId: 10,
+      },
+      {
+        symbol: "DOGEFDUSD",
+        orderId: 11,
+      },
     ],
     [
-      { symbol: "DOGEFDUSD", orderId: 12 },
+      {
+        symbol: "DOGEFDUSD",
+        orderId: 12,
+      },
     ],
   ]
+}
+
+function createHistoryCursorFixture() {
+  let tradePage = 0
+  let orderPage = 0
+  const tradePages = createTradeHistoryPages()
+  const orderPages = createOrderHistoryPages()
   const { broker, rpc } = createBroker({
     myTrades: () => tradePages[tradePage++],
     allOrders: () => orderPages[orderPage++],
