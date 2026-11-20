@@ -93,6 +93,8 @@ function assertFreshRelationalSchema(database) {
   for (const table of ["orders", "fills", "fill_commissions", "schema_migrations"]) {
     assert.ok(tables.includes(table), `A fresh Harvester database must contain the physical ${table} table.`)
   }
+  assert.ok(!tables.includes("sessions"), "Phase 1 must not add a sessions table.")
+  assert.ok(!tables.includes("errors"), "Phase 1 must not add an errors table.")
   assertColumnsPresent({
     database,
     table: "orders",
@@ -171,7 +173,14 @@ function assertMigratedLegacyHistory({ database, legacyRecord } = {}) {
   const migrated = database.prepare("SELECT * FROM orders").get()
   assert.ok(migrated, "Every valid legacy harvester_orders record must have a relational orders row.")
   assert.equal(migrated.id, legacyRecord.id, "Migration must preserve the original composite order identity.")
+  assert.equal(migrated.original_quantity, legacyRecord.originalQuantity, "Migration must preserve the exact original order quantity.")
   assert.equal(migrated.executed_quantity, legacyRecord.executedQuantity, "Migration must preserve the exact cumulative execution decimal string.")
+  assert.equal(migrated.remaining_quantity, legacyRecord.remainingQuantity, "Migration must preserve the exact remaining quantity.")
+  assert.equal(migrated.average_execution_price, null, "Migration must not invent an average execution price.")
+  assert.equal(migrated.local_first_observed_at, legacyRecord.firstSeenAt, "Migration must preserve the first local observation timestamp.")
+  assert.equal(migrated.local_last_observed_at, legacyRecord.lastSeenAt, "Migration must preserve the last local observation timestamp.")
+  assert.ok(migrated.migrated_at, "Migrated orders must record their migration timestamp.")
+  assert.equal(migrated.last_observed_source_kind, "legacy_harvester_orders", "The latest observation provenance must identify the migration source.")
   assert.equal(migrated.source_kind, "legacy_harvester_orders", "Migrated rows must retain explicit legacy migration provenance.")
   assert.equal(migrated.source_record_id, legacyRecord.id, "Migrated rows must point to their exact source record.")
   const source = database.prepare(
@@ -253,6 +262,20 @@ function assertFillForeignKey({ database, fill } = {}) {
   )
 }
 
+function assertCommissionQuoteValueConstraint({ database, fill } = {}) {
+  const statement = database.prepare(`
+    INSERT INTO fill_commissions (
+      fill_id, ordinal, amount, asset_id, asset_code,
+      quote_value_amount, quote_value_asset_id, quote_value_asset_code
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+  assert.throws(
+    () => statement.run(fill.id, 1, "0.1", "bnb", "BNB", "0.1", null, null),
+    /CHECK constraint failed/,
+    "A commission quote valuation must be wholly present or wholly absent.",
+  )
+}
+
 function assertPersistedFill({ database } = {}) {
   const fill = database.prepare("SELECT * FROM fills").get()
   assert.ok(fill, "One canonical applied execution must create one physical fills row.")
@@ -270,6 +293,10 @@ function assertPersistedFill({ database } = {}) {
   assert.equal(commission.quote_value_amount, "0.001234567890123456", "Actual third-asset commission valuation must preserve its exact quote amount.")
   assert.equal(commission.quote_value_asset_id, "usdt", "Commission quote valuation asset identity must be preserved.")
   assert.equal(commission.quote_value_asset_code, "USDT", "Commission quote valuation asset code must be preserved.")
+  assertCommissionQuoteValueConstraint({
+    database,
+    fill,
+  })
   assert.equal(fill.strategy_id, null, "Missing order ownership must remain nullable rather than inventing strategy attribution.")
   assert.equal(fill.order_id, null, "A fill without a verified relational parent order must retain a nullable order reference.")
   return fill

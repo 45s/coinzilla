@@ -108,7 +108,12 @@ const CREATE_RELATIONAL_TABLES_SQL = `
     quote_value_amount TEXT,
     quote_value_asset_id TEXT,
     quote_value_asset_code TEXT,
-    UNIQUE (fill_id, ordinal)
+    UNIQUE (fill_id, ordinal),
+    CHECK (
+      (quote_value_amount IS NULL AND quote_value_asset_id IS NULL AND quote_value_asset_code IS NULL)
+      OR
+      (quote_value_amount IS NOT NULL AND quote_value_asset_id IS NOT NULL AND quote_value_asset_code IS NOT NULL)
+    )
   );
   CREATE INDEX fill_commissions_asset_idx ON fill_commissions(asset_id, fill_id);
 `
