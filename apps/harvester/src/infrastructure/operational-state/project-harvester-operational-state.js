@@ -1103,7 +1103,10 @@ function createSessionSyntheticRecords({ session, latestSession, state }) {
     emit,
   })
   for (const record of remaining) {
-    if (isRecoverySellerOperationalRecord({ record, state })) {
+    if (isRecoverySellerOperationalRecord({
+      record,
+      state,
+    })) {
       continue
     }
     const events = mapFact({
