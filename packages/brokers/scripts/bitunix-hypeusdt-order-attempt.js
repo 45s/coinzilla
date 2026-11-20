@@ -38,10 +38,13 @@ function createBitunixBroker({ credentials, allowLiveOrderMutations }) {
 }
 
 function redactBitunixApiSecrets({ message, secrets }) {
-  return secrets.filter(Boolean).reduce(
-    (safeMessage, secret) => safeMessage.replaceAll(secret, "[REDACTED]"),
-    String(message),
-  )
+  let safeMessage = String(message)
+  for (const secret of secrets) {
+    if (secret) {
+      safeMessage = safeMessage.replaceAll(secret, "[REDACTED]")
+    }
+  }
+  return safeMessage
 }
 
 async function askForBitunixOrderConfirmation({ confirmationPhrase }) {
