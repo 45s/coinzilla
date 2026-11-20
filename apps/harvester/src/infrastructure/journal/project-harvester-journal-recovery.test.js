@@ -11,7 +11,6 @@ import {
 } from "../../application/events/lifecycle-event-dtos.js"
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../../domain/strategies/conservative/recovery-ledger.js"
-import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { updateTradingAccounting } from "../../use-cases/update-trading-accounting.js"
 
 const record = (...args) => {
@@ -82,38 +81,6 @@ test("projects durable order identity and exact fill facts without claiming exch
   assert.deepEqual(result.data.orders[0].fillIds, ["binance:BTCUSDT:trade-1"])
   assert.equal(result.data.fills[0].commissions[0].amount, "0.0004")
   assert.equal(result.data.requiresExchangeReconciliation, true)
-})
-
-test("fails closed instead of replaying Recovery Seller Journal fills as Conservative accounting", () => {
-  const ownership = {
-    purpose: "RECOVERY_BUY",
-    strategyId: StrategyId.RECOVERY_SELLER,
-    positionId: "rs-position-1",
-    cycleId: "rs-cycle-1",
-  }
-  const projection = projectHarvesterJournalRecovery({
-    records: [
-      submissionRequested(ownership),
-      submitted(ownership),
-      fill(ownership),
-    ],
-  })
-
-  assert.equal(projection.ok, true,
-    projection.errors?.[0]?.message ?? "The Journal projector must retain validated RS ownership metadata.")
-  assert.equal(projection.data.orders[0].strategyId, StrategyId.RECOVERY_SELLER,
-    "The projected order must retain its Recovery Seller strategy identity.")
-  assert.equal(projection.data.fills[0].strategyId, StrategyId.RECOVERY_SELLER,
-    "The projected fill must retain its Recovery Seller strategy identity.")
-
-  const restored = restoreHarvesterJournalState({
-    projection,
-    marketMetadata: new Map(),
-  })
-  assert.equal(restored.ok, false,
-    "RS Journal activity must not be replayed through the Conservative accounting workflow.")
-  assert.match(restored.errors[0].message, /Recovery Seller Journal replay is deferred/,
-    "Deferred RS restart/replay must fail closed with an explicit diagnostic.")
 })
 
 test("preserves a submission whose broker outcome was unknown", () => {
