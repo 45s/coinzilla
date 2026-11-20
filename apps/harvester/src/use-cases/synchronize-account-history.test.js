@@ -170,11 +170,12 @@ function createRepositories() {
 
 function createPagedBroker({ orders, fills, calls }) {
   return {
-    getCanonicalOrderHistory: async ({ symbol, orderId, limit }) => {
+    getCanonicalOrderHistory: async ({ symbol, orderId, limit, includeFollowingOrders }) => {
       calls.orders.push({
         symbol,
         orderId,
         limit,
+        includeFollowingOrders,
       })
       const page = orders
         .filter((order) => order.market.symbol === symbol && Number(order.brokerOrderId) >= orderId)
@@ -231,6 +232,10 @@ test("paginates configured-market order and trade history and persists exchange 
   assert.equal(result.data.retentionCoverageConfirmed, false)
   assert.equal(result.data.ordersPersisted, 1)
   assert.equal(result.data.fillsPersisted, 1)
+  assert.ok(
+    calls.orders.every(({ includeFollowingOrders }) => includeFollowingOrders === true),
+    "Every historical order scan must explicitly request inclusive lower-bound pagination.",
+  )
   assert.equal(repositories.orders[0].ownership, undefined)
   assert.equal(repositories.fills[0].ingestionSource, "exchange_history")
   assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10")
