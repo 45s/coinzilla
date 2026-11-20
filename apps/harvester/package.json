@@ -22,7 +22,9 @@
     "config:symbol": "node scripts/config-symbol.js",
     "volatility:calibrate": "node scripts/calibrate-volatility-thresholds.js",
     "operational-state:init": "node --env-file=.env scripts/initialize-operational-state.js",
-    "operational-state:init:dev": "node --env-file=.env.development scripts/initialize-operational-state.js"
+    "operational-state:init:dev": "node --env-file=.env.development scripts/initialize-operational-state.js",
+    "persistence:backup": "node scripts/trading-history-backups.js create",
+    "persistence:restore-check": "node scripts/trading-history-backups.js verify"
   },
   "engines": {
     "node": ">=24"
@@ -101,7 +103,8 @@
       "src/infrastructure/telegram/operator/diagnostics.test.js",
       "src/infrastructure/persistence/trading-history-backups/create-backup.test.js",
       "src/infrastructure/persistence/trading-history-backups/verify-backup.test.js",
-      "src/infrastructure/persistence/trading-history-backups/rotate-backups.test.js"
+      "src/infrastructure/persistence/trading-history-backups/rotate-backups.test.js",
+      "scripts/trading-history-backups.test.js"
     ]
   }
 }
