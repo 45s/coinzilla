@@ -1242,7 +1242,12 @@ test("preserves an existing verified client-order identity when a history replay
   const liveFill = createAppliedFillEvent()
   await persistence.fillRepository.upsert({
     fill: liveFill,
-    sourceEvent: createAppliedFillEventSourceEvent(),
+    sourceEvent: {
+      id: "live-fill-applied:duplicate",
+      name: "execution.fill_applied",
+      source: "binance.user-data",
+      timestamp: "2026-11-20T04:00:00.000Z",
+    },
     environment: "testnet",
   })
   const historicalFill = createAppliedFillEvent()
