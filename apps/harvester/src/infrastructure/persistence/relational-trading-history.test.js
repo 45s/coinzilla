@@ -1036,6 +1036,11 @@ test("upgrades an existing relational v1 database with exchange-history provenan
         table: "fills",
         columns: ["ingestion_source", "last_ingestion_source"],
       })
+      assertColumnsPresent({
+        database: connection,
+        table: "history_sync_cursors",
+        columns: ["last_order_sync_at"],
+      })
     },
   })
 })
@@ -1049,8 +1054,9 @@ async function assertEmptyHistoryCursor({ repository, providerIdentity, environm
   })
   assert.deepEqual(cursor, {
     lastOrderId: null,
+    lastOrderSyncAt: null,
     lastTradeId: null,
-  })
+  }, "A new scoped cursor must start with no order, order-time, or trade checkpoint.")
 }
 
 test("keeps durable history cursors isolated by provider, account, environment, and market", async (t) => {
@@ -1077,6 +1083,7 @@ test("keeps durable history cursors isolated by provider, account, environment, 
     environment: "testnet",
     symbol: "BTCUSDT",
     lastOrderId: "100",
+    lastOrderSyncAt: "2026-11-20T04:00:00.000Z",
     updatedAt: "2026-11-20T04:00:00.000Z",
   })
   await repository.saveTradeCursor({
@@ -1092,8 +1099,27 @@ test("keeps durable history cursors isolated by provider, account, environment, 
     symbol: "BTCUSDT",
   }), {
     lastOrderId: "100",
+    lastOrderSyncAt: "2026-11-20T04:00:00.000Z",
     lastTradeId: "200",
+  }, "Order and trade cursors must retain their independent durable checkpoints.")
+  await repository.saveOrderCursor({
+    providerIdentity,
+    environment: "testnet",
+    symbol: "BTCUSDT",
+    lastOrderId: "90",
+    lastOrderSyncAt: "2026-11-19T04:00:00.000Z",
+    updatedAt: "2026-11-20T04:00:02.000Z",
   })
+  assert.deepEqual(await repository.get({
+    providerIdentity,
+    environment: "testnet",
+    symbol: "BTCUSDT",
+  }), {
+    lastOrderId: "100",
+    lastOrderSyncAt: "2026-11-20T04:00:00.000Z",
+    lastTradeId: "200",
+  }, "A retried older order checkpoint must never move either order cursor backwards.")
+
   await Promise.all([
     assertEmptyHistoryCursor({
       repository,
@@ -1116,10 +1142,10 @@ test("keeps durable history cursors isolated by provider, account, environment, 
   ])
 })
 
-function createExchangeHistoryOrder({ status, executedQuantity, remainingQuantity, eventId, timestamp }) {
+function createExchangeHistoryOrder({ status, executedQuantity, remainingQuantity, eventId, timestamp, clientOrderId = "harvester-BTCUSDT-unfilled", brokerOrderId = "broker-order-unfilled" }) {
   const order = createOrderHistoryEventData({
-    clientOrderId: "harvester-BTCUSDT-unfilled",
-    brokerOrderId: "broker-order-unfilled",
+    clientOrderId,
+    brokerOrderId,
     originalQuantity: "1.0000",
     executedQuantity,
     remainingQuantity,
@@ -1335,5 +1361,73 @@ test("preserves an existing verified client-order identity when a history replay
       assert.equal(saved.ingestion_source, "live_event")
       assert.equal(saved.last_ingestion_source, "exchange_history")
     },
+  })
+})
+
+
+async function assertPendingOrderIds({ repository, providerIdentity, symbol, expected }) {
+  assert.deepEqual(
+    await repository.listPendingOrderIds({
+      providerIdentity,
+      environment: "testnet",
+      symbol,
+    }),
+    expected,
+    "The pending-order query must return every non-terminal exchange order in its full provider/account/environment/market scope.",
+  )
+}
+
+test("lists all pending exchange orders for the exact provider and market scope", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const providerIdentity = {
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+  }
+  const first = createExchangeHistoryOrder({
+    status: "OPEN",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    eventId: "exchange-history-order:pending-one",
+    timestamp: "2026-11-20T04:00:00.000Z",
+    clientOrderId: "harvester-pending-one",
+    brokerOrderId: "100",
+  })
+  const second = createExchangeHistoryOrder({
+    status: "PARTIALLY_FILLED",
+    executedQuantity: "0.2500",
+    remainingQuantity: "0.7500",
+    eventId: "exchange-history-order:pending-two",
+    timestamp: "2026-11-20T04:00:01.000Z",
+    clientOrderId: "harvester-pending-two",
+    brokerOrderId: "200",
+  })
+  const terminal = createExchangeHistoryOrder({
+    status: "FILLED",
+    executedQuantity: "1.0000",
+    remainingQuantity: "0",
+    eventId: "exchange-history-order:terminal",
+    timestamp: "2026-11-20T04:00:02.000Z",
+    clientOrderId: "harvester-terminal",
+    brokerOrderId: "300",
+  })
+  await persistence.orderRepository.upsertHistorical(first)
+  await persistence.orderRepository.upsertHistorical(second)
+  await persistence.orderRepository.upsertHistorical(terminal)
+  await assertPendingOrderIds({
+    repository: persistence.orderRepository,
+    providerIdentity,
+    symbol: "BTCUSDT",
+    expected: ["100", "200"],
+  })
+  await assertPendingOrderIds({
+    repository: persistence.orderRepository,
+    providerIdentity: {
+      ...providerIdentity,
+      accountId: "binance-secondary",
+    },
+    symbol: "BTCUSDT",
+    expected: [],
   })
 })
