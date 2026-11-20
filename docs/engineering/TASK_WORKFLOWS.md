@@ -1,6 +1,15 @@
 # Task-specific agent workflows
 
-All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's AGENTS.md, and its roadmap. Use the smallest applicable checklist below; high-risk requirements are additive.
+All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the mandatory [AI Task Compliance Standard](AI_TASK_COMPLIANCE_STANDARD.md), the owning domain's AGENTS.md, and its roadmap. Use the smallest applicable checklist below; high-risk requirements are additive.
+
+## Mandatory standards-compliance preflight
+
+- [ ] Completed the task-start gate in [AI Task Compliance Standard](AI_TASK_COMPLIANCE_STANDARD.md) before changing state.
+- [ ] Identified and read all applicable canonical standards, domain requirements, task checklist and linked specifications in full.
+- [ ] Inspected the actual source, consumers, tests, configuration and file tree; did not rely on memory or summaries.
+- [ ] Recorded task scope, constraints/invariants, acceptance criteria, verification and documentation impact.
+- [ ] Resolved applicable requirements conflicts or documented a concrete blocker/exception; none were silently bypassed.
+- [ ] Repeated standards discovery if task scope or affected domains changed.
 
 ## Task contract, incremental commits and handoff
 
