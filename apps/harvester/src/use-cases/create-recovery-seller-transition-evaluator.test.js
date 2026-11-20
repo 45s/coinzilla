@@ -8,6 +8,9 @@ const marketPrice = Object.freeze({
 })
 
 const marketMetadata = Object.freeze({
+  market: Object.freeze({
+    symbol: "ZROUSDT",
+  }),
   tradingRules: Object.freeze({
     constraints: Object.freeze([
       Object.freeze({
