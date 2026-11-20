@@ -1,4 +1,4 @@
-import { adaptBinanceWebSocketEvent } from "./broker-websocket/helpers/adapters/adapt-msg.js"
+import { adaptBinanceWebSocketEvent } from "./broker-websocket/helpers/adapters/adapt-binance-websocket-event.js"
 import { getUserDataEventIdentity } from "./broker-websocket/helpers/user-data-event-identity.js"
 
 /**
