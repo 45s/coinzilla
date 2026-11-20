@@ -13,12 +13,18 @@ const parseNonNegativeDecimal = ({ value, name }) => {
 
   return {
     value,
-    ...parseDecimal({ value, field: name }),
+    ...parseDecimal({
+      value,
+      field: name,
+    }),
   }
 }
 
 const isPositiveDecimal = ({ value, name }) =>
-  parseNonNegativeDecimal({ value, name }).coefficient > 0n
+  parseNonNegativeDecimal({
+    value,
+    name,
+  }).coefficient > 0n
 
 const formatDecimalAtScale = ({ value, scale }) => {
   const decimal = parseDecimal({ value })
@@ -36,7 +42,10 @@ const selectQuantityFilter = ({ filters }) => {
     (filter) =>
       filter.filterType === "MARKET_LOT_SIZE" &&
       typeof filter.stepSize === "string" &&
-      isPositiveDecimal({ value: filter.stepSize, name: "stepSize" }),
+      isPositiveDecimal({
+        value: filter.stepSize,
+        name: "stepSize",
+      }),
   )
   const lotFilter = filters.find(
     (filter) => filter.filterType === "LOT_SIZE",
@@ -75,17 +84,37 @@ const parseQuantityFilterValues = ({ freeBalance, quantityFilter }) => {
     throw new RangeError("stepSize must be positive")
   }
 
-  return { balance, step, min, max }
+  return {
+    balance,
+    step,
+    min,
+    max,
+  }
 }
 
-const assertQuantityWithinMarketLimits = ({ quantity, quantityFilter, min, max }) => {
-  if (compareDecimal({ left: quantity, right: min.value }) < 0) {
+const assertQuantityWithinMarketLimits = ({
+  quantity,
+  quantityFilter,
+  min,
+  max,
+}) => {
+  if (
+    compareDecimal({
+      left: quantity,
+      right: min.value,
+    }) < 0
+  ) {
     throw new Error(
       `Sell quantity is below the market minimum of ${quantityFilter.minQty}`,
     )
   }
 
-  if (compareDecimal({ left: quantity, right: max.value }) > 0) {
+  if (
+    compareDecimal({
+      left: quantity,
+      right: max.value,
+    }) > 0
+  ) {
     throw new Error(
       `Sell quantity exceeds the market maximum of ${quantityFilter.maxQty}; manual order splitting is required`,
     )
@@ -97,7 +126,9 @@ export const getMarketSellQuantity = ({ freeBalance, symbolInfo }) => {
     throw new Error("A valid Binance symbol filter list is required")
   }
 
-  const quantityFilter = selectQuantityFilter({ filters: symbolInfo.filters })
+  const quantityFilter = selectQuantityFilter({
+    filters: symbolInfo.filters,
+  })
   const { balance, step, min, max } = parseQuantityFilterValues({
     freeBalance,
     quantityFilter,
@@ -109,10 +140,18 @@ export const getMarketSellQuantity = ({ freeBalance, symbolInfo }) => {
     direction: "down",
   })
 
-  assertQuantityWithinMarketLimits({ quantity, quantityFilter, min, max })
+  assertQuantityWithinMarketLimits({
+    quantity,
+    quantityFilter,
+    min,
+    max,
+  })
 
   return {
-    quantity: formatDecimalAtScale({ value: quantity, scale }),
+    quantity: formatDecimalAtScale({
+      value: quantity,
+      scale,
+    }),
     stepSize: step.value,
   }
 }

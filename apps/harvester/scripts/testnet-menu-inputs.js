@@ -1,44 +1,70 @@
 export const TESTNET_MENU_ACTIONS = [
-  { id: "orders",
-label: "List open orders",
-script: "list-testnet-open-orders.js" },
-  { id: "cancel-orders",
-label: "Cancel all open orders",
-script: "cancel-testnet-open-orders.js" },
-  { id: "balances",
-label: "List account balances",
-script: "list-testnet-balances.js" },
-  { id: "sell-zro",
-label: "Sell all free ZRO",
-script: "sell-testnet-zro.js" },
-  { id: "history",
-label: "List order history",
-script: "list-testnet-order-history.js",
-prompts: ["symbol", "limit"] },
-  { id: "trades",
-label: "List trades",
-script: "list-testnet-trades.js",
-prompts: ["symbol", "limit", "fromId"] },
-  { id: "journal-audit",
-label: "Reconcile journal balances",
-script: "reconcile-journal-account-balances.js",
-prompts: ["directory"] },
-  { id: "account-audit",
-label: "Run TESTNET account audit",
-script: "audit-testnet-account.js" },
-  { id: "exit",
-label: "Exit" },
+  {
+    id: "orders",
+    label: "List open orders",
+    script: "list-testnet-open-orders.js",
+  },
+  {
+    id: "cancel-orders",
+    label: "Cancel all open orders",
+    script: "cancel-testnet-open-orders.js",
+  },
+  {
+    id: "balances",
+    label: "List account balances",
+    script: "list-testnet-balances.js",
+  },
+  {
+    id: "sell-zro",
+    label: "Sell all free ZRO",
+    script: "sell-testnet-zro.js",
+  },
+  {
+    id: "history",
+    label: "List order history",
+    script: "list-testnet-order-history.js",
+    prompts: ["symbol", "limit"],
+  },
+  {
+    id: "trades",
+    label: "List trades",
+    script: "list-testnet-trades.js",
+    prompts: ["symbol", "limit", "fromId"],
+  },
+  {
+    id: "journal-audit",
+    label: "Reconcile journal balances",
+    script: "reconcile-journal-account-balances.js",
+    prompts: ["directory"],
+  },
+  {
+    id: "account-audit",
+    label: "Run TESTNET account audit",
+    script: "audit-testnet-account.js",
+  },
+  {
+    id: "exit",
+    label: "Exit",
+  },
 ]
 
 export const PROMPT_DEFAULTS = {
-  symbol: { label: "Symbol",
-value: "ZROUSDT" },
-  limit: { label: "Result limit",
-value: "20" },
-  fromId: { label: "Starting trade ID (optional)",
-value: "" },
-  directory: { label: "Journal directory (blank uses configured/default directory)",
-value: "" },
+  symbol: {
+    label: "Symbol",
+    value: "ZROUSDT",
+  },
+  limit: {
+    label: "Result limit",
+    value: "20",
+  },
+  fromId: {
+    label: "Starting trade ID (optional)",
+    value: "",
+  },
+  directory: {
+    label: "Journal directory (blank uses configured/default directory)",
+    value: "",
+  },
 }
 
 export const buildTestnetMenuArguments = ({ actionId, answers = {} }) => {
@@ -69,7 +95,10 @@ export const resolveTestnetMenuKeypress = ({
   actionCount,
 }) => {
   if (key.ctrl && key.name === "c") {
-    return { type: "EXIT", selectedIndex }
+    return {
+      type: "EXIT",
+      selectedIndex,
+    }
   }
 
   if (key.name === "up") {
@@ -87,12 +116,21 @@ export const resolveTestnetMenuKeypress = ({
   }
 
   if (key.name === "escape" || character?.toLowerCase() === "q") {
-    return { type: "EXIT", selectedIndex }
+    return {
+      type: "EXIT",
+      selectedIndex,
+    }
   }
 
   if (key.name === "return" || key.name === "enter") {
-    return { type: "SELECT", selectedIndex }
+    return {
+      type: "SELECT",
+      selectedIndex,
+    }
   }
 
-  return { type: "CONTINUE", selectedIndex }
+  return {
+    type: "CONTINUE",
+    selectedIndex,
+  }
 }

@@ -79,7 +79,10 @@ test("scans production JavaScript across apps, packages, and repository scripts"
       "the full scan must inspect all production source areas and ignore tests, fixtures, and vendored files",
     )
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 

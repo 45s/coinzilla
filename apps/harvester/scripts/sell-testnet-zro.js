@@ -77,7 +77,10 @@ const assertNoOpenOrders = async () => {
 }
 
 const askForConfirmation = async () => {
-  const readline = createInterface({ input: stdin, output: stdout })
+  const readline = createInterface({
+    input: stdin,
+    output: stdout,
+  })
 
   try {
     const answer = await readline.question(
@@ -101,7 +104,12 @@ const createSellPreview = async () => {
     symbolInfo,
   })
 
-  return { freeBalance, symbolInfo, quantity, stepSize }
+  return {
+    freeBalance,
+    symbolInfo,
+    quantity,
+    stepSize,
+  }
 }
 
 const renderSellPreview = ({ freeBalance, quantity, stepSize }) => {
@@ -194,7 +202,10 @@ const main = async () => {
 
   cliConsole.log("\nSubmitting MARKET SELL...")
   const order = await submitMarketSell({ quantity: preview.quantity })
-  renderSellResult({ order, quantity: preview.quantity })
+  renderSellResult({
+    order,
+    quantity: preview.quantity,
+  })
 }
 
 main().catch((error) => {

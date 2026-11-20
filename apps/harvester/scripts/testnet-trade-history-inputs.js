@@ -38,11 +38,26 @@ const assertTradeSideFlags = ({ trade, index }) => {
 }
 
 const normalizeTradeRecord = ({ trade, index }) => {
-  assertTradeObject({ trade, index })
-  assertTradeIdentityFields({ trade, index })
-  assertTradeAmountFields({ trade, index })
-  assertTradeCommissionAsset({ trade, index })
-  assertTradeSideFlags({ trade, index })
+  assertTradeObject({
+    trade,
+    index,
+  })
+  assertTradeIdentityFields({
+    trade,
+    index,
+  })
+  assertTradeAmountFields({
+    trade,
+    index,
+  })
+  assertTradeCommissionAsset({
+    trade,
+    index,
+  })
+  assertTradeSideFlags({
+    trade,
+    index,
+  })
 
   return {
     tradeId: trade.id,
@@ -71,12 +86,22 @@ export const normalizeTradeHistory = ({ trades }) => {
     throw new TypeError("Binance trade history must be an array")
   }
 
-  const normalizedTrades = trades.map((trade, index) =>
-    normalizeTradeRecord({ trade, index }),
-  )
-  normalizedTrades.sort((left, right) =>
-    compareTradeExecutionTime({ left, right }),
-  )
+  const normalizedTrades = []
+  for (const [index, trade] of trades.entries()) {
+    normalizedTrades.push(
+      normalizeTradeRecord({
+        trade,
+        index,
+      }),
+    )
+  }
+  normalizedTrades.sort((...values) => {
+    const [left, right] = values
+    return compareTradeExecutionTime({
+      left,
+      right,
+    })
+  })
 
   return { trades: normalizedTrades }
 }
@@ -117,5 +142,9 @@ export const parseTradeHistoryArguments = ({ args = [] } = {}) => {
   const limit = parseTradeHistoryLimit({ args })
   const fromId = parseTradeHistoryFromId({ args })
 
-  return { symbol, limit, ...(fromId === undefined ? {} : { fromId }) }
+  return {
+    symbol,
+    limit,
+    ...(fromId === undefined ? {} : { fromId }),
+  }
 }

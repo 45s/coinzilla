@@ -13,7 +13,10 @@ import {
 } from "./testnet-menu-inputs.js"
 
 const prompt = async (question) => {
-  const readline = createPromptInterface({ input: stdin, output: stdout })
+  const readline = createPromptInterface({
+    input: stdin,
+    output: stdout,
+  })
   try {
     return await readline.question(question)
   } finally {
@@ -26,12 +29,21 @@ const collectArguments = async (action) => {
   for (const key of action.prompts ?? []) {
     const { label, value } = PROMPT_DEFAULTS[key]
     const actionDefault = action.id === "trades"
-      ? { symbol: "DOGEUSDT", limit: "1000" }[key] ?? value
+      ? {
+        symbol: "DOGEUSDT",
+        limit: "1000",
+      }[key] ?? value
       : value
     const answer = await prompt(`${label}${actionDefault ? ` [${actionDefault}]` : ""}: `)
-    answers[key] = normalizePromptAnswer({ answer, fallback: actionDefault })
+    answers[key] = normalizePromptAnswer({
+      answer,
+      fallback: actionDefault,
+    })
   }
-  return buildTestnetMenuArguments({ actionId: action.id, answers })
+  return buildTestnetMenuArguments({
+    actionId: action.id,
+    answers,
+  })
 }
 
 const renderMenu = (selectedIndex) => {

@@ -5,6 +5,7 @@ import {
   buildTestnetMenuArguments,
   normalizePromptAnswer,
   TESTNET_MENU_ACTIONS,
+  resolveTestnetMenuKeypress,
 } from "./testnet-menu-inputs.js"
 
 test("menu exposes all existing TESTNET and journal operations", () => {
@@ -77,21 +78,32 @@ test("exits menu navigation for Ctrl+C, Escape, and Q", () => {
   assert.deepEqual(
     resolveTestnetMenuKeypress({
       character: undefined,
-      key: { ctrl: true, name: "c" },
+      key: {
+        ctrl: true,
+        name: "c",
+      },
       selectedIndex: 2,
       actionCount: 5,
     }),
-    { type: "EXIT", selectedIndex: 2 },
+    {
+      type: "EXIT",
+      selectedIndex: 2,
+    },
     "Ctrl+C must exit without changing the selected action",
   )
   assert.deepEqual(
     resolveTestnetMenuKeypress({
       character: undefined,
-      key: { name: "escape" },
+      key: {
+        name: "escape",
+      },
       selectedIndex: 1,
       actionCount: 5,
     }),
-    { type: "EXIT", selectedIndex: 1 },
+    {
+      type: "EXIT",
+      selectedIndex: 1,
+    },
     "Escape must exit without changing the selected action",
   )
   assert.deepEqual(
@@ -101,7 +113,10 @@ test("exits menu navigation for Ctrl+C, Escape, and Q", () => {
       selectedIndex: 3,
       actionCount: 5,
     }),
-    { type: "EXIT", selectedIndex: 3 },
+    {
+      type: "EXIT",
+      selectedIndex: 3,
+    },
     "Q must exit without changing the selected action",
   )
 })
@@ -110,21 +125,31 @@ test("wraps menu selection when navigating up and down", () => {
   assert.deepEqual(
     resolveTestnetMenuKeypress({
       character: undefined,
-      key: { name: "up" },
+      key: {
+        name: "up",
+      },
       selectedIndex: 0,
       actionCount: 5,
     }),
-    { type: "MOVE", selectedIndex: 4 },
+    {
+      type: "MOVE",
+      selectedIndex: 4,
+    },
     "Up from the first action must wrap to the final action",
   )
   assert.deepEqual(
     resolveTestnetMenuKeypress({
       character: undefined,
-      key: { name: "down" },
+      key: {
+        name: "down",
+      },
       selectedIndex: 4,
       actionCount: 5,
     }),
-    { type: "MOVE", selectedIndex: 0 },
+    {
+      type: "MOVE",
+      selectedIndex: 0,
+    },
     "Down from the final action must wrap to the first action",
   )
 })
@@ -133,21 +158,31 @@ test("selects on Enter and ignores unrelated keypresses", () => {
   assert.deepEqual(
     resolveTestnetMenuKeypress({
       character: undefined,
-      key: { name: "return" },
+      key: {
+        name: "return",
+      },
       selectedIndex: 2,
       actionCount: 5,
     }),
-    { type: "SELECT", selectedIndex: 2 },
+    {
+      type: "SELECT",
+      selectedIndex: 2,
+    },
     "Enter must select the currently highlighted action",
   )
   assert.deepEqual(
     resolveTestnetMenuKeypress({
       character: "x",
-      key: { name: "x" },
+      key: {
+        name: "x",
+      },
       selectedIndex: 2,
       actionCount: 5,
     }),
-    { type: "CONTINUE", selectedIndex: 2 },
+    {
+      type: "CONTINUE",
+      selectedIndex: 2,
+    },
     "An unrelated keypress must preserve the current selection",
   )
 })
