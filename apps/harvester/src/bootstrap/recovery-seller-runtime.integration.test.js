@@ -12,6 +12,10 @@ import {
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
+import {
+  createLegacyPosition,
+  createLegacyPositionAccounting,
+} from "../domain/strategies/recovery-seller/legacy-position.js"
 import { createRecoverySellerRuntimeDispatch } from "./create-recovery-seller-runtime-dispatch.js"
 import { createRecoverySellerAccountingWorkflow } from "../use-cases/create-recovery-seller-accounting-workflow.js"
 import { createRecoverySellerOrderSubmitter } from "../use-cases/create-recovery-seller-order-submitter.js"
@@ -220,7 +224,7 @@ function createDispatchFixture({ accounting, stopWorkflow }) {
     enabled: true,
     investment: "100",
     orderQuantity: "5",
-    sellQuantity: "0",
+    sellQuantity: "50",
     minProfit: "0.01",
     priceStepPercent: "0.05",
     makerPercent: "0",
@@ -267,6 +271,19 @@ async function createIntegrationFixture() {
       data: fact,
     }),
   })
+  const legacyInitialized = await accounting.initializeLegacyPositions({
+    records: [
+      {
+        market,
+        position: createLegacyPosition({
+          invested: "100",
+          quantity: "50",
+        }),
+        accounting: createLegacyPositionAccounting(),
+      },
+    ],
+  })
+  assert.equal(legacyInitialized.ok, true, legacyInitialized.errors?.[0]?.message)
   const offlineBroker = createOfflineBroker()
   const submitter = createSubmitterFixture({
     store,
