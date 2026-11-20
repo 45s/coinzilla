@@ -60,7 +60,7 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 
 1. Filtered account snapshot history only with explicit provenance and completeness semantics.
 2. Offline, idempotent historical imports from verified source evidence.
-3. Production retention, permissions, disk monitoring, corruption/disk-full handling, backup scheduling, and operational restore drills.
+3. **Routine relational-history backups, verified restore checks, bounded retention and backup-file permissions — IN PROGRESS:** [#1564](https://github.com/45s/coinzilla/issues/1564) / [PR #1567](https://github.com/45s/coinzilla/pull/1567). Remaining after this slice: main-database permission enforcement, disk/WAL monitoring, disk-full and corruption response, and encrypted off-host replication.
 
 **Explicit exclusions from #1554/#1556:** no account-wide or delisted-market history completeness claim, account snapshots as a history source, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, process-restart restoration/adoption, Journal replay, new providers, `sessions`/`errors` tables, broker order-mutation behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
 

@@ -146,6 +146,12 @@ flowchart TD
   Q -. overflow or write failure .-> V[Log history gap; do not block trading]
 ```
 
+## 8. Routine operational backups and restore verification
+
+Routine backups are separate from migration version 1's one-time legacy-history safety backup. Use the [Harvester relational trading-history backup runbook](../operations/trading-history-backups.md) for the explicit TRADING_MODE commands, environment-isolated backup directories, online WAL-safe snapshots, manifest verification, bounded retention, permissions, host scheduling, and restore-check procedure.
+
+The maintenance CLI is outside Harvester startup and trading paths. It never creates a missing source database, makes no exchange calls, and does not perform a production database cutover. The restore-check restores to a temporary candidate only. The backup remains a non-authoritative copy of the relational history projection; it does not back up Journal or authorize restart recovery.
+
 ## Historical design reference
 
 [SQLite integration blueprint](./sqlite-integration-blueprint.md) is a source-verified design/audit snapshot from before PR #1469 and the relational trading-history work. Its target-layout statements and migration recommendations are historical context, not the current implementation contract.

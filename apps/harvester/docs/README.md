@@ -49,7 +49,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Operations and safety
 
 - [Operations index](operations/README.md) — Journal, logging, TESTNET procedures and safety boundaries
-- [Submission deferrals and missing-order diagnostics](operations/submission-deferrals.md) — stable reasons for withheld broker submissions and safe LIMIT_MAKER diagnosis.
+- [Submission deferrals and missing-order diagnostics](operations/submission-deferrals.md) — stable reasons for withheld broker submissions and safe LIMIT_MAKER diagnosis.\n- [Relational trading-history backup runbook](operations/trading-history-backups.md) — routine online backups, explicit TESTNET/LIVE selection, restore checks and retention.
 
 - [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier DOGEUSDT/ZROUSDT plan no longer matches the LINKFDUSD and ZROFDUSD default config. Reconcile scope before any future session.
 - [Journal operations](JOURNAL_OPERATIONS.md)
