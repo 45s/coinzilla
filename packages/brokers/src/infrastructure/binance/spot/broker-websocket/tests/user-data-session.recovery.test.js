@@ -98,34 +98,16 @@ E: 11 },
   await broker.disconnect()
 })
 
-it("reconnects with a new client and subscription, then waits for every consumer to acknowledge reconciliation", async () => {
-  const { broker, scheduler, clients } = createBroker()
-  await broker.connect()
-
-  const firstStatuses = []
-  const secondStatuses = []
-  const first = await broker.subscribeForUserData({
-    onEvent() {},
-    onStatus: (status) => firstStatuses.push(status),
-  })
-  const second = await broker.subscribeForUserData({
-    onEvent() {},
-    onStatus: (status) => secondStatuses.push(status),
-  })
-
-  clients[0].state = "closed"
-  clients[0].emitClose({ code: 1006,
-reason: "network lost",
-wasClean: false })
-  assert.equal(clients[0].listenerCount, 0)
-  assert.equal(clients[0].errorListenerCount, 0)
-  assert.equal(clients[0].closeListenerCount, 0)
+function assertDisconnectedUserDataClient({ broker, scheduler, client }) {
+  assert.equal(client.listenerCount, 0)
+  assert.equal(client.errorListenerCount, 0)
+  assert.equal(client.closeListenerCount, 0)
   assert.equal(broker.connected, false)
   assert.equal(broker.userDataUnavailable, true)
   assert.equal(scheduler.pendingCount, 1)
+}
 
-  await scheduler.runNext()
-
+function assertReplacementSession({ broker, scheduler, clients, first, second, firstStatuses, secondStatuses }) {
   assert.equal(clients.length, 2)
   assert.equal(clients[1].state, "open")
   assert.equal(clients[1].calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
@@ -136,34 +118,79 @@ wasClean: false })
   assert.ok(firstStatuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
   assert.ok(secondStatuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
   assert.equal(scheduler.pendingCount, 1)
+}
 
+function assertRepeatedRecoveryStatus({ broker, scheduler, firstStatuses, secondStatuses }) {
+  assert.equal(firstStatuses.filter((status) => status.type === "recovered").length, 2)
+  assert.equal(secondStatuses.filter((status) => status.type === "recovered").length, 2)
+  assert.equal(broker.userDataUnavailable, true)
+  assert.equal(scheduler.pendingCount, 1)
+}
+
+async function createTwoConsumerRecoveryFixture() {
+  const fixture = createBroker()
+  await fixture.broker.connect()
+  const firstStatuses = []
+  const secondStatuses = []
+  const first = await fixture.broker.subscribeForUserData({
+    onEvent() {}, onStatus: (status) => firstStatuses.push(status),
+  })
+  const second = await fixture.broker.subscribeForUserData({
+    onEvent() {}, onStatus: (status) => secondStatuses.push(status),
+  })
+  return { ...fixture, firstStatuses, secondStatuses, first, second }
+}
+
+async function triggerConsumerRecovery(fixture) {
+  fixture.clients[0].state = "closed"
+  fixture.clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+  assert.equal(fixture.clients[0].listenerCount, 0)
+  assert.equal(fixture.clients[0].errorListenerCount, 0)
+  assert.equal(fixture.clients[0].closeListenerCount, 0)
+  assert.equal(fixture.broker.connected, false)
+  assert.equal(fixture.broker.userDataUnavailable, true)
+  assert.equal(fixture.scheduler.pendingCount, 1)
+  await fixture.scheduler.runNext()
+}
+
+function assertReplacementConsumersRecovered(fixture) {
+  const { broker, scheduler, clients, first, second, firstStatuses, secondStatuses } = fixture
+  assert.equal(clients.length, 2)
+  assert.equal(clients[1].state, "open")
+  assert.equal(clients[1].calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
+  assert.equal(first.data.subscriptionId, 110)
+  assert.equal(second.data.subscriptionId, 110)
+  assert.equal(broker.connected, true)
+  assert.equal(broker.userDataUnavailable, true)
+  assert.ok(firstStatuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
+  assert.ok(secondStatuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
+  assert.equal(scheduler.pendingCount, 1)
+}
+
+async function assertRecoveryGateAndAcknowledge(fixture) {
+  const { broker, scheduler, clients, first, second, firstStatuses, secondStatuses } = fixture
   await scheduler.runNext()
   assert.equal(firstStatuses.filter((status) => status.type === "recovered").length, 2)
   assert.equal(secondStatuses.filter((status) => status.type === "recovered").length, 2)
   assert.equal(broker.userDataUnavailable, true)
   assert.equal(scheduler.pendingCount, 1)
-
-  await assertOrderMutationsBlocked({ broker,
-    client: clients[1],
-    first })
-
+  await assertOrderMutationsBlocked({ broker, client: clients[1], first })
   assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 0)
   assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
-
-  assertRecoveryAcknowledged({ broker,
-    scheduler,
-    second,
-    firstStatuses,
-    secondStatuses })
-  const placed = await broker.createOrder({ symbol: "BTCUSDT",
-quantity: "0.01",
-price: "50000" })
+  assertRecoveryAcknowledged({ broker, scheduler, second, firstStatuses, secondStatuses })
+  const placed = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
   assert.equal(clients[1].calls.some((call) => call.method === "order.place"), true)
   assert.equal(placed.ok, true)
+}
 
-  await first.data.disconnect()
-  await second.data.disconnect()
-  await broker.disconnect()
+it("reconnects with a new client and subscription, then waits for every consumer to acknowledge reconciliation", async () => {
+  const fixture = await createTwoConsumerRecoveryFixture()
+  await triggerConsumerRecovery(fixture)
+  assertReplacementConsumersRecovered(fixture)
+  await assertRecoveryGateAndAcknowledge(fixture)
+  await fixture.first.data.disconnect()
+  await fixture.second.data.disconnect()
+  await fixture.broker.disconnect()
 })
 
 

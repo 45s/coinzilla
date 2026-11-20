@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
+import { it } from "node:test"
 
 import { adaptTrade } from "./adapt-fill.js"
 
@@ -17,7 +17,6 @@ const baseTrade = {
   time: 1_798_000_000_000,
 }
 
-describe("adaptTrade", () => {
   it("maps Binance trade IDs, side, exact decimal strings, fee, and timestamp", () => {
     assert.deepEqual(adaptTrade(baseTrade), {
       id: "123",
@@ -96,4 +95,3 @@ id: -1 }), /trade ID must be an exact non-negative integer/)
     assert.throws(() => adaptTrade({ ...baseTrade,
 orderId: "1.5" }), /order ID must be an exact non-negative integer/)
   })
-})

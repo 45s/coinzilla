@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
+import { it } from "node:test"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
@@ -23,7 +23,6 @@ origQty: "3",
 executedQty: "1" })
 }
 
-describe("BinanceSdkBroker.getOpenOrders", () => {
   it("passes the requested symbol and adapts remaining quantities", async () => {
     const { broker, rpc } = createBroker(() => [rawOrder(1), rawOrder(2, "ETHUSDT")])
     const result = await broker.getOpenOrders({ symbol: "BTCUSDT" })
@@ -39,4 +38,3 @@ describe("BinanceSdkBroker.getOpenOrders", () => {
     assert.deepEqual(rpc.calls[0].params, {})
     assert.deepEqual(result.data, [])
   })
-})

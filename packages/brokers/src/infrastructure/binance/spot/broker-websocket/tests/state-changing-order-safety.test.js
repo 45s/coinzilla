@@ -3,7 +3,7 @@ import test from "node:test"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
-test("blocks every order mutation while the user-data stream is unavailable", async () => {
+function createMutationSafetyFixture() {
   const timers = new Map()
   let timerId = 0
   const setTimeoutFn = (callback) => {
@@ -20,62 +20,43 @@ test("blocks every order mutation while the user-data stream is unavailable", as
     "openOrders.cancelAll": () => assert.fail("openOrders.cancelAll must remain blocked"),
   })
   rpc.state = "open"
-
   const broker = new BinanceSdkBroker({
     tradingMode: "testnet",
     apiKey: "test-key",
     apiSecret: "test-secret",
-    logger: { error() {},
-info() {},
-warn() {},
-debug() {} },
-  }, { apiClientFactory: () => rpc,
-setTimeoutFn,
-clearTimeoutFn })
+    logger: { error() {}, info() {}, warn() {}, debug() {} },
+  }, { apiClientFactory: () => rpc, setTimeoutFn, clearTimeoutFn })
   broker.connected = true
+  return { broker, rpc, timers }
+}
 
-  const subscription = await broker.subscribeForUserData({ onEvent() {} })
-  assert.equal(subscription.ok, true)
-
-  rpc.emitEvent({
-    subscriptionId: 71,
-    event: { e: "eventStreamTerminated",
-E: 123_457 },
-  })
-
-  const results = await Promise.all([
-    broker.createOrder({
-      symbol: "BTCUSDT",
-      side: "BUY",
-      type: "LIMIT",
-      quantity: "0.01",
-      price: "50000",
-    }),
+function createBlockedMutationResults(broker) {
+  return Promise.all([
+    broker.createOrder({ symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "50000" }),
     broker.createCanonicalOrder({
-      symbol: "BTCUSDT",
-      side: "BUY",
-      type: "LIMIT",
-      quantity: "0.01",
-      price: "50000",
-      clientOrderId: "safety-test-order-1",
+      symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01",
+      price: "50000", clientOrderId: "safety-test-order-1",
     }),
-    broker.cancelOrder({ symbol: "BTCUSDT",
-orderId: 123 }),
+    broker.cancelOrder({ symbol: "BTCUSDT", orderId: 123 }),
     broker.cancelAllOpenOrders({ symbol: "BTCUSDT" }),
   ])
+}
 
+test("blocks every order mutation while the user-data stream is unavailable", async () => {
+  const { broker, rpc, timers } = createMutationSafetyFixture()
+  const subscription = await broker.subscribeForUserData({ onEvent() {} })
+  assert.equal(subscription.ok, true)
+  rpc.emitEvent({ subscriptionId: 71, event: { e: "eventStreamTerminated", E: 123_457 } })
+
+  const results = await createBlockedMutationResults(broker)
   for (const result of results) {
     assert.equal(result.ok, false)
     assert.match(result.errors[0].message, /user-data stream is unavailable/)
   }
-
   assert.equal(
-    rpc.calls.some(({ method }) =>
-      ["order.place", "order.cancel", "openOrders.cancelAll"].includes(method),
-    ),
+    rpc.calls.some(({ method }) => ["order.place", "order.cancel", "openOrders.cancelAll"].includes(method)),
     false,
   )
-
   await subscription.data.disconnect()
   assert.equal(timers.size, 0)
 })

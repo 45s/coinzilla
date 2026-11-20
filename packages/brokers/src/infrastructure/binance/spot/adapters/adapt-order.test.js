@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { describe, it } from 'node:test'
+import { it } from 'node:test'
 import { adaptOrder } from './adapt-order.js'
 
 const mockedBinanceOrder = {
@@ -25,7 +25,6 @@ const mockedBinanceOrder = {
   selfTradePreventionMode: 'NONE',
 }
 
-describe('adaptOrder', () => {
   it('adapts an unfilled Binance order including its client order ID', () => {
     const result = adaptOrder(mockedBinanceOrder)
     assert.equal(result.id, String(mockedBinanceOrder.orderId))
@@ -92,7 +91,6 @@ origQty: 'not-a-number' }),
 executedQty: 'not-a-number' }),
     )
   })
-})
 
 it("preserves a zero-valued Binance order ID", () => {
   const result = adaptOrder({

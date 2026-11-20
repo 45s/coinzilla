@@ -262,66 +262,93 @@ test("runtime gate requires the approved Node floor and patched Undici", () => {
 })
 
 
+function writeWebSocketHandshake({ request, socket }) {
+  const key = request.headers["sec-websocket-key"]
+  const accept = createHash("sha1")
+    .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+    .digest("base64")
+  socket.write([
+    "HTTP/1.1 101 Switching Protocols",
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    `Sec-WebSocket-Accept: ${accept}`,
+    "",
+    "",
+  ].join("\r\n"))
+}
+
+function decodeWebSocketPayload({ received, offset, masked, length }) {
+  let payload = received.subarray(offset + (masked ? 4 : 0), offset + (masked ? 4 : 0) + length)
+  if (!masked) {return payload}
+  const mask = received.subarray(offset, offset + 4)
+  payload = Buffer.from(payload)
+  for (let index = 0; index < payload.length; index += 1) {
+    payload[index] ^= mask[index % 4]
+  }
+  return payload
+}
+
+function parseWebSocketFrame(received) {
+  if (received.length < 2) {return null}
+  const [first, second] = received
+  const masked = (second & 0x80) !== 0
+  let length = second & 0x7f
+  let offset = 2
+  if (length === 126) {
+    if (received.length < 4) {return null}
+    length = received.readUInt16BE(2)
+    offset = 4
+  } else if (length === 127) {
+    if (received.length < 10) {return null}
+    const largeLength = received.readBigUInt64BE(2)
+    if (largeLength > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error("Unexpected oversized WebSocket frame")
+    }
+    length = Number(largeLength)
+    offset = 10
+  }
+  const maskLength = masked ? 4 : 0
+  const frameLength = offset + maskLength + length
+  if (received.length < frameLength) {return null}
+  return {
+    opcode: first & 0x0f,
+    frameLength,
+    payload: decodeWebSocketPayload({ received, offset, masked, length }),
+  }
+}
+
+function consumeWebSocketFrames({ socket, received, resolvePong, rejectPong }) {
+  while (received.length >= 2) {
+    let frame
+    try {
+      frame = parseWebSocketFrame(received)
+    } catch (error) {
+      rejectPong(error)
+      return received
+    }
+    if (!frame) {return received}
+    received = received.subarray(frame.frameLength)
+    if (frame.opcode === 0x0a) {resolvePong(frame.payload)}
+    if (frame.opcode === 0x08) {
+      socket.write(Buffer.concat([Buffer.from([0x88, frame.payload.length]), frame.payload]))
+      socket.end()
+    }
+  }
+  return received
+}
+
 function attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong }) {
-  server.on("upgrade", (...args) => {
-    const [request, socket] = args
-    const key = request.headers["sec-websocket-key"]
-    const accept = createHash("sha1")
-      .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
-      .digest("base64")
-
-    socket.write([
-      "HTTP/1.1 101 Switching Protocols",
-      "Upgrade: websocket",
-      "Connection: Upgrade",
-      `Sec-WebSocket-Accept: ${accept}`,
-      "",
-      "",
-    ].join("\r\n"))
+  server.on("upgrade", (request, socket) => {
+    writeWebSocketHandshake({ request, socket })
     socket.write(Buffer.concat([Buffer.from([0x89, payload.length]), payload]))
-
     let received = Buffer.alloc(0)
     socket.on("data", (chunk) => {
-      received = Buffer.concat([received, chunk])
-      while (received.length >= 2) {
-        const [first, second] = received
-        const opcode = first & 0x0f
-        const masked = (second & 0x80) !== 0
-        let length = second & 0x7f
-        let offset = 2
-        if (length === 126) {
-          if (received.length < 4) {return}
-          length = received.readUInt16BE(2)
-          offset = 4
-        } else if (length === 127) {
-          if (received.length < 10) {return}
-          const largeLength = received.readBigUInt64BE(2)
-          if (largeLength > BigInt(Number.MAX_SAFE_INTEGER)) {
-            rejectPong(new Error("Unexpected oversized WebSocket frame"))
-            return
-          }
-          length = Number(largeLength)
-          offset = 10
-        }
-
-        const maskLength = masked ? 4 : 0
-        if (received.length < offset + maskLength + length) {return}
-        let framePayload = received.subarray(offset + maskLength, offset + maskLength + length)
-        if (masked) {
-          const mask = received.subarray(offset, offset + 4)
-          framePayload = Buffer.from(framePayload)
-          for (let index = 0; index < framePayload.length; index += 1) {
-            framePayload[index] ^= mask[index % 4]
-          }
-        }
-
-        received = received.subarray(offset + maskLength + length)
-        if (opcode === 0x0a) {resolvePong(framePayload)}
-        if (opcode === 0x08) {
-          socket.write(Buffer.concat([Buffer.from([0x88, framePayload.length]), framePayload]))
-          socket.end()
-        }
-      }
+      received = consumeWebSocketFrames({
+        socket,
+        received: Buffer.concat([received, chunk]),
+        resolvePong,
+        rejectPong,
+      })
     })
   })
 }

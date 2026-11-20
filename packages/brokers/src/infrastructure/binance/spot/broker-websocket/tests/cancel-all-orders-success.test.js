@@ -1,9 +1,8 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
+import { it } from "node:test"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
 
-describe("BinanceSdkBroker.cancelAllOpenOrders success", () => {
   it("uses openOrders.cancelAll and adapts each canceled order", async () => {
     const rpc = createFakeRpcClient({
       "openOrders.cancelAll": () => [
@@ -38,4 +37,3 @@ stateChanging: true },
     assert.deepEqual(result.data.map((order) => order.id), ["1", "2"])
     assert.deepEqual(result.data.map((order) => order.quantity), [2, 2])
   })
-})

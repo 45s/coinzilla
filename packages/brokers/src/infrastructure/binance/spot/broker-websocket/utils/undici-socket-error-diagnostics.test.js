@@ -6,81 +6,94 @@ import test from "node:test"
 
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
-test("Undici does not emit a socket_error diagnostic for every abnormal 1006 close", {
-  timeout: 5_000,
-}, async (t) => {
+function handleAbnormalCloseUpgrade({ request, socket }) {
+  const key = request.headers["sec-websocket-key"]
+  const accept = createHash("sha1")
+    .update(key + WEBSOCKET_GUID)
+    .digest("base64")
+  socket.write([
+    "HTTP/1.1 101 Switching Protocols",
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    `Sec-WebSocket-Accept: ${accept}`,
+    "",
+    "",
+  ].join("\r\n"))
+  setTimeout(() => socket.destroy(), 25)
+}
+
+function createAbnormalCloseServer() {
+  const server = createServer()
+  let serverSocket = null
+  server.on("upgrade", (request, socket) => {
+    serverSocket = socket
+    handleAbnormalCloseUpgrade({ request, socket })
+  })
+  return { server, get serverSocket() { return serverSocket } }
+}
+
+function subscribeDiagnosticChannels() {
   const socketErrors = []
   const opened = []
   const closed = []
-  const socketErrorChannel = channel("undici:websocket:socket_error")
-  const openChannel = channel("undici:websocket:open")
-  const closeChannel = channel("undici:websocket:close")
-  const onSocketError = (error) => socketErrors.push(error)
-  const onOpen = (event) => opened.push(event)
-  const onClose = (event) => closed.push(event)
+  const channels = {
+    socketError: channel("undici:websocket:socket_error"),
+    open: channel("undici:websocket:open"),
+    close: channel("undici:websocket:close"),
+  }
+  const listeners = {
+    socketError: (error) => socketErrors.push(error),
+    open: (event) => opened.push(event),
+    close: (event) => closed.push(event),
+  }
+  channels.socketError.subscribe(listeners.socketError)
+  channels.open.subscribe(listeners.open)
+  channels.close.subscribe(listeners.close)
+  return { socketErrors, opened, closed, channels, listeners }
+}
 
-  socketErrorChannel.subscribe(onSocketError)
-  openChannel.subscribe(onOpen)
-  closeChannel.subscribe(onClose)
+function unsubscribeDiagnosticChannels({ channels, listeners }) {
+  channels.socketError.unsubscribe(listeners.socketError)
+  channels.open.unsubscribe(listeners.open)
+  channels.close.unsubscribe(listeners.close)
+}
 
-  const server = createServer()
-  let serverSocket = null
-  server.on("upgrade", (...args) => {
-    const [request, socket] = args
-    serverSocket = socket
-    const accept = createHash("sha1")
-      .update(request.headers["sec-websocket-key"] + WEBSOCKET_GUID)
-      .digest("base64")
-    socket.write([
-      "HTTP/1.1 101 Switching Protocols",
-      "Upgrade: websocket",
-      "Connection: Upgrade",
-      `Sec-WebSocket-Accept: ${accept}`,
-      "",
-      "",
-    ].join("\r\n"))
-
-    // Force an established-socket loss without sending a WebSocket close frame.
-    setTimeout(() => socket.destroy(), 25)
-  })
-
-  await new Promise((...args) => {
-    const [resolve, reject] = args
-    server.once("error", reject)
-    server.listen(0, "127.0.0.1", resolve)
-  })
-
-  const address = server.address()
-  const websocket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
-
-  t.after(async () => {
-    socketErrorChannel.unsubscribe(onSocketError)
-    openChannel.unsubscribe(onOpen)
-    closeChannel.unsubscribe(onClose)
-    websocket.close()
-    serverSocket?.destroy()
-    await new Promise((resolve) => server.close(resolve))
-  })
-
-  await new Promise((...args) => {
-    const [resolve, reject] = args
+function waitForWebSocketOpen(websocket) {
+  return new Promise((resolve, reject) => {
     websocket.addEventListener("open", resolve, { once: true })
     websocket.addEventListener("error", (event) => {
       reject(event.error ?? new Error(event.message || "WebSocket failed before opening"))
     }, { once: true })
   })
+}
 
-  const closeEvent = await new Promise((resolve) => {
-    websocket.addEventListener("close", resolve, { once: true })
+function waitForWebSocketClose(websocket) {
+  return new Promise((resolve) => websocket.addEventListener("close", resolve, { once: true }))
+}
+
+async function runSocketErrorDiagnosticTest(t) {
+  const diagnostics = subscribeDiagnosticChannels()
+  const fixture = createAbnormalCloseServer()
+  await listen(fixture.server)
+  const address = fixture.server.address()
+  const websocket = new WebSocket(`ws://127.0.0.1:${address.port}/ws`)
+  t.after(async () => {
+    unsubscribeDiagnosticChannels(diagnostics)
+    websocket.close()
+    fixture.serverSocket?.destroy()
+    await closeServer(fixture.server)
   })
-
+  await waitForWebSocketOpen(websocket)
+  const closeEvent = await waitForWebSocketClose(websocket)
   assert.equal(closeEvent.code, 1006)
-  assert.equal(opened.length, 1)
-  assert.equal(opened[0].websocket, websocket)
-  assert.equal(closed.length, 1)
-  assert.equal(closed[0].websocket, websocket)
-
+  assert.equal(diagnostics.opened.length, 1)
+  assert.equal(diagnostics.opened[0].websocket, websocket)
+  assert.equal(diagnostics.closed.length, 1)
+  assert.equal(diagnostics.closed[0].websocket, websocket)
   // A peer reset can produce close code 1006 without a client-side socket error.
-  // In that case the socket_error diagnostics channel emits nothing to correlate.
-  assert.equal(socketErrors.length, 0)
-})
+  assert.equal(diagnostics.socketErrors.length, 0)
+}
+
+test("Undici does not emit a socket_error diagnostic for every abnormal 1006 close", {
+  timeout: 5_000,
+}, runSocketErrorDiagnosticTest)

@@ -127,21 +127,35 @@ class MarketStreamLivenessMonitor {
 
   onTicker(message) {
     const tradeId = message?.L
-    if (this.#disposed ||
-        typeof message?.s !== "string" ||
-        message.s.toUpperCase() !== this.#symbol ||
-        !Number.isSafeInteger(tradeId) ||
-        tradeId < 0) {
-      return
-    }
+    if (!this.#isValidTicker(message, tradeId) || this.#isOldTicker(tradeId)) {return}
 
-    if (this.#lastTickerTradeId !== null && tradeId <= this.#lastTickerTradeId) {return}
     this.#lastTickerTradeId = tradeId
     this.#pruneRecoveryAttempts(this.#now())
     if (this.#lastAggTradeId !== null && tradeId <= this.#lastAggTradeId) {return}
+
+    this.#updatePendingTrade(tradeId)
+    this.#prepareRecovery()
+  }
+
+  #isValidTicker(message, tradeId) {
+    return !this.#disposed
+      && typeof message?.s === "string"
+      && message.s.toUpperCase() === this.#symbol
+      && Number.isSafeInteger(tradeId)
+      && tradeId >= 0
+  }
+
+  #isOldTicker(tradeId) {
+    return this.#lastTickerTradeId !== null && tradeId <= this.#lastTickerTradeId
+  }
+
+  #updatePendingTrade(tradeId) {
     if (this.#pendingTradeId === null || tradeId > this.#pendingTradeId) {
       this.#pendingTradeId = tradeId
     }
+  }
+
+  #prepareRecovery() {
     if (this.#state === "exhausted") {
       if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {return}
       this.#state = "healthy"
@@ -237,23 +251,50 @@ class MarketStreamLivenessMonitor {
     this.#reportStatus("exhausted")
   }
 
+  // Snapshot the recovery generation before the asynchronous resubscribe.
+  #beginRecovery() {
+    this.#pruneRecoveryAttempts(this.#now())
+    if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {
+      this.#exhaustRecovery()
+      return null
+    }
+    this.#recoveryAttemptTimes.push(this.#now())
+    this.#recovering = true
+    this.#state = "recovering"
+    this.#reportStatus("recovering")
+    return {
+      pendingTradeId: this.#pendingTradeId,
+      generation: ++this.#generation,
+    }
+  }
+
+  #isRecoveryObsolete(generation) {
+    return this.#disposed || this.#generation !== generation
+  }
+
+  #hasCaughtUp() {
+    return this.#pendingTradeId === null
+      || this.#lastAggTradeId !== null && this.#lastAggTradeId >= this.#pendingTradeId
+  }
+
+  #handleRecoveryFailure(error) {
+    this.#reportError(error)
+    this.#state = "recovery-failed"
+    if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {
+      this.#exhaustRecovery()
+      return
+    }
+    this.#scheduleCheck()
+  }
+
   async #recover() {
     if (this.#disposed || this.#recovering || this.#pendingTradeId === null || this.#state === "exhausted") {
       return
     }
 
-    this.#pruneRecoveryAttempts(this.#now())
-    if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {
-      this.#exhaustRecovery()
-      return
-    }
+    const recovery = this.#beginRecovery()
+    if (!recovery) {return}
 
-    this.#recoveryAttemptTimes.push(this.#now())
-    this.#recovering = true
-    this.#state = "recovering"
-    this.#reportStatus("recovering")
-    const pendingTradeIdAtStart = this.#pendingTradeId
-    const recoveryGeneration = ++this.#generation
     let recoveryError = null
     try {
       await this.#resubscribe()
@@ -261,27 +302,20 @@ class MarketStreamLivenessMonitor {
       recoveryError = error
     }
 
-    if (this.#disposed || this.#generation !== recoveryGeneration) {return}
+    if (this.#isRecoveryObsolete(recovery.generation)) {return}
     this.#recovering = false
-    if (this.#pendingTradeId === null ||
-        this.#lastAggTradeId !== null && this.#lastAggTradeId >= this.#pendingTradeId) {
+    if (this.#hasCaughtUp()) {
       this.#pendingTradeId = null
       this.#state = "healthy"
       return
     }
     if (recoveryError) {
-      this.#reportError(recoveryError)
-      this.#state = "recovery-failed"
-      if (this.#recoveryAttemptTimes.length >= this.#maxRecoveryAttempts) {
-        this.#exhaustRecovery()
-        return
-      }
-      this.#scheduleCheck()
+      this.#handleRecoveryFailure(recoveryError)
       return
     }
     this.#state = "awaiting-aggTrade"
     this.#reportStatus("awaiting-aggTrade")
-    if (this.#pendingTradeId > pendingTradeIdAtStart) {
+    if (this.#pendingTradeId > recovery.pendingTradeId) {
       this.#scheduleCheck()
     }
   }

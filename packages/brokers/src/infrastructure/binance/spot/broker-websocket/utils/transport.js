@@ -26,33 +26,39 @@ function readHttpUpgradeStatus(...sources) {
   return null
 }
 
-function createWebSocketError(...args) {
-  const [event, phase] = args
-  const source = event?.error instanceof Error ? event.error : null
-  const causeMessage = safeDiagnosticText(source?.message) ?? "Underlying WebSocket error"
-  const cause = source ? new Error(causeMessage) : undefined
-  if (cause && typeof source.name === "string") {cause.name = source.name}
-  if (cause && typeof source.stack === "string") {
+function createWebSocketCause(source) {
+  if (!(source instanceof Error)) {return null}
+  const cause = new Error(safeDiagnosticText(source.message) ?? "Underlying WebSocket error")
+  if (typeof source.name === "string") {cause.name = source.name}
+  if (typeof source.stack === "string") {
     cause.stack = safeDiagnosticText(source.stack, 2_048) ?? cause.stack
   }
+  return cause
+}
 
-  const message = safeDiagnosticText(event?.message) ??
-    safeDiagnosticText(source?.message) ??
-    "WebSocket connection error"
-  const error = new Error(message, cause ? { cause } : undefined)
-  if (source && typeof source.name === "string") {error.name = source.name}
-  error.diagnostics = {
+function createWebSocketDiagnostics({ event, phase, source, cause }) {
+  return {
     phase,
     httpUpgradeStatus: readHttpUpgradeStatus(event, source),
     closeCode: null,
     closeReason: null,
     wasClean: null,
-    underlyingError: source
-      ? { name: cause.name,
-        message: cause.message,
-        stack: cause.stack }
+    underlyingError: cause
+      ? { name: cause.name, message: cause.message, stack: cause.stack }
       : null,
   }
+}
+
+function createWebSocketError(...args) {
+  const [event, phase] = args
+  const source = event?.error instanceof Error ? event.error : null
+  const cause = createWebSocketCause(source)
+  const message = safeDiagnosticText(event?.message)
+    ?? safeDiagnosticText(source?.message)
+    ?? "WebSocket connection error"
+  const error = new Error(message, cause ? { cause } : undefined)
+  if (source && typeof source.name === "string") {error.name = source.name}
+  error.diagnostics = createWebSocketDiagnostics({ event, phase, source, cause })
   return error
 }
 
@@ -130,88 +136,110 @@ export class NativeWebSocketTransport {
     if (this.#state !== "idle") {
       return Promise.reject(new Error(`Cannot connect WebSocket in state: ${this.#state}`))
     }
-
     this.#state = "connecting"
-
     try {
       this.#socket = new this.WebSocketCtor(this.url)
       this.#attachPingDiagnostics(this.#socket)
     } catch (error) {
-      this.#diagnosticCleanup?.()
-      this.#diagnosticCleanup = null
-      this.#state = "closed"
+      this.#handleSocketConstructionFailure()
       return Promise.reject(error)
     }
-
-    this.#connectPromise = new Promise((...args) => {
-      const [resolve, reject] = args
-      this.#rejectConnect = reject
-      this.#handlers = {
-        open: () => {
-          if (this.#state !== "connecting") {return}
-          this.#clearConnectTimer()
-          this.#state = "open"
-          this.#rejectConnect = null
-          resolve(this)
-        },
-        message: (event) => this.#emit("message", event.data),
-        error: (event) => {
-          const error = createWebSocketError(
-            event,
-            this.#state === "connecting" ? "websocket-handshake" : "websocket",
-          )
-          this.#emit("error", error)
-          if (this.#state === "connecting") {
-            this.#connectError = error
-            // Wait for close so the rejection includes the final close code/reason.
-            this.#beginClosing()
-          }
-        },
-        close: (event) => this.#finalizeClose({
-          code: event.code,
-          reason: event.reason,
-          wasClean: event.wasClean,
-        }),
-      }
-
-      const registeredHandlers = []
-      try {
-        for (const [type, handler] of Object.entries(this.#handlers)) {
-          this.#socket.addEventListener(type, handler)
-          registeredHandlers.push([type, handler])
-        }
-
-        this.#connectTimer = this.setTimeout(() => {
-          if (this.#state !== "connecting") {return}
-          reject(new Error(`WebSocket connection timed out after ${this.connectTimeout} ms`))
-          this.#rejectConnect = null
-          this.#beginClosing()
-        }, this.connectTimeout)
-      } catch (error) {
-        this.#state = "closed"
-        this.#rejectConnect = null
-        for (const [type, handler] of registeredHandlers) {
-          try {
-            this.#socket.removeEventListener(type, handler)
-          } catch {
-            // Preserve the original startup error while attempting all cleanup.
-          }
-        }
-        this.#handlers = null
-        this.#diagnosticCleanup?.()
-        this.#diagnosticCleanup = null
-        const socket = this.#socket
-        this.#socket = null
-        try {
-          socket?.close()
-        } catch {
-          // Preserve the original startup error; the transport is already closed.
-        }
-        reject(error)
-      }
-    })
-
+    this.#connectPromise = this.#createConnectPromise()
     return this.#connectPromise
+  }
+
+  #handleSocketConstructionFailure() {
+    this.#diagnosticCleanup?.()
+    this.#diagnosticCleanup = null
+    this.#state = "closed"
+  }
+
+  #createConnectPromise() {
+    return new Promise((resolve, reject) => {
+      this.#rejectConnect = reject
+      this.#handlers = this.#createSocketHandlers({ resolve })
+      this.#registerSocketHandlers({ reject })
+    })
+  }
+
+  #createSocketHandlers({ resolve }) {
+    return {
+      open: () => {
+        if (this.#state !== "connecting") {return}
+        this.#clearConnectTimer()
+        this.#state = "open"
+        this.#rejectConnect = null
+        resolve(this)
+      },
+      message: (event) => this.#emit("message", event.data),
+      error: (event) => this.#handleSocketError(event),
+      close: (event) => this.#finalizeClose({
+        code: event.code,
+        reason: event.reason,
+        wasClean: event.wasClean,
+      }),
+    }
+  }
+
+  #handleSocketError(event) {
+    const error = createWebSocketError(
+      event,
+      this.#state === "connecting" ? "websocket-handshake" : "websocket",
+    )
+    this.#emit("error", error)
+    if (this.#state !== "connecting") {return}
+    this.#connectError = error
+    // Wait for close so the rejection includes the final close code/reason.
+    this.#beginClosing()
+  }
+
+  #registerSocketHandlers({ reject }) {
+    const registered = []
+    try {
+      this.#addSocketListeners(registered)
+      this.#connectTimer = this.setTimeout(() => {
+        if (this.#state !== "connecting") {return}
+        reject(new Error(`WebSocket connection timed out after ${this.connectTimeout} ms`))
+        this.#rejectConnect = null
+        this.#beginClosing()
+      }, this.connectTimeout)
+    } catch (error) {
+      this.#cleanupFailedSocketStart({ registered, reject, error })
+    }
+  }
+
+  #addSocketListeners(registered) {
+    for (const [type, handler] of Object.entries(this.#handlers)) {
+      this.#socket.addEventListener(type, handler)
+      registered.push([type, handler])
+    }
+  }
+
+  #cleanupFailedSocketStart({ registered, reject, error }) {
+    this.#state = "closed"
+    this.#rejectConnect = null
+    this.#removeRegisteredSocketListeners(registered)
+    this.#handlers = null
+    this.#diagnosticCleanup?.()
+    this.#diagnosticCleanup = null
+    const socket = this.#socket
+    this.#socket = null
+    try {
+      socket?.close()
+    } catch {
+      // Preserve the original startup error; the transport is already closed.
+    }
+    reject(error)
+  }
+
+  #removeRegisteredSocketListeners(registered) {
+    for (const [type, handler] of registered) {
+      try {
+        this.#socket.removeEventListener(type, handler)
+      } catch {
+        // Preserve the original startup error while attempting all cleanup.
+      }
+    }
   }
 
   /** @param {string|ArrayBuffer|ArrayBufferView} data - Data sent only while the socket is open. */
@@ -342,45 +370,67 @@ export class NativeWebSocketTransport {
     if (this.#state === "closed") {return}
     this.#state = "closed"
     this.#clearConnectTimer()
-    if (this.#closeTimer !== null) {
-      this.clearTimeout(this.#closeTimer)
-      this.#closeTimer = null
-    }
-
+    this.#clearCloseTimer()
     const closeReason = safeDiagnosticText(event.reason) ?? ""
-    if (this.#connectError) {
-      this.#connectError.diagnostics = {
-        ...this.#connectError.diagnostics,
-        closeCode: event.code ?? null,
-        closeReason,
-        wasClean: Boolean(event.wasClean),
-      }
-      const status = this.#connectError.diagnostics.httpUpgradeStatus
-      const statusText = status === null ? "unavailable" : String(status)
-      const reasonText = closeReason.length > 0 ? closeReason : "unavailable"
-      this.#connectError.message =
-        `WebSocket handshake failed (HTTP upgrade status ${statusText}; close code ${event.code ?? "unknown"}; close reason ${reasonText}): ${this.#connectError.message}`
-    }
+    this.#updateConnectError(event, closeReason)
+    this.#rejectConnectOnClose(event, closeReason)
+    this.#clearConnectError()
+    this.#cleanupSocketDiagnostics()
+    this.#removeSocketHandlers()
+    this.#notifyClose(event)
+  }
 
-    if (this.#rejectConnect) {
-      const error = this.#connectError ?? new Error("WebSocket closed before opening")
-      if (!error.diagnostics) {
-        error.diagnostics = {
-          phase: "websocket-handshake",
-          httpUpgradeStatus: null,
-          closeCode: event.code ?? null,
-          closeReason,
-          wasClean: Boolean(event.wasClean),
-          underlyingError: null,
-        }
-      }
-      this.#rejectConnect(error)
-      this.#rejectConnect = null
+  #clearCloseTimer() {
+    if (this.#closeTimer === null) {return}
+    this.clearTimeout(this.#closeTimer)
+    this.#closeTimer = null
+  }
+
+  #updateConnectError(event, closeReason) {
+    if (!this.#connectError) {return}
+    this.#connectError.diagnostics = {
+      ...this.#connectError.diagnostics,
+      closeCode: event.code ?? null,
+      closeReason,
+      wasClean: Boolean(event.wasClean),
     }
+    const status = this.#connectError.diagnostics.httpUpgradeStatus
+    const statusText = status === null ? "unavailable" : String(status)
+    const reasonText = closeReason.length > 0 ? closeReason : "unavailable"
+    this.#connectError.message =
+      `WebSocket handshake failed (HTTP upgrade status ${statusText}; close code ${event.code ?? "unknown"}; close reason ${reasonText}): ${this.#connectError.message}`
+  }
+
+  #rejectConnectOnClose(event, closeReason) {
+    if (!this.#rejectConnect) {return}
+    const error = this.#connectError ?? new Error("WebSocket closed before opening")
+    this.#ensureHandshakeDiagnostics({ error, event, closeReason })
+    this.#rejectConnect(error)
+    this.#rejectConnect = null
+  }
+
+  #ensureHandshakeDiagnostics({ error, event, closeReason }) {
+    if (error.diagnostics) {return}
+    error.diagnostics = {
+      phase: "websocket-handshake",
+      httpUpgradeStatus: null,
+      closeCode: event.code ?? null,
+      closeReason,
+      wasClean: Boolean(event.wasClean),
+      underlyingError: null,
+    }
+  }
+
+  #clearConnectError() {
     this.#connectError = null
+  }
+
+  #cleanupSocketDiagnostics() {
     this.#diagnosticCleanup?.()
     this.#diagnosticCleanup = null
+  }
 
+  #removeSocketHandlers() {
     if (this.#handlers && this.#socket) {
       for (const [type, handler] of Object.entries(this.#handlers)) {
         try {
@@ -391,11 +441,13 @@ export class NativeWebSocketTransport {
       }
     }
     this.#handlers = null
+  }
+
+  #notifyClose(event) {
     this.#emit("close", event)
-    this.#listeners.message.clear()
-    this.#listeners.error.clear()
-    this.#listeners.close.clear()
-    this.#listeners.ping.clear()
+    for (const listeners of Object.values(this.#listeners)) {
+      listeners.clear()
+    }
     this.#resolveClose?.()
     this.#resolveClose = null
   }

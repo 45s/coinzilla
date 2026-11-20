@@ -59,13 +59,15 @@ export function signBinanceParams(...args) {
  * @param {{apiKey: string, apiSecret: string, timestamp?: number, recvWindow?: number}} [options]
  * @returns {Record<string, string|number|boolean> & {signature: string}}
  */
-export function createSignedBinanceParams(...args) {
-  const [params, {
-    apiKey,
-    apiSecret,
-    timestamp = Date.now(),
-    recvWindow,
-  } = {}] = args
+function isValidReceiveWindow(recvWindow) {
+  return typeof recvWindow === "number"
+    && Number.isFinite(recvWindow)
+    && recvWindow > 0
+    && recvWindow <= 60_000
+    && Number(recvWindow.toFixed(3)) === recvWindow
+}
+
+function validateSignedParams({ params, apiKey, timestamp, recvWindow }) {
   if (!params || typeof params !== "object" || Array.isArray(params)) {
     throw new TypeError("Binance signed params must be an object")
   }
@@ -75,11 +77,26 @@ export function createSignedBinanceParams(...args) {
   if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
     throw new RangeError("Binance request timestamp must be a non-negative safe integer")
   }
-  if (recvWindow !== undefined &&
-      (typeof recvWindow !== "number" || !Number.isFinite(recvWindow) ||
-       recvWindow <= 0 || recvWindow > 60_000 || Number(recvWindow.toFixed(3)) !== recvWindow)) {
+  if (recvWindow !== undefined && !isValidReceiveWindow(recvWindow)) {
     throw new RangeError("Binance recvWindow must be greater than 0 and at most 60000 ms with up to 3 decimals")
   }
+}
+
+/**
+ * Add API-key, timestamp, optional receive window, and HMAC signature fields.
+ *
+ * @param {Record<string, string|number|boolean>} params
+ * @param {{apiKey: string, apiSecret: string, timestamp?: number, recvWindow?: number}} [options]
+ * @returns {Record<string, string|number|boolean> & {signature: string}}
+ */
+export function createSignedBinanceParams(...args) {
+  const [params, {
+    apiKey,
+    apiSecret,
+    timestamp = Date.now(),
+    recvWindow,
+  } = {}] = args
+  validateSignedParams({ params, apiKey, timestamp, recvWindow })
 
   const unsigned = {
     ...params,

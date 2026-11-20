@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
+import { it } from "node:test"
 import { BinanceSdkBroker } from "../broker.js"
 import { BinanceRpcError } from "../utils/rpc-client.js"
 import { createFakeRpcClient } from "../test-helpers/fake-broker-clients.js"
@@ -32,7 +32,6 @@ warn() {} },
 rpc }
 }
 
-describe("BinanceSdkBroker.getOrder client-order-ID lookup", () => {
   it("queries order.status with origClientOrderId and adapts the order", async () => {
     const { broker, rpc } = createBroker({
       "order.status": (...args) => {
@@ -114,4 +113,3 @@ clientOrderId: "harvester-client-123" },
     assert.equal(result.ok, false)
     assert.equal(result.errors[0], rejected)
   })
-})

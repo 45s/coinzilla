@@ -21,36 +21,26 @@ it("awaits asynchronous scheduled callbacks before advancing", async () => {
 })
 
 
-it("retries when a subscribe response arrives after its socket has closed", async () => {
-  const scheduler = createScheduler()
-  const clients = []
+function createDelayedSubscribeFixture({ scheduler, clients }) {
   let resolveDelayedSubscribe
   let markDelayedSubscribeStarted
   const delayedSubscribeStarted = new Promise((resolve) => {
     markDelayedSubscribeStarted = resolve
   })
   const broker = new BinanceSdkBroker({
-    apiKey: "test-key",
-    apiSecret: "test-secret",
-    tradingMode: "testnet",
-    reconnectDelay: 10,
-    logger: { error() {},
-info() {},
-warn() {} },
+    apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet",
+    reconnectDelay: 10, logger: { error() {}, info() {}, warn() {} },
   }, {
     apiClientFactory: () => {
       const index = clients.length
-      let subscribe
-      if (index === 0) {
-        subscribe = () => ({ subscriptionId: 10 })
-      } else if (index === 1) {
-        subscribe = () => new Promise((resolve) => {
-          resolveDelayedSubscribe = resolve
-          markDelayedSubscribeStarted()
-        })
-      } else {
-        subscribe = () => ({ subscriptionId: index * 100 + 10 })
-      }
+      const subscribe = index === 0
+        ? () => ({ subscriptionId: 10 })
+        : index === 1
+          ? () => new Promise((resolve) => {
+              resolveDelayedSubscribe = resolve
+              markDelayedSubscribeStarted()
+            })
+          : () => ({ subscriptionId: index * 100 + 10 })
       const client = createFakeRpcClient({
         "userDataStream.subscribe.signature": subscribe,
         "userDataStream.unsubscribe": () => ({}),
@@ -62,38 +52,39 @@ warn() {} },
     setTimeoutFn: scheduler.setTimeout,
     clearTimeoutFn: scheduler.clearTimeout,
   })
-  await broker.connect()
+  return {
+    broker,
+    delayedSubscribeStarted,
+    resolveDelayedSubscribe: (value) => resolveDelayedSubscribe(value),
+  }
+}
+
+it("retries when a subscribe response arrives after its socket has closed", async () => {
+  const scheduler = createScheduler()
+  const clients = []
+  const fixture = createDelayedSubscribeFixture({ scheduler, clients })
+  await fixture.broker.connect()
   const statuses = []
-  const subscription = await broker.subscribeForUserData({
-    onEvent() {},
-    onStatus: (status) => statuses.push(status),
+  const subscription = await fixture.broker.subscribeForUserData({
+    onEvent() {}, onStatus: (status) => statuses.push(status),
   })
-
   clients[0].state = "closed"
-  clients[0].emitClose({ code: 1006,
-reason: "network lost",
-wasClean: false })
+  clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
   const recovery = scheduler.runNext()
-  await delayedSubscribeStarted
-  assert.equal(typeof resolveDelayedSubscribe, "function")
-
+  await fixture.delayedSubscribeStarted
+  assert.equal(typeof fixture.resolveDelayedSubscribe, "function")
   clients[1].state = "closed"
-  clients[1].emitClose({ code: 1006,
-reason: "closed during subscribe",
-wasClean: false })
-  resolveDelayedSubscribe({ subscriptionId: 110 })
+  clients[1].emitClose({ code: 1006, reason: "closed during subscribe", wasClean: false })
+  fixture.resolveDelayedSubscribe({ subscriptionId: 110 })
   await recovery
-
   assert.equal(scheduler.pendingCount, 1)
   await scheduler.runNext()
   assert.equal(clients.length, 3)
   assert.equal(subscription.data.subscriptionId, 210)
   assert.ok(statuses.some((status) => status.type === "recovered"))
-
   await subscription.data.disconnect()
-  await broker.disconnect()
+  await fixture.broker.disconnect()
 })
-
 
 it("verifies a malformed subscribe response against the active session", async () => {
   const rpc = createFakeRpcClient({

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
+import { it } from "node:test"
 import { BinanceSdkBroker } from "../broker.js"
 import { createFakeRpcClient, createFakeStreamsClient } from "../test-helpers/fake-broker-clients.js"
 
@@ -23,7 +23,6 @@ rpc,
 streams }
 }
 
-describe("BinanceSdkBroker.disconnect", () => {
   it("disconnects both native clients and is idempotent", async () => {
     const { broker, rpc, streams } = createBroker()
     await broker.connect()
@@ -52,4 +51,3 @@ describe("BinanceSdkBroker.disconnect", () => {
     await assert.doesNotReject(() => broker.disconnect())
     assert.equal(broker.connected, false)
   })
-})

@@ -152,77 +152,87 @@ function armDiagnosticTimeout({ socket, state, details, finish, delay }) {
   }, delay)
 }
 
+function finishProbe({ state, details, resolve }) {
+  if (state.settled) {return}
+  state.settled = true
+  clearTimeout(state.timer)
+  details.opened = state.opened
+  resolve(details)
+}
+
+function recordConstructionFailure({ error, details, finish }) {
+  details.errorMessage = safeText(error?.message) ?? "WebSocket construction failed"
+  details.underlyingError = {
+    name: typeof error?.name === "string" ? error.name : "Error",
+    message: safeText(error?.message),
+  }
+  finish()
+}
+
+function handleProbeOpen({ socket, state, details, finish, armTimeout }) {
+  state.opened = true
+  details.closeRequested = true
+  try {
+    socket.close(1000, "read-only diagnostic complete")
+  } catch {
+    details.closeTimedOut = true
+    finish()
+    return
+  }
+  // A successful upgrade is the protocol signal; a peer that ignores our
+  // diagnostic close frame must not be misreported as a failed handshake.
+  armTimeout(1_000)
+}
+
+function handleProbeError({ event, details }) {
+  details.errorMessage = safeText(event?.message) ?? "WebSocket handshake error"
+  details.httpUpgradeStatus = readHttpUpgradeStatus(event, event?.error)
+  if (event?.error instanceof Error) {
+    details.underlyingError = {
+      name: typeof event.error.name === "string" ? event.error.name : "Error",
+      message: safeText(event.error.message),
+    }
+  }
+}
+
+function handleProbeClose({ event, details, finish }) {
+  details.closeCode = event.code ?? null
+  details.closeReason = safeText(event.reason) ?? ""
+  details.wasClean = Boolean(event.wasClean)
+  finish()
+}
+
+function registerProbeListeners({ socket, state, details, finish, armTimeout }) {
+  socket.addEventListener("open", () => handleProbeOpen({
+    socket, state, details, finish, armTimeout,
+  }), { once: true })
+  socket.addEventListener("error", (event) => handleProbeError({ event, details }))
+  socket.addEventListener("close", (event) => handleProbeClose({
+    event, details, finish,
+  }), { once: true })
+}
+
+function startEndpointProbe({ name, url, resolve }) {
+  const state = { opened: false, settled: false, timer: undefined }
+  const details = createProbeDetails(name)
+  const finish = () => finishProbe({ state, details, resolve })
+  let socket
+  try {
+    socket = new WebSocket(url)
+  } catch (error) {
+    recordConstructionFailure({ error, details, finish })
+    return
+  }
+  const armTimeout = (delay) => armDiagnosticTimeout({
+    socket, state, details, finish, delay,
+  })
+  armTimeout(5_000)
+  registerProbeListeners({ socket, state, details, finish, armTimeout })
+}
+
 function probeEndpoint(...args) {
   const [name, url] = args
-  return new Promise((resolve) => {
-    let socket
-    const state = { opened: false,
-      settled: false,
-      timer: undefined }
-    const details = createProbeDetails(name)
-
-    const finish = () => {
-      if (state.settled) {return}
-      state.settled = true
-      clearTimeout(state.timer)
-      details.opened = state.opened
-      resolve(details)
-    }
-
-    try {
-      socket = new WebSocket(url)
-    } catch (error) {
-      details.errorMessage = safeText(error?.message) ?? "WebSocket construction failed"
-      details.underlyingError = {
-        name: typeof error?.name === "string" ? error.name : "Error",
-        message: safeText(error?.message),
-      }
-      finish()
-      return
-    }
-
-    const armTimeout = (delay) => armDiagnosticTimeout({
-      socket,
-      state,
-      details,
-      finish,
-      delay,
-    })
-    armTimeout(5_000)
-
-    socket.addEventListener("open", () => {
-      state.opened = true
-      details.closeRequested = true
-      try {
-        socket.close(1000, "read-only diagnostic complete")
-      } catch {
-        details.closeTimedOut = true
-        finish()
-        return
-      }
-      // A successful upgrade is the protocol signal; a peer that ignores our
-      // diagnostic close frame must not be misreported as a failed handshake.
-      armTimeout(1_000)
-    }, { once: true })
-
-    socket.addEventListener("error", (event) => {
-      details.errorMessage = safeText(event?.message) ?? "WebSocket handshake error"
-      details.httpUpgradeStatus = readHttpUpgradeStatus(event, event?.error)
-      if (event?.error instanceof Error) {
-        details.underlyingError = {
-          name: typeof event.error.name === "string" ? event.error.name : "Error",
-          message: safeText(event.error.message),
-        }
-      }
-    })
-
-    socket.addEventListener("close", (event) => {
-      details.closeCode = event.code ?? null
-      details.closeReason = safeText(event.reason) ?? ""
-      details.wasClean = Boolean(event.wasClean)
-      finish()
-    }, { once: true })
-  })
+  return new Promise((resolve) => startEndpointProbe({ name, url, resolve }))
 }
 
 const report = {

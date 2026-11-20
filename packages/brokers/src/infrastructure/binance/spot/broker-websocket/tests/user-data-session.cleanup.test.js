@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { describe, it } from "node:test"
+import { it } from "node:test"
 import { BinanceSdkBroker } from "../broker.js"
 import { createScheduler } from "../test-helpers/user-data-session-fixtures.js"
 import { createFakeRpcClient, createFakeStreamsClient } from "../test-helpers/fake-broker-clients.js"
@@ -21,7 +21,6 @@ async function disconnectSubscription({ subscription, broker, scheduler }) {
   await broker.disconnect()
 }
 
-describe("Binance user-data listener setup cleanup", () => {
   it("rolls back listeners when a later listener registration throws", async () => {
     let client
     const broker = new BinanceSdkBroker({
@@ -97,80 +96,70 @@ warn() {} },
 
     await broker.disconnect()
   })
-})
 
 
-describe("Binance user-data listener detach resilience", () => {
   it("attempts every listener cleanup even when an earlier remover throws", async () => {
-    const removals = { event: 0,
-error: 0,
-close: 0 }
+    const removals = { event: 0, error: 0, close: 0 }
     const logs = []
-    let client
-    const broker = new BinanceSdkBroker({
-      tradingMode: "testnet",
-      apiKey: "test-key",
-      apiSecret: "test-secret",
-      logger: {
-        error() {},
-        info() {},
-        warn: (...args) => logs.push(args),
-      },
-    }, {
-      apiClientFactory: () => {
-        client = createFakeRpcClient({
-          "userDataStream.subscribe.signature": () => ({ subscriptionId: 79 }),
-          "userDataStream.unsubscribe": () => ({}),
-        })
-        const registerEvent = client.onEvent.bind(client)
-        const registerError = client.onError.bind(client)
-        const registerClose = client.onClose.bind(client)
-        client.onEvent = (listener) => {
-          const remove = registerEvent(listener)
-          return () => {
-            removals.event += 1
-            remove()
-            throw new Error("event remover failed")
-          }
-        }
-        client.onError = (listener) => {
-          const remove = registerError(listener)
-          return () => {
-            removals.error += 1
-            remove()
-            throw new Error("error remover failed")
-          }
-        }
-        client.onClose = (listener) => {
-          const remove = registerClose(listener)
-          return () => {
-            removals.close += 1
-            remove()
-            throw new Error("close remover failed")
-          }
-        }
-        return client
-      },
-      marketClientFactory: () => createFakeStreamsClient(),
-    })
-
-    await broker.connect()
-    const subscription = await broker.subscribeForUserData({ onEvent() {} })
+    const fixture = createListenerDetachFixture({ removals, logs })
+    await fixture.broker.connect()
+    const subscription = await fixture.broker.subscribeForUserData({ onEvent() {} })
     assert.equal(subscription.ok, true)
-
-    await assert.doesNotReject(broker.disconnect())
-
-    assert.equal(removals.event, 1)
-    assert.equal(removals.error, 1)
-    assert.equal(removals.close, 2)
-    assert.equal(client.listenerCount, 0)
-    await assertListenerCleanup({ broker,
-      client,
+    await assert.doesNotReject(fixture.broker.disconnect())
+    assert.deepEqual(removals, { event: 1, error: 1, close: 2 })
+    await assertListenerCleanup({
+      broker: fixture.broker,
+      client: fixture.client,
       logs,
-      removals })
+      removals,
+    })
   })
-})
 
+
+function createListenerDetachFixture({ removals, logs }) {
+  let client
+  const broker = new BinanceSdkBroker({
+    tradingMode: "testnet",
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    logger: {
+      error() {},
+      info() {},
+      warn: (...args) => logs.push(args),
+    },
+  }, {
+    apiClientFactory: () => {
+      client = createFakeRpcClient({
+        "userDataStream.subscribe.signature": () => ({ subscriptionId: 79 }),
+        "userDataStream.unsubscribe": () => ({}),
+      })
+      const registerEvent = client.onEvent.bind(client)
+      const registerError = client.onError.bind(client)
+      const registerClose = client.onClose.bind(client)
+      client.onEvent = (listener) => createFailingRemover({
+        register: registerEvent, listener, removals, key: "event",
+      })
+      client.onError = (listener) => createFailingRemover({
+        register: registerError, listener, removals, key: "error",
+      })
+      client.onClose = (listener) => createFailingRemover({
+        register: registerClose, listener, removals, key: "close",
+      })
+      return client
+    },
+    marketClientFactory: () => createFakeStreamsClient(),
+  })
+  return { broker, get client() { return client } }
+}
+
+function createFailingRemover({ register, listener, removals, key }) {
+  const remove = register(listener)
+  return () => {
+    removals[key] += 1
+    remove()
+    throw new Error(`${key} remover failed`)
+  }
+}
 
 function createUnsubscribeBroker({ unsubscribe, subscriptions }) {
   let client
@@ -196,7 +185,6 @@ warn() {} },
 get client() { return client } }
 }
 
-describe("Binance user-data unsubscribe outcome", () => {
 
 
   it("does not retry unsubscribe when the first response is lost but the remote state confirms removal", async () => {
@@ -265,10 +253,8 @@ describe("Binance user-data unsubscribe outcome", () => {
     assert.equal(setup.client.errorListenerCount, 0)
     await setup.broker.disconnect()
   })
-})
 
 
-describe("Binance user-data unsubscribe retry failure", () => {
   it("preserves both errors when the verified unsubscribe retry also fails", async () => {
     let unsubscribeAttempts = 0
     const originalError = new Error("first unsubscribe response timed out")
@@ -314,10 +300,8 @@ warn() {} },
     assert.equal(client.errorListenerCount, 0)
     await broker.disconnect()
   })
-})
 
 
-describe("Binance user-data failed reconnect cleanup", () => {
   it("detaches all session listeners when a replacement client's connect rejects", async () => {
     const scheduler = createScheduler()
     const clients = []
@@ -369,7 +353,6 @@ wasClean: false })
       broker,
       scheduler })
   })
-})
 
 
 function createDelayedSubscriptionBroker({ unsubscribe, subscriptions }) {
@@ -408,7 +391,6 @@ warn() {} },
   }
 }
 
-describe("Binance stale user-data subscription cleanup", () => {
 
 
   it("does not retry stale-subscription cleanup when lookup confirms the first unsubscribe succeeded", async () => {
@@ -461,4 +443,3 @@ describe("Binance stale user-data subscription cleanup", () => {
     assert.equal(unsubscribeAttempts, 2)
     assert.equal(setup.client().calls.filter((call) => call.method === "session.subscriptions").length, 1)
   })
-})

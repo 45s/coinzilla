@@ -45,102 +45,101 @@ async function waitForEvent(...args) {
   throw new Error("Timed out waiting for a Binance TESTNET user-data event")
 }
 
+let broker
+let subscription
+
+function registerIntegrationHooks() {
+  beforeEach(async () => {
+    broker = new BinanceSdkBroker({ apiKey, apiSecret, reconnectDelay: 250 })
+    assert.match(
+      broker.config.websocketApiUrl,
+      /testnet\.binance\.vision/,
+      "User-data integration tests must never connect to production",
+    )
+    await broker.connect()
+  })
+
+  afterEach(async () => {
+    try {
+      await subscription?.disconnect()
+    } finally {
+      await broker?.disconnect()
+      subscription = null
+      broker = null
+    }
+  })
+}
+
+async function runRecoveryIntegrationTest() {
+  const statuses = []
+  const result = await broker.subscribeForUserData({
+    onEvent() {},
+    onStatus: (status) => statuses.push(status),
+  })
+  assert.equal(result.ok, true)
+  subscription = result.data
+  const initialSubscriptionId = subscription.subscriptionId
+  assert.ok(Number.isSafeInteger(initialSubscriptionId))
+  const initialSubscriptions = await broker.tradingConnection.request("session.subscriptions")
+  assert.ok(Array.isArray(initialSubscriptions.data))
+  assert.ok(initialSubscriptions.data.some(
+    (item) => item.subscriptionId === initialSubscriptionId,
+  ))
+  const statusStart = statuses.length
+  const recovered = waitForStatus(statuses, "recovered", statusStart)
+  await broker.tradingConnection.disconnect()
+  await recovered
+  assert.notEqual(subscription.subscriptionId, initialSubscriptionId)
+  assert.equal(broker.connected, true)
+  assert.equal(broker.userDataUnavailable, true)
+  await assertRecoverySnapshots(broker)
+  assert.equal(broker.userDataUnavailable, true, "resubscription alone must not enable trading")
+  assert.equal(subscription.acknowledgeRecovery(), true)
+  assert.equal(broker.userDataUnavailable, false)
+}
+
+async function assertRecoverySnapshots(targetBroker) {
+  const assets = await targetBroker.getAssets()
+  const openOrders = await targetBroker.getOpenOrders()
+  const orderHistory = await targetBroker.getOrderHistory({ symbol, limit: 1000 })
+  const trades = await targetBroker.getMyTrades({ symbol, limit: 1000 })
+  assert.equal(assets.ok, true, "account snapshot must succeed before reconciliation")
+  assert.equal(openOrders.ok, true, "open-order snapshot must succeed before reconciliation")
+  assert.equal(orderHistory.ok, true, "order history lookup must succeed before reconciliation")
+  assert.equal(trades.ok, true, "trade history lookup must succeed before reconciliation")
+}
+
+async function runLiveEventIntegrationTest() {
+  const events = []
+  const result = await broker.subscribeForUserData({
+    onEvent: (payload) => events.push(payload),
+  })
+  assert.equal(result.ok, true)
+  subscription = result.data
+  const event = await waitForEvent(events, eventTimeoutMs)
+  assert.ok(event.event && typeof event.event === "object")
+  assert.notEqual(event.event.eventType, "eventStreamTerminated")
+}
+
+function registerUserDataIntegrationTests() {
+  registerIntegrationHooks()
+  it(
+    "re-subscribes after socket loss and stays fail-closed until snapshots are reconciled",
+    runRecoveryIntegrationTest,
+  )
+  it(
+    "receives a live user-data event when testnet activity is generated externally",
+    {
+      skip: process.env.BINANCE_TESTNET_EXPECT_USER_DATA_EVENT !== "1" &&
+        "Set BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1 and generate testnet account/order activity while this test runs",
+    },
+    runLiveEventIntegrationTest,
+  )
+}
+
 describe(
   "Binance user-data recovery integration (TESTNET only)",
   { skip: !(isExplicitlyOptedIn && hasTestnetCredentials) &&
       "Set BINANCE_TESTNET_INTEGRATION=1 and non-placeholder Binance TESTNET credentials to run these tests" },
-  () => {
-    let broker
-    let subscription
-
-    beforeEach(async () => {
-      broker = new BinanceSdkBroker({
-        apiKey,
-        apiSecret,
-        reconnectDelay: 250,
-      })
-
-      assert.match(
-        broker.config.websocketApiUrl,
-        /testnet\.binance\.vision/,
-        "User-data integration tests must never connect to production",
-      )
-
-      await broker.connect()
-    })
-
-    afterEach(async () => {
-      try {
-        await subscription?.disconnect()
-      } finally {
-        await broker?.disconnect()
-        subscription = null
-        broker = null
-      }
-    })
-
-    it("re-subscribes after socket loss and stays fail-closed until snapshots are reconciled", async () => {
-      const statuses = []
-      const result = await broker.subscribeForUserData({
-        onEvent() {},
-        onStatus: (status) => statuses.push(status),
-      })
-
-      assert.equal(result.ok, true)
-      subscription = result.data
-      const initialSubscriptionId = subscription.subscriptionId
-      assert.ok(Number.isSafeInteger(initialSubscriptionId))
-
-      const initialSubscriptions = await broker.tradingConnection.request("session.subscriptions")
-      assert.ok(Array.isArray(initialSubscriptions.data))
-      assert.ok(initialSubscriptions.data.some(
-        (item) => item.subscriptionId === initialSubscriptionId,
-      ))
-
-      const statusStart = statuses.length
-      const recovered = waitForStatus(statuses, "recovered", statusStart)
-      await broker.tradingConnection.disconnect()
-      await recovered
-
-      assert.notEqual(subscription.subscriptionId, initialSubscriptionId)
-      assert.equal(broker.connected, true)
-      assert.equal(broker.userDataUnavailable, true)
-
-      const assets = await broker.getAssets()
-      const openOrders = await broker.getOpenOrders()
-      const orderHistory = await broker.getOrderHistory({ symbol,
-limit: 1000 })
-      const trades = await broker.getMyTrades({ symbol,
-limit: 1000 })
-
-      assert.equal(assets.ok, true, "account snapshot must succeed before reconciliation")
-      assert.equal(openOrders.ok, true, "open-order snapshot must succeed before reconciliation")
-      assert.equal(orderHistory.ok, true, "order history lookup must succeed before reconciliation")
-      assert.equal(trades.ok, true, "trade history lookup must succeed before reconciliation")
-
-      assert.equal(broker.userDataUnavailable, true, "resubscription alone must not enable trading")
-      assert.equal(subscription.acknowledgeRecovery(), true)
-      assert.equal(broker.userDataUnavailable, false)
-    })
-
-    it(
-      "receives a live user-data event when testnet activity is generated externally",
-      {
-        skip: process.env.BINANCE_TESTNET_EXPECT_USER_DATA_EVENT !== "1" &&
-          "Set BINANCE_TESTNET_EXPECT_USER_DATA_EVENT=1 and generate testnet account/order activity while this test runs",
-      },
-      async () => {
-        const events = []
-        const result = await broker.subscribeForUserData({
-          onEvent: (payload) => events.push(payload),
-        })
-        assert.equal(result.ok, true)
-        subscription = result.data
-
-        const event = await waitForEvent(events, eventTimeoutMs)
-        assert.ok(event.event && typeof event.event === "object")
-        assert.notEqual(event.event.eventType, "eventStreamTerminated")
-      },
-    )
-  },
+  registerUserDataIntegrationTests,
 )

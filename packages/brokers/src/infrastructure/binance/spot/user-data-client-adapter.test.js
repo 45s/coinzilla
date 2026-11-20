@@ -42,36 +42,21 @@ test("maps user-data port operations to the exact signed Binance RPC contract", 
   ])
 })
 
-test("forwards connection state and listener lifecycle through the port", async () => {
-  const client = createFakeRpcClient()
-  const port = createBinanceUserDataClientPort(client)
-  const received = { events: [],
-    errors: [],
-    closes: [] }
-  const removeEvent = port.onEvent((event) => received.events.push(event))
-  const removeError = port.onError((error) => received.errors.push(error))
-  const removeClose = port.onClose((event) => received.closes.push(event))
-
-  assert.equal(port.state, "idle")
-  await port.connect()
-  assert.equal(port.state, "open")
-
+function emitPortLifecycleEvents(client) {
   const event = {
     subscriptionId: 17,
-    event: { e: "balanceUpdate",
-      a: "USDT",
-      d: "1",
-      T: 10,
-      E: 11 },
+    event: { e: "balanceUpdate", a: "USDT", d: "1", T: 10, E: 11 },
   }
   const error = new Error("socket warning")
-  const close = { code: 1006,
-    reason: "network lost" }
+  const close = { code: 1006, reason: "network lost" }
   client.emitEvent(event)
   client.emitEvent(structuredClone(event))
   client.emitError(error)
   client.emitClose(close)
+  return { error, close }
+}
 
+function assertPortLifecycleEvents({ received, error, close }) {
   assert.equal(received.events.length, 2)
   assert.equal(received.events[0].type, "event")
   assert.equal(received.events[0].subscriptionId, 17)
@@ -80,14 +65,26 @@ test("forwards connection state and listener lifecycle through the port", async 
   assert.equal(received.events[1].deduplicationKey, received.events[0].deduplicationKey)
   assert.deepEqual(received.errors, [error])
   assert.deepEqual(received.closes, [close])
+}
 
+test("forwards connection state and listener lifecycle through the port", async () => {
+  const client = createFakeRpcClient()
+  const port = createBinanceUserDataClientPort(client)
+  const received = { events: [], errors: [], closes: [] }
+  const removeEvent = port.onEvent((event) => received.events.push(event))
+  const removeError = port.onError((error) => received.errors.push(error))
+  const removeClose = port.onClose((event) => received.closes.push(event))
+  assert.equal(port.state, "idle")
+  await port.connect()
+  assert.equal(port.state, "open")
+  const events = emitPortLifecycleEvents(client)
+  assertPortLifecycleEvents({ received, ...events })
   removeEvent()
   removeError()
   removeClose()
   assert.equal(client.listenerCount, 0)
   assert.equal(client.errorListenerCount, 0)
   assert.equal(client.closeListenerCount, 0)
-
   await port.disconnect()
   assert.equal(port.state, "closed")
 })

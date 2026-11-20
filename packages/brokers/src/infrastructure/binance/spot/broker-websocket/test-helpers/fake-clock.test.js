@@ -29,10 +29,16 @@ test("FakeClock supports cancellation and timers scheduled by callbacks", () => 
   const canceled = clock.setTimeout(() => calls.push("canceled"), 5)
 
   clock.clearTimeout(canceled)
-  clock.setTimeout(() => {
+  function scheduleChild() {
+    calls.push("child")
+  }
+
+  function scheduleParent() {
     calls.push("parent")
-    clock.setTimeout(() => calls.push("child"), 2)
-  }, 5)
+    clock.setTimeout(scheduleChild, 2)
+  }
+
+  clock.setTimeout(scheduleParent, 5)
 
   clock.advanceBy(7)
 

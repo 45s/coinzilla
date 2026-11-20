@@ -11,47 +11,69 @@ const CONTROL_MESSAGE_INTERVAL = 300
 const MAX_STREAMS_PER_CONNECTION = 1_024
 const MAX_STREAMS_PER_SUBSCRIBE = 200
 
+function assertPositiveInteger({ name, value }) {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new RangeError(`${name} must be a positive integer`)
+  }
+}
+
 function validateClientOptions({ url, transportFactory, ackTimeout, heartbeatTimeout, reconnectDelay, maxReconnectDelay, rotationDelay, onError }) {
   if (typeof url !== "string" || !url.startsWith("wss://") && !url.startsWith("ws://")) {
     throw new TypeError("A valid WebSocket Streams URL is required")
   }
-  if (typeof transportFactory !== "function") {throw new TypeError("transportFactory must be a function")}
-  if (!Number.isInteger(ackTimeout) || ackTimeout < 1) {throw new RangeError("ackTimeout must be a positive integer")}
-  if (!Number.isInteger(heartbeatTimeout) || heartbeatTimeout < 1) {
-    throw new RangeError("heartbeatTimeout must be a positive integer")
+  if (typeof transportFactory !== "function") {
+    throw new TypeError("transportFactory must be a function")
   }
-  if (!Number.isInteger(reconnectDelay) || reconnectDelay < 1) {throw new RangeError("reconnectDelay must be a positive integer")}
+  for (const [name, value] of Object.entries({
+    ackTimeout,
+    heartbeatTimeout,
+    reconnectDelay,
+    rotationDelay,
+  })) {
+    assertPositiveInteger({ name, value })
+  }
   if (!Number.isInteger(maxReconnectDelay) || maxReconnectDelay < reconnectDelay) {
     throw new RangeError("maxReconnectDelay must be greater than or equal to reconnectDelay")
   }
-  if (!Number.isInteger(rotationDelay) || rotationDelay < 1) {throw new RangeError("rotationDelay must be a positive integer")}
-  if (typeof onError !== "function") {throw new TypeError("onError must be a function")}
+  if (typeof onError !== "function") {
+    throw new TypeError("onError must be a function")
+  }
+}
+
+function matchesAllMarketStream(stream, message) {
+  const eventTypes = {
+    "!miniTicker@arr": "24hrMiniTicker",
+    "!ticker@arr": "24hrTicker",
+  }
+  if (eventTypes[stream]) {return message.e === eventTypes[stream]}
+  const window = stream.match(/^!ticker_(1h|4h)@arr$/)?.[1]
+  return Boolean(window && message.e === `${window}Ticker`)
+}
+
+function matchesSymbolStreamType(streamType, message) {
+  const eventTypes = {
+    aggTrade: "aggTrade",
+    trade: "trade",
+    miniTicker: "24hrMiniTicker",
+    ticker: "24hrTicker",
+  }
+  if (eventTypes[streamType]) {return message.e === eventTypes[streamType]}
+  if (streamType === "bookTicker") {return message.e === undefined || message.e === "bookTicker"}
+  if (streamType.startsWith("kline_")) {
+    return message.e === "kline" && message.k?.i === streamType.slice(6)
+  }
+  if (streamType.startsWith("ticker_")) {return message.e === `${streamType.slice(7)}Ticker`}
+  if (streamType.startsWith("depth")) {return message.e === "depthUpdate"}
+  return false
 }
 
 function matchesRawStream(...args) {
   const [stream, message] = args
   if (Array.isArray(message)) {return message.some((item) => matchesRawStream(stream, item))}
-
-  const symbol = typeof message.s === "string" ? message.s.toLowerCase() : null
-  if (stream.startsWith("!")) {
-    if (stream === "!miniTicker@arr") {return message.e === "24hrMiniTicker"}
-    if (stream === "!ticker@arr") {return message.e === "24hrTicker"}
-    const window = stream.match(/^!ticker_(1h|4h)@arr$/)?.[1]
-    return Boolean(window && message.e === `${window}Ticker`)
-  }
-
+  if (stream.startsWith("!")) {return matchesAllMarketStream(stream, message)}
   const [streamSymbol, streamType] = stream.split("@")
-  if (symbol !== streamSymbol) {return false}
-
-  if (streamType === "aggTrade") {return message.e === "aggTrade"}
-  if (streamType === "trade") {return message.e === "trade"}
-  if (streamType === "miniTicker") {return message.e === "24hrMiniTicker"}
-  if (streamType === "ticker") {return message.e === "24hrTicker"}
-  if (streamType === "bookTicker") {return message.e === undefined || message.e === "bookTicker"}
-  if (streamType.startsWith("kline_")) {return message.e === "kline" && message.k?.i === streamType.slice(6)}
-  if (streamType.startsWith("ticker_")) {return message.e === `${streamType.slice(7)}Ticker`}
-  if (streamType.startsWith("depth")) {return message.e === "depthUpdate"}
-  return false
+  const symbol = typeof message.s === "string" ? message.s.toLowerCase() : null
+  return symbol === streamSymbol && matchesSymbolStreamType(streamType, message)
 }
 
 /**
@@ -172,60 +194,7 @@ export class BinanceStreamsClient {
     const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
     if (streams.length === 0) {throw new TypeError("At least one stream is required")}
 
-    return this.#enqueueOperation(async () => {
-      const addedListeners = []
-      for (const stream of new Set(streams)) {
-        let listeners = this.#listeners.get(stream)
-        if (!listeners) {
-          listeners = new Set()
-          this.#listeners.set(stream, listeners)
-        }
-        if (!listeners.has(listener)) {
-          listeners.add(listener)
-          addedListeners.push(stream)
-        }
-      }
-
-      const desiredStreams = [...this.#listeners.keys()]
-      if (desiredStreams.length > MAX_STREAMS_PER_CONNECTION) {
-        this.#removeListenerFromStreams({ streams: addedListeners,
-          listener })
-        throw new RangeError(`Binance allows at most ${MAX_STREAMS_PER_CONNECTION} streams per connection`)
-      }
-
-      try {
-        if (this.#state !== "open") {
-          await this.#connect(this.#reconnectAttempts > 0, desiredStreams)
-        }
-
-        const missingStreams = streams.filter((stream) => !this.#activeStreams.has(stream))
-        const activatedStreams = []
-        try {
-          for (const batch of this.#chunk([...new Set(missingStreams)], MAX_STREAMS_PER_SUBSCRIBE)) {
-            await this.#request({ method: "SUBSCRIBE",
-              streams: batch })
-            for (const stream of batch) {
-              this.#activeStreams.add(stream)
-              activatedStreams.push(stream)
-            }
-          }
-        } catch (error) {
-          if (activatedStreams.length > 0) {
-            for (const stream of activatedStreams) {this.#activeStreams.delete(stream)}
-            this.#request({ method: "UNSUBSCRIBE",
-              streams: activatedStreams })
-              .catch((cleanupError) => this.#reportError(cleanupError))
-          }
-          throw error
-        }
-      } catch (error) {
-        this.#removeListenerFromStreams({ streams: addedListeners,
-          listener })
-        throw error
-      }
-
-      return streams
-    })
+    return this.#enqueueOperation(() => this.#subscribeStreams({ streams, listener }))
   }
 
   /**
@@ -235,6 +204,68 @@ export class BinanceStreamsClient {
    * @param {(message: object) => void} [listener]
    * @returns {Promise<string[]>} The normalized stream names processed.
    */
+  async #subscribeStreams({ streams, listener }) {
+    const addedListeners = this.#addListeners({ streams, listener })
+    const desiredStreams = [...this.#listeners.keys()]
+    if (desiredStreams.length > MAX_STREAMS_PER_CONNECTION) {
+      this.#removeListenerFromStreams({ streams: addedListeners, listener })
+      throw new RangeError(`Binance allows at most ${MAX_STREAMS_PER_CONNECTION} streams per connection`)
+    }
+    try {
+      await this.#connectIfNeeded(desiredStreams)
+      await this.#activateMissingStreams(streams)
+    } catch (error) {
+      this.#removeListenerFromStreams({ streams: addedListeners, listener })
+      throw error
+    }
+    return streams
+  }
+
+  #addListeners({ streams, listener }) {
+    const added = []
+    for (const stream of streams) {
+      let listeners = this.#listeners.get(stream)
+      if (!listeners) {
+        listeners = new Set()
+        this.#listeners.set(stream, listeners)
+      }
+      if (listeners.has(listener)) {continue}
+      listeners.add(listener)
+      added.push(stream)
+    }
+    return added
+  }
+
+  async #connectIfNeeded(desiredStreams) {
+    if (this.#state !== "open") {
+      await this.#connect(this.#reconnectAttempts > 0, desiredStreams)
+    }
+  }
+
+  async #activateMissingStreams(streams) {
+    const missing = streams.filter((stream) => !this.#activeStreams.has(stream))
+    const activated = []
+    try {
+      for (const batch of this.#chunk([...new Set(missing)], MAX_STREAMS_PER_SUBSCRIBE)) {
+        await this.#request({ method: "SUBSCRIBE", streams: batch })
+        for (const stream of batch) {
+          this.#activeStreams.add(stream)
+          activated.push(stream)
+        }
+      }
+    } catch (error) {
+      this.#rollbackActivatedStreams(activated)
+      throw error
+    }
+  }
+
+  #rollbackActivatedStreams(streams) {
+    if (streams.length === 0) {return}
+    for (const stream of streams) {this.#activeStreams.delete(stream)}
+    this.#request({ method: "UNSUBSCRIBE", streams })
+      .catch((cleanupError) => this.#reportError(cleanupError))
+  }
+
   async unsubscribe(...args) {
     const [streamNames, listener] = args
     const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
@@ -404,38 +435,44 @@ export class BinanceStreamsClient {
     })
   }
 
-  async #activateInitialStreams({ transport, connectionStreams }) {
-    const initialBatch = connectionStreams.slice(0, MAX_STREAMS_PER_SUBSCRIBE)
-    const listedStreams = await this.#request({ method: "LIST_SUBSCRIPTIONS" })
+  #assertCurrentConnection(transport) {
     if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
       throw new Error("Binance Streams connection was superseded")
     }
+  }
+
+  async #activateInitialStreams({ transport, connectionStreams }) {
+    const initialBatch = connectionStreams.slice(0, MAX_STREAMS_PER_SUBSCRIBE)
+    const listedStreams = await this.#request({ method: "LIST_SUBSCRIPTIONS" })
+    this.#assertCurrentConnection(transport)
     if (!Array.isArray(listedStreams) || !initialBatch.every((stream) => listedStreams.includes(stream))) {
       throw new Error("Binance combined-stream connection did not confirm its initial subscriptions")
     }
-
     const desiredStreams = new Set(this.#listeners.keys())
-    const obsoleteInitialStreams = initialBatch.filter((stream) => !desiredStreams.has(stream))
-    if (obsoleteInitialStreams.length > 0) {
-      await this.#request({ method: "UNSUBSCRIBE",
-        streams: obsoleteInitialStreams })
-      if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
-        throw new Error("Binance Streams connection was superseded")
-      }
-    }
+    await this.#removeObsoleteInitialStreams({ transport, initialBatch, desiredStreams })
+    this.#markInitialStreamsActive({ initialBatch, desiredStreams })
+    await this.#subscribeRemainingStreams({ transport, connectionStreams, desiredStreams })
+  }
+
+  async #removeObsoleteInitialStreams({ transport, initialBatch, desiredStreams }) {
+    const obsolete = initialBatch.filter((stream) => !desiredStreams.has(stream))
+    if (obsolete.length === 0) {return}
+    await this.#request({ method: "UNSUBSCRIBE", streams: obsolete })
+    this.#assertCurrentConnection(transport)
+  }
+
+  #markInitialStreamsActive({ initialBatch, desiredStreams }) {
     for (const stream of initialBatch) {
       if (desiredStreams.has(stream)) {this.#activeStreams.add(stream)}
     }
+  }
 
-    const remainingStreams = connectionStreams
-      .slice(MAX_STREAMS_PER_SUBSCRIBE)
+  async #subscribeRemainingStreams({ transport, connectionStreams, desiredStreams }) {
+    const remaining = connectionStreams.slice(MAX_STREAMS_PER_SUBSCRIBE)
       .filter((stream) => desiredStreams.has(stream))
-    for (const batch of this.#chunk(remainingStreams, MAX_STREAMS_PER_SUBSCRIBE)) {
-      await this.#request({ method: "SUBSCRIBE",
-        streams: batch })
-      if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
-        throw new Error("Binance Streams connection was superseded")
-      }
+    for (const batch of this.#chunk(remaining, MAX_STREAMS_PER_SUBSCRIBE)) {
+      await this.#request({ method: "SUBSCRIBE", streams: batch })
+      this.#assertCurrentConnection(transport)
       for (const stream of batch) {this.#activeStreams.add(stream)}
     }
   }
@@ -577,17 +614,24 @@ payload: JSON.stringify(request) })
         this.#closeForServerShutdown(1012)
         return
       }
-      for (const [stream, listeners] of this.#listeners) {
-        const matches = parsed.stream ? parsed.stream === stream : matchesRawStream(stream, message)
-        if (!matches) {continue}
-        this.#lastMessageAt.set(stream, this.now())
-        for (const listener of listeners) {
-          try {
-            listener(message)
-          } catch (error) {
-            this.#reportError(error)
-          }
-        }
+      this.#dispatchDataMessage({ parsed, message })
+    }
+  }
+
+  #dispatchDataMessage({ parsed, message }) {
+    for (const [stream, listeners] of this.#listeners) {
+      const matches = parsed.stream ? parsed.stream === stream : matchesRawStream(stream, message)
+      if (matches) {this.#dispatchToStream({ stream, listeners, message })}
+    }
+  }
+
+  #dispatchToStream({ stream, listeners, message }) {
+    this.#lastMessageAt.set(stream, this.now())
+    for (const listener of listeners) {
+      try {
+        listener(message)
+      } catch (error) {
+        this.#reportError(error)
       }
     }
   }
