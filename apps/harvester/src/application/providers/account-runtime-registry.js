@@ -76,7 +76,7 @@ function createSerializedAccountTransitionQueue() {
   }
 }
 
-function defineAccountTradingStateProperties({
+function defineCoreAccountStateProperties({
   state,
   getPortfolio,
   setPortfolio,
@@ -86,12 +86,6 @@ function defineAccountTradingStateProperties({
   setOrderRegistry,
   getLegacyPositions,
   setLegacyPositions,
-  getRecoverySellerBuyExecutionByCycle,
-  setRecoverySellerBuyExecutionByCycle,
-  getRecoverySellerSellReservations,
-  setRecoverySellerSellReservations,
-  getUpdateQueue,
-  setUpdateQueue,
 }) {
   const definitions = [
     {
@@ -122,6 +116,25 @@ function defineAccountTradingStateProperties({
       isValid: (value) => value instanceof Map,
       errorMessage: "Account workflow legacyPositions must be a Map",
     },
+  ]
+  for (const definition of definitions) {
+    defineValidatedStateProperty({
+      state,
+      ...definition,
+    })
+  }
+}
+
+function defineRecoverySellerAccountStateProperties({
+  state,
+  getRecoverySellerBuyExecutionByCycle,
+  setRecoverySellerBuyExecutionByCycle,
+  getRecoverySellerSellReservations,
+  setRecoverySellerSellReservations,
+  getUpdateQueue,
+  setUpdateQueue,
+}) {
+  const definitions = [
     {
       property: "recoverySellerBuyExecutionByCycle",
       getValue: getRecoverySellerBuyExecutionByCycle,
@@ -150,6 +163,11 @@ function defineAccountTradingStateProperties({
       ...definition,
     })
   }
+}
+
+function defineAccountTradingStateProperties(input) {
+  defineCoreAccountStateProperties(input)
+  defineRecoverySellerAccountStateProperties(input)
 }
 
 function createAccountTradingState() {
