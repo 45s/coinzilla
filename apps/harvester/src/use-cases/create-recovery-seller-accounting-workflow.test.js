@@ -187,6 +187,28 @@ function makeWorkflow(context) {
   })
 }
 
+test("keeps a stable current cycle identity until the cycle is completed", () => {
+  let nextCycle = 0
+  const workflow = createRecoverySellerAccountingWorkflow({
+    createCycleId: () => `rs-cycle-${++nextCycle}`,
+  })
+
+  const first = workflow.getOrCreateCycleState({
+    marketId: market.id,
+  })
+  const repeated = workflow.getOrCreateCycleState({
+    marketId: market.id,
+  })
+
+  assert.deepEqual(repeated, first)
+  assert.equal(first.cycleId, "rs-cycle-1")
+  assert.equal(first.status, "ACCUMULATING")
+  assert.equal(workflow.getLatestBuyExecutionForMarket({
+    marketId: market.id,
+  }), undefined)
+})
+
+
 test("reserves one durable RS SELL per cycle before shared order registration", async () => {
   const context = makeContext()
   const workflow = makeWorkflow({
@@ -305,6 +327,15 @@ test("commits reconciled RS projections and releases the shared SELL reservation
     "The central SELL reservation must be released only after both projections commit.")
   assert.equal(workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }), undefined,
     "The cycle-scoped SELL reservation must release only after both accounting projections commit.")
+  const cycleOutcome = workflow.getCycleOutcome({ cycleId: "rs-cycle-1" })
+  assert.equal(
+    cycleOutcome.status,
+    result.data.profitability.eligible ? "CLOSED" : "UNRESOLVED",
+  )
+  assert.equal(
+    workflow.getCycleStateForMarket({ marketId: market.id }).status,
+    cycleOutcome.status,
+  )
 })
 
 test("keeps the SELL reservation and both projections unchanged when terminal fill history is incomplete", async () => {
