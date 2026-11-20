@@ -68,7 +68,6 @@ The S-4 audit inspected the existing canonical standard, the shared base and rep
 - **Adoption gap:** older feature-owned errors still directly extend native `Error` (including operator-query, market-readiness, trading-session, Telegram configuration/startup and process operational-state errors). Existing paths have tests, but the adoption is not uniform and no repository-wide scanner enforces it. This is not authority for a blanket conversion; #1028 remains the incremental owner-coordinated migration.
 - **Decision:** retain one canonical standard and the existing base. S-4 adds conceptual failure categories without a universal category property, clarifies retry ownership and idempotency, distinguishes known failures from unknown outcomes, defines safe fallback versus fail-closed behavior, and strengthens logging/reporting and test expectations. No runtime behavior, package API, CI workflow or exchange operation is changed in this phase.
 
-
 **Status:** S-4 policy extension merged in [PR #1579](https://github.com/45s/coinzilla/pull/1579) at `659493ca23792e1ac339de7102e3cebb4d377cba`. Gradual adoption of legacy error subclasses remains owner-coordinated under [#1028](https://github.com/45s/coinzilla/issues/1028).
 
 ## S-5 verified findings — 2026-11-20
@@ -139,6 +138,7 @@ Keep the issue's S-0 through S-10 structure, with these coordination adjustments
 8. **S-8 — templates.** Build optional templates only after the standards they encode are accepted.
 9. **S-9 — CI enforcement.** Coordinate architecture and package-matrix checks with #1264 and #1565; add only deterministic, high-confidence gates.
 10. **S-10 — documentation governance closeout.** Reconcile with #795, #1401 and #1403; do not absorb their independent scopes.
+
 ## Verification record
 
 S-0 was a source/documentation inspection using GitHub repository files, manifests, workflow definitions, issue and PR state, and commit comparisons.
