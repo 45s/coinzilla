@@ -833,7 +833,7 @@ Follow the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, and `AI_AGEN
 2. Review the complete diff for unrelated changes, secrets, generated noise, and ownership violations.
 3. Run narrow tests, broker package tests, relevant workspace tests, syntax checks, and dependency audit as applicable.
 4. Open a focused PR targeting `develop` with scope, compatibility impact, test evidence, exact checked commit, and remaining limitations.
-5. The responsible agent may merge after all required CI, freshness, and ownership gates pass. Routine human approval is not required for `develop`.
+5. The user reviews and merges after all required CI, freshness, and ownership gates pass. The responsible agent leaves the PR open and reports exact-head verification.
 
 ### Stop and ask the user when
 
@@ -880,7 +880,7 @@ When a new discovery changes an implementation decision:
 - Every task PR targets `develop`; do not open new work against `migration/binance-native-ws`, `feature/brokers`, or `main`.
 - Keep PRs focused on one broker task or a tightly coupled implementation/test/documentation change.
 - A task is complete only after its PR is integrated into `develop`, all required checks pass, and this roadmap reflects the verified result.
-- The responsible agent may merge a task PR after CI, target freshness, and ownership gates pass. No routine human approval is expected for `develop`.
+- The user reviews and merges a task PR after CI, target freshness, and ownership gates pass. The responsible agent must leave the PR open for review.
 - Keep all ongoing implementation and integration work on `develop`; do not create or manage release branches/PRs as part of a package task. Any separate release workflow requires an explicit user request.
 - Do not claim a phase complete merely because a PR is open or CI has started.
 
@@ -984,9 +984,9 @@ The DDD modernization is an internal refactor of a working package. **Do not reb
 - Work only in `packages/brokers/**` unless a separately authorized repository-level metadata change or cross-domain request requires otherwise.
 - Characterize existing behavior first. Follow strict RED → GREEN → REFACTOR in small vertical slices; run deterministic tests after each change and maintain the package coverage gates. Do not weaken or delete existing tests to make a refactor pass.
 - Create as many focused PRs as necessary. Each task branch is short-lived, starts from the latest `develop`, and targets `develop`. Multiple coherent commits per task branch are encouraged.
-- The agent owns the full delivery loop: implement, test, document, synchronize, open PR, inspect CI, merge when safe, clean up, update this roadmap, and start the next task. **Do not stop to request routine user approval or wait for the user to ask you to continue.**
-- Merge a task PR into `develop` once its exact head is current with `develop`, all required CI checks are green, broker package tests and applicable coverage pass, the diff is focused, and existing broker behavior/compatibility has been verified. No routine human approval is required for task PRs into `develop`. Never bypass branch protection or merge with pending/failed/missing required checks.
-- After merge, verify the merge, update task status here, delete the source branch when no longer needed, and start the next incomplete DDD slice from the latest `develop`. Repeat until the refactor scope is complete.
+- The agent owns implementation, tests, documentation, synchronization, PR creation, CI monitoring, review-ready handoff, and progression to the next task. The user owns review and merge; the agent performs cleanup after the user merges. **Do not stop implementation for routine approval or wait for the user to ask you to continue.**
+- Leave a task PR open for user review and merge once its exact head is current with `develop`, all required CI checks are green, broker package tests and applicable coverage pass, the diff is focused, and existing broker behavior/compatibility has been verified. Never merge or enable auto-merge on the user's behalf, and never bypass branch protection or hand over a PR with pending/failed/missing required checks.
+- After the user merges, verify the merge, update task status here, delete the source branch when no longer needed, and start the next incomplete DDD slice from the latest `develop`. Repeat until the refactor scope is complete.
 - A task is not complete merely because code or a PR exists. Every slice must be well tested, documented, CI-verified, and merged. A green CI badge does not excuse a behavior or compatibility regression.
 - If a genuine blocker prevents safe merge, state the exact blocker and evidence; fix it where possible and continue with independent safe tasks. Never claim tests were run when they were not.
 

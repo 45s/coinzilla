@@ -276,7 +276,7 @@ The repository's GitHub Actions workflows currently run package tests and test c
 
 ## AI-agent workflow authority
 
-The repository-wide workflow, domain ownership, cross-domain request process, and release policy are defined in [`AI_AGENT_WORKFLOW.md`](AI_AGENT_WORKFLOW.md). It is mandatory and takes precedence over a task prompt that asks an agent to bypass it. Package/application `AGENTS.md` files may add stricter local rules but must not weaken repository-wide requirements.
+The repository-wide workflow, domain ownership, cross-domain request process, and release policy are defined in [`AI_AGENT_WORKFLOW.md`](AI_AGENT_WORKFLOW.md). It is mandatory. User authorization governs whether a PR may be merged; repository instructions never grant an agent permission to merge on the user's behalf. Package/application `AGENTS.md` files may add stricter local rules but must not weaken repository-wide requirements.
 
 ### ECMAScript module exports
 
