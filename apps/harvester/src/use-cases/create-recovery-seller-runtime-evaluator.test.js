@@ -190,15 +190,25 @@ test("skips symbols without an enabled Recovery Seller pair", async () => {
 
 
 function createRuntimeLifecycleMarket() {
-  const baseAsset = new Asset({ id: "binance:ZRO", code: "ZRO" })
-  const quoteAsset = new Asset({ id: "binance:USDT", code: "USDT" })
+  const baseAsset = new Asset({
+    id: "binance:ZRO",
+    code: "ZRO",
+  })
+  const quoteAsset = new Asset({
+    id: "binance:USDT",
+    code: "USDT",
+  })
   const market = new Market({
     venue: "binance",
     symbol,
     baseAsset,
     quoteAsset,
   })
-  return { baseAsset, quoteAsset, market }
+  return {
+    baseAsset,
+    quoteAsset,
+    market,
+  }
 }
 
 function createRuntimeLifecycleBuyOrder({ market, baseAsset, quoteAsset } = {}) {
@@ -208,9 +218,18 @@ function createRuntimeLifecycleBuyOrder({ market, baseAsset, quoteAsset } = {}) 
     market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "2", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "5.01", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "5.01", asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 2,
@@ -239,9 +258,18 @@ function createRuntimeLifecycleBuyFill({ buyOrder, market, baseAsset, quoteAsset
     clientOrderId: buyOrder.clientOrderId,
     market,
     side: "BUY",
-    price: new Money({ amount: "2", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "5.01", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "10.02", asset: quoteAsset }),
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "10.02",
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -266,7 +294,7 @@ function createRuntimeLifecycleWorkflow({ buyOrder, buyOwnership, market } = {})
   })
 }
 
-function createRuntimeLifecycleMarketMetadata({ market, baseAsset, quoteAsset } = {}) {
+function createRuntimeLifecycleMarketMetadata({ market, quoteAsset } = {}) {
   return {
     market,
     orderType: "LIMIT_MAKER",
@@ -276,7 +304,10 @@ function createRuntimeLifecycleMarketMetadata({ market, baseAsset, quoteAsset } 
       constraints: [{
         type: "PRICE_INCREMENT",
         status: "SUPPORTED",
-        value: new Money({ amount: "0.1", asset: quoteAsset }),
+        value: new Money({
+          amount: "0.1",
+          asset: quoteAsset,
+        }),
       }],
     }),
   }
@@ -285,8 +316,14 @@ function createRuntimeLifecycleMarketMetadata({ market, baseAsset, quoteAsset } 
 function createRuntimeLifecycleAccountSnapshot({ baseAsset } = {}) {
   return {
     balances: [new Balance({
-      free: new Quantity({ amount: "55.01", asset: baseAsset }),
-      locked: new Quantity({ amount: "0", asset: baseAsset }),
+      free: new Quantity({
+        amount: "55.01",
+        asset: baseAsset,
+      }),
+      locked: new Quantity({
+        amount: "0",
+        asset: baseAsset,
+      }),
     })],
   }
 }
@@ -297,9 +334,18 @@ function createRuntimeLifecycleSellOrder({ action, market, baseAsset, quoteAsset
     market,
     side: "SELL",
     type: action.type,
-    limitPrice: new Money({ amount: action.price, asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: action.quantity, asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({
+      amount: action.price,
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: action.quantity,
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
     status: "PENDING",
     createdAt: 4,
     updatedAt: 4,
@@ -343,7 +389,10 @@ function createRuntimeLifecycleSubmitter({ workflow, market, baseAsset, quoteAss
       order,
       ownership,
     })
-    return { ok: true, data: { submitted: true } }
+    return {
+      ok: true,
+      data: { submitted: true },
+    }
   }
 }
 
@@ -368,7 +417,6 @@ function createRuntimeLifecycleSellDecision({ metrics } = {}) {
 function createRuntimeLifecycleEvaluator({ workflow, market, baseAsset, quoteAsset, metrics } = {}) {
   const metadata = createRuntimeLifecycleMarketMetadata({
     market,
-    baseAsset,
     quoteAsset,
   })
   const accountSnapshotForRuntime = createRuntimeLifecycleAccountSnapshot({ baseAsset })
@@ -376,7 +424,10 @@ function createRuntimeLifecycleEvaluator({ workflow, market, baseAsset, quoteAss
     recoverySellerWorkflow: workflow,
     recoverySellerStopWorkflow: { getState: () => stopState },
     recoverySellerPairs: {
-      [symbol]: { sellQuantity: "0.01", thirdAssetFeeQuoteValue: "0" },
+      [symbol]: {
+        sellQuantity: "0.01",
+        thirdAssetFeeQuoteValue: "0",
+      },
     },
     getRecoverySellerMarketMetadata: async () => metadata,
     getAccountSnapshot: async () => accountSnapshotForRuntime,
@@ -420,7 +471,10 @@ async function createRuntimeLifecycleFixture() {
     buyResult.errors?.[0]?.message ?? "The canonical recovery BUY fill must be applied.")
   assert.equal(workflow.getBuyExecutionVwap({ cycleId: "rs-cycle-1" }), "2",
     "The runtime snapshot must derive its recovery BUY reference from actual canonical fills.")
-  const metrics = { sellEvaluations: 0, submitCalls: 0 }
+  const metrics = {
+    sellEvaluations: 0,
+    submitCalls: 0,
+  }
   return {
     workflow,
     metrics,
