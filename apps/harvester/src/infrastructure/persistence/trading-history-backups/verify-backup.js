@@ -129,14 +129,42 @@ async function assertRegularFile(filename, { stage, code, environment } = {}) {
   }
 }
 
+async function assertRegularDirectory(directory, { environment, backupFilename } = {}) {
+  let stats
+  try {
+    stats = await lstat(directory)
+  } catch (cause) {
+    throw createBackupError({
+      stage: "backup-directory-validation",
+      code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
+      cause,
+      environment,
+      backupFilename,
+    })
+  }
+  if (stats.isSymbolicLink() || !stats.isDirectory()) {
+    throw createBackupError({
+      stage: "backup-directory-validation",
+      code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
+      environment,
+      backupFilename,
+    })
+  }
+}
+
 function validateManifest({ manifest, backupFilename, environment } = {}) {
   const latestSchemaVersion = HARVESTER_RELATIONAL_MIGRATIONS.at(-1)?.version ?? 0
+  const environmentDirectory = environment === "live" ? "production" : "testnet"
+  const filenamePattern = new RegExp(
+    `^harvester-${environmentDirectory}-\\d{8}T\\d{9}Z-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.sqlite$`,
+  )
   const validTimestamp = typeof manifest?.createdAt === "string" &&
     Number.isFinite(Date.parse(manifest.createdAt)) &&
     new Date(manifest.createdAt).toISOString() === manifest.createdAt
   const validManifest = manifest?.formatVersion === MANIFEST_FORMAT_VERSION &&
     manifest.environment === environment &&
     manifest.filename === basename(backupFilename) &&
+    filenamePattern.test(basename(backupFilename)) &&
     Number.isSafeInteger(manifest.schemaVersion) &&
     manifest.schemaVersion >= 0 &&
     manifest.schemaVersion <= latestSchemaVersion &&
@@ -160,6 +188,13 @@ export async function readAndValidateManifest({
   backupDirectory,
   environment,
 } = {}) {
+  if (typeof backupFilename !== "string" || typeof backupDirectory !== "string") {
+    throw createBackupError({
+      stage: "manifest-input-validation",
+      code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
+      environment,
+    })
+  }
   const resolvedFilename = resolve(backupFilename)
   const resolvedDirectory = resolve(backupDirectory)
   if (dirname(resolvedFilename) !== resolvedDirectory) {
@@ -170,25 +205,10 @@ export async function readAndValidateManifest({
       backupFilename: resolvedFilename,
     })
   }
-  await assertRegularFile(resolvedDirectory, {
-    stage: "manifest-directory-validation",
-    code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
+  await assertRegularDirectory(resolvedDirectory, {
     environment,
-  }).catch((error) => {
-    if (error instanceof OrderHistoryPersistenceError) {
-      throw error
-    }
-    throw error
+    backupFilename: resolvedFilename,
   })
-  const backupDirectoryStats = await lstat(resolvedDirectory)
-  if (backupDirectoryStats.isSymbolicLink() || !backupDirectoryStats.isDirectory()) {
-    throw createBackupError({
-      stage: "manifest-directory-validation",
-      code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
-      environment,
-      backupFilename: resolvedFilename,
-    })
-  }
   await assertRegularFile(resolvedFilename, {
     stage: "backup-file-validation",
     code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
@@ -217,7 +237,18 @@ export async function readAndValidateManifest({
     backupFilename: resolvedFilename,
     environment,
   })
-  const actualDigest = await calculateSha256(resolvedFilename)
+  let actualDigest
+  try {
+    actualDigest = await calculateSha256(resolvedFilename)
+  } catch (cause) {
+    throw createBackupError({
+      stage: "digest-read",
+      code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
+      cause,
+      environment,
+      backupFilename: resolvedFilename,
+    })
+  }
   if (actualDigest !== manifest.sha256) {
     throw createBackupError({
       stage: "digest-validation",
