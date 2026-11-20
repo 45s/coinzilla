@@ -189,6 +189,82 @@ function evaluateSell({ evaluateSellDecision, snapshot, input }) {
  * @param {Function} [input.evaluateSellDecision] Pure RS SELL policy override for testing.
  * @returns {Function} Async transition evaluator for createLatestTransitionEvaluator.
  */
+async function evaluateRecoverySellerTransition({
+  input,
+  getSnapshot,
+  submitOrder,
+  evaluateBuyDecision,
+  evaluateSellDecision,
+}) {
+  try {
+    validateTransitionInput(input)
+    const snapshot = validateSnapshot(await getSnapshot(input))
+    if (canEvaluateSell({ snapshot })) {
+      const sellDecision = evaluateSell({
+        evaluateSellDecision,
+        snapshot,
+        input,
+      })
+      if (sellDecision.stopState?.status === "STOPPED" ||
+          sellDecision.decision?.outcome !== "SUBMIT") {
+        return sellDecision
+      }
+      const action = createSellAction({
+        sellDecision,
+        snapshot,
+        marketPrice: input.marketPrice,
+        marketMetadata: input.marketMetadata,
+      })
+      if (action) {
+        return submitOrder({
+          lifecycleDecision: sellDecision.decision,
+          action,
+          marketMetadata: input.marketMetadata,
+        })
+      }
+    }
+
+    const buyDecision = evaluateBuy({
+      evaluateBuyDecision,
+      snapshot,
+      input,
+    })
+    const action = createBuyAction({
+      buyDecision,
+    })
+    if (!action) {
+      return buyDecision
+    }
+    return submitOrder({
+      lifecycleDecision: buyDecision.decision,
+      action,
+      marketMetadata: input.marketMetadata,
+    })
+  } catch (error) {
+    return toResult({
+      error,
+    })
+  }
+}
+
+/**
+ * Compose the pure Recovery Seller BUY/SELL policies with the durable order
+ * submitter. The SELL policy's planned minimum price is the trigger: below it,
+ * the evaluator continues the next BUY tranche; at/above it, the evaluator
+ * submits one owned mixed SELL. Existing orders, STOP, pause and incomplete
+ * reconciliation always take precedence over new actions.
+ *
+ * The snapshot provider owns recovery-cycle identity, actual BUY VWAP,
+ * Position/legacy accounting, available Spot allocation and pending BUY
+ * commitment. This evaluator does not invent or persist those facts.
+ *
+ * @param {object} input Dependencies for reading the current RS snapshot and submitting one owned action.
+ * @param {Function} input.getSnapshot Read the authoritative market/cycle/account snapshot.
+ * @param {Function} input.submitOrder Submit through createRecoverySellerOrderSubmitter.
+ * @param {Function} [input.evaluateBuyDecision] Pure RS BUY policy override for testing.
+ * @param {Function} [input.evaluateSellDecision] Pure RS SELL policy override for testing.
+ * @returns {Function} Async transition evaluator for createLatestTransitionEvaluator.
+ */
 export function createRecoverySellerTransitionEvaluator({
   getSnapshot,
   submitOrder,
@@ -205,56 +281,11 @@ export function createRecoverySellerTransitionEvaluator({
       throw new TypeError(`${name} must be a function`)
     }
   }
-
-  return async (input = {}) => {
-    try {
-      validateTransitionInput(input)
-      const snapshot = validateSnapshot(await getSnapshot(input))
-      if (canEvaluateSell({ snapshot })) {
-        const sellDecision = evaluateSell({
-          evaluateSellDecision,
-          snapshot,
-          input,
-        })
-        if (sellDecision.stopState?.status === "STOPPED" ||
-            sellDecision.decision?.outcome !== "SUBMIT") {
-          return sellDecision
-        }
-        const action = createSellAction({
-          sellDecision,
-          snapshot,
-          marketPrice: input.marketPrice,
-          marketMetadata: input.marketMetadata,
-        })
-        if (action) {
-          return submitOrder({
-            lifecycleDecision: sellDecision.decision,
-            action,
-            marketMetadata: input.marketMetadata,
-          })
-        }
-      }
-
-      const buyDecision = evaluateBuy({
-        evaluateBuyDecision,
-        snapshot,
-        input,
-      })
-      const action = createBuyAction({
-        buyDecision,
-      })
-      if (!action) {
-        return buyDecision
-      }
-      return submitOrder({
-        lifecycleDecision: buyDecision.decision,
-        action,
-        marketMetadata: input.marketMetadata,
-      })
-    } catch (error) {
-      return toResult({
-        error,
-      })
-    }
-  }
+  return (input = {}) => evaluateRecoverySellerTransition({
+    input,
+    getSnapshot,
+    submitOrder,
+    evaluateBuyDecision,
+    evaluateSellDecision,
+  })
 }

@@ -197,7 +197,12 @@ test("does not evaluate SELL before the first recovery Position exists", async (
     evaluateBuyDecision: () => createBuyDecision(),
     submitOrder: async (input) => {
       submitted = input
-      return { ok: true, data: { submitted: true } }
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
     },
   })
 
