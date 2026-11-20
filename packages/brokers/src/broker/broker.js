@@ -1,6 +1,6 @@
 import { assertBrokerContract, BROKER_COMPATIBILITY_METHODS, BROKER_METHODS } from "./broker-contract.js"
-import { BinanceWebSocketBroker } from "../infrastructure/binance/broker-websocket/broker.js"
-import { BitunixSpotBroker } from "../infrastructure/bitunix/broker.js"
+import { BinanceWebSocketBroker } from "../infrastructure/binance/spot/broker-websocket/broker.js"
+import { BitunixSpotBroker } from "../infrastructure/bitunix/spot/broker.js"
 
 const SUPPORTED_PROVIDERS = Object.freeze(["binance", "bitunix"])
 const COMMON_OPTIONS = new Set([

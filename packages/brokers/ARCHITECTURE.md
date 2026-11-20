@@ -26,8 +26,8 @@ The shared value model does not own provider implementation facts or runtime rea
 
 Each exchange owns its protocol and infrastructure adapter:
 
-- `infrastructure/binance/` owns Binance WebSocket API/Streams, signing, configuration, user-data lifecycle, and DTO adaptation.
-- `infrastructure/bitunix/` owns Bitunix Spot REST signing, HTTP transport, configuration, DTO adaptation, and Bitunix-to-entity mapping.
+- `infrastructure/binance/spot/` owns Binance WebSocket API/Streams, signing, configuration, user-data lifecycle, and DTO adaptation.
+- `infrastructure/bitunix/spot/` owns Bitunix Spot REST signing, HTTP transport, configuration, DTO adaptation, and Bitunix-to-entity mapping.
 
 Adapters may share canonical `@coinzilla/entities` and exact decimal utilities, but must not import one another's protocol code. Matching method names do not imply equal capabilities; unsupported capabilities fail explicitly and exchange facts are never synthesized.
 
@@ -176,7 +176,7 @@ Keep the current public broker API stable during this internal migration. Any pr
 
 ## Phase 9 implementation snapshot (after PR #697)
 
-**Structural baseline:** merge commit `ae5d1a8a9c474cff46a6db72f4258787bb071669` (PR #697). This is the historical starting snapshot for the remaining Phase 9 DDD slices, not the current `develop` commit. The later dependency-direction enforcement and public-contract verification are recorded in [Enforced dependency direction (PR #704)](#enforced-dependency-direction-pr-704) and the [package roadmap](./ROADMAP.md#14-mandatory-autonomous-ddd-refactoring-execution). The tree below is a selective architecture map, not an exhaustive file listing.
+**Structural baseline:** merge commit `ae5d1a8a9c474cff46a6db72f4258787bb071669` (PR #697). This is the historical starting snapshot for the remaining Phase 9 DDD slices, not the current `develop` commit. The later dependency-direction enforcement and public-contract verification are recorded in [Enforced dependency direction (PR #704)](#enforced-dependency-direction-pr-704) and the [package roadmap](./ROADMAP.md#14-mandatory-autonomous-ddd-refactoring-execution). The tree below is a selective historical architecture map, not an exhaustive file listing. It records the pre-product layout at PR #697; current provider source now lives under each exchange's `spot/` directory, as described above.
 
 The package now has a physical Domain / Application / Infrastructure split. The existing `broker-websocket` implementation remains internally organized as before; this slice relocates it under Infrastructure without redesigning protocol clients or decomposing folders for their own sake.
 
@@ -241,13 +241,13 @@ The Phase A source audit was read-only. The subsequent PR #693 final-head CI pas
 
 ### Current gaps and boundary pressure
 
-- `infrastructure/binance/broker-websocket/broker.js` imports both `application/user-data-session.js` and the concrete `infrastructure/binance/user-data-client-adapter.js`, as well as RPC, Streams, transport, Binance request builders, and Binance response adapters. It is the public facade and current composition boundary. The existing roadmap justifies keeping simple RPC methods cohesive; extract only a demonstrated composition seam or a cohesive stateful/application responsibility.
+- `infrastructure/binance/spot/broker-websocket/broker.js` imports both `application/user-data-session.js` and the concrete `infrastructure/binance/spot/user-data-client-adapter.js`, as well as RPC, Streams, transport, Binance request builders, and Binance response adapters. It is the public facade and current composition boundary. The existing roadmap justifies keeping simple RPC methods cohesive; extract only a demonstrated composition seam or a cohesive stateful/application responsibility.
 - The user-data client port is nested under `application/ports/` because the Brokers package's own user-data session workflow needs an internal injected client contract. It is not a consuming application's public Broker API or application port; the infrastructure adapter implements it and the package session owns its use.
 - There is no `bootstrap/` folder or dedicated `create-binance-broker.js` composition root yet. Client construction currently starts in module-local factories in `broker.js`.
 - There is no general `application/use-cases/` area. Do not assume every public broker method needs a use case; identify real application workflows first.
 - The only current `domain/` module is the user-data recovery completion policy. The package has not yet established broader domain modules for orders, market, account, or events.
-- `infrastructure/binance/adapters/adapt-canonical-fill.js` and `adapt-canonical-order.js` consume Binance DTOs and Binance identifier normalization. Their Binance DTO and identifier dependencies make them Infrastructure adapters, not exchange-neutral domain modules.
-- `infrastructure/binance/broker-websocket/utils/rpc-client.js`, `streams-client.js`, `streams-protocol.js`, `transport.js`, `runtime.js`, and `signature.js` are clearly Binance/protocol/runtime infrastructure, now grouped under `src/infrastructure/binance/`. Their lifecycle and protocol tests remain colocated with those components.
+- `infrastructure/binance/spot/adapters/adapt-canonical-fill.js` and `adapt-canonical-order.js` consume Binance DTOs and Binance identifier normalization. Their Binance DTO and identifier dependencies make them Infrastructure adapters, not exchange-neutral domain modules.
+- `infrastructure/binance/spot/broker-websocket/utils/rpc-client.js`, `streams-client.js`, `streams-protocol.js`, `transport.js`, `runtime.js`, and `signature.js` are clearly Binance/protocol/runtime infrastructure, now grouped under `src/infrastructure/binance/spot/`. Their lifecycle and protocol tests remain colocated with those components.
 - `broker.core.js` is a compatibility base class with default unsupported-method behavior and shared maps. Its long-term ownership is unresolved; do not automatically treat a base class as a domain entity or port.
 
 ### Verified ownership map
@@ -257,12 +257,12 @@ The Phase A source audit was read-only. The subsequent PR #693 final-head CI pas
 | `domain/user-data-recovery-policy.js` | Pure recovery-completion policy | Correctly placed in Domain |
 | `application/user-data-session.js` | Subscriber/session lifecycle and recovery coordination | Application coordinator; retain state ownership and test behavior |
 | `application/ports/user-data-client-port.js` | Exchange-neutral user-data client contract and runtime assertion | Correctly placed under Application; infrastructure implements it |
-| `infrastructure/binance/user-data-client-adapter.js` | Binance RPC/event adaptation to user-data port | Correctly placed in Infrastructure |
-| `infrastructure/binance/broker-websocket/broker.js` | Public broker facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only demonstrated composition or cohesive responsibilities |
-| `infrastructure/binance/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; physically grouped under `src/infrastructure/binance/` by PR #697 |
-| `infrastructure/binance/broker-websocket/helpers/adapters/*` | Binance request/response/event DTO mapping | Infrastructure adapters |
-| `infrastructure/binance/adapters/adapt-canonical-*.js` | Binance DTO to canonical Entities conversion | Infrastructure adapters; preserve exact decimal contracts |
-| `infrastructure/binance/adapters/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
+| `infrastructure/binance/spot/user-data-client-adapter.js` | Binance RPC/event adaptation to user-data port | Correctly placed in Infrastructure |
+| `infrastructure/binance/spot/broker-websocket/broker.js` | Public broker facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only demonstrated composition or cohesive responsibilities |
+| `infrastructure/binance/spot/broker-websocket/utils/*` | RPC, Streams, transport, signing, runtime, stream protocol | Infrastructure; physically grouped under `src/infrastructure/binance/spot/` by PR #697 |
+| `infrastructure/binance/spot/broker-websocket/helpers/adapters/*` | Binance request/response/event DTO mapping | Infrastructure adapters |
+| `infrastructure/binance/spot/adapters/adapt-canonical-*.js` | Binance DTO to canonical Entities conversion | Infrastructure adapters; preserve exact decimal contracts |
+| `infrastructure/binance/spot/adapters/adapt-*.js` | Legacy broker DTO and Binance asset/balance adaptation | Infrastructure; preserve legacy API shape until consumer migration is explicit |
 
 `application/user-data-session.js` is a cohesive stateful lifecycle coordinator with private state, injected client/port factories, and controlled timer dependencies. Its size triggers a modularity review under repository standards, but it must not be fragmented mechanically: first determine whether its state transitions can be separated without splitting ownership of the recovery state machine.
 
@@ -274,7 +274,7 @@ This map is a starting hypothesis based on the current tree. Validate each modul
 
 | Existing module / area | Primary responsibility | Target owner |
 | --- | --- | --- |
-| `src/infrastructure/binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC methods plus client/session wiring | Retain simple RPC operations; extract only a demonstrated composition seam or cohesive responsibility, never one wrapper per RPC |
+| `src/infrastructure/binance/spot/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC methods plus client/session wiring | Retain simple RPC operations; extract only a demonstrated composition seam or cohesive responsibility, never one wrapper per RPC |
 | `utils/rpc-client.js` | WebSocket API RPC mechanics | Infrastructure / Binance API |
 | `utils/streams-client.js`, `utils/streams-protocol.js` | Public stream protocol and subscription lifecycle | Infrastructure / Binance Streams |
 | `utils/transport.js`, `utils/runtime.js` | Native socket and runtime mechanics | Infrastructure / transport |
@@ -359,7 +359,7 @@ Do not duplicate the same scenario in every layer. A focused test at the owning 
 
 ### Phase E — Infrastructure adapters and composition
 
-- [x] Group all Binance-specific runtime, API/Streams, transport, sessions, signing/configuration, and response adapters under `src/infrastructure/binance/`, preserving the existing `broker-websocket` internal structure.
+- [x] Group all Binance-specific runtime, API/Streams, transport, sessions, signing/configuration, and response adapters under `src/infrastructure/binance/spot/`, preserving the existing `broker-websocket` internal structure.
 - [x] Implement application ports through the Binance infrastructure adapters without changing the public facade.
 - [x] Evaluate a dedicated bootstrap factory: keep composition in the concrete infrastructure broker facade because no separate bootstrap currently removes a demonstrated coupling or improves ownership. Keep public exports thin.
 - [x] Verify reconnect, cleanup, recovery acknowledgement, and uncertain mutation outcomes through deterministic offline lifecycle and broker regression suites. Live exchange verification remains a separate Phase 8 gate.
@@ -407,7 +407,7 @@ The current physical source boundaries are enforceable contracts, not directory 
 - `bootstrap/`, when present, is the composition root and may wire concrete Infrastructure to Application and Domain.
 - `src/index.js` is a public re-export surface. Its exported names are allow-listed by the public contract test; internal clients, adapters, ports, and helpers are not public API.
 
-The package currently has no `src/bootstrap/` directory. The Binance broker facade in `src/infrastructure/binance/broker-websocket/broker.js` remains the existing Infrastructure composition boundary; this enforcement change does not introduce a new factory or move the preserved WebSocket internals.
+The package currently has no `src/bootstrap/` directory. The Binance broker facade in `src/infrastructure/binance/spot/broker-websocket/broker.js` remains the existing Infrastructure composition boundary; this enforcement change does not introduce a new factory or move the preserved WebSocket internals.
 
 ### Executable enforcement and coverage
 
