@@ -74,6 +74,9 @@ jobs:
       - name: Check agent policy and domain ownership
         run: node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js
 
+      - name: Enforce helper purity and unit-test policy
+        run: pnpm run check:helper-policy
+
       - name: Test safe worktree synchronization
         run: pnpm run test:sync-main
 

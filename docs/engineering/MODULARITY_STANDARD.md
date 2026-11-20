@@ -41,8 +41,10 @@ src/
 Rules:
 
 - Keep primary services, clients, adapters, event subscribers, handlers, and orchestration at the feature root. Do not bury primary components in `helpers/` or create extra directory layers without a demonstrated domain boundary.
-- Reserve `helpers/` for pure supporting functions: explicit inputs, deterministic outputs, no network/filesystem/database/event-bus I/O, no environment/clock access, and no owned mutable lifecycle state.
-- Keep effectful operations and stateful orchestration in their owning feature-root component. A helper may validate or transform a response value, but must not fetch it or perform the I/O that obtains it.
+- Reserve `helpers/` for cohesive pure supporting functions: explicit inputs, deterministic outputs, validation/normalization, calculations, predicates, mapping and serialization. Helpers may return new objects, arrays, or errors, but must not mutate inputs, external/shared/module state, or own mutable lifecycle state.
+- Prohibited helper responsibilities include domain lifecycle logic/orchestration, filesystem/database/network/event-bus/broker I/O, environment/clock/random access, resource start/stop/subscribe/management, and stateful classes/services/repositories. Dependencies must not hide side effects; effectful dependencies are not permitted.
+- Every production helper module must have a directly associated colocated `.test.js` or `.spec.js` unit test. Tests should cover applicable normal, edge, invalid, boundary, deterministic, immutability, and output cases. Pure helper tests should not need infrastructure mocks.
+- The automated guard is `pnpm run check:helper-policy`, which runs in the required JavaScript quality workflow. It detects common violations and missing test files; static analysis is a guardrail, not proof of purity. Review must still inspect indirect dependencies and behavior.
 - Use concise, action-oriented filenames that communicate the helper's purpose. The parent feature directory already supplies domain context, so do not repeat it unnecessarily in every filename.
 - Do not add redundant suffixes such as `-helper` or `-utils`, or vague catch-all files such as `utils.js`, `common.js`, or `helpers.js`.
 - Do not mechanically extract every pure expression. Keep trivial or tightly coupled logic local when extraction would increase indirection without improving cohesion, reuse, or independent testability.

@@ -112,11 +112,14 @@ volume })
 /**
  * Normalize one Binance WebSocket API klines row.
  *
- * @param {{row: unknown, symbol: string, interval: string, now?: number}} options
+ * @param {{row: unknown,
+symbol: string,
+interval: string,
+now: number}} options
  * @returns {NormalizedCandle}
  * @throws {TypeError|RangeError} If the row, timestamps, prices or volume are invalid.
  */
-export function adaptKlineHistoryRow({ row, symbol, interval, now = Date.now() } = {}) {
+export function adaptKlineHistoryRow({ row, symbol, interval, now } = {}) {
   const normalized = normalizeSymbolAndInterval({ symbol,
 interval })
   if (!Array.isArray(row) || row.length !== 12) {
@@ -134,7 +137,7 @@ interval })
     low,
     close,
     volume,
-    isClosed: closeTime <= now,
+isClosed: closeTime <= now,
   })
 }
 
@@ -155,7 +158,7 @@ export function adaptKlineStreamMessage(message) {
 
   const normalized = normalizeSymbolAndInterval({
     symbol: message.s,
-    interval: message.k.i,
+interval: message.k.i,
   })
   if (typeof message.k.s !== "string" || message.k.s.trim().toUpperCase() !== normalized.symbol) {
     throw new TypeError("Binance Kline symbol does not match the event symbol")
@@ -163,13 +166,13 @@ export function adaptKlineStreamMessage(message) {
 
   return createNormalizedCandle({
     ...normalized,
-    openTime: message.k.t,
-    closeTime: message.k.T,
-    open: message.k.o,
-    high: message.k.h,
-    low: message.k.l,
-    close: message.k.c,
-    volume: message.k.v,
-    isClosed: message.k.x,
+openTime: message.k.t,
+closeTime: message.k.T,
+open: message.k.o,
+high: message.k.h,
+low: message.k.l,
+close: message.k.c,
+volume: message.k.v,
+isClosed: message.k.x,
   })
 }
