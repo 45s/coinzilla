@@ -34,7 +34,10 @@ const market = new Market({
 const marketMetadata = {
   market,
   orderType: "LIMIT_MAKER",
-  supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
+  supportedOrderTypes: [
+    "LIMIT_MAKER",
+    "LIMIT",
+  ],
   tradingRules: new TradingRules({
     market,
     constraints: [
@@ -252,10 +255,15 @@ test("composes RS runtime dispatch, durable submission, shared ownership and BUY
   const result = await dispatch({
     symbol: "ZROUSDT",
     state: {
-      prices: new Map([["ZROUSDT", {
-        symbol: "ZROUSDT",
-        price: "2",
-      }]]),
+      prices: new Map([
+        [
+          "ZROUSDT",
+          {
+            symbol: "ZROUSDT",
+            price: "2",
+          },
+        ],
+      ]),
       paused: new Set(),
       durablePausedMarkets: new Set(),
       operatorPausedMarkets: new Set(),
