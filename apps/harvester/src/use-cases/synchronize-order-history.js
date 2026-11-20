@@ -307,6 +307,7 @@ export async function fetchAndPersistOrderByExchangeId({
   sleep,
   now,
   state,
+  orderState,
 }) {
   const result = await requestOrderPage({
     broker,
@@ -346,6 +347,7 @@ export async function fetchAndPersistOrderByExchangeId({
     page,
     symbol,
     expectedOrderId: brokerOrderId,
+    orderState,
     state,
   })
   await persistCanonicalOrder({
@@ -373,6 +375,7 @@ async function fetchCurrentOpenOrders({
   sleep,
   now,
   state,
+  orderState,
 }) {
   await waitBeforeHistoryRequest({
     state,
@@ -417,6 +420,7 @@ async function fetchCurrentOpenOrders({
       sleep,
       now,
       state,
+      orderState,
     })
     if (lookup.order === null) {
       throw new Error(`Binance could not load canonical open order ${brokerOrderId} for ${symbol}`)
@@ -434,6 +438,7 @@ async function refreshStoredPendingOrders({
   sleep,
   now,
   state,
+  orderState,
 }) {
   const pendingOrderIds = await repositories.orderRepository.listPendingOrderIds({
     providerIdentity,
@@ -468,6 +473,7 @@ async function refreshStoredPendingOrders({
       sleep,
       now,
       state,
+      orderState,
     })
     if (lookup.order === null && !lookup.unavailable) {
       throw new Error(`Binance could not refresh pending order ${brokerOrderId} for ${symbol}`)
@@ -551,6 +557,7 @@ export async function synchronizeOrderHistoryForMarket({
     sleep,
     now,
     state,
+    orderState,
   })
   await refreshStoredPendingOrders({
     broker,
@@ -562,6 +569,7 @@ export async function synchronizeOrderHistoryForMarket({
     sleep,
     now,
     state,
+    orderState,
   })
   let windowStart = startTime
   while (windowStart <= nowMs) {
