@@ -88,30 +88,25 @@ async function createVerifiedMigrationBackup({ database, filename } = {}) {
 }
 
 async function prepareRelationalResources({ filename, eventBus, environment, logger } = {}) {
-  const relationalDatabase = createSqliteDatabase({
-    filename,
-    timeout: 5000,
-  })
-  await relationalDatabase.connect()
+  const relationalDatabase = createSqliteDatabase({ filename, timeout: 5000 })
+  let relationalOrderObserver
+  let fillObserver
   try {
+    await relationalDatabase.connect()
     const migrationBackupFilename = await createVerifiedMigrationBackup({
       database: relationalDatabase,
       filename,
     })
     await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
-    const orderRepository = createRelationalOrderHistoryRepository({
-      database: relationalDatabase,
-    })
-    const fillRepository = createFillHistoryRepository({
-      database: relationalDatabase,
-    })
-    const relationalOrderObserver = createOrderHistoryObserver({
+    const orderRepository = createRelationalOrderHistoryRepository({ database: relationalDatabase })
+    const fillRepository = createFillHistoryRepository({ database: relationalDatabase })
+    relationalOrderObserver = createOrderHistoryObserver({
       eventBus,
       repository: orderRepository,
       environment,
       logger,
     })
-    const fillObserver = createFillHistoryObserver({
+    fillObserver = createFillHistoryObserver({
       eventBus,
       repository: fillRepository,
       environment,
@@ -124,7 +119,20 @@ async function prepareRelationalResources({ filename, eventBus, environment, log
       migrationBackupFilename,
     }
   } catch (error) {
-    await relationalDatabase.close()
+    for (const observer of [fillObserver, relationalOrderObserver]) {
+      try {
+        await observer?.close()
+      } catch (cleanupError) {
+        logPreparationFailure({ logger, error: cleanupError, relational: true })
+      }
+    }
+    if (relationalDatabase.state !== "closed") {
+      try {
+        await relationalDatabase.close()
+      } catch (cleanupError) {
+        logPreparationFailure({ logger, error: cleanupError, relational: true })
+      }
+    }
     throw error
   }
 }

@@ -1,8 +1,7 @@
 import { OrderHistoryIntegrityError, OrderHistoryValidationError } from "../../domain/order-history/order-history-errors.js"
 import { ORDER_COLUMNS, mapOrderHistoryRecordToRow } from "./order-row-mapping.js"
 
-function createRelationalTables(transaction) {
-  transaction.exec(`
+const CREATE_RELATIONAL_TABLES_SQL = `
     CREATE TABLE orders (
       id TEXT PRIMARY KEY, provider_type TEXT NOT NULL, provider_instance_id TEXT NOT NULL,
       account_id TEXT NOT NULL, environment TEXT NOT NULL CHECK (environment IN ('testnet', 'live')),
@@ -62,9 +61,11 @@ function createRelationalTables(transaction) {
       UNIQUE (fill_id, ordinal)
     );
     CREATE INDEX fill_commissions_asset_idx ON fill_commissions(asset_id, fill_id);
-  `)
-}
+  `
 
+function createRelationalTables(transaction) {
+  transaction.exec(CREATE_RELATIONAL_TABLES_SQL)
+}
 function hasTable(transaction, name) {
   return transaction.prepare(
     "SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = ?",

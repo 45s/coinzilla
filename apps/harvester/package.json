@@ -45,6 +45,7 @@
       "src/infrastructure/persistence/order-history-repository.test.js",
       "src/infrastructure/persistence/order-history-observer.test.js",
       "src/infrastructure/persistence/order-history-persistence.test.js",
+      "src/infrastructure/persistence/relational-trading-history.test.js",
       "src/index.order-history.test.js",
       "src/application/events/lifecycle-event-dtos.order-history.test.js",
       "src/domain/trading-session/trading-session.test.js",
