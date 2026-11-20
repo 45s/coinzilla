@@ -1111,6 +1111,19 @@ test("persists exchange-observed unfilled orders for later fill reconciliation",
     includeUnfilled: true,
   })
   await persistence.orderRepository.upsertHistorical(record)
+  const providerIdentity = {
+    providerInstanceId: order.providerInstanceId,
+    providerType: order.providerType,
+    accountId: order.accountId,
+  }
+  assert.equal(
+    await persistence.orderRepository.getOldestPendingOrderId({
+      providerIdentity,
+      environment: "testnet",
+      symbol: order.symbol,
+    }),
+    order.brokerOrderId,
+  )
   await inspectSqlite({
     filename: context.filename,
     work: (database) => {
@@ -1124,6 +1137,34 @@ test("persists exchange-observed unfilled orders for later fill reconciliation",
       assert.equal(saved.ingestion_source, "exchange_history")
     },
   })
+  const filledRecord = createOrderHistoryRecord({
+    order: createOrderHistoryEventData({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      originalQuantity: "1.0000",
+      executedQuantity: "1.0000",
+      remainingQuantity: "0",
+      status: "FILLED",
+      ownership: undefined,
+    }),
+    sourceEvent: {
+      id: "exchange-history-order:unfilled-now-filled",
+      name: "exchange.history_order_observed",
+      source: "binance.exchange-history",
+      timestamp: "2026-11-20T04:00:01.000Z",
+    },
+    environment: "testnet",
+    includeUnfilled: true,
+  })
+  await persistence.orderRepository.upsertHistorical(filledRecord)
+  assert.equal(
+    await persistence.orderRepository.getOldestPendingOrderId({
+      providerIdentity,
+      environment: "testnet",
+      symbol: order.symbol,
+    }),
+    null,
+  )
 })
 
 
