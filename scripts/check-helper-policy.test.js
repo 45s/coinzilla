@@ -135,3 +135,29 @@ test("detects clocks, logging, and module-level mutable collections", () => {
     ],
   )
 })
+
+test("detects nested input mutation and mutating collection methods", () => {
+  assert.deepEqual(
+    analyzeHelperSource({
+      file: "helpers/input-mutating.js",
+      source: "export function update({ session }) { session.market.symbol = 'ETHUSDT'; session.orders.push({}); return session }\n",
+    }),
+    [
+      "helpers/input-mutating.js: possible caller-owned input mutation",
+      "helpers/input-mutating.js: possible caller-owned collection mutation",
+    ],
+  )
+})
+
+test("detects mutable module-level bindings", () => {
+  assert.deepEqual(
+    analyzeHelperSource({
+      file: "helpers/module-state.js",
+      source: "export let cache = {}\n",
+    }),
+    [
+      "helpers/module-state.js: mutable module-level bindings are prohibited",
+      "helpers/module-state.js: mutable module-level objects or arrays must be frozen",
+    ],
+  )
+})
