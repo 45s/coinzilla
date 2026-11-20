@@ -19,18 +19,30 @@ const FILTERS_NOT_APPLICABLE_TO_SUPPORTED_LIMIT_ORDERS = Object.freeze([
 ])
 
 const FILTER_CONSTRAINTS = Object.freeze({
-  PERCENT_PRICE: { type: "DYNAMIC_PRICE_BAND",
-scope: "SYMBOL" },
-PERCENT_PRICE_BY_SIDE: { type: "DYNAMIC_PRICE_BAND",
-scope: "SYMBOL" },
-MAX_POSITION: { type: "BASE_ASSET_POSITION_LIMIT",
-scope: "ACCOUNT" },
-MAX_NUM_ORDERS: { type: "OPEN_ORDER_COUNT_PER_MARKET",
-scope: "ACCOUNT" },
-EXCHANGE_MAX_NUM_ORDERS: { type: "OPEN_ORDER_COUNT_EXCHANGE_WIDE",
-scope: "EXCHANGE" },
-MAX_ASSET: { type: "ASSET_ORDER_LIMIT",
-scope: "ACCOUNT" },
+  PERCENT_PRICE: Object.freeze({
+    type: "DYNAMIC_PRICE_BAND",
+    scope: "SYMBOL",
+  }),
+  PERCENT_PRICE_BY_SIDE: Object.freeze({
+    type: "DYNAMIC_PRICE_BAND",
+    scope: "SYMBOL",
+  }),
+  MAX_POSITION: Object.freeze({
+    type: "BASE_ASSET_POSITION_LIMIT",
+    scope: "ACCOUNT",
+  }),
+  MAX_NUM_ORDERS: Object.freeze({
+    type: "OPEN_ORDER_COUNT_PER_MARKET",
+    scope: "ACCOUNT",
+  }),
+  EXCHANGE_MAX_NUM_ORDERS: Object.freeze({
+    type: "OPEN_ORDER_COUNT_EXCHANGE_WIDE",
+    scope: "EXCHANGE",
+  }),
+  MAX_ASSET: Object.freeze({
+    type: "ASSET_ORDER_LIMIT",
+    scope: "ACCOUNT",
+  }),
 })
 
 function collectUnvalidatedConstraints({ symbolFilters, exchangeFilters, assetFilters }) {
