@@ -104,11 +104,15 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 
 ### Phase 6 — Operational hardening
 
-- Define backup frequency, retention, access permissions, disk-space monitoring, corruption/disk-full diagnostics and tested restore drills.
+**Completed operational slice — PR #1567:** routine environment-scoped online backups, WAL-safe snapshots, manifest/digest verification, restore checks against a temporary candidate, bounded retention and backup-file permissions are implemented. See the [backup runbook](../operations/trading-history-backups.md) and [persistence README](README.md). Restore verification is not a database cutover; host scheduling remains operator-owned.
+
+Remaining work:
+
+- Enforce permissions on the main database and its directory, not only backup files.
+- Add disk-space/WAL monitoring, disk-full and corruption diagnostics/response, and encrypted off-host replication.
 - Define retention and archival separately for order/fill business history and operational diagnostics.
-- Verify WAL/checkpoint behavior and safe shutdown/backup behavior using actual SQLite integration.
-- Document database file locations and safe offline inspection/export procedures.
-- Establish production readiness only after restore evidence, failure drills and monitoring are complete.
+- Verify WAL/checkpoint behavior and safe shutdown/backup behavior using operational drills.
+- Establish production readiness only after monitoring, failure drills and restore evidence are complete.
 
 ## Delivery and scope rules
 
