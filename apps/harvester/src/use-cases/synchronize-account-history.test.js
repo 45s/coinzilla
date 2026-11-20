@@ -30,7 +30,7 @@ const market = new Market({
   quoteAsset,
 })
 
-function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, clientOrderId } = {}) {
+function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, clientOrderId, updatedAt = 200 } = {})
   return new CanonicalOrder({
     ...identity,
     clientOrderId: clientOrderId ?? `harvester-${orderId}`,
@@ -52,8 +52,8 @@ function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, c
     }),
     status: executed === "0" ? "OPEN" : "FILLED",
     createdAt: 100,
-    updatedAt: 200,
-    completedAt: 200,
+    updatedAt,
+    completedAt: updatedAt,
   })
 }
 
@@ -99,16 +99,12 @@ function createRepositories() {
       },
       findByExchangeOrderIdentity: async ({ marketId, brokerOrderId }) =>
         orderIdentities.get(`${marketId}:${brokerOrderId}`) ?? null,
-      getOldestPendingOrderId: async ({ symbol }) => {
-        const pendingOrders = orders.filter((order) =>
+      listPendingOrderIds: async ({ symbol }) => orders
+        .filter((order) =>
           order.market.symbol === symbol &&
           ["NEW", "OPEN", "PENDING", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status),
         )
-        const oldestOrderId = Math.min(
-          ...pendingOrders.map(({ brokerOrderId }) => Number(brokerOrderId)),
-        )
-        return Number.isFinite(oldestOrderId) ? String(oldestOrderId) : null
-      },
+        .map(({ brokerOrderId }) => brokerOrderId),
     },
     fillRepository: {
       upsert: async (input) => fills.push(input),
@@ -116,13 +112,15 @@ function createRepositories() {
     cursorRepository: {
       get: async ({ symbol }) => cursors.get(symbol) ?? {
         lastOrderId: null,
+        lastOrderSyncAt: null,
         lastTradeId: null,
       },
-      saveOrderCursor: async ({ symbol, lastOrderId }) => {
+      saveOrderCursor: async ({ symbol, lastOrderId, lastOrderSyncAt }) => {
         const current = cursors.get(symbol) ?? {}
         cursors.set(symbol, {
           ...current,
           lastOrderId,
+          lastOrderSyncAt,
         })
       },
       saveTradeCursor: async ({ symbol, lastTradeId }) => {
@@ -138,18 +136,23 @@ function createRepositories() {
 
 function createPagedBroker({ orders, fills, calls }) {
   return {
-    getCanonicalOrderHistory: async ({ symbol, orderId, limit }) => {
+    getCanonicalOrderHistory: async ({ symbol, orderId, startTime, endTime, limit }) => {
       calls.orders.push({
         symbol,
         orderId,
+        startTime,
+        endTime,
         limit,
       })
-      const next = orders.find((order) =>
-        order.market.symbol === symbol && Number(order.brokerOrderId) >= orderId,
-      )
+      const matchingOrders = orders
+        .filter((order) => order.market.symbol === symbol)
+        .filter((order) => orderId === undefined
+          ? order.updatedAt >= startTime && order.updatedAt <= endTime
+          : order.brokerOrderId === String(orderId))
+        .sort((left, right) => left.updatedAt - right.updatedAt)
       return {
         ok: true,
-        data: next ? [next] : [],
+        data: matchingOrders.slice(0, limit),
       }
     },
     getFills: async ({ symbol, fromId, limit }) => {
