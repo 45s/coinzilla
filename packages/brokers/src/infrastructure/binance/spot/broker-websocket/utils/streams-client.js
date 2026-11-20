@@ -1,0 +1,805 @@
+import { NativeWebSocketTransport } from "./transport.js"
+import { parseStreamMessage, validateStreamName } from "./streams-protocol.js"
+
+const DEFAULT_URL = "wss://stream.binance.com:9443/ws"
+const DEFAULT_ACK_TIMEOUT = 5_000
+const DEFAULT_HEARTBEAT_TIMEOUT = 45_000
+const DEFAULT_RECONNECT_DELAY = 1_000
+const MAX_RECONNECT_DELAY = 30_000
+const CONNECTION_ROTATION_DELAY = 23 * 60 * 60 * 1_000 + 50 * 60 * 1_000
+const CONTROL_MESSAGE_INTERVAL = 300
+const MAX_STREAMS_PER_CONNECTION = 1_024
+const MAX_STREAMS_PER_SUBSCRIBE = 200
+
+function assertPositiveInteger({ name, value }) {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new RangeError(`${name} must be a positive integer`)
+  }
+}
+
+function validateClientOptions({ url, transportFactory, ackTimeout, heartbeatTimeout, reconnectDelay, maxReconnectDelay, rotationDelay, onError }) {
+  if (typeof url !== "string" || !url.startsWith("wss://") && !url.startsWith("ws://")) {
+    throw new TypeError("A valid WebSocket Streams URL is required")
+  }
+  if (typeof transportFactory !== "function") {
+    throw new TypeError("transportFactory must be a function")
+  }
+  for (const [name, value] of Object.entries({
+    ackTimeout,
+    heartbeatTimeout,
+    reconnectDelay,
+    rotationDelay,
+  })) {
+    assertPositiveInteger({ name,
+value })
+  }
+  if (!Number.isInteger(maxReconnectDelay) || maxReconnectDelay < reconnectDelay) {
+    throw new RangeError("maxReconnectDelay must be greater than or equal to reconnectDelay")
+  }
+  if (typeof onError !== "function") {
+    throw new TypeError("onError must be a function")
+  }
+}
+
+function matchesAllMarketStream({
+    stream,
+    message,
+  }) {
+  const eventTypes = {
+    "!miniTicker@arr": "24hrMiniTicker",
+    "!ticker@arr": "24hrTicker",
+  }
+  if (eventTypes[stream]) {return message.e === eventTypes[stream]}
+  const window = stream.match(/^!ticker_(1h|4h)@arr$/)?.[1]
+  return Boolean(window && message.e === `${window}Ticker`)
+}
+
+function matchesSymbolStreamType({
+    streamType,
+    message,
+  }) {
+  const eventTypes = {
+    aggTrade: "aggTrade",
+    trade: "trade",
+    miniTicker: "24hrMiniTicker",
+    ticker: "24hrTicker",
+  }
+  if (eventTypes[streamType]) {return message.e === eventTypes[streamType]}
+  if (streamType === "bookTicker") {return message.e === undefined || message.e === "bookTicker"}
+  if (streamType.startsWith("kline_")) {
+    return message.e === "kline" && message.k?.i === streamType.slice(6)
+  }
+  if (streamType.startsWith("ticker_")) {return message.e === `${streamType.slice(7)}Ticker`}
+  if (streamType.startsWith("depth")) {return message.e === "depthUpdate"}
+  return false
+}
+
+function matchesRawStream(...args) {
+  const [stream, message] = args
+  if (Array.isArray(message)) {return message.some((item) => matchesRawStream(stream, item))}
+  if (stream.startsWith("!")) {return matchesAllMarketStream({
+    stream,
+    message,
+  })}
+  const [streamSymbol, streamType] = stream.split("@")
+  const symbol = typeof message.s === "string" ? message.s.toLowerCase() : null
+  return symbol === streamSymbol && matchesSymbolStreamType({
+    streamType,
+    message,
+  })
+}
+
+/**
+ * Manage public Binance Streams subscriptions, acknowledgements, and reconnects.
+ */
+export class BinanceStreamsClient {
+  #transport = null
+  #state = "idle"
+  #connectPromise = null
+  #manualDisconnect = false
+  #ready = false
+  #listeners = new Map()
+  #activeStreams = new Set()
+  #pending = new Map()
+  #nextRequestId = 1
+  #operationChain = Promise.resolve()
+  #controlQueue = []
+  #lastControlSent = -Infinity
+  #pumpTimer = null
+  #ackTimeouts = new Set()
+  #reconnectTimer = null
+  #rotationTimer = null
+  #reconnectAttempts = 0
+  #transportCleanup = null
+  #heartbeatTimer = null
+  #lastPingAt = null
+  #lastMessageAt = new Map()
+  #connectionGeneration = 0
+
+  /**
+   * @param {{url?: string, transportFactory?: (options: {url: string}) => object, ackTimeout?: number, heartbeatTimeout?: number, reconnectDelay?: number, maxReconnectDelay?: number, rotationDelay?: number, setTimeoutFn?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>, clearTimeoutFn?: (timer: ReturnType<typeof setTimeout>) => void, nowFn?: () => number, onError?: (error: Error) => void}} [options]
+   * @throws {TypeError|RangeError} If a URL, callback, or timing option is invalid.
+   */
+  constructor(...args) {
+    const [{
+    url = DEFAULT_URL,
+    transportFactory = (options) => new NativeWebSocketTransport(options),
+    ackTimeout = DEFAULT_ACK_TIMEOUT,
+    heartbeatTimeout = DEFAULT_HEARTBEAT_TIMEOUT,
+    reconnectDelay = DEFAULT_RECONNECT_DELAY,
+    maxReconnectDelay = MAX_RECONNECT_DELAY,
+    rotationDelay = CONNECTION_ROTATION_DELAY,
+    setTimeoutFn = setTimeout,
+    clearTimeoutFn = clearTimeout,
+    nowFn = Date.now,
+    onError = () => {},
+  } = {}] = args
+    validateClientOptions({ url,
+      transportFactory,
+      ackTimeout,
+      heartbeatTimeout,
+      reconnectDelay,
+      maxReconnectDelay,
+      rotationDelay,
+      onError })
+
+
+    this.url = url
+    this.transportFactory = transportFactory
+    this.ackTimeout = ackTimeout
+    this.heartbeatTimeout = heartbeatTimeout
+    this.reconnectDelay = reconnectDelay
+    this.maxReconnectDelay = maxReconnectDelay
+    this.rotationDelay = rotationDelay
+    this.setTimeout = setTimeoutFn
+    this.clearTimeout = clearTimeoutFn
+    this.now = nowFn
+    this.onError = onError
+  }
+
+  get state() {
+    return this.#state
+  }
+
+  get subscriptions() {
+    return [...this.#listeners.keys()]
+  }
+
+  get diagnostics() {
+    const now = this.now()
+    const streams = [...this.#listeners.keys()].map((stream) => {
+      const lastMessageAt = this.#lastMessageAt.get(stream) ?? null
+      return Object.freeze({
+        stream,
+        desired: true,
+        confirmed: this.#activeStreams.has(stream),
+        lastMessageAt,
+        messageAgeMs: lastMessageAt === null ? null : Math.max(0, now - lastMessageAt),
+      })
+    })
+    return Object.freeze({
+      connectionState: this.#state,
+      connectionGeneration: this.#connectionGeneration,
+      lastPingAt: this.#lastPingAt,
+      heartbeatAgeMs: this.#lastPingAt === null ? null : Math.max(0, now - this.#lastPingAt),
+      streams: Object.freeze(streams),
+    })
+  }
+
+  /** @returns {Promise<BinanceStreamsClient>} Resolves when all desired streams are active. */
+  connect() {
+    if (this.#listeners.size === 0) {
+      return Promise.reject(new Error("Subscribe to at least one stream before connecting"))
+    }
+    return this.#connect(false, [...this.#listeners.keys()])
+  }
+
+  /**
+   * Add a listener to one or more validated stream names.
+   *
+   * @param {string|string[]} streamNames
+   * @param {(message: object) => void} listener
+   * @returns {Promise<string[]>} The normalized stream names subscribed.
+   */
+  async subscribe(...args) {
+    const [streamNames, listener] = args
+    if (typeof listener !== "function") {throw new TypeError("A stream listener function is required")}
+    const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
+    if (streams.length === 0) {throw new TypeError("At least one stream is required")}
+
+    return this.#enqueueOperation(() => this.#subscribeStreams({ streams,
+listener }))
+  }
+
+  /**
+   * Remove a listener from one or more streams; omit listener to remove all listeners.
+   *
+   * @param {string|string[]} streamNames
+   * @param {(message: object) => void} [listener]
+   * @returns {Promise<string[]>} The normalized stream names processed.
+   */
+  async #subscribeStreams({ streams, listener }) {
+    const addedListeners = this.#addListeners({ streams,
+listener })
+    const desiredStreams = [...this.#listeners.keys()]
+    if (desiredStreams.length > MAX_STREAMS_PER_CONNECTION) {
+      this.#removeListenerFromStreams({ streams: addedListeners,
+listener })
+      throw new RangeError(`Binance allows at most ${MAX_STREAMS_PER_CONNECTION} streams per connection`)
+    }
+    try {
+      await this.#connectIfNeeded(desiredStreams)
+      await this.#activateMissingStreams(streams)
+    } catch (error) {
+      this.#removeListenerFromStreams({ streams: addedListeners,
+listener })
+      throw error
+    }
+    return streams
+  }
+
+  #addListeners({ streams, listener }) {
+    const added = []
+    for (const stream of streams) {
+      let listeners = this.#listeners.get(stream)
+      if (!listeners) {
+        listeners = new Set()
+        this.#listeners.set(stream, listeners)
+      }
+      if (listeners.has(listener)) {continue}
+      listeners.add(listener)
+      added.push(stream)
+    }
+    return added
+  }
+
+  async #connectIfNeeded(desiredStreams) {
+    if (this.#state !== "open") {
+      await this.#connect(this.#reconnectAttempts > 0, desiredStreams)
+    }
+  }
+
+  async #activateMissingStreams(streams) {
+    const missing = streams.filter((stream) => !this.#activeStreams.has(stream))
+    const activated = []
+    try {
+      for (const batch of this.#chunk([...new Set(missing)], MAX_STREAMS_PER_SUBSCRIBE)) {
+        await this.#request({ method: "SUBSCRIBE",
+streams: batch })
+        for (const stream of batch) {
+          this.#activeStreams.add(stream)
+          activated.push(stream)
+        }
+      }
+    } catch (error) {
+      this.#rollbackActivatedStreams(activated)
+      throw error
+    }
+  }
+
+  #rollbackActivatedStreams(streams) {
+    if (streams.length === 0) {return}
+    for (const stream of streams) {this.#activeStreams.delete(stream)}
+    this.#request({ method: "UNSUBSCRIBE",
+streams })
+      .catch((cleanupError) => this.#reportError(cleanupError))
+  }
+
+  async unsubscribe(...args) {
+    const [streamNames, listener] = args
+    const streams = [...new Set((Array.isArray(streamNames) ? streamNames : [streamNames]).map(validateStreamName))]
+    if (streams.length === 0) {throw new TypeError("At least one stream is required")}
+    if (listener !== undefined && typeof listener !== "function") {
+      throw new TypeError("listener must be a function when provided")
+    }
+
+    return this.#enqueueOperation(async () => {
+      const removals = streams.filter((stream) => {
+        const listeners = this.#listeners.get(stream)
+        return listeners && (listener === undefined || listeners.has(listener)) &&
+          (listener === undefined || listeners.size === 1)
+      })
+
+      if (removals.length > 0 && this.#state === "open") {
+        for (const batch of this.#chunk(removals, MAX_STREAMS_PER_SUBSCRIBE)) {
+          await this.#request({ method: "UNSUBSCRIBE",
+            streams: batch })
+        }
+      }
+
+      for (const stream of streams) {
+        const listeners = this.#listeners.get(stream)
+        if (!listeners) {continue}
+        if (listener === undefined) {listeners.clear()}
+        else {listeners.delete(listener)}
+        if (listeners.size === 0) {
+          this.#listeners.delete(stream)
+          this.#activeStreams.delete(stream)
+          this.#lastMessageAt.delete(stream)
+        }
+      }
+      if (this.#listeners.size === 0) {this.#clearReconnectTimer()}
+
+      return streams
+    })
+  }
+
+  /** @returns {Promise<void>} Stops reconnects, clears subscriptions, and closes the socket. */
+  async disconnect() {
+    this.#manualDisconnect = true
+    this.#clearReconnectTimer()
+    this.#clearRotationTimer()
+    this.#clearPumpTimer()
+    this.#clearHeartbeatTimer()
+    this.#controlQueue.length = 0
+    this.#rejectPending(new Error("Binance Streams client disconnected"))
+    this.#listeners.clear()
+    this.#activeStreams.clear()
+    this.#lastMessageAt.clear()
+    this.#lastPingAt = null
+
+    const transport = this.#transport
+    this.#transport = null
+    this.#state = "closed"
+    this.#ready = false
+    this.#detachTransportListeners()
+    if (transport) {await transport.close()}
+  }
+
+  #enqueueOperation(operation) {
+    const result = this.#operationChain.then(operation)
+    this.#operationChain = result.catch(() => {})
+    return result
+  }
+
+  async #connect(...args) {
+    const [isReconnect, initialStreams = []] = args
+    if (isReconnect && this.#listeners.size === 0) {return this}
+    if (this.#state === "open") {return this}
+    if (this.#state === "connecting") {return this.#connectPromise}
+    if (this.#manualDisconnect) {throw new Error("Binance Streams client has been disconnected")}
+
+    const connectionStreams = isReconnect ? [...this.#listeners.keys()] : [...initialStreams]
+    if (connectionStreams.length === 0) {throw new Error("At least one desired stream is required to connect")}
+
+    this.#clearReconnectTimer()
+    this.#state = "connecting"
+    this.#ready = false
+    this.#lastPingAt = null
+    this.#lastControlSent = -Infinity
+
+    let transport
+    try {
+      transport = this.#createTransport(connectionStreams)
+    } catch (error) {
+      this.#state = "closed"
+      if (!this.#manualDisconnect && isReconnect) {this.#scheduleReconnect()}
+      throw error
+    }
+
+    this.#transport = transport
+    this.#connectionGeneration += 1
+    this.#connectPromise = this.#initializeConnection({ transport,
+      connectionStreams,
+      isReconnect })
+    return this.#connectPromise
+  }
+
+  #createTransport(connectionStreams) {
+    const url = this.#buildCombinedUrl(connectionStreams.slice(0, MAX_STREAMS_PER_SUBSCRIBE))
+    const transport = this.transportFactory({ url })
+    for (const method of ["connect", "send", "close", "onMessage", "onError", "onClose", "onPing"]) {
+      if (typeof transport?.[method] !== "function") {
+        throw new TypeError(`Streams transport must implement ${method}()`)
+      }
+    }
+    return transport
+  }
+
+  #attachTransportListeners(transport) {
+    const removers = []
+    this.#transportCleanup = () => {
+      for (const remove of removers.splice(0).reverse()) {
+        try {
+          remove?.()
+        } catch (error) {
+          this.#reportError(error)
+        }
+      }
+    }
+    removers.push(transport.onMessage((message) => this.#handleMessage(message, transport)))
+    removers.push(transport.onError((error) => this.#reportError(error)))
+    removers.push(transport.onClose((event) => this.#handleClose(event, transport)))
+    removers.push(transport.onPing(() => this.#handlePing(transport)))
+  }
+
+  #initializeConnection({ transport, connectionStreams, isReconnect }) {
+    return Promise.resolve().then(() => {
+      this.#attachTransportListeners(transport)
+      return transport.connect()
+    }).then(async () => {
+      if (this.#transport !== transport || this.#manualDisconnect) {
+        await transport.close()
+        throw new Error("Binance Streams connection was superseded")
+      }
+
+      this.#state = "open"
+      this.#lastPingAt = this.now()
+      this.#scheduleHeartbeatWatchdog(transport)
+      this.#scheduleRotation()
+      await this.#activateInitialStreams({ transport,
+        connectionStreams })
+      this.#ready = true
+      this.#reconnectAttempts = 0
+      return this
+    }).catch(async (error) => {
+      this.#ready = false
+      this.#activeStreams.clear()
+      this.#clearHeartbeatTimer()
+      if (this.#transport === transport) {
+        this.#transport = null
+        this.#state = "closed"
+        this.#lastPingAt = null
+        this.#detachTransportListeners()
+        try {
+          await transport.close()
+        } catch (closeError) {
+          this.#reportError(closeError)
+        }
+      }
+      if (!this.#manualDisconnect && isReconnect) {this.#scheduleReconnect()}
+      throw error
+    }).finally(() => {
+      if (this.#transport === transport) {this.#connectPromise = null}
+    })
+  }
+
+  #assertCurrentConnection(transport) {
+    if (this.#transport !== transport || this.#manualDisconnect || this.#state !== "open") {
+      throw new Error("Binance Streams connection was superseded")
+    }
+  }
+
+  async #activateInitialStreams({ transport, connectionStreams }) {
+    const initialBatch = connectionStreams.slice(0, MAX_STREAMS_PER_SUBSCRIBE)
+    const listedStreams = await this.#request({ method: "LIST_SUBSCRIPTIONS" })
+    this.#assertCurrentConnection(transport)
+    if (!Array.isArray(listedStreams) || !initialBatch.every((stream) => listedStreams.includes(stream))) {
+      throw new Error("Binance combined-stream connection did not confirm its initial subscriptions")
+    }
+    const desiredStreams = new Set(this.#listeners.keys())
+    await this.#removeObsoleteInitialStreams({ transport,
+initialBatch,
+desiredStreams })
+    this.#markInitialStreamsActive({ initialBatch,
+desiredStreams })
+    await this.#subscribeRemainingStreams({ transport,
+connectionStreams,
+desiredStreams })
+  }
+
+  async #removeObsoleteInitialStreams({ transport, initialBatch, desiredStreams }) {
+    const obsolete = initialBatch.filter((stream) => !desiredStreams.has(stream))
+    if (obsolete.length === 0) {return}
+    await this.#request({ method: "UNSUBSCRIBE",
+streams: obsolete })
+    this.#assertCurrentConnection(transport)
+  }
+
+  #markInitialStreamsActive({ initialBatch, desiredStreams }) {
+    for (const stream of initialBatch) {
+      if (desiredStreams.has(stream)) {this.#activeStreams.add(stream)}
+    }
+  }
+
+  async #subscribeRemainingStreams({ transport, connectionStreams, desiredStreams }) {
+    const remaining = connectionStreams.slice(MAX_STREAMS_PER_SUBSCRIBE)
+      .filter((stream) => desiredStreams.has(stream))
+    for (const batch of this.#chunk(remaining, MAX_STREAMS_PER_SUBSCRIBE)) {
+      await this.#request({ method: "SUBSCRIBE",
+streams: batch })
+      this.#assertCurrentConnection(transport)
+      for (const stream of batch) {this.#activeStreams.add(stream)}
+    }
+  }
+
+  #buildCombinedUrl(streams) {
+    const url = new URL(this.url)
+    if (/\/ws\/?$/.test(url.pathname)) {
+      url.pathname = url.pathname.replace(/\/ws\/?$/, "/stream")
+    } else if (!url.pathname.endsWith("/stream")) {
+      url.pathname = `${url.pathname.replace(/\/$/, "")}/stream`
+    }
+    url.searchParams.set("streams", streams.join("/"))
+    return url.toString()
+  }
+
+  #removeListenerFromStreams({ streams, listener }) {
+    for (const stream of streams) {
+      const listeners = this.#listeners.get(stream)
+      listeners?.delete(listener)
+      if (listeners?.size === 0) {
+        this.#listeners.delete(stream)
+        this.#lastMessageAt.delete(stream)
+      }
+    }
+    if (this.#listeners.size === 0) {this.#clearReconnectTimer()}
+  }
+
+  #request({ method, streams }) {
+    if (this.#state !== "open" || !this.#transport) {
+      return Promise.reject(new Error(`Cannot ${method} streams while disconnected`))
+    }
+
+    const id = this.#nextRequestId++
+    return new Promise((...args) => {
+      const [resolve, reject] = args
+      const timeout = this.setTimeout(() => {
+        this.#pending.delete(id)
+        this.#ackTimeouts.delete(timeout)
+        this.#controlQueue = this.#controlQueue.filter((item) => item.id !== id)
+        if (this.#controlQueue.length === 0) {this.#clearPumpTimer()}
+        reject(new Error(`Binance Streams ${method} acknowledgement timed out`))
+      }, this.ackTimeout)
+      this.#ackTimeouts.add(timeout)
+      this.#pending.set(id, { resolve,
+reject,
+timeout,
+method })
+
+      const request = { method,
+id }
+      if (streams !== undefined) {request.params = streams}
+      this.#controlQueue.push({ id,
+payload: JSON.stringify(request) })
+      this.#pumpControlQueue()
+    })
+  }
+
+  #pumpControlQueue() {
+    if (this.#pumpTimer !== null || this.#controlQueue.length === 0 || this.#state !== "open") {return}
+    const wait = Math.max(0, CONTROL_MESSAGE_INTERVAL - (this.now() - this.#lastControlSent))
+    if (wait > 0) {
+      this.#pumpTimer = this.setTimeout(() => {
+        this.#pumpTimer = null
+        this.#pumpControlQueue()
+      }, wait)
+      return
+    }
+
+    const item = this.#controlQueue.shift()
+    try {
+      this.#transport.send(item.payload)
+      this.#lastControlSent = this.now()
+    } catch (error) {
+      const pending = this.#pending.get(item.id)
+      if (pending) {
+        this.#pending.delete(item.id)
+        this.#clearAckTimeout(pending.timeout)
+        pending.reject(error)
+      }
+    }
+
+    if (this.#controlQueue.length > 0) {
+      this.#pumpTimer = this.setTimeout(() => {
+        this.#pumpTimer = null
+        this.#pumpControlQueue()
+      }, CONTROL_MESSAGE_INTERVAL)
+    }
+  }
+
+  #handleMessage(...args) {
+    const [rawMessage, transport] = args
+    if (this.#transport !== transport) {return}
+
+    let parsed
+    try {
+      parsed = parseStreamMessage(rawMessage)
+    } catch (error) {
+      this.#reportError(error)
+      return
+    }
+
+    if (parsed.acknowledgement) {
+      this.#handleAcknowledgement(parsed.acknowledgement)
+      return
+    }
+    if (parsed.serverShutdown) {
+      this.#closeForServerShutdown(1000)
+      return
+    }
+    this.#handleDataMessages(parsed)
+  }
+
+  #handleAcknowledgement(acknowledgement) {
+    const { id, result, code, msg } = acknowledgement
+    const pending = this.#pending.get(id)
+    if (!pending) {return}
+    this.#pending.delete(id)
+    this.#clearAckTimeout(pending.timeout)
+    if (code !== undefined) {
+      pending.reject(new Error(`Binance Streams ${pending.method} failed (${code}): ${msg || "unknown error"}`))
+    } else if (pending.method === "LIST_SUBSCRIPTIONS" && !Array.isArray(result)) {
+      pending.reject(new Error("Malformed Binance Streams LIST_SUBSCRIPTIONS acknowledgement"))
+    } else if (pending.method !== "LIST_SUBSCRIPTIONS" && result !== null) {
+      pending.reject(new Error(`Malformed Binance Streams ${pending.method} acknowledgement`))
+    } else {
+      pending.resolve(result)
+    }
+  }
+
+  #closeForServerShutdown(code) {
+    this.#reportError(new Error("Binance Streams server is shutting down"))
+    this.#transport?.close(code, "Binance server shutdown").catch((error) => this.#reportError(error))
+  }
+
+  #handleDataMessages(parsed) {
+    const messages = Array.isArray(parsed.data) ? parsed.data : [parsed.data]
+    for (const message of messages) {
+      if (message.e === "serverShutdown") {
+        this.#closeForServerShutdown(1012)
+        return
+      }
+      this.#dispatchDataMessage({ parsed,
+message })
+    }
+  }
+
+  #dispatchDataMessage({ parsed, message }) {
+    for (const [stream, listeners] of this.#listeners) {
+      const matches = parsed.stream ? parsed.stream === stream : matchesRawStream(stream, message)
+      if (matches) {this.#dispatchToStream({ stream,
+listeners,
+message })}
+    }
+  }
+
+  #dispatchToStream({ stream, listeners, message }) {
+    this.#lastMessageAt.set(stream, this.now())
+    for (const listener of listeners) {
+      try {
+        listener(message)
+      } catch (error) {
+        this.#reportError(error)
+      }
+    }
+  }
+
+  #handleClose(...args) {
+    const [event, transport] = args
+    if (this.#transport !== transport) {return}
+    this.#detachTransportListeners()
+    const wasReady = this.#ready
+    this.#ready = false
+    this.#state = "closed"
+    this.#transport = null
+    this.#clearHeartbeatTimer()
+    this.#activeStreams.clear()
+    this.#clearRotationTimer()
+    this.#clearPumpTimer()
+    this.#controlQueue.length = 0
+    this.#rejectPending(new Error(`Binance Streams connection closed (${event.code}): ${event.reason}`))
+    if (!this.#manualDisconnect && wasReady && this.#listeners.size > 0) {this.#scheduleReconnect()}
+  }
+
+  #scheduleReconnect() {
+    if (this.#manualDisconnect || this.#reconnectTimer !== null || this.#listeners.size === 0) {return}
+    const delay = Math.min(
+      this.reconnectDelay * (2 ** this.#reconnectAttempts),
+      this.maxReconnectDelay,
+    )
+    this.#reconnectAttempts += 1
+    this.#reconnectTimer = this.setTimeout(() => {
+      this.#reconnectTimer = null
+      this.#connect(true).catch((error) => this.#reportError(error))
+    }, delay)
+  }
+
+  #scheduleRotation() {
+    this.#clearRotationTimer()
+    this.#rotationTimer = this.setTimeout(() => {
+      this.#rotationTimer = null
+      this.#transport?.close(1000, "Scheduled Binance Streams rotation")
+        .catch((error) => this.#reportError(error))
+    }, this.rotationDelay)
+  }
+
+  #detachTransportListeners() {
+    const cleanup = this.#transportCleanup
+    this.#transportCleanup = null
+    cleanup?.()
+  }
+
+  #rejectPending(error) {
+    for (const pending of this.#pending.values()) {
+      this.#clearAckTimeout(pending.timeout)
+      pending.reject(error)
+    }
+    this.#pending.clear()
+  }
+
+  #clearAckTimeout(timeout) {
+    this.clearTimeout(timeout)
+    this.#ackTimeouts.delete(timeout)
+  }
+
+  #handlePing(transport) {
+    if (this.#transport !== transport || this.#state !== "open") {return}
+    this.#lastPingAt = this.now()
+    this.#scheduleHeartbeatWatchdog(transport)
+  }
+
+  #scheduleHeartbeatWatchdog(transport) {
+    this.#clearHeartbeatTimer()
+    this.#heartbeatTimer = this.setTimeout(() => {
+      this.#heartbeatTimer = null
+      if (this.#transport !== transport || this.#state !== "open") {return}
+      const heartbeatAgeMs = this.#lastPingAt === null
+        ? this.heartbeatTimeout
+        : Math.max(0, this.now() - this.#lastPingAt)
+      if (heartbeatAgeMs < this.heartbeatTimeout) {
+        this.#scheduleHeartbeatWatchdog(transport)
+        return
+      }
+      const error = new Error(`Binance Streams heartbeat timed out after ${heartbeatAgeMs} ms`)
+      error.name = "BinanceStreamHeartbeatError"
+      error.code = "BINANCE_STREAM_HEARTBEAT_TIMEOUT"
+      error.retryable = true
+      error.context = Object.freeze({
+        connectionGeneration: this.#connectionGeneration,
+        heartbeatAgeMs,
+        heartbeatTimeoutMs: this.heartbeatTimeout,
+        activeStreamCount: this.#activeStreams.size,
+        streams: this.diagnostics.streams,
+      })
+      this.#reportError(error)
+      Promise.resolve(transport.close(4000, "Binance Streams heartbeat timed out"))
+        .catch((closeError) => this.#reportError(closeError))
+    }, this.heartbeatTimeout)
+  }
+
+  #clearHeartbeatTimer() {
+    if (this.#heartbeatTimer !== null) {
+      this.clearTimeout(this.#heartbeatTimer)
+      this.#heartbeatTimer = null
+    }
+  }
+
+  #clearReconnectTimer() {
+    if (this.#reconnectTimer !== null) {
+      this.clearTimeout(this.#reconnectTimer)
+      this.#reconnectTimer = null
+    }
+  }
+
+  #clearRotationTimer() {
+    if (this.#rotationTimer !== null) {
+      this.clearTimeout(this.#rotationTimer)
+      this.#rotationTimer = null
+    }
+  }
+
+  #clearPumpTimer() {
+    if (this.#pumpTimer !== null) {
+      this.clearTimeout(this.#pumpTimer)
+      this.#pumpTimer = null
+    }
+  }
+
+  #reportError(error) {
+    try {
+      this.onError(error)
+    } catch {
+      // Observers cannot interfere with the stream lifecycle.
+    }
+  }
+
+  #chunk(...args) {
+    const [values, size] = args
+    const chunks = []
+    for (let index = 0; index < values.length; index += size) {
+      chunks.push(values.slice(index, index + size))
+    }
+    return chunks
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Source layout
 
-The current source tree has a physical Domain / Application / Infrastructure split. All Binance-specific runtime, protocol, configuration, session, and DTO/Entity adapter code now lives under `src/infrastructure/binance/`. The existing `broker-websocket` internal structure is preserved; this move does not redesign its protocol clients.
+The current source tree has a physical Domain / Application / Infrastructure split. All Binance-specific runtime, protocol, configuration, session, and DTO/Entity adapter code now lives under `src/infrastructure/binance/spot/`. The existing `broker-websocket` internal structure is preserved; this move does not redesign its protocol clients.
 
 ```text
 packages/brokers/src/
@@ -69,21 +69,21 @@ packages/brokers/src/
 │       └── user-data-client-adapter.test.js
 ```
 
-The lifecycle implementation and its direct unit tests live together in `src/application/user-data-session.js` and `src/application/user-data-session.test.js`; these tests exercise the injected client port without constructing a Binance broker. Broker-level setup/recovery/reconciliation/cleanup suites and the opt-in integration test live under `src/infrastructure/binance/broker-websocket/tests/` because they exercise the concrete broker/application composition. Their shared deterministic fixtures remain under `broker-websocket/test-helpers/`.
+The lifecycle implementation and its direct unit tests live together in `src/application/user-data-session.js` and `src/application/user-data-session.test.js`; these tests exercise the injected client port without constructing a Binance broker. Broker-level setup/recovery/reconciliation/cleanup suites and the opt-in integration test live under `src/infrastructure/binance/spot/broker-websocket/tests/` because they exercise the concrete broker/application composition. Their shared deterministic fixtures remain under `broker-websocket/test-helpers/`.
 
 ## Ownership and conventions
 
 - `src/domain/user-data-recovery-policy.js` owns the pure, exchange-neutral recovery-completion policy.
 - `src/application/user-data-session.js` owns subscriber lifecycle, reconnect/recovery coordination, and reconciliation acknowledgement state.
 - `src/application/ports/user-data-client-port.js` owns the exchange-neutral client capability required by the application session.
-- `src/infrastructure/binance/user-data-client-adapter.js` implements that port and owns Binance RPC/event-envelope translation for user-data.
-- `infrastructure/binance/broker-websocket/broker.js` is the public broker facade and current composition boundary. It coordinates the RPC/Streams clients and preserves public result/callback contracts. Keep simple RPC methods cohesive; extract only a demonstrated composition seam or a distinct stateful/application responsibility.
-- `infrastructure/binance/broker-websocket/config/` owns validated runtime configuration; `BinanceWebSocketConfig` is Coinzilla-owned and does not depend on the removed Binance SDK.
-- `infrastructure/binance/broker-websocket/constants/` owns fixed Binance endpoint values.
-- `infrastructure/binance/broker-websocket/helpers/` owns Binance request construction and protocol-specific event/response adaptation.
+- `src/infrastructure/binance/spot/user-data-client-adapter.js` implements that port and owns Binance RPC/event-envelope translation for user-data.
+- `infrastructure/binance/spot/broker-websocket/broker.js` is the public broker facade and current composition boundary. It coordinates the RPC/Streams clients and preserves public result/callback contracts. Keep simple RPC methods cohesive; extract only a demonstrated composition seam or a distinct stateful/application responsibility.
+- `infrastructure/binance/spot/broker-websocket/config/` owns validated runtime configuration; `BinanceWebSocketConfig` is Coinzilla-owned and does not depend on the removed Binance SDK.
+- `infrastructure/binance/spot/broker-websocket/constants/` owns fixed Binance endpoint values.
+- `infrastructure/binance/spot/broker-websocket/helpers/` owns Binance request construction and protocol-specific event/response adaptation.
 - `helpers/adapters/adapt-kline.js` maps Binance historical klines and live Kline stream events into one immutable, exchange-neutral candle shape; its direct tests cover payload validation and OHLC invariants.
-- `infrastructure/binance/broker-websocket/utils/` owns low-level protocol/runtime infrastructure: RPC, Streams, transport, signing, and runtime guards.
-- `src/infrastructure/binance/adapters/` maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs. These are exchange-specific infrastructure mappings even though some outputs are canonical Entities.
+- `infrastructure/binance/spot/broker-websocket/utils/` owns low-level protocol/runtime infrastructure: RPC, Streams, transport, signing, and runtime guards.
+- `src/infrastructure/binance/spot/adapters/` maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs. These are exchange-specific infrastructure mappings even though some outputs are canonical Entities.
 - `broker-websocket/tests/` groups broker-operation contract tests; focused module tests remain colocated with their implementation.
 - `broker-websocket/test-helpers/` contains test-only fakes shared by broker tests; it is not part of the package's public API.
 
@@ -234,14 +234,14 @@ The first DDD/TDD tranche established deterministic tests, selected ports, and f
 
 | Current module | Current responsibility | Refactoring consideration |
 |---|---|---|
-| `src/index.js`, `src/infrastructure/binance/index.js`, `src/infrastructure/binance/broker-websocket/index.js` | Public exports and Binance infrastructure module composition | Keep public API/composition thin while preserving compatibility |
-| `infrastructure/binance/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only a demonstrated composition seam or distinct cohesive responsibility |
+| `src/index.js`, `src/infrastructure/binance/spot/index.js`, `src/infrastructure/binance/spot/broker-websocket/index.js` | Public exports and Binance infrastructure module composition | Keep public API/composition thin while preserving compatibility |
+| `infrastructure/binance/spot/broker-websocket/broker.js` | Public facade and current composition boundary; simple RPC operations plus client/session wiring | Keep simple RPC methods cohesive; extract only a demonstrated composition seam or distinct cohesive responsibility |
 | `src/domain/user-data-recovery-policy.js` | Pure exchange-neutral recovery-completion policy | Correctly placed in Domain; keep it free of infrastructure/application imports |
 | `src/application/ports/user-data-client-port.js` | Application-owned user-data client capability contract and assertion | Correctly placed under Application Ports; implemented by Binance Infrastructure |
 | `src/application/user-data-session.js` and `src/application/user-data-session.test.js` | Application subscriber lifecycle, reconnect/recovery coordination, reconciliation acknowledgement, and direct tests through an injected client port | Correctly placed in Application; keep direct tests independent of Binance and preserve state-machine cohesion |
-| `src/infrastructure/binance/user-data-client-adapter.js` | Adapts Binance RPC/event details to the application-owned user-data port | Correctly placed in Infrastructure; keep Binance request/event vocabulary here |
-| `infrastructure/binance/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Keep Binance request construction and protocol-specific event mapping in Infrastructure; promote a rule only when it is demonstrably exchange-neutral and independently owned |
-| `src/infrastructure/binance/adapters/` | Maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs | Correctly placed in Infrastructure; canonical shared entity invariants remain in `@coinzilla/entities` |
+| `src/infrastructure/binance/spot/user-data-client-adapter.js` | Adapts Binance RPC/event details to the application-owned user-data port | Correctly placed in Infrastructure; keep Binance request/event vocabulary here |
+| `infrastructure/binance/spot/broker-websocket/helpers/` | Request parameter construction, event adaptation, deduplication | Keep Binance request construction and protocol-specific event mapping in Infrastructure; promote a rule only when it is demonstrably exchange-neutral and independently owned |
+| `src/infrastructure/binance/spot/adapters/` | Maps Binance order/fill/account DTOs into shared Entities and normalizes Binance IDs | Correctly placed in Infrastructure; canonical shared entity invariants remain in `@coinzilla/entities` |
 | `config/`, `constants/`, `utils/` | Binance configuration, endpoints, transport, RPC, Streams, signing, runtime guards | Infrastructure implementation; must not become dependencies of domain/application code |
 | `test-helpers/`, colocated tests, `tests/` | Deterministic fakes, unit tests, broker contract tests | Separate domain/application tests from infrastructure/contract/integration tests as boundaries emerge |
 
@@ -338,7 +338,7 @@ The package coverage command includes `src/application/**/*.js` (including appli
 
 ### Phase 9 implementation slice 5 — Binance infrastructure adapter
 
-The Binance implementation of `UserDataClientPort` now lives in `src/infrastructure/binance/user-data-client-adapter.js`. The broker facade composes this adapter with the application session; the adapter owns Binance request names, HMAC signing options, response-envelope normalization, canonical user-data event mapping, termination conversion, and exchange-specific event identity generation. Its deterministic tests live beside the infrastructure implementation.
+The Binance implementation of `UserDataClientPort` now lives in `src/infrastructure/binance/spot/user-data-client-adapter.js`. The broker facade composes this adapter with the application session; the adapter owns Binance request names, HMAC signing options, response-envelope normalization, canonical user-data event mapping, termination conversion, and exchange-specific event identity generation. Its deterministic tests live beside the infrastructure implementation.
 
 The broker coverage command now includes `src/infrastructure/**/*.js` and excludes infrastructure test files, applying the same existing coverage thresholds to the adapter layer.
 ### Phase 9 implementation slice 6 — application-owned port location
@@ -347,7 +347,7 @@ The existing `UserDataClientPort` contract and its unchanged deterministic contr
 
 ### Phase 9 implementation slice 7 — Binance DTO/Entity adapters under Infrastructure
 
-The Binance-specific adapters for canonical orders/fills, legacy orders/trades, spot assets/balances, and Binance ID normalization now live under `src/infrastructure/binance/adapters/`. Their deterministic mapper test cases/assertions move with them; relative imports are updated where needed. The broker facade, canonical fill/history helpers, and package root export are updated to import from the infrastructure location. The obsolete `src/binance/shared/` coverage include/exclude is removed because `src/infrastructure/**/*.js` now covers these modules. Public root exports, method signatures, result shapes, decimal handling, and mapping behavior are unchanged. PR #693 merged at `512b77f4a7745e2b5fbff7849dcfe136830acab8` with Brokers unit tests/coverage, workspace tests/coverage, Harvester targeted regression tests, syntax, and dependency audit passing.
+The Binance-specific adapters for canonical orders/fills, legacy orders/trades, spot assets/balances, and Binance ID normalization now live under `src/infrastructure/binance/spot/adapters/`. Their deterministic mapper test cases/assertions move with them; relative imports are updated where needed. The broker facade, canonical fill/history helpers, and package root export are updated to import from the infrastructure location. The obsolete `src/binance/shared/` coverage include/exclude is removed because `src/infrastructure/**/*.js` now covers these modules. Public root exports, method signatures, result shapes, decimal handling, and mapping behavior are unchanged. PR #693 merged at `512b77f4a7745e2b5fbff7849dcfe136830acab8` with Brokers unit tests/coverage, workspace tests/coverage, Harvester targeted regression tests, syntax, and dependency audit passing.
 
 ### Phase 9 implementation slice 8 — separate Application unit tests from broker composition tests
 
@@ -355,7 +355,7 @@ The six tests that instantiate `UserDataSession` directly now live in `src/appli
 
 ### Phase 9 implementation slice 9 — complete Binance Infrastructure placement
 
-The former `src/binance/index.js` and all 87 files under `src/binance/broker-websocket/` now live under `src/infrastructure/binance/`. The existing `broker-websocket` internal folder structure and tests are preserved. The root package entry point, broker facade, user-data adapter, canonical mapping helpers, and the two adapter test cross-references update only their relative paths. Coverage now includes the relocated broker implementation through the existing Infrastructure glob and excludes its integration/test-helper files at their new paths. The `test:user-data-integration` and `test:websocket` package scripts now point to the relocated integration suites. Public root exports, broker methods, request/response shapes, decimal fidelity, event semantics, and protocol behavior are unchanged. No WebSocket client redesign or new wrapper layer is part of this slice.
+The former `src/binance/index.js` and all 87 files under `src/binance/broker-websocket/` now live under `src/infrastructure/binance/spot/`. The existing `broker-websocket` internal folder structure and tests are preserved. The root package entry point, broker facade, user-data adapter, canonical mapping helpers, and the two adapter test cross-references update only their relative paths. Coverage now includes the relocated broker implementation through the existing Infrastructure glob and excludes its integration/test-helper files at their new paths. The `test:user-data-integration` and `test:websocket` package scripts now point to the relocated integration suites. Public root exports, broker methods, request/response shapes, decimal fidelity, event semantics, and protocol behavior are unchanged. No WebSocket client redesign or new wrapper layer is part of this slice.
 
 ## Dependency direction and executable guard
 
