@@ -289,6 +289,49 @@ async function createIntegrationFixture() {
   }
 }
 
+async function assertAppliedBuyFill({ fixture, order, ownership }) {
+  const fill = new Fill({
+    tradeId: "offline-trade-1",
+    brokerOrderId: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
+    providerInstanceId: "binance-offline-integration",
+    providerType: "binance",
+    accountId: "offline-integration-account",
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "5",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "10",
+      asset: quoteAsset,
+    }),
+    executedAt: 3,
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const applied = await fixture.accounting.applyBuyFill({
+    fill,
+  })
+  assert.equal(applied.applied, true)
+  assert.equal(fixture.accounting.getBuyExecutionQuantity({
+    cycleId: "integration-cycle-1",
+  }), "5")
+  assert.equal(fixture.accounting.getBuyExecutionVwap({
+    cycleId: "integration-cycle-1",
+  }), "2")
+  assert.equal(fixture.accounting.getPortfolio().getPosition({
+    marketId: market.id,
+    positionId: ownership.positionId,
+  }).baseQuantity.amount, "5")
+  assert.equal(fixture.store.records.at(-1).factType, "EXECUTION_FILL")
+}
+
 async function runRuntimeIntegrationScenario() {
   const fixture = await createIntegrationFixture()
   const result = await fixture.dispatch({
@@ -336,46 +379,11 @@ async function runRuntimeIntegrationScenario() {
     "ORDER_SUBMISSION_OUTCOME",
   ])
 
-  const fill = new Fill({
-    tradeId: "offline-trade-1",
-    brokerOrderId: order.brokerOrderId,
-    clientOrderId: order.clientOrderId,
-    providerInstanceId: "binance-offline-integration",
-    providerType: "binance",
-    accountId: "offline-integration-account",
-    market,
-    side: "BUY",
-    price: new Money({
-      amount: "2",
-      asset: quoteAsset,
-    }),
-    quantity: new Quantity({
-      amount: "5",
-      asset: baseAsset,
-    }),
-    quoteQuantity: new Money({
-      amount: "10",
-      asset: quoteAsset,
-    }),
-    executedAt: 3,
-    commissions: [],
-    commissionStatus: "COMPLETE",
+  await assertAppliedBuyFill({
+    fixture,
+    order,
+    ownership,
   })
-  const applied = await fixture.accounting.applyBuyFill({
-    fill,
-  })
-  assert.equal(applied.applied, true)
-  assert.equal(fixture.accounting.getBuyExecutionQuantity({
-    cycleId: "integration-cycle-1",
-  }), "5")
-  assert.equal(fixture.accounting.getBuyExecutionVwap({
-    cycleId: "integration-cycle-1",
-  }), "2")
-  assert.equal(fixture.accounting.getPortfolio().getPosition({
-    marketId: market.id,
-    positionId: ownership.positionId,
-  }).baseQuantity.amount, "5")
-  assert.equal(fixture.store.records.at(-1).factType, "EXECUTION_FILL")
   assert.equal(fixture.stopWorkflow.getStopState().status, "RUNNING")
 }
 
