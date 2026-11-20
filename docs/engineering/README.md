@@ -4,7 +4,7 @@ Canonical repository-wide engineering guidance is linked below. Policy ownership
 
 - [Domain ownership](DOMAIN_OWNERSHIP.md) — paths, responsibilities and local instruction files
 - [Task workflows](TASK_WORKFLOWS.md) — task-specific checklists and standards preflight
-- [AI task compliance standard](AI_TASK_COMPLIANCE_STANDARD.md) — mandatory task standards discovery and compliance gate — task-specific checklists including task continuity and handoff checkpoints
+- [AI task compliance standard](AI_TASK_COMPLIANCE_STANDARD.md) — mandatory task standards discovery and compliance gate
 - [AI refactoring and code audit standard](AI_REFACTORING_AUDIT_STANDARD.md) — mandatory evidence-led process for AI refactoring and code audits
 - [Cross-domain requests](CROSS_DOMAIN_REQUESTS.md) — coordination across ownership boundaries
 - [Modularity standard](MODULARITY_STANDARD.md)
