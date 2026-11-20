@@ -17,7 +17,6 @@ export const BITUNIX_OPERATOR_ORDER_INTENT = Object.freeze({
 })
 const PROVISIONAL_HYPEUSDT_NOTIONAL_FLOOR = "11"
 
-
 function requireSuccessfulBrokerResult({ result, operation }) {
   if (!result || result.ok !== true) {
     const cause = result?.errors?.[0]
@@ -193,9 +192,3 @@ export function createBitunixOperatorOrderPreflight({
     openOrderCount: openOrders.length,
   })
 }
-
-/**
- * Require a real interactive terminal for the local LIVE operator command.
- *
- * @param {{stdin: {isTTY?: boolean}, stdout: {isTTY?: boolean}}} input
- * @returns {void}
