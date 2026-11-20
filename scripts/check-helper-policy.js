@@ -3,26 +3,75 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const IGNORED_DIRECTORIES = new Set([
-  "node_modules", ".git", "dist", "build", "coverage",
-  "generated", "vendor", "fixtures", "tests",
+  "node_modules",
+  ".git",
+  "dist",
+  "build",
+  "coverage",
+  "generated",
+  "vendor",
+  "fixtures",
+  "tests",
 ])
 
 const EFFECTFUL_MODULES = new Set([
-  "node:fs", "node:fs/promises", "node:net", "node:http", "node:https",
-  "node:child_process", "node:worker_threads", "node:stream", "node:tls",
-  "node:dgram", "node:os", "fs", "fs/promises", "net", "http", "https",
-  "child_process", "worker_threads", "stream", "tls", "dgram", "os",
+  "node:fs",
+  "node:fs/promises",
+  "node:net",
+  "node:http",
+  "node:https",
+  "node:child_process",
+  "node:worker_threads",
+  "node:stream",
+  "node:tls",
+  "node:dgram",
+  "node:os",
+  "fs",
+  "fs/promises",
+  "net",
+  "http",
+  "https",
+  "child_process",
+  "worker_threads",
+  "stream",
+  "tls",
+  "dgram",
+  "os",
 ])
 
 const PROHIBITED_API_PATTERNS = [
-  { pattern: /\bDate\.now\s*\(/, label: "Date.now" },
-  { pattern: /\bMath\.random\s*\(/, label: "Math.random" },
-  { pattern: /\bprocess\.env\b/, label: "process.env" },
-  { pattern: /\b(?:setTimeout|setInterval|setImmediate|clearTimeout|clearInterval|clearImmediate)\s*\(/, label: "timer API" },
-  { pattern: /\bfetch\s*\(/, label: "fetch" },
-  { pattern: /\b(?:console|logger)\.(?:log|info|warn|error|debug|trace)\s*\(/, label: "logging" },
-  { pattern: /\bnew\s+Date\s*\(\s*\)/, label: "uncontrolled Date construction" },
-  { pattern: /\b(?:randomBytes|randomUUID)\s*\(/, label: "randomness API" },
+  {
+    pattern: /\bDate\.now\s*\(/,
+    label: "Date.now",
+  },
+  {
+    pattern: /\bMath\.random\s*\(/,
+    label: "Math.random",
+  },
+  {
+    pattern: /\bprocess\.env\b/,
+    label: "process.env",
+  },
+  {
+    pattern: /\b(?:setTimeout|setInterval|setImmediate|clearTimeout|clearInterval|clearImmediate)\s*\(/,
+    label: "timer API",
+  },
+  {
+    pattern: /\bfetch\s*\(/,
+    label: "fetch",
+  },
+  {
+    pattern: /\b(?:console|logger)\.(?:log|info|warn|error|debug|trace)\s*\(/,
+    label: "logging",
+  },
+  {
+    pattern: /\bnew\s+Date\s*\(\s*\)/,
+    label: "uncontrolled Date construction",
+  },
+  {
+    pattern: /\b(?:randomBytes|randomUUID)\s*\(/,
+    label: "randomness API",
+  },
 ]
 
 /**
@@ -41,17 +90,19 @@ export function findHelperSources(root) {
         }
         continue
       }
-      if (!entry.isFile() ||
-          !/\.(?:js|mjs|cjs)$/.test(entry.name) ||
-          /\.(?:test|spec|fixture)\.(?:js|mjs|cjs)$/.test(entry.name)) {
+      if (
+        !entry.isFile() ||
+        !/\.(?:js|mjs|cjs)$/.test(entry.name) ||
+        /\.(?:test|spec|fixture)\.(?:js|mjs|cjs)$/.test(entry.name)
+      ) {
         continue
       }
 
       const file = join(directory, entry.name)
       const extension = entry.name.match(/\.(js|mjs|cjs)$/)?.[0] ?? ".js"
       const stem = entry.name.slice(0, -extension.length)
-      const testPath = join(directory, stem + ".test" + extension)
-      const specPath = join(directory, stem + ".spec" + extension)
+      const testPath = join(directory, \`${stem}.test${extension}\`)
+      const specPath = join(directory, \`${stem}.spec${extension}\`)
       helpers.push({
         directory,
         file,
@@ -81,7 +132,7 @@ export function findHelperSources(root) {
       visit(directory)
     }
   }
-  return helpers.sort((left, right) => left.file.localeCompare(right.file))
+  return helpers
 }
 
 /**
@@ -94,27 +145,27 @@ export function analyzeHelperSource({ file, source }) {
   const importPattern = /(?:\bfrom\s*|^\s*import\s*|\bimport\s*\(|\brequire\s*\()\s*["']([^"']+)["']/gm
   for (const match of source.matchAll(importPattern)) {
     if (EFFECTFUL_MODULES.has(match[1])) {
-      violations.push(file + ": prohibited import from " + match[1])
+      violations.push(\`${file}: prohibited import from ${match[1]}\`)
     }
   }
 
   for (const { pattern, label } of PROHIBITED_API_PATTERNS) {
     if (pattern.test(source)) {
-      violations.push(file + ": prohibited use of " + label)
+      violations.push(\`${file}: prohibited use of ${label}\`)
     }
   }
 
   if (/\bclass\s+[A-Za-z_$][\w$]*/.test(source)) {
-    violations.push(file + ": classes are prohibited in helpers")
+    violations.push(\`${file}: classes are prohibited in helpers\`)
   }
   if (/^\s*(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:new\s+)?(?:Set|Map)\s*\(/m.test(source)) {
-    violations.push(file + ": mutable module-level collections are prohibited")
+    violations.push(\`${file}: mutable module-level collections are prohibited\`)
   }
   if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*(?:\.\s*[A-Za-z_$][\w$]*|\[[^\]]+\])\s*=(?!=|>)/.test(source)) {
-    violations.push(file + ": possible caller-owned input mutation")
+    violations.push(\`${file}: possible caller-owned input mutation\`)
   }
-  if (/\b(?:push|pop|shift|unshift|splice|sort|reverse|set|add|delete|clear)\s*\(/.test(source)) {
-    violations.push(file + ": mutating collection method requires purity review")
+  if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*\.\s*(?:push|pop|shift|unshift|splice|sort|reverse|set|add|delete|clear)\s*\(/.test(source)) {
+    violations.push(\`${file}: possible caller-owned collection mutation\`)
   }
 
   return violations
@@ -132,7 +183,7 @@ export function findHelperPolicyViolations(root) {
       const fileName = helper.file.split(/[\\/]/).at(-1)
       const testName = fileName.replace(/\.(?:js|mjs|cjs)$/, ".test.js")
       const specName = fileName.replace(/\.(?:js|mjs|cjs)$/, ".spec.js")
-      violations.push(helper.file + ": missing directly associated unit test (" + testName + " or " + specName + ")")
+      violations.push(\`${helper.file}: missing directly associated unit test (${testName} or ${specName})\`)
     }
     violations.push(...analyzeHelperSource({
       file: helper.file,
@@ -146,9 +197,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = fileURLToPath(new URL("../", import.meta.url))
   const violations = findHelperPolicyViolations(root)
   if (violations.length > 0) {
-    process.stderr.write("Helper policy violations:\n" + violations.map((violation) => "- " + violation).join("\n") + "\n")
+    process.stderr.write(\`Helper policy violations:\\n${violations.map((violation) => \`- ${violation}\`).join("\\n")}\\n\`)
     process.exitCode = 1
   } else {
-    process.stdout.write("Helper policy passed for all discovered production helper modules.\n")
+    process.stdout.write("Helper policy passed for all discovered production helper modules.\\n")
   }
 }
