@@ -33,6 +33,9 @@ const PROHIBITED_API_PATTERNS = [
   { pattern: /\bprocess\.env\b/, label: "process.env" },
   { pattern: /\b(?:setTimeout|setInterval|setImmediate|clearTimeout|clearInterval|clearImmediate)\s*\(/, label: "timer API" },
   { pattern: /\bfetch\s*\(/, label: "fetch" },
+  { pattern: /\\b(?:console|logger)\\.(?:log|info|warn|error|debug|trace)\\s*\\(/, label: "logging" },
+  { pattern: /\\bnew\\s+Date\\s*\\(\\s*\\)/, label: "uncontrolled Date construction" },
+  { pattern: /\\b(?:randomBytes|randomUUID)\\s*\\(/, label: "randomness API" },
 ]
 
 /**
