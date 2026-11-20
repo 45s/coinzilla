@@ -29,7 +29,10 @@ test("accepts only safe non-negative integer exchange cursors", () => {
 test("rejects malformed and oversized exchange history pages", () => {
   assert.throws(
     () => validatePage({
-      result: { ok: false, data: [] },
+      result: {
+        ok: false,
+        data: [],
+      },
       symbol: "BTCUSDT",
       limit: 10,
       historyType: "order",
@@ -39,7 +42,10 @@ test("rejects malformed and oversized exchange history pages", () => {
   )
   assert.throws(
     () => validatePage({
-      result: { ok: true, data: [{}, {}] },
+      result: {
+        ok: true,
+        data: [{}, {}],
+      },
       symbol: "BTCUSDT",
       limit: 1,
       historyType: "trade",
