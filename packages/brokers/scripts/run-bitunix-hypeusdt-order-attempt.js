@@ -304,8 +304,10 @@ function formatHypeUsdtPreflightSummary({ preflight }) {
     `HYPEUSDT open orders returned by the symbol-scoped query: ${preflight.openOrderCount}`,
     "Open-order response completeness is not established; an empty result is not proof of account-wide absence.",
     "Price tick and quantity step remain UNKNOWN; the exchange may reject the submitted price or quantity.",
+    "The balance is a point-in-time response without an authoritative source timestamp and may change before dispatch.",
     "Free USDT is below the order notional, but other exchange-side credits or account settings may still affect acceptance.",
     "This balance observation does NOT guarantee an insufficient-balance rejection.",
+    "If accepted, the 30 USDT limit may be marketable and could fill immediately at the live ask.",
     "Exactly one placement call will be made. No retry, cancel, transfer, or second mutation will follow.",
   ].join("\n")
 }
