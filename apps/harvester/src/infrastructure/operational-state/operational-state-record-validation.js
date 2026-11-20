@@ -23,7 +23,7 @@ maxLength: MAX_FACT_ID_LENGTH })
   const factType = requireNonEmptyString({ value: fact.factType,
 field: "factType",
 maxLength: 64 })
-  if (!FACT_TYPES.has(factType) || factType === "LEDGER_INITIALIZED") {
+  if (!FACT_TYPES.includes(factType) || factType === "LEDGER_INITIALIZED") {
     throw new TypeError(`Operational State record type is not allowlisted: ${  factType}`)
   }
   return {
