@@ -130,7 +130,7 @@ All methods below are present on both provider facades. An unsupported implement
 | `getExchangeMarkets()` | Supported | Supported | Normalized `Market[]`. |
 | `getOpenOrders()` | Supported | Supported | Current open orders; Bitunix requires a symbol, Binance can query account-wide or by symbol. |
 | `getCanonicalOrder()` | Supported | Unsupported | Bitunix Spot does not expose the client order identity required by `CanonicalOrder`. |
-| `getCanonicalOrderHistory()` | Supported | Unsupported | One bounded Binance query; not a claim of exhaustive account history. |
+| `getCanonicalOrderHistory({ symbol, orderId?, startTime?, endTime?, limit?, includeFollowingOrders? })` | Supported | Unsupported | One bounded canonical Binance query. With `orderId`, the default is exact-order lookup; opt into inclusive lower-bound pagination with `includeFollowingOrders: true`. The caller owns pagination and coverage. |
 | `getFills()` | Supported | Unsupported | Canonical `Fill[]`; Bitunix matching details do not prove stable execution identity or fill completeness. |
 | `getPrices({ symbol })` | Supported | Supported | One-shot ticker result; not a subscription. |
 | `getCandles({ symbol, interval, ... })` | Supported | Unsupported | Bitunix Spot kline data omits volume required by the canonical OHLCV contract. |
@@ -155,6 +155,15 @@ These methods remain present on both facades for existing consumers. They are no
 | `getPrice({ symbol })` | Compatibility alias for `getPrices({ symbol })` on both providers. |
 | `createOrder(input)` | Legacy `Order` placement facade. Binance supports it behind the same safety gates; Bitunix implements LIMIT with base `quantity` and MARKET with quote `quoteQuantity` behind explicit opt-in. Caller-supplied client IDs remain unsupported; canonical placement remains unsupported. |
 | `getSymbolFilters({ symbol })` | Raw provider metadata retained for existing infrastructure adapters. It is not a normalized `TradingRules` value and is not part of the canonical method catalog. |
+
+### Canonical Binance order-history query semantics
+
+`getCanonicalOrderHistory()` remains one bounded, symbol-scoped query; it does not paginate automatically.
+
+- With `includeFollowingOrders` omitted or `false`, a supplied `orderId` preserves the established exact-order lookup behavior. This remains the default for existing reconnect/reconciliation callers.
+- With `includeFollowingOrders: true`, the caller must supply `orderId`. Binance treats this value as an inclusive lower-bound cursor, and the broker returns every canonical order from that bounded `allOrders` response rather than filtering to one exact ID.
+- Continue a pagination scan from the last returned order ID plus one. A short/empty page ends that one cursor scan; it does not prove account-wide, delisted-market, or retention-window completeness.
+- The option changes only read-only result selection. It does not change order placement, cancellation, mutation outcomes, or provider capabilities. Bitunix canonical order history remains explicitly unsupported.
 
 ### Order quantity denomination
 

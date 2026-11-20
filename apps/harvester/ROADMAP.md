@@ -29,39 +29,42 @@ The ADA recovery lifecycle work below remains a separate active trading-safety o
 
 ## Persistence — provider-agnostic database integration (#1327)
 
+The [trading-history persistence roadmap](./docs/persistence/trading-history-roadmap.md) is the canonical phased plan for the completed relational history foundation and the remaining attribution, analytics and operational work. The persistence README remains the current implementation contract.
+
 **Status:** The generic `@coinzilla/db` provider-neutral CRUD/query, lifecycle, transaction, SQLite provider, backup/restore primitives and conformance infrastructure are implemented and hardened. The package-specific DB ESLint cleanup is complete.
 
 **Relational-schema direction — generic prerequisite complete:** [PR #1489](https://github.com/45s/coinzilla/pull/1489) completed the generic SQLite migration audit and hardening tracked by [#1486](https://github.com/45s/coinzilla/issues/1486). The DB package now detects changed applied migration implementations and rejects out-of-order pending migrations while preserving legacy migration history. The DB package still owns generic infrastructure only; Harvester owns its business tables, schema, repositories and migrations.
 
-**Target Harvester layout — design direction, not implemented:** Phase 1 targets Harvester-owned relational `orders` and `fills` tables; the complete phased model, constraints, acceptance criteria and implementation prompt are in the [trading-history persistence roadmap](docs/persistence/trading-history-roadmap.md). Do not add `sessions` or `errors` tables in Phase 1. A future `sessions` table needs a separately defined business purpose and lifecycle; error persistence needs explicit redaction, duplication and retention rules.
-
-Any migration must preserve existing `harvester_orders` history through a verified, idempotent conversion with a backup/rollback plan before cutover. This source contains cumulative order execution snapshots, not individual fills; do not fabricate fills, prices or commissions from it. Keep best-effort non-blocking observer semantics and TESTNET/LIVE file separation. No Journal/ADR-0001 replacement, restart restoration, or trading-state authority is introduced.
+Any migration must preserve existing `harvester_orders` history through a verified, idempotent conversion with a rollback/backup plan before cutover. Keep the current best-effort, non-blocking observer semantics and TESTNET/LIVE file separation. No Journal/ADR-0001 replacement, restart restoration, or trading-state authority is introduced.
 
 **Previous persistence scope:** The trading-session-ID history projection from PR #1369 and the temporary `harvester_processes` process-ID smoke-test write are removed in this slice, as explicitly requested. The replacement history record is an executed-order projection; it does not use process or runtime-session identity.
 
+**Relational trading history and live fill persistence — PHASES 1/2 COMPLETE:** [#1554](https://github.com/45s/coinzilla/issues/1554) was delivered in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555) (merge commit `9611dee32a7d5b3efa6737f6343b8553a2235022`). It adds physical `orders`, `fills`, and commission-detail tables, versioned application-owned SQLite migrations, source-preserving legacy conversion, and bounded best-effort persistence of canonical applied fills. The legacy collection observer remains active during dual-write compatibility. The relational projection remains non-authoritative.
+
+**Startup exchange-history synchronization — PHASE 3 COMPLETE:** [#1556](https://github.com/45s/coinzilla/issues/1556) was delivered in merged [PR #1557](https://github.com/45s/coinzilla/pull/1557), merge commit `c2b0eba34ea2778be8d70212fd5e2e3144067aa5`. The read-only Binance scan runs before trading-engine activation for each runtime’s configured execution markets. It paginates canonical order and trade history, persists orders (including unfilled observations), fills and commissions with explicit `exchange_history` provenance, and advances durable provider/account/environment/symbol cursors only after each page is fully persisted. Interrupted pages replay idempotently; startup also refreshes the oldest stored non-terminal order so offline fills can be discovered after the forward cursor advances. Ambiguous order/fill linkage fails closed. The backwards-compatible broker pagination contract is delivered by merged [PR #1559](https://github.com/45s/coinzilla/pull/1559), tracked by [#1558](https://github.com/45s/coinzilla/issues/1558), merge commit `b06f034daecbd2b6dee9ad68b8426ca3bab106cb`. This is observational history only: it does not adopt orders, infer strategy ownership, restore process state, authorize trading, or certify delisted/unconfigured-market or exchange-retention completeness.
+
 **Filled-order history — MERGED:** [PR #1469](https://github.com/45s/coinzilla/pull/1469) merged into `develop` as `39f098000d6c20cb596a9e6700250faa00bbd80e` (exact validated PR head `6d11d883e2d8250c2b3fab9f6d5a40d6178996bb`). It delivers a non-authoritative `harvester_orders` projection. Persist an order as soon as cumulative executed quantity is positive, including immediate partial/fully filled acknowledgements, later partial/final fills, and partial-fill cancellation outcomes. Further lifecycle snapshots update the same row. Identity is `(environment, providerInstanceId, providerType, accountId, clientOrderId)`; exact decimal strings, canonical market/asset facts, provider/account provenance, and available strategy/position ownership are retained.
 
-The observer uses a bounded serialized best-effort queue. SQLite is never awaited from broker submission, user-data processing, fill application, accounting, Journal, or trading readiness. Queue overflow and write errors are reported as history gaps without blocking trading. TESTNET/LIVE retain separate database files. OrderRegistry, Journal, and ADR-0001 retain their existing authority and guarantees; no restart restoration is introduced.
+Order and fill observers use bounded serialized best-effort queues. SQLite is never awaited from broker submission, user-data processing, fill application, accounting, Journal, or trading readiness. Queue overflow and write errors are reported as history gaps without blocking trading. TESTNET/LIVE retain separate database files. OrderRegistry, Journal, and ADR-0001 retain their existing authority and guarantees; no restart restoration is introduced.
 
 The temporary `harvester_processes` process-ID smoke-test row and its obsolete persistence helper are removed. Neither process ID nor runtime session ID is part of the order-history record or key. No changes are made to `packages/db`.
 
 ### Ownership and dependency direction
 
-- Harvester owns order-history domain records, repository semantics, lifecycle projection, and SQLite composition.
+- Harvester owns trading-history schemas, repository semantics, migrations, lifecycle projections, and SQLite composition.
 - `packages/db` owns only generic provider-neutral persistence contracts and adapters.
 - OrderRegistry remains authoritative for in-process order ownership/state.
 - Journal remains the ordered lifecycle evidence store; this is not a second event ledger.
 - ADR-0001 remains separate and unchanged. The projection does not restore/adopt orders after restart.
 - SQLite is the only currently implemented provider.
 
-### Remaining #1327 work
+### Remaining persistence work after Phase 3
 
-1. Add fill-level history only if a concrete query need is established and the provider fill identity contract is proven.
-2. Add filtered account snapshot history only with explicit provenance and completeness semantics.
-3. Design offline, idempotent historical imports from verified source evidence.
-4. Define backup schedules, retention, permissions, disk monitoring, corruption/disk-full handling, and tested restore procedures before production deployment.
+1. Filtered account snapshot history only with explicit provenance and completeness semantics.
+2. Offline, idempotent historical imports from verified source evidence.
+3. Production retention, permissions, disk monitoring, corruption/disk-full handling, backup scheduling, and operational restore drills.
 
-**Explicit exclusions:** no new provider, no big-bang migration, no Journal/ADR-0001 replacement, no recovery restoration, no individual fill/commission ledger in this slice, no strategy or broker API changes, and no exchange operations.
+**Explicit exclusions from #1554/#1556:** no account-wide or delisted-market history completeness claim, account snapshots as a history source, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, process-restart restoration/adoption, Journal replay, new providers, `sessions`/`errors` tables, broker order-mutation behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
 
 ## Repository-wide quality baseline
 

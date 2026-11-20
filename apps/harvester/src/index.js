@@ -192,7 +192,10 @@ async function closeObservability({
   const eventBusErrors = await closeEventBus({ eventBus })
   const databaseErrors = await closeHarvesterPersistence({
     observer: orderHistoryPersistence?.observer,
+    relationalOrderObserver: orderHistoryPersistence?.relationalOrderObserver,
+    fillObserver: orderHistoryPersistence?.fillObserver,
     database: orderHistoryPersistence?.database,
+    relationalDatabase: orderHistoryPersistence?.relationalDatabase,
     logger,
   })
   const processLockErrors = await releaseProcessLock({
@@ -791,7 +794,10 @@ function publishRuntimeStarted({
 async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } = {}) {
   const runtime = await startProviderAccounts({
     providers: resources.providerInstances,
-    start: options.start,
+    start: (startOptions) => options.start({
+      ...startOptions,
+      orderHistoryPersistence: resources.orderHistoryPersistence,
+    }),
     appConfig: resources.appConfig,
     env: options.env,
     eventPublisher: resources.eventPublisher,

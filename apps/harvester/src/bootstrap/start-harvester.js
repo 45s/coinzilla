@@ -29,6 +29,7 @@ import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
 import { recordOrderSubmissionIntent } from "../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submission-outcome.js"
 import { recordExecutionFill } from "../use-cases/record-execution-fill.js"
+import { synchronizeAccountHistory } from "../use-cases/synchronize-account-history/index.js"
 import { recordOrderCancellationIntent } from "../use-cases/record-order-cancellation-intent.js"
 import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
 import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"
@@ -398,6 +399,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     ...startupState.startupOptions,
     env: dependencies.env,
     brokerAdapterFactory: dependencies.brokerAdapterFactory,
+    orderHistoryPersistence: dependencies.orderHistoryPersistence,
     providerIdentity: dependencies.providerIdentity,
     providerRequired: dependencies.providerRequired !== false,
     marketDataProviderInstanceId: dependencies.marketDataProviderInstanceId,
@@ -801,6 +803,104 @@ async function startHarvesterUserDataServices({
   })
 }
 
+function shouldSynchronizeStartupHistory({ identity, symbols } = {}) {
+  return identity?.providerType === "binance" &&
+    Array.isArray(symbols) &&
+    symbols.length > 0
+}
+
+function hasOrderHistoryRepository({ persistence } = {}) {
+  const repository = persistence?.orderRepository
+  return typeof repository?.upsertHistorical === "function" &&
+    typeof repository?.findByExchangeOrderIdentity === "function" &&
+    typeof repository?.getOldestPendingOrderId === "function"
+}
+
+function hasFillHistoryRepository({ persistence } = {}) {
+  return typeof persistence?.fillRepository?.upsert === "function"
+}
+
+function hasHistoryCursorRepository({ persistence } = {}) {
+  const repository = persistence?.historySyncCursorRepository
+  return typeof repository?.get === "function" &&
+    typeof repository?.saveOrderCursor === "function" &&
+    typeof repository?.saveTradeCursor === "function"
+}
+
+function hasHistoryPersistence({ persistence } = {}) {
+  return hasOrderHistoryRepository({ persistence }) &&
+    hasFillHistoryRepository({ persistence }) &&
+    hasHistoryCursorRepository({ persistence })
+}
+
+function logHistorySyncSkipped({ startup, identity } = {}) {
+  startup.logger.warn?.({
+    message: "Exchange history synchronization skipped because relational history persistence is unavailable",
+    providerInstanceId: identity?.providerInstanceId,
+    environment: startup.tradingMode,
+  })
+}
+
+function logHistorySyncFailure({ startup, identity, result } = {}) {
+  startup.logger.error?.({
+    message: "Exchange history synchronization failed; historical coverage is incomplete",
+    providerInstanceId: identity.providerInstanceId,
+    environment: startup.tradingMode,
+    errors: result?.errors,
+  })
+}
+
+function logHistorySyncSuccess({ startup, identity, result } = {}) {
+  startup.logger.info?.({
+    message: "Exchange history pages scanned for configured markets; global coverage remains unverified",
+    providerInstanceId: identity.providerInstanceId,
+    environment: startup.tradingMode,
+    ...result.data,
+  })
+}
+
+async function synchronizeStartupExchangeHistory({ startup, portfolio, resources } = {}) {
+  const identity = startup.providerIdentity ?? portfolio.accountRuntime.identity
+  const persistence = startup.orderHistoryPersistence
+  if (!shouldSynchronizeStartupHistory({
+    identity,
+    symbols: startup.executionSymbols,
+  })) {
+    return
+  }
+  if (!hasHistoryPersistence({
+    persistence,
+  })) {
+    logHistorySyncSkipped({
+      startup,
+      identity,
+    })
+    return
+  }
+  const result = await synchronizeAccountHistory({
+    broker: resources.broker,
+    symbols: startup.executionSymbols,
+    providerIdentity: identity,
+    environment: startup.tradingMode,
+    orderRepository: persistence.orderRepository,
+    fillRepository: persistence.fillRepository,
+    cursorRepository: persistence.historySyncCursorRepository,
+  })
+  if (result?.ok !== true) {
+    logHistorySyncFailure({
+      startup,
+      identity,
+      result,
+    })
+    return
+  }
+  logHistorySyncSuccess({
+    startup,
+    identity,
+    result,
+  })
+}
+
 async function startHarvesterPreflightServices({ startup,
   portfolio,
   resources,
@@ -809,6 +909,11 @@ async function startHarvesterPreflightServices({ startup,
   recoveryRuntime,
   activateTradingEngine } = {}) {
   await initializeHarvesterMarketMetadata({
+    startup,
+    portfolio,
+    resources,
+  })
+  await synchronizeStartupExchangeHistory({
     startup,
     portfolio,
     resources,

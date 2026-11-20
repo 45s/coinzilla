@@ -106,7 +106,7 @@ Owning the port does not mean copying shared entities. Reuse canonical Order, Fi
 | Cancel order | `cancelOrder({ symbol, orderId })` |
 | Read open orders | `getOpenOrders({ symbol? } = {})`; omit `symbol` for an account-wide snapshot |
 | Read fills | `getFills(input)` |
-| Read canonical order history | `getCanonicalOrderHistory({ symbol, orderId })` |
+| Read canonical order history | `getCanonicalOrderHistory({ symbol, orderId, includeFollowingOrders? })` |
 | Account snapshot | `getAccountSnapshot()` |
 | Symbol filters | `getSymbolFilters({ symbol })` |
 | Price subscription | `subscribeForPrices({ symbol, onPrice })` |
@@ -115,6 +115,8 @@ Owning the port does not mean copying shared entities. Reuse canonical Order, Fi
 | User-data subscription | `subscribeForUserData({ symbols?, trackedOrders?, onEvent, onObservation, onStatus })` |
 
 Query/order methods generally return `{ ok, data }` or `{ ok: false, errors }` using the shared result convention. Connection lifecycle methods throw on failure. Consult the package source/tests for exact input/output contracts.
+
+For Binance canonical history, the default `getCanonicalOrderHistory({ symbol, orderId })` behavior remains an exact-order lookup for reconnect reconciliation. Harvester startup history synchronization opts into the bounded inclusive lower-bound page with `includeFollowingOrders: true`; it supplies `orderId` and owns pagination/cursor durability. The adapter forwards the complete input unchanged so this read-only option is not dropped.
 
 `getOpenOrders({ symbol? } = {})` returns the shared legacy `Order[]` shape, not `CanonicalOrder[]`. An omitted options object and an explicit empty object both mean account-wide; a supplied `symbol` scopes the query to that market. The Harvester adapter must default its optional options argument to `{}` because bootstrap and read-only operator queries intentionally call `getOpenOrders()` for account-wide visibility. Its numeric `quantity` and `price` fields are not suitable for exact financial comparisons. Reconciliation uses only its string broker `id`, symbol/side/type, and the exact string `originalQuantity` / `executedQuantity` metadata preserved by the broker adapter; canonical status and financial execution facts come from `getCanonicalOrderHistory()` and `getFills()`.
 
@@ -152,7 +154,7 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
     cancelOrder: ({ symbol, orderId }) => client.cancelOrder({ symbol, orderId }),
     getOpenOrders: (options = {}) => client.getOpenOrders(options),
     getFills: ({ symbol, ...query }) => client.getFills({ symbol, ...query }),
-    getCanonicalOrderHistory: ({ symbol, orderId }) => client.getCanonicalOrderHistory({ symbol, orderId }),
+    getCanonicalOrderHistory: (input) => client.getCanonicalOrderHistory(input),
     getAccountSnapshot: () => client.getAccountSnapshot(),
     getSymbolFilters: ({ symbol }) => client.getSymbolFilters({ symbol }),
     getExchangeMarkets: () => client.getExchangeMarkets(),

@@ -8,8 +8,8 @@ import {
   BROKER_MUTATION_OUTCOMES,
   getBrokerMutationOutcome,
 } from "./broker-contract.js"
-import { BinanceWebSocketBroker } from "../infrastructure/binance/broker-websocket/broker.js"
-import { BitunixSpotBroker } from "../infrastructure/bitunix/broker.js"
+import { BinanceWebSocketBroker } from "../infrastructure/binance/spot/broker-websocket/broker.js"
+import { BitunixSpotBroker } from "../infrastructure/bitunix/spot/broker.js"
 
 function createBrokers() {
   return [

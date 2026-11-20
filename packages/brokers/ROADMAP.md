@@ -14,6 +14,14 @@ Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
 **Status: COMPLETE.** The common method/result/error contract and shared Binance/Bitunix offline conformance suite were merged in [PR #1451](https://github.com/45s/coinzilla/pull/1451), merge `e6d3e60aaaa26ad23705564ffc17f786c995b3dd`. Capability-model ownership was subsequently reconciled in [PR #1455](https://github.com/45s/coinzilla/pull/1455): `@coinzilla/entities` owns the single shared value contract; Brokers owns provider-specific declarations/evidence and re-exports the shared class for compatibility. The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md). This API completion does not resolve Bitunix's separate Harvester admission blockers in [#1185](https://github.com/45s/coinzilla/issues/1185).
 
+### Canonical Binance order-history pagination mode — #1558
+
+**Status: COMPLETE** in merged [PR #1559](https://github.com/45s/coinzilla/pull/1559), merge commit `b06f034daecbd2b6dee9ad68b8426ca3bab106cb`; accepted from the Harvester Phase 3 consumer audit in [#1556](https://github.com/45s/coinzilla/issues/1556).
+
+Binance `allOrders.orderId` is an inclusive lower-bound cursor, while the existing `getCanonicalOrderHistory({ symbol, orderId })` deliberately filters its result to the exact requested order for reconnect reconciliation. The additive `includeFollowingOrders: true` option requires an `orderId` and returns every canonical order in the bounded lower-bound page so a consumer can paginate safely. The method remains one page per call; it does not claim complete account, delisted-market, or retention-window coverage. Bitunix canonical history remains unsupported.
+
+This is a read-only query contract extension only. It does not change order placement/cancellation, mutation outcomes, or trading authority. Required CI passed on exact PR head `c0a5bea83d272a59afad20bbcd9cd1d6735fb0f3`.
+
 ### Public `Broker` constructor follow-up
 
 Tracking: [issue #1497](https://github.com/45s/coinzilla/issues/1497), implementation [PR #1498](https://github.com/45s/coinzilla/pull/1498).
@@ -442,12 +450,12 @@ The current `packages/brokers/src/index.js` exports exactly:
 
 | Export | Source | Contract |
 |---|---|---|
-| `BinanceWebSocketBroker` | `infrastructure/binance/broker-websocket/broker.js` | Public Binance Spot WebSocket API/Streams broker facade |
-| `BinanceWebSocketConfig` | `infrastructure/binance/broker-websocket/config/binance-websocket-config.js` | Validated credentials, endpoints, and reconnect configuration |
-| `BitunixSpotBroker` | `infrastructure/bitunix/broker.js` | Partial Bitunix Spot REST broker facade; order mutations are not implemented |
-| `BitunixSpotConfig` | `infrastructure/bitunix/config/bitunix-spot-config.js` | Validated Bitunix Spot REST configuration |
-| `BitunixSpotWebSocketClient` | `infrastructure/bitunix/api/websocket-client.js` | Separately managed, authenticated Spot WebSocket RPC client for supported request/response queries |
-| `BitunixWebSocketError` | `infrastructure/bitunix/api/websocket-client.js` | Structured Bitunix Spot WebSocket RPC/transport error |
+| `BinanceWebSocketBroker` | `infrastructure/binance/spot/broker-websocket/broker.js` | Public Binance Spot WebSocket API/Streams broker facade |
+| `BinanceWebSocketConfig` | `infrastructure/binance/spot/broker-websocket/config/binance-websocket-config.js` | Validated credentials, endpoints, and reconnect configuration |
+| `BitunixSpotBroker` | `infrastructure/bitunix/spot/broker.js` | Partial Bitunix Spot REST broker facade; order mutations are not implemented |
+| `BitunixSpotConfig` | `infrastructure/bitunix/spot/config/bitunix-spot-config.js` | Validated Bitunix Spot REST configuration |
+| `BitunixSpotWebSocketClient` | `infrastructure/bitunix/spot/api/websocket-client.js` | Separately managed, authenticated Spot WebSocket RPC client for supported request/response queries |
+| `BitunixWebSocketError` | `infrastructure/bitunix/spot/api/websocket-client.js` | Structured Bitunix Spot WebSocket RPC/transport error |
 | `normalizeBinanceId` | `infrastructure/binance/adapters/normalize-binance-id.js` | Exact non-negative Binance identifier normalization |
 
 The module retains an internal `BinanceSdkConfig` alias for compatibility inside its own module, but it is not a separate public root export. The old SDK/REST broker and standalone legacy Streams exports are not current root exports. Do not restore or remove aliases without a consumer-backed compatibility decision.

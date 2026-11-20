@@ -13,52 +13,89 @@ function reportCloseFailure({ logger, error, stage } = {}) {
   }
 }
 
+async function closeObserver({ observer, logger, stage } = {}) {
+  if (typeof observer?.close !== "function") {
+    return []
+  }
+  try {
+    const result = await observer.close()
+    return result?.ok === false && Array.isArray(result.errors)
+      ? result.errors
+      : []
+  } catch (cause) {
+    const error = new OrderHistoryPersistenceError({
+      stage,
+      cause,
+    })
+    reportCloseFailure({
+      logger,
+      error,
+      stage,
+    })
+    return [error]
+  }
+}
+
+async function closeDatabase({ database, logger, stage } = {}) {
+  if (typeof database?.close !== "function" || database.state === "closed") {
+    return []
+  }
+  try {
+    await database.close()
+    return []
+  } catch (cause) {
+    const error = new OrderHistoryPersistenceError({
+      stage,
+      cause,
+    })
+    reportCloseFailure({
+      logger,
+      error,
+      stage,
+    })
+    return [error]
+  }
+}
+
 /**
- * Drain the order-history observer before closing its SQLite database.
+ * Drain every projection observer before closing either SQLite connection.
  *
- * @param {{observer?: object, database?: object, logger?: object}} input
- * @returns {Promise<Error[]>} Cleanup failures that should be included in process shutdown diagnostics.
+ * @param {{observer?: object, relationalOrderObserver?: object, fillObserver?: object, database?: object, relationalDatabase?: object, logger?: object}} input
+ * @returns {Promise<Error[]>} Cleanup failures for process shutdown diagnostics.
  */
 export async function closeHarvesterPersistence({
   observer,
+  relationalOrderObserver,
+  fillObserver,
   database,
+  relationalDatabase,
   logger,
 } = {}) {
   const errors = []
-  if (observer && typeof observer.close === "function") {
-    try {
-      const result = await observer.close()
-      if (result?.ok === false && Array.isArray(result.errors)) {
-        errors.push(...result.errors)
-      }
-    } catch (cause) {
-      const error = new OrderHistoryPersistenceError({
-        stage: "observer-close",
-        cause,
-      })
-      errors.push(error)
-      reportCloseFailure({
-        logger,
-        error,
-        stage: "observer-close",
-      })
-    }
-  }
-  if (database && typeof database.close === "function" && database.state !== "closed") {
-    try {
-      await database.close()
-    } catch (cause) {
-      const error = new OrderHistoryPersistenceError({
-        stage: "database-close",
-        cause,
-      })
-      errors.push(error)
-      reportCloseFailure({
-        logger,
-        error,
-        stage: "database-close",
-      })
-    }
-  }
+  errors.push(...await closeObserver({
+    observer,
+    logger,
+    stage: "legacy-observer-close",
+  }))
+  errors.push(...await closeObserver({
+    observer: relationalOrderObserver,
+    logger,
+    stage: "relational-order-observer-close",
+  }))
+  errors.push(...await closeObserver({
+    observer: fillObserver,
+    logger,
+    stage: "fill-observer-close",
+  }))
+  errors.push(...await closeDatabase({
+    database,
+    logger,
+    stage: "legacy-database-close",
+  }))
+  errors.push(...await closeDatabase({
+    database: relationalDatabase,
+    logger,
+    stage: "relational-database-close",
+  }))
   return errors
 }
