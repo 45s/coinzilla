@@ -11,6 +11,7 @@ import { createOrderHistoryObserver } from "./create-order-history-observer.js"
 import { createRelationalOrderHistoryRepository } from "./relational-order-repository.js"
 import { createFillHistoryRepository } from "./fill-history-repository.js"
 import { createFillHistoryObserver } from "./create-fill-history-observer.js"
+import { createHistorySyncCursorRepository } from "./history-sync-cursor-repository.js"
 import { HARVESTER_RELATIONAL_MIGRATIONS } from "./relational-migrations.js"
 import { assertHarvesterDatabaseIsolation } from "./resolve-harvester-database-filename.js"
 
@@ -160,6 +161,9 @@ async function prepareRelationalResources({
     const fillRepository = createFillHistoryRepository({
       database: relationalDatabase,
     })
+    const historySyncCursorRepository = createHistorySyncCursorRepository({
+      database: relationalDatabase,
+    })
     relationalOrderObserver = createOrderHistoryObserver({
       eventBus,
       repository: orderRepository,
@@ -176,6 +180,9 @@ async function prepareRelationalResources({
       relationalDatabase,
       relationalOrderObserver,
       fillObserver,
+      orderRepository,
+      fillRepository,
+      historySyncCursorRepository,
       migrationBackupFilename,
     }
   } catch (error) {
@@ -257,6 +264,9 @@ async function preparePersistenceWithRelationalFallback({
       relationalDatabase: null,
       relationalOrderObserver: null,
       fillObserver: null,
+      orderRepository: null,
+      fillRepository: null,
+      historySyncCursorRepository: null,
       migrationBackupFilename: null,
       relationalError,
     })

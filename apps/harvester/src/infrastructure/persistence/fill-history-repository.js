@@ -240,7 +240,7 @@ function mapFillSourceEvent({ sourceEvent } = {}) {
   }
 }
 
-function mapFillEvent({ fill, sourceEvent, environment } = {}) {
+function mapFillEvent({ fill, sourceEvent, environment, ingestionSource = "live_event" } = {}) {
   const tradingEnvironment = requireString({
     value: environment,
     field: "environment",
@@ -248,6 +248,11 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
   if (!["testnet", "live"].includes(tradingEnvironment)) {
     throw new OrderHistoryValidationError({
       field: "environment",
+    })
+  }
+  if (!["live_event", "exchange_history"].includes(ingestionSource)) {
+    throw new OrderHistoryValidationError({
+      field: "ingestionSource",
     })
   }
   const tradeId = requireString({
@@ -309,7 +314,7 @@ function assertOrderReferenceMatches({ order, fill } = {}) {
   }
 }
 
-function mapFillRow({ fill, order } = {}) {
+function mapFillRow({ fill, order, ingestionSource } = {}) {
   const row = { ...fill }
   delete row.commissions
   return {
@@ -319,6 +324,8 @@ function mapFillRow({ fill, order } = {}) {
     position_id: order?.position_id ?? null,
     cycle_id: order?.cycle_id ?? null,
     source_kind: "live_fill_applied",
+    ingestion_source: ingestionSource,
+    last_ingestion_source: ingestionSource,
     last_observed_at: fill.local_observed_at,
   }
 }
@@ -361,7 +368,6 @@ function assertDuplicateMatches({ transaction, existing, candidate } = {}) {
     "symbol",
     "exchange_trade_id",
     "exchange_order_id",
-    "client_order_id",
     "side",
     "execution_price",
     "executed_base_quantity",
@@ -370,7 +376,12 @@ function assertDuplicateMatches({ transaction, existing, candidate } = {}) {
     "commission_status",
     "exchange_executed_at",
   ]
-  const factsMatch = columns.every((column) => existing[column] === candidate[column])
+  const clientOrderIdentityMatches =
+    existing.client_order_id === null ||
+    candidate.client_order_id === null ||
+    existing.client_order_id === candidate.client_order_id
+  const factsMatch = columns.every((column) => existing[column] === candidate[column]) &&
+    clientOrderIdentityMatches
   const commissionsMatch = commissionFactsMatch({
     existing: readExistingCommissions({
       transaction,
@@ -422,10 +433,51 @@ function insertFill({ transaction, row, commissions } = {}) {
   })
 }
 
-function upsertFill({ transaction, fill } = {}) {
+function updateExistingFill({ transaction, existing, fill, order, ingestionSource } = {}) {
+  transaction.prepare(`
+    UPDATE fills SET
+      client_order_id = COALESCE(client_order_id, ?),
+      order_id = COALESCE(order_id, ?),
+      strategy_id = COALESCE(strategy_id, ?),
+      position_id = COALESCE(position_id, ?),
+      cycle_id = COALESCE(cycle_id, ?),
+      last_observed_at = ?,
+      last_source_event_id = ?,
+      last_ingestion_source = ?
+    WHERE id = ?
+  `).run(
+    fill.client_order_id,
+    order?.id ?? null,
+    order?.strategy_id ?? null,
+    order?.position_id ?? null,
+    order?.cycle_id ?? null,
+    fill.local_observed_at,
+    fill.last_source_event_id,
+    ingestionSource,
+    existing.id,
+  )
+}
+
+function upsertFill({ transaction, fill, ingestionSource } = {}) {
   const existing = readExistingFill({
     transaction,
     fill,
+  })
+  const fillForOrder = existing !== undefined &&
+    existing.client_order_id !== null &&
+    fill.client_order_id === null
+    ? {
+        ...fill,
+        client_order_id: existing.client_order_id,
+      }
+    : fill
+  const order = findOrderReference({
+    transaction,
+    fill: fillForOrder,
+  })
+  assertOrderReferenceMatches({
+    order,
+    fill: fillForOrder,
   })
   if (existing !== undefined) {
     assertDuplicateMatches({
@@ -433,26 +485,19 @@ function upsertFill({ transaction, fill } = {}) {
       existing,
       candidate: fill,
     })
-    transaction.prepare(
-      "UPDATE fills SET last_observed_at = ?, last_source_event_id = ? WHERE id = ?",
-    ).run(
-      fill.local_observed_at,
-      fill.last_source_event_id,
-      existing.id,
-    )
+    updateExistingFill({
+      transaction,
+      existing,
+      fill: fillForOrder,
+      order,
+      ingestionSource,
+    })
     return existing.id
   }
-  const order = findOrderReference({
-    transaction,
-    fill,
-  })
-  assertOrderReferenceMatches({
-    order,
-    fill,
-  })
   const row = mapFillRow({
-    fill,
+    fill: fillForOrder,
     order,
+    ingestionSource,
   })
   insertFill({
     transaction,
@@ -489,16 +534,18 @@ export function createFillHistoryRepository({ database } = {}) {
     throw new TypeError("Relational fill history requires a connected SQLite database.")
   }
   return Object.freeze({
-    upsert: async ({ fill, sourceEvent, environment } = {}) => {
+    upsert: async ({ fill, sourceEvent, environment, ingestionSource = "live_event" } = {}) => {
       const candidate = mapFillEvent({
         fill,
         sourceEvent,
         environment,
+        ingestionSource,
       })
       try {
         return await database.transaction((transaction) => upsertFill({
           transaction,
           fill: candidate,
+          ingestionSource,
         }))
       } catch (error) {
         throw normalizeFillWriteError({
