@@ -245,7 +245,7 @@ async function fetchOrderHistoryForMarket({
       limit,
       historyType: "order",
     })
-    for (const order of page) {
+    const validatedOrders = page.map((order) => {
       lastOrderId = validateCanonicalOrder({
         order,
         symbol,
@@ -253,6 +253,9 @@ async function fetchOrderHistoryForMarket({
         state,
       })
       state.ordersObserved += 1
+      return order
+    })
+    for (const order of validatedOrders) {
       await persistCanonicalOrder({
         order,
         repositories,
@@ -437,7 +440,7 @@ async function fetchFillHistoryForMarket({
       limit,
       historyType: "trade",
     })
-    for (const fill of page) {
+    const validatedFills = page.map((fill) => {
       lastTradeId = validateCanonicalFill({
         fill,
         symbol,
@@ -445,6 +448,9 @@ async function fetchFillHistoryForMarket({
         state,
       })
       state.fillsObserved += 1
+      return fill
+    })
+    for (const fill of validatedFills) {
       await persistCanonicalFill({
         fill,
         repositories,
