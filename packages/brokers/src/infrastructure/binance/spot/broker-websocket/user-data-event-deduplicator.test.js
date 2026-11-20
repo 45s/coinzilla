@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { createUserDataEventDeduplicator } from "./user-data-event-deduplicator.js"
 
-test("deduplicates event identities and respects subscription IDs only for payload identity", () => {
+test("deduplicates identical execution reports across subscriptions", () => {
   const deduplicator = createUserDataEventDeduplicator()
   const report = {
     subscriptionId: 4,
@@ -13,6 +13,7 @@ I: 21 },
   }
   assert.equal(deduplicator.isDuplicate(report), false)
   assert.equal(deduplicator.isDuplicate(structuredClone(report)), true)
+  assert.equal(deduplicator.isDuplicate({ ...report, subscriptionId: 5 }), true)
   assert.equal(deduplicator.isDuplicate({
     ...report,
 event: { ...report.event,
