@@ -83,8 +83,12 @@ export function findHelperSources(root) {
     }
   }
 
-  visit(join(root, "apps"))
-  visit(join(root, "packages"))
+  for (const area of ["apps", "packages"]) {
+    const directory = join(root, area)
+    if (existsSync(directory)) {
+      visit(directory)
+    }
+  }
   return helpers.sort((left, right) => left.file.localeCompare(right.file))
 }
 
