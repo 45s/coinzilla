@@ -409,6 +409,8 @@ function createOperationalProjectionState() {
     marketHistoryCoverageBySymbol: new Map(),
     orderIntents: new Map(),
     cancellationIntents: new Map(),
+    recoverySellerOrdersByCycle: new Map(),
+    recoverySellerFillsByCycle: new Map(),
     cycleFillIdsByMarket: new Map(),
     orderSubmissionOutcomes: [],
     orderCancellationOutcomes: [],
@@ -585,7 +587,53 @@ function handleTradingOperationalFact({ record, state }) {
   if (!TRADING_FACT_TYPES.has(record.factType)) {
     throw new Error(`Unsupported Operational State Store projection type: ${record.factType}`)
   }
+  if (record.factType === "ORDER_SUBMISSION_INTENT" &&
+      record.data.strategyId === "RS_recoverySeller") {
+    const intent = record.data
+    const expectedPurpose = intent.side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL"
+    if (!intent.clientOrderId || !intent.cycleId || !intent.positionId ||
+        intent.purpose !== expectedPurpose ||
+        state.orderIntents.has(intent.clientOrderId)) {
+      throw new Error("Recovery Seller durable order intent has missing, contradictory or reused ownership")
+    }
+    state.orderIntents.set(intent.clientOrderId, intent)
+    state.recoverySellerOrdersByCycle.set(intent.cycleId, [
+      ...(state.recoverySellerOrdersByCycle.get(intent.cycleId) ?? []),
+      Object.freeze({
+        clientOrderId: intent.clientOrderId,
+        marketId: intent.marketId,
+        symbol: intent.symbol,
+        side: intent.side,
+        purpose: intent.purpose,
+        positionId: intent.positionId,
+        cycleId: intent.cycleId,
+        sequence: record.sequence,
+        status: "SUBMISSION_OUTCOME_PENDING",
+      }),
+    ])
+  }
   if (record.factType === "ORDER_SUBMISSION_OUTCOME") {
+    const intent = state.orderIntents.get(record.data.clientOrderId)
+    if (intent?.strategyId === "RS_recoverySeller") {
+      assertIntentMatches({
+        intent,
+        data: record.data,
+        fields: ["marketId", "symbol", "side", "purpose", "strategyId", "positionId", "cycleId"],
+        context: "Recovery Seller durable submission outcome",
+      })
+      const orders = state.recoverySellerOrdersByCycle.get(intent.cycleId) ?? []
+      state.recoverySellerOrdersByCycle.set(intent.cycleId, orders.map((order) =>
+        order.clientOrderId === intent.clientOrderId
+          ? Object.freeze({
+              ...order,
+              brokerOrderId: record.data.brokerOrderId ?? null,
+              submissionOutcome: record.data.outcome,
+              status: record.data.status ?? record.data.outcome,
+              outcomeSequence: record.sequence,
+            })
+          : order
+      ))
+    }
     state.orderSubmissionOutcomes.push(Object.freeze({
       ...record.data,
       factId: record.factId,
@@ -600,6 +648,37 @@ function handleTradingOperationalFact({ record, state }) {
     }))
   }
   if (record.factType === "EXECUTION_FILL_APPLIED") {
+    const intent = record.data.clientOrderId == null
+      ? undefined
+      : state.orderIntents.get(record.data.clientOrderId)
+    if (intent?.strategyId === "RS_recoverySeller") {
+      assertIntentMatches({
+        intent,
+        data: record.data,
+        fields: ["marketId", "symbol", "side", "strategyId", "positionId", "cycleId"],
+        context: "Recovery Seller execution fill",
+      })
+      if (!record.data.brokerOrderId ||
+          (intent.brokerOrderId && intent.brokerOrderId !== record.data.brokerOrderId)) {
+        throw new Error("Recovery Seller execution fill has contradictory broker order ownership")
+      }
+      const fills = state.recoverySellerFillsByCycle.get(intent.cycleId) ?? []
+      if (fills.some((fill) => fill.fillId === record.data.fillId)) {
+        throw new Error("Recovery Seller cycle contains a duplicate canonical fill identity")
+      }
+      fills.push(Object.freeze({
+        ...record.data,
+        factId: record.factId,
+        sequence: record.sequence,
+        strategyId: intent.strategyId,
+        positionId: intent.positionId,
+        cycleId: intent.cycleId,
+        purpose: intent.purpose,
+      }))
+      state.recoverySellerFillsByCycle.set(intent.cycleId, fills)
+    } else if (record.data.strategyId === "RS_recoverySeller") {
+      throw new Error("Recovery Seller execution fill has no preceding durable owned order intent")
+    }
     const appliedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
     if (appliedFillIds.includes(record.data.fillId)) {
       throw new Error(`Durable recovery cycle contains a duplicate applied fill identity: ${record.data.fillId}`)
@@ -919,6 +998,23 @@ reason: pause.reason })
       recoveryCycleEvaluations,
       orderSubmissionOutcomes: Object.freeze(state.orderSubmissionOutcomes),
       orderCancellationOutcomes: Object.freeze(state.orderCancellationOutcomes),
+      recoverySellerLifecycle: Object.freeze({
+        candidateOnly: true,
+        restorationEnabled: false,
+        requiresExchangeReconciliation: true,
+        ordersByCycle: Object.freeze([...state.recoverySellerOrdersByCycle].map(([cycleId, orders]) =>
+          Object.freeze({
+            cycleId,
+            orders: Object.freeze(orders),
+            // A durable submission intent is a reservation boundary. A terminal
+            // broker status alone is not proof that mixed-SELL accounting committed.
+            reservedSellOrders: Object.freeze(orders.filter((order) => order.side === "SELL")),
+          })
+        )),
+        appliedFillsByCycle: Object.freeze([...state.recoverySellerFillsByCycle].map(([cycleId, fills]) =>
+          Object.freeze({ cycleId, fills: Object.freeze(fills) })
+        )),
+      }),
       source: "DURABLE_FACTS",
       candidateOnly: true,
       restorationEnabled: false,
