@@ -53,6 +53,19 @@ export function mapCanonicalOrder({ order, providerIdentity, environment, observ
   })
 }
 
+export function validateCanonicalOrderProviderIdentity({ order, providerIdentity, symbol }) {
+  if (order.providerInstanceId === undefined) {
+    return
+  }
+  if (
+    order.providerInstanceId !== providerIdentity.providerInstanceId ||
+    order.providerType !== providerIdentity.providerType ||
+    order.accountId !== providerIdentity.accountId
+  ) {
+    throw new Error(`Binance order provider identity conflicts for ${symbol}:${order.brokerOrderId}`)
+  }
+}
+
 export function createOrderIdentityKey({ order }) {
   return `${order.market.id}:${order.brokerOrderId}`
 }
