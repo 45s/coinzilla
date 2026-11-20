@@ -63,24 +63,8 @@ function createValidPreflightInput({ overrides = {} } = {}) {
   }
 }
 
-function createAttemptDependencies({
-  overrides = {},
-  confirmation = true,
-  markerError,
-  orderResult = {
-    ok: true,
-    data: {
-      id: "order-123",
-    },
-    mutationOutcome: "CONFIRMED",
-  },
-  orderDisconnectError,
-} = {}) {
-  const events = []
-  const input = createValidPreflightInput({
-    overrides,
-  })
-  const readBroker = {
+function createReadBroker({ events, input }) {
+  return {
     async connect() {
       events.push("read.connect")
     },
@@ -104,7 +88,10 @@ function createAttemptDependencies({
       events.push("read.disconnect")
     },
   }
-  const orderBroker = {
+}
+
+function createOrderBroker({ events, orderResult, orderDisconnectError }) {
+  return {
     async connect() {
       events.push("order.connect")
     },
@@ -122,6 +109,34 @@ function createAttemptDependencies({
       }
     },
   }
+}
+
+function createAttemptDependencies({
+  overrides = {},
+  confirmation = true,
+  markerError,
+  orderResult = {
+    ok: true,
+    data: {
+      id: "order-123",
+    },
+    mutationOutcome: "CONFIRMED",
+  },
+  orderDisconnectError,
+} = {}) {
+  const events = []
+  const input = createValidPreflightInput({
+    overrides,
+  })
+  const readBroker = createReadBroker({
+    events,
+    input,
+  })
+  const orderBroker = createOrderBroker({
+    events,
+    orderResult,
+    orderDisconnectError,
+  })
   const run = () => runBitunixOperatorOrderAttempt({
     readBroker,
     createOrderBroker() {
