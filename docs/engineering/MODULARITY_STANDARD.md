@@ -33,9 +33,9 @@ src/
     notifier.js
     index.js
     helpers/
-      run-validation.js
-      run-response-validation.js
-      get-safe-error-msg.js
+      validate-telegram-inputs.js
+      validate-telegram-api-response.js
+      sanitize-error-message.js
 ```
 
 Rules:

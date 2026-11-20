@@ -1,14 +1,14 @@
 import {
-  validateTelegramOptions,
+  validateTelegramConfiguration,
   validateTelegramMessage,
-} from "./helpers/run-validation.js"
-import { safeErrorMessage } from "./helpers/get-safe-error-msg.js"
+} from "./helpers/validate-telegram-inputs.js"
+import { sanitizeErrorMessage } from "./helpers/sanitize-error-message.js"
 import {
   assertHttpResponse,
   createHttpFailure,
   getHttpStatus,
   validateSuccessfulPayload,
-} from "./helpers/run-response-validation.js"
+} from "./helpers/validate-telegram-api-response.js"
 
 const TELEGRAM_API_BASE_URL = "https://api.telegram.org"
 
@@ -16,12 +16,12 @@ function normalizeRejectedError({ error, token }) {
   if (error instanceof Error) {
     return error
   }
-  return new Error(safeErrorMessage({ error,
+  return new Error(sanitizeErrorMessage({ error,
     token }))
 }
 
 function sanitizeCaughtError({ error, token }) {
-  error.message = safeErrorMessage({ error,
+  error.message = sanitizeErrorMessage({ error,
     token })
   if (typeof token !== "string" || token.length < 6) {
     return
@@ -91,7 +91,7 @@ export class TelegramNotifier {
   #timeoutMs
 
   constructor(options) {
-    const validated = validateTelegramOptions({ options,
+    const validated = validateTelegramConfiguration({ options,
       defaultFetchImpl: globalThis.fetch })
     this.#token = validated.token
     this.#chatId = validated.chatId

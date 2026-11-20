@@ -5,7 +5,7 @@ import {
   getHttpStatus,
   createHttpFailure,
   validateSuccessfulPayload,
-} from "./run-response-validation.js"
+} from "./validate-telegram-api-response.js"
 
 test("validates HTTP response shape and returns safe status values", () => {
   assert.doesNotThrow(() => assertHttpResponse({

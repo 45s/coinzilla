@@ -16,11 +16,11 @@ Transport-specific implementation belongs under src/<transport>/. Keep the root 
           notifier.test.js
           event-subscriber.test.js
           helpers/
-            run-validation.js
-            run-validation.test.js
-            run-response-validation.js
-            get-safe-error-msg.js
-            get-safe-error-msg.test.js
+            validate-telegram-inputs.js
+            validate-telegram-inputs.test.js
+            validate-telegram-api-response.js
+            sanitize-error-message.js
+            sanitize-error-message.test.js
         email/    (future; create when implemented)
         discord/  (future; create when implemented)
 
