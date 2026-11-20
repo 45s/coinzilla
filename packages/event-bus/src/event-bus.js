@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto"
 import { assertObjectInput, defaultLogger, toResult } from "@coinzilla/utils"
 import { isValidEventName } from "./helpers/event-name.js"
-import { assertSupportedPayload, cloneAndFreezePayload } from "./helpers/payload.js"
-import { validateOptions } from "./helpers/options.js"
+import { assertEventPayloadSupported, cloneAndFreezeEventPayload } from "./helpers/assert-and-clone-event-payload.js"
+import { validateEventBusOptions } from "./helpers/validate-event-bus-options.js"
 import { canAcceptDeliveries } from "./helpers/delivery-capacity.js"
 
 const ALL_EVENTS = Symbol("all-events")
@@ -12,7 +12,7 @@ export class EventBus {
    * @throws {TypeError} If options or a configured callback is invalid.
    */
   constructor(options = {}) {
-    const { logger, onError, maxPending } = validateOptions({
+    const { logger, onError, maxPending } = validateEventBusOptions({
       options,
       defaultLogger,
     })
@@ -70,8 +70,8 @@ export class EventBus {
     let eventData
 
     try {
-      assertSupportedPayload(data)
-      eventData = cloneAndFreezePayload(data)
+      assertEventPayloadSupported(data)
+      eventData = cloneAndFreezeEventPayload(data)
     } catch (error) {
       return toResult({ error })
     }

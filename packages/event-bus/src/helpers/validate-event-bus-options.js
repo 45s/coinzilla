@@ -4,7 +4,7 @@
  * @param {unknown} input.options
  * @param {object} input.defaultLogger
  */
-export function validateOptions({ options, defaultLogger }) {
+export function validateEventBusOptions({ options, defaultLogger }) {
   if (
     options === null ||
     typeof options !== "object" ||
