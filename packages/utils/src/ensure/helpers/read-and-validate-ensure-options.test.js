@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import {
   readEnsureOptionProperty,
-  readEnsureOptionPropertys,
+  validateEnsureOptionsRecord,
   resolveEnsureDiagnosticName,
   resolveEnsureErrorMessage,
   readEnsureAssertionOptions,
@@ -21,9 +21,9 @@ key: "value",
 })
 
 test("requires plain option records", () => {
-  assert.equal(readEnsureOptionPropertys({ options: {} }).constructor, Object)
-  assert.throws(() => readEnsureOptionPropertys({ options: [] }), TypeError)
-  assert.throws(() => readEnsureOptionPropertys({ options: new Date() }), TypeError)
+  assert.equal(validateEnsureOptionsRecord({ options: {} }).constructor, Object)
+  assert.throws(() => validateEnsureOptionsRecord({ options: [] }), TypeError)
+  assert.throws(() => validateEnsureOptionsRecord({ options: new Date() }), TypeError)
 })
 
 test("resolves diagnostic names and messages", () => {
