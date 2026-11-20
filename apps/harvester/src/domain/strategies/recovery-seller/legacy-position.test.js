@@ -69,6 +69,56 @@ function makeLegacySellFill() {
   })
 }
 
+function makeLegacyCommissionAllocations() {
+  return [
+    {
+      assetId: baseAsset.id,
+      assetCode: baseAsset.code,
+      amount: "0.01",
+    },
+    {
+      assetId: quoteAsset.id,
+      assetCode: quoteAsset.code,
+      amount: "0.1",
+    },
+    {
+      assetId: feeAsset.id,
+      assetCode: feeAsset.code,
+      amount: "0.01",
+      quoteValue: {
+        assetId: quoteAsset.id,
+        assetCode: quoteAsset.code,
+        amount: "0.05",
+      },
+    },
+  ]
+}
+
+function makeRecoveryCommissionAllocations() {
+  return [
+    {
+      assetId: baseAsset.id,
+      assetCode: baseAsset.code,
+      amount: "0.02",
+    },
+    {
+      assetId: quoteAsset.id,
+      assetCode: quoteAsset.code,
+      amount: "0.2",
+    },
+    {
+      assetId: feeAsset.id,
+      assetCode: feeAsset.code,
+      amount: "0.02",
+      quoteValue: {
+        assetId: quoteAsset.id,
+        assetCode: quoteAsset.code,
+        amount: "0.1",
+      },
+    },
+  ]
+}
+
 function makeLegacySellAllocation({
   fill,
   allocationFingerprint = "legacy-allocation-fingerprint-1",
@@ -76,28 +126,7 @@ function makeLegacySellAllocation({
     grossBaseQuantity: "1",
     baseDebit: "1.01",
     quoteProceeds: "100",
-    commissions: [
-      {
-        assetId: baseAsset.id,
-        assetCode: baseAsset.code,
-        amount: "0.01",
-      },
-      {
-        assetId: quoteAsset.id,
-        assetCode: quoteAsset.code,
-        amount: "0.1",
-      },
-      {
-        assetId: feeAsset.id,
-        assetCode: feeAsset.code,
-        amount: "0.01",
-        quoteValue: {
-          assetId: quoteAsset.id,
-          assetCode: quoteAsset.code,
-          amount: "0.05",
-        },
-      },
-    ],
+    commissions: makeLegacyCommissionAllocations(),
   },
 } = {}) {
   return {
@@ -109,28 +138,7 @@ function makeLegacySellAllocation({
       grossBaseQuantity: "2",
       baseDebit: "2.02",
       quoteProceeds: "200",
-      commissions: [
-        {
-          assetId: baseAsset.id,
-          assetCode: baseAsset.code,
-          amount: "0.02",
-        },
-        {
-          assetId: quoteAsset.id,
-          assetCode: quoteAsset.code,
-          amount: "0.2",
-        },
-        {
-          assetId: feeAsset.id,
-          assetCode: feeAsset.code,
-          amount: "0.02",
-          quoteValue: {
-            assetId: quoteAsset.id,
-            assetCode: quoteAsset.code,
-            amount: "0.1",
-          },
-        },
-      ],
+      commissions: makeRecoveryCommissionAllocations(),
     },
     legacy,
   }
