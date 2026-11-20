@@ -811,7 +811,8 @@ async function synchronizeStartupExchangeHistory({ startup, portfolio, resources
     return
   }
   if (typeof persistence?.orderRepository?.upsertHistorical !== "function" ||
-      typeof persistence?.fillRepository?.upsert !== "function") {
+      typeof persistence?.fillRepository?.upsert !== "function" ||
+      typeof persistence?.historySyncCursorRepository?.get !== "function") {
     startup.logger.warn?.({
       message: "Exchange history synchronization skipped because relational history persistence is unavailable",
       providerInstanceId: identity.providerInstanceId,
@@ -826,6 +827,7 @@ async function synchronizeStartupExchangeHistory({ startup, portfolio, resources
     environment: startup.tradingMode,
     orderRepository: persistence.orderRepository,
     fillRepository: persistence.fillRepository,
+    cursorRepository: persistence.historySyncCursorRepository,
   })
   if (result?.ok !== true) {
     startup.logger.error?.({
