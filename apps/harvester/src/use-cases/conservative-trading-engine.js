@@ -8,6 +8,7 @@ import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-n
 import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
+import { createRecoverySellerOrderSubmitter } from "./create-recovery-seller-order-submitter.js"
 import { makeCollectOwnedOrderSnapshots } from "./collect-owned-order-snapshots.js"
 import { makeOrderEventWorkflow } from "./order-event-workflow.js"
 import { makeVolatilityProtectionWorkflow } from "./volatility-protection-workflow.js"
@@ -1789,6 +1790,22 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
     isPostOnlyOrderCrossing,
     isShutdownRecoverySubmissionAllowed: () => context.shutdownRecoverySubmission.allowed,
   })
+  if (Object.keys(dependencies.recoverySellerPairs ?? {}).length > 0) {
+    const latchSubmissionFailure = (input = {}) => latchRecoverySellerSubmissionFailure({
+      recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+      ...input,
+    })
+    context.submitRecoverySellerOrder = createRecoverySellerOrderSubmitter({
+      broker: dependencies.broker,
+      recoverySellerAccountingWorkflow: dependencies.recoverySellerWorkflow,
+      onDurableSubmissionIntent: dependencies.onOperationalStateSubmissionIntent,
+      onDurableSubmissionOutcome: dependencies.onOperationalStateSubmissionOutcome,
+      onUnresolvedSubmission: latchSubmissionFailure,
+      onOrderValidationFailure: latchSubmissionFailure,
+      canSubmit: context.canSubmit,
+      onSellReserved: dependencies.onRecoverySellerSellReserved,
+    })
+  }
   context.submit = makeExecuteStrategyDecision({
     broker: dependencies.broker,
     onOperationalStateSubmissionIntent: dependencies.onOperationalStateSubmissionIntent,
@@ -1887,7 +1904,11 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     logger: dependencies.logger,
     strategyPolicy: dependencies.strategyPolicy,
     evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
+    recoverySellerPairs: dependencies.recoverySellerPairs,
+    recoverySellerWorkflow: dependencies.recoverySellerWorkflow,
     recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+    submitRecoverySellerOrder: context.submitRecoverySellerOrder,
+    getRecoverySellerMarketMetadata: dependencies.getRecoverySellerMarketMetadata,
     pause: context.pause,
     completeRecoveryCycle: dependencies.completeRecoveryCycle,
     eventPublisher: dependencies.eventPublisher,
@@ -1948,6 +1969,37 @@ function createConservativeEngineMarketEventContext({ context } = {}) {
   })
 }
 
+async function latchRecoverySellerSubmissionFailure({
+  recoverySellerStopWorkflow,
+  order,
+  reason,
+  outcome,
+  error,
+} = {}) {
+  if (typeof recoverySellerStopWorkflow?.latch !== "function") {
+    return toResult({
+      error: new Error("Recovery Seller submission failure requires the durable global STOP workflow"),
+    })
+  }
+  const detail = error instanceof Error
+    ? error.message
+    : error === undefined
+      ? "no additional error details"
+      : String(error)
+  const orderIdentity = typeof order?.clientOrderId === "string" && order.clientOrderId.trim()
+    ? {
+        clientOrderId: order.clientOrderId,
+        ...(typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()
+          ? { brokerOrderId: order.brokerOrderId }
+          : {}),
+      }
+    : undefined
+  return recoverySellerStopWorkflow.latch({
+    explanation: `Recovery Seller submission requires operator reconciliation (${reason ?? outcome ?? "UNRESOLVED"}): ${detail}`,
+    ...(orderIdentity === undefined ? {} : { orderIdentity }),
+  })
+}
+
 async function latchRecoverySellerTerminalFailure({
   recoverySellerStopWorkflow,
   order,
@@ -1992,6 +2044,7 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
     publishRecoveryCycleNotCompleted: context.publishRecoveryCycleNotCompleted,
     isStopping: dependencies.isStopping,
     onUnownedExternalOrderObserved: dependencies.onUnownedExternalOrderObserved,
+    reconcileRecoverySellerMixedSell: dependencies.recoverySellerWorkflow?.reconcileTerminalMixedSell,
     latchRecoverySellerStop: ({ order, reason, error } = {}) =>
       latchRecoverySellerTerminalFailure({
         recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
