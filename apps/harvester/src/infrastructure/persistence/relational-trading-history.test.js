@@ -395,7 +395,7 @@ function createInterruptedMigration() {
 
 function createRetryMigration() {
   return {
-    version: 2,
+    version: 3,
     name: "harvester-relational-interrupted-test",
     up(transaction) {
       transaction.exec("CREATE TABLE retry_probe (id TEXT PRIMARY KEY)")
@@ -942,12 +942,11 @@ test("stores exchange-history provenance and links only the verified scoped orde
   }
   delete historicalOrder.ownership
   await persistence.orderRepository.upsertHistorical(historicalOrder)
+  const historicalFill = createAppliedFillEvent()
+  historicalFill.clientOrderId = historicalOrder.clientOrderId
+  historicalFill.brokerOrderId = historicalOrder.brokerOrderId
   await persistence.fillRepository.upsert({
-    fill: createAppliedFillEvent({
-      overrides: {
-        clientOrderId: historicalOrder.clientOrderId,
-      },
-    }),
+    fill: historicalFill,
     sourceEvent: {
       id: "exchange-history-fill:binance-primary:binance:BTCUSDT:trade-0001",
       name: "execution.fill_history_reconciled",
