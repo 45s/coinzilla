@@ -443,6 +443,33 @@ test("Bitunix operator attempt stops before mutation when the one-shot marker ca
   assert.equal(events.some((event) => event.operation === "createOrder"), false)
 })
 
+test("Bitunix operator attempt validates the mutation Broker before creating its marker", async () => {
+  const events = []
+  const readBroker = createMockBitunixReadBroker({
+    events,
+    input: createValidBitunixOperatorPreflightInput(),
+  })
+
+  await assert.rejects(
+    runBitunixOperatorOrderAttempt({
+      readBroker,
+      createOrderBroker: () => ({
+        async connect() {},
+        async disconnect() {},
+      }),
+      async confirm() {
+        return true
+      },
+      async createMarker() {
+        events.push("marker")
+      },
+      writeLine() {},
+    }),
+    /mutation Broker.*createOrder/i,
+  )
+  assert.equal(events.includes("marker"), false)
+})
+
 test("Bitunix operator attempt never retries an unknown placement outcome", async () => {
   const unknownResult = {
     ok: false,
