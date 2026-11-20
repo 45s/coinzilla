@@ -812,7 +812,9 @@ async function synchronizeStartupExchangeHistory({ startup, portfolio, resources
   }
   if (typeof persistence?.orderRepository?.upsertHistorical !== "function" ||
       typeof persistence?.fillRepository?.upsert !== "function" ||
-      typeof persistence?.historySyncCursorRepository?.get !== "function") {
+      typeof persistence?.historySyncCursorRepository?.get !== "function" ||
+      typeof persistence.historySyncCursorRepository.saveOrderCursor !== "function" ||
+      typeof persistence.historySyncCursorRepository.saveTradeCursor !== "function") {
     startup.logger.warn?.({
       message: "Exchange history synchronization skipped because relational history persistence is unavailable",
       providerInstanceId: identity.providerInstanceId,
@@ -839,7 +841,7 @@ async function synchronizeStartupExchangeHistory({ startup, portfolio, resources
     return
   }
   startup.logger.info?.({
-    message: "Exchange history synchronization completed for configured markets",
+    message: "Exchange history pages scanned for configured markets; global coverage remains unverified",
     providerInstanceId: identity.providerInstanceId,
     environment: startup.tradingMode,
     ...result.data,
