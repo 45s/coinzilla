@@ -86,8 +86,8 @@ test("detects mutation and stateful classes", () => {
       source: "export function update({ session }) { session.chronologySource = \"SINGLE_SESSION\"; return session }\nexport class StatefulHelper {}\n",
     }),
     [
-      "helpers/mutating.js: possible caller-owned input mutation",
       "helpers/mutating.js: classes are prohibited in helpers",
+      "helpers/mutating.js: possible caller-owned input mutation",
     ],
   )
 })
@@ -128,8 +128,8 @@ test("detects clocks, logging, and module-level mutable collections", () => {
       source: "const cache = new Set()\nconst shared = {}\nexport function now() { return performance.now() }\nexport function warn() { logger.warn('warning') }\n",
     }),
     [
-      "helpers/stateful.js: prohibited use of performance.now",
       "helpers/stateful.js: prohibited use of logging",
+      "helpers/stateful.js: prohibited use of performance.now",
       "helpers/stateful.js: mutable module-level objects or arrays must be frozen",
       "helpers/stateful.js: mutable module-level collections are prohibited",
     ],
