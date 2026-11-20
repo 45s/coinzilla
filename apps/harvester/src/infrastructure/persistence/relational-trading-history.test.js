@@ -1082,3 +1082,46 @@ test("keeps durable history cursors isolated by provider, account, environment, 
     lastTradeId: null,
   })
 })
+
+
+test("persists exchange-observed unfilled orders for later fill reconciliation", async (t) => {
+  const context = await createTestContext({
+    t,
+  })
+  const persistence = await preparePersistence({
+    context,
+  })
+  const order = createOrderHistoryEventData({
+    clientOrderId: "harvester-BTCUSDT-unfilled",
+    brokerOrderId: "broker-order-unfilled",
+    executedQuantity: "0",
+    remainingQuantity: "1.0000",
+    status: "NEW",
+    ownership: undefined,
+  })
+  const record = createOrderHistoryRecord({
+    order,
+    sourceEvent: {
+      id: "exchange-history-order:unfilled",
+      name: "exchange.history_order_observed",
+      source: "binance.exchange-history",
+      timestamp: "2026-11-20T04:00:00.000Z",
+    },
+    environment: "testnet",
+    includeUnfilled: true,
+  })
+  await persistence.orderRepository.upsertHistorical(record)
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const saved = database.prepare(
+        "SELECT * FROM orders WHERE client_order_id = ?",
+      ).get(order.clientOrderId)
+      assert.ok(saved)
+      assert.equal(saved.executed_quantity, "0")
+      assert.equal(saved.remaining_quantity, "1.0000")
+      assert.equal(saved.strategy_id, null)
+      assert.equal(saved.ingestion_source, "exchange_history")
+    },
+  })
+})
