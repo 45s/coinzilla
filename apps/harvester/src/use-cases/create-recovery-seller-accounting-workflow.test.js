@@ -204,7 +204,12 @@ function makeTransitionSnapshotInput() {
   }
 }
 
-function makeWorkflow(context) {
+function makeWorkflow(context, {
+  onOperationalStateRecoverySellerMixedSellReconciled = async () => ({
+    ok: true,
+    data: { durable: true },
+  }),
+} = {}) {
   return createRecoverySellerAccountingWorkflow({
     initialPortfolio: context.portfolio,
     initialOrderRegistry: context.openRegistry,
@@ -213,6 +218,7 @@ function makeWorkflow(context) {
       position: context.legacyPosition,
       accounting: context.legacyAccounting,
     }],
+    onOperationalStateRecoverySellerMixedSellReconciled,
   })
 }
 
@@ -440,6 +446,56 @@ test("commits reconciled RS projections and releases the shared SELL reservation
   assert.equal(
     workflow.getCycleStateForMarket({ marketId: market.id }).status,
     cycleOutcome.status,
+  )
+})
+
+test("keeps both accounting projections and the SELL reservation unchanged when durable reconciliation commit fails", async () => {
+  const context = makeContext()
+  const workflow = makeWorkflow(context, {
+    onOperationalStateRecoverySellerMixedSellReconciled: async () => ({
+      ok: false,
+      errors: [new Error("durable fact append failed")],
+    }),
+  })
+  const openOrder = context.openRegistry.getOrder({
+    clientOrderId: "rs-sell-1",
+  })
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: openOrder.clientOrderId,
+    brokerOrderId: openOrder.brokerOrderId,
+  })
+  await workflow.reserveSellCycle({
+    order: openOrder,
+    ownership,
+    durableIntent: true,
+  })
+  const portfolioBefore = workflow.getPortfolio()
+  const legacyBefore = workflow.getLegacyPosition({ marketId: market.id })
+  const registryBefore = workflow.getOrderRegistry()
+
+  const result = await workflow.reconcileTerminalMixedSell({
+    reconciliation: context.reconciliation,
+    terminalOrder: context.terminalOrder,
+    canonicalFills: [context.fill],
+    canonicalFillAllocations: [context.allocation],
+    minProfit: "0.2",
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(result.errors[0].message, /durable fact append failed/)
+  assert.equal(workflow.getPortfolio(), portfolioBefore)
+  assert.equal(workflow.getLegacyPosition({ marketId: market.id }), legacyBefore)
+  assert.equal(workflow.getOrderRegistry(), registryBefore)
+  assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1)
+  assert.equal(
+    workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
+    openOrder.clientOrderId,
   )
 })
 
