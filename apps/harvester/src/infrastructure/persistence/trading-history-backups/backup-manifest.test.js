@@ -2,7 +2,6 @@ import assert from "node:assert/strict"
 import {
   appendFile,
   mkdtemp,
-  readFile,
   rm,
   writeFile,
 } from "node:fs/promises"
