@@ -14,6 +14,7 @@ test("preserves the stable code, cause, and bounded diagnostic context", () => {
   assert.equal(error.code, "HARVESTER_HISTORY_BACKUP_FAILED")
   assert.equal(error.cause, cause)
   assert.deepEqual(error.context, {
+    stage: "backup",
     environment: "testnet",
     backupFilename: "history.sqlite",
   })
