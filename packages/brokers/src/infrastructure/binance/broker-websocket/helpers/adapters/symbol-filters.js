@@ -116,7 +116,7 @@ function validateSymbolMetadata({ symbolInfo, symbol }) {
     !Array.isArray(symbolInfo.orderTypes) ||
     symbolInfo.orderTypes.length === 0
   ) {
-    throw new Error("Binance market metadata is incomplete for " + symbol)
+    throw new Error(["Binance market metadata is incomplete for ", symbol].join(""))
   }
 }
 
