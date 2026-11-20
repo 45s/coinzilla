@@ -23,9 +23,9 @@ test("Telegram adapter depends on injected ports instead of application infrastr
   const [subscriber, notifier, validation, safeErrors, responseValidation] = await Promise.all([
     readSource("./telegram/event-subscriber.js"),
     readSource("./telegram/notifier.js"),
-    readSource("./telegram/helpers/run-validation.js"),
-    readSource("./telegram/helpers/get-safe-error-msg.js"),
-    readSource("./telegram/helpers/run-response-validation.js"),
+    readSource("./telegram/helpers/validate-telegram-inputs.js"),
+    readSource("./telegram/helpers/sanitize-error-message.js"),
+    readSource("./telegram/helpers/validate-telegram-api-response.js"),
   ])
 
   const providerSources = [subscriber, notifier, validation, safeErrors, responseValidation]
