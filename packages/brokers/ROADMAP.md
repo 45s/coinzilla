@@ -8,13 +8,14 @@ owner: brokers
 
 This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may retain consumer-integration context for provenance, but application ports, adapters, routing, and runtime composition remain owned by each consuming application.
 
-## S-7 naming remediation — in review
+## S-7 naming remediation — staged
 
 Tracking: [repository standards issue #1568](https://github.com/45s/coinzilla/issues/1568) and [naming audit issue #1582](https://github.com/45s/coinzilla/issues/1582).
 
-[PR #1590](https://github.com/45s/coinzilla/pull/1590) replaces the ambiguous Binance Spot WebSocket helper names `adapt-msg.js` / `adaptMsg` and `user.js` / `adaptUser` with `adapt-binance-websocket-event.js` / `adaptBinanceWebSocketEvent` and `user-data-event-adapters.js` / `userDataEventAdapters`. The only production consumer and colocated tests are updated. These are private implementation names; no public Broker contract, event payload, exchange behavior, or trading lifecycle changes are intended.
+- **Merged:** [PR #1591](https://github.com/45s/coinzilla/pull/1591) renamed `adapt-msg.js` / `adaptMsg` to `adapt-binance-websocket-event.js` / `adaptBinanceWebSocketEvent`, and `user.js` / `adaptUser` to `user-data-event-adapters.js` / `userDataEventAdapters`. It updated the production user-data client and all direct tests. Merge commit: `895f3aa4a9ebb93a12dd95168b2e56118cc3173a`.
+- **S-7 closeout in review:** [PR #1590](https://github.com/45s/coinzilla/pull/1590) completes the repository file-tree/naming standard and clarifies the remaining Binance event-map identifiers. These are private implementation names; no public Broker contract, event payload, exchange behavior, or trading lifecycle changes are intended.
 
-**Status:** implementation and test-first regression rename are in PR review. Mark complete only after merge and exact-head package/required CI verification.
+**Status:** the primary module rename is merged; the remaining naming standard and documentation closeout are pending PR #1590 review and exact-head CI.
 
 ## Common exchange-neutral Broker API
 
