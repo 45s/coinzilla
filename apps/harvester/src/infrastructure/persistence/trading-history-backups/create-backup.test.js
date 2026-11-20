@@ -25,6 +25,7 @@ test("creates and restore-verifies an environment-scoped backup including commit
   assert.equal(result.verified, true)
   const manifest = await assertManifest({
     result,
+    directory: fixture.directory,
   })
   assert.equal(manifest.schemaVersion, 3)
 

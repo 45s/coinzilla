@@ -125,7 +125,7 @@ export async function createEmptyFixture(t, { tradingMode = "testnet" } = {}) {
   }
 }
 
-export async function assertManifest({ result } = {}) {
+export async function assertManifest({ result, directory } = {}) {
   await access(result.backupFilename)
   await access(result.manifestFilename)
   const manifest = JSON.parse(await readFile(result.manifestFilename, "utf8"))
@@ -136,7 +136,7 @@ export async function assertManifest({ result } = {}) {
   assert.equal(manifest.schemaVersion, 3)
   assert.match(manifest.sha256, /^[a-f0-9]{64}$/)
   assert.equal(JSON.stringify(manifest).includes("never-copy-this-secret"), false)
-  assert.equal(JSON.stringify(manifest).includes(result.directory), false)
+  assert.equal(JSON.stringify(manifest).includes(directory), false)
   return manifest
 }
 

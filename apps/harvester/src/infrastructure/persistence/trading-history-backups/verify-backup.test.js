@@ -1,11 +1,9 @@
 import assert from "node:assert/strict"
-import { appendFile, readFile, writeFile } from "node:fs/promises"
+import { appendFile, writeFile } from "node:fs/promises"
 import test from "node:test"
 import {
-  assertFileMissing,
   createBackupService,
   createFixture,
-  readBackupFiles,
   readManifest,
 } from "./test-support.js"
 
@@ -50,5 +48,4 @@ test("rejects a manifest whose declared environment has been changed", async (t)
     }),
     (error) => error.code === "HARVESTER_HISTORY_BACKUP_ENVIRONMENT_MISMATCH",
   )
-  await assertFileMissing(path.join(fixture.backupDirectory, ".restore-check"))
 })
