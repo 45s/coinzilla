@@ -680,7 +680,10 @@ function createRecoverySellerCycleStateApi({ state, createCycleId }) {
     getCycleOutcome: ({ cycleId } = {}) =>
       state.recoverySellerCycleOutcomes.get(cycleId),
     getLatestBuyExecutionForMarket: ({ marketId } = {}) =>
-      getLatestBuyExecutionForMarket({ state, marketId }),
+      getLatestBuyExecutionForMarket({
+        state,
+        marketId,
+      }),
     getReservedSellCycleForMarket: ({ marketId } = {}) =>
       [...state.recoverySellerSellReservations.values()]
         .find((reservation) => reservation.marketId === marketId),
