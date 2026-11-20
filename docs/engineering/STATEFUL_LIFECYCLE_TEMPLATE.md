@@ -79,4 +79,4 @@ This is a resource-lifecycle example, not a requirement that every domain entity
 - Document valid states, transition rules, idempotency, concurrency and failure recovery.
 - Add transition tests before changing behavior; use controlled promises/fake timers for race cases.
 - Update the owning domain's instructions, roadmap and operational docs when its lifecycle contract changes.
-- Follow the [Modularity Standard](MODULARITY_STANDARD.md), [Testing Standard](TESTING_STANDARD.md), and the owning domain's instructions.
+- Follow the [Modularity Standard](MODULARITY_STANDARD.md), [Human-readable test design standard](../../ENGINEERING_STANDARDS.md#human-readable-test-design), and the owning domain's instructions.
