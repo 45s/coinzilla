@@ -15,7 +15,7 @@ Tracking: [repository standards issue #1568](https://github.com/45s/coinzilla/is
 - **Merged:** [PR #1591](https://github.com/45s/coinzilla/pull/1591) renamed `adapt-msg.js` / `adaptMsg` to `adapt-binance-websocket-event.js` / `adaptBinanceWebSocketEvent`, and `user.js` / `adaptUser` to `user-data-event-adapters.js` / `userDataEventAdapters`. It updated the production user-data client and all direct tests. Merge commit: `895f3aa4a9ebb93a12dd95168b2e56118cc3173a`.
 - **S-7 closeout in review:** [PR #1593](https://github.com/45s/coinzilla/pull/1593) completes the repository file-tree/naming standard and clarifies the remaining Binance event-map identifiers. These are private implementation names; no public Broker contract, event payload, exchange behavior, or trading lifecycle changes are intended.
 
-**Status:** the primary module rename is merged; the S-7 policy/documentation closeout is in [PR #1593](https://github.com/45s/coinzilla/pull/1593). All six required workflows passed on exact head `b47dddf7351ef889f1b67ecd42a445efae6f6e7a`; mark the S-7 closeout complete after user merge.
+**Status:** the primary module rename is merged; the S-7 policy/documentation closeout is in [PR #1593](https://github.com/45s/coinzilla/pull/1593). Final exact-head verification is recorded in the PR body; mark the S-7 closeout complete after user merge.
 
 ## Common exchange-neutral Broker API
 
