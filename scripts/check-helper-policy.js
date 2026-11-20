@@ -166,7 +166,7 @@ export function analyzeHelperSource({ file, source }) {
   if (/\bclass\s+[A-Za-z_$][\w$]*/.test(source)) {
     violations.push([file, ": classes are prohibited in helpers"].join(""))
   }
-  if (/^let\s+[A-Za-z_$][\w$]*\s*=/.test(source)) {
+  if (/^(?:export\s+)?(?:let|var)\s+[A-Za-z_$][\w$]*\s*=/.test(source)) {
     violations.push([file, ": mutable module-level bindings are prohibited"].join(""))
   }
   if (/^(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:\{|\[)/m.test(source)) {
