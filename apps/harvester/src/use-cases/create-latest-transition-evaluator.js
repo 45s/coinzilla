@@ -380,6 +380,8 @@ export function createLatestTransitionEvaluator(dependencies = {}) {
       const recoverySellerResult = await dependencies.evaluateRecoverySellerTransition({
         ...options,
         state: dependencies.state,
+        hasBlockingOpenOrdersForSymbol: dependencies.hasBlockingOpenOrdersForSymbol,
+        authorizeRecoverySellerAction: dependencies.authorizeRecoverySellerAction,
         recoverySellerPairs: dependencies.recoverySellerPairs,
         recoverySellerWorkflow: dependencies.recoverySellerWorkflow,
         recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,

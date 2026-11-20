@@ -9,6 +9,7 @@ import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
 import { createRecoverySellerOrderSubmitter } from "./create-recovery-seller-order-submitter.js"
+import { createRecoverySellerActionAuthorizer } from "./create-recovery-seller-action-authorizer.js"
 import { makeCollectOwnedOrderSnapshots } from "./collect-owned-order-snapshots.js"
 import { makeOrderEventWorkflow } from "./order-event-workflow.js"
 import { makeVolatilityProtectionWorkflow } from "./volatility-protection-workflow.js"
@@ -1890,6 +1891,18 @@ function createConservativeEngineRecoverySubmissionContext({ context } = {}) {
 
 function createConservativeEngineEvaluationContext({ context } = {}) {
   const { dependencies } = context
+  const authorizeRecoverySellerAction = Object.keys(dependencies.recoverySellerPairs ?? {}).length > 0
+    ? createRecoverySellerActionAuthorizer({
+      state: context.state,
+      recoverySellerPairs: dependencies.recoverySellerPairs,
+      recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+      getPortfolio: dependencies.getPortfolio,
+      getAccountSnapshot: dependencies.getAccountSnapshot,
+      getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
+      getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
+      allocateOrderCommitments,
+    })
+    : undefined
   context.evaluateLatestTransition = createLatestTransitionEvaluator({
     state: context.state,
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
@@ -1905,6 +1918,7 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     logger: dependencies.logger,
     strategyPolicy: dependencies.strategyPolicy,
     evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
+    authorizeRecoverySellerAction,
     recoverySellerPairs: dependencies.recoverySellerPairs,
     recoverySellerWorkflow: dependencies.recoverySellerWorkflow,
     recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,

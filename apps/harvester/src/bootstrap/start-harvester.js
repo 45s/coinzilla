@@ -10,6 +10,7 @@ import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-br
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createRecoverySellerAccountingWorkflow } from "../use-cases/create-recovery-seller-accounting-workflow.js"
 import { createRecoverySellerStopWorkflow } from "../use-cases/create-recovery-seller-stop-workflow.js"
+import { createRecoverySellerRuntimeDispatch } from "./create-recovery-seller-runtime-dispatch.js"
 import { createLegacyPosition, createLegacyPositionAccounting } from "../domain/strategies/recovery-seller/legacy-position.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
@@ -426,10 +427,6 @@ async function resolveHarvesterStartupConfiguration({ dependencies }) {
       ...resolved,
       brokerName: dependencies.providerIdentity.providerType,
     })
-  assertRecoverySellerEvaluatorConfigured({
-    recoverySellerPairs: providerResolved.recoverySellerPairs,
-    evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
-  })
   return { resolved: providerResolved }
 }
 
@@ -535,6 +532,19 @@ reason: "TRADING_ENGINE_NOT_READY" } })
   context.completeRecoveryCycle = (...args) => context.portfolioWorkflow.completeRecoveryCycle(...args)
   context.getMarketMetadata = ({ symbol } = {}) => context.marketMetadata.get(symbol)
   context.getAccountSnapshot = () => startup.accountSnapshotManagerRef.current?.getAccountSnapshot()
+  if (Object.keys(startup.recoverySellerPairs ?? {}).length > 0) {
+    startup.evaluateRecoverySellerTransition ??= createRecoverySellerRuntimeDispatch({
+      recoverySellerWorkflow,
+      recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
+      recoverySellerPairs: startup.recoverySellerPairs,
+      getRecoverySellerMarketMetadata: context.getRecoverySellerMarketMetadata,
+      getAccountSnapshot: context.getAccountSnapshot,
+    })
+    assertRecoverySellerEvaluatorConfigured({
+      recoverySellerPairs: startup.recoverySellerPairs,
+      evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
+    })
+  }
   return context
 }
 
