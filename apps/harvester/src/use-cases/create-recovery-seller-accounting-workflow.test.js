@@ -437,7 +437,7 @@ function assertSuccessfulTerminalMixedSellCommit({ workflow, result } = {}) {
     "A fully reconciled profitable cycle may transition to a fresh accumulating cycle.")
 }
 
-async function reserveAndReconcileTerminalMixedSell({ workflow, context, openOrder } = {}) {
+async function reserveRecoverySellerSell({ workflow, openOrder } = {}) {
   const ownership = createOrderOwnership({
     ownership: {
       strategyId,
@@ -448,28 +448,29 @@ async function reserveAndReconcileTerminalMixedSell({ workflow, context, openOrd
     clientOrderId: openOrder.clientOrderId,
     brokerOrderId: openOrder.brokerOrderId,
   })
-  const reservation = await workflow.reserveSellCycle({
+  return workflow.reserveSellCycle({
     order: openOrder,
     ownership,
     durableIntent: true,
   })
-  const result = await workflow.reconcileTerminalMixedSell({
+}
+
+async function reconcileTerminalMixedSell({ workflow, context } = {}) {
+  return workflow.reconcileTerminalMixedSell({
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
     canonicalFills: [context.fill],
     canonicalFillAllocations: [context.allocation],
     minProfit: "0.2",
   })
-  return { reservation, result }
 }
 
 test("commits reconciled RS projections and releases the shared SELL reservation atomically", async () => {
   const context = makeContext()
   const workflow = makeWorkflow({ context })
   const openOrder = context.openRegistry.getOrder({ clientOrderId: "rs-sell-1" })
-  const { reservation, result } = await reserveAndReconcileTerminalMixedSell({
+  const reservation = await reserveRecoverySellerSell({
     workflow,
-    context,
     openOrder,
   })
 
@@ -481,7 +482,14 @@ test("commits reconciled RS projections and releases the shared SELL reservation
   )
   assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1,
     "An open RS SELL must remain in the shared reservation registry before terminal reconciliation.")
-  assertSuccessfulTerminalMixedSellCommit({ workflow, result })
+  const result = await reconcileTerminalMixedSell({
+    workflow,
+    context,
+  })
+  assertSuccessfulTerminalMixedSellCommit({
+    workflow,
+    result,
+  })
 })
 
 test("keeps both accounting projections and the SELL reservation unchanged when durable reconciliation commit fails", async () => {
