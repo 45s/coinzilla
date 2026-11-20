@@ -11,12 +11,25 @@ const HYPEUSDT_ORDER_NOTIONAL = multiplyDecimal({
   left: HYPEUSDT_ORDER_DETAILS.price,
   right: HYPEUSDT_ORDER_DETAILS.quantity,
 })
+/**
+ * Fixed HYPEUSDT BUY LIMIT intent for the one-shot local operator investigation.
+ * Price, quantity, and notional are exact decimal strings in USDT/HYPE units.
+ *
+ * @type {Readonly<{symbol: string, side: string, type: string, price: string, quantity: string, notional: string}>}
+ */
 export const BITUNIX_OPERATOR_ORDER_INTENT = Object.freeze({
   ...HYPEUSDT_ORDER_DETAILS,
   notional: HYPEUSDT_ORDER_NOTIONAL,
 })
 const PROVISIONAL_HYPEUSDT_NOTIONAL_FLOOR = "11"
 
+/**
+ * Require a successful Broker result and return its data payload.
+ *
+ * @param {{result: object, operation: string}} input
+ * @returns {unknown} The successful Broker result data.
+ * @throws {Error} When the Broker result is unsuccessful.
+ */
 export function assertSuccessfulBitunixBrokerResult({ result, operation }) {
   if (!result || result.ok !== true) {
     const cause = result?.errors?.[0]
