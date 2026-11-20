@@ -345,13 +345,14 @@ function calculateTerminalMixedSellAccounting({
   }
 }
 
-function reconcileTerminalMixedSellTransition({
+async function reconcileTerminalMixedSellTransition({
   state,
   reconciliation,
   terminalOrder,
   canonicalFills,
   canonicalFillAllocations,
   minProfit,
+  onOperationalStateRecoverySellerMixedSellReconciled,
 }) {
   const { registryUpdate, terminalRegisteredOrder } = resolveTerminalMixedSellOrder({
     state,
@@ -366,20 +367,37 @@ function reconcileTerminalMixedSellTransition({
     canonicalFillAllocations,
     minProfit,
   })
-  // Until this point, the old registry still reserves the SELL.
-  // Publish terminal order and both accounting projections as one transition.
+  if (result.accounting.applied !== true) {
+    throw new Error("Recovery Seller terminal mixed-SELL accounting did not commit; the sole-SELL reservation remains active")
+  }
+  const ownership = resolveRecoverySellerOrderOwnership({
+    registry: registryUpdate.registry,
+    order: terminalRegisteredOrder,
+  })
+  if (typeof onOperationalStateRecoverySellerMixedSellReconciled !== "function") {
+    throw new Error("Recovery Seller terminal mixed-SELL accounting requires a durable reconciliation callback")
+  }
+  const eligible = result.profitability?.eligible === true
+  const durableResult = await onOperationalStateRecoverySellerMixedSellReconciled({
+    terminalOrder: terminalRegisteredOrder,
+    ownership,
+    canonicalFills,
+    accountingApplied: true,
+    eligible,
+  })
+  if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
+    throw durableResult?.errors?.[0] ??
+      new Error("Recovery Seller terminal mixed-SELL reconciliation fact was not durably committed")
+  }
+  // Publish terminal order and both accounting projections only after the
+  // exact terminal accounting boundary is durably committed.
   state.portfolio = result.accounting.portfolio
   state.legacyPositions = result.nextLegacyPositions
   state.orderRegistry = registryUpdate.registry
-  const ownership = resolveRecoverySellerOrderOwnership({
-    registry: state.orderRegistry,
-    order: terminalRegisteredOrder,
-  })
   const reservation = state.recoverySellerSellReservations.get(ownership.cycleId)
   if (reservation?.clientOrderId === terminalRegisteredOrder.clientOrderId) {
     state.recoverySellerSellReservations.delete(ownership.cycleId)
   }
-  const eligible = result.profitability?.eligible === true
   const cycleStatus = eligible ? "CLOSED" : "UNRESOLVED"
   const cycleOutcome = Object.freeze({
     marketId: terminalRegisteredOrder.market.id,
@@ -598,6 +616,7 @@ function createRecoverySellerWorkflowState({
 function createRecoverySellerAccountingOperations({
   state,
   onOperationalStateExecutionFill,
+  onOperationalStateRecoverySellerMixedSellReconciled,
 } = {}) {
   return {
     applyBuyFill: createSerializedWorkflowOperation({
@@ -610,7 +629,10 @@ function createRecoverySellerAccountingOperations({
     }),
     reconcileTerminalMixedSell: createSerializedWorkflowOperation({
       state,
-      transition: reconcileTerminalMixedSellTransition,
+      transition: (input) => reconcileTerminalMixedSellTransition({
+        ...input,
+        onOperationalStateRecoverySellerMixedSellReconciled,
+      }),
     }),
     reserveSellCycle: createSerializedWorkflowOperation({
       state,
@@ -934,6 +956,7 @@ export function createRecoverySellerAccountingWorkflow({
   initialOrderRegistry,
   initialLegacyPositions = [],
   onOperationalStateExecutionFill,
+  onOperationalStateRecoverySellerMixedSellReconciled,
   sharedState,
   createCycleId = randomUUID,
 } = {}) {
@@ -947,6 +970,12 @@ export function createRecoverySellerAccountingWorkflow({
       name: "onOperationalStateExecutionFill",
     })
   }
+  if (onOperationalStateRecoverySellerMixedSellReconciled !== undefined) {
+    ensure.function({
+      value: onOperationalStateRecoverySellerMixedSellReconciled,
+      name: "onOperationalStateRecoverySellerMixedSellReconciled",
+    })
+  }
   const state = createRecoverySellerWorkflowState({
     sharedState,
     initialPortfolio,
@@ -956,6 +985,7 @@ export function createRecoverySellerAccountingWorkflow({
   const operations = createRecoverySellerAccountingOperations({
     state,
     onOperationalStateExecutionFill,
+    onOperationalStateRecoverySellerMixedSellReconciled,
   })
   return createRecoverySellerAccountingWorkflowApi({
     state,

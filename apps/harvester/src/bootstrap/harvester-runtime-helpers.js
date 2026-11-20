@@ -342,6 +342,21 @@ export function createHarvesterTradingEngine(options = {}) {
 }
 
 
+function createRecoverySellerMixedSellReconciledCallback({ store,
+  recordRecoverySellerMixedSellReconciled } = {}) {
+  return store
+    ? ({ terminalOrder, ownership, canonicalFills, accountingApplied, eligible }) =>
+      recordRecoverySellerMixedSellReconciled({
+        operationalStateStore: store,
+        terminalOrder,
+        ownership,
+        canonicalFills,
+        accountingApplied,
+        eligible,
+      })
+    : undefined
+}
+
 function createExecutionFillCallback({ store,
   recordExecutionFill } = {}) {
   return store ? ({ fill }) => recordExecutionFill({ operationalStateStore: store,
@@ -479,6 +494,10 @@ export function createOperationalStateCallbacks(dependencies = {}) {
   return {
     onOperationalStateExecutionFill: createExecutionFillCallback({ store,
       recordExecutionFill: dependencies.recordExecutionFill }),
+    onOperationalStateRecoverySellerMixedSellReconciled: createRecoverySellerMixedSellReconciledCallback({
+      store,
+      recordRecoverySellerMixedSellReconciled: dependencies.recordRecoverySellerMixedSellReconciled,
+    }),
     onOperationalStateRecoveryCycleCompleted: createRecoveryCycleCompletedCallback({ store,
       recordRecoveryCycleCompleted: dependencies.recordRecoveryCycleCompleted }),
     onOperationalStateRecoveryCycleNotCompleted: createRecoveryCycleNotCompletedCallback({ store,

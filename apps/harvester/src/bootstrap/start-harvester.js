@@ -36,6 +36,7 @@ import { recordOrderCancellationIntent } from "../use-cases/record-order-cancell
 import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
 import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"
 import { recordRecoveryCycleNotCompleted } from "../use-cases/record-recovery-cycle-not-completed.js"
+import { recordRecoverySellerMixedSellReconciled } from "../use-cases/record-recovery-seller-mixed-sell-reconciled.js"
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
@@ -277,6 +278,7 @@ function createHarvesterOperationalStateCallbacks({ operationalStateStore } = {}
     recordExecutionFill,
     recordRecoveryCycleCompleted,
     recordRecoveryCycleNotCompleted,
+    recordRecoverySellerMixedSellReconciled,
     recordOrderSubmissionIntent,
     recordOrderSubmissionOutcome,
     recordOrderCancellationIntent,
@@ -531,6 +533,7 @@ function createHarvesterPortfolioContext({ startup } = {}) {
   const accountRuntime = accountRuntimeRegistry.get(providerIdentity.providerInstanceId)
   const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
     sharedState: accountRuntime.state,
+    onOperationalStateRecoverySellerMixedSellReconciled: startup.onOperationalStateRecoverySellerMixedSellReconciled,
   })
   const context = {
     accountRuntime,
