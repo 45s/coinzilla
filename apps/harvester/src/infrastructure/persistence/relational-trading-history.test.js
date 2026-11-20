@@ -1053,6 +1053,32 @@ async function assertEmptyHistoryCursor({ repository, providerIdentity, environm
   })
 }
 
+async function assertHistoryCursorScopes({ repository, providerIdentity }) {
+  await Promise.all([
+    assertEmptyHistoryCursor({
+      repository,
+      providerIdentity: {
+        ...providerIdentity,
+        accountId: "binance-secondary",
+      },
+      environment: "testnet",
+      symbol: "BTCUSDT",
+    }),
+    assertEmptyHistoryCursor({
+      repository,
+      providerIdentity,
+      environment: "live",
+      symbol: "BTCUSDT",
+    }),
+    assertEmptyHistoryCursor({
+      repository,
+      providerIdentity,
+      environment: "testnet",
+      symbol: "ETHUSDT",
+    }),
+  ])
+}
+
 test("keeps durable history cursors isolated by provider, account, environment, and market", async (t) => {
   const context = await createTestContext({
     t,
@@ -1094,26 +1120,10 @@ test("keeps durable history cursors isolated by provider, account, environment, 
     lastOrderId: "100",
     lastTradeId: "200",
   })
-  await Promise.all([
-    assertEmptyHistoryCursor({
-      repository,
-      providerIdentity: { ...providerIdentity, accountId: "binance-secondary" },
-      environment: "testnet",
-      symbol: "BTCUSDT",
-    }),
-    assertEmptyHistoryCursor({
-      repository,
-      providerIdentity,
-      environment: "live",
-      symbol: "BTCUSDT",
-    }),
-    assertEmptyHistoryCursor({
-      repository,
-      providerIdentity,
-      environment: "testnet",
-      symbol: "ETHUSDT",
-    }),
-  ])
+  await assertHistoryCursorScopes({
+    repository,
+    providerIdentity,
+  })
 })
 
 function createExchangeHistoryOrder({ status, executedQuantity, remainingQuantity, eventId, timestamp }) {
