@@ -29,12 +29,12 @@ maxLength: 64 })
   return {
     factId,
     factType,
-    runtimeSessionId: requireNonEmptyString({
+runtimeSessionId: requireNonEmptyString({
       value: runtimeSessionId,
-      field: "runtimeSessionId",
-      maxLength: MAX_RUNTIME_SESSION_ID_LENGTH,
+field: "runtimeSessionId",
+maxLength: MAX_RUNTIME_SESSION_ID_LENGTH,
     }),
-    data: validateFactData({ factType,
+data: validateFactData({ factType,
 data: fact.data,
 factId,
 runtimeSessionId }),
@@ -76,25 +76,25 @@ function assertOperationalStateRecordEnvelope({
   }
   requireNonEmptyString({
     value: record.factId,
-    field: "record.factId",
-    maxLength: MAX_FACT_ID_LENGTH,
+field: "record.factId",
+maxLength: MAX_FACT_ID_LENGTH,
   })
   requireNonEmptyString({
     value: record.factType,
-    field: "record.factType",
-    maxLength: 64,
+field: "record.factType",
+maxLength: 64,
   })
   if (!FACT_TYPES.includes(record.factType)) {
     throw new Error(`Operational State record type is not allowlisted: ${record.factType}`)
   }
   requireNonEmptyString({
     value: record.runtimeSessionId,
-    field: "record.runtimeSessionId",
-    maxLength: MAX_RUNTIME_SESSION_ID_LENGTH,
+field: "record.runtimeSessionId",
+maxLength: MAX_RUNTIME_SESSION_ID_LENGTH,
   })
   const recordedAt = requireNonEmptyString({
     value: record.recordedAt,
-    field: "record.recordedAt",
+field: "record.recordedAt",
   })
   const parsedDate = new Date(recordedAt)
   if (!Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString() !== recordedAt) {
@@ -132,9 +132,9 @@ function assertOperationalStateRecordPayloadIntegrity({ record, index, schemaVer
   }
   validateFactData({
     factType: record.factType,
-    data: record.data,
-    factId: record.factId,
-    runtimeSessionId: record.runtimeSessionId,
+data: record.data,
+factId: record.factId,
+runtimeSessionId: record.runtimeSessionId,
   })
   if (index === 0 && record.data.schemaVersion !== schemaVersion) {
     throw new Error("Operational State Store genesis schema version does not match the stream schema")
@@ -168,9 +168,9 @@ export function createManifestCheckpoint({ schemaVersion, record, previousManife
   const body = {
     formatVersion: FORMAT_VERSION,
     schemaVersion,
-    sequence: record.sequence,
-    lastCommittedDigest: record.digest,
-    recordCount: (BigInt(record.sequence) + 1n).toString(),
+sequence: record.sequence,
+lastCommittedDigest: record.digest,
+recordCount: (BigInt(record.sequence) + 1n).toString(),
     previousManifestDigest,
   }
   return { ...body,
