@@ -181,7 +181,7 @@ Explicitly deferred from initial runtime acceptance: process restart/replay and 
 
 1. The owner-approved per-pair `minProfit`, Conservative order-type/fee-reserve and exchange-filter STOP decisions are recorded in the canonical RS specification and implemented and merged in PR #1127 (`3fde5cdc0b1ed39bffeb5e21a67f44e0f653e8c3`).
 2. **Verified on exact PR head `96315757e74a4851770716b04d8dae5cf9580ece`:** 13/13 focused RS evaluator tests and 2,101/2,101 full Harvester tests, full workspace Unit Tests, Test Coverage, strict changed-file ESLint, workspace JavaScript quality/syntax, actionlint, Utils tests and dependency audit passed. The optional External Documentation Links workflow was still running at merge and is not claimed as passed. Coverage includes all profitability gates, min/max filters, missing required filters, missing third-asset valuation, unsupported order types and one-SELL-per-cycle behavior.
-3. Keep post-fill adverse results, terminal partial/canceled/rejected/expired SELLs, third-asset valuation source and STOP reset/resume fail-closed. Do not add automatic recovery or a second SELL.
+3. Keep post-fill adverse results and terminal partial/canceled/rejected/expired SELLs fail-closed with terminal STOP. Third-asset valuation is deferred; CC-operator cannot clear or resume STOP. Do not add automatic recovery or a second SELL.
 4. RS-4 integration and RS-5 offline lifecycle proof remain separate required phases. Do not register or enable RS until the remaining safety contract and offline proof are complete; preserve CG behavior.
 
 ## 8. Current disposition
