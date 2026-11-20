@@ -171,66 +171,6 @@ export function analyzeHelperSource({ file, source }) {
   }
   if (/^(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:new\s+)?(?:Set|Map)\s*\(/m.test(source)) {
     violations.push([file, ": mutable module-level collections are prohibited"].join(""))
-  if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*(?:\.\s*[A-Za-z_$][\w$]*|\[[^\]]+\])\s*=(?!=|>)/.test(source)) {
-    violations.push([file, ": possible caller-owned input mutation"].join(""))
-  }
-  }
-  if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*\.\s*(?:push|pop|shift|unshift|splice|sort|reverse|set|add|delete|clear)\s*\(/.test(source)) {
-    violations.push([file, ": possible caller-owned collection mutation"].join(""))
-  }
-
-  return violations
-}
-
-/**
- * Find missing colocated tests and source-level purity violations.
- * @param {string} root Repository root.
- * @returns {string[]}
- */
-export function findHelperPolicyViolations(root) {
-  const violations = []
-  for (const helper of findHelperSources(root)) {
-    if (!helper.hasTest) {
-      const fileName = helper.file.split(/[\\/]/).at(-1)
-      const testName = fileName.replace(/\.(?:js|mjs|cjs)$/, ".test.js")
-      const specName = fileName.replace(/\.(?:js|mjs|cjs)$/, ".spec.js")
-      violations.push([
-        helper.file,
-        ": missing directly associated unit test (",
-        testName,
-        " or ",
-        specName,
-        ")",
-      ].join(""))
-    }
-    violations.push(...analyzeHelperSource({
-      file: helper.file,
-      source: readFileSync(helper.file, "utf8"),
-    }))
-  }
-  return violations.sort()
-}
-
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const root = fileURLToPath(new URL("../", import.meta.url))
-  const violations = findHelperPolicyViolations(root)
-  if (violations.length > 0) {
-    process.stderr.write([
-      "Helper policy violations:\n",
-      violations.map((violation) => ["- ", violation, "\n"].join("")).join(""),
-    ].join(""))
-    process.exitCode = 1
-  } else {
-    process.stdout.write("Helper policy passed for all discovered production helper modules.\n")
-  }
-}  if (/\bclass\s+[A-Za-z_$][\w$]*/.test(source)) {
-    violations.push([file, ": classes are prohibited in helpers"].join(""))
-  }
-  if (/^(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:\{|\[)/m.test(source)) {
-    violations.push([file, ": mutable module-level objects or arrays must be frozen"].join(""))
-  }
-  if (/^(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:new\s+)?(?:Set|Map)\s*\(/m.test(source)) {
-    violations.push([file, ": mutable module-level collections are prohibited"].join(""))
   }
   if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*(?:\.\s*[A-Za-z_$][\w$]*|\[[^\]]+\])\s*=(?!=|>)/.test(source)) {
     violations.push([file, ": possible caller-owned input mutation"].join(""))
@@ -252,8 +192,10 @@ export function findHelperPolicyViolations(root) {
   for (const helper of findHelperSources(root)) {
     if (!helper.hasTest) {
       const fileName = helper.file.split(/[\\/]/).at(-1)
-      const testName = fileName.replace(/\.(?:js|mjs|cjs)$/, ".test.js")
-      const specName = fileName.replace(/\.(?:js|mjs|cjs)$/, ".spec.js")
+      const extension = fileName.match(/\.(js|mjs|cjs)$/)?.[0] ?? ".js"
+      const stem = fileName.slice(0, -extension.length)
+      const testName = [stem, ".test", extension].join("")
+      const specName = [stem, ".spec", extension].join("")
       violations.push([
         helper.file,
         ": missing directly associated unit test (",
