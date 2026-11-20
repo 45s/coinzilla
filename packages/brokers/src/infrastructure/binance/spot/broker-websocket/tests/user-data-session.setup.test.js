@@ -38,14 +38,17 @@ warn() {} },
   }, {
     apiClientFactory: () => {
       const index = clients.length
-      const subscribe = index === 0
-        ? () => ({ subscriptionId: 10 })
-        : index === 1
-          ? () => new Promise((resolve) => {
-              resolveDelayedSubscribe = resolve
-              markDelayedSubscribeStarted()
-            })
-          : () => ({ subscriptionId: index * 100 + 10 })
+      let subscribe
+      if (index === 0) {
+        subscribe = () => ({ subscriptionId: 10 })
+      } else if (index === 1) {
+        subscribe = () => new Promise((resolve) => {
+          resolveDelayedSubscribe = resolve
+          markDelayedSubscribeStarted()
+        })
+      } else {
+        subscribe = () => ({ subscriptionId: index * 100 + 10 })
+      }
       const client = createFakeRpcClient({
         "userDataStream.subscribe.signature": subscribe,
         "userDataStream.unsubscribe": () => ({}),

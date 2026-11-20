@@ -98,35 +98,6 @@ E: 11 },
   await broker.disconnect()
 })
 
-function assertDisconnectedUserDataClient({ broker, scheduler, client }) {
-  assert.equal(client.listenerCount, 0)
-  assert.equal(client.errorListenerCount, 0)
-  assert.equal(client.closeListenerCount, 0)
-  assert.equal(broker.connected, false)
-  assert.equal(broker.userDataUnavailable, true)
-  assert.equal(scheduler.pendingCount, 1)
-}
-
-function assertReplacementSession({ broker, scheduler, clients, first, second, firstStatuses, secondStatuses }) {
-  assert.equal(clients.length, 2)
-  assert.equal(clients[1].state, "open")
-  assert.equal(clients[1].calls.filter((call) => call.method === "userDataStream.subscribe.signature").length, 1)
-  assert.equal(first.data.subscriptionId, 110)
-  assert.equal(second.data.subscriptionId, 110)
-  assert.equal(broker.connected, true)
-  assert.equal(broker.userDataUnavailable, true)
-  assert.ok(firstStatuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
-  assert.ok(secondStatuses.some((status) => status.type === "recovered" && status.reconciliationRequired))
-  assert.equal(scheduler.pendingCount, 1)
-}
-
-function assertRepeatedRecoveryStatus({ broker, scheduler, firstStatuses, secondStatuses }) {
-  assert.equal(firstStatuses.filter((status) => status.type === "recovered").length, 2)
-  assert.equal(secondStatuses.filter((status) => status.type === "recovered").length, 2)
-  assert.equal(broker.userDataUnavailable, true)
-  assert.equal(scheduler.pendingCount, 1)
-}
-
 async function createTwoConsumerRecoveryFixture() {
   const fixture = createBroker()
   await fixture.broker.connect()
