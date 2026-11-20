@@ -65,12 +65,16 @@ function resolveCursorIdentity({ providerIdentity, environment, symbol }) {
 }
 
 function readCursor({ database, identity }) {
-  const row = database.prepare(
-    `SELECT ${HISTORY_SYNC_CURSOR_COLUMNS.order}, ${HISTORY_SYNC_CURSOR_COLUMNS.trade} FROM history_sync_cursors WHERE id = ?`,
-  ).get(identity.id)
+  const row = database.prepare(`
+    SELECT
+      ${HISTORY_SYNC_CURSOR_COLUMNS.order},
+      ${HISTORY_SYNC_CURSOR_COLUMNS.trade}
+    FROM history_sync_cursors
+    WHERE id = ?
+  `).get(identity.id)
   return {
-    lastOrderId: row?.last_order_id ?? null,
-    lastTradeId: row?.last_trade_id ?? null,
+    lastOrderId: row?.[HISTORY_SYNC_CURSOR_COLUMNS.order] ?? null,
+    lastTradeId: row?.[HISTORY_SYNC_CURSOR_COLUMNS.trade] ?? null,
   }
 }
 
