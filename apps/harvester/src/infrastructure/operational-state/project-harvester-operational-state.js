@@ -711,9 +711,18 @@ function hasMatchingRecoverySellerReconciledSellIdentity({
   ownedOrder,
   state,
 }) {
-  return hasMatchingRecoverySellerReconciledIntent({ data, intent }) &&
-    hasMatchingRecoverySellerReconciledOrder({ data, ownedOrder }) &&
-    hasUncommittedRecoverySellerReconciliation({ data, state })
+  return hasMatchingRecoverySellerReconciledIntent({
+    data,
+    intent,
+  }) &&
+    hasMatchingRecoverySellerReconciledOrder({
+      data,
+      ownedOrder,
+    }) &&
+    hasUncommittedRecoverySellerReconciliation({
+      data,
+      state,
+    })
 }
 
 function assertRecoverySellerReconciledSellOrder({ data, state }) {
