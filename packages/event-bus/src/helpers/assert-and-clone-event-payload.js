@@ -3,15 +3,15 @@
  * Supports primitives, plain objects, arrays, cycles, and shared references.
  * @param {unknown} value
  */
-export function assertSupportedPayload(value) {
-  validatePayload({
+export function assertEventPayloadSupported(value) {
+  validateEventPayloadGraph({
     value,
     seen: new WeakSet(),
   })
 }
 
-function validatePayload({ value, seen }) {
-  if (isSupportedPrimitive(value)) {
+function validateEventPayloadGraph({ value, seen }) {
+  if (isSupportedEventPayloadPrimitive(value)) {
     return
   }
 
@@ -38,7 +38,7 @@ function validatePayload({ value, seen }) {
   }
 
   for (const key of Reflect.ownKeys(value)) {
-    validatePayloadProperty({
+    validateEventPayloadGraphProperty({
       value,
       key,
       isArray,
@@ -47,7 +47,7 @@ function validatePayload({ value, seen }) {
   }
 }
 
-function isSupportedPrimitive(value) {
+function isSupportedEventPayloadPrimitive(value) {
   return (
     value === null ||
     value === undefined ||
@@ -58,7 +58,7 @@ function isSupportedPrimitive(value) {
   )
 }
 
-function validatePayloadProperty({ value, key, isArray, seen }) {
+function validateEventPayloadGraphProperty({ value, key, isArray, seen }) {
   if (typeof key !== "string") {
     throw new TypeError("Event data cannot contain symbol properties")
   }
@@ -82,18 +82,18 @@ function validatePayloadProperty({ value, key, isArray, seen }) {
     throw new TypeError("Event data cannot contain non-enumerable properties")
   }
 
-  validatePayload({
+  validateEventPayloadGraph({
     value: descriptor.value,
     seen,
   })
 }
 
 /** Clone and recursively freeze a previously validated payload graph. */
-export function cloneAndFreezePayload(data) {
-  return deepFreeze(structuredClone(data))
+export function cloneAndFreezeEventPayload(data) {
+  return freezeEventPayloadGraph(structuredClone(data))
 }
 
-function deepFreeze(value) {
+function freezeEventPayloadGraph(value) {
   const seen = new WeakSet()
 
   function freeze(current) {

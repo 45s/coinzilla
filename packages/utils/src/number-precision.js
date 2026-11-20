@@ -1,4 +1,4 @@
-import { fixNumber, preciseNumber, roundNumber } from './number-operations.js'
+import { fixNumber, preciseNumber, roundNumber } from './number-precision-operations.js'
 
 /**
  * Legacy numeric helper facade.
