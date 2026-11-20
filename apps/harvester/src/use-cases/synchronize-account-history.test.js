@@ -99,6 +99,15 @@ function createRepositories() {
       },
       findByExchangeOrderIdentity: async ({ marketId, brokerOrderId }) =>
         orderIdentities.get(`${marketId}:${brokerOrderId}`) ?? null,
+      getOldestPendingOrderId: async ({ symbol }) => {
+        const pendingOrders = orders.filter((order) =>
+          order.market.symbol === symbol &&
+          ["NEW", "OPEN", "PENDING", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status),
+        )
+        return pendingOrders
+          .sort((left, right) => Number(left.brokerOrderId) - Number(right.brokerOrderId))[0]
+          ?.brokerOrderId ?? null
+      },
     },
     fillRepository: {
       upsert: async (input) => fills.push(input),
