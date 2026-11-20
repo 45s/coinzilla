@@ -93,7 +93,7 @@ function findStatusByType({ statuses, type }) {
 }
 
 function hasRecoveryFailureStatus(statuses) {
-  const recoveryFailedStatus = findStatusByType(statuses, "recoveryFailed")
+  const recoveryFailedStatus = findStatusByType({ statuses, type: "recoveryFailed" })
   return recoveryFailedStatus?.recoveryRequired === true
 }
 
@@ -215,9 +215,6 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
 
   return {
     session,
-    get currentPort() {
-      return ports.get(currentClient)
-    },
     get pendingTimerCount() {
       return timers.size
     },
