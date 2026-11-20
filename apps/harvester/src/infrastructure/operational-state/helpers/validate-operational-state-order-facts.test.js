@@ -361,3 +361,51 @@ test("leaves unrelated fact types to their owning validators", () => {
   assert.doesNotThrow(() => validateOrderCancellationIntentFact(unrelated))
   assert.doesNotThrow(() => validateOrderCancellationOutcomeFact(unrelated))
 })
+
+
+test("requires exact Recovery Seller ownership for every durable SELL intent", () => {
+  let thrownError
+  assert.throws(
+    () => validateOrderSubmissionIntentFact(makeSubmissionIntent({
+      side: "SELL",
+      purpose: "RECOVERY_SELL",
+    })),
+    (error) => {
+      thrownError = error
+      return error instanceof TypeError
+    },
+    "A Recovery Seller SELL intent must not become durable without its strategy, Position, and cycle identity.",
+  )
+  assert.match(
+    thrownError.message,
+    /explicit strategy, Position, and cycle ownership/i,
+    "A missing Recovery Seller SELL identity must report the exact ownership invariant.",
+  )
+})
+
+test("preserves the original cause when durable Recovery Seller ownership is invalid", () => {
+  let wrappedError
+  assert.throws(
+    () => validateOrderSubmissionIntentFact(makeSubmissionIntent({
+      side: "SELL",
+      purpose: "RECOVERY_BUY",
+      strategyId: "RS_recoverySeller",
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    })),
+    (error) => {
+      wrappedError = error
+      return error instanceof TypeError
+    },
+    "A mismatched Recovery Seller purpose and order side must be rejected at the durable-fact boundary.",
+  )
+  assert.ok(
+    wrappedError.cause instanceof TypeError,
+    "The durable-fact validator must preserve the original domain ownership error as the wrapper cause.",
+  )
+  assert.match(
+    wrappedError.cause.message,
+    /purpose must match its canonical order side/i,
+    "The preserved cause must explain the precise Recovery Seller ownership mismatch.",
+  )
+})
