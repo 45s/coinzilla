@@ -2,13 +2,13 @@
 
 **Phase 1/2:** [#1554 — Relational trading history and live fill persistence](https://github.com/45s/coinzilla/issues/1554), completed in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555).
 
-**Phase 3:** [#1556 — Binance startup order and trade-history synchronization](https://github.com/45s/coinzilla/issues/1556), implemented in open [PR #1557](https://github.com/45s/coinzilla/pull/1557).
+**Phase 3:** [#1556 — Binance startup order and trade-history synchronization](https://github.com/45s/coinzilla/issues/1556), implemented in open [PR #1558](https://github.com/45s/coinzilla/pull/1558).
 
 **Parent workstream:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
 
 **Existing order-history projection:** [PR #1469](https://github.com/45s/coinzilla/pull/1469).
 
-**Relational implementation:** [PR #1555](https://github.com/45s/coinzilla/pull/1555) is merged. Phase 3 is under review in [PR #1557](https://github.com/45s/coinzilla/pull/1557); do not treat it as delivered until that PR is merged and its required checks pass.
+**Relational implementation:** [PR #1555](https://github.com/45s/coinzilla/pull/1555) is merged. Phase 3 is under review in [PR #1558](https://github.com/45s/coinzilla/pull/1558); do not treat it as delivered until that PR is merged and its required checks pass.
 
 ## 1. Separate orders, fills, and strategy cycles
 
