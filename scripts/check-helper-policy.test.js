@@ -47,7 +47,7 @@ test("reports helpers missing a directly associated unit test", () => {
   try {
     writeFileSync(join(directory, "calculate.js"), "export function calculate({ value }) { return value * 2 }\n")
     assert.deepEqual(findHelperPolicyViolations(root), [
-      \`${join(directory, "calculate.js")}: missing directly associated unit test (calculate.test.js or calculate.spec.js)\`,
+      [join(directory, "calculate.js"), ": missing directly associated unit test (calculate.test.js or calculate.spec.js)"].join(""),
     ])
   } finally {
     rmSync(root, { recursive: true, force: true })
@@ -58,7 +58,7 @@ test("detects prohibited side-effect APIs and effectful imports", () => {
   assert.deepEqual(
     analyzeHelperSource({
       file: "helpers/effectful.js",
-      source: \`import fs from "node:fs"\nexport function read({ path }) { return fs.readFileSync(path) }\nexport function currentTime() { return Date.now() }\n\`,
+      source: "import fs from \"node:fs\"\nexport function read({ path }) { return fs.readFileSync(path) }\nexport function currentTime() { return Date.now() }\n",
     }),
     [
       "helpers/effectful.js: prohibited import from node:fs",
@@ -71,7 +71,7 @@ test("detects mutation and stateful classes", () => {
   assert.deepEqual(
     analyzeHelperSource({
       file: "helpers/mutating.js",
-      source: \`export function update({ session }) { session.chronologySource = "SINGLE_SESSION"; return session }\nexport class StatefulHelper {}\n\`,
+      source: "export function update({ session }) { session.chronologySource = \"SINGLE_SESSION\"; return session }\nexport class StatefulHelper {}\n",
     }),
     [
       "helpers/mutating.js: possible caller-owned input mutation",
@@ -84,7 +84,7 @@ test("allows pure transforms and deterministic path utilities", () => {
   assert.deepEqual(
     analyzeHelperSource({
       file: "helpers/transform.js",
-      source: \`import path from "node:path"\nexport function normalize({ value }) { return path.basename(value.trim()) }\n\`,
+      source: "import path from \"node:path\"\nexport function normalize({ value }) { return path.basename(value.trim()) }\n",
     }),
     [],
   )
