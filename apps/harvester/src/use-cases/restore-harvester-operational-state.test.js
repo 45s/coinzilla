@@ -4,6 +4,7 @@ import test from "node:test"
 import { Asset, Market } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { projectHarvesterOperationalState } from "../infrastructure/operational-state/project-harvester-operational-state.js"
 import { restoreHarvesterOperationalState } from "./restore-harvester-operational-state.js"
 
@@ -122,6 +123,65 @@ function createOwnedOrderRecords() {
       commissionStatus: "COMPLETE",
       commissions: [],
     }, "execution-fill-applied:binance:BTCUSDT:trade-1"),
+  ]
+}
+
+function createRecoverySellerOrderFactData({ clientOrderId, side, purpose, quantity }) {
+  return {
+    clientOrderId,
+    marketId: market.id,
+    venue: market.venue,
+    symbol: market.symbol,
+    baseAssetId: market.baseAsset.id,
+    quoteAssetId: market.quoteAsset.id,
+    side,
+    type: "LIMIT_MAKER",
+    price: "100",
+    quantity,
+    purpose,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-1",
+    cycleId: "rs-cycle-1",
+  }
+}
+
+function createRecoverySellerOrderRecords({ side, purpose, quantity, quoteQuantity }) {
+  const clientOrderId = "rs-client-1"
+  const brokerOrderId = "rs-broker-1"
+  const orderData = createRecoverySellerOrderFactData({
+    clientOrderId,
+    side,
+    purpose,
+    quantity,
+  })
+  return [
+    record(5, "ORDER_SUBMISSION_INTENT", orderData, `order-submission-intent:${clientOrderId}`),
+    record(6, "ORDER_SUBMISSION_OUTCOME", {
+      ...orderData,
+      executedQuantity: "0",
+      outcome: "ACKNOWLEDGED",
+      brokerOrderId,
+      status: "OPEN",
+    }, `order-submission-outcome:${clientOrderId}:ACKNOWLEDGED`),
+    record(7, "EXECUTION_FILL_APPLIED", {
+      fillId: `binance:${market.symbol}:trade-rs-1`,
+      tradeId: "trade-rs-1",
+      brokerOrderId,
+      clientOrderId,
+      marketId: market.id,
+      venue: market.venue,
+      symbol: market.symbol,
+      baseAssetId: market.baseAsset.id,
+      quoteAssetId: market.quoteAsset.id,
+      side,
+      price: "100",
+      quantity,
+      quoteQuantity,
+      liquidityRole: "MAKER",
+      executedAt: 1_700_000_000_002,
+      commissionStatus: "COMPLETE",
+      commissions: [],
+    }, `execution-fill-applied:binance:${market.symbol}:trade-rs-1`),
   ]
 }
 
@@ -585,4 +645,46 @@ test("uses the injected Operational State projector and returns its failure unch
 
   assert.equal(result.ok, false, "A failed injected projection must stop candidate restoration.")
   assert.strictEqual(result.errors[0], projectionError, "The use case must preserve the projector's original error.")
+})
+
+test("fails closed on Recovery Seller BUY Journal activity while replay is deferred", async () => {
+  const result = await restoreCandidate({
+    operationalStateStore: makeStore([
+      ...createPreflightRecords({ externalOpenOrder: false }),
+      ...createRecoverySellerOrderRecords({
+        side: "BUY",
+        purpose: "RECOVERY_BUY",
+        quantity: "0.02",
+        quoteQuantity: "2",
+      }),
+    ]),
+    marketMetadata: new Map([[market.symbol, { market }]]),
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(
+    result.errors?.map(({ message }) => message).join("; "),
+    /Recovery Seller Journal replay is deferred/,
+  )
+})
+
+test("fails closed on Recovery Seller SELL Journal activity while replay is deferred", async () => {
+  const result = await restoreCandidate({
+    operationalStateStore: makeStore([
+      ...createPreflightRecords({ externalOpenOrder: false }),
+      ...createRecoverySellerOrderRecords({
+        side: "SELL",
+        purpose: "RECOVERY_SELL",
+        quantity: "0.01",
+        quoteQuantity: "1",
+      }),
+    ]),
+    marketMetadata: new Map([[market.symbol, { market }]]),
+  })
+
+  assert.equal(result.ok, false)
+  assert.match(
+    result.errors?.map(({ message }) => message).join("; "),
+    /Recovery Seller Journal replay is deferred/,
+  )
 })
