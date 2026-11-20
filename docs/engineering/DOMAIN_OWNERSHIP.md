@@ -18,6 +18,24 @@ Coinzilla is a monorepo with independently maintained application and package do
 
 `@coinzilla/indicators` owns pure, deterministic, exchange-neutral technical-indicator calculations over normalized caller-supplied market data. It owns its public API, tests, documentation and roadmap. The first consumer is Harvester high-volatility protection (#1016); adaptive price-step planning (#1013) is a later consumer. Harvester retains strategy/risk policy; Brokers retains exchange-specific candle retrieval and normalization. See the [Indicators README](../../packages/indicators/README.md) and [Indicators roadmap](../../packages/indicators/ROADMAP.md).
 
+## Current implementation map
+
+This map records the actual top-level source layout at the S-1 audit baseline. It describes the current code, not a mandate to reorganize packages into identical templates.
+
+| Domain | Current source layout | Representative production entry/file |
+| --- | --- | --- |
+| Harvester | `apps/harvester/src/{application,bootstrap,domain,infrastructure,use-cases}/` | `src/use-cases/execute-strategy-decision.js`; `src/domain/strategies/recovery-seller/evaluate-buy-decision.js` |
+| Brokers | `packages/brokers/src/{domain,application,infrastructure,broker}/` plus public facade | `src/application/user-data-session.js`; `src/infrastructure/binance/spot/user-data-client-adapter.js`; `src/index.js` |
+| DB | `packages/db/src/{domain,application,infrastructure}/` plus provider entrypoints | `src/application/ports/database-provider.js`; `src/infrastructure/` adapters |
+| Entities | Feature folders under `packages/entities/src/` (`assets`, `balances`, `canonical-orders`, `fills`, `markets`, `money`, `orders`, `quantity`, `trading-rules`, `values`) | `src/canonical-orders/`, `src/money/`, `src/index.js` |
+| Event Bus | Flat public event-bus module plus `src/helpers/` | `src/event-bus.js`; `src/helpers/delivery-capacity.js` |
+| Indicators | Flat pure calculation/validation modules | `src/calculate-atr-series.js`; `src/calculate-natr-series.js`; `src/validate-candles.js` |
+| Journal | `src/adapters/`, `src/helpers/`, journal/replay modules | `src/adapters/filesystem-journal-store.js`; `src/replay-journal-records.js` |
+| Notifiers | `src/telegram/` transport/subscriber and public facade | `src/telegram/event-subscriber.js`; `src/architecture.test.js` |
+| Utils | Domain-neutral helper modules, `src/ensure/`, logging and error helpers | `src/index.js`; `src/default-logger.js`; `src/system-custom-error.js` |
+
+Harvester and Brokers have explicit layered structures. DB also separates domain/application/infrastructure. Entities, Event Bus, Indicators, Journal, Notifiers and Utils use package-specific layouts; apply their local ownership and purity rules rather than imposing unused layers. The [workspace dependency policy](#workspace-package-dependency-policy) governs package-to-package edges, while the [internal module matrix](#internal-module-dependency-direction) governs layers where they exist.
+
 ## Workspace package dependency policy
 
 The workspace dependency graph is intentionally one-way: the Harvester application composes shared packages; shared packages depend only on the packages listed below. This is the canonical allowlist for direct **workspace-package** dependencies. It is derived from the current package manifests and must be updated in the same PR as an approved dependency change.
