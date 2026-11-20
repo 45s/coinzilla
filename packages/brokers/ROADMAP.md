@@ -10,7 +10,7 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 ## User-data session lifecycle test hardening — #1602
 
-**Status: In progress** — [issue #1602](https://github.com/45s/coinzilla/issues/1602).
+**Status: In review** — [issue #1602](https://github.com/45s/coinzilla/issues/1602) · [PR #1606](https://github.com/45s/coinzilla/pull/1606).
 
 The direct Application suite now characterizes subscriber event filtering/deduplication, callback isolation, RPC error notification, recovery reminders, subscriber removal during recovery, concurrent subscription coalescing, and cleanup when a remote subscription resolves after session shutdown. Supporting port and recovery-policy tests include scenario-specific assertion diagnostics. Tests remain offline and exercise the injected application port; existing Binance composition coverage remains in its infrastructure test suites. No production behavior or public contract changes are intended.
 
