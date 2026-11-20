@@ -99,7 +99,9 @@
       "src/infrastructure/telegram/operator/pages.test.js",
       "src/infrastructure/telegram/operator/controls.test.js",
       "src/infrastructure/telegram/operator/diagnostics.test.js",
-      "src/infrastructure/persistence/trading-history-backups/create-backup.test.js"
+      "src/infrastructure/persistence/trading-history-backups/create-backup.test.js",
+      "src/infrastructure/persistence/trading-history-backups/verify-backup.test.js",
+      "src/infrastructure/persistence/trading-history-backups/rotate-backups.test.js"
     ]
   }
 }
