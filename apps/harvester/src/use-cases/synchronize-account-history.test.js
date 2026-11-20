@@ -60,7 +60,7 @@ function createOrder({
     status: executed === "0" ? "OPEN" : "FILLED",
     createdAt,
     updatedAt,
-    completedAt: updatedAt,
+    ...(executed === "0" ? {} : { completedAt: updatedAt }),
   })
 }
 
@@ -240,7 +240,7 @@ test("paginates configured-market order and trade history and persists exchange 
   )
 })
 
-test("fails closed when an exchange history cursor does not advance", async () => {
+test("rejects duplicate order identities within one exchange-history page", async () => {
   const repositories = createRepositories()
   const broker = {
     getOpenOrders: async () => ({
