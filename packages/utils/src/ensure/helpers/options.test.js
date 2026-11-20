@@ -10,11 +10,13 @@ import {
 
 test("reads data properties without invoking accessors", () => {
   const record = { value: 5 }
-  assert.equal(readOption({ record, key: "value" }), 5)
-  assert.equal(readOption({ record, key: "missing" }), undefined)
+  assert.equal(readOption({ record,
+key: "value" }), 5)
+  assert.equal(readOption({ record,
+key: "missing" }), undefined)
   assert.throws(() => readOption({
     record: Object.defineProperty({}, "value", { get() { throw new Error("getter") } }),
-    key: "value",
+key: "value",
   }), TypeError)
 })
 
@@ -34,10 +36,12 @@ test("resolves diagnostic names and messages", () => {
 })
 
 test("reads validated value options", () => {
-  assert.deepEqual(readValueOptions({ options: { value: 3, name: "count" } }), {
+  assert.deepEqual(readValueOptions({ options: { value: 3,
+name: "count" } }), {
     value: 3,
-    name: "count",
-    errMsg: undefined,
-    record: { value: 3, name: "count" },
+name: "count",
+errMsg: undefined,
+record: { value: 3,
+name: "count" },
   })
 })
