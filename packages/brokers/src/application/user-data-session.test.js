@@ -500,7 +500,10 @@ describe("Application user-data session recovery generations", () => {
     )
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
-      { accepted: true, completed: false },
+      {
+        accepted: true,
+        completed: false,
+      },
       "The first subscriber may acknowledge only the generation it actually reconciled.",
     )
 
@@ -527,12 +530,18 @@ describe("Application user-data session recovery generations", () => {
     )
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
-      { accepted: true, completed: false },
+      {
+        accepted: true,
+        completed: false,
+      },
       "The current generation must remain pending until every active subscriber acknowledges it.",
     )
     assert.deepEqual(
       second.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
-      { accepted: true, completed: true },
+      {
+        accepted: true,
+        completed: true,
+      },
       "Only the final current-generation acknowledgement may complete shared recovery.",
     )
     assertReconciledGenerationStatus({
@@ -717,6 +726,10 @@ describe("Application user-data session recovery reminders", () => {
     fixture.closeInitialConnection()
     await fixture.reconnect()
     const recoveryGeneration = findStatusByType(statuses, "recovered")?.recoveryGeneration
+    assert.ok(
+      Number.isSafeInteger(recoveryGeneration),
+      "A recovered status must expose its generation before the subscriber acknowledges it.",
+    )
 
     assert.equal(
       getStatusesByType(statuses, "recovered").length,
@@ -743,7 +756,10 @@ describe("Application user-data session recovery reminders", () => {
     )
     assert.deepEqual(
       subscription.data.acknowledgeRecoveryResult(recoveryGeneration),
-      { accepted: true, completed: true },
+      {
+        accepted: true,
+        completed: true,
+      },
       "Acknowledging the current generation must complete recovery.",
     )
     assert.equal(
@@ -756,6 +772,10 @@ describe("Application user-data session recovery reminders", () => {
     await fixture.session.stop()
   })
 
+  })
+})
+
+describe("Application user-data recovery after subscriber removal", () => {
   it("completes recovery when an unacknowledged subscriber disconnects", async () => {
     const firstStatuses = []
     const secondStatuses = []
@@ -776,7 +796,10 @@ describe("Application user-data session recovery reminders", () => {
 
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(recoveryGeneration),
-      { accepted: true, completed: false },
+      {
+        accepted: true,
+        completed: false,
+      },
       "The first subscriber's acknowledgement must remain pending while another active subscriber has not acknowledged.",
     )
     await second.data.disconnect()
