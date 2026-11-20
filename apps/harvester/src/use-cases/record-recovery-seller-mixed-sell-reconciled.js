@@ -16,23 +16,16 @@ function createFactId({ marketId, cycleId, sellOrderClientId, sellOrderBrokerOrd
   return `recovery-seller-mixed-sell-reconciled:${digest}`
 }
 
-function validateReconciliationInput({
-  operationalStateStore,
-  terminalOrder,
-  ownership,
-  canonicalFills,
-  accountingApplied,
-  eligible,
-}) {
-  if (typeof operationalStateStore?.append !== "function") {
-    throw new TypeError("Recovery Seller mixed-SELL reconciliation requires durable Operational State Store append")
-  }
+function validateTerminalOrder({ terminalOrder }) {
   if (!(terminalOrder instanceof CanonicalOrder) ||
       !TERMINAL_ORDER_STATUSES.has(terminalOrder.status) ||
       typeof terminalOrder.brokerOrderId !== "string" ||
       !terminalOrder.brokerOrderId.trim()) {
     throw new TypeError("Recovery Seller mixed-SELL reconciliation requires an acknowledged terminal CanonicalOrder")
   }
+}
+
+function validateRecoverySellerOwnership({ ownership }) {
   if (
     ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
     ownership.purpose !== "RECOVERY_SELL" ||
@@ -41,9 +34,15 @@ function validateReconciliationInput({
   ) {
     throw new TypeError("Recovery Seller mixed-SELL reconciliation requires immutable cycle and Position ownership")
   }
+}
+
+function validateCommittedAccounting({ accountingApplied, eligible }) {
   if (accountingApplied !== true || typeof eligible !== "boolean") {
     throw new TypeError("Recovery Seller mixed-SELL reconciliation requires a committed accounting result and explicit eligibility")
   }
+}
+
+function validateCanonicalSellFills({ canonicalFills, terminalOrder }) {
   if (!Array.isArray(canonicalFills) || canonicalFills.length === 0) {
     throw new TypeError("Recovery Seller mixed-SELL reconciliation requires the complete canonical terminal fill set")
   }
@@ -59,9 +58,26 @@ function validateReconciliationInput({
     }
     fillIds.add(fill.id)
   }
-  return Object.freeze([...fillIds])
+  return Object.freeze([...fillIds].sort())
 }
 
+function validateReconciliationInput(options) {
+  const {
+    operationalStateStore,
+    terminalOrder,
+    ownership,
+    canonicalFills,
+    accountingApplied,
+    eligible,
+  } = options
+  if (typeof operationalStateStore?.append !== "function") {
+    throw new TypeError("Recovery Seller mixed-SELL reconciliation requires durable Operational State Store append")
+  }
+  validateTerminalOrder({ terminalOrder })
+  validateRecoverySellerOwnership({ ownership })
+  validateCommittedAccounting({ accountingApplied, eligible })
+  return validateCanonicalSellFills({ canonicalFills, terminalOrder })
+}
 /**
  * Commit the durable boundary after terminal mixed-SELL accounting has applied
  * both the shared Portfolio and legacy projections. A terminal order status or
@@ -73,8 +89,6 @@ export async function recordRecoverySellerMixedSellReconciled(options = {}) {
       operationalStateStore,
       terminalOrder,
       ownership,
-      canonicalFills,
-      accountingApplied,
       eligible,
     } = options
     const appliedFillIds = validateReconciliationInput(options)

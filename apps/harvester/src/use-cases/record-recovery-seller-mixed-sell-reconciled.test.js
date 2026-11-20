@@ -4,8 +4,14 @@ import { Asset, CanonicalOrder, Fill, Market, Money, Quantity } from "@coinzilla
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { recordRecoverySellerMixedSellReconciled } from "./record-recovery-seller-mixed-sell-reconciled.js"
 
-const baseAsset = new Asset({ id: "binance:ZRO", code: "ZRO" })
-const quoteAsset = new Asset({ id: "binance:USDT", code: "USDT" })
+const baseAsset = new Asset({
+  id: "binance:ZRO",
+  code: "ZRO",
+})
+const quoteAsset = new Asset({
+  id: "binance:USDT",
+  code: "USDT",
+})
 const market = new Market({
   venue: "binance",
   symbol: "ZROUSDT",
@@ -20,9 +26,18 @@ function makeOrder({ status = "FILLED" } = {}) {
     market,
     side: "SELL",
     type: "LIMIT",
-    limitPrice: new Money({ amount: "2", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "5", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "5", asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "5",
+      asset: baseAsset,
+    }),
     status,
     createdAt: 1,
     acknowledgedAt: 2,
@@ -38,9 +53,18 @@ function makeFill({ clientOrderId = "rs-sell-1", brokerOrderId = "broker-sell-1"
     clientOrderId,
     market,
     side: "SELL",
-    price: new Money({ amount: "2", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "5", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "10", asset: quoteAsset }),
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "5",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "10",
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })

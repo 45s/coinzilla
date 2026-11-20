@@ -13,6 +13,22 @@ function createReconciliationFactId({ marketId, cycleId, sellOrderClientId, sell
   return `recovery-seller-mixed-sell-reconciled:${sha256OperationalStateValue(identity)}`
 }
 
+function validateAssetIdentity({ canonicalData }) {
+  requireNonEmptyString({
+    value: canonicalData.baseAssetId,
+    field: "data.baseAssetId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  requireNonEmptyString({
+    value: canonicalData.quoteAssetId,
+    field: "data.quoteAssetId",
+    maxLength: MAX_FACT_ID_LENGTH,
+  })
+  if (canonicalData.baseAssetId === canonicalData.quoteAssetId) {
+    throw new TypeError("Recovery Seller mixed-SELL reconciliation assets must differ")
+  }
+}
+
 function validateIdentity({ canonicalData, factId }) {
   const marketId = requireNonEmptyString({
     value: canonicalData.marketId,
@@ -44,21 +60,11 @@ function validateIdentity({ canonicalData, factId }) {
     field: "data.sellOrderBrokerOrderId",
     maxLength: MAX_FACT_ID_LENGTH,
   })
-  requireNonEmptyString({
-    value: canonicalData.baseAssetId,
-    field: "data.baseAssetId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
-  requireNonEmptyString({
-    value: canonicalData.quoteAssetId,
-    field: "data.quoteAssetId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
+  validateAssetIdentity({ canonicalData })
   if (
     venue !== venue.toLowerCase() ||
     !/^[A-Z0-9]{3,30}$/.test(symbol) ||
     marketId !== `${venue}:${symbol}` ||
-    canonicalData.baseAssetId === canonicalData.quoteAssetId ||
     factId !== createReconciliationFactId({
       marketId,
       cycleId,

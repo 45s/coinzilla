@@ -345,6 +345,60 @@ function calculateTerminalMixedSellAccounting({
   }
 }
 
+async function persistTerminalMixedSellAccountingBoundary({
+  callback,
+  terminalOrder,
+  ownership,
+  canonicalFills,
+  eligible,
+}) {
+  if (typeof callback !== "function") {
+    throw new Error("Recovery Seller terminal mixed-SELL accounting requires a durable reconciliation callback")
+  }
+  const result = await callback({
+    terminalOrder,
+    ownership,
+    canonicalFills,
+    accountingApplied: true,
+    eligible,
+  })
+  if (result?.ok !== true || result.data?.durable !== true) {
+    throw result?.errors?.[0] ??
+      new Error("Recovery Seller terminal mixed-SELL reconciliation fact was not durably committed")
+  }
+}
+
+function publishTerminalMixedSellAccounting({
+  state,
+  registryUpdate,
+  terminalRegisteredOrder,
+  ownership,
+  result,
+  eligible,
+}) {
+  state.portfolio = result.accounting.portfolio
+  state.legacyPositions = result.nextLegacyPositions
+  state.orderRegistry = registryUpdate.registry
+  const reservation = state.recoverySellerSellReservations.get(ownership.cycleId)
+  if (reservation?.clientOrderId === terminalRegisteredOrder.clientOrderId) {
+    state.recoverySellerSellReservations.delete(ownership.cycleId)
+  }
+  const cycleOutcome = Object.freeze({
+    marketId: terminalRegisteredOrder.market.id,
+    cycleId: ownership.cycleId,
+    positionId: ownership.positionId,
+    status: eligible ? "CLOSED" : "UNRESOLVED",
+    eligible,
+  })
+  state.recoverySellerCycleOutcomes.set(ownership.cycleId, cycleOutcome)
+  state.recoverySellerCycleStates.set(terminalRegisteredOrder.market.id, cycleOutcome)
+  return Object.freeze({
+    ...result.accounting,
+    orderRegistry: state.orderRegistry,
+    profitability: result.profitability,
+  })
+}
+
 async function reconcileTerminalMixedSellTransition({
   state,
   reconciliation,
@@ -374,44 +428,21 @@ async function reconcileTerminalMixedSellTransition({
     registry: registryUpdate.registry,
     order: terminalRegisteredOrder,
   })
-  if (typeof onOperationalStateRecoverySellerMixedSellReconciled !== "function") {
-    throw new Error("Recovery Seller terminal mixed-SELL accounting requires a durable reconciliation callback")
-  }
   const eligible = result.profitability?.eligible === true
-  const durableResult = await onOperationalStateRecoverySellerMixedSellReconciled({
+  await persistTerminalMixedSellAccountingBoundary({
+    callback: onOperationalStateRecoverySellerMixedSellReconciled,
     terminalOrder: terminalRegisteredOrder,
     ownership,
     canonicalFills,
-    accountingApplied: true,
     eligible,
   })
-  if (durableResult?.ok !== true || durableResult.data?.durable !== true) {
-    throw durableResult?.errors?.[0] ??
-      new Error("Recovery Seller terminal mixed-SELL reconciliation fact was not durably committed")
-  }
-  // Publish terminal order and both accounting projections only after the
-  // exact terminal accounting boundary is durably committed.
-  state.portfolio = result.accounting.portfolio
-  state.legacyPositions = result.nextLegacyPositions
-  state.orderRegistry = registryUpdate.registry
-  const reservation = state.recoverySellerSellReservations.get(ownership.cycleId)
-  if (reservation?.clientOrderId === terminalRegisteredOrder.clientOrderId) {
-    state.recoverySellerSellReservations.delete(ownership.cycleId)
-  }
-  const cycleStatus = eligible ? "CLOSED" : "UNRESOLVED"
-  const cycleOutcome = Object.freeze({
-    marketId: terminalRegisteredOrder.market.id,
-    cycleId: ownership.cycleId,
-    positionId: ownership.positionId,
-    status: cycleStatus,
+  return publishTerminalMixedSellAccounting({
+    state,
+    registryUpdate,
+    terminalRegisteredOrder,
+    ownership,
+    result,
     eligible,
-  })
-  state.recoverySellerCycleOutcomes.set(ownership.cycleId, cycleOutcome)
-  state.recoverySellerCycleStates.set(terminalRegisteredOrder.market.id, cycleOutcome)
-  return Object.freeze({
-    ...result.accounting,
-    orderRegistry: state.orderRegistry,
-    profitability: result.profitability,
   })
 }
 

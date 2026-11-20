@@ -204,7 +204,8 @@ function makeTransitionSnapshotInput() {
   }
 }
 
-function makeWorkflow(context, {
+function makeWorkflow({
+  context,
   onOperationalStateRecoverySellerMixedSellReconciled = async () => ({
     ok: true,
     data: { durable: true },
@@ -245,7 +246,7 @@ test("keeps a stable current cycle identity until the cycle is completed", () =>
 
 test("builds a normalized transition snapshot from active SELL and verified legacy Spot state", () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const snapshot = workflow.getTransitionSnapshot(makeTransitionSnapshotInput())
 
   assert.equal(snapshot.cycleState.cycleId, "rs-cycle-1")
@@ -281,7 +282,8 @@ test("includes pending BUY quote commitment in the transition snapshot", () => {
     brokerOrderId: order.brokerOrderId,
   })
   const workflow = makeWorkflow({
-    ...context,
+    context: {
+      ...context,
     openRegistry: new OrderRegistry({
       orders: [order],
       ownerships: [ownership],
@@ -323,8 +325,10 @@ test("creates a stable first-cycle snapshot when the market has no active orders
 test("reserves one durable RS SELL per cycle before shared order registration", async () => {
   const context = makeContext()
   const workflow = makeWorkflow({
-    ...context,
-    openRegistry: new OrderRegistry(),
+    context: {
+      ...context,
+      openRegistry: new OrderRegistry(),
+    },
   })
   const ownership = createOrderOwnership({
     ownership: {
@@ -387,7 +391,7 @@ test("reserves one durable RS SELL per cycle before shared order registration", 
 
 test("commits reconciled RS projections and releases the shared SELL reservation atomically", async () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const openOrder = context.openRegistry.getOrder({
     clientOrderId: "rs-sell-1",
   })
@@ -451,7 +455,8 @@ test("commits reconciled RS projections and releases the shared SELL reservation
 
 test("keeps both accounting projections and the SELL reservation unchanged when durable reconciliation commit fails", async () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context, {
+  const workflow = makeWorkflow({
+    context,
     onOperationalStateRecoverySellerMixedSellReconciled: async () => ({
       ok: false,
       errors: [new Error("durable fact append failed")],
@@ -501,7 +506,7 @@ test("keeps both accounting projections and the SELL reservation unchanged when 
 
 test("keeps the SELL reservation and both projections unchanged when terminal fill history is incomplete", async () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const portfolioBefore = workflow.getPortfolio()
   const legacyBefore = workflow.getLegacyPosition({ marketId: market.id })
   const registryBefore = workflow.getOrderRegistry()
@@ -527,7 +532,7 @@ test("keeps the SELL reservation and both projections unchanged when terminal fi
 
 test("exposes separately tracked legacy quote proceeds to the shared account snapshot baseline", async () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const result = await workflow.reconcileTerminalMixedSell({
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
@@ -545,7 +550,7 @@ test("exposes separately tracked legacy quote proceeds to the shared account sna
 
 test("exposes only verified untracked Spot legacy quantity outside the shared Portfolio", async () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const result = await workflow.reconcileTerminalMixedSell({
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
@@ -580,7 +585,7 @@ test("exposes only verified untracked Spot legacy quantity outside the shared Po
 
 test("fails closed when the legacy Spot base asset is missing from the authoritative account snapshot", () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   assert.throws(
     () => workflow.getAdditionalTrackedBaseQuantity({
       balances: [],
@@ -593,7 +598,7 @@ test("fails closed when the legacy Spot base asset is missing from the authorita
 
 test("treats a repeated terminal RS accounting event as an exact no-op", async () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const input = {
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
@@ -741,7 +746,7 @@ test("allocates quote, base and valued third-asset commissions before independen
     ],
   })
   const context = makeContext({ fill })
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const result = await workflow.reconcileTerminalMixedSell({
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
