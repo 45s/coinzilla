@@ -395,8 +395,8 @@ test("composes enabled Telegram operator control independently from outbound not
   )
   assert.deepEqual(
     OPERATOR_CONTROL_CONFIG.telegram.allowedUserIds,
-    process.env.TELEGRAM_USER_ID ? [process.env.TELEGRAM_USER_ID] : [],
-    "The operator allowlist must be seeded from TELEGRAM_USER_ID without adding an undefined entry.",
+    [],
+    "The imported config module must expose only its static allowlist; TELEGRAM_USER_ID is resolved at bootstrap.",
   )
 })
 
