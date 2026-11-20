@@ -70,7 +70,7 @@ test("scans production JavaScript across apps, packages, and repository scripts"
     writeFileSync(join(ignored, "ignored-utils.js"), "export const value = true\n")
 
     assert.deepEqual(
-      findModuleNamingViolations(root),
+      findModuleNamingViolations({ root }),
       [
         "apps/example/src/helpers.js: vague module filename",
         "packages/example/src/testnet-utils.js: redundant helper/utility filename suffix",

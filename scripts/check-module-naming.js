@@ -93,7 +93,7 @@ const collectProductionModuleSources = ({ root, relativeDirectory, files }) => {
  * @param {string} root Repository root.
  * @returns {string[]}
  */
-export function findProductionModuleSources(root) {
+export function findProductionModuleSources({ root }) {
   const files = []
 
   for (const area of SOURCE_AREAS) {
@@ -114,10 +114,10 @@ export function findProductionModuleSources(root) {
  * @param {string} root Repository root.
  * @returns {string[]}
  */
-export function findModuleNamingViolations(root) {
+export function findModuleNamingViolations({ root }) {
   const violations = []
 
-  for (const file of findProductionModuleSources(root)) {
+  for (const file of findProductionModuleSources({ root })) {
     violations.push(...analyzeModuleFilename({ file }))
   }
 
@@ -170,7 +170,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       changedPaths: diffOutput.split(/\r?\n/).filter(Boolean),
     })
   } else {
-    violations = findModuleNamingViolations(root)
+    violations = findModuleNamingViolations({ root })
   }
 
   if (violations.length > 0) {
