@@ -206,18 +206,7 @@ async function persistCanonicalOrder({ order, repositories, providerIdentity, en
   state.ordersPersisted += 1
 }
 
-async function fetchOrderHistoryForMarket({
-  broker,
-  symbol,
-  repositories,
-  providerIdentity,
-  environment,
-  limit,
-  requestDelayMs,
-  sleep,
-  now,
-  state,
-}) {
+async function resolveOrderHistoryCursor({ repositories, providerIdentity, environment, symbol }) {
   const cursor = await repositories.cursorRepository.get({
     providerIdentity,
     environment,
@@ -245,56 +234,138 @@ async function fetchOrderHistoryForMarket({
         field: "pending order ID",
         symbol,
       })
-  let orderId = Math.min(storedOrderId + 1, pendingOrderCursor)
-  let lastOrderId = orderId - 1
-  while (true) {
-    await waitBeforeRequest({
+  const orderId = Math.min(storedOrderId + 1, pendingOrderCursor)
+  return {
+    orderId,
+    lastOrderId: orderId - 1,
+  }
+}
+
+async function requestOrderPage({ broker, symbol, orderId, limit, requestDelayMs, sleep, state }) {
+  await waitBeforeRequest({
+    state,
+    requestDelayMs,
+    sleep,
+  })
+  const result = await broker.getCanonicalOrderHistory({
+    symbol,
+    orderId,
+    limit,
+  })
+  state.requestCount += 1
+  state.orderPagesChecked += 1
+  return validatePage({
+    result,
+    symbol,
+    limit,
+    historyType: "order",
+  })
+}
+
+function validateOrderPage({ page, symbol, lastOrderId, state }) {
+  let nextOrderId = lastOrderId
+  const orders = page.map((order) => {
+    nextOrderId = validateCanonicalOrder({
+      order,
+      symbol,
+      lastOrderId: nextOrderId,
       state,
-      requestDelayMs,
-      sleep,
     })
-    const result = await broker.getCanonicalOrderHistory({
+    return order
+  })
+  state.ordersObserved += orders.length
+  return {
+    orders,
+    lastOrderId: nextOrderId,
+  }
+}
+
+async function persistOrderPage({ orders, repositories, providerIdentity, environment, now, state }) {
+  for (const order of orders) {
+    await persistCanonicalOrder({
+      order,
+      repositories,
+      providerIdentity,
+      environment,
+      observedAt: new Date(now()).toISOString(),
+      state,
+    })
+  }
+}
+
+async function saveOrderPageCursor({
+  page,
+  lastOrderId,
+  repositories,
+  providerIdentity,
+  environment,
+  symbol,
+  now,
+}) {
+  if (page.length === 0) {
+    return
+  }
+  await repositories.cursorRepository.saveOrderCursor({
+    providerIdentity,
+    environment,
+    symbol,
+    lastOrderId: String(lastOrderId),
+    updatedAt: new Date(now()).toISOString(),
+  })
+}
+
+async function fetchOrderHistoryForMarket({
+  broker,
+  symbol,
+  repositories,
+  providerIdentity,
+  environment,
+  limit,
+  requestDelayMs,
+  sleep,
+  now,
+  state,
+}) {
+  let { orderId, lastOrderId } = await resolveOrderHistoryCursor({
+    repositories,
+    providerIdentity,
+    environment,
+    symbol,
+  })
+  while (true) {
+    const page = await requestOrderPage({
+      broker,
       symbol,
       orderId,
       limit,
+      requestDelayMs,
+      sleep,
+      state,
     })
-    state.requestCount += 1
-    state.orderPagesChecked += 1
-    const page = validatePage({
-      result,
+    const validated = validateOrderPage({
+      page,
       symbol,
-      limit,
-      historyType: "order",
+      lastOrderId,
+      state,
     })
-    const validatedOrders = page.map((order) => {
-      lastOrderId = validateCanonicalOrder({
-        order,
-        symbol,
-        lastOrderId,
-        state,
-      })
-      return order
+    await persistOrderPage({
+      orders: validated.orders,
+      repositories,
+      providerIdentity,
+      environment,
+      now,
+      state,
     })
-    state.ordersObserved += validatedOrders.length
-    for (const order of validatedOrders) {
-      await persistCanonicalOrder({
-        order,
-        repositories,
-        providerIdentity,
-        environment,
-        observedAt: new Date(now()).toISOString(),
-        state,
-      })
-    }
-    if (page.length > 0) {
-      await repositories.cursorRepository.saveOrderCursor({
-        providerIdentity,
-        environment,
-        symbol,
-        lastOrderId: String(lastOrderId),
-        updatedAt: new Date(now()).toISOString(),
-      })
-    }
+    lastOrderId = validated.lastOrderId
+    await saveOrderPageCursor({
+      page,
+      lastOrderId,
+      repositories,
+      providerIdentity,
+      environment,
+      symbol,
+      now,
+    })
     if (page.length < limit) {
       return
     }
