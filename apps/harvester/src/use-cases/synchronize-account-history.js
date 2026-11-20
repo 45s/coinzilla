@@ -343,21 +343,8 @@ async function fetchOrderHistoryForMarket({
     symbol,
   })
   while (true) {
-    const page = await requestOrderPage({
-      broker,
-      symbol,
-      orderId,
-      limit,
-      requestDelayMs,
-      sleep,
-      state,
-    })
-    const validated = validateOrderPage({
-      page,
-      symbol,
-      lastOrderId,
-      state,
-    })
+    const page = await requestOrderPage({ broker, symbol, orderId, limit, requestDelayMs, sleep, state })
+    const validated = validateOrderPage({ page, symbol, lastOrderId, state })
     await persistOrderPage({
       orders: validated.orders,
       repositories,
@@ -617,21 +604,8 @@ async function fetchFillHistoryForMarket({
     symbol,
   })
   while (true) {
-    const page = await requestFillPage({
-      broker,
-      symbol,
-      fromId,
-      limit,
-      requestDelayMs,
-      sleep,
-      state,
-    })
-    const validated = validateFillPage({
-      page,
-      symbol,
-      lastTradeId,
-      state,
-    })
+    const page = await requestFillPage({ broker, symbol, fromId, limit, requestDelayMs, sleep, state })
+    const validated = validateFillPage({ page, symbol, lastTradeId, state })
     await persistFillPage({
       fills: validated.fills,
       repositories,
