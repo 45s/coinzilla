@@ -76,8 +76,20 @@ export function validateWorkspaceTestMatrix({
   }
 
   const expectedUnitPackages = packageNames.filter((name) => name !== UTILS_PACKAGE)
-  errors.push(...comparePackages({ label: "Unit-test", expected: expectedUnitPackages, actual: unitTestPackages }))
-  errors.push(...comparePackages({ label: "Coverage", expected: packageNames, actual: coveragePackages }))
+  errors.push(
+    ...comparePackages({
+      label: "Unit-test",
+      expected: expectedUnitPackages,
+      actual: unitTestPackages,
+    }),
+  )
+  errors.push(
+    ...comparePackages({
+      label: "Coverage",
+      expected: packageNames,
+      actual: coveragePackages,
+    }),
+  )
 
   if (!packageNames.includes(UTILS_PACKAGE) || !utilsTestJobConfigured) {
     errors.push(
