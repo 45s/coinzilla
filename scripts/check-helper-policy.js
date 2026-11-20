@@ -167,12 +167,12 @@ export function analyzeHelperSource({ file, source }) {
     violations.push([file, ": classes are prohibited in helpers"].join(""))
   }
   if (/^(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:new\s+)?(?:Set|Map)\s*\(/m.test(source)) {
-  if (/^(?:export\\s+)?(?:const|let|var)\\s+[A-Za-z_$][\\w$]*\\s*=\\s*(?:\\{|\\[)/m.test(source)) {
+  if (/^(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:\{|\[)/m.test(source)) {
     violations.push([file, ": mutable module-level objects or arrays must be frozen"].join(""))
   }
+  if (/^(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:new\s+)?(?:Set|Map)\s*\(/m.test(source)) {
     violations.push([file, ": mutable module-level collections are prohibited"].join(""))
   }
-  if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*(?:\.\s*[A-Za-z_$][\w$]*|\[[^\]]+\])\s*=(?!=|>)/.test(source)) {
     violations.push([file, ": possible caller-owned input mutation"].join(""))
   }
   if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*\.\s*(?:push|pop|shift|unshift|splice|sort|reverse|set|add|delete|clear)\s*\(/.test(source)) {
