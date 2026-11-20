@@ -8,10 +8,11 @@ import {
   Money,
   Quantity,
 } from "@coinzilla/entities"
-import { assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { createOrderOwnership } from "../domain/orders/order-ownership.js"
 import { updateTradingAccounting } from "./update-trading-accounting.js"
 
 function requireMarket({ marketMetadata, symbol }) {
@@ -41,64 +42,103 @@ function configuredMarketSymbols({ marketMetadata }) {
   }).filter((symbol) => typeof symbol === "string" && symbol.trim()))]
 }
 
-function restoreFill({ data, market }) {
-  const commissions = data.commissions.map((item) => {
-    const isThirdAsset = item.assetId !== market.baseAsset.id && item.assetId !== market.quoteAsset.id
-    let asset
-    if (item.assetId === market.baseAsset.id) {
-      if (item.asset !== market.baseAsset.code) {
-        throw new Error(`Recovered commission asset code contradicts the market base asset identity for ${market.symbol}`)
-      }
-      asset = market.baseAsset
-    } else if (item.assetId === market.quoteAsset.id) {
-      if (item.asset !== market.quoteAsset.code) {
-        throw new Error(`Recovered commission asset code contradicts the market quote asset identity for ${market.symbol}`)
-      }
-      asset = market.quoteAsset
-    } else {
-      if (item.asset === market.baseAsset.code || item.asset === market.quoteAsset.code) {
-        throw new Error(`Recovered commission asset ID contradicts a market asset code for ${market.symbol}`)
-      }
-      asset = new Asset({ id: item.assetId, 
-        code: item.asset })
-      if (item.quoteValue === undefined && compareDecimal({ left: item.amount, 
-        right: "0" }) > 0) {
-        throw new Error(`Recovered third-asset commission is missing its historical quote valuation for ${market.symbol}`)
-      }
+function restoreCommissionAsset({ item, market }) {
+  if (item.assetId === market.baseAsset.id) {
+    if (item.asset !== market.baseAsset.code) {
+      throw new Error(`Recovered commission asset code contradicts the market base asset identity for ${market.symbol}`)
     }
-    let quoteValue
-    if (item.quoteValue !== undefined) {
-      if (item.quoteValue.assetId !== market.quoteAsset.id ||
-          item.quoteValue.asset !== market.quoteAsset.code) {
-        throw new Error(`Recovered commission quote valuation does not match the market quote asset for ${market.symbol}`)
-      }
-      if (isThirdAsset && compareDecimal({ left: item.amount, 
-        right: "0" }) > 0 &&
-          compareDecimal({ left: item.quoteValue.amount, 
-            right: "0" }) <= 0) {
-        throw new Error(`Recovered third-asset commission quote valuation must be greater than zero for ${market.symbol}`)
-      }
-      quoteValue = new Money({ amount: item.quoteValue.amount, 
-        asset: market.quoteAsset })
+    return market.baseAsset
+  }
+  if (item.assetId === market.quoteAsset.id) {
+    if (item.asset !== market.quoteAsset.code) {
+      throw new Error(`Recovered commission asset code contradicts the market quote asset identity for ${market.symbol}`)
     }
-    return new Commission({
-      amount: new Money({ amount: item.amount, 
-        asset }),
-      ...(quoteValue === undefined ? {} : { quoteValue }),
-    })
+    return market.quoteAsset
+  }
+  if (item.asset === market.baseAsset.code || item.asset === market.quoteAsset.code) {
+    throw new Error(`Recovered commission asset ID contradicts a market asset code for ${market.symbol}`)
+  }
+  return new Asset({
+    id: item.assetId,
+    code: item.asset,
   })
+}
+
+function restoreCommissionQuoteValue({ item, market, isThirdAsset }) {
+  if (item.quoteValue === undefined) {
+    if (isThirdAsset && compareDecimal({
+      left: item.amount,
+      right: "0",
+    }) > 0) {
+      throw new Error(`Recovered third-asset commission is missing its historical quote valuation for ${market.symbol}`)
+    }
+    return undefined
+  }
+  if (item.quoteValue.assetId !== market.quoteAsset.id ||
+      item.quoteValue.asset !== market.quoteAsset.code) {
+    throw new Error(`Recovered commission quote valuation does not match the market quote asset for ${market.symbol}`)
+  }
+  if (isThirdAsset &&
+      compareDecimal({
+        left: item.amount,
+        right: "0",
+      }) > 0 &&
+      compareDecimal({
+        left: item.quoteValue.amount,
+        right: "0",
+      }) <= 0) {
+    throw new Error(`Recovered third-asset commission quote valuation must be greater than zero for ${market.symbol}`)
+  }
+  return new Money({
+    amount: item.quoteValue.amount,
+    asset: market.quoteAsset,
+  })
+}
+
+function restoreCommission({ item, market }) {
+  const isThirdAsset = item.assetId !== market.baseAsset.id &&
+    item.assetId !== market.quoteAsset.id
+  const asset = restoreCommissionAsset({
+    item,
+    market,
+  })
+  const quoteValue = restoreCommissionQuoteValue({
+    item,
+    market,
+    isThirdAsset,
+  })
+  return new Commission({
+    amount: new Money({
+      amount: item.amount,
+      asset,
+    }),
+    ...(quoteValue === undefined ? {} : { quoteValue }),
+  })
+}
+
+function restoreFill({ data, market }) {
+  const commissions = data.commissions.map((item) => restoreCommission({
+    item,
+    market,
+  }))
   const fill = new Fill({
     tradeId: data.tradeId,
     brokerOrderId: data.brokerOrderId,
     clientOrderId: data.clientOrderId,
     market,
     side: data.side,
-    price: new Money({ amount: data.price, 
-      asset: market.quoteAsset }),
-    quantity: new Quantity({ amount: data.quantity, 
-      asset: market.baseAsset }),
-    quoteQuantity: new Money({ amount: data.quoteQuantity, 
-      asset: market.quoteAsset }),
+    price: new Money({
+      amount: data.price,
+      asset: market.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: data.quantity,
+      asset: market.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: data.quoteQuantity,
+      asset: market.quoteAsset,
+    }),
     liquidityRole: data.liquidityRole,
     executedAt: data.executedAt,
     commissions,
@@ -123,7 +163,10 @@ function getRestoredOrderStatus({ order }) {
   return "UNKNOWN"
 }
 
-function restoreOrder({ order, market }) {
+function restoreOrder({
+      order,
+      market,
+    }) {
   const status = getRestoredOrderStatus({ order })
   if (status === "REJECTED" && order.cumulativeFillQuantity !== "0") {
     throw new Error(`Rejected recovered order contains executed quantity: ${order.clientOrderId}`)
@@ -166,29 +209,60 @@ function validateStickySafetyBlockers({ stickySafetyBlockers }) {
   }
 }
 
+function validateRecoveryCycleEvaluationIdentity({ evaluation }) {
+  if (!evaluation || typeof evaluation.symbol !== "string" || !evaluation.symbol.trim()) {
+    throw new TypeError("Recovery projection contains an invalid recovery-cycle symbol")
+  }
+  if (typeof evaluation.marketId !== "string" || !evaluation.marketId.trim()) {
+    throw new TypeError("Recovery projection contains an invalid recovery-cycle market identity")
+  }
+  if (typeof evaluation.sellOrderClientId !== "string" || !evaluation.sellOrderClientId.trim()) {
+    throw new TypeError("Recovery projection contains an invalid recovery-cycle client order identity")
+  }
+  if (typeof evaluation.sellOrderBrokerOrderId !== "string" || !evaluation.sellOrderBrokerOrderId.trim()) {
+    throw new TypeError("Recovery projection contains an invalid recovery-cycle broker order identity")
+  }
+  if (typeof evaluation.reason !== "string" || !evaluation.reason.trim()) {
+    throw new TypeError("Recovery projection contains an invalid recovery-cycle reason")
+  }
+  if (!["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(evaluation.outcome)) {
+    throw new TypeError("Recovery projection contains an unsupported recovery-cycle outcome")
+  }
+  if (!Number.isSafeInteger(evaluation.sequence) || evaluation.sequence < 0) {
+    throw new TypeError("Recovery projection contains an invalid recovery-cycle sequence")
+  }
+}
+
+function validateRecoveryCycleEvaluationAmounts({ evaluation }) {
+  for (const field of ["realizedNetProfit", "activeQuantity", "keepQuantity", "minProfit"]) {
+    assertDecimalString({
+      value: evaluation[field],
+      field: `recoveryCycleEvaluation.${field}`,
+    })
+  }
+}
+
+function validateRecoveryCycleEvaluationMarket({ evaluation, marketMetadata }) {
+  const market = requireMarket({
+    marketMetadata,
+    symbol: evaluation.symbol,
+  })
+  if (market.id !== evaluation.marketId) {
+    throw new Error(`Recovery-cycle evaluation market identity conflicts with canonical exchange metadata for ${evaluation.symbol}`)
+  }
+}
+
 function validateRecoveryCycleEvaluations({ recoveryCycleEvaluations, marketMetadata }) {
   if (!Array.isArray(recoveryCycleEvaluations)) {
     throw new TypeError("Recovery projection recoveryCycleEvaluations must be an array")
   }
   for (const evaluation of recoveryCycleEvaluations) {
-    if (!evaluation || typeof evaluation.symbol !== "string" || !evaluation.symbol.trim() ||
-        typeof evaluation.marketId !== "string" || !evaluation.marketId.trim() ||
-        typeof evaluation.sellOrderClientId !== "string" || !evaluation.sellOrderClientId.trim() ||
-        typeof evaluation.sellOrderBrokerOrderId !== "string" || !evaluation.sellOrderBrokerOrderId.trim() ||
-        typeof evaluation.reason !== "string" || !evaluation.reason.trim() ||
-        !["CONTINUE_SELL_THROUGH", "BLOCKED"].includes(evaluation.outcome) ||
-        !Number.isSafeInteger(evaluation.sequence) || evaluation.sequence < 0) {
-      throw new TypeError("Recovery projection contains an invalid recovery-cycle evaluation")
-    }
-    for (const field of ["realizedNetProfit", "activeQuantity", "keepQuantity", "minProfit"]) {
-      assertDecimalString({ value: evaluation[field], 
-        field: `recoveryCycleEvaluation.${field}` })
-    }
-    const market = requireMarket({ marketMetadata, 
-      symbol: evaluation.symbol })
-    if (market.id !== evaluation.marketId) {
-      throw new Error(`Recovery-cycle evaluation market identity conflicts with canonical exchange metadata for ${evaluation.symbol}`)
-    }
+    validateRecoveryCycleEvaluationIdentity({ evaluation })
+    validateRecoveryCycleEvaluationAmounts({ evaluation })
+    validateRecoveryCycleEvaluationMarket({
+      evaluation,
+      marketMetadata,
+    })
   }
 }
 
@@ -205,11 +279,15 @@ function validateProjectionData({ projection, marketMetadata }) {
   const stickySafetyBlockers = data.stickySafetyBlockers ?? []
   validateStickySafetyBlockers({ stickySafetyBlockers })
   const recoveryCycleEvaluations = data.recoveryCycleEvaluations ?? []
-  validateRecoveryCycleEvaluations({ recoveryCycleEvaluations, 
-    marketMetadata })
-  return { data, 
-    stickySafetyBlockers, 
-    recoveryCycleEvaluations }
+  validateRecoveryCycleEvaluations({
+    recoveryCycleEvaluations,
+    marketMetadata,
+  })
+  return {
+    data,
+    stickySafetyBlockers,
+    recoveryCycleEvaluations,
+  }
 }
 
 function assertRecoverySellerJournalReplayDeferred({ data }) {
@@ -244,9 +322,69 @@ function createPortfolioEvents({ data }) {
   return portfolioEvents
 }
 
+function recordRecoverySellerBuyExecution({ item, fill, state }) {
+  if (typeof item.cycleId !== "string" || !item.cycleId.trim()) {
+    throw new Error(`Recovered Recovery Seller BUY fill has no cycle ownership: ${fill.id}`)
+  }
+  const current = state.recoverySellerBuyExecutionByCycle.get(item.cycleId) ?? {
+    fillIds: new Set(),
+    quantity: "0",
+    quoteQuantity: "0",
+  }
+  if (current.fillIds.has(fill.id)) {
+    return
+  }
+  const fillIds = new Set(current.fillIds)
+  fillIds.add(fill.id)
+  state.recoverySellerBuyExecutionByCycle.set(item.cycleId, Object.freeze({
+    fillIds,
+    quantity: addDecimal({
+      left: current.quantity,
+      right: fill.quantity.amount,
+    }),
+    quoteQuantity: addDecimal({
+      left: current.quoteQuantity,
+      right: fill.quoteQuantity.amount,
+    }),
+  }))
+}
+
+function replayRecoverySellerFill({
+      item,
+      fill,
+      state,
+    }) {
+  if (fill.side === "SELL") {
+    throw new Error("Recovery Seller SELL fill cannot be restored without persisted mixed-sell allocation evidence")
+  }
+  const result = state.portfolio.applyFill({
+    fill,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: item.positionId,
+  })
+  state.portfolio = result.portfolio
+  if (result.applied) {
+    recordRecoverySellerBuyExecution({
+      item,
+      fill,
+      state,
+    })
+  }
+}
+
 function replayFillEvent({ item, sequence, market, state }) {
-  const fill = restoreFill({ data: item, 
-    market })
+  const fill = restoreFill({
+    data: item,
+    market,
+  })
+  if (item.strategyId === StrategyId.RECOVERY_SELLER) {
+    replayRecoverySellerFill({
+      item,
+      fill,
+      state,
+    })
+    return
+  }
   const recoveryLedger = state.recoveryLedgers.get(market.id) ?? RecoveryLedger.empty({ market })
   const result = updateTradingAccounting({
     portfolio: state.portfolio,
@@ -312,6 +450,7 @@ function replayPortfolioEvents({ events, marketMetadata }) {
     completedOrderClientIds: new Set(),
     trailingBuySequenceBySymbol: new Map(),
     completedCycleSequenceBySymbol: new Map(),
+    recoverySellerBuyExecutionByCycle: new Map(),
   }
   for (const event of events) {
     const { value: item, sequence, type } = event
@@ -346,8 +485,10 @@ function createPausedMarketState({ data, stickySafetyBlockers, recoveryCycleEval
     ...accountBlockedSymbols,
     ...recoveryCycleEvaluations.filter(({ outcome }) => outcome === "BLOCKED").map(({ symbol }) => symbol),
   ])
-  return { durablePausedMarkets, 
-    pausedMarkets: new Set(durablePausedMarkets) }
+  return {
+    durablePausedMarkets,
+    pausedMarkets: new Set(durablePausedMarkets),
+  }
 }
 
 function createLatestSubmissionSequenceBySymbolSide({ orders }) {
@@ -360,85 +501,171 @@ function createLatestSubmissionSequenceBySymbolSide({ orders }) {
   return latestSubmissionSequenceBySymbolSide
 }
 
-function markRecoveryManagedCancellation({ order, state, latestSubmissionSequenceBySymbolSide, durablePausedMarkets, pausedMarkets }) {
-  if (order.cancellationState === "NONE") {
-    state.unrequestedTerminalOrderClientIds.add(order.clientOrderId)
-  }
-  if (order.cancellationState === "CANCELED" &&
-      compareDecimal({ left: order.cumulativeFillQuantity, 
-        right: "0" }) > 0) {
-    durablePausedMarkets.add(order.symbol)
-    pausedMarkets.add(order.symbol)
-  }
-  if (["REQUESTED", "UNKNOWN"].includes(order.cancellationState)) {
-    if (order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL" && order.side === "SELL") {
-      state.replacementIntents.add(order.symbol)
-      state.recoveryManagedPausedMarkets.add(order.symbol)
-      state.recoveryManagedCancellationClientOrderIds.add(order.clientOrderId)
-      pausedMarkets.add(order.symbol)
-    } else if (order.cancellationReason === "TRAILING_BUY_REPRICE" && order.side === "BUY") {
-      state.trailingBuyRepriceIntents.add(order.symbol)
-      state.recoveryManagedPausedMarkets.add(order.symbol)
-      pausedMarkets.add(order.symbol)
-    } else {
-      durablePausedMarkets.add(order.symbol)
-      pausedMarkets.add(order.symbol)
-    }
+function pauseDurableMarket({ symbol, durablePausedMarkets, pausedMarkets }) {
+  durablePausedMarkets.add(symbol)
+  pausedMarkets.add(symbol)
+}
+
+function pauseRecoveryManagedMarket({ symbol, state, pausedMarkets }) {
+  state.recoveryManagedPausedMarkets.add(symbol)
+  pausedMarkets.add(symbol)
+}
+
+function markPendingRecoveryCancellation({ order, state, durablePausedMarkets, pausedMarkets }) {
+  if (order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL" && order.side === "SELL") {
+    state.replacementIntents.add(order.symbol)
+    state.recoveryManagedCancellationClientOrderIds.add(order.clientOrderId)
+    pauseRecoveryManagedMarket({
+      symbol: order.symbol,
+      state,
+      pausedMarkets,
+    })
     return
   }
-  if (order.cancellationState !== "CANCELED" ||
-      compareDecimal({ left: order.cumulativeFillQuantity, 
-        right: "0" }) !== 0) {
+  if (order.cancellationReason === "TRAILING_BUY_REPRICE" && order.side === "BUY") {
+    state.trailingBuyRepriceIntents.add(order.symbol)
+    state.recoveryManagedCancellationClientOrderIds.add(order.clientOrderId)
+    pauseRecoveryManagedMarket({
+      symbol: order.symbol,
+      state,
+      pausedMarkets,
+    })
     return
   }
-  let replacementSide
+  pauseDurableMarket({
+    symbol: order.symbol,
+    durablePausedMarkets,
+    pausedMarkets,
+  })
+}
+
+function getReplacementSide({ order }) {
   if (order.cancellationReason === "TRAILING_BUY_REPRICE") {
-    replacementSide = "BUY"
-  } else if (order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL") {
-    replacementSide = "SELL"
+    return "BUY"
   }
-  const latestReplacementSequence = replacementSide
-    ? latestSubmissionSequenceBySymbolSide.get(`${order.symbol}:${replacementSide}`) ?? -1
-    : -1
+  if (order.cancellationReason === "BUY_FILLED_RECALCULATE_RECOVERY_SELL") {
+    return "SELL"
+  }
+  return undefined
+}
+
+function markConfirmedRecoveryCancellation({
+  order,
+  state,
+  latestSubmissionSequenceBySymbolSide,
+  durablePausedMarkets,
+  pausedMarkets,
+}) {
+  const replacementSide = getReplacementSide({ order })
   if (!replacementSide) {
-    durablePausedMarkets.add(order.symbol)
-    pausedMarkets.add(order.symbol)
+    pauseDurableMarket({
+      symbol: order.symbol,
+      durablePausedMarkets,
+      pausedMarkets,
+    })
     return
   }
+  const latestReplacementSequence = latestSubmissionSequenceBySymbolSide.get(
+    `${order.symbol}:${replacementSide}`,
+  ) ?? -1
   if (order.cancellationSequence <= latestReplacementSequence) {
     return
   }
   if (replacementSide === "BUY") {
     state.trailingBuyRepriceIntents.add(order.symbol)
-    state.recoveryManagedPausedMarkets.add(order.symbol)
     state.recoveryManagedCancellationClientOrderIds.add(order.clientOrderId)
-    pausedMarkets.add(order.symbol)
-  }
-  if (replacementSide === "SELL") {
+  } else {
     state.replacementIntents.add(order.symbol)
-    state.recoveryManagedPausedMarkets.add(order.symbol)
-    pausedMarkets.add(order.symbol)
+  }
+  pauseRecoveryManagedMarket({
+    symbol: order.symbol,
+    state,
+    pausedMarkets,
+  })
+}
+
+function markRecoveryManagedCancellation({
+  order,
+  state,
+  latestSubmissionSequenceBySymbolSide,
+  durablePausedMarkets,
+  pausedMarkets,
+}) {
+  if (order.cancellationState === "NONE") {
+    state.unrequestedTerminalOrderClientIds.add(order.clientOrderId)
+  }
+  if (order.cancellationState === "CANCELED" &&
+      compareDecimal({
+        left: order.cumulativeFillQuantity,
+        right: "0",
+      }) > 0) {
+    pauseDurableMarket({
+      symbol: order.symbol,
+      durablePausedMarkets,
+      pausedMarkets,
+    })
+  }
+  if (["REQUESTED", "UNKNOWN"].includes(order.cancellationState)) {
+    markPendingRecoveryCancellation({
+      order,
+      state,
+      durablePausedMarkets,
+      pausedMarkets,
+    })
+    return
+  }
+  if (order.cancellationState === "CANCELED" &&
+      compareDecimal({
+        left: order.cumulativeFillQuantity,
+        right: "0",
+      }) === 0) {
+    markConfirmedRecoveryCancellation({
+      order,
+      state,
+      latestSubmissionSequenceBySymbolSide,
+      durablePausedMarkets,
+      pausedMarkets,
+    })
   }
 }
 
 function restoreOrderState({ data, marketMetadata, durablePausedMarkets, pausedMarkets }) {
   const state = {
     restoredOrders: [],
+    restoredOwnerships: [],
     replacementIntents: new Set(),
     trailingBuyRepriceIntents: new Set(),
     unrequestedTerminalOrderClientIds: new Set(),
     recoveryManagedPausedMarkets: new Set(),
     recoveryManagedCancellationClientOrderIds: new Set(),
   }
-  const latestSubmissionSequenceBySymbolSide = createLatestSubmissionSequenceBySymbolSide({ orders: data.orders })
+  const latestSubmissionSequenceBySymbolSide = createLatestSubmissionSequenceBySymbolSide({
+    orders: data.orders,
+  })
   for (const order of data.orders) {
     if (order.submissionOutcome === "REJECTED") {
       continue
     }
-    const market = requireMarket({ marketMetadata, 
-      symbol: order.symbol })
-    state.restoredOrders.push(restoreOrder({ order, 
-      market }))
+    const market = requireMarket({
+      marketMetadata,
+      symbol: order.symbol,
+    })
+    state.restoredOrders.push(restoreOrder({
+      order,
+      market,
+    }))
+    if (order.strategyId === StrategyId.RECOVERY_SELLER) {
+      state.restoredOwnerships.push(createOrderOwnership({
+        ownership: {
+          strategyId: order.strategyId,
+          positionId: order.positionId,
+          purpose: order.purpose,
+          cycleId: order.cycleId,
+        },
+        clientOrderId: order.clientOrderId,
+        ...(order.brokerOrderId === undefined ? {} : { brokerOrderId: order.brokerOrderId }),
+      }))
+    }
     markRecoveryManagedCancellation({
       order,
       state,
@@ -491,11 +718,15 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       completedCycleSequenceBySymbol: replayState.completedCycleSequenceBySymbol,
       trailingBuySequenceBySymbol: replayState.trailingBuySequenceBySymbol,
     })
-    const orderRegistry = new OrderRegistry({ orders: orderState.restoredOrders })
+    const orderRegistry = new OrderRegistry({
+      orders: orderState.restoredOrders,
+      ownerships: orderState.restoredOwnerships,
+    })
     return toResult({
       data: Object.freeze({
         portfolio: replayState.portfolio,
         recoveryLedgers: replayState.recoveryLedgers,
+        recoverySellerBuyExecutionByCycle: replayState.recoverySellerBuyExecutionByCycle,
         orderRegistry,
         journalFills: Object.freeze([...data.fills]),
         stickySafetyBlockers: Object.freeze([...stickySafetyBlockers]),
