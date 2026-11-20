@@ -1,1 +1,1 @@
-export { synchronizeAccountHistory } from "./synchronize-account-history.js"
+export { synchronizeAccountHistory } from "./sync-acc-history.js"
