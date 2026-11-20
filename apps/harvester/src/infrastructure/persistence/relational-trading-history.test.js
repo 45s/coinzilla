@@ -176,40 +176,74 @@ function assertUniqueIdentity({ database, table, row } = {}) {
   )
 }
 
-function assertMigratedLegacyHistory({ database, legacyRecord } = {}) {
-  const migrated = database.prepare("SELECT * FROM orders").get()
-  assert.ok(migrated, "Every valid legacy harvester_orders record must have a relational orders row.")
-  assert.equal(migrated.id, legacyRecord.id, "Migration must preserve the original composite order identity.")
-  assert.equal(migrated.provider_type, legacyRecord.providerType, "Migration must preserve provider type.")
-  assert.equal(migrated.provider_instance_id, legacyRecord.providerInstanceId, "Migration must preserve provider instance identity.")
-  assert.equal(migrated.account_id, legacyRecord.accountId, "Migration must preserve account identity.")
-  assert.equal(migrated.environment, legacyRecord.environment, "Migration must preserve trading environment.")
-  assert.equal(migrated.market_id, legacyRecord.market.id, "Migration must preserve canonical market identity.")
-  assert.equal(migrated.symbol, legacyRecord.symbol, "Migration must preserve market symbol.")
-  assert.equal(migrated.exchange_order_id, legacyRecord.brokerOrderId, "Migration must preserve the exchange order identifier.")
-  assert.equal(migrated.client_order_id, legacyRecord.clientOrderId, "Migration must preserve the client order identifier.")
-  assert.equal(migrated.side, legacyRecord.side, "Migration must preserve order side.")
-  assert.equal(migrated.order_type, legacyRecord.type, "Migration must preserve canonical order type.")
-  assert.equal(migrated.status, legacyRecord.status, "Migration must preserve canonical order status.")
-  assert.equal(migrated.original_quantity, legacyRecord.originalQuantity, "Migration must preserve the exact original order quantity.")
-  assert.equal(migrated.executed_quantity, legacyRecord.executedQuantity, "Migration must preserve the exact cumulative execution decimal string.")
-  assert.equal(migrated.remaining_quantity, legacyRecord.remainingQuantity, "Migration must preserve the exact remaining quantity.")
-  assert.equal(migrated.average_execution_price, null, "Migration must not invent an average execution price.")
-  assert.equal(migrated.local_first_observed_at, legacyRecord.firstSeenAt, "Migration must preserve the first local observation timestamp.")
-  assert.equal(migrated.local_last_observed_at, legacyRecord.lastSeenAt, "Migration must preserve the last local observation timestamp.")
-  assert.ok(migrated.migrated_at, "Migrated orders must record their migration timestamp.")
-  assert.equal(migrated.last_observed_source_kind, "legacy_harvester_orders", "The latest observation provenance must identify the migration source.")
-  assert.equal(migrated.source_kind, "legacy_harvester_orders", "Migrated rows must retain explicit legacy migration provenance.")
-  assert.equal(migrated.ingestion_source, "legacy_migration", "Migrated rows must identify the legacy migration as their ingestion source.")
-  assert.equal(migrated.last_ingestion_source, "legacy_migration", "The latest migrated order observation must identify the migration source.")
-  assert.equal(migrated.source_record_id, legacyRecord.id, "Migrated rows must point to their exact source record.")
+function assertMigratedLegacyIdentity({ migrated, legacyRecord }) {
+  assert.equal(migrated.id, legacyRecord.id)
+  assert.equal(migrated.provider_type, legacyRecord.providerType)
+  assert.equal(migrated.provider_instance_id, legacyRecord.providerInstanceId)
+  assert.equal(migrated.account_id, legacyRecord.accountId)
+  assert.equal(migrated.environment, legacyRecord.environment)
+  assert.equal(migrated.market_id, legacyRecord.market.id)
+  assert.equal(migrated.symbol, legacyRecord.symbol)
+  assert.equal(migrated.exchange_order_id, legacyRecord.brokerOrderId)
+  assert.equal(migrated.client_order_id, legacyRecord.clientOrderId)
+}
+
+function assertMigratedLegacyFacts({ migrated, legacyRecord }) {
+  assert.equal(migrated.side, legacyRecord.side)
+  assert.equal(migrated.order_type, legacyRecord.type)
+  assert.equal(migrated.status, legacyRecord.status)
+  assert.equal(migrated.original_quantity, legacyRecord.originalQuantity)
+  assert.equal(migrated.executed_quantity, legacyRecord.executedQuantity)
+  assert.equal(migrated.remaining_quantity, legacyRecord.remainingQuantity)
+  assert.equal(migrated.average_execution_price, null)
+  assert.equal(migrated.local_first_observed_at, legacyRecord.firstSeenAt)
+  assert.equal(migrated.local_last_observed_at, legacyRecord.lastSeenAt)
+}
+
+function assertMigratedLegacyProvenance({ migrated, legacyRecord }) {
+  assert.ok(migrated.migrated_at)
+  assert.equal(migrated.last_observed_source_kind, "legacy_harvester_orders")
+  assert.equal(migrated.source_kind, "legacy_harvester_orders")
+  assert.equal(migrated.ingestion_source, "legacy_migration")
+  assert.equal(migrated.last_ingestion_source, "legacy_migration")
+  assert.equal(migrated.source_record_id, legacyRecord.id)
+}
+
+function assertLegacySourcePreserved({ database, legacyRecord }) {
   const source = database.prepare(
     "SELECT record FROM db_records WHERE collection = ? AND id = ?",
   ).get("harvester_orders", legacyRecord.id)
-  assert.ok(source, "The original harvester_orders source record must remain available after migration.")
-  assert.deepEqual(JSON.parse(source.record), legacyRecord, "Migration must not rewrite the original JSON history record.")
+  assert.ok(source)
+  assert.deepEqual(JSON.parse(source.record), legacyRecord)
+}
+
+function assertNoSyntheticFills({ database }) {
   const fills = database.prepare("SELECT COUNT(*) AS count FROM fills").get()
-  assert.equal(fills.count, 0, "Cumulative order execution quantity must never be converted into synthetic fill records.")
+  assert.equal(fills.count, 0)
+}
+
+function assertMigratedLegacyHistory({ database, legacyRecord } = {}) {
+  const migrated = database.prepare("SELECT * FROM orders").get()
+  assert.ok(migrated, "Every valid legacy harvester_orders record must have a relational orders row.")
+  assertMigratedLegacyIdentity({
+    migrated,
+    legacyRecord,
+  })
+  assertMigratedLegacyFacts({
+    migrated,
+    legacyRecord,
+  })
+  assertMigratedLegacyProvenance({
+    migrated,
+    legacyRecord,
+  })
+  assertLegacySourcePreserved({
+    database,
+    legacyRecord,
+  })
+  assertNoSyntheticFills({
+    database,
+  })
   assertUniqueIdentity({
     database,
     table: "orders",
