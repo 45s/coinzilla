@@ -304,7 +304,10 @@ function createRetryMigration() {
 
 async function assertMigrationRetry({ database } = {}) {
   await assert.rejects(
-    database.migrate([createInterruptedMigration()]),
+    database.migrate([
+      ...HARVESTER_RELATIONAL_MIGRATIONS,
+      createInterruptedMigration(),
+    ]),
     /intentional migration interruption/,
     "An interrupted migration must reject instead of recording a successful version.",
   )
@@ -313,8 +316,14 @@ async function assertMigrationRetry({ database } = {}) {
   ).get()
   assert.equal(partialTable, undefined, "A failed migration must roll back its partial DDL.")
   const retry = createRetryMigration()
-  await database.migrate([retry])
-  await database.migrate([retry])
+  await database.migrate([
+    ...HARVESTER_RELATIONAL_MIGRATIONS,
+    retry,
+  ])
+  await database.migrate([
+    ...HARVESTER_RELATIONAL_MIGRATIONS,
+    retry,
+  ])
   const applied = database.prepare(
     "SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?",
   ).get(2)
