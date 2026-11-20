@@ -96,7 +96,7 @@ test("allows pure transforms and deterministic path utilities", () => {
   assert.deepEqual(
     analyzeHelperSource({
       file: "helpers/transform.js",
-      source: "import path from \"node:path\"\nexport function normalize({ value, input }) { const params = {}; params.value = path.basename(value.trim()); if (input.type !== \\"MARKET\\") return params; return input.quantity !== undefined ? params : params }\n",
+      source: "import path from \"node:path\"\nexport function normalize({ value, input }) { const params = {}; params.value = path.basename(value.trim()); if (input.type !== 'MARKET') return params; return input.quantity !== undefined ? params : params }\n",
     }),
     [],
   )
