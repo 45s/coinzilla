@@ -24,10 +24,10 @@ This map records the actual top-level source layout at the S-1 audit baseline. I
 
 | Domain | Current source layout | Representative production entry/file |
 | --- | --- | --- |
-| Harvester | `apps/harvester/src/` | `src/use-cases/execute-strategy-decision.js`; `src/domain/strategies/recovery-seller/evaluate-buy-decision.js` |
-| Brokers | `packages/brokers/src/` plus public facade | `src/application/user-data-session.js`; `src/infrastructure/binance/spot/user-data-client-adapter.js`; `src/index.js` |
-| DB | `packages/db/src/` plus provider entrypoints | `src/application/ports/database-provider.js`; `src/infrastructure/` adapters |
-| Entities | Feature folders under `packages/entities/src/` (`assets`, `balances`, `canonical-orders`, `fills`, `markets`, `money`, `orders`, `quantity`, `trading-rules`, `values`) | `src/canonical-orders/`, `src/money/`, `src/index.js` |
+| Harvester | `apps/harvester/src` | `src/use-cases/execute-strategy-decision.js`; `src/domain/strategies/recovery-seller/evaluate-buy-decision.js` |
+| Brokers | `packages/brokers/src` plus public facade | `src/application/user-data-session.js`; `src/infrastructure/binance/spot/user-data-client-adapter.js`; `src/index.js` |
+| DB | `packages/db/src` plus provider entrypoints | `src/application/ports/database-provider.js`; `src/infrastructure/` adapters |
+| Entities | Feature folders under `packages/entities/src` (`assets`, `balances`, `canonical-orders`, `fills`, `markets`, `money`, `orders`, `quantity`, `trading-rules`, `values`) | `src/canonical-orders/`, `src/money/`, `src/index.js` |
 | Event Bus | Flat public event-bus module plus `src/helpers/` | `src/event-bus.js`; `src/helpers/delivery-capacity.js` |
 | Indicators | Flat pure calculation/validation modules | `src/calculate-atr-series.js`; `src/calculate-natr-series.js`; `src/validate-candles.js` |
 | Journal | `src/adapters/`, `src/helpers/`, journal/replay modules | `src/adapters/filesystem-journal-store.js`; `src/replay-journal-records.js` |
