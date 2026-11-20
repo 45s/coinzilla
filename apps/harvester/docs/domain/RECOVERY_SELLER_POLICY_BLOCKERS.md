@@ -1,13 +1,17 @@
 ---
 title: Conservative strategy audit and Recovery Seller policy blockers
-status: active
+status: historical-reference
 type: audit
 owner: harvester
 created: 2026-11-18
-last_verified: 2026-11-18
+last_verified: 2026-11-20
 ---
 
 # Conservative strategy audit and Recovery Seller policy blockers
+
+## Current-status notice — 2026-11-20
+
+This audit is a historical policy snapshot and is superseded by PR #1515 and the current [Recovery Seller implementation roadmap](./recovery-seller-implementation-roadmap.md). Do not use the older status statements below as current runtime blockers. PR #1515 implements RS-4 shared-engine dispatch, account-wide quote/base authorization, terminal mixed-SELL reconciliation and durable STOP composition. RS remains non-executable behind the hard acceptance gate until scoped RS-5 offline lifecycle/concurrency/failure acceptance and exact-head required CI pass. Process restart/replay and third-asset commission valuation are deferred from initial runtime acceptance. STOP is terminal: CC-operator exposes authorized read-only status and cannot clear, reset, unpause or resume it.
 
 ## Audit metadata
 
@@ -105,7 +109,7 @@ Focused CG evidence files include `helpers.test.js`, `initial-buy-price.test.js`
 | SELL order type and fee role | CG has order-type and fee-reserve selection | No RS SELL policy selects order type or maker/taker fee role | Owner decision required |
 | SELL exchange filters | Min/max quantity, notional, price, quantity-step/tick and dust dispositions | Planner receives tick/step but does not evaluate the full SELL filter set or disposition | Owner decision + policy implementation required |
 | SELL partial/terminal outcomes | Reconciled continuation/replacement behavior is defined | One SELL lifecycle per RS cycle; terminal underfill/cancel becomes UNRESOLVED | Resolution policy required; current block is safe but not a completed workflow |
-| STOP | CG uses existing pair/order safety gates | Sticky global STOP; WAIT/RECONCILE only while stopped | **OWNER-APPROVED 2026-11-19:** explicit operator reset only after cause fixed, orders/fills/balances reconciled, no unresolved discrepancies, and accounting verified; application reset path is being implemented in #1475 |
+| STOP | CG uses existing pair/order safety gates | Sticky global STOP; WAIT/RECONCILE only while stopped | **SUPERSEDED:** STOP is terminal for the initial RS runtime; CC-operator exposes read-only status only and has no clear/reset/unpause/resume method. |
 | Third-asset fees | CG requires reliable quote valuation and fails closed | Planner accepts explicit quote valuation; accounting remains fail-closed on incomplete valuation | Approved valuation source/timestamp/freshness contract required |
 | Accounting and ownership | Canonical fill accounting, Portfolio and RecoveryLedger | RS legacy/recovery allocation, canonical-fill binding, staged partials, terminal reconciliation and atomic dual projections | Foundation implemented; integration proof remains |
 | Same-market concurrency | Shared engine/account reservations | Shared-Portfolio architecture contract exists; RS not wired | RS-4 integration and tests required |
@@ -165,14 +169,13 @@ CG focused tests exist for price calculation, fee selection, SELL plan/accountin
 
 **This audit did not run tests.** Test files were inspected and the repository test inventory was reviewed. PR #1379 is merged. GitHub reports its actual current head `3c25aef4d85c10a7059f3fb741650cb4f71ebb22` with 30 successful check runs and one skipped read-only TESTNET integration; the skipped check performed no exchange operation. The PR description's older verification SHA differs from the current head; the audit used the current head's check-run data. This is evidence of CI, not an independent local rerun.
 
-Missing acceptance coverage/work before execution:
+Remaining in-scope acceptance before execution:
 
-- RS SELL policy decision tests for order-type choice, fee role, all min/max filters, blocked/capped candidate outcomes, and profit revalidation after any filter adjustment.
-- Deterministic post-fill adverse-result and terminal-underfill resolution tests after the owner decisions.
-- Approved third-asset valuation-source/freshness tests.
-- Operator STOP resolution/reset tests for the owner-approved cause-fixed, reconciled, accounting-verified manual reset (domain/application barrier now implemented in #1475; runtime wiring remains).
-- RS-4 integration tests for same-market/different-market CG+RS concurrency, order ownership, shared reservations and exact-once fills.
-- RS-5 offline full-cycle tests including EARN return/custody reconciliation, partial fills, fees, unknown outcomes and restart/replay boundaries.
+- Complete the scoped RS-5 lifecycle matrix at the production composition boundary: full cycle, partial/terminal outcomes, exact-once reservation/accounting and failure/unknown-order handling.
+- Retain explicit same-market and different-market CG/RS accounting concurrency tests, including strategy-specific Position attribution and one shared Portfolio.
+- Verify EARN-held quantity is excluded until a later authoritative Spot snapshot confirms its return; no EARN balance is inferred by the Spot allocator.
+
+Explicitly deferred from initial runtime acceptance: process restart/replay and third-asset commission valuation. STOP is terminal and no operator reset/resume test or capability is required.
 
 ## 7. Recommended implementation sequence
 
@@ -186,14 +189,14 @@ Missing acceptance coverage/work before execution:
 - CG remains the reference and its behavior must not change as part of RS policy work.
 - RS accounting, BUY policy, independent profitability gates and the owner-approved pre-submission SELL evaluator are implemented and verified on PR head `96315757e74a4851770716b04d8dae5cf9580ece`, merged as `3fde5cdc0b1ed39bffeb5e21a67f44e0f653e8c3`.
 - Owner-approved `minProfit`, order type/fee reserve and exchange-filter STOP decisions are no longer blockers.
-- Post-fill adverse outcomes, terminal partial/canceled/rejected/expired SELLs and third-asset valuation source remain fail-closed. The owner approved the manual STOP reset contract on 2026-11-19; implementation is tracked in #1475. RS-4 and RS-5 remain mandatory separate phases.
+- Post-fill adverse outcomes and terminal partial/canceled/rejected/expired SELLs remain fail-closed with terminal STOP. Third-asset valuation is deferred. CC-operator has read-only STOP visibility and no reset/resume capability. RS-4 is implemented in PR #1515; scoped RS-5 acceptance remains required.
 - This follow-up implementation used offline tests only. The read-only Binance TESTNET integration workflow was skipped. No TESTNET/LIVE exchange operation or order was performed.
 
 ## 9. Blocker clarification and implementation handoff
 
-Three SELL-policy decisions were confirmed by the strategy owner on 2026-11-18 and are implemented in merged PR #1127: per-pair `minProfit` only, Conservative-compatible order type/fee reserve, and sticky STOP on exchange-filter violations. The manual STOP reset contract was separately approved on 2026-11-19 and is being implemented in #1475.
+Three SELL-policy decisions were confirmed by the strategy owner on 2026-11-18 and are implemented in merged PR #1127: per-pair `minProfit` only, Conservative-compatible order type/fee reserve, and sticky STOP on exchange-filter violations. The earlier 2026-11-19 manual STOP reset direction was superseded by the terminal STOP contract confirmed for PR #1515.
 
-The remaining cases are deliberately fail-closed rather than assigned speculative defaults: adverse post-fill results, terminal underfill/cancel/reject/expiry, third-asset valuation source/freshness, and STOP reset/resume. Trailing-BUY repricing remains unchanged and outside this SELL-policy slice.
+The remaining cases are deliberately fail-closed rather than assigned speculative defaults: adverse post-fill results and terminal underfill/cancel/reject/expiry latch terminal STOP. Third-asset valuation is deferred. CC-operator cannot reset/resume STOP. Trailing-BUY repricing remains unchanged and outside this SELL-policy slice.
 
 ### Implementation handoff
 
@@ -205,6 +208,16 @@ This dated addendum supersedes the pre-merge handoff in §9; it does not rewrite
 
 - The owner-approved pure pre-submission SELL evaluator was merged in PR #1127 as `3fde5cdc0b1ed39bffeb5e21a67f44e0f653e8c3`. The evaluator implements the existing per-pair `minProfit` and 0.01 quote-asset floor, Conservative-compatible order type/fee reserve, supported min/max exchange-filter validation, and sticky STOP for missing required inputs, planning failures or filter violations.
 - Exact implementation head `96315757e74a4851770716b04d8dae5cf9580ece` passed 13/13 focused evaluator tests, 2,101/2,101 Harvester tests, workspace Unit Tests and Test Coverage, strict ESLint, JavaScript quality/syntax, actionlint, Utils tests and dependency audit. The read-only Binance TESTNET integration was skipped; no exchange operations were performed.
-- **RS-3 pure policy is complete.** The remaining blockers are post-fill adverse-result resolution, terminal partial/canceled/rejected/expired SELL resolution, an approved third-asset fee valuation source/freshness contract, and runtime STOP reset/resume wiring. These remain fail-closed; do not invent defaults or authorize a second SELL.
-- **RS-4 shared Trading Engine integration and RS-5 offline lifecycle acceptance remain incomplete.** RS remains unregistered, unconfigured and non-executable. No TESTNET/LIVE order or exchange action is authorized.
-- The implementation handoff above that asks to continue RS-3 implementation is historical and superseded by this update. Future work starts with the unresolved fail-closed decisions and RS-4/RS-5 acceptance, not by reimplementing the merged evaluator.
+- **RS-3 pure policy and RS-4 shared Trading Engine runtime composition are complete.** The hard acceptance gate remains closed pending scoped RS-5 offline lifecycle/concurrency/failure proof and exact-head required CI.
+- Restart/replay and third-asset commission valuation are deferred. STOP is terminal; CC-operator can inspect authorized status but cannot clear, reset, unpause or resume it.
+- RS remains disabled/non-executable; no TESTNET/LIVE order or exchange action is authorized.
+
+## 11. Current implementation status — PR #1515 (2026-11-20)
+
+- Production RS runtime dispatch is composed through the existing serialized Trading Engine and shared account runtime.
+- BUY/SELL submission uses the engine-owned submitter and account-wide quote/base commitment allocator; missing or contradictory allocation evidence latches durable global STOP.
+- Terminal RS SELL fill history is reconciled before atomic recovery/legacy accounting commits; the sole-cycle reservation is released only after successful commit.
+- STOP is terminal. CC-operator exposes read-only status only; it cannot clear, reset, unpause or resume STOP.
+- Offline tests cover policy gates, Spot-only custody, manual EARN return only after authoritative Spot balance confirmation, multi-cycle fixed legacy basis, unknown submission, terminal underfill, exact-once accounting and same-/different-market CG/RS accounting concurrency.
+- Remaining in-scope work is the complete RS-5 production-composition lifecycle/partial-terminal/failure matrix. Restart/replay and third-asset commission valuation are explicitly deferred.
+- RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE remains false; RS is not executable. No TESTNET/LIVE exchange operations were performed.
