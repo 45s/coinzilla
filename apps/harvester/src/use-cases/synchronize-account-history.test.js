@@ -281,6 +281,7 @@ test("scopes repeated exchange order and trade IDs independently by configured m
     environment: "testnet",
     orderRepository: repositories.orderRepository,
     fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
     limit: 1,
     requestDelayMs: 0,
     now: () => 300,
