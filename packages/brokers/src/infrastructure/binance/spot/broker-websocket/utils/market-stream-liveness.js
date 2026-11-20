@@ -127,7 +127,7 @@ class MarketStreamLivenessMonitor {
 
   onTicker(message) {
     const tradeId = message?.L
-    if (!this.#isValidTicker(message, tradeId) || this.#isOldTicker(tradeId)) {return}
+    if (!this.#isValidTicker({ message, tradeId }) || this.#isOldTicker(tradeId)) {return}
 
     this.#lastTickerTradeId = tradeId
     this.#pruneRecoveryAttempts(this.#now())
@@ -137,7 +137,7 @@ class MarketStreamLivenessMonitor {
     this.#prepareRecovery()
   }
 
-  #isValidTicker(message, tradeId) {
+  #isValidTicker({ message, tradeId }) {
     return !this.#disposed
       && typeof message?.s === "string"
       && message.s.toUpperCase() === this.#symbol
