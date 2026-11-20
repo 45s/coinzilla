@@ -22,7 +22,9 @@
     "config:symbol": "node scripts/config-symbol.js",
     "volatility:calibrate": "node scripts/calibrate-volatility-thresholds.js",
     "operational-state:init": "node --env-file=.env scripts/initialize-operational-state.js",
-    "operational-state:init:dev": "node --env-file=.env.development scripts/initialize-operational-state.js"
+    "operational-state:init:dev": "node --env-file=.env.development scripts/initialize-operational-state.js",
+    "persistence:backup": "node scripts/trading-history-backups.js create",
+    "persistence:restore-check": "node scripts/trading-history-backups.js verify"
   },
   "engines": {
     "node": ">=24"
@@ -77,8 +79,6 @@
       "src/use-cases/create-recovery-seller-accounting-workflow.test.js",
       "src/use-cases/resolve-recovery-seller-stop.test.js",
       "src/use-cases/execute-strategy-decision.test.js",
-      "src/use-cases/create-latest-transition-evaluator.test.js",
-      "src/use-cases/conservative-engine-order-event-composition.test.js",
       "src/use-cases/conservative-trading-engine.test.js",
       "src/use-cases/conservative-trading-engine.multi-market.test.js",
       "src/application/operator/create-harvester-operator.test.js",
@@ -101,6 +101,17 @@
       "src/infrastructure/telegram/operator/pages.test.js",
       "src/infrastructure/telegram/operator/controls.test.js",
       "src/infrastructure/telegram/operator/diagnostics.test.js",
+      "src/infrastructure/persistence/trading-history-backups/create-backup.test.js",
+      "src/infrastructure/persistence/trading-history-backups/verify-backup.test.js",
+      "src/infrastructure/persistence/trading-history-backups/rotate-backups.test.js",
+      "scripts/trading-history-backups.test.js",
+      "src/infrastructure/persistence/trading-history-backups/errors.test.js",
+      "src/infrastructure/persistence/trading-history-backups/backup-paths.test.js",
+      "src/infrastructure/persistence/trading-history-backups/backup-manifest.test.js",
+      "src/infrastructure/persistence/trading-history-backups/backup-schema.test.js",
+      "src/infrastructure/persistence/trading-history-backups/backup-sqlite.test.js",
+      "src/use-cases/create-latest-transition-evaluator.test.js",
+      "src/use-cases/conservative-engine-order-event-composition.test.js",
       "src/use-cases/order-event-workflow.test.js",
       "src/use-cases/create-recovery-seller-order-submitter.test.js",
       "src/use-cases/record-order-submission-intent.test.js",
