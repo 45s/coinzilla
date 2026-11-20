@@ -280,7 +280,12 @@ test("does not submit when an owned active order is awaiting reconciliation", as
     }),
     submitOrder: async () => {
       submitted = true
-      return { ok: true, data: { submitted: true } }
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
     },
   })
 
