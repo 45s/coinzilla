@@ -297,7 +297,10 @@ function assertRecoverySellerJournalReplayDeferred({ data }) {
     ["RECOVERY_BUY", "RECOVERY_SELL"].includes(item.purpose)
   const hasRecoverySellerOrders = data.orders.some(isRecoverySellerActivity)
   const hasRecoverySellerFills = data.fills.some(isRecoverySellerActivity)
-  if (hasRecoverySellerOrders || hasRecoverySellerFills) {
+  const lifecycle = data.recoverySellerLifecycle
+  const hasCandidateOrders = lifecycle?.ordersByCycle?.some(({ orders }) => orders.length > 0) ?? false
+  const hasCandidateFills = lifecycle?.appliedFillsByCycle?.some(({ fills }) => fills.length > 0) ?? false
+  if (hasRecoverySellerOrders || hasRecoverySellerFills || hasCandidateOrders || hasCandidateFills) {
     throw new Error(
       "Recovery Seller Journal replay is deferred; refusing to restore RS orders or fills through Conservative accounting.",
     )
