@@ -1,4 +1,4 @@
-import { readOption, readOptions } from "./helpers/options.js"
+import { readEnsureOptionProperty, validateEnsureOptionsRecord } from "./helpers/read-and-validate-ensure-options.js"
 import {
   requireArray,
   requireNonEmptyArray,
@@ -115,8 +115,8 @@ class EnsureChain {
   }
 
   map(options) {
-    const record = readOptions({ options })
-    const transform = readOption({
+    const record = validateEnsureOptionsRecord({ options })
+    const transform = readEnsureOptionProperty({
       record,
       key: "transform",
     })
@@ -134,8 +134,8 @@ class EnsureChain {
   }
 
   filter(options) {
-    const record = readOptions({ options })
-    const predicate = readOption({
+    const record = validateEnsureOptionsRecord({ options })
+    const predicate = readEnsureOptionProperty({
       record,
       key: "predicate",
     })
@@ -162,12 +162,12 @@ class EnsureChain {
   }
 
   between(options) {
-    const record = readOptions({ options })
-    const min = readOption({
+    const record = validateEnsureOptionsRecord({ options })
+    const min = readEnsureOptionProperty({
       record,
       key: "min",
     })
-    const max = readOption({
+    const max = readEnsureOptionProperty({
       record,
       key: "max",
     })
