@@ -30,7 +30,13 @@ const market = new Market({
   quoteAsset,
 })
 
-function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, clientOrderId, updatedAt = 200 } = {})
+function createOrder({
+  orderId = "10",
+  executed = "0.1",
+  orderMarket = market,
+  clientOrderId,
+  updatedAt = 200,
+} = {}) {
   return new CanonicalOrder({
     ...identity,
     clientOrderId: clientOrderId ?? `harvester-${orderId}`,
