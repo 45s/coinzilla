@@ -3,4 +3,4 @@
  * @param {string} value
  * @returns {string}
  */
-export const capitalize = (value) => value.trim().toUpperCase()
+export const trimAndUppercase = (value) => value.trim().toUpperCase()
