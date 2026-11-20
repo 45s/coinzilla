@@ -40,7 +40,17 @@ async function readManagedBackupPairs({ backupDirectory, environment } = {}) {
   return pairs
 }
 
-async function removeBackupPair(pair, environment) {
+function sortBackupPairs(pairs) {
+  const pairsByKey = new Map()
+  const sortKeys = pairs.map((pair) => {
+    const key = `${pair.manifest.createdAt}\u0000${pair.backupFilename}`
+    pairsByKey.set(key, pair)
+    return key
+  }).sort()
+  return sortKeys.map((key) => pairsByKey.get(key))
+}
+
+async function removeBackupPair({ pair, environment } = {}) {
   try {
     await unlink(pair.manifestFilename)
     await unlink(pair.backupFilename)
@@ -79,15 +89,16 @@ export async function rotateBackups({
       cause,
     })
   }
-  pairs.sort((left, right) => (
-    Date.parse(left.manifest.createdAt) - Date.parse(right.manifest.createdAt)
-  ))
-  const excessCount = Math.max(0, pairs.length - keep)
-  for (const pair of pairs.slice(0, excessCount)) {
-    await removeBackupPair(pair, environment)
+  const sortedPairs = sortBackupPairs(pairs)
+  const excessCount = Math.max(0, sortedPairs.length - keep)
+  for (const pair of sortedPairs.slice(0, excessCount)) {
+    await removeBackupPair({
+      pair,
+      environment,
+    })
   }
   return {
-    retainedBackupCount: pairs.length - excessCount,
+    retainedBackupCount: sortedPairs.length - excessCount,
     deletedBackupCount: excessCount,
   }
 }

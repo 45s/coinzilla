@@ -34,7 +34,7 @@ function parseArguments(args) {
   )
 }
 
-function logFailure(logger, error) {
+function logFailure({ logger, error } = {}) {
   logger.error({
     message: "Harvester trading-history backup command failed.",
     errorName: error.name,
@@ -82,7 +82,10 @@ export async function runTradingHistoryBackupCommand({
     })
     return 0
   } catch (error) {
-    logFailure(logger, error)
+    logFailure({
+      logger,
+      error,
+    })
     return 1
   }
 }

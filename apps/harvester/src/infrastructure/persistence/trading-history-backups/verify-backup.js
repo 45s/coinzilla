@@ -173,7 +173,7 @@ function isValidTimestamp(value) {
     new Date(value).toISOString() === value
 }
 
-function isValidBackupFilename(filename, environment) {
+function isValidBackupFilename({ filename, environment } = {}) {
   const environmentDirectory = environment === "live" ? "production" : "testnet"
   const pattern = new RegExp(
     `^harvester-${environmentDirectory}-\\d{8}T\\d{9}Z-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.sqlite$`,
@@ -193,7 +193,10 @@ function validateManifest({ manifest, backupFilename, environment } = {}) {
   const latestSchemaVersion = HARVESTER_RELATIONAL_MIGRATIONS.at(-1)?.version ?? 0
   const validManifest = manifest?.formatVersion === MANIFEST_FORMAT_VERSION &&
     manifest.filename === basename(backupFilename) &&
-    isValidBackupFilename(basename(backupFilename), environment) &&
+    isValidBackupFilename({
+      filename: basename(backupFilename),
+      environment,
+    }) &&
     Number.isSafeInteger(manifest.schemaVersion) &&
     manifest.schemaVersion >= 0 &&
     manifest.schemaVersion <= latestSchemaVersion &&
