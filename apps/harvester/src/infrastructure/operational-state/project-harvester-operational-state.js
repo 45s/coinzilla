@@ -641,6 +641,26 @@ function handleTradingOperationalFact({ record, state }) {
     }))
   }
   if (record.factType === "ORDER_CANCELLATION_OUTCOME") {
+    const intent = state.orderIntents.get(record.data.clientOrderId)
+    if (intent?.strategyId === "RS_recoverySeller") {
+      assertIntentMatches({
+        intent,
+        data: record.data,
+        fields: ["marketId", "symbol", "side"],
+        context: "Recovery Seller durable cancellation outcome",
+      })
+      const orders = state.recoverySellerOrdersByCycle.get(intent.cycleId) ?? []
+      state.recoverySellerOrdersByCycle.set(intent.cycleId, orders.map((order) =>
+        order.clientOrderId === intent.clientOrderId
+          ? Object.freeze({
+              ...order,
+              status: record.data.status,
+              cancellationOutcome: record.data.outcome,
+              cancellationSequence: record.sequence,
+            })
+          : order
+      ))
+    }
     state.orderCancellationOutcomes.push(Object.freeze({
       ...record.data,
       factId: record.factId,
