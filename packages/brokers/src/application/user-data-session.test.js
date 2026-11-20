@@ -133,7 +133,7 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
 
 describe("Application user-data session dependency validation", () => {
   it("validates required dependencies and retry policy", () => {
-    assert.throws(() => new UserDataSession({}), TypeError)
+    assert.throws(() => new UserDataSession({}), TypeError, "A session without its required dependencies must be rejected.")
     assert.throws(() => new UserDataSession({
       getClient() {},
       createClient() {},
@@ -141,7 +141,7 @@ describe("Application user-data session dependency validation", () => {
       setConnected() {},
       setUnavailable() {},
       reconnectDelay: -1,
-    }), RangeError)
+    }), RangeError, "A negative reconnect delay must be rejected.")
   })
 
   it("validates the injected client port before using it", async () => {
@@ -159,6 +159,7 @@ describe("Application user-data session dependency validation", () => {
     await assert.rejects(
       session.subscribe({ onEvent: () => {} }),
       /User-data client port/,
+      "An incomplete injected client port must be rejected before subscription setup.",
     )
     await session.stop()
   })
@@ -170,7 +171,7 @@ describe("Application user-data session dependency validation", () => {
       setClient() {},
       setConnected() {},
       setUnavailable() {},
-    }), /client port factory/)
+    }), /client port factory/, "A session must require its injected client-port factory.")
   })
 })
 
@@ -192,13 +193,15 @@ describe("Application user-data session callback validation", () => {
     await assert.rejects(
       session.subscribe({ onEvent: null }),
       /onEvent callback must be a function/,
+      "A subscription must reject a non-function event callback.",
     )
     await assert.rejects(
       session.subscribe({ onEvent() {},
 onStatus: null }),
       /onStatus callback must be a function/,
+      "A subscription must reject a non-function status callback.",
     )
-    assert.equal(portFactoryCalls, 0)
+    assert.equal(portFactoryCalls, 0, "Invalid callbacks must be rejected before the client-port factory is accessed.")
     await session.stop()
   })
 
@@ -219,6 +222,7 @@ onStatus: null }),
     await assert.rejects(
       session.subscribe({ onEvent() {} }),
       /Binance WebSocket API must be open before subscribing to user data/,
+      "A missing API client must reject subscription setup before constructing a port.",
     )
     assert.equal(portFactoryCalls, 0)
     await session.stop()
@@ -265,7 +269,7 @@ close: new Set() }
       getClient: () => rawClient,
       createClient: () => rawClient,
       createUserDataClientPort: (client) => {
-        assert.equal(client, rawClient)
+        assert.equal(client, rawClient, "The session must pass the active API client to its injected port factory.")
         return port
       },
       setClient() {},
@@ -275,15 +279,15 @@ close: new Set() }
 
     session.start()
     const subscription = await session.subscribe({ onEvent() {} })
-    assert.equal(subscription.data.subscriptionId, 17)
+    assert.equal(subscription.data.subscriptionId, 17, "The subscription handle must expose the remote subscription ID.")
     await subscription.data.disconnect()
 
-    assert.deepEqual(calls, [["subscribe"], ["unsubscribe", 17]])
-    assert.equal(listeners.event.size, 0)
-    assert.equal(listeners.error.size, 0)
-    assert.equal(listeners.close.size, 1)
+    assert.deepEqual(calls, [["subscribe"], ["unsubscribe", 17]], "The session must create one remote subscription and unsubscribe it when its final local subscriber disconnects.")
+    assert.equal(listeners.event.size, 0, "Disconnecting the final subscriber must detach the event listener.")
+    assert.equal(listeners.error.size, 0, "Disconnecting the final subscriber must detach the error listener.")
+    assert.equal(listeners.close.size, 1, "The connection-close listener must remain until the session itself stops.")
     await session.stop()
-    assert.equal(listeners.close.size, 0)
+    assert.equal(listeners.close.size, 0, "Stopping the session must detach the remaining connection-close listener.")
   })
 })
 
@@ -302,12 +306,12 @@ describe("Application user-data session recovery acknowledgements", () => {
 
     assert.ok(statuses.some((status) =>
       status.type === "recoveryFailed" && status.recoveryRequired === true
-    ))
+    ), "A failed reconnect must publish a recoveryFailed status while keeping recovery required.")
     assert.deepEqual(subscription.data.acknowledgeRecoveryResult(), {
       accepted: false,
       completed: false,
       reason: "recovery-not-pending",
-    })
+    }, "A failed reconnect must not accept an acknowledgement without an active recovered subscription.")
 
     await fixture.session.stop()
   })
@@ -321,7 +325,7 @@ describe("Application user-data session recovery acknowledgements", () => {
       accepted: false,
       completed: false,
       reason: "recovery-not-pending",
-    })
+    }, "An acknowledgement must be rejected when no recovery is pending.")
 
     await subscription.data.disconnect()
     await fixture.session.stop()
@@ -348,11 +352,11 @@ describe("Application user-data session recovery acknowledgements", () => {
     assert.deepEqual(first.data.acknowledgeRecoveryResult(recoveryGeneration), {
       accepted: true,
       completed: false,
-    })
+    }, "The first subscriber acknowledgement must be accepted without completing recovery for other subscribers.")
     assert.deepEqual(second.data.acknowledgeRecoveryResult(recoveryGeneration), {
       accepted: true,
       completed: true,
-    })
+    }, "The final active subscriber acknowledgement must complete the shared recovery generation.")
 
     await fixture.session.stop()
   })
@@ -464,7 +468,7 @@ describe("Application user-data session inactive subscribers", () => {
       accepted: false,
       completed: false,
       reason: "stale-or-inactive",
-    })
+    }, "A disconnected subscriber must not acknowledge a recovery generation.")
 
     await fixture.session.stop()
   })
