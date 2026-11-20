@@ -61,3 +61,38 @@ export const buildTestnetMenuArguments = ({ actionId, answers = {} }) => {
 export const normalizePromptAnswer = ({ answer, fallback = "" } = {}) => (
   (answer ?? "").trim() || fallback
 )
+
+export const resolveTestnetMenuKeypress = ({
+  character,
+  key = {},
+  selectedIndex,
+  actionCount,
+}) => {
+  if (key.ctrl && key.name === "c") {
+    return { type: "EXIT", selectedIndex }
+  }
+
+  if (key.name === "up") {
+    return {
+      type: "MOVE",
+      selectedIndex: (selectedIndex - 1 + actionCount) % actionCount,
+    }
+  }
+
+  if (key.name === "down") {
+    return {
+      type: "MOVE",
+      selectedIndex: (selectedIndex + 1) % actionCount,
+    }
+  }
+
+  if (key.name === "escape" || character?.toLowerCase() === "q") {
+    return { type: "EXIT", selectedIndex }
+  }
+
+  if (key.name === "return" || key.name === "enter") {
+    return { type: "SELECT", selectedIndex }
+  }
+
+  return { type: "CONTINUE", selectedIndex }
+}

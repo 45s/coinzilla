@@ -23,7 +23,7 @@ import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-br
 import {
   assertRecoverySellerEvaluatorConfigured,
   assertRecoverySellerRuntimeAcceptance,
-} from "./harvester-runtime-helpers.js"
+} from "./harvester-runtime-setup.js"
 
 // Include the source file in every reporter test name so failures are identifiable
 // even when the spec reporter output is copied without its surrounding file header.
