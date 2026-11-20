@@ -52,7 +52,7 @@ test("creates and restore-verifies an environment-scoped backup including commit
 })
 
 test("does not create an empty source database when the configured file is missing", async (t) => {
-  const fixture = await createEmptyFixture(t)
+  const fixture = await createEmptyFixture({ testContext: t })
   await assert.rejects(
     fixture.service.createBackup(),
     (error) => error.code === "HARVESTER_HISTORY_BACKUP_SOURCE_UNAVAILABLE",
@@ -61,7 +61,7 @@ test("does not create an empty source database when the configured file is missi
 })
 
 test("does not overwrite a timestamped backup when the generated name collides", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ testContext: t })
   const first = await fixture.service.createBackup()
   const originalBytes = await readFile(first.backupFilename)
   await assert.rejects(
@@ -77,7 +77,7 @@ test("creates owner-only backup files and directories on POSIX systems", async (
     t.skip("Windows ACLs are configured by the service account, not POSIX mode bits.")
     return
   }
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ testContext: t })
   const result = await fixture.service.createBackup()
   const directoryStats = await lstat(fixture.backupDirectory)
   const fileStats = await lstat(result.backupFilename)

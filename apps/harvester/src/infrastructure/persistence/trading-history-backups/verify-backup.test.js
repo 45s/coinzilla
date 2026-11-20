@@ -25,7 +25,7 @@ test("rejects a TESTNET backup when the verifier selects LIVE", async (t) => {
 })
 
 test("rejects backup bytes that no longer match the sidecar digest", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ testContext: t })
   const result = await fixture.service.createBackup()
   await appendFile(result.backupFilename, "tampered")
   await assert.rejects(
@@ -37,7 +37,7 @@ test("rejects backup bytes that no longer match the sidecar digest", async (t) =
 })
 
 test("rejects a manifest whose declared environment has been changed", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ testContext: t })
   const result = await fixture.service.createBackup()
   const manifest = await readManifest(result.manifestFilename)
   manifest.environment = "live"
