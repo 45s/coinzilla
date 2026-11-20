@@ -208,6 +208,11 @@ function createAppliedFillEvent({ overrides = {} } = {}) {
       amount: "0.000012340000000001",
       assetId: "bnb",
       asset: "BNB",
+      quoteValue: {
+        amount: "0.001234567890123456",
+        assetId: "usdt",
+        asset: "USDT",
+      },
     }],
     commissionStatus: "COMPLETE",
     ...overrides,
@@ -262,6 +267,9 @@ function assertPersistedFill({ database } = {}) {
   assert.equal(commission.amount, "0.000012340000000001", "Commission amount must retain all supplied decimal precision.")
   assert.equal(commission.asset_id, "bnb", "Commission asset identity must be preserved.")
   assert.equal(commission.asset_code, "BNB", "Commission asset code must be preserved.")
+  assert.equal(commission.quote_value_amount, "0.001234567890123456", "Actual third-asset commission valuation must preserve its exact quote amount.")
+  assert.equal(commission.quote_value_asset_id, "usdt", "Commission quote valuation asset identity must be preserved.")
+  assert.equal(commission.quote_value_asset_code, "USDT", "Commission quote valuation asset code must be preserved.")
   assert.equal(fill.strategy_id, null, "Missing order ownership must remain nullable rather than inventing strategy attribution.")
   assert.equal(fill.order_id, null, "A fill without a verified relational parent order must retain a nullable order reference.")
   return fill
