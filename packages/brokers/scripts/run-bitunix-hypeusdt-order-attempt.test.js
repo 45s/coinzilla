@@ -1,7 +1,9 @@
 import assert from "node:assert/strict"
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises"
+import { spawnSync } from "node:child_process"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import test from "node:test"
 import {
   assertInteractiveTerminal,
@@ -342,6 +344,20 @@ test("Bitunix operator CLI requires an interactive input and output terminal", (
       isTTY: true,
     },
   }))
+})
+
+test("Bitunix operator CLI refuses non-interactive execution before credentials or network", () => {
+  const scriptPath = fileURLToPath(new URL("./bitunix-hypeusdt-order-attempt.js", import.meta.url))
+  const result = spawnSync(process.execPath, [scriptPath], {
+    encoding: "utf8",
+    env: {
+      PATH: process.env.PATH,
+    },
+  })
+
+  assert.equal(result.status, 1)
+  assert.match(result.stderr, /interactive terminal/i)
+  assert.equal(result.stdout, "")
 })
 
 test("Bitunix operator marker is exclusive, private, and contains no account balances", async () => {
