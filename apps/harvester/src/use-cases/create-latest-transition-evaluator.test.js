@@ -193,7 +193,9 @@ test("passes the complete account-scoped RS runtime dependencies to its producti
     getAdditionalTrackedQuoteCashFlow: () => "0",
     pause: async () => ({ ok: true }),
     eventPublisher: {
-      publish: () => ({ ok: true }),
+      publish: () => ({
+        ok: true,
+      }),
     },
   }
   Object.assign(dependencies, expected)

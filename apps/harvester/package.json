@@ -76,6 +76,7 @@
       "src/use-cases/resolve-recovery-seller-stop.test.js",
       "src/use-cases/execute-strategy-decision.test.js",
       "src/use-cases/create-latest-transition-evaluator.test.js",
+      "src/use-cases/conservative-engine-order-event-composition.test.js",
       "src/use-cases/conservative-trading-engine.test.js",
       "src/use-cases/conservative-trading-engine.multi-market.test.js",
       "src/application/operator/create-harvester-operator.test.js",
