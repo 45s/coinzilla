@@ -202,7 +202,10 @@ test("passes the complete account-scoped RS runtime dependencies to its producti
   let received
   dependencies.evaluateRecoverySellerTransition = async (input) => {
     received = input
-    return { ok: true, data: { skipped: true } }
+    return {
+      ok: true,
+      data: { skipped: true },
+    }
   }
 
   const evaluate = createLatestTransitionEvaluator(dependencies)

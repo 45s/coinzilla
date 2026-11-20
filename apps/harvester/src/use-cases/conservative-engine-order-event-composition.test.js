@@ -6,9 +6,20 @@ import { createOrderOwnership } from "../domain/orders/order-ownership.js"
 import { createConservativeEngineOrderEventContext } from "./conservative-trading-engine.js"
 
 const test = (...[name, ...args]) => nodeTest(`[conservative-engine-order-event-composition.test.js] ${name}`, ...args)
-const baseAsset = new Asset({ id: "doge", code: "DOGE" })
-const quoteAsset = new Asset({ id: "usdt", code: "USDT" })
-const market = new Market({ venue: "binance", symbol: "DOGEUSDT", baseAsset, quoteAsset })
+const baseAsset = new Asset({
+  id: "doge",
+  code: "DOGE",
+})
+const quoteAsset = new Asset({
+  id: "usdt",
+  code: "USDT",
+})
+const market = new Market({
+  venue: "binance",
+  symbol: "DOGEUSDT",
+  baseAsset,
+  quoteAsset,
+})
 
 function createContext({ orderRegistry, reconcileTerminalMixedSell } = {}) {
   const noOperation = async () => ({ ok: true })
@@ -20,7 +31,12 @@ function createContext({ orderRegistry, reconcileTerminalMixedSell } = {}) {
     },
     pairs: [],
     dependencies: {
-      broker: { getFills: async () => ({ ok: true, data: [] }) },
+      broker: {
+        getFills: async () => ({
+          ok: true,
+          data: [],
+        }),
+      },
       recoverySellerWorkflow: { reconcileTerminalMixedSell },
       recoverySellerStopWorkflow: { latch: noOperation },
       eventPublisher: { publish: noOperation },
@@ -50,9 +66,18 @@ test("wires terminal RS SELL reconciliation to the mixed ownership accounting wo
     market,
     side: "SELL",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "100", asset: quoteAsset }),
-    originalQuantity: new Quantity({ amount: "1", asset: baseAsset }),
-    executedQuantity: new Quantity({ amount: "0", asset: baseAsset }),
+    limitPrice: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
     status: "CANCELED",
     createdAt: 1,
     acknowledgedAt: 2,
@@ -78,7 +103,10 @@ test("wires terminal RS SELL reconciliation to the mixed ownership accounting wo
     orderRegistry,
     reconcileTerminalMixedSell: async (input) => {
       reconciled = input
-      return { ok: true, data: { applied: true } }
+      return {
+        ok: true,
+        data: { applied: true },
+      }
     },
   })
   createConservativeEngineOrderEventContext({ context })
