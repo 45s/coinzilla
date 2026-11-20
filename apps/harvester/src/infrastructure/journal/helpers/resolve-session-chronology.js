@@ -269,9 +269,9 @@ function validateOrderedSessionRanges({ orderedSessions }) {
 export function validateAndOrderSessions(sessions) {
   if (sessions.length <= 1) {
     if (sessions.length === 1) {
-      sessions[0].chronologySource = "SINGLE_SESSION"
+      return [{ ...sessions[0], chronologySource: "SINGLE_SESSION" }]
     }
-    return sessions
+    return []
   }
   validateSessionChronologyAvailability({ sessions })
   validateUniqueSessionChronology({ sessions })
