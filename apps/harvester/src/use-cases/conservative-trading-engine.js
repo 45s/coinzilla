@@ -1981,11 +1981,12 @@ async function latchRecoverySellerSubmissionFailure({
       error: new Error("Recovery Seller submission failure requires the durable global STOP workflow"),
     })
   }
-  const detail = error instanceof Error
-    ? error.message
-    : error === undefined
-      ? "no additional error details"
-      : String(error)
+  let detail = "no additional error details"
+  if (error instanceof Error) {
+    detail = error.message
+  } else if (error !== undefined) {
+    detail = String(error)
+  }
   const orderIdentity = typeof order?.clientOrderId === "string" && order.clientOrderId.trim()
     ? {
         clientOrderId: order.clientOrderId,
@@ -2022,7 +2023,7 @@ async function latchRecoverySellerTerminalFailure({
   })
 }
 
-function createConservativeEngineOrderEventContext({ context } = {}) {
+export function createConservativeEngineOrderEventContext({ context } = {}) {
   const { dependencies } = context
   const orderEventWorkflow = makeOrderEventWorkflow({
     state: context.state,
