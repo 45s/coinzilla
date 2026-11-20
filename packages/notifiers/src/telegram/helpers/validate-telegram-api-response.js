@@ -1,4 +1,4 @@
-import { safeErrorMessage } from "./get-safe-error-msg.js"
+import { sanitizeErrorMessage } from "./sanitize-error-message.js"
 
 export function assertHttpResponse(response) {
   if (
@@ -18,7 +18,7 @@ export function getHttpStatus(response) {
 
 export function createHttpFailure({ payload, status, token }) {
   const description = typeof payload?.description === "string"
-    ? safeErrorMessage({ error: payload.description,
+    ? sanitizeErrorMessage({ error: payload.description,
       token })
     : null
   const detail = description ? `: ${description}` : ""
@@ -35,7 +35,7 @@ export function validateSuccessfulPayload({ payload, token }) {
     payload.ok !== true
   ) {
     const description = typeof payload?.description === "string"
-      ? safeErrorMessage({ error: payload.description,
+      ? sanitizeErrorMessage({ error: payload.description,
         token })
       : "unknown Telegram API error"
     throw new Error(`Telegram API rejected sendMessage: ${description}`)
