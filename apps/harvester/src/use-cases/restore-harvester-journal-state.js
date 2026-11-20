@@ -212,6 +212,19 @@ function validateProjectionData({ projection, marketMetadata }) {
     recoveryCycleEvaluations }
 }
 
+function assertRecoverySellerJournalReplayDeferred({ data }) {
+  const isRecoverySellerActivity = (item) =>
+    item.strategyId === StrategyId.RECOVERY_SELLER ||
+    ["RECOVERY_BUY", "RECOVERY_SELL"].includes(item.purpose)
+  const hasRecoverySellerOrders = data.orders.some(isRecoverySellerActivity)
+  const hasRecoverySellerFills = data.fills.some(isRecoverySellerActivity)
+  if (hasRecoverySellerOrders || hasRecoverySellerFills) {
+    throw new Error(
+      "Recovery Seller Journal replay is deferred; refusing to restore RS orders or fills through Conservative accounting.",
+    )
+  }
+}
+
 function createPortfolioEvents({ data }) {
   const portfolioEvents = [
     ...data.fills.map((fill) => ({ type: "fill", 
@@ -458,6 +471,7 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     const validated = validateProjectionData({ projection, 
       marketMetadata })
     const { data, stickySafetyBlockers, recoveryCycleEvaluations } = validated
+    assertRecoverySellerJournalReplayDeferred({ data })
     const events = createPortfolioEvents({ data })
     const replayState = replayPortfolioEvents({ events, 
       marketMetadata })
