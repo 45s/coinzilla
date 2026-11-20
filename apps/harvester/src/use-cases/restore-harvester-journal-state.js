@@ -276,6 +276,7 @@ function validateProjectionData({ projection, marketMetadata }) {
       throw new TypeError(`Recovery projection ${field} must be an array`)
     }
   }
+  assertRecoverySellerJournalReplayDeferred({ data })
   const stickySafetyBlockers = data.stickySafetyBlockers ?? []
   validateStickySafetyBlockers({ stickySafetyBlockers })
   const recoveryCycleEvaluations = data.recoveryCycleEvaluations ?? []
@@ -698,7 +699,6 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
     const validated = validateProjectionData({ projection, 
       marketMetadata })
     const { data, stickySafetyBlockers, recoveryCycleEvaluations } = validated
-    assertRecoverySellerJournalReplayDeferred({ data })
     const events = createPortfolioEvents({ data })
     const replayState = replayPortfolioEvents({ events, 
       marketMetadata })
