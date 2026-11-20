@@ -81,8 +81,8 @@ function assertMigrationHistory(database) {
   const migrations = database.prepare(
     "SELECT version, name, checksum FROM schema_migrations ORDER BY version",
   ).all()
-  assert.equal(migrations.length, 2, "A fresh database must record the initial schema and history-provenance migrations.")
-  assert.deepEqual(migrations.map(({ version }) => version), [1, 2], "A fresh database must apply the ordered v1 and v2 migrations.")
+  assert.equal(migrations.length, 3, "A fresh database must record schema, provenance, and cursor migrations.")
+  assert.deepEqual(migrations.map(({ version }) => version), [1, 2, 3], "A fresh database must apply all ordered relational migrations.")
   assert.ok(migrations[0].checksum, "The migration history must record the implementation checksum.")
 }
 
@@ -90,7 +90,7 @@ function assertFreshRelationalSchema(database) {
   const tables = database.prepare(
     "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
   ).all().map(({ name }) => name)
-  for (const table of ["orders", "fills", "fill_commissions", "schema_migrations"]) {
+  for (const table of ["orders", "fills", "fill_commissions", "history_sync_cursors", "schema_migrations"]) {
     assert.ok(tables.includes(table), `A fresh Harvester database must contain the physical ${table} table.`)
   }
   assert.ok(!tables.includes("sessions"), "Phase 1 must not add a sessions table.")
@@ -384,7 +384,7 @@ async function assertBackupAndRollback({ filename, backupFilename, legacyRecord 
 
 function createInterruptedMigration() {
   return {
-    version: 3,
+    version: 4,
     name: "harvester-relational-interrupted-test",
     up(transaction) {
       transaction.exec("CREATE TABLE interrupted_probe (id TEXT PRIMARY KEY)")
@@ -427,7 +427,7 @@ async function assertMigrationRetry({ database } = {}) {
   ])
   const applied = database.prepare(
     "SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?",
-  ).get(3)
+  ).get(4)
   assert.equal(applied.count, 1, "A repaired migration must apply once and remain idempotent on repetition.")
 }
 
@@ -1003,5 +1003,82 @@ test("upgrades an existing relational v1 database with exchange-history provenan
         columns: ["ingestion_source", "last_ingestion_source"],
       })
     },
+  })
+})
+
+
+test("keeps durable history cursors isolated by provider, account, environment, and market", async (t) => {
+  const context = await createTestContext({
+    t,
+  })
+  const persistence = await preparePersistence({
+    context,
+  })
+  const providerIdentity = {
+    providerInstanceId: "binanceTestnet",
+    providerType: "binance",
+    accountId: "binance-primary",
+  }
+  const initial = await persistence.historySyncCursorRepository.get({
+    providerIdentity,
+    environment: "testnet",
+    symbol: "BTCUSDT",
+  })
+  assert.deepEqual(initial, {
+    lastOrderId: null,
+    lastTradeId: null,
+  })
+  await persistence.historySyncCursorRepository.saveOrderCursor({
+    providerIdentity,
+    environment: "testnet",
+    symbol: "BTCUSDT",
+    lastOrderId: "100",
+    updatedAt: "2026-11-20T04:00:00.000Z",
+  })
+  await persistence.historySyncCursorRepository.saveTradeCursor({
+    providerIdentity,
+    environment: "testnet",
+    symbol: "BTCUSDT",
+    lastTradeId: "200",
+    updatedAt: "2026-11-20T04:00:01.000Z",
+  })
+  const saved = await persistence.historySyncCursorRepository.get({
+    providerIdentity,
+    environment: "testnet",
+    symbol: "BTCUSDT",
+  })
+  assert.deepEqual(saved, {
+    lastOrderId: "100",
+    lastTradeId: "200",
+  })
+  const otherAccount = await persistence.historySyncCursorRepository.get({
+    providerIdentity: {
+      ...providerIdentity,
+      accountId: "binance-secondary",
+    },
+    environment: "testnet",
+    symbol: "BTCUSDT",
+  })
+  const otherEnvironment = await persistence.historySyncCursorRepository.get({
+    providerIdentity,
+    environment: "live",
+    symbol: "BTCUSDT",
+  })
+  const otherMarket = await persistence.historySyncCursorRepository.get({
+    providerIdentity,
+    environment: "testnet",
+    symbol: "ETHUSDT",
+  })
+  assert.deepEqual(otherAccount, {
+    lastOrderId: null,
+    lastTradeId: null,
+  })
+  assert.deepEqual(otherEnvironment, {
+    lastOrderId: null,
+    lastTradeId: null,
+  })
+  assert.deepEqual(otherMarket, {
+    lastOrderId: null,
+    lastTradeId: null,
   })
 })
