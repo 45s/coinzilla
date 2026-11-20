@@ -317,6 +317,13 @@ function formatHypeUsdtMutationResult({ result }) {
   ].join("\n")
 }
 
+function assertBitunixMutationBroker({ broker }) {
+  const requiredMethods = ["connect", "createOrder", "disconnect"]
+  if (!broker || requiredMethods.some((method) => typeof broker[method] !== "function")) {
+    throw new TypeError("Bitunix operator attempt requires a mutation Broker with createOrder()")
+  }
+}
+
 function assertBitunixOperatorAttemptDependencies({
   readBroker,
   createOrderBroker,
@@ -324,9 +331,16 @@ function assertBitunixOperatorAttemptDependencies({
   createMarker,
   writeLine,
 }) {
-  if (!readBroker || typeof readBroker.connect !== "function" ||
-      typeof readBroker.disconnect !== "function") {
-    throw new TypeError("Bitunix operator attempt requires a connected read Broker")
+  const requiredReadMethods = [
+    "connect",
+    "getExchangeMarkets",
+    "getSymbolFilters",
+    "getBalances",
+    "getOpenOrders",
+    "disconnect",
+  ]
+  if (!readBroker || requiredReadMethods.some((method) => typeof readBroker[method] !== "function")) {
+    throw new TypeError("Bitunix operator attempt requires a read Broker with market, balance, and open-order queries")
   }
   for (const [name, dependency] of [
     ["createOrderBroker", createOrderBroker],
@@ -384,6 +398,9 @@ export async function runBitunixOperatorOrderAttempt({
     })
   }
   const orderBroker = createOrderBroker()
+  assertBitunixMutationBroker({
+    broker: orderBroker,
+  })
   await orderBroker.connect()
   try {
     await createMarker({
