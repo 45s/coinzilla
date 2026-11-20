@@ -95,6 +95,23 @@ function findStatusByType({ statuses, type }) {
   })[0]
 }
 
+function getCurrentRecoveryGeneration(statuses) {
+  const recoveryGeneration = findStatusByType({
+    statuses,
+    type: "recovered",
+  })?.recoveryGeneration
+  assert.ok(
+    Number.isSafeInteger(recoveryGeneration),
+    "A recovered status must expose its generation before the subscriber acknowledges it.",
+  )
+  return recoveryGeneration
+}
+
+async function disconnectSubscriptionAndStop({ fixture, subscription }) {
+  await subscription.data.disconnect()
+  await fixture.session.stop()
+}
+
 function hasRecoveryFailureStatus(statuses) {
   const recoveryFailedStatus = findStatusByType({
     statuses,
@@ -347,8 +364,9 @@ onStatus: null }),
   })
 })
 
-describe("Application user-data session client port", () => {
-  it("coordinates user-data subscriptions through the injected port, not a raw RPC client", async () => {
+describe("Application user-data session client port", () => it(
+  "coordinates user-data subscriptions through the injected port, not a raw RPC client",
+  async () => {
     const rawClient = {}
     const calls = []
     const listeners = {
@@ -408,8 +426,8 @@ describe("Application user-data session client port", () => {
     assert.equal(listeners.close.size, 1, "The connection-close listener must remain until the session itself stops.")
     await session.stop()
     assert.equal(listeners.close.size, 0, "Stopping the session must detach the remaining connection-close listener.")
-  })
-})
+  },
+))
 
 async function verifyFailedReconnectKeepsRecoveryPending() {
   const statuses = []
@@ -726,8 +744,7 @@ async function verifyEventDeliveryFiltersDuplicatesAndIsolatesThrowingSubscriber
     "Disconnecting one subscriber must not stop delivery to the remaining active subscriber.",
   )
 
-  await second.data.disconnect()
-  await fixture.session.stop()
+  await disconnectSubscriptionAndStop({ fixture, subscription: second })
 }
 
 describe("Application user-data session event delivery", () => {
@@ -817,8 +834,9 @@ describe("Application user-data session RPC errors", () => {
   )
 })
 
-describe("Application user-data session recovery reminders", () => {
-  it("repeats recovered reminders until the current generation is acknowledged", async () => {
+describe("Application user-data session recovery reminders", () => it(
+  "repeats recovered reminders until the current generation is acknowledged",
+  async () => {
     const statuses = []
     const fixture = createRecoveryFixture()
     fixture.session.start()
@@ -829,14 +847,7 @@ describe("Application user-data session recovery reminders", () => {
 
     fixture.closeInitialConnection()
     await fixture.reconnect()
-    const recoveryGeneration = findStatusByType({
-      statuses,
-      type: "recovered",
-    })?.recoveryGeneration
-    assert.ok(
-      Number.isSafeInteger(recoveryGeneration),
-      "A recovered status must expose its generation before the subscriber acknowledges it.",
-    )
+    const recoveryGeneration = getCurrentRecoveryGeneration(statuses)
 
     assert.equal(
       getStatusesByType({
@@ -883,8 +894,8 @@ describe("Application user-data session recovery reminders", () => {
 
     await subscription.data.disconnect()
     await fixture.session.stop()
-  })
-})
+  },
+))
 
 describe("Application user-data recovery after subscriber removal", () => {
   it("completes recovery when an unacknowledged subscriber disconnects", async () => {
