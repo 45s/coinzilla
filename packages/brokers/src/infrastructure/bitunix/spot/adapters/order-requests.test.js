@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
+import { BrokerUnsupportedOperationError } from "../../../../broker/errors/broker-unsupported-operation-error.js"
 import {
   BITUNIX_SPOT_ORDER_API,
   createSpotCancelRequest,

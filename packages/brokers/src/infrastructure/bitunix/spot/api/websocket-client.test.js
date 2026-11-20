@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { BitunixSpotWebSocketClient, BitunixWebSocketError } from "../../../index.js"
+import { BitunixSpotWebSocketClient, BitunixWebSocketError } from "../../../../index.js"
 
 class FakeTransport {
   listeners = {

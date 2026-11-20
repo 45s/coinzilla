@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
-import { BrokerUnsupportedOperationError } from "../../broker/errors/broker-unsupported-operation-error.js"
+import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 import { serializeBitunixJson } from "./api/json-serializer.js"
 
 const WITHDRAW_PATH = "/api/spot/v1/withdraw"
