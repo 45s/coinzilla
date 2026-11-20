@@ -1146,9 +1146,7 @@ test("subscribes every enabled market before waiting for the first market's REST
   await runtime.stop()
 })
 
-test("synchronizes configured Binance history before activating the trading engine", async () => {
-  const calls = []
-  const broker = createBroker(calls)
+function configureStartupHistoryBroker({ broker, calls }) {
   broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
     calls.push(`history:orders:${symbol}:${orderId}`)
     return {
@@ -1163,6 +1161,36 @@ test("synchronizes configured Binance history before activating the trading engi
       data: [],
     }
   }
+}
+
+function createStartupHistoryPersistence({ persistedOrders, persistedFills }) {
+  return {
+    orderRepository: {
+      upsertHistorical: async (record) => persistedOrders.push(record),
+      findByExchangeOrderIdentity: async () => null,
+      getOldestPendingOrderId: async () => null,
+    },
+    fillRepository: {
+      upsert: async (input) => persistedFills.push(input),
+    },
+    historySyncCursorRepository: {
+      get: async () => ({
+        lastOrderId: null,
+        lastTradeId: null,
+      }),
+      saveOrderCursor: async () => {},
+      saveTradeCursor: async () => {},
+    },
+  }
+}
+
+test("synchronizes configured Binance history before activating the trading engine", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  configureStartupHistoryBroker({
+    broker,
+    calls,
+  })
   const persistedOrders = []
   const persistedFills = []
   const runtime = await startHarvesterForTest({
@@ -1173,24 +1201,10 @@ test("synchronizes configured Binance history before activating the trading engi
       providerType: "binance",
       accountId: "binance-primary",
     },
-    orderHistoryPersistence: {
-      orderRepository: {
-        upsertHistorical: async (record) => persistedOrders.push(record),
-        findByExchangeOrderIdentity: async () => null,
-        getOldestPendingOrderId: async () => null,
-      },
-      fillRepository: {
-        upsert: async (input) => persistedFills.push(input),
-      },
-      historySyncCursorRepository: {
-        get: async () => ({
-          lastOrderId: null,
-          lastTradeId: null,
-        }),
-        saveOrderCursor: async () => {},
-        saveTradeCursor: async () => {},
-      },
-    },
+    orderHistoryPersistence: createStartupHistoryPersistence({
+      persistedOrders,
+      persistedFills,
+    }),
     brokerAdapterFactory: () => broker,
     logger: {
       info() {},
@@ -1201,11 +1215,13 @@ test("synchronizes configured Binance history before activating the trading engi
   try {
     const orderHistoryIndex = calls.indexOf("history:orders:BTCUSDT:0")
     const fillHistoryIndex = calls.indexOf("history:fills:BTCUSDT:0")
+    const marketDataIndex = calls.indexOf("prices:BTCUSDT")
     assert.ok(orderHistoryIndex >= 0, "Startup must query canonical order history for the configured execution market.")
     assert.ok(fillHistoryIndex > orderHistoryIndex, "Startup must query trade history after loading the market's order identities.")
+    assert.ok(fillHistoryIndex < marketDataIndex, "Startup history synchronization must finish before market-data activation.")
     assert.equal(runtime.tradingEnabled, true, "A read-only history scan must not change trading enablement.")
-    assert.equal(persistedOrders.length, 0)
-    assert.equal(persistedFills.length, 0)
+    assert.equal(persistedOrders.length, 0, "An empty exchange history must not fabricate orders.")
+    assert.equal(persistedFills.length, 0, "An empty exchange history must not fabricate fills.")
   } finally {
     await runtime.stop()
   }
