@@ -57,7 +57,9 @@ function hashLegacyRecords(database) {
 }
 
 async function verifyMigrationBackup({ filename, expected } = {}) {
-  const backupDatabase = createSqliteDatabase({ filename })
+  const backupDatabase = createSqliteDatabase({
+    filename,
+  })
   await backupDatabase.connect()
   try {
     const integrity = backupDatabase.prepare("PRAGMA integrity_check").get()
@@ -82,13 +84,26 @@ async function createVerifiedMigrationBackup({ database, filename } = {}) {
     return null
   }
   const backupFilename = `${filename}.pre-relational-v1.backup`
-  await database.backup({ destination: backupFilename })
-  await verifyMigrationBackup({ filename: backupFilename, expected })
+  await database.backup({
+    destination: backupFilename,
+  })
+  await verifyMigrationBackup({
+    filename: backupFilename,
+    expected,
+  })
   return backupFilename
 }
 
-async function prepareRelationalResources({ filename, eventBus, environment, logger } = {}) {
-  const relationalDatabase = createSqliteDatabase({ filename, timeout: 5000 })
+async function prepareRelationalResources({
+  filename,
+  eventBus,
+  environment,
+  logger,
+} = {}) {
+  const relationalDatabase = createSqliteDatabase({
+    filename,
+    timeout: 5000,
+  })
   let relationalOrderObserver
   let fillObserver
   try {
@@ -98,8 +113,12 @@ async function prepareRelationalResources({ filename, eventBus, environment, log
       filename,
     })
     await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
-    const orderRepository = createRelationalOrderHistoryRepository({ database: relationalDatabase })
-    const fillRepository = createFillHistoryRepository({ database: relationalDatabase })
+    const orderRepository = createRelationalOrderHistoryRepository({
+      database: relationalDatabase,
+    })
+    const fillRepository = createFillHistoryRepository({
+      database: relationalDatabase,
+    })
     relationalOrderObserver = createOrderHistoryObserver({
       eventBus,
       repository: orderRepository,
@@ -123,14 +142,22 @@ async function prepareRelationalResources({ filename, eventBus, environment, log
       try {
         await observer?.close()
       } catch (cleanupError) {
-        logPreparationFailure({ logger, error: cleanupError, relational: true })
+        logPreparationFailure({
+          logger,
+          error: cleanupError,
+          relational: true,
+        })
       }
     }
     if (relationalDatabase.state !== "closed") {
       try {
         await relationalDatabase.close()
       } catch (cleanupError) {
-        logPreparationFailure({ logger, error: cleanupError, relational: true })
+        logPreparationFailure({
+          logger,
+          error: cleanupError,
+          relational: true,
+        })
       }
     }
     throw error
@@ -152,12 +179,20 @@ export async function prepareOrderHistoryPersistence({
 } = {}) {
   let database
   try {
-    const filename = await assertHarvesterDatabaseIsolation({ tradingMode, env })
+    const filename = await assertHarvesterDatabaseIsolation({
+      tradingMode,
+      env,
+    })
     database = createDatabase({
-      provider: createSqliteProvider({ filename, timeout: 5000 }),
+      provider: createSqliteProvider({
+        filename,
+        timeout: 5000,
+      }),
     })
     await database.connect()
-    const repository = createOrderHistoryRepository({ database })
+    const repository = createOrderHistoryRepository({
+      database,
+    })
     const observer = createOrderHistoryObserver({
       eventBus,
       repository,
@@ -171,9 +206,18 @@ export async function prepareOrderHistoryPersistence({
         environment: tradingMode,
         logger,
       })
-      return Object.freeze({ database, observer, ...relational, relationalError: null })
+      return Object.freeze({
+        database,
+        observer,
+        ...relational,
+        relationalError: null,
+      })
     } catch (relationalError) {
-      logPreparationFailure({ logger, error: relationalError, relational: true })
+      logPreparationFailure({
+        logger,
+        error: relationalError,
+        relational: true,
+      })
       return Object.freeze({
         database,
         observer,
@@ -192,7 +236,10 @@ export async function prepareOrderHistoryPersistence({
         // Preserve the original preparation failure as the primary diagnostic.
       }
     }
-    logPreparationFailure({ logger, error })
+    logPreparationFailure({
+      logger,
+      error,
+    })
     return null
   }
 }
