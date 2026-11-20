@@ -2,7 +2,7 @@ import { userDataEventAdapters } from "./user-data-event-adapters.js"
 import { adaptAggTrades } from "./adapt-trades.js"
 
 /** Binance user-data and public stream event-name mapping. */
-export const BINANCE_WEBSOCKET_EVENT_TYPES = Object.freeze({
+export const wsEventsMap = Object.freeze({
   executionReport: "executionReport",
 outboundAccountPosition: "outboundAccountPosition",
 aggTrade: "aggTrade",
@@ -117,13 +117,13 @@ brokerEvidence: createExecutionReportEvidence(message),
   }
 }
 
-const binanceWebSocketEventAdapters = Object.freeze({
-  [BINANCE_WEBSOCKET_EVENT_TYPES.executionReport]: adaptExecutedOrder,
-  [BINANCE_WEBSOCKET_EVENT_TYPES.outboundAccountPosition]: userDataEventAdapters.outboundAccountPosition,
-  [BINANCE_WEBSOCKET_EVENT_TYPES.aggTrade]: adaptAggTrades,
-  [BINANCE_WEBSOCKET_EVENT_TYPES.account]: userDataEventAdapters.outboundAccountInfo,
-  [BINANCE_WEBSOCKET_EVENT_TYPES.balanceUpdate]: userDataEventAdapters.balanceUpdate,
-  [BINANCE_WEBSOCKET_EVENT_TYPES.listStatus]: userDataEventAdapters.listStatus,
+const adaptersMap = Object.freeze({
+  [wsEventsMap.executionReport]: adaptExecutedOrder,
+  [wsEventsMap.outboundAccountPosition]: userDataEventAdapters.outboundAccountPosition,
+  [wsEventsMap.aggTrade]: adaptAggTrades,
+  [wsEventsMap.account]: userDataEventAdapters.outboundAccountInfo,
+  [wsEventsMap.balanceUpdate]: userDataEventAdapters.balanceUpdate,
+  [wsEventsMap.listStatus]: userDataEventAdapters.listStatus,
 })
 
 /**
@@ -134,8 +134,8 @@ const binanceWebSocketEventAdapters = Object.freeze({
  * @returns {object} Adapted event payload.
  */
 export function adaptBinanceWebSocketEvent(message) {
-  const adapter = Object.hasOwn(binanceWebSocketEventAdapters, message.e)
-    ? binanceWebSocketEventAdapters[message.e]
+  const adapter = Object.hasOwn(adaptersMap, message.e)
+    ? adaptersMap[message.e]
     : undefined
   if (!adapter) {
     return message
