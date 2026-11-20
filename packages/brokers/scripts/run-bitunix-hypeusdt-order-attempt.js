@@ -291,7 +291,7 @@ async function readHypeUsdtOperatorPreflight({ readBroker }) {
 function formatHypeUsdtPreflightSummary({ preflight }) {
   const { order } = preflight
   return [
-    "BITUNIX SPOT — LIVE OPERATOR HYPEUSDT_ORDER ATTEMPT",
+    "BITUNIX SPOT — LIVE OPERATOR ORDER ATTEMPT",
     "Endpoint: https://openapi.bitunix.com (LIVE)",
     `Order: ${order.side} ${order.type} ${order.symbol}`,
     `Limit price: ${order.price} USDT`,
