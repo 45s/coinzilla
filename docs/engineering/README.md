@@ -13,6 +13,7 @@ Canonical repository-wide engineering guidance is linked below. Policy ownership
 - [Shared utilities policy](SHARED_UTILITIES_POLICY.md)
 - [JavaScript and JSDoc standard](JAVASCRIPT_JSDOC_STANDARD.md)
 - [Structured error handling standard](structured-error-handling.md) — shared error contract and incremental adoption
+- [Logging and observability standard](LOGGING_OBSERVABILITY_STANDARD.md) — structured records, severity, correlation, redaction and transport ownership
 - [Branch and release policy](BRANCH_AND_RELEASE_POLICY.md)
 - [Definition of Done](DEFINITION_OF_DONE.md)
 

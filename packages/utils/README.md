@@ -32,7 +32,7 @@ Import the supported API from the package entry point:
 
 ## Shared logging
 
-Use the existing logger rather than calling `console` from application or domain code. Prefer structured fields and never pass credentials, tokens, or private keys.
+Follow the repository [Logging and Observability Standard](../../docs/engineering/LOGGING_OBSERVABILITY_STANDARD.md) for severity, correlation, redaction, and reporting boundaries. Use the existing logger rather than calling `console` from application or domain code. Prefer structured fields and never pass credentials, tokens, or private keys.
 
 ```js
 import { defaultLogger } from "@coinzilla/utils"
@@ -69,7 +69,7 @@ defaultLogger.setContext({
 defaultLogger.info({ message: "Broker startup requested" })
 ```
 
-The transport entry receives an optional `context` object separate from `data`. Context is normalized by the same safe formatter and sensitive-field redactor, then frozen before delivery. Calling `setContext` replaces the complete context snapshot; call `setContext({})` to clear it. When context is empty, the historical entry shape remains `{ timestamp, level, method, data }`. The default console transport displays configured context alongside the log data.
+The transport entry receives an optional `context` object separate from `data`. Context is normalized by the same safe formatter and sensitive-field redactor, then frozen before delivery. Calling `setContext` replaces the complete context snapshot; call `setContext({})` to clear it. When context is empty, the historical entry shape remains `{ timestamp, level, method, data }`. The default console transport displays configured context alongside the log data. This context is shared by every subsequent record on that Logger instance and is intended for stable process identity only. Do not change it per request or operation in concurrent flows; put operation correlation IDs in each entry's `data` and propagate them explicitly.
 
 ### Build provenance
 
@@ -182,7 +182,7 @@ Public configuration methods:
 - `removeTransport(name)` removes a transport and awaits its optional `close()` hook. Unknown names return `false`.
 - `close()` removes all transports and awaits their optional cleanup hooks.
 
-Transport `write` and `close` may return promises. Logging methods remain synchronous; asynchronous transport failures are caught and reported through the optional `onTransportError({ transport, error })` constructor callback. Synchronous failures are reported the same way and do not prevent other transports from receiving the entry. When no callback is provided, failures are reported with `console.error`. Cleanup failures are reported without preventing other transports from closing. Applications that own file handles or other resources should implement `close()` and call logger cleanup during their own shutdown lifecycle.
+Transport `write` and `close` may return promises. Logging methods remain synchronous; synchronous and asynchronous transport failures are caught and reported through the optional `onTransportError({ transport, error })` constructor callback. A failed transport does not prevent other eligible transports from receiving the entry. When no callback is provided, the emergency fallback reports only the transport name and safe error type; it does not print the raw Error message or stack. The custom callback receives the original error and must redact it before reporting. If the callback itself fails, the emergency fallback remains bounded and does not print that reporter error's message or stack. Cleanup failures are reported without preventing other transports from closing. Applications that own file handles or other resources should implement `close()` and call logger cleanup during their own shutdown lifecycle.
 
 `Logger` accepts `new Logger({ transports, onTransportError })`. Omitting `transports` creates the built-in console destination. Supplying an array (including an empty array) explicitly controls the destinations. Configuration belongs to each Logger instance; tests that change the shared `defaultLogger` should restore its thresholds or use a separate `Logger` instance.
 

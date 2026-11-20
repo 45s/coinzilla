@@ -151,14 +151,7 @@ A materially edited test case must comply with these practices throughout that c
 
 Follow the canonical [Structured Error Handling Standard](docs/engineering/structured-error-handling.md) for the shared `SystemCustomError` base, component-owned subclasses and codes, cause preservation, safe diagnostic context, and gradual adoption. New functionality and materially changed bug-fix paths must follow it; unrelated legacy code is migrated incrementally.
 
-- Treat diagnostics as part of the feature design. A failure should be understandable from its error and logs without requiring guesswork.
-- Use structured logging with stable fields and relevant context (for example: operation, component, entity/event identifier, state, and original error) when that context exists.
-- Log at meaningful boundaries and actionable failure points. Avoid noisy per-item logs, duplicate reports, and logging the same error at multiple layers without adding context.
-- Do not silently catch and ignore errors. If an error is intentionally handled, make the recovery or suppression explicit and test it.
-- Ensure logging/error-reporting failures do not create unhandled rejections or mask the original failure.
-- Never log secrets, credentials, access tokens, private keys, or sensitive user data. Prefer safe identifiers and redacted summaries over full payloads.
-- Expose enough diagnostics to understand resource pressure and lifecycle state where relevant, without leaking mutable internal state.
-- Test important error paths and verify that diagnostic hooks receive the expected context.
+Follow the canonical [Logging and Observability Standard](docs/engineering/LOGGING_OBSERVABILITY_STANDARD.md) for structured records, severity meanings, operational versus diagnostic events, correlation/context, redaction, transport failures, and logging ownership.
 
 ### 4. Naming and readability
 
