@@ -96,12 +96,12 @@ test("persists a durable reconciliation boundary for the exact terminal RS SELL 
     eligible: false,
   })
 
-  assert.equal(result.ok, true)
-  assert.equal(appended.factType, "RECOVERY_SELLER_MIXED_SELL_RECONCILED")
-  assert.equal(appended.data.terminalStatus, "FILLED")
-  assert.deepEqual(appended.data.appliedFillIds, [makeFill().id])
-  assert.equal(appended.data.accountingApplied, true)
-  assert.equal(appended.data.eligible, false)
+  assert.equal(result.ok, true, "A complete canonical terminal SELL must persist its reconciliation boundary.")
+  assert.equal(appended.factType, "RECOVERY_SELLER_MIXED_SELL_RECONCILED", "The writer must append the dedicated RS reconciliation fact.")
+  assert.equal(appended.data.terminalStatus, "FILLED", "The fact must preserve the terminal broker order status.")
+  assert.deepEqual(appended.data.appliedFillIds, [makeFill().id], "The fact must bind the exact canonical SELL fill set.")
+  assert.equal(appended.data.accountingApplied, true, "The fact may only be written after both accounting projections commit.")
+  assert.equal(appended.data.eligible, false, "The fact must preserve the explicit profitability eligibility result.")
 })
 
 test("does not persist a terminal boundary for incomplete or foreign accounting evidence", async () => {
@@ -140,8 +140,11 @@ test("does not persist a terminal boundary for incomplete or foreign accounting 
     eligible: true,
   })
 
-  assert.equal(missingFill.ok, false)
-  assert.equal(foreignFill.ok, false)
-  assert.equal(uncommitted.ok, false)
-  assert.equal(appendCount, 0)
+  assert.equal(missingFill.ok, false, "An empty terminal fill set must not release the SELL reservation.")
+  assert.equal(missingFill.errors[0].code, "RS_MIXED_SELL_RECONCILIATION_INVALID", "Missing fills must produce the stable RS reconciliation error code.")
+  assert.equal(foreignFill.ok, false, "A fill owned by another broker order must not be accepted.")
+  assert.equal(foreignFill.errors[0].code, "RS_MIXED_SELL_RECONCILIATION_INVALID", "Foreign fills must produce the stable RS reconciliation error code.")
+  assert.equal(uncommitted.ok, false, "Accounting that did not commit must not produce a terminal fact.")
+  assert.equal(uncommitted.errors[0].code, "RS_MIXED_SELL_ACCOUNTING_NOT_COMMITTED", "Uncommitted accounting must produce its distinct stable error code.")
+  assert.equal(appendCount, 0, "Invalid reconciliation evidence must be rejected before any durable append.")
 })

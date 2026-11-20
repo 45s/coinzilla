@@ -33,7 +33,10 @@ function makeFact(overrides = {}) {
 }
 
 test("accepts an explicit durable terminal mixed-SELL accounting boundary", () => {
-  assert.doesNotThrow(() => validateRecoverySellerMixedSellReconciledFact(makeFact()))
+  assert.doesNotThrow(
+    () => validateRecoverySellerMixedSellReconciledFact(makeFact()),
+    "A canonical terminal fact with a committed accounting result must pass schema validation.",
+  )
 })
 
 test("rejects non-terminal, uncommitted, ambiguous and malformed mixed-SELL boundaries", () => {
@@ -51,6 +54,7 @@ test("rejects non-terminal, uncommitted, ambiguous and malformed mixed-SELL boun
     assert.throws(
       () => validateRecoverySellerMixedSellReconciledFact(fact),
       /identity|terminal order|unique canonical|unsupported fields/,
+      "Malformed, non-terminal or uncommitted RS reconciliation facts must be rejected.",
     )
   }
 })

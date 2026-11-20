@@ -89,7 +89,7 @@ test("projects verified durable order facts into a candidate recovery projection
     records: [record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"), baseline(), started(), ...preflightFacts(), ...orderFacts()],
   })
 
-  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "), "Durable RS lifecycle facts must project into a candidate without enabling trading.")
   assert.equal(result.data.source, "DURABLE_FACTS")
   assert.equal(result.data.candidateOnly, true, "Durable projection must remain a candidate, not active runtime state.")
   assert.equal(result.data.restorationEnabled, false, "Projection must never enable automatic restart restoration.")
@@ -690,9 +690,9 @@ test("projects RS order ownership, fills and fail-closed SELL reservations acros
   const result = projectHarvesterOperationalState({ records: createRecoverySellerLifecycleRecords() })
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   const lifecycle = result.data.recoverySellerLifecycle
-  assert.equal(lifecycle.candidateOnly, true)
-  assert.equal(lifecycle.restorationEnabled, false)
-  assert.equal(lifecycle.requiresExchangeReconciliation, true)
+  assert.equal(lifecycle.candidateOnly, true, "The RS lifecycle projection must remain a non-executable candidate.")
+  assert.equal(lifecycle.restorationEnabled, false, "The candidate must never restore trading readiness by itself.")
+  assert.equal(lifecycle.requiresExchangeReconciliation, true, "Exchange and history reconciliation must remain mandatory.")
   assert.deepEqual(
     lifecycle.ordersByCycle[0].orders.map(({ side, status }) => ({
       side,
@@ -709,13 +709,13 @@ test("projects RS order ownership, fills and fail-closed SELL reservations acros
       },
     ],
   )
-  assert.equal(lifecycle.ordersByCycle[0].reservedSellOrders.length, 1)
+  assert.equal(lifecycle.ordersByCycle[0].reservedSellOrders.length, 1, "A terminal cancellation alone must not release the sole-SELL reservation.")
   assert.deepEqual(lifecycle.appliedFillsByCycle[0].fills.map(({ fillId }) => fillId), ["rs-buy-fill-1"])
 })
 
 test("fails closed when an execution fill has no durable owned submission intent", () => {
   const result = projectHarvesterOperationalState({ records: createRecoverySellerOrphanFillRecords() })
-  assert.equal(result.ok, false)
+  assert.equal(result.ok, false, "A fill without a preceding durable owned order intent must fail closed.")
 })
 
 test("keeps RS BUY fills out of the Conservative recovery-cycle fill boundary for the same market", () => {

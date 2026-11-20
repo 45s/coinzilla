@@ -512,12 +512,13 @@ test("keeps both accounting projections and the SELL reservation unchanged when 
     minProfit: "0.2",
   })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /durable fact append failed/)
-  assert.equal(workflow.getPortfolio(), portfolioBefore)
-  assert.equal(workflow.getLegacyPosition({ marketId: market.id }), legacyBefore)
-  assert.equal(workflow.getOrderRegistry(), registryBefore)
-  assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1)
+  assert.equal(result.ok, false, "A failed durable reconciliation append must abort the terminal accounting transition.")
+  assert.equal(result.errors[0].code, "RS_MIXED_SELL_DURABLE_FACT_COMMIT_FAILED", "A durable append failure must expose a stable Recovery Seller error code.")
+  assert.match(result.errors[0].message, /durable fact append failed/, "The original durable append failure must remain diagnosable.")
+  assert.equal(workflow.getPortfolio(), portfolioBefore, "Portfolio publication must wait for durable reconciliation.")
+  assert.equal(workflow.getLegacyPosition({ marketId: market.id }), legacyBefore, "Legacy accounting publication must wait for durable reconciliation.")
+  assert.equal(workflow.getOrderRegistry(), registryBefore, "The terminal OrderRegistry projection must not publish after a failed append.")
+  assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1, "The failed append must leave the prior active order registered.")
   assert.equal(
     workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
     openOrder.clientOrderId,

@@ -204,4 +204,11 @@ The exact-head Harvester targeted suite passed after these tests were added. Str
 
 ### PR #1515 runtime integration coverage — 2026-11-20
 
+- `src/infrastructure/operational-state/project-harvester-operational-state.test.js` covers RS-owned durable order/fill projection, CG fill-boundary isolation, terminal reservation retention and exact mixed-SELL reconciliation identity.
+- `src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.test.js` covers the strict durable mixed-SELL fact schema.
+- `src/use-cases/record-recovery-seller-mixed-sell-reconciled.test.js` covers exact terminal order/fill identity, durable append and invalid/uncommitted evidence rejection.
+- `src/use-cases/create-recovery-seller-accounting-workflow.test.js` covers durable append failure rollback, reservation retention and terminal replay idempotency.
+
+The new runtime-dispatch and action-authorizer suites cover the production composition seam and account-wide order authorization. `start-harvester.test.js` verifies the code-level acceptance gate remains closed for configured RS routes. These tests do not substitute for RS-5: durable restart replay, third-asset valuation freshness, operator STOP reset/resume transport, and same-/different-market CG/RS lifecycle concurrency still require dedicated offline acceptance coverage.
+
 The new runtime-dispatch and action-authorizer suites cover the production composition seam and account-wide order authorization. `start-harvester.test.js` verifies the code-level acceptance gate remains closed for configured RS routes. These tests do not substitute for RS-5: durable restart replay, third-asset valuation freshness, operator STOP reset/resume transport, and same-/different-market CG/RS lifecycle concurrency still require dedicated offline acceptance coverage.
