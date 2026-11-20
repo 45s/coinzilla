@@ -334,7 +334,8 @@ async function assertAppliedBuyFill({ fixture, order, ownership }) {
   const applied = await fixture.accounting.applyBuyFill({
     fill,
   })
-  assert.equal(applied.applied, true)
+  assert.equal(applied.ok, true, applied.errors?.[0]?.message)
+  assert.equal(applied.data.applied, true)
   assert.equal(fixture.accounting.getBuyExecutionQuantity({
     cycleId: "integration-cycle-1",
   }), "5")
