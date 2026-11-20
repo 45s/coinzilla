@@ -14,6 +14,10 @@ import { createPositionId } from "../domain/portfolio/position.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { validateRecoverySellerSubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import {
+  RECOVERY_SELLER_ACCOUNTING_ERROR_CODES,
+  RecoverySellerAccountingError,
+} from "../domain/strategies/recovery-seller/recovery-seller-accounting-error.js"
 import { applyReconciledMixedSellOrder } from "../domain/strategies/recovery-seller/mixed-sell-fill-accounting.js"
 import { calculateRecoverySellerProfitability } from "../domain/strategies/recovery-seller/calculate-profitability.js"
 
@@ -468,14 +472,13 @@ function resolveDuplicateTerminalMixedSellAccounting({
   })
 }
 
-async function reconcileTerminalMixedSellTransition({
+function prepareTerminalMixedSellTransition({
   state,
   reconciliation,
   terminalOrder,
   canonicalFills,
   canonicalFillAllocations,
   minProfit,
-  onOperationalStateRecoverySellerMixedSellReconciled,
 }) {
   const { registryUpdate, terminalRegisteredOrder } = resolveTerminalMixedSellOrder({
     state,
@@ -501,35 +504,61 @@ async function reconcileTerminalMixedSellTransition({
     canonicalFills,
     result,
   })
-  if (duplicateResult) {
-    return duplicateResult
+  return {
+    registryUpdate,
+    terminalRegisteredOrder,
+    result,
+    ownership,
+    duplicateResult,
   }
-  if (result.accounting.applied !== true) {
+}
+
+async function reconcileTerminalMixedSellTransition({
+  state,
+  reconciliation,
+  terminalOrder,
+  canonicalFills,
+  canonicalFillAllocations,
+  minProfit,
+  onOperationalStateRecoverySellerMixedSellReconciled,
+}) {
+  const prepared = prepareTerminalMixedSellTransition({
+    state,
+    reconciliation,
+    terminalOrder,
+    canonicalFills,
+    canonicalFillAllocations,
+    minProfit,
+  })
+  if (prepared.duplicateResult) {
+    return prepared.duplicateResult
+  }
+  if (prepared.result.accounting.applied !== true) {
     throw new RecoverySellerAccountingError({
       code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.ACCOUNTING_NOT_COMMITTED,
       message: "Recovery Seller terminal mixed-SELL accounting did not commit; the sole-SELL reservation remains active",
       context: {
-        marketId: terminalRegisteredOrder.market.id,
-        cycleId: ownership.cycleId,
-        sellOrderClientId: terminalRegisteredOrder.clientOrderId,
+        marketId: prepared.terminalRegisteredOrder.market.id,
+        cycleId: prepared.ownership.cycleId,
+        sellOrderClientId: prepared.terminalRegisteredOrder.clientOrderId,
       },
     })
   }
-  const eligible = result.profitability?.eligible === true
+  const eligible = prepared.result.profitability?.eligible === true
   await persistTerminalMixedSellAccountingBoundary({
     callback: onOperationalStateRecoverySellerMixedSellReconciled,
-    terminalOrder: terminalRegisteredOrder,
-    ownership,
+    terminalOrder: prepared.terminalRegisteredOrder,
+    ownership: prepared.ownership,
     canonicalFills,
     eligible,
   })
   return publishTerminalMixedSellAccounting({
     state,
-    registryUpdate,
-    terminalRegisteredOrder,
-    ownership,
+    registryUpdate: prepared.registryUpdate,
+    terminalRegisteredOrder: prepared.terminalRegisteredOrder,
+    ownership: prepared.ownership,
     canonicalFills,
-    result,
+    result: prepared.result,
     eligible,
   })
 }
