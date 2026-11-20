@@ -2,13 +2,12 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { UserDataSession } from "./user-data-session.js"
 
-function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect }) {
+function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, calls = [], subscribe }) {
   const listeners = {
     event: new Set(),
     error: new Set(),
     close: new Set(),
   }
-  const calls = []
   return {
     calls,
     state: "open",
@@ -25,6 +24,7 @@ function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect }
     },
     async subscribe() {
       calls.push("subscribe")
+      if (subscribe) {return subscribe()}
       return subscriptionId
     },
     async listSubscriptions() {
@@ -59,6 +59,94 @@ function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect }
   }
 }
 
+function createSessionWithoutDependencies() {
+  return new UserDataSession({})
+}
+
+function createSessionWithNegativeReconnectDelay() {
+  return new UserDataSession({
+    getClient() {},
+    createClient() {},
+    setClient() {},
+    setConnected() {},
+    setUnavailable() {},
+    reconnectDelay: -1,
+  })
+}
+
+function createSessionWithoutClientPortFactory() {
+  return new UserDataSession({
+    getClient() {},
+    createClient() {},
+    setClient() {},
+    setConnected() {},
+    setUnavailable() {},
+  })
+}
+
+function getStatusesByType(statuses, type) {
+  return statuses.filter((status) => status.type === type)
+}
+
+function findStatusByType(statuses, type) {
+  return getStatusesByType(statuses, type)[0]
+}
+
+function hasStatus(statuses, type, predicate = () => true) {
+  return statuses.some((status) => status.type === type && predicate(status))
+}
+
+function hasLoggedError(logs, message, error) {
+  return logs.some(([loggedMessage, loggedError]) =>
+    loggedMessage === message && loggedError === error
+  )
+}
+
+function countLoggedErrors(logs, message, error) {
+  return logs.filter(([loggedMessage, loggedError]) =>
+    loggedMessage === message && loggedError === error
+  ).length
+}
+
+function countCalls(calls, method) {
+  return calls.filter((call) =>
+    call === method || (Array.isArray(call) && call[0] === method)
+  ).length
+}
+
+function createEventRecorder(received) {
+  return function recordEvent(message) {
+    received.push(message)
+  }
+}
+
+function createStatusRecorder(received) {
+  return function recordStatus(status) {
+    received.push(status)
+  }
+}
+
+function createRecoveryPortFactory({ ports, initialClient, reconnectClient, failReconnect }) {
+  return (client) => {
+    if (!ports.has(client)) {
+      ports.set(client, createRecoveryPort({
+        subscriptionId: client === initialClient ? 17 : 18,
+        isReconnectClient: client === reconnectClient,
+        failReconnect,
+      }))
+    }
+    return ports.get(client)
+  }
+}
+
+async function runNextRecoveryTimer({ timers, session }) {
+  const [pending] = [...timers.entries()]
+  assert.ok(pending, "A user-data session timer must be scheduled before it is advanced.")
+  timers.delete(pending[0])
+  await pending[1]()
+  await session.waitForRecovery()
+}
+
 function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
   let currentClient = { name: "initial" }
   const initialClient = currentClient
@@ -70,16 +158,12 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
   const session = new UserDataSession({
     getClient: () => currentClient,
     createClient: () => reconnectClient,
-    createUserDataClientPort: (client) => {
-      if (!ports.has(client)) {
-        ports.set(client, createRecoveryPort({
-          subscriptionId: client === initialClient ? 17 : 18,
-          isReconnectClient: client === reconnectClient,
-          failReconnect,
-        }))
-      }
-      return ports.get(client)
-    },
+    createUserDataClientPort: createRecoveryPortFactory({
+      ports,
+      initialClient,
+      reconnectClient,
+      failReconnect,
+    }),
     setClient: (client) => {
       currentClient = client
     },
@@ -97,14 +181,6 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
       timers.delete(id)
     },
   })
-
-  async function runNextTimer() {
-    const [pending] = [...timers.entries()]
-    assert.ok(pending, "A user-data session timer must be scheduled before it is advanced.")
-    timers.delete(pending[0])
-    await pending[1]()
-    await session.waitForRecovery()
-  }
 
   return {
     session,
@@ -126,22 +202,23 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
     closeCurrentConnection() {
       ports.get(currentClient).close()
     },
-    runNextTimer,
-    reconnect: runNextTimer,
+    runNextTimer: () => runNextRecoveryTimer({ timers, session }),
+    reconnect: () => runNextRecoveryTimer({ timers, session }),
   }
 }
 
 describe("Application user-data session dependency validation", () => {
   it("validates required dependencies and retry policy", () => {
-    assert.throws(() => new UserDataSession({}), TypeError, "A session without its required dependencies must be rejected.")
-    assert.throws(() => new UserDataSession({
-      getClient() {},
-      createClient() {},
-      setClient() {},
-      setConnected() {},
-      setUnavailable() {},
-      reconnectDelay: -1,
-    }), RangeError, "A negative reconnect delay must be rejected.")
+    assert.throws(
+      createSessionWithoutDependencies,
+      TypeError,
+      "A session without its required dependencies must be rejected.",
+    )
+    assert.throws(
+      createSessionWithNegativeReconnectDelay,
+      RangeError,
+      "A negative reconnect delay must be rejected.",
+    )
   })
 
   it("validates the injected client port before using it", async () => {
@@ -165,13 +242,11 @@ describe("Application user-data session dependency validation", () => {
   })
 
   it("requires the client port factory after validating the existing retry policy", () => {
-    assert.throws(() => new UserDataSession({
-      getClient() {},
-      createClient() {},
-      setClient() {},
-      setConnected() {},
-      setUnavailable() {},
-    }), /client port factory/, "A session must require its injected client-port factory.")
+    assert.throws(
+      createSessionWithoutClientPortFactory,
+      /client port factory/,
+      "A session must require its injected client-port factory.",
+    )
   })
 })
 
