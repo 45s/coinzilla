@@ -25,6 +25,17 @@ const EFFECTFUL_MODULES = new Set([
   "node:tls",
   "node:dgram",
   "node:os",
+  "fs",
+  "fs/promises",
+  "net",
+  "http",
+  "https",
+  "child_process",
+  "worker_threads",
+  "stream",
+  "tls",
+  "dgram",
+  "os",
 ])
 
 const PROHIBITED_API_PATTERNS = [
@@ -35,11 +46,12 @@ const PROHIBITED_API_PATTERNS = [
   { pattern: /\bfetch\s*\(/, label: "fetch" },
   { pattern: /\b(?:console|logger)\.(?:log|info|warn|error|debug|trace)\s*\(/, label: "logging" },
   { pattern: /\bnew\s+Date\s*\(\s*\)/, label: "uncontrolled Date construction" },
-  { pattern: /\\b(?:randomBytes|randomUUID)\\s*\\(/, label: "randomness API" },
+  { pattern: /\b(?:randomBytes|randomUUID)\s*\(/, label: "randomness API" },
 ]
 
 /**
- * Recursively discover production JavaScript helper modules and sibling tests.
+ * Discover production JavaScript helper modules and their colocated tests.
+ * Nested helpers directories are included; test and fixture files are excluded.
  * @param {string} root Repository root.
  * @returns {{ directory: string, file: string, testPath: string, hasTest: boolean }[]}
  */
@@ -68,12 +80,12 @@ export function findHelperSources(root) {
         }
         continue
       }
-      if (!entry.isFile() || !/\\.(?:js|mjs|cjs)$/.test(entry.name) ||
-          /\\.(?:test|spec|fixture)\\.(?:js|mjs|cjs)$/.test(entry.name)) {
+      if (!entry.isFile() || !/\.(?:js|mjs|cjs)$/.test(entry.name) ||
+          /\.(?:test|spec|fixture)\.(?:js|mjs|cjs)$/.test(entry.name)) {
         continue
       }
       const file = join(directory, entry.name)
-      const extension = entry.name.match(/\\.(js|mjs|cjs)$/)?.[0] ?? ".js"
+      const extension = entry.name.match(/\.(js|mjs|cjs)$/)?.[0] ?? ".js"
       const stem = entry.name.slice(0, -extension.length)
       const testPath = join(directory, stem + ".test" + extension)
       const specPath = join(directory, stem + ".spec" + extension)
@@ -96,14 +108,14 @@ export function findHelperSources(root) {
 }
 
 /**
- * Analyze one helper module for detectable impurity patterns.
- * This conservative scanner is a guardrail, not a mathematical purity proof.
+ * Detect common helper-purity violations. This scanner is intentionally
+ * heuristic and does not prove purity or inspect transitive dependencies.
  * @param {{ file: string, source: string }} options
  * @returns {string[]}
  */
 export function analyzeHelperSource({ file, source }) {
   const violations = []
-  const importPattern = /\bfrom\s*["']([^"']+)["']/g
+  const importPattern = /(?:\bfrom\s*|^\s*import\s*)["']([^"']+)["']/gm
   for (const match of source.matchAll(importPattern)) {
     if (EFFECTFUL_MODULES.has(match[1])) {
       violations.push(file + ": prohibited import from " + match[1])
@@ -119,24 +131,18 @@ export function analyzeHelperSource({ file, source }) {
   if (/\bclass\s+[A-Za-z_$][\w$]*/.test(source)) {
     violations.push(file + ": stateful classes are prohibited in helpers")
   }
-
-  if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*(?:\.\s*[A-Za-z_$][\w$]*|\[[^\]]+\])\s*=(?!=)/.test(source)) {
-    violations.push(file + ": mutation of caller-owned input is prohibited")
-  }
-
-  if (/^\\s*(?:export\\s+)?const\\s+[A-Za-z_$][\\w$]*\\s*=\\s*(?:new\\s+)?(?:Set|Map)\\s*\\(/m.test(source)) {
-    violations.push(file + ": mutable module-level collections are prohibited")
-  }
-
   if (/^\s*(?:export\s+)?const\s+[A-Za-z_$][\w$]*\s*=\s*(?:new\s+)?(?:Set|Map)\s*\(/m.test(source)) {
     violations.push(file + ": mutable module-level collections are prohibited")
+  }
+  if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*(?:\.\s*[A-Za-z_$][\w$]*|\[[^\]]+\])\s*=(?!=)/.test(source)) {
+    violations.push(file + ": mutation of caller-owned input is prohibited")
   }
 
   return violations
 }
 
 /**
- * Return every helper-policy violation in the repository.
+ * Find missing colocated tests and source-level purity violations.
  * @param {string} root Repository root.
  * @returns {string[]}
  */
@@ -144,9 +150,10 @@ export function findHelperPolicyViolations(root) {
   const violations = []
   for (const helper of findHelperSources(root)) {
     if (!helper.hasTest) {
-      violations.push(helper.file + ": missing directly associated unit test (" +
-        helper.file.split("/").at(-1).replace(/\.(?:js|mjs|cjs)$/, ".test.js") +
-        " or " + helper.file.split("/").at(-1).replace(/\.(?:js|mjs|cjs)$/, ".spec.js") + ")")
+      const fileName = helper.file.split("/").at(-1)
+      const testName = fileName.replace(/\.(?:js|mjs|cjs)$/, ".test.js")
+      const specName = fileName.replace(/\.(?:js|mjs|cjs)$/, ".spec.js")
+      violations.push(helper.file + ": missing directly associated unit test (" + testName + " or " + specName + ")")
     }
     violations.push(...analyzeHelperSource({
       file: helper.file,
