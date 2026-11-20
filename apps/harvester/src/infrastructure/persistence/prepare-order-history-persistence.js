@@ -161,6 +161,9 @@ async function prepareRelationalResources({
     const fillRepository = createFillHistoryRepository({
       database: relationalDatabase,
     })
+    const historySyncCursorRepository = createHistorySyncCursorRepository({
+      database: relationalDatabase,
+    })
     relationalOrderObserver = createOrderHistoryObserver({
       eventBus,
       repository: orderRepository,
