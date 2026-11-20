@@ -281,6 +281,7 @@ async function requestOrderPage({ broker, symbol, orderId, limit, requestDelayMs
     symbol,
     orderId,
     limit,
+    includeFollowingOrders: true,
   })
   return validatePage({
     result,
