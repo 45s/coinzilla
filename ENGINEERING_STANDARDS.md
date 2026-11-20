@@ -35,6 +35,10 @@ Other repository instructions and task checklists should link to this section ra
 
 All JavaScript contributors, including AI agents, MUST follow the canonical [ESLint Standard](docs/engineering/ESLINT_STANDARD.md). Read it and inspect the effective eslint.config.js rules before writing or changing JavaScript. ESLint rules are engineering constraints, not suggestions to work around. Do not add inline suppressions, weaken rule settings, reduce lint coverage, or alter lint commands to make a change pass. Refactor the implementation to satisfy the existing rules. The root ESLint configuration disables inline configuration so source comments cannot suppress or override configured rules.
 
+## Configuration
+
+Follow the canonical [Configuration Standard](docs/engineering/CONFIGURATION_STANDARD.md) for ownership, loading, validation, defaults, environment access, immutability, secrets, compatibility and tests. Domain instructions may add stricter application-specific requirements but must link to this standard rather than redefine the repository-wide contract.
+
 ## Exchange environment configuration
 
 Binance exchange endpoint selection is governed by [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md). All consumers MUST pass an explicit `TRADING_MODE=testnet|live`; missing or invalid values fail closed. `NODE_ENV` is application runtime metadata only and MUST NOT select or influence Binance endpoints. Keep the ADR as the cross-workspace decision source and the Brokers/Harvester documentation as the operational guides.
@@ -91,6 +95,39 @@ This is a repository-wide convention. Domain-specific agent instructions may add
 - Add or maintain package-specific coverage thresholds where the tooling supports them. A threshold must be meaningful, enforced by CI, and increased deliberately; do not claim coverage is gated when it is not.
 - Run the affected package's test and coverage scripts first, then relevant workspace tests and repository quality checks. Report exact commands and outcomes accurately.
 - Never claim tests passed unless they were actually executed and passed.
+
+### Test expectations by module and layer
+
+Choose tests from the behavior and risk being changed. Use the lowest-cost test that proves the contract; add a higher-level test only when it proves an interaction that a lower-level test cannot.
+
+| Module or boundary | Expected test evidence | What the test should prove |
+|---|---|---|
+| Pure helper / calculation / mapper | Direct unit test, colocated with the helper | Deterministic output, normal and boundary inputs, invalid input, immutability where promised; no infrastructure mocks |
+| Domain value object / entity | Unit test | Construction and validation, invariants, equality/serialization where public, exact decimal and asset/unit behavior |
+| Domain policy / decision function | Unit test or named behavior matrix | Each meaningful rule, threshold boundary, rejected decision, and combinations that affect the result |
+| State machine / lifecycle model | Unit test | Allowed and rejected transitions, invariants, terminal states, duplicate/out-of-order events, and recovery from incomplete state |
+| Application use case / handler | Focused unit or integration test with injected ports | Observable result, dependency calls and ordering, side-effect boundary, partial failure, retry/unknown outcome handling, and cleanup |
+| Infrastructure adapter / external protocol | Adapter contract tests using fake transport or captured fixtures | Exact request/response mapping, validation before I/O, malformed responses, timeouts, transport failures, error classification, and redaction |
+| Repository / persistence | Contract and integration tests against a deterministic local provider or temporary database | Serialization, isolation, transaction commit/rollback, atomicity, reopen/recovery and failure behavior |
+| Runtime composition / lifecycle | Integration test with real in-process components and fake external boundaries | Wiring, startup/shutdown ordering, concurrency, resource ownership, idempotent cleanup, and failure propagation |
+| Public package contract | Consumer-facing contract or shared conformance suite | Public exports, result/error shapes, compatibility and consistent behavior across implementations |
+| Cross-layer user workflow | End-to-end test only when it proves a distinct risk | A meaningful complete workflow across real internal boundaries; do not duplicate lower-level coverage without added confidence |
+
+For financial, broker, order, fill, accounting and recovery behavior, select the relevant rows together: test exact decimal values, partial and duplicate fills, event ordering, commissions, reconciliation, unknown outcomes, persistence boundaries and restart behavior. A passing happy-path test is not sufficient where failure or uncertainty changes safety.
+
+### Test placement and boundaries
+
+- Keep a module's focused unit tests beside the module as `.test.js` or `.spec.js`. The [Modularity Standard](docs/engineering/MODULARITY_STANDARD.md) additionally requires every production helper to have a directly colocated unit test.
+- Use an existing package-level `test/` tree for scenarios spanning multiple modules, replay/crash matrices, and end-to-end workflows. Use `scripts/*.test.js` for developer/maintenance tooling. Do not create mirrored test trees or move existing tests solely to satisfy a universal layout.
+- Keep tests in the owning package. Shared contract/conformance helpers may be reused when they express a real public contract; keep provider-specific assertions with the provider.
+- Name external/network integration files distinctly (the repository uses `.integration.js`) and expose them through a separate, explicit command or workflow gate. Never let an opt-in external test silently enter the default unit-test command.
+- Default unit and CI tests must be deterministic, offline, credential-free and safe to repeat. Replace external systems at the boundary with controlled fakes; do not mock the behavior being tested or every internal call.
+- Use captured, sanitized protocol fixtures where they add value. Do not treat a fixture or third-party implementation as proof of an external guarantee.
+- Control time, randomness, scheduling and concurrency through injected dependencies. Prefer deferred promises, barriers and deterministic schedulers over arbitrary sleeps. Clean up listeners, timers, temporary files, servers, subscriptions and pending work.
+- Broker tests that mutate exchange state must be explicitly gated and TESTNET-only. They are not part of ordinary pull-request tests. LIVE mutation is never a test strategy. Read-only external checks also require an explicit opt-in when they use credentials or a network service.
+- Keep test commands owned by package manifests and workflow matrices. When adding a workspace package, update both unit-test and coverage matrices in the same change. Preserve required status-context names unless a separately reviewed ruleset migration is planned.
+- Coverage percentages are guardrails, not proof of behavior. Review uncovered branches and critical failure paths. Keep thresholds package-owned and evidence-based; do not impose a universal percentage or invent a threshold without measuring the package. A package without a threshold is an explicit gap, not evidence that coverage is sufficient.
+- Do not run the same suite twice merely to produce two reports unless the separate run adds a distinct enforced check. CI duplication and required-context changes belong to the repository quality-gate owner, not an individual package test-policy change.
 
 ### Human-readable test design
 
