@@ -24,7 +24,10 @@ test("returns immutable partial-history diagnostics without claiming account-wid
   assert.equal(diagnostics.failureCount, 1, "A failed market scan must produce one actionable diagnostic failure.")
   assert.deepEqual(
     diagnostics.failures,
-    [{ market: "BTCUSDT", message: "simulated persistence failure" }],
+    [{
+      market: "BTCUSDT",
+      message: "simulated persistence failure",
+    }],
     "The diagnostic failure must identify the market and preserve the original failure message.",
   )
   assert.equal(Object.isFrozen(diagnostics), true, "Callers must not be able to mutate returned synchronization diagnostics.")
