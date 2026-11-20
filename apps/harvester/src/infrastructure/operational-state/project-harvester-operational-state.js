@@ -1212,6 +1212,14 @@ factId: fact.factId }),
   return Object.freeze(mappedEvaluations)
 }
 
+function assertRecoverySellerJournalReplayDeferred({ state }) {
+  if (state.recoverySellerOrdersByCycle.size > 0 || state.recoverySellerFillsByCycle.size > 0) {
+    throw new Error(
+      "Recovery Seller Journal replay is deferred; refusing to restore RS orders or fills through Conservative accounting.",
+    )
+  }
+}
+
 function createRecoverySellerLifecycleProjection({ state }) {
   const ordersByCycle = [...state.recoverySellerOrdersByCycle].map(([cycleId, orders]) => {
     const projectedOrders = orders.map((order) => Object.freeze({
@@ -1309,6 +1317,7 @@ export function projectHarvesterOperationalState({ records } = {}) {
 index,
 state })
     }
+    assertRecoverySellerJournalReplayDeferred({ state })
     const syntheticRecords = createSyntheticJournalRecords({ state })
     const projected = projectHarvesterJournalRecovery({ records: syntheticRecords })
     if (projected?.ok !== true) {
