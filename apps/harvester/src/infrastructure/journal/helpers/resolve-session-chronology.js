@@ -269,7 +269,7 @@ function validateOrderedSessionRanges({ orderedSessions }) {
 export function validateAndOrderSessions(sessions) {
   if (sessions.length <= 1) {
     if (sessions.length === 1) {
-      return [{ ...sessions[0], chronologySource: "SINGLE_SESSION" }]
+      return [{\n        ...sessions[0],\n        chronologySource: "SINGLE_SESSION",\n      }]
     }
     return []
   }
