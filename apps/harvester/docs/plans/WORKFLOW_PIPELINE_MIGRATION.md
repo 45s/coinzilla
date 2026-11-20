@@ -176,7 +176,7 @@ The implementation agent must:
 5. Keep tests deterministic, offline and credential-free. Do not run TESTNET or LIVE operations.
 6. Run focused Harvester tests and coverage, then the required workspace/CI checks. Inspect results on the exact final PR head SHA.
 7. Update every affected living document in the same implementation PR and include a Documentation impact section.
-8. Open a focused PR to `develop`; synchronize with the latest `develop` and satisfy all required checks before merge. Do not merge a stale PR or bypass branch protection.
+8. Open a focused PR to `develop`; synchronize with the latest `develop` and satisfy all required checks before handing it to the user. The user reviews and merges; agents must not merge or enable auto-merge. Do not hand over a stale PR or bypass branch protection.
 
 The migration is successful only if the selected workflow becomes easier to follow, meaningful pure logic has clear ownership, the application/domain/infrastructure dependency direction remains intact, and all existing externally observable behavior and safety invariants remain unchanged.
 
@@ -204,7 +204,7 @@ The following prompt is intended to be given to a coding agent with repository a
 >
 > **Documentation:** update the architecture guide and any other living docs whose claims are affected by the actual extraction. Keep this plan's status and implementation details accurate; update indexes when adding/moving docs. Include a PR `Documentation impact` section listing exact paths. Do not rewrite historical audits/evidence.
 >
-> **Git workflow:** after the preflight, create a short-lived task branch from the latest `develop`, never `main`. Follow the exact branch naming and freshness rules in `AI_AGENT_WORKFLOW.md`. Commit the implementation, tests and documentation together. Open a focused PR targeting `develop` with a detailed description of scope, before/after responsibilities, DDD boundary, invariants preserved, tests/checks, documentation impact and known limitations. Inspect the exact PR head and GitHub Actions. Synchronize with latest `develop` and re-run affected checks when required. Do not merge unless all required checks pass and repository policy permits the responsible agent to merge. Never bypass branch protection.
+> **Git workflow:** after the preflight, create a short-lived task branch from the latest `develop`, never `main`. Follow the exact branch naming and freshness rules in `AI_AGENT_WORKFLOW.md`. Commit the implementation, tests and documentation together. Open a focused PR targeting `develop` with a detailed description of scope, before/after responsibilities, DDD boundary, invariants preserved, tests/checks, documentation impact and known limitations. Inspect the exact PR head and GitHub Actions. Synchronize with latest `develop` and re-run affected checks when required. The user reviews and merges only after all required checks pass. Agents must never merge or enable auto-merge. Never bypass branch protection.
 >
 > **Completion report:** provide the PR link, exact head SHA, files changed, extracted responsibilities and their layer ownership, tests/checks with exact results, any remaining limitations, and explicit confirmation that no TESTNET/LIVE activity occurred. Do not claim multi-strategy concurrency is implemented.
 
