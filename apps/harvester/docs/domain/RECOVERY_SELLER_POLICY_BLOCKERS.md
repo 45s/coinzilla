@@ -45,7 +45,7 @@ The canonical CG contract is `CONSERVATIVE_DOMAIN_SPECIFICATION.md`. Current sou
 - **Exchange filters:** minimum filters are checked; max quantity/notional cap the candidate; price filters can block it. Exchange-constrained residual dust is classified with exact quantity/filter evidence and retained only under the completion contract. A price-filter or commission-valuation failure is a block, not dust.
 - **Lifecycle/accounting:** confirmed partial fills and commissions are applied exactly once. Existing SELLs are not repriced merely because they partially fill. Cancellation/replacement requires terminal reconciliation and complete canonical fills. Recovery completion requires reconciled terminal fill, all actual commissions, full cost recovery plus minimum profit, and preserved retained inventory.
 
-Focused CG evidence files include `helpers.test.js`, `initial-buy-price.test.js`, `sell-fee-rate.test.js`, `recovery-sell-plan.test.js`, `recovery-sell-plan-accounting.test.js`, `recovery-fill-accounting.test.js`, `recovery-ledger.test.js`, `recovery-completion.test.js`, `recovery-completion.dust.test.js`, `strategy.test.js`, and `trailing-buy-repricing.test.js`. The domain test inventory maps the additional application-level engine tests.
+Focused CG evidence files include `state-predicates.test.js`, `initial-buy-price.test.js`, `sell-fee-rate.test.js`, `recovery-sell-plan.test.js`, `recovery-sell-plan-accounting.test.js`, `recovery-fill-accounting.test.js`, `recovery-ledger.test.js`, `recovery-completion.test.js`, `recovery-completion.dust.test.js`, `strategy.test.js`, and `trailing-buy-repricing.test.js`. The domain test inventory maps the additional application-level engine tests.
 
 ## Evidence index
 
