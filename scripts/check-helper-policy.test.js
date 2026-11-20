@@ -96,14 +96,16 @@ test("enforces naming only for changed helper files", () => {
       join(directory, "normalize-binance-symbol.js"),
       "export function normalizeBinanceSymbol({ symbol }) { return symbol }\\n",
     )
-    assert.deepEqual(findChangedHelperNamingViolations({
-      root,
-      changedPaths: [
-        "packages/example/src/helpers/process.js",
-        "packages/example/src/helpers/normalize-binance-symbol.js",
-        "packages/example/src/index.js",
-      ],
-    }), [
+    assert.deepEqual(
+      findChangedHelperNamingViolations({
+        root,
+        changedPaths: [
+          "packages/example/src/helpers/process.js",
+          "packages/example/src/helpers/normalize-binance-symbol.js",
+          "packages/example/src/index.js",
+        ],
+      }),
+      [
       "packages/example/src/helpers/process.js: vague exported helper name process",
       "packages/example/src/helpers/process.js: vague helper filename",
     ])
@@ -115,13 +117,16 @@ test("enforces naming only for changed helper files", () => {
 test("changed-name check ignores deleted helper files and non-helper paths", () => {
   const { root } = createFixture()
   try {
-    assert.deepEqual(findChangedHelperNamingViolations({
-      root,
-      changedPaths: [
-        "packages/example/src/helpers/deleted.js",
-        "packages/example/src/index.js",
-      ],
-    }), [])
+    assert.deepEqual(
+      findChangedHelperNamingViolations({
+        root,
+        changedPaths: [
+          "packages/example/src/helpers/deleted.js",
+          "packages/example/src/index.js",
+        ],
+      }),
+      [],
+    )
   } finally {
     rmSync(root, { recursive: true, force: true })
   }
