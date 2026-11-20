@@ -682,29 +682,31 @@ function projectConservativeRecoveryFillBoundary({
   state.cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
 }
 
-function projectRecoverySellerMixedSellReconciledFact({ record, state }) {
-  const data = record.data
+function assertRecoverySellerReconciledSellOrder({ data, state }) {
   const intent = state.orderIntents.get(data.sellOrderClientId)
   const orders = state.recoverySellerOrdersByCycle.get(data.cycleId) ?? []
   const ownedOrder = orders.find((order) => order.clientOrderId === data.sellOrderClientId)
-  if (
-    intent?.strategyId !== "RS_recoverySeller" ||
-    intent.purpose !== "RECOVERY_SELL" ||
-    intent.cycleId !== data.cycleId ||
-    intent.marketId !== data.marketId ||
-    intent.venue !== data.venue ||
-    intent.symbol !== data.symbol ||
-    intent.baseAssetId !== data.baseAssetId ||
-    intent.quoteAssetId !== data.quoteAssetId ||
-    ownedOrder?.brokerOrderId !== data.sellOrderBrokerOrderId ||
-    ownedOrder.status !== data.terminalStatus ||
-    ownedOrder.submissionOutcome !== "ACKNOWLEDGED" ||
-    state.reconciledRecoverySellerSellOrderClientIds.has(data.sellOrderClientId) ||
-    data.accountingApplied !== true ||
-    typeof data.eligible !== "boolean"
-  ) {
+  const identityMatches = intent?.strategyId === "RS_recoverySeller" &&
+    intent.purpose === "RECOVERY_SELL" &&
+    intent.cycleId === data.cycleId &&
+    intent.marketId === data.marketId &&
+    intent.venue === data.venue &&
+    intent.symbol === data.symbol &&
+    intent.baseAssetId === data.baseAssetId &&
+    intent.quoteAssetId === data.quoteAssetId &&
+    ownedOrder?.brokerOrderId === data.sellOrderBrokerOrderId &&
+    ownedOrder.submissionOutcome === "ACKNOWLEDGED" &&
+    (ownedOrder.status === data.terminalStatus || ownedOrder.status === "OPEN") &&
+    !state.reconciledRecoverySellerSellOrderClientIds.has(data.sellOrderClientId) &&
+    data.accountingApplied === true &&
+    typeof data.eligible === "boolean"
+  if (!identityMatches) {
     throw new Error("Recovery Seller mixed-SELL reconciliation does not match one acknowledged terminal owned SELL order")
   }
+  return { ownedOrder }
+}
+
+function assertRecoverySellerReconciledFillSet({ data, state }) {
   const expectedFillIds = (state.recoverySellerFillsByCycle.get(data.cycleId) ?? [])
     .filter((fill) =>
       fill.clientOrderId === data.sellOrderClientId && fill.side === "SELL"
@@ -718,11 +720,32 @@ function projectRecoverySellerMixedSellReconciledFact({ record, state }) {
   ) {
     throw new Error("Recovery Seller mixed-SELL reconciliation does not match the exact canonical SELL fill set")
   }
+}
+
+function projectRecoverySellerMixedSellReconciledFact({
+  record,
+  state,
+}) {
+  const { data } = record
+  const { ownedOrder } = assertRecoverySellerReconciledSellOrder({ data, state })
+  assertRecoverySellerReconciledFillSet({ data, state })
+  const orders = state.recoverySellerOrdersByCycle.get(data.cycleId) ?? []
+  state.recoverySellerOrdersByCycle.set(data.cycleId, orders.map((order) =>
+    order.clientOrderId === data.sellOrderClientId
+      ? Object.freeze({
+          ...order,
+          status: data.terminalStatus,
+          mixedSellReconciled: true,
+          reconciliationSequence: record.sequence,
+        })
+      : order
+  ))
   state.reconciledRecoverySellerSellOrderClientIds.add(data.sellOrderClientId)
   state.recoverySellerMixedSellReconciliations.push(Object.freeze({
     factId: record.factId,
     sequence: record.sequence,
     ...data,
+    priorStatus: ownedOrder.status,
   }))
 }
 
@@ -1129,6 +1152,37 @@ factId: fact.factId }),
   return Object.freeze(mappedEvaluations)
 }
 
+function createRecoverySellerLifecycleProjection({ state }) {
+  const ordersByCycle = [...state.recoverySellerOrdersByCycle].map(([cycleId, orders]) => {
+    const projectedOrders = orders.map((order) => Object.freeze({
+      ...order,
+      reconciled: state.reconciledRecoverySellerSellOrderClientIds.has(order.clientOrderId),
+    }))
+    const reservedSellOrders = projectedOrders.filter((order) =>
+      order.side === "SELL" && !order.reconciled
+    )
+    return Object.freeze({
+      cycleId,
+      orders: Object.freeze(projectedOrders),
+      reservedSellOrders: Object.freeze(reservedSellOrders),
+    })
+  })
+  const appliedFillsByCycle = [...state.recoverySellerFillsByCycle].map(([cycleId, fills]) =>
+    Object.freeze({
+      cycleId,
+      fills: Object.freeze(fills),
+    })
+  )
+  return Object.freeze({
+    candidateOnly: true,
+    restorationEnabled: false,
+    requiresExchangeReconciliation: true,
+    ordersByCycle: Object.freeze(ordersByCycle),
+    appliedFillsByCycle: Object.freeze(appliedFillsByCycle),
+    reconciledSellOrders: Object.freeze(state.recoverySellerMixedSellReconciliations),
+  })
+}
+
 function createOperationalProjectionResult({ projected, state }) {
   const recoveryCycles = mapCompletedRecoveryCycles({
     cycles: projected.data.recoveryCycles,
@@ -1139,12 +1193,10 @@ function createOperationalProjectionResult({ projected, state }) {
     facts: state.recoveryCycleNotCompletedFacts,
   })
   const stickySafetyBlockers = Object.freeze([...state.activeBlockers.values()].map((blocker) =>
-    Object.freeze({ ...blocker,
-scope: blocker.scope })
+    Object.freeze({ ...blocker, scope: blocker.scope })
   ))
   const pausedMarkets = Object.freeze([...state.strategyPauses].map(([symbol, pause]) =>
-    Object.freeze({ symbol,
-reason: pause.reason })
+    Object.freeze({ symbol, reason: pause.reason })
   ))
   return toResult({
     data: Object.freeze({
@@ -1153,33 +1205,7 @@ reason: pause.reason })
       recoveryCycleEvaluations,
       orderSubmissionOutcomes: Object.freeze(state.orderSubmissionOutcomes),
       orderCancellationOutcomes: Object.freeze(state.orderCancellationOutcomes),
-      recoverySellerLifecycle: Object.freeze({
-        candidateOnly: true,
-        restorationEnabled: false,
-        requiresExchangeReconciliation: true,
-        ordersByCycle: Object.freeze([...state.recoverySellerOrdersByCycle].map(([cycleId, orders]) =>
-          Object.freeze({
-            cycleId,
-            orders: Object.freeze(orders.map((order) => Object.freeze({
-              ...order,
-              reconciled: state.reconciledRecoverySellerSellOrderClientIds.has(order.clientOrderId),
-            }))),
-            // A durable submission intent is a reservation boundary. A terminal
-            // broker status alone is not proof that mixed-SELL accounting committed.
-            reservedSellOrders: Object.freeze(orders.filter((order) =>
-              order.side === "SELL" &&
-              !state.reconciledRecoverySellerSellOrderClientIds.has(order.clientOrderId)
-            )),
-          })
-        )),
-        appliedFillsByCycle: Object.freeze([...state.recoverySellerFillsByCycle].map(([cycleId, fills]) =>
-          Object.freeze({
-            cycleId,
-            fills: Object.freeze(fills),
-          })
-        )),
-        reconciledSellOrders: Object.freeze(state.recoverySellerMixedSellReconciliations),
-      }),
+      recoverySellerLifecycle: createRecoverySellerLifecycleProjection({ state }),
       source: "DURABLE_FACTS",
       candidateOnly: true,
       restorationEnabled: false,

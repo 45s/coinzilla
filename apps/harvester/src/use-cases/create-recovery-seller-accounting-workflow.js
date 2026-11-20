@@ -373,6 +373,7 @@ function publishTerminalMixedSellAccounting({
   registryUpdate,
   terminalRegisteredOrder,
   ownership,
+  canonicalFills,
   result,
   eligible,
 }) {
@@ -395,6 +396,33 @@ function publishTerminalMixedSellAccounting({
   })
   state.recoverySellerCycleOutcomes.set(ownership.cycleId, cycleOutcome)
   state.recoverySellerCycleStates.set(terminalRegisteredOrder.market.id, cycleOutcome)
+  return Object.freeze({
+    ...result.accounting,
+    orderRegistry: state.orderRegistry,
+    profitability: result.profitability,
+  })
+}
+
+function resolveDuplicateTerminalMixedSellAccounting({
+  state,
+  ownership,
+  terminalRegisteredOrder,
+  canonicalFills,
+  result,
+}) {
+  if (result.accounting.duplicate !== true) {
+    return undefined
+  }
+  const priorOutcome = state.recoverySellerCycleOutcomes.get(ownership.cycleId)
+  const replayFillIds = canonicalFills.map((fill) => fill.id).sort()
+  const priorFillIds = priorOutcome?.appliedFillIds ?? []
+  const sameCommittedBoundary =
+    priorOutcome?.sellOrderClientId === terminalRegisteredOrder.clientOrderId &&
+    priorOutcome?.sellOrderBrokerOrderId === terminalRegisteredOrder.brokerOrderId &&
+    JSON.stringify(priorFillIds) === JSON.stringify(replayFillIds)
+  if (!sameCommittedBoundary) {
+    throw new Error("Recovery Seller duplicate terminal accounting does not match the committed cycle/order/fill boundary")
+  }
   return Object.freeze({
     ...result.accounting,
     orderRegistry: state.orderRegistry,
@@ -428,22 +456,15 @@ async function reconcileTerminalMixedSellTransition({
     registry: registryUpdate.registry,
     order: terminalRegisteredOrder,
   })
-  if (result.accounting.duplicate === true) {
-    const priorOutcome = state.recoverySellerCycleOutcomes.get(ownership.cycleId)
-    const replayFillIds = canonicalFills.map((fill) => fill.id).sort()
-    const priorFillIds = priorOutcome?.appliedFillIds ?? []
-    if (
-      priorOutcome?.sellOrderClientId !== terminalRegisteredOrder.clientOrderId ||
-      priorOutcome?.sellOrderBrokerOrderId !== terminalRegisteredOrder.brokerOrderId ||
-      JSON.stringify(priorFillIds) !== JSON.stringify(replayFillIds)
-    ) {
-      throw new Error("Recovery Seller duplicate terminal accounting does not match the committed cycle/order/fill boundary")
-    }
-    return Object.freeze({
-      ...result.accounting,
-      orderRegistry: state.orderRegistry,
-      profitability: result.profitability,
-    })
+  const duplicateResult = resolveDuplicateTerminalMixedSellAccounting({
+    state,
+    ownership,
+    terminalRegisteredOrder,
+    canonicalFills,
+    result,
+  })
+  if (duplicateResult) {
+    return duplicateResult
   }
   if (result.accounting.applied !== true) {
     throw new Error("Recovery Seller terminal mixed-SELL accounting did not commit; the sole-SELL reservation remains active")
@@ -461,6 +482,7 @@ async function reconcileTerminalMixedSellTransition({
     registryUpdate,
     terminalRegisteredOrder,
     ownership,
+    canonicalFills,
     result,
     eligible,
   })
