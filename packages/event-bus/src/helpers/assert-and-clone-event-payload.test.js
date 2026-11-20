@@ -2,13 +2,13 @@ import test from "node:test"
 import assert from "node:assert/strict"
 
 import {
-  assertSupportedPayload,
-  cloneAndFreezePayload,
-} from "./payload.js"
+  assertEventPayloadSupported,
+  cloneAndFreezeEventPayload,
+} from "./assert-and-clone-event-payload.js"
 
 test("accepts supported primitive values", () => {
   for (const value of [null, undefined, "text", true, false, 0, -1, NaN, Infinity, 1n]) {
-    assert.doesNotThrow(() => assertSupportedPayload(value))
+    assert.doesNotThrow(() => assertEventPayloadSupported(value))
   }
 })
 
@@ -23,7 +23,7 @@ test("accepts plain objects, arrays, null-prototype objects, cycles, and shared 
   cyclic.self = cyclic
   const nullPrototype = Object.assign(Object.create(null), { safe: true })
 
-  assert.doesNotThrow(() => assertSupportedPayload({
+  assert.doesNotThrow(() => assertEventPayloadSupported({
     cyclic,
     nullPrototype,
     sparse,
@@ -35,7 +35,7 @@ test("rejects functions, symbols, and unsupported primitive types", () => {
     () => {},
     Symbol("payload"),
   ]) {
-    assert.throws(() => assertSupportedPayload(value), /unsupported value/)
+    assert.throws(() => assertEventPayloadSupported(value), /unsupported value/)
   }
 })
 
@@ -59,7 +59,7 @@ test("rejects mutable built-ins and class instances", () => {
 
   for (const value of unsupported) {
     assert.throws(
-      () => assertSupportedPayload({ value }),
+      () => assertEventPayloadSupported({ value }),
       /only plain objects, arrays, and primitive values/,
     )
   }
@@ -70,7 +70,7 @@ test("rejects symbol keys without reading property values", () => {
   payload[Symbol("hidden")] = "value"
 
   assert.throws(
-    () => assertSupportedPayload(payload),
+    () => assertEventPayloadSupported(payload),
     /symbol properties/,
   )
 })
@@ -86,7 +86,7 @@ test("rejects accessors without invoking getters", () => {
     },
   })
 
-  assert.throws(() => assertSupportedPayload(payload), /accessor properties/)
+  assert.throws(() => assertEventPayloadSupported(payload), /accessor properties/)
   assert.equal(getterCalls, 0)
 })
 
@@ -99,7 +99,7 @@ test("rejects non-enumerable properties", () => {
   })
 
   assert.throws(
-    () => assertSupportedPayload(payload),
+    () => assertEventPayloadSupported(payload),
     /non-enumerable properties/,
   )
 })
@@ -109,14 +109,14 @@ test("rejects custom array properties and symbol keys", () => {
   customProperty.extra = true
 
   assert.throws(
-    () => assertSupportedPayload(customProperty),
+    () => assertEventPayloadSupported(customProperty),
     /custom properties/,
   )
 
   const symbolProperty = [1]
   symbolProperty[Symbol("extra")] = true
   assert.throws(
-    () => assertSupportedPayload(symbolProperty),
+    () => assertEventPayloadSupported(symbolProperty),
     /symbol properties/,
   )
 })
@@ -132,21 +132,21 @@ test("rejects accessor and non-enumerable array indices", () => {
   accessorArray.length = 1
 
   assert.throws(
-    () => assertSupportedPayload(accessorArray),
+    () => assertEventPayloadSupported(accessorArray),
     /accessor properties/,
   )
 
   const hiddenIndex = [1]
   Object.defineProperty(hiddenIndex, "0", { enumerable: false })
   assert.throws(
-    () => assertSupportedPayload(hiddenIndex),
+    () => assertEventPayloadSupported(hiddenIndex),
     /non-enumerable properties/,
   )
 })
 
 test("clones payloads without retaining source references and freezes nested values", () => {
   const original = { nested: { values: [1, 2] } }
-  const clone = cloneAndFreezePayload(original)
+  const clone = cloneAndFreezeEventPayload(original)
 
   assert.notEqual(clone, original)
   assert.notEqual(clone.nested, original.nested)
@@ -169,7 +169,7 @@ test("clones and freezes cyclic graphs while preserving cycles and shared identi
   }
   original.self = original
 
-  const clone = cloneAndFreezePayload(original)
+  const clone = cloneAndFreezeEventPayload(original)
 
   assert.notEqual(clone, original)
   assert.equal(clone.self, clone)
@@ -185,7 +185,7 @@ test("deep-freezing handles sparse arrays and null-prototype source objects", ()
   sparse[2] = { ok: true }
   const original = Object.assign(Object.create(null), { sparse })
 
-  const clone = cloneAndFreezePayload(original)
+  const clone = cloneAndFreezeEventPayload(original)
   assert.equal(clone.sparse.length, 3)
   assert.equal(0 in clone.sparse, false)
   assert.equal(2 in clone.sparse, true)
