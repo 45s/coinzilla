@@ -198,10 +198,11 @@ export function analyzeHelperNaming({ file, source }) {
   if (VAGUE_HELPER_NAMES.has(stem)) {
     violations.push([file, ": vague helper filename"].join(""))
   }
-  const pattern = /export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g
+  const pattern = /export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|export\s+(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/g
   for (const match of source.matchAll(pattern)) {
-    if (VAGUE_HELPER_NAMES.has(match[1])) {
-      violations.push([file, ": vague exported helper name ", match[1]].join(""))
+    const name = match[1] ?? match[2]
+    if (VAGUE_HELPER_NAMES.has(name)) {
+      violations.push([file, ": vague exported helper name ", name].join(""))
     }
   }
   return violations
