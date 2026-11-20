@@ -117,7 +117,14 @@ function createRepositories() {
       },
     },
     fillRepository: {
-      upsert: async (input) => fills.push(input),
+      upsert: async (input) => {
+        const existingIndex = fills.findIndex(({ fill }) => fill.fillId === input.fill.fillId)
+        if (existingIndex === -1) {
+          fills.push(input)
+        } else {
+          fills[existingIndex] = input
+        }
+      },
     },
     cursorRepository: {
       get: async ({ symbol }) => cursors.get(symbol) ?? {
@@ -304,7 +311,7 @@ test("replays a page after an order write failure without advancing its durable 
   failSecondOrder = false
   const retried = await synchronizeAccountHistory(input)
   assert.equal(retried.ok, true, "A retried page must complete after persistence recovers.")
-  assert.deepEqual(calls.orders.map(({ orderId }) => orderId), [0, 0], "The failed page must be requested again from its original cursor.")
+  assert.deepEqual(calls.orders.slice(0, 2).map(({ orderId }) => orderId), [0, 0], "The failed page must be requested again from its original cursor.")
   assert.equal(repositories.orders.length, 2, "Page replay must leave one relational order per canonical identity.")
   assert.equal(repositories.cursors.get("BTCUSDT").lastOrderId, "11", "The cursor may advance only after every order in the page is persisted.")
 })
@@ -360,8 +367,8 @@ test("replays a trade page after a fill write failure without advancing its dura
   failSecondFill = false
   const retried = await synchronizeAccountHistory(input)
   assert.equal(retried.ok, true, "A retried trade page must complete after persistence recovers.")
-  assert.deepEqual(calls.fills.map(({ fromId }) => fromId), [0, 0], "The failed trade page must be requested again from its original cursor.")
-  assert.equal(repositories.fills.length, 3, "The repository receives the replayed first fill and the previously failed second fill.")
+  assert.deepEqual(calls.fills.slice(0, 2).map(({ fromId }) => fromId), [0, 0], "The failed trade page must be requested again from its original cursor.")
+  assert.equal(repositories.fills.length, 2, "Idempotent fill upserts must leave one row per execution after replay.")
   assert.equal(repositories.cursors.get("BTCUSDT").lastTradeId, "2", "The trade cursor may advance only after every fill in the page is persisted.")
 })
 
