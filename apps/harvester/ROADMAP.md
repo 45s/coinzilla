@@ -29,6 +29,8 @@ The ADA recovery lifecycle work below remains a separate active trading-safety o
 
 ## Persistence — provider-agnostic database integration (#1327)
 
+The [trading-history persistence roadmap](./docs/persistence/trading-history-roadmap.md) is the canonical phased plan for completed relational history and the remaining attribution, analytics and operational work. The persistence README remains the current implementation contract.
+
 **Status:** The generic `@coinzilla/db` provider-neutral CRUD/query, lifecycle, transaction, SQLite provider, backup/restore primitives and conformance infrastructure are implemented and hardened. The package-specific DB ESLint cleanup is complete.
 
 **Relational-schema direction — generic prerequisite complete:** [PR #1489](https://github.com/45s/coinzilla/pull/1489) completed the generic SQLite migration audit and hardening tracked by [#1486](https://github.com/45s/coinzilla/issues/1486). The DB package now detects changed applied migration implementations and rejects out-of-order pending migrations while preserving legacy migration history. The DB package still owns generic infrastructure only; Harvester owns its business tables, schema, repositories and migrations.
@@ -56,11 +58,12 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 - ADR-0001 remains separate and unchanged. The projection does not restore/adopt orders after restart.
 - SQLite is the only currently implemented provider.
 
+**Routine relational-history backups, restore verification, bounded retention and backup-file permissions — COMPLETE:** [#1564](https://github.com/45s/coinzilla/issues/1564) was delivered in merged [PR #1567](https://github.com/45s/coinzilla/pull/1567), merge commit `5f1d4a035941db8a7e0d6cd3c401299ab3c6ef21`. Host scheduling remains operator-owned. Main-database permission enforcement, disk/WAL monitoring, disk-full and corruption response, and encrypted off-host replication remain deferred.
+
 ### Remaining persistence work after Phase 3
 
 1. Filtered account snapshot history only with explicit provenance and completeness semantics.
 2. Offline, idempotent historical imports from verified source evidence.
-3. **Routine relational-history backups, verified restore checks, bounded retention and backup-file permissions — IN PROGRESS:** [#1564](https://github.com/45s/coinzilla/issues/1564) / [PR #1567](https://github.com/45s/coinzilla/pull/1567). Remaining after this slice: main-database permission enforcement, disk/WAL monitoring, disk-full and corruption response, and encrypted off-host replication.
 
 **Explicit exclusions from #1554/#1556:** no account-wide or delisted-market history completeness claim, account snapshots as a history source, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, process-restart restoration/adoption, Journal replay, new providers, `sessions`/`errors` tables, broker order-mutation behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
 

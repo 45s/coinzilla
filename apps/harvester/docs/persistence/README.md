@@ -8,6 +8,8 @@
 
 **Existing order-history projection:** [PR #1469](https://github.com/45s/coinzilla/pull/1469).
 
+**Forward plan:** [Trading-history persistence roadmap](./trading-history-roadmap.md) tracks follow-on strategy-cycle attribution, analytics and remaining operational hardening. Phases 1–3 are implemented; routine relational-history backups and restore checks are delivered in [PR #1567](https://github.com/45s/coinzilla/pull/1567). This README remains the current implementation and safety-boundary reference.
+
 **Relational implementation:** Phases 1/2 are complete in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555); Phase 3 is complete in merged [PR #1557](https://github.com/45s/coinzilla/pull/1557). The merged implementation and its documented coverage limitations are described below.
 
 ## 1. Separate orders, fills, and strategy cycles
