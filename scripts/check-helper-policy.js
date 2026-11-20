@@ -216,7 +216,7 @@ export function analyzeHelperNaming({ file, source }) {
 export function findHelperNamingViolations(root) {
   const violations = []
   for (const helper of findHelperSources(root)) {
-    violations.push(...analyzeHelperNaming({ file: helper.file, source: readFileSync(helper.file, "utf8") }))
+    violations.push(...analyzeHelperNaming({\n      file: helper.file,\n      source: readFileSync(helper.file, "utf8"),\n    }))
   }
   return violations.sort()
 }
