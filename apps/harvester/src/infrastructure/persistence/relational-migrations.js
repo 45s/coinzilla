@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import {
   OrderHistoryIntegrityError,
   OrderHistoryValidationError,
@@ -181,9 +182,58 @@ function migrateLegacyOrders(transaction) {
   }
 }
 
+function hashLegacyRecords(transaction) {
+  const hash = createHash("sha256")
+  if (!hasTable({
+    transaction,
+    name: "db_records",
+  })) {
+    return {
+      count: 0,
+      checksum: hash.digest("hex"),
+    }
+  }
+  const records = transaction.prepare(
+    "SELECT id, record FROM db_records WHERE collection = ? ORDER BY id",
+  ).all("harvester_orders")
+  for (const record of records) {
+    hash.update(record.id)
+    hash.update("\\0")
+    hash.update(record.record)
+    hash.update("\\0")
+  }
+  return {
+    count: records.length,
+    checksum: hash.digest("hex"),
+  }
+}
+
+function verifyLegacyMigration({ transaction, sourceSnapshot } = {}) {
+  const actualSource = hashLegacyRecords(transaction)
+  if (actualSource.count !== sourceSnapshot.count ||
+    actualSource.checksum !== sourceSnapshot.checksum) {
+    throw new OrderHistoryIntegrityError({
+      field: "legacySourcePreservation",
+    })
+  }
+  const migrated = transaction.prepare(
+    "SELECT COUNT(*) AS count FROM orders WHERE source_kind = ?",
+  ).get("legacy_harvester_orders")
+  if (migrated.count !== sourceSnapshot.count) {
+    throw new OrderHistoryIntegrityError({
+      field: "legacyMigrationCount",
+    })
+  }
+}
+
 function migrateRelationalTradingHistory(transaction) {
+  const sourceSnapshot = hashLegacyRecords(transaction)
   createRelationalTables(transaction)
   migrateLegacyOrders(transaction)
+  verifyLegacyMigration({
+    transaction,
+    sourceSnapshot,
+  })
 }
 
 export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([

@@ -6,7 +6,6 @@ import {
   createSqliteProvider,
 } from "@coinzilla/db"
 import { defaultLogger } from "@coinzilla/utils"
-import { OrderHistoryIntegrityError } from "../../domain/order-history/order-history-errors.js"
 import { createOrderHistoryRepository } from "./order-history-repository.js"
 import { createOrderHistoryObserver } from "./create-order-history-observer.js"
 import { createRelationalOrderHistoryRepository } from "./relational-order-repository.js"
@@ -79,17 +78,11 @@ async function verifyMigrationBackup({ filename, expected } = {}) {
 
 async function createVerifiedMigrationBackup({ database, filename } = {}) {
   if (hasRelationalMigration(database)) {
-    return {
-      backupFilename: null,
-      sourceSnapshot: null,
-    }
+    return null
   }
   const sourceSnapshot = hashLegacyRecords(database)
   if (sourceSnapshot.count === 0) {
-    return {
-      backupFilename: null,
-      sourceSnapshot,
-    }
+    return null
   }
   const backupFilename = `${filename}.pre-relational-v1.${sourceSnapshot.checksum}.backup`
   try {
@@ -110,28 +103,7 @@ async function createVerifiedMigrationBackup({ database, filename } = {}) {
       expected: sourceSnapshot,
     })
   }
-  return {
-    backupFilename,
-    sourceSnapshot,
-  }
-}
-
-function verifyLegacyMigration({ database, sourceSnapshot } = {}) {
-  const actualSource = hashLegacyRecords(database)
-  if (actualSource.count !== sourceSnapshot.count ||
-    actualSource.checksum !== sourceSnapshot.checksum) {
-    throw new OrderHistoryIntegrityError({
-      field: "legacySourcePreservation",
-    })
-  }
-  const migrated = database.prepare(
-    "SELECT COUNT(*) AS count FROM orders WHERE source_kind = ?",
-  ).get("legacy_harvester_orders")
-  if (migrated.count !== sourceSnapshot.count) {
-    throw new OrderHistoryIntegrityError({
-      field: "legacyMigrationCount",
-    })
-  }
+  return backupFilename
 }
 
 async function closePartialRelationalResources({
@@ -177,17 +149,11 @@ async function prepareRelationalResources({
   let fillObserver
   try {
     await relationalDatabase.connect()
-    const migrationState = await createVerifiedMigrationBackup({
+    const migrationBackupFilename = await createVerifiedMigrationBackup({
       database: relationalDatabase,
       filename,
     })
     await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
-    if (migrationState.sourceSnapshot !== null) {
-      verifyLegacyMigration({
-        database: relationalDatabase,
-        sourceSnapshot: migrationState.sourceSnapshot,
-      })
-    }
     const orderRepository = createRelationalOrderHistoryRepository({
       database: relationalDatabase,
     })
@@ -210,7 +176,7 @@ async function prepareRelationalResources({
       relationalDatabase,
       relationalOrderObserver,
       fillObserver,
-      migrationBackupFilename: migrationState.backupFilename,
+      migrationBackupFilename,
     }
   } catch (error) {
     await closePartialRelationalResources({
