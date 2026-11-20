@@ -59,10 +59,15 @@ function makeFill({ tradeId = "sell-1", quantity = "5.01", quoteQuantity = "10.5
   })
 }
 
-function makeOrder({ status = "OPEN", executedQuantity = "0" } = {}) {
+function makeOrder({
+  status = "OPEN",
+  executedQuantity = "0",
+  clientOrderId = "rs-sell-1",
+  brokerOrderId = "broker-sell-1",
+} = {}) {
   return new CanonicalOrder({
-    clientOrderId: "rs-sell-1",
-    brokerOrderId: "broker-sell-1",
+    clientOrderId,
+    brokerOrderId,
     market,
     side: "SELL",
     type: "LIMIT_MAKER",
@@ -181,6 +186,71 @@ function makeWorkflow(context) {
     }],
   })
 }
+
+test("reserves one durable RS SELL per cycle before shared order registration", async () => {
+  const context = makeContext()
+  const workflow = makeWorkflow({
+    ...context,
+    openRegistry: new OrderRegistry(),
+  })
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: "rs-sell-1",
+    brokerOrderId: "broker-sell-1",
+  })
+  const order = makeOrder()
+
+  const withoutDurableIntent = await workflow.reserveSellCycle({
+    order,
+    ownership,
+    durableIntent: false,
+  })
+  assert.equal(withoutDurableIntent.ok, false,
+    "A process-local reservation must never substitute for the durable submission intent.")
+
+  const reserved = await workflow.reserveSellCycle({
+    order,
+    ownership,
+    durableIntent: true,
+  })
+  assert.equal(reserved.ok, true, reserved.errors?.[0]?.message)
+  assert.equal(reserved.data.durable, true,
+    "The reservation is valid only after the durable intent has been committed.")
+  assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 0,
+    "The cycle reservation must exist before the order enters the shared registry.")
+  assert.equal(
+    workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
+    "rs-sell-1",
+  )
+
+  const duplicateOwnership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: "rs-sell-2",
+    brokerOrderId: "broker-sell-2",
+  })
+  const duplicate = await workflow.reserveSellCycle({
+    order: makeOrder({
+      clientOrderId: "rs-sell-2",
+      brokerOrderId: "broker-sell-2",
+    }),
+    ownership: duplicateOwnership,
+    durableIntent: true,
+  })
+  assert.equal(duplicate.ok, false,
+    "A second SELL client order must not reserve the same recovery cycle.")
+  assert.match(duplicate.errors[0].message, /already reserved/i)
+})
+
 
 test("commits reconciled RS projections and releases the shared SELL reservation atomically", async () => {
   const context = makeContext()
