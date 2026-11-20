@@ -702,12 +702,17 @@ function handleTradingOperationalFact({ record, state }) {
     } else if (record.data.strategyId === "RS_recoverySeller") {
       throw new Error("Recovery Seller execution fill has no preceding durable owned order intent")
     }
-    const appliedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
-    if (appliedFillIds.includes(record.data.fillId)) {
-      throw new Error(`Durable recovery cycle contains a duplicate applied fill identity: ${record.data.fillId}`)
+    // The Conservative recovery-cycle fill boundary is strategy-owned.
+    // RS fills are projected separately above and must never contaminate CG
+    // completion/evaluation facts for the same market.
+    if (intent?.strategyId !== "RS_recoverySeller") {
+      const appliedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
+      if (appliedFillIds.includes(record.data.fillId)) {
+        throw new Error(`Durable recovery cycle contains a duplicate applied fill identity: ${record.data.fillId}`)
+      }
+      appliedFillIds.push(record.data.fillId)
+      state.cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
     }
-    appliedFillIds.push(record.data.fillId)
-    state.cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
   }
   if (
     record.factType === "RECOVERY_CYCLE_COMPLETED" ||
