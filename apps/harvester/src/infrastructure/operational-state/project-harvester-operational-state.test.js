@@ -6,6 +6,11 @@ const sessionId = "process-session-1"
 const fingerprint = "f".repeat(64)
 const blockerDigest = "a".repeat(64)
 const blockerId = "b".repeat(64)
+const recoverySellerOwnership = Object.freeze({
+  strategyId: "RS_recoverySeller",
+  positionId: "rs-position-1",
+  cycleId: "rs-cycle-1",
+})
 
 const record = (...parameters) => {
   const [sequence, factType, data, factId = `${factType  }:${  sequence}`, runtimeSessionId = sessionId] = parameters
@@ -322,6 +327,7 @@ function createCompletedRecoveryCycleProjectionRecords() {
     price: "100",
     quantity: "0.4",
     purpose: "RECOVERY_SELL",
+    ...recoverySellerOwnership,
   }, "order-submission-intent:harvester-recovery-sell-1")
   const sellOutcome = record(6, "ORDER_SUBMISSION_OUTCOME", {
     clientOrderId: "harvester-recovery-sell-1",
@@ -336,6 +342,7 @@ function createCompletedRecoveryCycleProjectionRecords() {
     quantity: "0.4",
     executedQuantity: "0.4",
     purpose: "RECOVERY_SELL",
+    ...recoverySellerOwnership,
     outcome: "ACKNOWLEDGED",
     brokerOrderId: "broker-recovery-sell-1",
     status: "FILLED",
@@ -428,6 +435,7 @@ test("projects an explicit durable NOT_COMPLETED outcome for a fully filled reco
     price: "100",
     quantity: "0.4",
     purpose: "RECOVERY_SELL",
+    ...recoverySellerOwnership,
   }, "order-submission-intent:harvester-recovery-sell-continue")
   const sellOutcome = record(6, "ORDER_SUBMISSION_OUTCOME", {
     clientOrderId: "harvester-recovery-sell-continue",
@@ -442,6 +450,7 @@ test("projects an explicit durable NOT_COMPLETED outcome for a fully filled reco
     quantity: "0.4",
     executedQuantity: "0.4",
     purpose: "RECOVERY_SELL",
+    ...recoverySellerOwnership,
     outcome: "ACKNOWLEDGED",
     brokerOrderId: "broker-recovery-sell-continue",
     status: "FILLED",
@@ -510,6 +519,7 @@ test("rejects a completed-cycle fact that names a different terminal SELL order"
     price: "100",
     quantity: "0.4",
     purpose: "RECOVERY_SELL",
+    ...recoverySellerOwnership,
   }, "order-submission-intent:harvester-recovery-sell-identity")
   const sellOutcome = record(6, "ORDER_SUBMISSION_OUTCOME", {
     clientOrderId: "harvester-recovery-sell-identity",
@@ -524,6 +534,7 @@ test("rejects a completed-cycle fact that names a different terminal SELL order"
     quantity: "0.4",
     executedQuantity: "0.4",
     purpose: "RECOVERY_SELL",
+    ...recoverySellerOwnership,
     outcome: "ACKNOWLEDGED",
     brokerOrderId: "broker-recovery-sell-identity",
     status: "FILLED",
