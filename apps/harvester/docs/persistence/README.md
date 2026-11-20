@@ -25,10 +25,13 @@ A **strategy cycle** is a future business-level grouping of one or more orders a
 | `orders` | One row per canonical exchange order | Existing Harvester tuple: `(environment, provider_instance_id, provider_type, account_id, client_order_id)` |
 | `fills` | One row per actual applied exchange execution | `(provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)` |
 | `fill_commissions` | One row per commission asset charged on a fill | `(fill_id, ordinal)` |
+| `history_sync_cursors` | Last fully persisted order/trade IDs per environment, provider instance/type, account, and configured symbol | `(environment, provider_instance_id, provider_type, account_id, symbol)` |
 
 The order primary key preserves the existing `harvester_orders` ID generated from the canonical identity tuple. Exchange order IDs have a non-unique provider/account/environment/market lookup index; provider-specific reuse semantics are not assumed.
 
 The canonical `Fill.id` is `market.id:tradeId`; it is not globally unique. The relational fill primary key is a JSON-encoded tuple containing environment, provider instance/type, account, market ID, and provider execution ID. The original canonical fill ID is retained separately as `canonical_fill_id`.
+
+`ingestion_source` and `last_ingestion_source` distinguish `live_event`, `exchange_history`, and (for migrated orders) `legacy_migration`. The older `source_kind` columns remain compatible with the Phase 1/2 event-projection contract; the separate ingestion fields record whether the row was observed from a live event or an exchange-history scan.
 
 `ingestion_source` and `last_ingestion_source` distinguish `live_event`, `exchange_history`, and (for migrated orders) `legacy_migration`. The older `source_kind` columns remain compatible with the Phase 1/2 event projection contract; ingestion path is recorded separately rather than mislabeling exchange history as a live event.
 
