@@ -31,7 +31,7 @@ test("execution reports use symbol, order ID, and execution ID", () => {
   }), "executionReport:BTCUSDT:10:22")
 })
 
-test("events without a stable ID use exact serialized payload identity", () => {
+test("payload identities are exact and independent of subscription ID", () => {
   const message = {
     subscriptionId: 3,
     event: {
@@ -43,6 +43,13 @@ test("events without a stable ID use exact serialized payload identity", () => {
     },
   }
   assert.equal(getUserDataEventIdentity(message), ["payload:", JSON.stringify(message.event)].join(""))
+  assert.equal(
+    getUserDataEventIdentity({
+      ...message,
+      subscriptionId: 8,
+    }),
+    ["payload:", JSON.stringify(message.event)].join(""),
+  )
   assert.equal(getUserDataEventIdentity({
     ...message,
     event: {
