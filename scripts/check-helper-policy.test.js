@@ -13,7 +13,7 @@ function createFixture() {
   const root = mkdtempSync(join(tmpdir(), "helper-policy-"))
   const directory = join(root, "packages", "example", "src", "helpers")
   mkdirSync(directory, { recursive: true })
-  return { root, directory }
+  return {\n    root,\n    directory,\n  }
 }
 
 test("discovers production helper modules and their directly associated tests", () => {
@@ -27,7 +27,7 @@ test("discovers production helper modules and their directly associated tests", 
 
     assert.deepEqual(
       sources.map(({ file, hasTest }) => ({ file, hasTest })),
-      [{ file: join(directory, "normalize.js"), hasTest: true }],
+      [{\n        file: join(directory, "normalize.js"),\n        hasTest: true,\n      }],
       "The policy scanner must discover production helpers while excluding tests and fixture files.",
     )
   } finally {
@@ -44,7 +44,7 @@ test("reports helper modules without a directly associated unit test", () => {
 
     assert.deepEqual(
       violations,
-      [join(directory, "calculate.js") + ": missing directly associated unit test (calculate.test.js or calculate.spec.js)"],
+      [`${join(directory, "calculate.js")}: missing directly associated unit test (calculate.test.js or calculate.spec.js)`],
       "Every production helper module must have a colocated unit test with a matching filename.",
     )
   } finally {
