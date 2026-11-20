@@ -49,6 +49,10 @@ import { mapUserDataReadinessChangedData } from "../application/events/user-data
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop, assertRecoverySellerEvaluatorConfigured, assertRecoverySellerRuntimeAcceptance } from "./harvester-runtime-helpers.js"
 
+// Keep RS non-executable until issue #1475 RS-4 and RS-5 acceptance evidence is complete.
+const RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = false
+
+
 function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
   if (typeof operationalStateStore?.append !== "function" ||
       typeof operationalStateStore?.verify !== "function" ||
@@ -486,9 +490,6 @@ async function createHarvesterStartupContext({ options } = {}) {
     ...operationalStateCallbacks,
   }
 }
-
-// Keep RS non-executable until issue #1475 RS-4 and RS-5 acceptance evidence is complete.
-const RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = false
 
 function configureRecoverySellerRuntimeDispatch({
   startup,
