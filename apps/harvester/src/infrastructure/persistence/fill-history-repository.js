@@ -120,36 +120,17 @@ function mapCommissions({ commissions } = {}) {
   return result
 }
 
-function mapFillEvent({ fill, sourceEvent, environment } = {}) {
-  const tradingEnvironment = requireString({
-    value: environment,
-    field: "environment",
-  })
-  if (!["testnet", "live"].includes(tradingEnvironment)) {
-    throw new OrderHistoryValidationError({
-      field: "environment",
-    })
-  }
-  const tradeId = requireString({
-    value: fill.tradeId,
-    field: "tradeId",
-  })
-  const fillId = requireString({
-    value: fill.fillId,
-    field: "fillId",
-  })
-  const identitySuffix = `:${tradeId}`
-  if (!fillId.endsWith(identitySuffix) || fillId.length === identitySuffix.length) {
+function resolveMarketId({ fillId, tradeId } = {}) {
+  const suffix = `:${tradeId}`
+  if (!fillId.endsWith(suffix) || fillId.length === suffix.length) {
     throw new OrderHistoryIntegrityError({
       field: "canonicalFillId",
     })
   }
-  const marketId = fillId.slice(0, -identitySuffix.length)
-  if (fill.side !== "BUY" && fill.side !== "SELL") {
-    throw new OrderHistoryValidationError({
-      field: "side",
-    })
-  }
+  return fillId.slice(0, -suffix.length)
+}
+
+function mapFillIdentity({ fill, environment, marketId, tradeId, fillId } = {}) {
   const providerType = requireString({
     value: fill.providerType,
     field: "providerType",
@@ -162,12 +143,9 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
     value: fill.accountId,
     field: "accountId",
   })
-  const commissions = mapCommissions({
-    commissions: fill.commissions,
-  })
   return {
     id: JSON.stringify([
-      tradingEnvironment,
+      environment,
       providerInstanceId,
       providerType,
       accountId,
@@ -178,7 +156,7 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
     provider_type: providerType,
     provider_instance_id: providerInstanceId,
     account_id: accountId,
-    environment: tradingEnvironment,
+    environment,
     market_id: marketId,
     symbol: requireString({
       value: fill.symbol,
@@ -195,6 +173,16 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
           value: fill.clientOrderId,
           field: "clientOrderId",
         }),
+  }
+}
+
+function mapFillExecution({ fill } = {}) {
+  if (fill.side !== "BUY" && fill.side !== "SELL") {
+    throw new OrderHistoryValidationError({
+      field: "side",
+    })
+  }
+  return {
     side: fill.side,
     execution_price: requireDecimal({
       value: fill.price,
@@ -222,10 +210,16 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
     exchange_executed_at: mapExecutionTimestamp({
       value: fill.executedAt,
     }),
-    local_observed_at: requireIsoTimestamp({
-      value: sourceEvent.timestamp,
-      field: "sourceEvent.timestamp",
-    }),
+  }
+}
+
+function mapFillSourceEvent({ sourceEvent } = {}) {
+  const observedAt = requireIsoTimestamp({
+    value: sourceEvent.timestamp,
+    field: "sourceEvent.timestamp",
+  })
+  return {
+    local_observed_at: observedAt,
     source_event_id: requireString({
       value: sourceEvent.id,
       field: "sourceEvent.id",
@@ -242,11 +236,45 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
       value: sourceEvent.source,
       field: "sourceEvent.source",
     }),
-    source_event_timestamp: requireIsoTimestamp({
-      value: sourceEvent.timestamp,
-      field: "sourceEvent.timestamp",
+    source_event_timestamp: observedAt,
+  }
+}
+
+function mapFillEvent({ fill, sourceEvent, environment } = {}) {
+  const tradingEnvironment = requireString({
+    value: environment,
+    field: "environment",
+  })
+  if (!["testnet", "live"].includes(tradingEnvironment)) {
+    throw new OrderHistoryValidationError({
+      field: "environment",
+    })
+  }
+  const tradeId = requireString({
+    value: fill.tradeId,
+    field: "tradeId",
+  })
+  const fillId = requireString({
+    value: fill.fillId,
+    field: "fillId",
+  })
+  const marketId = resolveMarketId({
+    fillId,
+    tradeId,
+  })
+  return {
+    ...mapFillIdentity({
+      fill,
+      environment: tradingEnvironment,
+      marketId,
+      tradeId,
+      fillId,
     }),
-    commissions,
+    ...mapFillExecution({ fill }),
+    ...mapFillSourceEvent({ sourceEvent }),
+    commissions: mapCommissions({
+      commissions: fill.commissions,
+    }),
   }
 }
 
