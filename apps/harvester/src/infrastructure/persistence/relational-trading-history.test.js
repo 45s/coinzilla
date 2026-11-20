@@ -7,13 +7,16 @@ import {
   createDatabase,
   createSqliteDatabase,
   createSqliteProvider,
+  restoreSqliteDatabase,
 } from "@coinzilla/db"
 import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { createOrderHistoryRecord } from "../../domain/order-history/order-history-record.js"
 import { closeHarvesterPersistence } from "./close-harvester-persistence.js"
+import { createFillHistoryObserver } from "./create-fill-history-observer.js"
 import { prepareOrderHistoryPersistence } from "./prepare-order-history-persistence.js"
 import { resolveHarvesterDatabaseFilename } from "./resolve-harvester-database-filename.js"
+import { HARVESTER_RELATIONAL_MIGRATIONS } from "./relational-migrations.js"
 import { createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
 
 async function createTestContext({ t } = {}) {
@@ -21,7 +24,9 @@ async function createTestContext({ t } = {}) {
   const eventBus = new EventBus()
   const filename = resolveHarvesterDatabaseFilename({
     tradingMode: "testnet",
-    env: { HARVESTER_DATABASE_DIRECTORY: directory },
+    env: {
+      HARVESTER_DATABASE_DIRECTORY: directory,
+    },
   })
   let persistence
   t.after(async () => {
@@ -36,16 +41,20 @@ async function createTestContext({ t } = {}) {
     directory,
     eventBus,
     filename,
-    setPersistence: (value) => { persistence = value },
+    setPersistence: (value) => {
+      persistence = value
+    },
   }
 }
 
-async function preparePersistence({ context } = {}) {
+async function preparePersistence({ context, logger = { error() {} } } = {}) {
   const persistence = await prepareOrderHistoryPersistence({
     tradingMode: "testnet",
-    env: { HARVESTER_DATABASE_DIRECTORY: context.directory },
+    env: {
+      HARVESTER_DATABASE_DIRECTORY: context.directory,
+    },
     eventBus: context.eventBus,
-    logger: { error() {} },
+    logger,
   })
   context.setPersistence(persistence)
   return persistence
@@ -141,10 +150,25 @@ async function seedLegacyRecord({ filename, record } = {}) {
   }
 }
 
+function assertUniqueIdentity({ database, table, row } = {}) {
+  const columns = Object.keys(row)
+  const duplicate = {
+    ...row,
+    id: `duplicate:${row.id}`,
+  }
+  const statement = database.prepare(
+    `INSERT INTO ${table} (${columns.join(", ")})
+     VALUES (${columns.map(() => "?").join(", ")})`,
+  )
+  assert.throws(
+    () => statement.run(...columns.map((column) => duplicate[column])),
+    /UNIQUE constraint failed/,
+    `The ${table} scoped identity must reject a second physical row.`,
+  )
+}
+
 function assertMigratedLegacyHistory({ database, legacyRecord } = {}) {
-  const migrated = database.prepare(
-    "SELECT id, executed_quantity, source_kind, source_record_id FROM orders",
-  ).get()
+  const migrated = database.prepare("SELECT * FROM orders").get()
   assert.ok(migrated, "Every valid legacy harvester_orders record must have a relational orders row.")
   assert.equal(migrated.id, legacyRecord.id, "Migration must preserve the original composite order identity.")
   assert.equal(migrated.executed_quantity, legacyRecord.executedQuantity, "Migration must preserve the exact cumulative execution decimal string.")
@@ -157,9 +181,14 @@ function assertMigratedLegacyHistory({ database, legacyRecord } = {}) {
   assert.deepEqual(JSON.parse(source.record), legacyRecord, "Migration must not rewrite the original JSON history record.")
   const fills = database.prepare("SELECT COUNT(*) AS count FROM fills").get()
   assert.equal(fills.count, 0, "Cumulative order execution quantity must never be converted into synthetic fill records.")
+  assertUniqueIdentity({
+    database,
+    table: "orders",
+    row: migrated,
+  })
 }
 
-function createAppliedFillEvent() {
+function createAppliedFillEvent({ overrides = {} } = {}) {
   return {
     fillId: "binance:BTCUSDT:trade-0001",
     tradeId: "trade-0001",
@@ -181,7 +210,30 @@ function createAppliedFillEvent() {
       asset: "BNB",
     }],
     commissionStatus: "COMPLETE",
+    ...overrides,
   }
+}
+
+async function publishAppliedFill({ eventBus, fill } = {}) {
+  eventBus.publish({
+    name: HARVESTER_EVENT_NAMES.FILL_APPLIED,
+    source: "harvester",
+    data: fill,
+  })
+  await eventBus.flush()
+}
+
+function assertFillForeignKey({ database, fill } = {}) {
+  const foreignKeys = database.prepare("PRAGMA foreign_key_list(fills)").all()
+  assert.ok(
+    foreignKeys.some(({ table, from, to }) => table === "orders" && from === "order_id" && to === "id"),
+    "fills.order_id must reference orders.id as a real SQLite foreign key.",
+  )
+  assert.throws(
+    () => database.prepare("UPDATE fills SET order_id = ? WHERE id = ?").run("missing-order-id", fill.id),
+    /FOREIGN KEY constraint failed/,
+    "SQLite must reject a fill reference to a non-existent order.",
+  )
 }
 
 function assertPersistedFill({ database } = {}) {
@@ -200,6 +252,84 @@ function assertPersistedFill({ database } = {}) {
   assert.equal(commission.asset_code, "BNB", "Commission asset code must be preserved.")
   assert.equal(fill.strategy_id, null, "Missing order ownership must remain nullable rather than inventing strategy attribution.")
   assert.equal(fill.order_id, null, "A fill without a verified relational parent order must retain a nullable order reference.")
+  return fill
+}
+
+async function assertBackupAndRollback({ filename, backupFilename, legacyRecord } = {}) {
+  assert.ok(backupFilename, "Existing legacy history must have a verified pre-migration backup.")
+  const stagingFilename = `${filename}.rollback-staging`
+  await restoreSqliteDatabase({
+    backupFilename,
+    filename: stagingFilename,
+    timeout: 5_000,
+  })
+  await inspectSqlite({
+    filename: stagingFilename,
+    work: (database) => {
+      const integrity = database.prepare("PRAGMA integrity_check").get()
+      assert.equal(integrity.integrity_check, "ok", "A restored pre-migration backup must pass SQLite integrity checking.")
+      const source = database.prepare(
+        "SELECT record FROM db_records WHERE collection = ? AND id = ?",
+      ).get("harvester_orders", legacyRecord.id)
+      assert.ok(source, "Rollback must preserve the original legacy order-history record.")
+      assert.deepEqual(JSON.parse(source.record), legacyRecord, "Rollback must restore the exact original source payload.")
+      const ordersTable = database.prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'orders'",
+      ).get()
+      assert.equal(ordersTable, undefined, "The verified backup must represent the pre-relational schema.")
+    },
+  })
+}
+
+function createInterruptedMigration() {
+  return {
+    version: 2,
+    name: "harvester-relational-interrupted-test",
+    up(transaction) {
+      transaction.exec("CREATE TABLE interrupted_probe (id TEXT PRIMARY KEY)")
+      throw new Error("intentional migration interruption")
+    },
+  }
+}
+
+function createRetryMigration() {
+  return {
+    version: 2,
+    name: "harvester-relational-interrupted-test",
+    up(transaction) {
+      transaction.exec("CREATE TABLE retry_probe (id TEXT PRIMARY KEY)")
+    },
+  }
+}
+
+async function assertMigrationRetry({ database } = {}) {
+  await assert.rejects(
+    database.migrate([createInterruptedMigration()]),
+    /intentional migration interruption/,
+    "An interrupted migration must reject instead of recording a successful version.",
+  )
+  const partialTable = database.prepare(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'interrupted_probe'",
+  ).get()
+  assert.equal(partialTable, undefined, "A failed migration must roll back its partial DDL.")
+  const retry = createRetryMigration()
+  await database.migrate([retry])
+  await database.migrate([retry])
+  const applied = database.prepare(
+    "SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?",
+  ).get(2)
+  assert.equal(applied.count, 1, "A repaired migration must apply once and remain idempotent on repetition.")
+}
+
+function createDeferred() {
+  let resolve
+  const promise = new Promise((done) => {
+    resolve = done
+  })
+  return {
+    promise,
+    resolve,
+  }
 }
 
 test("creates versioned physical orders, fills, and commission tables on a fresh database", async (t) => {
@@ -209,6 +339,10 @@ test("creates versioned physical orders, fills, and commission tables on a fresh
   await inspectSqlite({
     filename: context.filename,
     work: (database) => assertFreshRelationalSchema(database),
+  })
+  await persistence.relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
+  await assertMigrationRetry({
+    database: persistence.relationalDatabase,
   })
 })
 
@@ -228,6 +362,19 @@ test("migrates legacy harvester_orders without deleting source records or fabric
       legacyRecord,
     }),
   })
+  await assertBackupAndRollback({
+    filename: context.filename,
+    backupFilename: persistence.migrationBackupFilename,
+    legacyRecord,
+  })
+  await persistence.relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const count = database.prepare("SELECT COUNT(*) AS count FROM orders").get()
+      assert.equal(count.count, 1, "Repeated startup migration must not duplicate migrated order history.")
+    },
+  })
 })
 
 test("persists actual applied fills asynchronously with exact execution and commission facts", async (t) => {
@@ -235,16 +382,278 @@ test("persists actual applied fills asynchronously with exact execution and comm
   const persistence = await preparePersistence({ context })
   assert.ok(persistence, "The existing order-history persistence must remain available when relational fill history is enabled.")
   assert.ok(persistence.fillObserver, "Phase 2 must expose a separate bounded observer for canonical execution.fill_applied events.")
-  context.eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.FILL_APPLIED,
-    source: "harvester",
-    data: createAppliedFillEvent(),
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill: createAppliedFillEvent(),
   })
-  await context.eventBus.flush()
   const observerResult = await persistence.fillObserver.flush()
   assert.equal(observerResult.ok, true, "A valid applied execution must drain successfully into relational history.")
   await inspectSqlite({
     filename: context.filename,
-    work: (database) => assertPersistedFill({ database }),
+    work: (database) => {
+      const fill = assertPersistedFill({ database })
+      assertUniqueIdentity({
+        database,
+        table: "fills",
+        row: fill,
+      })
+      assertFillForeignKey({
+        database,
+        fill,
+      })
+    },
   })
+})
+
+test("preserves very large financial decimals without floating-point conversion", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const price = "999999999999999999999999999999.123456789012345678901234567890"
+  const quantity = "123456789012345678901234567890.12345678901234567890"
+  const quoteQuantity = "123456789012345678901234567890123456789.12345678901234567890"
+  const fill = createAppliedFillEvent({
+    overrides: {
+      fillId: "binance:BTCUSDT:trade-large",
+      tradeId: "trade-large",
+      price,
+      quantity,
+      quoteQuantity,
+    },
+  })
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill,
+  })
+  const result = await persistence.fillObserver.flush()
+  assert.equal(result.ok, true, "Large exact decimal facts must be accepted by relational fill persistence.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const stored = database.prepare("SELECT * FROM fills").get()
+      assert.equal(stored.execution_price, price, "Large execution price must round-trip byte-for-byte.")
+      assert.equal(stored.executed_base_quantity, quantity, "Large base quantity must round-trip byte-for-byte.")
+      assert.equal(stored.executed_quote_quantity, quoteQuantity, "Large quote quantity must round-trip byte-for-byte.")
+    },
+  })
+})
+
+test("deduplicates identical applied executions without creating duplicate commission rows", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const fill = createAppliedFillEvent()
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill,
+  })
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill,
+  })
+  const result = await persistence.fillObserver.flush()
+  assert.equal(result.ok, true, "An identical execution replay must be idempotent.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const fills = database.prepare("SELECT COUNT(*) AS count FROM fills").get()
+      const commissions = database.prepare("SELECT COUNT(*) AS count FROM fill_commissions").get()
+      assert.equal(fills.count, 1, "An identical exchange execution must create exactly one fill row.")
+      assert.equal(commissions.count, 1, "An identical replay must not duplicate actual commission facts.")
+    },
+  })
+})
+
+test("rejects conflicting facts for an already-seen provider-scoped execution identity", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill: createAppliedFillEvent(),
+  })
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill: createAppliedFillEvent({
+      overrides: {
+        price: "100001.00000001",
+      },
+    }),
+  })
+  const result = await persistence.fillObserver.flush()
+  assert.equal(result.ok, false, "Conflicting facts for one scoped execution identity must be reported as an integrity failure.")
+  assert.equal(result.errors[0].code, "HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT", "A conflicting duplicate must retain its stable integrity error code.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const fill = database.prepare("SELECT * FROM fills").get()
+      assert.equal(fill.execution_price, "100000.00000001", "Conflicting replay must not overwrite the original execution fact.")
+    },
+  })
+})
+
+test("rolls back incompatible legacy migration and retries without losing the source record", async (t) => {
+  const context = await createTestContext({ t })
+  const legacyRecord = createLegacyRecord()
+  await seedLegacyRecord({
+    filename: context.filename,
+    record: legacyRecord,
+  })
+  const incompatibleRecord = {
+    ...legacyRecord,
+    id: "incompatible-order-identity",
+  }
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => database.prepare(
+      "UPDATE db_records SET record = ? WHERE collection = ? AND id = ?",
+    ).run(
+      JSON.stringify(incompatibleRecord),
+      "harvester_orders",
+      legacyRecord.id,
+    ),
+  })
+  const failed = await preparePersistence({ context })
+  assert.ok(failed.relationalError, "An incompatible legacy identity must fail relational migration visibly.")
+  assert.equal(failed.relationalDatabase, null, "A failed relational migration must not activate relational observers.")
+  assert.equal(failed.relationalError.code, "HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT", "The migration failure must expose a stable identity-conflict code.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const source = database.prepare(
+        "SELECT record FROM db_records WHERE collection = ? AND id = ?",
+      ).get("harvester_orders", legacyRecord.id)
+      assert.deepEqual(JSON.parse(source.record), incompatibleRecord, "A failed migration must leave the original source collection untouched.")
+      const orders = database.prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'orders'",
+      ).get()
+      assert.equal(orders, undefined, "Failed migration DDL must roll back atomically.")
+    },
+  })
+  await closeHarvesterPersistence(failed)
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => database.prepare(
+      "UPDATE db_records SET record = ? WHERE collection = ? AND id = ?",
+    ).run(
+      JSON.stringify(legacyRecord),
+      "harvester_orders",
+      legacyRecord.id,
+    ),
+  })
+  const recovered = await preparePersistence({ context })
+  assert.ok(recovered.relationalDatabase, "A repaired legacy record must allow the unapplied migration to retry successfully.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => assertMigratedLegacyHistory({
+      database,
+      legacyRecord,
+    }),
+  })
+})
+
+test("keeps TESTNET and LIVE relational histories in separate database files", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-environment-isolation-"))
+  const testnetEventBus = new EventBus()
+  const liveEventBus = new EventBus()
+  let testnetPersistence
+  let livePersistence
+  t.after(async () => {
+    await closeHarvesterPersistence(testnetPersistence ?? {})
+    await closeHarvesterPersistence(livePersistence ?? {})
+    await testnetEventBus.close()
+    await liveEventBus.close()
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  })
+  const env = {
+    HARVESTER_DATABASE_DIRECTORY: directory,
+  }
+  const testnetFilename = resolveHarvesterDatabaseFilename({
+    tradingMode: "testnet",
+    env,
+  })
+  const liveFilename = resolveHarvesterDatabaseFilename({
+    tradingMode: "live",
+    env,
+  })
+  assert.notEqual(testnetFilename, liveFilename, "TESTNET and LIVE must resolve to different SQLite files.")
+  testnetPersistence = await prepareOrderHistoryPersistence({
+    tradingMode: "testnet",
+    env,
+    eventBus: testnetEventBus,
+    logger: { error() {} },
+  })
+  livePersistence = await prepareOrderHistoryPersistence({
+    tradingMode: "live",
+    env,
+    eventBus: liveEventBus,
+    logger: { error() {} },
+  })
+  await publishAppliedFill({
+    eventBus: testnetEventBus,
+    fill: createAppliedFillEvent(),
+  })
+  await publishAppliedFill({
+    eventBus: liveEventBus,
+    fill: createAppliedFillEvent(),
+  })
+  assert.equal((await testnetPersistence.fillObserver.flush()).ok, true, "TESTNET fill history must persist independently.")
+  assert.equal((await livePersistence.fillObserver.flush()).ok, true, "LIVE fill history must persist independently.")
+  await inspectSqlite({
+    filename: testnetFilename,
+    work: (database) => {
+      const row = database.prepare("SELECT environment FROM fills").get()
+      assert.equal(row.environment, "testnet", "TESTNET database rows must retain the TESTNET environment.")
+    },
+  })
+  await inspectSqlite({
+    filename: liveFilename,
+    work: (database) => {
+      const row = database.prepare("SELECT environment FROM fills").get()
+      assert.equal(row.environment, "live", "LIVE database rows must retain the LIVE environment.")
+    },
+  })
+})
+
+test("keeps EventBus delivery non-blocking when the bounded fill queue is full", async (t) => {
+  const eventBus = new EventBus()
+  const deferred = createDeferred()
+  const observer = createFillHistoryObserver({
+    eventBus,
+    repository: {
+      upsert: () => deferred.promise,
+    },
+    environment: "testnet",
+    logger: { error() {} },
+    maxPending: 1,
+  })
+  t.after(async () => {
+    deferred.resolve("cleanup")
+    await observer.close()
+    await eventBus.close()
+  })
+  eventBus.publish({
+    name: HARVESTER_EVENT_NAMES.FILL_APPLIED,
+    source: "harvester",
+    data: createAppliedFillEvent(),
+  })
+  eventBus.publish({
+    name: HARVESTER_EVENT_NAMES.FILL_APPLIED,
+    source: "harvester",
+    data: createAppliedFillEvent({
+      overrides: {
+        fillId: "binance:BTCUSDT:trade-0002",
+        tradeId: "trade-0002",
+      },
+    }),
+  })
+  await eventBus.flush()
+  await Promise.resolve()
+  const diagnostics = observer.getDiagnostics()
+  assert.equal(diagnostics.pendingCount, 1, "The fill observer must enforce its configured pending-write bound.")
+  assert.equal(diagnostics.droppedCount, 1, "Overflow must be recorded as an observable history gap.")
+  deferred.resolve("persisted")
+  const result = await observer.flush()
+  assert.equal(result.ok, false, "A queue overflow must be reported without blocking EventBus delivery.")
+  assert.equal(result.diagnostics.failureCount, 1, "The observer must retain the queue-overflow failure count.")
 })
