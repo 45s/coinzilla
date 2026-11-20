@@ -11553,8 +11553,17 @@ test("routes terminal RS SELL events through mixed-ownership accounting reconcil
     getTerminalFills: async () => [],
   })
   const terminalOrder = new CanonicalOrder({
-    ...order,
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market: order.market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: order.executedQuantity,
     status: "CANCELED",
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
     updatedAt: 3,
     completedAt: 3,
   })

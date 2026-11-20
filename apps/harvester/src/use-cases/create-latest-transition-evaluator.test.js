@@ -180,12 +180,21 @@ test("passes the complete account-scoped RS runtime dependencies to its producti
     recoverySellerWorkflow: { applyBuyFill: async () => ({ ok: true }) },
     recoverySellerStopWorkflow: { isStopped: () => false },
     recoverySellerPairs: { RSUSDT: { enabled: true } },
-    getRecoverySellerMarketMetadata: () => ({ market: { id: "RSUSDT" } }),
-    getAccountSnapshot: () => ({ ok: true, data: {} }),
+    getRecoverySellerMarketMetadata: () => ({
+      market: {
+        id: "RSUSDT",
+      },
+    }),
+    getAccountSnapshot: () => ({
+      ok: true,
+      data: {},
+    }),
     getAdditionalTrackedBaseQuantity: () => "0",
     getAdditionalTrackedQuoteCashFlow: () => "0",
     pause: async () => ({ ok: true }),
-    eventPublisher: { publish: () => ({ ok: true }) },
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+    },
   }
   Object.assign(dependencies, expected)
   let received
