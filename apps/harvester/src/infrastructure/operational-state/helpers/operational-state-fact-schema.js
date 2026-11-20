@@ -7,7 +7,7 @@ export const MAX_RECORD_BYTES = 128 * 1024
 export const SHA256_PATTERN = /^[a-f0-9]{64}$/
 export const SEQUENCE_PATTERN = /^(0|[1-9][0-9]*)$/
 
-export const FACT_TYPES = new Set([
+export const FACT_TYPES = Object.freeze([
   "LEDGER_INITIALIZED",
   "PROCESS_STARTED",
   "PROCESS_STOPPED",

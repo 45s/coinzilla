@@ -21,6 +21,13 @@ Examples:
 - **Roadmap ID(s):** <!-- e.g. FR-017; use N/A only when no roadmap item applies, and explain why. -->
 - **Invariant(s) protected:** <!-- State the concrete correctness/safety invariant(s), or explain why none apply. -->
 
+## Standards compliance
+
+- [ ] Completed the mandatory [AI Task Compliance Standard](../docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md) preflight; applicable standards were read and followed.
+- [ ] Inspected existing implementation, consumers, tests and configuration; no policy was bypassed or weakened.
+- **Applicable standards:** <!-- List canonical documents or N/A with reason. -->
+- **Exceptions/conflicts:** <!-- None, or link the documented decision/blocker. -->
+
 ## Verification
 
 - [ ] Added or updated tests for behavior changes and relevant edge cases, or explained why tests are not applicable.

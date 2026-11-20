@@ -45,13 +45,13 @@ function assertProcessStartedDirectoryMatches({
   if (directoryMatch[1] !== expectedTimestamp || directoryMatch[2] !== expectedSessionId) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_MISMATCH",
-      message: `Process-start identity does not match its session directory: ${directory}`,
-      details: {
+message: `Process-start identity does not match its session directory: ${directory}`,
+details: {
         directory,
         expectedTimestamp,
-        actualTimestamp: directoryMatch[1],
+actualTimestamp: directoryMatch[1],
         expectedSessionId,
-        actualSessionId: directoryMatch[2],
+actualSessionId: directoryMatch[2],
       },
     })
   }
@@ -62,8 +62,8 @@ function parseProcessStarted({ records, directory }) {
   if (startedRecords.length > 1) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
-      message: `Journal session contains more than one harvester.process_started record: ${directory}`,
-      details: { directory,
+message: `Journal session contains more than one harvester.process_started record: ${directory}`,
+details: { directory,
 count: startedRecords.length },
     })
   }
@@ -89,8 +89,8 @@ count: startedRecords.length },
   })) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
-      message: `Journal session has invalid process-start identity metadata: ${directory}`,
-      details: { directory,
+message: `Journal session has invalid process-start identity metadata: ${directory}`,
+details: { directory,
 startedAt,
 runtimeSessionId,
 processId },
@@ -102,7 +102,7 @@ startedAt,
 runtimeSessionId })
   return Object.freeze({
     chronologySource: "PROCESS_STARTED",
-    chronologyTimestamp: timestamp,
+chronologyTimestamp: timestamp,
     startedAt,
     runtimeSessionId,
     processId,
@@ -132,12 +132,12 @@ directory })
   if (!timestampsAreMonotonic) {
     return Object.freeze({
       chronologySource: "UNAVAILABLE",
-      chronologyTimestamp: undefined,
-      firstRecordTimestamp: undefined,
-      lastRecordTimestamp: undefined,
-      startedAt: processStarted?.startedAt ?? null,
-      runtimeSessionId: processStarted?.runtimeSessionId ?? null,
-      processId: processStarted?.processId ?? null,
+chronologyTimestamp: undefined,
+firstRecordTimestamp: undefined,
+lastRecordTimestamp: undefined,
+startedAt: processStarted?.startedAt ?? null,
+runtimeSessionId: processStarted?.runtimeSessionId ?? null,
+processId: processStarted?.processId ?? null,
     })
   }
 
@@ -147,38 +147,38 @@ directory })
     if (eventTimestamps.some((timestamp) => timestamp < processStarted.chronologyTimestamp)) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_PROCESS_IDENTITY_INVALID",
-        message: `A Journal event timestamp precedes its process-start timestamp: ${  directory}`,
-        details: { directory,
+message: `A Journal event timestamp precedes its process-start timestamp: ${  directory}`,
+details: { directory,
 startedAt: processStarted.startedAt },
       })
     }
     return Object.freeze({
       ...processStarted,
-      firstRecordTimestamp: firstRecordTimestamp ?? processStarted.chronologyTimestamp,
-      lastRecordTimestamp: lastRecordTimestamp ?? processStarted.chronologyTimestamp,
+firstRecordTimestamp: firstRecordTimestamp ?? processStarted.chronologyTimestamp,
+lastRecordTimestamp: lastRecordTimestamp ?? processStarted.chronologyTimestamp,
     })
   }
 
   if (firstRecordTimestamp === undefined) {
     return Object.freeze({
       chronologySource: "UNAVAILABLE",
-      chronologyTimestamp: undefined,
-      firstRecordTimestamp: undefined,
-      lastRecordTimestamp: undefined,
-      startedAt: null,
-      runtimeSessionId: null,
-      processId: null,
+chronologyTimestamp: undefined,
+firstRecordTimestamp: undefined,
+lastRecordTimestamp: undefined,
+startedAt: null,
+runtimeSessionId: null,
+processId: null,
     })
   }
 
   return Object.freeze({
     chronologySource: "FIRST_RECORD_TIMESTAMP",
-    chronologyTimestamp: firstRecordTimestamp,
+chronologyTimestamp: firstRecordTimestamp,
     firstRecordTimestamp,
     lastRecordTimestamp,
-    startedAt: null,
-    runtimeSessionId: null,
-    processId: null,
+startedAt: null,
+runtimeSessionId: null,
+processId: null,
   })
 }
 
@@ -202,8 +202,8 @@ function validateSessionChronologyAvailability({ sessions }) {
   if (sources.has("UNAVAILABLE")) {
     throw createHistoryError({
       code: "HARVESTER_JOURNAL_SESSION_ORDER_AMBIGUOUS",
-      message: "One or more Journal sessions have no usable chronology evidence",
-      details: {
+message: "One or more Journal sessions have no usable chronology evidence",
+details: {
         sessions: sessions.map(({ fileName, chronologySource, startedAt }) => ({
           fileName,
           chronologySource,
@@ -221,11 +221,11 @@ function validateUniqueSessionChronology({ sessions }) {
     if (session.chronologyTimestamp === undefined || timestamps.has(session.chronologyTimestamp)) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_SESSION_ORDER_AMBIGUOUS",
-        message: "Journal session chronology is missing or duplicated; session order cannot be proven",
-        details: {
+message: "Journal session chronology is missing or duplicated; session order cannot be proven",
+details: {
           fileName: session.fileName,
-          chronologySource: session.chronologySource,
-          startedAt: session.startedAt,
+chronologySource: session.chronologySource,
+startedAt: session.startedAt,
         },
       })
     }
@@ -234,8 +234,8 @@ function validateUniqueSessionChronology({ sessions }) {
       if (identities.has(session.runtimeSessionId)) {
         throw createHistoryError({
           code: "HARVESTER_JOURNAL_DUPLICATE_SESSION_ID",
-          message: `Duplicate runtime session identity in Journal history: ${  session.runtimeSessionId}`,
-          details: { runtimeSessionId: session.runtimeSessionId },
+message: `Duplicate runtime session identity in Journal history: ${  session.runtimeSessionId}`,
+details: { runtimeSessionId: session.runtimeSessionId },
         })
       }
       identities.add(session.runtimeSessionId)
@@ -254,12 +254,12 @@ function validateOrderedSessionRanges({ orderedSessions }) {
     ) {
       throw createHistoryError({
         code: "HARVESTER_JOURNAL_SESSION_ORDER_AMBIGUOUS",
-        message: "Journal session event ranges overlap; a safe flattened chronology cannot be established",
-        details: {
+message: "Journal session event ranges overlap; a safe flattened chronology cannot be established",
+details: {
           previousSession: previous.fileName,
-          previousLastRecordTimestamp: previous.lastRecordTimestamp,
-          nextSession: current.fileName,
-          nextChronologyTimestamp: current.chronologyTimestamp,
+previousLastRecordTimestamp: previous.lastRecordTimestamp,
+nextSession: current.fileName,
+nextChronologyTimestamp: current.chronologyTimestamp,
         },
       })
     }
@@ -269,9 +269,12 @@ function validateOrderedSessionRanges({ orderedSessions }) {
 export function validateAndOrderSessions(sessions) {
   if (sessions.length <= 1) {
     if (sessions.length === 1) {
-      sessions[0].chronologySource = "SINGLE_SESSION"
+      return [{
+        ...sessions[0],
+chronologySource: "SINGLE_SESSION",
+      }]
     }
-    return sessions
+    return []
   }
   validateSessionChronologyAvailability({ sessions })
   validateUniqueSessionChronology({ sessions })
