@@ -287,9 +287,7 @@ function assertCommissionQuoteValueConstraint({ database, fill } = {}) {
   )
 }
 
-function assertPersistedFill({ database } = {}) {
-  const fill = database.prepare("SELECT * FROM fills").get()
-  assert.ok(fill, "One canonical applied execution must create one physical fills row.")
+function assertFillIdentityAndProvenance({ fill } = {}) {
   assert.equal(fill.canonical_fill_id, "binance:BTCUSDT:trade-0001", "The canonical fill identity must be retained separately from the scoped row key.")
   assert.equal(fill.provider_type, "binance", "Fill provider type must be preserved.")
   assert.equal(fill.provider_instance_id, "binanceTestnet", "Fill provider instance must be preserved.")
@@ -309,12 +307,17 @@ function assertPersistedFill({ database } = {}) {
   assert.equal(fill.source_event_timestamp, fill.local_observed_at, "Source event and local observation timestamps must remain aligned.")
   assert.equal(new Date(fill.local_observed_at).toISOString(), fill.local_observed_at, "Local ingestion timestamps must use canonical UTC ISO-8601.")
   assert.ok(fill.last_observed_at, "The latest local fill observation timestamp must be stored.")
+}
+
+function assertFillFinancialFacts({ fill } = {}) {
   assert.equal(fill.exchange_trade_id, "trade-0001", "The exchange execution identifier must be preserved exactly.")
   assert.equal(fill.execution_price, "100000.00000001", "Execution price must remain an exact decimal string.")
   assert.equal(fill.executed_base_quantity, "0.123456789123", "Base quantity must remain an exact decimal string.")
   assert.equal(fill.executed_quote_quantity, "12345.67890123", "Quote quantity must remain an exact decimal string.")
   assert.equal(fill.exchange_executed_at, "2025-11-18T21:06:40.123Z", "Exchange execution time must be preserved separately in canonical UTC ISO-8601.")
-  assert.ok(fill.local_observed_at, "Local observation time must be recorded independently from exchange execution time.")
+}
+
+function assertFillCommissionFacts({ database, fill } = {}) {
   const commission = database.prepare("SELECT * FROM fill_commissions").get()
   assert.ok(commission, "The actual commission must be stored in a readable commission row.")
   assert.equal(commission.amount, "0.000012340000000001", "Commission amount must retain all supplied decimal precision.")
@@ -327,8 +330,19 @@ function assertPersistedFill({ database } = {}) {
     database,
     fill,
   })
+}
+
+function assertPersistedFill({ database } = {}) {
+  const fill = database.prepare("SELECT * FROM fills").get()
+  assert.ok(fill, "One canonical applied execution must create one physical fills row.")
+  assertFillIdentityAndProvenance({ fill })
+  assertFillFinancialFacts({ fill })
+  assertFillCommissionFacts({
+    database,
+    fill,
+  })
   assert.equal(fill.strategy_id, null, "Missing order ownership must remain nullable rather than inventing strategy attribution.")
-  assert.equal(fill.order_id, null, "A fill without a verified relational parent order must retain a nullable order reference.")
+  assert.equal(fill.order_id, null, "A fill without a verified relational parent must retain a nullable order reference.")
   return fill
 }
 
