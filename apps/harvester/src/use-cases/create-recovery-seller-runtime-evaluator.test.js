@@ -106,7 +106,7 @@ test("builds the runtime snapshot from canonical market, account and stop state"
   const result = await runtime.evaluate(runtime.input)
   const snapshotInput = runtime.getSnapshotInput()
 
-  assert.equal(result.ok, true)
+  assert.equal(result.decision.outcome, "WAIT", "The runtime wrapper must return the pure BUY policy decision unchanged.")
   assert.equal(snapshotInput.marketMetadata, marketMetadata)
   assert.equal(snapshotInput.pairConfig, pairConfig)
   assert.equal(snapshotInput.accountSnapshot, accountSnapshot)
@@ -132,7 +132,7 @@ test("fails closed for stopped, paused or unreconciled runtime state", async () 
   const result = await runtime.evaluate(runtime.input)
   const snapshotInput = runtime.getSnapshotInput()
 
-  assert.equal(result.ok, true)
+  assert.equal(result.decision.outcome, "WAIT", "A blocked runtime snapshot must not submit an order.")
   assert.equal(snapshotInput.strategyStopped, true)
   assert.equal(snapshotInput.marketPaused, true)
   assert.equal(snapshotInput.reconciliationComplete, false)
