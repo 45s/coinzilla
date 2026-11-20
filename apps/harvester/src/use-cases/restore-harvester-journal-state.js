@@ -163,7 +163,10 @@ function getRestoredOrderStatus({ order }) {
   return "UNKNOWN"
 }
 
-function restoreOrder({ order, market }) {
+function restoreOrder({
+      order,
+      market,
+    }) {
   const status = getRestoredOrderStatus({ order })
   if (status === "REJECTED" && order.cumulativeFillQuantity !== "0") {
     throw new Error(`Rejected recovered order contains executed quantity: ${order.clientOrderId}`)
@@ -333,7 +336,11 @@ function recordRecoverySellerBuyExecution({ item, fill, state }) {
   }))
 }
 
-function replayRecoverySellerFill({ item, fill, state }) {
+function replayRecoverySellerFill({
+      item,
+      fill,
+      state,
+    }) {
   if (fill.side === "SELL") {
     throw new Error("Recovery Seller SELL fill cannot be restored without persisted mixed-sell allocation evidence")
   }
@@ -353,7 +360,10 @@ function replayRecoverySellerFill({ item, fill, state }) {
 }
 
 function replayFillEvent({ item, sequence, market, state }) {
-  const fill = restoreFill({ data: item, market })
+  const fill = restoreFill({
+    data: item,
+    market,
+  })
   if (item.strategyId === StrategyId.RECOVERY_SELLER) {
     replayRecoverySellerFill({ item, fill, state })
     return
@@ -612,7 +622,9 @@ function restoreOrderState({ data, marketMetadata, durablePausedMarkets, pausedM
     recoveryManagedPausedMarkets: new Set(),
     recoveryManagedCancellationClientOrderIds: new Set(),
   }
-  const latestSubmissionSequenceBySymbolSide = createLatestSubmissionSequenceBySymbolSide({ orders: data.orders })
+  const latestSubmissionSequenceBySymbolSide = createLatestSubmissionSequenceBySymbolSide({
+    orders: data.orders,
+  })
   for (const order of data.orders) {
     if (order.submissionOutcome === "REJECTED") {
       continue
