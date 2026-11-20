@@ -310,6 +310,14 @@ The implementation uses the existing native WebSocket API klines request and pub
 
 Protocol references: [Binance Spot WebSocket API — Klines](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-api.md#klines) and [Binance Spot Kline Streams](https://github.com/binance/binance-spot-api-docs/blob/master/web-socket-streams.md#klinecandlestick-streams-for-utc).
 
+## Bitunix development workflow
+
+Every Bitunix Spot implementation task must follow the mandatory [Bitunix Spot development workflow](./BITUNIX_WORKFLOW.md). It requires agents to work through the common Broker API and Bitunix provider facade, turn verified protocol findings and operator observations into adapter/error-handling improvements and offline regression tests, and keep capability evidence and documentation synchronized.
+
+**The safety policy is unchanged:** automated tests, CI, scheduled jobs, and AI-agent-executed commands must never mutate a LIVE account. Order-mutation integration tests remain TESTNET-only. A human-initiated local LIVE experiment is a separate, explicitly confirmed operator investigation—not a test—and AI agents must never execute it. The lack of Bitunix Spot TESTNET does not authorize redirecting tests to LIVE; issue [#1185](https://github.com/45s/coinzilla/issues/1185) remains authoritative for lifecycle and production-readiness blockers.
+
+The existing `diagnose:bitunix` command described below remains read-only. It does not submit orders, and it is not the guarded local order experiment. Do not assume that a live-order command exists until a separately reviewed implementation is delivered.
+
 ## Bitunix Spot local diagnostics
 
 The Bitunix diagnostic runner is an explicitly invoked, non-mutating local tool. Application-level read checks run through the same public `Broker` constructor used by consumers (market catalog, price, balances, and open orders); REST and WebSocket clients are accessed directly only for separate transport-level endpoint, request-correlation, connection, and cleanup probes. The diagnostic does not change broker runtime composition or enable trading.
