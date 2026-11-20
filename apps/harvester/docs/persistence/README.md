@@ -2,7 +2,7 @@
 
 **Phase 1/2:** [#1554 — Relational trading history and live fill persistence](https://github.com/45s/coinzilla/issues/1554), completed in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555).
 
-**Phase 3:** [#1556 — Binance startup order and trade-history synchronization](https://github.com/45s/coinzilla/issues/1556), implemented in open [PR #1557](https://github.com/45s/coinzilla/pull/1557). Its required backwards-compatible broker pagination contract is tracked by [#1558](https://github.com/45s/coinzilla/issues/1558) / [PR #1559](https://github.com/45s/coinzilla/pull/1559).
+**Phase 3:** [#1556 — Binance startup order and trade-history synchronization](https://github.com/45s/coinzilla/issues/1556), implemented in open [PR #1557](https://github.com/45s/coinzilla/pull/1557). Its required backwards-compatible broker pagination contract was delivered by merged [#1558](https://github.com/45s/coinzilla/issues/1558) / [PR #1559](https://github.com/45s/coinzilla/pull/1559), merge commit `b06f034daecbd2b6dee9ad68b8426ca3bab106cb`.
 
 **Parent workstream:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
 
