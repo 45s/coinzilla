@@ -94,7 +94,12 @@ function saveCursor({
       symbol, last_order_id, last_trade_id, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
-      ${cursorColumn} = excluded.${cursorColumn},
+      ${cursorColumn} = CASE
+        WHEN ${cursorColumn} IS NULL OR
+          CAST(excluded.${cursorColumn} AS INTEGER) > CAST(${cursorColumn} AS INTEGER)
+        THEN excluded.${cursorColumn}
+        ELSE ${cursorColumn}
+      END,
       updated_at = excluded.updated_at
   `)
   insert.run(
