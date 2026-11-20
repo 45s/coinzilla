@@ -141,7 +141,7 @@ function createBitunixOperatorAttemptDependencies({
   })
   const run = () => runBitunixOperatorOrderAttempt({
     readBroker,
-    createMockBitunixOrderBroker() {
+    createOrderBroker() {
       events.push("order.construct")
       return orderBroker
     },
