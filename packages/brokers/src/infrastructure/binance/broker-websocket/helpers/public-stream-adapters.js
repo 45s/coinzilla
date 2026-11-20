@@ -34,6 +34,6 @@ export function adaptPublicStreamMessage(message) {
     throw new TypeError("Authenticated user-data events are not public market-data events")
   }
 
-  const adapter = publicAdapters[message.e]
+  const adapter = Object.hasOwn(publicAdapters, message.e)\n    ? publicAdapters[message.e]\n    : undefined
   return adapter ? adapter(message) : message
 }
