@@ -1,8 +1,6 @@
 import { requireNonEmptyString, sha256OperationalStateValue } from "../operational-state-canonical.js"
 import { MAX_FACT_ID_LENGTH } from "./operational-state-fact-schema.js"
 
-const TERMINAL_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
-
 function createReconciliationFactId({ marketId, cycleId, sellOrderClientId, sellOrderBrokerOrderId }) {
   const identity = JSON.stringify([
     marketId,
@@ -120,7 +118,7 @@ export function validateRecoverySellerMixedSellReconciledFact({ factType, canoni
   })
   validateAppliedFillIds({ appliedFillIds: canonicalData.appliedFillIds })
   if (
-    !TERMINAL_STATUSES.has(canonicalData.terminalStatus) ||
+    !["FILLED", "CANCELED", "REJECTED", "EXPIRED"].includes(canonicalData.terminalStatus) ||
     canonicalData.accountingApplied !== true ||
     typeof canonicalData.eligible !== "boolean"
   ) {
