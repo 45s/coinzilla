@@ -17,6 +17,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | AI task standards discovery and compliance gate | [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md) |
 | Domain/path ownership | [docs/engineering/DOMAIN_OWNERSHIP.md](docs/engineering/DOMAIN_OWNERSHIP.md) |
 | Bitunix Spot reference-driven implementation | [packages/brokers/AGENTS.md — mandatory Bitunix reference audit](packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit) |
+| Bitunix Spot discovery-to-regression workflow and operator-only LIVE investigation boundary | [packages/brokers/BITUNIX_WORKFLOW.md](packages/brokers/BITUNIX_WORKFLOW.md) |
 | Cross-domain requests | [docs/engineering/CROSS_DOMAIN_REQUESTS.md](docs/engineering/CROSS_DOMAIN_REQUESTS.md) |
 | Module boundaries, feature-folder layout and pure-function extraction | [docs/engineering/MODULARITY_STANDARD.md](docs/engineering/MODULARITY_STANDARD.md) |
 | Shared utility search and reuse | [docs/engineering/SHARED_UTILITIES_POLICY.md](docs/engineering/SHARED_UTILITIES_POLICY.md) |
@@ -60,7 +61,7 @@ All agents must follow the canonical [visual documentation and workflow schemas 
 - Select the smallest applicable checklist from `docs/engineering/TASK_WORKFLOWS.md`.
 - For every refactoring or code-audit task, read and follow the canonical [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md); the applicable task checklist links to it.
 - Identify the owning domain and its roadmap before editing. Local instructions may add domain-specific constraints but must not redefine repository-wide policy.
-- For any Bitunix Spot task, read and follow [the Brokers package's mandatory reference-audit rule](packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit) before implementation; inspect the referenced Spot source and tests first.
+- For any Bitunix Spot task, read and follow [the Brokers package's mandatory agent instructions](packages/brokers/AGENTS.md), including the [mandatory Bitunix workflow](packages/brokers/BITUNIX_WORKFLOW.md) and [reference-audit rule](packages/brokers/AGENTS.md#bitunix-spot-development--mandatory-reference-audit), before implementation; inspect the referenced Spot source and tests first. Human-run local LIVE experiments are not tests and must never be executed by AI agents. The repository's TESTNET-only automated order-test policy remains unchanged.
 - For every JavaScript change, study and follow [ESLint Standard](docs/engineering/ESLINT_STANDARD.md) before editing; do not wait for CI to reveal predictable lint violations.
 - For generic validation, use the public `ensure` API from `@coinzilla/utils`.
   Prefer direct assertions for simple checks and `ensure.chain({ value, name })` for clear multi-step validation/transformation. Use one options object for every call.
