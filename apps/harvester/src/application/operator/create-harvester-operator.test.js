@@ -108,7 +108,6 @@ test("creates an immutable Harvester operator facade without a generic command d
     "resumeBuys",
     "pauseAllBuys",
     "resumeAllBuys",
-    "getRecoverySellerStopState",
   ])
   assert.equal(Object.isFrozen(operator), true)
   assert.equal(typeof operator.pauseMarket, "function")
@@ -123,8 +122,10 @@ test("creates an immutable Harvester operator facade without a generic command d
 
 test("pause authorizes the actor and commits an ADR-0001 durable fact inside the engine transition", async () => {
   const { calls, operationalStateStore, engine } = createHarness()
-  const operator = createHarvesterOperator({ operationalStateStore,
-    engine })
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    engine,
+  })
 
   const result = await operator.pauseMarket({
     actor,
@@ -446,7 +447,10 @@ test("Recovery Seller STOP status query still enforces operator authorization", 
     getBlockerId: () => "rs-stop-blocker-2",
   }
   const { engine } = createHarness()
-  const operator = createHarvesterOperator({ engine, recoverySellerStopWorkflow })
+  const operator = createHarvesterOperator({
+    engine,
+    recoverySellerStopWorkflow,
+  })
 
   const result = await operator.getRecoverySellerStopState({
     actor: { id: "telegram-user:untrusted", roles: [] },
