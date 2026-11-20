@@ -2,7 +2,7 @@ import { userDataEventAdapters } from "./user-data-event-adapters.js"
 import { adaptAggTrades } from "./adapt-trades.js"
 
 /** Binance user-data and public stream event-name mapping. */
-export const binanceWebSocketEventTypes = Object.freeze({
+export const BINANCE_WEBSOCKET_EVENT_TYPES = Object.freeze({
   executionReport: "executionReport",
 outboundAccountPosition: "outboundAccountPosition",
 aggTrade: "aggTrade",
@@ -118,12 +118,12 @@ brokerEvidence: createExecutionReportEvidence(message),
 }
 
 const binanceWebSocketEventAdapters = Object.freeze({
-  [binanceWebSocketEventTypes.executionReport]: adaptExecutedOrder,
-  [binanceWebSocketEventTypes.outboundAccountPosition]: userDataEventAdapters.outboundAccountPosition,
-  [binanceWebSocketEventTypes.aggTrade]: adaptAggTrades,
-  [binanceWebSocketEventTypes.account]: userDataEventAdapters.outboundAccountInfo,
-  [binanceWebSocketEventTypes.balanceUpdate]: userDataEventAdapters.balanceUpdate,
-  [binanceWebSocketEventTypes.listStatus]: userDataEventAdapters.listStatus,
+  [BINANCE_WEBSOCKET_EVENT_TYPES.executionReport]: adaptExecutedOrder,
+  [BINANCE_WEBSOCKET_EVENT_TYPES.outboundAccountPosition]: userDataEventAdapters.outboundAccountPosition,
+  [BINANCE_WEBSOCKET_EVENT_TYPES.aggTrade]: adaptAggTrades,
+  [BINANCE_WEBSOCKET_EVENT_TYPES.account]: userDataEventAdapters.outboundAccountInfo,
+  [BINANCE_WEBSOCKET_EVENT_TYPES.balanceUpdate]: userDataEventAdapters.balanceUpdate,
+  [BINANCE_WEBSOCKET_EVENT_TYPES.listStatus]: userDataEventAdapters.listStatus,
 })
 
 /**
