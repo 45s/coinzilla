@@ -1,5 +1,24 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import {
+  Asset,
+  Balance,
+  CanonicalOrder,
+  Fill,
+  Market,
+  Money,
+  Quantity,
+  TradingRules,
+} from "@coinzilla/entities"
+import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { createOrderOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import {
+  createLegacyPosition,
+  createLegacyPositionAccounting,
+} from "../domain/strategies/recovery-seller/legacy-position.js"
+import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
 import { createRecoverySellerRuntimeEvaluator } from "./create-recovery-seller-runtime-evaluator.js"
 
 const symbol = "ZROUSDT"
@@ -167,4 +186,254 @@ test("skips symbols without an enabled Recovery Seller pair", async () => {
   assert.equal(result.ok, true)
   assert.equal(result.data.skipped, true)
   assert.equal(runtime.getSnapshotInput(), undefined)
+})
+
+
+test("composes a filled recovery BUY into one reserved mixed SELL and blocks a duplicate transition", async () => {
+  const baseAsset = new Asset({
+    id: "binance:ZRO",
+    code: "ZRO",
+  })
+  const quoteAsset = new Asset({
+    id: "binance:USDT",
+    code: "USDT",
+  })
+  const market = new Market({
+    venue: "binance",
+    symbol,
+    baseAsset,
+    quoteAsset,
+  })
+  const buyOrder = new CanonicalOrder({
+    clientOrderId: "rs-buy-1",
+    brokerOrderId: "broker-rs-buy-1",
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 2,
+    updatedAt: 3,
+    completedAt: 3,
+  })
+  const buyOwnership = createOrderOwnership({
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: buyOrder.clientOrderId,
+    brokerOrderId: buyOrder.brokerOrderId,
+  })
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: new OrderRegistry({
+      orders: [buyOrder],
+      ownerships: [buyOwnership],
+    }),
+    initialLegacyPositions: [{
+      market,
+      position: createLegacyPosition({
+        invested: "100",
+        quantity: "50",
+      }),
+      accounting: createLegacyPositionAccounting(),
+    }],
+    createCycleId: () => "rs-cycle-2",
+  })
+  const buyFill = new Fill({
+    tradeId: "rs-buy-fill-1",
+    brokerOrderId: buyOrder.brokerOrderId,
+    clientOrderId: buyOrder.clientOrderId,
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "5.01",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "10.02",
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  const buyResult = await workflow.applyBuyFill({
+    fill: buyFill,
+  })
+  assert.equal(buyResult.ok, true, buyResult.errors?.[0]?.message ?? "The canonical recovery BUY fill must be applied.")
+  assert.equal(workflow.getBuyExecutionVwap({ cycleId: "rs-cycle-1" }), "2",
+    "The runtime snapshot must derive its recovery BUY reference from actual canonical fills.")
+
+  const executionMarketMetadata = {
+    market,
+    orderType: "LIMIT_MAKER",
+    supportedOrderTypes: ["LIMIT_MAKER", "LIMIT"],
+    tradingRules: new TradingRules({
+      market,
+      constraints: [{
+        type: "PRICE_INCREMENT",
+        status: "SUPPORTED",
+        value: new Money({
+          amount: "0.1",
+          asset: quoteAsset,
+        }),
+      }],
+    }),
+  }
+  const executionPairConfig = {
+    sellQuantity: "0.01",
+    thirdAssetFeeQuoteValue: "0",
+  }
+  const accountSnapshotForRuntime = {
+    balances: [new Balance({
+      free: new Quantity({
+        amount: "55.01",
+        asset: baseAsset,
+      }),
+      locked: new Quantity({
+        amount: "0",
+        asset: baseAsset,
+      }),
+    })],
+  }
+  let sellEvaluations = 0
+  let submitCalls = 0
+  let submittedAction
+  const evaluate = createRecoverySellerRuntimeEvaluator({
+    recoverySellerWorkflow: workflow,
+    recoverySellerStopWorkflow: {
+      getState: () => stopState,
+    },
+    recoverySellerPairs: {
+      [symbol]: executionPairConfig,
+    },
+    getRecoverySellerMarketMetadata: async () => executionMarketMetadata,
+    getAccountSnapshot: async () => accountSnapshotForRuntime,
+    isMarketPriceFresh: () => true,
+    isStopping: () => false,
+    hasBlockingOpenOrdersForSymbol: () => false,
+    evaluateSellDecision: () => {
+      sellEvaluations += 1
+      return {
+        stopState,
+        decision: {
+          outcome: "SUBMIT",
+          reasonCode: "RS_SELL_PROFITABILITY_AND_FILTERS_PASSED",
+          explanation: "Test confirms the production transition composition submits its owned SELL.",
+        },
+        orderIntent: {
+          side: "SELL",
+          type: "LIMIT_MAKER",
+          quantity: "5.02",
+          plan: {
+            price: "2",
+          },
+        },
+      }
+    },
+    evaluateBuyDecision: () => ({
+      decision: {
+        outcome: "WAIT",
+        reasonCode: "RS_WAITING_FOR_ORDER_RECONCILIATION",
+        explanation: "No second BUY may be submitted while the sole SELL is active.",
+      },
+    }),
+    submitOrder: async ({ action }) => {
+      submitCalls += 1
+      submittedAction = action
+      const order = new CanonicalOrder({
+        clientOrderId: "rs-sell-1",
+        brokerOrderId: "broker-rs-sell-1",
+        market,
+        side: "SELL",
+        type: action.type,
+        limitPrice: new Money({
+          amount: action.price,
+          asset: quoteAsset,
+        }),
+        originalQuantity: new Quantity({
+          amount: action.quantity,
+          asset: baseAsset,
+        }),
+        executedQuantity: new Quantity({
+          amount: "0",
+          asset: baseAsset,
+        }),
+        status: "PENDING",
+        createdAt: 4,
+        updatedAt: 4,
+      })
+      const ownership = createOrderOwnership({
+        ownership: {
+          strategyId: StrategyId.RECOVERY_SELLER,
+          positionId: action.positionId,
+          purpose: action.purpose,
+          cycleId: action.cycleId,
+        },
+        clientOrderId: order.clientOrderId,
+      })
+      const reserved = await workflow.reserveSellCycle({
+        order,
+        ownership,
+        durableIntent: true,
+      })
+      assert.equal(reserved.ok, true, reserved.errors?.[0]?.message ?? "The sole SELL cycle must be durably reserved before registration.")
+      workflow.getExecutionCallbacks().onPendingOrder({
+        order,
+        ownership,
+      })
+      return {
+        ok: true,
+        data: {
+          submitted: true,
+        },
+      }
+    },
+  })
+  const runtimeInput = {
+    symbol,
+    state: {
+      prices: new Map([[symbol, marketPrice]]),
+      paused: new Set(),
+      durablePausedMarkets: new Set(),
+      operatorPausedMarkets: new Set(),
+    },
+  }
+
+  const submitted = await evaluate(runtimeInput)
+  assert.equal(submitted.ok, true, submitted.errors?.[0]?.message ?? "The production runtime evaluator must submit the profitable mixed SELL.")
+  assert.equal(submitted.data.submitted, true)
+  assert.equal(submittedAction.side, "SELL")
+  assert.equal(submittedAction.purpose, "RECOVERY_SELL")
+  assert.equal(submittedAction.strategyId, StrategyId.RECOVERY_SELLER)
+  assert.equal(submittedAction.positionId, "rs-position-1")
+  assert.equal(submittedAction.cycleId, "rs-cycle-1")
+  assert.equal(submittedAction.price, "12.3")
+  assert.equal(workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId, "rs-sell-1",
+    "The sole cycle reservation must be held for the exact registered SELL order.")
+
+  const blocked = await evaluate(runtimeInput)
+  assert.equal(blocked.ok, true)
+  assert.equal(blocked.data.decision.outcome, "WAIT",
+    "A second evaluation must wait while the first SELL remains active.")
+  assert.equal(submitCalls, 1, "The runtime must not submit a second SELL or a new BUY while the cycle SELL is unresolved.")
+  assert.equal(sellEvaluations, 1, "The SELL policy must not be reevaluated while the owned SELL order is active.")
 })
