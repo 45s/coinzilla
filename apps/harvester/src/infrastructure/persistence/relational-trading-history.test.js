@@ -1225,7 +1225,7 @@ test("resolves exchange order identity only within its full provider scope and r
     includeUnfilled: true,
   })
   await persistence.orderRepository.upsertHistorical(secondOrder)
-  await assert.rejects(
+  assert.throws(
     () => persistence.orderRepository.findByExchangeOrderIdentity(lookup),
     /exchangeOrderIdAmbiguous/,
   )
