@@ -7,8 +7,15 @@ function journalRecord({ name, data, lineNumber }) {
   const id = name
   return {
     id,
-    payload: { id, name, data },
-    position: { fileName: "session.jsonl", lineNumber },
+    payload: {
+      id,
+      name,
+      data,
+    },
+    position: {
+      fileName: "session.jsonl",
+      lineNumber,
+    },
   }
 }
 
@@ -33,12 +40,19 @@ function recoverySellerJournalRecords() {
   return [
     journalRecord({
       name: "order.submission_requested",
-      data: { ...intent, status: "PENDING" },
+      data: {
+        ...intent,
+        status: "PENDING",
+      },
       lineNumber: 1,
     }),
     journalRecord({
       name: "order.submitted",
-      data: { ...intent, brokerOrderId, status: "NEW" },
+      data: {
+        ...intent,
+        brokerOrderId,
+        status: "NEW",
+      },
       lineNumber: 2,
     }),
     journalRecord({
