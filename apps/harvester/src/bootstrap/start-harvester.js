@@ -29,6 +29,7 @@ import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
 import { recordOrderSubmissionIntent } from "../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submission-outcome.js"
 import { recordExecutionFill } from "../use-cases/record-execution-fill.js"
+import { synchronizeAccountHistory } from "../use-cases/synchronize-account-history.js"
 import { recordOrderCancellationIntent } from "../use-cases/record-order-cancellation-intent.js"
 import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
 import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"
@@ -398,6 +399,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     ...startupState.startupOptions,
     env: dependencies.env,
     brokerAdapterFactory: dependencies.brokerAdapterFactory,
+    orderHistoryPersistence: dependencies.orderHistoryPersistence,
     providerIdentity: dependencies.providerIdentity,
     providerRequired: dependencies.providerRequired !== false,
     marketDataProviderInstanceId: dependencies.marketDataProviderInstanceId,
@@ -801,6 +803,47 @@ async function startHarvesterUserDataServices({
   })
 }
 
+async function synchronizeStartupExchangeHistory({ startup, portfolio, resources } = {}) {
+  const identity = startup.providerIdentity ?? portfolio.accountRuntime.identity
+  const persistence = startup.orderHistoryPersistence
+  if (identity.providerType !== "binance" || !Array.isArray(startup.executionSymbols) ||
+      startup.executionSymbols.length === 0) {
+    return
+  }
+  if (typeof persistence?.orderRepository?.upsertHistorical !== "function" ||
+      typeof persistence?.fillRepository?.upsert !== "function") {
+    startup.logger.warn?.({
+      message: "Exchange history synchronization skipped because relational history persistence is unavailable",
+      providerInstanceId: identity.providerInstanceId,
+      environment: startup.tradingMode,
+    })
+    return
+  }
+  const result = await synchronizeAccountHistory({
+    broker: resources.broker,
+    symbols: startup.executionSymbols,
+    providerIdentity: identity,
+    environment: startup.tradingMode,
+    orderRepository: persistence.orderRepository,
+    fillRepository: persistence.fillRepository,
+  })
+  if (result?.ok !== true) {
+    startup.logger.error?.({
+      message: "Exchange history synchronization failed; historical coverage is incomplete",
+      providerInstanceId: identity.providerInstanceId,
+      environment: startup.tradingMode,
+      errors: result?.errors,
+    })
+    return
+  }
+  startup.logger.info?.({
+    message: "Exchange history synchronization completed for configured markets",
+    providerInstanceId: identity.providerInstanceId,
+    environment: startup.tradingMode,
+    ...result.data,
+  })
+}
+
 async function startHarvesterPreflightServices({ startup,
   portfolio,
   resources,
@@ -809,6 +852,11 @@ async function startHarvesterPreflightServices({ startup,
   recoveryRuntime,
   activateTradingEngine } = {}) {
   await initializeHarvesterMarketMetadata({
+    startup,
+    portfolio,
+    resources,
+  })
+  await synchronizeStartupExchangeHistory({
     startup,
     portfolio,
     resources,
