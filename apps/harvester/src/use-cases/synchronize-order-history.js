@@ -40,8 +40,10 @@ function validateCanonicalOrder({
     throw new TypeError(`Binance order history is missing a valid update timestamp for ${symbol}`)
   }
   if (timeWindow &&
-      (order.updatedAt < timeWindow.startTime || order.updatedAt > timeWindow.endTime)) {
-    throw new Error(`Binance order history returned an order outside its requested update-time window for ${symbol}`)
+      (!Number.isSafeInteger(order.createdAt) ||
+        order.createdAt < timeWindow.startTime ||
+        order.createdAt > timeWindow.endTime)) {
+    throw new Error(`Binance order history returned an order outside its requested creation-time window for ${symbol}`)
   }
   const key = createOrderIdentityKey({
     order,
@@ -232,14 +234,6 @@ async function fetchOrderWindow({
     startTime,
     endTime,
   }
-  if (page.ok === false) {
-    validateHistoryPage({
-      result: page,
-      symbol,
-      limit,
-      historyType: "order",
-    })
-  }
   const orders = validateHistoryPage({
     result: page,
     symbol,
@@ -329,6 +323,7 @@ export async function fetchAndPersistOrderByExchangeId({
     result,
   })) {
     state.archivedOrderLookups += 1
+    state.refreshedOrderIds.add(`${symbol}:${brokerOrderId}`)
     return {
       order: null,
       unavailable: true,
@@ -341,6 +336,7 @@ export async function fetchAndPersistOrderByExchangeId({
     historyType: "order",
   })
   if (page.length === 0) {
+    state.refreshedOrderIds.add(`${symbol}:${brokerOrderId}`)
     return {
       order: null,
       unavailable: false,
@@ -360,13 +356,75 @@ export async function fetchAndPersistOrderByExchangeId({
     observedAt: new Date(now()).toISOString(),
     state,
   })
+  state.refreshedOrderIds.add(`${symbol}:${brokerOrderId}`)
   return {
     order,
     unavailable: false,
   }
 }
 
-async function refreshPendingOrders({
+async function fetchCurrentOpenOrders({
+  broker,
+  symbol,
+  repositories,
+  providerIdentity,
+  environment,
+  requestDelayMs,
+  sleep,
+  now,
+  state,
+}) {
+  await waitBeforeHistoryRequest({
+    state,
+    requestDelayMs,
+    sleep,
+  })
+  const result = await broker.getOpenOrders({
+    symbol,
+  })
+  state.requestCount += 1
+  state.openOrderSnapshotsChecked += 1
+  if (result?.ok !== true || !Array.isArray(result.data)) {
+    const details = result?.errors?.map((error) => error?.message ?? String(error)).join("; ")
+    throw new Error(
+      `Unable to fetch Binance open orders for ${symbol}${details ? `: ${details}` : ""}`,
+    )
+  }
+  const seenOrderIds = new Set()
+  for (const openOrder of result.data) {
+    if (openOrder?.symbol !== symbol || openOrder.id === undefined || openOrder.id === null) {
+      throw new TypeError(`Binance open-orders response contains an invalid order for ${symbol}`)
+    }
+    const brokerOrderId = String(openOrder.id)
+    requireNumericCursor({
+      value: brokerOrderId,
+      field: "open order ID",
+      symbol,
+    })
+    if (seenOrderIds.has(brokerOrderId)) {
+      throw new Error(`Binance open-orders response contains duplicate order ID ${brokerOrderId} for ${symbol}`)
+    }
+    seenOrderIds.add(brokerOrderId)
+    state.openOrdersObserved += 1
+    const lookup = await fetchAndPersistOrderByExchangeId({
+      broker,
+      symbol,
+      brokerOrderId,
+      repositories,
+      providerIdentity,
+      environment,
+      requestDelayMs,
+      sleep,
+      now,
+      state,
+    })
+    if (lookup.order === null) {
+      throw new Error(`Binance could not load canonical open order ${brokerOrderId} for ${symbol}`)
+    }
+  }
+}
+
+async function refreshStoredPendingOrders({
   broker,
   symbol,
   repositories,
@@ -396,6 +454,9 @@ async function refreshPendingOrders({
       throw new Error(`Pending Binance order lookup returned duplicate order ID ${brokerOrderId} for ${symbol}`)
     }
     seenOrderIds.add(brokerOrderId)
+    if (state.refreshedOrderIds.has(`${symbol}:${brokerOrderId}`)) {
+      continue
+    }
     const lookup = await fetchAndPersistOrderByExchangeId({
       broker,
       symbol,
@@ -480,7 +541,18 @@ export async function synchronizeOrderHistoryForMarket({
   const orderState = {
     maxOrderId: lastOrderId,
   }
-  await refreshPendingOrders({
+  await fetchCurrentOpenOrders({
+    broker,
+    symbol,
+    repositories,
+    providerIdentity,
+    environment,
+    requestDelayMs,
+    sleep,
+    now,
+    state,
+  })
+  await refreshStoredPendingOrders({
     broker,
     symbol,
     repositories,
