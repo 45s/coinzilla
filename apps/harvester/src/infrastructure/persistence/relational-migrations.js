@@ -286,6 +286,12 @@ function migrateHistorySyncCursors(transaction) {
   `)
 }
 
+function migrateOrderHistoryTimeCursor(transaction) {
+  transaction.exec(
+    "ALTER TABLE history_sync_cursors ADD COLUMN last_order_sync_at TEXT",
+  )
+}
+
 export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([
   Object.freeze({
     version: 1,
@@ -301,5 +307,10 @@ export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([
     version: 3,
     name: "harvester-history-sync-cursors",
     up: migrateHistorySyncCursors,
+  }),
+  Object.freeze({
+    version: 4,
+    name: "harvester-order-history-time-cursor",
+    up: migrateOrderHistoryTimeCursor,
   }),
 ])
