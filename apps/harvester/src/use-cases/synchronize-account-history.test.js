@@ -30,12 +30,12 @@ const market = new Market({
   quoteAsset,
 })
 
-function createOrder({ orderId = "10", executed = "0.1" } = {}) {
+function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, clientOrderId } = {}) {
   return new CanonicalOrder({
     ...identity,
-    clientOrderId: `harvester-${orderId}`,
+    clientOrderId: clientOrderId ?? `harvester-${orderId}`,
     brokerOrderId: orderId,
-    market,
+    market: orderMarket,
     side: "BUY",
     type: "LIMIT",
     limitPrice: new Money({
@@ -57,13 +57,13 @@ function createOrder({ orderId = "10", executed = "0.1" } = {}) {
   })
 }
 
-function createFill({ tradeId = "1", orderId = "10" } = {}) {
+function createFill({ tradeId = "1", orderId = "10", fillMarket = market, clientOrderId } = {}) {
   return new Fill({
     ...identity,
     tradeId,
     brokerOrderId: orderId,
-    clientOrderId: `harvester-${orderId}`,
-    market,
+    clientOrderId: clientOrderId ?? `harvester-${orderId}`,
+    market: fillMarket,
     side: "BUY",
     price: new Money({
       amount: "100",
@@ -107,7 +107,9 @@ function createPagedBroker({ orders, fills, calls }) {
         orderId,
         limit,
       })
-      const next = orders.find((order) => Number(order.brokerOrderId) >= orderId)
+      const next = orders.find((order) =>
+        order.market.symbol === symbol && Number(order.brokerOrderId) >= orderId,
+      )
       return {
         ok: true,
         data: next ? [next] : [],
@@ -119,7 +121,9 @@ function createPagedBroker({ orders, fills, calls }) {
         fromId,
         limit,
       })
-      const next = fills.find((fill) => Number(fill.tradeId) >= fromId)
+      const next = fills.find((fill) =>
+        fill.market.symbol === symbol && Number(fill.tradeId) >= fromId,
+      )
       return {
         ok: true,
         data: next ? [next] : [],
@@ -205,4 +209,66 @@ test("fails closed when an exchange history cursor does not advance", async () =
   assert.match(result.errors[0].message, /strictly increasing/)
   assert.equal(repositories.orders.length, 0)
   assert.equal(repositories.fills.length, 0)
+})
+
+
+test("scopes repeated exchange order and trade IDs independently by configured market", async () => {
+  const ethAsset = new Asset({
+    id: "eth",
+    code: "ETH",
+  })
+  const ethMarket = new Market({
+    venue: "binance",
+    symbol: "ETHUSDT",
+    baseAsset: ethAsset,
+    quoteAsset,
+  })
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const broker = createPagedBroker({
+    orders: [
+      createOrder({
+        orderMarket: market,
+        clientOrderId: "btc-order",
+      }),
+      createOrder({
+        orderMarket: ethMarket,
+        clientOrderId: "eth-order",
+      }),
+    ],
+    fills: [
+      createFill({
+        fillMarket: market,
+        clientOrderId: "btc-order",
+      }),
+      createFill({
+        fillMarket: ethMarket,
+        clientOrderId: "eth-order",
+      }),
+    ],
+    calls,
+  })
+  const result = await synchronizeAccountHistory({
+    broker,
+    symbols: ["BTCUSDT", "ETHUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    limit: 1,
+    requestDelayMs: 0,
+    now: () => 300,
+  })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.marketsQueried, ["BTCUSDT", "ETHUSDT"])
+  assert.equal(result.data.ordersPersisted, 2)
+  assert.equal(result.data.fillsPersisted, 2)
+  assert.deepEqual(
+    repositories.fills.map(({ fill }) => fill.clientOrderId),
+    ["btc-order", "eth-order"],
+  )
 })
