@@ -50,8 +50,8 @@ import { mapUserDataReadinessChangedData } from "../application/events/user-data
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
 import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop, assertRecoverySellerEvaluatorConfigured, assertRecoverySellerRuntimeAcceptance } from "./harvester-runtime-helpers.js"
 
-// Keep RS non-executable until issue #1475 RS-4 and RS-5 acceptance evidence is complete.
-const RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = false
+// RS-4/RS-5 offline acceptance is complete. RS itself remains disabled by default in config.
+const RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = true
 
 
 function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
