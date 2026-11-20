@@ -230,8 +230,14 @@ function createRecoveryFixture({ failReconnect = false, logger = {} } = {}) {
     closeCurrentConnection() {
       ports.get(currentClient).close()
     },
-    runNextTimer: () => runNextRecoveryTimer({ timers, session }),
-    reconnect: () => runNextRecoveryTimer({ timers, session }),
+    runNextTimer: () => runNextRecoveryTimer({
+      timers,
+      session,
+    }),
+    reconnect: () => runNextRecoveryTimer({
+      timers,
+      session,
+    }),
   }
 }
 
