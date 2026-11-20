@@ -266,6 +266,25 @@ function migrateExchangeHistoryProvenance(transaction) {
   `)
 }
 
+function migrateHistorySyncCursors(transaction) {
+  transaction.exec(`
+    CREATE TABLE history_sync_cursors (
+      id TEXT PRIMARY KEY,
+      provider_type TEXT NOT NULL,
+      provider_instance_id TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      environment TEXT NOT NULL CHECK (environment IN ('testnet', 'live')),
+      symbol TEXT NOT NULL,
+      last_order_id TEXT,
+      last_trade_id TEXT,
+      updated_at TEXT NOT NULL,
+      UNIQUE (environment, provider_instance_id, provider_type, account_id, symbol)
+    );
+    CREATE INDEX history_sync_cursors_scope_idx
+      ON history_sync_cursors(environment, provider_instance_id, provider_type, account_id);
+  `)
+}
+
 export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([
   Object.freeze({
     version: 1,
@@ -276,5 +295,10 @@ export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([
     version: 2,
     name: "harvester-exchange-history-provenance",
     up: migrateExchangeHistoryProvenance,
+  }),
+  Object.freeze({
+    version: 3,
+    name: "harvester-history-sync-cursors",
+    up: migrateHistorySyncCursors,
   }),
 ])
