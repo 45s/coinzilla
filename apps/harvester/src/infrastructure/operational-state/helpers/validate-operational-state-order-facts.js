@@ -1,4 +1,5 @@
 import { requireNonEmptyString } from "../operational-state-canonical.js"
+import { validateRecoverySellerSubmissionOwnership } from "../../../domain/orders/recovery-seller-submission-ownership.js"
 import { MAX_FACT_ID_LENGTH } from "./operational-state-fact-schema.js"
 import {
   isCanonicalDecimalString,
@@ -36,39 +37,26 @@ function factIdForOrderOutcome(...parameters) {
 }
 
 function validateDurableOrderOwnership({ canonicalData, context } = {}) {
-  const fields = ["strategyId", "positionId", "cycleId"]
-  const hasOwnership = fields.some((field) => canonicalData[field] !== undefined)
-  if (canonicalData.purpose === null) {
-    if (hasOwnership) {
-      throw new TypeError(`${context} cannot attach strategy ownership to an unowned order`)
-    }
-    return
+  const hasOwnership = ["strategyId", "positionId", "cycleId"].some(
+    (field) => canonicalData[field] !== undefined
+  )
+  const ownership = hasOwnership
+    ? {
+        strategyId: canonicalData.strategyId,
+        positionId: canonicalData.positionId,
+        cycleId: canonicalData.cycleId,
+        purpose: canonicalData.purpose,
+      }
+    : undefined
+  try {
+    validateRecoverySellerSubmissionOwnership({
+      order: { side: canonicalData.side },
+      purpose: canonicalData.purpose ?? null,
+      ownership,
+    })
+  } catch (error) {
+    throw new TypeError(`${context}: ${error.message}`)
   }
-  let expectedSide
-  if (canonicalData.purpose === "RECOVERY_BUY") {
-    expectedSide = "BUY"
-  } else if (canonicalData.purpose === "RECOVERY_SELL") {
-    expectedSide = "SELL"
-  }
-  if (expectedSide === undefined || canonicalData.side !== expectedSide) {
-    throw new TypeError(`${context} purpose must match its canonical order side`)
-  }
-  if (!hasOwnership && canonicalData.purpose === "RECOVERY_SELL") {
-    return
-  }
-  if (canonicalData.strategyId !== "RS_recoverySeller") {
-    throw new TypeError(`${context} Recovery Seller ownership must identify its strategy`)
-  }
-  requireNonEmptyString({
-    value: canonicalData.positionId,
-    field: "data.positionId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
-  requireNonEmptyString({
-    value: canonicalData.cycleId,
-    field: "data.cycleId",
-    maxLength: MAX_FACT_ID_LENGTH,
-  })
 }
 
 function validateOrderSubmissionIntentFields({ canonicalData }) {

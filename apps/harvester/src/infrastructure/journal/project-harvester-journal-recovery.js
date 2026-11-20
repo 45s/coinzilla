@@ -1,3 +1,4 @@
+import { validateRecoverySellerSubmissionOwnership } from "../../domain/orders/recovery-seller-submission-ownership.js"
 import { addDecimal, assertDecimalString, compareDecimal, toResult } from "@coinzilla/utils"
 
 const EVENT = Object.freeze({
@@ -123,6 +124,30 @@ right: mapped.minimumNotional }) >= 0)) {
   return mapped
 }
 
+function requireJournalOrderOwnership({ data } = {}) {
+  const purpose = data.purpose ?? null
+  const hasOwnership = ["strategyId", "positionId", "cycleId"].some(
+    (field) => data[field] !== undefined
+  )
+  const ownership = hasOwnership
+    ? {
+        strategyId: data.strategyId,
+        positionId: data.positionId,
+        cycleId: data.cycleId,
+        purpose,
+      }
+    : undefined
+  const normalized = validateRecoverySellerSubmissionOwnership({
+    order: { side: data.side },
+    purpose,
+    ownership,
+  })
+  return {
+    purpose,
+    ...(normalized ?? {}),
+  }
+}
+
 function requireOrderIntent({ data }) {
   const clientOrderId = requireString({ value: data.clientOrderId,
 field: "clientOrderId" })
@@ -147,17 +172,21 @@ positive: true })
   const quantity = requireDecimal({ value: data.quantity,
 field: "quantity",
 positive: true })
-  return { clientOrderId,
+  const ownership = requireJournalOrderOwnership({ data })
+  return {
+    clientOrderId,
     ...providerIdentity,
-symbol,
-side: data.side,
-type,
-price,
-quantity }
+    symbol,
+    side: data.side,
+    type,
+    price,
+    quantity,
+    ...ownership,
+  }
 }
 
 function assertSameIntent({ current, next }) {
-  for (const field of ["clientOrderId", "providerInstanceId", "providerType", "accountId", "symbol", "side", "type", "price", "quantity"]) {
+  for (const field of ["clientOrderId", "providerInstanceId", "providerType", "accountId", "symbol", "side", "type", "price", "quantity", "purpose", "strategyId", "positionId", "cycleId"]) {
     if (current[field] !== next[field]) {
       throw new Error(`Journal order event changed immutable ${  field  } for ${  current.clientOrderId}`)
     }
@@ -198,12 +227,14 @@ function requireFillIdentity({ data }) {
     providerType: data.providerType,
     accountId: data.accountId,
   } : {}
+  const ownership = requireJournalOrderOwnership({ data })
   return {
     fillId,
     tradeId,
     brokerOrderId,
     ...(clientOrderId === undefined ? {} : { clientOrderId }),
     ...providerIdentity,
+    ...ownership,
   }
 }
 
@@ -910,8 +941,8 @@ function resolveFillOrder({ fill, state }) {
     assertJournalOrderFieldsMatch({
       data: fill,
       order,
-      fields: ["providerInstanceId", "providerType", "accountId"],
-      message: "Applied fill provider provenance conflicts with its journaled order",
+      fields: ["providerInstanceId", "providerType", "accountId", "purpose", "strategyId", "positionId", "cycleId"],
+      message: "Applied fill ownership or provider provenance conflicts with its journaled order",
     })
   }
   if (order.submissionOutcome === "REJECTED") {

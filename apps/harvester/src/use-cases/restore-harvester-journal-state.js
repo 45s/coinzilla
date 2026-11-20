@@ -8,10 +8,11 @@ import {
   Money,
   Quantity,
 } from "@coinzilla/entities"
-import { assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
+import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal, toResult } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { createOrderOwnership } from "../domain/orders/order-ownership.js"
 import { updateTradingAccounting } from "./update-trading-accounting.js"
 
 function requireMarket({ marketMetadata, symbol }) {
@@ -231,9 +232,51 @@ function createPortfolioEvents({ data }) {
   return portfolioEvents
 }
 
+function recordRecoverySellerBuyExecution({ item, fill, state }) {
+  if (typeof item.cycleId !== "string" || !item.cycleId.trim()) {
+    throw new Error(`Recovered Recovery Seller BUY fill has no cycle ownership: ${fill.id}`)
+  }
+  const current = state.recoverySellerBuyExecutionByCycle.get(item.cycleId) ?? {
+    fillIds: new Set(),
+    quantity: "0",
+    quoteQuantity: "0",
+  }
+  if (current.fillIds.has(fill.id)) {
+    return
+  }
+  const fillIds = new Set(current.fillIds)
+  fillIds.add(fill.id)
+  state.recoverySellerBuyExecutionByCycle.set(item.cycleId, Object.freeze({
+    fillIds,
+    quantity: addDecimal(current.quantity, fill.quantity.amount),
+    quoteQuantity: addDecimal(current.quoteQuantity, fill.quoteQuantity.amount),
+  }))
+}
+
+function replayRecoverySellerFill({ item, fill, state }) {
+  if (fill.side === "SELL") {
+    throw new Error("Recovery Seller SELL fill cannot be restored without persisted mixed-sell allocation evidence")
+  }
+  const result = state.portfolio.applyFill({
+    fill,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: item.positionId,
+  })
+  if (!result.ok) {
+    throw result.errors?.[0] ?? new Error(`Unable to replay Recovery Seller fill ${fill.id}`)
+  }
+  state.portfolio = result.data.portfolio
+  if (result.data.applied) {
+    recordRecoverySellerBuyExecution({ item, fill, state })
+  }
+}
+
 function replayFillEvent({ item, sequence, market, state }) {
-  const fill = restoreFill({ data: item, 
-    market })
+  const fill = restoreFill({ data: item, market })
+  if (item.strategyId === StrategyId.RECOVERY_SELLER) {
+    replayRecoverySellerFill({ item, fill, state })
+    return
+  }
   const recoveryLedger = state.recoveryLedgers.get(market.id) ?? RecoveryLedger.empty({ market })
   const result = updateTradingAccounting({
     portfolio: state.portfolio,
@@ -299,7 +342,7 @@ function replayPortfolioEvents({ events, marketMetadata }) {
     completedOrderClientIds: new Set(),
     trailingBuySequenceBySymbol: new Map(),
     completedCycleSequenceBySymbol: new Map(),
-  }
+    recoverySellerBuyExecutionByCycle: new Map(),
   for (const event of events) {
     const { value: item, sequence, type } = event
     const market = requireMarket({ marketMetadata, 
@@ -411,6 +454,7 @@ function markRecoveryManagedCancellation({ order, state, latestSubmissionSequenc
 function restoreOrderState({ data, marketMetadata, durablePausedMarkets, pausedMarkets }) {
   const state = {
     restoredOrders: [],
+    restoredOwnerships: [],
     replacementIntents: new Set(),
     trailingBuyRepriceIntents: new Set(),
     unrequestedTerminalOrderClientIds: new Set(),
@@ -424,8 +468,19 @@ function restoreOrderState({ data, marketMetadata, durablePausedMarkets, pausedM
     }
     const market = requireMarket({ marketMetadata, 
       symbol: order.symbol })
-    state.restoredOrders.push(restoreOrder({ order, 
-      market }))
+    state.restoredOrders.push(restoreOrder({ order, market }))
+    if (order.strategyId === StrategyId.RECOVERY_SELLER) {
+      state.restoredOwnerships.push(createOrderOwnership({
+        ownership: {
+          strategyId: order.strategyId,
+          positionId: order.positionId,
+          purpose: order.purpose,
+          cycleId: order.cycleId,
+        },
+        clientOrderId: order.clientOrderId,
+        ...(order.brokerOrderId === undefined ? {} : { brokerOrderId: order.brokerOrderId }),
+      }))
+    }
     markRecoveryManagedCancellation({
       order,
       state,
@@ -477,11 +532,15 @@ export function restoreHarvesterJournalState({ projection, marketMetadata } = {}
       completedCycleSequenceBySymbol: replayState.completedCycleSequenceBySymbol,
       trailingBuySequenceBySymbol: replayState.trailingBuySequenceBySymbol,
     })
-    const orderRegistry = new OrderRegistry({ orders: orderState.restoredOrders })
+    const orderRegistry = new OrderRegistry({
+      orders: orderState.restoredOrders,
+      ownerships: orderState.restoredOwnerships,
+    })
     return toResult({
       data: Object.freeze({
         portfolio: replayState.portfolio,
         recoveryLedgers: replayState.recoveryLedgers,
+        recoverySellerBuyExecutionByCycle: replayState.recoverySellerBuyExecutionByCycle,
         orderRegistry,
         journalFills: Object.freeze([...data.fills]),
         stickySafetyBlockers: Object.freeze([...stickySafetyBlockers]),

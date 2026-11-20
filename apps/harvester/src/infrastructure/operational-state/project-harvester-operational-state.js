@@ -302,13 +302,13 @@ function mapExecutionFillFact({ data, orderIntents }) {
         strategyId: intent.strategyId,
         positionId: intent.positionId,
         cycleId: intent.cycleId,
-        purpose: intent.purpose,
       }
     : {}
   return [{
     name: EVENT.FILL_APPLIED,
     data: {
       ...mapFill({ data }),
+      purpose: intent?.purpose ?? null,
       ...ownership,
     },
   }]
