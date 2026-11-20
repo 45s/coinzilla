@@ -6,10 +6,10 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 
 | Workflow file | Triggers | Purpose and principal checks | Ruleset requirement (`main` + `develop`) |
 | --- | --- | --- | --- |
-| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`; an independent workspace-quality job with JavaScript syntax and strict full-workspace ESLint (`pnpm lint`, zero errors and warnings); and, for PRs targeting `develop`, an independent `Check strict ESLint for changed files` job. The required `Check JavaScript syntax` aggregator fails unless the workspace job and every applicable changed-file check succeed. The workflow also runs agent-policy/domain-ownership checks, the report-only full-tree baseline, the blocking full-tree maintained Markdown style gate, the blocking maintained-source local-anchor gate, changed-file Markdown style enforcement, and mocked external-link checker unit tests. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
-| `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the workspace package-test matrix offline. Manual `develop` dispatch can explicitly opt into read-only Binance TESTNET integration. | `Run package tests` in both active rulesets. |
-| `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the Node.js test-coverage matrix for all workspace packages and enforces package-specific thresholds where a `test:coverage` script exists (Entities has no separate threshold script). | `Workspace test coverage` in both active rulesets. |
-| `utils-unit-tests.yml` (**Utils Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Recursively discovers and runs all Utils test files (`find packages/utils/src -type f -name '*.test.js' -print0 \| xargs -0 node --test`), including nested feature tests such as `ensure`. | `packages/utils tests` in both active rulesets. |
+| `quality-gate.yml` (**JavaScript Syntax**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs `actionlint`; an independent workspace-quality job with JavaScript syntax and strict full-workspace ESLint (`pnpm lint`, zero errors and warnings); and, for PRs targeting `develop`, an independent `Check strict ESLint for changed files` job. The required `Check JavaScript syntax` aggregator fails unless the workspace job and every applicable changed-file check succeed. The workflow also runs agent-policy/domain-ownership checks, the tested workspace test-matrix guard, the report-only full-tree baseline, maintained Markdown style/anchor gates, changed-file Markdown style enforcement, and mocked external-link checker unit tests. | `actionlint` and `Check JavaScript syntax` are separate required contexts in both active rulesets. |
+| `unit-tests.yml` (**Unit Tests**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs the eight-package unit-test matrix plus the dedicated Utils job offline. The Utils job keeps the existing `packages/utils tests` check name. Manual `develop` dispatch can explicitly opt into read-only Binance TESTNET integration. | `Run package tests` and `packages/utils tests` in both active rulesets. |
+| `test-coverage.yml` (**Test Coverage**) | Pull requests; pushes to `main`/`develop`; manual dispatch | Runs all nine workspace packages once through their package-owned `test:coverage` scripts. Entities now has a package-scoped 90% line / 85% branch / 85% function threshold. | `Workspace test coverage` in both active rulesets. |
+| `utils-unit-tests.yml` | Removed | Utils tests now run once in `unit-tests.yml`; the job name remains `packages/utils tests` so the existing ruleset context is preserved. | No separate workflow. |
 | `dependency-audit.yml` (**Dependency Audit**) | Pull requests; pushes to `main`/`develop`; manual dispatch; weekly schedule | Audits production dependencies with the high-severity threshold. | `Audit production dependencies` in both active rulesets. |
 | `harvester-targeted-tests.yml` (**Harvester Targeted Tests**) | Pull requests; manual dispatch | Runs `pnpm --filter @coinzilla/harvester test:targeted`. | Additional PR workflow; not required by either active ruleset. |
 | `harvester-process-lock.yml` (**Harvester Process Lock**) | Path-filtered pull requests/pushes; manual dispatch | Runs the process-lock regression test on Ubuntu and Windows when process-lock code, Harvester entrypoint, or this workflow changes. | Additional path-filtered workflow; not required by either active ruleset. |
@@ -47,7 +47,7 @@ The networked **External Documentation Links** workflow is an advisory check for
 
 ## Triggers and optional broker validation
 
-- **JavaScript Syntax**, **Unit Tests**, **Utils Unit Tests**, and **Test Coverage** run for pull requests, pushes to `main`/`develop`, and manual dispatch.
+- **JavaScript Syntax**, **Unit Tests** (including the Utils job), and **Test Coverage** run for pull requests, pushes to `main`/`develop`, and manual dispatch.
 - **Dependency Audit** has the same triggers plus a weekly scheduled run on Monday at 07:23 UTC.
 - **Harvester Targeted Tests** runs for pull requests and manual dispatch.
 - **Harvester Process Lock** runs for matching path changes on pull requests/pushes to `main`/`develop`, plus manual dispatch.
@@ -117,8 +117,14 @@ node scripts/check-markdown-style.js "$BASE_SHA"
 # Focused Utils tests
 pnpm --filter @coinzilla/utils test
 
+# Workspace test/coverage matrix consistency guard
+pnpm run check:test-matrix
+
 # Workspace test coverage
 pnpm run test:coverage
+
+# Package-scoped Entities coverage (90% lines / 85% branches / 85% functions)
+pnpm --filter @coinzilla/entities run test:coverage
 
 # Production dependency audit
 pnpm audit --prod --audit-level high
