@@ -157,9 +157,9 @@ it("does not convert financial values through JavaScript Number", () => {
 
 
 it("maps equivalent execution facts to identical canonical fills when E differs from T", async () => {
-  const { adaptMsg } = await import("../broker-websocket/helpers/adapters/adapt-msg.js")
+  const { adaptBinanceWebSocketEvent } = await import("../broker-websocket/helpers/adapters/adapt-binance-websocket-event.js")
   const transactionTime = trade.time
-  const event = adaptMsg({
+  const event = adaptBinanceWebSocketEvent({
     e: "executionReport",
     E: transactionTime + 1,
     s: "BTCUSDT",
