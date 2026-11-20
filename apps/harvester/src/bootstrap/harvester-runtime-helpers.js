@@ -235,6 +235,18 @@ function createRecoveredTradingEngineState(recoveredState) {
   }
 }
 
+export function assertRecoverySellerRuntimeAcceptance({
+  recoverySellerPairs,
+  acceptanceComplete = false,
+} = {}) {
+  if (Object.keys(recoverySellerPairs ?? {}).length === 0) {
+    return
+  }
+  if (acceptanceComplete !== true) {
+    throw new Error("Recovery Seller remains disabled until RS-4 integration and RS-5 offline lifecycle acceptance are complete")
+  }
+}
+
 export function assertRecoverySellerEvaluatorConfigured({
   recoverySellerPairs,
   evaluateRecoverySellerTransition,

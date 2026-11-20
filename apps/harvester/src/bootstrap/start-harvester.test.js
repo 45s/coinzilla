@@ -20,7 +20,10 @@ const testEventPublisher = Object.freeze({
   }),
 })
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
-import { assertRecoverySellerEvaluatorConfigured } from "./harvester-runtime-helpers.js"
+import {
+  assertRecoverySellerEvaluatorConfigured,
+  assertRecoverySellerRuntimeAcceptance,
+} from "./harvester-runtime-helpers.js"
 
 // Include the source file in every reporter test name so failures are identifiable
 // even when the spec reporter output is copied without its surrounding file header.
@@ -560,23 +563,27 @@ const createFill = ({
 }
 
 
-test("rejects configured RS routes without a production evaluator during startup preflight", () => {
-  assert.throws(() => assertRecoverySellerEvaluatorConfigured({
-    recoverySellerPairs: {
-      BTCUSDT: {
-        enabled: true,
-      },
+test("keeps configured RS routes disabled until RS-4 and RS-5 acceptance is complete", () => {
+  const recoverySellerPairs = {
+    BTCUSDT: {
+      enabled: true,
     },
-  }), /before broker connection/)
-  assert.doesNotThrow(() => assertRecoverySellerEvaluatorConfigured({
+  }
+  assert.throws(() => assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs,
+  }), /RS-4 integration and RS-5 offline lifecycle acceptance/)
+  assert.doesNotThrow(() => assertRecoverySellerRuntimeAcceptance({
     recoverySellerPairs: {},
   }))
+  assert.doesNotThrow(() => assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs,
+    acceptanceComplete: true,
+  }))
+  assert.throws(() => assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs,
+  }), /before broker connection/)
   assert.doesNotThrow(() => assertRecoverySellerEvaluatorConfigured({
-    recoverySellerPairs: {
-      BTCUSDT: {
-        enabled: true,
-      },
-    },
+    recoverySellerPairs,
     evaluateRecoverySellerTransition: async () => ({ ok: true }),
   }))
 })

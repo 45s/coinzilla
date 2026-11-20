@@ -491,6 +491,10 @@ function configureRecoverySellerRuntimeDispatch({
   if (Object.keys(startup.recoverySellerPairs ?? {}).length === 0) {
     return
   }
+  assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs: startup.recoverySellerPairs,
+    acceptanceComplete: RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE,
+  })
   startup.evaluateRecoverySellerTransition ??= createRecoverySellerRuntimeDispatch({
     recoverySellerWorkflow,
     recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
