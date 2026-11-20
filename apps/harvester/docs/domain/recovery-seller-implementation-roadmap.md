@@ -328,6 +328,12 @@ Preserve manual/external order ownership. EARN/off-Spot quantity is never availa
 
 **Acceptance:** application tests prove CG and RS run concurrently on different and same markets; fills are applied once to the shared Portfolio and attributed to the correct strategy; shared reservations prevent double-spend/oversell; order lifecycle and broker safety remain correct. Advanced pause/disable/abandon/resume/restart lifecycle functionality is deferred under FITDIB. No parallel execution engine or strategy-specific broker.
 
+### Durable RS lifecycle projection checkpoint (PR #1515)
+
+The verified Operational State Store candidate projector now keeps RS-owned order intents, acknowledged submission outcomes, terminal cancellation outcomes and canonical applied fills grouped by immutable cycle/Position ownership. It validates each RS fill against its original acknowledged client/broker order identity. RS fills are excluded from the Conservative recovery-cycle fill boundary, including when both strategies trade the same market.
+
+The projection is explicitly candidate-only: it never restores an executable Portfolio or OrderRegistry, never opens trading readiness and still requires authoritative exchange/history reconciliation. A terminal broker status, including CANCELED, does not release an RS sole-SELL reservation in the candidate. The durable terminal mixed-SELL accounting boundary and safe state hydration are still outstanding; do not infer them from an order status or fill event alone.
+
 ## RS-5 — Offline lifecycle verification and delivery
 
 **Deliverable:** deterministic end-to-end RS lifecycle proof and current documentation.
