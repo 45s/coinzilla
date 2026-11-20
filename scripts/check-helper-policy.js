@@ -68,6 +68,15 @@ const PROHIBITED_API_PATTERNS = [
     pattern: /\bnew\s+Date\s*\(\s*\)/,
     label: "uncontrolled Date construction",
   },
+  },
+  {
+    pattern: /\bperformance\.now\s*\(/,
+    label: "performance.now",
+  },
+  {
+    pattern: /\bprocess\.(?:cwd|hrtime)\b/,
+    label: "process clock or working directory",
+  },
   {
     pattern: /\b(?:randomBytes|randomUUID)\s*\(/,
     label: "randomness API",
@@ -158,7 +167,7 @@ export function analyzeHelperSource({ file, source }) {
   if (/\bclass\s+[A-Za-z_$][\w$]*/.test(source)) {
     violations.push([file, ": classes are prohibited in helpers"].join(""))
   }
-  if (/^\s*(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:new\s+)?(?:Set|Map)\s*\(/m.test(source)) {
+  if (/^(?:export\s+)?(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:new\s+)?(?:Set|Map)\s*\(/m.test(source)) {
     violations.push([file, ": mutable module-level collections are prohibited"].join(""))
   }
   if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*(?:\.\s*[A-Za-z_$][\w$]*|\[[^\]]+\])\s*=(?!=|>)/.test(source)) {
