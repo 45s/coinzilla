@@ -198,9 +198,9 @@ function hashLegacyRecords(transaction) {
   ).all("harvester_orders")
   for (const record of records) {
     hash.update(record.id)
-    hash.update("\\0")
+    hash.update("\0")
     hash.update(record.record)
-    hash.update("\\0")
+    hash.update("\0")
   }
   return {
     count: records.length,
