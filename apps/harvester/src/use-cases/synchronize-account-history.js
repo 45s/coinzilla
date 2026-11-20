@@ -55,6 +55,7 @@ function validateOptions({
   }
   if (typeof orderRepository?.upsertHistorical !== "function" ||
       typeof orderRepository?.findByExchangeOrderIdentity !== "function" ||
+      typeof orderRepository?.getOldestPendingOrderId !== "function" ||
       typeof fillRepository?.upsert !== "function" ||
       typeof cursorRepository?.get !== "function" ||
       typeof cursorRepository?.saveOrderCursor !== "function" ||
@@ -214,17 +215,30 @@ async function fetchOrderHistoryForMarket({
     environment,
     symbol,
   })
-  let lastOrderId = cursor.lastOrderId === null
+  const storedOrderId = cursor.lastOrderId === null
     ? -1
     : requireNumericCursor({
         value: cursor.lastOrderId,
         field: "stored order ID",
         symbol,
       })
-  if (lastOrderId >= Number.MAX_SAFE_INTEGER) {
+  if (storedOrderId >= Number.MAX_SAFE_INTEGER) {
     throw new RangeError(`Stored Binance order history cursor cannot advance for ${symbol}`)
   }
-  let orderId = lastOrderId + 1
+  const oldestPendingOrderId = await repositories.orderRepository.getOldestPendingOrderId({
+    providerIdentity,
+    environment,
+    symbol,
+  })
+  const pendingOrderCursor = oldestPendingOrderId === null
+    ? storedOrderId + 1
+    : requireNumericCursor({
+        value: oldestPendingOrderId,
+        field: "pending order ID",
+        symbol,
+      })
+  let orderId = Math.min(storedOrderId + 1, pendingOrderCursor)
+  let lastOrderId = orderId - 1
   while (true) {
     await waitBeforeRequest({
       state,
