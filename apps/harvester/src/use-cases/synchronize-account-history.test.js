@@ -158,7 +158,7 @@ function createPagedBroker({ orders, fills, calls }) {
         .filter((order) => orderId === undefined
           ? order.updatedAt >= startTime && order.updatedAt <= endTime
           : order.brokerOrderId === String(orderId))
-        .sort((left, right) => left.updatedAt - right.updatedAt)
+        .sort((left, right) => Number(left.brokerOrderId) - Number(right.brokerOrderId))
       return {
         ok: true,
         data: matchingOrders.slice(0, limit),
