@@ -1,5 +1,5 @@
 import { Fill } from "@coinzilla/entities"
-import { fetchAndPersistOrderByExchangeId } from "./synchronize-order-history.js"
+import { fetchAndPersistOrderByExchangeId } from "./synchronize-order-history-pages.js"
 import {
   createHistorySourceEvent,
   requireNumericCursor,
