@@ -143,7 +143,9 @@ Log at the boundary that owns the operational decision or at the actionable fail
 
 - Preserve the original error object for logger/telemetry integrations where supported.
 - The shared Logger intentionally allowlists standard Error diagnostics. Pass custom `code`, `context`, and `retryable` as explicit structured fields when they are needed in logs.
-- Avoid duplicate logs when an error is rethrown unchanged.
+- Avoid duplicate logs when an error is rethrown unchanged. The layer that decides whether to retry, recover, fall back, or stop owns the single actionable operational log; lower layers should not emit a second identical ERROR entry for the same failure.
+- The retry owner should record a retry attempt and its bounded decision once, with safe operation identity and attempt/budget context. The terminal failure should be reported once when the owner exhausts the policy or decides not to retry.
+- When a permitted fallback is used, report that degraded/stale state explicitly with safe source/age/reason context. Do not log an error and then present the fallback as an ordinary current success.
 - Do not log and then silently continue unless that is an explicitly tested recovery policy.
 - A logging or notification failure must not mask the original operational failure.
 - User-facing messages should be safe and understandable; detailed diagnostics belong in protected logs.
@@ -173,7 +175,7 @@ Tests for new or materially changed error behavior should verify, as applicable:
 - propagation and wrapping at the intended architectural boundary, including result-envelope compatibility;
 - known versus unknown mutation outcomes, authoritative reconciliation, and fail-closed behavior when uncertainty remains;
 - explicit fallback behavior, including stale/degraded labeling when a last-known read snapshot is permitted;
-- behavior when logging, reporting, cleanup, or recovery itself fails, including preservation of multiple failures where relevant;
+- single-boundary logging for retry/fallback/terminal decisions, and behavior when logging, reporting, cleanup, or recovery itself fails, including preservation of multiple failures where relevant;
 - compatibility of public exports and any serialized diagnostic representation.
 
 Use deterministic tests and meaningful assertion messages. Follow the mandatory RED → GREEN → REFACTOR process in [Engineering Standards](../../ENGINEERING_STANDARDS.md).
