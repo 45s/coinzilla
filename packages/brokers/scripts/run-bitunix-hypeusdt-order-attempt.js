@@ -226,13 +226,20 @@ export async function createOneShotMarker({
   if (typeof markerPath !== "string" || markerPath.trim() === "") {
     throw new TypeError("Bitunix operator marker path must be a non-empty string")
   }
-  if (!preflight?.order || preflight.order.symbol !== HYPEUSDT_ORDER.symbol) {
-    throw new TypeError("Bitunix operator marker requires the validated HYPEUSDT order intent")
+  const orderMatchesFixedIntent = preflight?.order &&
+    preflight.order.symbol === HYPEUSDT_ORDER.symbol &&
+    preflight.order.side === HYPEUSDT_ORDER.side &&
+    preflight.order.type === HYPEUSDT_ORDER.type &&
+    preflight.order.price === HYPEUSDT_ORDER.price &&
+    preflight.order.quantity === HYPEUSDT_ORDER.quantity &&
+    preflight.order.notional === HYPEUSDT_ORDER.notional
+  if (!orderMatchesFixedIntent) {
+    throw new TypeError("Bitunix operator marker requires the exact fixed HYPEUSDT order intent")
   }
   const marker = {
     createdAt: new Date(now()).toISOString(),
     status: "DISPATCH_STARTED",
-    order: preflight.order,
+    order: HYPEUSDT_ORDER,
   }
   await mkdir(dirname(markerPath), {
     recursive: true,
