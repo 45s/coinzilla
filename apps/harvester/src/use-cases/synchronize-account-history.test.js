@@ -63,7 +63,7 @@ function createOrder({
   })
 }
 
-function createFill({ tradeId = "1", orderId = "10", fillMarket = market, clientOrderId } = {}) {
+function createFill({ tradeId = "1", orderId = "10", fillMarket = market, clientOrderId, executedAt = 200 } = {}) {
   return new Fill({
     ...identity,
     tradeId,
@@ -84,7 +84,7 @@ function createFill({ tradeId = "1", orderId = "10", fillMarket = market, client
       asset: fillMarket.quoteAsset,
     }),
     liquidityRole: "MAKER",
-    executedAt: 200,
+    executedAt,
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -95,9 +95,11 @@ function createRepositories() {
   const fills = []
   const cursors = new Map()
   const orderIdentities = new Map()
+  const orderCursorSaves = []
   return {
     orders,
     fills,
+    orderCursorSaves,
     orderRepository: {
       upsertHistorical: async (record) => {
         orders.push(record)
@@ -122,6 +124,7 @@ function createRepositories() {
         lastTradeId: null,
       },
       saveOrderCursor: async ({ symbol, lastOrderId, lastOrderSyncAt }) => {
+        orderCursorSaves.push({ symbol, lastOrderId, lastOrderSyncAt })
         const current = cursors.get(symbol) ?? {}
         cursors.set(symbol, {
           ...current,
@@ -167,12 +170,14 @@ function createPagedBroker({ orders, fills, calls }) {
         fromId,
         limit,
       })
-      const next = fills.find((fill) =>
-        fill.market.symbol === symbol && Number(fill.tradeId) >= fromId,
-      )
+      const matchingFills = fills
+        .filter((fill) =>
+          fill.market.symbol === symbol && Number(fill.tradeId) >= fromId,
+        )
+        .sort((left, right) => Number(left.tradeId) - Number(right.tradeId))
       return {
         ok: true,
-        data: next ? [next] : [],
+        data: matchingFills.slice(0, limit),
       }
     },
   }
@@ -186,13 +191,13 @@ test("paginates configured-market order and trade history and persists exchange 
   }
   const broker = createPagedBroker({
     orders: [
-      createOrder({ orderId: "10", updatedAt: 100 }),
-      createOrder({ orderId: "11", updatedAt: 200 }),
+      createOrder({ orderId: "11", updatedAt: 100 }),
+      createOrder({ orderId: "10", updatedAt: 200 }),
       createOrder({ orderId: "12", updatedAt: 300 }),
     ],
     fills: [
-      createFill({ tradeId: "1", orderId: "10" }),
-      createFill({ tradeId: "2", orderId: "11" }),
+      createFill({ tradeId: "1", orderId: "11" }),
+      createFill({ tradeId: "2", orderId: "10" }),
       createFill({ tradeId: "3", orderId: "12" }),
     ],
     calls,
@@ -218,7 +223,7 @@ test("paginates configured-market order and trade history and persists exchange 
   assert.equal(result.data.fillsPersisted, 3, "Trade-history pagination must persist all three executions returned by the exchange.")
   assert.equal(repositories.orders[0].ownership, undefined, "Exchange history must not invent strategy ownership for a previously external order.")
   assert.equal(repositories.fills[0].ingestionSource, "exchange_history", "Backfilled executions must retain exchange-history provenance.")
-  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10", "A fill must retain the client-order identity verified from its exchange order.")
+  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-11", "A fill must retain the client-order identity verified from its exchange order.")
   assert.equal(calls.orders[0].orderId, undefined, "Symbol-wide order-history pages must not use the exact-order lookup parameter as a cursor.")
   assert.equal(calls.orders[0].startTime, 0, "The initial order-history scan must begin at the configured lookback boundary.")
   assert.equal(calls.orders[0].endTime, 300, "The initial order-history scan must end at the injected startup time.")
@@ -467,4 +472,99 @@ test("links later fills to a stored order after its order cursor has advanced", 
   assert.equal(second.data.ordersObserved, 0, "No old terminal order should be re-observed when its update time predates the overlap.")
   assert.equal(second.data.fillsPersisted, 1, "A newly available trade must still be persisted after the order cursor has advanced.")
   assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10", "The fill must link through the previously persisted scoped exchange-order identity.")
+})
+
+
+test("does not advance the order-history checkpoint when a later bounded window fails", async () => {
+  const repositories = createRepositories()
+  let orderPage = 0
+  let fillRequests = 0
+  const broker = {
+    getCanonicalOrderHistory: async () => {
+      orderPage += 1
+      if (orderPage === 1) {
+        return {
+          ok: true,
+          data: [createOrder({ updatedAt: 100 })],
+        }
+      }
+      return {
+        ok: false,
+        errors: [new Error("second order-history window failed")],
+      }
+    },
+    getFills: async () => {
+      fillRequests += 1
+      return {
+        ok: true,
+        data: [],
+      }
+    },
+  }
+  const result = await synchronizeAccountHistory({
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 2,
+    requestDelayMs: 0,
+    now: () => 86400001,
+  })
+
+  assert.equal(result.ok, false, "A failed order-history window must fail the market scan.")
+  assert.equal(repositories.orders.length, 1, "Successfully persisted earlier windows may remain for idempotent replay.")
+  assert.equal(repositories.orderCursorSaves.length, 0, "The durable order checkpoint must advance only after every window succeeds.")
+  assert.equal(fillRequests, 0, "Trade-history pagination must not start after an incomplete order-history scan.")
+  assert.equal(result.errors[0].historyDiagnostics.orderPagesChecked, 2, "Diagnostics must include the failed bounded order-history request.")
+  assert.equal(result.errors[0].historyDiagnostics.historyPagesComplete, false, "A partial order scan must never be reported complete.")
+})
+
+
+test("resolves older fill orders by exact exchange identity when outside the initial order lookback", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const now = 200 * 24 * 60 * 60 * 1000
+  const oldOrder = createOrder({
+    orderId: "10",
+    updatedAt: 80 * 24 * 60 * 60 * 1000,
+  })
+  const oldFill = createFill({
+    tradeId: "1",
+    orderId: "10",
+    executedAt: 80 * 24 * 60 * 60 * 1000,
+    clientOrderId: null,
+  })
+  const broker = createPagedBroker({
+    orders: [oldOrder],
+    fills: [oldFill],
+    calls,
+  })
+  const result = await synchronizeAccountHistory({
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 2,
+    requestDelayMs: 0,
+    now: () => now,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map((error) => error.message).join("; "))
+  assert.equal(repositories.orders.length, 1, "An older order must be fetched by exact exchange order identity when the time-window backfill cannot include it.")
+  assert.equal(repositories.fills.length, 1, "The older exchange execution must still be imported from its durable trade cursor.")
+  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10", "The exact historical order lookup must provide the verified client-order identity for the fill.")
+  assert.equal(
+    calls.orders.some(({ orderId }) => orderId === "10"),
+    true,
+    "The fallback order lookup must use the exact exchange order ID, not reinterpret it as a page cursor.",
+  )
 })
