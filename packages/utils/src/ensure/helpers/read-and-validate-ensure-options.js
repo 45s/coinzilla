@@ -3,7 +3,7 @@
  * @param {{ record: object, key: string }} options
  * @returns {unknown}
  */
-export function readOption({ record, key }) {
+export function readEnsureOptionProperty({ record, key }) {
   let descriptor
   try {
     descriptor = Object.getOwnPropertyDescriptor(record, key)
@@ -24,7 +24,7 @@ export function readOption({ record, key }) {
  * @param {{ options: unknown }} options
  * @returns {object}
  */
-export function readOptions({ options }) {
+export function validateEnsureOptionsRecord({ options }) {
   if (options === null || typeof options !== "object") {
     throw new TypeError("options must be an object")
   }
@@ -48,7 +48,7 @@ export function readOptions({ options }) {
  * @param {{ name?: unknown }} options
  * @returns {string}
  */
-export function resolveName({ name }) {
+export function resolveEnsureDiagnosticName({ name }) {
   if (name === undefined) {
     return "value"
   }
@@ -63,7 +63,7 @@ export function resolveName({ name }) {
  * @param {{ errMsg?: unknown }} options
  * @returns {string|undefined}
  */
-export function resolveErrorMessage({ errMsg }) {
+export function resolveEnsureErrorMessage({ errMsg }) {
   if (errMsg === undefined) {
     return undefined
   }
@@ -78,24 +78,24 @@ export function resolveErrorMessage({ errMsg }) {
  * @param {{ options: unknown }} options
  * @returns {{ value: unknown, name: string, errMsg?: string, record: object }}
  */
-export function readValueOptions({ options }) {
-  const record = readOptions({ options })
-  const value = readOption({
+export function readEnsureAssertionOptions({ options }) {
+  const record = validateEnsureOptionsRecord({ options })
+  const value = readEnsureOptionProperty({
     record,
     key: "value",
   })
-  const name = readOption({
+  const name = readEnsureOptionProperty({
     record,
     key: "name",
   })
-  const errMsg = readOption({
+  const errMsg = readEnsureOptionProperty({
     record,
     key: "errMsg",
   })
   return {
     value,
-    name: resolveName({ name }),
-    errMsg: resolveErrorMessage({ errMsg }),
+    name: resolveEnsureDiagnosticName({ name }),
+    errMsg: resolveEnsureErrorMessage({ errMsg }),
     record,
   }
 }

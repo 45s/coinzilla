@@ -15,7 +15,7 @@ import { defaultLogger } from './logger.js'
  * @param {{ envVarName: string, where?: string, logger?: FeatureFlagLogger }} options
  * @returns {boolean}
  */
-export function checkIfFeatureEnable({ envVarName, where, logger = defaultLogger } = {}) {
+export function isFeatureEnabled({ envVarName, where, logger = defaultLogger } = {}) {
   try {
     const value = process.env[envVarName]
     if (value === '1') {
@@ -32,7 +32,7 @@ export function checkIfFeatureEnable({ envVarName, where, logger = defaultLogger
     handleErr({
       error,
       logger,
-      where: checkIfFeatureEnable.name,
+      where: isFeatureEnabled.name,
     })
     return false
   }
