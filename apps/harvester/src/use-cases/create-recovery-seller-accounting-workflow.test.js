@@ -514,7 +514,7 @@ test("keeps both accounting projections and the SELL reservation unchanged when 
 
   assert.equal(result.ok, false, "A failed durable reconciliation append must abort the terminal accounting transition.")
   assert.equal(result.errors[0].code, "RS_MIXED_SELL_DURABLE_FACT_COMMIT_FAILED", "A durable append failure must expose a stable Recovery Seller error code.")
-  assert.match(result.errors[0].message, /durable fact append failed/, "The original durable append failure must remain diagnosable.")
+  assert.match(result.errors[0].cause.message, /durable fact append failed/, "The original durable append failure must remain available as the native cause.")
   assert.equal(workflow.getPortfolio(), portfolioBefore, "Portfolio publication must wait for durable reconciliation.")
   assert.equal(workflow.getLegacyPosition({ marketId: market.id }), legacyBefore, "Legacy accounting publication must wait for durable reconciliation.")
   assert.equal(workflow.getOrderRegistry(), registryBefore, "The terminal OrderRegistry projection must not publish after a failed append.")
