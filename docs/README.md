@@ -58,6 +58,7 @@ Each active application/package owns its local README, agent instructions, roadm
 ## Shared package entry points
 
 - [Brokers](../packages/brokers/README.md) — exchange integration and broker operations
+- [Bitunix Spot development workflow](../packages/brokers/BITUNIX_WORKFLOW.md) — mandatory evidence-to-implementation process and operator-only LIVE investigation boundary
 - [Database](../packages/db/README.md) — provider-neutral CRUD infrastructure with built-in SQLite provider
 - [Entities](../packages/entities/README.md) — exchange-neutral domain contracts and financial value objects
 - [Event Bus](../packages/event-bus/README.md) — bounded in-process event delivery
