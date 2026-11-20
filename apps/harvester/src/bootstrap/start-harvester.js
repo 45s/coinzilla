@@ -809,17 +809,28 @@ function shouldSynchronizeStartupHistory({ identity, symbols } = {}) {
     symbols.length > 0
 }
 
+function hasOrderHistoryRepository({ persistence } = {}) {
+  const repository = persistence?.orderRepository
+  return typeof repository?.upsertHistorical === "function" &&
+    typeof repository?.findByExchangeOrderIdentity === "function" &&
+    typeof repository?.getOldestPendingOrderId === "function"
+}
+
+function hasFillHistoryRepository({ persistence } = {}) {
+  return typeof persistence?.fillRepository?.upsert === "function"
+}
+
+function hasHistoryCursorRepository({ persistence } = {}) {
+  const repository = persistence?.historySyncCursorRepository
+  return typeof repository?.get === "function" &&
+    typeof repository?.saveOrderCursor === "function" &&
+    typeof repository?.saveTradeCursor === "function"
+}
+
 function hasHistoryPersistence({ persistence } = {}) {
-  const requiredMethods = [
-    persistence?.orderRepository?.upsertHistorical,
-    persistence?.orderRepository?.findByExchangeOrderIdentity,
-    persistence?.orderRepository?.getOldestPendingOrderId,
-    persistence?.fillRepository?.upsert,
-    persistence?.historySyncCursorRepository?.get,
-    persistence?.historySyncCursorRepository?.saveOrderCursor,
-    persistence?.historySyncCursorRepository?.saveTradeCursor,
-  ]
-  return requiredMethods.every((method) => typeof method === "function")
+  return hasOrderHistoryRepository({ persistence }) &&
+    hasFillHistoryRepository({ persistence }) &&
+    hasHistoryCursorRepository({ persistence })
 }
 
 function logHistorySyncSkipped({ startup, identity } = {}) {
