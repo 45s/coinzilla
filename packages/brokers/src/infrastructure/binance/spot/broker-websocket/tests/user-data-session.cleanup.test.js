@@ -99,14 +99,19 @@ warn() {} },
 
 
   it("attempts every listener cleanup even when an earlier remover throws", async () => {
-    const removals = { event: 0, error: 0, close: 0 }
+    const removals = { event: 0,
+error: 0,
+close: 0 }
     const logs = []
-    const fixture = createListenerDetachFixture({ removals, logs })
+    const fixture = createListenerDetachFixture({ removals,
+logs })
     await fixture.broker.connect()
     const subscription = await fixture.broker.subscribeForUserData({ onEvent() {} })
     assert.equal(subscription.ok, true)
     await assert.doesNotReject(fixture.broker.disconnect())
-    assert.deepEqual(removals, { event: 1, error: 1, close: 2 })
+    assert.deepEqual(removals, { event: 1,
+error: 1,
+close: 2 })
     await assertListenerCleanup({
       broker: fixture.broker,
       client: fixture.client,
@@ -137,19 +142,29 @@ function createListenerDetachFixture({ removals, logs }) {
       const registerError = client.onError.bind(client)
       const registerClose = client.onClose.bind(client)
       client.onEvent = (listener) => createFailingRemover({
-        register: registerEvent, listener, removals, key: "event",
+        register: registerEvent,
+listener,
+removals,
+key: "event",
       })
       client.onError = (listener) => createFailingRemover({
-        register: registerError, listener, removals, key: "error",
+        register: registerError,
+listener,
+removals,
+key: "error",
       })
       client.onClose = (listener) => createFailingRemover({
-        register: registerClose, listener, removals, key: "close",
+        register: registerClose,
+listener,
+removals,
+key: "close",
       })
       return client
     },
     marketClientFactory: () => createFakeStreamsClient(),
   })
-  return { broker, get client() { return client } }
+  return { broker,
+get client() { return client } }
 }
 
 function createFailingRemover({ register, listener, removals, key }) {

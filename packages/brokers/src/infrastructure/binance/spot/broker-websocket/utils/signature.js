@@ -96,7 +96,10 @@ export function createSignedBinanceParams(...args) {
     timestamp = Date.now(),
     recvWindow,
   } = {}] = args
-  validateSignedParams({ params, apiKey, timestamp, recvWindow })
+  validateSignedParams({ params,
+apiKey,
+timestamp,
+recvWindow })
 
   const unsigned = {
     ...params,

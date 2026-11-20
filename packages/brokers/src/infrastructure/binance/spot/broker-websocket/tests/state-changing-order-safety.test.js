@@ -24,20 +24,36 @@ function createMutationSafetyFixture() {
     tradingMode: "testnet",
     apiKey: "test-key",
     apiSecret: "test-secret",
-    logger: { error() {}, info() {}, warn() {}, debug() {} },
-  }, { apiClientFactory: () => rpc, setTimeoutFn, clearTimeoutFn })
+    logger: { error() {},
+info() {},
+warn() {},
+debug() {} },
+  }, { apiClientFactory: () => rpc,
+setTimeoutFn,
+clearTimeoutFn })
   broker.connected = true
-  return { broker, rpc, timers }
+  return { broker,
+rpc,
+timers }
 }
 
 function createBlockedMutationResults(broker) {
   return Promise.all([
-    broker.createOrder({ symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01", price: "50000" }),
+    broker.createOrder({ symbol: "BTCUSDT",
+side: "BUY",
+type: "LIMIT",
+quantity: "0.01",
+price: "50000" }),
     broker.createCanonicalOrder({
-      symbol: "BTCUSDT", side: "BUY", type: "LIMIT", quantity: "0.01",
-      price: "50000", clientOrderId: "safety-test-order-1",
+      symbol: "BTCUSDT",
+side: "BUY",
+type: "LIMIT",
+quantity: "0.01",
+      price: "50000",
+clientOrderId: "safety-test-order-1",
     }),
-    broker.cancelOrder({ symbol: "BTCUSDT", orderId: 123 }),
+    broker.cancelOrder({ symbol: "BTCUSDT",
+orderId: 123 }),
     broker.cancelAllOpenOrders({ symbol: "BTCUSDT" }),
   ])
 }
@@ -46,7 +62,9 @@ test("blocks every order mutation while the user-data stream is unavailable", as
   const { broker, rpc, timers } = createMutationSafetyFixture()
   const subscription = await broker.subscribeForUserData({ onEvent() {} })
   assert.equal(subscription.ok, true)
-  rpc.emitEvent({ subscriptionId: 71, event: { e: "eventStreamTerminated", E: 123_457 } })
+  rpc.emitEvent({ subscriptionId: 71,
+event: { e: "eventStreamTerminated",
+E: 123_457 } })
 
   const results = await createBlockedMutationResults(broker)
   for (const result of results) {

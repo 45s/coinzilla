@@ -44,7 +44,9 @@ function createWebSocketDiagnostics({ event, phase, source, cause }) {
     closeReason: null,
     wasClean: null,
     underlyingError: cause
-      ? { name: cause.name, message: cause.message, stack: cause.stack }
+      ? { name: cause.name,
+message: cause.message,
+stack: cause.stack }
       : null,
   }
 }
@@ -58,7 +60,10 @@ function createWebSocketError(...args) {
     ?? "WebSocket connection error"
   const error = new Error(message, cause ? { cause } : undefined)
   if (source && typeof source.name === "string") {error.name = source.name}
-  error.diagnostics = createWebSocketDiagnostics({ event, phase, source, cause })
+  error.diagnostics = createWebSocketDiagnostics({ event,
+phase,
+source,
+cause })
   return error
 }
 
@@ -204,7 +209,9 @@ export class NativeWebSocketTransport {
         this.#beginClosing()
       }, this.connectTimeout)
     } catch (error) {
-      this.#cleanupFailedSocketStart({ registered, reject, error })
+      this.#cleanupFailedSocketStart({ registered,
+reject,
+error })
     }
   }
 
@@ -404,7 +411,9 @@ export class NativeWebSocketTransport {
   #rejectConnectOnClose(event, closeReason) {
     if (!this.#rejectConnect) {return}
     const error = this.#connectError ?? new Error("WebSocket closed before opening")
-    this.#ensureHandshakeDiagnostics({ error, event, closeReason })
+    this.#ensureHandshakeDiagnostics({ error,
+event,
+closeReason })
     this.#rejectConnect(error)
     this.#rejectConnect = null
   }

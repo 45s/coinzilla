@@ -50,7 +50,9 @@ let subscription
 
 function registerIntegrationHooks() {
   beforeEach(async () => {
-    broker = new BinanceSdkBroker({ apiKey, apiSecret, reconnectDelay: 250 })
+    broker = new BinanceSdkBroker({ apiKey,
+apiSecret,
+reconnectDelay: 250 })
     assert.match(
       broker.config.websocketApiUrl,
       /testnet\.binance\.vision/,
@@ -101,8 +103,10 @@ async function runRecoveryIntegrationTest() {
 async function assertRecoverySnapshots(targetBroker) {
   const assets = await targetBroker.getAssets()
   const openOrders = await targetBroker.getOpenOrders()
-  const orderHistory = await targetBroker.getOrderHistory({ symbol, limit: 1000 })
-  const trades = await targetBroker.getMyTrades({ symbol, limit: 1000 })
+  const orderHistory = await targetBroker.getOrderHistory({ symbol,
+limit: 1000 })
+  const trades = await targetBroker.getMyTrades({ symbol,
+limit: 1000 })
   assert.equal(assets.ok, true, "account snapshot must succeed before reconciliation")
   assert.equal(openOrders.ok, true, "open-order snapshot must succeed before reconciliation")
   assert.equal(orderHistory.ok, true, "order history lookup must succeed before reconciliation")

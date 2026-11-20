@@ -204,35 +204,58 @@ function handleProbeClose({ event, details, finish }) {
 
 function registerProbeListeners({ socket, state, details, finish, armTimeout }) {
   socket.addEventListener("open", () => handleProbeOpen({
-    socket, state, details, finish, armTimeout,
+    socket,
+state,
+details,
+finish,
+armTimeout,
   }), { once: true })
-  socket.addEventListener("error", (event) => handleProbeError({ event, details }))
+  socket.addEventListener("error", (event) => handleProbeError({ event,
+details }))
   socket.addEventListener("close", (event) => handleProbeClose({
-    event, details, finish,
+    event,
+details,
+finish,
   }), { once: true })
 }
 
 function startEndpointProbe({ name, url, resolve }) {
-  const state = { opened: false, settled: false, timer: undefined }
+  const state = { opened: false,
+settled: false,
+timer: undefined }
   const details = createProbeDetails(name)
-  const finish = () => finishProbe({ state, details, resolve })
+  const finish = () => finishProbe({ state,
+details,
+resolve })
   let socket
   try {
     socket = new WebSocket(url)
   } catch (error) {
-    recordConstructionFailure({ error, details, finish })
+    recordConstructionFailure({ error,
+details,
+finish })
     return
   }
   const armTimeout = (delay) => armDiagnosticTimeout({
-    socket, state, details, finish, delay,
+    socket,
+state,
+details,
+finish,
+delay,
   })
   armTimeout(5_000)
-  registerProbeListeners({ socket, state, details, finish, armTimeout })
+  registerProbeListeners({ socket,
+state,
+details,
+finish,
+armTimeout })
 }
 
 function probeEndpoint(...args) {
   const [name, url] = args
-  return new Promise((resolve) => startEndpointProbe({ name, url, resolve }))
+  return new Promise((resolve) => startEndpointProbe({ name,
+url,
+resolve }))
 }
 
 const report = {

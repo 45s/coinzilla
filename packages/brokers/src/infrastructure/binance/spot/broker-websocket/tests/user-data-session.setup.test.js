@@ -28,8 +28,13 @@ function createDelayedSubscribeFixture({ scheduler, clients }) {
     markDelayedSubscribeStarted = resolve
   })
   const broker = new BinanceSdkBroker({
-    apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet",
-    reconnectDelay: 10, logger: { error() {}, info() {}, warn() {} },
+    apiKey: "test-key",
+apiSecret: "test-secret",
+tradingMode: "testnet",
+    reconnectDelay: 10,
+logger: { error() {},
+info() {},
+warn() {} },
   }, {
     apiClientFactory: () => {
       const index = clients.length
@@ -62,19 +67,25 @@ function createDelayedSubscribeFixture({ scheduler, clients }) {
 it("retries when a subscribe response arrives after its socket has closed", async () => {
   const scheduler = createScheduler()
   const clients = []
-  const fixture = createDelayedSubscribeFixture({ scheduler, clients })
+  const fixture = createDelayedSubscribeFixture({ scheduler,
+clients })
   await fixture.broker.connect()
   const statuses = []
   const subscription = await fixture.broker.subscribeForUserData({
-    onEvent() {}, onStatus: (status) => statuses.push(status),
+    onEvent() {},
+onStatus: (status) => statuses.push(status),
   })
   clients[0].state = "closed"
-  clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+  clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
   const recovery = scheduler.runNext()
   await fixture.delayedSubscribeStarted
   assert.equal(typeof fixture.resolveDelayedSubscribe, "function")
   clients[1].state = "closed"
-  clients[1].emitClose({ code: 1006, reason: "closed during subscribe", wasClean: false })
+  clients[1].emitClose({ code: 1006,
+reason: "closed during subscribe",
+wasClean: false })
   fixture.resolveDelayedSubscribe({ subscriptionId: 110 })
   await recovery
   assert.equal(scheduler.pendingCount, 1)

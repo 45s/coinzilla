@@ -157,25 +157,56 @@ data: ticker })
 
 function assertCandleRows(data, now) {
   assert.deepEqual(data.map(({ symbol, interval, openTime, closeTime, open, high, low, close, volume, isClosed }) => ({
-    symbol, interval, openTime, closeTime, open, high, low, close, volume, isClosed,
+    symbol,
+interval,
+openTime,
+closeTime,
+open,
+high,
+low,
+close,
+volume,
+isClosed,
   })), [
     {
-      symbol: "BTCUSDT", interval: "1m", openTime: now - 120_000, closeTime: now - 60_001,
-      open: "1.0000", high: "1.5000", low: "0.9000", close: "1.2000",
-      volume: "10.0000", isClosed: true,
+      symbol: "BTCUSDT",
+interval: "1m",
+openTime: now - 120_000,
+closeTime: now - 60_001,
+      open: "1.0000",
+high: "1.5000",
+low: "0.9000",
+close: "1.2000",
+      volume: "10.0000",
+isClosed: true,
     },
     {
-      symbol: "BTCUSDT", interval: "1m", openTime: now - 60_000, closeTime: now - 1,
-      open: "1.2000", high: "1.6000", low: "1.1000", close: "1.5000",
-      volume: "11.0000", isClosed: true,
+      symbol: "BTCUSDT",
+interval: "1m",
+openTime: now - 60_000,
+closeTime: now - 1,
+      open: "1.2000",
+high: "1.6000",
+low: "1.1000",
+close: "1.5000",
+      volume: "11.0000",
+isClosed: true,
     },
   ])
 }
 
 function assertCandleRpcCalls(rpc) {
-  assert.deepEqual(rpc.calls.map(({ method, params, options }) => ({ method, params, options })), [
-    { method: "time", params: {}, options: {} },
-    { method: "klines", params: { symbol: "BTCUSDT", interval: "1m", limit: 100 }, options: {} },
+  assert.deepEqual(rpc.calls.map(({ method, params, options }) => ({ method,
+params,
+options })), [
+    { method: "time",
+params: {},
+options: {} },
+    { method: "klines",
+params: { symbol: "BTCUSDT",
+interval: "1m",
+limit: 100 },
+options: {} },
   ])
 }
 
@@ -187,11 +218,15 @@ test("getCandles uses public klines and returns normalized, ordered exact-string
   ]
   const { broker, rpc } = createBroker({
     klines: (params) => {
-      assert.deepEqual(params, { symbol: "BTCUSDT", interval: "1m", limit: 100 })
+      assert.deepEqual(params, { symbol: "BTCUSDT",
+interval: "1m",
+limit: 100 })
       return rows
     },
   })
-  const result = await broker.getCandles({ symbol: "btcusdt", interval: "1m", limit: 100 })
+  const result = await broker.getCandles({ symbol: "btcusdt",
+interval: "1m",
+limit: 100 })
   assert.equal(result.ok, true)
   assertCandleRpcCalls(rpc)
   assertCandleRows(result.data, now)

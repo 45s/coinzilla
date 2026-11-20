@@ -133,17 +133,25 @@ async function createTwoConsumerRecoveryFixture() {
   const firstStatuses = []
   const secondStatuses = []
   const first = await fixture.broker.subscribeForUserData({
-    onEvent() {}, onStatus: (status) => firstStatuses.push(status),
+    onEvent() {},
+onStatus: (status) => firstStatuses.push(status),
   })
   const second = await fixture.broker.subscribeForUserData({
-    onEvent() {}, onStatus: (status) => secondStatuses.push(status),
+    onEvent() {},
+onStatus: (status) => secondStatuses.push(status),
   })
-  return { ...fixture, firstStatuses, secondStatuses, first, second }
+  return { ...fixture,
+firstStatuses,
+secondStatuses,
+first,
+second }
 }
 
 async function triggerConsumerRecovery(fixture) {
   fixture.clients[0].state = "closed"
-  fixture.clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+  fixture.clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
   assert.equal(fixture.clients[0].listenerCount, 0)
   assert.equal(fixture.clients[0].errorListenerCount, 0)
   assert.equal(fixture.clients[0].closeListenerCount, 0)
@@ -174,11 +182,19 @@ async function assertRecoveryGateAndAcknowledge(fixture) {
   assert.equal(secondStatuses.filter((status) => status.type === "recovered").length, 2)
   assert.equal(broker.userDataUnavailable, true)
   assert.equal(scheduler.pendingCount, 1)
-  await assertOrderMutationsBlocked({ broker, client: clients[1], first })
+  await assertOrderMutationsBlocked({ broker,
+client: clients[1],
+first })
   assert.equal(firstStatuses.filter((status) => status.type === "reconciled").length, 0)
   assert.equal(secondStatuses.filter((status) => status.type === "reconciled").length, 0)
-  assertRecoveryAcknowledged({ broker, scheduler, second, firstStatuses, secondStatuses })
-  const placed = await broker.createOrder({ symbol: "BTCUSDT", quantity: "0.01", price: "50000" })
+  assertRecoveryAcknowledged({ broker,
+scheduler,
+second,
+firstStatuses,
+secondStatuses })
+  const placed = await broker.createOrder({ symbol: "BTCUSDT",
+quantity: "0.01",
+price: "50000" })
   assert.equal(clients[1].calls.some((call) => call.method === "order.place"), true)
   assert.equal(placed.ok, true)
 }

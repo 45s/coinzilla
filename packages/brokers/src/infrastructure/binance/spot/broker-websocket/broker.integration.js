@@ -102,12 +102,14 @@ function registerOrderMutationIntegrationTest() {
         assert.ok(ok)
         assert.ok(order.id)
         assert.equal(order.symbol, symbol)
-        const result = await broker.getOrder({ symbol, orderId: order.id })
+        const result = await broker.getOrder({ symbol,
+orderId: order.id })
         assert.ok(result.ok)
         assert.equal(result.data.id, order.id)
       } finally {
         if (order?.id) {
-          const result = await broker.cancelOrder({ symbol, orderId: order.id })
+          const result = await broker.cancelOrder({ symbol,
+orderId: order.id })
           assert.ok(result.ok)
           assert.equal(order.id, result.data.id)
         }

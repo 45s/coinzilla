@@ -98,8 +98,13 @@ function createResubscribeRetryFixture({ scheduler }) {
   const clients = []
   let attempts = 0
   const broker = new BinanceSdkBroker({
-    apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet",
-    reconnectDelay: 10, logger: { error() {}, info() {}, warn() {} },
+    apiKey: "test-key",
+apiSecret: "test-secret",
+tradingMode: "testnet",
+    reconnectDelay: 10,
+logger: { error() {},
+info() {},
+warn() {} },
   }, {
     apiClientFactory: () => {
       const index = clients.length
@@ -121,7 +126,9 @@ function createResubscribeRetryFixture({ scheduler }) {
     clearTimeoutFn: scheduler.clearTimeout,
     userDataRecoveryWarningThreshold: 2,
   })
-  return { broker, clients, get attempts() { return attempts } }
+  return { broker,
+clients,
+get attempts() { return attempts } }
 }
 
 it("keeps retrying failed remote resubscriptions until one succeeds", async () => {
@@ -130,10 +137,13 @@ it("keeps retrying failed remote resubscriptions until one succeeds", async () =
   await fixture.broker.connect()
   const statuses = []
   const subscription = await fixture.broker.subscribeForUserData({
-    onEvent() {}, onStatus: (status) => statuses.push(status),
+    onEvent() {},
+onStatus: (status) => statuses.push(status),
   })
   fixture.clients[0].state = "closed"
-  fixture.clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+  fixture.clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
   await scheduler.runNext()
   assert.equal(scheduler.pendingCount, 1)
   await scheduler.runNext()
@@ -419,8 +429,13 @@ function createConnectionRetryFixture({ scheduler }) {
   const clients = []
   let attempts = 0
   const broker = new BinanceSdkBroker({
-    apiKey: "test-key", apiSecret: "test-secret", tradingMode: "testnet",
-    reconnectDelay: 10, logger: { error() {}, info() {}, warn() {} },
+    apiKey: "test-key",
+apiSecret: "test-secret",
+tradingMode: "testnet",
+    reconnectDelay: 10,
+logger: { error() {},
+info() {},
+warn() {} },
   }, {
     apiClientFactory: () => {
       const client = createFakeRpcClient({
@@ -441,7 +456,9 @@ function createConnectionRetryFixture({ scheduler }) {
     clearTimeoutFn: scheduler.clearTimeout,
     userDataRecoveryWarningThreshold: 2,
   })
-  return { broker, clients, get attempts() { return attempts } }
+  return { broker,
+clients,
+get attempts() { return attempts } }
 }
 
 it("continues reconnecting after the warning threshold until the socket recovers", async () => {
@@ -450,10 +467,13 @@ it("continues reconnecting after the warning threshold until the socket recovers
   await fixture.broker.connect()
   const statuses = []
   const subscription = await fixture.broker.subscribeForUserData({
-    onEvent() {}, onStatus: (status) => statuses.push(status),
+    onEvent() {},
+onStatus: (status) => statuses.push(status),
   })
   fixture.clients[0].state = "closed"
-  fixture.clients[0].emitClose({ code: 1006, reason: "network lost", wasClean: false })
+  fixture.clients[0].emitClose({ code: 1006,
+reason: "network lost",
+wasClean: false })
   await scheduler.runNext()
   assert.equal(scheduler.pendingCount, 1)
   await scheduler.runNext()

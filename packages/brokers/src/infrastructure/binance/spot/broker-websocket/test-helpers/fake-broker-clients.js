@@ -7,7 +7,9 @@ function createFakeRpcLifecycle({ listeners, errorListeners, closeListeners }) {
     async disconnect() {
       this.state = "closed"
       for (const listener of closeListeners) {
-        listener({ code: 1000, reason: "", wasClean: true })
+        listener({ code: 1000,
+reason: "",
+wasClean: true })
       }
       listeners.clear()
       errorListeners.clear()
@@ -20,7 +22,9 @@ function createFakeRpcRequests({ calls, handlers }) {
   return {
     async request(...args) {
       const [method, params = {}, options = {}] = args
-      calls.push({ method, params, options })
+      calls.push({ method,
+params,
+options })
       const handler = handlers[method]
       if (typeof handler !== "function") {
         throw new Error(`Unexpected Binance RPC method: ${method}`)
@@ -61,7 +65,11 @@ export function createFakeRpcClient(handlers = {}) {
   const errorListeners = new Set()
   const closeListeners = new Set()
   const calls = []
-  const dependencies = { listeners, errorListeners, closeListeners, calls, handlers }
+  const dependencies = { listeners,
+errorListeners,
+closeListeners,
+calls,
+handlers }
   const client = {
     calls,
     state: "idle",

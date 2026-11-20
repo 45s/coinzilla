@@ -212,17 +212,27 @@ endTime: 86_400_001 }),
 
 
 async function fetchTradePages(broker) {
-  const first = await broker.getMyTrades({ symbol: "DOGEFDUSD", fromId: 10, limit: 2 })
+  const first = await broker.getMyTrades({ symbol: "DOGEFDUSD",
+fromId: 10,
+limit: 2 })
   const nextId = Number(first.data.at(-1).id) + 1
-  const second = await broker.getMyTrades({ symbol: "DOGEFDUSD", fromId: nextId, limit: 2 })
-  return { first, second }
+  const second = await broker.getMyTrades({ symbol: "DOGEFDUSD",
+fromId: nextId,
+limit: 2 })
+  return { first,
+second }
 }
 
 async function fetchOrderPages(broker) {
-  const first = await broker.getOrderHistory({ symbol: "DOGEFDUSD", orderId: 10, limit: 2 })
+  const first = await broker.getOrderHistory({ symbol: "DOGEFDUSD",
+orderId: 10,
+limit: 2 })
   const nextId = Number(first.data.at(-1).orderId) + 1
-  const second = await broker.getOrderHistory({ symbol: "DOGEFDUSD", orderId: nextId, limit: 2 })
-  return { first, second }
+  const second = await broker.getOrderHistory({ symbol: "DOGEFDUSD",
+orderId: nextId,
+limit: 2 })
+  return { first,
+second }
 }
 
 test("history cursors advance from the last returned ID without repeating records", async () => {
@@ -230,16 +240,49 @@ test("history cursors advance from the last returned ID without repeating record
   let orderPage = 0
   const tradePages = [
     [
-      { id: 10, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 10 },
-      { id: 11, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 11 },
+      { id: 10,
+symbol: "DOGEFDUSD",
+orderId: 1,
+qty: "1",
+price: "1",
+quoteQty: "1",
+commission: "0",
+commissionAsset: "DOGE",
+isBuyer: true,
+isMaker: true,
+time: 10 },
+      { id: 11,
+symbol: "DOGEFDUSD",
+orderId: 1,
+qty: "1",
+price: "1",
+quoteQty: "1",
+commission: "0",
+commissionAsset: "DOGE",
+isBuyer: true,
+isMaker: true,
+time: 11 },
     ],
     [
-      { id: 12, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 12 },
+      { id: 12,
+symbol: "DOGEFDUSD",
+orderId: 1,
+qty: "1",
+price: "1",
+quoteQty: "1",
+commission: "0",
+commissionAsset: "DOGE",
+isBuyer: true,
+isMaker: true,
+time: 12 },
     ],
   ]
   const orderPages = [
-    [{ symbol: "DOGEFDUSD", orderId: 10 }, { symbol: "DOGEFDUSD", orderId: 11 }],
-    [{ symbol: "DOGEFDUSD", orderId: 12 }],
+    [{ symbol: "DOGEFDUSD",
+orderId: 10 }, { symbol: "DOGEFDUSD",
+orderId: 11 }],
+    [{ symbol: "DOGEFDUSD",
+orderId: 12 }],
   ]
   const { broker, rpc } = createBroker({
     myTrades: () => tradePages[tradePage++],

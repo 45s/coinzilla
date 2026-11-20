@@ -313,7 +313,10 @@ function parseWebSocketFrame(received) {
   return {
     opcode: first & 0x0f,
     frameLength,
-    payload: decodeWebSocketPayload({ received, offset, masked, length }),
+    payload: decodeWebSocketPayload({ received,
+offset,
+masked,
+length }),
   }
 }
 
@@ -339,7 +342,8 @@ function consumeWebSocketFrames({ socket, received, resolvePong, rejectPong }) {
 
 function attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong }) {
   server.on("upgrade", (request, socket) => {
-    writeWebSocketHandshake({ request, socket })
+    writeWebSocketHandshake({ request,
+socket })
     socket.write(Buffer.concat([Buffer.from([0x89, payload.length]), payload]))
     let received = Buffer.alloc(0)
     socket.on("data", (chunk) => {

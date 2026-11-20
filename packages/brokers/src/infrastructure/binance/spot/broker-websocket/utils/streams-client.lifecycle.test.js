@@ -645,7 +645,8 @@ async function rejectSecondSubscriptionBatch({ client, clock, transports }) {
   clock.advanceBy(300)
   await flush()
   assert.equal(transports[0].sent[2].method, "SUBSCRIBE")
-  acknowledge(transports[0], 2, { code: 2, msg: "second batch failed" })
+  acknowledge(transports[0], 2, { code: 2,
+msg: "second batch failed" })
   await assert.rejects(batch, /second batch failed/)
 }
 
@@ -664,9 +665,15 @@ async function completeQueuedCleanup({ client, clock, transports }) {
 
 test("paces queued cleanup requests and clears the control pump timer on disconnect", async () => {
   const { client, clock, transports } = createClient()
-  await activateInitialAggTrade({ client, clock, transports })
-  await rejectSecondSubscriptionBatch({ client, clock, transports })
-  await completeQueuedCleanup({ client, clock, transports })
+  await activateInitialAggTrade({ client,
+clock,
+transports })
+  await rejectSecondSubscriptionBatch({ client,
+clock,
+transports })
+  await completeQueuedCleanup({ client,
+clock,
+transports })
   const pending = client.subscribe("bnbusdt@trade", () => {})
   await flush()
   assert.equal(transports[0].sent.length, 5)
