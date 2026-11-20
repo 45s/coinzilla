@@ -77,6 +77,12 @@ jobs:
       - name: Enforce helper purity and unit-test policy
         run: pnpm run check:helper-policy
 
+      - name: Fetch exact PR base for helper naming diff
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git fetch --no-tags origin "${BASE_SHA}"
+
       - name: Enforce context-aware naming for changed helper files
         if: github.event_name == 'pull_request'
         env:
