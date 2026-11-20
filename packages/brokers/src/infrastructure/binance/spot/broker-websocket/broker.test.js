@@ -229,7 +229,10 @@ interval: "1m",
 limit: 100 })
   assert.equal(result.ok, true)
   assertCandleRpcCalls(rpc)
-  assertCandleRows({ data: result.data, now })
+  assertCandleRows({
+    data: result.data,
+    now,
+  })
   assert.equal(Object.isFrozen(result.data), true)
 })
 

@@ -41,7 +41,10 @@ value })
   }
 }
 
-function matchesAllMarketStream({ stream, message }) {
+function matchesAllMarketStream({
+    stream,
+    message,
+  }) {
   const eventTypes = {
     "!miniTicker@arr": "24hrMiniTicker",
     "!ticker@arr": "24hrTicker",
@@ -51,7 +54,10 @@ function matchesAllMarketStream({ stream, message }) {
   return Boolean(window && message.e === `${window}Ticker`)
 }
 
-function matchesSymbolStreamType({ streamType, message }) {
+function matchesSymbolStreamType({
+    streamType,
+    message,
+  }) {
   const eventTypes = {
     aggTrade: "aggTrade",
     trade: "trade",

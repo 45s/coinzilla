@@ -127,7 +127,10 @@ class MarketStreamLivenessMonitor {
 
   onTicker(message) {
     const tradeId = message?.L
-    if (!this.#isValidTicker({ message, tradeId }) || this.#isOldTicker(tradeId)) {return}
+    if (!this.#isValidTicker({
+      message,
+      tradeId,
+    }) || this.#isOldTicker(tradeId)) {return}
 
     this.#lastTickerTradeId = tradeId
     this.#pruneRecoveryAttempts(this.#now())
