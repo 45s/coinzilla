@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { NH } from './number-helper.js'
+import { NH } from './number-precision.js'
 
 for (const methodName of ['round', 'fix', 'precise']) {
   it(`should has "${methodName}"`, () => {
