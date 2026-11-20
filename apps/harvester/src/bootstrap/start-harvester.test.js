@@ -1176,6 +1176,7 @@ test("synchronizes configured Binance history before activating the trading engi
     orderHistoryPersistence: {
       orderRepository: {
         upsertHistorical: async (record) => persistedOrders.push(record),
+        findByExchangeOrderIdentity: async () => null,
       },
       fillRepository: {
         upsert: async (input) => persistedFills.push(input),
