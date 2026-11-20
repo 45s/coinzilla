@@ -589,33 +589,6 @@ function createRecoverySellerWorkflowState({
     recoverySellerCycleOutcomes: new Map(),
     updateQueue: Promise.resolve(),
   }
-  if (!(state.portfolio instanceof Portfolio)) {
-    throw new TypeError("initialPortfolio must be a Portfolio")
-  }
-  if (!(state.orderRegistry instanceof OrderRegistry)) {
-    throw new TypeError("initialOrderRegistry must be an OrderRegistry")
-  }
-  if (!(state.recoverySellerBuyExecutionByCycle instanceof Map)) {
-    throw new TypeError("sharedState.recoverySellerBuyExecutionByCycle must be a Map")
-  }
-  if (state.recoverySellerSellReservations === undefined && !Object.isFrozen(state)) {
-    state.recoverySellerSellReservations = new Map()
-  }
-  if (!(state.recoverySellerSellReservations instanceof Map)) {
-    throw new TypeError("sharedState.recoverySellerSellReservations must be a Map")
-  }
-  if (state.recoverySellerCycleStates === undefined && !Object.isFrozen(state)) {
-    state.recoverySellerCycleStates = new Map()
-  }
-  if (!(state.recoverySellerCycleStates instanceof Map)) {
-    throw new TypeError("sharedState.recoverySellerCycleStates must be a Map")
-  }
-  if (state.recoverySellerCycleOutcomes === undefined && !Object.isFrozen(state)) {
-    state.recoverySellerCycleOutcomes = new Map()
-  }
-  if (!(state.recoverySellerCycleOutcomes instanceof Map)) {
-    throw new TypeError("sharedState.recoverySellerCycleOutcomes must be a Map")
-  }
   validateRecoverySellerWorkflowState(state)
   return state
 }
