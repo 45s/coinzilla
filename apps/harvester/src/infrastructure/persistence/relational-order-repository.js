@@ -196,6 +196,34 @@ function getOldestPendingOrderId({ database, providerIdentity, environment, symb
   return row?.exchange_order_id ?? null
 }
 
+function listPendingOrderIds({ database, providerIdentity, environment, symbol } = {}) {
+  const identity = {
+    providerType: providerIdentity?.providerType,
+    providerInstanceId: providerIdentity?.providerInstanceId,
+    accountId: providerIdentity?.accountId,
+    environment,
+    symbol,
+  }
+  for (const [field, value] of Object.entries(identity)) {
+    if (typeof value !== "string" || value.trim() === "") {
+      throw new TypeError(`Pending-order lookup ${field} must be a non-empty string`)
+    }
+  }
+  return database.prepare(`
+    SELECT exchange_order_id FROM orders
+    WHERE provider_type = ? AND provider_instance_id = ? AND account_id = ?
+      AND environment = ? AND symbol = ? AND exchange_order_id IS NOT NULL
+      AND status IN ('NEW', 'OPEN', 'PENDING', 'PARTIALLY_FILLED', 'UNKNOWN')
+    ORDER BY CAST(exchange_order_id AS INTEGER) ASC
+  `).all(
+    identity.providerType,
+    identity.providerInstanceId,
+    identity.accountId,
+    identity.environment,
+    identity.symbol,
+  ).map(({ exchange_order_id: exchangeOrderId }) => exchangeOrderId)
+}
+
 function normalizeOrderWriteError({ error, record } = {}) {
   if (error instanceof OrderHistoryIntegrityError ||
     error?.code === "HARVESTER_ORDER_HISTORY_RECORD_INVALID") {
@@ -253,6 +281,10 @@ export function createRelationalOrderHistoryRepository({ database } = {}) {
       ...input,
     }),
     getOldestPendingOrderId: (input) => getOldestPendingOrderId({
+      database,
+      ...input,
+    }),
+    listPendingOrderIds: (input) => listPendingOrderIds({
       database,
       ...input,
     }),
