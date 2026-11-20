@@ -255,6 +255,26 @@ test("reserves one durable RS SELL per cycle before shared order registration", 
 test("commits reconciled RS projections and releases the shared SELL reservation atomically", async () => {
   const context = makeContext()
   const workflow = makeWorkflow(context)
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: context.order.clientOrderId,
+    brokerOrderId: context.order.brokerOrderId,
+  })
+  const reservation = await workflow.reserveSellCycle({
+    order: context.order,
+    ownership,
+    durableIntent: true,
+  })
+  assert.equal(reservation.ok, true, reservation.errors?.[0]?.message)
+  assert.equal(
+    workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
+    context.order.clientOrderId,
+  )
 
   assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1,
     "An open RS SELL must remain in the shared reservation registry before terminal reconciliation.")
@@ -280,6 +300,8 @@ test("commits reconciled RS projections and releases the shared SELL reservation
     "Only the legacy-allocated SELL quantity may debit authorized legacy inventory.")
   assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 0,
     "The central SELL reservation must be released only after both projections commit.")
+  assert.equal(workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }), undefined,
+    "The cycle-scoped SELL reservation must release only after both accounting projections commit.")
 })
 
 test("keeps the SELL reservation and both projections unchanged when terminal fill history is incomplete", async () => {

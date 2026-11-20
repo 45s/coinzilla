@@ -1803,7 +1803,8 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
       onUnresolvedSubmission: latchSubmissionFailure,
       onOrderValidationFailure: latchSubmissionFailure,
       canSubmit: context.canSubmit,
-      onSellReserved: dependencies.onRecoverySellerSellReserved,
+      onSellReserved: dependencies.onRecoverySellerSellReserved ??
+        dependencies.recoverySellerWorkflow?.reserveSellCycle,
     })
   }
   context.submit = makeExecuteStrategyDecision({

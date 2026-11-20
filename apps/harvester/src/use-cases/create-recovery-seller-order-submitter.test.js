@@ -362,7 +362,9 @@ test("durably reserves the sole RS SELL cycle before registry registration and b
     sharedState,
     broker,
     unresolved,
-    onSellReserved: async ({ order, ownership }) => {
+    onSellReserved: async ({ order, ownership, durableIntent }) => {
+      assert.equal(durableIntent, true,
+        "The reservation callback must run only after the durable submission intent is committed.")
       assert.equal(durableFacts[0]?.type, "INTENT", "The canonical SELL intent must be durably committed before reserving the cycle.")
       assert.equal(durableFacts[0]?.fact.ownership?.cycleId, ownership.cycleId, "The durable intent must carry the exact cycle identity before reservation.")
       reservedOrder = {

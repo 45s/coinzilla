@@ -83,6 +83,7 @@ function createAccountTradingState() {
   let orderRegistry = OrderRegistry.empty()
   let legacyPositions = new Map()
   let recoverySellerBuyExecutionByCycle = new Map()
+  let recoverySellerSellReservations = new Map()
   let updateQueue = Promise.resolve()
   const state = createAccountStateCollections()
   state.runTransition = createSerializedAccountTransitionQueue()
@@ -125,6 +126,14 @@ function createAccountTradingState() {
     setValue: (value) => { recoverySellerBuyExecutionByCycle = value },
     isValid: (value) => value instanceof Map,
     errorMessage: "Account workflow recoverySellerBuyExecutionByCycle must be a Map",
+  })
+  defineValidatedStateProperty({
+    state,
+    property: "recoverySellerSellReservations",
+    getValue: () => recoverySellerSellReservations,
+    setValue: (value) => { recoverySellerSellReservations = value },
+    isValid: (value) => value instanceof Map,
+    errorMessage: "Account workflow recoverySellerSellReservations must be a Map",
   })
   defineValidatedStateProperty({
     state,

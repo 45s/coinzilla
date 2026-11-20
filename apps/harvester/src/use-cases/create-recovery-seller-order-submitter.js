@@ -74,6 +74,7 @@ function createPendingOrderCallback({
       const reserved = await onSellReserved({
         order: input.order,
         ownership: input.ownership,
+        durableIntent: true,
       })
       if (reserved?.ok !== true || reserved.data?.durable !== true) {
         throw reserved?.errors?.[0] ??

@@ -9,6 +9,7 @@ import {
 } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { validateRecoverySellerSubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { applyReconciledMixedSellOrder } from "../domain/strategies/recovery-seller/mixed-sell-fill-accounting.js"
 import { calculateRecoverySellerProfitability } from "../domain/strategies/recovery-seller/calculate-profitability.js"
@@ -361,6 +362,14 @@ function reconcileTerminalMixedSellTransition({
   state.portfolio = result.accounting.portfolio
   state.legacyPositions = result.nextLegacyPositions
   state.orderRegistry = registryUpdate.registry
+  const ownership = resolveRecoverySellerOrderOwnership({
+    registry: state.orderRegistry,
+    order: terminalRegisteredOrder,
+  })
+  const reservation = state.recoverySellerSellReservations.get(ownership.cycleId)
+  if (reservation?.clientOrderId === terminalRegisteredOrder.clientOrderId) {
+    state.recoverySellerSellReservations.delete(ownership.cycleId)
+  }
   return Object.freeze({
     ...result.accounting,
     orderRegistry: state.orderRegistry,
@@ -441,6 +450,62 @@ function validateSharedRecoverySellerWorkflowState({
   }
 }
 
+function reserveRecoverySellerSellCycleTransition({
+  state,
+  order,
+  ownership,
+  durableIntent,
+}) {
+  if (durableIntent !== true) {
+    throw new Error("Recovery Seller SELL cycle reservation requires a durable submission intent")
+  }
+  if (!(order instanceof CanonicalOrder) || order.side !== "SELL") {
+    throw new TypeError("Recovery Seller cycle reservation requires a canonical SELL order")
+  }
+  const normalizedOwnership = validateRecoverySellerSubmissionOwnership({
+    order,
+    purpose: "RECOVERY_SELL",
+    ownership,
+  })
+  if (!normalizedOwnership) {
+    throw new TypeError("Recovery Seller SELL cycle reservation requires explicit RS ownership")
+  }
+  const existing = state.recoverySellerSellReservations.get(normalizedOwnership.cycleId)
+  if (existing) {
+    if (existing.clientOrderId === order.clientOrderId &&
+        existing.brokerOrderId === order.brokerOrderId) {
+      return Object.freeze({
+        durable: true,
+        duplicate: true,
+      })
+    }
+    throw new Error(`Recovery Seller cycle ${normalizedOwnership.cycleId} is already reserved by SELL order ${existing.clientOrderId}`)
+  }
+  for (const activeOrder of state.orderRegistry.getActiveOrders()) {
+    if (activeOrder.clientOrderId === order.clientOrderId) {
+      continue
+    }
+    const activeOwnership = state.orderRegistry.getOwnership({
+      clientOrderId: activeOrder.clientOrderId,
+    })
+    if (activeOrder.side === "SELL" &&
+        activeOwnership?.strategyId === StrategyId.RECOVERY_SELLER &&
+        activeOwnership.cycleId === normalizedOwnership.cycleId) {
+      throw new Error(`Recovery Seller cycle ${normalizedOwnership.cycleId} already has an active SELL order`)
+    }
+  }
+  state.recoverySellerSellReservations.set(normalizedOwnership.cycleId, Object.freeze({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    positionId: normalizedOwnership.positionId,
+    cycleId: normalizedOwnership.cycleId,
+    marketId: order.market.id,
+  }))
+  return Object.freeze({
+    durable: true,
+  })
+}
+
 function createRecoverySellerWorkflowState({
   sharedState,
   initialPortfolio,
@@ -458,6 +523,7 @@ function createRecoverySellerWorkflowState({
     orderRegistry: initialOrderRegistry ?? OrderRegistry.empty(),
     legacyPositions: createLegacyPositionMap(initialLegacyPositions),
     recoverySellerBuyExecutionByCycle: new Map(),
+    recoverySellerSellReservations: new Map(),
     updateQueue: Promise.resolve(),
   }
   if (!(state.portfolio instanceof Portfolio)) {
@@ -468,6 +534,12 @@ function createRecoverySellerWorkflowState({
   }
   if (!(state.recoverySellerBuyExecutionByCycle instanceof Map)) {
     throw new TypeError("sharedState.recoverySellerBuyExecutionByCycle must be a Map")
+  }
+  if (state.recoverySellerSellReservations === undefined && !Object.isFrozen(state)) {
+    state.recoverySellerSellReservations = new Map()
+  }
+  if (!(state.recoverySellerSellReservations instanceof Map)) {
+    throw new TypeError("sharedState.recoverySellerSellReservations must be a Map")
   }
   return state
 }
@@ -488,6 +560,10 @@ function createRecoverySellerAccountingOperations({
     reconcileTerminalMixedSell: createSerializedWorkflowOperation({
       state,
       transition: reconcileTerminalMixedSellTransition,
+    }),
+    reserveSellCycle: createSerializedWorkflowOperation({
+      state,
+      transition: reserveRecoverySellerSellCycleTransition,
     }),
     initializeLegacyPositions: createSerializedWorkflowOperation({
       state,
@@ -518,6 +594,10 @@ function createRecoverySellerAccountingWorkflowApi({ state, operations } = {}) {
     getPortfolio: () => state.portfolio,
     getOrderRegistry: () => state.orderRegistry,
     getActiveOrders: () => state.orderRegistry.getActiveOrders(),
+    getReservedSellCycle: ({ cycleId } = {}) => {
+      const reservation = state.recoverySellerSellReservations.get(cycleId)
+      return reservation ? Object.freeze({ ...reservation }) : undefined
+    },
     getLegacyPosition: ({ marketId } = {}) => getLegacyPositionRecord({
       state,
       marketId,
