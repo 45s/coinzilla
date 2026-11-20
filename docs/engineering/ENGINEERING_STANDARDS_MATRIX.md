@@ -17,7 +17,7 @@ This matrix is the evidence-based S-0 inventory for [issue #1568](https://github
 
 - **Repository:** `45s/coinzilla`
 - **Target:** `develop`
-- **S-7 source-tree baseline:** `3974d6deb6037a32ee9a233e683f01d5c18ebb78` (2026-11-20; includes merged S-6 and helper-naming CI PR #1587, plus Telegram naming remediation PR #1589).
+- **S-7 source-tree baseline:** `895f3aa4a9ebb93a12dd95168b2e56118cc3173a` (2026-11-20; includes merged S-6 and helper-naming CI PR #1587, plus Telegram naming remediation PR #1589).
 - **Audit date:** 2026-11-20
 - **Scope:** repository-wide engineering policies, package ownership/instructions, workspace manifests, documented source architecture, quality workflows, and overlapping engineering/documentation initiatives.
 - **No runtime changes:** this phase is documentation and repository-state audit only. No exchange, account, TESTNET, or LIVE operations were performed.
@@ -25,7 +25,7 @@ This matrix is the evidence-based S-0 inventory for [issue #1568](https://github
 
 ## S-7 source-tree evidence
 
-The recursive Git tree at `develop` commit `3974d6deb6037a32ee9a233e683f01d5c18ebb78` contained 1,403 entries, including 1,023 JavaScript files. All 1,023 JavaScript filenames use lowercase kebab-case word segments; 37 also use a dot-separated role/scope qualifier (for example `.port.js` or `.lifecycle.test.js`). 505 files used the workspace's `.test.js` convention and none used `.spec.js`. The tree contained nine `helpers/` directories, four `adapters/` directories, one `services/` directory, two `utils/` directories, and no `common/` or `misc/` directories.
+The recursive Git tree at `develop` commit `895f3aa4a9ebb93a12dd95168b2e56118cc3173a` contained 1,403 entries, including 1,023 JavaScript files. All 1,023 JavaScript filenames use lowercase kebab-case word segments; 37 also use a dot-separated role/scope qualifier (for example `.port.js` or `.lifecycle.test.js`). 505 files used the workspace's `.test.js` convention and none used `.spec.js`. The tree contained nine `helpers/` directories, four `adapters/` directories, one `services/` directory, two `utils/` directories, and no `common/` or `misc/` directories.
 
 The source layouts intentionally differ: Harvester, Brokers and DB use layers where needed; Entities groups by domain concept; Indicators keeps calculation modules flat; Event Bus, Journal, Notifiers and Utils use smaller package-specific layouts. Harvester has a separate layered `test/` tree for cross-module tests, while package unit tests are generally colocated. These are examples of responsibility-based choices, not a mandatory shared template.
 
