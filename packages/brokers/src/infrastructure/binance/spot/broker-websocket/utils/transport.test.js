@@ -321,27 +321,29 @@ length }),
 }
 
 function consumeWebSocketFrames({ socket, received, resolvePong, rejectPong }) {
-  while (received.length >= 2) {
+  let remaining = received
+  while (remaining.length >= 2) {
     let frame
     try {
-      frame = parseWebSocketFrame(received)
+      frame = parseWebSocketFrame(remaining)
     } catch (error) {
       rejectPong(error)
-      return received
+      return remaining
     }
-    if (!frame) {return received}
-    received = received.subarray(frame.frameLength)
+    if (!frame) {return remaining}
+    remaining = remaining.subarray(frame.frameLength)
     if (frame.opcode === 0x0a) {resolvePong(frame.payload)}
     if (frame.opcode === 0x08) {
       socket.write(Buffer.concat([Buffer.from([0x88, frame.payload.length]), frame.payload]))
       socket.end()
     }
   }
-  return received
+  return remaining
 }
 
 function attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong }) {
-  server.on("upgrade", (request, socket) => {
+  server.on("upgrade", (...args) => {
+    const [request, socket] = args
     writeWebSocketHandshake({ request,
 socket })
     socket.write(Buffer.concat([Buffer.from([0x89, payload.length]), payload]))
