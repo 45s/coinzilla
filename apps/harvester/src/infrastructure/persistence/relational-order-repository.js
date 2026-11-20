@@ -91,7 +91,7 @@ function linkOrderFills({ transaction, row } = {}) {
   )
 }
 
-function upsertOrder({ transaction, record } = {}) {
+function upsertOrder({ transaction, record, ingestionSource = "live_event" } = {}) {
   const existingRow = readOrder({
     transaction,
     id: record.id,
@@ -109,6 +109,7 @@ function upsertOrder({ transaction, record } = {}) {
     record: merged,
     existing: existingRow,
     sourceKind: "live_order_event",
+    ingestionSource,
   })
   writeOrder({
     transaction,
@@ -120,6 +121,79 @@ function upsertOrder({ transaction, record } = {}) {
     row,
   })
   return merged
+}
+
+function findByExchangeOrderIdentity({
+  database,
+  providerIdentity,
+  environment,
+  marketId,
+  brokerOrderId,
+} = {}) {
+  const identity = {
+    providerType: providerIdentity?.providerType,
+    providerInstanceId: providerIdentity?.providerInstanceId,
+    accountId: providerIdentity?.accountId,
+    environment,
+    marketId,
+    brokerOrderId,
+  }
+  for (const [field, value] of Object.entries(identity)) {
+    if (typeof value !== "string" || value.trim() === "") {
+      throw new TypeError(`Exchange-order lookup ${field} must be a non-empty string`)
+    }
+  }
+  const matches = database.prepare(`
+    SELECT client_order_id FROM orders
+    WHERE provider_type = ? AND provider_instance_id = ? AND account_id = ?
+      AND environment = ? AND market_id = ? AND exchange_order_id = ?
+    LIMIT 2
+  `).all(
+    identity.providerType,
+    identity.providerInstanceId,
+    identity.accountId,
+    identity.environment,
+    identity.marketId,
+    identity.brokerOrderId,
+  )
+  if (matches.length > 1) {
+    throw new OrderHistoryIntegrityError({
+      field: "exchangeOrderIdAmbiguous",
+      providerInstanceId: identity.providerInstanceId,
+      accountId: identity.accountId,
+    })
+  }
+  return matches[0]?.client_order_id ?? null
+}
+
+function getOldestPendingOrderId({ database, providerIdentity, environment, symbol } = {}) {
+  const identity = {
+    providerType: providerIdentity?.providerType,
+    providerInstanceId: providerIdentity?.providerInstanceId,
+    accountId: providerIdentity?.accountId,
+    environment,
+    symbol,
+  }
+  for (const [field, value] of Object.entries(identity)) {
+    if (typeof value !== "string" || value.trim() === "") {
+      throw new TypeError(`Pending-order lookup ${field} must be a non-empty string`)
+    }
+  }
+  const row = database.prepare(`
+    SELECT exchange_order_id FROM orders
+    WHERE provider_type = ? AND provider_instance_id = ? AND account_id = ?
+      AND environment = ? AND symbol = ? AND exchange_order_id IS NOT NULL
+      AND status IN ('NEW', 'OPEN', 'PENDING', 'PARTIALLY_FILLED', 'UNKNOWN')
+    ORDER BY CAST(exchange_order_id AS INTEGER) ASC
+    LIMIT 1
+  `).get(
+    identity.providerType,
+    identity.providerInstanceId,
+    identity.accountId,
+    identity.environment,
+    identity.symbol,
+  )
+  return row?.exchange_order_id ?? null
 }
 
 function normalizeOrderWriteError({ error, record } = {}) {
@@ -144,23 +218,43 @@ function normalizeOrderWriteError({ error, record } = {}) {
  * @param {{database: object}} input
  * @returns {{upsert: (record: object) => Promise<object>}}
  */
+async function persistOrder({ database, record, ingestionSource }) {
+  try {
+    return await database.transaction((transaction) => upsertOrder({
+      transaction,
+      record,
+      ingestionSource,
+    }))
+  } catch (error) {
+    throw normalizeOrderWriteError({
+      error,
+      record,
+    })
+  }
+}
+
 export function createRelationalOrderHistoryRepository({ database } = {}) {
   if (!database || typeof database.transaction !== "function") {
     throw new TypeError("Relational order history requires a connected SQLite database.")
   }
   return Object.freeze({
-    upsert: async (record) => {
-      try {
-        return await database.transaction((transaction) => upsertOrder({
-          transaction,
-          record,
-        }))
-      } catch (error) {
-        throw normalizeOrderWriteError({
-          error,
-          record,
-        })
-      }
-    },
+    upsert: (record) => persistOrder({
+      database,
+      record,
+      ingestionSource: "live_event",
+    }),
+    upsertHistorical: (record) => persistOrder({
+      database,
+      record,
+      ingestionSource: "exchange_history",
+    }),
+    findByExchangeOrderIdentity: (input) => findByExchangeOrderIdentity({
+      database,
+      ...input,
+    }),
+    getOldestPendingOrderId: (input) => getOldestPendingOrderId({
+      database,
+      ...input,
+    }),
   })
 }

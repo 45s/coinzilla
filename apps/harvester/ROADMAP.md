@@ -37,7 +37,9 @@ Any migration must preserve existing `harvester_orders` history through a verifi
 
 **Previous persistence scope:** The trading-session-ID history projection from PR #1369 and the temporary `harvester_processes` process-ID smoke-test write are removed in this slice, as explicitly requested. The replacement history record is an executed-order projection; it does not use process or runtime-session identity.
 
-**Relational trading history and live fill persistence — IN PROGRESS:** [#1554](https://github.com/45s/coinzilla/issues/1554). Phase 1 adds physical `orders`, `fills`, and commission-detail tables, versioned application-owned SQLite migrations, and a source-preserving conversion of `harvester_orders`. Phase 2 persists only canonical applied executions through a bounded best-effort observer. The existing collection observer remains active during migration and dual-write verification. Startup exchange-history synchronization is a separate later phase; no restoration or trading-state authority is introduced.
+**Relational trading history and live fill persistence — PHASES 1/2 COMPLETE:** [#1554](https://github.com/45s/coinzilla/issues/1554) was delivered in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555) (merge commit `9611dee32a7d5b3efa6737f6343b8553a2235022`). It adds physical `orders`, `fills`, and commission-detail tables, versioned application-owned SQLite migrations, source-preserving legacy conversion, and bounded best-effort persistence of canonical applied fills. The legacy collection observer remains active during dual-write compatibility. The relational projection remains non-authoritative.
+
+**Startup exchange-history synchronization — PHASE 3 IN PROGRESS:** [#1556](https://github.com/45s/coinzilla/issues/1556) / [PR #1557](https://github.com/45s/coinzilla/pull/1557). Reliable Binance order pagination depends on the backwards-compatible read-only contract extension in [Brokers issue #1558](https://github.com/45s/coinzilla/issues/1558) / [PR #1559](https://github.com/45s/coinzilla/pull/1559): Harvester opts into `includeFollowingOrders: true` because the default `getCanonicalOrderHistory({ symbol, orderId })` remains an exact-order lookup. The implementation is Binance-only and scans each runtime’s configured execution markets using paginated canonical order and trade history reads. It persists all canonical historical order observations (including unfilled orders), fills, and commissions into the same relational tables with explicit `exchange_history` ingestion provenance. When a fill arrives after its order cursor has advanced, the fill is linked only through a unique provider/account/environment/market-scoped exchange-order lookup; ambiguous matches fail closed. The first scan starts at ID zero; `history_sync_cursors` then stores independent order/trade cursors per provider/account/environment/symbol. Cursors advance only after each page is fully persisted, so interrupted pages replay idempotently. Each startup rechecks the oldest stored non-terminal order behind the cursor to refresh orders that may have filled while Harvester was offline; cursor advancement remains monotonic. The sync does not adopt startup orders, infer strategy ownership, restore process state, or authorize trading. Page exhaustion does not prove delisted/unconfigured-market coverage or the exchange retention horizon.
 
 **Filled-order history — MERGED:** [PR #1469](https://github.com/45s/coinzilla/pull/1469) merged into `develop` as `39f098000d6c20cb596a9e6700250faa00bbd80e` (exact validated PR head `6d11d883e2d8250c2b3fab9f6d5a40d6178996bb`). It delivers a non-authoritative `harvester_orders` projection. Persist an order as soon as cumulative executed quantity is positive, including immediate partial/fully filled acknowledgements, later partial/final fills, and partial-fill cancellation outcomes. Further lifecycle snapshots update the same row. Identity is `(environment, providerInstanceId, providerType, accountId, clientOrderId)`; exact decimal strings, canonical market/asset facts, provider/account provenance, and available strategy/position ownership are retained.
 
@@ -54,14 +56,13 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 - ADR-0001 remains separate and unchanged. The projection does not restore/adopt orders after restart.
 - SQLite is the only currently implemented provider.
 
-### Remaining persistence work after #1554
+### Remaining persistence work after #1556
 
-1. Startup exchange order/trade-history synchronization and pagination (separate Phase 3; requires verified provider contracts and reconciliation semantics).
-2. Filtered account snapshot history only with explicit provenance and completeness semantics.
-3. Offline, idempotent historical imports from verified source evidence.
-4. Production retention, permissions, disk monitoring, corruption/disk-full handling, backup scheduling, and operational restore drills.
+1. Filtered account snapshot history only with explicit provenance and completeness semantics.
+2. Offline, idempotent historical imports from verified source evidence.
+3. Production retention, permissions, disk monitoring, corruption/disk-full handling, backup scheduling, and operational restore drills.
 
-**Explicit exclusions from #1554:** no startup synchronization, account snapshots, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, restart restoration/adoption, new providers, `sessions`/ `errors` tables, broker behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
+**Explicit exclusions from #1554/#1556:** no account-wide or delisted-market history completeness claim, account snapshots as a history source, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, process-restart restoration/adoption, Journal replay, new providers, `sessions`/`errors` tables, broker order-mutation behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
 
 ## Repository-wide quality baseline
 
