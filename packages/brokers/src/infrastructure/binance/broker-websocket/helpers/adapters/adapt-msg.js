@@ -1,4 +1,3 @@
-import { defaultLogger as logger } from "@coinzilla/utils"
 import { adaptUser } from "./user.js"
 import { adaptAggTrades } from "./adapt-trades.js"
 
@@ -137,7 +136,6 @@ const adaptersMap = {
 export function adaptMsg(message) {
   const adapter = adaptersMap[message.e]
   if (!adapter) {
-    logger.warn(`Adapter for "${message.e}" message not found`)
     return message
   }
   return adapter(message)
