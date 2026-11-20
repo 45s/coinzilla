@@ -24,18 +24,18 @@ describe("user-data client port contract", () => {
   })
 
   it("rejects a missing port", () => {
-    assert.throws(() => assertUserDataClientPort(null), TypeError, "A missing port must be rejected.")
+    assert.throws(assertUserDataClientPort.bind(null, null), TypeError, "A missing port must be rejected.")
   })
 
   it("rejects a port missing required capabilities", () => {
     const port = createValidPort()
     delete port.unsubscribe
-    assert.throws(() => assertUserDataClientPort(port), TypeError, "A port missing a required capability must be rejected.")
+    assert.throws(assertUserDataClientPort.bind(null, port), TypeError, "A port missing a required capability must be rejected.")
   })
 
   it("rejects a port without a state value", () => {
     const port = createValidPort()
     port.state = null
-    assert.throws(() => assertUserDataClientPort(port), TypeError, "A port without a valid state value must be rejected.")
+    assert.throws(assertUserDataClientPort.bind(null, port), TypeError, "A port without a valid state value must be rejected.")
   })
 })
