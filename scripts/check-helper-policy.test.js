@@ -108,3 +108,17 @@ test("discovers nested helper directories", () => {
 force: true })
   }
 })
+
+test("detects clocks, logging, and module-level mutable collections", () => {
+  assert.deepEqual(
+    analyzeHelperSource({
+      file: "helpers/stateful.js",
+      source: "const cache = new Set()\nexport function now() { return performance.now() }\nexport function warn() { logger.warn('warning') }\n",
+    }),
+    [
+      "helpers/stateful.js: prohibited use of performance.now",
+      "helpers/stateful.js: prohibited use of logging",
+      "helpers/stateful.js: mutable module-level collections are prohibited",
+    ],
+  )
+})
