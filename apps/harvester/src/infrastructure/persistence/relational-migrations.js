@@ -241,10 +241,36 @@ function migrateRelationalTradingHistory(transaction) {
   })
 }
 
+function migrateExchangeHistoryProvenance(transaction) {
+  transaction.exec(`
+    ALTER TABLE orders
+      ADD COLUMN ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration'));
+    ALTER TABLE orders
+      ADD COLUMN last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (last_ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration'));
+    UPDATE orders
+      SET ingestion_source = 'legacy_migration',
+        last_ingestion_source = 'legacy_migration'
+      WHERE source_kind = 'legacy_harvester_orders';
+    ALTER TABLE fills
+      ADD COLUMN ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (ingestion_source IN ('live_event', 'exchange_history'));
+    ALTER TABLE fills
+      ADD COLUMN last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (last_ingestion_source IN ('live_event', 'exchange_history'));
+  `)
+}
+
 export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([
   Object.freeze({
     version: 1,
     name: "harvester-relational-trading-history",
     up: migrateRelationalTradingHistory,
+  }),
+  Object.freeze({
+    version: 2,
+    name: "harvester-exchange-history-provenance",
+    up: migrateExchangeHistoryProvenance,
   }),
 ])
