@@ -94,6 +94,7 @@
     "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.test.js",
       "src/infrastructure/journal/helpers/resolve-session-chronology.test.js",
       "src/infrastructure/journal/discover-harvester-journal-sessions.test.js",
+    "src/infrastructure/journal/project-harvester-journal-recovery-recovery-seller-ownership.test.js",
       "src/infrastructure/telegram/format-telegram-operator-response.test.js",
       "src/infrastructure/telegram/operator/constants.test.js",
       "src/infrastructure/telegram/operator/commands.test.js",
