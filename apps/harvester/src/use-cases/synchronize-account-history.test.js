@@ -327,6 +327,11 @@ test("replays a page after an order write failure without advancing its durable 
 
   const failed = await synchronizeAccountHistory(input)
   assert.equal(failed.ok, false, "A failed record write must fail the current history page.")
+  const diagnostics = failed.errors[0].historyDiagnostics
+  assert.equal(diagnostics.failureCount, 1, "The failed page must be represented in startup diagnostics.")
+  assert.equal(diagnostics.failures[0].market, "BTCUSDT", "Diagnostics must identify the market whose page failed.")
+  assert.equal(diagnostics.orderPagesChecked, 1, "Diagnostics must count the page request before persistence failed.")
+  assert.equal(diagnostics.ordersPersisted, 1, "Diagnostics must report records persisted before the failure.")
   assert.equal(repositories.cursors.get("BTCUSDT")?.lastOrderId, undefined, "The order cursor must remain unchanged after a partial page write.")
   assert.equal(repositories.orders.length, 1, "A successfully written record may remain available for idempotent replay.")
 
@@ -383,6 +388,10 @@ test("replays a trade page after a fill write failure without advancing its dura
 
   const failed = await synchronizeAccountHistory(input)
   assert.equal(failed.ok, false, "A failed fill write must fail the current trade-history page.")
+  const diagnostics = failed.errors[0].historyDiagnostics
+  assert.equal(diagnostics.failureCount, 1, "A failed trade page must be represented in startup diagnostics.")
+  assert.equal(diagnostics.fillPagesChecked, 1, "Diagnostics must count the trade page request before persistence failed.")
+  assert.equal(diagnostics.fillsPersisted, 1, "Diagnostics must report fills persisted before the failure.")
   assert.equal(repositories.cursors.get("BTCUSDT")?.lastTradeId, undefined, "The trade cursor must remain unchanged after a partial page write.")
   assert.equal(repositories.fills.length, 1, "A successfully written fill may remain available for idempotent replay.")
 
