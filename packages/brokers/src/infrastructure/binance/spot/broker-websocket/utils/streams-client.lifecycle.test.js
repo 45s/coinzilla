@@ -622,7 +622,7 @@ test("clears the control pump timer when its only queued request times out", asy
 
 
 function createBatchStreamNames() {
-  return Array.from({ length: 201 }, (_, index) => `s${String(index).padStart(4, "0")}@aggTrade`)
+  return Array.from({ length: 201 }).map((index) => `s${String(index).padStart(4, "0")}@aggTrade`)
 }
 
 async function activateInitialAggTrade({ client, clock, transports }) {

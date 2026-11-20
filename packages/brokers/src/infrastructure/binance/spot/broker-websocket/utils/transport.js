@@ -160,7 +160,8 @@ export class NativeWebSocketTransport {
   }
 
   #createConnectPromise() {
-    return new Promise((resolve, reject) => {
+    return new Promise((...args) => {
+      const [resolve, reject] = args
       this.#rejectConnect = reject
       this.#handlers = this.#createSocketHandlers({ resolve })
       this.#registerSocketHandlers({ reject })
@@ -379,8 +380,8 @@ error })
     this.#clearConnectTimer()
     this.#clearCloseTimer()
     const closeReason = safeDiagnosticText(event.reason) ?? ""
-    this.#updateConnectError(event, closeReason)
-    this.#rejectConnectOnClose(event, closeReason)
+    this.#updateConnectError({ event, closeReason })
+    this.#rejectConnectOnClose({ event, closeReason })
     this.#clearConnectError()
     this.#cleanupSocketDiagnostics()
     this.#removeSocketHandlers()
@@ -393,7 +394,7 @@ error })
     this.#closeTimer = null
   }
 
-  #updateConnectError(event, closeReason) {
+  #updateConnectError({ event, closeReason }) {
     if (!this.#connectError) {return}
     this.#connectError.diagnostics = {
       ...this.#connectError.diagnostics,
@@ -408,7 +409,7 @@ error })
       `WebSocket handshake failed (HTTP upgrade status ${statusText}; close code ${event.code ?? "unknown"}; close reason ${reasonText}): ${this.#connectError.message}`
   }
 
-  #rejectConnectOnClose(event, closeReason) {
+  #rejectConnectOnClose({ event, closeReason }) {
     if (!this.#rejectConnect) {return}
     const error = this.#connectError ?? new Error("WebSocket closed before opening")
     this.#ensureHandshakeDiagnostics({ error,
