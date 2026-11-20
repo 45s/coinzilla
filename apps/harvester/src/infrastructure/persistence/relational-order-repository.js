@@ -91,7 +91,7 @@ function linkOrderFills({ transaction, row } = {}) {
   )
 }
 
-function upsertOrder({ transaction, record } = {}) {
+function upsertOrder({ transaction, record, ingestionSource = "live_event" } = {}) {
   const existingRow = readOrder({
     transaction,
     id: record.id,
@@ -109,6 +109,7 @@ function upsertOrder({ transaction, record } = {}) {
     record: merged,
     existing: existingRow,
     sourceKind: "live_order_event",
+    ingestionSource,
   })
   writeOrder({
     transaction,
@@ -144,23 +145,35 @@ function normalizeOrderWriteError({ error, record } = {}) {
  * @param {{database: object}} input
  * @returns {{upsert: (record: object) => Promise<object>}}
  */
+async function persistOrder({ database, record, ingestionSource }) {
+  try {
+    return await database.transaction((transaction) => upsertOrder({
+      transaction,
+      record,
+      ingestionSource,
+    }))
+  } catch (error) {
+    throw normalizeOrderWriteError({
+      error,
+      record,
+    })
+  }
+}
+
 export function createRelationalOrderHistoryRepository({ database } = {}) {
   if (!database || typeof database.transaction !== "function") {
     throw new TypeError("Relational order history requires a connected SQLite database.")
   }
   return Object.freeze({
-    upsert: async (record) => {
-      try {
-        return await database.transaction((transaction) => upsertOrder({
-          transaction,
-          record,
-        }))
-      } catch (error) {
-        throw normalizeOrderWriteError({
-          error,
-          record,
-        })
-      }
-    },
+    upsert: (record) => persistOrder({
+      database,
+      record,
+      ingestionSource: "live_event",
+    }),
+    upsertHistorical: (record) => persistOrder({
+      database,
+      record,
+      ingestionSource: "exchange_history",
+    }),
   })
 }
