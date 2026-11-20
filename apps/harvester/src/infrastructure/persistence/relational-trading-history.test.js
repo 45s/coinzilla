@@ -967,3 +967,38 @@ test("stores exchange-history provenance and links only the verified scoped orde
     },
   })
 })
+
+
+test("upgrades an existing relational v1 database with exchange-history provenance", async (t) => {
+  const context = await createTestContext({
+    t,
+  })
+  const database = createSqliteDatabase({
+    filename: context.filename,
+  })
+  await database.connect()
+  await database.migrate([
+    HARVESTER_RELATIONAL_MIGRATIONS[0],
+  ])
+  await database.close()
+  const persistence = await preparePersistence({
+    context,
+  })
+  assert.ok(persistence.relationalDatabase)
+  await inspectSqlite({
+    filename: context.filename,
+    work: (connection) => {
+      assertMigrationHistory(connection)
+      assertColumnsPresent({
+        database: connection,
+        table: "orders",
+        columns: ["ingestion_source", "last_ingestion_source"],
+      })
+      assertColumnsPresent({
+        database: connection,
+        table: "fills",
+        columns: ["ingestion_source", "last_ingestion_source"],
+      })
+    },
+  })
+})
