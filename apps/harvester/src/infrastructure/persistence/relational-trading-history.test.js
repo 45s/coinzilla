@@ -549,15 +549,55 @@ test("rolls back incompatible legacy migration and retries without losing the so
   })
 })
 
+async function createEnvironmentPersistence({
+  directory,
+  tradingMode,
+  eventBus,
+} = {}) {
+  const env = {
+    HARVESTER_DATABASE_DIRECTORY: directory,
+  }
+  const filename = resolveHarvesterDatabaseFilename({
+    tradingMode,
+    env,
+  })
+  const persistence = await prepareOrderHistoryPersistence({
+    tradingMode,
+    env,
+    eventBus,
+    logger: { error() {} },
+  })
+  return {
+    filename,
+    persistence,
+  }
+}
+
+async function assertEnvironmentFill({ filename, expectedEnvironment } = {}) {
+  await inspectSqlite({
+    filename,
+    work: (database) => {
+      const row = database.prepare("SELECT environment FROM fills").get()
+      assert.equal(
+        row.environment,
+        expectedEnvironment,
+        `${expectedEnvironment.toUpperCase()} database rows must retain their own environment.`,
+      )
+    },
+  })
+}
+
 test("keeps TESTNET and LIVE relational histories in separate database files", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-environment-isolation-"))
   const testnetEventBus = new EventBus()
   const liveEventBus = new EventBus()
-  let testnetPersistence
-  let livePersistence
+  const resources = {
+    testnetPersistence: null,
+    livePersistence: null,
+  }
   t.after(async () => {
-    await closeHarvesterPersistence(testnetPersistence ?? {})
-    await closeHarvesterPersistence(livePersistence ?? {})
+    await closeHarvesterPersistence(resources.testnetPersistence ?? {})
+    await closeHarvesterPersistence(resources.livePersistence ?? {})
     await testnetEventBus.close()
     await liveEventBus.close()
     await rm(directory, {
@@ -565,30 +605,19 @@ test("keeps TESTNET and LIVE relational histories in separate database files", a
       force: true,
     })
   })
-  const env = {
-    HARVESTER_DATABASE_DIRECTORY: directory,
-  }
-  const testnetFilename = resolveHarvesterDatabaseFilename({
+  const testnet = await createEnvironmentPersistence({
+    directory,
     tradingMode: "testnet",
-    env,
-  })
-  const liveFilename = resolveHarvesterDatabaseFilename({
-    tradingMode: "live",
-    env,
-  })
-  assert.notEqual(testnetFilename, liveFilename, "TESTNET and LIVE must resolve to different SQLite files.")
-  testnetPersistence = await prepareOrderHistoryPersistence({
-    tradingMode: "testnet",
-    env,
     eventBus: testnetEventBus,
-    logger: { error() {} },
   })
-  livePersistence = await prepareOrderHistoryPersistence({
+  const live = await createEnvironmentPersistence({
+    directory,
     tradingMode: "live",
-    env,
     eventBus: liveEventBus,
-    logger: { error() {} },
   })
+  resources.testnetPersistence = testnet.persistence
+  resources.livePersistence = live.persistence
+  assert.notEqual(testnet.filename, live.filename, "TESTNET and LIVE must resolve to different SQLite files.")
   await publishAppliedFill({
     eventBus: testnetEventBus,
     fill: createAppliedFillEvent(),
@@ -597,21 +626,15 @@ test("keeps TESTNET and LIVE relational histories in separate database files", a
     eventBus: liveEventBus,
     fill: createAppliedFillEvent(),
   })
-  assert.equal((await testnetPersistence.fillObserver.flush()).ok, true, "TESTNET fill history must persist independently.")
-  assert.equal((await livePersistence.fillObserver.flush()).ok, true, "LIVE fill history must persist independently.")
-  await inspectSqlite({
-    filename: testnetFilename,
-    work: (database) => {
-      const row = database.prepare("SELECT environment FROM fills").get()
-      assert.equal(row.environment, "testnet", "TESTNET database rows must retain the TESTNET environment.")
-    },
+  assert.equal((await testnet.persistence.fillObserver.flush()).ok, true, "TESTNET fill history must persist independently.")
+  assert.equal((await live.persistence.fillObserver.flush()).ok, true, "LIVE fill history must persist independently.")
+  await assertEnvironmentFill({
+    filename: testnet.filename,
+    expectedEnvironment: "testnet",
   })
-  await inspectSqlite({
-    filename: liveFilename,
-    work: (database) => {
-      const row = database.prepare("SELECT environment FROM fills").get()
-      assert.equal(row.environment, "live", "LIVE database rows must retain the LIVE environment.")
-    },
+  await assertEnvironmentFill({
+    filename: live.filename,
+    expectedEnvironment: "live",
   })
 })
 
