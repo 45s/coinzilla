@@ -255,6 +255,9 @@ test("reserves one durable RS SELL per cycle before shared order registration", 
 test("commits reconciled RS projections and releases the shared SELL reservation atomically", async () => {
   const context = makeContext()
   const workflow = makeWorkflow(context)
+  const openOrder = context.openRegistry.getOrder({
+    clientOrderId: "rs-sell-1",
+  })
   const ownership = createOrderOwnership({
     ownership: {
       strategyId,
@@ -262,18 +265,18 @@ test("commits reconciled RS projections and releases the shared SELL reservation
       purpose: "RECOVERY_SELL",
       cycleId: "rs-cycle-1",
     },
-    clientOrderId: context.order.clientOrderId,
-    brokerOrderId: context.order.brokerOrderId,
+    clientOrderId: openOrder.clientOrderId,
+    brokerOrderId: openOrder.brokerOrderId,
   })
   const reservation = await workflow.reserveSellCycle({
-    order: context.order,
+    order: openOrder,
     ownership,
     durableIntent: true,
   })
   assert.equal(reservation.ok, true, reservation.errors?.[0]?.message)
   assert.equal(
     workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
-    context.order.clientOrderId,
+    openOrder.clientOrderId,
   )
 
   assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1,

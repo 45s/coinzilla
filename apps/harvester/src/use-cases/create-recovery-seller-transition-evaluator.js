@@ -75,7 +75,7 @@ function canEvaluateSell({ snapshot }) {
 }
 
 function getPriceTickSize({ marketMetadata }) {
-  const rules = marketMetadata.tradingRules?.constraints
+  const { constraints: rules } = marketMetadata.tradingRules ?? {}
   if (!Array.isArray(rules)) {
     throw new TypeError("Recovery Seller SELL submission requires normalized exchange trading rules")
   }
