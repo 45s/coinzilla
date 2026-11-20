@@ -54,7 +54,7 @@ Follow the [Shared Utilities Policy](../../docs/engineering/SHARED_UTILITIES_POL
 
 Harvester agents MUST write the implementation, regression tests, and same-commit documentation updates. GitHub Actions runs the tests and checks for task PRs.
 
-A missing local checkout, terminal, Node installation, pnpm installation, or local test runner is not a reason to stop, defer implementation, or ask the user to run commands. Use GitHub repository operations to create the task branch, commit the actual changes, and open/update the PR. Inspect the exact PR head and GitHub Actions results, fix failures in source/tests, and let GitHub rerun them. Never weaken tests or claim success without green checks on the exact head SHA. Merge into `develop` only after all required checks pass and branch freshness is verified.
+A missing local checkout, terminal, Node installation, pnpm installation, or local test runner is not a reason to stop, defer implementation, or ask the user to run commands. Use GitHub repository operations to create the task branch, commit the actual changes, and open/update the PR. Inspect the exact PR head and GitHub Actions results, fix failures in source/tests, and let GitHub rerun them. Never weaken tests or claim success without green checks on the exact head SHA. Leave validated PRs open for user review and merge; Harvester agents must never merge or enable auto-merge.
 
 ## Application configuration
 
@@ -72,7 +72,7 @@ A missing local checkout, terminal, Node installation, pnpm installation, or loc
 
 Follow the repository-wide [Structured Error Handling Standard](../../docs/engineering/structured-error-handling.md) for the shared `SystemCustomError` base, stable codes, cause preservation and safe context. This section adds stricter Harvester-specific diagnostic requirements.
 
-- AI agents MUST NOT introduce a generic `Error` for a known Harvester/domain failure when a specific failure type can be named. Use a domain-specific class extending `Error`, with a precise `name` and stable machine-readable `code`.
+- AI agents MUST NOT introduce a generic `Error` for a known Harvester/domain failure when a specific failure type can be named. Define a domain-specific error class extending the shared `SystemCustomError` from `@coinzilla/utils` (which itself extends `Error`), with a precise `name`, stable machine-readable `code`, preserved `cause`, and safe structured context. Follow the canonical [Structured Error Handling Standard](../../docs/engineering/structured-error-handling.md).
 - Every operational error MUST identify the failing component/operation and affected entity (for example, market symbol), preserve the original cause, and expose safe structured details needed to act. The message must state what failed and why; include concrete remediation when known.
 - At external-data boundaries, emit structured DEBUG/TRACE evidence before validation can reject the data. Include source/filter identifiers and normalized descriptors; never log credentials, signatures, or secret payloads.
 - Fatal startup logs MUST preserve the typed error name, code, concise message, safe entity identifiers, structured details, and stack/cause in the DEBUG log. Console summaries may be compact, but MUST retain the stable error code and affected entity. Never truncate the only copy of diagnostic evidence.
