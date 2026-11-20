@@ -400,6 +400,7 @@ async function createHarvesterStartupContext({ options } = {}) {
     env: dependencies.env,
     brokerAdapterFactory: dependencies.brokerAdapterFactory,
     orderHistoryPersistence: dependencies.orderHistoryPersistence,
+    historySyncRequestDelayMs: dependencies.historySyncRequestDelayMs,
     providerIdentity: dependencies.providerIdentity,
     providerRequired: dependencies.providerRequired !== false,
     marketDataProviderInstanceId: dependencies.marketDataProviderInstanceId,
@@ -813,7 +814,7 @@ function hasOrderHistoryRepository({ persistence } = {}) {
   const repository = persistence?.orderRepository
   return typeof repository?.upsertHistorical === "function" &&
     typeof repository?.findByExchangeOrderIdentity === "function" &&
-    typeof repository?.getOldestPendingOrderId === "function"
+    typeof repository?.listPendingOrderIds === "function"
 }
 
 function hasFillHistoryRepository({ persistence } = {}) {
@@ -885,6 +886,7 @@ async function synchronizeStartupExchangeHistory({ startup, portfolio, resources
     orderRepository: persistence.orderRepository,
     fillRepository: persistence.fillRepository,
     cursorRepository: persistence.historySyncCursorRepository,
+    requestDelayMs: startup.historySyncRequestDelayMs,
   })
   if (result?.ok !== true) {
     logHistorySyncFailure({
