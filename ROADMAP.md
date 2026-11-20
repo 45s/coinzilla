@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-20
-**Latest source-verified develop checkpoint:** `fe629842ec432d0782bde2430a1c4dc90b69d430` (2026-11-20; includes merged S-2 PR #1575). The latest complete recursive Markdown/MDX inventory remains 160 tracked files at `543753da5938eba2d95ad19d74c3f98a991e6461` (89 under Harvester and 71 elsewhere); it has not been re-counted at this newer checkpoint.
+**Latest source-verified develop checkpoint:** `03339f7d388573947e61e381935b652de202e2e0` (2026-11-20; includes merged S-3 configuration PR #1576; S-2 standard PR #1575 is also merged). The latest complete recursive Markdown/MDX inventory remains 160 tracked files at `543753da5938eba2d95ad19d74c3f98a991e6461` (89 under Harvester and 71 elsewhere); it has not been re-counted at this newer checkpoint.
 
 ## Multi-provider Harvester execution and market-data routing — #1339
 
@@ -125,6 +125,7 @@
     - **Adoption:** new functionality follows the standard immediately; bug fixes migrate the touched error path where relevant and safe. Migrate untouched legacy code only through focused tasks with a concrete diagnostic benefit.
     - **Safety:** no duplicate base implementations, dependency cycles, message-based classification, blanket native-Error conversion or one-shot rewrite. Do not let logging/reporting failures mask the original failure.
     - **Canonical guidance:** [Structured Error Handling Standard](docs/engineering/structured-error-handling.md).
+    - **S-4 policy extension:** the source audit and clarification of failure categories, retry ownership, fallback/fail-closed behavior, unknown-state reconciliation and error-reporting boundaries are in progress under [engineering standards issue #1568](https://github.com/45s/coinzilla/issues/1568). This does not migrate legacy errors; the owning domains continue incremental adoption under #1028.
     - **Owner:** [Utils roadmap](packages/utils/ROADMAP.md) for the shared base; each consuming domain owns its subclasses and gradual migrations.
 
 11. **Workspace JavaScript linting — COMPLETE.** The full workspace has zero ESLint errors and warnings, and changed JavaScript files receive an additional strict policy on PRs targeting `develop`. Delivered through [PR #1288](https://github.com/45s/coinzilla/pull/1288) (zero-warning full-workspace gate), [PR #1311](https://github.com/45s/coinzilla/pull/1311) (evidence-based rule hardening), [PR #1322](https://github.com/45s/coinzilla/pull/1322) (function-quality policy), [PR #1346](https://github.com/45s/coinzilla/pull/1346) (progressive strict changed-file enforcement), and [PR #1352](https://github.com/45s/coinzilla/pull/1352) (roadmap closeout). No repository-wide or package-specific ESLint cleanup remains outstanding; fix any future finding in the PR that introduces it.
