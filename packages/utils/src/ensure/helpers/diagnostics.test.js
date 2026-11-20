@@ -19,15 +19,17 @@ test("describes primitive and structured values without arbitrary coercion", () 
 test("creates custom and descriptive TypeErrors and validates finite numbers", () => {
   assert.equal(typeError({
     name: "amount",
-    expectation: "a finite number",
-    value: "x",
+expectation: "a finite number",
+value: "x",
   }).message.includes("amount"), true)
   assert.equal(typeError({
     name: "amount",
-    expectation: "a number",
-    value: "x",
-    errMsg: "custom",
+expectation: "a number",
+value: "x",
+errMsg: "custom",
   }).message, "custom")
-  assert.equal(requireFiniteNumber({ value: 1.5, name: "amount" }), 1.5)
-  assert.throws(() => requireFiniteNumber({ value: Infinity, name: "amount" }), TypeError)
+  assert.equal(requireFiniteNumber({ value: 1.5,
+name: "amount" }), 1.5)
+  assert.throws(() => requireFiniteNumber({ value: Infinity,
+name: "amount" }), TypeError)
 })
