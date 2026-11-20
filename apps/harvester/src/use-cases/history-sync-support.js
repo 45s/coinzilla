@@ -46,5 +46,5 @@ export function isArchivedOrderHistoryResult({ result } = {}) {
   return result?.ok === false &&
     Array.isArray(result.errors) &&
     result.errors.length > 0 &&
-    result.errors.every((error) => error?.code === -2026)
+    result.errors.every((error) => Number(error?.code) === -2026)
 }
