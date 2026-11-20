@@ -22,7 +22,7 @@ function createAbnormalCloseServer() {
       `Sec-WebSocket-Accept: ${accept}`,
       "",
       "",
-    ].join("\\r\\n"))
+    ].join("\r\n"))
     setTimeout(() => socket.destroy(), 25)
   })
   return {
