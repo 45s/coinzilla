@@ -29,6 +29,7 @@ export function createHarvesterOperator({
   getRecoveryLedger,
   getAccountSnapshot,
   getOpenOrders,
+  recoverySellerStopWorkflow,
 } = {}) {
   const pauseBuys = createPauseBuys({ engine,
     operationalStateStore })
@@ -49,6 +50,22 @@ export function createHarvesterOperator({
       getRuntimeSnapshot })
     operator.getStatus = readState.getStatus
     operator.getMarkets = readState.getMarkets
+  }
+  if (recoverySellerStopWorkflow !== undefined) {
+    operator.getRecoverySellerStopState = async ({ actor } = {}) => {
+      try {
+        authorizeOperatorActor({ actor })
+        return {
+          ok: true,
+          data: {
+            stopState: recoverySellerStopWorkflow.getStopState(),
+            blockerId: recoverySellerStopWorkflow.getBlockerId(),
+          },
+        }
+      } catch (error) {
+        return { ok: false, errors: [error] }
+      }
+    }
   }
   if ([getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders].some((provider) => provider !== undefined)) {
     const readTradingState = createReadOperatorTradingState({ engine,
