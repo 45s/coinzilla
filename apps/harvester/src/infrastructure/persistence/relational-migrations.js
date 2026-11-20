@@ -8,6 +8,10 @@ import {
   mapOrderHistoryRecordToRow,
 } from "./order-row-mapping.js"
 
+const INITIAL_ORDER_COLUMNS = Object.freeze(
+  ORDER_COLUMNS.filter((column) => !["ingestion_source", "last_ingestion_source"].includes(column)),
+)
+
 const CREATE_RELATIONAL_TABLES_SQL = `
   CREATE TABLE orders (
     id TEXT PRIMARY KEY,
@@ -151,13 +155,14 @@ function insertLegacyOrder({ transaction, sourceRow } = {}) {
     sourceKind: "legacy_harvester_orders",
     sourceRecordId: sourceRow.id,
     migratedAt: new Date().toISOString(),
+    includeUnfilled: false,
   })
   const statement = transaction.prepare(
-    `INSERT INTO orders (${ORDER_COLUMNS.join(", ")})
-     VALUES (${ORDER_COLUMNS.map(() => "?").join(", ")})`,
+    `INSERT INTO orders (${INITIAL_ORDER_COLUMNS.join(", ")})
+     VALUES (${INITIAL_ORDER_COLUMNS.map(() => "?").join(", ")})`,
   )
   try {
-    statement.run(...ORDER_COLUMNS.map((column) => row[column]))
+    statement.run(...INITIAL_ORDER_COLUMNS.map((column) => row[column]))
   } catch (cause) {
     throw new OrderHistoryIntegrityError({
       field: "legacyOrderIdentity",
@@ -241,10 +246,60 @@ function migrateRelationalTradingHistory(transaction) {
   })
 }
 
+function migrateExchangeHistoryProvenance(transaction) {
+  transaction.exec(`
+    ALTER TABLE orders
+      ADD COLUMN ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration'));
+    ALTER TABLE orders
+      ADD COLUMN last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (last_ingestion_source IN ('live_event', 'exchange_history', 'legacy_migration'));
+    UPDATE orders
+      SET ingestion_source = 'legacy_migration',
+        last_ingestion_source = 'legacy_migration'
+      WHERE source_kind = 'legacy_harvester_orders';
+    ALTER TABLE fills
+      ADD COLUMN ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (ingestion_source IN ('live_event', 'exchange_history'));
+    ALTER TABLE fills
+      ADD COLUMN last_ingestion_source TEXT NOT NULL DEFAULT 'live_event'
+      CHECK (last_ingestion_source IN ('live_event', 'exchange_history'));
+  `)
+}
+
+function migrateHistorySyncCursors(transaction) {
+  transaction.exec(`
+    CREATE TABLE history_sync_cursors (
+      id TEXT PRIMARY KEY,
+      provider_type TEXT NOT NULL,
+      provider_instance_id TEXT NOT NULL,
+      account_id TEXT NOT NULL,
+      environment TEXT NOT NULL CHECK (environment IN ('testnet', 'live')),
+      symbol TEXT NOT NULL,
+      last_order_id TEXT,
+      last_trade_id TEXT,
+      updated_at TEXT NOT NULL,
+      UNIQUE (environment, provider_instance_id, provider_type, account_id, symbol)
+    );
+    CREATE INDEX history_sync_cursors_scope_idx
+      ON history_sync_cursors(environment, provider_instance_id, provider_type, account_id);
+  `)
+}
+
 export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([
   Object.freeze({
     version: 1,
     name: "harvester-relational-trading-history",
     up: migrateRelationalTradingHistory,
+  }),
+  Object.freeze({
+    version: 2,
+    name: "harvester-exchange-history-provenance",
+    up: migrateExchangeHistoryProvenance,
+  }),
+  Object.freeze({
+    version: 3,
+    name: "harvester-history-sync-cursors",
+    up: migrateHistorySyncCursors,
   }),
 ])

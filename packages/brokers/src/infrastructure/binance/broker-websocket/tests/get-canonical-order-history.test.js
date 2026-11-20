@@ -161,6 +161,63 @@ orderId: 698704 })
 })
 
 
+test("returns the full bounded lower-bound page when pagination is explicitly requested", async () => {
+  const orders = [
+    {
+      ...rawOrder,
+      orderId: 698704,
+      clientOrderId: "client-698704",
+    },
+    {
+      ...rawOrder,
+      orderId: 698745,
+      clientOrderId: "client-698745",
+    },
+    {
+      ...rawOrder,
+      orderId: 698746,
+      clientOrderId: "client-698746",
+    },
+  ]
+  const broker = createBroker({
+    allOrders(params) {
+      assert.deepEqual(params, {
+        symbol: "DOGEFDUSD",
+        limit: 100,
+        orderId: 698704,
+      })
+      return orders
+    },
+    exchangeInfo: () => ({ symbols: [symbolInfo] }),
+  })
+
+  const result = await broker.getCanonicalOrderHistory({
+    symbol: "DOGEFDUSD",
+    orderId: 698704,
+    limit: 100,
+    includeFollowingOrders: true,
+  })
+
+  assert.equal(result.ok, true, "A valid bounded history page must be accepted.")
+  assert.deepEqual(
+    result.data.map(({ brokerOrderId }) => brokerOrderId),
+    ["698704", "698745", "698746"],
+    "Pagination mode must preserve every order returned at or above the inclusive cursor.",
+  )
+})
+
+test("requires an explicit lower-bound cursor when canonical history pagination is enabled", async () => {
+  const broker = createBroker({})
+
+  const result = await broker.getCanonicalOrderHistory({
+    symbol: "DOGEFDUSD",
+    includeFollowingOrders: true,
+  })
+
+  assert.equal(result.ok, false, "Pagination without a lower-bound cursor must fail closed.")
+  assert.equal(broker.tradingConnection.calls.length, 0, "Invalid pagination input must be rejected before exchange I/O.")
+})
+
 test("accepts absent optional Binance order-history timestamps and metadata", async () => {
   const broker = createBroker({
     allOrders: () => [{

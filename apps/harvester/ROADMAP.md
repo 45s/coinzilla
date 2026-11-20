@@ -37,7 +37,9 @@ Any migration must preserve existing `harvester_orders` history through a verifi
 
 **Previous persistence scope:** The trading-session-ID history projection from PR #1369 and the temporary `harvester_processes` process-ID smoke-test write are removed in this slice, as explicitly requested. The replacement history record is an executed-order projection; it does not use process or runtime-session identity.
 
-**Relational trading history and live fill persistence — IN PROGRESS:** [#1554](https://github.com/45s/coinzilla/issues/1554). Phase 1 adds physical `orders`, `fills`, and commission-detail tables, versioned application-owned SQLite migrations, and a source-preserving conversion of `harvester_orders`. Phase 2 persists only canonical applied executions through a bounded best-effort observer. The existing collection observer remains active during migration and dual-write verification. Startup exchange-history synchronization is a separate later phase; no restoration or trading-state authority is introduced.
+**Relational trading history and live fill persistence — PHASES 1/2 COMPLETE:** [#1554](https://github.com/45s/coinzilla/issues/1554) was delivered in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555) (merge commit `9611dee32a7d5b3efa6737f6343b8553a2235022`). It adds physical `orders`, `fills`, and commission-detail tables, versioned application-owned SQLite migrations, source-preserving legacy conversion, and bounded best-effort persistence of canonical applied fills. The legacy collection observer remains active during dual-write compatibility. The relational projection remains non-authoritative.
+
+**Startup exchange-history synchronization — PHASE 3 COMPLETE:** [#1556](https://github.com/45s/coinzilla/issues/1556) was delivered in merged [PR #1557](https://github.com/45s/coinzilla/pull/1557), merge commit `c2b0eba34ea2778be8d70212fd5e2e3144067aa5`. The read-only Binance scan runs before trading-engine activation for each runtime’s configured execution markets. It paginates canonical order and trade history, persists orders (including unfilled observations), fills and commissions with explicit `exchange_history` provenance, and advances durable provider/account/environment/symbol cursors only after each page is fully persisted. Interrupted pages replay idempotently; startup also refreshes the oldest stored non-terminal order so offline fills can be discovered after the forward cursor advances. Ambiguous order/fill linkage fails closed. The backwards-compatible broker pagination contract is delivered by merged [PR #1559](https://github.com/45s/coinzilla/pull/1559), tracked by [#1558](https://github.com/45s/coinzilla/issues/1558), merge commit `b06f034daecbd2b6dee9ad68b8426ca3bab106cb`. This is observational history only: it does not adopt orders, infer strategy ownership, restore process state, authorize trading, or certify delisted/unconfigured-market or exchange-retention completeness.
 
 **Filled-order history — MERGED:** [PR #1469](https://github.com/45s/coinzilla/pull/1469) merged into `develop` as `39f098000d6c20cb596a9e6700250faa00bbd80e` (exact validated PR head `6d11d883e2d8250c2b3fab9f6d5a40d6178996bb`). It delivers a non-authoritative `harvester_orders` projection. Persist an order as soon as cumulative executed quantity is positive, including immediate partial/fully filled acknowledgements, later partial/final fills, and partial-fill cancellation outcomes. Further lifecycle snapshots update the same row. Identity is `(environment, providerInstanceId, providerType, accountId, clientOrderId)`; exact decimal strings, canonical market/asset facts, provider/account provenance, and available strategy/position ownership are retained.
 
@@ -54,14 +56,13 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 - ADR-0001 remains separate and unchanged. The projection does not restore/adopt orders after restart.
 - SQLite is the only currently implemented provider.
 
-### Remaining persistence work after #1554
+### Remaining persistence work after Phase 3
 
-1. Startup exchange order/trade-history synchronization and pagination (separate Phase 3; requires verified provider contracts and reconciliation semantics).
-2. Filtered account snapshot history only with explicit provenance and completeness semantics.
-3. Offline, idempotent historical imports from verified source evidence.
-4. Production retention, permissions, disk monitoring, corruption/disk-full handling, backup scheduling, and operational restore drills.
+1. Filtered account snapshot history only with explicit provenance and completeness semantics.
+2. Offline, idempotent historical imports from verified source evidence.
+3. Production retention, permissions, disk monitoring, corruption/disk-full handling, backup scheduling, and operational restore drills.
 
-**Explicit exclusions from #1554:** no startup synchronization, account snapshots, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, restart restoration/adoption, new providers, `sessions`/ `errors` tables, broker behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
+**Explicit exclusions from #1554/#1556:** no account-wide or delisted-market history completeness claim, account snapshots as a history source, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, process-restart restoration/adoption, Journal replay, new providers, `sessions`/`errors` tables, broker order-mutation behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
 
 ## Repository-wide quality baseline
 

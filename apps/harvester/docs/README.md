@@ -25,7 +25,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
 - [Strategy extensibility architecture discussion and audit roadmap](architecture/strategy-extensibility-audit-roadmap.md) — current source observations, agreed design direction, open decisions and S-1 through S-4 audit roadmap.
 - [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — historical source-verified design/audit snapshot; current implementation is governed by the Harvester persistence README.
-- [Harvester ordinary persistence](persistence/README.md) — current filled-order projection and relational orders/fills migration and live-persistence contract.
+- [Harvester ordinary persistence](persistence/README.md) — relational orders/fills migration, live-fill persistence, and Phase 3 Binance startup exchange-history synchronization contract.
 - [ADR-0003: Multi-provider execution and market-data routing](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) — accepted target architecture; implementation is tracked by [#1339](https://github.com/45s/coinzilla/issues/1339).
 - [ADR-0004: Complete Bitunix provider integration](../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md) — Bitunix admission requires a complete Brokers and Harvester provider contract; no interim partial facade.
 - [Multi-provider migration audit and implementation plan](../../../docs/architecture/multi-provider-migration-plan.md) — source-verified Harvester composition, order provenance, account isolation, recovery prerequisites and phased implementation plan.

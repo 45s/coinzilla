@@ -1,12 +1,14 @@
 # Harvester ordinary persistence
 
-**Owning issue:** [#1554 — Relational trading history and live fill persistence](https://github.com/45s/coinzilla/issues/1554)
+**Phase 1/2:** [#1554 — Relational trading history and live fill persistence](https://github.com/45s/coinzilla/issues/1554), completed in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555).
+
+**Phase 3 — COMPLETE:** [#1556 — Binance startup order and trade-history synchronization](https://github.com/45s/coinzilla/issues/1556) was delivered in merged [PR #1557](https://github.com/45s/coinzilla/pull/1557), merge commit `c2b0eba34ea2778be8d70212fd5e2e3144067aa5`. The implementation performs read-only, paginated Binance order/trade-history synchronization for each configured execution market before trading-engine activation. Its backwards-compatible broker pagination contract was delivered in merged [#1558](https://github.com/45s/coinzilla/issues/1558) / [PR #1559](https://github.com/45s/coinzilla/pull/1559), merge commit `b06f034daecbd2b6dee9ad68b8426ca3bab106cb`.
 
 **Parent workstream:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
 
 **Existing order-history projection:** [PR #1469](https://github.com/45s/coinzilla/pull/1469).
 
-**Relational implementation:** [PR #1555](https://github.com/45s/coinzilla/pull/1555), in progress. This document describes the target behavior being implemented on that branch; the task is not complete until the PR is merged and its required checks pass.
+**Relational implementation:** Phases 1/2 are complete in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555); Phase 3 is complete in merged [PR #1557](https://github.com/45s/coinzilla/pull/1557). The merged implementation and its documented coverage limitations are described below.
 
 ## 1. Separate orders, fills, and strategy cycles
 
@@ -23,10 +25,13 @@ A **strategy cycle** is a future business-level grouping of one or more orders a
 | `orders` | One row per canonical exchange order | Existing Harvester tuple: `(environment, provider_instance_id, provider_type, account_id, client_order_id)` |
 | `fills` | One row per actual applied exchange execution | `(provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)` |
 | `fill_commissions` | One row per commission asset charged on a fill | `(fill_id, ordinal)` |
+| `history_sync_cursors` | Last fully persisted order/trade IDs per environment, provider instance/type, account, and configured symbol | `(environment, provider_instance_id, provider_type, account_id, symbol)` |
 
 The order primary key preserves the existing `harvester_orders` ID generated from the canonical identity tuple. Exchange order IDs have a non-unique provider/account/environment/market lookup index; provider-specific reuse semantics are not assumed.
 
 The canonical `Fill.id` is `market.id:tradeId`; it is not globally unique. The relational fill primary key is a JSON-encoded tuple containing environment, provider instance/type, account, market ID, and provider execution ID. The original canonical fill ID is retained separately as `canonical_fill_id`.
+
+`ingestion_source` and `last_ingestion_source` distinguish `live_event`, `exchange_history`, and (for migrated orders) `legacy_migration`. The older `source_kind` columns remain compatible with the Phase 1/2 event-projection contract; the separate ingestion fields record whether the row was observed from a live event or an exchange-history scan.
 
 A fill's `order_id` is a nullable foreign key to `orders.id`. It is linked only through the canonical scoped client-order identity, with market and any available exchange-order facts checked for consistency. Exchange order IDs are retained but are not used alone to infer a relationship because provider reuse semantics vary. A fill can be persisted before its order projection is visible; a later order write links it when the client-order identity is present. Strategy, position, and cycle attribution are copied only from that verified relationship. Missing ownership remains SQL `NULL`, never a fabricated identifier.
 
@@ -36,7 +41,7 @@ A fill's `order_id` is a nullable foreign key to `orders.id`. It is linked only 
 - `orders.original_quantity`, `executed_quantity`, `remaining_quantity`, `cumulative_quote_quantity`, and `limit_price` preserve their supplied decimal strings. Optional facts remain `NULL`.
 - `orders.average_execution_price` remains `NULL` unless the canonical order contract later supplies an actual average. It is not inferred from cumulative totals.
 - `fills.execution_price`, `executed_base_quantity`, and `executed_quote_quantity` preserve the canonical fill values exactly.
-- Each actual commission is stored with its exact amount, asset ID/code, and optional historical quote valuation in `fill_commissions`. Configured fee rates are never used to estimate missing commissions.
+- Each actual commission is stored with its exact amount, asset ID/code, and optional exchange-supplied quote valuation in `fill_commissions`. Binance `myTrades` provides commission amount and asset but no quote valuation; those quote-value columns remain `NULL` unless the canonical fill supplies an actual valuation. Configured fee rates and current market prices are never used to estimate missing commissions.
 - Missing financial data is `NULL` or explicitly represented by the canonical commission status; it is never silently replaced with zero.
 - All physical timestamp columns use canonical UTC ISO-8601 strings with millisecond precision. Exchange creation/update/execution timestamps remain separate from local first/last observation or ingestion timestamps. A missing exchange timestamp remains `NULL`.
 
@@ -97,11 +102,17 @@ The observer enqueues work and returns immediately to EventBus delivery. A seria
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 1 | Physical `orders`, `fills`, commission detail, versioned migration, legacy-history verification/backup/rollback, repositories and deterministic tests | In progress in #1554 |
-| 2 | Non-blocking persistence of canonical applied fills with exact facts and scoped deduplication | In progress in #1554 |
-| 3 | Startup exchange order/trade-history API synchronization, pagination, reconciliation and recovery of executions that occurred while Harvester was offline | Deferred; separate issue and provider contract required |
+| 1 | Physical `orders`, `fills`, commission detail, versioned migration, legacy-history verification/backup/rollback, repositories and deterministic tests | Complete — merged PR #1555 |
+| 2 | Non-blocking persistence of canonical applied fills with exact facts and scoped deduplication | Complete — merged PR #1555 |
+| 3 | Startup exchange order/trade-history API synchronization, pagination, reconciliation and recovery of executions that occurred while Harvester was offline | Complete — merged PR #1557 (`c2b0eba34ea2778be8d70212fd5e2e3144067aa5`); Binance configured markets only |
 
-This task does not implement startup history API calls, pagination, account snapshots, strategy-cycle lifecycle, PnL/analytics queries, equity snapshots, drawdown, restart restoration/adoption, or new providers. It does not add `sessions` or `errors` tables, change broker behavior, alter Journal semantics, or modify ADR-0001. No exchange operation or TESTNET/LIVE trading activity is part of implementation or CI.
+Phase 3 performs read-only Binance order/trade-history scans for each runtime’s configured execution symbols. It paginates `getCanonicalOrderHistory({ symbol, orderId, includeFollowingOrders: true })` by exchange order ID and `getFills` by trade ID. The explicit `includeFollowingOrders` option is required because the default canonical order-history call intentionally preserves exact-order lookup semantics for existing reconciliation callers; [Brokers PR #1559](https://github.com/45s/coinzilla/pull/1559) adds the backwards-compatible pagination mode. The first scan for a provider/account/environment/symbol begins at ID zero; `history_sync_cursors` then stores the last fully persisted order and trade IDs independently, so subsequent startups resume after those pages. Cursor writes happen only after every record in the page is persisted; a crash or write failure before cursor advancement causes a safe idempotent page replay on the next startup. Each startup also rewinds the order scan to the oldest stored non-terminal order, if one exists, so an older open/partially-filled order is refreshed even after the forward cursor has passed it. The cursor itself remains monotonic. All canonical order observations, including unfilled orders, are persisted so a later execution can still be linked after the order cursor has advanced. Binance trade-history responses do not carry the Harvester client-order identity; fills first use the order page collected in the same scan, then fall back to a unique stored-order lookup scoped by provider, provider instance, account, environment, market ID, and exchange order ID. Ambiguous matches fail closed. Fills are then persisted with actual execution and commission facts. Exchange history never creates strategy/position/cycle ownership; existing verified ownership is preserved only when merging into an already-owned order record.
+
+A failed scan is returned with structured partial diagnostics: attempted and fully queried markets, order/trade pages requested, observed and persisted record counts, and a failure count/list identifying the market and error. Page request counters increment before the broker call so transport failures are counted as attempted requests. The first failure stops the current synchronization run; the startup integration logs the failure and continues without changing the existing trading-readiness or order-ownership authority. This is an explicit best-effort policy, not a claim that history is complete on a failed startup.
+
+The sync runs after market metadata initialization and before trading-engine activation. It performs no exchange writes. A failed scan is logged as incomplete history and does not reverse live accounting or change the existing order-ownership/readiness authority. Page exhaustion applies only to the configured symbols queried. It does not prove the historical market universe, include delisted/unconfigured symbols, or establish the exchange retention horizon; the result deliberately reports `complete: false`, `marketUniverseComplete: false`, and `retentionCoverageConfirmed: false`.
+
+Explicit exclusions remain: account-wide/delisted-market completeness, account snapshots as a history source, strategy-cycle lifecycle, PnL/analytics, equity snapshots, drawdown, process-restart restoration/adoption, Journal replay, new providers, and `sessions`/`errors` tables. No broker order mutation, TESTNET/LIVE trading activity, Journal semantics, ADR-0001, or `packages/db` changes are part of this phase.
 
 ## 7. Persistence lifecycle
 

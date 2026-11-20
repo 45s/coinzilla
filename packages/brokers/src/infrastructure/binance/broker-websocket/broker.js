@@ -606,16 +606,27 @@ error })
     }
   }
 
-  /** @param {{symbol: string, orderId?: string|number, startTime?: number, endTime?: number, limit?: number}} [input] @returns {Promise<BrokerResult<import("@coinzilla/entities").CanonicalOrder[]>>} */
+  /**
+   * @param {{symbol: string, orderId?: string|number, startTime?: number, endTime?: number, limit?: number, includeFollowingOrders?: boolean}} [input]
+   * @returns {Promise<BrokerResult<import("@coinzilla/entities").CanonicalOrder[]>>}
+   */
   async getCanonicalOrderHistory(input = {}) {
     try {
+      const { includeFollowingOrders = false } = input
+      if (typeof includeFollowingOrders !== "boolean") {
+        throw new TypeError("getCanonicalOrderHistory includeFollowingOrders must be a boolean")
+      }
+      if (includeFollowingOrders && input.orderId === undefined) {
+        throw new TypeError("getCanonicalOrderHistory pagination requires an orderId lower-bound cursor")
+      }
+
       const params = createOrderHistoryParams(input)
       const response = await this.tradingConnection.request("allOrders", params, { signed: true })
       const orders = requireOrderHistoryArray({ orders: response.data })
       validateOrderHistoryCursorItems({ orders })
-      // Binance allOrders.orderId is a lower-bound cursor, not an exact-ID filter.
-      // Filter the cursor page to the exact Harvester-owned order requested.
-      const matchingOrders = params.orderId === undefined
+      // Binance allOrders.orderId is an inclusive lower-bound cursor, not an exact-ID filter.
+      // Preserve exact-order behavior by default; pagination is explicit and opt-in.
+      const matchingOrders = params.orderId === undefined || includeFollowingOrders
         ? orders
         : orders.filter((order) => String(order.orderId) === String(params.orderId))
       if (matchingOrders.length === 0) {
@@ -631,12 +642,16 @@ error })
         exchangeInfo: metadataResponse.data,
       })
       return toResult({
-        data: adaptCanonicalOrderHistory({ orders: matchingOrders,
-market }),
+        data: adaptCanonicalOrderHistory({
+          orders: matchingOrders,
+          market,
+        }),
       })
     } catch (error) {
-      handleErr({ where: "BinanceWebSocketBroker.getCanonicalOrderHistory()",
-error })
+      handleErr({
+        where: "BinanceWebSocketBroker.getCanonicalOrderHistory()",
+        error,
+      })
       return toResult({ errors: [error] })
     }
   }
