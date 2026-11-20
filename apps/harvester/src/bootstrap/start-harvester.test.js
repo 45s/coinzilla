@@ -1180,6 +1180,14 @@ test("synchronizes configured Binance history before activating the trading engi
       fillRepository: {
         upsert: async (input) => persistedFills.push(input),
       },
+      historySyncCursorRepository: {
+        get: async () => ({
+          lastOrderId: null,
+          lastTradeId: null,
+        }),
+        saveOrderCursor: async () => {},
+        saveTradeCursor: async () => {},
+      },
     },
     brokerAdapterFactory: () => broker,
     logger: {
