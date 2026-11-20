@@ -682,11 +682,13 @@ function projectConservativeRecoveryFillBoundary({
   state.cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
 }
 
-function assertRecoverySellerReconciledSellOrder({ data, state }) {
-  const intent = state.orderIntents.get(data.sellOrderClientId)
-  const orders = state.recoverySellerOrdersByCycle.get(data.cycleId) ?? []
-  const ownedOrder = orders.find((order) => order.clientOrderId === data.sellOrderClientId)
-  const identityMatches = intent?.strategyId === "RS_recoverySeller" &&
+function hasMatchingRecoverySellerReconciledSellIdentity({
+  data,
+  intent,
+  ownedOrder,
+  state,
+}) {
+  return intent?.strategyId === "RS_recoverySeller" &&
     intent.purpose === "RECOVERY_SELL" &&
     intent.cycleId === data.cycleId &&
     intent.marketId === data.marketId &&
@@ -700,7 +702,18 @@ function assertRecoverySellerReconciledSellOrder({ data, state }) {
     !state.reconciledRecoverySellerSellOrderClientIds.has(data.sellOrderClientId) &&
     data.accountingApplied === true &&
     typeof data.eligible === "boolean"
-  if (!identityMatches) {
+}
+
+function assertRecoverySellerReconciledSellOrder({ data, state }) {
+  const intent = state.orderIntents.get(data.sellOrderClientId)
+  const orders = state.recoverySellerOrdersByCycle.get(data.cycleId) ?? []
+  const ownedOrder = orders.find((order) => order.clientOrderId === data.sellOrderClientId)
+  if (!hasMatchingRecoverySellerReconciledSellIdentity({
+    data,
+    intent,
+    ownedOrder,
+    state,
+  })) {
     throw new Error("Recovery Seller mixed-SELL reconciliation does not match one acknowledged terminal owned SELL order")
   }
   return { ownedOrder }
@@ -727,8 +740,14 @@ function projectRecoverySellerMixedSellReconciledFact({
   state,
 }) {
   const { data } = record
-  const { ownedOrder } = assertRecoverySellerReconciledSellOrder({ data, state })
-  assertRecoverySellerReconciledFillSet({ data, state })
+  const { ownedOrder } = assertRecoverySellerReconciledSellOrder({
+    data,
+    state,
+  })
+  assertRecoverySellerReconciledFillSet({
+    data,
+    state,
+  })
   const orders = state.recoverySellerOrdersByCycle.get(data.cycleId) ?? []
   state.recoverySellerOrdersByCycle.set(data.cycleId, orders.map((order) =>
     order.clientOrderId === data.sellOrderClientId
@@ -1193,10 +1212,16 @@ function createOperationalProjectionResult({ projected, state }) {
     facts: state.recoveryCycleNotCompletedFacts,
   })
   const stickySafetyBlockers = Object.freeze([...state.activeBlockers.values()].map((blocker) =>
-    Object.freeze({ ...blocker, scope: blocker.scope })
+    Object.freeze({
+      ...blocker,
+      scope: blocker.scope,
+    })
   ))
   const pausedMarkets = Object.freeze([...state.strategyPauses].map(([symbol, pause]) =>
-    Object.freeze({ symbol, reason: pause.reason })
+    Object.freeze({
+      symbol,
+      reason: pause.reason,
+    })
   ))
   return toResult({
     data: Object.freeze({

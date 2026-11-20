@@ -323,7 +323,7 @@ test("creates a stable first-cycle snapshot when the market has no active orders
 
 
 
-test("reserves one durable RS SELL per cycle before shared order registration", async () => {
+function createReservedRecoverySellerSellFixture() {
   const context = makeContext()
   const workflow = makeWorkflow({
     context: {
@@ -341,31 +341,51 @@ test("reserves one durable RS SELL per cycle before shared order registration", 
     clientOrderId: "rs-sell-1",
     brokerOrderId: "broker-sell-1",
   })
-  const order = makeOrder()
+  return {
+    workflow,
+    ownership,
+    order: makeOrder(),
+  }
+}
 
+test("reserves one durable RS SELL per cycle before shared order registration", async () => {
+  const { workflow, ownership, order } = createReservedRecoverySellerSellFixture()
   const withoutDurableIntent = await workflow.reserveSellCycle({
     order,
     ownership,
     durableIntent: false,
   })
-  assert.equal(withoutDurableIntent.ok, false,
-    "A process-local reservation must never substitute for the durable submission intent.")
-
+  assert.equal(
+    withoutDurableIntent.ok,
+    false,
+    "A process-local reservation must never substitute for the durable submission intent.",
+  )
   const reserved = await workflow.reserveSellCycle({
     order,
     ownership,
     durableIntent: true,
   })
-  assert.equal(reserved.ok, true, reserved.errors?.[0]?.message)
-  assert.equal(reserved.data.durable, true,
-    "The reservation is valid only after the durable intent has been committed.")
-  assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 0,
-    "The cycle reservation must exist before the order enters the shared registry.")
+  assert.equal(reserved.ok, true, "A durable SELL intent must permit the matching cycle reservation.")
+  assert.equal(reserved.data.durable, true, "The reservation must confirm its durable intent boundary.")
+  assert.equal(
+    workflow.getOrderRegistry().getActiveOrders().length,
+    0,
+    "The cycle reservation must exist before the order enters the shared registry.",
+  )
   assert.equal(
     workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
     "rs-sell-1",
+    "The reserved cycle must point to the exact owned SELL client order.",
   )
+})
 
+test("rejects a second SELL reservation for the same recovery cycle", async () => {
+  const { workflow, ownership, order } = createReservedRecoverySellerSellFixture()
+  await workflow.reserveSellCycle({
+    order,
+    ownership,
+    durableIntent: true,
+  })
   const duplicateOwnership = createOrderOwnership({
     ownership: {
       strategyId,
@@ -384,9 +404,8 @@ test("reserves one durable RS SELL per cycle before shared order registration", 
     ownership: duplicateOwnership,
     durableIntent: true,
   })
-  assert.equal(duplicate.ok, false,
-    "A second SELL client order must not reserve the same recovery cycle.")
-  assert.match(duplicate.errors[0].message, /already reserved/i)
+  assert.equal(duplicate.ok, false, "A second SELL must not reserve the same recovery cycle.")
+  assert.match(duplicate.errors[0].message, /already reserved/i, "The duplicate reservation error must explain the conflict.")
 })
 
 
