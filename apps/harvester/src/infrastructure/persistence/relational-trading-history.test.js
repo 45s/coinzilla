@@ -395,7 +395,7 @@ function createInterruptedMigration() {
 
 function createRetryMigration() {
   return {
-    version: 3,
+    version: 4,
     name: "harvester-relational-interrupted-test",
     up(transaction) {
       transaction.exec("CREATE TABLE retry_probe (id TEXT PRIMARY KEY)")
