@@ -1227,7 +1227,7 @@ test("persists a BUY execution fact before publishing RS Portfolio accounting", 
   const persistenceCalls = []
   const workflow = createRecoverySellerAccountingWorkflow({
     initialPortfolio: new Portfolio(),
-    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+    initialOrderRegistry: makeRecoveryBuyRegistry({ order }),
     onOperationalStateExecutionFill: async ({ fill: received }) => {
       persistenceCalls.push(received)
       assert.equal(workflow.getPortfolio().positions.length, 0,
@@ -1260,7 +1260,7 @@ test("does not publish RS BUY accounting when the durable execution-fill append 
   })
   const workflow = createRecoverySellerAccountingWorkflow({
     initialPortfolio: new Portfolio(),
-    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+    initialOrderRegistry: makeRecoveryBuyRegistry({ order }),
     onOperationalStateExecutionFill: async () => ({
       ok: false,
       errors: [new Error("execution fact fsync failed")],
