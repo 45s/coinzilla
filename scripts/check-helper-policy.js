@@ -194,11 +194,11 @@ export function analyzeHelperSource({ file, source }) {
 export function analyzeHelperNaming({ file, source }) {
   const violations = []
   const fileName = file.split(/[\\/]/).at(-1)
-  const stem = fileName.replace(/\\.(?:js|mjs|cjs)$/, "")
+  const stem = fileName.replace(/\.(?:js|mjs|cjs)$/, "")
   if (VAGUE_HELPER_NAMES.has(stem)) {
     violations.push([file, ": vague helper filename"].join(""))
   }
-  const pattern = /export\\s+(?:async\\s+)?function\\s+([A-Za-z_$][\\w$]*)/g
+  const pattern = /export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)/g
   for (const match of source.matchAll(pattern)) {
     if (VAGUE_HELPER_NAMES.has(match[1])) {
       violations.push([file, ": vague exported helper name ", match[1]].join(""))
