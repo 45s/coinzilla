@@ -6,13 +6,13 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
 import {
-  assertInteractiveTerminal,
+  assertBitunixOperatorInteractiveTerminal,
   createBitunixOperatorOrderPreflight,
   createOneShotMarker,
   runBitunixOperatorOrderAttempt,
 } from "./run-bitunix-hypeusdt-order-attempt.js"
 
-function createValidPreflightInput({ overrides = {} } = {}) {
+function createValidBitunixOperatorPreflightInput({ overrides = {} } = {}) {
   const market = {
     symbol: "HYPEUSDT",
     baseAsset: {
@@ -65,7 +65,7 @@ function createValidPreflightInput({ overrides = {} } = {}) {
   }
 }
 
-function createReadBroker({ events, input }) {
+function createMockBitunixReadBroker({ events, input }) {
   return {
     async connect() {
       events.push("read.connect")
@@ -92,7 +92,7 @@ function createReadBroker({ events, input }) {
   }
 }
 
-function createOrderBroker({ events, orderResult, orderDisconnectError }) {
+function createMockBitunixOrderBroker({ events, orderResult, orderDisconnectError }) {
   return {
     async connect() {
       events.push("order.connect")
@@ -113,7 +113,7 @@ function createOrderBroker({ events, orderResult, orderDisconnectError }) {
   }
 }
 
-function createAttemptDependencies({
+function createBitunixOperatorAttemptDependencies({
   overrides = {},
   confirmation = true,
   markerError,
@@ -127,21 +127,21 @@ function createAttemptDependencies({
   orderDisconnectError,
 } = {}) {
   const events = []
-  const input = createValidPreflightInput({
+  const input = createValidBitunixOperatorPreflightInput({
     overrides,
   })
-  const readBroker = createReadBroker({
+  const readBroker = createMockBitunixReadBroker({
     events,
     input,
   })
-  const orderBroker = createOrderBroker({
+  const orderBroker = createMockBitunixOrderBroker({
     events,
     orderResult,
     orderDisconnectError,
   })
   const run = () => runBitunixOperatorOrderAttempt({
     readBroker,
-    createOrderBroker() {
+    createMockBitunixOrderBroker() {
       events.push("order.construct")
       return orderBroker
     },
@@ -172,7 +172,7 @@ function createAttemptDependencies({
 }
 
 test("Bitunix operator preflight fixes the exact HYPEUSDT BUY LIMIT intent", () => {
-  const preflight = createBitunixOperatorOrderPreflight(createValidPreflightInput())
+  const preflight = createBitunixOperatorOrderPreflight(createValidBitunixOperatorPreflightInput())
 
   assert.deepEqual(preflight.order, {
     symbol: "HYPEUSDT",
@@ -191,7 +191,7 @@ test("Bitunix operator preflight fixes the exact HYPEUSDT BUY LIMIT intent", () 
 })
 
 test("Bitunix operator preflight rejects a market not returned as explicitly open", () => {
-  const input = createValidPreflightInput()
+  const input = createValidBitunixOperatorPreflightInput()
   input.marketResult.data = []
 
   assert.throws(
@@ -201,7 +201,7 @@ test("Bitunix operator preflight rejects a market not returned as explicitly ope
 })
 
 test("Bitunix operator preflight rejects mismatched pair identity", () => {
-  const input = createValidPreflightInput()
+  const input = createValidBitunixOperatorPreflightInput()
   input.filtersResult.data.base = "BTC"
 
   assert.throws(
@@ -211,7 +211,7 @@ test("Bitunix operator preflight rejects mismatched pair identity", () => {
 })
 
 test("Bitunix operator preflight rejects a market not explicitly marked open", () => {
-  const input = createValidPreflightInput()
+  const input = createValidBitunixOperatorPreflightInput()
   input.filtersResult.data.isOpen = "unknown"
 
   assert.throws(
@@ -222,7 +222,7 @@ test("Bitunix operator preflight rejects a market not explicitly marked open", (
 
 test("Bitunix operator preflight requires documented minimum quantity and notional", () => {
   for (const field of ["minVolume", "minPrice"]) {
-    const input = createValidPreflightInput()
+    const input = createValidBitunixOperatorPreflightInput()
     delete input.filtersResult.data[field]
 
     assert.throws(
@@ -235,7 +235,7 @@ test("Bitunix operator preflight requires documented minimum quantity and notion
 
 test("Bitunix operator preflight rejects invalid or negative market minima", () => {
   for (const value of ["", "unknown", "-0.1"]) {
-    const input = createValidPreflightInput()
+    const input = createValidBitunixOperatorPreflightInput()
     input.filtersResult.data.minVolume = value
 
     assert.throws(
@@ -247,7 +247,7 @@ test("Bitunix operator preflight rejects invalid or negative market minima", () 
 })
 
 test("Bitunix operator preflight rejects an order below the documented minimum quantity", () => {
-  const input = createValidPreflightInput()
+  const input = createValidBitunixOperatorPreflightInput()
   input.filtersResult.data.minVolume = "0.4000001"
 
   assert.throws(
@@ -257,7 +257,7 @@ test("Bitunix operator preflight rejects an order below the documented minimum q
 })
 
 test("Bitunix operator preflight rejects an order below the documented minimum notional", () => {
-  const input = createValidPreflightInput()
+  const input = createValidBitunixOperatorPreflightInput()
   input.filtersResult.data.minPrice = "12.0001"
 
   assert.throws(
@@ -268,7 +268,7 @@ test("Bitunix operator preflight rejects an order below the documented minimum n
 
 test("Bitunix operator preflight rejects free USDT sufficient to cover the order", () => {
   for (const amount of ["12", "12.0000", "20"]) {
-    const input = createValidPreflightInput()
+    const input = createValidBitunixOperatorPreflightInput()
     input.balancesResult.data[0].free.amount = amount
 
     assert.throws(
@@ -280,7 +280,7 @@ test("Bitunix operator preflight rejects free USDT sufficient to cover the order
 })
 
 test("Bitunix operator preflight requires an explicit USDT balance row", () => {
-  const input = createValidPreflightInput()
+  const input = createValidBitunixOperatorPreflightInput()
   input.balancesResult.data = []
 
   assert.throws(
@@ -290,7 +290,7 @@ test("Bitunix operator preflight requires an explicit USDT balance row", () => {
 })
 
 test("Bitunix operator preflight rejects any existing HYPEUSDT open order", () => {
-  const input = createValidPreflightInput()
+  const input = createValidBitunixOperatorPreflightInput()
   input.openOrdersResult.data = [{
     id: "existing-order",
   }]
@@ -310,7 +310,7 @@ test("Bitunix operator preflight fails closed when any broker read fails", () =>
   ]
 
   for (const operation of operations) {
-    const input = createValidPreflightInput()
+    const input = createValidBitunixOperatorPreflightInput()
     input[operation] = {
       ok: false,
       errors: [new Error(`${operation} failed`)],
@@ -326,7 +326,7 @@ test("Bitunix operator preflight fails closed when any broker read fails", () =>
 
 test("Bitunix operator CLI requires an interactive input and output terminal", () => {
   assert.throws(
-    () => assertInteractiveTerminal({
+    () => assertBitunixOperatorInteractiveTerminal({
       stdin: {
         isTTY: false,
       },
@@ -336,7 +336,7 @@ test("Bitunix operator CLI requires an interactive input and output terminal", (
     }),
     /interactive terminal/i,
   )
-  assert.doesNotThrow(() => assertInteractiveTerminal({
+  assert.doesNotThrow(() => assertBitunixOperatorInteractiveTerminal({
     stdin: {
       isTTY: true,
     },
@@ -363,7 +363,7 @@ test("Bitunix operator CLI refuses non-interactive execution before credentials 
 test("Bitunix operator marker is exclusive, private, and contains no account balances", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-operator-order-"))
   const markerPath = join(directory, "attempt.json")
-  const preflight = createBitunixOperatorOrderPreflight(createValidPreflightInput())
+  const preflight = createBitunixOperatorOrderPreflight(createValidBitunixOperatorPreflightInput())
 
   try {
     await createOneShotMarker({
@@ -399,7 +399,7 @@ test("Bitunix operator marker is exclusive, private, and contains no account bal
 })
 
 test("Bitunix operator attempt confirms before creating a mutation-enabled broker", async () => {
-  const { events, run } = createAttemptDependencies()
+  const { events, run } = createBitunixOperatorAttemptDependencies()
   const result = await run()
 
   assert.equal(result.ok, true)
@@ -421,7 +421,7 @@ test("Bitunix operator attempt confirms before creating a mutation-enabled broke
 })
 
 test("Bitunix operator attempt stops without a marker or mutation when confirmation is declined", async () => {
-  const { events, run } = createAttemptDependencies({
+  const { events, run } = createBitunixOperatorAttemptDependencies({
     confirmation: false,
   })
   const result = await run()
@@ -432,7 +432,7 @@ test("Bitunix operator attempt stops without a marker or mutation when confirmat
 })
 
 test("Bitunix operator attempt stops before mutation when the one-shot marker cannot be created", async () => {
-  const { events, run } = createAttemptDependencies({
+  const { events, run } = createBitunixOperatorAttemptDependencies({
     markerError: Object.assign(new Error("marker already exists"), {
       code: "EEXIST",
     }),
@@ -449,7 +449,7 @@ test("Bitunix operator attempt never retries an unknown placement outcome", asyn
     mutationOutcome: "OUTCOME_UNKNOWN",
     errors: [new Error("acknowledgement lost")],
   }
-  const { events, run } = createAttemptDependencies({
+  const { events, run } = createBitunixOperatorAttemptDependencies({
     orderResult: unknownResult,
   })
   const result = await run()
@@ -468,7 +468,7 @@ test("Bitunix operator attempt preserves the broker result if cleanup fails afte
     },
     mutationOutcome: "CONFIRMED",
   }
-  const { run } = createAttemptDependencies({
+  const { run } = createBitunixOperatorAttemptDependencies({
     orderResult,
     orderDisconnectError: new Error("disconnect failed"),
   })
@@ -479,7 +479,7 @@ test("Bitunix operator attempt preserves the broker result if cleanup fails afte
 })
 
 test("Bitunix operator attempt does not ask for confirmation after a failed preflight read", async () => {
-  const { events, run } = createAttemptDependencies({
+  const { events, run } = createBitunixOperatorAttemptDependencies({
     overrides: {
       balancesResult: {
         ok: false,
