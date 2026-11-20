@@ -230,7 +230,7 @@ export function findHelperNamingViolations(root) {
  * @returns {string[]}
  */
 export function findChangedHelperNamingViolations({ root, changedPaths }) {
-  const helperPaths = changedPaths.filter((path) => /(?:^|\\/)helpers\\/[^/]+\\.(?:js|mjs|cjs)$/.test(path))
+  const helperPaths = changedPaths.filter((path) => path.split("/").includes("helpers") && /\.(?:js|mjs|cjs)$/.test(path))
   const violations = []
   for (const path of helperPaths) {
     const absolutePath = join(root, path)
