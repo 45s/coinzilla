@@ -73,8 +73,8 @@ test("scans helper fixture names", () => {
   try {
     writeFileSync(join(directory, "process.js"), "export function process({ value }) { return value }\\n")
     assert.deepEqual(findHelperNamingViolations(root), [
-      `${join(directory, "process.js")}: vague helper filename`,
       `${join(directory, "process.js")}: vague exported helper name process`,
+      `${join(directory, "process.js")}: vague helper filename`,
     ])
   } finally {
     rmSync(root, {
