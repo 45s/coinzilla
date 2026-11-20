@@ -230,11 +230,15 @@ export function findHelperNamingViolations(root) {
  * @returns {string[]}
  */
 export function findChangedHelperNamingViolations({ root, changedPaths }) {
-  const helperPaths = changedPaths.filter((path) => path.split("/").includes("helpers") && /\.(?:js|mjs|cjs)$/.test(path))
+  const helperPaths = changedPaths.filter((path) =>
+    path.split("/").includes("helpers") && /\.(?:js|mjs|cjs)$/.test(path),
+  )
   const violations = []
   for (const path of helperPaths) {
     const absolutePath = join(root, path)
-    if (!existsSync(absolutePath)) continue
+    if (!existsSync(absolutePath)) {
+      continue
+    }
     violations.push(...analyzeHelperNaming({
       file: path,
       source: readFileSync(absolutePath, "utf8"),
@@ -282,9 +286,17 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const changedPaths = changedNames && baseSha
     ? execFileSync("git", ["diff", "--name-only", `${baseSha}...HEAD`], { cwd: root, encoding: "utf8" }).split(/\r?\n/).filter(Boolean)
     : []
-  const violations = changedNames
-    ? (baseSha ? findChangedHelperNamingViolations({ root, changedPaths }) : ["Changed-name check requires an exact 40-character base SHA"])
-    : checkNames ? findHelperNamingViolations(root) : findHelperPolicyViolations(root)
+  let violations = findHelperPolicyViolations(root)
+  if (checkNames) {
+    violations = findHelperNamingViolations(root)
+  }
+  if (changedNames) {
+    if (baseSha) {
+      violations = findChangedHelperNamingViolations({ root, changedPaths })
+    } else {
+      violations = ["Changed-name check requires an exact 40-character base SHA"]
+    }
+  }
   if (violations.length > 0) {
     process.stderr.write([
       "Helper policy violations:\n",
