@@ -55,19 +55,37 @@ function getDiagnostics({ state, maxPending } = {}) {
   })
 }
 
-function enqueueFill({ state, repository, event, environment, logger, maxPending } = {}) {
+function recordQueueFailure({ state, logger, event, stage, code } = {}) {
+  const error = new OrderHistoryPersistenceError({
+    stage,
+    code,
+    retryable: true,
+    context: createEventContext(event),
+  })
+  recordFailure({
+    state,
+    logger,
+    event,
+    stage,
+    error,
+  })
+}
+
+function enqueueFill({
+  state,
+  repository,
+  event,
+  environment,
+  logger,
+  maxPending,
+} = {}) {
   if (state.pendingCount >= maxPending) {
-    recordFailure({
+    recordQueueFailure({
       state,
       logger,
       event,
       stage: "queue",
-      error: new OrderHistoryPersistenceError({
-        stage: "queue",
-        code: "HARVESTER_FILL_HISTORY_QUEUE_FULL",
-        retryable: true,
-        context: createEventContext(event),
-      }),
+      code: "HARVESTER_FILL_HISTORY_QUEUE_FULL",
     })
     return
   }
@@ -90,25 +108,35 @@ function enqueueFill({ state, repository, event, environment, logger, maxPending
     })
 }
 
-function handleEvent({ event, state, repository, environment, logger, maxPending } = {}) {
+function handleEvent({
+  event,
+  state,
+  repository,
+  environment,
+  logger,
+  maxPending,
+} = {}) {
   if (event?.name !== HARVESTER_EVENT_NAMES.FILL_APPLIED) {
     return
   }
   if (state.closed) {
-    recordFailure({
+    recordQueueFailure({
       state,
       logger,
       event,
       stage: "closed",
-      error: new OrderHistoryPersistenceError({
-        stage: "closed",
-        code: "HARVESTER_FILL_HISTORY_OBSERVER_CLOSED",
-        context: createEventContext(event),
-      }),
+      code: "HARVESTER_FILL_HISTORY_OBSERVER_CLOSED",
     })
     return
   }
-  enqueueFill({ state, repository, event, environment, logger, maxPending })
+  enqueueFill({
+    state,
+    repository,
+    event,
+    environment,
+    logger,
+    maxPending,
+  })
 }
 
 function subscribe({ eventBus, handler } = {}) {
@@ -135,7 +163,12 @@ function closeObserver({ state, subscription, logger } = {}) {
     try {
       subscription.unsubscribe()
     } catch (error) {
-      recordFailure({ state, logger, error, stage: "unsubscribe" })
+      recordFailure({
+        state,
+        logger,
+        error,
+        stage: "unsubscribe",
+      })
     }
     state.closePromise = flushQueue(state)
   }
@@ -174,7 +207,10 @@ export function createFillHistoryObserver({
     closePromise: null,
     errors: [],
   }
-  state.diagnostics = () => getDiagnostics({ state, maxPending })
+  state.diagnostics = () => getDiagnostics({
+    state,
+    maxPending,
+  })
   const handler = (event) => handleEvent({
     event,
     state,
@@ -183,10 +219,17 @@ export function createFillHistoryObserver({
     logger,
     maxPending,
   })
-  const subscription = subscribe({ eventBus, handler })
+  const subscription = subscribe({
+    eventBus,
+    handler,
+  })
   return Object.freeze({
     flush: () => flushQueue(state),
-    close: () => closeObserver({ state, subscription, logger }),
+    close: () => closeObserver({
+      state,
+      subscription,
+      logger,
+    }),
     getDiagnostics: state.diagnostics,
   })
 }
