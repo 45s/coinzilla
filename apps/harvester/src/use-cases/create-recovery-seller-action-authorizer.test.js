@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { allocateOrderCommitments } from "../domain/orders/allocate-order-commitments.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createRecoverySellerActionAuthorizer } from "./create-recovery-seller-action-authorizer.js"
 
 const symbol = "ZROUSDT"
@@ -29,22 +30,34 @@ const input = Object.freeze({
   }),
 })
 
-function createAuthorizer({ quoteBalance = "100", accountSnapshot } = {}) {
+function createAuthorizer({
+  quoteBalance = "100",
+  baseBalance = "0",
+  accountSnapshot,
+  activeOrders = [],
+  actionOverride = action,
+  snapshotOverride = snapshot,
+  portfolioOverride,
+} = {}) {
   let latchCount = 0
+  const ownershipByClientOrderId = new Map(activeOrders.map((order) => [
+    order.clientOrderId,
+    { strategyId: order.strategyId ?? StrategyId.COIN_GRABBER },
+  ]))
   const state = {
     registry: {
-      getActiveOrders: () => [],
-      getOwnership: () => undefined,
+      getActiveOrders: () => activeOrders,
+      getOwnership: ({ clientOrderId }) => ownershipByClientOrderId.get(clientOrderId),
     },
   }
-  const portfolio = {
+  const portfolio = portfolioOverride ?? {
     positions: [],
     getPosition: () => undefined,
   }
   const currentSnapshot = accountSnapshot === undefined ? {
     balances: [],
     getFreeBalance: ({ assetId }) => ({
-      amount: assetId === "USDT" ? quoteBalance : "0",
+      amount: assetId === "USDT" ? quoteBalance : baseBalance,
     }),
     getPortfolioBaseQuantityBaseline: () => "0",
     getAdditionalTrackedBaseQuantityBaseline: () => "0",
@@ -77,11 +90,37 @@ function createAuthorizer({ quoteBalance = "100", accountSnapshot } = {}) {
   })
   return {
     authorize: () => authorize({
-      action,
-      snapshot,
+      action: actionOverride,
+      snapshot: snapshotOverride,
       input,
     }),
     getLatchCount: () => latchCount,
+  }
+}
+
+
+
+function makeActiveOrder({
+  clientOrderId,
+  symbol,
+  marketId = symbol,
+  baseAssetId = "ZRO",
+  quoteAssetId = "USDT",
+  side = "BUY",
+  remainingQuantity = "9.1",
+  limitPrice = "10",
+} = {}) {
+  return {
+    clientOrderId,
+    market: {
+      id: marketId,
+      symbol,
+      baseAsset: { id: baseAssetId },
+      quoteAsset: { id: quoteAssetId },
+    },
+    side,
+    remainingQuantity: { amount: remainingQuantity },
+    limitPrice: { amount: limitPrice },
   }
 }
 
@@ -110,4 +149,85 @@ test("latches durable STOP when the account snapshot is missing", async () => {
 
   assert.equal(result.ok, false, "A missing account snapshot must fail the allocation request.")
   assert.equal(runtime.getLatchCount(), 1, "A missing account snapshot must latch durable STOP.")
+})
+
+
+test("reserves same-market CG BUY commitments before authorizing an RS BUY", async () => {
+  const conservativeOrder = makeActiveOrder({
+    clientOrderId: "cg-same-market-buy",
+    symbol,
+    remainingQuantity: "9.1",
+  })
+  const runtime = createAuthorizer({
+    activeOrders: [conservativeOrder],
+  })
+  const result = await runtime.authorize()
+
+  assert.equal(result.ok, true, "A valid CG order must remain a normal account commitment during RS allocation.")
+  assert.equal(result.data.skipped, true, "The RS BUY must defer when the same-market CG BUY leaves less than its required quote.")
+  assert.equal(result.data.reason, "INSUFFICIENT_QUOTE_BALANCE", "The shared allocator must report the account-wide quote reservation as the deferral reason.")
+  assert.equal(runtime.getLatchCount(), 0, "A valid same-market CG commitment must not be misclassified as an accounting STOP.")
+})
+
+test("reserves different-market CG BUY commitments sharing the same quote asset before authorizing an RS BUY", async () => {
+  const conservativeOrder = makeActiveOrder({
+    clientOrderId: "cg-doge-buy",
+    symbol: "DOGEUSDT",
+    marketId: "binance:DOGEUSDT",
+    baseAssetId: "DOGE",
+    quoteAssetId: "USDT",
+    remainingQuantity: "9.1",
+  })
+  const runtime = createAuthorizer({
+    activeOrders: [conservativeOrder],
+  })
+  const result = await runtime.authorize()
+
+  assert.equal(result.ok, true, "A different-market CG order using the same USDT asset must remain a valid account commitment.")
+  assert.equal(result.data.skipped, true, "The RS BUY must account for CG quote reservations across every market sharing USDT.")
+  assert.equal(result.data.reason, "INSUFFICIENT_QUOTE_BALANCE", "The allocator must identify the shared quote-asset reservation as the deferral reason.")
+  assert.equal(runtime.getLatchCount(), 0, "Cross-market quote contention is a normal deferral, not a global STOP.")
+})
+
+test("latches STOP rather than double-selling base reserved by a same-market CG order", async () => {
+  const conservativeOrder = makeActiveOrder({
+    clientOrderId: "cg-same-market-sell",
+    symbol,
+    side: "SELL",
+    remainingQuantity: "0.6",
+    limitPrice: "20",
+  })
+  const recoveryPortfolio = {
+    positions: [{
+      market: input.marketMetadata.market,
+      totalBaseQuantity: { amount: "1" },
+      quoteNetCashFlow: { amount: "0" },
+    }],
+    getPosition: () => ({
+      baseQuantity: { amount: "1" },
+      spent: { amount: "10" },
+    }),
+  }
+  const runtime = createAuthorizer({
+    baseBalance: "0",
+    activeOrders: [conservativeOrder],
+    actionOverride: {
+      side: "SELL",
+      quantity: "0.5",
+      positionId: "rs-position-1",
+    },
+    snapshotOverride: {
+      planInput: {
+        recoveryQuantity: "1",
+        verifiedUnreservedLegacyQuantity: "0",
+        recoveryCostBasis: "10",
+      },
+      cumulativeNetSellProceeds: "0",
+    },
+    portfolioOverride: recoveryPortfolio,
+  })
+  const result = await runtime.authorize()
+
+  assert.equal(result.ok, false, "An RS SELL that overlaps a CG-reserved base quantity must fail closed.")
+  assert.equal(runtime.getLatchCount(), 1, "An attempted cross-strategy double-sell must latch durable account-wide STOP.")
 })
