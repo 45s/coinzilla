@@ -682,12 +682,7 @@ function projectConservativeRecoveryFillBoundary({
   state.cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
 }
 
-function hasMatchingRecoverySellerReconciledSellIdentity({
-  data,
-  intent,
-  ownedOrder,
-  state,
-}) {
+function hasMatchingRecoverySellerReconciledIntent({ data, intent }) {
   return intent?.strategyId === "RS_recoverySeller" &&
     intent.purpose === "RECOVERY_SELL" &&
     intent.cycleId === data.cycleId &&
@@ -695,13 +690,30 @@ function hasMatchingRecoverySellerReconciledSellIdentity({
     intent.venue === data.venue &&
     intent.symbol === data.symbol &&
     intent.baseAssetId === data.baseAssetId &&
-    intent.quoteAssetId === data.quoteAssetId &&
-    ownedOrder?.brokerOrderId === data.sellOrderBrokerOrderId &&
+    intent.quoteAssetId === data.quoteAssetId
+}
+
+function hasMatchingRecoverySellerReconciledOrder({ data, ownedOrder }) {
+  return ownedOrder?.brokerOrderId === data.sellOrderBrokerOrderId &&
     ownedOrder.submissionOutcome === "ACKNOWLEDGED" &&
-    (ownedOrder.status === data.terminalStatus || ownedOrder.status === "OPEN") &&
-    !state.reconciledRecoverySellerSellOrderClientIds.has(data.sellOrderClientId) &&
+    (ownedOrder.status === data.terminalStatus || ownedOrder.status === "OPEN")
+}
+
+function hasUncommittedRecoverySellerReconciliation({ data, state }) {
+  return !state.reconciledRecoverySellerSellOrderClientIds.has(data.sellOrderClientId) &&
     data.accountingApplied === true &&
     typeof data.eligible === "boolean"
+}
+
+function hasMatchingRecoverySellerReconciledSellIdentity({
+  data,
+  intent,
+  ownedOrder,
+  state,
+}) {
+  return hasMatchingRecoverySellerReconciledIntent({ data, intent }) &&
+    hasMatchingRecoverySellerReconciledOrder({ data, ownedOrder }) &&
+    hasUncommittedRecoverySellerReconciliation({ data, state })
 }
 
 function assertRecoverySellerReconciledSellOrder({ data, state }) {
