@@ -94,6 +94,35 @@ async function createVerifiedMigrationBackup({ database, filename } = {}) {
   return backupFilename
 }
 
+async function closePartialRelationalResources({
+  database,
+  observers,
+  logger,
+} = {}) {
+  for (const observer of observers) {
+    try {
+      await observer?.close()
+    } catch (error) {
+      logPreparationFailure({
+        logger,
+        error,
+        relational: true,
+      })
+    }
+  }
+  if (database.state !== "closed") {
+    try {
+      await database.close()
+    } catch (error) {
+      logPreparationFailure({
+        logger,
+        error,
+        relational: true,
+      })
+    }
+  }
+}
+
 async function prepareRelationalResources({
   filename,
   eventBus,
@@ -138,29 +167,87 @@ async function prepareRelationalResources({
       migrationBackupFilename,
     }
   } catch (error) {
-    for (const observer of [fillObserver, relationalOrderObserver]) {
-      try {
-        await observer?.close()
-      } catch (cleanupError) {
-        logPreparationFailure({
-          logger,
-          error: cleanupError,
-          relational: true,
-        })
-      }
+    await closePartialRelationalResources({
+      database: relationalDatabase,
+      observers: [fillObserver, relationalOrderObserver],
+      logger,
+    })
+    throw error
+  }
+}
+
+async function createLegacyPersistence({
+  filename,
+  environment,
+  eventBus,
+  logger,
+} = {}) {
+  const database = createDatabase({
+    provider: createSqliteProvider({
+      filename,
+      timeout: 5000,
+    }),
+  })
+  try {
+    await database.connect()
+    const repository = createOrderHistoryRepository({
+      database,
+    })
+    const observer = createOrderHistoryObserver({
+      eventBus,
+      repository,
+      environment,
+      logger,
+    })
+    return {
+      database,
+      observer,
     }
-    if (relationalDatabase.state !== "closed") {
+  } catch (error) {
+    if (database.state !== "closed") {
       try {
-        await relationalDatabase.close()
-      } catch (cleanupError) {
-        logPreparationFailure({
-          logger,
-          error: cleanupError,
-          relational: true,
-        })
+        await database.close()
+      } catch {
+        // Preserve the original legacy persistence preparation failure.
       }
     }
     throw error
+  }
+}
+
+async function preparePersistenceWithRelationalFallback({
+  legacyPersistence,
+  filename,
+  eventBus,
+  environment,
+  logger,
+} = {}) {
+  try {
+    const relational = await prepareRelationalResources({
+      filename,
+      eventBus,
+      environment,
+      logger,
+    })
+    return Object.freeze({
+      ...legacyPersistence,
+      ...relational,
+      relationalError: null,
+    })
+  } catch (relationalError) {
+    logPreparationFailure({
+      logger,
+      error: relationalError,
+      relational: true,
+    })
+    return Object.freeze({
+      ...legacyPersistence,
+      relationalDatabase: null,
+      relationalOrderObserver: null,
+      fillObserver: null,
+      migrationBackupFilename: null,
+      relationalError,
+    })
   }
 }
 
@@ -177,65 +264,25 @@ export async function prepareOrderHistoryPersistence({
   eventBus,
   logger = defaultLogger,
 } = {}) {
-  let database
   try {
     const filename = await assertHarvesterDatabaseIsolation({
       tradingMode,
       env,
     })
-    database = createDatabase({
-      provider: createSqliteProvider({
-        filename,
-        timeout: 5000,
-      }),
-    })
-    await database.connect()
-    const repository = createOrderHistoryRepository({
-      database,
-    })
-    const observer = createOrderHistoryObserver({
+    const legacyPersistence = await createLegacyPersistence({
+      filename,
+      environment: tradingMode,
       eventBus,
-      repository,
+      logger,
+    })
+    return preparePersistenceWithRelationalFallback({
+      legacyPersistence,
+      filename,
+      eventBus,
       environment: tradingMode,
       logger,
     })
-    try {
-      const relational = await prepareRelationalResources({
-        filename,
-        eventBus,
-        environment: tradingMode,
-        logger,
-      })
-      return Object.freeze({
-        database,
-        observer,
-        ...relational,
-        relationalError: null,
-      })
-    } catch (relationalError) {
-      logPreparationFailure({
-        logger,
-        error: relationalError,
-        relational: true,
-      })
-      return Object.freeze({
-        database,
-        observer,
-        relationalDatabase: null,
-        relationalOrderObserver: null,
-        fillObserver: null,
-        migrationBackupFilename: null,
-        relationalError,
-      })
-    }
   } catch (error) {
-    if (database && database.state !== "closed") {
-      try {
-        await database.close()
-      } catch {
-        // Preserve the original preparation failure as the primary diagnostic.
-      }
-    }
     logPreparationFailure({
       logger,
       error,
