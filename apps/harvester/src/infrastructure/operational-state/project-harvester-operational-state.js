@@ -616,7 +616,10 @@ function updateRecoverySellerOrderFromFact({ record, state, fields, context, pat
   const orders = state.recoverySellerOrdersByCycle.get(intent.cycleId) ?? []
   state.recoverySellerOrdersByCycle.set(intent.cycleId, orders.map((order) =>
     order.clientOrderId === intent.clientOrderId
-      ? Object.freeze({ ...order, ...patch(record) })
+      ? Object.freeze({
+          ...order,
+          ...patch(record),
+        })
       : order
   ))
 }
@@ -684,6 +687,55 @@ function projectRecoveryCycleOutcome({ record, state }) {
   state.recoveryCycleNotCompletedFacts.push(fact)
 }
 
+function projectSubmissionOutcomeFact({ record, state }) {
+  updateRecoverySellerOrderFromFact({
+    record,
+    state,
+    fields: ["marketId", "symbol", "side", "purpose", "strategyId", "positionId", "cycleId"],
+    context: "Recovery Seller durable submission outcome",
+    patch: (currentRecord) => ({
+      brokerOrderId: currentRecord.data.brokerOrderId ?? null,
+      submissionOutcome: currentRecord.data.outcome,
+      status: currentRecord.data.status ?? currentRecord.data.outcome,
+      outcomeSequence: currentRecord.sequence,
+    }),
+  })
+  state.orderSubmissionOutcomes.push(Object.freeze({
+    ...record.data,
+    factId: record.factId,
+    sequence: record.sequence,
+  }))
+}
+
+function projectCancellationOutcomeFact({ record, state }) {
+  updateRecoverySellerOrderFromFact({
+    record,
+    state,
+    fields: ["marketId", "symbol", "side"],
+    context: "Recovery Seller durable cancellation outcome",
+    patch: (currentRecord) => ({
+      status: currentRecord.data.status,
+      cancellationOutcome: currentRecord.data.outcome,
+      cancellationSequence: currentRecord.sequence,
+    }),
+  })
+  state.orderCancellationOutcomes.push(Object.freeze({
+    ...record.data,
+    factId: record.factId,
+    sequence: record.sequence,
+  }))
+}
+
+function projectExecutionFillFact({ record, state }) {
+  const intent = record.data.clientOrderId == null
+    ? undefined
+    : state.orderIntents.get(record.data.clientOrderId)
+  projectRecoverySellerExecutionFill({ record, state, intent })
+  if (intent?.strategyId !== "RS_recoverySeller") {
+    projectConservativeRecoveryFillBoundary({ record, state })
+  }
+}
+
 function handleTradingOperationalFact({ record, state }) {
   const session = requireActiveOperationalSession({
     record,
@@ -698,51 +750,13 @@ function handleTradingOperationalFact({ record, state }) {
     projectRecoverySellerSubmissionIntent({ record, state })
   }
   if (record.factType === "ORDER_SUBMISSION_OUTCOME") {
-    updateRecoverySellerOrderFromFact({
-      record,
-      state,
-      fields: ["marketId", "symbol", "side", "purpose", "strategyId", "positionId", "cycleId"],
-      context: "Recovery Seller durable submission outcome",
-      patch: (currentRecord) => ({
-        brokerOrderId: currentRecord.data.brokerOrderId ?? null,
-        submissionOutcome: currentRecord.data.outcome,
-        status: currentRecord.data.status ?? currentRecord.data.outcome,
-        outcomeSequence: currentRecord.sequence,
-      }),
-    })
-    state.orderSubmissionOutcomes.push(Object.freeze({
-      ...record.data,
-      factId: record.factId,
-      sequence: record.sequence,
-    }))
+    projectSubmissionOutcomeFact({ record, state })
   }
   if (record.factType === "ORDER_CANCELLATION_OUTCOME") {
-    updateRecoverySellerOrderFromFact({
-      record,
-      state,
-      fields: ["marketId", "symbol", "side"],
-      context: "Recovery Seller durable cancellation outcome",
-      patch: (currentRecord) => ({
-        status: currentRecord.data.status,
-        cancellationOutcome: currentRecord.data.outcome,
-        cancellationSequence: currentRecord.sequence,
-      }),
-    })
-    state.orderCancellationOutcomes.push(Object.freeze({
-      ...record.data,
-      factId: record.factId,
-      sequence: record.sequence,
-    }))
+    projectCancellationOutcomeFact({ record, state })
   }
   if (record.factType === "EXECUTION_FILL_APPLIED") {
-    const intent = record.data.clientOrderId == null
-      ? undefined
-      : state.orderIntents.get(record.data.clientOrderId)
-    projectRecoverySellerExecutionFill({ record, state, intent })
-    // RS fills have their own cycle boundary and must not contaminate CG.
-    if (intent?.strategyId !== "RS_recoverySeller") {
-      projectConservativeRecoveryFillBoundary({ record, state })
-    }
+    projectExecutionFillFact({ record, state })
   }
   if (
     record.factType === "RECOVERY_CYCLE_COMPLETED" ||
@@ -1056,7 +1070,10 @@ reason: pause.reason })
           })
         )),
         appliedFillsByCycle: Object.freeze([...state.recoverySellerFillsByCycle].map(([cycleId, fills]) =>
-          Object.freeze({ cycleId, fills: Object.freeze(fills) })
+          Object.freeze({
+            cycleId,
+            fills: Object.freeze(fills),
+          })
         )),
       }),
       source: "DURABLE_FACTS",
