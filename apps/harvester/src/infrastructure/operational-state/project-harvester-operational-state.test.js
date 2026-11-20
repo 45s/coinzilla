@@ -573,3 +573,136 @@ test("rejects a completed-cycle fact that names a different terminal SELL order"
 
   assert.equal(result.ok, false, "A cycle cannot be committed against a different fully filled SELL order.")
 })
+
+
+test("projects Recovery Seller order ownership, applied fills and fail-closed SELL reservations across restart candidates", () => {
+  const cycleId = "c".repeat(64)
+  const positionId = "rs-position-1"
+  const provider = {
+    providerInstanceId: "binance:spot:account-1",
+    providerType: "BINANCE",
+    accountId: "account-1",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+  }
+  const ownedIntent = ({ clientOrderId, side, purpose, sequence }) => record(sequence, "ORDER_SUBMISSION_INTENT", {
+    ...provider,
+    clientOrderId,
+    strategyId: "RS_recoverySeller",
+    positionId,
+    cycleId,
+    side,
+    type: "LIMIT",
+    price: "100",
+    quantity: "0.1",
+    purpose,
+  }, `rs-order-intent:${clientOrderId}`)
+  const ownedOutcome = ({ clientOrderId, side, purpose, sequence, brokerOrderId }) => record(sequence, "ORDER_SUBMISSION_OUTCOME", {
+    ...provider,
+    clientOrderId,
+    strategyId: "RS_recoverySeller",
+    positionId,
+    cycleId,
+    side,
+    type: "LIMIT",
+    price: "100",
+    quantity: "0.1",
+    executedQuantity: "0.1",
+    purpose,
+    outcome: "ACKNOWLEDGED",
+    brokerOrderId,
+    status: "FILLED",
+  }, `rs-order-outcome:${clientOrderId}`)
+  const ownedFill = ({ clientOrderId, brokerOrderId, side, fillId, sequence }) => record(sequence, "EXECUTION_FILL_APPLIED", {
+    ...provider,
+    fillId,
+    tradeId: fillId,
+    clientOrderId,
+    brokerOrderId,
+    side,
+    price: "100",
+    quantity: "0.1",
+    quoteQuantity: "10",
+    liquidityRole: "MAKER",
+    executedAt: 1_700_000_000_000 + sequence,
+    commissionStatus: "COMPLETE",
+    commissions: [],
+  }, `rs-fill:${fillId}`)
+  const records = [
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    baseline(),
+    started(),
+    ...preflightFacts(),
+    ownedIntent({ clientOrderId: "rs-buy-1", side: "BUY", purpose: "RECOVERY_BUY", sequence: 5 }),
+    ownedOutcome({ clientOrderId: "rs-buy-1", side: "BUY", purpose: "RECOVERY_BUY", sequence: 6, brokerOrderId: "rs-broker-buy-1" }),
+    ownedFill({ clientOrderId: "rs-buy-1", brokerOrderId: "rs-broker-buy-1", side: "BUY", fillId: "rs-buy-fill-1", sequence: 7 }),
+    ownedIntent({ clientOrderId: "rs-sell-1", side: "SELL", purpose: "RECOVERY_SELL", sequence: 8 }),
+    ownedOutcome({ clientOrderId: "rs-sell-1", side: "SELL", purpose: "RECOVERY_SELL", sequence: 9, brokerOrderId: "rs-broker-sell-1" }),
+    ownedFill({ clientOrderId: "rs-sell-1", brokerOrderId: "rs-broker-sell-1", side: "SELL", fillId: "rs-sell-fill-1", sequence: 10 }),
+  ]
+  const result = projectHarvesterOperationalState({ records })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  const lifecycle = result.data.recoverySellerLifecycle
+  assert.equal(lifecycle.candidateOnly, true)
+  assert.equal(lifecycle.restorationEnabled, false)
+  assert.equal(lifecycle.requiresExchangeReconciliation, true)
+  assert.equal(lifecycle.ordersByCycle.length, 1)
+  assert.deepEqual(
+    lifecycle.ordersByCycle[0].orders.map(({ side, purpose, status }) => ({ side, purpose, status })),
+    [
+      { side: "BUY", purpose: "RECOVERY_BUY", status: "FILLED" },
+      { side: "SELL", purpose: "RECOVERY_SELL", status: "FILLED" },
+    ],
+  )
+  assert.equal(lifecycle.ordersByCycle[0].reservedSellOrders.length, 1,
+    "A terminal broker status must not release the sole-SELL reservation before durable mixed-SELL accounting reconciliation.")
+  assert.deepEqual(
+    lifecycle.appliedFillsByCycle[0].fills.map(({ fillId, side, positionId, purpose }) => ({
+      fillId, side, positionId, purpose,
+    })),
+    [
+      { fillId: "rs-buy-fill-1", side: "BUY", positionId, purpose: "RECOVERY_BUY" },
+      { fillId: "rs-sell-fill-1", side: "SELL", positionId, purpose: "RECOVERY_SELL" },
+    ],
+  )
+})
+
+test("fails closed when a Recovery Seller fill has no durable owned submission intent", () => {
+  const result = projectHarvesterOperationalState({
+    records: [
+      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+      baseline(),
+      started(),
+      ...preflightFacts(),
+      record(5, "EXECUTION_FILL_APPLIED", {
+        fillId: "rs-orphan-fill",
+        tradeId: "rs-orphan-trade",
+        brokerOrderId: "rs-orphan-broker-order",
+        clientOrderId: "rs-orphan-client-order",
+        providerInstanceId: "binance:spot:account-1",
+        providerType: "BINANCE",
+        accountId: "account-1",
+        marketId: "binance:BTCUSDT",
+        venue: "binance",
+        symbol: "BTCUSDT",
+        baseAssetId: "asset:BTC",
+        quoteAssetId: "asset:USDT",
+        side: "BUY",
+        price: "100",
+        quantity: "0.1",
+        quoteQuantity: "10",
+        liquidityRole: "MAKER",
+        executedAt: 1_700_000_000_005,
+        commissionStatus: "COMPLETE",
+        commissions: [],
+        strategyId: "RS_recoverySeller",
+      }, "rs-orphan-fill"),
+    ],
+  })
+
+  assert.equal(result.ok, false)
+})
