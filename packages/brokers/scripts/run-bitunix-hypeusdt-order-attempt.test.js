@@ -418,6 +418,10 @@ test("Bitunix operator attempt confirms before creating a mutation-enabled broke
 
   assert.equal(result.ok, true)
   assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(
+    events.find((event) => event.operation === "confirm").confirmationPhrase,
+    "SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER",
+  )
   assert.ok(events.indexOf("read.disconnect") < events.findIndex((event) => event.operation === "confirm"))
   assert.ok(events.findIndex((event) => event.operation === "confirm") < events.indexOf("order.construct"))
   assert.ok(events.indexOf("order.connect") < events.indexOf("marker"))
