@@ -37,7 +37,7 @@ export function createCanonicalOrderHistoryMarket({ symbol, exchangeInfo }) {
   return createCanonicalMarket({ symbolInfo: symbolMatches[0] })
 }
 
-const CANONICAL_ORDER_STATUSES = new Set([
+const CANONICAL_ORDER_STATUSES = Object.freeze([
   "NEW",
   "PARTIALLY_FILLED",
   "FILLED",
@@ -56,7 +56,7 @@ export function validateCanonicalOrderHistoryItems({ orders, symbol }) {
     if (typeof order.symbol !== "string" || order.symbol.trim().toUpperCase() !== symbol.trim().toUpperCase()) {
       throw new TypeError("Binance order history is missing or conflicts with the requested symbol")
     }
-    if (typeof order.status !== "string" || !CANONICAL_ORDER_STATUSES.has(order.status.toUpperCase())) {
+    if (typeof order.status !== "string" || !CANONICAL_ORDER_STATUSES.includes(order.status.toUpperCase())) {
       throw new TypeError("Binance order history is missing or has an unsupported status")
     }
   }
