@@ -54,7 +54,7 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 
 ### Phase 1 — Relational order/fill foundation and safe order-history migration
 
-<badge>Complete — PR #1555</badge>
+**Status: Complete — PR #1555.**
 
 - Added Harvester-owned physical `orders`, `fills` and `fill_commissions` tables with versioned migrations and repository adapters using the public `@coinzilla/db` API.
 - Migrated existing `harvester_orders` snapshots into relational `orders` with verified backup, source validation and idempotent conversion. The source collection remains available during dual-write compatibility.
@@ -63,7 +63,7 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 
 ### Phase 2 — Persist actual live executions and commissions
 
-<badge>Complete — PR #1555</badge>
+**Status: Complete — PR #1555.**
 
 - Persisted canonical applied fills as individual execution rows, with exact execution facts and scoped provider/account/environment/market identity.
 - Persisted actual commission amount and asset in `fill_commissions`; missing exchange-supplied quote valuation remains unknown rather than estimated.
@@ -72,7 +72,7 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 
 ### Phase 3 — Startup exchange-history synchronization
 
-<badge>Complete — PR #1557 / broker pagination PR #1559</badge>
+**Status: Complete — PR #1557 and broker pagination PR #1559.**
 
 - Runs a read-only Binance order/trade-history scan for each configured execution market during startup, after market metadata initialization and before trading-engine activation. It is not a separately invoked import command.
 - Fetches order history and trade history independently, with provider pagination and durable per-environment/provider-instance/provider-type/account/symbol cursors.
