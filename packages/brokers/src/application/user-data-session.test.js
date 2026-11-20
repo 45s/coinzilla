@@ -399,76 +399,83 @@ describe("Application user-data session client port", () => {
   })
 })
 
+async function verifyFailedReconnectKeepsRecoveryPending() {
+  const statuses = []
+  const fixture = createRecoveryFixture({ failReconnect: true })
+  fixture.session.start()
+  const subscription = await fixture.session.subscribe({
+    onEvent() {},
+    onStatus: createStatusRecorder(statuses),
+  })
+
+  fixture.closeInitialConnection()
+  await fixture.reconnect()
+
+  assert.ok(
+    hasRecoveryFailureStatus(statuses),
+    "A failed reconnect must publish a recoveryFailed status while keeping recovery required.",
+  )
+  assert.deepEqual(subscription.data.acknowledgeRecoveryResult(), {
+    accepted: false,
+    completed: false,
+    reason: "recovery-not-pending",
+  }, "A failed reconnect must not accept an acknowledgement without an active recovered subscription.")
+
+  await fixture.session.stop()
+}
+
+async function verifyAcknowledgementIsRejectedWithoutRecovery() {
+  const fixture = createRecoveryFixture()
+  fixture.session.start()
+  const subscription = await fixture.session.subscribe({ onEvent() {} })
+
+  assert.deepEqual(subscription.data.acknowledgeRecoveryResult(), {
+    accepted: false,
+    completed: false,
+    reason: "recovery-not-pending",
+  }, "An acknowledgement must be rejected when no recovery is pending.")
+
+  await subscription.data.disconnect()
+  await fixture.session.stop()
+}
+
+async function verifySubscriberAcknowledgementsCompleteSharedRecovery() {
+  const recoveryStatuses = []
+  const fixture = createRecoveryFixture()
+  fixture.session.start()
+  const first = await fixture.session.subscribe({
+    onEvent() {},
+    onStatus: createStatusRecorder(recoveryStatuses),
+  })
+  const second = await fixture.session.subscribe({ onEvent() {} })
+
+  fixture.closeInitialConnection()
+  await fixture.reconnect()
+  const recoveryGeneration = findStatusByType({
+    statuses: recoveryStatuses,
+    type: "recovered",
+  })?.recoveryGeneration
+
+  assert.ok(
+    Number.isSafeInteger(recoveryGeneration),
+    "The broker must expose the current recovery generation before a subscriber acknowledges it.",
+  )
+  assert.deepEqual(first.data.acknowledgeRecoveryResult(recoveryGeneration), {
+    accepted: true,
+    completed: false,
+  }, "The first subscriber acknowledgement must be accepted without completing recovery for other subscribers.")
+  assert.deepEqual(second.data.acknowledgeRecoveryResult(recoveryGeneration), {
+    accepted: true,
+    completed: true,
+  }, "The final active subscriber acknowledgement must complete the shared recovery generation.")
+
+  await fixture.session.stop()
+}
+
 describe("Application user-data session recovery acknowledgements", () => {
-  it("keeps recovery pending and rejects acknowledgement while reconnect is unavailable", async () => {
-    const statuses = []
-    const fixture = createRecoveryFixture({ failReconnect: true })
-    fixture.session.start()
-    const subscription = await fixture.session.subscribe({
-      onEvent() {},
-      onStatus: createStatusRecorder(statuses),
-    })
-
-    fixture.closeInitialConnection()
-    await fixture.reconnect()
-
-    assert.ok(
-      hasRecoveryFailureStatus(statuses),
-      "A failed reconnect must publish a recoveryFailed status while keeping recovery required.",
-    )
-    assert.deepEqual(subscription.data.acknowledgeRecoveryResult(), {
-      accepted: false,
-      completed: false,
-      reason: "recovery-not-pending",
-    }, "A failed reconnect must not accept an acknowledgement without an active recovered subscription.")
-
-    await fixture.session.stop()
-  })
-
-  it("does not accept an acknowledgement when no recovery is pending", async () => {
-    const fixture = createRecoveryFixture()
-    fixture.session.start()
-    const subscription = await fixture.session.subscribe({ onEvent() {} })
-
-    assert.deepEqual(subscription.data.acknowledgeRecoveryResult(), {
-      accepted: false,
-      completed: false,
-      reason: "recovery-not-pending",
-    }, "An acknowledgement must be rejected when no recovery is pending.")
-
-    await subscription.data.disconnect()
-    await fixture.session.stop()
-  })
-
-  it("reports local acknowledgement acceptance separately from shared recovery completion", async () => {
-    const recoveryStatuses = []
-    const fixture = createRecoveryFixture()
-    fixture.session.start()
-    const first = await fixture.session.subscribe({
-      onEvent() {},
-      onStatus: (status) => recoveryStatuses.push(status),
-    })
-    const second = await fixture.session.subscribe({ onEvent() {} })
-
-    fixture.closeInitialConnection()
-    await fixture.reconnect()
-    const recoveryGeneration = findStatusByType({ statuses: recoveryStatuses, type: "recovered" })?.recoveryGeneration
-
-    assert.ok(
-      Number.isSafeInteger(recoveryGeneration),
-      "The broker must expose the current recovery generation before a subscriber acknowledges it.",
-    )
-    assert.deepEqual(first.data.acknowledgeRecoveryResult(recoveryGeneration), {
-      accepted: true,
-      completed: false,
-    }, "The first subscriber acknowledgement must be accepted without completing recovery for other subscribers.")
-    assert.deepEqual(second.data.acknowledgeRecoveryResult(recoveryGeneration), {
-      accepted: true,
-      completed: true,
-    }, "The final active subscriber acknowledgement must complete the shared recovery generation.")
-
-    await fixture.session.stop()
-  })
+  it("keeps recovery pending when reconnect is unavailable", verifyFailedReconnectKeepsRecoveryPending)
+  it("rejects acknowledgement when no recovery is pending", verifyAcknowledgementIsRejectedWithoutRecovery)
+  it("separates local acknowledgement acceptance from shared completion", verifySubscriberAcknowledgementsCompleteSharedRecovery)
 })
 
 function assertReconciledGenerationStatus({ statuses, recoveryGeneration, subscriberLabel }) {
@@ -484,81 +491,113 @@ function assertReconciledGenerationStatus({ statuses, recoveryGeneration, subscr
   )
 }
 
-describe("Application user-data session recovery generations", () => {
-  it("rejects an acknowledgement from an older recovery generation without counting it toward the newer generation", async () => {
-    const scenario = await createTwoSubscriberRecoveryScenario()
-    const {
-      fixture,
-      first,
-      second,
-      firstStatuses,
-      secondStatuses,
-      firstRecoveryGeneration,
-    } = scenario
+function assertStaleRecoveryAcknowledgementIsRejected({ first, firstStatuses, firstRecoveryGeneration }) {
+  assert.deepEqual(
+    first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
+    {
+      accepted: false,
+      completed: false,
+      reason: "stale-recovery-generation",
+    },
+    "A delayed acknowledgement from the previous generation must be rejected without mutating current subscriber state.",
+  )
+  assert.equal(
+    getStatusesByType({ statuses: firstStatuses, type: "reconciled" }).length,
+    0,
+    "A stale acknowledgement must never publish global completion for the newer recovery.",
+  )
+}
 
-    assert.ok(
-      Number.isSafeInteger(firstRecoveryGeneration),
-      "The broker must publish an integer recovery-generation token with each recovered status.",
-    )
-    assert.deepEqual(
-      first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
-      {
-        accepted: true,
-        completed: false,
-      },
-      "The first subscriber may acknowledge only the generation it actually reconciled.",
-    )
-
-    fixture.closeCurrentConnection()
-    await fixture.reconnect()
-    const secondRecoveryGeneration = getStatusesByType({ statuses: firstStatuses, type: "recovered" }).at(-1)?.recoveryGeneration
-    assert.ok(
-      Number.isSafeInteger(secondRecoveryGeneration) && secondRecoveryGeneration > firstRecoveryGeneration,
-      "A later transport recovery must publish a strictly newer broker generation.",
-    )
-    assert.deepEqual(
-      first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
-      {
-        accepted: false,
-        completed: false,
-        reason: "stale-recovery-generation",
-      },
-      "A delayed acknowledgement from the previous generation must be rejected without mutating current subscriber state.",
-    )
-    assert.equal(
-      getStatusesByType({ statuses: firstStatuses, type: "reconciled" }).length,
-      0,
-      "A stale acknowledgement must never publish global completion for the newer recovery.",
-    )
-    assert.deepEqual(
-      first.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
-      {
-        accepted: true,
-        completed: false,
-      },
-      "The current generation must remain pending until every active subscriber acknowledges it.",
-    )
-    assert.deepEqual(
-      second.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
-      {
-        accepted: true,
-        completed: true,
-      },
-      "Only the final current-generation acknowledgement may complete shared recovery.",
-    )
-    assertReconciledGenerationStatus({
-      statuses: firstStatuses,
-      recoveryGeneration: secondRecoveryGeneration,
-      subscriberLabel: "First subscriber",
-    })
-    assertReconciledGenerationStatus({
-      statuses: secondStatuses,
-      recoveryGeneration: secondRecoveryGeneration,
-      subscriberLabel: "Second subscriber",
-    })
-
-    await fixture.session.stop()
+function assertCurrentRecoveryGenerationCompletes({
+  first,
+  second,
+  firstStatuses,
+  secondStatuses,
+  secondRecoveryGeneration,
+}) {
+  assert.deepEqual(
+    first.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
+    {
+      accepted: true,
+      completed: false,
+    },
+    "The current generation must remain pending until every active subscriber acknowledges it.",
+  )
+  assert.deepEqual(
+    second.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
+    {
+      accepted: true,
+      completed: true,
+    },
+    "Only the final current-generation acknowledgement may complete shared recovery.",
+  )
+  assertReconciledGenerationStatus({
+    statuses: firstStatuses,
+    recoveryGeneration: secondRecoveryGeneration,
+    subscriberLabel: "First subscriber",
   })
+  assertReconciledGenerationStatus({
+    statuses: secondStatuses,
+    recoveryGeneration: secondRecoveryGeneration,
+    subscriberLabel: "Second subscriber",
+  })
+}
+
+async function verifyStaleRecoveryGenerationCannotCompleteNewerRecovery() {
+  const scenario = await createTwoSubscriberRecoveryScenario()
+  const {
+    fixture,
+    first,
+    second,
+    firstStatuses,
+    secondStatuses,
+    firstRecoveryGeneration,
+  } = scenario
+
+  assert.ok(
+    Number.isSafeInteger(firstRecoveryGeneration),
+    "The broker must publish an integer recovery-generation token with each recovered status.",
+  )
+  assert.deepEqual(
+    first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
+    {
+      accepted: true,
+      completed: false,
+    },
+    "The first subscriber may acknowledge only the generation it actually reconciled.",
+  )
+
+  fixture.closeCurrentConnection()
+  await fixture.reconnect()
+  const secondRecoveryGeneration = getStatusesByType({
+    statuses: firstStatuses,
+    type: "recovered",
+  }).at(-1)?.recoveryGeneration
+  assert.ok(
+    Number.isSafeInteger(secondRecoveryGeneration) && secondRecoveryGeneration > firstRecoveryGeneration,
+    "A later transport recovery must publish a strictly newer broker generation.",
+  )
+  assertStaleRecoveryAcknowledgementIsRejected({
+    first,
+    firstStatuses,
+    firstRecoveryGeneration,
+  })
+  assertCurrentRecoveryGenerationCompletes({
+    first,
+    second,
+    firstStatuses,
+    secondStatuses,
+    secondRecoveryGeneration,
+  })
+
+  await fixture.session.stop()
+}
+
+describe("Application user-data session recovery generations", () => {
+  it(
+    "rejects an acknowledgement from an older generation without counting it toward the newer generation",
+    verifyStaleRecoveryGenerationCannotCompleteNewerRecovery,
+  )
 })
 
 describe("Application user-data session inactive subscribers", () => {
@@ -582,137 +621,158 @@ describe("Application user-data session inactive subscribers", () => {
 })
 
 
-describe("Application user-data session event delivery", () => {
-  it("filters stale and duplicate events while isolating a throwing subscriber", async () => {
-    const callbackError = new Error("subscriber callback failed")
-    const logs = []
-    const fixture = createRecoveryFixture({
-      logger: {
-        error: (...args) => logs.push(args),
-      },
-    })
-    const received = []
-    fixture.session.start()
-    const first = await fixture.session.subscribe({
-      onEvent() {
-        throw callbackError
-      },
-    })
-    const second = await fixture.session.subscribe({
-      onEvent: createEventRecorder(received),
-    })
-    const event = {
-      type: "balanceUpdate",
-      balanceDelta: "1",
-    }
-
-    fixture.emitEvent({
-      type: "event",
-      subscriptionId: 17,
-      deduplicationKey: "event-1",
-      event,
-    })
-    fixture.emitEvent({
-      type: "event",
-      subscriptionId: 17,
-      deduplicationKey: "event-1",
-      event,
-    })
-    fixture.emitEvent({
-      type: "event",
-      subscriptionId: 999,
-      deduplicationKey: "event-2",
-      event: {
-        ...event,
-        balanceDelta: "2",
-      },
-    })
-
-    assert.deepEqual(
-      received,
-      [{ event }],
-      "A valid event must be delivered once to every active subscriber, regardless of another subscriber's callback failure.",
-    )
-    assert.equal(
-      countLoggedErrors({ logs, message: "Binance user-data event callback failed", error: callbackError }),
-      1,
-      "A throwing event callback must be logged once without interrupting fan-out.",
-    )
-
-    await first.data.disconnect()
-    const nextEvent = {
-      type: "balanceUpdate",
-      balanceDelta: "3",
-    }
-    fixture.emitEvent({
-      type: "event",
-      subscriptionId: 17,
-      deduplicationKey: "event-3",
-      event: nextEvent,
-    })
-    assert.deepEqual(
-      received,
-      [{ event }, { event: nextEvent }],
-      "Disconnecting one subscriber must not stop delivery to the remaining active subscriber.",
-    )
-
-    await second.data.disconnect()
-    await fixture.session.stop()
+async function createEventDeliveryScenario() {
+  const callbackError = new Error("subscriber callback failed")
+  const logs = []
+  const fixture = createRecoveryFixture({
+    logger: {
+      error: (...args) => logs.push(args),
+    },
   })
+  const received = []
+  fixture.session.start()
+  const first = await fixture.session.subscribe({
+    onEvent() {
+      throw callbackError
+    },
+  })
+  const second = await fixture.session.subscribe({
+    onEvent: createEventRecorder(received),
+  })
+  return { fixture, first, second, callbackError, logs, received }
+}
+
+async function verifyEventDeliveryFiltersDuplicatesAndIsolatesThrowingSubscribers() {
+  const scenario = await createEventDeliveryScenario()
+  const { fixture, first, second, callbackError, logs, received } = scenario
+  const event = {
+    type: "balanceUpdate",
+    balanceDelta: "1",
+  }
+
+  fixture.emitEvent({
+    type: "event",
+    subscriptionId: 17,
+    deduplicationKey: "event-1",
+    event,
+  })
+  fixture.emitEvent({
+    type: "event",
+    subscriptionId: 17,
+    deduplicationKey: "event-1",
+    event,
+  })
+  fixture.emitEvent({
+    type: "event",
+    subscriptionId: 999,
+    deduplicationKey: "event-2",
+    event: {
+      ...event,
+      balanceDelta: "2",
+    },
+  })
+
+  assert.deepEqual(
+    received,
+    [{ event }],
+    "A valid event must be delivered once to every active subscriber, regardless of another subscriber's callback failure.",
+  )
+  assert.equal(
+    countLoggedErrors({ logs, message: "Binance user-data event callback failed", error: callbackError }),
+    1,
+    "A throwing event callback must be logged once without interrupting fan-out.",
+  )
+
+  await first.data.disconnect()
+  const nextEvent = {
+    type: "balanceUpdate",
+    balanceDelta: "3",
+  }
+  fixture.emitEvent({
+    type: "event",
+    subscriptionId: 17,
+    deduplicationKey: "event-3",
+    event: nextEvent,
+  })
+  assert.deepEqual(
+    received,
+    [{ event }, { event: nextEvent }],
+    "Disconnecting one subscriber must not stop delivery to the remaining active subscriber.",
+  )
+
+  await second.data.disconnect()
+  await fixture.session.stop()
+}
+
+describe("Application user-data session event delivery", () => {
+  it(
+    "filters stale and duplicate events while isolating a throwing subscriber",
+    verifyEventDeliveryFiltersDuplicatesAndIsolatesThrowingSubscribers,
+  )
 })
 
-describe("Application user-data session RPC errors", () => {
-  it("notifies every subscriber of an RPC error without starting recovery", async () => {
-    const callbackError = new Error("status callback failed")
-    const rpcError = new Error("user-data RPC failed")
-    const logs = []
-    const statuses = []
-    const fixture = createRecoveryFixture({
-      logger: {
-        error: (...args) => logs.push(args),
-      },
-    })
-    fixture.session.start()
-    const first = await fixture.session.subscribe({
-      onEvent() {},
-      onStatus() {
-        throw callbackError
-      },
-    })
-    const second = await fixture.session.subscribe({
-      onEvent() {},
-      onStatus: (status) => statuses.push(status),
-    })
-
-    fixture.emitError(rpcError)
-
-    assert.deepEqual(
-      statuses,
-      [{
-        type: "rpcError",
-        error: rpcError,
-        recoveryRequired: false,
-      }],
-      "An RPC error must be forwarded as a diagnostic status without claiming that reconciliation is required.",
-    )
-    assert.equal(
-      fixture.pendingTimerCount,
-      0,
-      "An RPC error notification alone must not schedule a reconnect.",
-    )
-    assert.ok(
-      hasLoggedError({ logs, message: "Binance user data stream error", error: rpcError }),
-      "The original RPC error must be logged without replacing its identity.",
-    )
-    assert.ok(
-      hasLoggedError({ logs, message: "Binance user-data status callback failed", error: callbackError }),
-      "A throwing status callback must be isolated and reported.",
-    )
-
-    await first.data.disconnect()
-    await second.data.disconnect()
-    await fixture.session.stop()
+async function createRpcErrorScenario() {
+  const callbackError = new Error("status callback failed")
+  const rpcError = new Error("user-data RPC failed")
+  const logs = []
+  const statuses = []
+  const fixture = createRecoveryFixture({
+    logger: {
+      error: (...args) => logs.push(args),
+    },
   })
+  fixture.session.start()
+  const first = await fixture.session.subscribe({
+    onEvent() {},
+    onStatus() {
+      throw callbackError
+    },
+  })
+  const second = await fixture.session.subscribe({
+    onEvent() {},
+    onStatus: createStatusRecorder(statuses),
+  })
+  fixture.emitError(rpcError)
+  return { fixture, first, second, callbackError, rpcError, logs, statuses }
+}
+
+async function verifyRpcErrorNotificationDoesNotStartRecovery() {
+  const scenario = await createRpcErrorScenario()
+  const { fixture, first, second, callbackError, rpcError, logs, statuses } = scenario
+
+  assert.deepEqual(
+    statuses,
+    [{
+      type: "rpcError",
+      error: rpcError,
+      recoveryRequired: false,
+    }],
+    "An RPC error must be forwarded as a diagnostic status without claiming that reconciliation is required.",
+  )
+  assert.equal(
+    fixture.pendingTimerCount,
+    0,
+    "An RPC error notification alone must not schedule a reconnect.",
+  )
+  assert.ok(
+    hasLoggedError({ logs, message: "Binance user data stream error", error: rpcError }),
+    "The original RPC error must be logged without replacing its identity.",
+  )
+  assert.ok(
+    hasLoggedError({ logs, message: "Binance user-data status callback failed", error: callbackError }),
+    "A throwing status callback must be isolated and reported.",
+  )
+
+  await first.data.disconnect()
+  await second.data.disconnect()
+  await fixture.session.stop()
+}
+
+describe("Application user-data session RPC errors", () => {
+  it(
+    "notifies every subscriber of an RPC error without starting recovery",
+    verifyRpcErrorNotificationDoesNotStartRecovery,
+  )
 })
 
 describe("Application user-data session recovery reminders", () => {
