@@ -35,6 +35,10 @@ Other repository instructions and task checklists should link to this section ra
 
 All JavaScript contributors, including AI agents, MUST follow the canonical [ESLint Standard](docs/engineering/ESLINT_STANDARD.md). Read it and inspect the effective eslint.config.js rules before writing or changing JavaScript. ESLint rules are engineering constraints, not suggestions to work around. Do not add inline suppressions, weaken rule settings, reduce lint coverage, or alter lint commands to make a change pass. Refactor the implementation to satisfy the existing rules. The root ESLint configuration disables inline configuration so source comments cannot suppress or override configured rules.
 
+## Configuration
+
+Follow the canonical [Configuration Standard](docs/engineering/CONFIGURATION_STANDARD.md) for ownership, loading, validation, defaults, environment access, immutability, secrets, compatibility and tests. Domain instructions may add stricter application-specific requirements but must link to this standard rather than redefine the repository-wide contract.
+
 ## Exchange environment configuration
 
 Binance exchange endpoint selection is governed by [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md). All consumers MUST pass an explicit `TRADING_MODE=testnet|live`; missing or invalid values fail closed. `NODE_ENV` is application runtime metadata only and MUST NOT select or influence Binance endpoints. Keep the ADR as the cross-workspace decision source and the Brokers/Harvester documentation as the operational guides.
