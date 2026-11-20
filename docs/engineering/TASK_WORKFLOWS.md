@@ -8,6 +8,7 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the mandatory [AI Ta
 - [ ] Identified and read all applicable canonical standards, domain requirements, task checklist and linked specifications in full.
 - [ ] Inspected the actual source, consumers, tests, configuration and file tree; did not rely on memory or summaries.
 - [ ] Recorded task scope, constraints/invariants, acceptance criteria, verification and documentation impact.
+- [ ] Reviewed names for new or materially changed modules/functions/exports/variables: helpers are fully self-descriptive; core/domain functions are behavior-descriptive with contextual brevity; orchestration names express the action/transition; modules/services/classes remain concise and responsibility-oriented.
 - [ ] Resolved applicable requirements conflicts or documented a concrete blocker/exception; none were silently bypassed.
 - [ ] Repeated standards discovery if task scope or affected domains changed.
 
@@ -26,6 +27,7 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 ## Documentation-only change
 
 - Confirm the owning documentation/domain, canonical source of truth and linked references.
+- Review names of new or materially changed document headings, filenames and identifiers in examples for clarity; keep names concise where the surrounding context is explicit.
 - Follow [Documentation Governance](../DOCUMENTATION_GOVERNANCE.md): classify the document, preserve historical provenance, and avoid creating competing sources of truth.
 - Follow the canonical [Markdown style standard](../MARKDOWN_STYLE.md) for formatting and authoring conventions.
 - Update the nearest documentation index when adding, moving, renaming, superseding or archiving a document.
