@@ -366,6 +366,18 @@ test("Bitunix operator marker is exclusive, private, and contains no account bal
   const preflight = createBitunixOperatorOrderPreflight(createValidBitunixOperatorPreflightInput())
 
   try {
+    await assert.rejects(
+      createOneShotMarker({
+        markerPath,
+        preflight: {
+          order: {
+            ...preflight.order,
+            price: "1",
+          },
+        },
+      }),
+      /exact fixed HYPEUSDT order intent/i,
+    )
     await createOneShotMarker({
       markerPath,
       preflight,
