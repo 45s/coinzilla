@@ -1,3 +1,5 @@
+import { open, mkdir } from "node:fs/promises"
+import { dirname } from "node:path"
 import { assertDecimalString, compareDecimal, multiplyDecimal } from "@coinzilla/utils"
 
 const ORDER_DETAILS = Object.freeze({
@@ -16,6 +18,8 @@ const ORDER = Object.freeze({
   notional: ORDER_NOTIONAL,
 })
 const PROVISIONAL_NOTIONAL_FLOOR = "11"
+
+export const BITUNIX_OPERATOR_ORDER_CONFIRMATION = "SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER"
 
 function requireSuccessfulResult({ result, operation }) {
   if (!result || result.ok !== true) {
@@ -86,13 +90,13 @@ function validateSymbolFilters({ symbolFilters }) {
     throw new RangeError("Bitunix HYPEUSDT order quantity is below the documented minimum quantity")
   }
   if (compareDecimal({
-    left: ORDER_NOTIONAL,
+    left: ORDER.notional,
     right: minimumNotional,
   }) < 0) {
     throw new RangeError("Bitunix HYPEUSDT order notional is below the documented minimum notional")
   }
   if (compareDecimal({
-    left: ORDER_NOTIONAL,
+    left: ORDER.notional,
     right: PROVISIONAL_NOTIONAL_FLOOR,
   }) < 0) {
     throw new RangeError("Bitunix HYPEUSDT order notional is below the provisional local safety floor")
@@ -118,7 +122,7 @@ function findQuoteBalance({ balances }) {
   })
   if (compareDecimal({
     left: freeQuoteBalance,
-    right: ORDER_NOTIONAL,
+    right: ORDER.notional,
   }) >= 0) {
     throw new Error("Bitunix operator preflight stopped: free USDT is at least 12 and could cover the order")
   }
@@ -183,7 +187,7 @@ export function createBitunixOperatorOrderPreflight({
   }
   return Object.freeze({
     order: ORDER,
-    notional: ORDER_NOTIONAL,
+    notional: ORDER.notional,
     minimumQuantity,
     minimumNotional,
     provisionalNotionalFloor: PROVISIONAL_NOTIONAL_FLOOR,
@@ -193,34 +197,214 @@ export function createBitunixOperatorOrderPreflight({
   })
 }
 
-
 /**
- * Require a real interactive terminal before enabling the operator command.
+ * Require a real interactive terminal for the local LIVE operator command.
  *
- * @param {object} input
+ * @param {{stdin: {isTTY?: boolean}, stdout: {isTTY?: boolean}}} input
  * @returns {void}
  */
-export function assertInteractiveTerminal(input = {}) {
-  void input
+export function assertInteractiveTerminal({ stdin, stdout } = {}) {
+  if (stdin?.isTTY !== true || stdout?.isTTY !== true) {
+    throw new Error("Bitunix LIVE order attempt requires an interactive terminal; non-interactive execution is refused")
+  }
 }
 
 /**
- * Persist the one-shot marker before the order request is dispatched.
+ * Persist an exclusive one-shot marker before dispatching the order request.
  *
  * @param {object} input
+ * @param {string} input.markerPath Local gitignored marker path.
+ * @param {object} input.preflight Validated order preflight.
+ * @param {() => number} [input.now] Clock for deterministic tests.
  * @returns {Promise<void>}
  */
-export async function createOneShotMarker(input = {}) {
-  void input
+export async function createOneShotMarker({
+  markerPath,
+  preflight,
+  now = Date.now,
+} = {}) {
+  if (typeof markerPath !== "string" || markerPath.trim() === "") {
+    throw new TypeError("Bitunix operator marker path must be a non-empty string")
+  }
+  if (!preflight?.order || preflight.order.symbol !== ORDER.symbol) {
+    throw new TypeError("Bitunix operator marker requires the validated HYPEUSDT order intent")
+  }
+  const marker = {
+    createdAt: new Date(now()).toISOString(),
+    status: "DISPATCH_STARTED",
+    order: preflight.order,
+  }
+  await mkdir(dirname(markerPath), {
+    recursive: true,
+    mode: 0o700,
+  })
+  const file = await open(markerPath, "wx", 0o600)
+  try {
+    await file.writeFile(`${JSON.stringify(marker, null, 2)}\n`, "utf8")
+    await file.sync()
+  } finally {
+    await file.close()
+  }
+}
+
+async function readPreflight({ readBroker }) {
+  await readBroker.connect()
+  try {
+    const marketResult = await readBroker.getExchangeMarkets()
+    requireSuccessfulResult({
+      result: marketResult,
+      operation: "market catalog",
+    })
+    const filtersResult = await readBroker.getSymbolFilters({
+      symbol: ORDER.symbol,
+    })
+    requireSuccessfulResult({
+      result: filtersResult,
+      operation: "symbol metadata",
+    })
+    const balancesResult = await readBroker.getBalances()
+    requireSuccessfulResult({
+      result: balancesResult,
+      operation: "account balances",
+    })
+    const openOrdersResult = await readBroker.getOpenOrders({
+      symbol: ORDER.symbol,
+    })
+    return createBitunixOperatorOrderPreflight({
+      marketResult,
+      filtersResult,
+      balancesResult,
+      openOrdersResult,
+    })
+  } finally {
+    await readBroker.disconnect()
+  }
+}
+
+function formatPreflightSummary({ preflight }) {
+  const { order } = preflight
+  return [
+    "BITUNIX SPOT — LIVE OPERATOR ORDER ATTEMPT",
+    "Endpoint: https://openapi.bitunix.com (LIVE)",
+    `Order: ${order.side} ${order.type} ${order.symbol}`,
+    `Limit price: ${order.price} USDT`,
+    `Base quantity: ${order.quantity} HYPE`,
+    `Order notional: ${order.notional} USDT`,
+    `Exchange minimum quantity (minVolume): ${preflight.minimumQuantity} HYPE`,
+    `Exchange minimum notional (minPrice): ${preflight.minimumNotional} USDT`,
+    `Provisional local notional floor: ${preflight.provisionalNotionalFloor} USDT (not an exchange guarantee)`,
+    `USDT balance: free ${preflight.freeQuoteBalance}; locked ${preflight.lockedQuoteBalance}`,
+    `HYPEUSDT open orders returned by the symbol-scoped query: ${preflight.openOrderCount}`,
+    "Open-order response completeness is not established; an empty result is not proof of account-wide absence.",
+    "Price tick and quantity step remain UNKNOWN; the exchange may reject the submitted price or quantity.",
+    "Free USDT is below the order notional, but other exchange-side credits or account settings may still affect acceptance.",
+    "This balance observation does NOT guarantee an insufficient-balance rejection.",
+    "Exactly one placement call will be made. No retry, cancel, transfer, or second mutation will follow.",
+  ].join("\n")
+}
+
+function formatMutationResult({ result }) {
+  const outcome = result?.mutationOutcome ?? "UNREPORTED"
+  const orderId = result?.data?.id
+  const errorMessage = result?.errors?.[0]?.message
+  return [
+    `Broker result: ${result?.ok === true ? "success" : "not successful"}; mutation outcome: ${outcome}.`,
+    ...(orderId ? [`Exchange order ID: ${orderId}`] : []),
+    ...(errorMessage ? [`Broker message: ${errorMessage}`] : []),
+    ...(outcome === "OUTCOME_UNKNOWN"
+      ? ["WARNING: outcome is unknown. Do not retry; reconcile manually before any further action."]
+      : []),
+  ].join("\n")
+}
+
+function assertAttemptDependencies({
+  readBroker,
+  createOrderBroker,
+  confirm,
+  createMarker,
+  writeLine,
+}) {
+  if (!readBroker || typeof readBroker.connect !== "function" ||
+      typeof readBroker.disconnect !== "function") {
+    throw new TypeError("Bitunix operator attempt requires a connected read Broker")
+  }
+  for (const [name, dependency] of [
+    ["createOrderBroker", createOrderBroker],
+    ["confirm", confirm],
+    ["createMarker", createMarker],
+    ["writeLine", writeLine],
+  ]) {
+    if (typeof dependency !== "function") {
+      throw new TypeError(`Bitunix operator attempt requires ${name}()`)
+    }
+  }
 }
 
 /**
- * Run the read-only preflight and one explicitly confirmed order attempt.
+ * Run read-only preflight, require human approval, then submit exactly one order.
  *
  * @param {object} input
- * @returns {Promise<object>}
+ * @param {object} input.readBroker Broker instance with live mutations disabled.
+ * @param {() => object} input.createOrderBroker Factory for the mutation-enabled Broker.
+ * @param {(input: object) => Promise<boolean>} input.confirm Exact operator confirmation.
+ * @param {(input: object) => Promise<void>} input.createMarker Exclusive marker writer.
+ * @param {(message: string) => void} input.writeLine Local terminal output callback.
+ * @returns {Promise<object>} The original Broker placement result or NOT_SENT decline result.
  */
-export async function runBitunixOperatorOrderAttempt(input = {}) {
-  void input
-  return null
+export async function runBitunixOperatorOrderAttempt({
+  readBroker,
+  createOrderBroker,
+  confirm,
+  createMarker,
+  writeLine,
+} = {}) {
+  assertAttemptDependencies({
+    readBroker,
+    createOrderBroker,
+    confirm,
+    createMarker,
+    writeLine,
+  })
+  const preflight = await readPreflight({
+    readBroker,
+  })
+  writeLine(formatPreflightSummary({
+    preflight,
+  }))
+  const approved = await confirm({
+    preflight,
+    confirmationPhrase: BITUNIX_OPERATOR_ORDER_CONFIRMATION,
+  })
+  if (approved !== true) {
+    writeLine("Operator declined or did not enter the exact confirmation phrase. No order was sent.")
+    return Object.freeze({
+      ok: false,
+      mutationOutcome: "NOT_SENT",
+      declined: true,
+    })
+  }
+  const orderBroker = createOrderBroker()
+  await orderBroker.connect()
+  try {
+    await createMarker({
+      preflight,
+    })
+    const result = await orderBroker.createOrder({
+      symbol: preflight.order.symbol,
+      side: preflight.order.side,
+      type: preflight.order.type,
+      quantity: preflight.order.quantity,
+      price: preflight.order.price,
+    })
+    writeLine(formatMutationResult({
+      result,
+    }))
+    return result
+  } finally {
+    try {
+      await orderBroker.disconnect()
+    } catch (error) {
+      writeLine(`Warning: mutation Broker disconnect failed after the placement attempt: ${error.message}`)
+    }
+  }
 }
