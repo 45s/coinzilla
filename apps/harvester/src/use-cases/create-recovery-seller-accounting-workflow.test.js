@@ -186,8 +186,14 @@ function makeTransitionSnapshotInput() {
     accountSnapshot: {
       balances: [
         new Balance({
-          free: new Quantity({ amount: "55.01", asset: baseAsset }),
-          locked: new Quantity({ amount: "0", asset: baseAsset }),
+          free: new Quantity({
+            amount: "55.01",
+            asset: baseAsset,
+          }),
+          locked: new Quantity({
+            amount: "0",
+            asset: baseAsset,
+          }),
         }),
       ],
     },

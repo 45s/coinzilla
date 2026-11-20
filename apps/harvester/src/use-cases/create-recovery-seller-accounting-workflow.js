@@ -5,6 +5,7 @@ import {
   DECIMAL_ROUNDING_MODES,
   divideDecimal,
   ensure,
+  multiplyDecimal,
   subtractDecimal,
   toResult,
 } from "@coinzilla/utils"
@@ -674,7 +675,6 @@ function getRecoverySellerMarketActiveOrders({ state, marketId }) {
       ...order,
       ownership: state.orderRegistry.getOwnership({
         clientOrderId: order.clientOrderId,
-        brokerOrderId: order.brokerOrderId,
       }),
     }))
 }
@@ -718,11 +718,12 @@ function resolveRecoverySellerTransitionCycleState({
 }
 
 function calculateRecoverySellerPendingBuyCommitment({ activeOrders, cycleId }) {
-  return activeOrders.reduce((total, order) => {
+  let total = "0"
+  for (const order of activeOrders) {
     if (order.side !== "BUY" ||
         order.ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
         order.ownership.cycleId !== cycleId) {
-      return total
+      continue
     }
     const remainingQuantity = subtractDecimal({
       left: order.originalQuantity.amount,
@@ -732,11 +733,12 @@ function calculateRecoverySellerPendingBuyCommitment({ activeOrders, cycleId }) 
       left: remainingQuantity,
       right: order.limitPrice.amount,
     })
-    return addDecimal({
+    total = addDecimal({
       left: total,
       right: quoteCommitment,
     })
-  }, "0")
+  }
+  return total
 }
 
 function createRecoverySellerTransitionPlanInput({
@@ -769,6 +771,20 @@ function createRecoverySellerTransitionPlanInput({
   })
 }
 
+function createRecoverySellerPositionSnapshot({ state, market, cycleState }) {
+  const position = state.portfolio.getPosition({
+    marketId: market.id,
+    positionId: cycleState.positionId,
+  })
+  return position
+    ? Object.freeze({
+        positionId: cycleState.positionId,
+        quantity: position.baseQuantity.amount,
+        spent: position.spent.amount,
+      })
+    : undefined
+}
+
 function createRecoverySellerTransitionSnapshot({
   state,
   createCycleId,
@@ -795,17 +811,11 @@ function createRecoverySellerTransitionSnapshot({
     activeOrders,
     createCycleId,
   })
-  const position = state.portfolio.getPosition({
-    marketId: market.id,
-    positionId: cycleState.positionId,
+  const recoveryPosition = createRecoverySellerPositionSnapshot({
+    state,
+    market,
+    cycleState,
   })
-  const recoveryPosition = position
-    ? Object.freeze({
-        positionId: cycleState.positionId,
-        quantity: position.baseQuantity.amount,
-        spent: position.spent.amount,
-      })
-    : undefined
   const planInput = createRecoverySellerTransitionPlanInput({
     state,
     market,
