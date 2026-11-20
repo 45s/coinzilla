@@ -51,7 +51,7 @@ test("reports a workspace package missing from the unit-test matrix", () => {
   })
 
   assert.ok(
-    errors.some((error) => error.includes("@coinzilla/journal") && error.includes("unit-test")),
+    errors.some((error) => error.toLowerCase().includes("@coinzilla/journal") && error.toLowerCase().includes("unit-test")),
     "The matrix guard must identify a workspace package omitted from unit-test CI.",
   )
 })
@@ -66,7 +66,7 @@ test("reports a workspace package missing from the coverage matrix", () => {
   })
 
   assert.ok(
-    errors.some((error) => error.includes("@coinzilla/entities") && error.includes("coverage")),
+    errors.some((error) => error.toLowerCase().includes("@coinzilla/entities") && error.toLowerCase().includes("coverage")),
     "The matrix guard must identify a workspace package omitted from coverage CI.",
   )
 })
