@@ -62,6 +62,7 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 - Preserve public contracts unless an intentional, documented, tested behavior change is required.
 - Prefer cohesive modules and meaningful pure-function extraction; avoid speculative abstractions and mechanical churn.
 - Verify every changed file and relevant package/workspace checks; report exact results, skipped checks, and the final PR head.
+- When the audit touches `helpers/`, run `pnpm run check:helper-policy`; inspect all detected violations and indirect dependencies rather than treating the scanner as a purity proof.
 - Update affected living documentation and indexes; preserve historical evidence and include a Documentation impact note in the PR.
 
 ## Cross-domain or shared-infrastructure change
