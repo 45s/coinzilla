@@ -6,7 +6,7 @@ import {
   assertBitunixOperatorInteractiveTerminal,
   createOneShotMarker,
   runBitunixOperatorOrderAttempt,
-} from "./run-bitunix-hypeusdt-order-attempt.js"
+} from "./bitunix-operator-order-attempt.js"
 
 const markerPath = fileURLToPath(new URL(
   "../.diagnostics/bitunix-hypeusdt-buy-limit-attempt.json",
