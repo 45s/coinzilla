@@ -104,7 +104,12 @@
       "src/infrastructure/persistence/trading-history-backups/create-backup.test.js",
       "src/infrastructure/persistence/trading-history-backups/verify-backup.test.js",
       "src/infrastructure/persistence/trading-history-backups/rotate-backups.test.js",
-      "scripts/trading-history-backups.test.js"
+      "scripts/trading-history-backups.test.js",
+      "src/infrastructure/persistence/trading-history-backups/errors.test.js",
+      "src/infrastructure/persistence/trading-history-backups/backup-paths.test.js",
+      "src/infrastructure/persistence/trading-history-backups/backup-manifest.test.js",
+      "src/infrastructure/persistence/trading-history-backups/backup-schema.test.js",
+      "src/infrastructure/persistence/trading-history-backups/backup-sqlite.test.js"
     ]
   }
 }
