@@ -8,7 +8,7 @@ import {
 } from "./test-support.js"
 
 test("rejects a TESTNET backup when the verifier selects LIVE", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ testContext: t })
   const result = await fixture.service.createBackup()
   const liveService = createBackupService({
     env: {

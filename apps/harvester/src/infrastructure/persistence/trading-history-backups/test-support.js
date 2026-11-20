@@ -62,12 +62,12 @@ export async function createRelationalSource({ directory, tradingMode = "testnet
   }
 }
 
-export async function createFixture(t, options = {}) {
+export async function createFixture({ testContext, ...options } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-history-backup-"))
   const cleanup = {
     database: null,
   }
-  t.after(async () => {
+  testContext.after(async () => {
     await cleanup.database?.close()
     await rm(directory, {
       recursive: true,
@@ -103,9 +103,9 @@ export async function createFixture(t, options = {}) {
   }
 }
 
-export async function createEmptyFixture(t, { tradingMode = "testnet" } = {}) {
+export async function createEmptyFixture({ testContext, tradingMode = "testnet" } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-history-empty-"))
-  t.after(() => rm(directory, {
+  testContext.after(() => rm(directory, {
     recursive: true,
     force: true,
   }))

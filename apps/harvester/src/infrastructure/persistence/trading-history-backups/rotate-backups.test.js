@@ -1,4 +1,3 @@
-import assert from "node:assert/strict"
 import { access, writeFile } from "node:fs/promises"
 import path from "node:path"
 import test from "node:test"
@@ -18,7 +17,7 @@ test("retains only the newest verified pairs and leaves unrelated or orphan file
     "00000000-0000-4000-8000-000000000002",
     "00000000-0000-4000-8000-000000000003",
   ]
-  const fixture = await createFixture(t, {
+  const fixture = await createFixture({ testContext: t,
     now: () => dates.shift(),
     createId: () => ids.shift(),
   })

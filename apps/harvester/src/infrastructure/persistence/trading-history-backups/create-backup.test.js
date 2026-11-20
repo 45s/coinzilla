@@ -13,7 +13,7 @@ import {
 } from "./test-support.js"
 
 test("creates and restore-verifies an environment-scoped backup including committed WAL data", async (t) => {
-  const fixture = await createFixture(t)
+  const fixture = await createFixture({ testContext: t })
   const journalMode = fixture.source.database.prepare("PRAGMA journal_mode").get().journal_mode
   assert.equal(journalMode, "wal")
 
