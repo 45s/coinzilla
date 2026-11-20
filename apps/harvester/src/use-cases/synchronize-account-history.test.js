@@ -50,7 +50,7 @@ function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, c
       amount: executed,
       asset: orderMarket.baseAsset,
     }),
-    status: executed === "0" ? "NEW" : "FILLED",
+    status: executed === "0" ? "OPEN" : "FILLED",
     createdAt: 100,
     updatedAt: 200,
     completedAt: 200,
