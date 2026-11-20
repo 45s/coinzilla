@@ -322,8 +322,14 @@ function recordRecoverySellerBuyExecution({ item, fill, state }) {
   fillIds.add(fill.id)
   state.recoverySellerBuyExecutionByCycle.set(item.cycleId, Object.freeze({
     fillIds,
-    quantity: addDecimal(current.quantity, fill.quantity.amount),
-    quoteQuantity: addDecimal(current.quoteQuantity, fill.quoteQuantity.amount),
+    quantity: addDecimal({
+      left: current.quantity,
+      right: fill.quantity.amount,
+    }),
+    quoteQuantity: addDecimal({
+      left: current.quoteQuantity,
+      right: fill.quoteQuantity.amount,
+    }),
   }))
 }
 

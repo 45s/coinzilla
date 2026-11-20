@@ -683,7 +683,7 @@ test("restores Recovery Seller BUY ownership, Position inventory, and exact cycl
   assert.equal(buyExecution.quoteQuantity, "2")
 })
 
-test("fails closed when a Recovery Seller SELL fill has no durable mixed-allocation evidence", async () => {
+test("fails closed when a Recovery Seller SELL fill has no durable cycle outcome", async () => {
   const result = await restoreCandidate({
     operationalStateStore: makeStore([
       ...createPreflightRecords({ externalOpenOrder: false }),
@@ -698,5 +698,5 @@ test("fails closed when a Recovery Seller SELL fill has no durable mixed-allocat
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors?.map(({ message }) => message).join("; "), /mixed.sell allocation/i)
+  assert.match(result.errors?.map(({ message }) => message).join("; "), /explicit recovery-cycle outcome/i)
 })
