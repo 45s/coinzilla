@@ -89,6 +89,9 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: pnpm run check:helper-names:changed -- "${BASE_SHA}"
 
+      - name: Enforce repository-wide production module filenames
+        run: pnpm run check:module-names
+
       - name: Verify workspace test and coverage matrices
         run: pnpm run check:test-matrix
 
