@@ -744,7 +744,10 @@ async function verifyEventDeliveryFiltersDuplicatesAndIsolatesThrowingSubscriber
     "Disconnecting one subscriber must not stop delivery to the remaining active subscriber.",
   )
 
-  await disconnectSubscriptionAndStop({ fixture, subscription: second })
+  await disconnectSubscriptionAndStop({
+    fixture,
+    subscription: second,
+  })
 }
 
 describe("Application user-data session event delivery", () => {
