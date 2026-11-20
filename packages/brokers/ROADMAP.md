@@ -13,9 +13,9 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 Tracking: [repository standards issue #1568](https://github.com/45s/coinzilla/issues/1568) and [naming audit issue #1582](https://github.com/45s/coinzilla/issues/1582).
 
 - **Merged:** [PR #1591](https://github.com/45s/coinzilla/pull/1591) renamed `adapt-msg.js` / `adaptMsg` to `adapt-binance-websocket-event.js` / `adaptBinanceWebSocketEvent`, and `user.js` / `adaptUser` to `user-data-event-adapters.js` / `userDataEventAdapters`. It updated the production user-data client and all direct tests. Merge commit: `895f3aa4a9ebb93a12dd95168b2e56118cc3173a`.
-- **S-7 closeout in review:** [PR #1592](https://github.com/45s/coinzilla/pull/1592) completes the repository file-tree/naming standard and clarifies the remaining Binance event-map identifiers. These are private implementation names; no public Broker contract, event payload, exchange behavior, or trading lifecycle changes are intended.
+- **S-7 closeout in review:** [PR #1593](https://github.com/45s/coinzilla/pull/1593) completes the repository file-tree/naming standard and clarifies the remaining Binance event-map identifiers. These are private implementation names; no public Broker contract, event payload, exchange behavior, or trading lifecycle changes are intended.
 
-**Status:** the primary module rename is merged; the remaining naming standard and documentation closeout are pending PR #1592 review and exact-head CI.
+**Status:** the primary module rename is merged; the remaining naming standard and documentation closeout are pending PR #1593 review and exact-head CI.
 
 ## Common exchange-neutral Broker API
 
