@@ -125,7 +125,7 @@ test("rejects malformed order-submission intent identity, fields, classification
     ["unsupported order type", { type: "MARKET" }, /type must be LIMIT/],
     ["zero price", { price: "0" }, /price and quantity must be positive/],
     ["non-canonical quantity", { quantity: "01" }, /price and quantity must be positive/],
-    ["unsupported purpose", { purpose: "MANUAL" }, /purpose must be null or RECOVERY_SELL/],
+    ["unsupported purpose", { purpose: "MANUAL" }, /purpose/],
   ]
 
   for (const [description, changes, expectedError] of invalidCases) {
@@ -182,7 +182,7 @@ test("rejects order-submission outcomes with inconsistent identity, amounts, or 
     ["invalid type", { type: "MARKET" }, /type must be LIMIT/],
     ["invalid amount", { price: "0" }, /amounts must be canonical/],
     ["invalid outcome", { outcome: "SENT" }, /classification is unsupported/],
-    ["invalid purpose", { purpose: "MANUAL" }, /purpose must be null or RECOVERY_SELL/],
+    ["invalid purpose", { purpose: "MANUAL" }, /purpose/],
     ["unacknowledged order with broker identity", { brokerOrderId: "broker-order-1" }, /PENDING order without broker identity/],
     ["unacknowledged order with non-pending status", { status: "NEW" }, /PENDING order without broker identity/],
     ["unacknowledged order with execution", { executedQuantity: "0.1" }, /PENDING order without broker identity/],

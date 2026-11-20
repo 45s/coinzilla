@@ -44,10 +44,19 @@ function validateDurableOrderOwnership({ canonicalData, context } = {}) {
     }
     return
   }
-  const expectedPurpose = canonicalData.side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL"
-  if (canonicalData.purpose !== expectedPurpose ||
-      canonicalData.strategyId !== "RS_recoverySeller") {
-    throw new TypeError(`${context} purpose and strategy ownership must match the Recovery Seller order side`)
+  const expectedSide = canonicalData.purpose === "RECOVERY_BUY"
+    ? "BUY"
+    : canonicalData.purpose === "RECOVERY_SELL"
+      ? "SELL"
+      : undefined
+  if (expectedSide === undefined || canonicalData.side !== expectedSide) {
+    throw new TypeError(`${context} purpose must match its canonical order side`)
+  }
+  if (!hasOwnership && canonicalData.purpose === "RECOVERY_SELL") {
+    return
+  }
+  if (canonicalData.strategyId !== "RS_recoverySeller") {
+    throw new TypeError(`${context} Recovery Seller ownership must identify its strategy`)
   }
   requireNonEmptyString({
     value: canonicalData.positionId,
@@ -137,7 +146,10 @@ function validateOrderSubmissionIntentSemantics({
   if (!isPositiveDecimalString(canonicalData.price) || !isPositiveDecimalString(canonicalData.quantity)) {
     throw new TypeError("Order-submission intent price and quantity must be positive exact decimal strings")
   }
-  validateDurableOrderOwnership({ canonicalData, context: "Order-submission intent" })
+  validateDurableOrderOwnership({
+    canonicalData,
+    context: "Order-submission intent",
+  })
 }
 
 export function validateOrderSubmissionIntentFact({ factType, canonicalData, factId }) {
@@ -182,7 +194,10 @@ function validateOrderSubmissionOutcomeAmounts({ canonicalData }) {
 }
 
 function validateOrderSubmissionOutcomeState({ canonicalData }) {
-  validateDurableOrderOwnership({ canonicalData, context: "Order-submission outcome" })
+  validateDurableOrderOwnership({
+    canonicalData,
+    context: "Order-submission outcome",
+  })
   if (!["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(canonicalData.outcome)) {
     throw new TypeError("Order-submission outcome classification is unsupported")
   }

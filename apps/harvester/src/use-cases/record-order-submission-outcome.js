@@ -24,7 +24,11 @@ function validateSubmissionStoreAndOrder({
   if (!SUPPORTED_PURPOSES.has(purpose)) {
     throw new TypeError("Order-submission outcome purpose must be null, RECOVERY_BUY, or RECOVERY_SELL")
   }
-  validateRecoverySellerSubmissionOwnership({ order, purpose, ownership })
+  const normalizedOwnership = validateRecoverySellerSubmissionOwnership({
+    order,
+    purpose,
+    ownership,
+  })
 }
 
 function validateSubmissionAcknowledgement({
@@ -106,7 +110,13 @@ function validateSubmissionOutcome(options) {
  */
 export async function recordOrderSubmissionOutcome(options = {}) {
   try {
-    const { operationalStateStore, order, outcome, purpose = null, ownership } = options
+    const {
+      operationalStateStore,
+      order,
+      outcome,
+      purpose = null,
+      ownership,
+    } = options
     const { market, clientOrderId, acknowledged, ownership: normalizedOwnership } = validateSubmissionOutcome({
       ...options,
       purpose,

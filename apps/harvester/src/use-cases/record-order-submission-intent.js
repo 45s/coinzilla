@@ -46,7 +46,11 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose, owner
   if (!SUPPORTED_PURPOSES.has(purpose)) {
     throw new TypeError("Order-submission intent purpose must be null, RECOVERY_BUY, or RECOVERY_SELL")
   }
-  const normalizedOwnership = validateRecoverySellerSubmissionOwnership({ order, purpose, ownership })
+  const normalizedOwnership = validateRecoverySellerSubmissionOwnership({
+    order,
+    purpose,
+    ownership,
+  })
   const { market } = order
   for (const field of ["providerInstanceId", "providerType", "accountId"]) {
     if (typeof order[field] !== "string" || !order[field].trim()) {

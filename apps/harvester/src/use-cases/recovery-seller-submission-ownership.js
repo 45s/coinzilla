@@ -25,9 +25,16 @@ export function validateRecoverySellerSubmissionOwnership({ order, purpose, owne
     }
     return undefined
   }
-  const expectedPurpose = order?.side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL"
-  if (purpose !== expectedPurpose) {
+  const expectedSide = purpose === "RECOVERY_BUY"
+    ? "BUY"
+    : purpose === "RECOVERY_SELL"
+      ? "SELL"
+      : undefined
+  if (expectedSide === undefined || order?.side !== expectedSide) {
     throw new TypeError("Recovery Seller submission purpose must match its canonical order side")
+  }
+  if (ownership === undefined && purpose === "RECOVERY_SELL") {
+    return undefined
   }
   if (ownership === null || typeof ownership !== "object" || Array.isArray(ownership)) {
     throw new TypeError("Recovery Seller submission requires explicit strategy, Position, and cycle ownership")
@@ -37,7 +44,13 @@ export function validateRecoverySellerSubmissionOwnership({ order, purpose, owne
   }
   return Object.freeze({
     strategyId: StrategyId.RECOVERY_SELLER,
-    positionId: requireIdentifier({ value: ownership.positionId, field: "positionId" }),
-    cycleId: requireIdentifier({ value: ownership.cycleId, field: "cycleId" }),
+    positionId: requireIdentifier({
+      value: ownership.positionId,
+      field: "positionId",
+    }),
+    cycleId: requireIdentifier({
+      value: ownership.cycleId,
+      field: "cycleId",
+    }),
   })
 }
