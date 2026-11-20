@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import nodeTest from "node:test"
-import { Asset, CanonicalOrder, Market, Money, OrderRegistry, Quantity } from "@coinzilla/entities"
+import { Asset, CanonicalOrder, Market, Money, Quantity } from "@coinzilla/entities"
+import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createOrderOwnership } from "../domain/orders/order-ownership.js"
 import { createConservativeEngineOrderEventContext } from "./conservative-trading-engine.js"
