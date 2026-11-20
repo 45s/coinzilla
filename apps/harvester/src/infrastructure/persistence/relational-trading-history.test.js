@@ -1041,6 +1041,18 @@ test("upgrades an existing relational v1 database with exchange-history provenan
 })
 
 
+async function assertEmptyHistoryCursor({ repository, providerIdentity, environment, symbol }) {
+  const cursor = await repository.get({
+    providerIdentity,
+    environment,
+    symbol,
+  })
+  assert.deepEqual(cursor, {
+    lastOrderId: null,
+    lastTradeId: null,
+  })
+}
+
 test("keeps durable history cursors isolated by provider, account, environment, and market", async (t) => {
   const context = await createTestContext({
     t,
@@ -1053,70 +1065,56 @@ test("keeps durable history cursors isolated by provider, account, environment, 
     providerType: "binance",
     accountId: "binance-primary",
   }
-  const initial = await persistence.historySyncCursorRepository.get({
+  const repository = persistence.historySyncCursorRepository
+  await assertEmptyHistoryCursor({
+    repository,
     providerIdentity,
     environment: "testnet",
     symbol: "BTCUSDT",
   })
-  assert.deepEqual(initial, {
-    lastOrderId: null,
-    lastTradeId: null,
-  })
-  await persistence.historySyncCursorRepository.saveOrderCursor({
+  await repository.saveOrderCursor({
     providerIdentity,
     environment: "testnet",
     symbol: "BTCUSDT",
     lastOrderId: "100",
     updatedAt: "2026-11-20T04:00:00.000Z",
   })
-  await persistence.historySyncCursorRepository.saveTradeCursor({
+  await repository.saveTradeCursor({
     providerIdentity,
     environment: "testnet",
     symbol: "BTCUSDT",
     lastTradeId: "200",
     updatedAt: "2026-11-20T04:00:01.000Z",
   })
-  const saved = await persistence.historySyncCursorRepository.get({
+  assert.deepEqual(await repository.get({
     providerIdentity,
     environment: "testnet",
     symbol: "BTCUSDT",
-  })
-  assert.deepEqual(saved, {
+  }), {
     lastOrderId: "100",
     lastTradeId: "200",
   })
-  const otherAccount = await persistence.historySyncCursorRepository.get({
-    providerIdentity: {
-      ...providerIdentity,
-      accountId: "binance-secondary",
-    },
-    environment: "testnet",
-    symbol: "BTCUSDT",
-  })
-  const otherEnvironment = await persistence.historySyncCursorRepository.get({
-    providerIdentity,
-    environment: "live",
-    symbol: "BTCUSDT",
-  })
-  const otherMarket = await persistence.historySyncCursorRepository.get({
-    providerIdentity,
-    environment: "testnet",
-    symbol: "ETHUSDT",
-  })
-  assert.deepEqual(otherAccount, {
-    lastOrderId: null,
-    lastTradeId: null,
-  })
-  assert.deepEqual(otherEnvironment, {
-    lastOrderId: null,
-    lastTradeId: null,
-  })
-  assert.deepEqual(otherMarket, {
-    lastOrderId: null,
-    lastTradeId: null,
-  })
+  await Promise.all([
+    assertEmptyHistoryCursor({
+      repository,
+      providerIdentity: { ...providerIdentity, accountId: "binance-secondary" },
+      environment: "testnet",
+      symbol: "BTCUSDT",
+    }),
+    assertEmptyHistoryCursor({
+      repository,
+      providerIdentity,
+      environment: "live",
+      symbol: "BTCUSDT",
+    }),
+    assertEmptyHistoryCursor({
+      repository,
+      providerIdentity,
+      environment: "testnet",
+      symbol: "ETHUSDT",
+    }),
+  ])
 })
-
 
 test("persists exchange-observed unfilled orders for later fill reconciliation", async (t) => {
   const context = await createTestContext({
