@@ -151,6 +151,7 @@ function mapCanonicalOrder({ order, providerIdentity, environment, observedAt })
       observedAt,
     }),
     environment,
+    includeUnfilled: true,
   })
 }
 
@@ -182,9 +183,6 @@ function validateCanonicalOrder({ order, symbol, lastOrderId, state }) {
 }
 
 async function persistCanonicalOrder({ order, repositories, providerIdentity, environment, observedAt, state }) {
-  if (order.executedQuantity.amount === "0") {
-    return
-  }
   const record = mapCanonicalOrder({
     order,
     providerIdentity,
