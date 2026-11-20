@@ -3,7 +3,7 @@ import { getOrderHistory } from "./binance-testnet-api.js"
 import {
   normalizeOrderHistory,
   parseOrderHistoryArguments,
-} from "./testnet-order-history-utils.js"
+} from "./testnet-order-history-inputs.js"
 
 const cliConsole = new Console({
   stdout: process.stdout,

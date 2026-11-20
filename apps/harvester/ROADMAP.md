@@ -841,8 +841,9 @@ This section is the current operational status and supersedes older statements b
 ## Conservative domain rule extraction — PR #653
 
 The Conservative policy now delegates its core state predicates to
-`src/domain/strategies/conservative/helpers.js`. Each predicate has
-a focused deterministic unit test in `helpers.test.js`; the policy
+`src/domain/strategies/conservative/state-predicates.js` (renamed from
+`helpers.js` in PR #1600). Each predicate has a focused deterministic unit
+test in `state-predicates.test.js` (renamed from `helpers.test.js` in PR #1600); the policy
 continues to own intent calculation and order economics, while the trading
 engine continues to own broker lifecycle and I/O.
 

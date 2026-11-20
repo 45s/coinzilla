@@ -8,7 +8,7 @@ import {
   getAccountBalances,
   getOpenOrders,
 } from "./binance-testnet-api.js"
-import { getMarketSellQuantity } from "./testnet-sell-utils.js"
+import { getMarketSellQuantity } from "./calculate-testnet-market-sell-quantity.js"
 
 const cliConsole = new Console({
   stdout: process.stdout,

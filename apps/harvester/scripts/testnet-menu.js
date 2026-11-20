@@ -9,7 +9,7 @@ import {
   PROMPT_DEFAULTS,
   TESTNET_MENU_ACTIONS,
   normalizePromptAnswer,
-} from "./testnet-menu-utils.js"
+} from "./testnet-menu-inputs.js"
 
 const prompt = async (question) => {
   const readline = createPromptInterface({ input: stdin,

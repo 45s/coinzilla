@@ -52,7 +52,7 @@ Focused CG evidence files include `helpers.test.js`, `initial-buy-price.test.js`
 ### Conservative source and tests
 
 - [Strategy evaluator](../../src/domain/strategies/conservative/strategy.js)
-- [Order helpers](../../src/domain/strategies/conservative/helpers.js)
+- [Order helpers](../../src/domain/strategies/conservative/state-predicates.js)
 - [Initial BUY pricing](../../src/domain/strategies/conservative/initial-buy-price.js)
 - [SELL fee reserve](../../src/domain/strategies/conservative/sell-fee-rate.js)
 - [SELL planner](../../src/domain/strategies/conservative/recovery-sell-plan.js)

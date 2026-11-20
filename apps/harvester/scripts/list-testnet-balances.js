@@ -1,6 +1,6 @@
 import { Console } from "node:console"
 import { getAccountBalances } from "./binance-testnet-api.js"
-import { getNonZeroBalances, normalizeAccountBalances } from "./testnet-balance-utils.js"
+import { getNonZeroBalances, normalizeAccountBalances } from "./testnet-account-balances.js"
 
 const cliConsole = new Console({
   stdout: process.stdout,
