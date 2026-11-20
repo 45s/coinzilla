@@ -77,6 +77,12 @@ jobs:
       - name: Enforce helper purity and unit-test policy
         run: pnpm run check:helper-policy
 
+      - name: Enforce context-aware naming for changed helper files
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: pnpm run check:helper-names:changed -- "${BASE_SHA}"
+
       - name: Verify workspace test and coverage matrices
         run: pnpm run check:test-matrix
 
