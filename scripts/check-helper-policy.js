@@ -124,6 +124,10 @@ export function analyzeHelperSource({ file, source }) {
     violations.push(file + ": mutation of caller-owned input is prohibited")
   }
 
+  if (/^\\s*(?:export\\s+)?const\\s+[A-Za-z_$][\\w$]*\\s*=\\s*(?:new\\s+)?(?:Set|Map)\\s*\\(/m.test(source)) {
+    violations.push(file + ": mutable module-level collections are prohibited")
+  }
+
   return violations
 }
 
