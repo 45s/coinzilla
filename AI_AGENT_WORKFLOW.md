@@ -10,7 +10,6 @@ Harvester's mandatory execution order is defined only in [TRADING_FIRST.md](apps
 
 Visual workflow diagrams follow the canonical [visual documentation and workflow schemas standard](ENGINEERING_STANDARDS.md#visual-documentation-and-workflow-schemas). Consider flowcharts and sequence diagrams for complex work, and keep them aligned with source code and tests.
 
-## 1. The short version
 ## 0. Mandatory documentation and requirements preflight
 
 The task-start gate and readiness record are owned by the canonical [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md). Every agent must complete that standard independently before any state-changing work and follow [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md). Use [Task Workflows](docs/engineering/TASK_WORKFLOWS.md) for the task-specific checklist and the owning domain's instructions/roadmap for local constraints. Do not reproduce the compliance checklist here; the standard is the single source of truth. Read-only discovery is allowed; do not implement or mutate state until the gate is complete. If required material is missing or contradictory, stop and report the exact blocker.
@@ -18,6 +17,8 @@ The task-start gate and readiness record are owned by the canonical [AI Task Com
 Before implementing a shared helper or cross-cutting capability, follow the single [shared-utilities policy](docs/engineering/SHARED_UTILITIES_POLICY.md).
 
 For any refactoring or code-audit task, use the canonical [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md) together with the applicable checklist in [Task Workflows](docs/engineering/TASK_WORKFLOWS.md). Treat its scope, evidence, test-first, compatibility, verification, and reporting requirements as mandatory.
+
+## 1. The short version
 
 1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, this document, and the owning domain's `AGENTS.md` and `ROADMAP.md`.
 2. Identify one owning domain and one focused task.
@@ -266,7 +267,7 @@ Each domain roadmap is the source of truth for that domain's planned work and st
 - Leave the task PR open for the user to review and merge after every required check passes on the exact head SHA and branch freshness/ownership requirements are satisfied. Never merge or enable auto-merge on the user's behalf. Never claim a test/check passed unless GitHub reports success for the relevant commit.
 
 For broker changes, keep live/network integration tests separate from default unit tests. Tests that place orders must use TESTNET only, and only under explicit authorization. Never use production credentials or trigger LIVE broker actions as part of CI verification.
-## 9. Final release: one human review
+## 9. Final release: milestone review
 
 The purpose of `develop` is to accumulate independently implemented, automatically validated work. **Every task PR must still be left open for user review and merge**, as required by §§1 and 8 and by the repository's issue/PR governance. The final release PR provides the milestone-level review of the accumulated `develop` changes; it does not replace task-PR review.
 
