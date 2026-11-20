@@ -1071,6 +1071,15 @@ function emitLatestSessionState({ session, latestSession, state, emit }) {
   }
 }
 
+function isRecoverySellerOperationalRecord({ record, state }) {
+  const clientOrderId = record.data.clientOrderId ?? record.data.sellOrderClientId
+  const intent = clientOrderId == null
+    ? undefined
+    : state.orderIntents.get(clientOrderId)
+  return record.data.strategyId === "RS_recoverySeller" ||
+    intent?.strategyId === "RS_recoverySeller"
+}
+
 function createSessionSyntheticRecords({ session, latestSession, state }) {
   const syntheticRecords = []
   let lineNumber = 0
@@ -1094,6 +1103,9 @@ function createSessionSyntheticRecords({ session, latestSession, state }) {
     emit,
   })
   for (const record of remaining) {
+    if (isRecoverySellerOperationalRecord({ record, state })) {
+      continue
+    }
     const events = mapFact({
       record,
       orderIntents: state.orderIntents,
@@ -1212,14 +1224,6 @@ factId: fact.factId }),
   return Object.freeze(mappedEvaluations)
 }
 
-function assertRecoverySellerJournalReplayDeferred({ state }) {
-  if (state.recoverySellerOrdersByCycle.size > 0 || state.recoverySellerFillsByCycle.size > 0) {
-    throw new Error(
-      "Recovery Seller Journal replay is deferred; refusing to restore RS orders or fills through Conservative accounting.",
-    )
-  }
-}
-
 function createRecoverySellerLifecycleProjection({ state }) {
   const ordersByCycle = [...state.recoverySellerOrdersByCycle].map(([cycleId, orders]) => {
     const projectedOrders = orders.map((order) => Object.freeze({
@@ -1317,7 +1321,6 @@ export function projectHarvesterOperationalState({ records } = {}) {
 index,
 state })
     }
-    assertRecoverySellerJournalReplayDeferred({ state })
     const syntheticRecords = createSyntheticJournalRecords({ state })
     const projected = projectHarvesterJournalRecovery({ records: syntheticRecords })
     if (projected?.ok !== true) {
