@@ -23,6 +23,7 @@ test("exports stable schema limits and fact type allowlist", () => {
   assert.equal(SHA256_PATTERN.test("g".repeat(64)), false)
   assert.equal(SEQUENCE_PATTERN.test("0"), true)
   assert.equal(SEQUENCE_PATTERN.test("01"), false)
+  assert.equal(Object.isFrozen(FACT_TYPES), true)
   assert.equal(FACT_TYPES.includes("PROCESS_STARTED"), true)
   assert.equal(FACT_TYPES.includes("UNSUPPORTED"), false)
 })
