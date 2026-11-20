@@ -55,7 +55,7 @@ function validateDurableOrderOwnership({ canonicalData, context } = {}) {
       ownership,
     })
   } catch (error) {
-    throw new TypeError(`${context}: ${error.message}`)
+    throw new TypeError(`${context}: ${error.message}`, { cause: error })
   }
 }
 
