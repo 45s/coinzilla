@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
 import {
   addDecimal,
@@ -8,6 +9,7 @@ import {
   toResult,
 } from "@coinzilla/utils"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
+import { createPositionId } from "../domain/portfolio/position.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { validateRecoverySellerSubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
@@ -234,6 +236,12 @@ async function applyRecoverySellerBuyFillTransition({
   state.portfolio = result.portfolio
   if (nextBuyExecution) {
     state.recoverySellerBuyExecutionByCycle.set(ownership.cycleId, nextBuyExecution)
+    state.recoverySellerCycleStates.set(nextBuyExecution.marketId, Object.freeze({
+      marketId: nextBuyExecution.marketId,
+      cycleId: ownership.cycleId,
+      positionId: ownership.positionId,
+      status: "ACCUMULATING",
+    }))
   }
   return Object.freeze({
     ...result,
@@ -370,6 +378,16 @@ function reconcileTerminalMixedSellTransition({
   if (reservation?.clientOrderId === terminalRegisteredOrder.clientOrderId) {
     state.recoverySellerSellReservations.delete(ownership.cycleId)
   }
+  const cycleStatus = result.profitability.eligible ? "CLOSED" : "UNRESOLVED"
+  const cycleOutcome = Object.freeze({
+    marketId: terminalRegisteredOrder.market.id,
+    cycleId: ownership.cycleId,
+    positionId: ownership.positionId,
+    status: cycleStatus,
+    eligible: result.profitability.eligible,
+  })
+  state.recoverySellerCycleOutcomes.set(ownership.cycleId, cycleOutcome)
+  state.recoverySellerCycleStates.set(terminalRegisteredOrder.market.id, cycleOutcome)
   return Object.freeze({
     ...result.accounting,
     orderRegistry: state.orderRegistry,
@@ -501,6 +519,12 @@ function reserveRecoverySellerSellCycleTransition({
     cycleId: normalizedOwnership.cycleId,
     marketId: order.market.id,
   }))
+  state.recoverySellerCycleStates.set(order.market.id, Object.freeze({
+    marketId: order.market.id,
+    cycleId: normalizedOwnership.cycleId,
+    positionId: normalizedOwnership.positionId,
+    status: "SELL_SUBMITTED",
+  }))
   return Object.freeze({
     durable: true,
   })
@@ -524,6 +548,8 @@ function createRecoverySellerWorkflowState({
     legacyPositions: createLegacyPositionMap(initialLegacyPositions),
     recoverySellerBuyExecutionByCycle: new Map(),
     recoverySellerSellReservations: new Map(),
+    recoverySellerCycleStates: new Map(),
+    recoverySellerCycleOutcomes: new Map(),
     updateQueue: Promise.resolve(),
   }
   if (!(state.portfolio instanceof Portfolio)) {
@@ -540,6 +566,18 @@ function createRecoverySellerWorkflowState({
   }
   if (!(state.recoverySellerSellReservations instanceof Map)) {
     throw new TypeError("sharedState.recoverySellerSellReservations must be a Map")
+  }
+  if (state.recoverySellerCycleStates === undefined && !Object.isFrozen(state)) {
+    state.recoverySellerCycleStates = new Map()
+  }
+  if (!(state.recoverySellerCycleStates instanceof Map)) {
+    throw new TypeError("sharedState.recoverySellerCycleStates must be a Map")
+  }
+  if (state.recoverySellerCycleOutcomes === undefined && !Object.isFrozen(state)) {
+    state.recoverySellerCycleOutcomes = new Map()
+  }
+  if (!(state.recoverySellerCycleOutcomes instanceof Map)) {
+    throw new TypeError("sharedState.recoverySellerCycleOutcomes must be a Map")
   }
   return state
 }
@@ -572,9 +610,76 @@ function createRecoverySellerAccountingOperations({
   }
 }
 
-function createRecoverySellerAccountingWorkflowApi({ state, operations } = {}) {
+function getLatestBuyExecutionForMarket({ state, marketId }) {
+  return [...state.recoverySellerBuyExecutionByCycle.values()]
+    .filter((execution) => execution.marketId === marketId)
+    .at(-1)
+}
+
+function getOrCreateRecoverySellerCycleState({ state, marketId, createCycleId }) {
+  const current = state.recoverySellerCycleStates.get(marketId)
+  if (current && current.status !== "CLOSED") {
+    return Object.freeze({ ...current })
+  }
+  const latestExecution = getLatestBuyExecutionForMarket({
+    state,
+    marketId,
+  })
+  if (latestExecution) {
+    const outcome = state.recoverySellerCycleOutcomes.get(latestExecution.cycleId)
+    if (outcome?.status !== "CLOSED") {
+      const cycleState = Object.freeze({
+        marketId,
+        cycleId: latestExecution.cycleId,
+        positionId: latestExecution.positionId,
+        status: outcome?.status ?? "ACCUMULATING",
+      })
+      state.recoverySellerCycleStates.set(marketId, cycleState)
+      return cycleState
+    }
+  }
+  const cycleId = createCycleId()
+  if (typeof cycleId !== "string" || !cycleId.trim()) {
+    throw new TypeError("createCycleId must return a non-empty string")
+  }
+  const cycleState = Object.freeze({
+    marketId,
+    cycleId,
+    positionId: createPositionId({
+      marketId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+    }),
+    status: "ACCUMULATING",
+  })
+  state.recoverySellerCycleStates.set(marketId, cycleState)
+  return cycleState
+}
+
+function createRecoverySellerCycleStateApi({ state, createCycleId }) {
+  return {
+    getOrCreateCycleState: ({ marketId } = {}) =>
+      getOrCreateRecoverySellerCycleState({
+        state,
+        marketId,
+        createCycleId,
+      }),
+    getCycleStateForMarket: ({ marketId } = {}) => state.recoverySellerCycleStates.get(marketId),
+    getCycleOutcome: ({ cycleId } = {}) => state.recoverySellerCycleOutcomes.get(cycleId),
+    getLatestBuyExecutionForMarket: ({ marketId } = {}) =>
+      getLatestBuyExecutionForMarket({ state, marketId }),
+    getReservedSellCycleForMarket: ({ marketId } = {}) =>
+      [...state.recoverySellerSellReservations.values()]
+        .find((reservation) => reservation.marketId === marketId),
+  }
+}
+
+function createRecoverySellerAccountingWorkflowApi({ state, operations, createCycleId } = {}) {
   return Object.freeze({
     ...operations,
+    ...createRecoverySellerCycleStateApi({
+      state,
+      createCycleId,
+    }),
     getExecutionCallbacks: () => createRecoverySellerExecutionCallbacks({ state }),
     getBuyExecutionQuantity: ({ cycleId } = {}) =>
       state.recoverySellerBuyExecutionByCycle.get(cycleId)?.quantity,
@@ -624,7 +729,12 @@ export function createRecoverySellerAccountingWorkflow({
   initialLegacyPositions = [],
   onOperationalStateExecutionFill,
   sharedState,
+  createCycleId = randomUUID,
 } = {}) {
+  ensure.function({
+    value: createCycleId,
+    name: "createCycleId",
+  })
   if (onOperationalStateExecutionFill !== undefined) {
     ensure.function({
       value: onOperationalStateExecutionFill,
@@ -644,5 +754,6 @@ export function createRecoverySellerAccountingWorkflow({
   return createRecoverySellerAccountingWorkflowApi({
     state,
     operations,
+    createCycleId,
   })
 }

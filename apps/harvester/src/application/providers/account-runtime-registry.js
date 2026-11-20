@@ -125,14 +125,12 @@ function defineCoreAccountStateProperties({
   }
 }
 
-function defineRecoverySellerAccountStateProperties({
+function defineRecoverySellerExecutionStateProperties({
   state,
   getRecoverySellerBuyExecutionByCycle,
   setRecoverySellerBuyExecutionByCycle,
   getRecoverySellerSellReservations,
   setRecoverySellerSellReservations,
-  getUpdateQueue,
-  setUpdateQueue,
 }) {
   const definitions = [
     {
@@ -149,12 +147,36 @@ function defineRecoverySellerAccountStateProperties({
       isValid: (value) => value instanceof Map,
       errorMessage: "Account workflow recoverySellerSellReservations must be a Map",
     },
+  ]
+  for (const definition of definitions) {
+    defineValidatedStateProperty({
+      state,
+      ...definition,
+    })
+  }
+}
+
+function defineRecoverySellerCycleStateProperties({
+  state,
+  getRecoverySellerCycleStates,
+  setRecoverySellerCycleStates,
+  getRecoverySellerCycleOutcomes,
+  setRecoverySellerCycleOutcomes,
+}) {
+  const definitions = [
     {
-      property: "updateQueue",
-      getValue: getUpdateQueue,
-      setValue: setUpdateQueue,
-      isValid: (value) => value !== null && typeof value?.then === "function",
-      errorMessage: "Account workflow updateQueue must be Promise-like",
+      property: "recoverySellerCycleStates",
+      getValue: getRecoverySellerCycleStates,
+      setValue: setRecoverySellerCycleStates,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow recoverySellerCycleStates must be a Map",
+    },
+    {
+      property: "recoverySellerCycleOutcomes",
+      getValue: getRecoverySellerCycleOutcomes,
+      setValue: setRecoverySellerCycleOutcomes,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow recoverySellerCycleOutcomes must be a Map",
     },
   ]
   for (const definition of definitions) {
@@ -163,6 +185,23 @@ function defineRecoverySellerAccountStateProperties({
       ...definition,
     })
   }
+}
+
+function defineAccountQueueStateProperty({ state, getUpdateQueue, setUpdateQueue }) {
+  defineValidatedStateProperty({
+    state,
+    property: "updateQueue",
+    getValue: getUpdateQueue,
+    setValue: setUpdateQueue,
+    isValid: (value) => value !== null && typeof value?.then === "function",
+    errorMessage: "Account workflow updateQueue must be Promise-like",
+  })
+}
+
+function defineRecoverySellerAccountStateProperties(input) {
+  defineRecoverySellerExecutionStateProperties(input)
+  defineRecoverySellerCycleStateProperties(input)
+  defineAccountQueueStateProperty(input)
 }
 
 function defineAccountTradingStateProperties(input) {
@@ -178,6 +217,8 @@ function createAccountTradingState() {
   let legacyPositions = new Map()
   let recoverySellerBuyExecutionByCycle = new Map()
   let recoverySellerSellReservations = new Map()
+  let recoverySellerCycleStates = new Map()
+  let recoverySellerCycleOutcomes = new Map()
   let updateQueue = Promise.resolve()
   const state = createAccountStateCollections()
   state.runTransition = createSerializedAccountTransitionQueue()
@@ -195,6 +236,10 @@ function createAccountTradingState() {
     setRecoverySellerBuyExecutionByCycle: (value) => { recoverySellerBuyExecutionByCycle = value },
     getRecoverySellerSellReservations: () => recoverySellerSellReservations,
     setRecoverySellerSellReservations: (value) => { recoverySellerSellReservations = value },
+    getRecoverySellerCycleStates: () => recoverySellerCycleStates,
+    setRecoverySellerCycleStates: (value) => { recoverySellerCycleStates = value },
+    getRecoverySellerCycleOutcomes: () => recoverySellerCycleOutcomes,
+    setRecoverySellerCycleOutcomes: (value) => { recoverySellerCycleOutcomes = value },
     getUpdateQueue: () => updateQueue,
     setUpdateQueue: (value) => { updateQueue = value },
   })
