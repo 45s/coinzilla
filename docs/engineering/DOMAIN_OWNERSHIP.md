@@ -45,6 +45,48 @@ Rules:
 
 This table governs package-to-package dependencies; it does **not** prove internal source-file boundaries. Each package's local architecture instructions and tests remain authoritative for its internal layers. The current repository has package-scoped architecture checks, not a complete repository-wide source-import checker. See the [Modularity Standard](./MODULARITY_STANDARD.md) and [ADR-0001](../architecture/decisions/ADR-0001-clean-hexagonal-architecture.md) for module-level direction and review requirements.
 
+## Representative internal import boundaries
+
+The following examples were checked against the current source tree. They show the intended direction; they are representative, not an exhaustive import graph.
+
+| Layer | Source example | Observed dependency direction |
+| --- | --- | --- |
+| Harvester Domain | `apps/harvester/src/domain/strategies/recovery-seller/evaluate-buy-decision.js` | Imports domain siblings and domain-neutral decimal helpers from `@coinzilla/utils`; does not import Brokers, DB, Telegram, or infrastructure adapters. |
+| Harvester Application | `apps/harvester/src/use-cases/execute-strategy-decision.js` | Imports canonical `@coinzilla/entities` values, `@coinzilla/utils`, and Harvester domain policies; broker operations arrive through injected options. |
+| Harvester Infrastructure | `apps/harvester/src/infrastructure/persistence/order-history-repository.js` | Imports the public `@coinzilla/db` contract and Harvester-owned domain errors/transitions; persistence-specific coordination stays in Infrastructure. |
+| Brokers Domain | `packages/brokers/src/domain/user-data-recovery-policy.js` | Owns a pure recovery-completion decision and has no imports. |
+| Brokers Application | `packages/brokers/src/application/user-data-session.js` | Imports the Domain policy and its own Application port contract; it does not import Binance protocol code. |
+| Brokers Infrastructure | `packages/brokers/src/infrastructure/binance/spot/user-data-client-adapter.js` | Imports Binance-specific protocol adapters and adapts them to the Brokers Application port. |
+| Brokers public facade | `packages/brokers/src/index.js` | Exposes the supported broker contract and concrete provider adapters; it contains exports, not business orchestration. |
+
+Examples of the actual imports:
+
+```js
+// Harvester Domain
+import { addDecimal, assertDecimalString } from "@coinzilla/utils"
+import { calculateInitialBuyPrice } from "../conservative/initial-buy-price.js"
+
+// Harvester Application
+import { CanonicalOrder } from "@coinzilla/entities"
+import { toResult } from "@coinzilla/utils"
+import { createPendingCanonicalOrder } from "../domain/orders/create-pending-canonical-order.js"
+
+// Harvester Infrastructure
+import { DatabaseConflictError } from "@coinzilla/db"
+import { OrderHistoryIntegrityError } from "../../domain/order-history/order-history-errors.js"
+
+// Brokers Application
+import { canCompleteUserDataRecovery } from "../domain/user-data-recovery-policy.js"
+import { assertUserDataClientPort } from "./ports/user-data-client-port.js"
+
+// Brokers Infrastructure
+import { adaptMsg } from "./broker-websocket/helpers/adapters/adapt-msg.js"
+import { getUserDataEventIdentity } from "./broker-websocket/helpers/user-data-event-identity.js"
+```
+
+Test files may deliberately import infrastructure to exercise integration boundaries; do not classify test-only imports as production dependency violations. A source-level audit must distinguish production files from tests and fixtures. These examples do not prove every module follows the rule; the current automated checks remain package-scoped.
+
+
 ## Shared infrastructure
 
 The following are cross-domain and must be treated as shared ownership: root package manifests and lockfile, CI workflows, GitHub rules, root engineering documentation, workspace scripts, and dependency policy.
