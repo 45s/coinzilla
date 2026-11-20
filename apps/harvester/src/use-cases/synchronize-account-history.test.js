@@ -57,9 +57,9 @@ function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, c
   })
 }
 
-function createFill({ tradeId = "1", orderId = "10", fillMarket = market, clientOrderId } = {}) {
+function createFill({ tradeId = "1", orderId = "10", fillMarket = market, clientOrderId, providerIdentity = identity } = {}) {
   return new Fill({
-    ...identity,
+    ...providerIdentity,
     tradeId,
     brokerOrderId: orderId,
     clientOrderId: clientOrderId === null ? undefined : clientOrderId ?? `harvester-${orderId}`,
@@ -92,9 +92,15 @@ function createRepositories() {
   return {
     orders,
     fills,
+    cursors,
     orderRepository: {
       upsertHistorical: async (record) => {
-        orders.push(record)
+        const existingIndex = orders.findIndex(({ id }) => id === record.id)
+        if (existingIndex === -1) {
+          orders.push(record)
+        } else {
+          orders[existingIndex] = record
+        }
         orderIdentities.set(`${record.market.id}:${record.brokerOrderId}`, record.clientOrderId)
       },
       findByExchangeOrderIdentity: async ({ marketId, brokerOrderId }) =>
@@ -144,12 +150,13 @@ function createPagedBroker({ orders, fills, calls }) {
         orderId,
         limit,
       })
-      const next = orders.find((order) =>
-        order.market.symbol === symbol && Number(order.brokerOrderId) >= orderId,
-      )
+      const page = orders
+        .filter((order) => order.market.symbol === symbol && Number(order.brokerOrderId) >= orderId)
+        .sort((left, right) => Number(left.brokerOrderId) - Number(right.brokerOrderId))
+        .slice(0, limit)
       return {
         ok: true,
-        data: next ? [next] : [],
+        data: page,
       }
     },
     getFills: async ({ symbol, fromId, limit }) => {
@@ -158,12 +165,13 @@ function createPagedBroker({ orders, fills, calls }) {
         fromId,
         limit,
       })
-      const next = fills.find((fill) =>
-        fill.market.symbol === symbol && Number(fill.tradeId) >= fromId,
-      )
+      const page = fills
+        .filter((fill) => fill.market.symbol === symbol && Number(fill.tradeId) >= fromId)
+        .sort((left, right) => Number(left.tradeId) - Number(right.tradeId))
+        .slice(0, limit)
       return {
         ok: true,
-        data: next ? [next] : [],
+        data: page,
       }
     },
   }
@@ -245,6 +253,116 @@ test("rejects exchange orders carrying a different provider or account identity"
   assert.match(result.errors[0].message, /provider identity conflicts/i, "The failure must identify the provider-identity conflict.")
   assert.equal(repositories.orders.length, 0, "A foreign-account order must never be persisted under the configured account.")
   assert.equal(repositories.fills.length, 0, "No fill scan may proceed after an identity-conflicting order page.")
+})
+
+test("replays a page after an order write failure without advancing its durable cursor", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const broker = createPagedBroker({
+    orders: [
+      createOrder({
+        orderId: "10",
+        clientOrderId: "first-order",
+      }),
+      createOrder({
+        orderId: "11",
+        clientOrderId: "second-order",
+      }),
+    ],
+    fills: [],
+    calls,
+  })
+  const originalUpsert = repositories.orderRepository.upsertHistorical
+  let failSecondOrder = true
+  repositories.orderRepository.upsertHistorical = async (record) => {
+    if (failSecondOrder && record.brokerOrderId === "11") {
+      throw new Error("simulated second-order persistence failure")
+    }
+    await originalUpsert(record)
+  }
+  const input = {
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 2,
+    requestDelayMs: 0,
+    now: () => 300,
+  }
+
+  const failed = await synchronizeAccountHistory(input)
+  assert.equal(failed.ok, false, "A failed record write must fail the current history page.")
+  assert.equal(repositories.cursors.get("BTCUSDT")?.lastOrderId, undefined, "The order cursor must remain unchanged after a partial page write.")
+  assert.equal(repositories.orders.length, 1, "A successfully written record may remain available for idempotent replay.")
+
+  failSecondOrder = false
+  const retried = await synchronizeAccountHistory(input)
+  assert.equal(retried.ok, true, "A retried page must complete after persistence recovers.")
+  assert.deepEqual(calls.orders.map(({ orderId }) => orderId), [0, 0], "The failed page must be requested again from its original cursor.")
+  assert.equal(repositories.orders.length, 2, "Page replay must leave one relational order per canonical identity.")
+  assert.equal(repositories.cursors.get("BTCUSDT").lastOrderId, "11", "The cursor may advance only after every order in the page is persisted.")
+})
+
+test("replays a trade page after a fill write failure without advancing its durable cursor", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const broker = createPagedBroker({
+    orders: [],
+    fills: [
+      createFill({
+        tradeId: "1",
+        orderId: "10",
+        clientOrderId: null,
+      }),
+      createFill({
+        tradeId: "2",
+        orderId: "11",
+        clientOrderId: null,
+      }),
+    ],
+    calls,
+  })
+  const originalUpsert = repositories.fillRepository.upsert
+  let failSecondFill = true
+  repositories.fillRepository.upsert = async (input) => {
+    if (failSecondFill && input.fill.tradeId === "2") {
+      throw new Error("simulated second-fill persistence failure")
+    }
+    await originalUpsert(input)
+  }
+  const input = {
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 2,
+    requestDelayMs: 0,
+    now: () => 300,
+  }
+
+  const failed = await synchronizeAccountHistory(input)
+  assert.equal(failed.ok, false, "A failed fill write must fail the current trade-history page.")
+  assert.equal(repositories.cursors.get("BTCUSDT")?.lastTradeId, undefined, "The trade cursor must remain unchanged after a partial page write.")
+  assert.equal(repositories.fills.length, 1, "A successfully written fill may remain available for idempotent replay.")
+
+  failSecondFill = false
+  const retried = await synchronizeAccountHistory(input)
+  assert.equal(retried.ok, true, "A retried trade page must complete after persistence recovers.")
+  assert.deepEqual(calls.fills.map(({ fromId }) => fromId), [0, 0], "The failed trade page must be requested again from its original cursor.")
+  assert.equal(repositories.fills.length, 3, "The repository receives the replayed first fill and the previously failed second fill.")
+  assert.equal(repositories.cursors.get("BTCUSDT").lastTradeId, "2", "The trade cursor may advance only after every fill in the page is persisted.")
 })
 
 test("fails closed when an exchange history cursor does not advance", async () => {
