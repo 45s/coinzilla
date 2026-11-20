@@ -1,7 +1,11 @@
 import { createHash } from "node:crypto"
 import { CanonicalOrder, Fill } from "@coinzilla/entities"
-import { toResult } from "@coinzilla/utils"
+import { ensure, toResult } from "@coinzilla/utils"
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import {
+  RECOVERY_SELLER_ACCOUNTING_ERROR_CODES,
+  RecoverySellerAccountingError,
+} from "../domain/strategies/recovery-seller/recovery-seller-accounting-error.js"
 
 const TERMINAL_ORDER_STATUSES = new Set(["FILLED", "CANCELED", "REJECTED", "EXPIRED"])
 
@@ -16,35 +20,71 @@ function createFactId({ marketId, cycleId, sellOrderClientId, sellOrderBrokerOrd
   return `recovery-seller-mixed-sell-reconciled:${digest}`
 }
 
-function validateTerminalOrder({ terminalOrder }) {
+function createReconciliationInputError({ message, options, cause }) {
+  return new RecoverySellerAccountingError({
+    code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.RECONCILIATION_INVALID,
+    message,
+    context: {
+      marketId: options.terminalOrder?.market?.id ?? null,
+      cycleId: options.ownership?.cycleId ?? null,
+      sellOrderClientId: options.terminalOrder?.clientOrderId ?? null,
+    },
+    cause,
+  })
+}
+
+function validateTerminalOrder({ terminalOrder, options }) {
   if (!(terminalOrder instanceof CanonicalOrder) ||
       !TERMINAL_ORDER_STATUSES.has(terminalOrder.status) ||
       typeof terminalOrder.brokerOrderId !== "string" ||
       !terminalOrder.brokerOrderId.trim()) {
-    throw new TypeError("Recovery Seller mixed-SELL reconciliation requires an acknowledged terminal CanonicalOrder")
+    throw createReconciliationInputError({
+      message: "Recovery Seller mixed-SELL reconciliation requires an acknowledged terminal CanonicalOrder",
+      options,
+    })
   }
 }
 
-function validateRecoverySellerOwnership({ ownership }) {
+function validateRecoverySellerOwnership({ ownership, options }) {
   if (
     ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
     ownership.purpose !== "RECOVERY_SELL" ||
     typeof ownership.cycleId !== "string" || !ownership.cycleId.trim() ||
     typeof ownership.positionId !== "string" || !ownership.positionId.trim()
   ) {
-    throw new TypeError("Recovery Seller mixed-SELL reconciliation requires immutable cycle and Position ownership")
+    throw createReconciliationInputError({
+      message: "Recovery Seller mixed-SELL reconciliation requires immutable cycle and Position ownership",
+      options,
+    })
   }
 }
 
-function validateCommittedAccounting({ accountingApplied, eligible }) {
-  if (accountingApplied !== true || typeof eligible !== "boolean") {
-    throw new TypeError("Recovery Seller mixed-SELL reconciliation requires a committed accounting result and explicit eligibility")
+function validateCommittedAccounting({ accountingApplied, eligible, options }) {
+  if (accountingApplied !== true) {
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.ACCOUNTING_NOT_COMMITTED,
+      message: "Recovery Seller mixed-SELL reconciliation requires a committed accounting result",
+      context: {
+        marketId: options.terminalOrder?.market?.id ?? null,
+        cycleId: options.ownership?.cycleId ?? null,
+        sellOrderClientId: options.terminalOrder?.clientOrderId ?? null,
+      },
+    })
+  }
+  if (typeof eligible !== "boolean") {
+    throw createReconciliationInputError({
+      message: "Recovery Seller mixed-SELL reconciliation requires an explicit eligibility result",
+      options,
+    })
   }
 }
 
-function validateCanonicalSellFills({ canonicalFills, terminalOrder }) {
+function validateCanonicalSellFills({ canonicalFills, terminalOrder, options }) {
   if (!Array.isArray(canonicalFills) || canonicalFills.length === 0) {
-    throw new TypeError("Recovery Seller mixed-SELL reconciliation requires the complete canonical terminal fill set")
+    throw createReconciliationInputError({
+      message: "Recovery Seller mixed-SELL reconciliation requires the complete canonical terminal fill set",
+      options,
+    })
   }
   const fillIds = new Set()
   for (const fill of canonicalFills) {
@@ -54,7 +94,10 @@ function validateCanonicalSellFills({ canonicalFills, terminalOrder }) {
         fill.clientOrderId !== terminalOrder.clientOrderId ||
         fill.brokerOrderId !== terminalOrder.brokerOrderId ||
         fillIds.has(fill.id)) {
-      throw new TypeError("Recovery Seller mixed-SELL reconciliation contains missing, duplicate or foreign canonical fills")
+      throw createReconciliationInputError({
+        message: "Recovery Seller mixed-SELL reconciliation contains missing, duplicate or foreign canonical fills",
+        options,
+      })
     }
     fillIds.add(fill.id)
   }
@@ -70,18 +113,35 @@ function validateReconciliationInput(options) {
     accountingApplied,
     eligible,
   } = options
-  if (typeof operationalStateStore?.append !== "function") {
-    throw new TypeError("Recovery Seller mixed-SELL reconciliation requires durable Operational State Store append")
+  try {
+    ensure.function({
+      value: operationalStateStore?.append,
+      name: "operationalStateStore.append",
+    })
+  } catch (cause) {
+    throw createReconciliationInputError({
+      message: "Recovery Seller mixed-SELL reconciliation requires durable Operational State Store append",
+      options,
+      cause,
+    })
   }
-  validateTerminalOrder({ terminalOrder })
-  validateRecoverySellerOwnership({ ownership })
+  validateTerminalOrder({
+    terminalOrder,
+    options,
+  })
+  validateRecoverySellerOwnership({
+    ownership,
+    options,
+  })
   validateCommittedAccounting({
     accountingApplied,
     eligible,
+    options,
   })
   return validateCanonicalSellFills({
     canonicalFills,
     terminalOrder,
+    options,
   })
 }
 /**
@@ -105,33 +165,64 @@ export async function recordRecoverySellerMixedSellReconciled(options = {}) {
       sellOrderClientId: terminalOrder.clientOrderId,
       sellOrderBrokerOrderId: terminalOrder.brokerOrderId,
     })
-    const result = await operationalStateStore.append({
-      factId,
-      factType: "RECOVERY_SELLER_MIXED_SELL_RECONCILED",
-      data: {
-        cycleId: ownership.cycleId,
-        marketId: market.id,
-        venue: market.venue,
-        symbol: market.symbol,
-        baseAssetId: market.baseAsset.id,
-        quoteAssetId: market.quoteAsset.id,
-        sellOrderClientId: terminalOrder.clientOrderId,
-        sellOrderBrokerOrderId: terminalOrder.brokerOrderId,
-        terminalStatus: terminalOrder.status,
-        appliedFillIds,
-        accountingApplied: true,
-        eligible,
-      },
-    })
+    let result
+    try {
+      result = await operationalStateStore.append({
+        factId,
+        factType: "RECOVERY_SELLER_MIXED_SELL_RECONCILED",
+        data: {
+          cycleId: ownership.cycleId,
+          marketId: market.id,
+          venue: market.venue,
+          symbol: market.symbol,
+          baseAssetId: market.baseAsset.id,
+          quoteAssetId: market.quoteAsset.id,
+          sellOrderClientId: terminalOrder.clientOrderId,
+          sellOrderBrokerOrderId: terminalOrder.brokerOrderId,
+          terminalStatus: terminalOrder.status,
+          appliedFillIds,
+          accountingApplied: true,
+          eligible,
+        },
+      })
+    } catch (cause) {
+      throw new RecoverySellerAccountingError({
+        code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.DURABLE_FACT_COMMIT_FAILED,
+        message: "Recovery Seller mixed-SELL reconciliation fact append failed",
+        context: {
+          marketId: market.id,
+          cycleId: ownership.cycleId,
+          sellOrderClientId: terminalOrder.clientOrderId,
+        },
+        cause,
+      })
+    }
     if (result?.ok !== true || result.data?.durable !== true) {
-      return toResult({
-        errors: result?.errors?.length
-          ? result.errors
-          : [new Error("Recovery Seller mixed-SELL reconciliation fact append was not durably confirmed")],
+      throw new RecoverySellerAccountingError({
+        code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.DURABLE_FACT_COMMIT_FAILED,
+        message: "Recovery Seller mixed-SELL reconciliation fact append was not durably confirmed",
+        context: {
+          marketId: market.id,
+          cycleId: ownership.cycleId,
+          sellOrderClientId: terminalOrder.clientOrderId,
+        },
+        cause: result?.errors?.[0],
       })
     }
     return result
   } catch (error) {
-    return toResult({ error })
+    const typedError = error instanceof RecoverySellerAccountingError
+      ? error
+      : new RecoverySellerAccountingError({
+        code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.DURABLE_FACT_COMMIT_FAILED,
+        message: "Recovery Seller mixed-SELL reconciliation fact could not be recorded",
+        context: {
+          marketId: options.terminalOrder?.market?.id ?? null,
+          cycleId: options.ownership?.cycleId ?? null,
+          sellOrderClientId: options.terminalOrder?.clientOrderId ?? null,
+        },
+        cause: error,
+      })
+    return toResult({ error: typedError })
   }
 }

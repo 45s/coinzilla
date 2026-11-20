@@ -353,18 +353,48 @@ async function persistTerminalMixedSellAccountingBoundary({
   eligible,
 }) {
   if (typeof callback !== "function") {
-    throw new Error("Recovery Seller terminal mixed-SELL accounting requires a durable reconciliation callback")
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.DURABLE_FACT_REQUIRED,
+      message: "Recovery Seller terminal mixed-SELL accounting requires a durable reconciliation callback",
+      context: {
+        marketId: terminalOrder.market.id,
+        cycleId: ownership.cycleId,
+        sellOrderClientId: terminalOrder.clientOrderId,
+      },
+    })
   }
-  const result = await callback({
-    terminalOrder,
-    ownership,
-    canonicalFills,
-    accountingApplied: true,
-    eligible,
-  })
+  let result
+  try {
+    result = await callback({
+      terminalOrder,
+      ownership,
+      canonicalFills,
+      accountingApplied: true,
+      eligible,
+    })
+  } catch (cause) {
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.DURABLE_FACT_COMMIT_FAILED,
+      message: "Recovery Seller terminal mixed-SELL reconciliation fact append failed",
+      context: {
+        marketId: terminalOrder.market.id,
+        cycleId: ownership.cycleId,
+        sellOrderClientId: terminalOrder.clientOrderId,
+      },
+      cause,
+    })
+  }
   if (result?.ok !== true || result.data?.durable !== true) {
-    throw result?.errors?.[0] ??
-      new Error("Recovery Seller terminal mixed-SELL reconciliation fact was not durably committed")
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.DURABLE_FACT_COMMIT_FAILED,
+      message: "Recovery Seller terminal mixed-SELL reconciliation fact was not durably committed",
+      context: {
+        marketId: terminalOrder.market.id,
+        cycleId: ownership.cycleId,
+        sellOrderClientId: terminalOrder.clientOrderId,
+      },
+      cause: result?.errors?.[0],
+    })
   }
 }
 
@@ -421,7 +451,15 @@ function resolveDuplicateTerminalMixedSellAccounting({
     priorOutcome?.sellOrderBrokerOrderId === terminalRegisteredOrder.brokerOrderId &&
     JSON.stringify(priorFillIds) === JSON.stringify(replayFillIds)
   if (!sameCommittedBoundary) {
-    throw new Error("Recovery Seller duplicate terminal accounting does not match the committed cycle/order/fill boundary")
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.DUPLICATE_TERMINAL_BOUNDARY_CONFLICT,
+      message: "Recovery Seller duplicate terminal accounting does not match the committed cycle/order/fill boundary",
+      context: {
+        marketId: terminalRegisteredOrder.market.id,
+        cycleId: ownership.cycleId,
+        sellOrderClientId: terminalRegisteredOrder.clientOrderId,
+      },
+    })
   }
   return Object.freeze({
     ...result.accounting,
@@ -467,7 +505,15 @@ async function reconcileTerminalMixedSellTransition({
     return duplicateResult
   }
   if (result.accounting.applied !== true) {
-    throw new Error("Recovery Seller terminal mixed-SELL accounting did not commit; the sole-SELL reservation remains active")
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.ACCOUNTING_NOT_COMMITTED,
+      message: "Recovery Seller terminal mixed-SELL accounting did not commit; the sole-SELL reservation remains active",
+      context: {
+        marketId: terminalRegisteredOrder.market.id,
+        cycleId: ownership.cycleId,
+        sellOrderClientId: terminalRegisteredOrder.clientOrderId,
+      },
+    })
   }
   const eligible = result.profitability?.eligible === true
   await persistTerminalMixedSellAccountingBoundary({

@@ -1,4 +1,8 @@
 import { toResult } from "@coinzilla/utils"
+import {
+  RECOVERY_SELLER_ACCOUNTING_ERROR_CODES,
+  RecoverySellerAccountingError,
+} from "../../domain/strategies/recovery-seller/recovery-seller-accounting-error.js"
 import { projectHarvesterJournalRecovery } from "../journal/project-harvester-journal-recovery.js"
 
 const EVENT = Object.freeze({
@@ -735,7 +739,15 @@ function assertRecoverySellerReconciledSellOrder({ data, state }) {
     ownedOrder,
     state,
   })) {
-    throw new Error("Recovery Seller mixed-SELL reconciliation does not match one acknowledged terminal owned SELL order")
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.RECONCILIATION_INVALID,
+      message: "Recovery Seller mixed-SELL reconciliation does not match one acknowledged terminal owned SELL order",
+      context: {
+        marketId: data.marketId,
+        cycleId: data.cycleId,
+        sellOrderClientId: data.sellOrderClientId,
+      },
+    })
   }
   return { ownedOrder }
 }
@@ -752,7 +764,15 @@ function assertRecoverySellerReconciledFillSet({ data, state }) {
     expectedFillIds.length === 0 ||
     JSON.stringify(expectedFillIds) !== JSON.stringify(appliedFillIds)
   ) {
-    throw new Error("Recovery Seller mixed-SELL reconciliation does not match the exact canonical SELL fill set")
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.RECONCILIATION_INVALID,
+      message: "Recovery Seller mixed-SELL reconciliation does not match the exact canonical SELL fill set",
+      context: {
+        marketId: data.marketId,
+        cycleId: data.cycleId,
+        sellOrderClientId: data.sellOrderClientId,
+      },
+    })
   }
 }
 
