@@ -112,11 +112,11 @@ volume })
 /**
  * Normalize one Binance WebSocket API klines row.
  *
- * @param {{row: unknown, symbol: string, interval: string, now?: number}} options
+ * @param {{row: unknown, symbol: string, interval: string, now: number}} options
  * @returns {NormalizedCandle}
  * @throws {TypeError|RangeError} If the row, timestamps, prices or volume are invalid.
  */
-export function adaptKlineHistoryRow({ row, symbol, interval, now = Date.now() } = {}) {
+export function adaptKlineHistoryRow({ row, symbol, interval, now } = {}) {
   const normalized = normalizeSymbolAndInterval({ symbol,
 interval })
   if (!Array.isArray(row) || row.length !== 12) {
