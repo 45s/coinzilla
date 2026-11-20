@@ -343,6 +343,7 @@ function replayPortfolioEvents({ events, marketMetadata }) {
     trailingBuySequenceBySymbol: new Map(),
     completedCycleSequenceBySymbol: new Map(),
     recoverySellerBuyExecutionByCycle: new Map(),
+  }
   for (const event of events) {
     const { value: item, sequence, type } = event
     const market = requireMarket({ marketMetadata, 
