@@ -35,6 +35,13 @@ export function createBackupFilename({
   createdAt,
   backupId,
 } = {}) {
+  if (environment !== "testnet" && environment !== "live") {
+    throw createBackupError({
+      stage: "backup-name-validation",
+      code: "HARVESTER_HISTORY_BACKUP_INVALID_ENVIRONMENT",
+      environment,
+    })
+  }
   if (!(createdAt instanceof Date) || !Number.isFinite(createdAt.getTime())) {
     throw createBackupError({
       stage: "backup-name-validation",
@@ -87,6 +94,7 @@ export async function ensurePrivateDirectory({ directory, environment } = {}) {
     if (cause.code !== "EEXIST") {
       throw createBackupError({
         stage: "backup-directory-creation",
+        code: "HARVESTER_HISTORY_BACKUP_FAILED",
         cause,
         environment,
       })

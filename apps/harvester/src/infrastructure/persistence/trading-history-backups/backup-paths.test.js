@@ -60,6 +60,15 @@ test("builds a UTC timestamped environment-specific filename and rejects invalid
   assert.throws(
     () => createBackupFilename({
       backupDirectory: "/data/backups/testnet",
+      environment: "unknown",
+      createdAt: new Date("2026-11-20T04:15:30.000Z"),
+      backupId: BACKUP_ID,
+    }),
+    (error) => error.code === "HARVESTER_HISTORY_BACKUP_INVALID_ENVIRONMENT",
+  )
+  assert.throws(
+    () => createBackupFilename({
+      backupDirectory: "/data/backups/testnet",
       environment: "testnet",
       createdAt: new Date("2026-11-20T04:15:30.000Z"),
       backupId: "../overwrite",

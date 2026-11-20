@@ -103,3 +103,17 @@ test("rejects malformed manifest metadata", async (t) => {
     (error) => error.code === "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
   )
 })
+
+test("rejects a manifest request without an explicit supported environment", async (t) => {
+  const fixture = await createManifestFixture({
+    testContext: t,
+  })
+  await assert.rejects(
+    readAndValidateManifest({
+      backupFilename: fixture.backupFilename,
+      backupDirectory: fixture.directory,
+      environment: "production",
+    }),
+    (error) => error.code === "HARVESTER_HISTORY_BACKUP_INVALID_ENVIRONMENT",
+  )
+})

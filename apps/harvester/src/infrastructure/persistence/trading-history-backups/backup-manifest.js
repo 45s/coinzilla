@@ -80,6 +80,7 @@ export function createBackupManifest({
   schemaVersion,
   sha256,
 } = {}) {
+  assertValidEnvironment(environment)
   const createdAtValue = createdAt instanceof Date && Number.isFinite(createdAt.getTime())
     ? createdAt.toISOString()
     : null
@@ -107,11 +108,22 @@ export async function calculateSha256(filename) {
   return hash.digest("hex")
 }
 
+function assertValidEnvironment(environment) {
+  if (environment !== "testnet" && environment !== "live") {
+    throw createBackupError({
+      stage: "manifest-environment-validation",
+      code: "HARVESTER_HISTORY_BACKUP_INVALID_ENVIRONMENT",
+      environment,
+    })
+  }
+}
+
 async function resolveManifestPaths({
   backupFilename,
   backupDirectory,
   environment,
 } = {}) {
+  assertValidEnvironment(environment)
   if (typeof backupFilename !== "string" || typeof backupDirectory !== "string") {
     throw createBackupError({
       stage: "manifest-input-validation",
