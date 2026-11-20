@@ -163,9 +163,21 @@ orderId: 698704 })
 
 test("returns the full bounded lower-bound page when pagination is explicitly requested", async () => {
   const orders = [
-    { ...rawOrder, orderId: 698704, clientOrderId: "client-698704" },
-    { ...rawOrder, orderId: 698745, clientOrderId: "client-698745" },
-    { ...rawOrder, orderId: 698746, clientOrderId: "client-698746" },
+    {
+      ...rawOrder,
+      orderId: 698704,
+      clientOrderId: "client-698704",
+    },
+    {
+      ...rawOrder,
+      orderId: 698745,
+      clientOrderId: "client-698745",
+    },
+    {
+      ...rawOrder,
+      orderId: 698746,
+      clientOrderId: "client-698746",
+    },
   ]
   const broker = createBroker({
     allOrders(params) {
