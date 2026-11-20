@@ -215,7 +215,7 @@ async function fetchOrderHistoryForMarket({
     environment,
     symbol,
   })
-  const storedOrderId = cursor.lastOrderId === null
+  const storedOrderId = cursor.lastOrderId === null || cursor.lastOrderId === undefined
     ? -1
     : requireNumericCursor({
         value: cursor.lastOrderId,
@@ -431,7 +431,7 @@ async function fetchFillHistoryForMarket({
     environment,
     symbol,
   })
-  let lastTradeId = cursor.lastTradeId === null
+  let lastTradeId = cursor.lastTradeId === null || cursor.lastTradeId === undefined
     ? -1
     : requireNumericCursor({
         value: cursor.lastTradeId,
