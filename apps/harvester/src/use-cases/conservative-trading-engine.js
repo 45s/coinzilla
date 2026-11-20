@@ -1889,20 +1889,28 @@ function createConservativeEngineRecoverySubmissionContext({ context } = {}) {
   })
 }
 
+function createEngineRecoverySellerActionAuthorizer({ context, dependencies } = {}) {
+  if (Object.keys(dependencies.recoverySellerPairs ?? {}).length === 0) {
+    return undefined
+  }
+  return createRecoverySellerActionAuthorizer({
+    state: context.state,
+    recoverySellerPairs: dependencies.recoverySellerPairs,
+    recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+    getPortfolio: dependencies.getPortfolio,
+    getAccountSnapshot: dependencies.getAccountSnapshot,
+    getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
+    allocateOrderCommitments,
+  })
+}
+
 function createConservativeEngineEvaluationContext({ context } = {}) {
   const { dependencies } = context
-  const authorizeRecoverySellerAction = Object.keys(dependencies.recoverySellerPairs ?? {}).length > 0
-    ? createRecoverySellerActionAuthorizer({
-      state: context.state,
-      recoverySellerPairs: dependencies.recoverySellerPairs,
-      recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
-      getPortfolio: dependencies.getPortfolio,
-      getAccountSnapshot: dependencies.getAccountSnapshot,
-      getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
-      getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
-      allocateOrderCommitments,
-    })
-    : undefined
+  const authorizeRecoverySellerAction = createEngineRecoverySellerActionAuthorizer({
+    context,
+    dependencies,
+  })
   context.evaluateLatestTransition = createLatestTransitionEvaluator({
     state: context.state,
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,

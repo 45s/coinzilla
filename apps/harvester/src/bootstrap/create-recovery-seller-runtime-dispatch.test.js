@@ -4,13 +4,29 @@ import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createRecoverySellerRuntimeDispatch } from "./create-recovery-seller-runtime-dispatch.js"
 
 const symbol = "ZROUSDT"
-const marketPrice = Object.freeze({ symbol, price: "12.3" })
-const marketMetadata = Object.freeze({ market: Object.freeze({ symbol }) })
+const marketPrice = Object.freeze({
+  symbol,
+  price: "12.3",
+})
+const marketMetadata = Object.freeze({
+  market: Object.freeze({ symbol }),
+})
 const pairConfig = Object.freeze({})
-const accountSnapshot = Object.freeze({ balances: Object.freeze([]) })
-const stopState = Object.freeze({ status: "RUNNING", decision: null })
+const accountSnapshot = Object.freeze({
+  balances: Object.freeze([]),
+})
+const stopState = Object.freeze({
+  status: "RUNNING",
+  decision: null,
+})
 
-function createDispatch({ evaluateBuyDecision, onSubmit = async () => ({ ok: true, data: { submitted: false } }) } = {}) {
+function createDispatch({
+  evaluateBuyDecision,
+  onSubmit = async () => ({
+    ok: true,
+    data: { submitted: false },
+  }),
+} = {}) {
   let snapshotInput
   let submissionInput
   let latchCount = 0
@@ -19,7 +35,11 @@ function createDispatch({ evaluateBuyDecision, onSubmit = async () => ({ ok: tru
       getTransitionSnapshot: (input) => {
         snapshotInput = input
         return Object.freeze({
-          cycleState: Object.freeze({ cycleId: "rs-cycle-1", positionId: "rs-position-1", status: "ACCUMULATING" }),
+          cycleState: Object.freeze({
+            cycleId: "rs-cycle-1",
+            positionId: "rs-position-1",
+            status: "ACCUMULATING",
+          }),
           recoveryPosition: undefined,
           planInput: Object.freeze({
             recoveryQuantity: "0",
@@ -45,10 +65,15 @@ function createDispatch({ evaluateBuyDecision, onSubmit = async () => ({ ok: tru
       getState: async () => stopState,
       latch: async () => {
         latchCount += 1
-        return { ok: true, data: { durable: true } }
+        return {
+          ok: true,
+          data: { durable: true },
+        }
       },
     },
-    recoverySellerPairs: { [symbol]: pairConfig },
+    recoverySellerPairs: {
+      [symbol]: pairConfig,
+    },
     getRecoverySellerMarketMetadata: async () => marketMetadata,
     getAccountSnapshot: async () => accountSnapshot,
     evaluateBuyDecision,
@@ -80,7 +105,11 @@ function createDispatch({ evaluateBuyDecision, onSubmit = async () => ({ ok: tru
 test("composes runtime dependencies and returns the shared result contract", async () => {
   const runtime = createDispatch({
     evaluateBuyDecision: () => ({
-      decision: Object.freeze({ outcome: "WAIT", reasonCode: "TEST_WAIT", explanation: "No order is eligible." }),
+      decision: Object.freeze({
+        outcome: "WAIT",
+        reasonCode: "TEST_WAIT",
+        explanation: "No order is eligible.",
+      }),
     }),
   })
   const result = await runtime.dispatch()
@@ -97,7 +126,11 @@ test("composes runtime dependencies and returns the shared result contract", asy
 test("routes eligible RS actions through the engine-owned submitter with immutable ownership", async () => {
   const runtime = createDispatch({
     evaluateBuyDecision: () => ({
-      decision: Object.freeze({ outcome: "SUBMIT", reasonCode: "TEST_SUBMIT", explanation: "Test-only order." }),
+      decision: Object.freeze({
+        outcome: "SUBMIT",
+        reasonCode: "TEST_SUBMIT",
+        explanation: "Test-only order.",
+      }),
       action: Object.freeze({
         side: "BUY",
         purpose: "RECOVERY_BUY",
@@ -107,10 +140,16 @@ test("routes eligible RS actions through the engine-owned submitter with immutab
         price: "10",
       }),
     }),
-    onSubmit: async () => ({ ok: true, data: { submitted: true } }),
+    onSubmit: async () => ({
+      ok: true,
+      data: { submitted: true },
+    }),
   })
   const result = await runtime.dispatch({
-    authorizeRecoverySellerAction: async () => ({ ok: true, data: { allowed: true } }),
+    authorizeRecoverySellerAction: async () => ({
+      ok: true,
+      data: { allowed: true },
+    }),
   })
   const submission = runtime.getSubmissionInput()
 
@@ -123,7 +162,11 @@ test("routes eligible RS actions through the engine-owned submitter with immutab
 test("latches STOP and withholds an RS order when the shared reservation allocator is missing", async () => {
   const runtime = createDispatch({
     evaluateBuyDecision: () => ({
-      decision: Object.freeze({ outcome: "SUBMIT", reasonCode: "TEST_SUBMIT", explanation: "Test-only order." }),
+      decision: Object.freeze({
+        outcome: "SUBMIT",
+        reasonCode: "TEST_SUBMIT",
+        explanation: "Test-only order.",
+      }),
       action: Object.freeze({
         side: "BUY",
         purpose: "RECOVERY_BUY",

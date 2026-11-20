@@ -483,6 +483,27 @@ async function createHarvesterStartupContext({ options } = {}) {
   }
 }
 
+function configureRecoverySellerRuntimeDispatch({
+  startup,
+  context,
+  recoverySellerWorkflow,
+} = {}) {
+  if (Object.keys(startup.recoverySellerPairs ?? {}).length === 0) {
+    return
+  }
+  startup.evaluateRecoverySellerTransition ??= createRecoverySellerRuntimeDispatch({
+    recoverySellerWorkflow,
+    recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
+    recoverySellerPairs: startup.recoverySellerPairs,
+    getRecoverySellerMarketMetadata: context.getRecoverySellerMarketMetadata,
+    getAccountSnapshot: context.getAccountSnapshot,
+  })
+  assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs: startup.recoverySellerPairs,
+    evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
+  })
+}
+
 function createHarvesterPortfolioContext({ startup } = {}) {
   const providerIdentity = startup.providerIdentity ?? resolveBinanceProviderIdentity({
     tradingMode: startup.tradingMode,
@@ -532,19 +553,11 @@ reason: "TRADING_ENGINE_NOT_READY" } })
   context.completeRecoveryCycle = (...args) => context.portfolioWorkflow.completeRecoveryCycle(...args)
   context.getMarketMetadata = ({ symbol } = {}) => context.marketMetadata.get(symbol)
   context.getAccountSnapshot = () => startup.accountSnapshotManagerRef.current?.getAccountSnapshot()
-  if (Object.keys(startup.recoverySellerPairs ?? {}).length > 0) {
-    startup.evaluateRecoverySellerTransition ??= createRecoverySellerRuntimeDispatch({
-      recoverySellerWorkflow,
-      recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
-      recoverySellerPairs: startup.recoverySellerPairs,
-      getRecoverySellerMarketMetadata: context.getRecoverySellerMarketMetadata,
-      getAccountSnapshot: context.getAccountSnapshot,
-    })
-    assertRecoverySellerEvaluatorConfigured({
-      recoverySellerPairs: startup.recoverySellerPairs,
-      evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
-    })
-  }
+  configureRecoverySellerRuntimeDispatch({
+    startup,
+    context,
+    recoverySellerWorkflow,
+  })
   return context
 }
 

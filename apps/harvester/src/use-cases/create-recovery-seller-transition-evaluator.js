@@ -219,6 +219,69 @@ async function submitAuthorizedAction({
   })
 }
 
+async function evaluateRecoverySellerSellTransition({
+  input,
+  snapshot,
+  submitOrder,
+  authorizeAction,
+  evaluateSellDecision,
+}) {
+  const sellDecision = evaluateSell({
+    evaluateSellDecision,
+    snapshot,
+    input,
+  })
+  if (sellDecision.stopState?.status === "STOPPED" ||
+      sellDecision.decision?.outcome !== "SUBMIT") {
+    return sellDecision
+  }
+  const action = createSellAction({
+    sellDecision,
+    snapshot,
+    marketPrice: input.marketPrice,
+    marketMetadata: input.marketMetadata,
+  })
+  if (!action) {
+    return undefined
+  }
+  return submitAuthorizedAction({
+    authorizeAction,
+    submitOrder,
+    action,
+    lifecycleDecision: sellDecision.decision,
+    snapshot,
+    input,
+  })
+}
+
+async function evaluateRecoverySellerBuyTransition({
+  input,
+  snapshot,
+  submitOrder,
+  authorizeAction,
+  evaluateBuyDecision,
+}) {
+  const buyDecision = evaluateBuy({
+    evaluateBuyDecision,
+    snapshot,
+    input,
+  })
+  const action = createBuyAction({
+    buyDecision,
+  })
+  if (!action) {
+    return buyDecision
+  }
+  return submitAuthorizedAction({
+    authorizeAction,
+    submitOrder,
+    action,
+    lifecycleDecision: buyDecision.decision,
+    snapshot,
+    input,
+  })
+}
+
 async function evaluateRecoverySellerTransition({
   input,
   getSnapshot,
@@ -231,51 +294,23 @@ async function evaluateRecoverySellerTransition({
     validateTransitionInput(input)
     const snapshot = validateSnapshot(await getSnapshot(input))
     if (canEvaluateSell({ snapshot })) {
-      const sellDecision = evaluateSell({
-        evaluateSellDecision,
-        snapshot,
+      const sellResult = await evaluateRecoverySellerSellTransition({
         input,
-      })
-      if (sellDecision.stopState?.status === "STOPPED" ||
-          sellDecision.decision?.outcome !== "SUBMIT") {
-        return sellDecision
-      }
-      const action = createSellAction({
-        sellDecision,
         snapshot,
-        marketPrice: input.marketPrice,
-        marketMetadata: input.marketMetadata,
+        submitOrder,
+        authorizeAction,
+        evaluateSellDecision,
       })
-      if (action) {
-        return submitAuthorizedAction({
-          authorizeAction,
-          submitOrder,
-          action,
-          lifecycleDecision: sellDecision.decision,
-          snapshot,
-          input,
-        })
+      if (sellResult !== undefined) {
+        return sellResult
       }
     }
-
-    const buyDecision = evaluateBuy({
-      evaluateBuyDecision,
-      snapshot,
+    return evaluateRecoverySellerBuyTransition({
       input,
-    })
-    const action = createBuyAction({
-      buyDecision,
-    })
-    if (!action) {
-      return buyDecision
-    }
-    return submitAuthorizedAction({
-      authorizeAction,
+      snapshot,
       submitOrder,
-      action,
-      lifecycleDecision: buyDecision.decision,
-      snapshot,
-      input,
+      authorizeAction,
+      evaluateBuyDecision,
     })
   } catch (error) {
     return toResult({

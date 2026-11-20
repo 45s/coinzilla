@@ -92,6 +92,20 @@ function createRecoverySellerAllocationInput({ dependencies, action, snapshot, i
   }
 }
 
+function isExactExecutableRecoverySellerAction({ decision, action } = {}) {
+  return decision?.executableActions?.length === 1 &&
+    decision.executableActions[0] === action &&
+    decision.deferredActions?.length === 0
+}
+
+function getDeferredRecoverySellerReason({ decision } = {}) {
+  if (decision?.executableActions?.length !== 0 ||
+      decision.deferredActions?.length !== 1) {
+    return undefined
+  }
+  return decision.deferredActions[0].reason
+}
+
 function resolveRecoverySellerAllocation({ allocation, action } = {}) {
   if (allocation?.ok !== true) {
     return {
@@ -100,17 +114,17 @@ function resolveRecoverySellerAllocation({ allocation, action } = {}) {
     }
   }
   const decision = allocation.data?.allocation
-  if (decision?.executableActions?.length === 1 &&
-      decision.executableActions[0] === action &&
-      decision.deferredActions?.length === 0) {
-    return { allowed: true }
+  if (isExactExecutableRecoverySellerAction({ decision, action })) {
+    return {
+      allowed: true,
+    }
   }
-  if (decision?.executableActions?.length === 0 &&
-      decision.deferredActions?.length === 1) {
+  const deferredReason = getDeferredRecoverySellerReason({ decision })
+  if (deferredReason) {
     return {
       allowed: false,
       skipped: true,
-      reason: decision.deferredActions[0].reason,
+      reason: deferredReason,
     }
   }
   return {
@@ -136,7 +150,9 @@ async function authorizeRecoverySellerAction({ dependencies, action, snapshot, i
         error: resolved.error,
       })
     }
-    return toResult({ data: resolved })
+    return toResult({
+      data: resolved,
+    })
   } catch (error) {
     return latchAllocationFailure({
       recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
@@ -148,7 +164,6 @@ async function authorizeRecoverySellerAction({ dependencies, action, snapshot, i
 
 export function createRecoverySellerActionAuthorizer(dependencies = {}) {
   const {
-    state,
     recoverySellerPairs,
     recoverySellerStopWorkflow,
     getPortfolio,

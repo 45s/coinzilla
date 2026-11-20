@@ -55,12 +55,19 @@ function createAuthorizer({ quoteBalance = "100", accountSnapshot } = {}) {
   const recoverySellerStopWorkflow = {
     latch: async () => {
       latchCount += 1
-      return { ok: true, data: { durable: true } }
+      return {
+        ok: true,
+        data: { durable: true },
+      }
     },
   }
   const authorize = createRecoverySellerActionAuthorizer({
     state,
-    recoverySellerPairs: { [symbol]: { investment: 100 } },
+    recoverySellerPairs: {
+      [symbol]: {
+        investment: 100,
+      },
+    },
     recoverySellerStopWorkflow,
     getPortfolio: () => portfolio,
     getAccountSnapshot: () => currentSnapshot,
