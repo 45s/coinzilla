@@ -29,7 +29,7 @@ test("discovers production helper modules and colocated tests", () => {
     const sources = findHelperSources(root)
 
     assert.deepEqual(
-      sources.map(({ file, hasTest }) => ({ file, hasTest })),
+      sources.map(({ file, hasTest }) => ({\n        file,\n        hasTest,\n      })),
       [
         {
           file: join(directory, "normalize.js"),
