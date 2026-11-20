@@ -62,7 +62,10 @@ export function createHarvesterOperator({
           },
         }
       } catch (error) {
-        return { ok: false, errors: [error] }
+        return {
+          ok: false,
+          errors: [error],
+        }
       }
     }
   }
