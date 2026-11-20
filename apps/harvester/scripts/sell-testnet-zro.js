@@ -8,7 +8,7 @@ import {
   getAccountBalances,
   getOpenOrders,
 } from "./binance-testnet-api.js"
-import { getMarketSellQuantity } from "./testnet-sell-utils.js"
+import { getMarketSellQuantity } from "./calculate-testnet-market-sell-quantity.js"
 
 const cliConsole = new Console({
   stdout: process.stdout,
@@ -77,8 +77,10 @@ const assertNoOpenOrders = async () => {
 }
 
 const askForConfirmation = async () => {
-  const readline = createInterface({ input: stdin,
-output: stdout })
+  const readline = createInterface({
+    input: stdin,
+    output: stdout,
+  })
 
   try {
     const answer = await readline.question(
@@ -91,24 +93,28 @@ output: stdout })
   }
 }
 
-const main = async () => {
-  cliConsole.log("\nBinance Spot TESTNET — Sell All Free ZRO at Market\n")
-
-  await assertNoOpenOrders()
-
+const createSellPreview = async () => {
   const [{ balances }, { symbolInfo }] = await Promise.all([
     getAccountBalances(),
     getSymbolInfo(),
   ])
-
   const freeBalance = getFreeZroBalance({ balances })
   const { quantity, stepSize } = getMarketSellQuantity({
     freeBalance,
     symbolInfo,
   })
 
+  return {
+    freeBalance,
+    symbolInfo,
+    quantity,
+    stepSize,
+  }
+}
+
+const renderSellPreview = ({ freeBalance, quantity, stepSize }) => {
   cliConsole.log("========== MARKET SELL PREVIEW ==========")
-  cliConsole.log(`Environment:  Binance Spot TESTNET`)
+  cliConsole.log("Environment:  Binance Spot TESTNET")
   cliConsole.log(`Symbol:       ${SYMBOL}`)
   cliConsole.log("Side:         SELL")
   cliConsole.log("Order type:   MARKET")
@@ -118,22 +124,13 @@ const main = async () => {
   cliConsole.log("=========================================")
   cliConsole.log("\nOnly free ZRO is included. Locked ZRO is not sold.")
   cliConsole.log("A market order does not guarantee a specific execution price.")
+}
 
-  const confirmed = await askForConfirmation()
-
-  if (!confirmed) {
-    cliConsole.log("\nConfirmation did not match. No order was placed.")
-    return
-  }
-
-  // Re-read the account immediately before submission. Never silently sell a
-  // different amount from the one the operator explicitly confirmed.
+const assertSellPreviewStillCurrent = async ({ symbolInfo, quantity }) => {
   await assertNoOpenOrders()
 
-  const { balances: refreshedBalances } = await getAccountBalances()
-  const refreshedFreeBalance = getFreeZroBalance({
-    balances: refreshedBalances,
-  })
+  const { balances } = await getAccountBalances()
+  const refreshedFreeBalance = getFreeZroBalance({ balances })
   const refreshed = getMarketSellQuantity({
     freeBalance: refreshedFreeBalance,
     symbolInfo,
@@ -144,9 +141,9 @@ const main = async () => {
       `Free ZRO balance changed after confirmation (preview: ${quantity}, current: ${refreshed.quantity}). Nothing was sold; run the preview again.`,
     )
   }
+}
 
-  cliConsole.log("\nSubmitting MARKET SELL...")
-
+const submitMarketSell = async ({ quantity }) => {
   const { data: order } = await binanceTestnetRequest({
     method: "POST",
     path: "/api/v3/order",
@@ -159,6 +156,10 @@ const main = async () => {
     },
   })
 
+  return order
+}
+
+const renderSellResult = ({ order, quantity }) => {
   cliConsole.log("\n========== MARKET SELL RESULT ==========")
   cliConsole.log(`Order ID:          ${order.orderId}`)
   cliConsole.log(`Status:            ${order.status}`)
@@ -177,6 +178,34 @@ const main = async () => {
     )
   }
   cliConsole.log("========================================")
+}
+
+const main = async () => {
+  cliConsole.log("\nBinance Spot TESTNET — Sell All Free ZRO at Market\n")
+  await assertNoOpenOrders()
+
+  const preview = await createSellPreview()
+  renderSellPreview(preview)
+
+  const confirmed = await askForConfirmation()
+  if (!confirmed) {
+    cliConsole.log("\nConfirmation did not match. No order was placed.")
+    return
+  }
+
+  // Re-read the account immediately before submission. Never silently sell a
+  // different amount from the one the operator explicitly confirmed.
+  await assertSellPreviewStillCurrent({
+    symbolInfo: preview.symbolInfo,
+    quantity: preview.quantity,
+  })
+
+  cliConsole.log("\nSubmitting MARKET SELL...")
+  const order = await submitMarketSell({ quantity: preview.quantity })
+  renderSellResult({
+    order,
+    quantity: preview.quantity,
+  })
 }
 
 main().catch((error) => {

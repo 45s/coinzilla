@@ -1,4 +1,4 @@
-import { reconcileJournalAccountSnapshotRecords } from "./account-snapshot-journal-utils.js"
+import { reconcileJournalAccountSnapshotRecords } from "./reconcile-journal-account-snapshot-records.js"
 import { readHarvesterJournalHistory } from "../src/infrastructure/journal/read-harvester-journal-history.js"
 
 const directory = process.argv[2] ?? process.env.HARVESTER_JOURNAL_DIRECTORY ?? "logs"

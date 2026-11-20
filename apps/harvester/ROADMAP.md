@@ -1,6 +1,12 @@
 # Harvester Roadmap
 
-> **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
+## Repository-wide source naming audit — Harvester slice (#1582)
+
+- **Implemented in PR #1605:** eight private module filenames now describe their responsibilities: Conservative `state-predicates.js`; six script modules for journal reconciliation, account balances, menu inputs, order-history inputs, market-sell quantity, and trade-history inputs; and bootstrap `harvester-runtime-setup.js`. All consumers, colocated tests, and current documentation references are updated.
+- **Behavior and safety:** private paths and test names only, plus internal decomposition of validation and menu navigation routines. Function contracts, strategy decisions, accounting, order lifecycle, configuration, and TESTNET CLI order flow are preserved. No exchange/account operations.
+- **Test-first evidence:** the new module tests were added before source renames and produced the expected missing-module failures. Menu navigation tests cover Ctrl+C/Escape/Q exit, wrapped up/down movement, Enter selection, and unrelated keys.
+- **Verification checkpoint:** Harvester unit tests and configured regression tests pass. Workspace unit tests and coverage, full-workspace ESLint, strict changed-file ESLint, actionlint, external documentation links, helper policy, and the repository-wide production module filename scan pass. The final maintained-Markdown gate identified a repeated blank line in this roadmap; it is corrected in the latest commit and awaits exact-head rerun.
+- **Large-module follow-up:** the 523-line runtime setup module remains a cohesive bootstrap composition boundary with one consumer. A separate focused refactor should split user-data state, candle-history service, trading-engine composition, and operational-state callbacks without fragmenting shared-state behavior.
 
 ## TOP HARVESTER PRIORITY — Multi-provider execution and market-data routing (#1339)
 
@@ -834,8 +840,9 @@ This section is the current operational status and supersedes older statements b
 ## Conservative domain rule extraction — PR #653
 
 The Conservative policy now delegates its core state predicates to
-`src/domain/strategies/conservative/helpers.js`. Each predicate has
-a focused deterministic unit test in `helpers.test.js`; the policy
+`src/domain/strategies/conservative/state-predicates.js` (renamed from
+`helpers.js` in PR #1600). Each predicate has a focused deterministic unit
+test in `state-predicates.test.js` (renamed from `helpers.test.js` in PR #1600); the policy
 continues to own intent calculation and order economics, while the trading
 engine continues to own broker lifecycle and I/O.
 

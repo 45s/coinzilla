@@ -3,7 +3,7 @@ import { getMyTrades } from "./binance-testnet-api.js"
 import {
   normalizeTradeHistory,
   parseTradeHistoryArguments,
-} from "./testnet-trade-history-utils.js"
+} from "./testnet-trade-history-inputs.js"
 
 const cliConsole = new Console({
   stdout: process.stdout,

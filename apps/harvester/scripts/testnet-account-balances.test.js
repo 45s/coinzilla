@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { getNonZeroBalances, normalizeAccountBalances } from "./testnet-balance-utils.js"
+import { getNonZeroBalances, normalizeAccountBalances } from "./testnet-account-balances.js"
 
 test("getNonZeroBalances returns only assets with free or locked funds", () => {
   const { balances } = getNonZeroBalances({
