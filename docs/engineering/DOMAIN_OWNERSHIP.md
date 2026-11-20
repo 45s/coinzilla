@@ -86,7 +86,6 @@ import { getUserDataEventIdentity } from "./broker-websocket/helpers/user-data-e
 
 Test files may deliberately import infrastructure to exercise integration boundaries; do not classify test-only imports as production dependency violations. A source-level audit must distinguish production files from tests and fixtures. These examples do not prove every module follows the rule; the current automated checks remain package-scoped.
 
-
 ## Shared infrastructure
 
 The following are cross-domain and must be treated as shared ownership: root package manifests and lockfile, CI workflows, GitHub rules, root engineering documentation, workspace scripts, and dependency policy.
