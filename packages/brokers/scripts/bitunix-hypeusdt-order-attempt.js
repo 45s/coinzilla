@@ -53,7 +53,7 @@ async function askForBitunixOrderConfirmation({ confirmationPhrase }) {
     const answer = await readline.question(
       `Type exactly "${confirmationPhrase}" to submit one LIVE order: `,
     )
-    return answer.trim() === confirmationPhrase
+    return answer === confirmationPhrase
   } finally {
     readline.close()
   }
