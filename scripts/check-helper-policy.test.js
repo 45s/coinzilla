@@ -96,3 +96,23 @@ test("allows deterministic pure transformations and path utilities", () => {
     "Pure transformations and deterministic node:path utilities must remain allowed.",
   )
 })
+
+test("discovers nested helper directories", () => {
+  const { root, directory } = createFixture()
+  const nestedDirectory = join(directory, "adapters")
+  mkdirSync(nestedDirectory)
+  try {
+    writeFileSync(join(nestedDirectory, "map.js"), "export function map({ value }) { return value }\\n")
+    writeFileSync(join(nestedDirectory, "map.test.js"), "import test from 'node:test'\\n")
+
+    const sources = findHelperSources(root)
+
+    assert.deepEqual(
+      sources.map(({ file }) => file),
+      [join(nestedDirectory, "map.js")],
+      "Nested helper modules must not escape repository-wide policy discovery.",
+    )
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
