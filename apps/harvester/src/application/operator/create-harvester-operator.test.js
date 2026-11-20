@@ -439,36 +439,3 @@ test("Recovery Seller STOP is observable but cannot be cleared through the opera
   assert.equal(status.data.blockerId, "rs-stop-blocker-1")
   assert.equal(operator.resolveRecoverySellerStop, undefined)
 })
-    getBlockerId: () => "rs-stop-blocker-3",
-    resolve: async (evidence) => {
-      calls.push(evidence)
-      return {
-        ok: true,
-        data: {},
-      }
-    },
-  }
-  const { engine } = createHarness()
-  const operator = createHarvesterOperator({
-    engine,
-    recoverySellerStopWorkflow,
-  })
-
-  const unauthorized = await operator.resolveRecoverySellerStop({
-    actor: {
-      id: "telegram-user:untrusted",
-      roles: [],
-    },
-    requestId: "telegram:rs-stop-reset:2",
-  })
-  const missingActionId = await operator.resolveRecoverySellerStop({
-    actor,
-    causeFixed: true,
-  })
-
-  assert.equal(unauthorized.ok, false)
-  assert.equal(unauthorized.errors[0].code, "OPERATOR_UNAUTHORIZED")
-  assert.equal(missingActionId.ok, false)
-  assert.equal(missingActionId.errors[0].code, "INVALID_OPERATOR_REQUEST_ID")
-  assert.deepEqual(calls, [])
-})
