@@ -13,7 +13,7 @@ last_verified: 2026-11-19
 
 Preserve the architecture discussion and agreed direction for making Harvester extensible across trading strategies without breaking the existing Coin Grabber (CG / Conservative) behavior or the proposed Recovery Seller (RS) behavior.
 
-This document preserves the strategy architecture discussion and audit plan. The owner-approved implementation direction for RS-4 / PR #1476 is recorded in §5.2 and is authoritative for that work. The remaining source audit and exact implementation contracts must still be verified against code; this document does not claim that the target runtime is already implemented.
+This document preserves the strategy architecture discussion and audit plan. The owner-approved implementation direction for RS-4 / PR #1476 is recorded in §5.2 and is authoritative for that work. The RS-4 shared-engine runtime composition and scoped RS-5 offline acceptance are complete in PR #1515. The runtime acceptance gate is open; RS remains disabled by default in its strategy configuration. This roadmap preserves the historical architecture discussion and must be read with the current Harvester implementation roadmap.
 
 The goal is not to add a framework for hypothetical strategies. The goal is to make the existing strategy boundaries and shared trading capabilities clear, and to determine whether and how the current CG and RS work can fit a safe, maintainable architecture.
 
@@ -143,7 +143,7 @@ The strategy owner approved the following direction. It is the architecture deci
 4. **Shared account resources and safeguards.** Reuse the account Portfolio, canonical order/fill facts, OrderRegistry, broker submission path and account-wide quote/base reservation controls. Keep strategy Positions, attribution and configured investment budgets independent. A fill updates the shared aggregate exactly once and the owning strategy projection exactly once.
 5. **One serialized account-level decision/order-transition path.** Serialize competing strategy decisions, intent allocation, order submission/acknowledgement transitions and canonical order/fill processing through the shared account coordinator. A shared accounting-update queue alone is insufficient if decisions and order transitions can still race in separate queues.
 6. **Preserve Conservative behavior.** CG is the regression baseline. Do not change its approved financial rules or lifecycle behavior merely to make the two strategies symmetrical. Reuse only capabilities with demonstrated common semantics.
-7. **Fail closed and keep RS gated.** Unknown or ambiguous exchange outcomes retain ownership and reservations and require reconciliation; no blind retries or speculative replacement. Missing third-asset commission valuation remains a blocker, never zero. RS stays disabled/non-executable until the complete RS-4 integration and RS-5 offline lifecycle acceptance pass.
+7. **Fail closed and keep RS gated.** Unknown or ambiguous exchange outcomes retain ownership and reservations and require reconciliation; no blind retries or speculative replacement. Third-asset commission valuation is deferred and remains fail-closed, never zero. RS-4 integration and scoped RS-5 offline lifecycle acceptance are complete; the runtime acceptance gate is open, while RS remains disabled by default in configuration.
 
 This approval does not authorize a universal `BaseStrategy`, a speculative strategy framework, a second broker/execution implementation, broker-package changes, exchange TESTNET/LIVE mutations, or early RS enablement. Exact DTOs, module boundaries and queue APIs are implementation details to derive from the existing source and prove with deterministic offline tests—not new architecture decisions to reopen the approved direction.
 
@@ -222,7 +222,7 @@ The following observations were made by inspecting files on `develop`. They are 
 - RS domain components exist, including `apps/harvester/src/domain/strategies/recovery-seller/cycle-state.js`.
 - RS accounting workflow code exists, including `apps/harvester/src/use-cases/create-recovery-seller-accounting-workflow.js`.
 - RS has different cycle/accounting and legacy-inventory semantics from CG.
-- The source/runtime integration status must be verified against current code and the Recovery Seller roadmap. Do not assume RS already has a complete independent engine or is executable simply because its domain and accounting components exist.
+- The source/runtime integration status must be verified against current code and the Recovery Seller roadmap. RS runtime composition is implemented through the shared Trading Engine, not an independent engine. RS remains disabled by default in configuration.
 
 ### 7.3 Shared capabilities that must be audited
 
@@ -356,7 +356,7 @@ S-4 is an architecture proof and safety verification, not a feature expansion.
 - Strategy policy, cycle/lifecycle semantics, accounting attribution and investment budgets remain strategy-specific; shared account custody, Portfolio aggregate, order/fill facts, execution submission and quote/base reservations remain coordinated account-wide.
 - Preserve CG behavior; do not add a parallel engine, universal base class or speculative framework.
 - Source audit and implementation decomposition must remain evidence-based, but they do not reopen the approved direction or block the explicitly authorized PR #1476 work.
-- RS remains disabled/non-executable until RS-4 integration and RS-5 offline acceptance are complete.
+- RS-4 integration and RS-5 offline acceptance are complete; the runtime gate is open, while RS remains disabled by default in configuration.
 
 ### Implementation details still to derive from source
 
@@ -375,14 +375,14 @@ When continuing this work:
 2. Verify the current `develop` source and current CG/RS roadmap/status; do not rely solely on this discussion snapshot.
 3. Continue the owner-approved RS-4 implementation in PR #1515 against issue #1475. Use S-1 source mapping as an implementation aid, not as a gate that suspends the approved task.
 4. Implement the shared account-level coordinator and explicit strategy routing incrementally, with RED → GREEN offline tests and source-backed module boundaries.
-5. Preserve CG behavior and RS-specific lifecycle/accounting. Keep RS disabled/non-executable until RS-4 and RS-5 acceptance pass.
+5. Preserve CG behavior and RS-specific lifecycle/accounting. Keep RS disabled by default in configuration; RS-4 and RS-5 acceptance are complete.
 6. Do not change broker packages or perform TESTNET/LIVE exchange mutations as part of this work.
 7. Keep the user's review/merge ownership: task PRs target `develop`; leave PRs open for user review.
 
 ## RS-4 implementation checkpoint — PR #1515 (2026-11-20)
 
-- The production RS policy/lifecycle dispatch path is implemented for the existing shared Trading Engine and account-owned serialized transition queue; no parallel strategy engine is introduced. The current hard acceptance gate prevents activation.
+- The production RS policy/lifecycle dispatch path is implemented for the existing shared Trading Engine and account-owned serialized transition queue; no parallel strategy engine is introduced. The runtime acceptance gate is open; RS remains disabled by default in configuration.
 - RS actions use the engine-owned submitter and an account-wide authorization step backed by the shared Portfolio, AccountSnapshot, OrderRegistry and `allocateStrategyOrderCommitments`. Pair budgets and Position ownership remain strategy-specific.
 - Terminal RS SELL processing stages canonical fills until complete terminal reconciliation can atomically commit recovery and legacy accounting. Missing or failed reconciliation remains a durable global STOP.
-- The production composition is protected by `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = false`; configured RS routes fail before broker connection until RS-4/RS-5 acceptance is complete.
-- Remaining acceptance work: durable replay of RS cycle/BUY VWAP/ownership/sole-SELL reservation/terminal outcomes; fresh third-asset commission valuation; operator-facing STOP reset/resume transport; and offline same-/different-market concurrency, restart and failure proofs. No exchange operations are authorized or performed.
+- The production composition is protected by `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = true` after RS-4/RS-5 offline acceptance. `RS_RECOVERY_SELLER_CONFIG.enabled` remains false by default.
+- Restart/replay and third-asset commission valuation are deferred. STOP is terminal with read-only CC-operator status and no clear/resume transport. Offline same-/different-market concurrency, lifecycle and failure proofs are complete. No TESTNET/LIVE exchange operations were authorized or performed.
