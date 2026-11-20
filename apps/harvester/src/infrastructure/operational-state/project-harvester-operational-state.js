@@ -655,12 +655,15 @@ function handleTradingOperationalFact({ record, state }) {
       assertIntentMatches({
         intent,
         data: record.data,
-        fields: ["marketId", "symbol", "side", "strategyId", "positionId", "cycleId"],
+        fields: ["marketId", "symbol", "side"],
         context: "Recovery Seller execution fill",
       })
+      const orders = state.recoverySellerOrdersByCycle.get(intent.cycleId) ?? []
+      const ownedOrder = orders.find((order) => order.clientOrderId === intent.clientOrderId)
       if (!record.data.brokerOrderId ||
-          (intent.brokerOrderId && intent.brokerOrderId !== record.data.brokerOrderId)) {
-        throw new Error("Recovery Seller execution fill has contradictory broker order ownership")
+          ownedOrder?.submissionOutcome !== "ACKNOWLEDGED" ||
+          ownedOrder.brokerOrderId !== record.data.brokerOrderId) {
+        throw new Error("Recovery Seller execution fill has no matching acknowledged broker order ownership")
       }
       const fills = state.recoverySellerFillsByCycle.get(intent.cycleId) ?? []
       if (fills.some((fill) => fill.fillId === record.data.fillId)) {
