@@ -667,6 +667,172 @@ function getOrCreateRecoverySellerCycleState({ state, marketId, createCycleId })
   return cycleState
 }
 
+function getRecoverySellerMarketActiveOrders({ state, marketId }) {
+  return state.orderRegistry.getActiveOrders()
+    .filter((order) => order.market.id === marketId)
+    .map((order) => Object.freeze({
+      ...order,
+      ownership: state.orderRegistry.getOwnership({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+      }),
+    }))
+}
+
+function resolveRecoverySellerTransitionCycleState({
+  state,
+  marketId,
+  activeOrders,
+  createCycleId,
+}) {
+  const activeRecoveryOrder = activeOrders.find(
+    (order) => order.ownership?.strategyId === StrategyId.RECOVERY_SELLER,
+  )
+  if (activeRecoveryOrder) {
+    const cycleState = Object.freeze({
+      marketId,
+      cycleId: activeRecoveryOrder.ownership.cycleId,
+      positionId: activeRecoveryOrder.ownership.positionId,
+      status: activeRecoveryOrder.side === "SELL" ? "SELL_SUBMITTED" : "ACCUMULATING",
+    })
+    state.recoverySellerCycleStates.set(marketId, cycleState)
+    return cycleState
+  }
+  const reservation = [...state.recoverySellerSellReservations.values()]
+    .find((item) => item.marketId === marketId)
+  if (reservation) {
+    const cycleState = Object.freeze({
+      marketId,
+      cycleId: reservation.cycleId,
+      positionId: reservation.positionId,
+      status: "SELL_SUBMITTED",
+    })
+    state.recoverySellerCycleStates.set(marketId, cycleState)
+    return cycleState
+  }
+  return getOrCreateRecoverySellerCycleState({
+    state,
+    marketId,
+    createCycleId,
+  })
+}
+
+function calculateRecoverySellerPendingBuyCommitment({ activeOrders, cycleId }) {
+  return activeOrders.reduce((total, order) => {
+    if (order.side !== "BUY" ||
+        order.ownership?.strategyId !== StrategyId.RECOVERY_SELLER ||
+        order.ownership.cycleId !== cycleId) {
+      return total
+    }
+    const remainingQuantity = subtractDecimal({
+      left: order.originalQuantity.amount,
+      right: order.executedQuantity.amount,
+    })
+    const quoteCommitment = multiplyDecimal({
+      left: remainingQuantity,
+      right: order.limitPrice.amount,
+    })
+    return addDecimal({
+      left: total,
+      right: quoteCommitment,
+    })
+  }, "0")
+}
+
+function createRecoverySellerTransitionPlanInput({
+  state,
+  market,
+  pairConfig,
+  accountSnapshot,
+  recoveryPosition,
+  thirdAssetFeeQuoteValue,
+}) {
+  const legacyRecord = getLegacyPositionRecord({
+    state,
+    marketId: market.id,
+  })
+  const additionalTrackedBase = createAdditionalTrackedBaseQuantity({
+    state,
+    balances: accountSnapshot.balances,
+    portfolio: state.portfolio,
+  })
+  const verifiedUnreservedLegacyQuantity = additionalTrackedBase
+    .find((allocation) => allocation.assetId === market.baseAsset.id)?.amount ?? "0"
+  return Object.freeze({
+    recoveryQuantity: recoveryPosition?.quantity ?? "0",
+    configuredLegacyQuantity: pairConfig.sellQuantity,
+    legacyRemainingQuantity: legacyRecord.position.remainingQuantity,
+    verifiedUnreservedLegacyQuantity,
+    recoveryCostBasis: recoveryPosition?.spent ?? "0",
+    legacyAverageCost: legacyRecord.position.averageCost,
+    thirdAssetFeeQuoteValue: thirdAssetFeeQuoteValue ?? pairConfig.thirdAssetFeeQuoteValue,
+  })
+}
+
+function createRecoverySellerTransitionSnapshot({
+  state,
+  createCycleId,
+  marketMetadata,
+  pairConfig,
+  accountSnapshot,
+  stopState,
+  strategyStopped,
+  marketPaused,
+  reconciliationComplete,
+  thirdAssetFeeQuoteValue,
+}) {
+  const market = marketMetadata?.market
+  if (!market || !Array.isArray(accountSnapshot?.balances)) {
+    throw new TypeError("Recovery Seller transition snapshot requires market metadata and canonical account balances")
+  }
+  const activeOrders = getRecoverySellerMarketActiveOrders({
+    state,
+    marketId: market.id,
+  })
+  const cycleState = resolveRecoverySellerTransitionCycleState({
+    state,
+    marketId: market.id,
+    activeOrders,
+    createCycleId,
+  })
+  const position = state.portfolio.getPosition({
+    marketId: market.id,
+    positionId: cycleState.positionId,
+  })
+  const recoveryPosition = position
+    ? Object.freeze({
+        positionId: cycleState.positionId,
+        quantity: position.baseQuantity.amount,
+        spent: position.spent.amount,
+      })
+    : undefined
+  const planInput = createRecoverySellerTransitionPlanInput({
+    state,
+    market,
+    pairConfig,
+    accountSnapshot,
+    recoveryPosition,
+    thirdAssetFeeQuoteValue,
+  })
+  const execution = state.recoverySellerBuyExecutionByCycle.get(cycleState.cycleId)
+  return Object.freeze({
+    cycleState,
+    recoveryPosition,
+    planInput,
+    cumulativeNetSellProceeds: "0",
+    pendingBuyCommitment: calculateRecoverySellerPendingBuyCommitment({
+      activeOrders,
+      cycleId: cycleState.cycleId,
+    }),
+    activeOrders: Object.freeze(activeOrders),
+    stopState,
+    strategyStopped,
+    marketPaused,
+    reconciliationComplete,
+    lastBuyPrice: calculateRecoverySellerBuyExecutionVwap({ execution }),
+  })
+}
+
 function createRecoverySellerCycleStateApi({ state, createCycleId }) {
   return {
     getOrCreateCycleState: ({ marketId } = {}) =>
@@ -697,6 +863,12 @@ function createRecoverySellerAccountingWorkflowApi({ state, operations, createCy
       state,
       createCycleId,
     }),
+    getTransitionSnapshot: (input = {}) =>
+      createRecoverySellerTransitionSnapshot({
+        state,
+        createCycleId,
+        ...input,
+      }),
     getExecutionCallbacks: () => createRecoverySellerExecutionCallbacks({ state }),
     getBuyExecutionQuantity: ({ cycleId } = {}) =>
       state.recoverySellerBuyExecutionByCycle.get(cycleId)?.quantity,
