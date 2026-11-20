@@ -88,8 +88,8 @@ const BINANCE_SPOT_CAPABILITIES = [
     type: "READ_CANONICAL_ORDER_HISTORY",
     status: "SUPPORTED",
     method: "getCanonicalOrderHistory",
-    guarantee: "Returns canonical orders from one bounded, symbol-scoped allOrders query.",
-    limitation: "The caller owns pagination; this is not complete account-wide history.",
+    guarantee: "Returns one bounded, symbol-scoped canonical allOrders response; exact-order lookup remains the default and inclusive lower-bound pagination is opt-in.",
+    limitation: "The caller owns pagination; this is not complete account-wide, delisted-market, or retention-window history.",
   },
   {
     type: "READ_TRADE_HISTORY",
