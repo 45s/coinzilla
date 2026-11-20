@@ -778,6 +778,12 @@ function createInitialState() {
  * or the exchange's retention horizon.
  */
 function createHistoryDiagnostics({ state, historyPagesComplete, errorMessage } = {}) {
+  const failures = errorMessage === undefined
+    ? []
+    : [Object.freeze({
+        market: state.currentMarket,
+        message: errorMessage,
+      })]
   return Object.freeze({
     historyScope: "CONFIGURED_MARKETS",
     marketsAttempted: Object.freeze([...state.marketsAttempted]),
@@ -790,6 +796,8 @@ function createHistoryDiagnostics({ state, historyPagesComplete, errorMessage } 
     fillsObserved: state.fillsObserved,
     fillsPersisted: state.fillsPersisted,
     requestCount: state.requestCount,
+    failureCount: failures.length,
+    failures: Object.freeze(failures),
     historyPagesComplete,
     marketHistoryPagesComplete: historyPagesComplete,
     marketUniverseComplete: false,
