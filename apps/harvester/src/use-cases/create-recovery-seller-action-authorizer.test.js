@@ -29,7 +29,7 @@ const input = Object.freeze({
   }),
 })
 
-function createAuthorizer({ quoteBalance = "100", accountSnapshot = undefined } = {}) {
+function createAuthorizer({ quoteBalance = "100", accountSnapshot } = {}) {
   let latchCount = 0
   const state = {
     registry: {
@@ -41,7 +41,7 @@ function createAuthorizer({ quoteBalance = "100", accountSnapshot = undefined } 
     positions: [],
     getPosition: () => undefined,
   }
-  const currentSnapshot = accountSnapshot ?? {
+  const currentSnapshot = accountSnapshot === undefined ? {
     balances: [],
     getFreeBalance: ({ assetId }) => ({
       amount: assetId === "USDT" ? quoteBalance : "0",
@@ -51,7 +51,7 @@ function createAuthorizer({ quoteBalance = "100", accountSnapshot = undefined } 
     getQuoteCashFlowBaseline: () => "0",
     getCommittedQuoteBalanceBaseline: () => "0",
     getCommittedBaseBalanceBaseline: () => "0",
-  }
+  } : accountSnapshot
   const recoverySellerStopWorkflow = {
     latch: async () => {
       latchCount += 1

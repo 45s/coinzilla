@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { createRecoverySellerRuntimeDispatch } from "./create-recovery-seller-runtime-dispatch.js"
 
 const symbol = "ZROUSDT"
@@ -13,6 +13,7 @@ const stopState = Object.freeze({ status: "RUNNING", decision: null })
 function createDispatch({ evaluateBuyDecision, onSubmit = async () => ({ ok: true, data: { submitted: false } }) } = {}) {
   let snapshotInput
   let submissionInput
+  let latchCount = 0
   const dispatch = createRecoverySellerRuntimeDispatch({
     recoverySellerWorkflow: {
       getTransitionSnapshot: (input) => {
@@ -40,7 +41,13 @@ function createDispatch({ evaluateBuyDecision, onSubmit = async () => ({ ok: tru
         })
       },
     },
-    recoverySellerStopWorkflow: { getState: async () => stopState },
+    recoverySellerStopWorkflow: {
+      getState: async () => stopState,
+      latch: async () => {
+        latchCount += 1
+        return { ok: true, data: { durable: true } }
+      },
+    },
     recoverySellerPairs: { [symbol]: pairConfig },
     getRecoverySellerMarketMetadata: async () => marketMetadata,
     getAccountSnapshot: async () => accountSnapshot,
@@ -66,6 +73,7 @@ function createDispatch({ evaluateBuyDecision, onSubmit = async () => ({ ok: tru
     }),
     getSnapshotInput: () => snapshotInput,
     getSubmissionInput: () => submissionInput,
+    getLatchCount: () => latchCount,
   }
 }
 
@@ -101,11 +109,34 @@ test("routes eligible RS actions through the engine-owned submitter with immutab
     }),
     onSubmit: async () => ({ ok: true, data: { submitted: true } }),
   })
-  const result = await runtime.dispatch()
+  const result = await runtime.dispatch({
+    authorizeRecoverySellerAction: async () => ({ ok: true, data: { allowed: true } }),
+  })
   const submission = runtime.getSubmissionInput()
 
   assert.equal(result.ok, true, "The shared order submitter result must be preserved.")
   assert.equal(result.data.submitted, true, "The RS action must reach the engine-owned submitter.")
   assert.equal(submission.action.strategyId, StrategyId.RECOVERY_SELLER, "The submitted action must retain RS ownership.")
   assert.equal(submission.action.cycleId, "rs-cycle-1", "The submitted action must retain its cycle identity.")
+})
+
+test("latches STOP and withholds an RS order when the shared reservation allocator is missing", async () => {
+  const runtime = createDispatch({
+    evaluateBuyDecision: () => ({
+      decision: Object.freeze({ outcome: "SUBMIT", reasonCode: "TEST_SUBMIT", explanation: "Test-only order." }),
+      action: Object.freeze({
+        side: "BUY",
+        purpose: "RECOVERY_BUY",
+        cycleId: "rs-cycle-1",
+        positionId: "rs-position-1",
+        quantity: "1",
+        price: "10",
+      }),
+    }),
+  })
+  const result = await runtime.dispatch()
+
+  assert.equal(result.ok, false, "An RS order must fail closed without account-wide reservation authorization.")
+  assert.equal(runtime.getLatchCount(), 1, "Missing reservation authorization must durably latch STOP.")
+  assert.equal(runtime.getSubmissionInput(), undefined, "The broker submitter must not be called without authorization.")
 })
