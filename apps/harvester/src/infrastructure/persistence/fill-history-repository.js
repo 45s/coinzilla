@@ -240,7 +240,7 @@ function mapFillSourceEvent({ sourceEvent } = {}) {
   }
 }
 
-function mapFillEvent({ fill, sourceEvent, environment } = {}) {
+function mapFillEvent({ fill, sourceEvent, environment, ingestionSource = "live_event" } = {}) {
   const tradingEnvironment = requireString({
     value: environment,
     field: "environment",
@@ -248,6 +248,11 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
   if (!["testnet", "live"].includes(tradingEnvironment)) {
     throw new OrderHistoryValidationError({
       field: "environment",
+    })
+  }
+  if (!["live_event", "exchange_history"].includes(ingestionSource)) {
+    throw new OrderHistoryValidationError({
+      field: "ingestionSource",
     })
   }
   const tradeId = requireString({
@@ -309,7 +314,7 @@ function assertOrderReferenceMatches({ order, fill } = {}) {
   }
 }
 
-function mapFillRow({ fill, order } = {}) {
+function mapFillRow({ fill, order, ingestionSource } = {}) {
   const row = { ...fill }
   delete row.commissions
   return {
@@ -319,6 +324,8 @@ function mapFillRow({ fill, order } = {}) {
     position_id: order?.position_id ?? null,
     cycle_id: order?.cycle_id ?? null,
     source_kind: "live_fill_applied",
+    ingestion_source: ingestionSource,
+    last_ingestion_source: ingestionSource,
     last_observed_at: fill.local_observed_at,
   }
 }
@@ -422,7 +429,7 @@ function insertFill({ transaction, row, commissions } = {}) {
   })
 }
 
-function upsertFill({ transaction, fill } = {}) {
+function upsertFill({ transaction, fill, ingestionSource } = {}) {
   const existing = readExistingFill({
     transaction,
     fill,
@@ -434,10 +441,11 @@ function upsertFill({ transaction, fill } = {}) {
       candidate: fill,
     })
     transaction.prepare(
-      "UPDATE fills SET last_observed_at = ?, last_source_event_id = ? WHERE id = ?",
+      "UPDATE fills SET last_observed_at = ?, last_source_event_id = ?, last_ingestion_source = ? WHERE id = ?",
     ).run(
       fill.local_observed_at,
       fill.last_source_event_id,
+      fill.last_ingestion_source,
       existing.id,
     )
     return existing.id
@@ -453,6 +461,7 @@ function upsertFill({ transaction, fill } = {}) {
   const row = mapFillRow({
     fill,
     order,
+    ingestionSource,
   })
   insertFill({
     transaction,
@@ -489,16 +498,18 @@ export function createFillHistoryRepository({ database } = {}) {
     throw new TypeError("Relational fill history requires a connected SQLite database.")
   }
   return Object.freeze({
-    upsert: async ({ fill, sourceEvent, environment } = {}) => {
+    upsert: async ({ fill, sourceEvent, environment, ingestionSource = "live_event" } = {}) => {
       const candidate = mapFillEvent({
         fill,
         sourceEvent,
         environment,
+        ingestionSource,
       })
       try {
         return await database.transaction((transaction) => upsertFill({
           transaction,
           fill: candidate,
+          ingestionSource,
         }))
       } catch (error) {
         throw normalizeFillWriteError({
