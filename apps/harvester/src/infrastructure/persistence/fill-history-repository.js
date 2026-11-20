@@ -463,7 +463,8 @@ function upsertFill({ transaction, fill, ingestionSource } = {}) {
     transaction,
     fill,
   })
-  const fillForOrder = existing?.client_order_id !== null &&
+  const fillForOrder = existing !== undefined &&
+    existing.client_order_id !== null &&
     fill.client_order_id === null
     ? {
         ...fill,
