@@ -141,12 +141,23 @@ async function evaluateRecoverySellerRuntimeInput({
       error: new TypeError(`Recovery Seller market metadata is unavailable for ${symbol}`),
     })
   }
-  return evaluateTransition({
+  const result = await evaluateTransition({
     ...input,
     symbol,
     marketPrice,
     marketMetadata,
     pairConfig,
+  })
+  if (result?.ok === true || result?.ok === false) {
+    return result
+  }
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    return toResult({
+      error: new TypeError("Recovery Seller transition evaluator returned an invalid result"),
+    })
+  }
+  return toResult({
+    data: result,
   })
 }
 

@@ -66,7 +66,7 @@ This service collects data and exposes snapshots only. It does not activate vola
 
 ## Application-level orchestration coverage
 
-`src/use-cases/create-recovery-seller-transition-evaluator.test.js` verifies the production dispatch boundary: the profitable SELL target is evaluated before BUY, BUY accumulation continues below that target, RS order ownership is attached, STOP is sticky, and active orders block new submissions.
+`src/use-cases/create-recovery-seller-runtime-evaluator.test.js` verifies canonical market/account/STOP snapshot construction and adapts raw policy lifecycle decisions to the shared `toResult` contract consumed by the latest-transition dispatcher. `src/use-cases/create-recovery-seller-transition-evaluator.test.js` verifies the production dispatch boundary: the profitable SELL target is evaluated before BUY, BUY accumulation continues below that target, RS order ownership is attached, STOP is sticky, and active orders block new submissions.
 
 Recovery Seller durable-order replay binds canonical applied fills to immutable strategy, Position, and cycle ownership from their preceding order intent. The Operational State Store projection and crash-matrix tests preserve the legacy Coin Grabber RECOVERY_SELL path and require fill ownership to be projected only from an RS-owned order intent. A SELL without its durable cycle outcome remains fail-closed. (supplemental; not included in the 38 domain test files) The file-backed crash matrix also verifies that provider provenance on canonical fills remains consistent with the originating durable order intent.
 
