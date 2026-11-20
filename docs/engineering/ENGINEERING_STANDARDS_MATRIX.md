@@ -156,7 +156,6 @@ S-0 was a source/documentation inspection using GitHub repository files, manifes
 
 Proceed to S-1 only after this matrix is reviewed in its PR. Keep S-1 narrow: inspect actual source imports and existing architecture checks, then define the smallest useful dependency-boundary contract. Do not start S-2 through S-10 in parallel.
 
-
 ## S-6 verified findings — 2026-11-20
 
 - **Confirmed workflow contradiction:** `AI_AGENT_WORKFLOW.md` §9 previously said, “Do not ask the user to review every task PR,” while §§1 and 8 require the user to review and merge every task PR. Root `AGENTS.md` and issue #1568 establish the same user-review boundary. This was a direct policy conflict, not merely duplicated wording.
