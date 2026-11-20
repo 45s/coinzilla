@@ -1,5 +1,5 @@
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
-import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
+import { BrokerUnsupportedOperationError } from "../../../../broker/errors/broker-unsupported-operation-error.js"
 
 export const BITUNIX_SPOT_ORDER_API = Object.freeze({
   orderDetail: "/api/spot/v1/order/detail",

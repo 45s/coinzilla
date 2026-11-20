@@ -1,4 +1,4 @@
-import { BrokerCapabilities } from "../../broker/broker-capabilities.js"
+import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 
 const BITUNIX_SPOT_CAPABILITIES = [
   {

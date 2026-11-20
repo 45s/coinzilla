@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { BrokerCapabilities } from "../../broker/broker-capabilities.js"
+import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
 import { createBitunixBrokerCapabilities } from "./capabilities.js"
 
 test("Bitunix Spot capability declaration uses the canonical BrokerCapabilities contract", () => {

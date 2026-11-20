@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { BrokerCapabilities as EntityBrokerCapabilities } from "@coinzilla/entities"
 
-import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
+import { BrokerCapabilities } from "../../../../broker/broker-capabilities.js"
 import { createBinanceBrokerCapabilities } from "./capabilities.js"
 
 test("Binance capability declaration uses the canonical BrokerCapabilities contract", () => {

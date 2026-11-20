@@ -1,4 +1,4 @@
-import { BrokerCapabilities } from "../../../broker/broker-capabilities.js"
+import { BrokerCapabilities } from "../../../../broker/broker-capabilities.js"
 
 const USER_DATA_READY_CONDITIONS = [
   "The WebSocket API connection must be open.",
