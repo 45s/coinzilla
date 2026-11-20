@@ -794,7 +794,10 @@ function publishRuntimeStarted({
 async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } = {}) {
   const runtime = await startProviderAccounts({
     providers: resources.providerInstances,
-    start: options.start,
+    start: (startOptions) => options.start({
+      ...startOptions,
+      orderHistoryPersistence: resources.orderHistoryPersistence,
+    }),
     appConfig: resources.appConfig,
     env: options.env,
     eventPublisher: resources.eventPublisher,

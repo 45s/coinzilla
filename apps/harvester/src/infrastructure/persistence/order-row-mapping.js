@@ -45,6 +45,8 @@ export const ORDER_COLUMNS = Object.freeze([
   "source_record_id",
   "migrated_at",
   "last_execution_type",
+  "ingestion_source",
+  "last_ingestion_source",
 ])
 
 function requireString({ value, field } = {}) {
@@ -127,7 +129,7 @@ function mapLegacyOrderFacts({ record } = {}) {
   }
 }
 
-function normalizeOrderHistoryRecord({ record } = {}) {
+function normalizeOrderHistoryRecord({ record, includeUnfilled = true } = {}) {
   if (record?.schemaVersion !== 1 || record.recordKind !== "harvester.order-history") {
     throw new TypeError("Legacy order-history record has an unsupported schema version or record kind.")
   }
@@ -139,6 +141,7 @@ function normalizeOrderHistoryRecord({ record } = {}) {
     order: mapLegacyOrderFacts({ record }),
     sourceEvent: mapLegacySourceEvent({ record }),
     environment: record.environment,
+    includeUnfilled,
   })
   if (normalized === null || normalized.id !== record.id) {
     throw new TypeError("Legacy order-history record identity or executed quantity is incompatible.")
@@ -261,12 +264,18 @@ function mapOrderProvenanceColumns({
   sourceKind,
   sourceRecordId,
   migratedAt,
+  ingestionSource,
 } = {}) {
+  const defaultIngestionSource = sourceKind === "legacy_harvester_orders"
+    ? "legacy_migration"
+    : "live_event"
   return {
     source_kind: existing?.source_kind ?? sourceKind,
     last_observed_source_kind: sourceKind,
     source_record_id: existing?.source_record_id ?? sourceRecordId ?? null,
     migrated_at: existing?.migrated_at ?? migratedAt ?? null,
+    ingestion_source: existing?.ingestion_source ?? ingestionSource ?? defaultIngestionSource,
+    last_ingestion_source: ingestionSource ?? defaultIngestionSource,
   }
 }
 
@@ -276,8 +285,13 @@ export function mapOrderHistoryRecordToRow({
   sourceKind = "live_order_event",
   sourceRecordId,
   migratedAt,
+  ingestionSource,
+  includeUnfilled = true,
 } = {}) {
-  const order = normalizeOrderHistoryRecord({ record })
+  const order = normalizeOrderHistoryRecord({
+    record,
+    includeUnfilled,
+  })
   return {
     id: order.id,
     provider_type: order.providerType,
@@ -307,6 +321,7 @@ export function mapOrderHistoryRecordToRow({
       sourceKind,
       sourceRecordId,
       migratedAt,
+      ingestionSource,
     }),
   }
 }
