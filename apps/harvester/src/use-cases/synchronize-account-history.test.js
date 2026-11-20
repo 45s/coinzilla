@@ -185,8 +185,16 @@ test("paginates configured-market order and trade history and persists exchange 
     fills: [],
   }
   const broker = createPagedBroker({
-    orders: [createOrder()],
-    fills: [createFill()],
+    orders: [
+      createOrder({ orderId: "10", updatedAt: 100 }),
+      createOrder({ orderId: "11", updatedAt: 200 }),
+      createOrder({ orderId: "12", updatedAt: 300 }),
+    ],
+    fills: [
+      createFill({ tradeId: "1", orderId: "10" }),
+      createFill({ tradeId: "2", orderId: "11" }),
+      createFill({ tradeId: "3", orderId: "12" }),
+    ],
     calls,
   })
   const result = await synchronizeAccountHistory({
@@ -197,27 +205,27 @@ test("paginates configured-market order and trade history and persists exchange 
     orderRepository: repositories.orderRepository,
     fillRepository: repositories.fillRepository,
     cursorRepository: repositories.cursorRepository,
-    limit: 1,
+    limit: 2,
     requestDelayMs: 0,
     now: () => 300,
   })
 
   assert.equal(result.ok, true, result.errors?.map((error) => error.message).join("; "))
-  assert.equal(result.data.historyScope, "CONFIGURED_MARKETS")
-  assert.equal(result.data.marketUniverseComplete, false)
-  assert.equal(result.data.retentionCoverageConfirmed, false)
-  assert.equal(result.data.ordersPersisted, 1)
-  assert.equal(result.data.fillsPersisted, 1)
-  assert.equal(repositories.orders[0].ownership, undefined)
-  assert.equal(repositories.fills[0].ingestionSource, "exchange_history")
-  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10")
-  assert.deepEqual(
-    calls.orders.map(({ orderId }) => orderId),
-    [0, 11],
-  )
+  assert.equal(result.data.historyScope, "CONFIGURED_MARKETS", "History diagnostics must describe the configured-market scope.")
+  assert.equal(result.data.marketUniverseComplete, false, "Configured symbols must not be presented as the complete account market universe.")
+  assert.equal(result.data.retentionCoverageConfirmed, false, "Exchange page exhaustion must not be presented as proof of retention completeness.")
+  assert.equal(result.data.ordersPersisted, 3, "Time-window splitting must persist all three orders returned by the bounded exchange queries.")
+  assert.equal(result.data.fillsPersisted, 3, "Trade-history pagination must persist all three executions returned by the exchange.")
+  assert.equal(repositories.orders[0].ownership, undefined, "Exchange history must not invent strategy ownership for a previously external order.")
+  assert.equal(repositories.fills[0].ingestionSource, "exchange_history", "Backfilled executions must retain exchange-history provenance.")
+  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10", "A fill must retain the client-order identity verified from its exchange order.")
+  assert.equal(calls.orders[0].orderId, undefined, "Symbol-wide order-history pages must not use the exact-order lookup parameter as a cursor.")
+  assert.equal(calls.orders[0].startTime, 0, "The initial order-history scan must begin at the configured lookback boundary.")
+  assert.equal(calls.orders[0].endTime, 300, "The initial order-history scan must end at the injected startup time.")
   assert.deepEqual(
     calls.fills.map(({ fromId }) => fromId),
-    [0, 2],
+    [0, 3],
+    "Trade-history pagination must advance by the last persisted trade ID plus one.",
   )
 })
 
@@ -253,13 +261,13 @@ test("fails closed when an exchange history cursor does not advance", async () =
     now: () => 300,
   })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /strictly increasing/)
-  assert.deepEqual(result.errors[0].historyDiagnostics.marketsAttempted, ["BTCUSDT"])
-  assert.equal(result.errors[0].historyDiagnostics.orderPagesChecked, 1)
-  assert.equal(result.errors[0].historyDiagnostics.historyPagesComplete, false)
-  assert.equal(repositories.orders.length, 0)
-  assert.equal(repositories.fills.length, 0)
+  assert.equal(result.ok, false, "Duplicate order identities in one exchange-history page must fail closed.")
+  assert.match(result.errors[0].message, /duplicate order identity/, "The failure must identify the repeated exchange order identity.")
+  assert.deepEqual(result.errors[0].historyDiagnostics.marketsAttempted, ["BTCUSDT"], "Failure diagnostics must identify the market whose history scan was attempted.")
+  assert.equal(result.errors[0].historyDiagnostics.orderPagesChecked, 1, "Failure diagnostics must count the malformed order-history page.")
+  assert.equal(result.errors[0].historyDiagnostics.historyPagesComplete, false, "A malformed page must never be reported as complete history.")
+  assert.equal(repositories.orders.length, 0, "No order from an invalid page may be persisted.")
+  assert.equal(repositories.fills.length, 0, "Trade history must not continue after an invalid order-history page.")
 })
 
 
@@ -310,18 +318,19 @@ test("scopes repeated exchange order and trade IDs independently by configured m
     orderRepository: repositories.orderRepository,
     fillRepository: repositories.fillRepository,
     cursorRepository: repositories.cursorRepository,
-    limit: 1,
+    limit: 2,
     requestDelayMs: 0,
     now: () => 300,
   })
 
-  assert.equal(result.ok, true)
-  assert.deepEqual(result.data.marketsQueried, ["BTCUSDT", "ETHUSDT"])
-  assert.equal(result.data.ordersPersisted, 2)
-  assert.equal(result.data.fillsPersisted, 2)
+  assert.equal(result.ok, true, "History synchronization must complete for every configured market when all exchange pages succeed.")
+  assert.deepEqual(result.data.marketsQueried, ["BTCUSDT", "ETHUSDT"], "Diagnostics must list each successfully queried market in configured order.")
+  assert.equal(result.data.ordersPersisted, 2, "Repeated exchange order IDs in different markets must persist as distinct scoped orders.")
+  assert.equal(result.data.fillsPersisted, 2, "Repeated trade IDs in different markets must persist as distinct scoped fills.")
   assert.deepEqual(
     repositories.fills.map(({ fill }) => fill.clientOrderId),
     ["btc-order", "eth-order"],
+    "Each market fill must link only to the matching market order identity.",
   )
 })
 
@@ -347,23 +356,25 @@ test("resumes from durable per-market cursors without re-persisting prior pages"
     cursorRepository: repositories.cursorRepository,
     limit: 1,
     requestDelayMs: 0,
-    now: () => 300,
+    now: () => 864000000,
   }
   const first = await synchronizeAccountHistory(input)
   const second = await synchronizeAccountHistory(input)
 
   assert.equal(first.ok, true, first.errors?.map((error) => error.message).join("; "))
   assert.equal(second.ok, true, second.errors?.map((error) => error.message).join("; "))
-  assert.deepEqual(
-    calls.orders.map(({ orderId }) => orderId),
-    [0, 11, 11],
+  assert.equal(
+    calls.orders.at(-1).startTime,
+    777600000,
+    "A completed order-history scan must resume from its durable checkpoint with the configured overlap.",
   )
   assert.deepEqual(
     calls.fills.map(({ fromId }) => fromId),
-    [0, 2, 2],
+    [0, 2],
+    "A completed trade-history cursor must resume after the last persisted execution without replaying earlier pages.",
   )
-  assert.equal(second.data.ordersPersisted, 0)
-  assert.equal(second.data.fillsPersisted, 0)
+  assert.equal(second.data.ordersPersisted, 0, "A resumed scan must not re-persist orders outside its overlap window.")
+  assert.equal(second.data.fillsPersisted, 0, "A resumed trade scan must not re-persist executions before its durable cursor.")
 })
 
 
@@ -394,7 +405,7 @@ test("rechecks a pending order behind the cursor and links its later offline fil
     cursorRepository: repositories.cursorRepository,
     limit: 1,
     requestDelayMs: 0,
-    now: () => 300,
+    now: () => 864000000,
   }
   const first = await synchronizeAccountHistory(input)
   orders[0] = createOrder({
@@ -406,12 +417,12 @@ test("rechecks a pending order behind the cursor and links its later offline fil
   const second = await synchronizeAccountHistory(input)
 
   assert.equal(first.ok, true, first.errors?.map((error) => error.message).join("; "))
-  assert.equal(first.data.ordersPersisted, 1)
+  assert.equal(first.data.ordersPersisted, 1, "The initial scan must persist the unfilled order before its later offline execution.")
   assert.equal(second.ok, true, second.errors?.map((error) => error.message).join("; "))
-  assert.equal(second.data.ordersObserved, 1)
-  assert.equal(second.data.fillsPersisted, 1)
-  assert.equal(repositories.orders.at(-1).status, "FILLED")
-  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10")
+  assert.equal(second.data.ordersObserved, 1, "The next startup must refresh the older pending order by its exact exchange order ID.")
+  assert.equal(second.data.fillsPersisted, 1, "The offline execution must be persisted when the trade cursor is scanned.")
+  assert.equal(repositories.orders.at(-1).status, "FILLED", "The refreshed order must reflect the exchange-confirmed terminal status.")
+  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10", "The later fill must link to the client-order identity persisted before shutdown.")
 })
 
 
@@ -438,7 +449,7 @@ test("links later fills to a stored order after its order cursor has advanced", 
     cursorRepository: repositories.cursorRepository,
     limit: 1,
     requestDelayMs: 0,
-    now: () => 300,
+    now: () => 864000000,
   }
   const first = await synchronizeAccountHistory(input)
   fills.push(createFill({
@@ -448,11 +459,12 @@ test("links later fills to a stored order after its order cursor has advanced", 
 
   assert.equal(first.ok, true)
   assert.equal(second.ok, true, second.errors?.map((error) => error.message).join("; "))
-  assert.deepEqual(
-    calls.orders.map(({ orderId }) => orderId),
-    [0, 11, 11],
+  assert.equal(
+    calls.orders.some(({ orderId }) => orderId === "10"),
+    false,
+    "A terminal order outside the overlap window must not be requeried when its durable order record already exists.",
   )
-  assert.equal(second.data.ordersObserved, 0)
-  assert.equal(second.data.fillsPersisted, 1)
-  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10")
+  assert.equal(second.data.ordersObserved, 0, "No old terminal order should be re-observed when its update time predates the overlap.")
+  assert.equal(second.data.fillsPersisted, 1, "A newly available trade must still be persisted after the order cursor has advanced.")
+  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10", "The fill must link through the previously persisted scoped exchange-order identity.")
 })
