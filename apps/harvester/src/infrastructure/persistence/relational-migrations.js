@@ -8,6 +8,10 @@ import {
   mapOrderHistoryRecordToRow,
 } from "./order-row-mapping.js"
 
+const INITIAL_ORDER_COLUMNS = Object.freeze(
+  ORDER_COLUMNS.filter((column) => !["ingestion_source", "last_ingestion_source"].includes(column)),
+)
+
 const CREATE_RELATIONAL_TABLES_SQL = `
   CREATE TABLE orders (
     id TEXT PRIMARY KEY,
@@ -153,11 +157,11 @@ function insertLegacyOrder({ transaction, sourceRow } = {}) {
     migratedAt: new Date().toISOString(),
   })
   const statement = transaction.prepare(
-    `INSERT INTO orders (${ORDER_COLUMNS.join(", ")})
-     VALUES (${ORDER_COLUMNS.map(() => "?").join(", ")})`,
+    `INSERT INTO orders (${INITIAL_ORDER_COLUMNS.join(", ")})
+     VALUES (${INITIAL_ORDER_COLUMNS.map(() => "?").join(", ")})`,
   )
   try {
-    statement.run(...ORDER_COLUMNS.map((column) => row[column]))
+    statement.run(...INITIAL_ORDER_COLUMNS.map((column) => row[column]))
   } catch (cause) {
     throw new OrderHistoryIntegrityError({
       field: "legacyOrderIdentity",
