@@ -538,6 +538,41 @@ test("links an earlier fill to its later matching order projection without inven
   })
 })
 
+test("does not infer a relational order link from an exchange order ID without a client identity", async (t) => {
+  const context = await createTestContext({ t })
+  const legacyRecord = createLegacyRecord()
+  await seedLegacyRecord({
+    filename: context.filename,
+    record: legacyRecord,
+  })
+  const persistence = await preparePersistence({ context })
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill: createAppliedFillEvent({
+      overrides: {
+        clientOrderId: undefined,
+        brokerOrderId: legacyRecord.brokerOrderId,
+      },
+    }),
+  })
+  assert.equal((await persistence.fillObserver.flush()).ok, true, "An execution without a client order ID must still be stored.")
+  context.eventBus.publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+    source: "harvester",
+    data: createOrderHistoryEventData(),
+  })
+  await context.eventBus.flush()
+  await persistence.relationalOrderObserver.flush()
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const fill = database.prepare("SELECT * FROM fills").get()
+      assert.equal(fill.order_id, null, "An exchange order ID alone must not create an unverified local order relationship.")
+      assert.equal(fill.strategy_id, null, "Unverified exchange-order matching must not fabricate strategy attribution.")
+    },
+  })
+})
+
 test("rejects fill-to-order attribution when client and exchange order identities conflict", async (t) => {
   const context = await createTestContext({ t })
   const legacyRecord = createLegacyRecord()
@@ -550,8 +585,8 @@ test("rejects fill-to-order attribution when client and exchange order identitie
     eventBus: context.eventBus,
     fill: createAppliedFillEvent({
       overrides: {
-        brokerOrderId: legacyRecord.brokerOrderId,
-        clientOrderId: "different-client-order",
+        brokerOrderId: "different-broker-order",
+        clientOrderId: legacyRecord.clientOrderId,
       },
     }),
   })

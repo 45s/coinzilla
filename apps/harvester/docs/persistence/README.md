@@ -24,11 +24,11 @@ A **strategy cycle** is a future business-level grouping of one or more orders a
 | `fills` | One row per actual applied exchange execution | `(provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)` |
 | `fill_commissions` | One row per commission asset charged on a fill | `(fill_id, ordinal)` |
 
-The order primary key preserves the existing `harvester_orders` ID generated from the canonical identity tuple. Exchange order IDs also have a scoped unique index when supplied.
+The order primary key preserves the existing `harvester_orders` ID generated from the canonical identity tuple. Exchange order IDs have a non-unique provider/account/environment/market lookup index; provider-specific reuse semantics are not assumed.
 
 The canonical `Fill.id` is `market.id:tradeId`; it is not globally unique. The relational fill primary key is a JSON-encoded tuple containing environment, provider instance/type, account, market ID, and provider execution ID. The original canonical fill ID is retained separately as `canonical_fill_id`.
 
-A fill's `order_id` is a nullable foreign key to `orders.id`. It is linked only when the provider/account/environment and client or exchange order identity match. A fill can be persisted before its order projection is visible; a later order write links it. Strategy, position, and cycle attribution are copied only from that verified order relationship. Missing ownership remains SQL `NULL`, never a fabricated identifier.
+A fill's `order_id` is a nullable foreign key to `orders.id`. It is linked only through the canonical scoped client-order identity, with market and any available exchange-order facts checked for consistency. Exchange order IDs are retained but are not used alone to infer a relationship because provider reuse semantics vary. A fill can be persisted before its order projection is visible; a later order write links it when the client-order identity is present. Strategy, position, and cycle attribution are copied only from that verified relationship. Missing ownership remains SQL `NULL`, never a fabricated identifier.
 
 ## 2. Exact financial and timestamp semantics
 

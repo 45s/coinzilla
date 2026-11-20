@@ -278,7 +278,10 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
   }
 }
 
-function readOrderByClientOrderId({ transaction, fill } = {}) {
+function findOrderReference({ transaction, fill } = {}) {
+  if (fill.client_order_id === null) {
+    return undefined
+  }
   const id = createOrderHistoryId({
     environment: fill.environment,
     providerInstanceId: fill.provider_instance_id,
@@ -287,56 +290,15 @@ function readOrderByClientOrderId({ transaction, fill } = {}) {
     clientOrderId: fill.client_order_id,
   })
   return transaction.prepare(
-    "SELECT id, market_id, exchange_order_id, client_order_id, strategy_id, position_id, cycle_id FROM orders WHERE id = ?",
+    "SELECT id, market_id, exchange_order_id, strategy_id, position_id, cycle_id FROM orders WHERE id = ?",
   ).get(id)
-}
-
-function readOrderByExchangeOrderId({ transaction, fill } = {}) {
-  const orders = transaction.prepare(`
-    SELECT id, market_id, exchange_order_id, client_order_id, strategy_id, position_id, cycle_id FROM orders
-    WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
-      AND account_id = ? AND market_id = ? AND exchange_order_id = ?
-  `).all(
-    fill.environment,
-    fill.provider_instance_id,
-    fill.provider_type,
-    fill.account_id,
-    fill.market_id,
-    fill.exchange_order_id,
-  )
-  if (orders.length > 1) {
-    throw new OrderHistoryIntegrityError({
-      field: "fill.ambiguousExchangeOrderIdentity",
-      providerInstanceId: fill.provider_instance_id,
-      accountId: fill.account_id,
-    })
-  }
-  return orders[0]
-}
-
-function findOrderReference({ transaction, fill } = {}) {
-  if (fill.client_order_id !== null) {
-    const order = readOrderByClientOrderId({
-      transaction,
-      fill,
-    })
-    if (order) {
-      return order
-    }
-  }
-  return readOrderByExchangeOrderId({
-    transaction,
-    fill,
-  })
 }
 
 function assertOrderReferenceMatches({ order, fill } = {}) {
   if (order && (
     order.market_id !== fill.market_id ||
     (order.exchange_order_id !== null &&
-      order.exchange_order_id !== fill.exchange_order_id) ||
-    (fill.client_order_id !== null &&
-      order.client_order_id !== fill.client_order_id)
+      order.exchange_order_id !== fill.exchange_order_id)
   )) {
     throw new OrderHistoryIntegrityError({
       field: "fill.orderIdentity",
