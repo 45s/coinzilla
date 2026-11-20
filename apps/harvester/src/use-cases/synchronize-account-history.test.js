@@ -346,3 +346,47 @@ test("resumes from durable per-market cursors without re-persisting prior pages"
   assert.equal(second.data.ordersPersisted, 0)
   assert.equal(second.data.fillsPersisted, 0)
 })
+
+
+test("links a later offline fill to an earlier persisted unfilled order", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const orders = [
+    createOrder({
+      executed: "0",
+    }),
+  ]
+  const fills = []
+  const broker = createPagedBroker({
+    orders,
+    fills,
+    calls,
+  })
+  const input = {
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 1,
+    requestDelayMs: 0,
+    now: () => 300,
+  }
+  const first = await synchronizeAccountHistory(input)
+  fills.push(createFill({
+    clientOrderId: null,
+  }))
+  const second = await synchronizeAccountHistory(input)
+
+  assert.equal(first.ok, true, first.errors?.map((error) => error.message).join("; "))
+  assert.equal(first.data.ordersPersisted, 1)
+  assert.equal(second.ok, true, second.errors?.map((error) => error.message).join("; "))
+  assert.equal(second.data.ordersObserved, 0)
+  assert.equal(second.data.fillsPersisted, 1)
+  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10")
+})
