@@ -563,7 +563,7 @@ const createFill = ({
 }
 
 
-test("keeps configured RS routes disabled until RS-4 and RS-5 acceptance is complete", () => {
+test("rejects configured RS routes when the runtime acceptance gate is closed", () => {
   const recoverySellerPairs = {
     BTCUSDT: {
       enabled: true,
