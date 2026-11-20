@@ -93,9 +93,11 @@ interval: "1m" }), /exactly 12 fields/)
   assert.throws(() => adaptKlineHistoryRow({ row: historyRow.slice(0, 11),
 symbol: "BTCUSDT",
 interval: "1m" }), /exactly 12 fields/)
+now: 2,
   assert.throws(() => adaptKlineHistoryRow({ row: [NaN, ...historyRow.slice(1)],
 symbol: "BTCUSDT",
 interval: "1m" }), /openTime/)
+now: 2,
   assert.throws(() => adaptKlineHistoryRow({ row: [historyRow[0], ...historyRow.slice(1, 6), historyRow[0] - 1, ...historyRow.slice(7)],
 symbol: "BTCUSDT",
 interval: "1m" }), /closeTime/)
