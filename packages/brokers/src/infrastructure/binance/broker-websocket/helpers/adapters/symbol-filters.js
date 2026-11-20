@@ -3,7 +3,12 @@ import {
   validatePositiveDecimalFilter,
 } from "../symbol-filter-adapters.js"
 
-const STATIC_FILTER_TYPES = Object.freeze(["PRICE_FILTER", "LOT_SIZE", "NOTIONAL", "MIN_NOTIONAL"])
+const STATIC_FILTER_TYPES = Object.freeze([
+  "PRICE_FILTER",
+  "LOT_SIZE",
+  "NOTIONAL",
+  "MIN_NOTIONAL",
+])
 
 const FILTERS_NOT_APPLICABLE_TO_SUPPORTED_LIMIT_ORDERS = Object.freeze([
   "MARKET_LOT_SIZE",
@@ -52,25 +57,35 @@ function collectUnvalidatedConstraints({ symbolFilters, exchangeFilters, assetFi
     if (FILTERS_NOT_APPLICABLE_TO_SUPPORTED_LIMIT_ORDERS.includes(sourceFilterType)) {
       return
     }
-    const mappedConstraint = Object.hasOwn(FILTER_CONSTRAINTS, sourceFilterType)\n      ? FILTER_CONSTRAINTS[sourceFilterType]\n      : undefined
+
+    const mappedConstraint = Object.hasOwn(FILTER_CONSTRAINTS, sourceFilterType)
+      ? FILTER_CONSTRAINTS[sourceFilterType]
+      : undefined
+
     constraints.push(Object.freeze({
       type: mappedConstraint?.type ?? "UNMODELED_EXCHANGE_CONSTRAINT",
-scope: mappedConstraint?.scope ?? scope,
-sourceFilterType: sourceFilterType ?? "MISSING_FILTER_TYPE",
+      scope: mappedConstraint?.scope ?? scope,
+      sourceFilterType: sourceFilterType ?? "MISSING_FILTER_TYPE",
     }))
   }
 
   for (const filter of symbolFilters) {
-    add({ filter,
-scope: "SYMBOL" })
+    add({
+      filter,
+      scope: "SYMBOL",
+    })
   }
   for (const filter of exchangeFilters) {
-    add({ filter,
-scope: "EXCHANGE" })
+    add({
+      filter,
+      scope: "EXCHANGE",
+    })
   }
   for (const filter of assetFilters) {
-    add({ filter,
-scope: "ACCOUNT" })
+    add({
+      filter,
+      scope: "ACCOUNT",
+    })
   }
 
   const unique = new Map()
@@ -81,39 +96,27 @@ scope: "ACCOUNT" })
   return Object.freeze([...unique.values()])
 }
 
-/**
- * Extract static LIMIT/LIMIT_MAKER rules and preserve every other applicable
- * exchange constraint for the domain readiness gate. This adapter deliberately
- * does not guess at dynamic reference prices or account-wide state.
- *
- * @param {{symbol: string,
-exchangeInfo: {symbols?: Array<object>, exchangeFilters?: Array<object>}, accountFilters?: {symbolFilters?: Array<object>, exchangeFilters?: Array<object>, assetFilters?: Array<object>}}} options
- * @returns {{symbol: string,
-baseAsset: string,
-quoteAsset: string,
-tickSize: string,
-stepSize: string, minPrice?: string, maxPrice?: string, minQuantity?: string, maxQuantity?: string, minNotional?: string, maxNotional?: string,
-supportedOrderTypes: string[],
-unvalidatedConstraints: Array<object>}}
- * @throws {Error|TypeError} If required exchange metadata or decimal filters are invalid.
- */
 function findSymbolFilters({ symbol, exchangeInfo }) {
   const symbolInfo = exchangeInfo?.symbols?.find((item) => item.symbol === symbol)
   const filters = Array.isArray(symbolInfo?.filters) ? symbolInfo.filters : []
   return {
     symbolInfo,
     filters,
-priceFilter: filters.find((filter) => filter.filterType === "PRICE_FILTER"),
-lotSizeFilter: filters.find((filter) => filter.filterType === "LOT_SIZE"),
-notionalFilter: filters.find((filter) => filter.filterType === "NOTIONAL") ??
+    priceFilter: filters.find((filter) => filter.filterType === "PRICE_FILTER"),
+    lotSizeFilter: filters.find((filter) => filter.filterType === "LOT_SIZE"),
+    notionalFilter: filters.find((filter) => filter.filterType === "NOTIONAL") ??
       filters.find((filter) => filter.filterType === "MIN_NOTIONAL"),
   }
 }
 
 function validateSymbolMetadata({ symbolInfo, symbol }) {
-  if (!symbolInfo?.baseAsset || !symbolInfo?.quoteAsset ||
-      !Array.isArray(symbolInfo.orderTypes) || symbolInfo.orderTypes.length === 0) {
-    throw new Error(`Binance market metadata is incomplete for ${symbol}`)
+  if (
+    !symbolInfo?.baseAsset ||
+    !symbolInfo?.quoteAsset ||
+    !Array.isArray(symbolInfo.orderTypes) ||
+    symbolInfo.orderTypes.length === 0
+  ) {
+    throw new Error("Binance market metadata is incomplete for " + symbol)
   }
 }
 
@@ -121,49 +124,54 @@ function readOptionalFilters({ priceFilter, lotSizeFilter, notionalFilter, symbo
   return {
     minPrice: readOptionalDecimalFilter({
       value: priceFilter?.minPrice,
-name: "PRICE_FILTER.minPrice",
+      name: "PRICE_FILTER.minPrice",
       symbol,
     }),
-maxPrice: readOptionalDecimalFilter({
+    maxPrice: readOptionalDecimalFilter({
       value: priceFilter?.maxPrice,
-name: "PRICE_FILTER.maxPrice",
+      name: "PRICE_FILTER.maxPrice",
       symbol,
     }),
-minQuantity: readOptionalDecimalFilter({
+    minQuantity: readOptionalDecimalFilter({
       value: lotSizeFilter?.minQty,
-name: "LOT_SIZE.minQty",
+      name: "LOT_SIZE.minQty",
       symbol,
     }),
-maxQuantity: readOptionalDecimalFilter({
+    maxQuantity: readOptionalDecimalFilter({
       value: lotSizeFilter?.maxQty,
-name: "LOT_SIZE.maxQty",
+      name: "LOT_SIZE.maxQty",
       symbol,
     }),
-minNotional: readOptionalDecimalFilter({
+    minNotional: readOptionalDecimalFilter({
       value: notionalFilter?.minNotional,
-name: "NOTIONAL.minNotional",
+      name: "NOTIONAL.minNotional",
       symbol,
     }),
-maxNotional: readOptionalDecimalFilter({
+    maxNotional: readOptionalDecimalFilter({
       value: notionalFilter?.maxNotional,
-name: "NOTIONAL.maxNotional",
+      name: "NOTIONAL.maxNotional",
       symbol,
     }),
   }
 }
 
 function collectAccountSymbolFilters({ accountFilters, symbol }) {
-  if (!Array.isArray(accountFilters.symbolFilters)) {return []}
+  if (!Array.isArray(accountFilters.symbolFilters)) {
+    return []
+  }
   return accountFilters.symbolFilters.filter((filter) =>
-    (!filter.symbol || filter.symbol === symbol) && !STATIC_FILTER_TYPES.includes(filter.filterType)
+    (!filter.symbol || filter.symbol === symbol) &&
+    !STATIC_FILTER_TYPES.includes(filter.filterType)
   )
 }
 
 function buildUnvalidatedConstraints({ filters, exchangeInfo, accountFilters, symbolInfo, symbol }) {
   const symbolFilters = [
     ...filters.filter((filter) => !STATIC_FILTER_TYPES.includes(filter.filterType)),
-    ...collectAccountSymbolFilters({ accountFilters,
-      symbol }),
+    ...collectAccountSymbolFilters({
+      accountFilters,
+      symbol,
+    }),
   ]
   const exchangeFilters = [
     ...(Array.isArray(exchangeInfo?.exchangeFilters) ? exchangeInfo.exchangeFilters : []),
@@ -176,9 +184,12 @@ function buildUnvalidatedConstraints({ filters, exchangeInfo, accountFilters, sy
       filter.asset === symbolInfo.quoteAsset
     )
     : []
-  return collectUnvalidatedConstraints({ symbolFilters,
+
+  return collectUnvalidatedConstraints({
+    symbolFilters,
     exchangeFilters,
-    assetFilters })
+    assetFilters,
+  })
 }
 
 /**
@@ -186,38 +197,37 @@ function buildUnvalidatedConstraints({ filters, exchangeInfo, accountFilters, sy
  * exchange constraint for the domain readiness gate. This adapter deliberately
  * does not guess at dynamic reference prices or account-wide state.
  *
- * @param {{symbol: string,
-exchangeInfo: {symbols?: Array<object>, exchangeFilters?: Array<object>}, accountFilters?: {symbolFilters?: Array<object>, exchangeFilters?: Array<object>, assetFilters?: Array<object>}}} options
- * @returns {{symbol: string,
-baseAsset: string,
-quoteAsset: string,
-tickSize: string,
-stepSize: string, minPrice?: string, maxPrice?: string, minQuantity?: string, maxQuantity?: string, minNotional?: string, maxNotional?: string,
-supportedOrderTypes: string[],
-unvalidatedConstraints: Array<object>}}
+ * @param {{symbol: string, exchangeInfo: {symbols?: Array<object>, exchangeFilters?: Array<object>}, accountFilters?: {symbolFilters?: Array<object>, exchangeFilters?: Array<object>, assetFilters?: Array<object>}}} options
+ * @returns {{symbol: string, baseAsset: string, quoteAsset: string, tickSize: string, stepSize: string, minPrice?: string, maxPrice?: string, minQuantity?: string, maxQuantity?: string, minNotional?: string, maxNotional?: string, supportedOrderTypes: string[], unvalidatedConstraints: Array<object>}}
  * @throws {Error|TypeError} If required exchange metadata or decimal filters are invalid.
  */
 export function adaptSymbolFiltersResponse({ symbol, exchangeInfo, accountFilters = {} }) {
-  const metadata = findSymbolFilters({ symbol,
-    exchangeInfo })
+  const metadata = findSymbolFilters({
+    symbol,
+    exchangeInfo,
+  })
   const { symbolInfo, filters, priceFilter, lotSizeFilter, notionalFilter } = metadata
   const tickSize = validatePositiveDecimalFilter({
     value: priceFilter?.tickSize,
-name: "PRICE_FILTER.tickSize",
+    name: "PRICE_FILTER.tickSize",
     symbol,
   })
   const stepSize = validatePositiveDecimalFilter({
     value: lotSizeFilter?.stepSize,
-name: "LOT_SIZE.stepSize",
+    name: "LOT_SIZE.stepSize",
     symbol,
   })
-  validateSymbolMetadata({ symbolInfo,
-    symbol })
+  validateSymbolMetadata({
+    symbolInfo,
+    symbol,
+  })
 
-  const optionalFilters = readOptionalFilters({ priceFilter,
+  const optionalFilters = readOptionalFilters({
+    priceFilter,
     lotSizeFilter,
     notionalFilter,
-    symbol })
+    symbol,
+  })
   const unvalidatedConstraints = buildUnvalidatedConstraints({
     filters,
     exchangeInfo,
@@ -228,14 +238,14 @@ name: "LOT_SIZE.stepSize",
 
   return {
     symbol,
-baseAsset: symbolInfo.baseAsset,
-quoteAsset: symbolInfo.quoteAsset,
+    baseAsset: symbolInfo.baseAsset,
+    quoteAsset: symbolInfo.quoteAsset,
     tickSize,
     stepSize,
     ...Object.fromEntries(
       Object.entries(optionalFilters).filter(([, value]) => value !== undefined),
     ),
-supportedOrderTypes: symbolInfo.orderTypes,
+    supportedOrderTypes: symbolInfo.orderTypes,
     unvalidatedConstraints,
   }
 }
