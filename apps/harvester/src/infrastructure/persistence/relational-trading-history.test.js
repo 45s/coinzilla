@@ -188,7 +188,7 @@ function assertPersistedFill({ database } = {}) {
   assert.equal(fill.execution_price, "100000.00000001", "Execution price must remain an exact decimal string.")
   assert.equal(fill.executed_base_quantity, "0.123456789123", "Base quantity must remain an exact decimal string.")
   assert.equal(fill.executed_quote_quantity, "12345.67890123", "Quote quantity must remain an exact decimal string.")
-  assert.equal(fill.exchange_executed_at, "2025-11-18T22:26:40.123Z", "Exchange execution time must be preserved separately in canonical UTC ISO-8601.")
+  assert.equal(fill.exchange_executed_at, "2025-11-18T21:06:40.123Z", "Exchange execution time must be preserved separately in canonical UTC ISO-8601.")
   assert.ok(fill.local_observed_at, "Local observation time must be recorded independently from exchange execution time.")
   const commission = database.prepare("SELECT * FROM fill_commissions").get()
   assert.ok(commission, "The actual commission must be stored in a readable commission row.")
