@@ -89,11 +89,17 @@ function getStatusesByType({ statuses, type }) {
 }
 
 function findStatusByType({ statuses, type }) {
-  return getStatusesByType({ statuses, type })[0]
+  return getStatusesByType({
+    statuses,
+    type,
+  })[0]
 }
 
 function hasRecoveryFailureStatus(statuses) {
-  const recoveryFailedStatus = findStatusByType({ statuses, type: "recoveryFailed" })
+  const recoveryFailedStatus = findStatusByType({
+    statuses,
+    type: "recoveryFailed",
+  })
   return recoveryFailedStatus?.recoveryRequired === true
 }
 
@@ -153,7 +159,10 @@ async function createTwoSubscriberRecoveryScenario() {
     second,
     firstStatuses,
     secondStatuses,
-    firstRecoveryGeneration: findStatusByType({ statuses: firstStatuses, type: "recovered" })?.recoveryGeneration,
+    firstRecoveryGeneration: findStatusByType({
+      statuses: firstStatuses,
+      type: "recovered",
+    })?.recoveryGeneration,
   }
 }
 
@@ -505,7 +514,10 @@ function assertStaleRecoveryAcknowledgementIsRejected({ first, firstStatuses, fi
     "A delayed acknowledgement from the previous generation must be rejected without mutating current subscriber state.",
   )
   assert.equal(
-    getStatusesByType({ statuses: firstStatuses, type: "reconciled" }).length,
+    getStatusesByType({
+      statuses: firstStatuses,
+      type: "reconciled",
+    }).length,
     0,
     "A stale acknowledgement must never publish global completion for the newer recovery.",
   )
@@ -642,7 +654,14 @@ async function createEventDeliveryScenario() {
   const second = await fixture.session.subscribe({
     onEvent: createEventRecorder(received),
   })
-  return { fixture, first, second, callbackError, logs, received }
+  return {
+    fixture,
+    first,
+    second,
+    callbackError,
+    logs,
+    received,
+  }
 }
 
 async function verifyEventDeliveryFiltersDuplicatesAndIsolatesThrowingSubscribers() {
@@ -681,7 +700,11 @@ async function verifyEventDeliveryFiltersDuplicatesAndIsolatesThrowingSubscriber
     "A valid event must be delivered once to every active subscriber, regardless of another subscriber's callback failure.",
   )
   assert.equal(
-    countLoggedErrors({ logs, message: "Binance user-data event callback failed", error: callbackError }),
+    countLoggedErrors({
+      logs,
+      message: "Binance user-data event callback failed",
+      error: callbackError,
+    }),
     1,
     "A throwing event callback must be logged once without interrupting fan-out.",
   )
@@ -736,7 +759,15 @@ async function createRpcErrorScenario() {
     onStatus: createStatusRecorder(statuses),
   })
   fixture.emitError(rpcError)
-  return { fixture, first, second, callbackError, rpcError, logs, statuses }
+  return {
+    fixture,
+    first,
+    second,
+    callbackError,
+    rpcError,
+    logs,
+    statuses,
+  }
 }
 
 async function verifyRpcErrorNotificationDoesNotStartRecovery() {
@@ -758,11 +789,19 @@ async function verifyRpcErrorNotificationDoesNotStartRecovery() {
     "An RPC error notification alone must not schedule a reconnect.",
   )
   assert.ok(
-    hasLoggedError({ logs, message: "Binance user data stream error", error: rpcError }),
+    hasLoggedError({
+      logs,
+      message: "Binance user data stream error",
+      error: rpcError,
+    }),
     "The original RPC error must be logged without replacing its identity.",
   )
   assert.ok(
-    hasLoggedError({ logs, message: "Binance user-data status callback failed", error: callbackError }),
+    hasLoggedError({
+      logs,
+      message: "Binance user-data status callback failed",
+      error: callbackError,
+    }),
     "A throwing status callback must be isolated and reported.",
   )
 
@@ -790,14 +829,20 @@ describe("Application user-data session recovery reminders", () => {
 
     fixture.closeInitialConnection()
     await fixture.reconnect()
-    const recoveryGeneration = findStatusByType({ statuses, type: "recovered" })?.recoveryGeneration
+    const recoveryGeneration = findStatusByType({
+      statuses,
+      type: "recovered",
+    })?.recoveryGeneration
     assert.ok(
       Number.isSafeInteger(recoveryGeneration),
       "A recovered status must expose its generation before the subscriber acknowledges it.",
     )
 
     assert.equal(
-      getStatusesByType({ statuses, type: "recovered" }).length,
+      getStatusesByType({
+        statuses,
+        type: "recovered",
+      }).length,
       1,
       "A successful reconnect must notify the subscriber that reconciliation is required.",
     )
@@ -855,7 +900,10 @@ describe("Application user-data recovery after subscriber removal", () => {
 
     fixture.closeInitialConnection()
     await fixture.reconnect()
-    const recoveryGeneration = findStatusByType({ statuses: firstStatuses, type: "recovered" })?.recoveryGeneration
+    const recoveryGeneration = findStatusByType({
+      statuses: firstStatuses,
+      type: "recovered",
+    })?.recoveryGeneration
 
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(recoveryGeneration),
@@ -868,7 +916,10 @@ describe("Application user-data recovery after subscriber removal", () => {
     await second.data.disconnect()
 
     assert.deepEqual(
-      getStatusesByType({ statuses: firstStatuses, type: "reconciled" }),
+      getStatusesByType({
+        statuses: firstStatuses,
+        type: "reconciled",
+      }),
       [{
         type: "reconciled",
         subscriptionId: 18,
@@ -878,7 +929,10 @@ describe("Application user-data recovery after subscriber removal", () => {
       "Removing the final unacknowledged subscriber must complete recovery for the remaining acknowledged subscriber.",
     )
     assert.equal(
-      getStatusesByType({ statuses: secondStatuses, type: "reconciled" }).length,
+      getStatusesByType({
+        statuses: secondStatuses,
+        type: "reconciled",
+      }).length,
       0,
       "A disconnected subscriber must not receive the terminal recovery notification.",
     )
@@ -946,7 +1000,10 @@ describe("Application user-data session concurrent setup", () => {
     await fixture.subscribeStarted
 
     assert.equal(
-      countCalls({ calls: fixture.calls, method: "subscribe" }),
+      countCalls({
+        calls: fixture.calls,
+        method: "subscribe",
+      }),
       1,
       "Concurrent local subscribers must share one in-flight remote subscription request.",
     )
@@ -958,13 +1015,19 @@ describe("Application user-data session concurrent setup", () => {
 
     await first.data.disconnect()
     assert.equal(
-      countCalls({ calls: fixture.calls, method: "unsubscribe" }),
+      countCalls({
+        calls: fixture.calls,
+        method: "unsubscribe",
+      }),
       0,
       "Disconnecting one of multiple subscribers must retain the shared remote subscription.",
     )
     await second.data.disconnect()
     assert.deepEqual(
-      getCallsByMethod({ calls: fixture.calls, method: "unsubscribe" }),
+      getCallsByMethod({
+        calls: fixture.calls,
+        method: "unsubscribe",
+      }),
       [["unsubscribe", 17]],
       "The remote subscription must be removed exactly once after the final subscriber disconnects.",
     )
