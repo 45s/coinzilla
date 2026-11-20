@@ -25,8 +25,8 @@ For any refactoring or code-audit task, use the canonical [AI Refactoring and Co
 4. Change only files owned by that domain, unless a coordinated cross-domain task explicitly authorizes otherwise.
 5. Add tests and follow the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact).
 6. Commit the implementation, strong regression tests, and documentation, then open a PR targeting `develop`. GitHub Actions is the required verification runner; run local checks when a working local environment is available, but local execution is not a prerequisite for implementation or PR creation.
-7. The responsible agent synchronizes and merges the task PR after all automated requirements pass. No routine human approval is expected for `develop`.
-8. Never merge task work directly into `main`.
+7. The responsible agent synchronizes, verifies, and prepares the task PR for review. The user reviews and merges every task PR; agents must never merge or enable auto-merge.
+8. Never merge any task or release PR on the user's behalf. Never merge task work directly into `main`.
 9. When the agreed milestone is ready, prepare one release PR from `develop` to `main`. The user reviews and approves that release PR.
 
 ## 1.1 Incremental commits and resumable task handoffs — mandatory
@@ -129,7 +129,7 @@ The next agent must be able to continue from the issue, PR, branch and canonical
 | Branch | Purpose | Who merges |
 | --- | --- | --- |
 | `main` | Stable, releasable history | User approves final release PR |
-| `develop` | Shared integration branch for ongoing work | Responsible agent after all required gates pass |
+| `develop` | Shared integration branch for ongoing work | User, after reviewing the PR and required gates |
 | `feature/<domain>/<task>` | Short-lived feature task | Responsible agent into `develop` |
 | `fix/<domain>/<task>` | Short-lived bug-fix task | Responsible agent into `develop` |
 | `docs/<task>` | Short-lived documentation task | Responsible agent into `develop` |
@@ -211,9 +211,9 @@ A task PR targeting `develop` must:
 - Satisfy the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact) for every meaningful change; do not leave required documentation as an untracked follow-up.
 - Have a reviewed final diff with no secrets, generated noise, weakened tests, or unrelated edits.
 
-**Human approval is not a routine gate for `develop`.** After all required checks pass, branch freshness is verified, and the diff/ownership checks are satisfied, the responsible agent may merge its own task PR into `develop`. Prefer GitHub auto-merge if the repository enables it; otherwise merge only after the required checks have completed successfully. Never bypass branch protection or merge with pending/failed checks.
+**User review and merge are mandatory for every task PR.** After all required checks pass, branch freshness is verified, and the diff/ownership checks are satisfied, the responsible agent must leave the PR open for the user to review and merge. Agents must not merge task PRs, enable auto-merge, or treat passing CI as authorization to integrate changes.
 
-The agent is responsible for merge execution and cleanup. Do not ask the user to merge routine task PRs or update branches manually.
+The agent remains responsible for implementation, branch freshness, CI diagnosis, and review-ready handoff. The user owns the merge decision and execution.
 
 ## 6. Branch freshness and conflict handling — required on every PR update
 
@@ -234,9 +234,9 @@ Before **each** action that updates an existing PR or its source branch—includ
 
 This procedure applies every time, not only once per PR and not only before merge. If a PR is already current, record/confirm that result and proceed without creating an unnecessary synchronization commit. Metadata-only changes still require the pre-update freshness check.
 
-### Mandatory final merge check
+### Mandatory pre-handoff merge-readiness check
 
-Immediately before merging, repeat the full freshness check against the PR's actual target. If either ref changes during validation, repeat synchronization and required checks. Merge only when the latest target tip is an ancestor of the exact PR head being merged and every required gate is satisfied.
+Before handing a PR to the user for review, repeat the full freshness check against the PR's actual target. If either ref changes during validation, repeat synchronization and required checks. Report the exact PR head and confirm that the latest target tip is an ancestor of that head and every required gate is satisfied. The user performs the merge; agents must not do so.
 
 Never force-push shared history, discard another agent's work, use empty commits to restart CI, or ask the user to perform routine synchronization. If permissions or tools prevent safe synchronization or verification, stop and report the exact blocker. Never merge a stale PR or bypass branch protection.
 
@@ -263,7 +263,7 @@ Each domain roadmap is the source of truth for that domain's planned work and st
 - Verify every required check against the **exact current PR head SHA**. Record the SHA and the relevant Actions run/check evidence in the PR. A green run on an earlier commit, a workflow that merely started, or a locally inferred result does not count.
 - If an Actions run fails for infrastructure reasons, retry only the failed job/run when appropriate and safe; distinguish infrastructure failure from a product/test failure. If the workflow itself is broken, repair it in the same task or a focused supporting PR. Do not report the work as verified until the required checks pass.
 - If GitHub permissions or repository services prevent a specific GitHub operation, continue with every other safe implementation and repository step possible. Report the exact denied operation and its effect; do not convert a missing local terminal into a blocker or ask the user to run routine commands.
-- Merge the task PR into `develop` only after every required check passes on the exact head SHA and branch freshness/ownership requirements are satisfied. Never claim a test/check passed unless GitHub reports success for the relevant commit.
+- Leave the task PR open for the user to review and merge after every required check passes on the exact head SHA and branch freshness/ownership requirements are satisfied. Never merge or enable auto-merge on the user's behalf. Never claim a test/check passed unless GitHub reports success for the relevant commit.
 
 For broker changes, keep live/network integration tests separate from default unit tests. Tests that place orders must use TESTNET only, and only under explicit authorization. Never use production credentials or trigger LIVE broker actions as part of CI verification.
 ## 9. Final release: one human review
@@ -276,7 +276,7 @@ When the user-approved milestone is ready:
 2. Synchronize and validate `develop` against the latest `main`.
 3. Run the full release validation and inspect the complete `develop` → `main` diff.
 4. Prepare one release PR with a concise milestone summary, roadmap items included, test evidence, compatibility/migration notes, and known risks.
-5. The user performs the final review and approval. Agents must not merge this PR unless the user explicitly authorizes that merge.
+5. The user performs the final review, approval, and merge. Agents must not merge this PR or any task PR.
 
 Do not turn every small commit into a separate human decision. Keep the final PR understandable with a summary and links to task PRs/issues.
 
@@ -302,7 +302,7 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 - Require **all** CI checks: `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, `Audit production dependencies`, and `actionlint`.
 - Require branches to be up to date before merging (`strict_required_status_checks_policy: true`).
 - Require conversation resolution.
-- Require zero human approvals; agents may merge their own PRs only after every required check is green.
+- Require at least one approving human review. The user reviews and merges task PRs; agents must never merge or enable auto-merge.
 - Block force pushes and deletion of `develop` itself; task source branches are deleted after merge.
 - Keep GitHub automatic head-branch deletion enabled.
 - Do not configure bypass actors or admin bypass for these gates.
@@ -314,7 +314,7 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 - Require at least one approving review so the final release approval is technically enforced, not merely documented.
 - Block force pushes and branch deletion.
 
-Enable repository **Allow auto-merge** only if desired and supported by the chosen merge strategy. If it remains disabled, agents may merge task PRs themselves after all rules are satisfied. Do not describe auto-merge as active until the repository setting is actually enabled.
+Keep repository **Allow auto-merge** disabled for task PRs. The user performs the merge manually after review. Do not describe approval enforcement as active until the live ruleset has been updated and read back.
 
 After configuration, read back both live rulesets and verify they match the requirements above. Derive exact required-check context names from successful workflow runs; never assume a workflow name is its status context. Do not claim a rule is active until the live ruleset confirms it.
 
