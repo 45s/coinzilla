@@ -855,7 +855,10 @@ describe("Application user-data session recovery reminders", () => {
     await fixture.runNextTimer()
 
     assert.equal(
-      getStatusesByType({ statuses, type: "recovered" }).length,
+      getStatusesByType({
+        statuses,
+        type: "recovered",
+      }).length,
       2,
       "An unacknowledged recovery must repeat its recovered reminder.",
     )
