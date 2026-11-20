@@ -15,10 +15,6 @@ const userDataEventTypes = Object.freeze([
 ])
 
 /**
- * Adapt public market-data events only. Authenticated user-data events are
- * intentionally excluded and remain owned by the WebSocket API session.
- */
-/**
  * Adapt a public market-data message; reject authenticated user-data events.
  *
  * @param {unknown} message - Raw Binance Spot stream event.
@@ -34,6 +30,8 @@ export function adaptPublicStreamMessage(message) {
     throw new TypeError("Authenticated user-data events are not public market-data events")
   }
 
-  const adapter = Object.hasOwn(publicAdapters, message.e)\n    ? publicAdapters[message.e]\n    : undefined
+  const adapter = Object.hasOwn(publicAdapters, message.e)
+    ? publicAdapters[message.e]
+    : undefined
   return adapter ? adapter(message) : message
 }
