@@ -40,15 +40,15 @@ function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, c
     type: "LIMIT",
     limitPrice: new Money({
       amount: "100",
-      asset: quoteAsset,
+      asset: orderMarket.quoteAsset,
     }),
     originalQuantity: new Quantity({
       amount: "0.1",
-      asset: baseAsset,
+      asset: orderMarket.baseAsset,
     }),
     executedQuantity: new Quantity({
       amount: executed,
-      asset: baseAsset,
+      asset: orderMarket.baseAsset,
     }),
     status: "FILLED",
     createdAt: 100,
@@ -67,15 +67,15 @@ function createFill({ tradeId = "1", orderId = "10", fillMarket = market, client
     side: "BUY",
     price: new Money({
       amount: "100",
-      asset: quoteAsset,
+      asset: fillMarket.quoteAsset,
     }),
     quantity: new Quantity({
       amount: "0.1",
-      asset: baseAsset,
+      asset: fillMarket.baseAsset,
     }),
     quoteQuantity: new Money({
       amount: "10",
-      asset: quoteAsset,
+      asset: fillMarket.quoteAsset,
     }),
     liquidityRole: "MAKER",
     executedAt: 200,
@@ -177,7 +177,7 @@ test("paginates configured-market order and trade history and persists exchange 
     now: () => 300,
   })
 
-  assert.equal(result.ok, true)
+  assert.equal(result.ok, true, result.errors?.map((error) => error.message).join("; "))
   assert.equal(result.data.historyScope, "CONFIGURED_MARKETS")
   assert.equal(result.data.marketUniverseComplete, false)
   assert.equal(result.data.retentionCoverageConfirmed, false)
@@ -327,8 +327,8 @@ test("resumes from durable per-market cursors without re-persisting prior pages"
   const first = await synchronizeAccountHistory(input)
   const second = await synchronizeAccountHistory(input)
 
-  assert.equal(first.ok, true)
-  assert.equal(second.ok, true)
+  assert.equal(first.ok, true, first.errors?.map((error) => error.message).join("; "))
+  assert.equal(second.ok, true, second.errors?.map((error) => error.message).join("; "))
   assert.deepEqual(
     calls.orders.map(({ orderId }) => orderId),
     [0, 11, 11],
