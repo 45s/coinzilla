@@ -179,10 +179,28 @@ function createOrderIdentityKey({ order }) {
   return `${order.market.id}:${order.brokerOrderId}`
 }
 
-function validateCanonicalOrder({ order, symbol, lastOrderId, state }) {
-  if (!(order instanceof CanonicalOrder) || order.market.symbol !== symbol) {
+function validateCanonicalOrderProviderIdentity({ order, providerIdentity, symbol }) {
+  if (order.providerInstanceId === undefined) {
+    return
+  }
+  if (
+    order.providerInstanceId !== providerIdentity.providerInstanceId ||
+    order.providerType !== providerIdentity.providerType ||
+    order.accountId !== providerIdentity.accountId
+  ) {
+    throw new Error(`Binance order provider identity conflicts for ${symbol}:${order.brokerOrderId}`)
+  }
+}
+
+function validateCanonicalOrder({ order, symbol, lastOrderId, state, providerIdentity }) {
+  if (!(order instanceof CanonicalOrder) || order.market.symbol !== symbol || order.market.venue !== "binance") {
     throw new TypeError(`Binance order history returned a non-canonical or wrong-market order for ${symbol}`)
   }
+  validateCanonicalOrderProviderIdentity({
+    order,
+    providerIdentity,
+    symbol,
+  })
   const orderId = requireNumericCursor({
     value: order.brokerOrderId,
     field: "order ID",
@@ -257,13 +275,13 @@ async function requestOrderPage({ broker, symbol, orderId, limit, requestDelayMs
     requestDelayMs,
     sleep,
   })
+  state.requestCount += 1
+  state.orderPagesChecked += 1
   const result = await broker.getCanonicalOrderHistory({
     symbol,
     orderId,
     limit,
   })
-  state.requestCount += 1
-  state.orderPagesChecked += 1
   return validatePage({
     result,
     symbol,
@@ -272,7 +290,7 @@ async function requestOrderPage({ broker, symbol, orderId, limit, requestDelayMs
   })
 }
 
-function validateOrderPage({ page, symbol, lastOrderId, state }) {
+function validateOrderPage({ page, symbol, lastOrderId, state, providerIdentity }) {
   let nextOrderId = lastOrderId
   const orders = page.map((order) => {
     nextOrderId = validateCanonicalOrder({
@@ -280,6 +298,7 @@ function validateOrderPage({ page, symbol, lastOrderId, state }) {
       symbol,
       lastOrderId: nextOrderId,
       state,
+      providerIdentity,
     })
     return order
   })
@@ -343,8 +362,22 @@ async function fetchOrderHistoryForMarket({
     symbol,
   })
   while (true) {
-    const page = await requestOrderPage({ broker, symbol, orderId, limit, requestDelayMs, sleep, state })
-    const validated = validateOrderPage({ page, symbol, lastOrderId, state })
+    const page = await requestOrderPage({
+      broker,
+      symbol,
+      orderId,
+      limit,
+      requestDelayMs,
+      sleep,
+      state,
+    })
+    const validated = validateOrderPage({
+      page,
+      symbol,
+      lastOrderId,
+      state,
+      providerIdentity,
+    })
     await persistOrderPage({
       orders: validated.orders,
       repositories,
@@ -353,7 +386,7 @@ async function fetchOrderHistoryForMarket({
       now,
       state,
     })
-    ({ lastOrderId } = validated)
+    lastOrderId = validated.lastOrderId
     await saveOrderPageCursor({
       page,
       lastOrderId,
@@ -374,16 +407,24 @@ async function fetchOrderHistoryForMarket({
 }
 
 function createEnrichedFill({ fill, clientOrderId, providerIdentity }) {
+  const hasProviderIdentity = [
+    fill.providerInstanceId,
+    fill.providerType,
+    fill.accountId,
+  ].some((value) => value !== undefined)
   if (
-    fill.providerInstanceId !== undefined &&
+    hasProviderIdentity &&
     (fill.providerInstanceId !== providerIdentity.providerInstanceId ||
       fill.providerType !== providerIdentity.providerType ||
       fill.accountId !== providerIdentity.accountId)
   ) {
     throw new Error(`Binance fill provider identity conflicts for ${fill.market.symbol}:${fill.tradeId}`)
   }
-  if (fill.clientOrderId !== undefined && clientOrderId !== undefined &&
-      fill.clientOrderId !== clientOrderId) {
+  if (
+    fill.clientOrderId !== undefined &&
+    clientOrderId !== undefined &&
+    fill.clientOrderId !== clientOrderId
+  ) {
     throw new Error(`Binance fill client-order identity conflicts for ${fill.market.symbol}:${fill.tradeId}`)
   }
   return new Fill({
@@ -436,7 +477,7 @@ function mapCanonicalFill({ fill }) {
 }
 
 function validateCanonicalFill({ fill, symbol, lastTradeId, state }) {
-  if (!(fill instanceof Fill) || fill.market.symbol !== symbol) {
+  if (!(fill instanceof Fill) || fill.market.symbol !== symbol || fill.market.venue !== "binance") {
     throw new TypeError(`Binance trade history returned a non-canonical or wrong-market fill for ${symbol}`)
   }
   const tradeId = requireNumericCursor({
@@ -518,13 +559,13 @@ async function requestFillPage({ broker, symbol, fromId, limit, requestDelayMs, 
     requestDelayMs,
     sleep,
   })
+  state.requestCount += 1
+  state.fillPagesChecked += 1
   const result = await broker.getFills({
     symbol,
     fromId,
     limit,
   })
-  state.requestCount += 1
-  state.fillPagesChecked += 1
   return validatePage({
     result,
     symbol,
@@ -604,7 +645,15 @@ async function fetchFillHistoryForMarket({
     symbol,
   })
   while (true) {
-    const page = await requestFillPage({ broker, symbol, fromId, limit, requestDelayMs, sleep, state })
+    const page = await requestFillPage({
+      broker,
+      symbol,
+      fromId,
+      limit,
+      requestDelayMs,
+      sleep,
+      state,
+    })
     const validated = validateFillPage({ page, symbol, lastTradeId, state })
     await persistFillPage({
       fills: validated.fills,
@@ -614,7 +663,7 @@ async function fetchFillHistoryForMarket({
       now,
       state,
     })
-    ({ lastTradeId } = validated)
+    lastTradeId = validated.lastTradeId
     await saveTradePageCursor({
       page,
       lastTradeId,
