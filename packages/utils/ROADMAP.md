@@ -6,6 +6,16 @@ type: roadmap
 owner: utils
 ---
 
+## In review — S-5 Logger transport-failure fallback redaction ([#1568](https://github.com/45s/coinzilla/issues/1568); [PR #1581](https://github.com/45s/coinzilla/pull/1581))
+
+- The source audit found that the default transport-error reporter and the emergency fallback after a custom reporter failure wrote raw Error objects to stderr. This bypassed structured field-name redaction and could disclose credentials embedded in an error message or stack.
+- Test-first RED was observed on isolated test commit `6279998c4759306f19947c5ef4be712d977686eb`: both synthetic secret-leak regressions failed for the expected reason. The implementation is in commit `2d7140ed7b365fff0eb5d794f98b9da6425f8987`.
+- The fallback now emits only the transport name and safe error type. It does not emit the raw message or stack. The custom `onTransportError({ transport, error })` callback contract remains unchanged; the callback still receives the original error, and a callback failure falls back to the same bounded summary.
+- Exact-head Utils unit tests passed on the current PR head: 241 tests, 239 passed, 0 failed, 2 skipped. Workspace quality and package coverage checks are still pending.
+- No public API, dependency, Harvester source/runtime, CI workflow or logger abstraction was added. The canonical repository policy is [Logging and Observability Standard](../../docs/engineering/LOGGING_OBSERVABILITY_STANDARD.md).
+- **Status:** PR open; do not mark complete until exact-head required CI passes and the user merges it.
+
+
 ## Completed — shared SystemCustomError base (request [#1208](https://github.com/45s/coinzilla/issues/1208); merged [PR #1262](https://github.com/45s/coinzilla/pull/1262))
 
 - Added the single domain-neutral native `Error` base in `@coinzilla/utils`, preserving native `cause` and exposing optional immutable `code`, safe scalar `context`, and `retryable` diagnostics.
