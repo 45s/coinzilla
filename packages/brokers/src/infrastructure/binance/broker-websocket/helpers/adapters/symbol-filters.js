@@ -52,7 +52,7 @@ function collectUnvalidatedConstraints({ symbolFilters, exchangeFilters, assetFi
     if (FILTERS_NOT_APPLICABLE_TO_SUPPORTED_LIMIT_ORDERS.includes(sourceFilterType)) {
       return
     }
-    const mappedConstraint = FILTER_CONSTRAINTS[sourceFilterType]
+    const mappedConstraint = Object.hasOwn(FILTER_CONSTRAINTS, sourceFilterType)\n      ? FILTER_CONSTRAINTS[sourceFilterType]\n      : undefined
     constraints.push(Object.freeze({
       type: mappedConstraint?.type ?? "UNMODELED_EXCHANGE_CONSTRAINT",
 scope: mappedConstraint?.scope ?? scope,
