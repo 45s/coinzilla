@@ -2,24 +2,24 @@ import { open, mkdir } from "node:fs/promises"
 import { dirname } from "node:path"
 import { assertDecimalString, compareDecimal, multiplyDecimal } from "@coinzilla/utils"
 
-const HYPEUSDT_HYPEUSDT_ORDER_DETAILS = Object.freeze({
+const HYPEUSDT_ORDER_DETAILS = Object.freeze({
   symbol: "HYPEUSDT",
   side: "BUY",
   type: "LIMIT",
   price: "30",
   quantity: "0.4",
 })
-const HYPEUSDT_HYPEUSDT_ORDER_NOTIONAL = multiplyDecimal({
-  left: HYPEUSDT_HYPEUSDT_ORDER_DETAILS.price,
-  right: HYPEUSDT_HYPEUSDT_ORDER_DETAILS.quantity,
+const HYPEUSDT_ORDER_NOTIONAL = multiplyDecimal({
+  left: HYPEUSDT_ORDER_DETAILS.price,
+  right: HYPEUSDT_ORDER_DETAILS.quantity,
 })
 const HYPEUSDT_ORDER = Object.freeze({
-  ...HYPEUSDT_HYPEUSDT_ORDER_DETAILS,
-  notional: HYPEUSDT_HYPEUSDT_ORDER_NOTIONAL,
+  ...HYPEUSDT_ORDER_DETAILS,
+  notional: HYPEUSDT_ORDER_NOTIONAL,
 })
 const PROVISIONAL_HYPEUSDT_NOTIONAL_FLOOR = "11"
 
-export const BITUNIX_OPERATOR_HYPEUSDT_ORDER_CONFIRMATION = "SUBMIT ONE LIVE HYPEUSDT BUY LIMIT HYPEUSDT_ORDER"
+export const BITUNIX_OPERATOR_ORDER_CONFIRMATION = "SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER"
 
 function requireSuccessfulBrokerResult({ result, operation }) {
   if (!result || result.ok !== true) {
@@ -373,7 +373,7 @@ export async function runBitunixOperatorOrderAttempt({
   }))
   const approved = await confirm({
     preflight,
-    confirmationPhrase: BITUNIX_OPERATOR_HYPEUSDT_ORDER_CONFIRMATION,
+    confirmationPhrase: BITUNIX_OPERATOR_ORDER_CONFIRMATION,
   })
   if (approved !== true) {
     writeLine("Operator declined or did not enter the exact confirmation phrase. No order was sent.")
