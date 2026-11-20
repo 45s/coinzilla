@@ -81,8 +81,8 @@ function assertMigrationHistory(database) {
   const migrations = database.prepare(
     "SELECT version, name, checksum FROM schema_migrations ORDER BY version",
   ).all()
-  assert.equal(migrations.length, 1, "A fresh database must record exactly one initial Harvester relational migration.")
-  assert.equal(migrations[0].version, 1, "The initial Harvester relational schema must use migration version 1.")
+  assert.equal(migrations.length, 2, "A fresh database must record the initial schema and history-provenance migrations.")
+  assert.deepEqual(migrations.map(({ version }) => version), [1, 2], "A fresh database must apply the ordered v1 and v2 migrations.")
   assert.ok(migrations[0].checksum, "The migration history must record the implementation checksum.")
 }
 
@@ -105,6 +105,7 @@ function assertFreshRelationalSchema(database) {
       "original_quantity", "executed_quantity", "cumulative_quote_quantity",
       "remaining_quantity", "status", "exchange_created_at", "exchange_updated_at",
       "local_first_observed_at", "local_last_observed_at", "source_kind", "source_record_id",
+      "ingestion_source", "last_ingestion_source",
     ],
   })
   assertColumnsPresent({
@@ -116,6 +117,7 @@ function assertFreshRelationalSchema(database) {
       "client_order_id", "strategy_id", "cycle_id", "side", "execution_price",
       "executed_base_quantity", "executed_quote_quantity", "commission_status",
       "exchange_executed_at", "local_observed_at", "source_kind",
+      "ingestion_source", "last_ingestion_source",
     ],
   })
   const exchangeLookupIndex = database.prepare("PRAGMA index_list(orders)").all().find(
@@ -198,6 +200,8 @@ function assertMigratedLegacyHistory({ database, legacyRecord } = {}) {
   assert.ok(migrated.migrated_at, "Migrated orders must record their migration timestamp.")
   assert.equal(migrated.last_observed_source_kind, "legacy_harvester_orders", "The latest observation provenance must identify the migration source.")
   assert.equal(migrated.source_kind, "legacy_harvester_orders", "Migrated rows must retain explicit legacy migration provenance.")
+  assert.equal(migrated.ingestion_source, "legacy_migration", "Migrated rows must identify the legacy migration as their ingestion source.")
+  assert.equal(migrated.last_ingestion_source, "legacy_migration", "The latest migrated order observation must identify the migration source.")
   assert.equal(migrated.source_record_id, legacyRecord.id, "Migrated rows must point to their exact source record.")
   const source = database.prepare(
     "SELECT record FROM db_records WHERE collection = ? AND id = ?",
@@ -306,6 +310,7 @@ function assertFillIdentityAndProvenance({ fill } = {}) {
   assert.equal(fill.liquidity_role, "TAKER", "Execution liquidity role must be preserved.")
   assert.equal(fill.commission_status, "COMPLETE", "Canonical commission status must be preserved.")
   assert.equal(fill.source_kind, "live_fill_applied", "Fill provenance must identify the applied-fill observer.")
+  assert.equal(fill.ingestion_source, "live_event", "Live fill rows must identify their event ingestion path.")
   assert.equal(fill.source_event_name, HARVESTER_EVENT_NAMES.FILL_APPLIED, "Fill source event name must be retained.")
   assert.equal(fill.source_event_source, "harvester", "Fill source event producer must be retained.")
   assert.equal(fill.last_source_event_id, fill.source_event_id, "The first fill observation must also be its latest source event.")
@@ -922,4 +927,43 @@ test("keeps EventBus delivery non-blocking when the bounded fill queue is full",
   const result = await observer.flush()
   assert.equal(result.ok, false, "A queue overflow must be reported without blocking EventBus delivery.")
   assert.equal(result.diagnostics.failureCount, 1, "The observer must retain the queue-overflow failure count.")
+})
+
+
+test("stores exchange-history provenance and links only the verified scoped order", async (t) => {
+  const context = await createTestContext({
+    t,
+  })
+  const persistence = await preparePersistence({
+    context,
+  })
+  const historicalOrder = {
+    ...createLegacyRecord(),
+  }
+  delete historicalOrder.ownership
+  await persistence.orderRepository.upsertHistorical(historicalOrder)
+  await persistence.fillRepository.upsert({
+    fill: createAppliedFillEvent(),
+    sourceEvent: {
+      id: "exchange-history-fill:binance-primary:binance:BTCUSDT:trade-0001",
+      name: "execution.fill_history_reconciled",
+      source: "binance.exchange-history",
+      timestamp: "2026-11-20T04:00:00.000Z",
+    },
+    environment: "testnet",
+    ingestionSource: "exchange_history",
+  })
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const order = database.prepare("SELECT * FROM orders").get()
+      const fill = database.prepare("SELECT * FROM fills").get()
+      assert.equal(order.ingestion_source, "exchange_history")
+      assert.equal(order.strategy_id, null)
+      assert.equal(fill.ingestion_source, "exchange_history")
+      assert.equal(fill.last_ingestion_source, "exchange_history")
+      assert.equal(fill.order_id, order.id)
+      assert.equal(fill.strategy_id, null)
+    },
+  })
 })
