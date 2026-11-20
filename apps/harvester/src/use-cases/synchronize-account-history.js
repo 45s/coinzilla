@@ -46,14 +46,24 @@ function validateProviderIdentity({ providerIdentity } = {}) {
   }
 }
 
-function validateRepositories({ orderRepository, fillRepository, cursorRepository } = {}) {
-  if (typeof orderRepository?.upsertHistorical !== "function" ||
-      typeof orderRepository?.findByExchangeOrderIdentity !== "function" ||
-      typeof orderRepository?.getOldestPendingOrderId !== "function" ||
-      typeof fillRepository?.upsert !== "function" ||
-      typeof cursorRepository?.get !== "function" ||
-      typeof cursorRepository?.saveOrderCursor !== "function" ||
-      typeof cursorRepository?.saveTradeCursor !== "function") {
+function hasOrderRepository({ orderRepository } = {}) {
+  return typeof orderRepository?.upsertHistorical === "function" &&
+    typeof orderRepository?.findByExchangeOrderIdentity === "function" &&
+    typeof orderRepository?.getOldestPendingOrderId === "function"
+}
+
+function hasFillRepository({ fillRepository } = {}) {
+  return typeof fillRepository?.upsert === "function"
+}
+
+function hasCursorRepository({ cursorRepository } = {}) {
+  return typeof cursorRepository?.get === "function" &&
+    typeof cursorRepository?.saveOrderCursor === "function" &&
+    typeof cursorRepository?.saveTradeCursor === "function"
+}
+
+function validateRepositories(input) {
+  if (!hasOrderRepository(input) || !hasFillRepository(input) || !hasCursorRepository(input)) {
     throw new TypeError("Account history synchronization requires relational history and cursor repositories")
   }
 }
@@ -356,7 +366,7 @@ async function fetchOrderHistoryForMarket({
       now,
       state,
     })
-    lastOrderId = validated.lastOrderId
+    ({ lastOrderId } = validated)
     await saveOrderPageCursor({
       page,
       lastOrderId,
@@ -630,7 +640,7 @@ async function fetchFillHistoryForMarket({
       now,
       state,
     })
-    lastTradeId = validated.lastTradeId
+    ({ lastTradeId } = validated)
     await saveTradePageCursor({
       page,
       lastTradeId,
