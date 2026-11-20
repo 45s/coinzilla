@@ -9,6 +9,7 @@ Canonical repository-wide engineering guidance is linked below. Policy ownership
 - [Modularity standard](MODULARITY_STANDARD.md)
 - [Pure module template](PURE_MODULE_TEMPLATE.md) — optional starting shape with a source-backed example and direct-test pattern
 - [Domain policy template](DOMAIN_POLICY_TEMPLATE.md) — optional pure decision pattern with a behavior-matrix test example
+- [Stateful lifecycle template](STATEFUL_LIFECYCLE_TEMPLATE.md) — state ownership, transition design and deterministic lifecycle tests
 - [AI task compliance standard](AI_TASK_COMPLIANCE_STANDARD.md) — mandatory standards discovery, preflight readiness, ongoing compliance and completion verification
 - [Engineering standards and enforcement matrix](ENGINEERING_STANDARDS_MATRIX.md) — source-verified inventory and phase coordination for #1568
 - [Configuration standard](CONFIGURATION_STANDARD.md) — configuration ownership, validation, defaults, environment access, secrets and migration
