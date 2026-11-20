@@ -468,7 +468,7 @@ The prose is authoritative. BUY cadence and tranche sizing follow the owner-appr
 
 ## 15. Implementation boundary
 
-RS-4 shared Trading Engine integration is implemented in PR #1515. Until scoped RS-5 offline lifecycle verification is complete, exact-head required CI is green, and this draft specification is formally accepted:
+RS-4 shared Trading Engine integration and scoped RS-5 offline lifecycle verification are complete in PR #1515. The runtime acceptance gate is open; exact-head required CI and final specification review are the remaining merge checks. RS remains disabled by default. Before any RS route can activate:
 
 - Keep `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` true after offline acceptance; keep `RS_RECOVERY_SELLER_CONFIG.enabled` false by default. Configuration must be explicitly changed before any RS route can activate.
 - Restart/replay recovery and third-asset commission valuation are explicitly deferred. A third-asset fee without an approved quote value must fail closed.
