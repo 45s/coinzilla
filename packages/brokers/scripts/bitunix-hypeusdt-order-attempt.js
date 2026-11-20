@@ -95,7 +95,7 @@ async function main() {
   if (result.declined) {
     return
   }
-  if (result.mutationOutcome !== "CONFIRMED") {
+  if (result.ok !== true || result.mutationOutcome !== "CONFIRMED") {
     process.exitCode = 1
   }
 }
