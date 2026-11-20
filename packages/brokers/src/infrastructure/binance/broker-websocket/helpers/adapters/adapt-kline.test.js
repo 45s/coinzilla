@@ -180,3 +180,11 @@ interval: "1m",
 now: 1_700_000_060_000,
   }), /closeTime must not be before openTime/)
 })
+
+test("requires an injected clock for historical candle closure", () => {
+  assert.throws(() => adaptKlineHistoryRow({
+    row: historyRow,
+    symbol: "BTCUSDT",
+    interval: "1m",
+  }), /now/)
+})
