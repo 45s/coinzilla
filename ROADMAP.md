@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-19
-**Latest source-verified develop checkpoint:** `fdc951468648efa1fa17c93dd8c3f6ea78a23d84` (2026-11-19; includes merged PR #1455 Phase 6 execution routing). The latest complete recursive Markdown/MDX inventory remains 160 tracked files at `543753da5938eba2d95ad19d74c3f98a991e6461` (89 under Harvester and 71 elsewhere); it has not been re-counted at this newer checkpoint.
+**Last reviewed:** 2026-11-20
+**Latest source-verified develop checkpoint:** `8d88787aee65f5f79dfe3332a5c0f1918b020e6e` (2026-11-20; includes merged Harvester relational trading-history Phases 1–3 in PRs #1555/#1557 and broker pagination PR #1559). The latest complete recursive Markdown/MDX inventory remains 160 tracked files at `543753da5938eba2d95ad19d74c3f98a991e6461` (89 under Harvester and 71 elsewhere); it has not been re-counted at this newer checkpoint.
 
 ## Multi-provider Harvester execution and market-data routing — #1339
 
