@@ -377,7 +377,9 @@ test("Bitunix operator marker is exclusive, private, and contains no account bal
     ])
     const marker = JSON.parse(contents)
 
-    assert.equal(metadata.mode & 0o777, 0o600)
+    if (process.platform !== "win32") {
+      assert.equal(metadata.mode & 0o777, 0o600)
+    }
     assert.deepEqual(marker.order, preflight.order)
     assert.equal(marker.status, "DISPATCH_STARTED")
     assert.equal(Object.hasOwn(marker, "freeQuoteBalance"), false)
