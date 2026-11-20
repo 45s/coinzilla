@@ -149,7 +149,7 @@ function collectAccountSymbolFilters({ accountFilters, symbol }) {
 
 function buildUnvalidatedConstraints({ filters, exchangeInfo, accountFilters, symbolInfo, symbol }) {
   const symbolFilters = [
-    ...filters.filter((filter) => !STATIC_FILTER_TYPES.has(filter.filterType)),
+    ...filters.filter((filter) => !STATIC_FILTER_TYPES.includes(filter.filterType)),
     ...collectAccountSymbolFilters({ accountFilters,
       symbol }),
   ]
