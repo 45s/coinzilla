@@ -3,6 +3,7 @@
 ## Repository-wide source naming audit — Harvester slice (#1582)
 
 - **In progress:** the user-directed naming and module-responsibility audit covers the entire repository, including Harvester. The first Conservative slice adds behavior-characterization tests for the five existing state predicates before renaming the generic `helpers.js` module to `state-predicates.js`.
+- **TDD evidence:** the test-only commit `bfbe776f630c36710918ffb4a6c0f16c22a27f69` produced the expected `ERR_MODULE_NOT_FOUND` for the not-yet-created `state-predicates.js`; the pre-existing Conservative strategy tests continued to pass. Strict changed-file ESLint findings in the new test were corrected in `bf331236e84751dc3be5ee02e51d829a9a217f6d`; fresh CI on the corrected head is required before implementation.
 - **Compatibility:** this is a private module/test/documentation rename only. Predicate behavior, Conservative strategy decisions, accounting, order lifecycle, configuration and runtime composition remain unchanged. No exchange/account operations are part of this work.
 
 
