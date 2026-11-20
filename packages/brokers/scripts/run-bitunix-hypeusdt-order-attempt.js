@@ -1,6 +1,6 @@
 import { assertDecimalString, compareDecimal, multiplyDecimal } from "@coinzilla/utils"
 
-const ORDER = Object.freeze({
+const ORDER_DETAILS = Object.freeze({
   symbol: "HYPEUSDT",
   side: "BUY",
   type: "LIMIT",
@@ -8,8 +8,12 @@ const ORDER = Object.freeze({
   quantity: "0.4",
 })
 const ORDER_NOTIONAL = multiplyDecimal({
-  left: ORDER.price,
-  right: ORDER.quantity,
+  left: ORDER_DETAILS.price,
+  right: ORDER_DETAILS.quantity,
+})
+const ORDER = Object.freeze({
+  ...ORDER_DETAILS,
+  notional: ORDER_NOTIONAL,
 })
 const PROVISIONAL_NOTIONAL_FLOOR = "11"
 
