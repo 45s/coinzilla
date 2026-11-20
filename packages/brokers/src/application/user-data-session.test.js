@@ -364,9 +364,7 @@ onStatus: null }),
   })
 })
 
-describe("Application user-data session client port", () => it(
-  "coordinates user-data subscriptions through the injected port, not a raw RPC client",
-  async () => {
+it("coordinates user-data subscriptions through the injected port, not a raw RPC client", async () => {
     const rawClient = {}
     const calls = []
     const listeners = {
@@ -426,8 +424,7 @@ describe("Application user-data session client port", () => it(
     assert.equal(listeners.close.size, 1, "The connection-close listener must remain until the session itself stops.")
     await session.stop()
     assert.equal(listeners.close.size, 0, "Stopping the session must detach the remaining connection-close listener.")
-  },
-))
+})
 
 async function verifyFailedReconnectKeepsRecoveryPending() {
   const statuses = []
