@@ -1,18 +1,22 @@
 import { OrderHistoryIntegrityError } from "../../domain/order-history/order-history-errors.js"
 import { mergeOrderHistoryRecords } from "../../domain/order-history/order-history-transition.js"
 import { OrderHistoryPersistenceError } from "./order-history-persistence-error.js"
-import { mapOrderHistoryRecordToRow, mapOrderRowToRecord, ORDER_COLUMNS } from "./order-row-mapping.js"
+import {
+  mapOrderHistoryRecordToRow,
+  mapOrderRowToRecord,
+  ORDER_COLUMNS,
+} from "./order-row-mapping.js"
 
 const UPDATE_COLUMNS = Object.freeze(ORDER_COLUMNS.filter((column) => column !== "id"))
 const INSERT_SQL = `INSERT INTO orders (${ORDER_COLUMNS.join(", ")})
-  VALUES (${ORDER_COLUMNS.map(() => "?").join(", ")})`
+  VALUES (${ORDER_COLUMNS.map(() => "?").join(", ")} )`
 const UPDATE_SQL = `UPDATE orders SET ${UPDATE_COLUMNS.map((column) => `${column} = ?`).join(", ")} WHERE id = ?`
 
-function readOrder(transaction, id) {
+function readOrder({ transaction, id } = {}) {
   return transaction.prepare("SELECT * FROM orders WHERE id = ?").get(id)
 }
 
-function writeOrder(transaction, row, existing) {
+function writeOrder({ transaction, row, existing } = {}) {
   if (existing === undefined) {
     transaction.prepare(INSERT_SQL).run(...ORDER_COLUMNS.map((column) => row[column]))
     return
@@ -50,11 +54,14 @@ function assertFillOrderIdentity({ transaction, row } = {}) {
   }
 }
 
-function linkOrderFills(transaction, row) {
+function linkOrderFills({ transaction, row } = {}) {
   if (row.exchange_order_id === null) {
     return
   }
-  assertFillOrderIdentity({ transaction, row })
+  assertFillOrderIdentity({
+    transaction,
+    row,
+  })
   transaction.prepare(`
     UPDATE fills
     SET order_id = ?, strategy_id = COALESCE(strategy_id, ?),
@@ -77,23 +84,38 @@ function linkOrderFills(transaction, row) {
   )
 }
 
-function upsertOrder(transaction, record) {
-  const existingRow = readOrder(transaction, record.id)
-  const current = existingRow === undefined ? null : mapOrderRowToRecord(existingRow)
+function upsertOrder({ transaction, record } = {}) {
+  const existingRow = readOrder({
+    transaction,
+    id: record.id,
+  })
+  const current = existingRow === undefined
+    ? null
+    : mapOrderRowToRecord(existingRow)
   const merged = current === null
     ? record
-    : mergeOrderHistoryRecords({ current, candidate: record })
+    : mergeOrderHistoryRecords({
+        current,
+        candidate: record,
+      })
   const row = mapOrderHistoryRecordToRow({
     record: merged,
     existing: existingRow,
     sourceKind: "live_order_event",
   })
-  writeOrder(transaction, row, existingRow)
-  linkOrderFills(transaction, row)
+  writeOrder({
+    transaction,
+    row,
+    existing: existingRow,
+  })
+  linkOrderFills({
+    transaction,
+    row,
+  })
   return merged
 }
 
-function normalizeOrderWriteError(error, record) {
+function normalizeOrderWriteError({ error, record } = {}) {
   if (error instanceof OrderHistoryIntegrityError ||
     error?.code === "HARVESTER_ORDER_HISTORY_RECORD_INVALID") {
     return error
@@ -122,9 +144,15 @@ export function createRelationalOrderHistoryRepository({ database } = {}) {
   return Object.freeze({
     upsert: async (record) => {
       try {
-        return await database.transaction((transaction) => upsertOrder(transaction, record))
+        return await database.transaction((transaction) => upsertOrder({
+          transaction,
+          record,
+        }))
       } catch (error) {
-        throw normalizeOrderWriteError(error, record)
+        throw normalizeOrderWriteError({
+          error,
+          record,
+        })
       }
     },
   })
