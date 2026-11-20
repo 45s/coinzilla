@@ -134,7 +134,9 @@ const adaptersMap = Object.freeze({
  * @returns {object} Adapted event payload.
  */
 export function adaptMsg(message) {
-  const adapter = adaptersMap[message.e]
+  const adapter = Object.hasOwn(adaptersMap, message.e)
+    ? adaptersMap[message.e]
+    : undefined
   if (!adapter) {
     return message
   }
