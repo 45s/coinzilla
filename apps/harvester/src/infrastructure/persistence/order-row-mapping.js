@@ -129,7 +129,7 @@ function mapLegacyOrderFacts({ record } = {}) {
   }
 }
 
-function normalizeOrderHistoryRecord({ record } = {}) {
+function normalizeOrderHistoryRecord({ record, includeUnfilled = true } = {}) {
   if (record?.schemaVersion !== 1 || record.recordKind !== "harvester.order-history") {
     throw new TypeError("Legacy order-history record has an unsupported schema version or record kind.")
   }
@@ -141,6 +141,7 @@ function normalizeOrderHistoryRecord({ record } = {}) {
     order: mapLegacyOrderFacts({ record }),
     sourceEvent: mapLegacySourceEvent({ record }),
     environment: record.environment,
+    includeUnfilled,
   })
   if (normalized === null || normalized.id !== record.id) {
     throw new TypeError("Legacy order-history record identity or executed quantity is incompatible.")
@@ -285,8 +286,12 @@ export function mapOrderHistoryRecordToRow({
   sourceRecordId,
   migratedAt,
   ingestionSource,
+  includeUnfilled = true,
 } = {}) {
-  const order = normalizeOrderHistoryRecord({ record })
+  const order = normalizeOrderHistoryRecord({
+    record,
+    includeUnfilled,
+  })
   return {
     id: order.id,
     provider_type: order.providerType,
