@@ -8,6 +8,7 @@ import {
   analyzeHelperSource,
   analyzeHelperNaming,
   findHelperNamingViolations,
+  findChangedHelperNamingViolations,
   findHelperPolicyViolations,
 } from "./check-helper-policy.js"
 
@@ -83,6 +84,43 @@ test("scans helper fixture names", () => {
     })
   }
 })
+
+test("enforces naming only for changed helper files", () => {
+  const { root, directory } = createFixture()
+  try {
+    writeFileSync(join(directory, "process.js"), "export function process({ value }) { return value }\\n")
+    writeFileSync(join(directory, "normalize-binance-symbol.js"), "export function normalizeBinanceSymbol({ symbol }) { return symbol }\\n")
+    assert.deepEqual(findChangedHelperNamingViolations({
+      root,
+      changedPaths: [
+        "packages/example/src/helpers/process.js",
+        "packages/example/src/helpers/normalize-binance-symbol.js",
+        "packages/example/src/index.js",
+      ],
+    }), [
+      "packages/example/src/helpers/process.js: vague exported helper name process",
+      "packages/example/src/helpers/process.js: vague helper filename",
+    ])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test("changed-name check ignores deleted helper files and non-helper paths", () => {
+  const { root } = createFixture()
+  try {
+    assert.deepEqual(findChangedHelperNamingViolations({
+      root,
+      changedPaths: [
+        "packages/example/src/helpers/deleted.js",
+        "packages/example/src/index.js",
+      ],
+    }), [])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
 test("reports helpers missing a directly associated unit test", () => {
   const { root, directory } = createFixture()
   try {
