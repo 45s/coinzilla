@@ -192,7 +192,10 @@ async function closeObservability({
   const eventBusErrors = await closeEventBus({ eventBus })
   const databaseErrors = await closeHarvesterPersistence({
     observer: orderHistoryPersistence?.observer,
+    relationalOrderObserver: orderHistoryPersistence?.relationalOrderObserver,
+    fillObserver: orderHistoryPersistence?.fillObserver,
     database: orderHistoryPersistence?.database,
+    relationalDatabase: orderHistoryPersistence?.relationalDatabase,
     logger,
   })
   const processLockErrors = await releaseProcessLock({
