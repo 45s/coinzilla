@@ -113,3 +113,31 @@ test("rejects malformed command arguments without invoking backup operations", a
   assert.equal(serviceCreated, false)
   assert.match(logger.messages.error[0].errorName, /TypeError/)
 })
+
+test("uses the default retention count when the backup command has no options", async () => {
+  const logger = createLogger()
+  const calls = []
+  const service = {
+    createBackup: async (options) => {
+      calls.push(options)
+      return {
+        environment: "testnet",
+        backupFilename: "/tmp/backups/testnet/verified.sqlite",
+        retainedBackupCount: 30,
+        pagesCopied: 12,
+      }
+    },
+  }
+  const exitCode = await runTradingHistoryBackupCommand({
+    args: ["create"],
+    env: {
+      TRADING_MODE: "testnet",
+    },
+    logger,
+    createService: () => service,
+  })
+  assert.equal(exitCode, 0)
+  assert.deepEqual(calls, [{
+    keep: 30,
+  }])
+})

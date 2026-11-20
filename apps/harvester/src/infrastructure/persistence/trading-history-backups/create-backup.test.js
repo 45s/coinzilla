@@ -84,3 +84,31 @@ test("creates owner-only backup files and directories on POSIX systems", async (
   assert.equal(directoryStats.mode & 0o777, 0o700)
   assert.equal(fileStats.mode & 0o777, 0o600)
 })
+
+test("keeps LIVE backups in the production directory", async (t) => {
+  const fixture = await createFixture({
+    testContext: t,
+    tradingMode: "live",
+  })
+  const result = await fixture.service.createBackup()
+  assert.equal(result.environment, "live")
+  assert.equal(path.basename(path.dirname(result.backupFilename)), "production")
+})
+
+test("does not prune an older verified backup when a new backup fails schema validation", async (t) => {
+  const fixture = await createFixture({
+    testContext: t,
+  })
+  const previous = await fixture.service.createBackup({
+    keep: 1,
+  })
+  fixture.source.database.exec("DROP TABLE fills")
+  await assert.rejects(
+    fixture.service.createBackup({
+      keep: 1,
+    }),
+    (error) => error.code === "HARVESTER_HISTORY_BACKUP_SCHEMA_INVALID",
+  )
+  await access(previous.backupFilename)
+  await access(previous.manifestFilename)
+})
