@@ -141,59 +141,51 @@ function createAccountSnapshot() {
   }
 }
 
-test("composes RS runtime dispatch, durable submission, shared ownership and BUY-fill accounting offline", async () => {
-  const store = createStore()
-  const stopResult = await createRecoverySellerStopWorkflow({
-    operationalStateStore: store,
-  })
-  assert.equal(stopResult.ok, true, stopResult.errors?.[0]?.message)
-  const stopWorkflow = stopResult.data
-  const accounting = createRecoverySellerAccountingWorkflow({
-    sharedState: createSharedState(),
-    createCycleId: () => "integration-cycle-1",
-    onOperationalStateExecutionFill: async (fact) => store.append({
-      factType: "EXECUTION_FILL",
-      data: fact,
-    }),
-  })
+function createOfflineBroker() {
   let acknowledgedOrder
-  const broker = {
-    providerInstanceId: "binance-offline-integration",
-    providerType: "binance",
-    accountId: "offline-integration-account",
-    placeOrder: async ({ order }) => {
-      acknowledgedOrder = new CanonicalOrder({
-        clientOrderId: order.clientOrderId,
-        brokerOrderId: "offline-broker-order-1",
-        providerInstanceId: "binance-offline-integration",
-        providerType: "binance",
-        accountId: "offline-integration-account",
-        market,
-        side: order.side,
-        type: order.type,
-        limitPrice: new Money({
-          amount: order.price,
-          asset: quoteAsset,
-        }),
-        originalQuantity: new Quantity({
-          amount: order.quantity,
-          asset: baseAsset,
-        }),
-        executedQuantity: new Quantity({
-          amount: "0",
-          asset: baseAsset,
-        }),
-        status: "OPEN",
-        createdAt: 1,
-        acknowledgedAt: 2,
-        updatedAt: 2,
-      })
-      return {
-        ok: true,
-        data: acknowledgedOrder,
-      }
+  return {
+    getAcknowledgedOrder: () => acknowledgedOrder,
+    broker: {
+      providerInstanceId: "binance-offline-integration",
+      providerType: "binance",
+      accountId: "offline-integration-account",
+      placeOrder: async ({ order }) => {
+        acknowledgedOrder = new CanonicalOrder({
+          clientOrderId: order.clientOrderId,
+          brokerOrderId: "offline-broker-order-1",
+          providerInstanceId: "binance-offline-integration",
+          providerType: "binance",
+          accountId: "offline-integration-account",
+          market,
+          side: order.side,
+          type: order.type,
+          limitPrice: new Money({
+            amount: order.price,
+            asset: quoteAsset,
+          }),
+          originalQuantity: new Quantity({
+            amount: order.quantity,
+            asset: baseAsset,
+          }),
+          executedQuantity: new Quantity({
+            amount: "0",
+            asset: baseAsset,
+          }),
+          status: "OPEN",
+          createdAt: 1,
+          acknowledgedAt: 2,
+          updatedAt: 2,
+        })
+        return {
+          ok: true,
+          data: acknowledgedOrder,
+        }
+      },
     },
   }
+}
+
+function createSubmitterFixture({ store, accounting, stopWorkflow, broker }) {
   const unresolved = []
   const submit = createRecoverySellerOrderSubmitter({
     broker,
@@ -217,6 +209,13 @@ test("composes RS runtime dispatch, durable submission, shared ownership and BUY
     },
     canSubmit: () => true,
   })
+  return {
+    submit,
+    unresolved,
+  }
+}
+
+function createDispatchFixture({ accounting, stopWorkflow, submit }) {
   const pairConfig = {
     enabled: true,
     investment: "100",
@@ -227,7 +226,7 @@ test("composes RS runtime dispatch, durable submission, shared ownership and BUY
     makerPercent: "0",
     takerPercent: "0",
   }
-  const dispatch = createRecoverySellerRuntimeDispatch({
+  return createRecoverySellerRuntimeDispatch({
     recoverySellerWorkflow: accounting,
     recoverySellerStopWorkflow: stopWorkflow,
     recoverySellerPairs: {
@@ -251,8 +250,48 @@ test("composes RS runtime dispatch, durable submission, shared ownership and BUY
       },
     }),
   })
+}
 
-  const result = await dispatch({
+async function createIntegrationFixture() {
+  const store = createStore()
+  const stopResult = await createRecoverySellerStopWorkflow({
+    operationalStateStore: store,
+  })
+  assert.equal(stopResult.ok, true, stopResult.errors?.[0]?.message)
+  const stopWorkflow = stopResult.data
+  const accounting = createRecoverySellerAccountingWorkflow({
+    sharedState: createSharedState(),
+    createCycleId: () => "integration-cycle-1",
+    onOperationalStateExecutionFill: async (fact) => store.append({
+      factType: "EXECUTION_FILL",
+      data: fact,
+    }),
+  })
+  const offlineBroker = createOfflineBroker()
+  const submitter = createSubmitterFixture({
+    store,
+    accounting,
+    stopWorkflow,
+    broker: offlineBroker.broker,
+  })
+  const dispatch = createDispatchFixture({
+    accounting,
+    stopWorkflow,
+    submit: submitter.submit,
+  })
+  return {
+    store,
+    stopWorkflow,
+    accounting,
+    offlineBroker,
+    submitter,
+    dispatch,
+  }
+}
+
+async function runRuntimeIntegrationScenario() {
+  const fixture = await createIntegrationFixture()
+  const result = await fixture.dispatch({
     symbol: "ZROUSDT",
     state: {
       prices: new Map([
@@ -277,29 +316,30 @@ test("composes RS runtime dispatch, durable submission, shared ownership and BUY
         allowed: action.strategyId === "RS_recoverySeller",
       },
     }),
-    submitRecoverySellerOrder: submit,
+    submitRecoverySellerOrder: fixture.submitter.submit,
   })
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.submitted, true)
-  assert.ok(acknowledgedOrder, "The RS submitter must reach the injected offline broker")
-  assert.equal(unresolved.length, 0)
-  assert.equal(accounting.getActiveOrders().length, 1)
-  const ownership = accounting.getOrderRegistry().getOwnership({
-    clientOrderId: acknowledgedOrder.clientOrderId,
+  assert.ok(fixture.offlineBroker.getAcknowledgedOrder())
+  assert.equal(fixture.submitter.unresolved.length, 0)
+  assert.equal(fixture.accounting.getActiveOrders().length, 1)
+  const order = fixture.offlineBroker.getAcknowledgedOrder()
+  const ownership = fixture.accounting.getOrderRegistry().getOwnership({
+    clientOrderId: order.clientOrderId,
   })
   assert.equal(ownership.strategyId, "RS_recoverySeller")
   assert.equal(ownership.purpose, "RECOVERY_BUY")
   assert.equal(ownership.cycleId, "integration-cycle-1")
-  assert.deepEqual(store.records.map(({ factType }) => factType), [
+  assert.deepEqual(fixture.store.records.map(({ factType }) => factType), [
     "ORDER_SUBMISSION_INTENT",
     "ORDER_SUBMISSION_OUTCOME",
   ])
 
   const fill = new Fill({
     tradeId: "offline-trade-1",
-    brokerOrderId: acknowledgedOrder.brokerOrderId,
-    clientOrderId: acknowledgedOrder.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    clientOrderId: order.clientOrderId,
     providerInstanceId: "binance-offline-integration",
     providerType: "binance",
     accountId: "offline-integration-account",
@@ -321,20 +361,24 @@ test("composes RS runtime dispatch, durable submission, shared ownership and BUY
     commissions: [],
     commissionStatus: "COMPLETE",
   })
-  const applied = await accounting.applyBuyFill({
+  const applied = await fixture.accounting.applyBuyFill({
     fill,
   })
   assert.equal(applied.applied, true)
-  assert.equal(accounting.getBuyExecutionQuantity({
+  assert.equal(fixture.accounting.getBuyExecutionQuantity({
     cycleId: "integration-cycle-1",
   }), "5")
-  assert.equal(accounting.getBuyExecutionVwap({
+  assert.equal(fixture.accounting.getBuyExecutionVwap({
     cycleId: "integration-cycle-1",
   }), "2")
-  assert.equal(accounting.getPortfolio().getPosition({
+  assert.equal(fixture.accounting.getPortfolio().getPosition({
     marketId: market.id,
     positionId: ownership.positionId,
   }).baseQuantity.amount, "5")
-  assert.equal(store.records.at(-1).factType, "EXECUTION_FILL")
-  assert.equal(stopWorkflow.getStopState().status, "RUNNING")
+  assert.equal(fixture.store.records.at(-1).factType, "EXECUTION_FILL")
+  assert.equal(fixture.stopWorkflow.getStopState().status, "RUNNING")
+}
+
+test("composes RS runtime dispatch, durable submission, shared ownership and BUY-fill accounting offline", async () => {
+  await runRuntimeIntegrationScenario()
 })
