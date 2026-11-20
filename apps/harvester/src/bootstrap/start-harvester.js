@@ -483,6 +483,9 @@ async function createHarvesterStartupContext({ options } = {}) {
   }
 }
 
+// Keep RS non-executable until issue #1475 RS-4 and RS-5 acceptance evidence is complete.
+const RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = false
+
 function configureRecoverySellerRuntimeDispatch({
   startup,
   context,
