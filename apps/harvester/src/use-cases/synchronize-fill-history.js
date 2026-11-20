@@ -115,6 +115,10 @@ async function persistCanonicalFill({
       marketId: fill.market.id,
       brokerOrderId: fill.brokerOrderId,
     })
+    const symbolOrderKey = `${fill.market.symbol}:${fill.brokerOrderId}`
+    if (clientOrderId === null && state.refreshedOrderIds.has(symbolOrderKey)) {
+      state.ordersWithoutHistory.add(orderKey)
+    }
     if (clientOrderId === null && !state.ordersWithoutHistory.has(orderKey)) {
       const lookup = await fetchAndPersistOrderByExchangeId({
         broker,
