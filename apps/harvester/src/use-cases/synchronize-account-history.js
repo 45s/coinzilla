@@ -24,6 +24,7 @@ function validateOptions({
   environment,
   orderRepository,
   fillRepository,
+  cursorRepository,
   limit,
   requestDelayMs,
   sleep,
@@ -53,8 +54,11 @@ function validateOptions({
     throw new TypeError("Account history synchronization environment must be testnet or live")
   }
   if (typeof orderRepository?.upsertHistorical !== "function" ||
-      typeof fillRepository?.upsert !== "function") {
-    throw new TypeError("Account history synchronization requires relational order and fill repositories")
+      typeof fillRepository?.upsert !== "function" ||
+      typeof cursorRepository?.get !== "function" ||
+      typeof cursorRepository?.saveOrderCursor !== "function" ||
+      typeof cursorRepository?.saveTradeCursor !== "function") {
+    throw new TypeError("Account history synchronization requires relational history and cursor repositories")
   }
   if (!Number.isInteger(limit) || limit < 1 || limit > DEFAULT_PAGE_SIZE) {
     throw new TypeError("Account history page size must be between 1 and 1000")
@@ -206,8 +210,22 @@ async function fetchOrderHistoryForMarket({
   now,
   state,
 }) {
-  let orderId = 0
-  let lastOrderId = -1
+  const cursor = await repositories.cursorRepository.get({
+    providerIdentity,
+    environment,
+    symbol,
+  })
+  let lastOrderId = cursor.lastOrderId === null
+    ? -1
+    : requireNumericCursor({
+        value: cursor.lastOrderId,
+        field: "stored order ID",
+        symbol,
+      })
+  if (lastOrderId >= Number.MAX_SAFE_INTEGER) {
+    throw new RangeError(`Stored Binance order history cursor cannot advance for ${symbol}`)
+  }
+  let orderId = lastOrderId + 1
   while (true) {
     await waitBeforeRequest({
       state,
@@ -242,6 +260,15 @@ async function fetchOrderHistoryForMarket({
         environment,
         observedAt: new Date(now()).toISOString(),
         state,
+      })
+    }
+    if (page.length > 0) {
+      await repositories.cursorRepository.saveOrderCursor({
+        providerIdentity,
+        environment,
+        symbol,
+        lastOrderId: String(lastOrderId),
+        updatedAt: new Date(now()).toISOString(),
       })
     }
     if (page.length < limit) {
@@ -375,8 +402,22 @@ async function fetchFillHistoryForMarket({
   now,
   state,
 }) {
-  let fromId = 0
-  let lastTradeId = -1
+  const cursor = await repositories.cursorRepository.get({
+    providerIdentity,
+    environment,
+    symbol,
+  })
+  let lastTradeId = cursor.lastTradeId === null
+    ? -1
+    : requireNumericCursor({
+        value: cursor.lastTradeId,
+        field: "stored trade ID",
+        symbol,
+      })
+  if (lastTradeId >= Number.MAX_SAFE_INTEGER) {
+    throw new RangeError(`Stored Binance trade history cursor cannot advance for ${symbol}`)
+  }
+  let fromId = lastTradeId + 1
   while (true) {
     await waitBeforeRequest({
       state,
@@ -411,6 +452,15 @@ async function fetchFillHistoryForMarket({
         environment,
         observedAt: new Date(now()).toISOString(),
         state,
+      })
+    }
+    if (page.length > 0) {
+      await repositories.cursorRepository.saveTradeCursor({
+        providerIdentity,
+        environment,
+        symbol,
+        lastTradeId: String(lastTradeId),
+        updatedAt: new Date(now()).toISOString(),
       })
     }
     if (page.length < limit) {
@@ -467,6 +517,7 @@ export async function synchronizeAccountHistory({
   environment,
   orderRepository,
   fillRepository,
+  cursorRepository,
   limit = DEFAULT_PAGE_SIZE,
   requestDelayMs = DEFAULT_REQUEST_DELAY_MS,
   sleep = defaultSleep,
@@ -480,6 +531,7 @@ export async function synchronizeAccountHistory({
       environment,
       orderRepository,
       fillRepository,
+      cursorRepository,
       limit,
       requestDelayMs,
       sleep,
@@ -493,6 +545,7 @@ export async function synchronizeAccountHistory({
         repositories: {
           orderRepository,
           fillRepository,
+          cursorRepository,
         },
       },
       state,
