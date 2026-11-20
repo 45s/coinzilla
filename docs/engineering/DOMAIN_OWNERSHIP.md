@@ -45,6 +45,45 @@ Rules:
 
 This table governs package-to-package dependencies; it does **not** prove internal source-file boundaries. Each package's local architecture instructions and tests remain authoritative for its internal layers. The current repository has package-scoped architecture checks, not a complete repository-wide source-import checker. See the [Modularity Standard](./MODULARITY_STANDARD.md) and [ADR-0001](../architecture/decisions/ADR-0001-clean-hexagonal-architecture.md) for module-level direction and review requirements.
 
+
+## Internal module dependency direction
+
+Apply this matrix only to packages that already use the relevant layers. It describes dependency direction; it does not require every package to create every folder.
+
+| Module type | May depend on | Must not depend on / own |
+| --- | --- | --- |
+| Pure helper | Primitive/immutable input, value contracts, other pure helpers | I/O, mutable global state, runtime services, process/environment, filesystem, network, database, exchange clients, notification transports |
+| Domain policy/value | Domain entities, value objects, domain contracts, pure helpers and domain-neutral shared utilities | Concrete infrastructure adapters, external SDKs, database clients, notification transports, filesystem/network/process/environment |
+| Application/use case | Domain policies/contracts, application-owned ports, public shared package contracts | Concrete infrastructure implementations, provider SDKs, database drivers, direct environment/process access |
+| Infrastructure adapter/repository | Contracts/ports it implements, domain/application contracts, public package APIs, external SDKs and database drivers | Owning strategy/business policy or reaching into another package's private source tree |
+| Composition/bootstrap/runtime | Application use cases, concrete infrastructure adapters, validated configuration | Becoming the owner of domain policy or duplicating domain decisions |
+| Public package facade | Stable public contracts and supported implementations/adapters required by the package API | Business orchestration or private cross-package source imports |
+
+A package may use a simpler structure when it has no meaningful application/infrastructure split. Do not create layers or wrappers solely to match this table. The existing [Brokers architecture guide](../../packages/brokers/ARCHITECTURE.md), [Harvester architecture guide](../../apps/harvester/docs/architecture.md), and [ADR-0001](../architecture/decisions/ADR-0001-clean-hexagonal-architecture.md) provide package-specific context.
+
+## Architecture exceptions and approval
+
+- An edge absent from the workspace allowlist or a violation of the internal direction matrix is not an implicit exception because it already exists in legacy code.
+- Propose a new edge or exception through the [cross-domain request process](./CROSS_DOMAIN_REQUESTS.md). The owning domain and affected consumer owner must agree on the capability, reason, scope, compatibility/safety impact and migration plan before implementation.
+- Record the accepted exception in the issue and owning roadmap, including its owner and removal/follow-up condition. Update this standard and the package manifest in the same PR when the exception changes the allowed dependency policy.
+- Temporary workarounds must be narrow, explicitly coordinated, time-bounded and linked to a removal task. Do not create private copies or speculative abstractions to bypass ownership.
+- The user reviews and merges the implementation PR after required checks pass; agent or domain-owner agreement is not merge authorization.
+
+## Static enforcement and review checklist
+
+The manifest-backed workspace allowlist is deterministic, but the current repository does not have a repository-wide test that compares every manifest edge with this table. Brokers has a regex-based checker for literal relative imports in selected layers; Notifiers has package-local boundary tests. Those checks are useful locally but are not a complete AST/source-import graph and do not prove all packages obey the internal matrix. S-1 adds no broad scanner because a regex-only repository-wide checker would provide misleading assurance.
+
+For every dependency or module-boundary change, review:
+
+1. Identify the source and target owners; confirm the workspace edge is allowed or the exception is accepted and recorded.
+2. Use the target package's public entry point or an application-owned port; do not deep-import another package's private source.
+3. Inspect production imports separately from test/fixture imports.
+4. Verify the dependency direction and confirm the workspace graph remains acyclic.
+5. Add behavior/contract tests at the owning boundary and consumer tests where observable behavior changes.
+6. Update the owning roadmap, this policy if an allowed edge changes, and all affected documentation in the same PR.
+7. Verify required checks on the exact PR head and leave the PR open for user review and merge.
+
+
 ## Representative internal import boundaries
 
 The following examples were checked against the current source tree. They show the intended direction; they are representative, not an exhaustive import graph.
