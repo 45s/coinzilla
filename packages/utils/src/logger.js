@@ -81,6 +81,25 @@ function deepFreeze(value) {
   return Object.freeze(value)
 }
 
+function getSafeErrorType(error) {
+  try {
+    return error instanceof Error ? 'Error' : typeof error
+  } catch {
+    return 'unknown'
+  }
+}
+
+function reportSafeTransportError({ message, transport, error }) {
+  try {
+    outputConsole.error(message, {
+      transport,
+      errorType: getSafeErrorType(error),
+    })
+  } catch {
+    // There is no remaining diagnostic channel if stderr is unavailable.
+  }
+}
+
 function createConsoleTransport() {
   return {
     name: 'console',
@@ -148,9 +167,11 @@ export class Logger {
       throw new TypeError('onTransportError must be a function')
     }
 
-    this.#onTransportError = onTransportError ?? (({ transport, error }) => {
-      outputConsole.error('Logger transport failed', { transport,
-        error })
+    this.#onTransportError = onTransportError ?? ((context) => {
+      reportSafeTransportError({
+        message: 'Logger transport failed',
+        ...context,
+      })
     })
 
     for (const transport of transports) {
@@ -279,19 +300,19 @@ export class Logger {
       const result = this.#onTransportError(context)
       if (result && typeof result.then === 'function') {
         Promise.resolve(result).catch((error) => {
-          try {
-            outputConsole.error('Logger transport error handler failed', error)
-          } catch {
-            // There is no remaining diagnostic channel if stderr is unavailable.
-          }
+          reportSafeTransportError({
+            message: 'Logger transport error handler failed',
+            transport: context.transport,
+            error,
+          })
         })
       }
     } catch (error) {
-      try {
-        outputConsole.error('Logger transport error handler failed', error)
-      } catch {
-        // There is no remaining diagnostic channel if stderr is unavailable.
-      }
+      reportSafeTransportError({
+        message: 'Logger transport error handler failed',
+        transport: context.transport,
+        error,
+      })
     }
   }
 

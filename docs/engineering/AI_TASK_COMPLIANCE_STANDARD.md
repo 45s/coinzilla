@@ -33,7 +33,7 @@ Use this table to discover standards; it is a starting point, not an exhaustive 
 | Refactor / audit | [AI Refactoring and Code Audit Standard](AI_REFACTORING_AUDIT_STANDARD.md); applicable task checklist; actual public contracts, callers and tests |
 | Domain behavior or strategy | Owning domain instructions, roadmap, canonical specification, architecture/ADRs, lifecycle, safety and test documents |
 | Configuration / schema | Configuration owner docs, schema/validation contracts, defaults, compatibility and migration guidance |
-| Errors / diagnostics | [Structured Error Handling Standard](structured-error-handling.md); relevant logging, observability and redaction guidance |
+| Errors / diagnostics | [Structured Error Handling Standard](structured-error-handling.md); [Logging and Observability Standard](LOGGING_OBSERVABILITY_STANDARD.md) |
 | Broker / exchange / financial behavior | Broker/package instructions, provider references, exact-decimal policy, exchange environment and financial-safety rules; TESTNET/LIVE authorization boundaries |
 | CI / scripts / repository policy | Current workflows and scripts, CI governance, GitHub rules/check contexts, actionlint/syntax and policy-script tests |
 | Markdown / documentation | [Documentation Governance](../DOCUMENTATION_GOVERNANCE.md); [Markdown Style](../MARKDOWN_STYLE.md); owner indexes and canonical sources |
