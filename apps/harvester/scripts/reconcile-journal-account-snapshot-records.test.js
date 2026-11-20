@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { addDecimal } from "@coinzilla/utils"
-import { reconcileJournalAccountSnapshotRecords } from "./account-snapshot-journal-utils.js"
+import { reconcileJournalAccountSnapshotRecords } from "./reconcile-journal-account-snapshot-records.js"
 
 const balance = ({ asset, free, locked = "0" }) => ({
   asset,

@@ -5,7 +5,7 @@ import {
   buildTestnetMenuArguments,
   normalizePromptAnswer,
   TESTNET_MENU_ACTIONS,
-} from "./testnet-menu-utils.js"
+} from "./testnet-menu-inputs.js"
 
 test("menu exposes all existing TESTNET and journal operations", () => {
   assert.deepEqual(

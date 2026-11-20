@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { getMarketSellQuantity } from "./testnet-sell-utils.js"
+import { getMarketSellQuantity } from "./calculate-testnet-market-sell-quantity.js"
 
 const symbolInfo = {
   filters: [

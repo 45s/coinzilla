@@ -4,7 +4,7 @@ import test from "node:test"
 import {
   normalizeOrderHistory,
   parseOrderHistoryArguments,
-} from "./testnet-order-history-utils.js"
+} from "./testnet-order-history-inputs.js"
 
 const createOrder = (overrides = {}) => ({
   symbol: "ZROUSDT",

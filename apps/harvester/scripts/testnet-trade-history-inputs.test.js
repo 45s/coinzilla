@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import {
   normalizeTradeHistory,
   parseTradeHistoryArguments,
-} from "./testnet-trade-history-utils.js"
+} from "./testnet-trade-history-inputs.js"
 
 test("normalizes BUY/SELL trade facts and orders by execution time", () => {
   const { trades } = normalizeTradeHistory({
