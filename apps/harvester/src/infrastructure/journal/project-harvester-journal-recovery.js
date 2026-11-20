@@ -1,6 +1,5 @@
 import { addDecimal, assertDecimalString, compareDecimal, toResult } from "@coinzilla/utils"
 import { validateRecoverySellerSubmissionOwnership } from "../../domain/orders/recovery-seller-submission-ownership.js"
-import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 
 const EVENT = Object.freeze({
   STARTED: "harvester.started",
@@ -1342,17 +1341,6 @@ state })
   }
 }
 
-function assertRecoverySellerJournalReplayDeferred({ state }) {
-  const isRecoverySellerActivity = (order) =>
-    order.strategyId === StrategyId.RECOVERY_SELLER ||
-    ["RECOVERY_BUY", "RECOVERY_SELL"].includes(order.purpose)
-  if ([...state.ordersByClientId.values()].some(isRecoverySellerActivity)) {
-    throw new Error(
-      "Recovery Seller Journal replay is deferred; refusing to project RS orders or fills for Conservative restoration.",
-    )
-  }
-}
-
 function assertFullyFilledSellOutcomesResolved({ state }) {
   for (const [symbol, pendingSell] of state.lastFullyFilledSellBySymbol) {
     if (pendingSell.outcome === undefined) {
@@ -1421,7 +1409,6 @@ export function projectHarvesterJournalRecovery({ records } = {}) {
 sequence,
 state })
     }
-    assertRecoverySellerJournalReplayDeferred({ state })
     assertFullyFilledSellOutcomesResolved({ state })
     return toResult({ data: createJournalRecoveryProjectionData({ state }) })
   } catch (error) {
