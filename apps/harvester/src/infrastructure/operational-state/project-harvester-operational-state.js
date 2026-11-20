@@ -130,6 +130,12 @@ function mapOrderSubmissionIntentFact({ data, orderIntents }) {
       price: data.price,
       quantity: data.quantity,
       status: "PENDING",
+      ...(data.strategyId === undefined ? {} : {
+        strategyId: data.strategyId,
+        positionId: data.positionId,
+        cycleId: data.cycleId,
+        purpose: data.purpose,
+      }),
     },
   }]
 }
@@ -142,7 +148,7 @@ function mapOrderSubmissionOutcomeFact({ data, orderIntents }) {
   assertIntentMatches({
     intent,
     data,
-    fields: ["providerInstanceId", "providerType", "accountId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "purpose"],
+    fields: ["providerInstanceId", "providerType", "accountId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "purpose", "strategyId", "positionId", "cycleId"],
     context: "Durable submission outcome",
   })
   const immutableIntent = {
@@ -157,6 +163,12 @@ function mapOrderSubmissionOutcomeFact({ data, orderIntents }) {
     type: data.type,
     price: data.price,
     quantity: data.quantity,
+    ...(data.strategyId === undefined ? {} : {
+      strategyId: data.strategyId,
+      positionId: data.positionId,
+      cycleId: data.cycleId,
+      purpose: data.purpose,
+    }),
   }
   if (data.outcome === "ACKNOWLEDGED") {
     return [{
@@ -273,8 +285,8 @@ function mapOrderCancellationOutcomeFact({ data, orderIntents, cancellationInten
 }
 
 function mapExecutionFillFact({ data, orderIntents }) {
+  const intent = data.clientOrderId == null ? undefined : orderIntents.get(data.clientOrderId)
   if (data.providerInstanceId !== undefined) {
-    const intent = orderIntents.get(data.clientOrderId)
     if (!intent) {
       throw new Error(`Provider-attributed execution fill has no preceding submission intent: ${data.clientOrderId}`)
     }
@@ -285,9 +297,20 @@ function mapExecutionFillFact({ data, orderIntents }) {
       context: "Execution fill",
     })
   }
+  const ownership = intent?.strategyId === "RS_recoverySeller"
+    ? {
+        strategyId: intent.strategyId,
+        positionId: intent.positionId,
+        cycleId: intent.cycleId,
+        purpose: intent.purpose,
+      }
+    : {}
   return [{
     name: EVENT.FILL_APPLIED,
-    data: mapFill({ data }),
+    data: {
+      ...mapFill({ data }),
+      ...ownership,
+    },
   }]
 }
 

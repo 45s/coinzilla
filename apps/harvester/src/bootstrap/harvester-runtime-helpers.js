@@ -379,9 +379,11 @@ function createRecoveryCycleNotCompletedCallback({ store,
 function createSubmissionIntentCallback({ store,
   recordOrderSubmissionIntent } = {}) {
   return store ? ({ order,
-  purpose }) => recordOrderSubmissionIntent({ operationalStateStore: store,
+  purpose,
+  ownership }) => recordOrderSubmissionIntent({ operationalStateStore: store,
     order,
-    purpose }) : undefined
+    purpose,
+    ownership }) : undefined
 }
 
 function createSubmissionOutcomeCallback({ store,
@@ -389,10 +391,12 @@ function createSubmissionOutcomeCallback({ store,
   return store
     ? ({ order,
   outcome,
-  purpose }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
+  purpose,
+  ownership }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
       order,
       outcome,
-      purpose })
+      purpose,
+      ownership })
     : undefined
 }
 
