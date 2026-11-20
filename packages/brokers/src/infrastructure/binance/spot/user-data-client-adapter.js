@@ -1,4 +1,4 @@
-import { adaptMsg } from "./broker-websocket/helpers/adapters/adapt-msg.js"
+import { adaptBinanceWebSocketEvent } from "./broker-websocket/helpers/adapters/adapt-msg.js"
 import { getUserDataEventIdentity } from "./broker-websocket/helpers/user-data-event-identity.js"
 
 /**
@@ -49,7 +49,7 @@ eventTime: event.E ?? null,
         type: "event",
         subscriptionId,
 deduplicationKey: getUserDataEventIdentity(message),
-event: adaptMsg(event),
+event: adaptBinanceWebSocketEvent(event),
       })
     }),
 onError: (listener) => client.onError?.(listener),
