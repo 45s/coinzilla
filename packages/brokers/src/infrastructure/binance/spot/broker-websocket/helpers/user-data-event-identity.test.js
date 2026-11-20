@@ -15,6 +15,7 @@ test("execution reports use symbol, order ID, and execution ID", () => {
   }
   assert.equal(getUserDataEventIdentity(message), "executionReport:BTCUSDT:10:21")
   assert.equal(getUserDataEventIdentity(structuredClone(message)), "executionReport:BTCUSDT:10:21")
+  assert.equal(getUserDataEventIdentity({ ...message, subscriptionId: 5 }), "executionReport:BTCUSDT:10:21")
   assert.equal(getUserDataEventIdentity({
     ...message,
     event: {
