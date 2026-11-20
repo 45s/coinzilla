@@ -8,7 +8,7 @@ This runbook covers routine backups of the Harvester relational trading-history 
 ## Scope and safety
 
 - The command backs up the existing environment-specific Harvester SQLite file. It does not create an empty database if the source file is missing.
-- It uses SQLite's online backup API, so committed WAL contents are included in the snapshot. Harvester does not need to be stopped.
+- It uses SQLite's online backup API, so committed WAL contents are included in the snapshot. SQLite's WAL and shared-memory sidecars stay beside the source database; never move or copy only the live main database file. Harvester does not need to be stopped.
 - It is a separate maintenance CLI. It is not called from startup, order submission, user-data handling, fill application, accounting, Journal, readiness, or strategy paths.
 - It performs no broker or exchange requests and does not need Binance credentials.
 - It backs up only the Harvester database file. Journal JSONL, Operational State Store files, application configuration, and credentials are not included.
@@ -60,7 +60,7 @@ The command reports the backup filename, copied page count, and retained pair co
 
 A restore check validates the backup against the explicitly selected environment, verifies the manifest and digest, restores it to a temporary candidate on the same filesystem, applies the current Harvester relational migrations to that candidate, checks integrity and foreign keys, reports table row counts, and removes the temporary candidate.
 
-The backup must be in the selected environment's backup directory.
+The backup must be in the selected environment's backup directory. The public restore helper publishes the candidate with a same-filesystem hard link; the verifier creates its temporary candidate under the backup directory so that publication stays on one filesystem. Use a local filesystem that supports hard links.
 
 PowerShell:
 
@@ -73,7 +73,7 @@ Bash:
 
 Use TRADING_MODE=live and the production backup directory for a LIVE backup. A TESTNET backup is rejected when LIVE is selected, and vice versa.
 
-**Restore verification is not a database cutover.** It does not replace the configured database, adopt orders, restore process state, or replay Journal. For an actual recovery, follow a separately approved stopped-process procedure: stop all Harvester processes using the destination, preserve the current database, restore to a new staging filename, validate it, and only then perform a controlled configuration/filesystem switch. Never overwrite an open database.
+**Restore verification is not a database cutover.** It does not replace the configured database, adopt orders, restore process state, or replay Journal. Verification applies the migrations registered by the current Harvester build to the candidate only. A backup with a schema newer than that build is rejected; this process does not downgrade schemas, so do not restore a newer-build backup with an older application. For an actual recovery, follow a separately approved stopped-process procedure: stop all Harvester processes using the destination, preserve the current database, restore to a new staging filename, validate it, and only then perform a controlled configuration/filesystem switch. Never overwrite an open database.
 
 ## Retention and permissions
 

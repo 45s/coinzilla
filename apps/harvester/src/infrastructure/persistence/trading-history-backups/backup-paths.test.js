@@ -116,6 +116,8 @@ test("rejects missing and symbolic-link source files and symbolic-link backup di
   const sourceLink = path.join(directory, "source-link.sqlite")
   await symlink(source, sourceLink)
   const directoryLink = path.join(directory, "backup-link")
+  const fileAsDirectory = path.join(directory, "not-a-directory")
+  await writeFile(fileAsDirectory, "not a directory")
   await symlink(directory, directoryLink)
   await assert.rejects(
     assertSourceFile({
@@ -130,6 +132,13 @@ test("rejects missing and symbolic-link source files and symbolic-link backup di
       environment: "testnet",
     }),
     (error) => error.code === "HARVESTER_HISTORY_BACKUP_SOURCE_INVALID",
+  )
+  await assert.rejects(
+    ensurePrivateDirectory({
+      directory: fileAsDirectory,
+      environment: "testnet",
+    }),
+    (error) => error.code === "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
   )
   await assert.rejects(
     assertBackupDirectory({
