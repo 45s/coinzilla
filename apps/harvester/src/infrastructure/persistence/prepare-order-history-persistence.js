@@ -176,6 +176,8 @@ async function prepareRelationalResources({
       relationalDatabase,
       relationalOrderObserver,
       fillObserver,
+      orderRepository,
+      fillRepository,
       migrationBackupFilename,
     }
   } catch (error) {
@@ -257,6 +259,8 @@ async function preparePersistenceWithRelationalFallback({
       relationalDatabase: null,
       relationalOrderObserver: null,
       fillObserver: null,
+      orderRepository: null,
+      fillRepository: null,
       migrationBackupFilename: null,
       relationalError,
     })
