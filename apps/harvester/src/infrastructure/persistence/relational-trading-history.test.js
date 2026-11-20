@@ -125,7 +125,10 @@ function createLegacyRecord() {
 
 async function seedLegacyRecord({ filename, record } = {}) {
   const database = createDatabase({
-    provider: createSqliteProvider({ filename, timeout: 5_000 }),
+    provider: createSqliteProvider({
+      filename,
+      timeout: 5_000,
+    }),
   })
   await database.connect()
   try {
