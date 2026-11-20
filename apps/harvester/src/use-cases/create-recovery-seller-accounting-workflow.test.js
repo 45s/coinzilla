@@ -884,7 +884,7 @@ function makeRecoveryBuyFill({
   })
 }
 
-function makeRecoveryBuyRegistry(order, targetPositionId = positionId) {
+function makeRecoveryBuyRegistry({ order, targetPositionId = positionId } = {}) {
   const ownership = createOrderOwnership({
     ownership: {
       strategyId,
@@ -905,7 +905,7 @@ test("applies RS BUY fills to the registered Position exactly once and rejects m
   const order = makeRecoveryBuyOrder()
   const workflow = createRecoverySellerAccountingWorkflow({
     initialPortfolio: new Portfolio(),
-    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+    initialOrderRegistry: makeRecoveryBuyRegistry({ order }),
   })
   const firstFill = makeRecoveryBuyFill({
     tradeId: "rs-buy-fill-1",
@@ -1282,7 +1282,7 @@ function createSharedAccountWorkflowFixture() {
   const sharedState = {
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
-    orderRegistry: makeRecoveryBuyRegistry(buyOrder),
+    orderRegistry: makeRecoveryBuyRegistry({ order: buyOrder }),
     legacyPositions: new Map(),
     recoverySellerBuyExecutionByCycle: new Map(),
     updateQueue: Promise.resolve(),
@@ -1411,7 +1411,10 @@ async function assertConcurrentStrategyAccounting({ recoveryMarket, conservative
   const sharedState = {
     portfolio: new Portfolio(),
     recoveryLedgers: new Map(),
-    orderRegistry: makeRecoveryBuyRegistry(recoveryOrder, `rs-position-${scenario}`),
+    orderRegistry: makeRecoveryBuyRegistry({
+      order: recoveryOrder,
+      targetPositionId: `rs-position-${scenario}`,
+    }),
     legacyPositions: new Map(),
     recoverySellerBuyExecutionByCycle: new Map(),
     updateQueue: Promise.resolve(),
