@@ -650,6 +650,37 @@ async function saveTradePageCursor({
   })
 }
 
+async function persistAndAdvanceTradePage({
+  page,
+  validated,
+  repositories,
+  providerIdentity,
+  environment,
+  symbol,
+  now,
+  state,
+}) {
+  await persistFillPage({
+    fills: validated.fills,
+    repositories,
+    providerIdentity,
+    environment,
+    now,
+    state,
+  })
+  const { lastTradeId } = validated
+  await saveTradePageCursor({
+    page,
+    lastTradeId,
+    repositories,
+    providerIdentity,
+    environment,
+    symbol,
+    now,
+  })
+  return lastTradeId
+}
+
 async function fetchFillHistoryForMarket({
   broker,
   symbol,
@@ -684,24 +715,15 @@ async function fetchFillHistoryForMarket({
       lastTradeId,
       state,
     })
-    await persistFillPage({
-      fills: validated.fills,
-      repositories,
-      providerIdentity,
-      environment,
-      now,
-      state,
-    })
-    const { lastTradeId: nextLastTradeId } = validated
-    lastTradeId = nextLastTradeId
-    await saveTradePageCursor({
+    lastTradeId = await persistAndAdvanceTradePage({
       page,
-      lastTradeId,
+      validated,
       repositories,
       providerIdentity,
       environment,
       symbol,
       now,
+      state,
     })
     if (page.length < limit) {
       return
