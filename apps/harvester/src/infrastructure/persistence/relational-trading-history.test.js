@@ -1230,3 +1230,41 @@ test("resolves exchange order identity only within its full provider scope and r
     /exchangeOrderIdAmbiguous/,
   )
 })
+
+
+test("preserves an existing verified client-order identity when a history replay omits it", async (t) => {
+  const context = await createTestContext({
+    t,
+  })
+  const persistence = await preparePersistence({
+    context,
+  })
+  const liveFill = createAppliedFillEvent()
+  await persistence.fillRepository.upsert({
+    fill: liveFill,
+    sourceEvent: createAppliedFillEventSourceEvent(),
+    environment: "testnet",
+  })
+  const historicalFill = createAppliedFillEvent()
+  delete historicalFill.clientOrderId
+  await persistence.fillRepository.upsert({
+    fill: historicalFill,
+    sourceEvent: {
+      id: "exchange-history-fill:duplicate",
+      name: "execution.fill_history_reconciled",
+      source: "binance.exchange-history",
+      timestamp: "2026-11-20T04:00:01.000Z",
+    },
+    environment: "testnet",
+    ingestionSource: "exchange_history",
+  })
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const saved = database.prepare("SELECT * FROM fills").get()
+      assert.equal(saved.client_order_id, liveFill.clientOrderId)
+      assert.equal(saved.ingestion_source, "live_event")
+      assert.equal(saved.last_ingestion_source, "exchange_history")
+    },
+  })
+})
