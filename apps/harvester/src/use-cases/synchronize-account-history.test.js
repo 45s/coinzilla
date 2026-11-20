@@ -230,6 +230,9 @@ test("fails closed when an exchange history cursor does not advance", async () =
 
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /strictly increasing/)
+  assert.deepEqual(result.errors[0].historyDiagnostics.marketsAttempted, ["BTCUSDT"])
+  assert.equal(result.errors[0].historyDiagnostics.orderPagesChecked, 1)
+  assert.equal(result.errors[0].historyDiagnostics.historyPagesComplete, false)
   assert.equal(repositories.orders.length, 0)
   assert.equal(repositories.fills.length, 0)
 })
