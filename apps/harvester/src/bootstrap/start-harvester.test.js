@@ -1215,7 +1215,7 @@ test("synchronizes configured Binance history before activating the trading engi
   try {
     const orderHistoryIndex = calls.indexOf("history:orders:BTCUSDT:0")
     const fillHistoryIndex = calls.indexOf("history:fills:BTCUSDT:0")
-    const marketDataIndex = calls.indexOf("prices:BTCUSDT")
+    const marketDataIndex = calls.indexOf("subscribe:BTCUSDT")
     assert.ok(orderHistoryIndex >= 0, "Startup must query canonical order history for the configured execution market.")
     assert.ok(fillHistoryIndex > orderHistoryIndex, "Startup must query trade history after loading the market's order identities.")
     assert.ok(fillHistoryIndex < marketDataIndex, "Startup history synchronization must finish before market-data activation.")
