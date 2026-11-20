@@ -672,7 +672,14 @@ function getRecoverySellerMarketActiveOrders({ state, marketId }) {
   return state.orderRegistry.getActiveOrders()
     .filter((order) => order.market.id === marketId)
     .map((order) => Object.freeze({
-      ...order,
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      market: order.market,
+      side: order.side,
+      status: order.status,
+      originalQuantity: order.originalQuantity,
+      executedQuantity: order.executedQuantity,
+      limitPrice: order.limitPrice,
       ownership: state.orderRegistry.getOwnership({
         clientOrderId: order.clientOrderId,
       }),
