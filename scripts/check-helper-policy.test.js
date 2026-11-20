@@ -77,7 +77,10 @@ test("scans helper fixture names", () => {
       `${join(directory, "process.js")}: vague exported helper name process`,
     ])
   } finally {
-    rmSync(root, {\n      recursive: true,\n      force: true,\n    })
+    rmSync(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 test("reports helpers missing a directly associated unit test", () => {
