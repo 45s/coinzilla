@@ -252,9 +252,9 @@ async function fetchOrderHistoryForMarket({
         lastOrderId,
         state,
       })
-      state.ordersObserved += 1
       return order
     })
+    state.ordersObserved += validatedOrders.length
     for (const order of validatedOrders) {
       await persistCanonicalOrder({
         order,
@@ -447,9 +447,9 @@ async function fetchFillHistoryForMarket({
         lastTradeId,
         state,
       })
-      state.fillsObserved += 1
       return fill
     })
+    state.fillsObserved += validatedFills.length
     for (const fill of validatedFills) {
       await persistCanonicalFill({
         fill,
@@ -481,6 +481,8 @@ async function fetchFillHistoryForMarket({
 
 async function synchronizeMarkets({ input, state }) {
   for (const symbol of input.symbols) {
+    state.currentMarket = symbol
+    state.marketsAttempted.push(symbol)
     await fetchOrderHistoryForMarket({
       ...input,
       symbol,
@@ -492,6 +494,7 @@ async function synchronizeMarkets({ input, state }) {
       state,
     })
     state.marketsQueried.push(symbol)
+    state.currentMarket = null
   }
 }
 
@@ -504,7 +507,9 @@ function createInitialState() {
     ordersPersisted: 0,
     fillsObserved: 0,
     fillsPersisted: 0,
+    marketsAttempted: [],
     marketsQueried: [],
+    currentMarket: null,
     orderIds: new Set(),
     fillIds: new Set(),
     ordersByBrokerId: new Map(),
@@ -516,6 +521,28 @@ function createInitialState() {
  * Binance markets. The result never certifies the historical market universe
  * or the exchange's retention horizon.
  */
+function createHistoryDiagnostics({ state, historyPagesComplete, errorMessage } = {}) {
+  return Object.freeze({
+    historyScope: "CONFIGURED_MARKETS",
+    marketsAttempted: Object.freeze([...state.marketsAttempted]),
+    marketsQueried: Object.freeze([...state.marketsQueried]),
+    currentMarket: state.currentMarket,
+    orderPagesChecked: state.orderPagesChecked,
+    fillPagesChecked: state.fillPagesChecked,
+    ordersObserved: state.ordersObserved,
+    ordersPersisted: state.ordersPersisted,
+    fillsObserved: state.fillsObserved,
+    fillsPersisted: state.fillsPersisted,
+    requestCount: state.requestCount,
+    historyPagesComplete,
+    marketHistoryPagesComplete: historyPagesComplete,
+    marketUniverseComplete: false,
+    retentionCoverageConfirmed: false,
+    complete: false,
+    errorMessage,
+  })
+}
+
 export async function synchronizeAccountHistory({
   broker,
   symbols,
@@ -529,6 +556,7 @@ export async function synchronizeAccountHistory({
   sleep = defaultSleep,
   now = Date.now,
 } = {}) {
+  const state = createInitialState()
   try {
     const input = {
       broker,
@@ -544,7 +572,6 @@ export async function synchronizeAccountHistory({
       now,
     }
     validateOptions(input)
-    const state = createInitialState()
     await synchronizeMarkets({
       input: {
         ...input,
@@ -557,26 +584,22 @@ export async function synchronizeAccountHistory({
       state,
     })
     return toResult({
-      data: Object.freeze({
-        historyScope: "CONFIGURED_MARKETS",
-        marketsQueried: Object.freeze(state.marketsQueried),
-        orderPagesChecked: state.orderPagesChecked,
-        fillPagesChecked: state.fillPagesChecked,
-        ordersObserved: state.ordersObserved,
-        ordersPersisted: state.ordersPersisted,
-        fillsObserved: state.fillsObserved,
-        fillsPersisted: state.fillsPersisted,
-        requestCount: state.requestCount,
+      data: createHistoryDiagnostics({
+        state,
         historyPagesComplete: true,
-        marketHistoryPagesComplete: true,
-        marketUniverseComplete: false,
-        retentionCoverageConfirmed: false,
-        complete: false,
       }),
     })
   } catch (error) {
+    const failure = error instanceof Error
+      ? error
+      : new Error(String(error))
+    failure.historyDiagnostics = createHistoryDiagnostics({
+      state,
+      historyPagesComplete: false,
+      errorMessage: failure.message,
+    })
     return toResult({
-      error,
+      error: failure,
     })
   }
 }
