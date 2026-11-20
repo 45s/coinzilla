@@ -1224,61 +1224,70 @@ test("removes a refreshed filled order from pending-order lookup", async (t) => 
   })
 })
 
-test("resolves exchange order identity only within its full provider scope and rejects ambiguity", async (t) => {
-  const context = await createTestContext({
-    t,
-  })
-  const persistence = await preparePersistence({
-    context,
-  })
-  const firstOrder = {
-    ...createLegacyRecord(),
-  }
-  delete firstOrder.ownership
-  await persistence.orderRepository.upsertHistorical(firstOrder)
-  const providerIdentity = {
-    providerInstanceId: firstOrder.providerInstanceId,
-    providerType: firstOrder.providerType,
-    accountId: firstOrder.accountId,
-  }
-  const lookup = {
-    providerIdentity,
-    environment: firstOrder.environment,
-    marketId: firstOrder.market.id,
-    brokerOrderId: firstOrder.brokerOrderId,
-  }
-  assert.equal(
-    await persistence.orderRepository.findByExchangeOrderIdentity(lookup),
-    firstOrder.clientOrderId,
-  )
-  assert.equal(
-    await persistence.orderRepository.findByExchangeOrderIdentity({
-      ...lookup,
-      environment: "live",
+function createExchangeOrderLookup({ order }) {
+  return {
+    providerIdentity: createOrderProviderIdentity({
+      order,
     }),
-    null,
-  )
-  assert.equal(
-    await persistence.orderRepository.findByExchangeOrderIdentity({
-      ...lookup,
-      marketId: "binance:ETHUSDT",
-    }),
-    null,
-  )
-  const secondOrder = createOrderHistoryRecord({
+    environment: order.environment,
+    marketId: order.market.id,
+    brokerOrderId: order.brokerOrderId,
+  }
+}
+
+function createAmbiguousHistoryOrder({ clientOrderId, brokerOrderId, environment }) {
+  return createOrderHistoryRecord({
     order: createOrderHistoryEventData({
-      clientOrderId: "harvester-BTCUSDT-other",
-      brokerOrderId: firstOrder.brokerOrderId,
+      clientOrderId,
+      brokerOrderId,
       ownership: undefined,
     }),
     sourceEvent: {
-      id: "exchange-history-order:ambiguous",
+      id: `exchange-history-order:${clientOrderId}`,
       name: "exchange.history_order_observed",
       source: "binance.exchange-history",
       timestamp: "2026-11-20T04:00:01.000Z",
     },
-    environment: firstOrder.environment,
+    environment,
     includeUnfilled: true,
+  })
+}
+
+async function assertNoExchangeOrderLookup({ repository, lookup }) {
+  assert.equal(await repository.findByExchangeOrderIdentity(lookup), null)
+}
+
+test("resolves exchange order identity only within its full provider scope and rejects ambiguity", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const firstOrder = { ...createLegacyRecord() }
+  delete firstOrder.ownership
+  await persistence.orderRepository.upsertHistorical(firstOrder)
+  const lookup = createExchangeOrderLookup({
+    order: firstOrder,
+  })
+  assert.equal(
+    await persistence.orderRepository.findByExchangeOrderIdentity(lookup),
+    firstOrder.clientOrderId,
+  )
+  await assertNoExchangeOrderLookup({
+    repository: persistence.orderRepository,
+    lookup: {
+      ...lookup,
+      environment: "live",
+    },
+  })
+  await assertNoExchangeOrderLookup({
+    repository: persistence.orderRepository,
+    lookup: {
+      ...lookup,
+      marketId: "binance:ETHUSDT",
+    },
+  })
+  const secondOrder = createAmbiguousHistoryOrder({
+    clientOrderId: "harvester-BTCUSDT-other",
+    brokerOrderId: firstOrder.brokerOrderId,
+    environment: firstOrder.environment,
   })
   await persistence.orderRepository.upsertHistorical(secondOrder)
   assert.throws(
@@ -1286,7 +1295,6 @@ test("resolves exchange order identity only within its full provider scope and r
     /exchangeOrderIdAmbiguous/,
   )
 })
-
 
 test("preserves an existing verified client-order identity when a history replay omits it", async (t) => {
   const context = await createTestContext({
