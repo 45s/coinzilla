@@ -198,7 +198,7 @@ The active `develop` ruleset requires six contexts: Run package tests, Workspace
 
 - `apps/harvester/src/application/providers/account-runtime-registry.test.js`: `keeps engine registry replacements visible to every account workflow` verifies that replacing the engine's immutable OrderRegistry snapshot updates the account-scoped accessor used by RS accounting.
 - `apps/harvester/src/use-cases/order-event-workflow.test.js`: `latches the durable global RS STOP when terminal mixed-SELL reconciliation is unavailable` verifies that a terminal RS SELL cannot degrade to a market-only pause when its production reconciler is absent.
-- `apps/harvester/src/bootstrap/start-harvester.test.js`: `keeps configured RS routes disabled until RS-4 and RS-5 acceptance is complete` verifies that the hard code-level acceptance gate rejects configured RS routes before broker connection.
+- `apps/harvester/src/bootstrap/start-harvester.test.js`: `rejects configured RS routes when the runtime acceptance gate is closed` verifies the fail-closed behavior if the code-level gate is explicitly closed; the production gate is open after RS-5 acceptance and RS remains disabled by default in configuration.
 
 The exact-head Harvester targeted suite passed after these tests were added. Strict changed-file ESLint passed after removing the obsolete terminal-reconciliation helper. Full workspace unit tests, coverage, JavaScript syntax and external documentation-link checks must still pass on the final documentation commit before this checkpoint can be considered verified. These tests establish fail-closed boundaries only; they do not prove a complete RS lifecycle or authorize RS execution.
 

@@ -210,7 +210,7 @@ This dated addendum supersedes the pre-merge handoff in §9; it does not rewrite
 - Exact implementation head `96315757e74a4851770716b04d8dae5cf9580ece` passed 13/13 focused evaluator tests, 2,101/2,101 Harvester tests, workspace Unit Tests and Test Coverage, strict ESLint, JavaScript quality/syntax, actionlint, Utils tests and dependency audit. The read-only Binance TESTNET integration was skipped; no exchange operations were performed.
 - **RS-3 pure policy and RS-4 shared Trading Engine runtime composition are complete.** The runtime acceptance gate is open after scoped RS-5 offline lifecycle/concurrency/failure proof. RS remains disabled by default in configuration; exact-head required CI is the final merge check.
 - Restart/replay and third-asset commission valuation are deferred. STOP is terminal; CC-operator can inspect authorized status but cannot clear, reset, unpause or resume it.
-- RS remains disabled/non-executable; no TESTNET/LIVE order or exchange action is authorized.
+- RS remains disabled by default; no TESTNET/LIVE order or exchange action is authorized.
 
 ## 11. Current implementation status — PR #1515 (2026-11-20)
 
