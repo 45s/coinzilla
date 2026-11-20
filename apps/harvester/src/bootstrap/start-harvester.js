@@ -811,6 +811,7 @@ async function synchronizeStartupExchangeHistory({ startup, portfolio, resources
     return
   }
   if (typeof persistence?.orderRepository?.upsertHistorical !== "function" ||
+      typeof persistence.orderRepository.findByExchangeOrderIdentity !== "function" ||
       typeof persistence?.fillRepository?.upsert !== "function" ||
       typeof persistence?.historySyncCursorRepository?.get !== "function" ||
       typeof persistence.historySyncCursorRepository.saveOrderCursor !== "function" ||
