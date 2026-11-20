@@ -18,6 +18,33 @@ Coinzilla is a monorepo with independently maintained application and package do
 
 `@coinzilla/indicators` owns pure, deterministic, exchange-neutral technical-indicator calculations over normalized caller-supplied market data. It owns its public API, tests, documentation and roadmap. The first consumer is Harvester high-volatility protection (#1016); adaptive price-step planning (#1013) is a later consumer. Harvester retains strategy/risk policy; Brokers retains exchange-specific candle retrieval and normalization. See the [Indicators README](../../packages/indicators/README.md) and [Indicators roadmap](../../packages/indicators/ROADMAP.md).
 
+## Workspace package dependency policy
+
+The workspace dependency graph is intentionally one-way: the Harvester application composes shared packages; shared packages depend only on the packages listed below. This is the canonical allowlist for direct **workspace-package** dependencies. It is derived from the current package manifests and must be updated in the same PR as an approved dependency change.
+
+| Consumer | Allowed direct workspace dependencies |
+| --- | --- |
+| `@coinzilla/harvester` | `@coinzilla/brokers`, `@coinzilla/db`, `@coinzilla/entities`, `@coinzilla/event-bus`, `@coinzilla/indicators`, `@coinzilla/journal`, `@coinzilla/notifiers`, `@coinzilla/utils` |
+| `@coinzilla/brokers` | `@coinzilla/entities`, `@coinzilla/utils` |
+| `@coinzilla/db` | `@coinzilla/utils` |
+| `@coinzilla/entities` | `@coinzilla/utils` |
+| `@coinzilla/event-bus` | `@coinzilla/utils` |
+| `@coinzilla/indicators` | `@coinzilla/utils` |
+| `@coinzilla/journal` | `@coinzilla/event-bus`, `@coinzilla/utils` |
+| `@coinzilla/notifiers` | None |
+| `@coinzilla/utils` | None |
+
+Rules:
+
+- A workspace package must not depend on an application, on a consumer package, or on another workspace package absent from its row above. Do not create reverse dependencies or cycles.
+- Consumers import another package through its supported public package entry point. Do not reach into another package's private `src/` paths.
+- The Harvester application is the composition boundary and may depend on the shared packages listed for it; shared packages must not import Harvester or application-specific policy.
+- Keep business rules in the owning domain. In particular, Brokers owns exchange integration, Entities owns exchange-neutral value contracts, DB owns generic persistence infrastructure, Event Bus owns delivery semantics, Journal owns journal records/persistence, Indicators owns exchange-neutral calculations, Notifiers owns notification transport, and Utils owns domain-neutral helpers.
+- Before adding an edge, explain the required capability, why the existing public contracts or an application-owned port are insufficient, all affected consumers, and the impact on dependency direction. Coordinate cross-domain changes using the [cross-domain request process](./CROSS_DOMAIN_REQUESTS.md).
+- Update the affected package manifest, this table, package documentation/roadmap, and consumer tests in the same PR. Verify the resulting manifest graph remains acyclic.
+
+This table governs package-to-package dependencies; it does **not** prove internal source-file boundaries. Each package's local architecture instructions and tests remain authoritative for its internal layers. The current repository has package-scoped architecture checks, not a complete repository-wide source-import checker. See the [Modularity Standard](./MODULARITY_STANDARD.md) and [ADR-0001](../architecture/decisions/ADR-0001-clean-hexagonal-architecture.md) for module-level direction and review requirements.
+
 ## Shared infrastructure
 
 The following are cross-domain and must be treated as shared ownership: root package manifests and lockfile, CI workflows, GitHub rules, root engineering documentation, workspace scripts, and dependency policy.
