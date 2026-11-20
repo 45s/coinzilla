@@ -280,7 +280,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const changedNames = process.argv.includes("--changed-names")
   const baseSha = process.argv.find((argument) => /^[a-f0-9]{40}$/.test(argument))
   const changedPaths = changedNames && baseSha
-    ? execFileSync("git", ["diff", "--name-only", `${baseSha}...HEAD`], { cwd: root, encoding: "utf8" }).split(/\\r?\\n/).filter(Boolean)
+    ? execFileSync("git", ["diff", "--name-only", `${baseSha}...HEAD`], { cwd: root, encoding: "utf8" }).split(/\r?\n/).filter(Boolean)
     : []
   const violations = changedNames
     ? (baseSha ? findChangedHelperNamingViolations({ root, changedPaths }) : ["Changed-name check requires an exact 40-character base SHA"])
