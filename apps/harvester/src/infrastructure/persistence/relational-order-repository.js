@@ -123,6 +123,49 @@ function upsertOrder({ transaction, record, ingestionSource = "live_event" } = {
   return merged
 }
 
+function findByExchangeOrderIdentity({
+  database,
+  providerIdentity,
+  environment,
+  marketId,
+  brokerOrderId,
+} = {}) {
+  const identity = {
+    providerType: providerIdentity?.providerType,
+    providerInstanceId: providerIdentity?.providerInstanceId,
+    accountId: providerIdentity?.accountId,
+    environment,
+    marketId,
+    brokerOrderId,
+  }
+  for (const [field, value] of Object.entries(identity)) {
+    if (typeof value !== "string" || value.trim() === "") {
+      throw new TypeError(`Exchange-order lookup ${field} must be a non-empty string`)
+    }
+  }
+  const matches = database.prepare(`
+    SELECT client_order_id FROM orders
+    WHERE provider_type = ? AND provider_instance_id = ? AND account_id = ?
+      AND environment = ? AND market_id = ? AND exchange_order_id = ?
+    LIMIT 2
+  `).all(
+    identity.providerType,
+    identity.providerInstanceId,
+    identity.accountId,
+    identity.environment,
+    identity.marketId,
+    identity.brokerOrderId,
+  )
+  if (matches.length > 1) {
+    throw new OrderHistoryIntegrityError({
+      field: "exchangeOrderIdAmbiguous",
+      providerInstanceId: identity.providerInstanceId,
+      accountId: identity.accountId,
+    })
+  }
+  return matches[0]?.client_order_id ?? null
+}
+
 function normalizeOrderWriteError({ error, record } = {}) {
   if (error instanceof OrderHistoryIntegrityError ||
     error?.code === "HARVESTER_ORDER_HISTORY_RECORD_INVALID") {
@@ -174,6 +217,10 @@ export function createRelationalOrderHistoryRepository({ database } = {}) {
       database,
       record,
       ingestionSource: "exchange_history",
+    }),
+    findByExchangeOrderIdentity: (input) => findByExchangeOrderIdentity({
+      database,
+      ...input,
     }),
   })
 }
