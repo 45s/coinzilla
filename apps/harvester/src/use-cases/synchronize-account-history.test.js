@@ -357,7 +357,7 @@ test("resumes from durable per-market cursors without re-persisting prior pages"
 })
 
 
-test("links a later offline fill to an earlier persisted unfilled order", async () => {
+test("rechecks a pending order behind the cursor and links its later offline fill", async () => {
   const repositories = createRepositories()
   const calls = {
     orders: [],
@@ -387,6 +387,9 @@ test("links a later offline fill to an earlier persisted unfilled order", async 
     now: () => 300,
   }
   const first = await synchronizeAccountHistory(input)
+  orders[0] = createOrder({
+    executed: "0.1",
+  })
   fills.push(createFill({
     clientOrderId: null,
   }))
@@ -395,6 +398,50 @@ test("links a later offline fill to an earlier persisted unfilled order", async 
   assert.equal(first.ok, true, first.errors?.map((error) => error.message).join("; "))
   assert.equal(first.data.ordersPersisted, 1)
   assert.equal(second.ok, true, second.errors?.map((error) => error.message).join("; "))
+  assert.equal(second.data.ordersObserved, 1)
+  assert.equal(second.data.fillsPersisted, 1)
+  assert.equal(repositories.orders.at(-1).status, "FILLED")
+  assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10")
+})
+
+
+test("links later fills to a stored order after its order cursor has advanced", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const orders = [createOrder()]
+  const fills = []
+  const broker = createPagedBroker({
+    orders,
+    fills,
+    calls,
+  })
+  const input = {
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 1,
+    requestDelayMs: 0,
+    now: () => 300,
+  }
+  const first = await synchronizeAccountHistory(input)
+  fills.push(createFill({
+    clientOrderId: null,
+  }))
+  const second = await synchronizeAccountHistory(input)
+
+  assert.equal(first.ok, true)
+  assert.equal(second.ok, true, second.errors?.map((error) => error.message).join("; "))
+  assert.deepEqual(
+    calls.orders.map(({ orderId }) => orderId),
+    [0, 11, 11],
+  )
   assert.equal(second.data.ordersObserved, 0)
   assert.equal(second.data.fillsPersisted, 1)
   assert.equal(repositories.fills[0].fill.clientOrderId, "harvester-10")
