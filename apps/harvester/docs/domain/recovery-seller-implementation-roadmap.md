@@ -416,7 +416,8 @@ The diagrams do not override the [RS Domain Specification](./recovery-seller-dom
 - [x] Resolve strategy-owned CG/RS execution routes into separate effective pair maps and a deduplicated market subscription set; RS-only provider accounts remain fail-closed.
 - [x] Validate RS markets against canonical exchange trading rules and initialize explicitly configured legacy basis in the shared provider-account state before engine activation.
 - [x] Wire RS additional tracked Spot-base and realized quote-cash-flow providers into account snapshots and CG account-baseline evaluation; authoritative unreserved Spot custody is still required before SELL planning.
-- [x] Correct the exact-head validator-ordering regression and align offline bootstrap/notification fixtures with the explicit execution-route contract; retain fail-closed route validation.\n- [x] Route RS strategy/market intents into the shared serialized Trading Engine transition queue.
+- [x] Correct the exact-head validator-ordering regression and align offline bootstrap/notification fixtures with the explicit execution-route contract; retain fail-closed route validation.
+- [x] Route RS strategy/market intents into the shared serialized Trading Engine transition queue.
 - [x] Share account Portfolio, OrderRegistry, snapshots, account-wide quote/base commitment allocation and canonical fill processing without sharing strategy budgets/Positions.
 - [ ] Replay RS cycle state, BUY VWAP, order ownership, sole-SELL reservations and terminal outcomes from durable facts across restart.
 - [ ] Prove same-market and different-market CG+RS concurrency offline.
