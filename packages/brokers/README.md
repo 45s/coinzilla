@@ -411,7 +411,7 @@ The only order this command can attempt is:
 
 Before prompting for confirmation, it reads the market catalog, symbol metadata, account balances, and symbol-scoped open orders through the common Broker API. It aborts unless HYPEUSDT is explicitly open with matching HYPE/USDT identity, the documented `minVolume` (base quantity) and `minPrice` (quote notional) are present and satisfied, free USDT is below 12, and the symbol-scoped open-order query returns no rows. Decimal comparisons are exact. The local 11 USDT notional floor is provisional and is **not** an exchange guarantee.
 
-The preflight display also states the limitations: the empty symbol-scoped open-order response is not proof of account-wide absence because response completeness is unverified; price tick and quantity step remain UNKNOWN; and free USDT below 12 does not guarantee rejection because other exchange-side credits or account settings may affect acceptance. Review every displayed value. The final prompt requires the exact phrase:
+The preflight display also states the limitations: the empty symbol-scoped open-order response is not proof of account-wide absence because response completeness is unverified; the balance is a point-in-time response without an authoritative source timestamp and may change before dispatch; and price tick and quantity step remain UNKNOWN. Free USDT below 12 does not guarantee rejection because other exchange-side credits or account settings may affect acceptance. If accepted, the 30 USDT limit may be marketable and could fill immediately at the live ask. This is a real LIVE order, not a safe simulation. Review every displayed value. The final prompt requires the exact phrase:
 
 ```text
 SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER
