@@ -471,6 +471,13 @@ test("commits reconciled RS projections and releases the shared SELL reservation
     workflow.getCycleStateForMarket({ marketId: market.id }).status,
     cycleOutcome.status,
   )
+  const nextCycle = workflow.getOrCreateCycleState({
+    marketId: market.id,
+  })
+  assert.notEqual(nextCycle.cycleId, "rs-cycle-1",
+    "A new cycle may be allocated only after the prior mixed SELL has fully reconciled and closed.")
+  assert.equal(nextCycle.status, "ACCUMULATING",
+    "A fully reconciled profitable cycle may transition to a fresh accumulating cycle.")
 })
 
 test("keeps both accounting projections and the SELL reservation unchanged when durable reconciliation commit fails", async () => {
