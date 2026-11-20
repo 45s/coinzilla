@@ -36,6 +36,7 @@ function createOrder({
   orderMarket = market,
   clientOrderId,
   updatedAt = 200,
+  createdAt = updatedAt,
 } = {}) {
   return new CanonicalOrder({
     ...identity,
@@ -57,7 +58,7 @@ function createOrder({
       asset: orderMarket.baseAsset,
     }),
     status: executed === "0" ? "OPEN" : "FILLED",
-    createdAt: 100,
+    createdAt,
     updatedAt,
     completedAt: updatedAt,
   })
@@ -143,7 +144,7 @@ function createRepositories() {
   }
 }
 
-function createPagedBroker({ orders, fills, calls }) {
+function createPagedBroker({ orders, fills, calls, openOrders = [] }) {
   return {
     getCanonicalOrderHistory: async ({ symbol, orderId, startTime, endTime, limit }) => {
       calls.orders.push({
@@ -156,7 +157,7 @@ function createPagedBroker({ orders, fills, calls }) {
       const matchingOrders = orders
         .filter((order) => order.market.symbol === symbol)
         .filter((order) => orderId === undefined
-          ? order.updatedAt >= startTime && order.updatedAt <= endTime
+          ? order.createdAt >= startTime && order.createdAt <= endTime
           : order.brokerOrderId === String(orderId))
         .sort((left, right) => Number(left.brokerOrderId) - Number(right.brokerOrderId))
       return {
@@ -164,6 +165,10 @@ function createPagedBroker({ orders, fills, calls }) {
         data: matchingOrders.slice(0, limit),
       }
     },
+    getOpenOrders: async ({ symbol }) => ({
+      ok: true,
+      data: openOrders.filter((order) => order.symbol === symbol),
+    }),
     getFills: async ({ symbol, fromId, limit }) => {
       calls.fills.push({
         symbol,
@@ -238,6 +243,10 @@ test("paginates configured-market order and trade history and persists exchange 
 test("fails closed when an exchange history cursor does not advance", async () => {
   const repositories = createRepositories()
   const broker = {
+    getOpenOrders: async () => ({
+      ok: true,
+      data: [],
+    }),
     getCanonicalOrderHistory: async () => ({
       ok: true,
       data: [
@@ -481,6 +490,10 @@ test("does not advance the order-history checkpoint when a later bounded window 
   let orderPage = 0
   let fillRequests = 0
   const broker = {
+    getOpenOrders: async () => ({
+      ok: true,
+      data: [],
+    }),
     getCanonicalOrderHistory: async () => {
       orderPage += 1
       if (orderPage === 1) {
@@ -568,4 +581,47 @@ test("resolves older fill orders by exact exchange identity when outside the ini
     true,
     "The fallback order lookup must use the exact exchange order ID, not reinterpret it as a page cursor.",
   )
+})
+
+
+test("persists current open orders older than the initial order-history lookback", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const now = 200 * 24 * 60 * 60 * 1000
+  const oldOpenOrder = createOrder({
+    orderId: "10",
+    executed: "0",
+    createdAt: 80 * 24 * 60 * 60 * 1000,
+    updatedAt: 80 * 24 * 60 * 60 * 1000,
+  })
+  const broker = createPagedBroker({
+    orders: [oldOpenOrder],
+    fills: [],
+    openOrders: [{
+      id: "10",
+      symbol: "BTCUSDT",
+    }],
+    calls,
+  })
+  const result = await synchronizeAccountHistory({
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 2,
+    requestDelayMs: 0,
+    now: () => now,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map((error) => error.message).join("; "))
+  assert.equal(result.data.openOrderSnapshotsChecked, 1, "Startup must inspect current open orders for each configured market.")
+  assert.equal(result.data.openOrdersObserved, 1, "The current open-order snapshot must include the old exchange order.")
+  assert.equal(repositories.orders.length, 1, "An open order outside the initial time lookback must still be persisted by exact canonical lookup.")
+  assert.equal(repositories.orders[0].status, "OPEN", "The historical row must preserve the exchange-confirmed open status.")
 })
