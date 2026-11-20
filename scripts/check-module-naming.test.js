@@ -72,9 +72,9 @@ test("scans production JavaScript across apps, packages, and repository scripts"
     assert.deepEqual(
       findModuleNamingViolations(root),
       [
-        `${join(app, "helpers.js")}: vague module filename`,
-        `${join(pkg, "testnet-utils.js")}: redundant helper/utility filename suffix`,
-        `${join(scripts, "runtime-helpers.js")}: redundant helper/utility filename suffix`,
+        "apps/example/src/helpers.js: vague module filename",
+        "packages/example/src/testnet-utils.js: redundant helper/utility filename suffix",
+        "scripts/runtime-helpers.js: redundant helper/utility filename suffix",
       ].sort(),
       "the full scan must inspect all production source areas and ignore tests, fixtures, and vendored files",
     )
