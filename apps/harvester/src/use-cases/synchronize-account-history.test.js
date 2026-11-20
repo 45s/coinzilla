@@ -220,6 +220,7 @@ test("paginates configured-market order and trade history and persists exchange 
   assert.equal(result.data.marketUniverseComplete, false, "Configured symbols must not be presented as the complete account market universe.")
   assert.equal(result.data.retentionCoverageConfirmed, false, "Exchange page exhaustion must not be presented as proof of retention completeness.")
   assert.equal(result.data.ordersPersisted, 3, "Time-window splitting must persist all three orders returned by the bounded exchange queries.")
+  assert.deepEqual(repositories.orders.map(({ brokerOrderId }) => brokerOrderId), ["11", "10", "12"], "Order IDs may be observed out of numeric order when older orders receive later status updates.")
   assert.equal(result.data.fillsPersisted, 3, "Trade-history pagination must persist all three executions returned by the exchange.")
   assert.equal(repositories.orders[0].ownership, undefined, "Exchange history must not invent strategy ownership for a previously external order.")
   assert.equal(repositories.fills[0].ingestionSource, "exchange_history", "Backfilled executions must retain exchange-history provenance.")
@@ -261,7 +262,7 @@ test("fails closed when an exchange history cursor does not advance", async () =
     orderRepository: repositories.orderRepository,
     fillRepository: repositories.fillRepository,
     cursorRepository: repositories.cursorRepository,
-    limit: 2,
+    limit: 3,
     requestDelayMs: 0,
     now: () => 300,
   })
