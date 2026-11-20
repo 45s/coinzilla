@@ -301,7 +301,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   }
   if (changedNames) {
     if (baseSha) {
-      violations = findChangedHelperNamingViolations({ root, changedPaths })
+      violations = findChangedHelperNamingViolations({
+        root,
+        changedPaths,
+      })
     } else {
       violations = ["Changed-name check requires an exact 40-character base SHA"]
     }
