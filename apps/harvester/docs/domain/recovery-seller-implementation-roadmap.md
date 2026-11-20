@@ -8,7 +8,7 @@ created: 2026-11-14
 
 # Recovery Seller (RS) — Implementation Roadmap
 
-**Status:** RS-1, RS-2a and RS-2b are COMPLETE. RS-3 pure policy is complete. PR #1515 implements the production runtime dispatch, shared serialized-engine callback, account-wide quote/base commitment authorization and terminal mixed-SELL reconciliation. The runtime acceptance gate remains hard-disabled until RS-4/RS-5 offline acceptance passes. Still blocking: replay of RS cycle/BUY VWAP/ownership/sole-SELL reservation/terminal outcomes across restart, a reliable fresh third-asset commission valuation source, operator-facing STOP reset/resume transport, and the full RS-5 offline lifecycle/concurrency/restart/failure matrix. RS remains non-executable; see the [policy blocker audit](./RECOVERY_SELLER_POLICY_BLOCKERS.md).
+**Status:** RS-1, RS-2a and RS-2b are COMPLETE. RS-3 pure policy is complete. PR #1515 implements the production runtime dispatch, shared serialized-engine callback, account-wide quote/base commitment authorization and terminal mixed-SELL reconciliation. The runtime acceptance gate remains hard-disabled until RS-4/RS-5 offline acceptance passes. Still blocking: the scoped RS-5 offline lifecycle/concurrency/failure matrix. Restart/recovery and third-asset commission valuation are explicitly deferred. STOP is terminal and cannot be cleared by CC-operator; an unexpected error must be debugged and fixed before a controlled process restart. RS remains non-executable until the scoped matrix passes; see the [policy blocker audit](./RECOVERY_SELLER_POLICY_BLOCKERS.md).
 **Tracking:** RS-3 pure policy is completed in [PR #1127](https://github.com/45s/coinzilla/pull/1127). RS-4 shared-engine integration and RS-5 offline lifecycle proof remain separate phases. [PR #1118](https://github.com/45s/coinzilla/pull/1118), [PR #1131](https://github.com/45s/coinzilla/pull/1131), [PR #1137](https://github.com/45s/coinzilla/pull/1137), [PR #1144](https://github.com/45s/coinzilla/pull/1144) and [PR #1152](https://github.com/45s/coinzilla/pull/1152) are merged.
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
@@ -41,7 +41,7 @@ When the RS acceptance gate is eventually opened, bootstrap restores the account
 - Bootstrap contains the production composition path from the shared accounting workflow, durable STOP workflow, canonical market metadata and account snapshot. The current hard acceptance gate rejects configured RS routes before the path can run.
 - The engine injects an account-wide action authorizer backed by `allocateStrategyOrderCommitments`; the callback cannot submit without that authorization.
 - RS orders use the engine-owned submitter, immutable OrderRegistry ownership and the existing terminal mixed-SELL reconciler; CG policy, budgets and Positions remain separate.
-- The composition is tested, but the code-level acceptance gate remains false until restart/replay and RS-5 offline lifecycle evidence are complete.
+- The composition is tested, but the code-level acceptance gate remains false until the scoped RS-5 offline lifecycle evidence is complete. Restart/recovery and third-asset commission valuation are deferred.
 
 ## RS-4 account transition queue — shared coordinator foundation
 
@@ -298,7 +298,7 @@ The current owner contract requires three independent profitability gates: recov
 | Post-fill adverse result | Account confirmed fills/fees exactly once, leave cycle unresolved and STOP all new trading actions. No automatic recovery SELL/BUY or cycle reset. | **FAIL-CLOSED; no automatic resolution policy approved.** |
 | Terminal partial/canceled/rejected/expired SELL | One SELL lifecycle per cycle. Keep unresolved and reconcile; no second SELL or next BUY. | **FAIL-CLOSED; operator resolution path remains outside this policy slice.** |
 | Third-asset fee valuation | Explicit reliable quote value required. Missing value is not zero; no valuation source/timestamp/freshness policy approved. | **FAIL-CLOSED; source policy remains open.** |
-| Sticky STOP reset/resume | No automatic clear on market event or restart. Only non-trading WAIT/RECONCILE may proceed while stopped. | **FAIL-CLOSED; no reset path in this task.** |
+| Sticky STOP | No automatic clear on market event. CC-operator cannot unpause or reset STOP; investigate and fix the underlying unexpected error before controlled restart. | **TERMINAL; operator resolution removed from the operator facade.** |
 | Trailing BUY repricing | Current RS BUY behavior remains initial/next tranche pricing only. | **Not changed; no new behavior inferred.** |
 
 The final-residual-without-a-new-BUY liquidation remains explicitly deferred under FITDIB and is not an RS-3 deliverable. Advanced pause/disable/abandon/resume/restart semantics also remain deferred.
@@ -339,7 +339,7 @@ The projection remains candidate-only: it never restores an executable Portfolio
 
 **Deliverable:** deterministic end-to-end RS lifecycle proof and current documentation.
 
-Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent recovery, legacy and combined-cycle profitability gates and max-of-allocation SELL price target; partial/terminal fills and base/quote/third-asset commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; fixed original average cost and decreasing remaining legacy quantity/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints.
+Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent recovery, legacy and combined-cycle profitability gates and max-of-allocation SELL price target; partial/terminal fills and base/quote commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; fixed original average cost and decreasing remaining legacy quantity/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints. Restart/recovery and third-asset commission valuation are out of scope for this initial runtime acceptance.
 
 Update the canonical RS specification, architecture, runtime config docs only when config is approved, tests index, docs index, Harvester roadmap and PR descriptions.
 
@@ -411,7 +411,7 @@ flowchart TD
   J -->|"Yes"| K["Shared Trading Engine safety and order gates"]
 ~~~
 
-The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged; PR #1127 completes the pure pre-submission SELL evaluator. PR #1515 implements the shared-engine runtime dispatch, account-wide quote/base authorization and terminal mixed-SELL integration, but a hard acceptance gate keeps RS non-executable. Restart/replay, fresh third-asset commission valuation, operator STOP reset/resume transport and RS-5 offline lifecycle proof remain required before the gate can be enabled. Advanced lifecycle functionality remains deferred under FITDIB.
+The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged; PR #1127 completes the pure pre-submission SELL evaluator. PR #1515 implements the shared-engine runtime dispatch, account-wide quote/base authorization and terminal mixed-SELL integration, but a hard acceptance gate keeps RS non-executable. Restart/recovery and third-asset commission valuation are deferred. STOP is terminal with no CC-operator reset/resume capability. The scoped RS-5 offline lifecycle/concurrency/failure proof remains required before the gate can be enabled. Advanced lifecycle functionality remains deferred under FITDIB.
 
 ## RS-4 configuration boundary — PR #1476
 
@@ -468,4 +468,4 @@ Canonical fill accounting now distinguishes RS ownership, explicit CG ownership,
 - Added an account-wide action authorizer using the shared `allocateStrategyOrderCommitments` path. It accounts for active quote/base commitments across strategies while preserving RS-specific pair budgets and cycle inventory. Normal quote/budget exhaustion defers; missing or contradictory inputs latch durable global STOP.
 - Connected the terminal RS SELL path to complete canonical fill-history reconciliation and atomic recovery/legacy accounting. Reservation release follows successful commit only.
 - A hard code-level gate (`RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = false`) keeps RS non-executable until RS-4/RS-5 acceptance is complete.
-- Remaining blockers: durable restart replay of RS cycle/BUY VWAP/ownership/sole-SELL reservation/terminal outcomes; reliable fresh third-asset commission valuation; operator-facing STOP reset/resume transport; and the full RS-5 offline lifecycle/concurrency/restart/failure matrix. No exchange operations were performed.
+- Remaining blocker: scoped RS-5 offline lifecycle/concurrency/failure acceptance. Restart/recovery and third-asset commission valuation are deferred; STOP is terminal and cannot be cleared through CC-operator. No exchange operations were performed.
