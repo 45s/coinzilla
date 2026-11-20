@@ -511,6 +511,52 @@ test("deduplicates identical applied executions without creating duplicate commi
   })
 })
 
+test("scopes identical trade IDs by provider, provider instance, account, and market", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const fills = [
+    createAppliedFillEvent(),
+    createAppliedFillEvent({
+      overrides: {
+        accountId: "binance-secondary",
+        brokerOrderId: "order-secondary",
+        clientOrderId: "client-order-secondary",
+      },
+    }),
+    createAppliedFillEvent({
+      overrides: {
+        providerInstanceId: "binanceSecondary",
+        brokerOrderId: "order-instance-secondary",
+        clientOrderId: "client-order-instance-secondary",
+      },
+    }),
+    createAppliedFillEvent({
+      overrides: {
+        fillId: "other-provider:BTCUSDT:trade-0001",
+        providerType: "other-provider",
+        providerInstanceId: "other-provider-main",
+        brokerOrderId: "other-provider-order",
+        clientOrderId: "other-provider-client",
+      },
+    }),
+  ]
+  for (const fill of fills) {
+    await publishAppliedFill({
+      eventBus: context.eventBus,
+      fill,
+    })
+  }
+  const result = await persistence.fillObserver.flush()
+  assert.equal(result.ok, true, "The same provider trade ID in different scopes must not be treated as a conflicting duplicate.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const rows = database.prepare("SELECT COUNT(*) AS count FROM fills").get()
+      assert.equal(rows.count, 4, "Distinct provider/account/instance/market scopes must retain separate execution rows.")
+    },
+  })
+})
+
 test("rejects conflicting facts for an already-seen provider-scoped execution identity", async (t) => {
   const context = await createTestContext({ t })
   const persistence = await preparePersistence({ context })

@@ -33,8 +33,6 @@ The ADA recovery lifecycle work below remains a separate active trading-safety o
 
 **Relational-schema direction — generic prerequisite complete:** [PR #1489](https://github.com/45s/coinzilla/pull/1489) completed the generic SQLite migration audit and hardening tracked by [#1486](https://github.com/45s/coinzilla/issues/1486). The DB package now detects changed applied migration implementations and rejects out-of-order pending migrations while preserving legacy migration history. The DB package still owns generic infrastructure only; Harvester owns its business tables, schema, repositories and migrations.
 
-**Harvester relational trading history — IN PROGRESS:** [#1554](https://github.com/45s/coinzilla/issues/1554) owns physical `orders`, `fills`, and `fill_commissions` tables, versioned application-owned migrations, source-preserving `harvester_orders` migration, and non-blocking persistence of canonical applied fills. `packages/db` remains generic and unchanged. No `sessions` or `errors` table is in scope.
-
 Any migration must preserve existing `harvester_orders` history through a verified, idempotent conversion with a rollback/backup plan before cutover. Keep the current best-effort, non-blocking observer semantics and TESTNET/LIVE file separation. No Journal/ADR-0001 replacement, restart restoration, or trading-state authority is introduced.
 
 **Previous persistence scope:** The trading-session-ID history projection from PR #1369 and the temporary `harvester_processes` process-ID smoke-test write are removed in this slice, as explicitly requested. The replacement history record is an executed-order projection; it does not use process or runtime-session identity.
@@ -43,13 +41,13 @@ Any migration must preserve existing `harvester_orders` history through a verifi
 
 **Filled-order history — MERGED:** [PR #1469](https://github.com/45s/coinzilla/pull/1469) merged into `develop` as `39f098000d6c20cb596a9e6700250faa00bbd80e` (exact validated PR head `6d11d883e2d8250c2b3fab9f6d5a40d6178996bb`). It delivers a non-authoritative `harvester_orders` projection. Persist an order as soon as cumulative executed quantity is positive, including immediate partial/fully filled acknowledgements, later partial/final fills, and partial-fill cancellation outcomes. Further lifecycle snapshots update the same row. Identity is `(environment, providerInstanceId, providerType, accountId, clientOrderId)`; exact decimal strings, canonical market/asset facts, provider/account provenance, and available strategy/position ownership are retained.
 
-The observer uses a bounded serialized best-effort queue. SQLite is never awaited from broker submission, user-data processing, fill application, accounting, Journal, or trading readiness. Queue overflow and write errors are reported as history gaps without blocking trading. TESTNET/LIVE retain separate database files. OrderRegistry, Journal, and ADR-0001 retain their existing authority and guarantees; no restart restoration is introduced.
+Order and fill observers use bounded serialized best-effort queues. SQLite is never awaited from broker submission, user-data processing, fill application, accounting, Journal, or trading readiness. Queue overflow and write errors are reported as history gaps without blocking trading. TESTNET/LIVE retain separate database files. OrderRegistry, Journal, and ADR-0001 retain their existing authority and guarantees; no restart restoration is introduced.
 
 The temporary `harvester_processes` process-ID smoke-test row and its obsolete persistence helper are removed. Neither process ID nor runtime session ID is part of the order-history record or key. No changes are made to `packages/db`.
 
 ### Ownership and dependency direction
 
-- Harvester owns order-history domain records, repository semantics, lifecycle projection, and SQLite composition.
+- Harvester owns trading-history schemas, repository semantics, migrations, lifecycle projections, and SQLite composition.
 - `packages/db` owns only generic provider-neutral persistence contracts and adapters.
 - OrderRegistry remains authoritative for in-process order ownership/state.
 - Journal remains the ordered lifecycle evidence store; this is not a second event ledger.
