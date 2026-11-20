@@ -401,7 +401,7 @@ async function runRuntimeIntegrationScenario() {
     order,
     ownership,
   })
-  assert.equal(fixture.stopWorkflow.getStopState().status, "RUNNING")
+  assert.equal(fixture.stopWorkflow.getStopState().status, "CLEAR")
 }
 
 test("composes RS runtime dispatch, durable submission, shared ownership and BUY-fill accounting offline", async () => {
