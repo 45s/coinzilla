@@ -79,7 +79,7 @@ Before reporting completion or updating a PR as ready, verify:
 - [ ] Implementation follows the discovered architecture, dependency, naming, validation, error, logging and safety rules that apply.
 - [ ] Tests prove the changed contract, including relevant failure and boundary behavior; meaningful tests were not weakened or skipped.
 - [ ] Documentation and roadmap/index impact is handled in the same PR, or the reason for no change is recorded.
-- [ ] Names of new or materially changed files, functions, exports, and important variables were reviewed for behavior/responsibility clarity; contextual brevity is justified where used.
+- [ ] Names of new or materially changed files, functions, exports, and important variables were reviewed for behavior/responsibility clarity; contextual brevity is justified where used. When helper naming is in scope, run `pnpm run check:helper-names` and review findings (the scan is heuristic and report-only pending baseline review).
 - [ ] The complete diff was reviewed for unrelated changes and policy deviations.
 - [ ] Required checks were run and exact-head CI evidence is recorded; skipped checks and limitations are explicit.
 - [ ] Any standards exception or unresolved limitation is clearly documented and linked to the task.
