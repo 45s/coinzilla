@@ -124,7 +124,7 @@ const adaptersMap = Object.freeze({
   [wsEventsMap.account]: adaptUser.outboundAccountInfo,
   [wsEventsMap.balanceUpdate]: adaptUser.balanceUpdate,
   [wsEventsMap.listStatus]: adaptUser.listStatus,
-}
+})
 
 /**
  * Normalize a Binance WebSocket event using its event-type adapter.
