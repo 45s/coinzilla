@@ -5,30 +5,30 @@ import { adaptSymbolFiltersResponse } from "./symbol-filters.js"
 
 const completeSymbolInfo = {
   symbol: "BTCUSDT",
-  baseAsset: "BTC",
-  quoteAsset: "USDT",
-  orderTypes: ["LIMIT", "MARKET"],
-  filters: [
+baseAsset: "BTC",
+quoteAsset: "USDT",
+orderTypes: ["LIMIT", "MARKET"],
+filters: [
     {
       filterType: "PRICE_FILTER",
-      tickSize: "0.010000",
-      minPrice: "0.00000000",
-      maxPrice: "100000.00000000",
+tickSize: "0.010000",
+minPrice: "0.00000000",
+maxPrice: "100000.00000000",
     },
     {
       filterType: "LOT_SIZE",
-      stepSize: "0.000100",
-      minQty: "0.000000",
-      maxQty: "9000.000000",
+stepSize: "0.000100",
+minQty: "0.000000",
+maxQty: "9000.000000",
     },
     {
       filterType: "NOTIONAL",
-      minNotional: "5.00",
-      maxNotional: "1000000.00",
+minNotional: "5.00",
+maxNotional: "1000000.00",
     },
     {
       filterType: "MIN_NOTIONAL",
-      minNotional: "10.00",
+minNotional: "10.00",
     },
   ],
 }
@@ -36,32 +36,32 @@ const completeSymbolInfo = {
 test("maps required and optional Binance market filters without decimal normalization", () => {
   assert.deepEqual(adaptSymbolFiltersResponse({
     symbol: "BTCUSDT",
-    exchangeInfo: { symbols: [completeSymbolInfo] },
+exchangeInfo: { symbols: [completeSymbolInfo] },
   }), {
     symbol: "BTCUSDT",
-    baseAsset: "BTC",
-    quoteAsset: "USDT",
-    tickSize: "0.010000",
-    stepSize: "0.000100",
-    minPrice: "0.00000000",
-    maxPrice: "100000.00000000",
-    minQuantity: "0.000000",
-    maxQuantity: "9000.000000",
-    minNotional: "5.00",
-    maxNotional: "1000000.00",
-    supportedOrderTypes: ["LIMIT", "MARKET"],
-    unvalidatedConstraints: [],
+baseAsset: "BTC",
+quoteAsset: "USDT",
+tickSize: "0.010000",
+stepSize: "0.000100",
+minPrice: "0.00000000",
+maxPrice: "100000.00000000",
+minQuantity: "0.000000",
+maxQuantity: "9000.000000",
+minNotional: "5.00",
+maxNotional: "1000000.00",
+supportedOrderTypes: ["LIMIT", "MARKET"],
+unvalidatedConstraints: [],
   })
 })
 
 test("falls back to legacy MIN_NOTIONAL only when NOTIONAL is absent", () => {
   const symbolInfo = {
     ...completeSymbolInfo,
-    filters: completeSymbolInfo.filters.filter((filter) => filter.filterType !== "NOTIONAL"),
+filters: completeSymbolInfo.filters.filter((filter) => filter.filterType !== "NOTIONAL"),
   }
   const result = adaptSymbolFiltersResponse({
     symbol: "BTCUSDT",
-    exchangeInfo: { symbols: [symbolInfo] },
+exchangeInfo: { symbols: [symbolInfo] },
   })
   assert.equal(result.minNotional, "10.00")
 })
@@ -69,7 +69,7 @@ test("falls back to legacy MIN_NOTIONAL only when NOTIONAL is absent", () => {
 test("omits optional filter fields when Binance does not provide them", () => {
   const symbolInfo = {
     ...completeSymbolInfo,
-    filters: [
+filters: [
       { filterType: "PRICE_FILTER",
 tickSize: "0.01" },
       { filterType: "LOT_SIZE",
@@ -78,22 +78,22 @@ stepSize: "0.001" },
   }
   assert.deepEqual(adaptSymbolFiltersResponse({
     symbol: "BTCUSDT",
-    exchangeInfo: { symbols: [symbolInfo] },
+exchangeInfo: { symbols: [symbolInfo] },
   }), {
     symbol: "BTCUSDT",
-    baseAsset: "BTC",
-    quoteAsset: "USDT",
-    tickSize: "0.01",
-    stepSize: "0.001",
-    supportedOrderTypes: ["LIMIT", "MARKET"],
-    unvalidatedConstraints: [],
+baseAsset: "BTC",
+quoteAsset: "USDT",
+tickSize: "0.01",
+stepSize: "0.001",
+supportedOrderTypes: ["LIMIT", "MARKET"],
+unvalidatedConstraints: [],
   })
 })
 
 test("rejects missing, malformed, and non-positive required filters", () => {
   const missingTick = {
     ...completeSymbolInfo,
-    filters: completeSymbolInfo.filters.filter((filter) => filter.filterType !== "PRICE_FILTER"),
+filters: completeSymbolInfo.filters.filter((filter) => filter.filterType !== "PRICE_FILTER"),
   }
   assert.throws(() => adaptSymbolFiltersResponse({
     symbol: "BTCUSDT",
@@ -102,7 +102,7 @@ exchangeInfo: { symbols: [missingTick] },
 
   const malformedTick = {
     ...completeSymbolInfo,
-    filters: completeSymbolInfo.filters.map((filter) =>
+filters: completeSymbolInfo.filters.map((filter) =>
       filter.filterType === "PRICE_FILTER" ? { ...filter,
 tickSize: "NaN" } : filter),
   }
@@ -113,7 +113,7 @@ exchangeInfo: { symbols: [malformedTick] },
 
   const zeroStep = {
     ...completeSymbolInfo,
-    filters: completeSymbolInfo.filters.map((filter) =>
+filters: completeSymbolInfo.filters.map((filter) =>
       filter.filterType === "LOT_SIZE" ? { ...filter,
 stepSize: "0" } : filter),
   }
@@ -134,7 +134,7 @@ exchangeInfo: { symbols: [incomplete] },
 
   const invalidOptional = {
     ...completeSymbolInfo,
-    filters: completeSymbolInfo.filters.map((filter) =>
+filters: completeSymbolInfo.filters.map((filter) =>
       filter.filterType === "PRICE_FILTER" ? { ...filter,
 minPrice: "-1" } : filter),
   }
@@ -147,7 +147,7 @@ exchangeInfo: { symbols: [invalidOptional] },
 test("rejects exchange-info responses that do not contain the requested symbol", () => {
   assert.throws(() => adaptSymbolFiltersResponse({
     symbol: "BTCUSDT",
-    exchangeInfo: { symbols: [{ ...completeSymbolInfo,
+exchangeInfo: { symbols: [{ ...completeSymbolInfo,
 symbol: "ETHUSDT" }] },
   }), /PRICE_FILTER\.tickSize missing for BTCUSDT/)
 })
@@ -156,7 +156,7 @@ symbol: "ETHUSDT" }] },
 test("reports active dynamic and account-level filters as exchange-neutral unvalidated constraints", () => {
   const symbolInfo = {
     ...completeSymbolInfo,
-    filters: [
+filters: [
       ...completeSymbolInfo.filters,
       { filterType: "PERCENT_PRICE_BY_SIDE",
 bidMultiplierUp: "1.2",
@@ -179,9 +179,9 @@ maxNumAlgoOrders: 5 },
   }
   const result = adaptSymbolFiltersResponse({
     symbol: "BTCUSDT",
-    exchangeInfo: {
+exchangeInfo: {
       symbols: [symbolInfo],
-      exchangeFilters: [
+exchangeFilters: [
         { filterType: "EXCHANGE_MAX_NUM_ORDERS",
 maxNumOrders: 1000 },
       ],
@@ -211,11 +211,11 @@ sourceFilterType: "EXCHANGE_MAX_NUM_ORDERS" },
 test("maps private MAX_ASSET filters into account-scoped unvalidated constraints", () => {
   const result = adaptSymbolFiltersResponse({
     symbol: "BTCUSDT",
-    exchangeInfo: { symbols: [completeSymbolInfo] },
-    accountFilters: {
+exchangeInfo: { symbols: [completeSymbolInfo] },
+accountFilters: {
       symbolFilters: [],
-      exchangeFilters: [],
-      assetFilters: [
+exchangeFilters: [],
+assetFilters: [
         { filterType: "MAX_ASSET",
 asset: "USDT",
 limit: "1000" },
@@ -234,11 +234,11 @@ sourceFilterType: "MAX_ASSET" },
 test("does not block a market for account asset filters belonging to unrelated assets", () => {
   const result = adaptSymbolFiltersResponse({
     symbol: "BTCUSDT",
-    exchangeInfo: { symbols: [completeSymbolInfo] },
-    accountFilters: {
+exchangeInfo: { symbols: [completeSymbolInfo] },
+accountFilters: {
       symbolFilters: [],
-      exchangeFilters: [],
-      assetFilters: [
+exchangeFilters: [],
+assetFilters: [
         { filterType: "MAX_ASSET",
 asset: "ETH",
 limit: "10" },
@@ -253,7 +253,7 @@ limit: "10" },
 test("preserves both dynamic price filter variants and excludes only unsupported order-feature filters", () => {
   const symbolInfo = {
     ...completeSymbolInfo,
-    filters: [
+filters: [
       ...completeSymbolInfo.filters,
       { filterType: "PERCENT_PRICE",
 multiplierUp: "1.2",
@@ -277,7 +277,7 @@ avgPriceMins: 5 },
 
   const result = adaptSymbolFiltersResponse({
     symbol: "BTCUSDT",
-    exchangeInfo: { symbols: [symbolInfo] },
+exchangeInfo: { symbols: [symbolInfo] },
   })
 
   assert.deepEqual(result.unvalidatedConstraints, [
@@ -294,8 +294,8 @@ sourceFilterType: "PERCENT_PRICE_BY_SIDE" },
 test("does not reclassify static rules repeated by the private relevant-filters response", () => {
   const result = adaptSymbolFiltersResponse({
     symbol: "BTCUSDT",
-    exchangeInfo: { symbols: [completeSymbolInfo] },
-    accountFilters: {
+exchangeInfo: { symbols: [completeSymbolInfo] },
+accountFilters: {
       symbolFilters: [
         { filterType: "PRICE_FILTER",
 tickSize: "0.01" },
@@ -308,8 +308,8 @@ multiplierUp: "1.2",
 multiplierDown: "0.8",
 avgPriceMins: 5 },
       ],
-      exchangeFilters: [],
-      assetFilters: [],
+exchangeFilters: [],
+assetFilters: [],
     },
   });
 

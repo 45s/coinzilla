@@ -1,11 +1,16 @@
 import { adaptMsg } from "./broker-websocket/helpers/adapters/adapt-msg.js"
-import { getUserDataEventIdentity } from "./broker-websocket/helpers/user-data-event-deduplicator.js"
+import { getUserDataEventIdentity } from "./broker-websocket/helpers/user-data-event-identity.js"
 
 /**
  * Adapt the Binance RPC client to the exchange-neutral user-data client port.
  * Binance event envelopes and subscription IDs are normalized at this boundary.
  *
- * @param {{state: string, request: (method: string, params?: object, options?: object) => Promise<{data?: unknown}>, connect: () => Promise<unknown>, disconnect: () => Promise<unknown>, onEvent: (listener: (message: object) => void) => (() => void)|void, onError?: (listener: (error: Error) => void) => (() => void)|void, onClose: (listener: (event: object) => void) => (() => void)|void}} client - Binance WebSocket API RPC client.
+ * @param {{state: string,
+request: (method: string, params?: object, options?: object) => Promise<{data?: unknown}>,
+connect: () => Promise<unknown>,
+disconnect: () => Promise<unknown>,
+onEvent: (listener: (message: object) => void) => (() => void)|void, onError?: (listener: (error: Error) => void) => (() => void)|void,
+onClose: (listener: (event: object) => void) => (() => void)|void}} client - Binance WebSocket API RPC client.
  * @returns {import("../../../application/ports/user-data-client-port.js").UserDataClientPort}
  * @throws {TypeError} If the client does not expose the required RPC and lifecycle methods.
  */
@@ -20,9 +25,9 @@ export function createBinanceUserDataClientPort(client) {
     get state() {
       return client.state
     },
-    connect: (...args) => client.connect(...args),
-    disconnect: (...args) => client.disconnect(...args),
-    onEvent: (listener) => client.onEvent((message) => {
+connect: (...args) => client.connect(...args),
+disconnect: (...args) => client.disconnect(...args),
+onEvent: (listener) => client.onEvent((message) => {
       if (!message || typeof message !== "object") {return}
       const { subscriptionId } = message
       if (!Number.isSafeInteger(subscriptionId) || subscriptionId < 0) {return}
@@ -34,7 +39,7 @@ export function createBinanceUserDataClientPort(client) {
         listener({
           type: "terminated",
           subscriptionId,
-          eventTime: event.E ?? null,
+eventTime: event.E ?? null,
           event,
         })
         return
@@ -43,13 +48,13 @@ export function createBinanceUserDataClientPort(client) {
       listener({
         type: "event",
         subscriptionId,
-        deduplicationKey: getUserDataEventIdentity(message),
-        event: adaptMsg(event),
+deduplicationKey: getUserDataEventIdentity(message),
+event: adaptMsg(event),
       })
     }),
-    onError: (listener) => client.onError?.(listener),
-    onClose: (listener) => client.onClose(listener),
-    subscribe: async () => {
+onError: (listener) => client.onError?.(listener),
+onClose: (listener) => client.onClose(listener),
+subscribe: async () => {
       const response = await client.request(
         "userDataStream.subscribe.signature",
         {},
@@ -57,12 +62,12 @@ export function createBinanceUserDataClientPort(client) {
       )
       return response.data?.subscriptionId ?? null
     },
-    listSubscriptions: async () => {
+listSubscriptions: async () => {
       const response = await client.request("session.subscriptions")
       if (!Array.isArray(response.data)) {return null}
       return response.data.map((subscription) => subscription?.subscriptionId)
     },
-    unsubscribe: async (subscriptionId) => {
+unsubscribe: async (subscriptionId) => {
       await client.request(
         "userDataStream.unsubscribe",
         { subscriptionId },
