@@ -80,6 +80,12 @@ These rules are mandatory for every AI agent working on the existing broker pack
 5. The PR is merged into `develop`, the merge is verified, and the task branch is cleaned up.
 6. The next DDD slice starts without requiring another user prompt.
 
+## Mandatory Bitunix workflow — required for every agent
+
+Before any Bitunix Spot task, read and follow [BITUNIX_WORKFLOW.md](./BITUNIX_WORKFLOW.md) in addition to this mandatory reference audit. It defines the common Broker API-first development cycle, evidence-to-source/test requirements, error handling, operator-controlled LIVE investigation boundary, and completion criteria. This is a hard requirement for every AI agent and automated contributor, not optional guidance.
+
+**Keep the safety boundary strict:** all automated tests, CI, scheduled jobs, and AI-agent-executed commands remain forbidden from making LIVE mutations. Broker order-mutation integration tests remain TESTNET-only. A human may separately initiate a guarded local LIVE investigation on their own machine; it is not a test, must not be executed by an agent, and does not waive issue #1185 or establish production readiness. Follow the exact controls in [BITUNIX_WORKFLOW.md](./BITUNIX_WORKFLOW.md#5-operator-controlled-local-live-experiments-are-a-separate-activity).
+
 ## Bitunix Spot development — mandatory reference audit
 
 **Before implementing or changing any Bitunix Spot capability, first inspect how the same capability is implemented in the reference projects below.** This applies to every task, including WebSocket connections/subscriptions, REST transport and signing, market data, account/balance reads, order placement/cancellation, order status, execution history, reconciliation, reconnect behavior, and error handling. Do not begin by inventing an implementation from memory or by reading only the official endpoint page.
@@ -139,5 +145,5 @@ For each additional repository, record the exact inspected commit/path and wheth
 - Distinguish Spot from Futures throughout the audit. Never copy a Futures-only WebSocket subscription or endpoint into Spot without official Spot evidence.
 - A WebSocket RPC request/response method is not a continuous subscription. Do not claim a private order/execution stream exists unless official Spot documentation and implementation evidence demonstrate push events, subscription lifecycle, event identity, and reconnect/recovery semantics.
 - Third-party tests are useful examples, not proof that Bitunix guarantees the behavior. Confirm pagination/completeness, stable identifiers, source timestamps, quantity semantics, and unknown-outcome reconciliation independently.
-- Keep order placement/cancellation disabled when required identity, quantity, execution-history, lifecycle, or mutation-environment guarantees remain unresolved. No live order placement, cancellation, or account mutation as part of ordinary development or tests. Default tests remain offline and credential-free.
+- Keep order placement/cancellation disabled when required identity, quantity, execution-history, lifecycle, or mutation-environment guarantees remain unresolved. No LIVE mutation may be executed by an AI agent or as part of ordinary development, automated tests, CI, or scheduled work. A human-initiated local LIVE experiment is a separate operator-controlled investigation governed by [BITUNIX_WORKFLOW.md](./BITUNIX_WORKFLOW.md); it does not change capability status, production readiness, or issue #1185. Default tests remain offline and credential-free.
 - Keep [issue #1185](https://github.com/45s/coinzilla/issues/1185) and the [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) aligned with verified findings. Do not silently remove an existing blocker because a third-party SDK implements a method.
