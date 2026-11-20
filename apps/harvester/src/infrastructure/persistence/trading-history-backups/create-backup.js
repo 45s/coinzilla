@@ -49,7 +49,7 @@ function createBackupError({
   })
 }
 
-function validateEnvironment(env) {
+function validateEnvironment({ env } = {}) {
   const environment = env.TRADING_MODE
   if (environment !== "testnet" && environment !== "live") {
     throw createBackupError({
@@ -61,7 +61,7 @@ function validateEnvironment(env) {
   return environment
 }
 
-function validateRetentionCount(keep, environment) {
+function validateRetentionCount({ keep, environment } = {}) {
   if (!Number.isSafeInteger(keep) || keep < 1 || keep > 3650) {
     throw createBackupError({
       stage: "retention-validation",
@@ -72,7 +72,12 @@ function validateRetentionCount(keep, environment) {
   }
 }
 
-function createBackupFilename({ backupDirectory, environment, createdAt, backupId } = {}) {
+function createBackupFilename({
+  backupDirectory,
+  environment,
+  createdAt,
+  backupId,
+} = {}) {
   if (!(createdAt instanceof Date) || !Number.isFinite(createdAt.getTime())) {
     throw createBackupError({
       stage: "backup-name-validation",
@@ -95,7 +100,7 @@ function createBackupFilename({ backupDirectory, environment, createdAt, backupI
   )
 }
 
-async function assertSourceFile(filename, environment) {
+async function assertSourceFile({ filename, environment } = {}) {
   let stats
   try {
     stats = await lstat(filename)
@@ -116,7 +121,7 @@ async function assertSourceFile(filename, environment) {
   }
 }
 
-async function ensurePrivateDirectory(directory, environment) {
+async function ensurePrivateDirectory({ directory, environment } = {}) {
   try {
     await mkdir(directory, {
       mode: 0o700,
@@ -143,7 +148,7 @@ async function ensurePrivateDirectory(directory, environment) {
   }
 }
 
-async function restrictFilePermissions(filename) {
+async function restrictFilePermissions({ filename } = {}) {
   if (process.platform !== "win32") {
     await chmod(filename, 0o600)
   }
@@ -244,7 +249,7 @@ async function publishBackupPair({
   }
 }
 
-async function removeTemporaryDirectory(directory, error) {
+async function removeTemporaryDirectory({ directory, error } = {}) {
   try {
     await rm(directory, {
       recursive: true,
@@ -258,27 +263,39 @@ async function removeTemporaryDirectory(directory, error) {
   }
 }
 
-async function createBackup({
+async function resolveBackupContext({
   env,
   now,
   createId,
-  backupRate,
   keep,
 } = {}) {
-  const environment = validateEnvironment(env)
-  validateRetentionCount(keep, environment)
+  const environment = validateEnvironment({
+    env,
+  })
+  validateRetentionCount({
+    keep,
+    environment,
+  })
   const sourceFilename = await assertHarvesterDatabaseIsolation({
     tradingMode: environment,
     env,
   })
-  await assertSourceFile(sourceFilename, environment)
+  await assertSourceFile({
+    filename: sourceFilename,
+    environment,
+  })
   const backupDirectory = resolveBackupDirectory({
     tradingMode: environment,
     env,
   })
-  await ensurePrivateDirectory(dirname(backupDirectory), environment)
-  await ensurePrivateDirectory(backupDirectory, environment)
-
+  await ensurePrivateDirectory({
+    directory: dirname(backupDirectory),
+    environment,
+  })
+  await ensurePrivateDirectory({
+    directory: backupDirectory,
+    environment,
+  })
   const createdAt = now()
   const backupFilename = createBackupFilename({
     backupDirectory,
@@ -286,11 +303,25 @@ async function createBackup({
     createdAt,
     backupId: createId(),
   })
-  const manifestFilename = `${backupFilename}.manifest.json`
-  const temporaryDirectory = await mkdtemp(join(backupDirectory, ".backup-"))
+  return {
+    environment,
+    sourceFilename,
+    backupDirectory,
+    createdAt,
+    backupFilename,
+    manifestFilename: `${backupFilename}.manifest.json`,
+    temporaryDirectory: await mkdtemp(join(backupDirectory, ".backup-")),
+  }
+}
+
+async function createTemporaryBackupArtifact({
+  context,
+  backupRate,
+  env,
+} = {}) {
   const temporaryBackupFilename = join(
-    temporaryDirectory,
-    basename(backupFilename),
+    context.temporaryDirectory,
+    basename(context.backupFilename),
   )
   const temporaryManifestFilename = `${temporaryBackupFilename}.manifest.json`
   let onlineBackup
@@ -298,18 +329,20 @@ async function createBackup({
   let failure
   try {
     onlineBackup = await createOnlineBackup({
-      sourceFilename,
+      sourceFilename: context.sourceFilename,
       destinationFilename: temporaryBackupFilename,
       backupRate,
-      environment,
+      environment: context.environment,
     })
-    await restrictFilePermissions(temporaryBackupFilename)
+    await restrictFilePermissions({
+      filename: temporaryBackupFilename,
+    })
     sha256 = await calculateSha256(temporaryBackupFilename)
     const manifest = {
       formatVersion: 1,
-      environment,
-      createdAt: createdAt.toISOString(),
-      filename: basename(backupFilename),
+      environment: context.environment,
+      createdAt: context.createdAt.toISOString(),
+      filename: basename(context.backupFilename),
       schemaVersion: onlineBackup.schemaVersion,
       sha256,
     }
@@ -321,60 +354,75 @@ async function createBackup({
         mode: 0o600,
       },
     )
-    await restrictFilePermissions(temporaryManifestFilename)
+    await restrictFilePermissions({
+      filename: temporaryManifestFilename,
+    })
     await verifyBackup({
       backupFilename: temporaryBackupFilename,
       env,
-      expectedDirectory: temporaryDirectory,
+      expectedDirectory: context.temporaryDirectory,
     })
     await publishBackupPair({
       temporaryBackupFilename,
       temporaryManifestFilename,
-      backupFilename,
-      manifestFilename,
-      environment,
+      backupFilename: context.backupFilename,
+      manifestFilename: context.manifestFilename,
+      environment: context.environment,
     })
   } catch (cause) {
     failure = cause
   }
-  failure = await removeTemporaryDirectory(temporaryDirectory, failure)
+  failure = await removeTemporaryDirectory({
+    directory: context.temporaryDirectory,
+    error: failure,
+  })
   if (failure) {
     throw failure instanceof OrderHistoryPersistenceError
       ? failure
       : createBackupError({
-        stage: "backup",
+        stage: "backup-artifact-creation",
         cause: failure,
-        environment,
-        backupFilename,
-      })
-  }
-
-  let retention
-  try {
-    retention = await rotateBackups({
-      backupDirectory,
-      environment,
-      keep,
-    })
-  } catch (cause) {
-    throw cause instanceof OrderHistoryPersistenceError
-      ? cause
-      : createBackupError({
-        stage: "backup-retention",
-        code: "HARVESTER_HISTORY_BACKUP_RETENTION_FAILED",
-        cause,
-        environment,
-        backupFilename,
+        environment: context.environment,
+        backupFilename: context.backupFilename,
       })
   }
   return {
-    environment,
-    backupFilename,
-    manifestFilename,
-    createdAt: createdAt.toISOString(),
-    schemaVersion: onlineBackup.schemaVersion,
+    onlineBackup,
     sha256,
-    pagesCopied: onlineBackup.pagesCopied,
+  }
+}
+
+async function createBackup({
+  env,
+  now,
+  createId,
+  backupRate,
+  keep,
+} = {}) {
+  const context = await resolveBackupContext({
+    env,
+    now,
+    createId,
+    keep,
+  })
+  const artifact = await createTemporaryBackupArtifact({
+    context,
+    backupRate,
+    env,
+  })
+  const retention = await rotateBackups({
+    backupDirectory: context.backupDirectory,
+    environment: context.environment,
+    keep,
+  })
+  return {
+    environment: context.environment,
+    backupFilename: context.backupFilename,
+    manifestFilename: context.manifestFilename,
+    createdAt: context.createdAt.toISOString(),
+    schemaVersion: artifact.onlineBackup.schemaVersion,
+    sha256: artifact.sha256,
+    pagesCopied: artifact.onlineBackup.pagesCopied,
     verified: true,
     retainedBackupCount: retention.retainedBackupCount,
   }
