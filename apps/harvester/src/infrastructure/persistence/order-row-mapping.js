@@ -45,6 +45,8 @@ export const ORDER_COLUMNS = Object.freeze([
   "source_record_id",
   "migrated_at",
   "last_execution_type",
+  "ingestion_source",
+  "last_ingestion_source",
 ])
 
 function requireString({ value, field } = {}) {
@@ -261,12 +263,18 @@ function mapOrderProvenanceColumns({
   sourceKind,
   sourceRecordId,
   migratedAt,
+  ingestionSource,
 } = {}) {
+  const defaultIngestionSource = sourceKind === "legacy_harvester_orders"
+    ? "legacy_migration"
+    : "live_event"
   return {
     source_kind: existing?.source_kind ?? sourceKind,
     last_observed_source_kind: sourceKind,
     source_record_id: existing?.source_record_id ?? sourceRecordId ?? null,
     migrated_at: existing?.migrated_at ?? migratedAt ?? null,
+    ingestion_source: existing?.ingestion_source ?? ingestionSource ?? defaultIngestionSource,
+    last_ingestion_source: ingestionSource ?? defaultIngestionSource,
   }
 }
 
@@ -276,6 +284,7 @@ export function mapOrderHistoryRecordToRow({
   sourceKind = "live_order_event",
   sourceRecordId,
   migratedAt,
+  ingestionSource,
 } = {}) {
   const order = normalizeOrderHistoryRecord({ record })
   return {
@@ -307,6 +316,7 @@ export function mapOrderHistoryRecordToRow({
       sourceKind,
       sourceRecordId,
       migratedAt,
+      ingestionSource,
     }),
   }
 }
