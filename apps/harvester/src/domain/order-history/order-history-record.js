@@ -267,14 +267,38 @@ export function createOrderHistoryId(input = {}) {
   ])
 }
 
-function mapUnfilledExecution({ status, order } = {}) {
+function mapUnfilledExecution({ status, order, includeUnfilled } = {}) {
   if (["PARTIALLY_FILLED", "FILLED"].includes(status)) {
     invalidField({
       field: "executedQuantity",
       order,
     })
   }
-  return null
+  if (!includeUnfilled) {
+    return null
+  }
+  const originalQuantity = requireNonNegativeDecimal({
+    value: order.originalQuantity ?? order.quantity,
+    field: "originalQuantity",
+    order,
+  })
+  const remainingQuantity = requireNonNegativeDecimal({
+    value: order.remainingQuantity,
+    field: "remainingQuantity",
+    order,
+  })
+  assertExecutionQuantityConsistency({
+    order,
+    status,
+    originalQuantity,
+    executedQuantity: "0",
+    remainingQuantity,
+  })
+  return {
+    originalQuantity,
+    executedQuantity: "0",
+    remainingQuantity,
+  }
 }
 
 function assertExecutionQuantityConsistency({
@@ -332,7 +356,7 @@ function assertExecutionQuantityConsistency({
   }
 }
 
-function mapExecutionQuantities({ order, status } = {}) {
+function mapExecutionQuantities({ order, status, includeUnfilled = false } = {}) {
   const executedQuantity = requireNonNegativeDecimal({
     value: order.executedQuantity,
     field: "executedQuantity",
@@ -345,6 +369,7 @@ function mapExecutionQuantities({ order, status } = {}) {
     return mapUnfilledExecution({
       status,
       order,
+      includeUnfilled,
     })
   }
   const originalQuantity = requireNonNegativeDecimal({
@@ -541,6 +566,7 @@ export function createOrderHistoryRecord({
   order,
   sourceEvent,
   environment,
+  includeUnfilled = false,
 } = {}) {
   if (!isRecord(order)) {
     invalidField({
@@ -555,6 +581,7 @@ export function createOrderHistoryRecord({
   const quantities = mapExecutionQuantities({
     order,
     status,
+    includeUnfilled,
   })
   if (quantities === null) {
     return null

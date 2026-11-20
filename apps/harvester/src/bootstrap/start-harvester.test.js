@@ -1146,6 +1146,87 @@ test("subscribes every enabled market before waiting for the first market's REST
   await runtime.stop()
 })
 
+function configureStartupHistoryBroker({ broker, calls }) {
+  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
+    calls.push(`history:orders:${symbol}:${orderId}`)
+    return {
+      ok: true,
+      data: [],
+    }
+  }
+  broker.getFills = async ({ symbol, fromId }) => {
+    calls.push(`history:fills:${symbol}:${fromId}`)
+    return {
+      ok: true,
+      data: [],
+    }
+  }
+}
+
+function createStartupHistoryPersistence({ persistedOrders, persistedFills }) {
+  return {
+    orderRepository: {
+      upsertHistorical: async (record) => persistedOrders.push(record),
+      findByExchangeOrderIdentity: async () => null,
+      getOldestPendingOrderId: async () => null,
+    },
+    fillRepository: {
+      upsert: async (input) => persistedFills.push(input),
+    },
+    historySyncCursorRepository: {
+      get: async () => ({
+        lastOrderId: null,
+        lastTradeId: null,
+      }),
+      saveOrderCursor: async () => {},
+      saveTradeCursor: async () => {},
+    },
+  }
+}
+
+test("synchronizes configured Binance history before activating the trading engine", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  configureStartupHistoryBroker({
+    broker,
+    calls,
+  })
+  const persistedOrders = []
+  const persistedFills = []
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: binanceEnv,
+    providerIdentity: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    },
+    orderHistoryPersistence: createStartupHistoryPersistence({
+      persistedOrders,
+      persistedFills,
+    }),
+    brokerAdapterFactory: () => broker,
+    logger: {
+      info() {},
+      warn() {},
+      error() {},
+    },
+  })
+  try {
+    const orderHistoryIndex = calls.indexOf("history:orders:BTCUSDT:0")
+    const fillHistoryIndex = calls.indexOf("history:fills:BTCUSDT:0")
+    const marketDataIndex = calls.indexOf("subscribe:BTCUSDT")
+    assert.ok(orderHistoryIndex >= 0, "Startup must query canonical order history for the configured execution market.")
+    assert.ok(fillHistoryIndex > orderHistoryIndex, "Startup must query trade history after loading the market's order identities.")
+    assert.ok(fillHistoryIndex < marketDataIndex, "Startup history synchronization must finish before market-data activation.")
+    assert.equal(runtime.tradingEnabled, true, "A read-only history scan must not change trading enablement.")
+    assert.equal(persistedOrders.length, 0, "An empty exchange history must not fabricate orders.")
+    assert.equal(persistedFills.length, 0, "An empty exchange history must not fabricate fills.")
+  } finally {
+    await runtime.stop()
+  }
+})
+
 test("starts the Conservative trading engine and applies fills to Portfolio", async () => {
   const result = await startHarvesterForTest({
     loadConfig: async () => appConfig,
