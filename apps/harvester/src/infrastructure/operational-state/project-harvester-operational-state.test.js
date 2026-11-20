@@ -575,21 +575,21 @@ test("rejects a completed-cycle fact that names a different terminal SELL order"
 })
 
 
-test("projects Recovery Seller order ownership, applied fills and fail-closed SELL reservations across restart candidates", () => {
-  const cycleId = "c".repeat(64)
-  const positionId = "rs-position-1"
-  const provider = {
-    providerInstanceId: "binance:spot:account-1",
-    providerType: "BINANCE",
-    accountId: "account-1",
-    marketId: "binance:BTCUSDT",
-    venue: "binance",
-    symbol: "BTCUSDT",
-    baseAssetId: "asset:BTC",
-    quoteAssetId: "asset:USDT",
-  }
-  const ownedIntent = ({ clientOrderId, side, purpose, sequence }) => record(sequence, "ORDER_SUBMISSION_INTENT", {
-    ...provider,
+
+const recoverySellerProvider = Object.freeze({
+  providerInstanceId: "binance:spot:account-1",
+  providerType: "BINANCE",
+  accountId: "account-1",
+  marketId: "binance:BTCUSDT",
+  venue: "binance",
+  symbol: "BTCUSDT",
+  baseAssetId: "asset:BTC",
+  quoteAssetId: "asset:USDT",
+})
+
+function createRecoverySellerIntent({ clientOrderId, side, purpose, sequence, cycleId, positionId }) {
+  return record(sequence, "ORDER_SUBMISSION_INTENT", {
+    ...recoverySellerProvider,
     clientOrderId,
     strategyId: "RS_recoverySeller",
     positionId,
@@ -600,12 +600,15 @@ test("projects Recovery Seller order ownership, applied fills and fail-closed SE
     quantity: "0.1",
     purpose,
   }, `rs-order-intent:${clientOrderId}`)
-  const ownedOutcome = ({ clientOrderId, side, purpose, sequence, brokerOrderId, status = "OPEN" }) => record(sequence, "ORDER_SUBMISSION_OUTCOME", {
-    ...provider,
+}
+
+function createRecoverySellerOutcome({ clientOrderId, side, purpose, sequence, brokerOrderId, status = "OPEN" }) {
+  return record(sequence, "ORDER_SUBMISSION_OUTCOME", {
+    ...recoverySellerProvider,
     clientOrderId,
     strategyId: "RS_recoverySeller",
-    positionId,
-    cycleId,
+    positionId: "rs-position-1",
+    cycleId: "c".repeat(64),
     side,
     type: "LIMIT",
     price: "100",
@@ -616,8 +619,11 @@ test("projects Recovery Seller order ownership, applied fills and fail-closed SE
     brokerOrderId,
     status,
   }, `rs-order-outcome:${clientOrderId}`)
-  const ownedFill = ({ clientOrderId, brokerOrderId, side, fillId, sequence }) => record(sequence, "EXECUTION_FILL_APPLIED", {
-    ...provider,
+}
+
+function createRecoverySellerFill({ clientOrderId, brokerOrderId, side, fillId, sequence }) {
+  return record(sequence, "EXECUTION_FILL_APPLIED", {
+    ...recoverySellerProvider,
     fillId,
     tradeId: fillId,
     clientOrderId,
@@ -631,18 +637,23 @@ test("projects Recovery Seller order ownership, applied fills and fail-closed SE
     commissionStatus: "COMPLETE",
     commissions: [],
   }, `rs-fill:${fillId}`)
-  const records = [
+}
+
+function createRecoverySellerLifecycleRecords() {
+  const cycleId = "c".repeat(64)
+  const positionId = "rs-position-1"
+  return [
     record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
     baseline(),
     started(),
     ...preflightFacts(),
-    ownedIntent({ clientOrderId: "rs-buy-1", side: "BUY", purpose: "RECOVERY_BUY", sequence: 5 }),
-    ownedOutcome({ clientOrderId: "rs-buy-1", side: "BUY", purpose: "RECOVERY_BUY", sequence: 6, brokerOrderId: "rs-broker-buy-1", status: "FILLED" }),
-    ownedFill({ clientOrderId: "rs-buy-1", brokerOrderId: "rs-broker-buy-1", side: "BUY", fillId: "rs-buy-fill-1", sequence: 7 }),
-    ownedIntent({ clientOrderId: "rs-sell-1", side: "SELL", purpose: "RECOVERY_SELL", sequence: 8 }),
-    ownedOutcome({ clientOrderId: "rs-sell-1", side: "SELL", purpose: "RECOVERY_SELL", sequence: 9, brokerOrderId: "rs-broker-sell-1" }),
+    createRecoverySellerIntent({ clientOrderId: "rs-buy-1", side: "BUY", purpose: "RECOVERY_BUY", sequence: 5, cycleId, positionId }),
+    createRecoverySellerOutcome({ clientOrderId: "rs-buy-1", side: "BUY", purpose: "RECOVERY_BUY", sequence: 6, brokerOrderId: "rs-broker-buy-1", status: "FILLED" }),
+    createRecoverySellerFill({ clientOrderId: "rs-buy-1", brokerOrderId: "rs-broker-buy-1", side: "BUY", fillId: "rs-buy-fill-1", sequence: 7 }),
+    createRecoverySellerIntent({ clientOrderId: "rs-sell-1", side: "SELL", purpose: "RECOVERY_SELL", sequence: 8, cycleId, positionId }),
+    createRecoverySellerOutcome({ clientOrderId: "rs-sell-1", side: "SELL", purpose: "RECOVERY_SELL", sequence: 9, brokerOrderId: "rs-broker-sell-1" }),
     record(10, "ORDER_CANCELLATION_INTENT", {
-      ...provider,
+      ...recoverySellerProvider,
       clientOrderId: "rs-sell-1",
       brokerOrderId: "rs-broker-sell-1",
       side: "SELL",
@@ -654,7 +665,7 @@ test("projects Recovery Seller order ownership, applied fills and fail-closed SE
       status: "OPEN",
     }, "rs-sell-cancel-intent"),
     record(11, "ORDER_CANCELLATION_OUTCOME", {
-      ...provider,
+      ...recoverySellerProvider,
       clientOrderId: "rs-sell-1",
       brokerOrderId: "rs-broker-sell-1",
       side: "SELL",
@@ -664,100 +675,39 @@ test("projects Recovery Seller order ownership, applied fills and fail-closed SE
       executedQuantity: "0",
     }, "rs-sell-cancel-outcome"),
   ]
-  const result = projectHarvesterOperationalState({ records })
+}
 
-  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
-  const lifecycle = result.data.recoverySellerLifecycle
-  assert.equal(lifecycle.candidateOnly, true)
-  assert.equal(lifecycle.restorationEnabled, false)
-  assert.equal(lifecycle.requiresExchangeReconciliation, true)
-  assert.equal(lifecycle.ordersByCycle.length, 1)
-  assert.deepEqual(
-    lifecycle.ordersByCycle[0].orders.map(({ side, purpose, status }) => ({ side, purpose, status })),
-    [
-      { side: "BUY", purpose: "RECOVERY_BUY", status: "FILLED" },
-      { side: "SELL", purpose: "RECOVERY_SELL", status: "CANCELED" },
-    ],
-  )
-  assert.equal(result.data.orderCancellationOutcomes[0].status, "CANCELED")
-  assert.equal(lifecycle.ordersByCycle[0].reservedSellOrders.length, 1,
-    "A terminal CANCELED broker outcome must not release the sole-SELL reservation before durable mixed-SELL accounting reconciliation.")
-  assert.deepEqual(
-    lifecycle.appliedFillsByCycle[0].fills.map(({ fillId, side, positionId, purpose }) => ({
-      fillId, side, positionId, purpose,
-    })),
-    [
-      { fillId: "rs-buy-fill-1", side: "BUY", positionId, purpose: "RECOVERY_BUY" },
-
-    ],
-  )
-})
-
-test("fails closed when a Recovery Seller fill has no durable owned submission intent", () => {
-  const result = projectHarvesterOperationalState({
-    records: [
-      record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
-      baseline(),
-      started(),
-      ...preflightFacts(),
-      record(5, "EXECUTION_FILL_APPLIED", {
-        fillId: "rs-orphan-fill",
-        tradeId: "rs-orphan-trade",
-        brokerOrderId: "rs-orphan-broker-order",
-        clientOrderId: "rs-orphan-client-order",
-        providerInstanceId: "binance:spot:account-1",
-        providerType: "BINANCE",
-        accountId: "account-1",
-        marketId: "binance:BTCUSDT",
-        venue: "binance",
-        symbol: "BTCUSDT",
-        baseAssetId: "asset:BTC",
-        quoteAssetId: "asset:USDT",
-        side: "BUY",
-        price: "100",
-        quantity: "0.1",
-        quoteQuantity: "10",
-        liquidityRole: "MAKER",
-        executedAt: 1_700_000_000_005,
-        commissionStatus: "COMPLETE",
-        commissions: [],
-        strategyId: "RS_recoverySeller",
-      }, "rs-orphan-fill"),
-    ],
-  })
-
-  assert.equal(result.ok, false)
-})
-
-
-test("keeps RS BUY fills out of the Conservative recovery-cycle fill boundary for the same market", () => {
-  const { records: conservativeRecords, cycle } = createCompletedRecoveryCycleProjectionRecords()
-  const cycleId = "e".repeat(64)
-  const provider = {
-    providerInstanceId: "binance:spot:account-1",
-    providerType: "BINANCE",
-    accountId: "account-1",
-    marketId: "binance:BTCUSDT",
-    venue: "binance",
-    symbol: "BTCUSDT",
-    baseAssetId: "asset:BTC",
-    quoteAssetId: "asset:USDT",
-  }
-  const recoverySellerRecords = [
-    record(3, "ORDER_SUBMISSION_INTENT", {
-      ...provider,
-      clientOrderId: "rs-buy-isolated",
+function createRecoverySellerOrphanFillRecords() {
+  return [
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    baseline(),
+    started(),
+    ...preflightFacts(),
+    record(5, "EXECUTION_FILL_APPLIED", {
+      ...recoverySellerProvider,
+      fillId: "rs-orphan-fill",
+      tradeId: "rs-orphan-trade",
+      brokerOrderId: "rs-orphan-broker-order",
+      clientOrderId: "rs-orphan-client-order",
       side: "BUY",
-      type: "LIMIT",
       price: "100",
       quantity: "0.1",
-      purpose: "RECOVERY_BUY",
-      strategyId: "RS_recoverySeller",
-      positionId: "rs-position-isolated",
-      cycleId,
-    }, "rs-order-intent:rs-buy-isolated"),
+      quoteQuantity: "10",
+      liquidityRole: "MAKER",
+      executedAt: 1_700_000_000_005,
+      commissionStatus: "COMPLETE",
+      commissions: [],
+    }, "rs-orphan-fill"),
+  ]
+}
+
+function createMixedStrategyRecoveryProjectionRecords() {
+  const { records: conservativeRecords } = createCompletedRecoveryCycleProjectionRecords()
+  const cycleId = "e".repeat(64)
+  const rsRecords = [
+    createRecoverySellerIntent({ clientOrderId: "rs-buy-isolated", side: "BUY", purpose: "RECOVERY_BUY", sequence: 3, cycleId, positionId: "rs-position-isolated" }),
     record(4, "ORDER_SUBMISSION_OUTCOME", {
-      ...provider,
+      ...recoverySellerProvider,
       clientOrderId: "rs-buy-isolated",
       side: "BUY",
       type: "LIMIT",
@@ -772,39 +722,44 @@ test("keeps RS BUY fills out of the Conservative recovery-cycle fill boundary fo
       positionId: "rs-position-isolated",
       cycleId,
     }, "rs-order-outcome:rs-buy-isolated"),
-    record(5, "EXECUTION_FILL_APPLIED", {
-      ...provider,
-      fillId: "rs-buy-fill-isolated",
-      tradeId: "rs-buy-trade-isolated",
-      brokerOrderId: "rs-broker-buy-isolated",
-      clientOrderId: "rs-buy-isolated",
-      side: "BUY",
-      price: "100",
-      quantity: "0.1",
-      quoteQuantity: "10",
-      liquidityRole: "MAKER",
-      executedAt: 1_700_000_000_005,
-      commissionStatus: "COMPLETE",
-      commissions: [],
-    }, "rs-fill:rs-buy-fill-isolated"),
+    createRecoverySellerFill({ clientOrderId: "rs-buy-isolated", brokerOrderId: "rs-broker-buy-isolated", side: "BUY", fillId: "rs-buy-fill-isolated", sequence: 5 }),
   ]
-  const records = [
+  return [
     ...conservativeRecords.slice(0, 3),
-    ...recoverySellerRecords,
+    ...rsRecords,
     ...conservativeRecords.slice(3).map((item) => ({
       ...item,
       sequence: String(Number(item.sequence) + 3),
     })),
   ]
-  const result = projectHarvesterOperationalState({ records })
+}
 
+test("projects RS order ownership, fills and fail-closed SELL reservations across restart candidates", () => {
+  const result = projectHarvesterOperationalState({ records: createRecoverySellerLifecycleRecords() })
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  const lifecycle = result.data.recoverySellerLifecycle
+  assert.equal(lifecycle.candidateOnly, true)
+  assert.equal(lifecycle.restorationEnabled, false)
+  assert.equal(lifecycle.requiresExchangeReconciliation, true)
+  assert.deepEqual(lifecycle.ordersByCycle[0].orders.map(({ side, status }) => ({ side, status })), [
+    { side: "BUY", status: "FILLED" },
+    { side: "SELL", status: "CANCELED" },
+  ])
+  assert.equal(lifecycle.ordersByCycle[0].reservedSellOrders.length, 1)
+  assert.deepEqual(lifecycle.appliedFillsByCycle[0].fills.map(({ fillId }) => fillId), ["rs-buy-fill-1"])
+})
+
+test("fails closed when an execution fill has no durable owned submission intent", () => {
+  const result = projectHarvesterOperationalState({ records: createRecoverySellerOrphanFillRecords() })
+  assert.equal(result.ok, false)
+})
+
+test("keeps RS BUY fills out of the Conservative recovery-cycle fill boundary for the same market", () => {
+  const result = projectHarvesterOperationalState({ records: createMixedStrategyRecoveryProjectionRecords() })
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.equal(result.data.recoveryCycles.length, 1)
-  assert.equal(result.data.recoveryCycles[0].cycleId, cycle.data.cycleId)
-  assert.deepEqual(result.data.recoveryCycles[0].appliedFillIds, cycle.data.appliedFillIds)
-  assert.equal(result.data.recoverySellerLifecycle.appliedFillsByCycle.length, 1)
-  assert.deepEqual(
-    result.data.recoverySellerLifecycle.appliedFillsByCycle[0].fills.map(({ fillId }) => fillId),
-    ["rs-buy-fill-isolated"],
-  )
+  assert.deepEqual(result.data.recoveryCycles[0].appliedFillIds, ["binance:BTCUSDT:recovery-trade-1"])
+  assert.deepEqual(result.data.recoverySellerLifecycle.appliedFillsByCycle[0].fills.map(({ fillId }) => fillId), [
+    "rs-buy-fill-isolated",
+  ])
 })
