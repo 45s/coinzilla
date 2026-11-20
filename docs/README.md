@@ -23,6 +23,7 @@ This index is the entry point for maintained repository documentation. The gover
 - [Multi-provider migration audit and implementation plan](architecture/multi-provider-migration-plan.md) — source-verified audit, capability matrix, persistence assessment and implementation phases for #1339.
 - [Domain ownership](engineering/DOMAIN_OWNERSHIP.md)
 - [Task workflows](engineering/TASK_WORKFLOWS.md)
+- [AI task compliance standard](engineering/AI_TASK_COMPLIANCE_STANDARD.md) — mandatory standards discovery, preflight readiness and completion compliance
 - [AI refactoring and code audit standard](engineering/AI_REFACTORING_AUDIT_STANDARD.md)
 - [Cross-domain requests](engineering/CROSS_DOMAIN_REQUESTS.md)
 - [Contributing](contributing.md)
