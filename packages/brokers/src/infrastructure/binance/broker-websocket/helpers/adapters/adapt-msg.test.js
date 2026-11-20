@@ -107,3 +107,8 @@ signature: "secret",
   assert.equal(event.brokerEvidence.tradeId, 98765)
   assert.equal(JSON.stringify(event.brokerEvidence).includes("secret"), false)
 })
+
+test("returns unknown events unchanged without logging side effects", () => {
+  const message = { e: "unknownEvent", payload: { value: 1 } }
+  assert.equal(adaptMsg(message), message)
+})
