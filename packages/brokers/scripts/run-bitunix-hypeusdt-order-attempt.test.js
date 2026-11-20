@@ -348,11 +348,14 @@ test("Bitunix operator CLI requires an interactive input and output terminal", (
 
 test("Bitunix operator CLI refuses non-interactive execution before credentials or network", () => {
   const scriptPath = fileURLToPath(new URL("./bitunix-hypeusdt-order-attempt.js", import.meta.url))
+  const env = {
+    ...process.env,
+  }
+  delete env.BITUNIX_API_KEY
+  delete env.BITUNIX_API_SECRET
   const result = spawnSync(process.execPath, [scriptPath], {
     encoding: "utf8",
-    env: {
-      PATH: process.env.PATH,
-    },
+    env,
   })
 
   assert.equal(result.status, 1)
