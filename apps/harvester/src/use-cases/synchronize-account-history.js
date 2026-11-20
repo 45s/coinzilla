@@ -493,6 +493,101 @@ async function persistCanonicalFill({ fill, repositories, providerIdentity, envi
   state.fillsPersisted += 1
 }
 
+async function resolveTradeHistoryCursor({ repositories, providerIdentity, environment, symbol }) {
+  const cursor = await repositories.cursorRepository.get({
+    providerIdentity,
+    environment,
+    symbol,
+  })
+  const lastTradeId = cursor.lastTradeId === null || cursor.lastTradeId === undefined
+    ? -1
+    : requireNumericCursor({
+        value: cursor.lastTradeId,
+        field: "stored trade ID",
+        symbol,
+      })
+  if (lastTradeId >= Number.MAX_SAFE_INTEGER) {
+    throw new RangeError(`Stored Binance trade history cursor cannot advance for ${symbol}`)
+  }
+  return {
+    fromId: lastTradeId + 1,
+    lastTradeId,
+  }
+}
+
+async function requestFillPage({ broker, symbol, fromId, limit, requestDelayMs, sleep, state }) {
+  await waitBeforeRequest({
+    state,
+    requestDelayMs,
+    sleep,
+  })
+  const result = await broker.getFills({
+    symbol,
+    fromId,
+    limit,
+  })
+  state.requestCount += 1
+  state.fillPagesChecked += 1
+  return validatePage({
+    result,
+    symbol,
+    limit,
+    historyType: "trade",
+  })
+}
+
+function validateFillPage({ page, symbol, lastTradeId, state }) {
+  let nextTradeId = lastTradeId
+  const fills = page.map((fill) => {
+    nextTradeId = validateCanonicalFill({
+      fill,
+      symbol,
+      lastTradeId: nextTradeId,
+      state,
+    })
+    return fill
+  })
+  state.fillsObserved += fills.length
+  return {
+    fills,
+    lastTradeId: nextTradeId,
+  }
+}
+
+async function persistFillPage({ fills, repositories, providerIdentity, environment, now, state }) {
+  for (const fill of fills) {
+    await persistCanonicalFill({
+      fill,
+      repositories,
+      providerIdentity,
+      environment,
+      observedAt: new Date(now()).toISOString(),
+      state,
+    })
+  }
+}
+
+async function saveTradePageCursor({
+  page,
+  lastTradeId,
+  repositories,
+  providerIdentity,
+  environment,
+  symbol,
+  now,
+}) {
+  if (page.length === 0) {
+    return
+  }
+  await repositories.cursorRepository.saveTradeCursor({
+    providerIdentity,
+    environment,
+    symbol,
+    lastTradeId: String(lastTradeId),
+    updatedAt: new Date(now()).toISOString(),
+  })
+}
+
 async function fetchFillHistoryForMarket({
   broker,
   symbol,
@@ -505,70 +600,46 @@ async function fetchFillHistoryForMarket({
   now,
   state,
 }) {
-  const cursor = await repositories.cursorRepository.get({
+  let { fromId, lastTradeId } = await resolveTradeHistoryCursor({
+    repositories,
     providerIdentity,
     environment,
     symbol,
   })
-  let lastTradeId = cursor.lastTradeId === null || cursor.lastTradeId === undefined
-    ? -1
-    : requireNumericCursor({
-        value: cursor.lastTradeId,
-        field: "stored trade ID",
-        symbol,
-      })
-  if (lastTradeId >= Number.MAX_SAFE_INTEGER) {
-    throw new RangeError(`Stored Binance trade history cursor cannot advance for ${symbol}`)
-  }
-  let fromId = lastTradeId + 1
   while (true) {
-    await waitBeforeRequest({
-      state,
-      requestDelayMs,
-      sleep,
-    })
-    const result = await broker.getFills({
+    const page = await requestFillPage({
+      broker,
       symbol,
       fromId,
       limit,
+      requestDelayMs,
+      sleep,
+      state,
     })
-    state.requestCount += 1
-    state.fillPagesChecked += 1
-    const page = validatePage({
-      result,
+    const validated = validateFillPage({
+      page,
       symbol,
-      limit,
-      historyType: "trade",
+      lastTradeId,
+      state,
     })
-    const validatedFills = page.map((fill) => {
-      lastTradeId = validateCanonicalFill({
-        fill,
-        symbol,
-        lastTradeId,
-        state,
-      })
-      return fill
+    await persistFillPage({
+      fills: validated.fills,
+      repositories,
+      providerIdentity,
+      environment,
+      now,
+      state,
     })
-    state.fillsObserved += validatedFills.length
-    for (const fill of validatedFills) {
-      await persistCanonicalFill({
-        fill,
-        repositories,
-        providerIdentity,
-        environment,
-        observedAt: new Date(now()).toISOString(),
-        state,
-      })
-    }
-    if (page.length > 0) {
-      await repositories.cursorRepository.saveTradeCursor({
-        providerIdentity,
-        environment,
-        symbol,
-        lastTradeId: String(lastTradeId),
-        updatedAt: new Date(now()).toISOString(),
-      })
-    }
+    lastTradeId = validated.lastTradeId
+    await saveTradePageCursor({
+      page,
+      lastTradeId,
+      repositories,
+      providerIdentity,
+      environment,
+      symbol,
+      now,
+    })
     if (page.length < limit) {
       return
     }
