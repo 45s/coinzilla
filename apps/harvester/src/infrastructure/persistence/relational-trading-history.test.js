@@ -1096,7 +1096,7 @@ test("persists exchange-observed unfilled orders for later fill reconciliation",
     brokerOrderId: "broker-order-unfilled",
     executedQuantity: "0",
     remainingQuantity: "1.0000",
-    status: "NEW",
+    status: "OPEN",
     ownership: undefined,
   })
   const record = createOrderHistoryRecord({
@@ -1226,7 +1226,7 @@ test("resolves exchange order identity only within its full provider scope and r
   })
   await persistence.orderRepository.upsertHistorical(secondOrder)
   await assert.rejects(
-    persistence.orderRepository.findByExchangeOrderIdentity(lookup),
+    () => persistence.orderRepository.findByExchangeOrderIdentity(lookup),
     /exchangeOrderIdAmbiguous/,
   )
 })
