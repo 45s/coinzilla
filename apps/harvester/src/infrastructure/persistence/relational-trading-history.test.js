@@ -384,7 +384,7 @@ async function assertBackupAndRollback({ filename, backupFilename, legacyRecord 
 
 function createInterruptedMigration() {
   return {
-    version: 2,
+    version: 3,
     name: "harvester-relational-interrupted-test",
     up(transaction) {
       transaction.exec("CREATE TABLE interrupted_probe (id TEXT PRIMARY KEY)")
@@ -427,7 +427,7 @@ async function assertMigrationRetry({ database } = {}) {
   ])
   const applied = database.prepare(
     "SELECT COUNT(*) AS count FROM schema_migrations WHERE version = ?",
-  ).get(2)
+  ).get(3)
   assert.equal(applied.count, 1, "A repaired migration must apply once and remain idempotent on repetition.")
 }
 
@@ -943,7 +943,11 @@ test("stores exchange-history provenance and links only the verified scoped orde
   delete historicalOrder.ownership
   await persistence.orderRepository.upsertHistorical(historicalOrder)
   await persistence.fillRepository.upsert({
-    fill: createAppliedFillEvent(),
+    fill: createAppliedFillEvent({
+      overrides: {
+        clientOrderId: historicalOrder.clientOrderId,
+      },
+    }),
     sourceEvent: {
       id: "exchange-history-fill:binance-primary:binance:BTCUSDT:trade-0001",
       name: "execution.fill_history_reconciled",
