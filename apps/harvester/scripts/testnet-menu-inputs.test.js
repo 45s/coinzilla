@@ -72,3 +72,82 @@ test("normalizes prompt answers safely when input is missing or blank", () => {
   assert.equal(normalizePromptAnswer({ answer: undefined,
 fallback: "DOGEUSDT" }), "DOGEUSDT")
 })
+
+test("exits menu navigation for Ctrl+C, Escape, and Q", () => {
+  assert.deepEqual(
+    resolveTestnetMenuKeypress({
+      character: undefined,
+      key: { ctrl: true, name: "c" },
+      selectedIndex: 2,
+      actionCount: 5,
+    }),
+    { type: "EXIT", selectedIndex: 2 },
+    "Ctrl+C must exit without changing the selected action",
+  )
+  assert.deepEqual(
+    resolveTestnetMenuKeypress({
+      character: undefined,
+      key: { name: "escape" },
+      selectedIndex: 1,
+      actionCount: 5,
+    }),
+    { type: "EXIT", selectedIndex: 1 },
+    "Escape must exit without changing the selected action",
+  )
+  assert.deepEqual(
+    resolveTestnetMenuKeypress({
+      character: "q",
+      key: {},
+      selectedIndex: 3,
+      actionCount: 5,
+    }),
+    { type: "EXIT", selectedIndex: 3 },
+    "Q must exit without changing the selected action",
+  )
+})
+
+test("wraps menu selection when navigating up and down", () => {
+  assert.deepEqual(
+    resolveTestnetMenuKeypress({
+      character: undefined,
+      key: { name: "up" },
+      selectedIndex: 0,
+      actionCount: 5,
+    }),
+    { type: "MOVE", selectedIndex: 4 },
+    "Up from the first action must wrap to the final action",
+  )
+  assert.deepEqual(
+    resolveTestnetMenuKeypress({
+      character: undefined,
+      key: { name: "down" },
+      selectedIndex: 4,
+      actionCount: 5,
+    }),
+    { type: "MOVE", selectedIndex: 0 },
+    "Down from the final action must wrap to the first action",
+  )
+})
+
+test("selects on Enter and ignores unrelated keypresses", () => {
+  assert.deepEqual(
+    resolveTestnetMenuKeypress({
+      character: undefined,
+      key: { name: "return" },
+      selectedIndex: 2,
+      actionCount: 5,
+    }),
+    { type: "SELECT", selectedIndex: 2 },
+    "Enter must select the currently highlighted action",
+  )
+  assert.deepEqual(
+    resolveTestnetMenuKeypress({
+      character: "x",
+      key: { name: "x" },
+      selectedIndex: 2,
+      actionCount: 5,
+    }),
+    { type: "CONTINUE", selectedIndex: 2 },
+    "An unrelated keypress must preserve the current selection",
+  )
+})
