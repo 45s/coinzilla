@@ -24,7 +24,7 @@ Import the supported API from the package entry point:
 - `SystemCustomError`: shared native `Error` base for package-owned subclasses; preserves native `cause`, sets the concrete subclass name, and optionally exposes a stable `code`, safe scalar `context`, and boolean `retryable` classification.
 - `createKeyedQueue`: creates independent serialized promise queues per key; tasks sharing a key run in enqueue order, different keys run concurrently, and `drain()` waits for tasks pending when it is called. An optional `onError({ key, error })` reports task failures without poisoning later tasks for that key.
 - `assertObjectInput`: compatibility helper for operation input shape; delegates its generic object and operation-label checks to `ensure` and deliberately does not read input properties.
-- `checkIfFeatureEnable`: enables a feature only when its environment variable is exactly `1`; warning diagnostics never include the variable's value.
+- `isFeatureEnabled`: enables a feature only when its environment variable is exactly `1`; warning diagnostics never include the variable's value.
 - `addTextToFile`: append a string or `Uint8Array` to a file path supplied as a string or `URL`; the file is created when it does not exist.
 - `handleErr`: report structured error context.
 - `EVENTS`, `eventEmitter`: shared Node.js event names and singleton emitter; `EVENTS.PRICE_UPDATE` is the current event, and consumers should remove listeners during lifecycle cleanup.
