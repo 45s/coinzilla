@@ -16,11 +16,11 @@ Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
 ### Canonical Binance order-history pagination mode — #1558
 
-**Status: IN PROGRESS** in [PR #1559](https://github.com/45s/coinzilla/pull/1559), accepted after the Harvester Phase 3 consumer audit in [#1556](https://github.com/45s/coinzilla/issues/1556).
+**Status: COMPLETE** in merged [PR #1559](https://github.com/45s/coinzilla/pull/1559), merge commit `b06f034daecbd2b6dee9ad68b8426ca3bab106cb`; accepted from the Harvester Phase 3 consumer audit in [#1556](https://github.com/45s/coinzilla/issues/1556).
 
-Binance `allOrders.orderId` is an inclusive lower-bound cursor, while the existing `getCanonicalOrderHistory({ symbol, orderId })` deliberately filters its result to the exact requested order for reconnect reconciliation. Preserve that default behavior. The additive `includeFollowingOrders: true` option requires an `orderId` and returns every canonical order in the bounded lower-bound page so a consumer can paginate safely. The method remains one page per call; it does not claim complete account, delisted-market, or retention-window coverage. Bitunix canonical history remains unsupported.
+Binance `allOrders.orderId` is an inclusive lower-bound cursor, while the existing `getCanonicalOrderHistory({ symbol, orderId })` deliberately filters its result to the exact requested order for reconnect reconciliation. The additive `includeFollowingOrders: true` option requires an `orderId` and returns every canonical order in the bounded lower-bound page so a consumer can paginate safely. The method remains one page per call; it does not claim complete account, delisted-market, or retention-window coverage. Bitunix canonical history remains unsupported.
 
-This is a read-only query contract extension only. It does not change order placement/cancellation, mutation outcomes, or trading authority. Do not mark complete until Brokers package tests/coverage and required exact-head CI pass and the PR is merged into `develop`.
+This is a read-only query contract extension only. It does not change order placement/cancellation, mutation outcomes, or trading authority. Required CI passed on exact PR head `c0a5bea83d272a59afad20bbcd9cd1d6735fb0f3`.
 
 ### Public `Broker` constructor follow-up
 
