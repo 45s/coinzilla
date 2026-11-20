@@ -1,6 +1,6 @@
 # Harvester trading-history persistence roadmap
 
-**Status:** Active — Phases 1–3 complete; Phases 4–6 planned
+**Status:** Active — Phases 1–3 complete; Phases 4–5 and remaining Phase 6 work planned
 **Type:** Domain roadmap
 **Owner:** Harvester
 **Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
@@ -22,6 +22,7 @@ This roadmap does not authorize exchange activity, change strategy behavior, or 
 - [x] Relational order/fill schema, versioned Harvester migrations, legacy-order conversion, and live applied-fill persistence were delivered by [PR #1555](https://github.com/45s/coinzilla/pull/1555), merge commit `9611dee32a7d5b3efa6737f6343b8553a2235022`.
 - [x] Read-only Binance startup order/trade-history synchronization was delivered by [PR #1557](https://github.com/45s/coinzilla/pull/1557), merge commit `c2b0eba34ea2778be8d70212fd5e2e3144067aa5`; its backwards-compatible pagination contract was delivered by [PR #1559](https://github.com/45s/coinzilla/pull/1559), merge commit `b06f034daecbd2b6dee9ad68b8426ca3bab106cb`.
 - [x] TESTNET and LIVE use separate environment-selected SQLite files. The temporary process-ID smoke-test write and trading-session-ID projection were removed.
+- [x] Routine environment-scoped online backups, restore checks, bounded retention and backup-file permissions were delivered by [PR #1567](https://github.com/45s/coinzilla/pull/1567), merge commit `5f1d4a035941db8a7e0d6cd3c401299ab3c6ef21`.
 
 The legacy `harvester_orders` collection remains part of the compatibility/dual-write period. Its records are cumulative order snapshots, not individual executions. Never convert cumulative quantities or repeated order snapshots into fabricated fill rows.
 
@@ -103,6 +104,8 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 - Keep historical analytics read-only and separate from strategy decisions.
 
 ### Phase 6 — Operational hardening
+
+**Status: Partially complete — PR #1567 delivered the routine backup and restore-check slice; remaining work is listed below.**
 
 **Completed operational slice — PR #1567:** routine environment-scoped online backups, WAL-safe snapshots, manifest/digest verification, restore checks against a temporary candidate, bounded retention and backup-file permissions are implemented. See the [backup runbook](../operations/trading-history-backups.md) and [persistence README](README.md). Restore verification is not a database cutover; host scheduling remains operator-owned.
 
