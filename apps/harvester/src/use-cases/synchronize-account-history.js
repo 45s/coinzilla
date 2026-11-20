@@ -3,7 +3,7 @@ import { synchronizeFillHistoryForMarket } from "./synchronize-fill-history.js"
 import { synchronizeOrderHistoryForMarket } from "./synchronize-order-history.js"
 
 const DEFAULT_PAGE_SIZE = 1000
-const DEFAULT_REQUEST_DELAY_MS = 200
+const DEFAULT_REQUEST_DELAY_MS = 500
 
 const defaultSleep = ({ durationMs }) => new Promise((resolve) => {
   setTimeout(resolve, durationMs)
@@ -18,7 +18,8 @@ function requireIdentifier({ value, field }) {
 
 function validateOptions(input) {
   if (typeof input.broker?.getCanonicalOrderHistory !== "function" ||
-      typeof input.broker?.getFills !== "function") {
+      typeof input.broker?.getFills !== "function" ||
+      typeof input.broker?.getOpenOrders !== "function") {
     throw new TypeError("Account history synchronization requires canonical order and fill history methods")
   }
   if (!Array.isArray(input.symbols) || input.symbols.length === 0 ||
@@ -73,10 +74,13 @@ function createInitialState() {
     fillsPersisted: 0,
     pendingOrdersUnavailable: 0,
     archivedOrderLookups: 0,
+    openOrderSnapshotsChecked: 0,
+    openOrdersObserved: 0,
     marketsAttempted: [],
     marketsQueried: [],
     currentMarket: null,
     ordersWithoutHistory: new Set(),
+    refreshedOrderIds: new Set(),
     fillIds: new Set(),
     ordersByBrokerId: new Map(),
   }
@@ -115,6 +119,8 @@ function createHistoryDiagnostics({ state, historyPagesComplete, errorMessage } 
     fillsPersisted: state.fillsPersisted,
     pendingOrdersUnavailable: state.pendingOrdersUnavailable,
     archivedOrderLookups: state.archivedOrderLookups,
+    openOrderSnapshotsChecked: state.openOrderSnapshotsChecked,
+    openOrdersObserved: state.openOrdersObserved,
     requestCount: state.requestCount,
     historyPagesComplete,
     marketHistoryPagesComplete: historyPagesComplete,
