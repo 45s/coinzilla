@@ -49,7 +49,10 @@ async function getRecoverySellerRuntimeSnapshot({
     recoverySellerStopWorkflow.getState(),
   ])
   const strategyStopped = isStopping() === true || stopState?.status === "STOPPED"
-  const marketPaused = isMarketPaused({ state, symbol })
+  const marketPaused = isMarketPaused({
+    state,
+    symbol,
+  })
   const reconciliationComplete =
     hasBlockingOpenOrdersForSymbol({ symbol }) === false &&
     isMarketPriceFresh(marketPrice) === true &&
@@ -68,10 +71,9 @@ async function getRecoverySellerRuntimeSnapshot({
   })
 }
 
-export function createRecoverySellerRuntimeEvaluator({
+function createRuntimeTransitionEvaluator({
   recoverySellerWorkflow,
   recoverySellerStopWorkflow,
-  recoverySellerPairs,
   getRecoverySellerMarketMetadata,
   getAccountSnapshot,
   isMarketPriceFresh,
@@ -80,7 +82,7 @@ export function createRecoverySellerRuntimeEvaluator({
   submitOrder,
   evaluateBuyDecision,
   evaluateSellDecision,
-} = {}) {
+}) {
   assertRuntimeDependencies({
     recoverySellerWorkflow,
     recoverySellerStopWorkflow,
@@ -91,7 +93,7 @@ export function createRecoverySellerRuntimeEvaluator({
     hasBlockingOpenOrdersForSymbol,
     submitOrder,
   })
-  const evaluateTransition = createRecoverySellerTransitionEvaluator({
+  return createRecoverySellerTransitionEvaluator({
     getSnapshot: (input) => getRecoverySellerRuntimeSnapshot({
       input,
       recoverySellerWorkflow,
@@ -105,38 +107,79 @@ export function createRecoverySellerRuntimeEvaluator({
     evaluateBuyDecision,
     evaluateSellDecision,
   })
-  return async (input = {}) => {
-    const symbol = input.symbol
-    const marketPrice = input.state?.prices?.get(symbol)
-    if (!marketPrice || isMarketPriceFresh(marketPrice) !== true) {
-      return toResult({
-        data: {
-          skipped: true,
-          reason: "MARKET_PRICE_NOT_FRESH",
-        },
-      })
-    }
-    const pairConfig = recoverySellerPairs?.[symbol]
-    if (!pairConfig) {
-      return toResult({
-        data: {
-          skipped: true,
-          reason: "RECOVERY_SELLER_PAIR_NOT_CONFIGURED",
-        },
-      })
-    }
-    const marketMetadata = await getRecoverySellerMarketMetadata({ symbol })
-    if (!marketMetadata) {
-      return toResult({
-        error: new TypeError(`Recovery Seller market metadata is unavailable for ${symbol}`),
-      })
-    }
-    return evaluateTransition({
-      ...input,
-      symbol,
-      marketPrice,
-      marketMetadata,
-      pairConfig,
+}
+
+async function evaluateRecoverySellerRuntimeInput({
+  input,
+  recoverySellerPairs,
+  isMarketPriceFresh,
+  getRecoverySellerMarketMetadata,
+  evaluateTransition,
+}) {
+  const { symbol } = input
+  const marketPrice = input.state?.prices?.get(symbol)
+  if (!marketPrice || isMarketPriceFresh(marketPrice) !== true) {
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "MARKET_PRICE_NOT_FRESH",
+      },
     })
   }
+  const pairConfig = recoverySellerPairs?.[symbol]
+  if (!pairConfig) {
+    return toResult({
+      data: {
+        skipped: true,
+        reason: "RECOVERY_SELLER_PAIR_NOT_CONFIGURED",
+      },
+    })
+  }
+  const marketMetadata = await getRecoverySellerMarketMetadata({ symbol })
+  if (!marketMetadata) {
+    return toResult({
+      error: new TypeError(`Recovery Seller market metadata is unavailable for ${symbol}`),
+    })
+  }
+  return evaluateTransition({
+    ...input,
+    symbol,
+    marketPrice,
+    marketMetadata,
+    pairConfig,
+  })
+}
+
+export function createRecoverySellerRuntimeEvaluator({
+  recoverySellerWorkflow,
+  recoverySellerStopWorkflow,
+  recoverySellerPairs,
+  getRecoverySellerMarketMetadata,
+  getAccountSnapshot,
+  isMarketPriceFresh,
+  isStopping,
+  hasBlockingOpenOrdersForSymbol,
+  submitOrder,
+  evaluateBuyDecision,
+  evaluateSellDecision,
+} = {}) {
+  const evaluateTransition = createRuntimeTransitionEvaluator({
+    recoverySellerWorkflow,
+    recoverySellerStopWorkflow,
+    getRecoverySellerMarketMetadata,
+    getAccountSnapshot,
+    isMarketPriceFresh,
+    isStopping,
+    hasBlockingOpenOrdersForSymbol,
+    submitOrder,
+    evaluateBuyDecision,
+    evaluateSellDecision,
+  })
+  return (input = {}) => evaluateRecoverySellerRuntimeInput({
+    input,
+    recoverySellerPairs,
+    isMarketPriceFresh,
+    getRecoverySellerMarketMetadata,
+    evaluateTransition,
+  })
 }

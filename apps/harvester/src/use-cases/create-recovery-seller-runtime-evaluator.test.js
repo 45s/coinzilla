@@ -93,7 +93,10 @@ function createRuntime({
   })
   return {
     evaluate,
-    input: { symbol, state },
+    input: {
+      symbol,
+      state,
+    },
     getSnapshotInput: () => snapshotInput,
   }
 }
@@ -119,7 +122,10 @@ test("fails closed for stopped, paused or unreconciled runtime state", async () 
       paused: new Set([symbol]),
       safetyHaltRequired: true,
     },
-    stopStateOverride: Object.freeze({ status: "RUNNING", decision: null }),
+    stopStateOverride: Object.freeze({
+      status: "RUNNING",
+      decision: null,
+    }),
     isStopping: () => true,
     hasBlockingOpenOrdersForSymbol: () => true,
   })
