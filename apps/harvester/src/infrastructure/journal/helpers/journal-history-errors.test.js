@@ -9,8 +9,8 @@ test("creates history errors with optional details and cause", () => {
   const cause = new Error("disk failure")
   const error = createHistoryError({
     code: "JOURNAL_READ_FAILED",
-    message: "Cannot read journal",
-    details: { directory: "/journal" },
+message: "Cannot read journal",
+details: { directory: "/journal" },
     cause,
   })
 
@@ -22,12 +22,14 @@ test("creates history errors with optional details and cause", () => {
 
 test("normalizes missing directory errors and preserves other errors", () => {
   const missing = Object.assign(new Error("missing"), { code: "ENOENT" })
-  const normalized = normalizeHistoryReadError({ error: missing, directory: "./journal" })
+  const normalized = normalizeHistoryReadError({ error: missing,
+directory: "./journal" })
 
   assert.equal(normalized.code, "JOURNAL_DIRECTORY_NOT_FOUND")
   assert.equal(normalized.cause, missing)
   assert.equal(normalized.details.directory, normalized.message.split(": ").at(-1))
 
   const other = new Error("permission denied")
-  assert.equal(normalizeHistoryReadError({ error: other, directory: "./journal" }), other)
+  assert.equal(normalizeHistoryReadError({ error: other,
+directory: "./journal" }), other)
 })
