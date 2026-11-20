@@ -87,8 +87,8 @@ export function findHelperSources(root) {
       const file = join(directory, entry.name)
       const extension = entry.name.match(/\.(js|mjs|cjs)$/)?.[0] ?? ".js"
       const stem = entry.name.slice(0, -extension.length)
-      const testPath = join(directory, stem + ".test" + extension)
-      const specPath = join(directory, stem + ".spec" + extension)
+      const testPath = join(directory, `${stem}.test${extension}`)
+      const specPath = join(directory, `${stem}.spec${extension}`)
       helpers.push({
         directory,
         file,
@@ -104,7 +104,7 @@ export function findHelperSources(root) {
       visit(directory)
     }
   }
-  return helpers.sort((left, right) => left.file.localeCompare(right.file))
+  return helpers
 }
 
 /**
@@ -118,24 +118,24 @@ export function analyzeHelperSource({ file, source }) {
   const importPattern = /(?:\bfrom\s*|^\s*import\s*)["']([^"']+)["']/gm
   for (const match of source.matchAll(importPattern)) {
     if (EFFECTFUL_MODULES.has(match[1])) {
-      violations.push(file + ": prohibited import from " + match[1])
+      violations.push(`${file}: prohibited import from ${match[1]}`)
     }
   }
 
   for (const { pattern, label } of PROHIBITED_API_PATTERNS) {
     if (pattern.test(source)) {
-      violations.push(file + ": prohibited use of " + label)
+      violations.push(`${file}: prohibited use of ${label}`)
     }
   }
 
   if (/\bclass\s+[A-Za-z_$][\w$]*/.test(source)) {
-    violations.push(file + ": stateful classes are prohibited in helpers")
+    violations.push(`${file}: stateful classes are prohibited in helpers`)
   }
   if (/^\s*(?:export\s+)?const\s+[A-Za-z_$][\w$]*\s*=\s*(?:new\s+)?(?:Set|Map)\s*\(/m.test(source)) {
-    violations.push(file + ": mutable module-level collections are prohibited")
+    violations.push(`${file}: mutable module-level collections are prohibited`)
   }
   if (/\b(?:session|sessions|input|message|data|canonicalData|options|records|record|payload|params|order|fill|account|balances|orders|filters)\s*(?:\.\s*[A-Za-z_$][\w$]*|\[[^\]]+\])\s*=(?!=)/.test(source)) {
-    violations.push(file + ": mutation of caller-owned input is prohibited")
+    violations.push(`${file}: mutation of caller-owned input is prohibited`)
   }
 
   return violations
@@ -153,7 +153,7 @@ export function findHelperPolicyViolations(root) {
       const fileName = helper.file.split("/").at(-1)
       const testName = fileName.replace(/\.(?:js|mjs|cjs)$/, ".test.js")
       const specName = fileName.replace(/\.(?:js|mjs|cjs)$/, ".spec.js")
-      violations.push(helper.file + ": missing directly associated unit test (" + testName + " or " + specName + ")")
+      violations.push(`${helper.file}: missing directly associated unit test (${testName} or ${specName})`)
     }
     violations.push(...analyzeHelperSource({
       file: helper.file,
