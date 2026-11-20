@@ -403,6 +403,133 @@ test("replays a trade page after a fill write failure without advancing its dura
   assert.equal(repositories.cursors.get("BTCUSDT").lastTradeId, "2", "The trade cursor may advance only after every fill in the page is persisted.")
 })
 
+test("rejects a historical fill carrying a different provider or account identity", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const broker = createPagedBroker({
+    orders: [],
+    fills: [createFill({
+      providerIdentity: {
+        ...identity,
+        accountId: "different-account",
+      },
+    })],
+    calls,
+  })
+  const result = await synchronizeAccountHistory({
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 1,
+    requestDelayMs: 0,
+    now: () => 300,
+  })
+
+  assert.equal(result.ok, false, "A foreign-account execution must fail closed.")
+  assert.match(result.errors[0].message, /provider identity conflicts/i, "The failure must identify the provider-identity conflict.")
+  assert.equal(repositories.fills.length, 0, "A foreign-account fill must never be persisted under the configured account.")
+  assert.equal(repositories.cursors.get("BTCUSDT")?.lastTradeId, undefined, "A rejected fill must not advance the trade cursor.")
+})
+
+test("replays a fully persisted order page when its cursor write fails", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const broker = createPagedBroker({
+    orders: [createOrder()],
+    fills: [],
+    calls,
+  })
+  const saveOrderCursor = repositories.cursorRepository.saveOrderCursor
+  let failCursorWrite = true
+  repositories.cursorRepository.saveOrderCursor = async (input) => {
+    if (failCursorWrite) {
+      throw new Error("simulated order cursor write failure")
+    }
+    await saveOrderCursor(input)
+  }
+  const input = {
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 1,
+    requestDelayMs: 0,
+    now: () => 300,
+  }
+
+  const failed = await synchronizeAccountHistory(input)
+  assert.equal(failed.ok, false, "A failed cursor write must leave the page retryable.")
+  assert.equal(repositories.orders.length, 1, "The order page may be fully persisted before its cursor write fails.")
+  assert.equal(repositories.cursors.get("BTCUSDT")?.lastOrderId, undefined, "The failed cursor write must leave the durable cursor unchanged.")
+
+  failCursorWrite = false
+  const retried = await synchronizeAccountHistory(input)
+  assert.equal(retried.ok, true, "The fully persisted page must replay successfully after cursor storage recovers.")
+  assert.deepEqual(calls.orders.map(({ orderId }) => orderId), [0, 0, 11], "The page must replay from its original cursor before advancing.")
+  assert.equal(repositories.orders.length, 1, "The replay must remain idempotent at the order identity.")
+  assert.equal(repositories.cursors.get("BTCUSDT").lastOrderId, "10", "The cursor may advance after the replayed page is complete.")
+})
+
+test("replays a fully persisted trade page when its cursor write fails", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const broker = createPagedBroker({
+    orders: [],
+    fills: [createFill({
+      clientOrderId: null,
+    })],
+    calls,
+  })
+  const saveTradeCursor = repositories.cursorRepository.saveTradeCursor
+  let failCursorWrite = true
+  repositories.cursorRepository.saveTradeCursor = async (input) => {
+    if (failCursorWrite) {
+      throw new Error("simulated trade cursor write failure")
+    }
+    await saveTradeCursor(input)
+  }
+  const input = {
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 1,
+    requestDelayMs: 0,
+    now: () => 300,
+  }
+
+  const failed = await synchronizeAccountHistory(input)
+  assert.equal(failed.ok, false, "A failed trade cursor write must leave the page retryable.")
+  assert.equal(repositories.fills.length, 1, "The fill page may be fully persisted before its cursor write fails.")
+  assert.equal(repositories.cursors.get("BTCUSDT")?.lastTradeId, undefined, "The failed trade cursor write must leave the durable cursor unchanged.")
+
+  failCursorWrite = false
+  const retried = await synchronizeAccountHistory(input)
+  assert.equal(retried.ok, true, "The fully persisted trade page must replay successfully after cursor storage recovers.")
+  assert.deepEqual(calls.fills.map(({ fromId }) => fromId), [0, 0, 2], "The trade page must replay from its original cursor before advancing.")
+  assert.equal(repositories.fills.length, 1, "The replay must remain idempotent at the execution identity.")
+  assert.equal(repositories.cursors.get("BTCUSDT").lastTradeId, "1", "The trade cursor may advance after the replayed page is complete.")
+})
+
 test("fails closed when an exchange history cursor does not advance", async () => {
   const repositories = createRepositories()
   const broker = {
