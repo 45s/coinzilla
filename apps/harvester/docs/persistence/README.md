@@ -49,11 +49,11 @@ Harvester owns the physical schema and versioned migrations in `src/infrastructu
 Migration version 1:
 
 1. Runs only after the generic provider has opened the environment-specific database.
-2. If legacy order records exist and version 1 is not applied, creates a pre-migration backup at `harvester.db.pre-relational-v1.backup`.
-3. Verifies the backup with SQLite integrity checking and a SHA-256 checksum over the exact ordered legacy record IDs and JSON payloads.
+2. If legacy order records exist and version 1 is not applied, creates a pre-migration backup at `harvester.db.pre-relational-v1.<sha256>.backup`.
+3. Names the backup by a SHA-256 checksum of the exact ordered legacy record IDs and JSON payloads, reuses an existing backup only after re-verifying it, and verifies the backup with SQLite integrity checking.
 4. Creates the physical tables, indexes, uniqueness constraints, and foreign keys inside the versioned migration transaction.
 5. Validates and copies each legacy order row, preserving its ID, provider/account/environment identity, exact decimals, lifecycle facts, ownership when present, source-event provenance, and migration provenance.
-6. Leaves every original `db_records` / `harvester_orders` record untouched. It creates no fill rows from cumulative order quantities.
+6. Verifies that the source checksum is unchanged and that every source row was copied before observers start. It leaves every original `db_records` / `harvester_orders` record untouched and creates no fill rows from cumulative order quantities.
 
 The migration runner records the version and checksum in `schema_migrations`. A failed migration rolls back its DDL and inserts as one transaction. A retry can run the unapplied migration again. Repeated execution after success is a no-op.
 
@@ -63,8 +63,8 @@ A conflicting identity, invalid record, or incompatible schema fails visibly. Th
 
 The backup is environment-specific and sits beside that environment's database:
 
-- TESTNET: `data/testnet/harvester.db` and `data/testnet/harvester.db.pre-relational-v1.backup`
-- LIVE: `data/production/harvester.db` and `data/production/harvester.db.pre-relational-v1.backup`
+- TESTNET: `data/testnet/harvester.db` and `data/testnet/harvester.db.pre-relational-v1.<sha256>.backup`
+- LIVE: `data/production/harvester.db` and `data/production/harvester.db.pre-relational-v1.<sha256>.backup`
 
 The configured `HARVESTER_DATABASE_DIRECTORY` changes the base directory, not the TESTNET/production separation.
 

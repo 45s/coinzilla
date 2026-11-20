@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto"
+import { access } from "node:fs/promises"
 import {
   createDatabase,
   createSqliteDatabase,
   createSqliteProvider,
 } from "@coinzilla/db"
 import { defaultLogger } from "@coinzilla/utils"
+import { OrderHistoryIntegrityError } from "../../domain/order-history/order-history-errors.js"
 import { createOrderHistoryRepository } from "./order-history-repository.js"
 import { createOrderHistoryObserver } from "./create-order-history-observer.js"
 import { createRelationalOrderHistoryRepository } from "./relational-order-repository.js"
@@ -77,21 +79,59 @@ async function verifyMigrationBackup({ filename, expected } = {}) {
 
 async function createVerifiedMigrationBackup({ database, filename } = {}) {
   if (hasRelationalMigration(database)) {
-    return null
+    return {
+      backupFilename: null,
+      sourceSnapshot: null,
+    }
   }
-  const expected = hashLegacyRecords(database)
-  if (expected.count === 0) {
-    return null
+  const sourceSnapshot = hashLegacyRecords(database)
+  if (sourceSnapshot.count === 0) {
+    return {
+      backupFilename: null,
+      sourceSnapshot,
+    }
   }
-  const backupFilename = `${filename}.pre-relational-v1.backup`
-  await database.backup({
-    destination: backupFilename,
-  })
-  await verifyMigrationBackup({
-    filename: backupFilename,
-    expected,
-  })
-  return backupFilename
+  const backupFilename = `${filename}.pre-relational-v1.${sourceSnapshot.checksum}.backup`
+  try {
+    await access(backupFilename)
+    await verifyMigrationBackup({
+      filename: backupFilename,
+      expected: sourceSnapshot,
+    })
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error
+    }
+    await database.backup({
+      destination: backupFilename,
+    })
+    await verifyMigrationBackup({
+      filename: backupFilename,
+      expected: sourceSnapshot,
+    })
+  }
+  return {
+    backupFilename,
+    sourceSnapshot,
+  }
+}
+
+function verifyLegacyMigration({ database, sourceSnapshot } = {}) {
+  const actualSource = hashLegacyRecords(database)
+  if (actualSource.count !== sourceSnapshot.count ||
+    actualSource.checksum !== sourceSnapshot.checksum) {
+    throw new OrderHistoryIntegrityError({
+      field: "legacySourcePreservation",
+    })
+  }
+  const migrated = database.prepare(
+    "SELECT COUNT(*) AS count FROM orders WHERE source_kind = ?",
+  ).get("legacy_harvester_orders")
+  if (migrated.count !== sourceSnapshot.count) {
+    throw new OrderHistoryIntegrityError({
+      field: "legacyMigrationCount",
+    })
+  }
 }
 
 async function closePartialRelationalResources({
@@ -137,11 +177,17 @@ async function prepareRelationalResources({
   let fillObserver
   try {
     await relationalDatabase.connect()
-    const migrationBackupFilename = await createVerifiedMigrationBackup({
+    const migrationState = await createVerifiedMigrationBackup({
       database: relationalDatabase,
       filename,
     })
     await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
+    if (migrationState.sourceSnapshot !== null) {
+      verifyLegacyMigration({
+        database: relationalDatabase,
+        sourceSnapshot: migrationState.sourceSnapshot,
+      })
+    }
     const orderRepository = createRelationalOrderHistoryRepository({
       database: relationalDatabase,
     })
@@ -164,7 +210,7 @@ async function prepareRelationalResources({
       relationalDatabase,
       relationalOrderObserver,
       fillObserver,
-      migrationBackupFilename,
+      migrationBackupFilename: migrationState.backupFilename,
     }
   } catch (error) {
     await closePartialRelationalResources({
