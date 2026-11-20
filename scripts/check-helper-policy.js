@@ -283,9 +283,18 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const checkNames = process.argv.includes("--check-names")
   const changedNames = process.argv.includes("--changed-names")
   const baseSha = process.argv.find((argument) => /^[a-f0-9]{40}$/.test(argument))
-  const changedPaths = changedNames && baseSha
-    ? execFileSync("git", ["diff", "--name-only", `${baseSha}...HEAD`], { cwd: root, encoding: "utf8" }).split(/\r?\n/).filter(Boolean)
-    : []
+  let changedPaths = []
+  if (changedNames && baseSha) {
+    const diffOutput = execFileSync(
+      "git",
+      ["diff", "--name-only", `${baseSha}...HEAD`],
+      {
+        cwd: root,
+        encoding: "utf8",
+      },
+    )
+    changedPaths = diffOutput.split(/\r?\n/).filter(Boolean)
+  }
   let violations = findHelperPolicyViolations(root)
   if (checkNames) {
     violations = findHelperNamingViolations(root)
