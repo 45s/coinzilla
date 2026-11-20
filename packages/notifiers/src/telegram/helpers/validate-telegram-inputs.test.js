@@ -2,13 +2,13 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import {
   validateTelegramMessage,
-  validateTelegramOptions,
-} from "./run-validation.js"
+  validateTelegramConfiguration,
+} from "./validate-telegram-inputs.js"
 
 test("normalizes valid Telegram options and applies explicit defaults", () => {
   const fetchImpl = async () => {}
   assert.deepEqual(
-    validateTelegramOptions({
+    validateTelegramConfiguration({
       options: {
         token: " token ",
         chatId: " -100 ",
@@ -52,7 +52,7 @@ test("rejects malformed options and invalid timeout boundaries", () => {
       timeoutMs: 2_147_483_648,
     },
   ]) {
-    assert.throws(() => validateTelegramOptions({ options,
+    assert.throws(() => validateTelegramConfiguration({ options,
       defaultFetchImpl: async () => {} }))
   }
 })
