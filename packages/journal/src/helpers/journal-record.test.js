@@ -25,15 +25,19 @@ test("serializes events with additive versioned metadata", () => {
 })
 
 test("parses metadata records and legacy records with line positions", () => {
-  const content = ${serializeJournalRecord({
-    event: {
-      id: "event-1",
-      name: "a",
-    },
-  })}${JSON.stringify({
-    id: "event-2",
-    name: "b",
-  })}\n
+  const content = [
+    serializeJournalRecord({
+      event: {
+        id: "event-1",
+        name: "a",
+      },
+    }),
+    JSON.stringify({
+      id: "event-2",
+      name: "b",
+    }),
+    "",
+  ].join("\n")
 
   const records = parseJournalSession({
     content,
