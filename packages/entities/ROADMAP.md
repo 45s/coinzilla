@@ -29,6 +29,7 @@ owner: entities
 
 - `pnpm --filter @coinzilla/entities run test:coverage` measures only Entities production source (`src/**/*.js`, excluding tests and imported packages) and enforces 90% lines, 85% branches and 85% functions.
 - The required workspace coverage matrix invokes this command once. The matrix-completeness guard verifies the package remains included and retains both `test` and `test:coverage` scripts.
+- **Measured on PR #1578 exact head `32dc8a094691d08754a3874b0719135b0c441bc5`:** 156 tests passed; production-source coverage was 96.33% lines, 94.33% branches and 95.40% functions. The configured gate is therefore below the measured baseline and passed without adding tests solely to inflate coverage.
 - This gate is pending exact-head CI verification in [PR #1578](https://github.com/45s/coinzilla/pull/1578); it is not marked complete until the PR is merged.
 
 ### DEFERRED — only with a demonstrated contract need
