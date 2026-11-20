@@ -4,11 +4,11 @@ import { adaptAggTrades } from "./adapt-trades.js"
 /** Binance user-data and public stream event-name mapping. */
 export const wsEventsMap = Object.freeze({
   executionReport: "executionReport",
-  outboundAccountPosition: "outboundAccountPosition",
-  aggTrade: "aggTrade",
-  account: "account",
-  balanceUpdate: "balanceUpdate",
-  listStatus: "listStatus",
+outboundAccountPosition: "outboundAccountPosition",
+aggTrade: "aggTrade",
+account: "account",
+balanceUpdate: "balanceUpdate",
+listStatus: "listStatus",
 })
 
 const EXECUTION_REPORT_EVIDENCE_FIELDS = Object.freeze({
@@ -16,35 +16,35 @@ const EXECUTION_REPORT_EVIDENCE_FIELDS = Object.freeze({
 transactionTime: "T",
 symbol: "s",
 clientOrderId: "c",
-  originalClientOrderId: "C",
+originalClientOrderId: "C",
 side: "S",
 orderType: "o",
 timeInForce: "f",
-  orderQuantity: "q",
+orderQuantity: "q",
 orderPrice: "p",
 executionType: "x",
 orderStatus: "X",
-  orderId: "i",
+orderId: "i",
 orderListId: "g",
 orderCreationTime: "O",
 workingTime: "W",
-  lastExecutedQuantity: "l",
+lastExecutedQuantity: "l",
 cumulativeExecutedQuantity: "z",
 lastExecutedPrice: "L",
-  commissionAmount: "n",
+commissionAmount: "n",
 commissionAsset: "N",
 tradeId: "t",
 executionId: "I",
-  tradeGroupId: "M",
+tradeGroupId: "M",
 isMaker: "m",
 cumulativeQuoteQuantity: "Z",
-  lastQuoteQuantity: "Y",
+lastQuoteQuantity: "Y",
 quoteOrderQuantity: "Q",
 stopPrice: "P",
-  icebergQuantity: "F",
+icebergQuantity: "F",
 selfTradePreventionMode: "V",
 matchType: "k",
-  working: "w",
+working: "w",
 rejectReason: "r",
 })
 /**
@@ -55,7 +55,7 @@ rejectReason: "r",
  */
 const createExecutionReportEvidence = (message) => ({
   schemaVersion: 1,
-  source: "binance.spot.userData.executionReport",
+source: "binance.spot.userData.executionReport",
   ...Object.fromEntries(Object.entries(EXECUTION_REPORT_EVIDENCE_FIELDS).flatMap(([field, key]) => {
     const value = message[key]
     if (value === undefined) {return []}
@@ -73,30 +73,30 @@ const adaptExecutedOrder = (message) => {
   const report = adaptUser.executionReport(message)
   const executedOrder = {
     id: String(report.orderId),
-    symbol: report.symbol,
-    type: report.orderType,
-    side: report.side,
-    quantity: report.quantity,
-    executedQuantity: report.totalTradeQuantity,
-    price: report.price,
-    status: report.orderStatus,
-    clientOrderId: report.newClientOrderId,
-    createdAt: report.creationTime,
-    updatedAt: report.eventTime,
+symbol: report.symbol,
+type: report.orderType,
+side: report.side,
+quantity: report.quantity,
+executedQuantity: report.totalTradeQuantity,
+price: report.price,
+status: report.orderStatus,
+clientOrderId: report.newClientOrderId,
+createdAt: report.creationTime,
+updatedAt: report.eventTime,
   }
 
   const fill = report.executionType === "TRADE"
     ? {
         id: String(report.tradeId),
-        orderId: String(report.orderId),
-        symbol: report.symbol,
-        side: report.side,
-        price: report.priceLastTrade,
-        quantity: report.lastTradeQuantity,
-        quoteQuantity: report.lastQuoteTransacted,
-        commissionAmount: report.commission,
-        commissionAsset: report.commissionAsset,
-        isMaker: report.isMaker,
+orderId: String(report.orderId),
+symbol: report.symbol,
+side: report.side,
+price: report.priceLastTrade,
+quantity: report.lastTradeQuantity,
+quoteQuantity: report.lastQuoteTransacted,
+commissionAmount: report.commission,
+commissionAsset: report.commissionAsset,
+isMaker: report.isMaker,
         // Binance E is event publication time; T is transaction time.
         // Canonical REST myTrades fills use the transaction timestamp.
         time: report.orderTime,
@@ -105,15 +105,15 @@ const adaptExecutedOrder = (message) => {
 
   return {
     eventType: report.eventType,
-    executionType: report.executionType,
+executionType: report.executionType,
     // Preserve Binance execution-report identifiers separately:
     // c is the current/new client order ID; C is the original client order ID.
     // Ownership is correlated by the exchange-assigned order ID, as in Free-Roll.
     clientOrderId: report.newClientOrderId,
-    originalClientOrderId: report.originalClientOrderId,
+originalClientOrderId: report.originalClientOrderId,
     executedOrder,
     ...(fill ? { fill } : {}),
-    brokerEvidence: createExecutionReportEvidence(message),
+brokerEvidence: createExecutionReportEvidence(message),
   }
 }
 
