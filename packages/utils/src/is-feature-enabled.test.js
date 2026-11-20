@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { afterEach, describe, it } from 'node:test'
-import { checkIfFeatureEnable } from './check-if-feature-enable.js'
+import { isFeatureEnabled } from './is-feature-enabled.js'
 
 const originalValue = process.env.UTILS_TEST_FEATURE_FLAG
 const logger = {
@@ -19,12 +19,12 @@ afterEach(() => {
   logger.warnings.length = 0
 })
 
-describe('checkIfFeatureEnable', () => {
+describe('isFeatureEnabled', () => {
   it('returns true when the environment variable is exactly "1"', () => {
     process.env.UTILS_TEST_FEATURE_FLAG = '1'
 
     assert.equal(
-      checkIfFeatureEnable({
+      isFeatureEnabled({
         envVarName: 'UTILS_TEST_FEATURE_FLAG',
         where: 'unit test',
         logger,
@@ -38,7 +38,7 @@ describe('checkIfFeatureEnable', () => {
     process.env.UTILS_TEST_FEATURE_FLAG = 'super-secret-value'
 
     assert.equal(
-      checkIfFeatureEnable({
+      isFeatureEnabled({
         envVarName: 'UTILS_TEST_FEATURE_FLAG',
         where: 'unit test',
         logger,
@@ -61,7 +61,7 @@ describe('checkIfFeatureEnable', () => {
       error(payload) { errors.push(payload) },
     }
 
-    assert.equal(checkIfFeatureEnable({ envVarName: 'UTILS_TEST_FEATURE_FLAG',
+    assert.equal(isFeatureEnabled({ envVarName: 'UTILS_TEST_FEATURE_FLAG',
       logger: failingLogger }), false)
     assert.equal(errors.length, 1)
     assert.equal(errors[0].message, 'warning sink failed')
@@ -71,7 +71,7 @@ describe('checkIfFeatureEnable', () => {
     delete process.env.UTILS_TEST_FEATURE_FLAG
 
     assert.equal(
-      checkIfFeatureEnable({
+      isFeatureEnabled({
         envVarName: 'UTILS_TEST_FEATURE_FLAG',
         where: 'unit test',
         logger,
