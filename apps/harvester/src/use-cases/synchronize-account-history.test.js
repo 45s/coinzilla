@@ -104,9 +104,10 @@ function createRepositories() {
           order.market.symbol === symbol &&
           ["NEW", "OPEN", "PENDING", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status),
         )
-        return pendingOrders
-          .sort((left, right) => Number(left.brokerOrderId) - Number(right.brokerOrderId))[0]
-          ?.brokerOrderId ?? null
+        const oldestOrderId = Math.min(
+          ...pendingOrders.map(({ brokerOrderId }) => Number(brokerOrderId)),
+        )
+        return Number.isFinite(oldestOrderId) ? String(oldestOrderId) : null
       },
     },
     fillRepository: {
