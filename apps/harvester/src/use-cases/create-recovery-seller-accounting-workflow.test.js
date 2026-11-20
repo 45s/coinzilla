@@ -646,6 +646,10 @@ test("accounts a loss-making legacy allocation but marks the mixed SELL ineligib
       position: legacyPosition,
       accounting: createLegacyPositionAccounting(),
     }],
+    onOperationalStateRecoverySellerMixedSellReconciled: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
   })
 
   const result = await workflow.reconcileTerminalMixedSell({
@@ -688,6 +692,10 @@ test("commits actual fills when the combined cycle misses minProfit", async () =
       position: legacyPosition,
       accounting: createLegacyPositionAccounting(),
     }],
+    onOperationalStateRecoverySellerMixedSellReconciled: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
   })
 
   const result = await workflow.reconcileTerminalMixedSell({

@@ -387,6 +387,9 @@ function publishTerminalMixedSellAccounting({
     marketId: terminalRegisteredOrder.market.id,
     cycleId: ownership.cycleId,
     positionId: ownership.positionId,
+    sellOrderClientId: terminalRegisteredOrder.clientOrderId,
+    sellOrderBrokerOrderId: terminalRegisteredOrder.brokerOrderId,
+    appliedFillIds: Object.freeze(canonicalFills.map((fill) => fill.id).sort()),
     status: eligible ? "CLOSED" : "UNRESOLVED",
     eligible,
   })
@@ -421,13 +424,30 @@ async function reconcileTerminalMixedSellTransition({
     canonicalFillAllocations,
     minProfit,
   })
-  if (result.accounting.applied !== true) {
-    throw new Error("Recovery Seller terminal mixed-SELL accounting did not commit; the sole-SELL reservation remains active")
-  }
   const ownership = resolveRecoverySellerOrderOwnership({
     registry: registryUpdate.registry,
     order: terminalRegisteredOrder,
   })
+  if (result.accounting.duplicate === true) {
+    const priorOutcome = state.recoverySellerCycleOutcomes.get(ownership.cycleId)
+    const replayFillIds = canonicalFills.map((fill) => fill.id).sort()
+    const priorFillIds = priorOutcome?.appliedFillIds ?? []
+    if (
+      priorOutcome?.sellOrderClientId !== terminalRegisteredOrder.clientOrderId ||
+      priorOutcome?.sellOrderBrokerOrderId !== terminalRegisteredOrder.brokerOrderId ||
+      JSON.stringify(priorFillIds) !== JSON.stringify(replayFillIds)
+    ) {
+      throw new Error("Recovery Seller duplicate terminal accounting does not match the committed cycle/order/fill boundary")
+    }
+    return Object.freeze({
+      ...result.accounting,
+      orderRegistry: state.orderRegistry,
+      profitability: result.profitability,
+    })
+  }
+  if (result.accounting.applied !== true) {
+    throw new Error("Recovery Seller terminal mixed-SELL accounting did not commit; the sole-SELL reservation remains active")
+  }
   const eligible = result.profitability?.eligible === true
   await persistTerminalMixedSellAccountingBoundary({
     callback: onOperationalStateRecoverySellerMixedSellReconciled,
