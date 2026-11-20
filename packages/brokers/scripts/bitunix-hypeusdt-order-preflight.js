@@ -17,7 +17,7 @@ export const BITUNIX_OPERATOR_ORDER_INTENT = Object.freeze({
 })
 const PROVISIONAL_HYPEUSDT_NOTIONAL_FLOOR = "11"
 
-function requireSuccessfulBrokerResult({ result, operation }) {
+export function assertSuccessfulBitunixBrokerResult({ result, operation }) {
   if (!result || result.ok !== true) {
     const cause = result?.errors?.[0]
     const reason = cause?.code ?? cause?.message ?? "unsuccessful broker result"
@@ -145,7 +145,7 @@ export function createBitunixOperatorOrderPreflight({
   openOrdersResult,
 } = {}) {
   const markets = requireBrokerArrayResultData({
-    value: requireSuccessfulBrokerResult({
+    value: assertSuccessfulBitunixBrokerResult({
       result: marketResult,
       operation: "market catalog",
     }),
@@ -154,7 +154,7 @@ export function createBitunixOperatorOrderPreflight({
   validateHypeUsdtActiveMarket({
     markets,
   })
-  const symbolFilters = requireSuccessfulBrokerResult({
+  const symbolFilters = assertSuccessfulBitunixBrokerResult({
     result: filtersResult,
     operation: "symbol metadata",
   })
@@ -162,7 +162,7 @@ export function createBitunixOperatorOrderPreflight({
     symbolFilters,
   })
   const balances = requireBrokerArrayResultData({
-    value: requireSuccessfulBrokerResult({
+    value: assertSuccessfulBitunixBrokerResult({
       result: balancesResult,
       operation: "account balances",
     }),
@@ -172,7 +172,7 @@ export function createBitunixOperatorOrderPreflight({
     balances,
   })
   const openOrders = requireBrokerArrayResultData({
-    value: requireSuccessfulBrokerResult({
+    value: assertSuccessfulBitunixBrokerResult({
       result: openOrdersResult,
       operation: "symbol-scoped open orders",
     }),
