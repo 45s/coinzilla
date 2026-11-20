@@ -19,10 +19,19 @@ async function closeObserver({ observer, logger, stage } = {}) {
   }
   try {
     const result = await observer.close()
-    return result?.ok === false && Array.isArray(result.errors) ? result.errors : []
+    return result?.ok === false && Array.isArray(result.errors)
+      ? result.errors
+      : []
   } catch (cause) {
-    const error = new OrderHistoryPersistenceError({ stage, cause })
-    reportCloseFailure({ logger, error, stage })
+    const error = new OrderHistoryPersistenceError({
+      stage,
+      cause,
+    })
+    reportCloseFailure({
+      logger,
+      error,
+      stage,
+    })
     return [error]
   }
 }
@@ -35,8 +44,15 @@ async function closeDatabase({ database, logger, stage } = {}) {
     await database.close()
     return []
   } catch (cause) {
-    const error = new OrderHistoryPersistenceError({ stage, cause })
-    reportCloseFailure({ logger, error, stage })
+    const error = new OrderHistoryPersistenceError({
+      stage,
+      cause,
+    })
+    reportCloseFailure({
+      logger,
+      error,
+      stage,
+    })
     return [error]
   }
 }
@@ -56,10 +72,30 @@ export async function closeHarvesterPersistence({
   logger,
 } = {}) {
   const errors = []
-  errors.push(...await closeObserver({ observer, logger, stage: "legacy-observer-close" }))
-  errors.push(...await closeObserver({ observer: relationalOrderObserver, logger, stage: "relational-order-observer-close" }))
-  errors.push(...await closeObserver({ observer: fillObserver, logger, stage: "fill-observer-close" }))
-  errors.push(...await closeDatabase({ database, logger, stage: "legacy-database-close" }))
-  errors.push(...await closeDatabase({ database: relationalDatabase, logger, stage: "relational-database-close" }))
+  errors.push(...await closeObserver({
+    observer,
+    logger,
+    stage: "legacy-observer-close",
+  }))
+  errors.push(...await closeObserver({
+    observer: relationalOrderObserver,
+    logger,
+    stage: "relational-order-observer-close",
+  }))
+  errors.push(...await closeObserver({
+    observer: fillObserver,
+    logger,
+    stage: "fill-observer-close",
+  }))
+  errors.push(...await closeDatabase({
+    database,
+    logger,
+    stage: "legacy-database-close",
+  }))
+  errors.push(...await closeDatabase({
+    database: relationalDatabase,
+    logger,
+    stage: "relational-database-close",
+  }))
   return errors
 }
