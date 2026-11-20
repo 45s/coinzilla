@@ -2,7 +2,6 @@ import { CanonicalOrder } from "@coinzilla/entities"
 import { requireNumericCursor, validatePage } from "./helpers/validate-input.js"
 import {
   createOrderIdentityKey,
-  createSourceEvent,
   mapCanonicalOrder,
   validateCanonicalOrderProviderIdentity,
 } from "./helpers/map-history-records.js"
