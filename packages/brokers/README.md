@@ -316,7 +316,7 @@ Every Bitunix Spot implementation task must follow the mandatory [Bitunix Spot d
 
 **The safety policy is unchanged:** automated tests, CI, scheduled jobs, and AI-agent-executed commands must never mutate a LIVE account. Order-mutation integration tests remain TESTNET-only. A human-initiated local LIVE experiment is a separate, explicitly confirmed operator investigation—not a test—and AI agents must never execute it. The lack of Bitunix Spot TESTNET does not authorize redirecting tests to LIVE; issue [#1185](https://github.com/45s/coinzilla/issues/1185) remains authoritative for lifecycle and production-readiness blockers.
 
-The existing `diagnose:bitunix` command described below remains read-only. It does not submit orders, and it is not the guarded local order experiment. Do not assume that a live-order command exists until a separately reviewed implementation is delivered.
+The existing `diagnose:bitunix` command described below remains read-only. The separate one-shot `operator:bitunix:hypeusdt-order-attempt` command is a human-only LIVE investigation, not a diagnostic or test; it must never be run by AI agents, CI, or scheduled jobs. Its fixed order and safety gates are documented below and tracked in [issue #1608](https://github.com/45s/coinzilla/issues/1608) / [PR #1609](https://github.com/45s/coinzilla/pull/1609).
 
 ## Bitunix Spot local diagnostics
 
@@ -388,6 +388,38 @@ The publisher refuses to start when the worktree is dirty, the current branch is
 If Bitunix requests fail, the failure report is still committed and pushed when Git permits, the command returns a non-zero exit code, and the checkout is switched back to `develop`. If pushing fails, the command reports the local branch/commit details and still attempts to return to `develop`. Git must have a configured user name/email and a working `origin` push credential. No GitHub Actions secrets or workflows are involved.
 
 Use a dedicated API key with account-read permission only. The health check contacts the configured LIVE Bitunix Spot API and never places/cancels orders, withdraws, transfers, or changes account state. A successful check verifies the currently documented read-only REST/RPC calls; it does not establish TESTNET availability, continuous private events, or Harvester trading readiness.
+
+## One-shot Bitunix HYPEUSDT operator order attempt
+
+This is a deliberately fixed, human-operated LIVE investigation—not a general order CLI, an integration test, a TESTNET substitute, or proof of production readiness. The agent, unit tests, CI, scheduled jobs, and Harvester must never invoke it.
+
+From the repository root, run this command manually in an interactive terminal:
+
+```sh
+pnpm --filter @coinzilla/brokers operator:bitunix:hypeusdt-order-attempt
+```
+
+It loads `packages/brokers/.env.development` and requires both `BITUNIX_API_KEY` and `BITUNIX_API_SECRET`. Use a dedicated key with account-read and Spot-trading permissions; keep withdrawals disabled. The command uses the common `Broker` facade. Its read-only Broker has `allowLiveOrderMutations: false`; a separate mutation-enabled Broker is not constructed until after the operator enters the exact confirmation phrase.
+
+The only order this command can attempt is:
+
+- Symbol: `HYPEUSDT`
+- Side/type: `BUY LIMIT`
+- Price: `30` USDT
+- Base quantity: `0.4` HYPE
+- Exact notional: `12` USDT
+
+Before prompting for confirmation, it reads the market catalog, symbol metadata, account balances, and symbol-scoped open orders through the common Broker API. It aborts unless HYPEUSDT is explicitly open with matching HYPE/USDT identity, the documented `minVolume` (base quantity) and `minPrice` (quote notional) are present and satisfied, free USDT is below 12, and the symbol-scoped open-order query returns no rows. Decimal comparisons are exact. The local 11 USDT notional floor is provisional and is **not** an exchange guarantee.
+
+The preflight display also states the limitations: the empty symbol-scoped open-order response is not proof of account-wide absence because response completeness is unverified; price tick and quantity step remain UNKNOWN; and free USDT below 12 does not guarantee rejection because other exchange-side credits or account settings may affect acceptance. Review every displayed value. The final prompt requires the exact phrase:
+
+```text
+SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER
+```
+
+After that confirmation, the command connects the mutation-enabled Broker, atomically creates the exclusive marker `packages/brokers/.diagnostics/bitunix-hypeusdt-buy-limit-attempt.json` with owner-only file permissions, and calls `createOrder()` exactly once. The marker contains only the fixed order intent and timestamp—not credentials or account balances. Its existence blocks every subsequent invocation. Do not remove it to retry. There is no automatic retry, cancellation, transfer, or second mutation. If the Broker reports `OUTCOME_UNKNOWN`, keep the marker and reconcile manually before taking any further action.
+
+This command does not change the default `allowLiveOrderMutations: false` setting, the common Broker contract, capability declarations, or Harvester routing. It does not resolve issue [#1185](https://github.com/45s/coinzilla)'s client-order identity, unknown-outcome recovery, fill completeness, account freshness, private-event, or TESTNET blockers.
 
 ## Offline tests and coverage
 
