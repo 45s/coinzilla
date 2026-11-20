@@ -24,7 +24,7 @@ function validateSubmissionStoreAndOrder({
   if (!SUPPORTED_PURPOSES.has(purpose)) {
     throw new TypeError("Order-submission outcome purpose must be null, RECOVERY_BUY, or RECOVERY_SELL")
   }
-  const normalizedOwnership = validateRecoverySellerSubmissionOwnership({
+  return validateRecoverySellerSubmissionOwnership({
     order,
     purpose,
     ownership,
@@ -32,9 +32,9 @@ function validateSubmissionStoreAndOrder({
 }
 
 function validateSubmissionAcknowledgement({
-    order,
-    outcome,
-  }) {
+  order,
+  outcome,
+}) {
   const acknowledged = outcome === "ACKNOWLEDGED"
   if (acknowledged !== (typeof order.brokerOrderId === "string" && order.status !== "PENDING")) {
     throw new TypeError("Submission outcome classification contradicts canonical broker acknowledgement state")
@@ -66,15 +66,20 @@ function validateSubmissionOrderType({ order }) {
 }
 
 function validateSubmissionOutcome(options) {
-  const { operationalStateStore, order, outcome, purpose, ownership } = options
-  validateSubmissionStoreAndOrder({
+  const {
+    operationalStateStore,
+    order,
+    outcome,
+    purpose,
+    ownership,
+  } = options
+  const normalizedOwnership = validateSubmissionStoreAndOrder({
     operationalStateStore,
     order,
     outcome,
     purpose,
     ownership,
   })
-  const normalizedOwnership = validateRecoverySellerSubmissionOwnership({ order, purpose, ownership })
   const acknowledged = validateSubmissionAcknowledgement({
     order,
     outcome,
@@ -117,7 +122,12 @@ export async function recordOrderSubmissionOutcome(options = {}) {
       purpose = null,
       ownership,
     } = options
-    const { market, clientOrderId, acknowledged, ownership: normalizedOwnership } = validateSubmissionOutcome({
+    const {
+      market,
+      clientOrderId,
+      acknowledged,
+      ownership: normalizedOwnership,
+    } = validateSubmissionOutcome({
       ...options,
       purpose,
       ownership,

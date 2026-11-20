@@ -18,18 +18,18 @@ function requireIdentifier({ value, field } = {}) {
  * @param {object} [input.ownership] Strategy ownership metadata.
  * @returns {object|undefined} Normalized ownership fields for durable facts.
  */
-export function validateRecoverySellerSubmissionOwnership({ order, purpose, ownership } = {}) {
-  if (purpose === null) {
-    if (ownership !== undefined) {
-      throw new TypeError("Unowned order submissions cannot persist Recovery Seller ownership")
-    }
-    return undefined
+function expectedRecoverySellerSide({ purpose } = {}) {
+  if (purpose === "RECOVERY_BUY") {
+    return "BUY"
   }
-  const expectedSide = purpose === "RECOVERY_BUY"
-    ? "BUY"
-    : purpose === "RECOVERY_SELL"
-      ? "SELL"
-      : undefined
+  if (purpose === "RECOVERY_SELL") {
+    return "SELL"
+  }
+  return undefined
+}
+
+function normalizeRecoverySellerOwnership({ order, purpose, ownership } = {}) {
+  const expectedSide = expectedRecoverySellerSide({ purpose })
   if (expectedSide === undefined || order?.side !== expectedSide) {
     throw new TypeError("Recovery Seller submission purpose must match its canonical order side")
   }
@@ -53,4 +53,23 @@ export function validateRecoverySellerSubmissionOwnership({ order, purpose, owne
       field: "cycleId",
     }),
   })
+}
+
+/**
+ * Validate immutable strategy, Position, and cycle ownership before a submission fact is persisted.
+ *
+ * @param {object} input
+ * @param {object} input.order Canonical pending or acknowledged order.
+ * @param {string|null} input.purpose Explicit strategy purpose.
+ * @param {object} [input.ownership] Strategy ownership metadata.
+ * @returns {object|undefined} Normalized ownership fields for durable facts.
+ */
+export function validateRecoverySellerSubmissionOwnership({ order, purpose, ownership } = {}) {
+  if (purpose === null) {
+    if (ownership !== undefined) {
+      throw new TypeError("Unowned order submissions cannot persist Recovery Seller ownership")
+    }
+    return undefined
+  }
+  return normalizeRecoverySellerOwnership({ order, purpose, ownership })
 }

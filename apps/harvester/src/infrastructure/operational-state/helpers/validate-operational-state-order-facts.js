@@ -44,11 +44,12 @@ function validateDurableOrderOwnership({ canonicalData, context } = {}) {
     }
     return
   }
-  const expectedSide = canonicalData.purpose === "RECOVERY_BUY"
-    ? "BUY"
-    : canonicalData.purpose === "RECOVERY_SELL"
-      ? "SELL"
-      : undefined
+  let expectedSide
+  if (canonicalData.purpose === "RECOVERY_BUY") {
+    expectedSide = "BUY"
+  } else if (canonicalData.purpose === "RECOVERY_SELL") {
+    expectedSide = "SELL"
+  }
   if (expectedSide === undefined || canonicalData.side !== expectedSide) {
     throw new TypeError(`${context} purpose must match its canonical order side`)
   }
