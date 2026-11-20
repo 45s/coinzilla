@@ -201,7 +201,7 @@ function mapOrderQuantityColumns({ order, existing } = {}) {
   }
 }
 
-function mapOrderExchangeTimestampColumns({ order, existing } = {}) {
+function mapOrderCreationTimestampColumns({ order, existing } = {}) {
   return {
     exchange_created_at: toIsoTimestamp({
       value: order.createdAt,
@@ -211,6 +211,11 @@ function mapOrderExchangeTimestampColumns({ order, existing } = {}) {
       value: order.acknowledgedAt,
       field: "acknowledgedAt",
     }) ?? existing?.exchange_acknowledged_at ?? null,
+  }
+}
+
+function mapOrderUpdateTimestampColumns({ order, existing } = {}) {
+  return {
     exchange_updated_at: toIsoTimestamp({
       value: order.updatedAt,
       field: "updatedAt",
@@ -223,6 +228,19 @@ function mapOrderExchangeTimestampColumns({ order, existing } = {}) {
       value: order.brokerTransactionTime,
       field: "brokerTransactionTime",
     }) ?? existing?.exchange_transaction_at ?? null,
+  }
+}
+
+function mapOrderExchangeTimestampColumns({ order, existing } = {}) {
+  return {
+    ...mapOrderCreationTimestampColumns({
+      order,
+      existing,
+    }),
+    ...mapOrderUpdateTimestampColumns({
+      order,
+      existing,
+    }),
   }
 }
 

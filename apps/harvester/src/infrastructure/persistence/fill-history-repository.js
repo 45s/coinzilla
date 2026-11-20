@@ -67,7 +67,7 @@ function mapExecutionTimestamp({ value } = {}) {
 }
 
 function mapCommission({ commission, ordinal } = {}) {
-  const quoteValue = commission.quoteValue
+  const { quoteValue } = commission
   const quoteValueMissing = quoteValue === undefined || quoteValue === null
   return {
     ordinal,

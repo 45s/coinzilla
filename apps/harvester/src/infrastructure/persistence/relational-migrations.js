@@ -164,7 +164,10 @@ function insertLegacyOrder({ transaction, sourceRow } = {}) {
 }
 
 function migrateLegacyOrders(transaction) {
-  if (!hasTable({ transaction, name: "db_records" })) {
+  if (!hasTable({
+    transaction,
+    name: "db_records",
+  })) {
     return
   }
   const records = transaction.prepare(

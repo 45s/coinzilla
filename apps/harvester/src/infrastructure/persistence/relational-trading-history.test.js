@@ -27,7 +27,10 @@ async function createTestContext({ t } = {}) {
   t.after(async () => {
     await closeHarvesterPersistence(persistence ?? {})
     await eventBus.close()
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   })
   return {
     directory,
@@ -126,7 +129,10 @@ async function seedLegacyRecord({ filename, record } = {}) {
   })
   await database.connect()
   try {
-    await database.create({ collection: "harvester_orders", record })
+    await database.create({
+      collection: "harvester_orders",
+      record,
+    })
   } finally {
     await database.close()
   }
@@ -206,12 +212,18 @@ test("creates versioned physical orders, fills, and commission tables on a fresh
 test("migrates legacy harvester_orders without deleting source records or fabricating fills", async (t) => {
   const context = await createTestContext({ t })
   const legacyRecord = createLegacyRecord()
-  await seedLegacyRecord({ filename: context.filename, record: legacyRecord })
+  await seedLegacyRecord({
+    filename: context.filename,
+    record: legacyRecord,
+  })
   const persistence = await preparePersistence({ context })
   assert.ok(persistence, "An existing database with valid legacy order history must remain available after migration.")
   await inspectSqlite({
     filename: context.filename,
-    work: (database) => assertMigratedLegacyHistory({ database, legacyRecord }),
+    work: (database) => assertMigratedLegacyHistory({
+      database,
+      legacyRecord,
+    }),
   })
 })
 
