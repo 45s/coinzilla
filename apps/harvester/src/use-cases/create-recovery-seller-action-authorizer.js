@@ -114,7 +114,10 @@ function resolveRecoverySellerAllocation({ allocation, action } = {}) {
     }
   }
   const decision = allocation.data?.allocation
-  if (isExactExecutableRecoverySellerAction({ decision, action })) {
+  if (isExactExecutableRecoverySellerAction({
+    decision,
+    action,
+  })) {
     return {
       allowed: true,
     }
@@ -142,7 +145,10 @@ async function authorizeRecoverySellerAction({ dependencies, action, snapshot, i
       input,
     })
     const allocation = allocateStrategyOrderCommitments(allocationInput)
-    const resolved = resolveRecoverySellerAllocation({ allocation, action })
+    const resolved = resolveRecoverySellerAllocation({
+    allocation,
+    action,
+  })
     if (resolved.error) {
       return latchAllocationFailure({
         recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,

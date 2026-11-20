@@ -76,7 +76,11 @@ function createAuthorizer({ quoteBalance = "100", accountSnapshot } = {}) {
     allocateOrderCommitments,
   })
   return {
-    authorize: () => authorize({ action, snapshot, input }),
+    authorize: () => authorize({
+      action,
+      snapshot,
+      input,
+    }),
     getLatchCount: () => latchCount,
   }
 }

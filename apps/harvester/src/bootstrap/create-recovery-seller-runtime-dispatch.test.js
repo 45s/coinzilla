@@ -9,7 +9,9 @@ const marketPrice = Object.freeze({
   price: "12.3",
 })
 const marketMetadata = Object.freeze({
-  market: Object.freeze({ symbol }),
+  market: Object.freeze({
+    symbol,
+  }),
 })
 const pairConfig = Object.freeze({})
 const accountSnapshot = Object.freeze({
@@ -20,57 +22,67 @@ const stopState = Object.freeze({
   decision: null,
 })
 
-function createDispatch({
-  evaluateBuyDecision,
-  onSubmit = async () => ({
-    ok: true,
-    data: { submitted: false },
-  }),
-} = {}) {
+function createRecoverySellerWorkflow({ onSnapshot } = {}) {
+  return {
+    getTransitionSnapshot: (input) => {
+      onSnapshot(input)
+      return Object.freeze({
+        cycleState: Object.freeze({
+          cycleId: "rs-cycle-1",
+          positionId: "rs-position-1",
+          status: "ACCUMULATING",
+        }),
+        recoveryPosition: undefined,
+        planInput: Object.freeze({
+          recoveryQuantity: "0",
+          configuredLegacyQuantity: "0",
+          legacyRemainingQuantity: "0",
+          verifiedUnreservedLegacyQuantity: "0",
+          recoveryCostBasis: "0",
+          legacyAverageCost: "0",
+          thirdAssetFeeQuoteValue: "0",
+        }),
+        cumulativeNetSellProceeds: "0",
+        pendingBuyCommitment: "0",
+        activeOrders: Object.freeze([]),
+        lastBuyPrice: undefined,
+        stopState: input.stopState,
+        strategyStopped: input.strategyStopped,
+        marketPaused: input.marketPaused,
+        reconciliationComplete: input.reconciliationComplete,
+      })
+    },
+  }
+}
+
+function createRecoverySellerStopWorkflow({ onLatch } = {}) {
+  return {
+    getState: async () => stopState,
+    latch: async () => {
+      onLatch()
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  }
+}
+
+function createDispatchFixture({ evaluateBuyDecision, onSubmit } = {}) {
   let snapshotInput
   let submissionInput
   let latchCount = 0
   const dispatch = createRecoverySellerRuntimeDispatch({
-    recoverySellerWorkflow: {
-      getTransitionSnapshot: (input) => {
+    recoverySellerWorkflow: createRecoverySellerWorkflow({
+      onSnapshot: (input) => {
         snapshotInput = input
-        return Object.freeze({
-          cycleState: Object.freeze({
-            cycleId: "rs-cycle-1",
-            positionId: "rs-position-1",
-            status: "ACCUMULATING",
-          }),
-          recoveryPosition: undefined,
-          planInput: Object.freeze({
-            recoveryQuantity: "0",
-            configuredLegacyQuantity: "0",
-            legacyRemainingQuantity: "0",
-            verifiedUnreservedLegacyQuantity: "0",
-            recoveryCostBasis: "0",
-            legacyAverageCost: "0",
-            thirdAssetFeeQuoteValue: "0",
-          }),
-          cumulativeNetSellProceeds: "0",
-          pendingBuyCommitment: "0",
-          activeOrders: Object.freeze([]),
-          lastBuyPrice: undefined,
-          stopState: input.stopState,
-          strategyStopped: input.strategyStopped,
-          marketPaused: input.marketPaused,
-          reconciliationComplete: input.reconciliationComplete,
-        })
       },
-    },
-    recoverySellerStopWorkflow: {
-      getState: async () => stopState,
-      latch: async () => {
+    }),
+    recoverySellerStopWorkflow: createRecoverySellerStopWorkflow({
+      onLatch: () => {
         latchCount += 1
-        return {
-          ok: true,
-          data: { durable: true },
-        }
       },
-    },
+    }),
     recoverySellerPairs: {
       [symbol]: pairConfig,
     },
@@ -79,7 +91,21 @@ function createDispatch({
     evaluateBuyDecision,
   })
   return {
-    dispatch: (input = {}) => dispatch({
+    dispatch,
+    getSnapshotInput: () => snapshotInput,
+    getSubmissionInput: () => submissionInput,
+    getLatchCount: () => latchCount,
+    setSubmissionInput: (value) => {
+      submissionInput = value
+    },
+    onSubmit,
+  }
+}
+
+function createDispatch(options = {}) {
+  const fixture = createDispatchFixture(options)
+  return {
+    dispatch: (input = {}) => fixture.dispatch({
       symbol,
       state: {
         prices: new Map([[symbol, marketPrice]]),
@@ -91,14 +117,19 @@ function createDispatch({
       isStopping: () => false,
       hasBlockingOpenOrdersForSymbol: () => false,
       submitRecoverySellerOrder: async (submission) => {
-        submissionInput = submission
-        return onSubmit(submission)
+        fixture.setSubmissionInput(submission)
+        return fixture.onSubmit
+          ? fixture.onSubmit(submission)
+          : {
+            ok: true,
+            data: { submitted: false },
+          }
       },
       ...input,
     }),
-    getSnapshotInput: () => snapshotInput,
-    getSubmissionInput: () => submissionInput,
-    getLatchCount: () => latchCount,
+    getSnapshotInput: fixture.getSnapshotInput,
+    getSubmissionInput: fixture.getSubmissionInput,
+    getLatchCount: fixture.getLatchCount,
   }
 }
 
