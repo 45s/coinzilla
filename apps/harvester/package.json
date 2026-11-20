@@ -103,7 +103,8 @@
       "src/use-cases/order-event-workflow.test.js",
       "src/use-cases/create-recovery-seller-order-submitter.test.js",
       "src/use-cases/record-order-submission-intent.test.js",
-      "src/use-cases/record-order-submission-outcome.test.js"
+      "src/use-cases/record-order-submission-outcome.test.js",
+      "src/use-cases/restore-harvester-operational-state.test.js"
     ]
   }
 }
