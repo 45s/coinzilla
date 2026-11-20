@@ -25,6 +25,7 @@ This index is the entry point for maintained repository documentation. The gover
 - [Task workflows](engineering/TASK_WORKFLOWS.md)
 - [AI task compliance standard](engineering/AI_TASK_COMPLIANCE_STANDARD.md) — mandatory standards discovery, preflight readiness and completion compliance
 - [AI refactoring and code audit standard](engineering/AI_REFACTORING_AUDIT_STANDARD.md)
+- [Logging and observability standard](engineering/LOGGING_OBSERVABILITY_STANDARD.md)
 - [Cross-domain requests](engineering/CROSS_DOMAIN_REQUESTS.md)
 - [Contributing](contributing.md)
 - [Workspace package map](workspace-package-map.md)
