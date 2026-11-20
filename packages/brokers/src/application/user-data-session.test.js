@@ -224,7 +224,7 @@ onStatus: null }),
       /Binance WebSocket API must be open before subscribing to user data/,
       "A missing API client must reject subscription setup before constructing a port.",
     )
-    assert.equal(portFactoryCalls, 0)
+    assert.equal(portFactoryCalls, 0, "A missing API client must be rejected before constructing the client port.")
     await session.stop()
   })
 })
