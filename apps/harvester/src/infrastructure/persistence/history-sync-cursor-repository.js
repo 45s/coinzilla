@@ -81,16 +81,17 @@ function readCursor({ database, identity }) {
 function saveCursor({
   database,
   identity,
-  cursorColumn,
+  cursorType,
   cursorValue,
   updatedAt,
 }) {
-  if (!Object.values(HISTORY_SYNC_CURSOR_COLUMNS).includes(cursorColumn)) {
-    throw new TypeError("History-sync cursor column is not supported")
+  const cursorColumn = HISTORY_SYNC_CURSOR_COLUMNS[cursorType]
+  if (!cursorColumn) {
+    throw new TypeError("History-sync cursor type is not supported")
   }
   const value = requireCursor({
     value: cursorValue,
-    field: cursorColumn,
+    field: cursorType,
   })
   const timestamp = requireString({
     value: updatedAt,
@@ -152,7 +153,7 @@ export function createHistorySyncCursorRepository({ database } = {}) {
       saveCursor({
         database,
         identity,
-        cursorColumn: HISTORY_SYNC_CURSOR_COLUMNS.order,
+        cursorType: "order",
         cursorValue: lastOrderId,
         updatedAt,
       })
@@ -166,7 +167,7 @@ export function createHistorySyncCursorRepository({ database } = {}) {
       saveCursor({
         database,
         identity,
-        cursorColumn: HISTORY_SYNC_CURSOR_COLUMNS.trade,
+        cursorType: "trade",
         cursorValue: lastTradeId,
         updatedAt,
       })
