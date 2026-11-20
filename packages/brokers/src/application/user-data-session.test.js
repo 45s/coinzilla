@@ -682,14 +682,7 @@ async function createEventDeliveryScenario() {
   }
 }
 
-async function verifyEventDeliveryFiltersDuplicatesAndIsolatesThrowingSubscribers() {
-  const scenario = await createEventDeliveryScenario()
-  const { fixture, first, second, callbackError, logs, received } = scenario
-  const event = {
-    type: "balanceUpdate",
-    balanceDelta: "1",
-  }
-
+function emitAndAssertInitialEventDelivery({ fixture, event, received, logs, callbackError }) {
   fixture.emitEvent({
     type: "event",
     subscriptionId: 17,
@@ -726,6 +719,22 @@ async function verifyEventDeliveryFiltersDuplicatesAndIsolatesThrowingSubscriber
     1,
     "A throwing event callback must be logged once without interrupting fan-out.",
   )
+}
+
+async function verifyEventDeliveryFiltersDuplicatesAndIsolatesThrowingSubscribers() {
+  const scenario = await createEventDeliveryScenario()
+  const { fixture, first, second, callbackError, logs, received } = scenario
+  const event = {
+    type: "balanceUpdate",
+    balanceDelta: "1",
+  }
+  emitAndAssertInitialEventDelivery({
+    fixture,
+    event,
+    received,
+    logs,
+    callbackError,
+  })
 
   await first.data.disconnect()
   const nextEvent = {
