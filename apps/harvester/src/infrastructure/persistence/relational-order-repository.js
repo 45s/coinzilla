@@ -34,7 +34,14 @@ function assertFillOrderIdentity({ transaction, row } = {}) {
   const conflict = transaction.prepare(`
     SELECT id FROM fills
     WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
-      AND account_id = ? AND client_order_id = ? AND exchange_order_id <> ?
+      AND account_id = ?
+      AND (
+        (client_order_id = ? AND exchange_order_id <> ?)
+        OR (exchange_order_id = ? AND (
+          market_id <> ? OR
+          (client_order_id IS NOT NULL AND client_order_id <> ?)
+        ))
+      )
     LIMIT 1
   `).get(
     row.environment,
@@ -43,6 +50,9 @@ function assertFillOrderIdentity({ transaction, row } = {}) {
     row.account_id,
     row.client_order_id,
     row.exchange_order_id,
+    row.exchange_order_id,
+    row.market_id,
+    row.client_order_id,
   )
   if (conflict) {
     throw new OrderHistoryIntegrityError({
@@ -67,7 +77,8 @@ function linkOrderFills({ transaction, row } = {}) {
     SET order_id = ?, strategy_id = COALESCE(strategy_id, ?),
       position_id = COALESCE(position_id, ?), cycle_id = COALESCE(cycle_id, ?)
     WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
-      AND account_id = ? AND client_order_id = ? AND exchange_order_id = ?
+      AND account_id = ? AND market_id = ? AND exchange_order_id = ?
+      AND (client_order_id IS NULL OR client_order_id = ?)
       AND (order_id IS NULL OR order_id = ?)
   `).run(
     row.id,
@@ -78,8 +89,9 @@ function linkOrderFills({ transaction, row } = {}) {
     row.provider_instance_id,
     row.provider_type,
     row.account_id,
-    row.client_order_id,
+    row.market_id,
     row.exchange_order_id,
+    row.client_order_id,
     row.id,
   )
 }

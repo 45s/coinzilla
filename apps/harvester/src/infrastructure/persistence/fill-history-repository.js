@@ -294,19 +294,22 @@ function findOrderReference({ transaction, fill } = {}) {
       clientOrderId: fill.client_order_id,
     })
     return transaction.prepare(
-      "SELECT id, exchange_order_id, strategy_id, position_id, cycle_id FROM orders WHERE id = ?",
+      "SELECT id, market_id, exchange_order_id, strategy_id, position_id, cycle_id FROM orders WHERE id = ?",
     ).get(id)
   }
   return transaction.prepare(`
-    SELECT id, exchange_order_id, strategy_id, position_id, cycle_id FROM orders
+    SELECT id, market_id, exchange_order_id, strategy_id, position_id, cycle_id FROM orders
     WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
       AND account_id = ? AND exchange_order_id = ?
   `).get(...scope, fill.exchange_order_id)
 }
 
 function assertOrderReferenceMatches({ order, fill } = {}) {
-  if (order && order.exchange_order_id !== null &&
-    order.exchange_order_id !== fill.exchange_order_id) {
+  if (order && (
+    order.market_id !== fill.market_id ||
+    (order.exchange_order_id !== null &&
+      order.exchange_order_id !== fill.exchange_order_id)
+  )) {
     throw new OrderHistoryIntegrityError({
       field: "fill.orderIdentity",
       providerInstanceId: fill.provider_instance_id,
