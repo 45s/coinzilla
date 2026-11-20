@@ -633,3 +633,50 @@ test("persists current open orders older than the initial order-history lookback
   assert.equal(repositories.orders.length, 1, "An open order outside the initial time lookback must still be persisted by exact canonical lookup.")
   assert.equal(repositories.orders[0].status, "OPEN", "The historical row must preserve the exchange-confirmed open status.")
 })
+
+
+test("persists old fills without inventing an order link when Binance has archived the order", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const now = 200 * 24 * 60 * 60 * 1000
+  const broker = createPagedBroker({
+    orders: [],
+    fills: [createFill({
+      tradeId: "1",
+      orderId: "10",
+      clientOrderId: null,
+      executedAt: 80 * 24 * 60 * 60 * 1000,
+    })],
+    calls,
+  })
+  const getCanonicalOrderHistory = broker.getCanonicalOrderHistory
+  broker.getCanonicalOrderHistory = async (input) => {
+    if (input.orderId !== undefined) {
+      return {
+        ok: false,
+        errors: [Object.assign(new Error("Binance order was archived"), { code: -2026 })],
+      }
+    }
+    return getCanonicalOrderHistory(input)
+  }
+  const result = await synchronizeAccountHistory({
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 2,
+    requestDelayMs: 0,
+    now: () => now,
+  })
+
+  assert.equal(result.ok, true, result.errors?.map((error) => error.message).join("; "))
+  assert.equal(result.data.archivedOrderLookups, 1, "The unavailable archived-order lookup must be visible in diagnostics.")
+  assert.equal(repositories.fills.length, 1, "An archived order lookup must not discard the actual exchange fill.")
+  assert.equal(repositories.fills[0].fill.clientOrderId, undefined, "The fill must remain unlinked when no canonical order identity can be verified.")
+})
