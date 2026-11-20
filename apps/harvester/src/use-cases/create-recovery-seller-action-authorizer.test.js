@@ -73,7 +73,6 @@ function createAuthorizer({
   quoteBalance = "100",
   baseBalance = "0",
   accountSnapshot,
-  accountSnapshotMissing = false,
   activeOrders = [],
   actionOverride = action,
   snapshotOverride = snapshot,
@@ -163,7 +162,7 @@ test("defers an RS BUY when the shared account has insufficient quote without la
 })
 
 test("latches durable STOP when the account snapshot is missing", async () => {
-  const runtime = createAuthorizer({ accountSnapshotMissing: true })
+  const runtime = createAuthorizer({ accountSnapshot: null })
   const result = await runtime.authorize()
 
   assert.equal(result.ok, false, "A missing account snapshot must fail the allocation request.")
