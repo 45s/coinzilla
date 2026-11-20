@@ -365,7 +365,11 @@ function replayFillEvent({ item, sequence, market, state }) {
     market,
   })
   if (item.strategyId === StrategyId.RECOVERY_SELLER) {
-    replayRecoverySellerFill({ item, fill, state })
+    replayRecoverySellerFill({
+      item,
+      fill,
+      state,
+    })
     return
   }
   const recoveryLedger = state.recoveryLedgers.get(market.id) ?? RecoveryLedger.empty({ market })
@@ -633,7 +637,10 @@ function restoreOrderState({ data, marketMetadata, durablePausedMarkets, pausedM
       marketMetadata,
       symbol: order.symbol,
     })
-    state.restoredOrders.push(restoreOrder({ order, market }))
+    state.restoredOrders.push(restoreOrder({
+      order,
+      market,
+    }))
     if (order.strategyId === StrategyId.RECOVERY_SELLER) {
       state.restoredOwnerships.push(createOrderOwnership({
         ownership: {
