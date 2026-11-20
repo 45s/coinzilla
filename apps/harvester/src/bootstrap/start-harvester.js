@@ -887,6 +887,7 @@ async function synchronizeStartupExchangeHistory({ startup, portfolio, resources
     fillRepository: persistence.fillRepository,
     cursorRepository: persistence.historySyncCursorRepository,
     requestDelayMs: startup.historySyncRequestDelayMs,
+    now: startup.now,
   })
   if (result?.ok !== true) {
     logHistorySyncFailure({
