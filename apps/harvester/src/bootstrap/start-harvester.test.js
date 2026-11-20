@@ -5,7 +5,9 @@ import path from "node:path"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules } from "@coinzilla/entities"
 import { multiplyDecimal } from "@coinzilla/utils"
-import { startHarvester } from "./start-harvester.js"
+import { prepareHarvesterStartupState, startHarvester } from "./start-harvester.js"
+import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
+import { createRecoverySellerStopWorkflow } from "../use-cases/create-recovery-seller-stop-workflow.js"
 import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
@@ -18,6 +20,10 @@ const testEventPublisher = Object.freeze({
   }),
 })
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
+import {
+  assertRecoverySellerEvaluatorConfigured,
+  assertRecoverySellerRuntimeAcceptance,
+} from "./harvester-runtime-helpers.js"
 
 // Include the source file in every reporter test name so failures are identifiable
 // even when the spec reporter output is copied without its surrounding file header.
@@ -556,6 +562,31 @@ const createFill = ({
   })
 }
 
+
+test("rejects configured RS routes when the runtime acceptance gate is closed", () => {
+  const recoverySellerPairs = {
+    BTCUSDT: {
+      enabled: true,
+    },
+  }
+  assert.throws(() => assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs,
+  }), /RS-4 integration and RS-5 offline lifecycle acceptance/)
+  assert.doesNotThrow(() => assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs: {},
+  }))
+  assert.doesNotThrow(() => assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs,
+    acceptanceComplete: true,
+  }))
+  assert.throws(() => assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs,
+  }), /before broker connection/)
+  assert.doesNotThrow(() => assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs,
+    evaluateRecoverySellerTransition: async () => ({ ok: true }),
+  }))
+})
 
 test("rejects enabled Telegram operator control without a bot token before connecting to Binance", async () => {
   const config = {
@@ -5262,6 +5293,132 @@ test("verifies an injected Operational State Store before connecting to the brok
   assert.deepEqual(calls, [], "An unverified Operational State Store must block broker connection and subscriptions.")
 })
 
+
+async function seedRecoverySellerStopStore({ directory } = {}) {
+  const previousStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "rs-stop-bootstrap-previous-session",
+  })
+  const initialized = await previousStore.initialize()
+  assert.equal(initialized.ok, true, initialized.errors?.[0]?.message)
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore: previousStore,
+    appConfig,
+  })
+  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+  const previousProcess = await recordProcessStarted({
+    operationalStateStore: previousStore,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled: true,
+  })
+  assert.equal(previousProcess.ok, true, previousProcess.errors?.[0]?.message)
+  const workflow = await createRecoverySellerStopWorkflow({
+    operationalStateStore: previousStore,
+  })
+  assert.equal(workflow.ok, true, workflow.errors?.[0]?.message)
+  const blocker = await workflow.data.latch({
+    explanation: "Persisted RS test blocker",
+    orderIdentity: {
+      clientOrderId: "h-btcusdt-rs-stop-test",
+    },
+  })
+  assert.equal(blocker.ok, true, blocker.errors?.[0]?.message)
+  const stopped = await recordProcessStopped({
+    operationalStateStore: previousStore,
+    reason: "NORMAL",
+    clean: true,
+  })
+  assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+  return blocker
+}
+
+function createObservedRecoverySellerStore({ directory } = {}) {
+  const store = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "rs-stop-bootstrap-current-session",
+  })
+  const calls = []
+  const operationalStateStore = {
+    runtimeSessionId: store.runtimeSessionId,
+    append: async (input) => {
+      calls.push(input.factType)
+      return store.append(input)
+    },
+    verify: async (...args) => store.verify(...args),
+    readAll: async (...args) => {
+      calls.push("READ_ALL")
+      return store.readAll(...args)
+    },
+  }
+  return {
+    calls,
+    operationalStateStore,
+  }
+}
+
+async function createRecoverySellerStartupConfig() {
+  const baseResolved = await resolveHarvesterOptions({
+    appConfig,
+    env: binanceEnv,
+    eventPublisher: testEventPublisher,
+    logger: {},
+    executionRoutes: [
+      {
+        strategyId: "CG_coinGrabber",
+        symbol: "BTCUSDT",
+      },
+    ],
+  })
+  return Object.freeze({
+    ...baseResolved,
+    recoverySellerPairs: {
+      BTCUSDT: {
+        enabled: true,
+        investment: 100,
+        orderQuantity: 0.01,
+        sellQuantity: 0.001,
+        minProfit: 0.01,
+        priceStepPercent: 0.05,
+        makerPercent: 0,
+        takerPercent: 0,
+        legacyPosition: {
+          invested: 65,
+          quantity: 0.001,
+        },
+      },
+    },
+  })
+}
+
+test("restores the durable RS STOP latch before writing PROCESS_STARTED", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-rs-stop-bootstrap-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const blocker = await seedRecoverySellerStopStore({ directory })
+  const { calls, operationalStateStore } = createObservedRecoverySellerStore({ directory })
+  const resolved = await createRecoverySellerStartupConfig()
+  const startup = await prepareHarvesterStartupState({
+    dependencies: {
+      env: binanceEnv,
+      runtimeSessionId: "rs-stop-bootstrap-current-session",
+      suppliedOperationalStateStore: operationalStateStore,
+      logger: {},
+    },
+    resolved,
+  })
+
+  assert.equal(startup.recoverySellerStopWorkflow.getStopState().status, "STOPPED")
+  assert.equal(startup.recoverySellerStopWorkflow.getBlockerId(), blocker.data.record.data.blockerId)
+  assert.equal(startup.startupOptions.tradingEnabled, false, "A prior-process RS STOP may restart only in observation-only mode.")
+  const processStartIndex = calls.indexOf("PROCESS_STARTED")
+  const lastReadIndex = calls.lastIndexOf("READ_ALL")
+  assert.ok(processStartIndex >= 0, "The current process boundary must be persisted.")
+  assert.ok(lastReadIndex >= 0 && lastReadIndex < processStartIndex, "RS STOP history must be restored before PROCESS_STARTED is written.")
+})
 
 test("records configuration and process boundaries before broker startup and after shutdown", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-boundaries-"))

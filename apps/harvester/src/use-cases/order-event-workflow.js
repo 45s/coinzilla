@@ -58,11 +58,120 @@ function createProviderAttributedFillHistoryBroker({ broker, state, ordersByBrok
   }
 }
 
+function isRecoverySellerTerminalSell({ ownership, order } = {}) {
+  return ownership?.strategyId === StrategyId.RECOVERY_SELLER && order?.side === "SELL"
+}
+
+async function pauseAndLatchRecoverySellerTerminalFailure({
+  pause,
+  latchRecoverySellerStop,
+  order,
+  reason,
+  error,
+} = {}) {
+  let failure = error
+  try {
+    if (typeof latchRecoverySellerStop !== "function") {
+      throw new Error("Recovery Seller terminal reconciliation requires the durable global STOP workflow")
+    }
+    const stopped = await latchRecoverySellerStop({
+      order,
+      reason,
+      error,
+    })
+    if (stopped?.ok !== true || stopped.data?.durable !== true) {
+      throw stopped?.errors?.[0] ??
+        new Error("Recovery Seller terminal reconciliation STOP was not durably acknowledged")
+    }
+  } catch (stopError) {
+    failure = new AggregateError(
+      [error, stopError],
+      "Recovery Seller terminal reconciliation failed and its global STOP could not be confirmed",
+    )
+  }
+  await pause({
+    symbol: order.market.symbol,
+    reason,
+    error: failure,
+  })
+  return toResult({ error: failure })
+}
+
+async function reconcileRecoverySellerTerminalSell({
+  order,
+  canonicalFills,
+  pause,
+  latchRecoverySellerStop,
+  reconcileRecoverySellerMixedSell,
+} = {}) {
+  if (typeof reconcileRecoverySellerMixedSell !== "function") {
+    return pauseAndLatchRecoverySellerTerminalFailure({
+      pause,
+      latchRecoverySellerStop,
+      order,
+      reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_UNAVAILABLE",
+      error: new Error("Recovery Seller terminal SELL requires the mixed-SELL accounting workflow"),
+    })
+  }
+  const result = await reconcileRecoverySellerMixedSell({
+    order,
+    canonicalFills,
+  })
+  if (result?.ok === true) {
+    return result
+  }
+  return pauseAndLatchRecoverySellerTerminalFailure({
+    pause,
+    latchRecoverySellerStop,
+    order,
+    reason: "RS_TERMINAL_MIXED_SELL_RECONCILIATION_FAILED",
+    error: result?.errors?.[0] ??
+      new Error("Recovery Seller terminal mixed-SELL reconciliation failed"),
+  })
+}
+
+function createRecoverySellerTerminalOrderReconciler({
+  state,
+  pause,
+  reconcileRecoverySellerMixedSell,
+  latchRecoverySellerStop,
+} = {}) {
+  return async ({ order, canonicalFills } = {}) => {
+    const ownership = state.registry?.getOwnership?.({
+      clientOrderId: order?.clientOrderId,
+      brokerOrderId: order?.brokerOrderId,
+    })
+    if (!isRecoverySellerTerminalSell({
+      ownership,
+      order,
+    })) {
+      return toResult({
+        data: {
+          skipped: true,
+        },
+      })
+    }
+    const result = await reconcileRecoverySellerTerminalSell({
+      order,
+      canonicalFills,
+      pause,
+      latchRecoverySellerStop,
+      reconcileRecoverySellerMixedSell,
+    })
+    if (result?.ok === true) {
+      state.reconciledTerminalOrderClientIds.add(order.clientOrderId)
+    }
+    return result
+  }
+}
+
 function createReconcileTerminalOrderFillsTransition({
   broker,
   state,
   pause,
   processExecutionFillTransition,
+  reconcileRecoverySellerMixedSell,
+  latchRecoverySellerStop,
 }) {
   const ordersByBrokerId = new Map()
   const attributedBroker = createProviderAttributedFillHistoryBroker({
@@ -70,11 +179,18 @@ function createReconcileTerminalOrderFillsTransition({
     state,
     ordersByBrokerId,
   })
+  const onTerminalOrderReconciled = createRecoverySellerTerminalOrderReconciler({
+    state,
+    pause,
+    reconcileRecoverySellerMixedSell,
+    latchRecoverySellerStop,
+  })
   const reconcile = makeReconcileTerminalOrderFills({
     broker: attributedBroker,
     processedFillsByOrder: state.processedFillsByOrder,
     pause,
     processExecutionFillTransition,
+    onTerminalOrderReconciled,
   })
   return ({ order, eventFill } = {}) => {
     const registeredOrder = resolveRegisteredOrder({
@@ -102,7 +218,6 @@ function createReconcileTerminalOrderFillsTransition({
     })
   }
 }
-
 function createProcessExecutionFillTransition({
   state,
   eventPublisher,
@@ -146,6 +261,7 @@ function createWorkflowUserDataEventTransition({
   onUnownedExternalOrderObserved,
   processExecutionFillTransition,
   reconcileTerminalOrderFills,
+  reconcileRecoverySellerMixedSell,
 }) {
   return createUserDataEventTransition({
     state,
@@ -164,6 +280,7 @@ function createWorkflowUserDataEventTransition({
     onUnownedExternalOrderObserved,
     processExecutionFillTransition,
     reconcileTerminalOrderFills,
+    reconcileRecoverySellerMixedSell,
   })
 }
 
@@ -187,6 +304,8 @@ export function makeOrderEventWorkflow(options = {}) {
     recordSellExecutionFill,
     pause,
     requireProviderProvenance: requireProviderProvenanceOverride,
+    reconcileRecoverySellerMixedSell,
+    latchRecoverySellerStop,
   } = options
   const requireProviderProvenance = resolveProviderProvenanceRequirement({
     override: requireProviderProvenanceOverride,
@@ -208,6 +327,8 @@ export function makeOrderEventWorkflow(options = {}) {
     state,
     pause,
     processExecutionFillTransition,
+    reconcileRecoverySellerMixedSell,
+    latchRecoverySellerStop,
   })
   const processUserDataEventTransition = createWorkflowUserDataEventTransition({
     ...options,
@@ -491,11 +612,13 @@ async function resolveExecutionFillAccounting({ dependencies, order, fill }) {
     brokerOrderId: order.brokerOrderId,
   })
   const isRecoverySellerOwned = ownership?.strategyId === StrategyId.RECOVERY_SELLER
-  if (isRecoverySellerOwned && fill.side !== "BUY") {
+  if (isRecoverySellerOwned && fill.side === "SELL") {
     return {
       isRecoverySellerOwned,
       accounting: toResult({
-        error: new Error("Recovery Seller SELL fills require terminal mixed-SELL reconciliation and cannot be applied as individual fills"),
+        data: {
+          stagedForTerminalReconciliation: true,
+        },
       }),
     }
   }
@@ -531,6 +654,24 @@ async function resolveExecutionFillAccounting({ dependencies, order, fill }) {
   }
 }
 
+function stageRecoverySellerSellExecutionFill({
+  accounting,
+  isRecoverySellerOwned,
+  recordSellExecutionFill,
+  fill,
+} = {}) {
+  if (!isRecoverySellerOwned || accounting?.data?.stagedForTerminalReconciliation !== true) {
+    return undefined
+  }
+  if (typeof recordSellExecutionFill !== "function") {
+    return toResult({
+      error: new TypeError("Recovery Seller SELL staging requires the canonical execution-fill recorder"),
+    })
+  }
+  recordSellExecutionFill({ fill })
+  return toResult({ data: { stagedForTerminalReconciliation: true } })
+}
+
 async function applyValidatedExecutionFill({ dependencies, order, fill }) {
   const {
     state,
@@ -544,6 +685,23 @@ async function applyValidatedExecutionFill({ dependencies, order, fill }) {
     order,
     fill,
   })
+  const stagedResult = stageRecoverySellerSellExecutionFill({
+    accounting,
+    isRecoverySellerOwned,
+    recordSellExecutionFill,
+    fill,
+  })
+  if (stagedResult) {
+    return stagedResult.ok
+      ? stagedResult
+      : handleExecutionAccountingFailure({
+          accounting: stagedResult,
+          order,
+          fill,
+          pause,
+          eventPublisher,
+        })
+  }
   if (!accounting?.ok) {
     return handleExecutionAccountingFailure({
       accounting,
@@ -574,7 +732,6 @@ async function applyValidatedExecutionFill({ dependencies, order, fill }) {
     },
   })
 }
-
 async function processExecutionFill({ dependencies, order, fill }) {
   const registeredOrder = resolveRegisteredOrder({
     state: dependencies.state,

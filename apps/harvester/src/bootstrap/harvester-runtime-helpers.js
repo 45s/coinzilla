@@ -235,6 +235,30 @@ function createRecoveredTradingEngineState(recoveredState) {
   }
 }
 
+export function assertRecoverySellerRuntimeAcceptance({
+  recoverySellerPairs,
+  acceptanceComplete = false,
+} = {}) {
+  if (Object.keys(recoverySellerPairs ?? {}).length === 0) {
+    return
+  }
+  if (acceptanceComplete !== true) {
+    throw new Error("Recovery Seller remains disabled until RS-4 integration and RS-5 offline lifecycle acceptance are complete")
+  }
+}
+
+export function assertRecoverySellerEvaluatorConfigured({
+  recoverySellerPairs,
+  evaluateRecoverySellerTransition,
+} = {}) {
+  if (Object.keys(recoverySellerPairs ?? {}).length === 0) {
+    return
+  }
+  if (typeof evaluateRecoverySellerTransition !== "function") {
+    throw new Error("Configured Recovery Seller routes require a production transition evaluator before broker connection")
+  }
+}
+
 function createHarvesterTradingEngineSafetyCallbacks({
   userDataState,
   accountSnapshotManagerRef,
@@ -272,63 +296,44 @@ function createHarvesterTradingEngineOperationalCallbacks(options = {}) {
   }
 }
 
-function createHarvesterTradingEngineOptions(options = {}) {
-  const {
-    broker,
-    conservativeStrategyPolicy,
-    eventPublisher,
-    appConfig,
-    getPortfolio,
-    getRecoveryLedger,
-    getMarketMetadata,
-    getAccountSnapshot,
-    getAdditionalTrackedBaseQuantity,
-    getAdditionalTrackedQuoteCashFlow,
-    recoverySellerPairs,
-    recoverySellerWorkflow,
-    getRecoverySellerMarketMetadata,
-    evaluateRecoverySellerTransition,
-    updateTradingAccounting,
-    completeRecoveryCycle,
-    userDataState,
-    accountSnapshotManagerRef,
-    candleHistoryService,
-    logger,
-    recoveredState,
-    sharedAccountState,
-    isMarketPriceFresh,
-    isMarketBookFresh,
-  } = options
+function createHarvesterTradingEngineCoreOptions(options = {}) {
   return {
-    broker,
-    strategyPolicy: conservativeStrategyPolicy,
-    eventPublisher,
-    appConfig,
-    getPortfolio,
-    getRecoveryLedger,
-    getMarketMetadata,
-    getAccountSnapshot,
-    getAdditionalTrackedBaseQuantity,
-    getAdditionalTrackedQuoteCashFlow,
-    recoverySellerPairs,
-    recoverySellerWorkflow,
-    getRecoverySellerMarketMetadata,
-    evaluateRecoverySellerTransition,
-    updateTradingAccounting,
-    updateRecoverySellerAccounting: recoverySellerWorkflow?.applyBuyFill,
-    completeRecoveryCycle,
+    broker: options.broker,
+    strategyPolicy: options.conservativeStrategyPolicy,
+    eventPublisher: options.eventPublisher,
+    appConfig: options.appConfig,
+    getPortfolio: options.getPortfolio,
+    getRecoveryLedger: options.getRecoveryLedger,
+    getMarketMetadata: options.getMarketMetadata,
+    getAccountSnapshot: options.getAccountSnapshot,
+    getAdditionalTrackedBaseQuantity: options.getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow: options.getAdditionalTrackedQuoteCashFlow,
+    recoverySellerPairs: options.recoverySellerPairs,
+    recoverySellerWorkflow: options.recoverySellerWorkflow,
+    recoverySellerStopWorkflow: options.recoverySellerStopWorkflow,
+    getRecoverySellerMarketMetadata: options.getRecoverySellerMarketMetadata,
+    evaluateRecoverySellerTransition: options.evaluateRecoverySellerTransition,
+    updateTradingAccounting: options.updateTradingAccounting,
+    updateRecoverySellerAccounting: options.recoverySellerWorkflow?.applyBuyFill,
+    completeRecoveryCycle: options.completeRecoveryCycle,
+    isMarketPriceFresh: options.isMarketPriceFresh,
+    isMarketBookFresh: options.isMarketBookFresh,
+    getVolatilityData: ({ symbol } = {}) => options.candleHistoryService.getSnapshot({ symbol }),
+    logger: options.logger,
+    sharedAccountState: options.sharedAccountState,
+    initialState: createRecoveredTradingEngineState(options.recoveredState),
+  }
+}
+
+function createHarvesterTradingEngineOptions(options = {}) {
+  return {
+    ...createHarvesterTradingEngineCoreOptions(options),
     ...createHarvesterTradingEngineSafetyCallbacks({
-      userDataState,
-      accountSnapshotManagerRef,
-      logger,
+      userDataState: options.userDataState,
+      accountSnapshotManagerRef: options.accountSnapshotManagerRef,
+      logger: options.logger,
     }),
-    isMarketPriceFresh,
-    isMarketBookFresh,
-    getVolatilityData: ({ symbol } = {}) => candleHistoryService.getSnapshot({ symbol }),
     ...createHarvesterTradingEngineOperationalCallbacks(options),
-    logger,
-    sharedAccountState,
-    initialState: createRecoveredTradingEngineState(recoveredState),
   }
 }
 
@@ -336,6 +341,21 @@ export function createHarvesterTradingEngine(options = {}) {
   return options.makeConservativeTradingEngine(createHarvesterTradingEngineOptions(options))
 }
 
+
+function createRecoverySellerMixedSellReconciledCallback({ store,
+  recordRecoverySellerMixedSellReconciled } = {}) {
+  return store
+    ? ({ terminalOrder, ownership, canonicalFills, accountingApplied, eligible }) =>
+      recordRecoverySellerMixedSellReconciled({
+        operationalStateStore: store,
+        terminalOrder,
+        ownership,
+        canonicalFills,
+        accountingApplied,
+        eligible,
+      })
+    : undefined
+}
 
 function createExecutionFillCallback({ store,
   recordExecutionFill } = {}) {
@@ -386,9 +406,11 @@ function createRecoveryCycleNotCompletedCallback({ store,
 function createSubmissionIntentCallback({ store,
   recordOrderSubmissionIntent } = {}) {
   return store ? ({ order,
-  purpose }) => recordOrderSubmissionIntent({ operationalStateStore: store,
+  purpose,
+  ownership }) => recordOrderSubmissionIntent({ operationalStateStore: store,
     order,
-    purpose }) : undefined
+    purpose,
+    ownership }) : undefined
 }
 
 function createSubmissionOutcomeCallback({ store,
@@ -396,10 +418,12 @@ function createSubmissionOutcomeCallback({ store,
   return store
     ? ({ order,
   outcome,
-  purpose }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
+  purpose,
+  ownership }) => recordOrderSubmissionOutcome({ operationalStateStore: store,
       order,
       outcome,
-      purpose })
+      purpose,
+      ownership })
     : undefined
 }
 
@@ -470,6 +494,10 @@ export function createOperationalStateCallbacks(dependencies = {}) {
   return {
     onOperationalStateExecutionFill: createExecutionFillCallback({ store,
       recordExecutionFill: dependencies.recordExecutionFill }),
+    onOperationalStateRecoverySellerMixedSellReconciled: createRecoverySellerMixedSellReconciledCallback({
+      store,
+      recordRecoverySellerMixedSellReconciled: dependencies.recordRecoverySellerMixedSellReconciled,
+    }),
     onOperationalStateRecoveryCycleCompleted: createRecoveryCycleCompletedCallback({ store,
       recordRecoveryCycleCompleted: dependencies.recordRecoveryCycleCompleted }),
     onOperationalStateRecoveryCycleNotCompleted: createRecoveryCycleNotCompletedCallback({ store,

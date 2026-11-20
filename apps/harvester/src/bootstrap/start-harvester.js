@@ -9,6 +9,8 @@ import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
 import { createRecoverySellerAccountingWorkflow } from "../use-cases/create-recovery-seller-accounting-workflow.js"
+import { createRecoverySellerStopWorkflow } from "../use-cases/create-recovery-seller-stop-workflow.js"
+import { createRecoverySellerRuntimeDispatch } from "./create-recovery-seller-runtime-dispatch.js"
 import { createLegacyPosition, createLegacyPositionAccounting } from "../domain/strategies/recovery-seller/legacy-position.js"
 import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
@@ -34,6 +36,7 @@ import { recordOrderCancellationIntent } from "../use-cases/record-order-cancell
 import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
 import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"
 import { recordRecoveryCycleNotCompleted } from "../use-cases/record-recovery-cycle-not-completed.js"
+import { recordRecoverySellerMixedSellReconciled } from "../use-cases/record-recovery-seller-mixed-sell-reconciled.js"
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
@@ -45,7 +48,11 @@ import { createAccountRuntimeRegistry } from "../application/providers/account-r
 import { resolveBinanceProviderIdentity } from "../domain/provider-identity.js"
 import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
-import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop } from "./harvester-runtime-helpers.js"
+import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop, assertRecoverySellerEvaluatorConfigured, assertRecoverySellerRuntimeAcceptance } from "./harvester-runtime-helpers.js"
+
+// RS-4/RS-5 offline acceptance is complete. RS itself remains disabled by default in config.
+const RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = true
+
 
 function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
   if (typeof operationalStateStore?.append !== "function" ||
@@ -90,15 +97,39 @@ async function readVerifiedOperationalStateHistory({ operationalStateStore } = {
   assertVerifiedOperationalStateHistory({ existingFacts })
   const existingProjection = projectHarvesterOperationalState({ records: existingFacts.data.records })
   assertOperationalStateProjection({ existingProjection })
-  return existingProjection
+  return {
+    projection: existingProjection,
+    records: existingFacts.data.records,
+  }
 }
 
-function assertOperationalStateCanStart({ projection } = {}) {
-  if (projection.data.sessions.length > 0) {
-    throw new Error(
-      "Automatic Harvester process restart is disabled until ADR-0001 Step 9 crash/restart proof and the complete exchange-reconciliation gate are accepted; the durable ledger already contains a prior PROCESS_STARTED session.",
-    )
+function assertOperationalStateCanStart({ projection, records } = {}) {
+  const processStarts = records.filter((record) => record.factType === "PROCESS_STARTED")
+  if (processStarts.length === 0) {
+    return false
   }
+  const stoppedSessionIds = new Set(records
+    .filter((record) => record.factType === "PROCESS_STOPPED")
+    .map((record) => record.runtimeSessionId))
+  const allSessionsStopped = processStarts.every((record) => stoppedSessionIds.has(record.runtimeSessionId))
+  const latestProcessStart = processStarts.at(-1)
+  const stickySafetyBlockers = projection.data.stickySafetyBlockers ?? []
+  const observationOnlyRestart = latestProcessStart.data.tradingEnabled === false &&
+    stickySafetyBlockers.length === 0
+  const singleRecoverySellerStop = stickySafetyBlockers.length === 1 &&
+    stickySafetyBlockers[0].scope === "ACCOUNT" &&
+    stickySafetyBlockers[0].reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  if (
+    projection.data.candidateOnly === true &&
+    projection.data.restorationEnabled === false &&
+    allSessionsStopped &&
+    (observationOnlyRestart || singleRecoverySellerStop)
+  ) {
+    return true
+  }
+  throw new Error(
+    "Automatic Harvester trading-state restoration remains disabled until ADR-0001 Step 9 crash/restart proof and exchange reconciliation are accepted; only a clean prior session with an RS STOP latch or an observation-only session may restart, and trading remains disabled.",
+  )
 }
 
 async function verifyOperationalStateStore({ operationalStateStore,
@@ -109,9 +140,12 @@ async function verifyOperationalStateStore({ operationalStateStore,
   assertOperationalStateStoreInterface({ operationalStateStore })
   await verifyOperationalStateStoreDurability({ operationalStateStore })
   if (recoveryEnabled === true) {
-    const projection = await readVerifiedOperationalStateHistory({ operationalStateStore })
-    assertOperationalStateCanStart({ projection })
-    return { previousProcessStarted: false }
+    const history = await readVerifiedOperationalStateHistory({ operationalStateStore })
+    const previousProcessStarted = assertOperationalStateCanStart({
+      projection: history.projection,
+      records: history.records,
+    })
+    return { previousProcessStarted }
   }
   const existingFacts = await operationalStateStore.readAll()
   if (existingFacts?.ok !== true ||
@@ -244,6 +278,7 @@ function createHarvesterOperationalStateCallbacks({ operationalStateStore } = {}
     recordExecutionFill,
     recordRecoveryCycleCompleted,
     recordRecoveryCycleNotCompleted,
+    recordRecoverySellerMixedSellReconciled,
     recordOrderSubmissionIntent,
     recordOrderSubmissionOutcome,
     recordOrderCancellationIntent,
@@ -269,8 +304,10 @@ function createCoinGrabberMarketPriceErrorHandler({ logger } = {}) {
 
 async function resolveStartupOptionsForProcessRecovery({ resolved,
   operationalStateStore,
-  logger } = {}) {
-  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
+  logger,
+  recoverySellerEnabled = false } = {}) {
+  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true ||
+    recoverySellerEnabled
   const operationalState = await verifyOperationalStateStore({
     operationalStateStore,
     recoveryEnabled,
@@ -303,7 +340,7 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
   }
 }
 
-async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
+export async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
   const {
     env,
     runtimeSessionId,
@@ -324,11 +361,27 @@ async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
     logger,
   })
   const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
+  const recoverySellerEnabled = Object.keys(resolved.recoverySellerPairs ?? {}).length > 0
   const startupOptions = await resolveStartupOptionsForProcessRecovery({
     resolved,
     operationalStateStore,
     logger,
+    recoverySellerEnabled,
   })
+  let recoverySellerStopWorkflow
+  if (recoverySellerEnabled) {
+    if (!operationalStateStore) {
+      throw new Error("Configured Recovery Seller routes require a verified durable Operational State Store")
+    }
+    const stopWorkflowResult = await createRecoverySellerStopWorkflow({
+      operationalStateStore,
+    })
+    if (stopWorkflowResult?.ok !== true) {
+      throw stopWorkflowResult?.errors?.[0] ??
+        new Error("Recovery Seller durable STOP state could not be restored before process start")
+    }
+    recoverySellerStopWorkflow = stopWorkflowResult.data
+  }
   await persistHarvesterProcessStart({
     operationalStateStore,
     appConfig: startupOptions.appConfig,
@@ -340,6 +393,7 @@ async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
     operatorControlLifecycle,
     operationalStateStore,
     startupOptions,
+    recoverySellerStopWorkflow,
   }
 }
 
@@ -379,6 +433,10 @@ async function resolveHarvesterStartupConfiguration({ dependencies }) {
       ...resolved,
       brokerName: dependencies.providerIdentity.providerType,
     })
+  assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs: providerResolved.recoverySellerPairs,
+    acceptanceComplete: RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE,
+  })
   return { resolved: providerResolved }
 }
 
@@ -428,10 +486,36 @@ async function createHarvesterStartupContext({ options } = {}) {
     strategyShutdownParticipants: dependencies.strategyShutdownParticipants,
     operatorControlLifecycle: startupState.operatorControlLifecycle,
     operationalStateStore: startupState.operationalStateStore,
+    recoverySellerStopWorkflow: startupState.recoverySellerStopWorkflow,
     accountSnapshotManagerRef,
     onCommissionAsset,
     ...operationalStateCallbacks,
   }
+}
+
+function configureRecoverySellerRuntimeDispatch({
+  startup,
+  context,
+  recoverySellerWorkflow,
+} = {}) {
+  if (Object.keys(startup.recoverySellerPairs ?? {}).length === 0) {
+    return
+  }
+  assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs: startup.recoverySellerPairs,
+    acceptanceComplete: RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE,
+  })
+  startup.evaluateRecoverySellerTransition ??= createRecoverySellerRuntimeDispatch({
+    recoverySellerWorkflow,
+    recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
+    recoverySellerPairs: startup.recoverySellerPairs,
+    getRecoverySellerMarketMetadata: context.getRecoverySellerMarketMetadata,
+    getAccountSnapshot: context.getAccountSnapshot,
+  })
+  assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs: startup.recoverySellerPairs,
+    evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
+  })
 }
 
 function createHarvesterPortfolioContext({ startup } = {}) {
@@ -449,6 +533,7 @@ function createHarvesterPortfolioContext({ startup } = {}) {
   const accountRuntime = accountRuntimeRegistry.get(providerIdentity.providerInstanceId)
   const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
     sharedState: accountRuntime.state,
+    onOperationalStateRecoverySellerMixedSellReconciled: startup.onOperationalStateRecoverySellerMixedSellReconciled,
   })
   const context = {
     accountRuntime,
@@ -483,6 +568,11 @@ reason: "TRADING_ENGINE_NOT_READY" } })
   context.completeRecoveryCycle = (...args) => context.portfolioWorkflow.completeRecoveryCycle(...args)
   context.getMarketMetadata = ({ symbol } = {}) => context.marketMetadata.get(symbol)
   context.getAccountSnapshot = () => startup.accountSnapshotManagerRef.current?.getAccountSnapshot()
+  configureRecoverySellerRuntimeDispatch({
+    startup,
+    context,
+    recoverySellerWorkflow,
+  })
   return context
 }
 
@@ -688,6 +778,7 @@ function createHarvesterTradingEngineActivator({ startup,
       getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
       recoverySellerPairs: startup.recoverySellerPairs,
       recoverySellerWorkflow: portfolio.recoverySellerWorkflow,
+      recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
       evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
       getRecoverySellerMarketMetadata: portfolio.getRecoverySellerMarketMetadata,
       updateTradingAccounting: portfolio.updateTradingAccounting,
@@ -926,6 +1017,7 @@ async function startHarvesterPreflightServices({ startup,
     getRecoveryLedger: portfolio.getRecoveryLedger,
     getAccountSnapshot: portfolio.getAccountSnapshot,
     getOpenOrders: () => resources.broker.getOpenOrders(),
+    recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
   })
   await startHarvesterUserDataServices({
     startup,

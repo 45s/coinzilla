@@ -1,7 +1,8 @@
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
+import { validateRecoverySellerSubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
 
-const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
+const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
 
 function validateCanonicalMarketIdentity({ market }) {
   const requiredMarketValues = [
@@ -32,7 +33,7 @@ function validateSubmissionOrderFields({ order }) {
   }
 }
 
-function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
+function validateSubmissionIntent({ operationalStateStore, order, purpose, ownership }) {
   if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("recordOrderSubmissionIntent requires a Operational State Store append capability")
   }
@@ -43,8 +44,13 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
     throw new TypeError("Order-submission intent must identify a PENDING order without broker acknowledgement")
   }
   if (!SUPPORTED_PURPOSES.has(purpose)) {
-    throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
+    throw new TypeError("Order-submission intent purpose must be null, RECOVERY_BUY, or RECOVERY_SELL")
   }
+  const normalizedOwnership = validateRecoverySellerSubmissionOwnership({
+    order,
+    purpose,
+    ownership,
+  })
   const { market } = order
   for (const field of ["providerInstanceId", "providerType", "accountId"]) {
     if (typeof order[field] !== "string" || !order[field].trim()) {
@@ -58,6 +64,7 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
     clientOrderId: order.clientOrderId,
     price,
     quantity,
+    ownership: normalizedOwnership,
   }
 }
 
@@ -68,14 +75,16 @@ function validateSubmissionIntent({ operationalStateStore, order, purpose }) {
  * @param {object} options.operationalStateStore - Initialized ADR-0001 Operational State Store append capability.
  * @param {CanonicalOrder} options.order - Validated PENDING canonical order.
  * @param {string|null} options.purpose - Explicit application strategy purpose.
+ * @param {object} [options.ownership] - Exact Recovery Seller strategy, Position, and cycle ownership.
  * @returns {Promise<object>} Durable append result; success requires durable === true.
  */
 export async function recordOrderSubmissionIntent(options = {}) {
   try {
-    const { operationalStateStore, order, purpose = null } = options
-    const { market, clientOrderId, price, quantity } = validateSubmissionIntent({
+    const { operationalStateStore, order, purpose = null, ownership } = options
+    const { market, clientOrderId, price, quantity, ownership: normalizedOwnership } = validateSubmissionIntent({
       ...options,
       purpose,
+      ownership,
     })
     const result = await operationalStateStore.append({
       factId: `order-submission-intent:${clientOrderId}`,
@@ -95,6 +104,7 @@ export async function recordOrderSubmissionIntent(options = {}) {
         price,
         quantity,
         purpose,
+        ...(normalizedOwnership ?? {}),
       },
     })
     if (result?.ok !== true || result.data?.durable !== true) {

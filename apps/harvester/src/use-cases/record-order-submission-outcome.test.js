@@ -5,6 +5,7 @@ import { createFileOperationalStateStore } from "../infrastructure/operational-s
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { recordOrderSubmissionOutcome } from "./record-order-submission-outcome.js"
 
 const baseAsset = new Asset({ id: "binance:DOGE",
@@ -58,7 +59,13 @@ executedQuantity: "12.5" })
     operationalStateStore,
     order,
     outcome: "ACKNOWLEDGED",
-    purpose: "RECOVERY_SELL",
+    purpose: "RECOVERY_BUY",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-1",
+    },
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
@@ -80,7 +87,10 @@ executedQuantity: "12.5" })
     price: "0.099",
     quantity: "100",
     executedQuantity: "12.5",
-    purpose: "RECOVERY_SELL",
+    purpose: "RECOVERY_BUY",
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-1",
+    cycleId: "rs-cycle-1",
     outcome: "ACKNOWLEDGED",
     brokerOrderId: "broker-1",
     status: "PARTIALLY_FILLED",
@@ -183,4 +193,21 @@ test("rejects a legacy acknowledged order without provider provenance", async ()
   assert.equal(result.ok, false)
   assert.match(result.errors[0].message, /providerInstanceId.*provenance/i)
   assert.equal(appendCalls, 0)
+})
+
+
+test("rejects Recovery Seller BUY outcomes without exact cycle ownership", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const order = makeOrder({
+    brokerOrderId: "broker-1",
+    status: "OPEN",
+  })
+  const result = await recordOrderSubmissionOutcome({
+    operationalStateStore,
+    order,
+    outcome: "ACKNOWLEDGED",
+    purpose: "RECOVERY_BUY",
+  })
+
+  assert.equal(result.ok, false, "A Recovery Seller BUY outcome must preserve its strategy, position, and cycle ownership.")
 })

@@ -233,6 +233,7 @@ export async function createRecoverySellerStopWorkflow({ operationalStateStore }
           setStopSnapshot,
         }),
         getStopState: () => snapshot.stopState,
+        getState: () => snapshot.stopState,
         getBlockerId: () => snapshot.blockerId,
       }),
     })

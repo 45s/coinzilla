@@ -72,6 +72,7 @@
       "src/domain/strategies/recovery-seller/evaluate-buy-decision.test.js",
       "src/domain/strategies/recovery-seller/cycle-state.test.js",
       "src/domain/strategies/recovery-seller/lifecycle-state.test.js",
+      "src/domain/strategies/recovery-seller/recovery-seller-accounting-error.test.js",
       "src/domain/orders/order-registry.test.js",
       "src/domain/strategies/recovery-seller/recovery-seller-lifecycle.test.js",
       "src/domain/account/calculate-account-snapshot-baselines.test.js",
@@ -90,8 +91,10 @@
       "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-facts.test.js",
       "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
       "src/infrastructure/operational-state/helpers/validate-operational-state-execution-facts.test.js",
+      "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.test.js",
       "src/infrastructure/journal/helpers/resolve-session-chronology.test.js",
       "src/infrastructure/journal/discover-harvester-journal-sessions.test.js",
+      "src/infrastructure/journal/project-harvester-journal-recovery-recovery-seller-ownership.test.js",
       "src/infrastructure/telegram/format-telegram-operator-response.test.js",
       "src/infrastructure/telegram/operator/constants.test.js",
       "src/infrastructure/telegram/operator/commands.test.js",
@@ -109,7 +112,16 @@
       "src/infrastructure/persistence/trading-history-backups/backup-paths.test.js",
       "src/infrastructure/persistence/trading-history-backups/backup-manifest.test.js",
       "src/infrastructure/persistence/trading-history-backups/backup-schema.test.js",
-      "src/infrastructure/persistence/trading-history-backups/backup-sqlite.test.js"
+      "src/infrastructure/persistence/trading-history-backups/backup-sqlite.test.js",
+      "src/use-cases/create-latest-transition-evaluator.test.js",
+      "src/use-cases/conservative-engine-order-event-composition.test.js",
+      "src/use-cases/order-event-workflow.test.js",
+      "src/use-cases/create-recovery-seller-order-submitter.test.js",
+      "src/use-cases/record-order-submission-intent.test.js",
+      "src/use-cases/record-order-submission-outcome.test.js",
+      "src/use-cases/record-recovery-seller-mixed-sell-reconciled.test.js",
+      "src/use-cases/restore-harvester-operational-state.test.js",
+      "src/bootstrap/recovery-seller-runtime.integration.test.js"
     ]
   }
 }

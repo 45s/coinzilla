@@ -101,7 +101,14 @@ test("creates an immutable Harvester operator facade without a generic command d
     engine,
   })
 
-  assert.deepEqual(Object.keys(operator), ["pauseMarket", "resumeMarket", "pauseBuys", "resumeBuys", "pauseAllBuys", "resumeAllBuys"])
+  assert.deepEqual(Object.keys(operator), [
+    "pauseMarket",
+    "resumeMarket",
+    "pauseBuys",
+    "resumeBuys",
+    "pauseAllBuys",
+    "resumeAllBuys",
+  ])
   assert.equal(Object.isFrozen(operator), true)
   assert.equal(typeof operator.pauseMarket, "function")
   assert.equal(typeof operator.resumeMarket, "function")
@@ -115,8 +122,10 @@ test("creates an immutable Harvester operator facade without a generic command d
 
 test("pause authorizes the actor and commits an ADR-0001 durable fact inside the engine transition", async () => {
   const { calls, operationalStateStore, engine } = createHarness()
-  const operator = createHarvesterOperator({ operationalStateStore,
-    engine })
+  const operator = createHarvesterOperator({
+    operationalStateStore,
+    engine,
+  })
 
   const result = await operator.pauseMarket({
     actor,
@@ -412,4 +421,45 @@ test("rejects a supplied Operational State Store without an append boundary befo
     "A supplied but invalid store must fail closed instead of silently downgrading to process-local pause semantics.",
   )
   assert.deepEqual(calls, [], "Invalid persistence configuration must not reach the trading engine.")
+})
+
+test("Recovery Seller STOP is observable but cannot be cleared through the operator facade", async () => {
+  const recoverySellerStopWorkflow = {
+    getStopState: () => Object.freeze({ status: "STOPPED" }),
+    getBlockerId: () => "rs-stop-blocker-1",
+  }
+  const { engine } = createHarness()
+  const operator = createHarvesterOperator({
+    engine,
+    recoverySellerStopWorkflow,
+  })
+
+  const status = await operator.getRecoverySellerStopState({ actor })
+  assert.equal(status.ok, true)
+  assert.equal(status.data.stopState.status, "STOPPED")
+  assert.equal(status.data.blockerId, "rs-stop-blocker-1")
+  assert.equal(operator.resolveRecoverySellerStop, undefined)
+})
+
+test("Recovery Seller STOP status query still enforces operator authorization", async () => {
+  const recoverySellerStopWorkflow = {
+    getStopState: () => Object.freeze({ status: "STOPPED" }),
+    getBlockerId: () => "rs-stop-blocker-2",
+  }
+  const { engine } = createHarness()
+  const operator = createHarvesterOperator({
+    engine,
+    recoverySellerStopWorkflow,
+  })
+
+  const result = await operator.getRecoverySellerStopState({
+    actor: {
+      id: "telegram-user:untrusted",
+      roles: [],
+    },
+  })
+
+  assert.equal(result.ok, false, "An untrusted actor must not read the operator STOP state.")
+  assert.equal(result.errors[0].code, "OPERATOR_UNAUTHORIZED", "The STOP status query must preserve the standard authorization error.")
+  assert.equal(operator.resolveRecoverySellerStop, undefined, "No operator-facing STOP resolution method may exist.")
 })

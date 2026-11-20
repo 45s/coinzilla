@@ -5,6 +5,7 @@ import { createFileOperationalStateStore } from "../infrastructure/operational-s
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
+import { StrategyId } from "../domain/strategies/strategy-ids.js"
 import { recordOrderSubmissionIntent } from "./record-order-submission-intent.js"
 
 const baseAsset = new Asset({ id: "binance:DOGE",
@@ -50,7 +51,13 @@ test("records the canonical immutable order intent and requires a durable append
   const result = await recordOrderSubmissionIntent({
     operationalStateStore,
     order,
-    purpose: "RECOVERY_SELL",
+    purpose: "RECOVERY_BUY",
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-1",
+    },
   })
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
@@ -71,7 +78,10 @@ test("records the canonical immutable order intent and requires a durable append
     type: "LIMIT_MAKER",
     price: "0.099",
     quantity: "100",
-    purpose: "RECOVERY_SELL",
+    purpose: "RECOVERY_BUY",
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "rs-position-1",
+    cycleId: "rs-cycle-1",
   }, "The fact must preserve canonical market/order identities, exact decimal strings, and strategy purpose.")
 })
 
@@ -204,4 +214,16 @@ test("rejects partial provider identity in durable order facts", async (t) => {
     },
   })
   assert.equal(result.ok, false)
+})
+
+
+test("rejects Recovery Seller BUY intents without exact cycle ownership", async (t) => {
+  const operationalStateStore = await createStore(t)
+  const result = await recordOrderSubmissionIntent({
+    operationalStateStore,
+    order,
+    purpose: "RECOVERY_BUY",
+  })
+
+  assert.equal(result.ok, false, "A Recovery Seller BUY must persist its strategy, position, and cycle ownership.")
 })

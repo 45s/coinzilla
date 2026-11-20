@@ -171,3 +171,49 @@ test("keeps a durable safety pause fail-closed during shutdown recovery", async 
   assert.equal(result.data?.skipped, true)
   assert.equal(result.data?.reason, "PAIR_PAUSED")
 })
+
+
+test("passes the complete account-scoped RS runtime dependencies to its production evaluator", async () => {
+  const dependencies = createDependencies()
+  const expected = {
+    submitRecoverySellerOrder: async () => ({ ok: true }),
+    recoverySellerWorkflow: { applyBuyFill: async () => ({ ok: true }) },
+    recoverySellerStopWorkflow: { isStopped: () => false },
+    recoverySellerPairs: { RSUSDT: { enabled: true } },
+    getRecoverySellerMarketMetadata: () => ({
+      market: {
+        id: "RSUSDT",
+      },
+    }),
+    getAccountSnapshot: () => ({
+      ok: true,
+      data: {},
+    }),
+    getAdditionalTrackedBaseQuantity: () => "0",
+    getAdditionalTrackedQuoteCashFlow: () => "0",
+    pause: async () => ({ ok: true }),
+    eventPublisher: {
+      publish: () => ({
+        ok: true,
+      }),
+    },
+  }
+  Object.assign(dependencies, expected)
+  let received
+  dependencies.evaluateRecoverySellerTransition = async (input) => {
+    received = input
+    return {
+      ok: true,
+      data: { skipped: true },
+    }
+  }
+
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+  const result = await evaluate({ symbol: "RSUSDT" })
+
+  assert.equal(result.ok, true)
+  assert.equal(received.state, dependencies.state)
+  for (const [key, value] of Object.entries(expected)) {
+    assert.equal(received[key], value, `The production RS evaluator must receive the shared ${key} dependency.`)
+  }
+})

@@ -22,6 +22,7 @@ import {
   validateRecoveryCycleCompletedFact,
   validateRecoveryCycleNotCompletedFact,
 } from "./helpers/validate-operational-state-recovery-facts.js"
+import { validateRecoverySellerMixedSellReconciledFact } from "./helpers/validate-operational-state-recovery-seller-facts.js"
 import {
   validateAccountSnapshotCapturedFact,
   validateAccountOpenOrdersCapturedFact,
@@ -50,6 +51,7 @@ const FACT_DATA_VALIDATORS = Object.freeze({
   EXECUTION_FILL_APPLIED: validateExecutionFillAppliedFact,
   RECOVERY_CYCLE_COMPLETED: validateRecoveryCycleCompletedFact,
   RECOVERY_CYCLE_NOT_COMPLETED: validateRecoveryCycleNotCompletedFact,
+  RECOVERY_SELLER_MIXED_SELL_RECONCILED: validateRecoverySellerMixedSellReconciledFact,
   ACCOUNT_SNAPSHOT_CAPTURED: validateAccountSnapshotCapturedFact,
   ACCOUNT_OPEN_ORDERS_CAPTURED: validateAccountOpenOrdersCapturedFact,
   MARKET_HISTORY_COVERAGE_CONFIRMED: validateMarketHistoryCoverageConfirmedFact,

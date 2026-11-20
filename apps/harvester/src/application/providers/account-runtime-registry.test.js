@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createAccountRuntimeRegistry } from "./account-runtime-registry.js"
+import { createAccountRuntimeRegistry, linkSharedAccountOrderRegistry } from "./account-runtime-registry.js"
 import { createPortfolioWorkflow } from "../../use-cases/create-portfolio-workflow.js"
 import { createRecoverySellerAccountingWorkflow } from "../../use-cases/create-recovery-seller-accounting-workflow.js"
 import { Portfolio } from "../../domain/portfolio/portfolio.js"
@@ -29,6 +29,14 @@ test("creates independent in-memory trading state for each provider account", ()
   assert.notEqual(first.state.portfolio, second.state.portfolio, "Accounts must not share Portfolio instances.")
   assert.notEqual(first.state.orderRegistry, second.state.orderRegistry, "Accounts must not share OrderRegistry instances.")
   assert.notEqual(first.state.recoveryLedgers, second.state.recoveryLedgers, "Strategy accounting ledgers must remain account-local.")
+  assert.notEqual(first.state.recoverySellerBuyExecutionByCycle, second.state.recoverySellerBuyExecutionByCycle, "RS BUY execution accumulators must remain account-local.")
+  assert.equal(first.state.recoverySellerBuyExecutionByCycle instanceof Map, true, "RS BUY execution state must be an account-local Map.")
+  assert.equal(first.state.recoverySellerSellReservations instanceof Map, true, "RS SELL reservations must be an account-local Map.")
+  assert.equal(first.state.recoverySellerCycleStates instanceof Map, true, "RS cycle state must be account-local.")
+  assert.equal(first.state.recoverySellerCycleOutcomes instanceof Map, true, "RS cycle outcomes must be account-local.")
+  assert.notEqual(first.state.recoverySellerCycleStates, second.state.recoverySellerCycleStates)
+  assert.notEqual(first.state.recoverySellerCycleOutcomes, second.state.recoverySellerCycleOutcomes)
+  assert.notEqual(first.state.recoverySellerSellReservations, second.state.recoverySellerSellReservations, "RS SELL reservations must not be shared across accounts.")
   assert.notEqual(first.state.journalFills, second.state.journalFills, "Applied-fill identities must remain account-local.")
   assert.notEqual(first.state.pausedMarkets, second.state.pausedMarkets, "A pause in one account must not pause another account.")
   assert.notEqual(first.marketMetadata, second.marketMetadata, "Market metadata state must not be shared across account contexts.")
@@ -99,49 +107,88 @@ test("rejects duplicate provider instance ids and unknown account lookups", () =
 })
 
 
-test("shares one account Portfolio, OrderRegistry, and serialized queue across CG and RS workflows", () => {
-  const accountRuntime = createAccountRuntimeRegistry({ providers }).get("binance-testnet-one")
-  const conservative = createPortfolioWorkflow({ sharedState: accountRuntime.state })
-  const recoverySeller = createRecoverySellerAccountingWorkflow({ sharedState: accountRuntime.state })
-
-  assert.equal(conservative.getPortfolio(), accountRuntime.state.portfolio)
-  assert.equal(recoverySeller.getPortfolio(), accountRuntime.state.portfolio)
-  assert.equal(recoverySeller.getOrderRegistry(), accountRuntime.state.orderRegistry)
-  assert.equal(accountRuntime.state.legacyPositions instanceof Map, true)
-  const nextLegacyPositions = new Map()
-  accountRuntime.state.legacyPositions = nextLegacyPositions
-  assert.equal(accountRuntime.state.legacyPositions, nextLegacyPositions)
+function assertSharedMapProperty({ state, property, value } = {}) {
+  state[property] = value
+  assert.equal(state[property], value)
   assert.throws(() => {
-    accountRuntime.state.legacyPositions = []
+    state[property] = []
   }, /must be a Map/)
+}
 
+function assertSharedPortfolioProperty({ state, conservative, recoverySeller } = {}) {
   const nextPortfolio = new Portfolio()
-  accountRuntime.state.portfolio = nextPortfolio
+  state.portfolio = nextPortfolio
   assert.equal(conservative.getPortfolio(), nextPortfolio)
   assert.equal(recoverySeller.getPortfolio(), nextPortfolio)
   assert.throws(() => {
-    accountRuntime.state.portfolio = {}
+    state.portfolio = {}
   }, /must be a Portfolio/)
+}
 
-  const nextRecoveryLedgers = new Map()
-  accountRuntime.state.recoveryLedgers = nextRecoveryLedgers
-  assert.equal(conservative.getRecoveryLedger({ marketId: "BTCUSDT" }), undefined)
-  assert.equal(accountRuntime.state.recoveryLedgers, nextRecoveryLedgers)
-  assert.throws(() => {
-    accountRuntime.state.recoveryLedgers = []
-  }, /must be a Map/)
-
+function assertSharedOrderRegistryProperty({ state, recoverySeller } = {}) {
   const nextOrderRegistry = OrderRegistry.empty()
-  accountRuntime.state.orderRegistry = nextOrderRegistry
+  state.orderRegistry = nextOrderRegistry
   assert.equal(recoverySeller.getOrderRegistry(), nextOrderRegistry)
   assert.throws(() => {
-    accountRuntime.state.orderRegistry = {}
+    state.orderRegistry = {}
   }, /must be an OrderRegistry/)
+}
 
+test("keeps engine registry replacements visible to every account workflow", () => {
+  const accountState = createAccountRuntimeRegistry({ providers }).get("binance-testnet-one").state
+  const engineState = {
+    registry: accountState.orderRegistry,
+  }
+  linkSharedAccountOrderRegistry({
+    state: engineState,
+    initialState: accountState,
+  })
+  const replacement = OrderRegistry.empty()
+
+  engineState.registry = replacement
+
+  assert.equal(accountState.orderRegistry, replacement)
+  assert.equal(engineState.registry, replacement)
+})
+
+test("shares one account Portfolio, OrderRegistry, and serialized queue across CG and RS workflows", () => {
+  const accountRuntime = createAccountRuntimeRegistry({ providers }).get("binance-testnet-one")
+  const { state } = accountRuntime
+  const conservative = createPortfolioWorkflow({ sharedState: state })
+  const recoverySeller = createRecoverySellerAccountingWorkflow({ sharedState: state })
+
+  assert.equal(conservative.getPortfolio(), state.portfolio)
+  assert.equal(recoverySeller.getPortfolio(), state.portfolio)
+  assert.equal(recoverySeller.getOrderRegistry(), state.orderRegistry)
+  assert.equal(state.legacyPositions instanceof Map, true)
+  assertSharedMapProperty({
+    state,
+    property: "legacyPositions",
+    value: new Map(),
+  })
+  assertSharedPortfolioProperty({
+    state,
+    conservative,
+    recoverySeller,
+  })
+  assertSharedMapProperty({
+    state,
+    property: "recoveryLedgers",
+    value: new Map(),
+  })
+  assertSharedMapProperty({
+    state,
+    property: "recoverySellerBuyExecutionByCycle",
+    value: new Map(),
+  })
+  assertSharedOrderRegistryProperty({
+    state,
+    recoverySeller,
+  })
   const queuedTransition = Promise.resolve()
-  accountRuntime.state.updateQueue = queuedTransition
-  assert.equal(accountRuntime.state.updateQueue, queuedTransition)
-  assert.equal(Object.isFrozen(accountRuntime.state), true)
+  state.updateQueue = queuedTransition
+  assert.equal(state.updateQueue, queuedTransition)
+  assert.equal(Object.isFrozen(state), true)
 })
 
 test("serializes CG and RS engine transitions through one account-level queue", async () => {

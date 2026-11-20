@@ -77,6 +77,7 @@ function createSharedState() {
     recoveryLedgers: new Map(),
     orderRegistry: OrderRegistry.empty(),
     legacyPositions: new Map(),
+    recoverySellerBuyExecutionByCycle: new Map(),
     updateQueue: Promise.resolve(),
   }
 }
@@ -357,11 +358,15 @@ test("durably reserves the sole RS SELL cycle before registry registration and b
       })?.status === "PENDING"
     },
   })
-  const { submit } = createSubmitter({
+  const { submit, durableFacts } = createSubmitter({
     sharedState,
     broker,
     unresolved,
-    onSellReserved: async ({ order, ownership }) => {
+    onSellReserved: async ({ order, ownership, durableIntent }) => {
+      assert.equal(durableIntent, true,
+        "The reservation callback must run only after the durable submission intent is committed.")
+      assert.equal(durableFacts[0]?.type, "INTENT", "The canonical SELL intent must be durably committed before reserving the cycle.")
+      assert.equal(durableFacts[0]?.fact.ownership?.cycleId, ownership.cycleId, "The durable intent must carry the exact cycle identity before reservation.")
       reservedOrder = {
         order,
         ownership,
@@ -390,6 +395,7 @@ test("durably reserves the sole RS SELL cycle before registry registration and b
   assert.equal(reservedOrder.ownership.strategyId, "RS_recoverySeller")
   assert.equal(reservedOrder.ownership.purpose, "RECOVERY_SELL")
   assert.equal(pendingWasRegisteredAtBroker, true)
+  assert.equal(durableFacts.filter((fact) => fact.type === "INTENT").length, 1, "The shared executor must reuse the already committed SELL intent instead of appending a duplicate.")
   assert.equal(unresolved.length, 0)
 })
 

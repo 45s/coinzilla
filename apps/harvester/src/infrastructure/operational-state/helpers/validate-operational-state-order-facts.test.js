@@ -125,7 +125,7 @@ test("rejects malformed order-submission intent identity, fields, classification
     ["unsupported order type", { type: "MARKET" }, /type must be LIMIT/],
     ["zero price", { price: "0" }, /price and quantity must be positive/],
     ["non-canonical quantity", { quantity: "01" }, /price and quantity must be positive/],
-    ["unsupported purpose", { purpose: "MANUAL" }, /purpose must be null or RECOVERY_SELL/],
+    ["unsupported purpose", { purpose: "MANUAL" }, /purpose/],
   ]
 
   for (const [description, changes, expectedError] of invalidCases) {
@@ -182,7 +182,7 @@ test("rejects order-submission outcomes with inconsistent identity, amounts, or 
     ["invalid type", { type: "MARKET" }, /type must be LIMIT/],
     ["invalid amount", { price: "0" }, /amounts must be canonical/],
     ["invalid outcome", { outcome: "SENT" }, /classification is unsupported/],
-    ["invalid purpose", { purpose: "MANUAL" }, /purpose must be null or RECOVERY_SELL/],
+    ["invalid purpose", { purpose: "MANUAL" }, /purpose/],
     ["unacknowledged order with broker identity", { brokerOrderId: "broker-order-1" }, /PENDING order without broker identity/],
     ["unacknowledged order with non-pending status", { status: "NEW" }, /PENDING order without broker identity/],
     ["unacknowledged order with execution", { executedQuantity: "0.1" }, /PENDING order without broker identity/],
@@ -360,4 +360,53 @@ test("leaves unrelated fact types to their owning validators", () => {
   assert.doesNotThrow(() => validateOrderSubmissionOutcomeFact(unrelated))
   assert.doesNotThrow(() => validateOrderCancellationIntentFact(unrelated))
   assert.doesNotThrow(() => validateOrderCancellationOutcomeFact(unrelated))
+})
+
+
+test("requires complete Position and cycle identity for an RS-owned durable SELL intent", () => {
+  let thrownError
+  assert.throws(
+    () => validateOrderSubmissionIntentFact(makeSubmissionIntent({
+      side: "SELL",
+      purpose: "RECOVERY_SELL",
+      strategyId: "RS_recoverySeller",
+    })),
+    (error) => {
+      thrownError = error
+      return error instanceof TypeError
+    },
+    "An RS-owned SELL intent must not become durable with only partial strategy ownership.",
+  )
+  assert.match(
+    thrownError.message,
+    /valid positionId/i,
+    "A partially owned RS SELL must identify its missing Position identity.",
+  )
+})
+
+test("preserves the original cause when durable Recovery Seller ownership is invalid", () => {
+  let wrappedError
+  assert.throws(
+    () => validateOrderSubmissionIntentFact(makeSubmissionIntent({
+      side: "SELL",
+      purpose: "RECOVERY_BUY",
+      strategyId: "RS_recoverySeller",
+      positionId: "rs-position-1",
+      cycleId: "rs-cycle-1",
+    })),
+    (error) => {
+      wrappedError = error
+      return error instanceof TypeError
+    },
+    "A mismatched Recovery Seller purpose and order side must be rejected at the durable-fact boundary.",
+  )
+  assert.ok(
+    wrappedError.cause instanceof TypeError,
+    "The durable-fact validator must preserve the original domain ownership error as the wrapper cause.",
+  )
+  assert.match(
+    wrappedError.cause.message,
+    /purpose must match its canonical order side/i,
+    "The preserved cause must explain the precise Recovery Seller ownership mismatch.",
+  )
 })

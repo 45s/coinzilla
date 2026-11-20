@@ -121,6 +121,7 @@ function createWorkflowCalls() {
     cancellations: [],
     evaluations: [],
     buyExecutionPriceReads: [],
+    recoverySellerStops: [],
   }
 }
 
@@ -190,6 +191,8 @@ function createWorkflowDependencies({
   isStopping,
   accountingResult,
   updateRecoverySellerAccounting,
+  reconcileRecoverySellerMixedSell,
+  latchRecoverySellerStop,
 } = {}) {
   const accountedFillIds = new Set()
   return {
@@ -211,6 +214,8 @@ function createWorkflowDependencies({
       accountingResult,
     }),
     updateRecoverySellerAccounting,
+    reconcileRecoverySellerMixedSell,
+    latchRecoverySellerStop,
     recordBuyExecutionFill: ({ fill }) => calls.buyFills.push(fill),
     recordSellExecutionFill: ({ fill }) => calls.sellFills.push(fill),
     pause: async (input) => calls.pauses.push(input),
@@ -258,6 +263,8 @@ duplicate: false } }),
   registry,
   requireProviderProvenance = false,
   updateRecoverySellerAccounting,
+  reconcileRecoverySellerMixedSell,
+  latchRecoverySellerStop,
 } = {}) {
   const calls = createWorkflowCalls()
   const state = createWorkflowState({ updateResult,
@@ -274,6 +281,8 @@ activeOrders })
     isStopping,
     accountingResult,
     updateRecoverySellerAccounting,
+    reconcileRecoverySellerMixedSell,
+    latchRecoverySellerStop,
   })
   const workflow = makeOrderEventWorkflow({
     ...dependencies,
@@ -737,7 +746,7 @@ test("routes Recovery Seller-owned fills to RS accounting without mutating Conse
 })
 
 
-test("fails closed for an RS SELL fill until terminal mixed-SELL reconciliation", async () => {
+test("stages streamed RS SELL fills for complete terminal mixed-SELL reconciliation", async () => {
   const recoverySellerOrder = makeOrder({
     side: "SELL",
     clientOrderId: "h-dogeusdt-rs-sell-1",
@@ -774,12 +783,126 @@ test("fails closed for an RS SELL fill until terminal mixed-SELL reconciliation"
     fill: recoverySellerFill,
   })
 
-  assert.equal(result.ok, false, "An RS SELL fill must wait for terminal mixed-SELL reconciliation instead of committing partial allocation.")
+  assert.equal(result.ok, true, "A canonical streamed RS SELL fill must be staged without committing either accounting projection.")
+  assert.equal(result.data.stagedForTerminalReconciliation, true, "The staged result must make the terminal mixed-SELL barrier explicit.")
+  assert.deepEqual(calls.sellFills, [recoverySellerFill], "The canonical SELL fill must remain available to complete terminal history reconciliation.")
   assert.deepEqual(calls.accounting, [], "An RS SELL fill must never be applied to Conservative accounting.")
-  assert.deepEqual(recoverySellerAccountingCalls, [], "The RS mixed-SELL accounting workflow must not be invoked with an isolated streamed fill.")
-  assert.equal(calls.pauses[0]?.reason, "EXECUTION_ACCOUNTING_FAILED", "Unsupported RS SELL accounting must pause the affected market fail-closed.")
+  assert.deepEqual(recoverySellerAccountingCalls, [], "The RS mixed-SELL accounting workflow must wait for the complete terminal fill history.")
+  assert.deepEqual(calls.pauses, [], "A valid partial RS SELL fill is expected evidence, not an accounting failure.")
 })
 
+
+test("routes terminal RS SELL fill history through mixed accounting without Conservative completion", async () => {
+  const previousOrder = makeOrder({
+    side: "SELL",
+    status: "OPEN",
+    quantity: "1",
+    executedQuantity: "0",
+    clientOrderId: "h-dogeusdt-rs-sell-terminal",
+    brokerOrderId: "broker-rs-sell-terminal",
+  })
+  const terminalOrder = makeOrder({
+    side: "SELL",
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+    clientOrderId: previousOrder.clientOrderId,
+    brokerOrderId: previousOrder.brokerOrderId,
+  })
+  const fill = makeFill({
+    side: "SELL",
+    quantity: "1",
+    quoteQuantity: "100",
+    clientOrderId: terminalOrder.clientOrderId,
+    brokerOrderId: terminalOrder.brokerOrderId,
+  })
+  const ownership = {
+    clientOrderId: terminalOrder.clientOrderId,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: "doge-recovery-seller-position",
+    purpose: "RECOVERY_SELL",
+    cycleId: "doge-recovery-seller-cycle-1",
+  }
+  const registry = createLifecycleRegistry({
+    currentOrder: previousOrder,
+    ownership,
+  })
+  const mixedSellReconciliations = []
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    terminalFills: [fill],
+    reconcileRecoverySellerMixedSell: async (input) => {
+      mixedSellReconciliations.push(input)
+      return toResult({ data: { reconciled: true } })
+    },
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: terminalOrder,
+    },
+  })
+
+  assert.equal(result.ok, true, "A fully reconciled RS SELL must complete its strategy-owned terminal transition.")
+  assert.equal(mixedSellReconciliations.length, 1, "The complete terminal history must be handed to RS mixed accounting exactly once.")
+  assert.equal(mixedSellReconciliations[0].order, terminalOrder)
+  assert.deepEqual(mixedSellReconciliations[0].canonicalFills, [fill])
+  assert.deepEqual(calls.completedCycles, [], "RS SELL must never enter Conservative recovery-cycle completion.")
+  assert.deepEqual(calls.sellFills, [fill], "The terminal canonical fill must be staged exactly once.")
+})
+
+test("latches the durable global RS STOP when terminal mixed-SELL reconciliation is unavailable", async () => {
+  const terminalOrder = makeOrder({
+    side: "SELL",
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+    clientOrderId: "h-dogeusdt-rs-sell-stop-1",
+  })
+  const fill = makeFill({
+    side: "SELL",
+    quantity: "1",
+    quoteQuantity: "100",
+    clientOrderId: terminalOrder.clientOrderId,
+    brokerOrderId: terminalOrder.brokerOrderId,
+  })
+  const registry = createLifecycleRegistry({
+    currentOrder: terminalOrder,
+    ownership: {
+      clientOrderId: terminalOrder.clientOrderId,
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "doge-recovery-seller-position",
+      purpose: "RECOVERY_SELL",
+      cycleId: "doge-recovery-seller-cycle-stop-1",
+    },
+  })
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    terminalFills: [fill],
+    latchRecoverySellerStop: async (input) => {
+      calls.recoverySellerStops.push(input)
+      return toResult({
+        data: {
+          durable: true,
+        },
+      })
+    },
+  })
+
+  const result = await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: terminalOrder,
+    },
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(calls.recoverySellerStops.length, 1)
+  assert.equal(calls.recoverySellerStops[0].order, terminalOrder)
+  assert.equal(calls.recoverySellerStops[0].reason, "RS_TERMINAL_MIXED_SELL_RECONCILIATION_UNAVAILABLE")
+  assert.equal(calls.pauses[0].reason, "RS_TERMINAL_MIXED_SELL_RECONCILIATION_UNAVAILABLE")
+})
 
 test("fails closed for a registered order owned by an unsupported strategy", async () => {
   const unsupportedOrder = makeOrder({

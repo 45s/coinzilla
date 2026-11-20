@@ -69,6 +69,56 @@ function makeLegacySellFill() {
   })
 }
 
+function makeLegacyCommissionAllocations() {
+  return [
+    {
+      assetId: baseAsset.id,
+      assetCode: baseAsset.code,
+      amount: "0.01",
+    },
+    {
+      assetId: quoteAsset.id,
+      assetCode: quoteAsset.code,
+      amount: "0.1",
+    },
+    {
+      assetId: feeAsset.id,
+      assetCode: feeAsset.code,
+      amount: "0.01",
+      quoteValue: {
+        assetId: quoteAsset.id,
+        assetCode: quoteAsset.code,
+        amount: "0.05",
+      },
+    },
+  ]
+}
+
+function makeRecoveryCommissionAllocations() {
+  return [
+    {
+      assetId: baseAsset.id,
+      assetCode: baseAsset.code,
+      amount: "0.02",
+    },
+    {
+      assetId: quoteAsset.id,
+      assetCode: quoteAsset.code,
+      amount: "0.2",
+    },
+    {
+      assetId: feeAsset.id,
+      assetCode: feeAsset.code,
+      amount: "0.02",
+      quoteValue: {
+        assetId: quoteAsset.id,
+        assetCode: quoteAsset.code,
+        amount: "0.1",
+      },
+    },
+  ]
+}
+
 function makeLegacySellAllocation({
   fill,
   allocationFingerprint = "legacy-allocation-fingerprint-1",
@@ -76,28 +126,7 @@ function makeLegacySellAllocation({
     grossBaseQuantity: "1",
     baseDebit: "1.01",
     quoteProceeds: "100",
-    commissions: [
-      {
-        assetId: baseAsset.id,
-        assetCode: baseAsset.code,
-        amount: "0.01",
-      },
-      {
-        assetId: quoteAsset.id,
-        assetCode: quoteAsset.code,
-        amount: "0.1",
-      },
-      {
-        assetId: feeAsset.id,
-        assetCode: feeAsset.code,
-        amount: "0.01",
-        quoteValue: {
-          assetId: quoteAsset.id,
-          assetCode: quoteAsset.code,
-          amount: "0.05",
-        },
-      },
-    ],
+    commissions: makeLegacyCommissionAllocations(),
   },
 } = {}) {
   return {
@@ -109,28 +138,7 @@ function makeLegacySellAllocation({
       grossBaseQuantity: "2",
       baseDebit: "2.02",
       quoteProceeds: "200",
-      commissions: [
-        {
-          assetId: baseAsset.id,
-          assetCode: baseAsset.code,
-          amount: "0.02",
-        },
-        {
-          assetId: quoteAsset.id,
-          assetCode: quoteAsset.code,
-          amount: "0.2",
-        },
-        {
-          assetId: feeAsset.id,
-          assetCode: feeAsset.code,
-          amount: "0.02",
-          quoteValue: {
-            assetId: quoteAsset.id,
-            assetCode: quoteAsset.code,
-            amount: "0.1",
-          },
-        },
-      ],
+      commissions: makeRecoveryCommissionAllocations(),
     },
     legacy,
   }
@@ -160,15 +168,21 @@ test("reduces remaining legacy quantity by the actual legacy amount sold without
     quantity: "50",
   })
 
-  const nextPosition = legacyPosition.recordLegacySale({
+  const firstCyclePosition = legacyPosition.recordLegacySale({
     position: initialPosition,
     quantitySold: "0.01",
   })
+  const secondCyclePosition = legacyPosition.recordLegacySale({
+    position: firstCyclePosition,
+    quantitySold: "0.01",
+  })
 
-  assert.equal(nextPosition.remainingQuantity, "49.99", "A successful cycle must remove only the 0.01 legacy units actually sold.")
-  assert.equal(nextPosition.averageCost, "2", "Selling legacy units must never recalculate the original average acquisition cost.")
-  assert.equal(nextPosition.invested, "100", "The original invested amount must remain unchanged after a legacy disposal.")
-  assert.equal(initialPosition.remainingQuantity, "50", "Recording a disposal must return a new position without mutating the previous accounting snapshot.")
+  assert.equal(firstCyclePosition.remainingQuantity, "49.99", "The first successful cycle must remove only the 0.01 legacy units actually sold.")
+  assert.equal(secondCyclePosition.remainingQuantity, "49.98", "The next successful cycle must remove another 0.01 from the remaining legacy quantity.")
+  assert.equal(secondCyclePosition.averageCost, "2", "Average historical cost must remain fixed across every legacy disposal.")
+  assert.equal(secondCyclePosition.invested, "100", "The original invested amount must remain unchanged across cycles.")
+  assert.equal(firstCyclePosition.remainingQuantity, "49.99", "A later disposal must not mutate the previous accounting snapshot.")
+  assert.equal(initialPosition.remainingQuantity, "50", "Recording disposals must return new position snapshots without mutating the original.")
 })
 
 test("caps each cycle legacy slice at the smaller remaining quantity", () => {

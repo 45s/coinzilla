@@ -25,5 +25,6 @@ test("exports stable schema limits and fact type allowlist", () => {
   assert.equal(SEQUENCE_PATTERN.test("01"), false)
   assert.equal(Object.isFrozen(FACT_TYPES), true)
   assert.equal(FACT_TYPES.includes("PROCESS_STARTED"), true)
+  assert.equal(FACT_TYPES.includes("RECOVERY_SELLER_MIXED_SELL_RECONCILED"), true)
   assert.equal(FACT_TYPES.includes("UNSUPPORTED"), false)
 })
