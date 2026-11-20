@@ -1,3 +1,8 @@
+const HISTORY_SYNC_CURSOR_COLUMNS = Object.freeze({
+  order: "last_order_id",
+  trade: "last_trade_id",
+})
+
 function requireString({ value, field }) {
   if (typeof value !== "string" || value.trim() === "" || value !== value.trim()) {
     throw new TypeError(`History-sync cursor ${field} must be a non-empty string`)
@@ -61,7 +66,7 @@ function resolveCursorIdentity({ providerIdentity, environment, symbol }) {
 
 function readCursor({ database, identity }) {
   const row = database.prepare(
-    "SELECT last_order_id, last_trade_id FROM history_sync_cursors WHERE id = ?",
+    `SELECT ${HISTORY_SYNC_CURSOR_COLUMNS.order}, ${HISTORY_SYNC_CURSOR_COLUMNS.trade} FROM history_sync_cursors WHERE id = ?`,
   ).get(identity.id)
   return {
     lastOrderId: row?.last_order_id ?? null,
@@ -76,6 +81,9 @@ function saveCursor({
   cursorValue,
   updatedAt,
 }) {
+  if (!Object.values(HISTORY_SYNC_CURSOR_COLUMNS).includes(cursorColumn)) {
+    throw new TypeError("History-sync cursor column is not supported")
+  }
   const value = requireCursor({
     value: cursorValue,
     field: cursorColumn,
@@ -91,7 +99,7 @@ function saveCursor({
   const insert = database.prepare(`
     INSERT INTO history_sync_cursors (
       id, provider_type, provider_instance_id, account_id, environment,
-      symbol, last_order_id, last_trade_id, updated_at
+      symbol, ${HISTORY_SYNC_CURSOR_COLUMNS.order}, ${HISTORY_SYNC_CURSOR_COLUMNS.trade}, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       ${cursorColumn} = CASE
@@ -109,8 +117,8 @@ function saveCursor({
     identity.accountId,
     identity.environment,
     identity.symbol,
-    cursorColumn === "last_order_id" ? value : null,
-    cursorColumn === "last_trade_id" ? value : null,
+    cursorColumn === HISTORY_SYNC_CURSOR_COLUMNS.order ? value : null,
+    cursorColumn === HISTORY_SYNC_CURSOR_COLUMNS.trade ? value : null,
     timestamp,
   )
 }
@@ -140,7 +148,7 @@ export function createHistorySyncCursorRepository({ database } = {}) {
       saveCursor({
         database,
         identity,
-        cursorColumn: "last_order_id",
+        cursorColumn: HISTORY_SYNC_CURSOR_COLUMNS.order,
         cursorValue: lastOrderId,
         updatedAt,
       })
@@ -154,7 +162,7 @@ export function createHistorySyncCursorRepository({ database } = {}) {
       saveCursor({
         database,
         identity,
-        cursorColumn: "last_trade_id",
+        cursorColumn: HISTORY_SYNC_CURSOR_COLUMNS.trade,
         cursorValue: lastTradeId,
         updatedAt,
       })
