@@ -519,6 +519,35 @@ test("links an earlier fill to its later matching order projection without inven
   })
 })
 
+test("rejects fill-to-order attribution when client and exchange order identities conflict", async (t) => {
+  const context = await createTestContext({ t })
+  const legacyRecord = createLegacyRecord()
+  await seedLegacyRecord({
+    filename: context.filename,
+    record: legacyRecord,
+  })
+  const persistence = await preparePersistence({ context })
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill: createAppliedFillEvent({
+      overrides: {
+        brokerOrderId: legacyRecord.brokerOrderId,
+        clientOrderId: "different-client-order",
+      },
+    }),
+  })
+  const result = await persistence.fillObserver.flush()
+  assert.equal(result.ok, false, "A fill must not be attributed to an order with a different client-order identity.")
+  assert.equal(result.errors[0].code, "HARVESTER_ORDER_HISTORY_IDENTITY_CONFLICT", "Mismatched order linkage must be reported as an integrity conflict.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => {
+      const fills = database.prepare("SELECT COUNT(*) AS count FROM fills").get()
+      assert.equal(fills.count, 0, "A conflicting fill must not be persisted with incorrect order attribution.")
+    },
+  })
+})
+
 test("preserves very large financial decimals without floating-point conversion", async (t) => {
   const context = await createTestContext({ t })
   const persistence = await preparePersistence({ context })

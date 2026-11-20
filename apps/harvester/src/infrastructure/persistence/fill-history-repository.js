@@ -278,37 +278,56 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
   }
 }
 
-function findOrderReference({ transaction, fill } = {}) {
-  const scope = [
+function readOrderByClientOrderId({ transaction, fill } = {}) {
+  const id = createOrderHistoryId({
+    environment: fill.environment,
+    providerInstanceId: fill.provider_instance_id,
+    providerType: fill.provider_type,
+    accountId: fill.account_id,
+    clientOrderId: fill.client_order_id,
+  })
+  return transaction.prepare(
+    "SELECT id, market_id, exchange_order_id, client_order_id, strategy_id, position_id, cycle_id FROM orders WHERE id = ?",
+  ).get(id)
+}
+
+function readOrderByExchangeOrderId({ transaction, fill } = {}) {
+  return transaction.prepare(`
+    SELECT id, market_id, exchange_order_id, client_order_id, strategy_id, position_id, cycle_id FROM orders
+    WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
+      AND account_id = ? AND exchange_order_id = ?
+  `).get(
     fill.environment,
     fill.provider_instance_id,
     fill.provider_type,
     fill.account_id,
-  ]
+    fill.exchange_order_id,
+  )
+}
+
+function findOrderReference({ transaction, fill } = {}) {
   if (fill.client_order_id !== null) {
-    const id = createOrderHistoryId({
-      environment: fill.environment,
-      providerInstanceId: fill.provider_instance_id,
-      providerType: fill.provider_type,
-      accountId: fill.account_id,
-      clientOrderId: fill.client_order_id,
+    const order = readOrderByClientOrderId({
+      transaction,
+      fill,
     })
-    return transaction.prepare(
-      "SELECT id, market_id, exchange_order_id, strategy_id, position_id, cycle_id FROM orders WHERE id = ?",
-    ).get(id)
+    if (order) {
+      return order
+    }
   }
-  return transaction.prepare(`
-    SELECT id, market_id, exchange_order_id, strategy_id, position_id, cycle_id FROM orders
-    WHERE environment = ? AND provider_instance_id = ? AND provider_type = ?
-      AND account_id = ? AND exchange_order_id = ?
-  `).get(...scope, fill.exchange_order_id)
+  return readOrderByExchangeOrderId({
+    transaction,
+    fill,
+  })
 }
 
 function assertOrderReferenceMatches({ order, fill } = {}) {
   if (order && (
     order.market_id !== fill.market_id ||
     (order.exchange_order_id !== null &&
-      order.exchange_order_id !== fill.exchange_order_id)
+      order.exchange_order_id !== fill.exchange_order_id) ||
+    (fill.client_order_id !== null &&
+      order.client_order_id !== fill.client_order_id)
   )) {
     throw new OrderHistoryIntegrityError({
       field: "fill.orderIdentity",
