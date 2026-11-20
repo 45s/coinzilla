@@ -803,24 +803,66 @@ async function startHarvesterUserDataServices({
   })
 }
 
+function shouldSynchronizeStartupHistory({ identity, symbols } = {}) {
+  return identity?.providerType === "binance" &&
+    Array.isArray(symbols) &&
+    symbols.length > 0
+}
+
+function hasHistoryPersistence({ persistence } = {}) {
+  const requiredMethods = [
+    persistence?.orderRepository?.upsertHistorical,
+    persistence?.orderRepository?.findByExchangeOrderIdentity,
+    persistence?.orderRepository?.getOldestPendingOrderId,
+    persistence?.fillRepository?.upsert,
+    persistence?.historySyncCursorRepository?.get,
+    persistence?.historySyncCursorRepository?.saveOrderCursor,
+    persistence?.historySyncCursorRepository?.saveTradeCursor,
+  ]
+  return requiredMethods.every((method) => typeof method === "function")
+}
+
+function logHistorySyncSkipped({ startup, identity } = {}) {
+  startup.logger.warn?.({
+    message: "Exchange history synchronization skipped because relational history persistence is unavailable",
+    providerInstanceId: identity?.providerInstanceId,
+    environment: startup.tradingMode,
+  })
+}
+
+function logHistorySyncFailure({ startup, identity, result } = {}) {
+  startup.logger.error?.({
+    message: "Exchange history synchronization failed; historical coverage is incomplete",
+    providerInstanceId: identity.providerInstanceId,
+    environment: startup.tradingMode,
+    errors: result?.errors,
+  })
+}
+
+function logHistorySyncSuccess({ startup, identity, result } = {}) {
+  startup.logger.info?.({
+    message: "Exchange history pages scanned for configured markets; global coverage remains unverified",
+    providerInstanceId: identity.providerInstanceId,
+    environment: startup.tradingMode,
+    ...result.data,
+  })
+}
+
 async function synchronizeStartupExchangeHistory({ startup, portfolio, resources } = {}) {
   const identity = startup.providerIdentity ?? portfolio.accountRuntime.identity
   const persistence = startup.orderHistoryPersistence
-  if (identity.providerType !== "binance" || !Array.isArray(startup.executionSymbols) ||
-      startup.executionSymbols.length === 0) {
+  if (!shouldSynchronizeStartupHistory({
+    identity,
+    symbols: startup.executionSymbols,
+  })) {
     return
   }
-  if (typeof persistence?.orderRepository?.upsertHistorical !== "function" ||
-      typeof persistence.orderRepository.findByExchangeOrderIdentity !== "function" ||
-      typeof persistence.orderRepository.getOldestPendingOrderId !== "function" ||
-      typeof persistence?.fillRepository?.upsert !== "function" ||
-      typeof persistence?.historySyncCursorRepository?.get !== "function" ||
-      typeof persistence.historySyncCursorRepository.saveOrderCursor !== "function" ||
-      typeof persistence.historySyncCursorRepository.saveTradeCursor !== "function") {
-    startup.logger.warn?.({
-      message: "Exchange history synchronization skipped because relational history persistence is unavailable",
-      providerInstanceId: identity.providerInstanceId,
-      environment: startup.tradingMode,
+  if (!hasHistoryPersistence({
+    persistence,
+  })) {
+    logHistorySyncSkipped({
+      startup,
+      identity,
     })
     return
   }
@@ -834,19 +876,17 @@ async function synchronizeStartupExchangeHistory({ startup, portfolio, resources
     cursorRepository: persistence.historySyncCursorRepository,
   })
   if (result?.ok !== true) {
-    startup.logger.error?.({
-      message: "Exchange history synchronization failed; historical coverage is incomplete",
-      providerInstanceId: identity.providerInstanceId,
-      environment: startup.tradingMode,
-      errors: result?.errors,
+    logHistorySyncFailure({
+      startup,
+      identity,
+      result,
     })
     return
   }
-  startup.logger.info?.({
-    message: "Exchange history pages scanned for configured markets; global coverage remains unverified",
-    providerInstanceId: identity.providerInstanceId,
-    environment: startup.tradingMode,
-    ...result.data,
+  logHistorySyncSuccess({
+    startup,
+    identity,
+    result,
   })
 }
 
