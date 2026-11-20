@@ -84,6 +84,68 @@ function createFill({ tradeId = "1", orderId = "10", fillMarket = market, client
   })
 }
 
+function createOrderRepository({ orders, orderIdentities }) {
+  return {
+    upsertHistorical: async (record) => {
+      const existingIndex = orders.findIndex(({ id }) => id === record.id)
+      if (existingIndex === -1) {
+        orders.push(record)
+      } else {
+        orders[existingIndex] = record
+      }
+      orderIdentities.set(`${record.market.id}:${record.brokerOrderId}`, record.clientOrderId)
+    },
+    findByExchangeOrderIdentity: async ({ marketId, brokerOrderId }) =>
+      orderIdentities.get(`${marketId}:${brokerOrderId}`) ?? null,
+    getOldestPendingOrderId: async ({ symbol }) => {
+      const pendingOrders = orders.filter((order) =>
+        order.market.symbol === symbol &&
+        ["NEW", "OPEN", "PENDING", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status),
+      )
+      const oldestOrderId = Math.min(
+        ...pendingOrders.map(({ brokerOrderId }) => Number(brokerOrderId)),
+      )
+      return Number.isFinite(oldestOrderId) ? String(oldestOrderId) : null
+    },
+  }
+}
+
+function createFillRepository({ fills }) {
+  return {
+    upsert: async (input) => {
+      const existingIndex = fills.findIndex(({ fill }) => fill.fillId === input.fill.fillId)
+      if (existingIndex === -1) {
+        fills.push(input)
+      } else {
+        fills[existingIndex] = input
+      }
+    },
+  }
+}
+
+function createCursorRepository({ cursors }) {
+  return {
+    get: async ({ symbol }) => cursors.get(symbol) ?? {
+      lastOrderId: null,
+      lastTradeId: null,
+    },
+    saveOrderCursor: async ({ symbol, lastOrderId }) => {
+      const current = cursors.get(symbol) ?? {}
+      cursors.set(symbol, {
+        ...current,
+        lastOrderId,
+      })
+    },
+    saveTradeCursor: async ({ symbol, lastTradeId }) => {
+      const current = cursors.get(symbol) ?? {}
+      cursors.set(symbol, {
+        ...current,
+        lastTradeId,
+      })
+    },
+  }
+}
+
 function createRepositories() {
   const orders = []
   const fills = []
@@ -93,59 +155,16 @@ function createRepositories() {
     orders,
     fills,
     cursors,
-    orderRepository: {
-      upsertHistorical: async (record) => {
-        const existingIndex = orders.findIndex(({ id }) => id === record.id)
-        if (existingIndex === -1) {
-          orders.push(record)
-        } else {
-          orders[existingIndex] = record
-        }
-        orderIdentities.set(`${record.market.id}:${record.brokerOrderId}`, record.clientOrderId)
-      },
-      findByExchangeOrderIdentity: async ({ marketId, brokerOrderId }) =>
-        orderIdentities.get(`${marketId}:${brokerOrderId}`) ?? null,
-      getOldestPendingOrderId: async ({ symbol }) => {
-        const pendingOrders = orders.filter((order) =>
-          order.market.symbol === symbol &&
-          ["NEW", "OPEN", "PENDING", "PARTIALLY_FILLED", "UNKNOWN"].includes(order.status),
-        )
-        const oldestOrderId = Math.min(
-          ...pendingOrders.map(({ brokerOrderId }) => Number(brokerOrderId)),
-        )
-        return Number.isFinite(oldestOrderId) ? String(oldestOrderId) : null
-      },
-    },
-    fillRepository: {
-      upsert: async (input) => {
-        const existingIndex = fills.findIndex(({ fill }) => fill.fillId === input.fill.fillId)
-        if (existingIndex === -1) {
-          fills.push(input)
-        } else {
-          fills[existingIndex] = input
-        }
-      },
-    },
-    cursorRepository: {
-      get: async ({ symbol }) => cursors.get(symbol) ?? {
-        lastOrderId: null,
-        lastTradeId: null,
-      },
-      saveOrderCursor: async ({ symbol, lastOrderId }) => {
-        const current = cursors.get(symbol) ?? {}
-        cursors.set(symbol, {
-          ...current,
-          lastOrderId,
-        })
-      },
-      saveTradeCursor: async ({ symbol, lastTradeId }) => {
-        const current = cursors.get(symbol) ?? {}
-        cursors.set(symbol, {
-          ...current,
-          lastTradeId,
-        })
-      },
-    },
+    orderRepository: createOrderRepository({
+      orders,
+      orderIdentities,
+    }),
+    fillRepository: createFillRepository({
+      fills,
+    }),
+    cursorRepository: createCursorRepository({
+      cursors,
+    }),
   }
 }
 
@@ -159,7 +178,6 @@ function createPagedBroker({ orders, fills, calls }) {
       })
       const page = orders
         .filter((order) => order.market.symbol === symbol && Number(order.brokerOrderId) >= orderId)
-        .sort((left, right) => Number(left.brokerOrderId) - Number(right.brokerOrderId))
         .slice(0, limit)
       return {
         ok: true,
@@ -174,7 +192,6 @@ function createPagedBroker({ orders, fills, calls }) {
       })
       const page = fills
         .filter((fill) => fill.market.symbol === symbol && Number(fill.tradeId) >= fromId)
-        .sort((left, right) => Number(left.tradeId) - Number(right.tradeId))
         .slice(0, limit)
       return {
         ok: true,
