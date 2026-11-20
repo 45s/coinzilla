@@ -11,6 +11,7 @@ Canonical repository-wide engineering guidance is linked below. Policy ownership
 - [Domain policy template](DOMAIN_POLICY_TEMPLATE.md) — optional pure decision pattern with a behavior-matrix test example
 - [Stateful lifecycle template](STATEFUL_LIFECYCLE_TEMPLATE.md) — state ownership, transition design and deterministic lifecycle tests
 - [Application handler template](APPLICATION_HANDLER_TEMPLATE.md) — dependency-injected orchestration and port-interaction tests
+- [Infrastructure adapter template](INFRASTRUCTURE_ADAPTER_TEMPLATE.md) — provider-port implementation, capability declaration and reusable contract tests
 - [AI task compliance standard](AI_TASK_COMPLIANCE_STANDARD.md) — mandatory standards discovery, preflight readiness, ongoing compliance and completion verification
 - [Engineering standards and enforcement matrix](ENGINEERING_STANDARDS_MATRIX.md) — source-verified inventory and phase coordination for #1568
 - [Configuration standard](CONFIGURATION_STANDARD.md) — configuration ownership, validation, defaults, environment access, secrets and migration
