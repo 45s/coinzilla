@@ -3,9 +3,9 @@ import {
   validatePositiveDecimalFilter,
 } from "../symbol-filter-adapters.js"
 
-const STATIC_FILTER_TYPES = new Set(["PRICE_FILTER", "LOT_SIZE", "NOTIONAL", "MIN_NOTIONAL"])
+const STATIC_FILTER_TYPES = Object.freeze(["PRICE_FILTER", "LOT_SIZE", "NOTIONAL", "MIN_NOTIONAL"])
 
-const FILTERS_NOT_APPLICABLE_TO_SUPPORTED_LIMIT_ORDERS = new Set([
+const FILTERS_NOT_APPLICABLE_TO_SUPPORTED_LIMIT_ORDERS = Object.freeze([
   "MARKET_LOT_SIZE",
   "MAX_NUM_ALGO_ORDERS",
   "MAX_NUM_ICEBERG_ORDERS",
@@ -37,7 +37,7 @@ function collectUnvalidatedConstraints({ symbolFilters, exchangeFilters, assetFi
   const constraints = []
   const add = ({ filter, scope }) => {
     const sourceFilterType = filter?.filterType
-    if (FILTERS_NOT_APPLICABLE_TO_SUPPORTED_LIMIT_ORDERS.has(sourceFilterType)) {
+    if (FILTERS_NOT_APPLICABLE_TO_SUPPORTED_LIMIT_ORDERS.includes(sourceFilterType)) {
       return
     }
     const mappedConstraint = FILTER_CONSTRAINTS[sourceFilterType]
@@ -136,7 +136,7 @@ function readOptionalFilters({ priceFilter, lotSizeFilter, notionalFilter, symbo
 function collectAccountSymbolFilters({ accountFilters, symbol }) {
   if (!Array.isArray(accountFilters.symbolFilters)) {return []}
   return accountFilters.symbolFilters.filter((filter) =>
-    (!filter.symbol || filter.symbol === symbol) && !STATIC_FILTER_TYPES.has(filter.filterType)
+    (!filter.symbol || filter.symbol === symbol) && !STATIC_FILTER_TYPES.includes(filter.filterType)
   )
 }
 
