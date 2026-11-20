@@ -215,7 +215,7 @@ function createSubmitterFixture({ store, accounting, stopWorkflow, broker }) {
   }
 }
 
-function createDispatchFixture({ accounting, stopWorkflow, submit }) {
+function createDispatchFixture({ accounting, stopWorkflow }) {
   const pairConfig = {
     enabled: true,
     investment: "100",
@@ -277,7 +277,6 @@ async function createIntegrationFixture() {
   const dispatch = createDispatchFixture({
     accounting,
     stopWorkflow,
-    submit: submitter.submit,
   })
   return {
     store,
