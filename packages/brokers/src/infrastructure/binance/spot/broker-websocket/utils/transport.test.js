@@ -344,8 +344,10 @@ function consumeWebSocketFrames({ socket, received, resolvePong, rejectPong }) {
 function attachWebSocketPingHandler({ server, payload, resolvePong, rejectPong }) {
   server.on("upgrade", (...args) => {
     const [request, socket] = args
-    writeWebSocketHandshake({ request,
-socket })
+    writeWebSocketHandshake({
+      request,
+      socket,
+    })
     socket.write(Buffer.concat([Buffer.from([0x89, payload.length]), payload]))
     let received = Buffer.alloc(0)
     socket.on("data", (chunk) => {

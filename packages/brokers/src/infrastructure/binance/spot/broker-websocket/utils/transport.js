@@ -380,8 +380,14 @@ error })
     this.#clearConnectTimer()
     this.#clearCloseTimer()
     const closeReason = safeDiagnosticText(event.reason) ?? ""
-    this.#updateConnectError({ event, closeReason })
-    this.#rejectConnectOnClose({ event, closeReason })
+    this.#updateConnectError({
+      event,
+      closeReason,
+    })
+    this.#rejectConnectOnClose({
+      event,
+      closeReason,
+    })
     this.#clearConnectError()
     this.#cleanupSocketDiagnostics()
     this.#removeSocketHandlers()
