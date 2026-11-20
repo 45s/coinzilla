@@ -20,41 +20,41 @@ const historyRow = [
 
 const streamMessage = {
   e: "kline",
-  E: 1_700_000_059_000,
-  s: "BTCUSDT",
-  k: {
+E: 1_700_000_059_000,
+s: "BTCUSDT",
+k: {
     t: 1_700_000_000_000,
-    T: 1_700_000_059_999,
-    s: "BTCUSDT",
-    i: "1m",
-    o: "1.0000",
-    h: "2.0000",
-    l: "0.5000",
-    c: "1.5000",
-    v: "10.0000",
-    x: false,
+T: 1_700_000_059_999,
+s: "BTCUSDT",
+i: "1m",
+o: "1.0000",
+h: "2.0000",
+l: "0.5000",
+c: "1.5000",
+v: "10.0000",
+x: false,
   },
 }
 
 test("normalizes historical Kline rows and preserves exact decimal strings", () => {
   const candle = adaptKlineHistoryRow({
     row: historyRow,
-    symbol: "btcusdt",
-    interval: "1m",
-    now: 1_700_000_060_000,
+symbol: "btcusdt",
+interval: "1m",
+now: 1_700_000_060_000,
   })
 
   assert.deepEqual(candle, {
     symbol: "BTCUSDT",
-    interval: "1m",
-    openTime: 1_700_000_000_000,
-    closeTime: 1_700_000_059_999,
-    open: "1.0000",
-    high: "2.0000",
-    low: "0.5000",
-    close: "1.5000",
-    volume: "10.0000",
-    isClosed: true,
+interval: "1m",
+openTime: 1_700_000_000_000,
+closeTime: 1_700_000_059_999,
+open: "1.0000",
+high: "2.0000",
+low: "0.5000",
+close: "1.5000",
+volume: "10.0000",
+isClosed: true,
   })
   assert.equal(Object.isFrozen(candle), true)
 })
@@ -62,9 +62,9 @@ test("normalizes historical Kline rows and preserves exact decimal strings", () 
 test("marks a still-forming historical candle as open", () => {
   const candle = adaptKlineHistoryRow({
     row: historyRow,
-    symbol: "BTCUSDT",
-    interval: "1m",
-    now: 1_700_000_059_998,
+symbol: "BTCUSDT",
+interval: "1m",
+now: 1_700_000_059_998,
   })
   assert.equal(candle.isClosed, false)
 })
@@ -73,15 +73,15 @@ test("normalizes live Kline events and preserves their close flag", () => {
   const candle = adaptKlineStreamMessage(streamMessage)
   assert.deepEqual(candle, {
     symbol: "BTCUSDT",
-    interval: "1m",
-    openTime: 1_700_000_000_000,
-    closeTime: 1_700_000_059_999,
-    open: "1.0000",
-    high: "2.0000",
-    low: "0.5000",
-    close: "1.5000",
-    volume: "10.0000",
-    isClosed: false,
+interval: "1m",
+openTime: 1_700_000_000_000,
+closeTime: 1_700_000_059_999,
+open: "1.0000",
+high: "2.0000",
+low: "0.5000",
+close: "1.5000",
+volume: "10.0000",
+isClosed: false,
   })
   assert.equal(Object.isFrozen(candle), true)
 })
@@ -113,12 +113,12 @@ test("rejects malformed live Kline events and symbol mismatches", () => {
 k: null }), /kline object/)
   assert.throws(() => adaptKlineStreamMessage({
     ...streamMessage,
-    k: { ...streamMessage.k,
+k: { ...streamMessage.k,
 s: "ETHUSDT" },
   }), /symbol does not match/)
   assert.throws(() => adaptKlineStreamMessage({
     ...streamMessage,
-    k: { ...streamMessage.k,
+k: { ...streamMessage.k,
 x: "false" },
   }), /isClosed must be a boolean/)
 })
@@ -131,7 +131,7 @@ symbol: "BTCUSDT",
 interval: "2m" }), /supported Binance kline interval/)
   assert.throws(() => adaptKlineStreamMessage({
     ...streamMessage,
-    k: { ...streamMessage.k,
+k: { ...streamMessage.k,
 i: "2m" },
   }), /supported Binance kline interval/)
 })
@@ -184,7 +184,7 @@ now: 1_700_000_060_000,
 test("requires an injected clock for historical candle closure", () => {
   assert.throws(() => adaptKlineHistoryRow({
     row: historyRow,
-    symbol: "BTCUSDT",
-    interval: "1m",
+symbol: "BTCUSDT",
+interval: "1m",
   }), /now/)
 })
