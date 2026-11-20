@@ -105,7 +105,7 @@ jobs:
 
       - name: Probe TESTNET WebSocket endpoints (no credentials)
         continue-on-error: true
-        run: node packages/brokers/src/infrastructure/binance/broker-websocket/test-helpers/testnet-websocket-diagnostics.js
+        run: node packages/brokers/src/infrastructure/binance/spot/broker-websocket/test-helpers/testnet-websocket-diagnostics.js
 
       - name: Run broker TESTNET read-only integration
         shell: bash

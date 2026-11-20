@@ -1,7 +1,7 @@
 import { Broker } from "../src/index.js"
-import { BitunixRestClient } from "../src/infrastructure/bitunix/api/rest-client.js"
-import { BitunixSpotWebSocketClient } from "../src/infrastructure/bitunix/api/websocket-client.js"
-import { BitunixWebSocketTransport } from "../src/infrastructure/bitunix/api/websocket-transport.js"
+import { BitunixRestClient } from "../src/infrastructure/bitunix/spot/api/rest-client.js"
+import { BitunixSpotWebSocketClient } from "../src/infrastructure/bitunix/spot/api/websocket-client.js"
+import { BitunixWebSocketTransport } from "../src/infrastructure/bitunix/spot/api/websocket-transport.js"
 import {
   BrokerDiagnosticError,
   createDiagnosticReport,

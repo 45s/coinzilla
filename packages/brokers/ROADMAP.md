@@ -450,12 +450,12 @@ The current `packages/brokers/src/index.js` exports exactly:
 
 | Export | Source | Contract |
 |---|---|---|
-| `BinanceWebSocketBroker` | `infrastructure/binance/broker-websocket/broker.js` | Public Binance Spot WebSocket API/Streams broker facade |
-| `BinanceWebSocketConfig` | `infrastructure/binance/broker-websocket/config/binance-websocket-config.js` | Validated credentials, endpoints, and reconnect configuration |
-| `BitunixSpotBroker` | `infrastructure/bitunix/broker.js` | Partial Bitunix Spot REST broker facade; order mutations are not implemented |
-| `BitunixSpotConfig` | `infrastructure/bitunix/config/bitunix-spot-config.js` | Validated Bitunix Spot REST configuration |
-| `BitunixSpotWebSocketClient` | `infrastructure/bitunix/api/websocket-client.js` | Separately managed, authenticated Spot WebSocket RPC client for supported request/response queries |
-| `BitunixWebSocketError` | `infrastructure/bitunix/api/websocket-client.js` | Structured Bitunix Spot WebSocket RPC/transport error |
+| `BinanceWebSocketBroker` | `infrastructure/binance/spot/broker-websocket/broker.js` | Public Binance Spot WebSocket API/Streams broker facade |
+| `BinanceWebSocketConfig` | `infrastructure/binance/spot/broker-websocket/config/binance-websocket-config.js` | Validated credentials, endpoints, and reconnect configuration |
+| `BitunixSpotBroker` | `infrastructure/bitunix/spot/broker.js` | Partial Bitunix Spot REST broker facade; order mutations are not implemented |
+| `BitunixSpotConfig` | `infrastructure/bitunix/spot/config/bitunix-spot-config.js` | Validated Bitunix Spot REST configuration |
+| `BitunixSpotWebSocketClient` | `infrastructure/bitunix/spot/api/websocket-client.js` | Separately managed, authenticated Spot WebSocket RPC client for supported request/response queries |
+| `BitunixWebSocketError` | `infrastructure/bitunix/spot/api/websocket-client.js` | Structured Bitunix Spot WebSocket RPC/transport error |
 | `normalizeBinanceId` | `infrastructure/binance/adapters/normalize-binance-id.js` | Exact non-negative Binance identifier normalization |
 
 The module retains an internal `BinanceSdkConfig` alias for compatibility inside its own module, but it is not a separate public root export. The old SDK/REST broker and standalone legacy Streams exports are not current root exports. Do not restore or remove aliases without a consumer-backed compatibility decision.
