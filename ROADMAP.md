@@ -129,7 +129,9 @@
     - The separate async lifecycle race audit remains tracked by [issue #1313](https://github.com/45s/coinzilla/issues/1313); it is not an ESLint cleanup task.
     - **Owner:** shared infrastructure.
 
-### Cross-workspace Binance environment contract — PR #841 merged; LIVE mode is enabled; exchange acceptance remains unverified
+#12. **Helper purity and test enforcement — IN PROGRESS ([#1565](https://github.com/45s/coinzilla/issues/1565), [PR #1566](https://github.com/45s/coinzilla/pull/1566)).** The canonical Modularity Standard now defines helpers as pure deterministic supporting functions and requires colocated unit tests. The draft PR adds a recursive source scanner and runs it in the required JavaScript quality workflow. Initial source inventory found 39 helper production modules and 13 without colocated test files; the full source audit, missing tests, and scanner validation remain incomplete. A confirmed caller-input mutation in Journal chronology was fixed on the task branch. Do not mark complete until exact-head CI passes and all helper findings are dispositioned.
+
+## Cross-workspace Binance environment contract — PR #841 merged; LIVE mode is enabled; exchange acceptance remains unverified
 
 - **Decision:** Binance endpoint selection uses only explicit `TRADING_MODE=testnet|live`; `NODE_ENV` must never influence exchange routing. Missing/invalid mode fails closed. See [ADR-0002](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md).
 - **Why:** Harvester and the shared Brokers package must never disagree about which exchange environment receives requests.
