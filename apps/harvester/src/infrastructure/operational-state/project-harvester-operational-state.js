@@ -1107,9 +1107,6 @@ function createSessionSyntheticRecords({ session, latestSession, state }) {
       record,
       state,
     })) {
-      record,
-      state,
-    })) {
       continue
     }
     const events = mapFact({
