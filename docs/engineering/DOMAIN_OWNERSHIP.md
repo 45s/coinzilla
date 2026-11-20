@@ -45,7 +45,6 @@ Rules:
 
 This table governs package-to-package dependencies; it does **not** prove internal source-file boundaries. Each package's local architecture instructions and tests remain authoritative for its internal layers. The current repository has package-scoped architecture checks, not a complete repository-wide source-import checker. See the [Modularity Standard](./MODULARITY_STANDARD.md) and [ADR-0001](../architecture/decisions/ADR-0001-clean-hexagonal-architecture.md) for module-level direction and review requirements.
 
-
 ## Internal module dependency direction
 
 Apply this matrix only to packages that already use the relevant layers. It describes dependency direction; it does not require every package to create every folder.
@@ -82,7 +81,6 @@ For every dependency or module-boundary change, review:
 5. Add behavior/contract tests at the owning boundary and consumer tests where observable behavior changes.
 6. Update the owning roadmap, this policy if an allowed edge changes, and all affected documentation in the same PR.
 7. Verify required checks on the exact PR head and leave the PR open for user review and merge.
-
 
 ## Representative internal import boundaries
 
