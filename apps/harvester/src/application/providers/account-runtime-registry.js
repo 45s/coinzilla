@@ -76,6 +76,82 @@ function createSerializedAccountTransitionQueue() {
   }
 }
 
+function defineAccountTradingStateProperties({
+  state,
+  getPortfolio,
+  setPortfolio,
+  getRecoveryLedgers,
+  setRecoveryLedgers,
+  getOrderRegistry,
+  setOrderRegistry,
+  getLegacyPositions,
+  setLegacyPositions,
+  getRecoverySellerBuyExecutionByCycle,
+  setRecoverySellerBuyExecutionByCycle,
+  getRecoverySellerSellReservations,
+  setRecoverySellerSellReservations,
+  getUpdateQueue,
+  setUpdateQueue,
+}) {
+  const definitions = [
+    {
+      property: "portfolio",
+      getValue: getPortfolio,
+      setValue: setPortfolio,
+      isValid: (value) => value instanceof Portfolio,
+      errorMessage: "Account workflow portfolio must be a Portfolio",
+    },
+    {
+      property: "recoveryLedgers",
+      getValue: getRecoveryLedgers,
+      setValue: setRecoveryLedgers,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow recoveryLedgers must be a Map",
+    },
+    {
+      property: "orderRegistry",
+      getValue: getOrderRegistry,
+      setValue: setOrderRegistry,
+      isValid: (value) => value instanceof OrderRegistry,
+      errorMessage: "Account workflow orderRegistry must be an OrderRegistry",
+    },
+    {
+      property: "legacyPositions",
+      getValue: getLegacyPositions,
+      setValue: setLegacyPositions,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow legacyPositions must be a Map",
+    },
+    {
+      property: "recoverySellerBuyExecutionByCycle",
+      getValue: getRecoverySellerBuyExecutionByCycle,
+      setValue: setRecoverySellerBuyExecutionByCycle,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow recoverySellerBuyExecutionByCycle must be a Map",
+    },
+    {
+      property: "recoverySellerSellReservations",
+      getValue: getRecoverySellerSellReservations,
+      setValue: setRecoverySellerSellReservations,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow recoverySellerSellReservations must be a Map",
+    },
+    {
+      property: "updateQueue",
+      getValue: getUpdateQueue,
+      setValue: setUpdateQueue,
+      isValid: (value) => value !== null && typeof value?.then === "function",
+      errorMessage: "Account workflow updateQueue must be Promise-like",
+    },
+  ]
+  for (const definition of definitions) {
+    defineValidatedStateProperty({
+      state,
+      ...definition,
+    })
+  }
+}
+
 function createAccountTradingState() {
   // CG and RS accounting share one account-level serialization queue and canonical state.
   let portfolio = new Portfolio()
@@ -87,61 +163,22 @@ function createAccountTradingState() {
   let updateQueue = Promise.resolve()
   const state = createAccountStateCollections()
   state.runTransition = createSerializedAccountTransitionQueue()
-  defineValidatedStateProperty({
+  defineAccountTradingStateProperties({
     state,
-    property: "portfolio",
-    getValue: () => portfolio,
-    setValue: (value) => { portfolio = value },
-    isValid: (value) => value instanceof Portfolio,
-    errorMessage: "Account workflow portfolio must be a Portfolio",
-  })
-  defineValidatedStateProperty({
-    state,
-    property: "recoveryLedgers",
-    getValue: () => recoveryLedgers,
-    setValue: (value) => { recoveryLedgers = value },
-    isValid: (value) => value instanceof Map,
-    errorMessage: "Account workflow recoveryLedgers must be a Map",
-  })
-  defineValidatedStateProperty({
-    state,
-    property: "orderRegistry",
-    getValue: () => orderRegistry,
-    setValue: (value) => { orderRegistry = value },
-    isValid: (value) => value instanceof OrderRegistry,
-    errorMessage: "Account workflow orderRegistry must be an OrderRegistry",
-  })
-  defineValidatedStateProperty({
-    state,
-    property: "legacyPositions",
-    getValue: () => legacyPositions,
-    setValue: (value) => { legacyPositions = value },
-    isValid: (value) => value instanceof Map,
-    errorMessage: "Account workflow legacyPositions must be a Map",
-  })
-  defineValidatedStateProperty({
-    state,
-    property: "recoverySellerBuyExecutionByCycle",
-    getValue: () => recoverySellerBuyExecutionByCycle,
-    setValue: (value) => { recoverySellerBuyExecutionByCycle = value },
-    isValid: (value) => value instanceof Map,
-    errorMessage: "Account workflow recoverySellerBuyExecutionByCycle must be a Map",
-  })
-  defineValidatedStateProperty({
-    state,
-    property: "recoverySellerSellReservations",
-    getValue: () => recoverySellerSellReservations,
-    setValue: (value) => { recoverySellerSellReservations = value },
-    isValid: (value) => value instanceof Map,
-    errorMessage: "Account workflow recoverySellerSellReservations must be a Map",
-  })
-  defineValidatedStateProperty({
-    state,
-    property: "updateQueue",
-    getValue: () => updateQueue,
-    setValue: (value) => { updateQueue = value },
-    isValid: (value) => value !== null && typeof value?.then === "function",
-    errorMessage: "Account workflow updateQueue must be Promise-like",
+    getPortfolio: () => portfolio,
+    setPortfolio: (value) => { portfolio = value },
+    getRecoveryLedgers: () => recoveryLedgers,
+    setRecoveryLedgers: (value) => { recoveryLedgers = value },
+    getOrderRegistry: () => orderRegistry,
+    setOrderRegistry: (value) => { orderRegistry = value },
+    getLegacyPositions: () => legacyPositions,
+    setLegacyPositions: (value) => { legacyPositions = value },
+    getRecoverySellerBuyExecutionByCycle: () => recoverySellerBuyExecutionByCycle,
+    setRecoverySellerBuyExecutionByCycle: (value) => { recoverySellerBuyExecutionByCycle = value },
+    getRecoverySellerSellReservations: () => recoverySellerSellReservations,
+    setRecoverySellerSellReservations: (value) => { recoverySellerSellReservations = value },
+    getUpdateQueue: () => updateQueue,
+    setUpdateQueue: (value) => { updateQueue = value },
   })
   return Object.freeze(state)
 }

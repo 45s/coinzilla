@@ -101,7 +101,7 @@ function createSellAction({ sellDecision, snapshot, marketPrice, marketMetadata 
   if (sellDecision.decision?.outcome !== "SUBMIT") {
     return undefined
   }
-  const orderIntent = sellDecision.orderIntent
+  const { orderIntent } = sellDecision
   if (!orderIntent?.plan || orderIntent.side !== "SELL") {
     throw new TypeError("Recovery Seller SELL policy returned an incomplete order intent")
   }
