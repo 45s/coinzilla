@@ -416,24 +416,26 @@ The first-implementation product decisions below are recorded. Items marked as i
 | Terminal partial/canceled SELL | **TERMINAL STOP:** the cycle remains unresolved after terminal underfill/cancel/reject/expiry; no second SELL and no next BUY. Preserve original order identity and reconcile all actual fills; retain any unproven reservation. | Prevents silently replacing or abandoning a partially executed cycle; no operator reset/resume. |
 | Third-asset fee valuation | **UNRESOLVED SOURCE:** use a reliable quote conversion at execution time or an authoritative broker-supplied quote value; missing/ambiguous asset, rate or timestamp fails closed. | Never treat third-asset commission as zero or use an unverified current market price; no profitability decision is valid without reliable quote valuation.
 
-## 13. Remaining test contract before runtime integration
+## 13. Remaining RS-5 runtime acceptance contract
 
-RS-2b accounting and RS-3 pure policy now have deterministic domain/application coverage for legacy basis, verified Spot allocation, canonical mixed-fill attribution, partial/terminal reconciliation, atomic Portfolio/legacy commits, reservation retention/release, independent profitability gates, mixed-SELL planning, order-type/fee-reserve selection and supported exchange-filter STOP outcomes. RS-3 is complete in merged PR #1127. RS remains non-executable because RS-4 runtime integration and RS-5 offline lifecycle acceptance are not complete. The following integration/lifecycle scenarios remain required before RS can be registered or enabled:
+RS-2b accounting, RS-3 pure policy and RS-4 shared-engine runtime composition are implemented. PR #1515 adds production dispatch, engine-owned submission, account-wide quote/base authorization, terminal mixed-SELL reconciliation and durable global STOP. RS remains non-executable behind the hard acceptance gate until the scoped RS-5 offline lifecycle matrix, exact-head required CI and formal specification acceptance are complete. The following scenarios remain required before the gate may open:
 
 - missing/invalid startup legacy configuration and insufficient verified Spot availability; runtime authorization revocation/expiry is deferred under FITDIB;
-- any missing, contradictory, unexpected, or unmodeled condition at every lifecycle boundary produces a sticky STOP/BLOCK, prevents all new trading actions, preserves exact-once accounting and reservations, continues required reconciliation of already-submitted orders, and cannot self-resume without an approved resolution;
+- any missing, contradictory, unexpected, or unmodeled condition at every lifecycle boundary produces terminal global STOP, prevents all new trading actions, preserves exact-once accounting and reservations, and continues required reconciliation of already-submitted orders; there is no runtime or operator clear/reset/resume path;
 - configured legacy invested quote / original quantity average-cost calculation, including invalid zero/negative/missing inputs;
 - Spot-available versus EARN/off-Spot custody separation, transfer/redeem changes, and insufficient Spot reserve for the next legacy slice;
 - both cross-subsidy directions (recovery profitable / legacy loss-making, and legacy profitable / recovery loss-making), including cases where the combined cycle passes but one independent gate fails; also cover all-gates-pass and break-even legacy;
 - the agreed additive `sellQuantity` calculation (actual net recovery quantity + configured legacy slice), smaller-remainder/final-residual behavior, and constrained-dust classification after successful reconciliation; prove retained bonus dust is permanently excluded from every later RS cycle;
 - one/multiple BUY tranches, open/partial/unknown BUYs, and each approved next-BUY boundary;
-- base, quote, and third-asset commission accounting;
+- base- and quote-asset commission accounting. Third-asset commission valuation is deferred from initial runtime acceptance; if a third-asset fee is encountered without an approved reliable quote value, fail closed and latch STOP;
 - Opening-inventory declaration preserves operator-provided historical basis and provenance without changing verified Spot custody or canonical fill identities; SELL consumes only separately verified/allocated Spot quantity and explicitly attributed legacy quantity; missing or unverified custody fails closed;
 - Portfolio/RS attribution atomicity, identical duplicate fills, and conflicting fill identity;
 - active/in-flight SELL reservation conservation, partial fills, cancellation races, unknown outcomes, and reconciliation;
 - exact decimal precision and exchange-filter boundaries;
 - investment-limit behavior: block new BUYs while an existing recovery SELL remains unchanged and reconciled; advanced pause/disable/resume/abandon transitions are deferred under FITDIB;
-- CG and RS running concurrently on different markets and the same market, with independent order attribution and investment budgets; prove one strategy cannot consume the other's unused budget, shared reservations prevent double-spend, and no fill is duplicated or inventory oversold.
+- CG and RS running concurrently on different markets and the same market, with independent order attribution and investment budgets; prove one strategy cannot consume the other's unused budget, shared reservations prevent double-spend, and no fill is duplicated or inventory oversold;
+- production runtime composition from a canonical BUY fill through an owned mixed SELL decision and sole-cycle reservation, followed by terminal fill reconciliation, atomic accounting commit, reservation release and next-cycle gating across the runtime and accounting workflow suites;
+- STOP remains terminal across every failure path; CC-operator exposes read-only STOP status and has no clear/reset/unpause/resume capability.
 - External/manual order isolation while multiple strategies are active.
 
 Use exact decimal strings and meaningful assertion messages. Follow repository TDD: observe each behavior test RED before implementation and GREEN afterward. Never weaken existing Portfolio, Conservative, broker, or safety coverage.
@@ -466,10 +468,11 @@ The prose is authoritative. BUY cadence and tranche sizing follow the owner-appr
 
 ## 15. Implementation boundary
 
-Until RS-4 shared Trading Engine integration and RS-5 offline lifecycle verification are implemented and reviewed (and this draft specification is formally accepted):
+RS-4 shared Trading Engine integration is implemented in PR #1515. Until scoped RS-5 offline lifecycle verification is complete, exact-head required CI is green, and this draft specification is formally accepted:
 
-- Do not add RS runtime configuration, strategy registration, operator controls, or executable policy.
-- Do not place, cancel, replace, or manage RS orders.
+- Keep `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` false and RS non-executable. Configuration/route presence is not execution permission.
+- Restart/replay recovery and third-asset commission valuation are explicitly deferred. A third-asset fee without an approved quote value must fail closed.
+- STOP is terminal for this runtime. CC-operator may inspect authorized status but cannot clear, reset, unpause or resume STOP; diagnose and fix the underlying cause before a controlled external restart.
 - Do not seed Portfolio with synthetic fills or treat wallet balances as RS inventory.
 - Preserve existing CG_coinGrabber and Conservative behavior and all shared Portfolio/broker safety invariants. Any required shared Portfolio extension must be focused, test-first, and preserve canonical exact-once fill accounting.
 - Keep future deterministic RS decisions in pure domain functions and use existing execution/accounting workflows through explicit application ports.
