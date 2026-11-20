@@ -71,5 +71,9 @@ export function validateRecoverySellerSubmissionOwnership({ order, purpose, owne
     }
     return undefined
   }
-  return normalizeRecoverySellerOwnership({ order, purpose, ownership })
+  return normalizeRecoverySellerOwnership({
+    order,
+    purpose,
+    ownership,
+  })
 }
