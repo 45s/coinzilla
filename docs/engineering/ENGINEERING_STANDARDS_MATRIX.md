@@ -25,7 +25,7 @@ This matrix is the evidence-based S-0 inventory for [issue #1568](https://github
 
 ## S-7 source-tree evidence
 
-The recursive Git tree at `develop` commit `3974d6deb6037a32ee9a233e683f01d5c18ebb78` contained 1,403 entries, including 1,023 JavaScript files. All 1,023 JavaScript basenames followed lower kebab-case; 505 files used the workspace's `.test.js` convention and none used `.spec.js`. The tree contained nine `helpers/` directories, four `adapters/` directories, one `services/` directory, two `utils/` directories, and no `common/` or `misc/` directories.
+The recursive Git tree at `develop` commit `3974d6deb6037a32ee9a233e683f01d5c18ebb78` contained 1,403 entries, including 1,023 JavaScript files. All 1,023 JavaScript filenames use lowercase kebab-case word segments; 37 also use a dot-separated role/scope qualifier (for example `.port.js` or `.lifecycle.test.js`). 505 files used the workspace's `.test.js` convention and none used `.spec.js`. The tree contained nine `helpers/` directories, four `adapters/` directories, one `services/` directory, two `utils/` directories, and no `common/` or `misc/` directories.
 
 The source layouts intentionally differ: Harvester, Brokers and DB use layers where needed; Entities groups by domain concept; Indicators keeps calculation modules flat; Event Bus, Journal, Notifiers and Utils use smaller package-specific layouts. Harvester has a separate layered `test/` tree for cross-module tests, while package unit tests are generally colocated. These are examples of responsibility-based choices, not a mandatory shared template.
 
