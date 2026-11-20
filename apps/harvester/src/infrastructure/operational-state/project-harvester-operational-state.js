@@ -752,9 +752,16 @@ function projectExecutionFillFact({
   const intent = record.data.clientOrderId == null
     ? undefined
     : state.orderIntents.get(record.data.clientOrderId)
-  projectRecoverySellerExecutionFill({ record, state, intent })
+  projectRecoverySellerExecutionFill({
+    record,
+    state,
+    intent,
+  })
   if (intent?.strategyId !== "RS_recoverySeller") {
-    projectConservativeRecoveryFillBoundary({ record, state })
+    projectConservativeRecoveryFillBoundary({
+      record,
+      state,
+    })
   }
 }
 
@@ -769,22 +776,37 @@ function handleTradingOperationalFact({ record, state }) {
   }
   if (record.factType === "ORDER_SUBMISSION_INTENT" &&
       record.data.strategyId === "RS_recoverySeller") {
-    projectRecoverySellerSubmissionIntent({ record, state })
+    projectRecoverySellerSubmissionIntent({
+      record,
+      state,
+    })
   }
   if (record.factType === "ORDER_SUBMISSION_OUTCOME") {
-    projectSubmissionOutcomeFact({ record, state })
+    projectSubmissionOutcomeFact({
+      record,
+      state,
+    })
   }
   if (record.factType === "ORDER_CANCELLATION_OUTCOME") {
-    projectCancellationOutcomeFact({ record, state })
+    projectCancellationOutcomeFact({
+      record,
+      state,
+    })
   }
   if (record.factType === "EXECUTION_FILL_APPLIED") {
-    projectExecutionFillFact({ record, state })
+    projectExecutionFillFact({
+      record,
+      state,
+    })
   }
   if (
     record.factType === "RECOVERY_CYCLE_COMPLETED" ||
     record.factType === "RECOVERY_CYCLE_NOT_COMPLETED"
   ) {
-    projectRecoveryCycleOutcome({ record, state })
+    projectRecoveryCycleOutcome({
+      record,
+      state,
+    })
   }
   session.facts.push(record)
 }

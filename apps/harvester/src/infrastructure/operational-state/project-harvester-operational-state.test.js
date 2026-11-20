@@ -608,7 +608,13 @@ function createRecoverySellerLifecycleRecords() {
       sequence: 7,
     }),
   ]
-  return [...buyRecords, ...createRecoverySellerSellCancellationRecords({ cycleId, positionId })]
+  return [
+    ...buyRecords,
+    ...createRecoverySellerSellCancellationRecords({
+      cycleId,
+      positionId,
+    }),
+  ]
 }
 function createRecoverySellerOrphanFillRecords() {
   return [
@@ -688,7 +694,10 @@ test("projects RS order ownership, fills and fail-closed SELL reservations acros
   assert.equal(lifecycle.restorationEnabled, false)
   assert.equal(lifecycle.requiresExchangeReconciliation, true)
   assert.deepEqual(
-    lifecycle.ordersByCycle[0].orders.map(({ side, status }) => ({ side, status })),
+    lifecycle.ordersByCycle[0].orders.map(({ side, status }) => ({
+      side,
+      status,
+    })),
     [
       {
         side: "BUY",
