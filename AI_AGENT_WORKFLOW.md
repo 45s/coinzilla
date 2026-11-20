@@ -268,7 +268,7 @@ Each domain roadmap is the source of truth for that domain's planned work and st
 For broker changes, keep live/network integration tests separate from default unit tests. Tests that place orders must use TESTNET only, and only under explicit authorization. Never use production credentials or trigger LIVE broker actions as part of CI verification.
 ## 9. Final release: one human review
 
-The purpose of `develop` is to accumulate independently implemented, automatically validated work. Do not ask the user to review every task PR.
+The purpose of `develop` is to accumulate independently implemented, automatically validated work. **Every task PR must still be left open for user review and merge**, as required by §§1 and 8 and by the repository's issue/PR governance. The final release PR provides the milestone-level review of the accumulated `develop` changes; it does not replace task-PR review.
 
 When the user-approved milestone is ready:
 
