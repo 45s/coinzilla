@@ -31,7 +31,9 @@ The streamed RS SELL path now stages canonical fills without applying either acc
 
 Canonical streamed RS BUY fills now dispatch through the RS accounting workflow based on immutable OrderRegistry ownership. RS BUYs do not enter Conservative accounting or Conservative execution totals. RS SELL fills remain fail-closed in the streamed-fill path and must be handled by terminal mixed-SELL reconciliation; they are not applied as standalone CG fills.
 
-## RS-4 production evaluator dispatch — callback path connected
+## RS-4
+
+The production transition evaluator now composes the pure BUY/SELL policies with the durable submitter: it keeps accumulating below the existing SELL profitability target, submits the owned mixed SELL at/above that target, and blocks new submissions for active orders, STOP, pause or incomplete reconciliation. The evaluator deliberately consumes an injected authoritative snapshot; production snapshot composition and durable lifecycle persistence remain separate required steps. production evaluator dispatch — callback path connected
 
 The bootstrap now treats configured RS routes as recovery-enabled for the ADR-0001 restart gate, restores the account-scoped durable STOP workflow from the verified Operational State Store, and does so before appending the current `PROCESS_STARTED` fact. Missing/unverified storage blocks configured RS startup. The operator status snapshot also exposes the restored RS STOP state. The restored workflow is now carried through the startup context into the trading-engine composition and operator facade. RS configuration also activates the existing ADR-0001 prior-process restart block, rather than relying only on Conservative recovery settings.
 
