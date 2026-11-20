@@ -7,6 +7,7 @@
 - **Test-first evidence:** the new module tests were added before source renames and produced the expected missing-module failures. Menu navigation tests cover Ctrl+C/Escape/Q exit, wrapped up/down movement, Enter selection, and unrelated keys.
 - **Verification checkpoint:** Harvester unit tests and configured regression tests pass. Workspace unit tests and coverage, full-workspace ESLint, strict changed-file ESLint, actionlint, external documentation links, helper policy, and the repository-wide production module filename scan pass. The final maintained-Markdown gate identified a repeated blank line in this roadmap; it is corrected in the latest commit and awaits exact-head rerun.
 - **Large-module follow-up:** the 523-line runtime setup module remains a cohesive bootstrap composition boundary with one consumer. A separate focused refactor should split user-data state, candle-history service, trading-engine composition, and operational-state callbacks without fragmenting shared-state behavior.
+
 ## TOP HARVESTER PRIORITY — Multi-provider execution and market-data routing (#1339)
 
 **Priority decision:** [#1339](https://github.com/45s/coinzilla/issues/1339) is the primary Harvester architecture/delivery workstream. Deliver it incrementally and safely; do not interpret this priority as permission to enable another exchange or execute live orders.
