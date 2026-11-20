@@ -84,7 +84,7 @@ function assertOperationalStateRecordEnvelope({
     field: "record.factType",
     maxLength: 64,
   })
-  if (!FACT_TYPES.has(record.factType)) {
+  if (!FACT_TYPES.includes(record.factType)) {
     throw new Error(`Operational State record type is not allowlisted: ${record.factType}`)
   }
   requireNonEmptyString({
