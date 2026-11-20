@@ -87,24 +87,34 @@ isClosed: false,
 })
 
 test("rejects invalid history row shapes and timestamps", () => {
-  assert.throws(() => adaptKlineHistoryRow({ row: null,
-symbol: "BTCUSDT",
-interval: "1m" }), /exactly 12 fields/)
-  assert.throws(() => adaptKlineHistoryRow({ row: historyRow.slice(0, 11),
-symbol: "BTCUSDT",
-interval: "1m" }), /exactly 12 fields/)
-now: 2,
-  assert.throws(() => adaptKlineHistoryRow({ row: [NaN, ...historyRow.slice(1)],
-symbol: "BTCUSDT",
-interval: "1m" }), /openTime/)
-now: 2,
-  assert.throws(() => adaptKlineHistoryRow({ row: [historyRow[0], ...historyRow.slice(1, 6), historyRow[0] - 1, ...historyRow.slice(7)],
-symbol: "BTCUSDT",
-interval: "1m" }), /closeTime/)
-  assert.throws(() => adaptKlineHistoryRow({ row: historyRow,
-symbol: "BTCUSDT",
-interval: "1m",
-now: -1 }), /now/)
+  assert.throws(() => adaptKlineHistoryRow({
+    row: null,
+    symbol: "BTCUSDT",
+    interval: "1m",
+  }), /exactly 12 fields/)
+  assert.throws(() => adaptKlineHistoryRow({
+    row: historyRow.slice(0, 11),
+    symbol: "BTCUSDT",
+    interval: "1m",
+  }), /exactly 12 fields/)
+  assert.throws(() => adaptKlineHistoryRow({
+    row: [NaN, ...historyRow.slice(1)],
+    symbol: "BTCUSDT",
+    interval: "1m",
+    now: 2,
+  }), /openTime/)
+  assert.throws(() => adaptKlineHistoryRow({
+    row: [historyRow[0], ...historyRow.slice(1, 6), historyRow[0] - 1, ...historyRow.slice(7)],
+    symbol: "BTCUSDT",
+    interval: "1m",
+    now: 2,
+  }), /closeTime/)
+  assert.throws(() => adaptKlineHistoryRow({
+    row: historyRow,
+    symbol: "BTCUSDT",
+    interval: "1m",
+    now: -1,
+  }), /now/)
 })
 
 test("rejects malformed live Kline events and symbol mismatches", () => {
