@@ -1,3 +1,5 @@
+import { DEFAULT_PAGE_SIZE } from "../constants.js"
+
 /** Pure validation for the startup exchange-history synchronization boundary. */
 
 function requireIdentifier({ value, field }) {
