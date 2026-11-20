@@ -83,7 +83,10 @@ test("persists a durable reconciliation boundary for the exact terminal RS SELL 
     operationalStateStore: {
       append: async (fact) => {
         appended = fact
-        return { ok: true, data: { durable: true } }
+        return {
+          ok: true,
+          data: { durable: true },
+        }
       },
     },
     terminalOrder: makeOrder(),
@@ -106,7 +109,10 @@ test("does not persist a terminal boundary for incomplete or foreign accounting 
   const operationalStateStore = {
     append: async () => {
       appendCount += 1
-      return { ok: true, data: { durable: true } }
+      return {
+          ok: true,
+          data: { durable: true },
+        }
     },
   }
   const missingFill = await recordRecoverySellerMixedSellReconciled({

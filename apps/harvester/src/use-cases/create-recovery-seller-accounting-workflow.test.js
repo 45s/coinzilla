@@ -284,10 +284,11 @@ test("includes pending BUY quote commitment in the transition snapshot", () => {
   const workflow = makeWorkflow({
     context: {
       ...context,
-    openRegistry: new OrderRegistry({
-      orders: [order],
-      ownerships: [ownership],
-    }),
+      openRegistry: new OrderRegistry({
+        orders: [order],
+        ownerships: [ownership],
+      }),
+    },
   })
   const snapshot = workflow.getTransitionSnapshot(makeTransitionSnapshotInput())
 

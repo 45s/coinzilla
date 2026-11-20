@@ -114,7 +114,10 @@ export function validateRecoverySellerMixedSellReconciledFact({ factType, canoni
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Recovery Seller mixed-SELL reconciliation fact contains unsupported fields")
   }
-  validateIdentity({ canonicalData, factId })
+  validateIdentity({
+    canonicalData,
+    factId,
+  })
   validateAppliedFillIds({ appliedFillIds: canonicalData.appliedFillIds })
   if (
     !TERMINAL_STATUSES.has(canonicalData.terminalStatus) ||

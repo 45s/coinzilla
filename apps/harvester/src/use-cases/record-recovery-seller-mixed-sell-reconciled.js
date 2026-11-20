@@ -75,8 +75,14 @@ function validateReconciliationInput(options) {
   }
   validateTerminalOrder({ terminalOrder })
   validateRecoverySellerOwnership({ ownership })
-  validateCommittedAccounting({ accountingApplied, eligible })
-  return validateCanonicalSellFills({ canonicalFills, terminalOrder })
+  validateCommittedAccounting({
+    accountingApplied,
+    eligible,
+  })
+  return validateCanonicalSellFills({
+    canonicalFills,
+    terminalOrder,
+  })
 }
 /**
  * Commit the durable boundary after terminal mixed-SELL accounting has applied
