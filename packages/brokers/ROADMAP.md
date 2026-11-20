@@ -14,6 +14,14 @@ Tracking: [issue #1446](https://github.com/45s/coinzilla/issues/1446).
 
 **Status: COMPLETE.** The common method/result/error contract and shared Binance/Bitunix offline conformance suite were merged in [PR #1451](https://github.com/45s/coinzilla/pull/1451), merge `e6d3e60aaaa26ad23705564ffc17f786c995b3dd`. Capability-model ownership was subsequently reconciled in [PR #1455](https://github.com/45s/coinzilla/pull/1455): `@coinzilla/entities` owns the single shared value contract; Brokers owns provider-specific declarations/evidence and re-exports the shared class for compatibility. The full method matrix and result/error contract are documented in [BROKER_API.md](./BROKER_API.md). This API completion does not resolve Bitunix's separate Harvester admission blockers in [#1185](https://github.com/45s/coinzilla/issues/1185).
 
+### Canonical Binance order-history pagination mode — #1558
+
+**Status: IN PROGRESS** in [PR #1559](https://github.com/45s/coinzilla/pull/1559), accepted after the Harvester Phase 3 consumer audit in [#1556](https://github.com/45s/coinzilla/issues/1556).
+
+Binance `allOrders.orderId` is an inclusive lower-bound cursor, while the existing `getCanonicalOrderHistory({ symbol, orderId })` deliberately filters its result to the exact requested order for reconnect reconciliation. Preserve that default behavior. The additive `includeFollowingOrders: true` option requires an `orderId` and returns every canonical order in the bounded lower-bound page so a consumer can paginate safely. The method remains one page per call; it does not claim complete account, delisted-market, or retention-window coverage. Bitunix canonical history remains unsupported.
+
+This is a read-only query contract extension only. It does not change order placement/cancellation, mutation outcomes, or trading authority. Do not mark complete until Brokers package tests/coverage and required exact-head CI pass and the PR is merged into `develop`.
+
 ### Public `Broker` constructor follow-up
 
 Tracking: [issue #1497](https://github.com/45s/coinzilla/issues/1497), implementation [PR #1498](https://github.com/45s/coinzilla/pull/1498).
