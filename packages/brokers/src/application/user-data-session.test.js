@@ -771,8 +771,6 @@ describe("Application user-data session recovery reminders", () => {
     await subscription.data.disconnect()
     await fixture.session.stop()
   })
-
-  })
 })
 
 describe("Application user-data recovery after subscriber removal", () => {
