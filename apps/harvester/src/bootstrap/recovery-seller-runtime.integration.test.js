@@ -180,6 +180,9 @@ function createOfflineBroker({ placeOrderFailure = false } = {}) {
           acknowledgedAt: 2,
           updatedAt: 2,
         })
+        if (placeOrderFailure) {
+          throw new Error("offline simulated acknowledgement timeout")
+        }
         return {
           ok: true,
           data: acknowledgedOrder,
