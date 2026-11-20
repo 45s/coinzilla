@@ -103,7 +103,15 @@ function createRepositories() {
     orderCursorSaves,
     orderRepository: {
       upsertHistorical: async (record) => {
-        orders.push(record)
+        const existingIndex = orders.findIndex((existing) =>
+          existing.market.id === record.market.id &&
+          existing.clientOrderId === record.clientOrderId,
+        )
+        if (existingIndex === -1) {
+          orders.push(record)
+        } else {
+          orders[existingIndex] = record
+        }
         orderIdentities.set(`${record.market.id}:${record.brokerOrderId}`, record.clientOrderId)
       },
       findByExchangeOrderIdentity: async ({ marketId, brokerOrderId }) =>
