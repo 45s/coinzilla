@@ -113,3 +113,11 @@ test("returns unknown events unchanged without logging side effects", () => {
 payload: { value: 1 } }
   assert.equal(adaptMsg(message), message)
 })
+
+test("unknown prototype keys are returned unchanged", () => {
+  const message = {
+    e: "toString",
+    payload: "original",
+  }
+  assert.equal(adaptMsg(message), message)
+})
