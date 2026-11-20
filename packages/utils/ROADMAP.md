@@ -15,7 +15,6 @@ owner: utils
 - No public API, dependency, Harvester source/runtime, CI workflow or logger abstraction was added. The canonical repository policy is [Logging and Observability Standard](../../docs/engineering/LOGGING_OBSERVABILITY_STANDARD.md).
 - **Status:** PR open; do not mark complete until exact-head required CI passes and the user merges it.
 
-
 ## Completed — shared SystemCustomError base (request [#1208](https://github.com/45s/coinzilla/issues/1208); merged [PR #1262](https://github.com/45s/coinzilla/pull/1262))
 
 - Added the single domain-neutral native `Error` base in `@coinzilla/utils`, preserving native `cause` and exposing optional immutable `code`, safe scalar `context`, and `retryable` diagnostics.
