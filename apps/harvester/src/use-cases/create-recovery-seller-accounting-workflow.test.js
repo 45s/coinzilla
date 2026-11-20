@@ -64,12 +64,13 @@ function makeOrder({
   executedQuantity = "0",
   clientOrderId = "rs-sell-1",
   brokerOrderId = "broker-sell-1",
+  side = "SELL",
 } = {}) {
   return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
     market,
-    side: "SELL",
+    side,
     type: "LIMIT_MAKER",
     limitPrice: new Money({
       amount: "2",
@@ -175,6 +176,28 @@ function makeContext({ fill = makeFill() } = {}) {
   }
 }
 
+function makeTransitionSnapshotInput() {
+  return {
+    marketMetadata: { market },
+    pairConfig: {
+      sellQuantity: "50",
+      thirdAssetFeeQuoteValue: "0",
+    },
+    accountSnapshot: {
+      balances: [
+        new Balance({
+          free: new Quantity({ amount: "55.01", asset: baseAsset }),
+          locked: new Quantity({ amount: "0", asset: baseAsset }),
+        }),
+      ],
+    },
+    stopState: { status: "RUNNING" },
+    strategyStopped: false,
+    marketPaused: false,
+    reconciliationComplete: true,
+  }
+}
+
 function makeWorkflow(context) {
   return createRecoverySellerAccountingWorkflow({
     initialPortfolio: context.portfolio,
@@ -207,6 +230,82 @@ test("keeps a stable current cycle identity until the cycle is completed", () =>
     marketId: market.id,
   }), undefined)
 })
+
+test("builds a normalized transition snapshot from active SELL and verified legacy Spot state", () => {
+  const context = makeContext()
+  const workflow = makeWorkflow(context)
+  const snapshot = workflow.getTransitionSnapshot(makeTransitionSnapshotInput())
+
+  assert.equal(snapshot.cycleState.cycleId, "rs-cycle-1")
+  assert.equal(snapshot.cycleState.status, "SELL_SUBMITTED")
+  assert.equal(snapshot.recoveryPosition.quantity, "5.01")
+  assert.equal(snapshot.recoveryPosition.spent, "10.02")
+  assert.equal(snapshot.planInput.configuredLegacyQuantity, "50")
+  assert.equal(snapshot.planInput.legacyRemainingQuantity, "50")
+  assert.equal(snapshot.planInput.verifiedUnreservedLegacyQuantity, "50")
+  assert.equal(snapshot.planInput.recoveryCostBasis, "10.02")
+  assert.equal(snapshot.planInput.legacyAverageCost, "2")
+  assert.equal(snapshot.planInput.thirdAssetFeeQuoteValue, "0")
+  assert.equal(snapshot.pendingBuyCommitment, "0")
+  assert.equal(snapshot.activeOrders[0].ownership.cycleId, "rs-cycle-1")
+  assert.equal(snapshot.reconciliationComplete, true)
+})
+
+test("includes pending BUY quote commitment in the transition snapshot", () => {
+  const context = makeContext()
+  const order = makeOrder({
+    clientOrderId: "rs-buy-1",
+    brokerOrderId: "broker-buy-1",
+    side: "BUY",
+  })
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-buy",
+    },
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+  })
+  const workflow = makeWorkflow({
+    ...context,
+    openRegistry: new OrderRegistry({
+      orders: [order],
+      ownerships: [ownership],
+    }),
+  })
+  const snapshot = workflow.getTransitionSnapshot(makeTransitionSnapshotInput())
+
+  assert.equal(snapshot.cycleState.cycleId, "rs-cycle-buy")
+  assert.equal(snapshot.cycleState.status, "ACCUMULATING")
+  assert.equal(snapshot.pendingBuyCommitment, "10.02")
+  assert.equal(snapshot.activeOrders[0].ownership.purpose, "RECOVERY_BUY")
+})
+
+test("creates a stable first-cycle snapshot when the market has no active orders or BUY fills", () => {
+  let nextCycle = 0
+  const context = makeContext()
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: context.portfolio,
+    initialOrderRegistry: new OrderRegistry(),
+    initialLegacyPositions: [{
+      market,
+      position: context.legacyPosition,
+      accounting: context.legacyAccounting,
+    }],
+    createCycleId: () => `new-cycle-${++nextCycle}`,
+  })
+  const snapshot = workflow.getTransitionSnapshot(makeTransitionSnapshotInput())
+
+  assert.equal(snapshot.cycleState.cycleId, "new-cycle-1")
+  assert.equal(snapshot.cycleState.status, "ACCUMULATING")
+  assert.equal(snapshot.recoveryPosition, undefined)
+  assert.equal(snapshot.pendingBuyCommitment, "0")
+  assert.equal(workflow.getOrCreateCycleState({ marketId: market.id }).cycleId, "new-cycle-1")
+})
+
+
 
 
 test("reserves one durable RS SELL per cycle before shared order registration", async () => {
