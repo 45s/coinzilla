@@ -85,4 +85,3 @@ When a user asks an AI agent to implement, build, fix, change, configure, or oth
 ## GitHub-first implementation and verification — mandatory
 
 Implementation requests must be carried out within the user's stated scope, not replaced by advice or pseudocode. GitHub Actions is the repository verification runner. Follow the canonical [AI Agent Workflow](AI_AGENT_WORKFLOW.md) for task branches, commits, PRs, synchronization, exact-head checks, review and merge ownership. A missing local checkout or runner alone is not a reason to stop implementation. Never weaken checks or claim unverified success.
-
