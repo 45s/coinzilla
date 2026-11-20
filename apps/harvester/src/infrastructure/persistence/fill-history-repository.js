@@ -92,12 +92,15 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
   if (!["testnet", "live"].includes(environment)) {
     throw new OrderHistoryValidationError({ field: "environment" })
   }
-  const marketId = requireString(fill.marketId, "marketId")
   const tradeId = requireString(fill.tradeId, "tradeId")
   const fillId = requireString(fill.fillId, "fillId")
-  if (fillId !== `${marketId}:${tradeId}`) {
-    throw new OrderHistoryIntegrityError({ field: "canonicalFillId" })
+  const identitySuffix = `:${tradeId}`
+  if (!fillId.endsWith(identitySuffix) || fillId.length === identitySuffix.length) {
+    throw new OrderHistoryIntegrityError({
+      field: "canonicalFillId",
+    })
   }
+  const marketId = fillId.slice(0, -identitySuffix.length)
   if (fill.side !== "BUY" && fill.side !== "SELL") {
     throw new OrderHistoryValidationError({ field: "side" })
   }
@@ -110,12 +113,7 @@ function mapFillEvent({ fill, sourceEvent, environment } = {}) {
     account_id: requireString(fill.accountId, "accountId"),
     environment,
     market_id: marketId,
-    market_venue: requireString(fill.marketVenue, "marketVenue"),
     symbol: requireString(fill.symbol, "symbol"),
-    base_asset_id: requireString(fill.baseAssetId, "baseAssetId"),
-    base_asset_code: requireString(fill.baseAssetCode, "baseAssetCode"),
-    quote_asset_id: requireString(fill.quoteAssetId, "quoteAssetId"),
-    quote_asset_code: requireString(fill.quoteAssetCode, "quoteAssetCode"),
     exchange_trade_id: tradeId,
     exchange_order_id: requireString(fill.brokerOrderId, "brokerOrderId"),
     client_order_id: fill.clientOrderId === undefined
@@ -222,8 +220,7 @@ function commissionFactsMatch(existing, candidate) {
 function assertDuplicateMatches({ transaction, existing, candidate } = {}) {
   const columns = [
     "canonical_fill_id", "provider_type", "provider_instance_id", "account_id",
-    "environment", "market_id", "market_venue", "symbol", "base_asset_id",
-    "base_asset_code", "quote_asset_id", "quote_asset_code", "exchange_trade_id",
+    "environment", "market_id", "symbol", "exchange_trade_id",
     "exchange_order_id", "client_order_id", "side", "execution_price", "executed_base_quantity",
     "executed_quote_quantity", "liquidity_role", "commission_status", "exchange_executed_at",
   ]
