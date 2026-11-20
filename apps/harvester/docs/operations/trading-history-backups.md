@@ -1,6 +1,6 @@
 # Harvester relational trading-history backups
 
-**Owner:** Harvester application persistence.  
+**Owner:** Harvester application persistence.
 **Tracking:** [#1564](https://github.com/45s/coinzilla/issues/1564) / [PR #1567](https://github.com/45s/coinzilla/pull/1567).
 
 This runbook covers routine backups of the Harvester relational trading-history SQLite database and restore verification. It is separate from the one-time pre-relational migration backup described in the [persistence contract](../persistence/README.md#backup-and-rollback).
