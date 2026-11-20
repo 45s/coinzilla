@@ -427,6 +427,10 @@ async function resolveHarvesterStartupConfiguration({ dependencies }) {
       ...resolved,
       brokerName: dependencies.providerIdentity.providerType,
     })
+  assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs: providerResolved.recoverySellerPairs,
+    acceptanceComplete: RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE,
+  })
   return { resolved: providerResolved }
 }
 

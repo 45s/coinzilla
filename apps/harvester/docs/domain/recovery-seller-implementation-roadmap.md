@@ -38,7 +38,7 @@ The production runtime dispatch now composes the pure BUY/SELL policies with can
 The bootstrap now treats configured RS routes as recovery-enabled for the ADR-0001 restart gate, restores the account-scoped durable STOP workflow from the verified Operational State Store, and does so before appending the current `PROCESS_STARTED` fact. Missing/unverified storage blocks configured RS startup. The operator status snapshot also exposes the restored RS STOP state. The restored workflow is now carried through the startup context into the trading-engine composition and operator facade. RS configuration also activates the existing ADR-0001 prior-process restart block, rather than relying only on Conservative recovery settings.
 
 - `createLatestTransitionEvaluator` dispatches the RS callback after Conservative evaluation inside the shared account transition queue.
-- Bootstrap composes the production callback from the shared accounting workflow, durable STOP workflow, canonical market metadata and account snapshot before broker connection.
+- Bootstrap contains the production composition path from the shared accounting workflow, durable STOP workflow, canonical market metadata and account snapshot. The current hard acceptance gate rejects configured RS routes before the path can run.
 - The engine injects an account-wide action authorizer backed by `allocateStrategyOrderCommitments`; the callback cannot submit without that authorization.
 - RS orders use the engine-owned submitter, immutable OrderRegistry ownership and the existing terminal mixed-SELL reconciler; CG policy, budgets and Positions remain separate.
 - The composition is tested, but the code-level acceptance gate remains false until restart/replay and RS-5 offline lifecycle evidence are complete.
@@ -455,7 +455,7 @@ Canonical fill accounting now distinguishes RS ownership, explicit CG ownership,
 
 ### 2026-11-20 — production runtime dispatch and shared allocation checkpoint (PR #1515)
 
-- Added a bootstrap-composed RS runtime dispatcher using the shared accounting workflow, durable STOP workflow, canonical market metadata and shared account snapshot.
+- Added the bootstrap production-composition path for an RS runtime dispatcher using the shared accounting workflow, durable STOP workflow, canonical market metadata and shared account snapshot. The current hard gate prevents activation.
 - The dispatcher uses the existing serialized account Trading Engine path and engine-owned order submitter; no parallel RS engine was added.
 - Added an account-wide action authorizer using the shared `allocateStrategyOrderCommitments` path. It accounts for active quote/base commitments across strategies while preserving RS-specific pair budgets and cycle inventory. Normal quote/budget exhaustion defers; missing or contradictory inputs latch durable global STOP.
 - Connected the terminal RS SELL path to complete canonical fill-history reconciliation and atomic recovery/legacy accounting. Reservation release follows successful commit only.

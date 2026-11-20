@@ -381,7 +381,7 @@ When continuing this work:
 
 ## RS-4 implementation checkpoint — PR #1515 (2026-11-20)
 
-- Production RS policy/lifecycle dispatch is composed through the existing shared Trading Engine and account-owned serialized transition queue; no parallel strategy engine is introduced.
+- The production RS policy/lifecycle dispatch path is implemented for the existing shared Trading Engine and account-owned serialized transition queue; no parallel strategy engine is introduced. The current hard acceptance gate prevents activation.
 - RS actions use the engine-owned submitter and an account-wide authorization step backed by the shared Portfolio, AccountSnapshot, OrderRegistry and `allocateStrategyOrderCommitments`. Pair budgets and Position ownership remain strategy-specific.
 - Terminal RS SELL processing stages canonical fills until complete terminal reconciliation can atomically commit recovery and legacy accounting. Missing or failed reconciliation remains a durable global STOP.
 - The production composition is protected by `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = false`; configured RS routes fail before broker connection until RS-4/RS-5 acceptance is complete.
