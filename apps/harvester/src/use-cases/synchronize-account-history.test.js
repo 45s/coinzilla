@@ -50,7 +50,7 @@ function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, c
       amount: executed,
       asset: orderMarket.baseAsset,
     }),
-    status: "FILLED",
+    status: executed === "0" ? "NEW" : "FILLED",
     createdAt: 100,
     updatedAt: 200,
     completedAt: 200,
@@ -62,7 +62,7 @@ function createFill({ tradeId = "1", orderId = "10", fillMarket = market, client
     ...identity,
     tradeId,
     brokerOrderId: orderId,
-    clientOrderId: clientOrderId ?? `harvester-${orderId}`,
+    clientOrderId: clientOrderId === null ? undefined : clientOrderId ?? `harvester-${orderId}`,
     market: fillMarket,
     side: "BUY",
     price: new Money({
@@ -88,11 +88,17 @@ function createRepositories() {
   const orders = []
   const fills = []
   const cursors = new Map()
+  const orderIdentities = new Map()
   return {
     orders,
     fills,
     orderRepository: {
-      upsertHistorical: async (record) => orders.push(record),
+      upsertHistorical: async (record) => {
+        orders.push(record)
+        orderIdentities.set(`${record.market.id}:${record.brokerOrderId}`, record.clientOrderId)
+      },
+      findByExchangeOrderIdentity: async ({ marketId, brokerOrderId }) =>
+        orderIdentities.get(`${marketId}:${brokerOrderId}`) ?? null,
     },
     fillRepository: {
       upsert: async (input) => fills.push(input),
