@@ -439,3 +439,20 @@ test("Recovery Seller STOP is observable but cannot be cleared through the opera
   assert.equal(status.data.blockerId, "rs-stop-blocker-1")
   assert.equal(operator.resolveRecoverySellerStop, undefined)
 })
+
+test("Recovery Seller STOP status query still enforces operator authorization", async () => {
+  const recoverySellerStopWorkflow = {
+    getStopState: () => Object.freeze({ status: "STOPPED" }),
+    getBlockerId: () => "rs-stop-blocker-2",
+  }
+  const { engine } = createHarness()
+  const operator = createHarvesterOperator({ engine, recoverySellerStopWorkflow })
+
+  const result = await operator.getRecoverySellerStopState({
+    actor: { id: "telegram-user:untrusted", roles: [] },
+  })
+
+  assert.equal(result.ok, false, "An untrusted actor must not read the operator STOP state.")
+  assert.equal(result.errors[0].code, "OPERATOR_UNAUTHORIZED", "The STOP status query must preserve the standard authorization error.")
+  assert.equal(operator.resolveRecoverySellerStop, undefined, "No operator-facing STOP resolution method may exist.")
+})
