@@ -1168,6 +1168,7 @@ test("synchronizes configured Binance history before activating the trading engi
   const runtime = await startHarvesterForTest({
     loadConfig: async () => appConfig,
     env: binanceEnv,
+    historySyncRequestDelayMs: 0,
     providerIdentity: {
       providerInstanceId: "binanceTestnet",
       providerType: "binance",
