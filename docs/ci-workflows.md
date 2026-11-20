@@ -32,7 +32,7 @@ As verified against the active repository ruleset `develop-core` on 2026-11-18, 
 
 The two Harvester workflows and External Documentation Links run as additional checks but are not required contexts in this ruleset. A workflow trigger starting a run does not, by itself, make that check a merge requirement. Re-read the live ruleset before changing workflow names, job names, or required contexts; never infer required contexts from workflow names. The required `Check JavaScript syntax` context is an aggregator: it requires the independent workspace-quality job (including `pnpm lint`) and, for PRs targeting `develop`, the independent `Check strict ESLint for changed files` job. Either failure blocks the PR. The changed-file job fetches the target branch and complete history, computes the merge base with the PR head, and runs `pnpm lint:changed`; missing history or a missing merge base fails closed. The existing six ruleset contexts are unchanged because the required aggregator retains the existing `Check JavaScript syntax` name.
 
-The Unit Tests and Test Coverage package matrices explicitly list workspace packages. When adding a package, update both matrices in the same PR; the Indicators package is included in both. Indicators coverage runs the package's 90% line / 85% branch threshold script.
+The Unit Tests and Test Coverage package matrices explicitly list workspace packages. The required JavaScript quality workflow now runs a regression-tested matrix-completeness guard against workspace manifests; its tests and full manifest comparison are included in this implementation. This prevents a new package from silently escaping either matrix.
 
 ## Markdown and documentation checks
 
