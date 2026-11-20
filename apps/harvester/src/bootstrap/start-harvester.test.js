@@ -1149,8 +1149,8 @@ test("subscribes every enabled market before waiting for the first market's REST
 test("synchronizes configured Binance history before activating the trading engine", async () => {
   const calls = []
   const broker = createBroker(calls)
-  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
-    calls.push(`history:orders:${symbol}:${orderId}`)
+  broker.getCanonicalOrderHistory = async ({ symbol, orderId, startTime, endTime }) => {
+    calls.push(`history:orders:${symbol}:${orderId ?? "time"}:${startTime ?? ""}:${endTime ?? ""}`)
     return {
       ok: true,
       data: [],
@@ -1178,6 +1178,7 @@ test("synchronizes configured Binance history before activating the trading engi
         upsertHistorical: async (record) => persistedOrders.push(record),
         findByExchangeOrderIdentity: async () => null,
         getOldestPendingOrderId: async () => null,
+        listPendingOrderIds: async () => [],
       },
       fillRepository: {
         upsert: async (input) => persistedFills.push(input),
@@ -1185,6 +1186,7 @@ test("synchronizes configured Binance history before activating the trading engi
       historySyncCursorRepository: {
         get: async () => ({
           lastOrderId: null,
+          lastOrderSyncAt: null,
           lastTradeId: null,
         }),
         saveOrderCursor: async () => {},
@@ -1199,13 +1201,15 @@ test("synchronizes configured Binance history before activating the trading engi
     },
   })
   try {
-    const orderHistoryIndex = calls.indexOf("history:orders:BTCUSDT:0")
+    const orderHistoryIndex = calls.findIndex((call) => call.startsWith("history:orders:BTCUSDT:time:"))
     const fillHistoryIndex = calls.indexOf("history:fills:BTCUSDT:0")
-    assert.ok(orderHistoryIndex >= 0, "Startup must query canonical order history for the configured execution market.")
-    assert.ok(fillHistoryIndex > orderHistoryIndex, "Startup must query trade history after loading the market's order identities.")
+    const marketSubscriptionIndex = calls.indexOf("subscribe:BTCUSDT")
+    assert.ok(orderHistoryIndex >= 0, "Startup must query the configured market's canonical order history using the bounded time-window contract.")
+    assert.ok(fillHistoryIndex > orderHistoryIndex, "Startup must query trade history after completing the market's order-history scan.")
+    assert.ok(marketSubscriptionIndex > fillHistoryIndex, "Startup must finish the read-only history scan before activating market subscriptions.")
     assert.equal(runtime.tradingEnabled, true, "A read-only history scan must not change trading enablement.")
-    assert.equal(persistedOrders.length, 0)
-    assert.equal(persistedFills.length, 0)
+    assert.equal(persistedOrders.length, 0, "An empty exchange order-history response must not create synthetic order rows.")
+    assert.equal(persistedFills.length, 0, "An empty exchange trade-history response must not create synthetic fill rows.")
   } finally {
     await runtime.stop()
   }
