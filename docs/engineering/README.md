@@ -7,6 +7,7 @@ Canonical repository-wide engineering guidance is linked below. Policy ownership
 - [AI refactoring and code audit standard](AI_REFACTORING_AUDIT_STANDARD.md) — mandatory evidence-led process for AI refactoring and code audits
 - [Cross-domain requests](CROSS_DOMAIN_REQUESTS.md) — coordination across ownership boundaries
 - [Modularity standard](MODULARITY_STANDARD.md)
+- [Pure module template](PURE_MODULE_TEMPLATE.md) — optional starting shape with a source-backed example and direct-test pattern
 - [AI task compliance standard](AI_TASK_COMPLIANCE_STANDARD.md) — mandatory standards discovery, preflight readiness, ongoing compliance and completion verification
 - [Engineering standards and enforcement matrix](ENGINEERING_STANDARDS_MATRIX.md) — source-verified inventory and phase coordination for #1568
 - [Configuration standard](CONFIGURATION_STANDARD.md) — configuration ownership, validation, defaults, environment access, secrets and migration
