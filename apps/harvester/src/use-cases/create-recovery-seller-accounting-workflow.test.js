@@ -409,44 +409,7 @@ test("rejects a second SELL reservation for the same recovery cycle", async () =
 })
 
 
-test("commits reconciled RS projections and releases the shared SELL reservation atomically", async () => {
-  const context = makeContext()
-  const workflow = makeWorkflow({ context })
-  const openOrder = context.openRegistry.getOrder({
-    clientOrderId: "rs-sell-1",
-  })
-  const ownership = createOrderOwnership({
-    ownership: {
-      strategyId,
-      positionId,
-      purpose: "RECOVERY_SELL",
-      cycleId: "rs-cycle-1",
-    },
-    clientOrderId: openOrder.clientOrderId,
-    brokerOrderId: openOrder.brokerOrderId,
-  })
-  const reservation = await workflow.reserveSellCycle({
-    order: openOrder,
-    ownership,
-    durableIntent: true,
-  })
-  assert.equal(reservation.ok, true, reservation.errors?.[0]?.message)
-  assert.equal(
-    workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
-    openOrder.clientOrderId,
-  )
-
-  assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1,
-    "An open RS SELL must remain in the shared reservation registry before terminal reconciliation.")
-
-  const result = await workflow.reconcileTerminalMixedSell({
-    reconciliation: context.reconciliation,
-    terminalOrder: context.terminalOrder,
-    canonicalFills: [context.fill],
-    canonicalFillAllocations: [context.allocation],
-    minProfit: "0.2",
-  })
-
+function assertSuccessfulTerminalMixedSellCommit({ workflow, result } = {}) {
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.applied, true,
     "A fully reconciled mixed SELL must apply both immutable accounting projections.")
@@ -463,21 +426,62 @@ test("commits reconciled RS projections and releases the shared SELL reservation
   assert.equal(workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }), undefined,
     "The cycle-scoped SELL reservation must release only after both accounting projections commit.")
   const cycleOutcome = workflow.getCycleOutcome({ cycleId: "rs-cycle-1" })
-  assert.equal(
-    cycleOutcome.status,
-    result.data.profitability?.eligible === true ? "CLOSED" : "UNRESOLVED",
-  )
-  assert.equal(
-    workflow.getCycleStateForMarket({ marketId: market.id }).status,
-    cycleOutcome.status,
-  )
-  const nextCycle = workflow.getOrCreateCycleState({
-    marketId: market.id,
-  })
+  assert.equal(cycleOutcome.status, "CLOSED",
+    "A fully reconciled profitable mixed SELL must close its cycle.")
+  assert.equal(workflow.getCycleStateForMarket({ marketId: market.id }).status, "CLOSED",
+    "The market cycle state must publish the same terminal CLOSED outcome.")
+  const nextCycle = workflow.getOrCreateCycleState({ marketId: market.id })
   assert.notEqual(nextCycle.cycleId, "rs-cycle-1",
     "A new cycle may be allocated only after the prior mixed SELL has fully reconciled and closed.")
   assert.equal(nextCycle.status, "ACCUMULATING",
     "A fully reconciled profitable cycle may transition to a fresh accumulating cycle.")
+}
+
+async function reserveAndReconcileTerminalMixedSell({ workflow, context, openOrder } = {}) {
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: openOrder.clientOrderId,
+    brokerOrderId: openOrder.brokerOrderId,
+  })
+  const reservation = await workflow.reserveSellCycle({
+    order: openOrder,
+    ownership,
+    durableIntent: true,
+  })
+  const result = await workflow.reconcileTerminalMixedSell({
+    reconciliation: context.reconciliation,
+    terminalOrder: context.terminalOrder,
+    canonicalFills: [context.fill],
+    canonicalFillAllocations: [context.allocation],
+    minProfit: "0.2",
+  })
+  return { reservation, result }
+}
+
+test("commits reconciled RS projections and releases the shared SELL reservation atomically", async () => {
+  const context = makeContext()
+  const workflow = makeWorkflow({ context })
+  const openOrder = context.openRegistry.getOrder({ clientOrderId: "rs-sell-1" })
+  const { reservation, result } = await reserveAndReconcileTerminalMixedSell({
+    workflow,
+    context,
+    openOrder,
+  })
+
+  assert.equal(reservation.ok, true, reservation.errors?.[0]?.message)
+  assert.equal(
+    workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
+    openOrder.clientOrderId,
+    "The cycle reservation must retain the exact SELL identity until terminal reconciliation commits.",
+  )
+  assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1,
+    "An open RS SELL must remain in the shared reservation registry before terminal reconciliation.")
+  assertSuccessfulTerminalMixedSellCommit({ workflow, result })
 })
 
 test("keeps both accounting projections and the SELL reservation unchanged when durable reconciliation commit fails", async () => {
