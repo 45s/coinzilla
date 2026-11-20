@@ -240,20 +240,66 @@ function createHistoryCursorFixture() {
   let orderPage = 0
   const tradePages = [
     [
-      { id: 10, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 10 },
-      { id: 11, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 11 },
+      {
+        id: 10,
+        symbol: "DOGEFDUSD",
+        orderId: 1,
+        qty: "1",
+        price: "1",
+        quoteQty: "1",
+        commission: "0",
+        commissionAsset: "DOGE",
+        isBuyer: true,
+        isMaker: true,
+        time: 10,
+      },
+      {
+        id: 11,
+        symbol: "DOGEFDUSD",
+        orderId: 1,
+        qty: "1",
+        price: "1",
+        quoteQty: "1",
+        commission: "0",
+        commissionAsset: "DOGE",
+        isBuyer: true,
+        isMaker: true,
+        time: 11,
+      },
     ],
-    [{ id: 12, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 12 }],
+    [
+      {
+        id: 12,
+        symbol: "DOGEFDUSD",
+        orderId: 1,
+        qty: "1",
+        price: "1",
+        quoteQty: "1",
+        commission: "0",
+        commissionAsset: "DOGE",
+        isBuyer: true,
+        isMaker: true,
+        time: 12,
+      },
+    ],
   ]
   const orderPages = [
-    [{ symbol: "DOGEFDUSD", orderId: 10 }, { symbol: "DOGEFDUSD", orderId: 11 }],
-    [{ symbol: "DOGEFDUSD", orderId: 12 }],
+    [
+      { symbol: "DOGEFDUSD", orderId: 10 },
+      { symbol: "DOGEFDUSD", orderId: 11 },
+    ],
+    [
+      { symbol: "DOGEFDUSD", orderId: 12 },
+    ],
   ]
   const { broker, rpc } = createBroker({
     myTrades: () => tradePages[tradePage++],
     allOrders: () => orderPages[orderPage++],
   })
-  return { broker, rpc }
+  return {
+    broker,
+    rpc,
+  }
 }
 
 test("history cursors advance from the last returned ID without repeating records", async () => {
