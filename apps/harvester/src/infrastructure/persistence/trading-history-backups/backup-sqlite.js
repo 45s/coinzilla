@@ -63,6 +63,32 @@ export async function createOnlineBackup({
   return result
 }
 
+async function closeRestoreDatabase({
+  database,
+  connected,
+  failure,
+  environment,
+  backupFilename,
+} = {}) {
+  if (!connected) {
+    return failure
+  }
+  try {
+    await database.close()
+    return failure
+  } catch (cause) {
+    return failure
+      ? new AggregateError([failure, cause], "Restore candidate close failed.")
+      : createBackupError({
+        stage: "restore-close",
+        code: "HARVESTER_HISTORY_BACKUP_RESTORE_FAILED",
+        cause,
+        environment,
+        backupFilename,
+      })
+  }
+}
+
 export async function restoreAndValidate({
   backupFilename,
   temporaryDirectory,
@@ -101,21 +127,13 @@ export async function restoreAndValidate({
         backupFilename,
       })
   }
-  if (connected) {
-    try {
-      await database.close()
-    } catch (cause) {
-      failure = failure
-        ? new AggregateError([failure, cause], "Restore candidate close failed.")
-        : createBackupError({
-          stage: "restore-close",
-          code: "HARVESTER_HISTORY_BACKUP_RESTORE_FAILED",
-          cause,
-          environment,
-          backupFilename,
-        })
-    }
-  }
+  failure = await closeRestoreDatabase({
+    database,
+    connected,
+    failure,
+    environment,
+    backupFilename,
+  })
   if (failure) {
     throw failure
   }

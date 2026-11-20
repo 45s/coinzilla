@@ -1,7 +1,6 @@
 import assert from "node:assert/strict"
 import {
   lstat,
-  mkdir,
   mkdtemp,
   rm,
   symlink,

@@ -1,5 +1,5 @@
 import { readdir, unlink } from "node:fs/promises"
-import { basename, join } from "node:path"
+import { join } from "node:path"
 import { createBackupError } from "./errors.js"
 import { readAndValidateManifest } from "./backup-manifest.js"
 
