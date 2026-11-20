@@ -11550,7 +11550,7 @@ test("routes terminal RS SELL events through mixed-ownership accounting reconcil
     initialState: { orderRegistry },
     recoverySellerWorkflow,
     recoverySellerStopWorkflow,
-    getTerminalFills: async () => [],
+    getTerminalFills: () => [],
   })
   const terminalOrder = new CanonicalOrder({
     clientOrderId: order.clientOrderId,
