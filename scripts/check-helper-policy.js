@@ -68,7 +68,6 @@ const PROHIBITED_API_PATTERNS = [
     pattern: /\bnew\s+Date\s*\(\s*\)/,
     label: "uncontrolled Date construction",
   },
-  },
   {
     pattern: /\bperformance\.now\s*\(/,
     label: "performance.now",
