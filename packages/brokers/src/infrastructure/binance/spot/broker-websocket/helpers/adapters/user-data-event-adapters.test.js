@@ -1,10 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { adaptUser } from "./user.js"
+import { userDataEventAdapters } from "./user-data-event-adapters.js"
 
 test("maps balance updates without converting exact decimal strings", () => {
-  assert.deepEqual(adaptUser.balanceUpdate({
+  assert.deepEqual(userDataEventAdapters.balanceUpdate({
     a: "USDT",
     d: "-12.3400",
     T: 1_730_000_000_100,
@@ -19,7 +19,7 @@ test("maps balance updates without converting exact decimal strings", () => {
 })
 
 test("maps legacy outbound account information and every balance", () => {
-  assert.deepEqual(adaptUser.outboundAccountInfo({
+  assert.deepEqual(userDataEventAdapters.outboundAccountInfo({
     E: 101,
     m: 1,
     t: 2,
@@ -55,11 +55,11 @@ locked: "0.01000000" },
 locked: "0" },
     },
   })
-  assert.deepEqual(adaptUser.outboundAccountInfo({ B: [] }).balances, {})
+  assert.deepEqual(userDataEventAdapters.outboundAccountInfo({ B: [] }).balances, {})
 })
 
 test("maps outbound account position as an ordered balance list", () => {
-  assert.deepEqual(adaptUser.outboundAccountPosition({
+  assert.deepEqual(userDataEventAdapters.outboundAccountPosition({
     B: [
       { a: "ETH",
 f: "2.000",
@@ -83,7 +83,7 @@ locked: "10.00" },
     eventType: "outboundAccountPosition",
     lastAccountUpdate: 201,
   })
-  assert.deepEqual(adaptUser.outboundAccountPosition({ B: [] }).balances, [])
+  assert.deepEqual(userDataEventAdapters.outboundAccountPosition({ B: [] }).balances, [])
 })
 
 const executionReportInput = {
@@ -156,11 +156,11 @@ const expectedExecutionReport = {
 }
 
 test("maps the full Binance execution report without normalizing wire fields", () => {
-  assert.deepEqual(adaptUser.executionReport(executionReportInput), expectedExecutionReport)
+  assert.deepEqual(userDataEventAdapters.executionReport(executionReportInput), expectedExecutionReport)
 })
 
 test("maps list status and each child order", () => {
-  assert.deepEqual(adaptUser.listStatus({
+  assert.deepEqual(userDataEventAdapters.listStatus({
     E: 301,
     s: "ETHUSDT",
     g: 77,
@@ -198,5 +198,5 @@ orderId: 89,
 clientOrderId: "stop-loss" },
     ],
   })
-  assert.deepEqual(adaptUser.listStatus({ O: [] }).orders, [])
+  assert.deepEqual(userDataEventAdapters.listStatus({ O: [] }).orders, [])
 })

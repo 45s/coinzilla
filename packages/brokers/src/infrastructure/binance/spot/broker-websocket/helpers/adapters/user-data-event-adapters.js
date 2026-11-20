@@ -4,7 +4,7 @@
  *
  * @type {{balanceUpdate: (message: object) => object, outboundAccountInfo: (message: object) => object, outboundAccountPosition: (message: object) => object, executionReport: (message: object) => object, listStatus: (message: object) => object}}
  */
-export const adaptUser = Object.freeze({
+export const userDataEventAdapters = Object.freeze({
   balanceUpdate: (message) => ({
     asset: message.a,
     balanceDelta: message.d,

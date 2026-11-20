@@ -1,9 +1,9 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { adaptMsg } from "./adapt-msg.js"
+import { adaptBinanceWebSocketEvent } from "./adapt-binance-websocket-event.js"
 
 test("preserves both Binance execution-report client order identifiers", () => {
-  const event = adaptMsg({
+  const event = adaptBinanceWebSocketEvent({
     e: "executionReport",
 E: 1730000000000,
 s: "ZROUSDT",
@@ -42,7 +42,7 @@ Y: "0",
 test("uses Binance transaction time rather than event publication time for fills", () => {
   const transactionTime = 1_793_829_102_377
   const eventPublicationTime = transactionTime + 1
-  const event = adaptMsg({
+  const event = adaptBinanceWebSocketEvent({
     e: "executionReport",
 E: eventPublicationTime,
 s: "ZROUSDT",
@@ -74,7 +74,7 @@ Y: "9.08",
 })
 
 test("preserves bounded allowlisted Binance execution-report evidence without copying arbitrary fields", () => {
-  const event = adaptMsg({
+  const event = adaptBinanceWebSocketEvent({
     e: "executionReport",
 E: 1730000000000,
 T: 1730000000001,
@@ -111,7 +111,7 @@ signature: "secret",
 test("returns unknown events unchanged without logging side effects", () => {
   const message = { e: "unknownEvent",
 payload: { value: 1 } }
-  assert.equal(adaptMsg(message), message)
+  assert.equal(adaptBinanceWebSocketEvent(message), message)
 })
 
 test("unknown prototype keys are returned unchanged", () => {
@@ -119,5 +119,5 @@ test("unknown prototype keys are returned unchanged", () => {
     e: "toString",
     payload: "original",
   }
-  assert.equal(adaptMsg(message), message)
+  assert.equal(adaptBinanceWebSocketEvent(message), message)
 })
