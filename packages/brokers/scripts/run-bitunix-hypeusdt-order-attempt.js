@@ -292,6 +292,7 @@ function formatHypeUsdtPreflightSummary({ preflight }) {
   const { order } = preflight
   return [
     "BITUNIX SPOT — LIVE OPERATOR ORDER ATTEMPT",
+    "Provider: Bitunix Spot",
     "Endpoint: https://openapi.bitunix.com (LIVE)",
     `Order: ${order.side} ${order.type} ${order.symbol}`,
     `Limit price: ${order.price} USDT`,
@@ -305,8 +306,9 @@ function formatHypeUsdtPreflightSummary({ preflight }) {
     "Open-order response completeness is not established; an empty result is not proof of account-wide absence.",
     "Price tick and quantity step remain UNKNOWN; the exchange may reject the submitted price or quantity.",
     "The balance is a point-in-time response without an authoritative source timestamp and may change before dispatch.",
-    "Free USDT is below the order notional, but other exchange-side credits or account settings may still affect acceptance.",
+    "Bonuses, transfers, other assets, account settings, or exchange behavior may still affect acceptance.",
     "This balance observation does NOT guarantee an insufficient-balance rejection.",
+    "A successful or rejected LIVE response is one observation, not a production-readiness guarantee.",
     "If accepted, the 30 USDT limit may be marketable and could fill immediately at the live ask.",
     "Exactly one placement call will be made. No retry, cancel, transfer, or second mutation will follow.",
   ].join("\n")
