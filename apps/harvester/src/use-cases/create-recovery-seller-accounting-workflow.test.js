@@ -330,7 +330,7 @@ test("commits reconciled RS projections and releases the shared SELL reservation
   const cycleOutcome = workflow.getCycleOutcome({ cycleId: "rs-cycle-1" })
   assert.equal(
     cycleOutcome.status,
-    result.data.profitability.eligible ? "CLOSED" : "UNRESOLVED",
+    result.data.profitability?.eligible === true ? "CLOSED" : "UNRESOLVED",
   )
   assert.equal(
     workflow.getCycleStateForMarket({ marketId: market.id }).status,

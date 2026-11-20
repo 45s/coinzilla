@@ -378,13 +378,14 @@ function reconcileTerminalMixedSellTransition({
   if (reservation?.clientOrderId === terminalRegisteredOrder.clientOrderId) {
     state.recoverySellerSellReservations.delete(ownership.cycleId)
   }
-  const cycleStatus = result.profitability.eligible ? "CLOSED" : "UNRESOLVED"
+  const eligible = result.profitability?.eligible === true
+  const cycleStatus = eligible ? "CLOSED" : "UNRESOLVED"
   const cycleOutcome = Object.freeze({
     marketId: terminalRegisteredOrder.market.id,
     cycleId: ownership.cycleId,
     positionId: ownership.positionId,
     status: cycleStatus,
-    eligible: result.profitability.eligible,
+    eligible,
   })
   state.recoverySellerCycleOutcomes.set(ownership.cycleId, cycleOutcome)
   state.recoverySellerCycleStates.set(terminalRegisteredOrder.market.id, cycleOutcome)
@@ -468,6 +469,21 @@ function validateSharedRecoverySellerWorkflowState({
   }
 }
 
+function hasConflictingActiveRecoverySellerSell({ state, order, cycleId }) {
+  return state.orderRegistry.getActiveOrders().some((activeOrder) => {
+    if (activeOrder.clientOrderId === order.clientOrderId ||
+        activeOrder.side !== "SELL") {
+      return false
+    }
+    const activeOwnership = state.orderRegistry.getOwnership({
+      clientOrderId: activeOrder.clientOrderId,
+      brokerOrderId: activeOrder.brokerOrderId,
+    })
+    return activeOwnership?.strategyId === StrategyId.RECOVERY_SELLER &&
+      activeOwnership.cycleId === cycleId
+  })
+}
+
 function reserveRecoverySellerSellCycleTransition({
   state,
   order,
@@ -499,18 +515,12 @@ function reserveRecoverySellerSellCycleTransition({
     }
     throw new Error(`Recovery Seller cycle ${normalizedOwnership.cycleId} is already reserved by SELL order ${existing.clientOrderId}`)
   }
-  for (const activeOrder of state.orderRegistry.getActiveOrders()) {
-    if (activeOrder.clientOrderId === order.clientOrderId) {
-      continue
-    }
-    const activeOwnership = state.orderRegistry.getOwnership({
-      clientOrderId: activeOrder.clientOrderId,
-    })
-    if (activeOrder.side === "SELL" &&
-        activeOwnership?.strategyId === StrategyId.RECOVERY_SELLER &&
-        activeOwnership.cycleId === normalizedOwnership.cycleId) {
-      throw new Error(`Recovery Seller cycle ${normalizedOwnership.cycleId} already has an active SELL order`)
-    }
+  if (hasConflictingActiveRecoverySellerSell({
+    state,
+    order,
+    cycleId: normalizedOwnership.cycleId,
+  })) {
+    throw new Error(`Recovery Seller cycle ${normalizedOwnership.cycleId} already has an active SELL order`)
   }
   state.recoverySellerSellReservations.set(normalizedOwnership.cycleId, Object.freeze({
     clientOrderId: order.clientOrderId,
@@ -528,6 +538,33 @@ function reserveRecoverySellerSellCycleTransition({
   return Object.freeze({
     durable: true,
   })
+}
+
+function ensureRecoverySellerWorkflowMaps(state) {
+  const properties = [
+    ["recoverySellerBuyExecutionByCycle", "sharedState.recoverySellerBuyExecutionByCycle must be a Map"],
+    ["recoverySellerSellReservations", "sharedState.recoverySellerSellReservations must be a Map"],
+    ["recoverySellerCycleStates", "sharedState.recoverySellerCycleStates must be a Map"],
+    ["recoverySellerCycleOutcomes", "sharedState.recoverySellerCycleOutcomes must be a Map"],
+  ]
+  for (const [property, errorMessage] of properties) {
+    if (state[property] === undefined && !Object.isFrozen(state)) {
+      state[property] = new Map()
+    }
+    if (!(state[property] instanceof Map)) {
+      throw new TypeError(errorMessage)
+    }
+  }
+}
+
+function validateRecoverySellerWorkflowState(state) {
+  if (!(state.portfolio instanceof Portfolio)) {
+    throw new TypeError("initialPortfolio must be a Portfolio")
+  }
+  if (!(state.orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("initialOrderRegistry must be an OrderRegistry")
+  }
+  ensureRecoverySellerWorkflowMaps(state)
 }
 
 function createRecoverySellerWorkflowState({
@@ -579,8 +616,10 @@ function createRecoverySellerWorkflowState({
   if (!(state.recoverySellerCycleOutcomes instanceof Map)) {
     throw new TypeError("sharedState.recoverySellerCycleOutcomes must be a Map")
   }
+  validateRecoverySellerWorkflowState(state)
   return state
 }
+
 
 function createRecoverySellerAccountingOperations({
   state,
@@ -663,8 +702,10 @@ function createRecoverySellerCycleStateApi({ state, createCycleId }) {
         marketId,
         createCycleId,
       }),
-    getCycleStateForMarket: ({ marketId } = {}) => state.recoverySellerCycleStates.get(marketId),
-    getCycleOutcome: ({ cycleId } = {}) => state.recoverySellerCycleOutcomes.get(cycleId),
+    getCycleStateForMarket: ({ marketId } = {}) =>
+      state.recoverySellerCycleStates.get(marketId),
+    getCycleOutcome: ({ cycleId } = {}) =>
+      state.recoverySellerCycleOutcomes.get(cycleId),
     getLatestBuyExecutionForMarket: ({ marketId } = {}) =>
       getLatestBuyExecutionForMarket({ state, marketId }),
     getReservedSellCycleForMarket: ({ marketId } = {}) =>
