@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { createReadStream } from "node:fs"
-import { lstat, readFile } from "node:fs/promises"
+import { readFile } from "node:fs/promises"
 import {
   basename,
   dirname,

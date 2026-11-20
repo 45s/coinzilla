@@ -2,7 +2,8 @@ import {
   createSqliteDatabase,
   restoreSqliteDatabase,
 } from "@coinzilla/db"
-import { createBackupError } from "./errors.js"
+import { join } from "node:path"
+import { createBackupError, isBackupError } from "./errors.js"
 import {
   assertCurrentSchema,
   validateRestoredDatabase,
@@ -33,7 +34,7 @@ export async function createOnlineBackup({
       pagesCopied,
     }
   } catch (cause) {
-    failure = cause instanceof Error && cause.code?.startsWith("HARVESTER_HISTORY_BACKUP_")
+    failure = isBackupError(cause)
       ? cause
       : createBackupError({
         stage: "online-backup",
@@ -68,7 +69,7 @@ export async function restoreAndValidate({
   manifest,
   environment,
 } = {}) {
-  const restoredFilename = `${temporaryDirectory}/restored-history.sqlite`
+  const restoredFilename = join(temporaryDirectory, "restored-history.sqlite")
   let database
   let connected = false
   let result
@@ -90,7 +91,7 @@ export async function restoreAndValidate({
       backupFilename,
     })
   } catch (cause) {
-    failure = cause?.code?.startsWith("HARVESTER_HISTORY_BACKUP_")
+    failure = isBackupError(cause)
       ? cause
       : createBackupError({
         stage: "restore-validation",

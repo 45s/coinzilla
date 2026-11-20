@@ -1,19 +1,7 @@
 import { readdir, unlink } from "node:fs/promises"
 import { basename, join } from "node:path"
-import { OrderHistoryPersistenceError } from "../order-history-persistence-error.js"
-import { readAndValidateManifest } from "./verify-backup.js"
-
-function createRetentionError({ environment, backupFilename, cause } = {}) {
-  return new OrderHistoryPersistenceError({
-    stage: "backup-retention",
-    code: "HARVESTER_HISTORY_BACKUP_RETENTION_FAILED",
-    cause,
-    context: {
-      environment,
-      ...(backupFilename ? { backupFilename: basename(backupFilename) } : {}),
-    },
-  })
-}
+import { createBackupError } from "./errors.js"
+import { readAndValidateManifest } from "./backup-manifest.js"
 
 async function readManagedBackupPairs({ backupDirectory, environment } = {}) {
   const entries = await readdir(backupDirectory, {
@@ -58,10 +46,12 @@ async function removeBackupPair({ pair, environment } = {}) {
     if (cause.code === "ENOENT") {
       return
     }
-    throw createRetentionError({
+    throw createBackupError({
+      stage: "backup-retention",
+      code: "HARVESTER_HISTORY_BACKUP_RETENTION_FAILED",
+      cause,
       environment,
       backupFilename: pair.backupFilename,
-      cause,
     })
   }
 }
@@ -72,9 +62,10 @@ export async function rotateBackups({
   keep,
 } = {}) {
   if (!Number.isSafeInteger(keep) || keep < 1 || keep > 3650) {
-    throw createRetentionError({
+    throw createBackupError({
+      stage: "backup-retention-validation",
+      code: "HARVESTER_HISTORY_BACKUP_INVALID_INPUT",
       environment,
-      cause: new TypeError("Backup retention count must be between 1 and 3650."),
     })
   }
   let pairs
@@ -84,9 +75,11 @@ export async function rotateBackups({
       environment,
     })
   } catch (cause) {
-    throw createRetentionError({
-      environment,
+    throw createBackupError({
+      stage: "backup-retention",
+      code: "HARVESTER_HISTORY_BACKUP_RETENTION_FAILED",
       cause,
+      environment,
     })
   }
   const sortedPairs = sortBackupPairs(pairs)

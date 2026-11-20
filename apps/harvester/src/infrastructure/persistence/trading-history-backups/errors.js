@@ -18,3 +18,8 @@ export function createBackupError({
     },
   })
 }
+
+export function isBackupError(error) {
+  return typeof error?.code === "string" &&
+    error.code.startsWith("HARVESTER_HISTORY_BACKUP_")
+}
