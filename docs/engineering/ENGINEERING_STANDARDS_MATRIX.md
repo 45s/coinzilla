@@ -20,7 +20,7 @@ This matrix is the evidence-based S-0 inventory for [issue #1568](https://github
 - **S-7 source-tree baseline:** `895f3aa4a9ebb93a12dd95168b2e56118cc3173a` (2026-11-20; includes merged S-6 and helper-naming CI PR #1587, plus Telegram naming remediation PR #1589).
 - **Audit date:** 2026-11-20
 - **Scope:** repository-wide engineering policies, package ownership/instructions, workspace manifests, documented source architecture, quality workflows, and overlapping engineering/documentation initiatives.
-- **No runtime changes:** this phase is documentation and repository-state audit only. No exchange, account, TESTNET, or LIVE operations were performed.
+- **S-0 audit scope:** the original audit was documentation and repository-state only; no exchange, account, TESTNET, or LIVE operations were performed. S-7 PR #1593 includes only a behavior-preserving internal Broker identifier rename; it does not change runtime behavior or perform exchange operations.
 - **Evidence limitation:** workspace dependency declarations and documented module boundaries were inspected. A complete source-level relative-import graph was not generated in S-0; do not treat the manifest graph as proof that no internal import cycles or boundary violations exist. Live GitHub ruleset readback was not available through the current repository connection; ruleset details below are identified as the last documented verification, not a new live verification.
 
 ## S-7 source-tree evidence
