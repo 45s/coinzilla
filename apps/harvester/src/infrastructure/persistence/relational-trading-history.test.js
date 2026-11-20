@@ -223,6 +223,18 @@ async function publishAppliedFill({ eventBus, fill } = {}) {
   await eventBus.flush()
 }
 
+function assertLinkedFill({ database } = {}) {
+  const order = database.prepare(
+    "SELECT id, strategy_id, position_id, cycle_id FROM orders",
+  ).get()
+  const fill = database.prepare("SELECT * FROM fills").get()
+  assert.ok(order, "A later canonical order event must create the relational parent order.")
+  assert.equal(fill.order_id, order.id, "A previously unlinked fill must link to the matching scoped order.")
+  assert.equal(fill.strategy_id, order.strategy_id, "Strategy attribution must come only from the verified order relationship.")
+  assert.equal(fill.position_id, order.position_id, "Position attribution must come only from the verified order relationship.")
+  assert.equal(fill.cycle_id, order.cycle_id, "Cycle attribution must come only from the verified order relationship.")
+}
+
 function assertFillForeignKey({ database, fill } = {}) {
   const foreignKeys = database.prepare("PRAGMA foreign_key_list(fills)").all()
   assert.ok(
@@ -411,6 +423,34 @@ test("persists actual applied fills asynchronously with exact execution and comm
         fill,
       })
     },
+  })
+})
+
+test("links an earlier fill to its later matching order projection without inventing attribution", async (t) => {
+  const context = await createTestContext({ t })
+  const persistence = await preparePersistence({ context })
+  const fill = createAppliedFillEvent({
+    overrides: {
+      clientOrderId: "harvester-BTCUSDT-001",
+      brokerOrderId: "broker-order-001",
+    },
+  })
+  await publishAppliedFill({
+    eventBus: context.eventBus,
+    fill,
+  })
+  assert.equal((await persistence.fillObserver.flush()).ok, true, "A fill may be persisted before its order projection exists.")
+  context.eventBus.publish({
+    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+    source: "harvester",
+    data: createOrderHistoryEventData(),
+  })
+  await context.eventBus.flush()
+  assert.equal((await persistence.observer.flush()).ok, true, "The legacy order-history observer must remain active.")
+  assert.equal((await persistence.relationalOrderObserver.flush()).ok, true, "The relational order observer must persist the later order event.")
+  await inspectSqlite({
+    filename: context.filename,
+    work: (database) => assertLinkedFill({ database }),
   })
 })
 
