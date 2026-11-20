@@ -30,9 +30,9 @@ const market = new Market({
   quoteAsset,
 })
 
-function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, clientOrderId } = {}) {
+function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, clientOrderId, providerIdentity = identity } = {}) {
   return new CanonicalOrder({
-    ...identity,
+    ...providerIdentity,
     clientOrderId: clientOrderId ?? `harvester-${orderId}`,
     brokerOrderId: orderId,
     market: orderMarket,
@@ -210,6 +210,41 @@ test("paginates configured-market order and trade history and persists exchange 
     calls.fills.map(({ fromId }) => fromId),
     [0, 2],
   )
+})
+
+test("rejects exchange orders carrying a different provider or account identity", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const broker = createPagedBroker({
+    orders: [createOrder({
+      providerIdentity: {
+        ...identity,
+        accountId: "different-account",
+      },
+    })],
+    fills: [],
+    calls,
+  })
+  const result = await synchronizeAccountHistory({
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 1,
+    requestDelayMs: 0,
+    now: () => 300,
+  })
+
+  assert.equal(result.ok, false, "A mismatched exchange account must fail history synchronization.")
+  assert.match(result.errors[0].message, /provider identity conflicts/i, "The failure must identify the provider-identity conflict.")
+  assert.equal(repositories.orders.length, 0, "A foreign-account order must never be persisted under the configured account.")
+  assert.equal(repositories.fills.length, 0, "No fill scan may proceed after an identity-conflicting order page.")
 })
 
 test("fails closed when an exchange history cursor does not advance", async () => {
