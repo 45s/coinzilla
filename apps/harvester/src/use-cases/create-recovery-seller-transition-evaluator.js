@@ -185,14 +185,45 @@ function evaluateSell({ evaluateSellDecision, snapshot, input }) {
  * @param {object} input Dependencies for reading the current RS snapshot and submitting one owned action.
  * @param {Function} input.getSnapshot Read the authoritative market/cycle/account snapshot.
  * @param {Function} input.submitOrder Submit through createRecoverySellerOrderSubmitter.
+ * @param {Function} [input.authorizeAction] Authorize account-wide quote/base commitments before submission.
  * @param {Function} [input.evaluateBuyDecision] Pure RS BUY policy override for testing.
  * @param {Function} [input.evaluateSellDecision] Pure RS SELL policy override for testing.
  * @returns {Function} Async transition evaluator for createLatestTransitionEvaluator.
  */
+async function submitAuthorizedAction({
+  authorizeAction,
+  submitOrder,
+  action,
+  lifecycleDecision,
+  snapshot,
+  input,
+} = {}) {
+  const authorization = await authorizeAction({
+    action,
+    lifecycleDecision,
+    snapshot,
+    input,
+  })
+  if (authorization?.ok !== true || authorization.data?.allowed !== true) {
+    if (authorization?.ok === true || authorization?.ok === false) {
+      return authorization
+    }
+    return toResult({
+      error: new TypeError("Recovery Seller action authorization returned an invalid result"),
+    })
+  }
+  return submitOrder({
+    lifecycleDecision,
+    action,
+    marketMetadata: input.marketMetadata,
+  })
+}
+
 async function evaluateRecoverySellerTransition({
   input,
   getSnapshot,
   submitOrder,
+  authorizeAction,
   evaluateBuyDecision,
   evaluateSellDecision,
 }) {
@@ -216,10 +247,13 @@ async function evaluateRecoverySellerTransition({
         marketMetadata: input.marketMetadata,
       })
       if (action) {
-        return submitOrder({
-          lifecycleDecision: sellDecision.decision,
+        return submitAuthorizedAction({
+          authorizeAction,
+          submitOrder,
           action,
-          marketMetadata: input.marketMetadata,
+          lifecycleDecision: sellDecision.decision,
+          snapshot,
+          input,
         })
       }
     }
@@ -235,10 +269,13 @@ async function evaluateRecoverySellerTransition({
     if (!action) {
       return buyDecision
     }
-    return submitOrder({
-      lifecycleDecision: buyDecision.decision,
+    return submitAuthorizedAction({
+      authorizeAction,
+      submitOrder,
       action,
-      marketMetadata: input.marketMetadata,
+      lifecycleDecision: buyDecision.decision,
+      snapshot,
+      input,
     })
   } catch (error) {
     return toResult({
@@ -268,12 +305,14 @@ async function evaluateRecoverySellerTransition({
 export function createRecoverySellerTransitionEvaluator({
   getSnapshot,
   submitOrder,
+  authorizeAction = async () => toResult({ data: { allowed: true } }),
   evaluateBuyDecision = evaluateRecoverySellerBuyDecision,
   evaluateSellDecision = evaluateRecoverySellerSellDecision,
 } = {}) {
   for (const [name, callback] of Object.entries({
     getSnapshot,
     submitOrder,
+    authorizeAction,
     evaluateBuyDecision,
     evaluateSellDecision,
   })) {
@@ -285,6 +324,7 @@ export function createRecoverySellerTransitionEvaluator({
     input,
     getSnapshot,
     submitOrder,
+    authorizeAction,
     evaluateBuyDecision,
     evaluateSellDecision,
   })

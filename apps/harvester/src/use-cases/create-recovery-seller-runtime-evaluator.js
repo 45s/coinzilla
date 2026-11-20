@@ -80,6 +80,7 @@ function createRuntimeTransitionEvaluator({
   isStopping,
   hasBlockingOpenOrdersForSymbol,
   submitOrder,
+  authorizeAction,
   evaluateBuyDecision,
   evaluateSellDecision,
 }) {
@@ -104,6 +105,7 @@ function createRuntimeTransitionEvaluator({
       hasBlockingOpenOrdersForSymbol,
     }),
     submitOrder,
+    authorizeAction,
     evaluateBuyDecision,
     evaluateSellDecision,
   })
@@ -171,6 +173,7 @@ export function createRecoverySellerRuntimeEvaluator({
   isStopping,
   hasBlockingOpenOrdersForSymbol,
   submitOrder,
+  authorizeAction,
   evaluateBuyDecision,
   evaluateSellDecision,
 } = {}) {
@@ -183,6 +186,7 @@ export function createRecoverySellerRuntimeEvaluator({
     isStopping,
     hasBlockingOpenOrdersForSymbol,
     submitOrder,
+    authorizeAction,
     evaluateBuyDecision,
     evaluateSellDecision,
   })
