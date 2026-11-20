@@ -728,3 +728,83 @@ test("fails closed when a Recovery Seller fill has no durable owned submission i
 
   assert.equal(result.ok, false)
 })
+
+
+test("keeps RS BUY fills out of the Conservative recovery-cycle fill boundary for the same market", () => {
+  const { records: conservativeRecords, cycle } = createCompletedRecoveryCycleProjectionRecords()
+  const cycleId = "e".repeat(64)
+  const provider = {
+    providerInstanceId: "binance:spot:account-1",
+    providerType: "BINANCE",
+    accountId: "account-1",
+    marketId: "binance:BTCUSDT",
+    venue: "binance",
+    symbol: "BTCUSDT",
+    baseAssetId: "asset:BTC",
+    quoteAssetId: "asset:USDT",
+  }
+  const recoverySellerRecords = [
+    record(3, "ORDER_SUBMISSION_INTENT", {
+      ...provider,
+      clientOrderId: "rs-buy-isolated",
+      side: "BUY",
+      type: "LIMIT",
+      price: "100",
+      quantity: "0.1",
+      purpose: "RECOVERY_BUY",
+      strategyId: "RS_recoverySeller",
+      positionId: "rs-position-isolated",
+      cycleId,
+    }, "rs-order-intent:rs-buy-isolated"),
+    record(4, "ORDER_SUBMISSION_OUTCOME", {
+      ...provider,
+      clientOrderId: "rs-buy-isolated",
+      side: "BUY",
+      type: "LIMIT",
+      price: "100",
+      quantity: "0.1",
+      executedQuantity: "0.1",
+      purpose: "RECOVERY_BUY",
+      outcome: "ACKNOWLEDGED",
+      brokerOrderId: "rs-broker-buy-isolated",
+      status: "FILLED",
+      strategyId: "RS_recoverySeller",
+      positionId: "rs-position-isolated",
+      cycleId,
+    }, "rs-order-outcome:rs-buy-isolated"),
+    record(5, "EXECUTION_FILL_APPLIED", {
+      ...provider,
+      fillId: "rs-buy-fill-isolated",
+      tradeId: "rs-buy-trade-isolated",
+      brokerOrderId: "rs-broker-buy-isolated",
+      clientOrderId: "rs-buy-isolated",
+      side: "BUY",
+      price: "100",
+      quantity: "0.1",
+      quoteQuantity: "10",
+      liquidityRole: "MAKER",
+      executedAt: 1_700_000_000_005,
+      commissionStatus: "COMPLETE",
+      commissions: [],
+    }, "rs-fill:rs-buy-fill-isolated"),
+  ]
+  const records = [
+    ...conservativeRecords.slice(0, 3),
+    ...recoverySellerRecords,
+    ...conservativeRecords.slice(3).map((item) => ({
+      ...item,
+      sequence: String(Number(item.sequence) + 3),
+    })),
+  ]
+  const result = projectHarvesterOperationalState({ records })
+
+  assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
+  assert.equal(result.data.recoveryCycles.length, 1)
+  assert.equal(result.data.recoveryCycles[0].cycleId, cycle.data.cycleId)
+  assert.deepEqual(result.data.recoveryCycles[0].appliedFillIds, cycle.data.appliedFillIds)
+  assert.equal(result.data.recoverySellerLifecycle.appliedFillsByCycle.length, 1)
+  assert.deepEqual(
+    result.data.recoverySellerLifecycle.appliedFillsByCycle[0].fills.map(({ fillId }) => fillId),
+    ["rs-buy-fill-isolated"],
+  )
+})
