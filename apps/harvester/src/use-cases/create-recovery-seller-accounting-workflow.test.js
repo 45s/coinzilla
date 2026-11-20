@@ -823,11 +823,15 @@ test("rejects inconsistent restored legacy basis before exposing custody provide
 })
 
 
-function makeRecoveryBuyOrder() {
+function makeRecoveryBuyOrder({
+  targetMarket = market,
+  clientOrderId = "rs-buy-1",
+  brokerOrderId = "broker-buy-1",
+} = {}) {
   return new CanonicalOrder({
-    clientOrderId: "rs-buy-1",
-    brokerOrderId: "broker-buy-1",
-    market,
+    clientOrderId,
+    brokerOrderId,
+    market: targetMarket,
     side: "BUY",
     type: "LIMIT_MAKER",
     limitPrice: new Money({
@@ -836,11 +840,11 @@ function makeRecoveryBuyOrder() {
     }),
     originalQuantity: new Quantity({
       amount: "5.01",
-      asset: baseAsset,
+      asset: targetMarket.baseAsset,
     }),
     executedQuantity: new Quantity({
       amount: "0",
-      asset: baseAsset,
+      asset: targetMarket.baseAsset,
     }),
     status: "OPEN",
     createdAt: 100,
@@ -849,20 +853,27 @@ function makeRecoveryBuyOrder() {
   })
 }
 
-function makeRecoveryBuyFill({ tradeId, brokerOrderId = "broker-buy-1", quantity, quoteQuantity } = {}) {
+function makeRecoveryBuyFill({
+  tradeId,
+  brokerOrderId = "broker-buy-1",
+  clientOrderId = "rs-buy-1",
+  targetMarket = market,
+  quantity,
+  quoteQuantity,
+} = {}) {
   return new Fill({
     tradeId,
     brokerOrderId,
-    clientOrderId: "rs-buy-1",
-    market,
+    clientOrderId,
+    market: targetMarket,
     side: "BUY",
     price: new Money({
       amount: "2",
-      asset: quoteAsset,
+      asset: targetMarket.quoteAsset,
     }),
     quantity: new Quantity({
       amount: quantity,
-      asset: baseAsset,
+      asset: targetMarket.baseAsset,
     }),
     quoteQuantity: new Money({
       amount: quoteQuantity,
@@ -873,11 +884,11 @@ function makeRecoveryBuyFill({ tradeId, brokerOrderId = "broker-buy-1", quantity
   })
 }
 
-function makeRecoveryBuyRegistry(order) {
+function makeRecoveryBuyRegistry(order, targetPositionId = positionId) {
   const ownership = createOrderOwnership({
     ownership: {
       strategyId,
-      positionId,
+      positionId: targetPositionId,
       purpose: "RECOVERY_BUY",
       cycleId: "rs-cycle-1",
     },
@@ -1352,6 +1363,118 @@ test("initializes operator-authorized legacy positions once in the shared accoun
   assert.equal(duplicate.ok, false)
   assert.match(duplicate.errors[0].message, /already exists/i)
   assert.deepEqual(workflow.getLegacyPosition({ marketId: market.id }), record.position)
+})
+
+function createAdditionalTestMarket() {
+  const additionalBaseAsset = new Asset({
+    id: "binance:SOL",
+    code: "SOL",
+  })
+  return new Market({
+    venue: "binance",
+    symbol: "SOLUSDT",
+    baseAsset: additionalBaseAsset,
+    quoteAsset,
+  })
+}
+
+function makeConservativeBuyFill({ targetMarket, tradeId } = {}) {
+  return new Fill({
+    tradeId,
+    brokerOrderId: `broker-${tradeId}`,
+    clientOrderId: tradeId,
+    market: targetMarket,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: targetMarket.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "1",
+      asset: targetMarket.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "2",
+      asset: targetMarket.quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+async function assertConcurrentStrategyAccounting({ recoveryMarket, conservativeMarket, scenario } = {}) {
+  const recoveryOrder = makeRecoveryBuyOrder({
+    targetMarket: recoveryMarket,
+    clientOrderId: `rs-buy-${scenario}`,
+    brokerOrderId: `broker-rs-buy-${scenario}`,
+  })
+  const sharedState = {
+    portfolio: new Portfolio(),
+    recoveryLedgers: new Map(),
+    orderRegistry: makeRecoveryBuyRegistry(recoveryOrder, `rs-position-${scenario}`),
+    legacyPositions: new Map(),
+    recoverySellerBuyExecutionByCycle: new Map(),
+    updateQueue: Promise.resolve(),
+  }
+  const conservative = createPortfolioWorkflow({
+    sharedState,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+  })
+  const recoverySeller = createRecoverySellerAccountingWorkflow({ sharedState })
+  const recoveryFill = makeRecoveryBuyFill({
+    tradeId: `rs-fill-${scenario}`,
+    brokerOrderId: recoveryOrder.brokerOrderId,
+    clientOrderId: recoveryOrder.clientOrderId,
+    targetMarket: recoveryMarket,
+    quantity: "5.01",
+    quoteQuantity: "10.02",
+  })
+  const conservativeFill = makeConservativeBuyFill({
+    targetMarket: conservativeMarket,
+    tradeId: `cg-fill-${scenario}`,
+  })
+
+  const [recoveryResult, conservativeResult] = await Promise.all([
+    recoverySeller.applyBuyFill({ fill: recoveryFill }),
+    conservative.updateTradingAccounting({ fill: conservativeFill }),
+  ])
+
+  assert.equal(recoveryResult.ok, true, recoveryResult.errors?.[0]?.message)
+  assert.equal(conservativeResult.ok, true, conservativeResult.errors?.[0]?.message)
+  assert.strictEqual(conservative.getPortfolio(), recoverySeller.getPortfolio(),
+    "Both strategies must publish into the exact same account Portfolio instance.")
+  assert.equal(sharedState.portfolio.positions.length, 2,
+    "Concurrent strategy fills must create two independently owned Positions.")
+  assert.equal(sharedState.portfolio.appliedFillIds.length, 2,
+    "Both canonical fills must be accounted exactly once.")
+  assert.equal(sharedState.portfolio.getPosition({
+    marketId: recoveryMarket.id,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: `rs-position-${scenario}`,
+  }).baseQuantity.amount, "5.01",
+  "The RS fill must update only its owned Position with its exact base quantity.")
+  assert.equal(sharedState.portfolio.getPosition({
+    marketId: conservativeMarket.id,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).baseQuantity.amount, "1",
+  "The CG fill must update only its owned Position with its exact base quantity.")
+}
+
+test("accounts concurrent CG and RS fills on the same market without cross-attribution", async () => {
+  await assertConcurrentStrategyAccounting({
+    recoveryMarket: market,
+    conservativeMarket: market,
+    scenario: "same-market",
+  })
+})
+
+test("accounts concurrent CG and RS fills on different markets within one account", async () => {
+  await assertConcurrentStrategyAccounting({
+    recoveryMarket: market,
+    conservativeMarket: createAdditionalTestMarket(),
+    scenario: "different-markets",
+  })
 })
 
 test("Conservative and RS accounting workflows can share one serialized account Portfolio", async () => {
