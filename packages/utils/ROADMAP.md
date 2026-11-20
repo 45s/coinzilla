@@ -6,6 +6,15 @@ type: roadmap
 owner: utils
 ---
 
+## In review — S-5 Logger transport-failure fallback redaction ([#1568](https://github.com/45s/coinzilla/issues/1568); [PR #1581](https://github.com/45s/coinzilla/pull/1581))
+
+- The source audit found that the default transport-error reporter and the emergency fallback after a custom reporter failure wrote raw Error objects to stderr. This bypassed structured field-name redaction and could disclose credentials embedded in an error message or stack.
+- Test-first RED was observed on isolated test commit `6279998c4759306f19947c5ef4be712d977686eb`: both synthetic secret-leak regressions failed for the expected reason. The implementation is in commit `2d7140ed7b365fff0eb5d794f98b9da6425f8987`.
+- The fallback now emits only the transport name and safe error type. It does not emit the raw message or stack. The custom `onTransportError({ transport, error })` callback contract remains unchanged; the callback still receives the original error, and a callback failure falls back to the same bounded summary.
+- The Utils unit-test workflow passed on implementation commit `2d7140ed7b365fff0eb5d794f98b9da6425f8987`: 241 tests, 239 passed, 0 failed, 2 skipped; the Utils package coverage workflow also passed. Before synchronization, all six required contexts and all seven PR workflows passed on head `a896bf840d868f0a0b4387f2bcf5acd179c555c8`; the optional read-only Binance TESTNET integration was skipped by policy. The branch was then synchronized with `develop` at `659493ca23792e1ac339de7102e3cebb4d377cba` in merge commit `3ff076f62e9930789efa6ec224dd32e4020efd8a` (11 ahead, 0 behind). The previous CI results do not validate this new head; rerun all required checks on the exact synchronized head before marking this task merged.
+- No public API, dependency, Harvester source/runtime, CI workflow or logger abstraction was added. The canonical repository policy is [Logging and Observability Standard](../../docs/engineering/LOGGING_OBSERVABILITY_STANDARD.md).
+- **Status:** PR open; do not mark complete until exact-head required CI passes and the user merges it.
+
 ## Completed — shared SystemCustomError base (request [#1208](https://github.com/45s/coinzilla/issues/1208); merged [PR #1262](https://github.com/45s/coinzilla/pull/1262))
 
 - Added the single domain-neutral native `Error` base in `@coinzilla/utils`, preserving native `cause` and exposing optional immutable `code`, safe scalar `context`, and `retryable` diagnostics.

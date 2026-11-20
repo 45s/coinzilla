@@ -67,12 +67,12 @@ Shared low-level primitives may support these packages, but packages/utils must 
 
 ## Logging policy
 
-- Use Logger or defaultLogger from the public @coinzilla/utils API for application and package diagnostics.
-- Do not introduce direct console.log, console.info, console.warn, or console.error calls in business logic or application workflows.
-- Direct console access is permitted only inside the logger implementation or deliberate CLI output where stdout/stderr is the product interface. A synchronous `process.stderr.write` fallback is also permitted for fatal startup/shutdown diagnostics only when the shared logger is unavailable or has failed; it must not become routine application logging. Explain any other exception.
-- Prefer injecting a logger into workflows/adapters when it improves testability and makes the side effect explicit. Do not create a wrapper logger in every application.
-- Use structured context and stable fields. Never log secrets, credentials, access tokens, private keys, or sensitive payloads. Do not log the same failure redundantly.
-- If the current logger lacks a required generic capability, improve packages/utils first rather than creating an application-specific logger.
+Follow the canonical [Logging and Observability Standard](LOGGING_OBSERVABILITY_STANDARD.md) for severity meanings, structured fields, correlation/context, redaction, duplicate reporting, transport failure behavior, and the boundary between operational events and diagnostic detail.
+
+- `packages/utils` owns the shared Logger API and domain-neutral safe formatting; applications/domains own event meaning, operation correlation, and operational procedures.
+- Consumers use the public `Logger` or `defaultLogger` API. Inject it when doing so makes an effect explicit or materially improves testing; do not create an app-local wrapper logger.
+- If the shared Logger lacks a genuinely generic capability, improve `packages/utils` through its owner rather than creating a competing application-specific logger.
+- The exact direct-console guard scope and exceptions are recorded below. The guard does not authorize additional exceptions or routine `process.stderr.write` usage.
 
 ### Automated source guard
 
