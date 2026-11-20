@@ -9,6 +9,7 @@ Every AI agent and automated contributor must follow the canonical documents bel
 | Engineering design, testing, security, reliability, documentation impact | [ENGINEERING_STANDARDS.md](ENGINEERING_STANDARDS.md) |
 | AI-assisted refactoring and code audits | [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md) |
 | Structured errors, error ownership, wrapping, diagnostics and gradual migration | [Structured Error Handling Standard](docs/engineering/structured-error-handling.md) |
+| Logging, observability, severity, correlation, redaction and transport behavior | [Logging and Observability Standard](docs/engineering/LOGGING_OBSERVABILITY_STANDARD.md) |
 | Branches, PRs, incremental commits, resumable handoffs, synchronization, merge/release lifecycle | [AI_AGENT_WORKFLOW.md](AI_AGENT_WORKFLOW.md) |
 | Configuration ownership, validation, defaults, environment and migration | [Configuration Standard](docs/engineering/CONFIGURATION_STANDARD.md) |
 | Binance exchange environment selection | [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md) |
