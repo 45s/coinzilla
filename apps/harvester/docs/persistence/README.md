@@ -1,43 +1,140 @@
 # Harvester ordinary persistence
 
-**Tracking issue:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
+**Owning issue:** [#1554 — Relational trading history and live fill persistence](https://github.com/45s/coinzilla/issues/1554)
 
-**Current implementation:** filled-order history projection merged in [PR #1469](https://github.com/45s/coinzilla/pull/1469) as `39f098000d6c20cb596a9e6700250faa00bbd80e`.
+**Parent workstream:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
 
+**Existing order-history projection:** [PR #1469](https://github.com/45s/coinzilla/pull/1469).
 
+**Relational implementation:** [PR #1555](https://github.com/45s/coinzilla/pull/1555), in progress. This document describes the target behavior being implemented on that branch; the task is not complete until the PR is merged and its required checks pass.
 
-**Relational trading history — implementation in progress:** [#1554](https://github.com/45s/coinzilla/issues/1554) delivers versioned physical `orders` and `fills` tables, source-preserving migration of the existing collection, and non-blocking persistence of canonical applied fills. Until migration verification and cutover are complete, the existing `harvester_orders` observer remains active. Startup exchange-history synchronization is explicitly deferred.
+## 1. Separate orders, fills, and strategy cycles
 
-## Filled-order history
+An **order** is an exchange instruction with a lifecycle. It may be partially executed, fully executed, cancelled, rejected, or remain open.
 
-Harvester persists one record in the `harvester_orders` collection when a Harvester-owned order first has a positive cumulative executed quantity. This includes immediately partially/fully filled broker acknowledgements, later partial/final execution updates, and partially filled cancellation outcomes.
+A **fill** is one actual exchange execution. One order can produce zero, one, or many fills. The fill ledger must never be reconstructed from an order's cumulative executed quantity.
 
-The stable record identity is the complete tuple:
+A **strategy cycle** is a future business-level grouping of one or more orders and fills. It is not an exchange order or execution and is not implemented by this task. Strategy/cycle attribution remains nullable until a verified owner relationship is available.
 
-`(environment, providerInstanceId, providerType, accountId, clientOrderId)`
+### Physical tables
 
-The projection retains canonical market and asset identity, order side/type/status, broker and client order IDs, exact decimal quantities, optional price and cumulative quote quantity, lifecycle timestamps, source-event identity, and strategy/position ownership when available. Existing lifecycle snapshots update the same record; stale or duplicate source events cannot move the stored order backwards.
+| Table | Meaning | Important identity |
+| --- | --- | --- |
+| `orders` | One row per canonical exchange order | Existing Harvester tuple: `(environment, provider_instance_id, provider_type, account_id, client_order_id)` |
+| `fills` | One row per actual applied exchange execution | `(provider_type, provider_instance_id, account_id, environment, market_id, exchange_trade_id)` |
+| `fill_commissions` | One row per commission asset charged on a fill | `(fill_id, ordinal)` |
 
-The observer listens to `order.submitted`, `order.updated`, `order.cancelled`, and `order.cancel_failed`. Its bounded serialized queue is best-effort and does not await database writes from broker submission, user-data handling, fill application, accounting, Journal, or trading-readiness paths. Queue overflow and persistence failures are logged as history gaps and do not block trading.
+The order primary key preserves the existing `harvester_orders` ID generated from the canonical identity tuple. Exchange order IDs also have a scoped unique index when supplied.
 
-## Ownership and safety boundary
+The canonical `Fill.id` is `market.id:tradeId`; it is not globally unique. The relational fill primary key is a JSON-encoded tuple containing environment, provider instance/type, account, market ID, and provider execution ID. The original canonical fill ID is retained separately as `canonical_fill_id`.
 
-- Harvester owns the order-history model, repository port, lifecycle projection, and persistence composition.
-- `@coinzilla/db` owns generic provider-neutral database contracts and adapters; no `packages/db` changes are part of this slice.
-- SQLite is the only currently implemented provider. TESTNET and LIVE use separate environment-selected files.
-- OrderRegistry remains authoritative for in-process order state. This projection is not used for restart restoration or trading decisions.
-- Journal retains its existing ordered lifecycle-evidence contract.
-- Harvester ADR-0001 (Application-owned recovery facts) remains separate and unchanged. SQLite does not replace it.
-- No individual fill/commission ledger, second event ledger, recovery restoration, strategy change, broker API change, or exchange operation is introduced.
+A fill's `order_id` is a nullable foreign key to `orders.id`. It is linked only when the provider/account/environment and client or exchange order identity match. A fill can be persisted before its order projection is visible; a later order write links it. Strategy, position, and cycle attribution are copied only from that verified order relationship. Missing ownership remains SQL `NULL`, never a fabricated identifier.
 
-## Removed temporary persistence
+## 2. Exact financial and timestamp semantics
 
-The earlier trading-session-ID persistence and temporary `harvester_processes` process-ID smoke-test write are removed in this slice. Neither process ID nor runtime session ID is part of the filled-order history identity. This is ordinary historical reporting only, not a recovery-store migration.
+- Financial values are stored as SQLite `TEXT` decimal strings. Input is validated using the canonical decimal contract; comparisons use decimal utilities, never JavaScript floating-point arithmetic.
+- `orders.original_quantity`, `executed_quantity`, `remaining_quantity`, `cumulative_quote_quantity`, and `limit_price` preserve their supplied decimal strings. Optional facts remain `NULL`.
+- `orders.average_execution_price` remains `NULL` unless the canonical order contract later supplies an actual average. It is not inferred from cumulative totals.
+- `fills.execution_price`, `executed_base_quantity`, and `executed_quote_quantity` preserve the canonical fill values exactly.
+- Each actual commission is stored with its exact amount, asset ID/code, and optional historical quote valuation in `fill_commissions`. Configured fee rates are never used to estimate missing commissions.
+- Missing financial data is `NULL` or explicitly represented by the canonical commission status; it is never silently replaced with zero.
+- All physical timestamp columns use canonical UTC ISO-8601 strings with millisecond precision. Exchange creation/update/execution timestamps remain separate from local first/last observation or ingestion timestamps. A missing exchange timestamp remains `NULL`.
 
-## Verification and operational limitations
+## 3. Migration of existing `harvester_orders` history
 
-The implementation is covered by domain validation/transition tests, repository transaction and idempotency tests, real SQLite persistence and environment-isolation tests, observer queue/failure tests, lifecycle integration tests, and Harvester regression tests. Production deployment readiness is not implied: backup/restore, retention, permissions, disk monitoring, corruption/disk-full procedures, and operational recovery remain separate work.
+The existing collection is stored in the generic `db_records` table. It remains available and continues to be written by the PR #1469 observer while relational history is introduced.
+
+Harvester owns the physical schema and versioned migrations in `src/infrastructure/persistence/relational-migrations.js`. It uses the public `createSqliteDatabase` API from `@coinzilla/db`; it does not import `node:sqlite` or change `packages/db`.
+
+Migration version 1:
+
+1. Runs only after the generic provider has opened the environment-specific database.
+2. If legacy order records exist and version 1 is not applied, creates a pre-migration backup at `harvester.db.pre-relational-v1.backup`.
+3. Verifies the backup with SQLite integrity checking and a SHA-256 checksum over the exact ordered legacy record IDs and JSON payloads.
+4. Creates the physical tables, indexes, uniqueness constraints, and foreign keys inside the versioned migration transaction.
+5. Validates and copies each legacy order row, preserving its ID, provider/account/environment identity, exact decimals, lifecycle facts, ownership when present, source-event provenance, and migration provenance.
+6. Leaves every original `db_records` / `harvester_orders` record untouched. It creates no fill rows from cumulative order quantities.
+
+The migration runner records the version and checksum in `schema_migrations`. A failed migration rolls back its DDL and inserts as one transaction. A retry can run the unapplied migration again. Repeated execution after success is a no-op.
+
+A conflicting identity, invalid record, or incompatible schema fails visibly. The migration does not discard or rewrite source history. Relational observers are not activated on that failed startup attempt; the legacy collection observer remains active and the failure is logged. The verified backup is retained.
+
+### Backup and rollback
+
+The backup is environment-specific and sits beside that environment's database:
+
+- TESTNET: `data/testnet/harvester.db` and `data/testnet/harvester.db.pre-relational-v1.backup`
+- LIVE: `data/production/harvester.db` and `data/production/harvester.db.pre-relational-v1.backup`
+
+The configured `HARVESTER_DATABASE_DIRECTORY` changes the base directory, not the TESTNET/production separation.
+
+For rollback, stop every Harvester process using the affected environment database. Keep both the current file and backup. Use the public `restoreSqliteDatabase` API to restore the backup to a new staging filename (the API intentionally does not overwrite an existing destination). Open the staged file with `createSqliteDatabase`, verify `PRAGMA integrity_check` and the legacy-record checksum, then perform a controlled filesystem replacement while the application is stopped. Keep the failed post-migration file for investigation. Never restore over an open database.
+
+## 4. Observer compatibility and live fill capture
+
+The PR #1469 `harvester_orders` collection observer remains active. A second bounded observer writes the same canonical order-history records to the relational `orders` table. This dual-write period avoids a destructive cutover and keeps the old source collection available.
+
+Phase 2 adds a separate bounded observer for `execution.fill_applied`. This event is emitted only after the accounting workflow has successfully applied a canonical `Fill`. The event DTO now includes the canonical market ID/venue and base/quote asset identities required for provider-neutral relational attribution.
+
+The observer enqueues work and returns immediately to EventBus delivery. A serialized queue (default maximum 1,000 pending writes) performs SQLite work separately. It does not add database I/O to broker submission, user-data processing, fill application, accounting, Journal, trading-readiness, or strategy decision paths.
+
+- An identical execution identity with identical immutable facts is idempotent. The existing row and commission facts remain; last-observation provenance may advance.
+- The same scoped execution identity with conflicting price, quantity, order, market, side, commission, or timestamp facts is an integrity error and is logged as a history gap.
+- Queue overflow and database failures are observable diagnostics; they never block or reverse a successful accounting result.
+- Actual exchange trade IDs remain scoped by provider type/instance, account, environment, and market.
+
+## 5. Ownership and safety boundary
+
+- Harvester owns trading-history schemas, migrations, repository ports/adapters, row mapping, and persistence lifecycle.
+- `@coinzilla/db` owns generic database contracts, SQLite connection/transaction/migration/backup primitives, and provider adapters only.
+- TESTNET and LIVE use separate database files; the relational schema does not combine environments.
+- OrderRegistry remains authoritative for in-process order state and ownership.
+- Journal remains the ordered lifecycle-evidence store. The relational projection is not a second event ledger.
+- Harvester ADR-0001 remains authoritative and unchanged for its existing recovery-facts boundary.
+- SQLite is a non-authoritative historical/reporting projection. It does not restore, adopt, replay, or authorize orders after restart.
+
+## 6. Delivery phases and exclusions
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| 1 | Physical `orders`, `fills`, commission detail, versioned migration, legacy-history verification/backup/rollback, repositories and deterministic tests | In progress in #1554 |
+| 2 | Non-blocking persistence of canonical applied fills with exact facts and scoped deduplication | In progress in #1554 |
+| 3 | Startup exchange order/trade-history API synchronization, pagination, reconciliation and recovery of executions that occurred while Harvester was offline | Deferred; separate issue and provider contract required |
+
+This task does not implement startup history API calls, pagination, account snapshots, strategy-cycle lifecycle, PnL/analytics queries, equity snapshots, drawdown, restart restoration/adoption, or new providers. It does not add `sessions` or `errors` tables, change broker behavior, alter Journal semantics, or modify ADR-0001. No exchange operation or TESTNET/LIVE trading activity is part of implementation or CI.
+
+## 7. Persistence lifecycle
+
+The flow below is illustrative; source code and the contracts above remain authoritative.
+
+```mermaid
+flowchart TD
+  A[Harvester startup] --> B[Open generic SQLite provider]
+  B --> C[Keep legacy harvester_orders observer]
+  C --> D[Open public SQLite database API]
+  D --> E{Migration v1 applied?}
+  E -- No --> F{Legacy orders exist?}
+  F -- Yes --> G[Create and verify backup]
+  F -- No --> H[Run versioned migration]
+  G --> H
+  E -- Yes --> I[Skip migration]
+  H --> J[Copy legacy orders transactionally]
+  I --> K[Start relational order observer]
+  J --> K
+  K --> L[Start bounded applied-fill observer]
+  L --> M[Runtime events]
+  M --> N[Order event: dual-write legacy and relational orders]
+  M --> O[Accounting applies canonical Fill]
+  O --> P[execution.fill_applied event]
+  P --> Q[Bounded asynchronous fill queue]
+  Q --> R[Validate and deduplicate execution]
+  R --> S[Write fills and commission details]
+  S --> T[History available for later analysis]
+  G -. backup failure .-> U[Log relational failure; keep legacy observer]
+  H -. conflict or migration failure .-> U
+  Q -. overflow or write failure .-> V[Log history gap; do not block trading]
+```
 
 ## Historical design reference
 
-[SQLite integration blueprint](./sqlite-integration-blueprint.md) is a source-verified design/audit snapshot from before the filled-order-history slice. Its trading-session-history implementation inventory is historical and does not describe the current persistence composition.
+[SQLite integration blueprint](./sqlite-integration-blueprint.md) is a source-verified design/audit snapshot from before PR #1469 and the relational trading-history work. Its target-layout statements and migration recommendations are historical context, not the current implementation contract.

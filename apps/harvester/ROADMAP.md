@@ -33,7 +33,7 @@ The ADA recovery lifecycle work below remains a separate active trading-safety o
 
 **Relational-schema direction — generic prerequisite complete:** [PR #1489](https://github.com/45s/coinzilla/pull/1489) completed the generic SQLite migration audit and hardening tracked by [#1486](https://github.com/45s/coinzilla/issues/1486). The DB package now detects changed applied migration implementations and rejects out-of-order pending migrations while preserving legacy migration history. The DB package still owns generic infrastructure only; Harvester owns its business tables, schema, repositories and migrations.
 
-**Target Harvester layout — design direction, not implemented:** use readable, domain-owned physical tables where they provide stable query/reporting value (initial candidates: `orders`, `fills`, and carefully scoped `errors`). A `sessions` table requires a separately defined business purpose and lifecycle; do not restore the removed process-ID smoke test or old trading-session-ID projection. Error persistence must define safe payload redaction and retention, and must not duplicate Journal or replace diagnostic logs.
+**Harvester relational trading history — IN PROGRESS:** [#1554](https://github.com/45s/coinzilla/issues/1554) owns physical `orders`, `fills`, and `fill_commissions` tables, versioned application-owned migrations, source-preserving `harvester_orders` migration, and non-blocking persistence of canonical applied fills. `packages/db` remains generic and unchanged. No `sessions` or `errors` table is in scope.
 
 Any migration must preserve existing `harvester_orders` history through a verified, idempotent conversion with a rollback/backup plan before cutover. Keep the current best-effort, non-blocking observer semantics and TESTNET/LIVE file separation. No Journal/ADR-0001 replacement, restart restoration, or trading-state authority is introduced.
 
@@ -56,14 +56,14 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 - ADR-0001 remains separate and unchanged. The projection does not restore/adopt orders after restart.
 - SQLite is the only currently implemented provider.
 
-### Remaining #1327 work
+### Remaining persistence work after #1554
 
-1. Add fill-level history only if a concrete query need is established and the provider fill identity contract is proven.
-2. Add filtered account snapshot history only with explicit provenance and completeness semantics.
-3. Design offline, idempotent historical imports from verified source evidence.
-4. Define backup schedules, retention, permissions, disk monitoring, corruption/disk-full handling, and tested restore procedures before production deployment.
+1. Startup exchange order/trade-history synchronization and pagination (separate Phase 3; requires verified provider contracts and reconciliation semantics).
+2. Filtered account snapshot history only with explicit provenance and completeness semantics.
+3. Offline, idempotent historical imports from verified source evidence.
+4. Production retention, permissions, disk monitoring, corruption/disk-full handling, backup scheduling, and operational restore drills.
 
-**Explicit exclusions:** no new provider, no big-bang migration, no Journal/ADR-0001 replacement, no recovery restoration, no individual fill/commission ledger in this slice, no strategy or broker API changes, and no exchange operations.
+**Explicit exclusions from #1554:** no startup synchronization, account snapshots, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, restart restoration/adoption, new providers, `sessions`/ `errors` tables, broker behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
 
 ## Repository-wide quality baseline
 
