@@ -5,10 +5,21 @@ import { fileURLToPath } from "node:url"
 const UTILS_PACKAGE = "@coinzilla/utils"
 
 function findDuplicates(values) {
-  return values.filter((value, index) => values.indexOf(value) !== index)
+  const seen = new Set()
+  const duplicates = new Set()
+
+  for (const value of values) {
+    if (seen.has(value)) {
+      duplicates.add(value)
+    } else {
+      seen.add(value)
+    }
+  }
+
+  return [...duplicates]
 }
 
-function comparePackages(label, expected, actual) {
+function comparePackages({ label, expected, actual }) {
   const errors = []
   const duplicates = findDuplicates(actual)
   const missing = expected.filter((name) => !actual.includes(name))
@@ -65,8 +76,8 @@ export function validateWorkspaceTestMatrix({
   }
 
   const expectedUnitPackages = packageNames.filter((name) => name !== UTILS_PACKAGE)
-  errors.push(...comparePackages("Unit-test", expectedUnitPackages, unitTestPackages))
-  errors.push(...comparePackages("Coverage", packageNames, coveragePackages))
+  errors.push(...comparePackages({ label: "Unit-test", expected: expectedUnitPackages, actual: unitTestPackages }))
+  errors.push(...comparePackages({ label: "Coverage", expected: packageNames, actual: coveragePackages }))
 
   if (!packageNames.includes(UTILS_PACKAGE) || !utilsTestJobConfigured) {
     errors.push(
@@ -122,7 +133,7 @@ function readWorkspacePackages(rootDirectory) {
   return packages
 }
 
-function readMatrixPackages(workflowContent, expression, label) {
+function readMatrixPackages({ workflowContent, expression, label }) {
   const match = workflowContent.match(expression)
 
   if (!match) {
@@ -140,16 +151,16 @@ function checkWorkspaceTestMatrix(rootDirectory) {
   const unitWorkflow = readFileSync(unitWorkflowPath, "utf8")
   const coverageWorkflow = readFileSync(coverageWorkflowPath, "utf8")
 
-  const unitTestPackages = readMatrixPackages(
-    unitWorkflow,
-    /matrix:\s*\n\s*package:\s*\n([\s\S]*?)(?=\n\s*runs-on:)/,
-    "unit-test",
-  )
-  const coveragePackages = readMatrixPackages(
-    coverageWorkflow,
-    /matrix:\s*\n\s*include:\s*\n([\s\S]*?)(?=\n\s*runs-on:)/,
-    "coverage",
-  )
+  const unitTestPackages = readMatrixPackages({
+    workflowContent: unitWorkflow,
+    expression: /matrix:\s*\n\s*package:\s*\n([\s\S]*?)(?=\n\s*runs-on:)/,
+    label: "unit-test",
+  })
+  const coveragePackages = readMatrixPackages({
+    workflowContent: coverageWorkflow,
+    expression: /matrix:\s*\n\s*include:\s*\n([\s\S]*?)(?=\n\s*runs-on:)/,
+    label: "coverage",
+  })
   const utilsTestJobConfigured =
     unitWorkflow.includes("name: packages/utils tests") &&
     unitWorkflow.includes("pnpm --filter @coinzilla/utils test") &&
