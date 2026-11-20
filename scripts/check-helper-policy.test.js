@@ -72,7 +72,10 @@ test("allows context-specific helper names", () => {
 test("scans helper fixture names", () => {
   const { root, directory } = createFixture()
   try {
-    writeFileSync(join(directory, "process.js"), "export function process({ value }) { return value }\\n")
+    writeFileSync(
+      join(directory, "process.js"),
+      "export function process({ value }) { return value }\\n",
+    )
     assert.deepEqual(findHelperNamingViolations(root), [
       `${join(directory, "process.js")}: vague exported helper name process`,
       `${join(directory, "process.js")}: vague helper filename`,
@@ -89,7 +92,10 @@ test("enforces naming only for changed helper files", () => {
   const { root, directory } = createFixture()
   try {
     writeFileSync(join(directory, "process.js"), "export function process({ value }) { return value }\\n")
-    writeFileSync(join(directory, "normalize-binance-symbol.js"), "export function normalizeBinanceSymbol({ symbol }) { return symbol }\\n")
+    writeFileSync(
+      join(directory, "normalize-binance-symbol.js"),
+      "export function normalizeBinanceSymbol({ symbol }) { return symbol }\\n",
+    )
     assert.deepEqual(findChangedHelperNamingViolations({
       root,
       changedPaths: [
