@@ -85,7 +85,10 @@ function createAuthorizer({
     getPosition: () => undefined,
   }
   const currentSnapshot = accountSnapshot === undefined
-    ? createDefaultAccountSnapshot({ quoteBalance, baseBalance })
+    ? createDefaultAccountSnapshot({
+        quoteBalance,
+        baseBalance,
+      })
     : accountSnapshot
   const recoverySellerStopWorkflow = createAuthorizerStopWorkflow({
     onLatch: () => {
