@@ -1,4 +1,3 @@
-import { toResult } from "@coinzilla/utils"
 import { authorizeOperatorActor } from "./authorize-operator-actor.js"
 import {
   createPauseAllBuys,
