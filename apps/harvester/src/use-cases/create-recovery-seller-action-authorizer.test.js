@@ -30,6 +30,45 @@ const input = Object.freeze({
   }),
 })
 
+function createAuthorizerState({ activeOrders } = {}) {
+  const ownershipByClientOrderId = new Map(activeOrders.map((order) => [
+    order.clientOrderId,
+    { strategyId: order.strategyId ?? StrategyId.COIN_GRABBER },
+  ]))
+  return {
+    registry: {
+      getActiveOrders: () => activeOrders,
+      getOwnership: ({ clientOrderId }) => ownershipByClientOrderId.get(clientOrderId),
+    },
+  }
+}
+
+function createDefaultAccountSnapshot({ quoteBalance, baseBalance } = {}) {
+  return {
+    balances: [],
+    getFreeBalance: ({ assetId }) => ({
+      amount: assetId === "USDT" ? quoteBalance : baseBalance,
+    }),
+    getPortfolioBaseQuantityBaseline: () => "0",
+    getAdditionalTrackedBaseQuantityBaseline: () => "0",
+    getQuoteCashFlowBaseline: () => "0",
+    getCommittedQuoteBalanceBaseline: () => "0",
+    getCommittedBaseBalanceBaseline: () => "0",
+  }
+}
+
+function createAuthorizerStopWorkflow({ onLatch } = {}) {
+  return {
+    latch: async () => {
+      onLatch()
+      return {
+        ok: true,
+        data: { durable: true },
+      }
+    },
+  }
+}
+
 function createAuthorizer({
   quoteBalance = "100",
   baseBalance = "0",
@@ -40,46 +79,24 @@ function createAuthorizer({
   portfolioOverride,
 } = {}) {
   let latchCount = 0
-  const ownershipByClientOrderId = new Map(activeOrders.map((order) => [
-    order.clientOrderId,
-    { strategyId: order.strategyId ?? StrategyId.COIN_GRABBER },
-  ]))
-  const state = {
-    registry: {
-      getActiveOrders: () => activeOrders,
-      getOwnership: ({ clientOrderId }) => ownershipByClientOrderId.get(clientOrderId),
-    },
-  }
+  const state = createAuthorizerState({ activeOrders })
   const portfolio = portfolioOverride ?? {
     positions: [],
     getPosition: () => undefined,
   }
-  const currentSnapshot = accountSnapshot === undefined ? {
-    balances: [],
-    getFreeBalance: ({ assetId }) => ({
-      amount: assetId === "USDT" ? quoteBalance : baseBalance,
-    }),
-    getPortfolioBaseQuantityBaseline: () => "0",
-    getAdditionalTrackedBaseQuantityBaseline: () => "0",
-    getQuoteCashFlowBaseline: () => "0",
-    getCommittedQuoteBalanceBaseline: () => "0",
-    getCommittedBaseBalanceBaseline: () => "0",
-  } : accountSnapshot
-  const recoverySellerStopWorkflow = {
-    latch: async () => {
+  const currentSnapshot = accountSnapshot ?? createDefaultAccountSnapshot({
+    quoteBalance,
+    baseBalance,
+  })
+  const recoverySellerStopWorkflow = createAuthorizerStopWorkflow({
+    onLatch: () => {
       latchCount += 1
-      return {
-        ok: true,
-        data: { durable: true },
-      }
     },
-  }
+  })
   const authorize = createRecoverySellerActionAuthorizer({
     state,
     recoverySellerPairs: {
-      [symbol]: {
-        investment: 100,
-      },
+      [symbol]: { investment: 100 },
     },
     recoverySellerStopWorkflow,
     getPortfolio: () => portfolio,
@@ -99,11 +116,10 @@ function createAuthorizer({
 }
 
 
-
 function makeActiveOrder({
   clientOrderId,
-  symbol,
-  marketId = symbol,
+  symbol: orderSymbol = symbol,
+  marketId = orderSymbol,
   baseAssetId = "ZRO",
   quoteAssetId = "USDT",
   side = "BUY",
@@ -114,7 +130,7 @@ function makeActiveOrder({
     clientOrderId,
     market: {
       id: marketId,
-      symbol,
+      symbol: orderSymbol,
       baseAsset: { id: baseAssetId },
       quoteAsset: { id: quoteAssetId },
     },
