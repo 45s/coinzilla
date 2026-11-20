@@ -343,6 +343,37 @@ async function saveOrderPageCursor({
   })
 }
 
+async function persistAndAdvanceOrderPage({
+  page,
+  validated,
+  repositories,
+  providerIdentity,
+  environment,
+  symbol,
+  now,
+  state,
+}) {
+  await persistOrderPage({
+    orders: validated.orders,
+    repositories,
+    providerIdentity,
+    environment,
+    now,
+    state,
+  })
+  const { lastOrderId } = validated
+  await saveOrderPageCursor({
+    page,
+    lastOrderId,
+    repositories,
+    providerIdentity,
+    environment,
+    symbol,
+    now,
+  })
+  return lastOrderId
+}
+
 async function fetchOrderHistoryForMarket({
   broker,
   symbol,
@@ -378,23 +409,15 @@ async function fetchOrderHistoryForMarket({
       state,
       providerIdentity,
     })
-    await persistOrderPage({
-      orders: validated.orders,
-      repositories,
-      providerIdentity,
-      environment,
-      now,
-      state,
-    })
-    lastOrderId = validated.lastOrderId
-    await saveOrderPageCursor({
+    lastOrderId = await persistAndAdvanceOrderPage({
       page,
-      lastOrderId,
+      validated,
       repositories,
       providerIdentity,
       environment,
       symbol,
       now,
+      state,
     })
     if (page.length < limit) {
       return
@@ -654,7 +677,12 @@ async function fetchFillHistoryForMarket({
       sleep,
       state,
     })
-    const validated = validateFillPage({ page, symbol, lastTradeId, state })
+    const validated = validateFillPage({
+      page,
+      symbol,
+      lastTradeId,
+      state,
+    })
     await persistFillPage({
       fills: validated.fills,
       repositories,
@@ -663,7 +691,8 @@ async function fetchFillHistoryForMarket({
       now,
       state,
     })
-    lastTradeId = validated.lastTradeId
+    const { lastTradeId: nextLastTradeId } = validated
+    lastTradeId = nextLastTradeId
     await saveTradePageCursor({
       page,
       lastTradeId,
