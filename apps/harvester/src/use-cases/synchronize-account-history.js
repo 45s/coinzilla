@@ -17,23 +17,14 @@ function requireIdentifier({ value, field }) {
   return value
 }
 
-function validateOptions({
-  broker,
-  symbols,
-  providerIdentity,
-  environment,
-  orderRepository,
-  fillRepository,
-  cursorRepository,
-  limit,
-  requestDelayMs,
-  sleep,
-  now,
-}) {
+function validateBroker({ broker } = {}) {
   if (typeof broker?.getCanonicalOrderHistory !== "function" ||
       typeof broker?.getFills !== "function") {
     throw new TypeError("Account history synchronization requires canonical order and fill history methods")
   }
+}
+
+function validateSymbols({ symbols } = {}) {
   if (!Array.isArray(symbols) || symbols.length === 0 ||
       symbols.some((symbol) => typeof symbol !== "string" || !symbol.trim())) {
     throw new TypeError("Account history synchronization requires configured market symbols")
@@ -41,6 +32,9 @@ function validateOptions({
   if (new Set(symbols).size !== symbols.length) {
     throw new Error("Account history synchronization symbols must be unique")
   }
+}
+
+function validateProviderIdentity({ providerIdentity } = {}) {
   if (providerIdentity?.providerType !== "binance") {
     throw new TypeError("Account history synchronization currently supports Binance only")
   }
@@ -50,9 +44,9 @@ function validateOptions({
       field,
     })
   }
-  if (!["testnet", "live"].includes(environment)) {
-    throw new TypeError("Account history synchronization environment must be testnet or live")
-  }
+}
+
+function validateRepositories({ orderRepository, fillRepository, cursorRepository } = {}) {
   if (typeof orderRepository?.upsertHistorical !== "function" ||
       typeof orderRepository?.findByExchangeOrderIdentity !== "function" ||
       typeof orderRepository?.getOldestPendingOrderId !== "function" ||
@@ -62,6 +56,9 @@ function validateOptions({
       typeof cursorRepository?.saveTradeCursor !== "function") {
     throw new TypeError("Account history synchronization requires relational history and cursor repositories")
   }
+}
+
+function validatePagination({ limit, requestDelayMs, sleep, now } = {}) {
   if (!Number.isInteger(limit) || limit < 1 || limit > DEFAULT_PAGE_SIZE) {
     throw new TypeError("Account history page size must be between 1 and 1000")
   }
@@ -71,6 +68,17 @@ function validateOptions({
   if (typeof sleep !== "function" || typeof now !== "function") {
     throw new TypeError("Account history synchronization requires sleep and clock functions")
   }
+}
+
+function validateOptions(input) {
+  validateBroker(input)
+  validateSymbols(input)
+  validateProviderIdentity(input)
+  if (!["testnet", "live"].includes(input.environment)) {
+    throw new TypeError("Account history synchronization environment must be testnet or live")
+  }
+  validateRepositories(input)
+  validatePagination(input)
 }
 
 function requireNumericCursor({ value, field, symbol }) {
