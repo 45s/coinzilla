@@ -1,4 +1,4 @@
-import { readOption, readValueOptions } from "./helpers/options.js"
+import { readEnsureOptionProperty, readEnsureAssertionOptions } from "./helpers/read-and-validate-ensure-options.js"
 import {
   requireArray,
   requireNonEmptyArray,
@@ -38,7 +38,7 @@ import { createEnsureChain } from "./chain.js"
  */
 export const ensure = Object.freeze({
   string(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     if (typeof value !== "string") {
       throw typeError({
         name,
@@ -50,7 +50,7 @@ export const ensure = Object.freeze({
     return value
   },
   nonEmptyString(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     if (typeof value !== "string" || value.trim() === "") {
       throw typeError({
         name,
@@ -62,7 +62,7 @@ export const ensure = Object.freeze({
     return value
   },
   boolean(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     if (typeof value !== "boolean") {
       throw typeError({
         name,
@@ -74,7 +74,7 @@ export const ensure = Object.freeze({
     return value
   },
   number(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     return requireFiniteNumber({
       value,
       name,
@@ -82,7 +82,7 @@ export const ensure = Object.freeze({
     })
   },
   integer(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     if (!Number.isInteger(value)) {
       throw typeError({
         name,
@@ -94,7 +94,7 @@ export const ensure = Object.freeze({
     return value
   },
   safeInteger(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     if (!Number.isSafeInteger(value)) {
       throw typeError({
         name,
@@ -106,12 +106,12 @@ export const ensure = Object.freeze({
     return value
   },
   integerInRange(options) {
-    const { value, name, errMsg, record } = readValueOptions({ options })
-    const min = readOption({
+    const { value, name, errMsg, record } = readEnsureAssertionOptions({ options })
+    const min = readEnsureOptionProperty({
       record,
       key: "min",
     })
-    const max = readOption({
+    const max = readEnsureOptionProperty({
       record,
       key: "max",
     })
@@ -124,12 +124,12 @@ export const ensure = Object.freeze({
     })
   },
   numberInRange(options) {
-    const { value, name, errMsg, record } = readValueOptions({ options })
-    const min = readOption({
+    const { value, name, errMsg, record } = readEnsureAssertionOptions({ options })
+    const min = readEnsureOptionProperty({
       record,
       key: "min",
     })
-    const max = readOption({
+    const max = readEnsureOptionProperty({
       record,
       key: "max",
     })
@@ -142,7 +142,7 @@ export const ensure = Object.freeze({
     })
   },
   positiveInteger(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     ensure.safeInteger({
       value,
       name,
@@ -154,7 +154,7 @@ export const ensure = Object.freeze({
     return value
   },
   nonNegativeInteger(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     ensure.safeInteger({
       value,
       name,
@@ -166,7 +166,7 @@ export const ensure = Object.freeze({
     return value
   },
   array(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     return requireArray({
       value,
       name,
@@ -174,7 +174,7 @@ export const ensure = Object.freeze({
     })
   },
   nonEmptyArray(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     return requireNonEmptyArray({
       value,
       name,
@@ -182,7 +182,7 @@ export const ensure = Object.freeze({
     })
   },
   strings(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     return requireStrings({
       value,
       name,
@@ -190,7 +190,7 @@ export const ensure = Object.freeze({
     })
   },
   nonEmptyStrings(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     return requireStrings({
       value,
       name,
@@ -199,7 +199,7 @@ export const ensure = Object.freeze({
     })
   },
   unique(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     return requireUnique({
       value,
       name,
@@ -207,7 +207,7 @@ export const ensure = Object.freeze({
     })
   },
   function(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     if (typeof value !== "function") {
       throw typeError({
         name,
@@ -219,7 +219,7 @@ export const ensure = Object.freeze({
     return value
   },
   object(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     return requireObject({
       value,
       name,
@@ -227,7 +227,7 @@ export const ensure = Object.freeze({
     })
   },
   plainObject(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     return requirePlainObject({
       value,
       name,
@@ -235,7 +235,7 @@ export const ensure = Object.freeze({
     })
   },
   defined(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     if (value === undefined) {
       throw typeError({
         name,
@@ -247,15 +247,15 @@ export const ensure = Object.freeze({
     return value
   },
   notNull(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     if (value === null || value === undefined) {
       throw new TypeError(errMsg ?? `${name} must not be null or undefined (received ${value === null ? "null" : "undefined"})`)
     }
     return value
   },
   oneOf(options) {
-    const { value, name, errMsg, record } = readValueOptions({ options })
-    const values = readOption({
+    const { value, name, errMsg, record } = readEnsureAssertionOptions({ options })
+    const values = readEnsureOptionProperty({
       record,
       key: "values",
     })
@@ -267,7 +267,7 @@ export const ensure = Object.freeze({
     })
   },
   chain(options) {
-    const { value, name, errMsg } = readValueOptions({ options })
+    const { value, name, errMsg } = readEnsureAssertionOptions({ options })
     return createEnsureChain({
       value,
       name,

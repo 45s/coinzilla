@@ -1,12 +1,12 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 
-import { validateOptions } from "./options.js"
+import { validateEventBusOptions } from "./validate-event-bus-options.js"
 
 const defaultLogger = { error() {} }
 
 function validate(options) {
-  return validateOptions({
+  return validateEventBusOptions({
     options,
     defaultLogger,
   })
