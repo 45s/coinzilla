@@ -449,7 +449,7 @@ test("replays a fully persisted order page when its cursor write fails", async (
     fills: [],
     calls,
   })
-  const saveOrderCursor = repositories.cursorRepository.saveOrderCursor
+  const { saveOrderCursor } = repositories.cursorRepository
   let failCursorWrite = true
   repositories.cursorRepository.saveOrderCursor = async (input) => {
     if (failCursorWrite) {
@@ -496,7 +496,7 @@ test("replays a fully persisted trade page when its cursor write fails", async (
     })],
     calls,
   })
-  const saveTradeCursor = repositories.cursorRepository.saveTradeCursor
+  const { saveTradeCursor } = repositories.cursorRepository
   let failCursorWrite = true
   repositories.cursorRepository.saveTradeCursor = async (input) => {
     if (failCursorWrite) {
