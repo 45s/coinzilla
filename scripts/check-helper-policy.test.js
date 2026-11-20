@@ -6,6 +6,8 @@ import test from "node:test"
 import {
   findHelperSources,
   analyzeHelperSource,
+  analyzeHelperNaming,
+  findHelperNamingViolations,
   findHelperPolicyViolations,
 } from "./check-helper-policy.js"
 
@@ -48,6 +50,35 @@ test("discovers production helper modules and colocated tests", () => {
   }
 })
 
+test("detects vague helper filename and exported function names", () => {
+  assert.deepEqual(analyzeHelperNaming({
+    file: "helpers/normalize.js",
+    source: "export function normalize({ value }) { return value }\\n",
+  }), [
+    "helpers/normalize.js: vague helper filename",
+    "helpers/normalize.js: vague exported helper name normalize",
+  ])
+})
+
+test("allows context-specific helper names", () => {
+  assert.deepEqual(analyzeHelperNaming({
+    file: "helpers/normalize-binance-symbol.js",
+    source: "export function normalizeBinanceSymbol({ symbol }) { return symbol }\\n",
+  }), [])
+})
+
+test("scans helper fixture names", () => {
+  const { root, directory } = createFixture()
+  try {
+    writeFileSync(join(directory, "process.js"), "export function process({ value }) { return value }\\n")
+    assert.deepEqual(findHelperNamingViolations(root), [
+      join(directory, "process.js") + ": vague helper filename",
+      join(directory, "process.js") + ": vague exported helper name process",
+    ])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 test("reports helpers missing a directly associated unit test", () => {
   const { root, directory } = createFixture()
   try {
