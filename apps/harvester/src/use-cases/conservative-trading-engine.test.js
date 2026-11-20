@@ -16,6 +16,7 @@ import {
 } from "@coinzilla/entities"
 import { Portfolio } from "../domain/portfolio/portfolio.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
+import { createOrderOwnership } from "../domain/orders/order-ownership.js"
 import { RecoveryLedger } from "../domain/strategies/conservative/recovery-ledger.js"
 import { evaluateRecoveryCompletion } from "../domain/strategies/conservative/recovery-completion.js"
 import { createMarketBook, isPostOnlyOrderCrossing, makeConservativeTradingEngine } from "./conservative-trading-engine.js"
@@ -420,6 +421,8 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     additionalTrackedQuoteCashFlow,
     additionalTrackedBaseQuantity,
     initialState,
+    recoverySellerWorkflow,
+    recoverySellerStopWorkflow,
   } = options
   const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher })
   const defaultStrategyPolicy = createHarnessStrategyPolicy({ initialPortfolio: options.initialPortfolio })
@@ -461,6 +464,8 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     canTrade: canTradeOverride,
     isStopping: isStoppingOverride,
     initialState,
+    recoverySellerWorkflow,
+    recoverySellerStopWorkflow,
   })
 }
 
@@ -11490,4 +11495,79 @@ test("failed owned BUY cancellation leaves the emergency BUY gate active and rep
   assert.equal(harness.engine.getOperatorBuyPauseState().pausedMarkets.includes("DOGEUSDT"), true, "A failed cancellation must never roll back the market BUY gate.")
   assert.equal(harness.engine.getActiveOrders().some((order) => order.side === "BUY"), true, "The unresolved owned BUY must remain visible for reconciliation.")
   assert.equal(harness.pauses.length, 0, "The emergency BUY-only pause must not convert an unresolved cancellation into a broad strategy pause.")
+})
+
+
+test("routes terminal RS SELL events through mixed-ownership accounting reconciliation", async () => {
+  const order = new CanonicalOrder({
+    clientOrderId: "rs-terminal-sell-1",
+    brokerOrderId: "broker-rs-terminal-sell-1",
+    market,
+    side: "SELL",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 2,
+    updatedAt: 2,
+  })
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId: StrategyId.RECOVERY_SELLER,
+      positionId: "rs-position-1",
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+  })
+  const orderRegistry = new OrderRegistry({
+    orders: [order],
+    ownerships: [ownership],
+  })
+  let reconciled
+  const recoverySellerWorkflow = {
+    reconcileTerminalMixedSell: async (input) => {
+      reconciled = input
+      return { ok: true, data: { applied: true } }
+    },
+  }
+  const recoverySellerStopWorkflow = {
+    latch: async () => ({ ok: true, data: { durable: true } }),
+  }
+  const harness = await createHarness({
+    initialState: { orderRegistry },
+    recoverySellerWorkflow,
+    recoverySellerStopWorkflow,
+    getTerminalFills: async () => [],
+  })
+  const terminalOrder = new CanonicalOrder({
+    ...order,
+    status: "CANCELED",
+    updatedAt: 3,
+    completedAt: 3,
+  })
+
+  const result = await harness.engine.processUserDataEvent({
+    event: {
+      eventType: "executionReport",
+      executionType: "CANCELED",
+      executedOrder: terminalOrder,
+    },
+  })
+
+  assert.equal(result.ok, true, result.errors?.[0]?.message)
+  assert.equal(reconciled?.order?.clientOrderId, order.clientOrderId)
+  assert.deepEqual(reconciled?.canonicalFills, [])
 })
