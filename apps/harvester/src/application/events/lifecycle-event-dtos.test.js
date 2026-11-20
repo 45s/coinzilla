@@ -754,6 +754,12 @@ function createCanonicalAppliedFillExpectedData({ fill }) {
   return {
     fillId: fill.id,
     tradeId: "trade-42",
+    marketId: fill.market.id,
+    marketVenue: fill.market.venue,
+    baseAssetId: fill.market.baseAsset.id,
+    baseAssetCode: fill.market.baseAsset.code,
+    quoteAssetId: fill.market.quoteAsset.id,
+    quoteAssetCode: fill.market.quoteAsset.code,
     brokerOrderId: "broker-order-42",
     clientOrderId: "harvester-order-42",
     symbol: "DOGEUSDT",
