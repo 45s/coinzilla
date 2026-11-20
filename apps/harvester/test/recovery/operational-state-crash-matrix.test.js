@@ -1,3 +1,4 @@
+import { StrategyId } from "../../src/domain/strategies/strategy-ids.js"
 import assert from "node:assert/strict"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
