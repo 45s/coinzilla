@@ -14,6 +14,7 @@ const IGNORED_DIRECTORIES = new Set([
   "tests",
 ])
 
+const VAGUE_HELPER_NAMES = new Set(["helper", "helpers", "utils", "common", "data", "process", "handle", "execute", "update", "check", "get", "prepare", "normalize", "validate", "calculate", "map", "convert", "extract", "parse", "serialize"])
 const EFFECTFUL_MODULES = new Set([
   "node:fs",
   "node:fs/promises",
@@ -186,6 +187,43 @@ export function analyzeHelperSource({ file, source }) {
 }
 
 /**
+ * Detect vague helper filenames and exported function identifiers (heuristic only).
+ * @param {{ file: string, source: string }} options
+ * @returns {string[]}
+ */
+export function analyzeHelperNaming({ file, source }) {
+  const violations = []
+  const fileName = file.split(/[\\/]/).at(-1)
+  const stem = fileName.replace(/\.(?:js|mjs|cjs)$/, "")
+  if (VAGUE_HELPER_NAMES.has(stem)) {
+    violations.push([file, ": vague helper filename"].join(""))
+  }
+  const pattern = /export\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)|export\s+(?:const|let)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?(?:function\b|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)/g
+  for (const match of source.matchAll(pattern)) {
+    const name = match[1] ?? match[2]
+    if (VAGUE_HELPER_NAMES.has(name)) {
+      violations.push([file, ": vague exported helper name ", name].join(""))
+    }
+  }
+  return violations
+}
+
+/**
+ * Scan discovered helper files for naming heuristics.
+ * @param {string} root Repository root.
+ * @returns {string[]}
+ */
+export function findHelperNamingViolations(root) {
+  const violations = []
+  for (const helper of findHelperSources(root)) {
+    violations.push(...analyzeHelperNaming({
+      file: helper.file,
+      source: readFileSync(helper.file, "utf8"),
+    }))
+  }
+  return violations.sort()
+}
+/**
  * Find missing colocated tests and source-level purity violations.
  * @param {string} root Repository root.
  * @returns {string[]}
@@ -218,7 +256,8 @@ export function findHelperPolicyViolations(root) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = fileURLToPath(new URL("../", import.meta.url))
-  const violations = findHelperPolicyViolations(root)
+  const checkNames = process.argv.includes("--check-names")
+  const violations = checkNames ? findHelperNamingViolations(root) : findHelperPolicyViolations(root)
   if (violations.length > 0) {
     process.stderr.write([
       "Helper policy violations:\n",
