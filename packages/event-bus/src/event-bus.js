@@ -6,6 +6,96 @@ import { validateEventBusOptions } from "./helpers/validate-event-bus-options.js
 import { canAcceptDeliveries } from "./helpers/delivery-capacity.js"
 
 const ALL_EVENTS = Symbol("all-events")
+
+function prepareEventPublish({ input, closed }) {
+  let name
+  let source
+  let data
+
+  try {
+    assertObjectInput({
+      input,
+      operation: "Event publish",
+    })
+    ;({ name, source, data = {} } = input)
+  } catch (error) {
+    return { error }
+  }
+
+  if (closed) {
+    return { error: new Error("EventBus is closed") }
+  }
+
+  if (!isValidEventName(name)) {
+    return {
+      error: new TypeError("Event name must be 1-128 characters, start with a letter, number, or underscore, and contain only letters, numbers, _, ., :, or -"),
+    }
+  }
+
+  if (typeof source !== "string" || source.trim() === "") {
+    return { error: new TypeError("Event source must be a non-empty string") }
+  }
+
+  if (data === null || typeof data !== "object" || Array.isArray(data)) {
+    return { error: new TypeError("Event data must be an object") }
+  }
+
+  try {
+    assertEventPayloadSupported(data)
+    return {
+      name,
+      source,
+      eventData: cloneAndFreezeEventPayload(data),
+    }
+  } catch (error) {
+    return { error }
+  }
+}
+
+function createEventEnvelope({ name, source, data }) {
+  return Object.freeze({
+    id: randomUUID(),
+    timestamp: new Date().toISOString(),
+    name,
+    source,
+    data,
+  })
+}
+
+function validateEventBusCloseOptions({ options }) {
+  if (
+    options === null ||
+    typeof options !== "object" ||
+    Array.isArray(options) ||
+    (Object.getPrototypeOf(options) !== Object.prototype &&
+      Object.getPrototypeOf(options) !== null)
+  ) {
+    return {
+      error: new TypeError("EventBus close options must be a plain object"),
+    }
+  }
+
+  for (const key of Reflect.ownKeys(options)) {
+    if (key !== "timeoutMs") {
+      return {
+        error: new TypeError(`Unknown EventBus close option: ${String(key)}`),
+      }
+    }
+  }
+
+  const { timeoutMs } = options
+  if (
+    timeoutMs !== undefined &&
+    (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647)
+  ) {
+    return {
+      error: new TypeError("EventBus close timeoutMs must be an integer between 1 and 2147483647"),
+    }
+  }
+
+  return { timeoutMs }
+}
+
 export class EventBus {
   /**
    * @param {{ logger?: { error?: (entry: object) => void }, onError?: (context: object) => void | Promise<void>, maxPending?: number }} options
@@ -29,53 +119,15 @@ export class EventBus {
   }
 
   publish(input = {}) {
-    let name
-    let source
-    let data
-
-    try {
-      assertObjectInput({
-        input,
-        operation: "Event publish",
-      })
-      ;({ name, source, data = {} } = input)
-    } catch (error) {
-      return toResult({ error })
+    const preparation = prepareEventPublish({
+      input,
+      closed: this.closed,
+    })
+    if (preparation.error) {
+      return toResult({ error: preparation.error })
     }
 
-    if (this.closed) {
-      return toResult({
-        error: new Error("EventBus is closed"),
-      })
-    }
-
-    if (!isValidEventName(name)) {
-      return toResult({
-        error: new TypeError("Event name must be 1-128 characters, start with a letter, number, or underscore, and contain only letters, numbers, _, ., :, or -"),
-      })
-    }
-
-    if (typeof source !== "string" || source.trim() === "") {
-      return toResult({
-        error: new TypeError("Event source must be a non-empty string"),
-      })
-    }
-
-    if (data === null || typeof data !== "object" || Array.isArray(data)) {
-      return toResult({
-        error: new TypeError("Event data must be an object"),
-      })
-    }
-
-    let eventData
-
-    try {
-      assertEventPayloadSupported(data)
-      eventData = cloneAndFreezeEventPayload(data)
-    } catch (error) {
-      return toResult({ error })
-    }
-
+    const { name, source, eventData } = preparation
     const listeners = [
       ...(this.listeners.get(name) ?? []),
       ...this.allListeners,
@@ -91,14 +143,11 @@ export class EventBus {
       })
     }
 
-    const event = Object.freeze({
-      id: randomUUID(),
-      timestamp: new Date().toISOString(),
+    const event = createEventEnvelope({
       name,
       source,
       data: eventData,
     })
-
     for (const listener of listeners) {
       listener(event)
     }
@@ -177,7 +226,42 @@ export class EventBus {
       })
     }
 
-    const listener = (event) => {
+    const listener = this.#createEventDeliveryListener({ handler })
+    const registry = name === ALL_EVENTS
+      ? this.allListeners
+      : this.getListeners(name)
+    registry.add(listener)
+
+    const record = {
+      registry,
+      listener,
+      active: true,
+    }
+    this.subscriptions.add(record)
+
+    const subscription = {
+      unsubscribe: () => {
+        if (!record.active) {
+          return toResult({ unsubscribed: false })
+        }
+
+        record.active = false
+        record.registry.delete(record.listener)
+        this.subscriptions.delete(record)
+
+        if (name !== ALL_EVENTS && record.registry.size === 0) {
+          this.listeners.delete(name)
+        }
+
+        return toResult({ unsubscribed: true })
+      },
+    }
+
+    return toResult({ subscription })
+  }
+
+  #createEventDeliveryListener({ handler }) {
+    return (event) => {
       const task = Promise.resolve()
         .then(() => handler(event))
         .catch(async (error) => {
@@ -209,39 +293,6 @@ export class EventBus {
 
       this.pending.add(task)
     }
-
-    const registry = name === ALL_EVENTS
-      ? this.allListeners
-      : this.getListeners(name)
-
-    registry.add(listener)
-
-    const record = {
-      registry,
-      listener,
-      active: true,
-    }
-    this.subscriptions.add(record)
-
-    const subscription = {
-      unsubscribe: () => {
-        if (!record.active) {
-          return toResult({ unsubscribed: false })
-        }
-
-        record.active = false
-        record.registry.delete(record.listener)
-        this.subscriptions.delete(record)
-
-        if (name !== ALL_EVENTS && record.registry.size === 0) {
-          this.listeners.delete(name)
-        }
-
-        return toResult({ unsubscribed: true })
-      },
-    }
-
-    return toResult({ subscription })
   }
 
   getListeners(name) {
@@ -297,36 +348,12 @@ export class EventBus {
    * @param {{ timeoutMs?: number }} options (1–2,147,483,647 milliseconds when provided)
    */
   async close(options = {}) {
-    if (
-      options === null ||
-      typeof options !== "object" ||
-      Array.isArray(options) ||
-      (Object.getPrototypeOf(options) !== Object.prototype &&
-        Object.getPrototypeOf(options) !== null)
-    ) {
-      return toResult({
-        error: new TypeError("EventBus close options must be a plain object"),
-      })
+    const validation = validateEventBusCloseOptions({ options })
+    if (validation.error) {
+      return toResult({ error: validation.error })
     }
 
-    for (const key of Reflect.ownKeys(options)) {
-      if (key !== "timeoutMs") {
-        return toResult({
-          error: new TypeError(`Unknown EventBus close option: ${String(key)}`),
-        })
-      }
-    }
-
-    const { timeoutMs } = options
-    if (
-      timeoutMs !== undefined &&
-      (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 2_147_483_647)
-    ) {
-      return toResult({
-        error: new TypeError("EventBus close timeoutMs must be an integer between 1 and 2147483647"),
-      })
-    }
-
+    const { timeoutMs } = validation
     this.closed = true
 
     let result
