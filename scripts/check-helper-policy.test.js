@@ -56,7 +56,8 @@ test("detects vague helper filename and exported function names", () => {
     source: "export function normalize({ value }) { return value }\\nexport const get = ({ value }) => value\\n",
   }), [
     "helpers/normalize.js: vague helper filename",
-    "helpers/normalize.js: vague exported helper name normalize",\n    "helpers/normalize.js: vague exported helper name get",
+    "helpers/normalize.js: vague exported helper name normalize",
+    "helpers/normalize.js: vague exported helper name get",
   ])
 })
 
