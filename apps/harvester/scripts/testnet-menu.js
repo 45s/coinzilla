@@ -67,6 +67,18 @@ const waitForKeypress = () => new Promise((resolve) => {
   }))
 })
 
+const waitForMenuNavigation = async ({ selectedIndex }) => {
+  renderMenu(selectedIndex)
+  const { character, key = {} } = await waitForKeypress()
+
+  return resolveTestnetMenuKeypress({
+    character,
+    key,
+    selectedIndex,
+    actionCount: TESTNET_MENU_ACTIONS.length,
+  })
+}
+
 const stderrWrite = (message) => process.stderr.write(message)
 
 const runAction = async (action) => {
@@ -88,6 +100,39 @@ const runAction = async (action) => {
   await prompt("\nPress Enter to return to the menu...")
 }
 
+const runSelectedMenuAction = async ({ action, hideMenu, showMenu }) => {
+  stdin.setRawMode(false)
+  hideMenu()
+  await runAction(action)
+  stdin.setRawMode(true)
+  showMenu()
+}
+
+const runMenuLoop = async ({ hideMenu, showMenu }) => {
+  let selectedIndex = 0
+
+  while (true) {
+    const navigation = await waitForMenuNavigation({ selectedIndex })
+    const {
+      type,
+      selectedIndex: nextSelectedIndex,
+    } = navigation
+    selectedIndex = nextSelectedIndex
+
+    if (type === "EXIT") {return}
+    if (type !== "SELECT") {continue}
+
+    const action = TESTNET_MENU_ACTIONS[selectedIndex]
+    if (action.id === "exit") {return}
+
+    await runSelectedMenuAction({
+      action,
+      hideMenu,
+      showMenu,
+    })
+  }
+}
+
 export const runTestnetMenu = async () => {
   if (typeof stdin.setRawMode !== "function" || !stdin.isTTY) {
     throw new Error("The TESTNET menu requires an interactive terminal.")
@@ -97,7 +142,6 @@ export const runTestnetMenu = async () => {
   stdin.setRawMode(true)
   stdin.resume()
 
-  let selectedIndex = 0
   let menuVisible = false
   const showMenu = () => {
     stdout.write("\x1b[?1049h\x1b[?25l")
@@ -110,29 +154,10 @@ export const runTestnetMenu = async () => {
 
   try {
     showMenu()
-    while (true) {
-      renderMenu(selectedIndex)
-      const { character, key = {} } = await waitForKeypress()
-      const navigation = resolveTestnetMenuKeypress({
-        character,
-        key,
-        selectedIndex,
-        actionCount: TESTNET_MENU_ACTIONS.length,
-      })
-      selectedIndex = navigation.selectedIndex
-
-      if (navigation.type === "EXIT") {return}
-      if (navigation.type !== "SELECT") {continue}
-
-      const action = TESTNET_MENU_ACTIONS[selectedIndex]
-      if (action.id === "exit") {return}
-
-      stdin.setRawMode(false)
-      hideMenu()
-      await runAction(action)
-      stdin.setRawMode(true)
-      showMenu()
-    }
+    await runMenuLoop({
+      hideMenu,
+      showMenu,
+    })
   } finally {
     stdin.setRawMode(false)
     if (menuVisible) {hideMenu()}

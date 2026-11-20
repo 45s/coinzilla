@@ -118,6 +118,9 @@ test("checks only changed existing production module paths", () => {
       "the changed-file scan must ignore deleted paths, tests, documentation, and correctly named modules",
     )
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
