@@ -361,7 +361,6 @@ test("composes a filled recovery BUY into one reserved mixed SELL and blocks a d
       submittedAction = action
       const order = new CanonicalOrder({
         clientOrderId: "rs-sell-1",
-        brokerOrderId: "broker-rs-sell-1",
         market,
         side: "SELL",
         type: action.type,
