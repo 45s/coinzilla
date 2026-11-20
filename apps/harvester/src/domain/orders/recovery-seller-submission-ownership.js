@@ -24,6 +24,9 @@ function normalizeRecoverySellerOwnership({ order, purpose, ownership } = {}) {
   if (expectedSide === undefined || order?.side !== expectedSide) {
     throw new TypeError("Recovery Seller submission purpose must match its canonical order side")
   }
+  if (ownership === undefined && purpose === "RECOVERY_SELL") {
+    return undefined
+  }
   if (ownership === null || typeof ownership !== "object" || Array.isArray(ownership)) {
     throw new TypeError("Recovery Seller submission requires explicit strategy, Position, and cycle ownership")
   }

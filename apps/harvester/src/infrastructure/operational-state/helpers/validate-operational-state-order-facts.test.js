@@ -363,23 +363,24 @@ test("leaves unrelated fact types to their owning validators", () => {
 })
 
 
-test("requires exact Recovery Seller ownership for every durable SELL intent", () => {
+test("requires complete Position and cycle identity for an RS-owned durable SELL intent", () => {
   let thrownError
   assert.throws(
     () => validateOrderSubmissionIntentFact(makeSubmissionIntent({
       side: "SELL",
       purpose: "RECOVERY_SELL",
+      strategyId: "RS_recoverySeller",
     })),
     (error) => {
       thrownError = error
       return error instanceof TypeError
     },
-    "A Recovery Seller SELL intent must not become durable without its strategy, Position, and cycle identity.",
+    "An RS-owned SELL intent must not become durable with only partial strategy ownership.",
   )
   assert.match(
     thrownError.message,
-    /explicit strategy, Position, and cycle ownership/i,
-    "A missing Recovery Seller SELL identity must report the exact ownership invariant.",
+    /valid positionId/i,
+    "A partially owned RS SELL must identify its missing Position identity.",
   )
 })
 

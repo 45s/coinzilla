@@ -136,39 +136,24 @@ asset: quoteAsset }),
     commissions: [],
   })
 const persistOrder = async ({ store, clientOrderId, side, quantity, price, purpose = null }) => {
-  const pending = makeOrder({
-    clientOrderId,
-    side,
-    quantity,
-    price,
-  })
-  const ownership = purpose === "RECOVERY_SELL"
-    ? {
-        strategyId: StrategyId.RECOVERY_SELLER,
-        positionId: `rs-position:${clientOrderId}`,
-        cycleId: `rs-cycle:${clientOrderId}`,
-      }
-    : undefined
-  const intent = await recordOrderSubmissionIntent({
-    operationalStateStore: store,
-    order: pending,
-    purpose,
-    ownership,
-  })
+  const pending = makeOrder({ clientOrderId,
+side,
+quantity,
+price })
+  const intent = await recordOrderSubmissionIntent({ operationalStateStore: store,
+order: pending,
+purpose })
   assert.equal(intent.ok, true, intent.errors?.map(({ message }) => message).join("; "))
-  const acknowledged = acknowledge({
-    clientOrderId,
-    side,
-    quantity,
-    price,
-    purpose,
-  })
+  const acknowledged = acknowledge({ clientOrderId,
+side,
+quantity,
+price,
+purpose })
   const outcome = await recordOrderSubmissionOutcome({
     operationalStateStore: store,
     order: acknowledged,
     outcome: "ACKNOWLEDGED",
     purpose,
-    ownership,
   })
   assert.equal(outcome.ok, true, outcome.errors?.map(({ message }) => message).join("; "))
   return acknowledged
