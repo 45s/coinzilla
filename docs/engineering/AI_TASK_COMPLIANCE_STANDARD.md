@@ -17,6 +17,7 @@ Before implementation, refactoring, configuration changes, documentation edits, 
 4. Read all applicable nested `AGENTS.md`, domain `ROADMAP.md`, specifications, contracts, ADRs, runbooks, configuration and test guidance. Follow applicable links recursively and read those documents in full.
 5. Inspect the actual source, consumers, tests, configuration, file tree and current task/roadmap status. Do not rely on filenames, comments, previous chat, summaries, model memory or assumptions as substitutes.
 6. Identify the acceptance criteria, constraints, invariants, required tests/checks and documentation impact. Resolve any contradiction or discrepancy before making changes.
+7. Review naming for every new or materially changed module, function, exported identifier, and important variable using the [Modularity Standard](MODULARITY_STANDARD.md#naming-standard). Helpers must be self-descriptive; core/domain functions may use concise names when the containing module provides clear context; orchestration names must state the action/transition; modules and services should remain short and responsibility-oriented. Check for existing behavior before creating a differently named duplicate.
 
 **No state-changing work may begin until this gate is complete.** Read-only discovery is allowed. If a required document is inaccessible or requirements conflict without an explicit precedence rule, stop and report the exact issue; do not guess or silently bypass it. Each agent must perform its own preflight.
 
@@ -78,6 +79,7 @@ Before reporting completion or updating a PR as ready, verify:
 - [ ] Implementation follows the discovered architecture, dependency, naming, validation, error, logging and safety rules that apply.
 - [ ] Tests prove the changed contract, including relevant failure and boundary behavior; meaningful tests were not weakened or skipped.
 - [ ] Documentation and roadmap/index impact is handled in the same PR, or the reason for no change is recorded.
+- [ ] Names of new or materially changed files, functions, exports, and important variables were reviewed for behavior/responsibility clarity; contextual brevity is justified where used. When helper naming is in scope, run `pnpm run check:helper-names` and review findings (the scan is heuristic and report-only pending baseline review).
 - [ ] The complete diff was reviewed for unrelated changes and policy deviations.
 - [ ] Required checks were run and exact-head CI evidence is recorded; skipped checks and limitations are explicit.
 - [ ] Any standards exception or unresolved limitation is clearly documented and linked to the task.

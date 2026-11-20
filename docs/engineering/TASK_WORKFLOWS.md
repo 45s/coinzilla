@@ -8,6 +8,7 @@ All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the mandatory [AI Ta
 - [ ] Identified and read all applicable canonical standards, domain requirements, task checklist and linked specifications in full.
 - [ ] Inspected the actual source, consumers, tests, configuration and file tree; did not rely on memory or summaries.
 - [ ] Recorded task scope, constraints/invariants, acceptance criteria, verification and documentation impact.
+- [ ] Reviewed names for new or materially changed modules/functions/exports/variables: helpers are fully self-descriptive; core/domain functions are behavior-descriptive with contextual brevity; orchestration names express the action/transition; modules/services/classes remain concise and responsibility-oriented.
 - [ ] Resolved applicable requirements conflicts or documented a concrete blocker/exception; none were silently bypassed.
 - [ ] Repeated standards discovery if task scope or affected domains changed.
 
@@ -26,6 +27,7 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 ## Documentation-only change
 
 - Confirm the owning documentation/domain, canonical source of truth and linked references.
+- Review names of new or materially changed document headings, filenames and identifiers in examples for clarity; keep names concise where the surrounding context is explicit.
 - Follow [Documentation Governance](../DOCUMENTATION_GOVERNANCE.md): classify the document, preserve historical provenance, and avoid creating competing sources of truth.
 - Follow the canonical [Markdown style standard](../MARKDOWN_STYLE.md) for formatting and authoring conventions.
 - Update the nearest documentation index when adding, moving, renaming, superseding or archiving a document.
@@ -35,6 +37,7 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 - If a domain roadmap status/priority/blocker changes, inspect and synchronize the root `ROADMAP.md` when it tracks that item; verify the owner roadmap agrees with any changed root priority.
 - Do not equate passing link validation with factual freshness; compare affected docs against current source, tests, configuration and merged PR status.
 - Run `pnpm run check:agent-policy` when ownership or agent instructions change.
+- When helper naming policy or helper names change, run `pnpm run check:helper-names`; review all findings, recognizing the scan is heuristic and report-only pending baseline review.
 - When Markdown/MDX changes, run `node --test scripts/markdown-path-policy.test.js scripts/check-markdown-style.test.js` and `node scripts/check-markdown-style.js --all-maintained`.
 - When headings or local links change, run `node --test scripts/check-maintained-markdown-anchors.test.js` and `node scripts/check-maintained-markdown-anchors.js`; historical-source findings remain report-only.
 - For pull requests, run `node scripts/check-markdown-style.js <exact-40-character-target-base-sha>` for the changed-file guard.

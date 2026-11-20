@@ -53,6 +53,36 @@ Rules:
 
 This is a repository-wide default, not a rigid naming template. Choose precise names that describe actual behavior; the example filenames are illustrative rather than mandatory.
 
+## Naming standard
+
+Names must communicate behavior and responsibility without requiring implementation inspection. Naming expectations depend on architectural context:
+
+- **Helper files and helper functions:** use fully self-descriptive names that identify the specific operation, transformation, calculation, validation, extraction, parsing, serialization, or predicate. Include meaningful constraints or domain qualifiers when they distinguish the contract (for example, net of commissions, available inventory, exchange protocol, or lifecycle scope).
+- **Core/domain functions:** describe the business behavior explicitly. Context from the containing module may make names shorter; do not redundantly repeat the module or domain name in every function.
+- **Orchestration functions:** name the coordinated action or lifecycle transition, including important trigger/target context when ambiguity exists. Avoid generic orchestration verbs without an explicit object and outcome.
+- **Modules, files, services and classes:** use concise names that communicate the responsibility or domain boundary. The directory and parent module supply context; do not encode the entire path or feature name into every identifier.
+- **Variables and parameters:** name the represented value, state, or role. Avoid generic names when a more precise name improves understanding.
+
+Prefer established behavior-oriented prefixes where applicable: `calculate-`, `validate-`, `normalize-`, `convert-`, `extract-`, `serialize-`, `parse-`, `is-`, `has-`, `can-`, and `should-`. These are examples, not a rigid vocabulary.
+
+Avoid vague names such as `process`, `handle`, `execute`, `update`, `check`, `get`, `prepare`, `data`, `helper`, `utils`, `common`, `normalize`, `validate`, or `calculate` when they do not communicate the specific behavior. Such names may be acceptable only when their meaning is genuinely unambiguous from the local contract and context; do not use that exception to hide unclear responsibilities.
+
+Examples:
+
+| Context | Avoid | Prefer |
+| --- | --- | --- |
+| Helper | `normalize.js` | `normalize-binance-symbol.js` |
+| Helper | `check-status.js` | `is-order-terminal.js` |
+| Helper | `process-order.js` | `calculate-order-execution-quantity.js` |
+| Domain core | `process()` | `startCycle()` inside `recovery-cycle.js` |
+| Domain core | `update()` | `reconcileFilledBuyWithRecoverySell()` when that is the actual operation |
+| Orchestration | `handle()` | `cancelExistingSellAndRecalculateReplacement()` |
+| Service/module | `recovery-seller-strategy-recovery-cycle-orchestration-service.js` | `recovery-cycle-orchestrator.js` |
+
+Before adding a function or module, search for an existing implementation of the same behavior. Do not create duplicate behavior under a different name. When creating, refactoring, or moving code, review the filename, exported/public identifiers, internal functions and important variables together. If a name is intentionally short because the containing module supplies context, verify that the function's behavior remains clear from that module and its contract.
+
+AI agents must explicitly perform this naming review during task preflight and completion. The opt-in heuristic scan is available as `pnpm run check:helper-names`; it flags context-free helper filenames and exported function declarations. It is not a semantic naming proof and is not yet a blocking CI gate: existing-name baseline review is required before enabling repository-wide enforcement. Any exception must be justified in the task/PR.
+
 ## Module and file size review
 
 - Organize by responsibility and domain, not a rigid folder template.
