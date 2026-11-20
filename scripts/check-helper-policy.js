@@ -287,7 +287,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (changedNames && baseSha) {
     const diffOutput = execFileSync(
       "git",
-      ["diff", "--name-only", `${baseSha}...HEAD`],
+      ["diff", "--name-only", `${baseSha}..HEAD`],
       {
         cwd: root,
         encoding: "utf8",
