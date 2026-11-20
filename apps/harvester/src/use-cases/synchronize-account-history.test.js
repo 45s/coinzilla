@@ -87,6 +87,7 @@ function createFill({ tradeId = "1", orderId = "10", fillMarket = market, client
 function createRepositories() {
   const orders = []
   const fills = []
+  const cursors = new Map()
   return {
     orders,
     fills,
@@ -95,6 +96,26 @@ function createRepositories() {
     },
     fillRepository: {
       upsert: async (input) => fills.push(input),
+    },
+    cursorRepository: {
+      get: async ({ symbol }) => cursors.get(symbol) ?? {
+        lastOrderId: null,
+        lastTradeId: null,
+      },
+      saveOrderCursor: async ({ symbol, lastOrderId }) => {
+        const current = cursors.get(symbol) ?? {}
+        cursors.set(symbol, {
+          ...current,
+          lastOrderId,
+        })
+      },
+      saveTradeCursor: async ({ symbol, lastTradeId }) => {
+        const current = cursors.get(symbol) ?? {}
+        cursors.set(symbol, {
+          ...current,
+          lastTradeId,
+        })
+      },
     },
   }
 }
@@ -150,6 +171,7 @@ test("paginates configured-market order and trade history and persists exchange 
     environment: "testnet",
     orderRepository: repositories.orderRepository,
     fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
     limit: 1,
     requestDelayMs: 0,
     now: () => 300,
@@ -200,6 +222,7 @@ test("fails closed when an exchange history cursor does not advance", async () =
     environment: "testnet",
     orderRepository: repositories.orderRepository,
     fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
     limit: 2,
     requestDelayMs: 0,
     now: () => 300,
@@ -271,4 +294,45 @@ test("scopes repeated exchange order and trade IDs independently by configured m
     repositories.fills.map(({ fill }) => fill.clientOrderId),
     ["btc-order", "eth-order"],
   )
+})
+
+
+test("resumes from durable per-market cursors without re-persisting prior pages", async () => {
+  const repositories = createRepositories()
+  const calls = {
+    orders: [],
+    fills: [],
+  }
+  const broker = createPagedBroker({
+    orders: [createOrder()],
+    fills: [createFill()],
+    calls,
+  })
+  const input = {
+    broker,
+    symbols: ["BTCUSDT"],
+    providerIdentity: identity,
+    environment: "testnet",
+    orderRepository: repositories.orderRepository,
+    fillRepository: repositories.fillRepository,
+    cursorRepository: repositories.cursorRepository,
+    limit: 1,
+    requestDelayMs: 0,
+    now: () => 300,
+  }
+  const first = await synchronizeAccountHistory(input)
+  const second = await synchronizeAccountHistory(input)
+
+  assert.equal(first.ok, true)
+  assert.equal(second.ok, true)
+  assert.deepEqual(
+    calls.orders.map(({ orderId }) => orderId),
+    [0, 11, 11],
+  )
+  assert.deepEqual(
+    calls.fills.map(({ fromId }) => fromId),
+    [0, 2, 2],
+  )
+  assert.equal(second.data.ordersPersisted, 0)
+  assert.equal(second.data.fillsPersisted, 0)
 })
