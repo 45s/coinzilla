@@ -15,7 +15,10 @@ test("deduplicates identical execution reports across subscriptions", () => {
   }
   assert.equal(deduplicator.isDuplicate(report), false)
   assert.equal(deduplicator.isDuplicate(structuredClone(report)), true)
-  assert.equal(deduplicator.isDuplicate({ ...report, subscriptionId: 5 }), true)
+  assert.equal(deduplicator.isDuplicate({
+    ...report,
+    subscriptionId: 5,
+  }), true)
   assert.equal(deduplicator.isDuplicate({
     ...report,
     event: {
