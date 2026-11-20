@@ -3,7 +3,7 @@ import { resolve } from "node:path"
 import { pathToFileURL, fileURLToPath } from "node:url"
 import { Broker } from "../src/index.js"
 import {
-  assertInteractiveTerminal,
+  assertBitunixOperatorInteractiveTerminal,
   createOneShotMarker,
   runBitunixOperatorOrderAttempt,
 } from "./run-bitunix-hypeusdt-order-attempt.js"
@@ -13,7 +13,7 @@ const markerPath = fileURLToPath(new URL(
   import.meta.url,
 ))
 
-function readCredentials({ env }) {
+function readBitunixApiCredentials({ env }) {
   const apiKey = env.BITUNIX_API_KEY?.trim()
   const apiSecret = env.BITUNIX_API_SECRET?.trim()
   if (!apiKey || !apiSecret) {
@@ -37,14 +37,14 @@ function createBitunixBroker({ credentials, allowLiveOrderMutations }) {
   })
 }
 
-function redactSecrets({ message, secrets }) {
+function redactBitunixApiSecrets({ message, secrets }) {
   return secrets.filter(Boolean).reduce(
     (safeMessage, secret) => safeMessage.replaceAll(secret, "[REDACTED]"),
     String(message),
   )
 }
 
-async function askForOperatorConfirmation({ confirmationPhrase }) {
+async function askForBitunixOrderConfirmation({ confirmationPhrase }) {
   const readline = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -60,11 +60,11 @@ async function askForOperatorConfirmation({ confirmationPhrase }) {
 }
 
 async function main() {
-  assertInteractiveTerminal({
+  assertBitunixOperatorInteractiveTerminal({
     stdin: process.stdin,
     stdout: process.stdout,
   })
-  const credentials = readCredentials({
+  const credentials = readBitunixApiCredentials({
     env: process.env,
   })
   process.stdout.write(
@@ -80,13 +80,13 @@ async function main() {
       credentials,
       allowLiveOrderMutations: true,
     }),
-    confirm: askForOperatorConfirmation,
+    confirm: askForBitunixOrderConfirmation,
     createMarker: ({ preflight }) => createOneShotMarker({
       markerPath,
       preflight,
     }),
     writeLine: (message) => process.stdout.write(
-      `${redactSecrets({
+      `${redactBitunixApiSecrets({
         message,
         secrets: [credentials.apiKey, credentials.apiSecret],
       })}\n`,
@@ -100,8 +100,8 @@ async function main() {
   }
 }
 
-function reportFailure({ error }) {
-  const message = redactSecrets({
+function reportBitunixOperatorFailure({ error }) {
+  const message = redactBitunixApiSecrets({
     message: error?.message ?? error,
     secrets: [process.env.BITUNIX_API_KEY, process.env.BITUNIX_API_SECRET],
   })
@@ -116,7 +116,7 @@ const isMainModule = process.argv[1] &&
 
 if (isMainModule) {
   main().catch((error) => {
-    reportFailure({
+    reportBitunixOperatorFailure({
       error,
     })
     process.exitCode = 1
