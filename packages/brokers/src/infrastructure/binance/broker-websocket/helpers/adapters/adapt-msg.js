@@ -117,7 +117,7 @@ const adaptExecutedOrder = (message) => {
   }
 }
 
-const adaptersMap = {
+const adaptersMap = Object.freeze({
   [wsEventsMap.executionReport]: adaptExecutedOrder,
   [wsEventsMap.outboundAccountPosition]: adaptUser.outboundAccountPosition,
   [wsEventsMap.aggTrade]: adaptAggTrades,
