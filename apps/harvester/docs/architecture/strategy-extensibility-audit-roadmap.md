@@ -373,8 +373,16 @@ When continuing this work:
 
 1. Re-read repository and Harvester agent instructions and the applicable documentation preflight.
 2. Verify the current `develop` source and current CG/RS roadmap/status; do not rely solely on this discussion snapshot.
-3. Continue the owner-approved RS-4 implementation in PR #1476 against issue #1475. Use S-1 source mapping as an implementation aid, not as a gate that suspends the approved task.
+3. Continue the owner-approved RS-4 implementation in PR #1515 against issue #1475. Use S-1 source mapping as an implementation aid, not as a gate that suspends the approved task.
 4. Implement the shared account-level coordinator and explicit strategy routing incrementally, with RED → GREEN offline tests and source-backed module boundaries.
 5. Preserve CG behavior and RS-specific lifecycle/accounting. Keep RS disabled/non-executable until RS-4 and RS-5 acceptance pass.
 6. Do not change broker packages or perform TESTNET/LIVE exchange mutations as part of this work.
 7. Keep the user's review/merge ownership: task PRs target `develop`; leave PRs open for user review.
+
+## RS-4 implementation checkpoint — PR #1515 (2026-11-20)
+
+- Production RS policy/lifecycle dispatch is composed through the existing shared Trading Engine and account-owned serialized transition queue; no parallel strategy engine is introduced.
+- RS actions use the engine-owned submitter and an account-wide authorization step backed by the shared Portfolio, AccountSnapshot, OrderRegistry and `allocateStrategyOrderCommitments`. Pair budgets and Position ownership remain strategy-specific.
+- Terminal RS SELL processing stages canonical fills until complete terminal reconciliation can atomically commit recovery and legacy accounting. Missing or failed reconciliation remains a durable global STOP.
+- The production composition is protected by `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = false`; configured RS routes fail before broker connection until RS-4/RS-5 acceptance is complete.
+- Remaining acceptance work: durable replay of RS cycle/BUY VWAP/ownership/sole-SELL reservation/terminal outcomes; fresh third-asset commission valuation; operator-facing STOP reset/resume transport; and offline same-/different-market concurrency, restart and failure proofs. No exchange operations are authorized or performed.
