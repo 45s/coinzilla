@@ -45,8 +45,9 @@ jobs:
           lint_status=$?
           set -e
           echo "ESLINT_AUTOFIX_STATUS=$lint_status" >> "$GITHUB_STEP_SUMMARY"
-          pnpm exec eslint packages/brokers --format compact > packages/brokers/.eslint-ci-report.txt || true
+          pnpm exec eslint packages/brokers --format stylish > packages/brokers/.eslint-ci-report.txt || true
           git add packages/brokers
+git add -f packages/brokers/.eslint-ci-report.txt
           if git diff --cached --quiet; then
             echo "No automatic fixes to commit."
             exit 0
