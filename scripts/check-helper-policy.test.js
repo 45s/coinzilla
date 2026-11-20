@@ -55,7 +55,7 @@ test("reports helper modules without a directly associated unit test", () => {
 test("detects prohibited side-effect APIs and effectful imports", () => {
   const violations = analyzeHelperSource({
     file: "helpers/effectful.js",
-    source: "import fs from \\\"node:fs\\\"\nexport function read({ path }) { return fs.readFileSync(path) }\nexport function currentTime() { return Date.now() }\n",
+    source: "import fs from \"node:fs\"\nexport function read({ path }) { return fs.readFileSync(path) }\nexport function currentTime() { return Date.now() }\n",
   })
 
   assert.deepEqual(
@@ -71,7 +71,7 @@ test("detects prohibited side-effect APIs and effectful imports", () => {
 test("detects mutation of caller-owned input and stateful classes", () => {
   const violations = analyzeHelperSource({
     file: "helpers/mutating.js",
-    source: "export function update({ session }) { session.chronologySource = \\\"SINGLE_SESSION\\\"; return session }\nexport class StatefulHelper {}\n",
+    source: "export function update({ session }) { session.chronologySource = \"SINGLE_SESSION\"; return session }\nexport class StatefulHelper {}\n",
   })
 
   assert.deepEqual(
@@ -87,7 +87,7 @@ test("detects mutation of caller-owned input and stateful classes", () => {
 test("allows deterministic pure transformations and path utilities", () => {
   const violations = analyzeHelperSource({
     file: "helpers/transform.js",
-    source: "import path from \\\"node:path\\\"\nexport function normalize({ value }) { const normalized = value.trim(); return path.basename(normalized) }\n",
+    source: "import path from \"node:path\"\nexport function normalize({ value }) { const normalized = value.trim(); return path.basename(normalized) }\n",
   })
 
   assert.deepEqual(
