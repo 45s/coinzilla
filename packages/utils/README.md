@@ -322,7 +322,7 @@ The coverage command enforces at least 90% line coverage and 85% branch coverage
 
 ## Exact decimal arithmetic
 
-> **Financial safety:** the existing `NH` and `number-operations` helpers use JavaScript `Number`. They are suitable only where floating-point behavior is acceptable. Do not use them for balances, quantities, prices, fees, or other exact financial values; use the decimal-string API below.
+> **Financial safety:** the existing `NH` and `number-precision-operations` helpers use JavaScript `Number`. They are suitable only where floating-point behavior is acceptable. Do not use them for balances, quantities, prices, fees, or other exact financial values; use the decimal-string API below.
 
 The decimal API performs arithmetic with `BigInt` coefficients and explicit decimal scales. It never converts operands through JavaScript `Number`, so it is suitable for exact financial quantities when callers provide decimal strings.
 
