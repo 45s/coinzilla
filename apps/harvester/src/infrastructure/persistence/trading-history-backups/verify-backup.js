@@ -34,7 +34,13 @@ const ENVIRONMENT_TABLES = Object.freeze([
 const MANIFEST_FORMAT_VERSION = 1
 const SHA256_PATTERN = /^[a-f0-9]{64}$/
 
-function createBackupError({ stage, code, cause, environment, backupFilename } = {}) {
+function createBackupError({
+  stage,
+  code,
+  cause,
+  environment,
+  backupFilename,
+} = {}) {
   return new OrderHistoryPersistenceError({
     stage,
     code,
@@ -106,7 +112,12 @@ export function assertCurrentSchema(database) {
   return expectedVersions.at(-1) ?? 0
 }
 
-async function assertRegularFile(filename, { stage, code, environment } = {}) {
+async function assertRegularFile({
+  filename,
+  stage,
+  code,
+  environment,
+} = {}) {
   let stats
   try {
     stats = await lstat(filename)
@@ -129,7 +140,11 @@ async function assertRegularFile(filename, { stage, code, environment } = {}) {
   }
 }
 
-async function assertRegularDirectory(directory, { environment, backupFilename } = {}) {
+async function assertRegularDirectory({
+  directory,
+  environment,
+  backupFilename,
+} = {}) {
   let stats
   try {
     stats = await lstat(directory)
@@ -152,38 +167,50 @@ async function assertRegularDirectory(directory, { environment, backupFilename }
   }
 }
 
-function validateManifest({ manifest, backupFilename, environment } = {}) {
-  const latestSchemaVersion = HARVESTER_RELATIONAL_MIGRATIONS.at(-1)?.version ?? 0
+function isValidTimestamp(value) {
+  return typeof value === "string" &&
+    Number.isFinite(Date.parse(value)) &&
+    new Date(value).toISOString() === value
+}
+
+function isValidBackupFilename(filename, environment) {
   const environmentDirectory = environment === "live" ? "production" : "testnet"
-  const filenamePattern = new RegExp(
+  const pattern = new RegExp(
     `^harvester-${environmentDirectory}-\\d{8}T\\d{9}Z-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.sqlite$`,
   )
-  const validTimestamp = typeof manifest?.createdAt === "string" &&
-    Number.isFinite(Date.parse(manifest.createdAt)) &&
-    new Date(manifest.createdAt).toISOString() === manifest.createdAt
+  return pattern.test(filename)
+}
+
+function validateManifest({ manifest, backupFilename, environment } = {}) {
+  if (manifest?.environment !== environment) {
+    throw createBackupError({
+      stage: "manifest-environment-validation",
+      code: "HARVESTER_HISTORY_BACKUP_ENVIRONMENT_MISMATCH",
+      environment,
+      backupFilename,
+    })
+  }
+  const latestSchemaVersion = HARVESTER_RELATIONAL_MIGRATIONS.at(-1)?.version ?? 0
   const validManifest = manifest?.formatVersion === MANIFEST_FORMAT_VERSION &&
-    manifest.environment === environment &&
     manifest.filename === basename(backupFilename) &&
-    filenamePattern.test(basename(backupFilename)) &&
+    isValidBackupFilename(basename(backupFilename), environment) &&
     Number.isSafeInteger(manifest.schemaVersion) &&
     manifest.schemaVersion >= 0 &&
     manifest.schemaVersion <= latestSchemaVersion &&
-    validTimestamp &&
+    isValidTimestamp(manifest.createdAt) &&
     typeof manifest.sha256 === "string" &&
     SHA256_PATTERN.test(manifest.sha256)
   if (!validManifest) {
     throw createBackupError({
       stage: "manifest-validation",
-      code: manifest?.environment !== environment
-        ? "HARVESTER_HISTORY_BACKUP_ENVIRONMENT_MISMATCH"
-        : "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
+      code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
       environment,
       backupFilename,
     })
   }
 }
 
-export async function readAndValidateManifest({
+async function resolveManifestPaths({
   backupFilename,
   backupDirectory,
   environment,
@@ -205,21 +232,35 @@ export async function readAndValidateManifest({
       backupFilename: resolvedFilename,
     })
   }
-  await assertRegularDirectory(resolvedDirectory, {
+  await assertRegularDirectory({
+    directory: resolvedDirectory,
     environment,
     backupFilename: resolvedFilename,
   })
-  await assertRegularFile(resolvedFilename, {
+  await assertRegularFile({
+    filename: resolvedFilename,
     stage: "backup-file-validation",
     code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
     environment,
   })
   const manifestFilename = `${resolvedFilename}.manifest.json`
-  await assertRegularFile(manifestFilename, {
+  await assertRegularFile({
+    filename: manifestFilename,
     stage: "manifest-file-validation",
     code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
     environment,
   })
+  return {
+    resolvedFilename,
+    manifestFilename,
+  }
+}
+
+async function readManifest({
+  manifestFilename,
+  backupFilename,
+  environment,
+} = {}) {
   let manifest
   try {
     manifest = JSON.parse(await readFile(manifestFilename, "utf8"))
@@ -229,24 +270,42 @@ export async function readAndValidateManifest({
       code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
       cause,
       environment,
-      backupFilename: resolvedFilename,
+      backupFilename,
     })
   }
   validateManifest({
     manifest,
-    backupFilename: resolvedFilename,
+    backupFilename,
+    environment,
+  })
+  return manifest
+}
+
+export async function readAndValidateManifest({
+  backupFilename,
+  backupDirectory,
+  environment,
+} = {}) {
+  const paths = await resolveManifestPaths({
+    backupFilename,
+    backupDirectory,
+    environment,
+  })
+  const manifest = await readManifest({
+    manifestFilename: paths.manifestFilename,
+    backupFilename: paths.resolvedFilename,
     environment,
   })
   let actualDigest
   try {
-    actualDigest = await calculateSha256(resolvedFilename)
+    actualDigest = await calculateSha256(paths.resolvedFilename)
   } catch (cause) {
     throw createBackupError({
       stage: "digest-read",
       code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
       cause,
       environment,
-      backupFilename: resolvedFilename,
+      backupFilename: paths.resolvedFilename,
     })
   }
   if (actualDigest !== manifest.sha256) {
@@ -254,17 +313,17 @@ export async function readAndValidateManifest({
       stage: "digest-validation",
       code: "HARVESTER_HISTORY_BACKUP_DIGEST_MISMATCH",
       environment,
-      backupFilename: resolvedFilename,
+      backupFilename: paths.resolvedFilename,
     })
   }
   return {
-    backupFilename: resolvedFilename,
-    manifestFilename,
+    backupFilename: paths.resolvedFilename,
+    manifestFilename: paths.manifestFilename,
     manifest,
   }
 }
 
-function assertEnvironmentRows(database, environment) {
+function assertEnvironmentRows({ database, environment } = {}) {
   for (const tableName of ENVIRONMENT_TABLES) {
     const mismatch = database.prepare(
       `SELECT COUNT(*) AS count FROM ${tableName} WHERE environment <> ?`,
@@ -279,11 +338,59 @@ function assertEnvironmentRows(database, environment) {
   }
 }
 
-function readRowCounts(database) {
+function readRowCounts({ database } = {}) {
   return Object.fromEntries(REQUIRED_TABLES.map((tableName) => [
     tableName,
     database.prepare(`SELECT COUNT(*) AS count FROM ${tableName}`).get().count,
   ]))
+}
+
+async function validateRestoredDatabase({
+  database,
+  manifest,
+  environment,
+  backupFilename,
+} = {}) {
+  const restoredSchemaVersion = readSchemaVersion(database)
+  if (restoredSchemaVersion !== manifest.schemaVersion) {
+    throw createBackupError({
+      stage: "restore-schema-validation",
+      code: "HARVESTER_HISTORY_BACKUP_SCHEMA_INVALID",
+      environment,
+      backupFilename,
+    })
+  }
+  await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
+  const schemaVersion = assertCurrentSchema(database)
+  const integrity = database.prepare("PRAGMA integrity_check").get()?.integrity_check
+  if (integrity !== "ok") {
+    throw createBackupError({
+      stage: "restore-integrity-validation",
+      code: "HARVESTER_HISTORY_BACKUP_RESTORE_FAILED",
+      environment,
+      backupFilename,
+    })
+  }
+  const foreignKeyViolations = database.prepare("PRAGMA foreign_key_check").all()
+  if (foreignKeyViolations.length > 0) {
+    throw createBackupError({
+      stage: "restore-foreign-key-validation",
+      code: "HARVESTER_HISTORY_BACKUP_RESTORE_FAILED",
+      environment,
+      backupFilename,
+    })
+  }
+  assertEnvironmentRows({
+    database,
+    environment,
+  })
+  return {
+    environment,
+    schemaVersion,
+    rowCounts: readRowCounts({
+      database,
+    }),
+  }
 }
 
 async function restoreAndValidate({
@@ -307,41 +414,12 @@ async function restoreAndValidate({
     })
     await database.connect()
     connected = true
-    const restoredSchemaVersion = readSchemaVersion(database)
-    if (restoredSchemaVersion !== manifest.schemaVersion) {
-      throw createBackupError({
-        stage: "restore-schema-validation",
-        code: "HARVESTER_HISTORY_BACKUP_SCHEMA_INVALID",
-        environment,
-        backupFilename,
-      })
-    }
-    await database.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
-    const schemaVersion = assertCurrentSchema(database)
-    const integrity = database.prepare("PRAGMA integrity_check").get()?.integrity_check
-    if (integrity !== "ok") {
-      throw createBackupError({
-        stage: "restore-integrity-validation",
-        code: "HARVESTER_HISTORY_BACKUP_RESTORE_FAILED",
-        environment,
-        backupFilename,
-      })
-    }
-    const foreignKeyViolations = database.prepare("PRAGMA foreign_key_check").all()
-    if (foreignKeyViolations.length > 0) {
-      throw createBackupError({
-        stage: "restore-foreign-key-validation",
-        code: "HARVESTER_HISTORY_BACKUP_RESTORE_FAILED",
-        environment,
-        backupFilename,
-      })
-    }
-    assertEnvironmentRows(database, environment)
-    result = {
+    result = await validateRestoredDatabase({
+      database,
+      manifest,
       environment,
-      schemaVersion,
-      rowCounts: readRowCounts(database),
-    }
+      backupFilename,
+    })
   } catch (cause) {
     failure = cause instanceof OrderHistoryPersistenceError
       ? cause
@@ -372,6 +450,31 @@ async function restoreAndValidate({
     throw failure
   }
   return result
+}
+
+async function cleanupRestoreDirectory({
+  directory,
+  failure,
+  environment,
+  backupFilename,
+} = {}) {
+  try {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+    return failure
+  } catch (cause) {
+    return failure
+      ? new AggregateError([failure, cause], "Restore candidate cleanup failed.")
+      : createBackupError({
+        stage: "restore-cleanup",
+        code: "HARVESTER_HISTORY_BACKUP_CLEANUP_FAILED",
+        cause,
+        environment,
+        backupFilename,
+      })
+  }
 }
 
 export async function verifyBackup({
@@ -410,22 +513,12 @@ export async function verifyBackup({
   } catch (cause) {
     failure = cause
   }
-  try {
-    await rm(temporaryDirectory, {
-      recursive: true,
-      force: true,
-    })
-  } catch (cause) {
-    failure = failure
-      ? new AggregateError([failure, cause], "Restore candidate cleanup failed.")
-      : createBackupError({
-        stage: "restore-cleanup",
-        code: "HARVESTER_HISTORY_BACKUP_CLEANUP_FAILED",
-        cause,
-        environment,
-        backupFilename,
-      })
-  }
+  failure = await cleanupRestoreDirectory({
+    directory: temporaryDirectory,
+    failure,
+    environment,
+    backupFilename,
+  })
   if (failure) {
     throw failure instanceof OrderHistoryPersistenceError
       ? failure
