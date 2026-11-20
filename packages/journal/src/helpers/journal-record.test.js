@@ -31,7 +31,7 @@ test("parses metadata records and legacy records with line positions", () => {
         id: "event-1",
         name: "a",
       },
-    }),
+    }).trimEnd(),
     JSON.stringify({
       id: "event-2",
       name: "b",
