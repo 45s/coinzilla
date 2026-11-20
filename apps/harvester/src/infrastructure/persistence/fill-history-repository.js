@@ -445,7 +445,7 @@ function upsertFill({ transaction, fill, ingestionSource } = {}) {
     ).run(
       fill.local_observed_at,
       fill.last_source_event_id,
-      fill.last_ingestion_source,
+      ingestionSource,
       existing.id,
     )
     return existing.id
