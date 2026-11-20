@@ -155,7 +155,7 @@ data: ticker })
   })
 })
 
-function assertCandleRows(data, now) {
+function assertCandleRows({ data, now }) {
   assert.deepEqual(data.map(({ symbol, interval, openTime, closeTime, open, high, low, close, volume, isClosed }) => ({
     symbol,
 interval,
@@ -229,7 +229,7 @@ interval: "1m",
 limit: 100 })
   assert.equal(result.ok, true)
   assertCandleRpcCalls(rpc)
-  assertCandleRows(result.data, now)
+  assertCandleRows({ data: result.data, now })
   assert.equal(Object.isFrozen(result.data), true)
 })
 

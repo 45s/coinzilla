@@ -235,69 +235,37 @@ limit: 2 })
 second }
 }
 
-test("history cursors advance from the last returned ID without repeating records", async () => {
+function createHistoryCursorFixture() {
   let tradePage = 0
   let orderPage = 0
   const tradePages = [
     [
-      { id: 10,
-symbol: "DOGEFDUSD",
-orderId: 1,
-qty: "1",
-price: "1",
-quoteQty: "1",
-commission: "0",
-commissionAsset: "DOGE",
-isBuyer: true,
-isMaker: true,
-time: 10 },
-      { id: 11,
-symbol: "DOGEFDUSD",
-orderId: 1,
-qty: "1",
-price: "1",
-quoteQty: "1",
-commission: "0",
-commissionAsset: "DOGE",
-isBuyer: true,
-isMaker: true,
-time: 11 },
+      { id: 10, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 10 },
+      { id: 11, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 11 },
     ],
-    [
-      { id: 12,
-symbol: "DOGEFDUSD",
-orderId: 1,
-qty: "1",
-price: "1",
-quoteQty: "1",
-commission: "0",
-commissionAsset: "DOGE",
-isBuyer: true,
-isMaker: true,
-time: 12 },
-    ],
+    [{ id: 12, symbol: "DOGEFDUSD", orderId: 1, qty: "1", price: "1", quoteQty: "1", commission: "0", commissionAsset: "DOGE", isBuyer: true, isMaker: true, time: 12 }],
   ]
   const orderPages = [
-    [{ symbol: "DOGEFDUSD",
-orderId: 10 }, { symbol: "DOGEFDUSD",
-orderId: 11 }],
-    [{ symbol: "DOGEFDUSD",
-orderId: 12 }],
+    [{ symbol: "DOGEFDUSD", orderId: 10 }, { symbol: "DOGEFDUSD", orderId: 11 }],
+    [{ symbol: "DOGEFDUSD", orderId: 12 }],
   ]
   const { broker, rpc } = createBroker({
     myTrades: () => tradePages[tradePage++],
     allOrders: () => orderPages[orderPage++],
   })
+  return { broker, rpc }
+}
+
+test("history cursors advance from the last returned ID without repeating records", async () => {
+  const { broker, rpc } = createHistoryCursorFixture()
   const trades = await fetchTradePages(broker)
   const orders = await fetchOrderPages(broker)
-
   assert.deepEqual(trades.first.data.map((trade) => trade.id), ["10", "11"])
   assert.deepEqual(trades.second.data.map((trade) => trade.id), ["12"])
   assert.deepEqual(orders.first.data.map((order) => order.orderId), [10, 11])
   assert.deepEqual(orders.second.data.map((order) => order.orderId), [12])
   assert.deepEqual(rpc.calls.map((call) => call.params.fromId ?? call.params.orderId), [10, 12, 10, 12])
 })
-
 
 test("trade history rejects unsafe response trade and order IDs instead of rounding", async () => {
   for (const trade of [
