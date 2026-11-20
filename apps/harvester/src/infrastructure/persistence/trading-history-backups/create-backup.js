@@ -314,6 +314,53 @@ async function resolveBackupContext({
   }
 }
 
+async function createAndVerifyTemporaryBackup({
+  context,
+  backupRate,
+  env,
+  temporaryBackupFilename,
+  temporaryManifestFilename,
+} = {}) {
+  const onlineBackup = await createOnlineBackup({
+    sourceFilename: context.sourceFilename,
+    destinationFilename: temporaryBackupFilename,
+    backupRate,
+    environment: context.environment,
+  })
+  await restrictFilePermissions({
+    filename: temporaryBackupFilename,
+  })
+  const sha256 = await calculateSha256(temporaryBackupFilename)
+  const manifest = {
+    formatVersion: 1,
+    environment: context.environment,
+    createdAt: context.createdAt.toISOString(),
+    filename: basename(context.backupFilename),
+    schemaVersion: onlineBackup.schemaVersion,
+    sha256,
+  }
+  await writeFile(
+    temporaryManifestFilename,
+    `${JSON.stringify(manifest, null, 2)}\n`,
+    {
+      flag: "wx",
+      mode: 0o600,
+    },
+  )
+  await restrictFilePermissions({
+    filename: temporaryManifestFilename,
+  })
+  await verifyBackup({
+    backupFilename: temporaryBackupFilename,
+    env,
+    expectedDirectory: context.temporaryDirectory,
+  })
+  return {
+    onlineBackup,
+    sha256,
+  }
+}
+
 async function createTemporaryBackupArtifact({
   context,
   backupRate,
@@ -324,43 +371,13 @@ async function createTemporaryBackupArtifact({
     basename(context.backupFilename),
   )
   const temporaryManifestFilename = `${temporaryBackupFilename}.manifest.json`
-  let onlineBackup
-  let sha256
-  let failure
   try {
-    onlineBackup = await createOnlineBackup({
-      sourceFilename: context.sourceFilename,
-      destinationFilename: temporaryBackupFilename,
+    const artifact = await createAndVerifyTemporaryBackup({
+      context,
       backupRate,
-      environment: context.environment,
-    })
-    await restrictFilePermissions({
-      filename: temporaryBackupFilename,
-    })
-    sha256 = await calculateSha256(temporaryBackupFilename)
-    const manifest = {
-      formatVersion: 1,
-      environment: context.environment,
-      createdAt: context.createdAt.toISOString(),
-      filename: basename(context.backupFilename),
-      schemaVersion: onlineBackup.schemaVersion,
-      sha256,
-    }
-    await writeFile(
-      temporaryManifestFilename,
-      `${JSON.stringify(manifest, null, 2)}\n`,
-      {
-        flag: "wx",
-        mode: 0o600,
-      },
-    )
-    await restrictFilePermissions({
-      filename: temporaryManifestFilename,
-    })
-    await verifyBackup({
-      backupFilename: temporaryBackupFilename,
       env,
-      expectedDirectory: context.temporaryDirectory,
+      temporaryBackupFilename,
+      temporaryManifestFilename,
     })
     await publishBackupPair({
       temporaryBackupFilename,
@@ -369,14 +386,16 @@ async function createTemporaryBackupArtifact({
       manifestFilename: context.manifestFilename,
       environment: context.environment,
     })
+    await rm(context.temporaryDirectory, {
+      recursive: true,
+      force: true,
+    })
+    return artifact
   } catch (cause) {
-    failure = cause
-  }
-  failure = await removeTemporaryDirectory({
-    directory: context.temporaryDirectory,
-    error: failure,
-  })
-  if (failure) {
+    const failure = await removeTemporaryDirectory({
+      directory: context.temporaryDirectory,
+      error: cause,
+    })
     throw failure instanceof OrderHistoryPersistenceError
       ? failure
       : createBackupError({
@@ -385,10 +404,6 @@ async function createTemporaryBackupArtifact({
         environment: context.environment,
         backupFilename: context.backupFilename,
       })
-  }
-  return {
-    onlineBackup,
-    sha256,
   }
 }
 

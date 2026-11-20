@@ -181,17 +181,13 @@ function isValidBackupFilename({ filename, environment } = {}) {
   return pattern.test(filename)
 }
 
-function validateManifest({ manifest, backupFilename, environment } = {}) {
-  if (manifest?.environment !== environment) {
-    throw createBackupError({
-      stage: "manifest-environment-validation",
-      code: "HARVESTER_HISTORY_BACKUP_ENVIRONMENT_MISMATCH",
-      environment,
-      backupFilename,
-    })
-  }
+function isValidManifestMetadata({
+  manifest,
+  backupFilename,
+  environment,
+} = {}) {
   const latestSchemaVersion = HARVESTER_RELATIONAL_MIGRATIONS.at(-1)?.version ?? 0
-  const validManifest = manifest?.formatVersion === MANIFEST_FORMAT_VERSION &&
+  return manifest?.formatVersion === MANIFEST_FORMAT_VERSION &&
     manifest.filename === basename(backupFilename) &&
     isValidBackupFilename({
       filename: basename(backupFilename),
@@ -203,7 +199,22 @@ function validateManifest({ manifest, backupFilename, environment } = {}) {
     isValidTimestamp(manifest.createdAt) &&
     typeof manifest.sha256 === "string" &&
     SHA256_PATTERN.test(manifest.sha256)
-  if (!validManifest) {
+}
+
+function validateManifest({ manifest, backupFilename, environment } = {}) {
+  if (manifest?.environment !== environment) {
+    throw createBackupError({
+      stage: "manifest-environment-validation",
+      code: "HARVESTER_HISTORY_BACKUP_ENVIRONMENT_MISMATCH",
+      environment,
+      backupFilename,
+    })
+  }
+  if (!isValidManifestMetadata({
+    manifest,
+    backupFilename,
+    environment,
+  })) {
     throw createBackupError({
       stage: "manifest-validation",
       code: "HARVESTER_HISTORY_BACKUP_MANIFEST_INVALID",
