@@ -115,6 +115,41 @@ test("orders sessions only when chronology is unique and event ranges do not ove
   )
 })
 
+test("does not mutate a single session when assigning its chronology source", () => {
+  const originalSession = {
+    fileName: "only-session.jsonl",
+    chronologySource: "PROCESS_STARTED",
+    chronologyTimestamp: 100,
+    lastRecordTimestamp: 150,
+    runtimeSessionId: "only-run",
+  }
+  const inputSessions = [originalSession]
+  const originalSnapshot = structuredClone(inputSessions)
+
+  const orderedSessions = validateAndOrderSessions(inputSessions)
+
+  assert.deepEqual(
+    inputSessions,
+    originalSnapshot,
+    "Ordering one session must not mutate the caller-owned session object or array.",
+  )
+  assert.notStrictEqual(
+    orderedSessions,
+    inputSessions,
+    "The pure ordering helper must return a new array rather than reuse the caller-owned array.",
+  )
+  assert.notStrictEqual(
+    orderedSessions[0],
+    originalSession,
+    "The returned single-session result must be a new object when chronology metadata changes.",
+  )
+  assert.equal(
+    orderedSessions[0].chronologySource,
+    "SINGLE_SESSION",
+    "The returned session must retain the established single-session chronology result.",
+  )
+})
+
 test("rejects tied chronology evidence and overlapping session event ranges", () => {
   assert.throws(
     () => validateAndOrderSessions([
