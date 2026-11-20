@@ -20,10 +20,17 @@ owner: entities
    - **Do:** review imports and public exports; replace broad utility imports with narrowly scoped pure decimal/result helpers where practical. Keep exchange-specific parsing and strategy policy outside Entities.
    - **Verify:** add an architecture test that rejects imports from Brokers, Harvester, Journal, Event Bus, DB and infrastructure modules. Run package and workspace tests after each import change.
 
-3. **Establish package-owned coverage and contract-test gates.**
+3. **Establish package-owned coverage and contract-test gates — implementation in progress.**
    - **Why:** the workspace aggregate can hide a weak shared package behind the coverage of other packages. Entities contracts are high leverage and need their own regression signal.
-   - **Do:** measure production-source coverage by package, identify untested invariants and add a package-scoped coverage command with a negative self-check. Choose thresholds from a real baseline; target at least 90% lines and 80% branches without adding meaningless tests.
-   - **Verify:** CI proves the command fails below threshold and passes on the exact PR head.
+   - **Do:** measure production-source coverage by package and enforce a package-scoped threshold without counting imported Utils implementation files. [PR #1578](https://github.com/45s/coinzilla/pull/1578) adds `test:coverage` with 90% lines, 85% branches and 85% functions, based on the observed Entities source coverage report.
+   - **Verify:** the required Workspace test coverage matrix must run this package command and prove it passes on the exact PR head. Node's test runner exits non-zero when a configured threshold is missed. Mark complete only after exact-head CI is green and the PR is merged.
+
+### Coverage command
+
+- `pnpm --filter @coinzilla/entities run test:coverage` measures only Entities production source (`src/**/*.js`, excluding tests and imported packages) and enforces 90% lines, 85% branches and 85% functions.
+- The required workspace coverage matrix invokes this command once. The matrix-completeness guard verifies the package remains included and retains both `test` and `test:coverage` scripts.
+- **Measured on PR #1578 exact head `32dc8a094691d08754a3874b0719135b0c441bc5`:** 156 tests passed; production-source coverage was 96.33% lines, 94.33% branches and 95.40% functions. The configured gate is therefore below the measured baseline and passed without adding tests solely to inflate coverage.
+- This gate is pending exact-head CI verification in [PR #1578](https://github.com/45s/coinzilla/pull/1578); it is not marked complete until the PR is merged.
 
 ### DEFERRED — only with a demonstrated contract need
 
