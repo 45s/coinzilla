@@ -1,5 +1,11 @@
 # Harvester Roadmap
 
+## Repository-wide source naming audit — Harvester slice (#1582)
+
+- **In progress:** the user-directed naming and module-responsibility audit covers the entire repository, including Harvester. The first Conservative slice adds behavior-characterization tests for the five existing state predicates before renaming the generic `helpers.js` module to `state-predicates.js`.
+- **Compatibility:** this is a private module/test/documentation rename only. Predicate behavior, Conservative strategy decisions, accounting, order lifecycle, configuration and runtime composition remain unchanged. No exchange/account operations are part of this work.
+
+
 > **Living roadmap:** Current priorities and blockers are maintained at the top of this file. Historical audit and implementation records are preserved in [the roadmap history archive](./docs/audits/ROADMAP_HISTORY.md); do not append new session logs or historical evidence here.
 
 ## TOP HARVESTER PRIORITY — Multi-provider execution and market-data routing (#1339)
