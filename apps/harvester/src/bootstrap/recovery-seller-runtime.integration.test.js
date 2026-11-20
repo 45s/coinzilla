@@ -145,7 +145,7 @@ function createAccountSnapshot() {
   }
 }
 
-function createOfflineBroker() {
+function createOfflineBroker({ placeOrderFailure = false } = {}) {
   let acknowledgedOrder
   return {
     getAcknowledgedOrder: () => acknowledgedOrder,
@@ -256,7 +256,7 @@ function createDispatchFixture({ accounting, stopWorkflow }) {
   })
 }
 
-async function createIntegrationFixture() {
+async function createIntegrationFixture({ placeOrderFailure = false } = {}) {
   const store = createStore()
   const stopResult = await createRecoverySellerStopWorkflow({
     operationalStateStore: store,
@@ -284,7 +284,7 @@ async function createIntegrationFixture() {
     ],
   })
   assert.equal(legacyInitialized.ok, true, legacyInitialized.errors?.[0]?.message)
-  const offlineBroker = createOfflineBroker()
+  const offlineBroker = createOfflineBroker({ placeOrderFailure })
   const submitter = createSubmitterFixture({
     store,
     accounting,
@@ -303,6 +303,36 @@ async function createIntegrationFixture() {
     submitter,
     dispatch,
   }
+}
+
+async function dispatchInitialBuy(fixture) {
+  return fixture.dispatch({
+    symbol: "ZROUSDT",
+    state: {
+      prices: new Map([
+        [
+          "ZROUSDT",
+          {
+            symbol: "ZROUSDT",
+            price: "2",
+          },
+        ],
+      ]),
+      paused: new Set(),
+      durablePausedMarkets: new Set(),
+      operatorPausedMarkets: new Set(),
+    },
+    isMarketPriceFresh: () => true,
+    isStopping: () => false,
+    hasBlockingOpenOrdersForSymbol: () => false,
+    authorizeRecoverySellerAction: async ({ action }) => ({
+      ok: true,
+      data: {
+        allowed: action.strategyId === "RS_recoverySeller",
+      },
+    }),
+    submitRecoverySellerOrder: fixture.submitter.submit,
+  })
 }
 
 async function assertAppliedBuyFill({ fixture, order, ownership }) {
@@ -351,33 +381,7 @@ async function assertAppliedBuyFill({ fixture, order, ownership }) {
 
 async function runRuntimeIntegrationScenario() {
   const fixture = await createIntegrationFixture()
-  const result = await fixture.dispatch({
-    symbol: "ZROUSDT",
-    state: {
-      prices: new Map([
-        [
-          "ZROUSDT",
-          {
-            symbol: "ZROUSDT",
-            price: "2",
-          },
-        ],
-      ]),
-      paused: new Set(),
-      durablePausedMarkets: new Set(),
-      operatorPausedMarkets: new Set(),
-    },
-    isMarketPriceFresh: () => true,
-    isStopping: () => false,
-    hasBlockingOpenOrdersForSymbol: () => false,
-    authorizeRecoverySellerAction: async ({ action }) => ({
-      ok: true,
-      data: {
-        allowed: action.strategyId === "RS_recoverySeller",
-      },
-    }),
-    submitRecoverySellerOrder: fixture.submitter.submit,
-  })
+  const result = await dispatchInitialBuy(fixture)
 
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.submitted, true)
@@ -404,6 +408,23 @@ async function runRuntimeIntegrationScenario() {
   assert.equal(fixture.stopWorkflow.getStopState().status, "CLEAR")
 }
 
+async function runUnknownSubmissionScenario() {
+  const fixture = await createIntegrationFixture({
+    placeOrderFailure: true,
+  })
+  const result = await dispatchInitialBuy(fixture)
+
+  assert.equal(result.ok, false)
+  assert.equal(fixture.submitter.unresolved.length, 1)
+  assert.equal(fixture.stopWorkflow.getStopState().status, "STOPPED")
+  assert.ok(fixture.store.records.some((record) =>
+    record.factType === "SAFETY_BLOCKER_RAISED"))
+}
+
 test("composes RS runtime dispatch, durable submission, shared ownership and BUY-fill accounting offline", async () => {
   await runRuntimeIntegrationScenario()
+})
+
+test("latches durable terminal STOP when the offline broker acknowledgement is unknown", async () => {
+  await runUnknownSubmissionScenario()
 })
