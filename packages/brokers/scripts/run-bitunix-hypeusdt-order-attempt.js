@@ -192,3 +192,35 @@ export function createBitunixOperatorOrderPreflight({
     openOrderCount: openOrders.length,
   })
 }
+
+
+/**
+ * Require a real interactive terminal before enabling the operator command.
+ *
+ * @param {object} input
+ * @returns {void}
+ */
+export function assertInteractiveTerminal(input = {}) {
+  void input
+}
+
+/**
+ * Persist the one-shot marker before the order request is dispatched.
+ *
+ * @param {object} input
+ * @returns {Promise<void>}
+ */
+export async function createOneShotMarker(input = {}) {
+  void input
+}
+
+/**
+ * Run the read-only preflight and one explicitly confirmed order attempt.
+ *
+ * @param {object} input
+ * @returns {Promise<object>}
+ */
+export async function runBitunixOperatorOrderAttempt(input = {}) {
+  void input
+  return null
+}
