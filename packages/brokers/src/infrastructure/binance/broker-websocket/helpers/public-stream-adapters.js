@@ -1,12 +1,12 @@
 import { adaptAggTrades } from "./adapters/adapt-trades.js"
 import { adaptKlineStreamMessage } from "./adapters/adapt-kline.js"
 
-const publicAdapters = new Map([
-  ["aggTrade", adaptAggTrades],
-  ["kline", adaptKlineStreamMessage],
-])
+const publicAdapters = Object.freeze({
+  aggTrade: adaptAggTrades,
+  kline: adaptKlineStreamMessage,
+})
 
-const userDataEventTypes = new Set([
+const userDataEventTypes = Object.freeze([
   "executionReport",
   "outboundAccountPosition",
   "account",
@@ -30,10 +30,10 @@ export function adaptPublicStreamMessage(message) {
     throw new TypeError("A public Binance stream event object is required")
   }
 
-  if (userDataEventTypes.has(message.e)) {
+  if (userDataEventTypes.includes(message.e)) {
     throw new TypeError("Authenticated user-data events are not public market-data events")
   }
 
-  const adapter = publicAdapters.get(message.e)
+  const adapter = publicAdapters[message.e]
   return adapter ? adapter(message) : message
 }
