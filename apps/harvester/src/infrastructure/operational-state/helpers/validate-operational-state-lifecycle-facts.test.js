@@ -113,7 +113,7 @@ strategyName: "conservative",
 markets: ["BTCUSDT", "ETHUSDT"],
 fingerprint: DIGEST,
     },
-factId: "configuration-baseline:" + DIGEST,
+factId: `configuration-baseline:${DIGEST}`,
   }))
   assert.doesNotThrow(() => validateProcessStartedFact({
     factType: "PROCESS_STARTED",
