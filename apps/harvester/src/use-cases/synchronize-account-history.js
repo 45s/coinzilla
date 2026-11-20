@@ -54,6 +54,7 @@ function validateOptions({
     throw new TypeError("Account history synchronization environment must be testnet or live")
   }
   if (typeof orderRepository?.upsertHistorical !== "function" ||
+      typeof orderRepository?.findByExchangeOrderIdentity !== "function" ||
       typeof fillRepository?.upsert !== "function" ||
       typeof cursorRepository?.get !== "function" ||
       typeof cursorRepository?.saveOrderCursor !== "function" ||
@@ -369,7 +370,15 @@ function validateCanonicalFill({ fill, symbol, lastTradeId, state }) {
 
 async function persistCanonicalFill({ fill, repositories, providerIdentity, environment, observedAt, state }) {
   const orderKey = `${fill.market.id}:${fill.brokerOrderId}`
-  const clientOrderId = state.ordersByBrokerId.get(orderKey)
+  let clientOrderId = state.ordersByBrokerId.get(orderKey)
+  if (clientOrderId === undefined) {
+    clientOrderId = await repositories.orderRepository.findByExchangeOrderIdentity({
+      providerIdentity,
+      environment,
+      marketId: fill.market.id,
+      brokerOrderId: fill.brokerOrderId,
+    })
+  }
   const enrichedFill = createEnrichedFill({
     fill,
     clientOrderId,
