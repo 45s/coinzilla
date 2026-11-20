@@ -10,6 +10,7 @@
     "check:agent-policy": "node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js",
     "check:helper-policy": "node --test scripts/check-helper-policy.test.js && node scripts/check-helper-policy.js",
     "check:helper-names": "node --test scripts/check-helper-policy.test.js && node scripts/check-helper-policy.js --check-names",
+    "check:helper-names:changed": "node --test scripts/check-helper-policy.test.js && node scripts/check-helper-policy.js --changed-names",
     "quality": "pnpm test && pnpm lint && pnpm run check:syntax && pnpm run check:agent-policy && pnpm run test:external-links",
     "check:external-links": "node scripts/check-external-links.js",
     "test:external-links": "node --test scripts/check-external-links.test.js",

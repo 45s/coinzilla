@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { execFileSync } from "node:child_process"
 
 const IGNORED_DIRECTORIES = new Set([
   "node_modules",
@@ -224,6 +225,29 @@ export function findHelperNamingViolations(root) {
   return violations.sort()
 }
 /**
+ * Find naming violations in helper files included in a change.
+ * @param {{ root: string, changedPaths: string[] }} options
+ * @returns {string[]}
+ */
+export function findChangedHelperNamingViolations({ root, changedPaths }) {
+  const helperPaths = changedPaths.filter((path) =>
+    path.split("/").includes("helpers") && /\.(?:js|mjs|cjs)$/.test(path),
+  )
+  const violations = []
+  for (const path of helperPaths) {
+    const absolutePath = join(root, path)
+    if (!existsSync(absolutePath)) {
+      continue
+    }
+    violations.push(...analyzeHelperNaming({
+      file: path,
+      source: readFileSync(absolutePath, "utf8"),
+    }))
+  }
+  return violations.sort()
+}
+
+/**
  * Find missing colocated tests and source-level purity violations.
  * @param {string} root Repository root.
  * @returns {string[]}
@@ -257,7 +281,34 @@ export function findHelperPolicyViolations(root) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = fileURLToPath(new URL("../", import.meta.url))
   const checkNames = process.argv.includes("--check-names")
-  const violations = checkNames ? findHelperNamingViolations(root) : findHelperPolicyViolations(root)
+  const changedNames = process.argv.includes("--changed-names")
+  const baseSha = process.argv.find((argument) => /^[a-f0-9]{40}$/.test(argument))
+  let changedPaths = []
+  if (changedNames && baseSha) {
+    const diffOutput = execFileSync(
+      "git",
+      ["diff", "--name-only", `${baseSha}..HEAD`],
+      {
+        cwd: root,
+        encoding: "utf8",
+      },
+    )
+    changedPaths = diffOutput.split(/\r?\n/).filter(Boolean)
+  }
+  let violations = findHelperPolicyViolations(root)
+  if (checkNames) {
+    violations = findHelperNamingViolations(root)
+  }
+  if (changedNames) {
+    if (baseSha) {
+      violations = findChangedHelperNamingViolations({
+        root,
+        changedPaths,
+      })
+    } else {
+      violations = ["Changed-name check requires an exact 40-character base SHA"]
+    }
+  }
   if (violations.length > 0) {
     process.stderr.write([
       "Helper policy violations:\n",

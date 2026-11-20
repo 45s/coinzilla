@@ -81,7 +81,7 @@ Examples:
 
 Before adding a function or module, search for an existing implementation of the same behavior. Do not create duplicate behavior under a different name. When creating, refactoring, or moving code, review the filename, exported/public identifiers, internal functions and important variables together. If a name is intentionally short because the containing module supplies context, verify that the function's behavior remains clear from that module and its contract.
 
-AI agents must explicitly perform this naming review during task preflight and completion. The opt-in heuristic scan is available as `pnpm run check:helper-names`; it flags context-free helper filenames and exported function declarations. It is not a semantic naming proof and is not yet a blocking CI gate: existing-name baseline review is required before enabling repository-wide enforcement. Any exception must be justified in the task/PR.
+AI agents must explicitly perform this naming review during task preflight and completion. The heuristic scan is available as `pnpm run check:helper-names`; it flags context-free helper filenames and exported function declarations across the existing helper tree for baseline auditing. The PR CI gate runs `pnpm run check:helper-names:changed -- <base-sha>` and blocks vague filenames/exported names in changed helper files. This avoids unrelated legacy violations blocking a PR while enforcing the standard on touched helper code. The scanner cannot prove semantic clarity; reviewers must still inspect names and context. Any exception must be justified in the task/PR.
 
 ## Module and file size review
 
