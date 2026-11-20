@@ -578,7 +578,10 @@ function handleStrategyMarketResumedFact({ record, state }) {
   state.strategyPauses.delete(record.data.symbol)
 }
 
-function projectRecoverySellerSubmissionIntent({ record, state }) {
+function projectRecoverySellerSubmissionIntent({
+      record,
+      state,
+    }) {
   const intent = record.data
   const expectedPurpose = intent.side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL"
   if (!intent.clientOrderId || !intent.cycleId || !intent.positionId ||
@@ -624,7 +627,11 @@ function updateRecoverySellerOrderFromFact({ record, state, fields, context, pat
   ))
 }
 
-function projectRecoverySellerExecutionFill({ record, state, intent }) {
+function projectRecoverySellerExecutionFill({
+    record,
+    state,
+    intent,
+  }) {
   if (intent?.strategyId !== "RS_recoverySeller") {
     if (record.data.strategyId === "RS_recoverySeller") {
       throw new Error("Recovery Seller execution fill has no preceding durable owned order intent")
@@ -660,7 +667,10 @@ function projectRecoverySellerExecutionFill({ record, state, intent }) {
   state.recoverySellerFillsByCycle.set(intent.cycleId, fills)
 }
 
-function projectConservativeRecoveryFillBoundary({ record, state }) {
+function projectConservativeRecoveryFillBoundary({
+      record,
+      state,
+    }) {
   const appliedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
   if (appliedFillIds.includes(record.data.fillId)) {
     throw new Error(`Durable recovery cycle contains a duplicate applied fill identity: ${record.data.fillId}`)
@@ -669,7 +679,10 @@ function projectConservativeRecoveryFillBoundary({ record, state }) {
   state.cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
 }
 
-function projectRecoveryCycleOutcome({ record, state }) {
+function projectRecoveryCycleOutcome({
+      record,
+      state,
+    }) {
   const expectedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
   if (JSON.stringify(expectedFillIds) !== JSON.stringify(record.data.appliedFillIds)) {
     throw new Error(`Durable recovery-cycle outcome does not match the exact applied-fill boundary for ${record.data.marketId}`)
@@ -687,7 +700,10 @@ function projectRecoveryCycleOutcome({ record, state }) {
   state.recoveryCycleNotCompletedFacts.push(fact)
 }
 
-function projectSubmissionOutcomeFact({ record, state }) {
+function projectSubmissionOutcomeFact({
+      record,
+      state,
+    }) {
   updateRecoverySellerOrderFromFact({
     record,
     state,
@@ -707,7 +723,10 @@ function projectSubmissionOutcomeFact({ record, state }) {
   }))
 }
 
-function projectCancellationOutcomeFact({ record, state }) {
+function projectCancellationOutcomeFact({
+      record,
+      state,
+    }) {
   updateRecoverySellerOrderFromFact({
     record,
     state,
@@ -726,7 +745,10 @@ function projectCancellationOutcomeFact({ record, state }) {
   }))
 }
 
-function projectExecutionFillFact({ record, state }) {
+function projectExecutionFillFact({
+      record,
+      state,
+    }) {
   const intent = record.data.clientOrderId == null
     ? undefined
     : state.orderIntents.get(record.data.clientOrderId)

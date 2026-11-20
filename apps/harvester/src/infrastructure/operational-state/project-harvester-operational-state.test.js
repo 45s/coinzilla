@@ -534,37 +534,8 @@ function createRecoverySellerFill({ clientOrderId, brokerOrderId, side, fillId, 
   }, `rs-fill:${fillId}`)
 }
 
-function createRecoverySellerLifecycleRecords() {
-  const cycleId = "c".repeat(64)
-  const positionId = "rs-position-1"
+function createRecoverySellerSellCancellationRecords({ cycleId, positionId }) {
   return [
-    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
-    baseline(),
-    started(),
-    ...preflightFacts(),
-    createRecoverySellerIntent({
-      clientOrderId: "rs-buy-1",
-      side: "BUY",
-      purpose: "RECOVERY_BUY",
-      sequence: 5,
-      cycleId,
-      positionId,
-    }),
-    createRecoverySellerOutcome({
-      clientOrderId: "rs-buy-1",
-      side: "BUY",
-      purpose: "RECOVERY_BUY",
-      sequence: 6,
-      brokerOrderId: "rs-broker-buy-1",
-      status: "FILLED",
-    }),
-    createRecoverySellerFill({
-      clientOrderId: "rs-buy-1",
-      brokerOrderId: "rs-broker-buy-1",
-      side: "BUY",
-      fillId: "rs-buy-fill-1",
-      sequence: 7,
-    }),
     createRecoverySellerIntent({
       clientOrderId: "rs-sell-1",
       side: "SELL",
@@ -605,6 +576,40 @@ function createRecoverySellerLifecycleRecords() {
   ]
 }
 
+function createRecoverySellerLifecycleRecords() {
+  const cycleId = "c".repeat(64)
+  const positionId = "rs-position-1"
+  const buyRecords = [
+    record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
+    baseline(),
+    started(),
+    ...preflightFacts(),
+    createRecoverySellerIntent({
+      clientOrderId: "rs-buy-1",
+      side: "BUY",
+      purpose: "RECOVERY_BUY",
+      sequence: 5,
+      cycleId,
+      positionId,
+    }),
+    createRecoverySellerOutcome({
+      clientOrderId: "rs-buy-1",
+      side: "BUY",
+      purpose: "RECOVERY_BUY",
+      sequence: 6,
+      brokerOrderId: "rs-broker-buy-1",
+      status: "FILLED",
+    }),
+    createRecoverySellerFill({
+      clientOrderId: "rs-buy-1",
+      brokerOrderId: "rs-broker-buy-1",
+      side: "BUY",
+      fillId: "rs-buy-fill-1",
+      sequence: 7,
+    }),
+  ]
+  return [...buyRecords, ...createRecoverySellerSellCancellationRecords({ cycleId, positionId })]
+}
 function createRecoverySellerOrphanFillRecords() {
   return [
     record(0, "LEDGER_INITIALIZED", { schemaVersion: 1 }, "durable-facts:genesis"),
@@ -682,10 +687,19 @@ test("projects RS order ownership, fills and fail-closed SELL reservations acros
   assert.equal(lifecycle.candidateOnly, true)
   assert.equal(lifecycle.restorationEnabled, false)
   assert.equal(lifecycle.requiresExchangeReconciliation, true)
-  assert.deepEqual(lifecycle.ordersByCycle[0].orders.map(({ side, status }) => ({ side, status })), [
-    { side: "BUY", status: "FILLED" },
-    { side: "SELL", status: "CANCELED" },
-  ])
+  assert.deepEqual(
+    lifecycle.ordersByCycle[0].orders.map(({ side, status }) => ({ side, status })),
+    [
+      {
+        side: "BUY",
+        status: "FILLED",
+      },
+      {
+        side: "SELL",
+        status: "CANCELED",
+      },
+    ],
+  )
   assert.equal(lifecycle.ordersByCycle[0].reservedSellOrders.length, 1)
   assert.deepEqual(lifecycle.appliedFillsByCycle[0].fills.map(({ fillId }) => fillId), ["rs-buy-fill-1"])
 })
