@@ -103,7 +103,7 @@ AI agents must explicitly perform this naming review during task preflight and c
 
 ## File, identifier and boundary-artifact naming
 
-- JavaScript source and test filenames use lower kebab-case. A direct unit test mirrors its source basename and ends in `.test.js`; use descriptive test names for behavior and boundary conditions, not for the implementation detail being asserted.
+- Use lower kebab-case word segments for JavaScript filenames. A dot-separated role/scope qualifier is acceptable when it clarifies a module or test boundary (for example, `broker.port.js` or `rpc-client.lifecycle.test.js`). A direct unit test mirrors its source basename and ends in `.test.js`; use descriptive test names for behavior and boundary conditions, not for the implementation detail being asserted.
 - JavaScript functions, variables and object properties use `camelCase`; classes use `PascalCase`. Use `UPPER_SNAKE_CASE` for stable enum-like, configuration and protocol constants; do not capitalize every local `const` binding.
 - Boolean predicates should read as a question, normally with `is`, `has`, `can` or `should`. Functions should name an action and its subject/outcome. Classes should name the concept or stateful role they own.
 - Keep established acronyms such as API, HTTP, ID, RPC, URL and DTO when they are part of the domain vocabulary. Do not invent shortened forms such as `msg`, `cfg` or `acc` when the full word is clearer. Preserve wire-protocol field names only at the protocol boundary.
