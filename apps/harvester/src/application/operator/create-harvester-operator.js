@@ -8,6 +8,26 @@ import {
 import { createReadOperatorState } from "../../use-cases/operator-control/read-operator-state.js"
 import { createReadOperatorTradingState } from "../../use-cases/operator-control/read-operator-trading-state.js"
 
+function createReadRecoverySellerStopState({ recoverySellerStopWorkflow }) {
+  return async ({ actor } = {}) => {
+    try {
+      authorizeOperatorActor({ actor })
+      return {
+        ok: true,
+        data: {
+          stopState: recoverySellerStopWorkflow.getStopState(),
+          blockerId: recoverySellerStopWorkflow.getBlockerId(),
+        },
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        errors: [error],
+      }
+    }
+  }
+}
+
 /**
  * Compose Harvester's transport-independent operator capability.
  *
@@ -51,23 +71,7 @@ export function createHarvesterOperator({
     operator.getMarkets = readState.getMarkets
   }
   if (recoverySellerStopWorkflow !== undefined) {
-    operator.getRecoverySellerStopState = async ({ actor } = {}) => {
-      try {
-        authorizeOperatorActor({ actor })
-        return {
-          ok: true,
-          data: {
-            stopState: recoverySellerStopWorkflow.getStopState(),
-            blockerId: recoverySellerStopWorkflow.getBlockerId(),
-          },
-        }
-      } catch (error) {
-        return {
-          ok: false,
-          errors: [error],
-        }
-      }
-    }
+    operator.getRecoverySellerStopState = createReadRecoverySellerStopState({ recoverySellerStopWorkflow })
   }
   if ([getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders].some((provider) => provider !== undefined)) {
     const readTradingState = createReadOperatorTradingState({ engine,
