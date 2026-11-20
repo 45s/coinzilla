@@ -600,7 +600,7 @@ test("projects Recovery Seller order ownership, applied fills and fail-closed SE
     quantity: "0.1",
     purpose,
   }, `rs-order-intent:${clientOrderId}`)
-  const ownedOutcome = ({ clientOrderId, side, purpose, sequence, brokerOrderId }) => record(sequence, "ORDER_SUBMISSION_OUTCOME", {
+  const ownedOutcome = ({ clientOrderId, side, purpose, sequence, brokerOrderId, status = "OPEN" }) => record(sequence, "ORDER_SUBMISSION_OUTCOME", {
     ...provider,
     clientOrderId,
     strategyId: "RS_recoverySeller",
@@ -610,11 +610,11 @@ test("projects Recovery Seller order ownership, applied fills and fail-closed SE
     type: "LIMIT",
     price: "100",
     quantity: "0.1",
-    executedQuantity: "0.1",
+    executedQuantity: status === "FILLED" ? "0.1" : "0",
     purpose,
     outcome: "ACKNOWLEDGED",
     brokerOrderId,
-    status: "FILLED",
+    status,
   }, `rs-order-outcome:${clientOrderId}`)
   const ownedFill = ({ clientOrderId, brokerOrderId, side, fillId, sequence }) => record(sequence, "EXECUTION_FILL_APPLIED", {
     ...provider,
@@ -637,11 +637,32 @@ test("projects Recovery Seller order ownership, applied fills and fail-closed SE
     started(),
     ...preflightFacts(),
     ownedIntent({ clientOrderId: "rs-buy-1", side: "BUY", purpose: "RECOVERY_BUY", sequence: 5 }),
-    ownedOutcome({ clientOrderId: "rs-buy-1", side: "BUY", purpose: "RECOVERY_BUY", sequence: 6, brokerOrderId: "rs-broker-buy-1" }),
+    ownedOutcome({ clientOrderId: "rs-buy-1", side: "BUY", purpose: "RECOVERY_BUY", sequence: 6, brokerOrderId: "rs-broker-buy-1", status: "FILLED" }),
     ownedFill({ clientOrderId: "rs-buy-1", brokerOrderId: "rs-broker-buy-1", side: "BUY", fillId: "rs-buy-fill-1", sequence: 7 }),
     ownedIntent({ clientOrderId: "rs-sell-1", side: "SELL", purpose: "RECOVERY_SELL", sequence: 8 }),
     ownedOutcome({ clientOrderId: "rs-sell-1", side: "SELL", purpose: "RECOVERY_SELL", sequence: 9, brokerOrderId: "rs-broker-sell-1" }),
-    ownedFill({ clientOrderId: "rs-sell-1", brokerOrderId: "rs-broker-sell-1", side: "SELL", fillId: "rs-sell-fill-1", sequence: 10 }),
+    record(10, "ORDER_CANCELLATION_INTENT", {
+      ...provider,
+      clientOrderId: "rs-sell-1",
+      brokerOrderId: "rs-broker-sell-1",
+      side: "SELL",
+      type: "LIMIT",
+      price: "100",
+      quantity: "0.1",
+      executedQuantity: "0",
+      reason: "TRAILING_BUY_REPRICE",
+      status: "OPEN",
+    }, "rs-sell-cancel-intent"),
+    record(11, "ORDER_CANCELLATION_OUTCOME", {
+      ...provider,
+      clientOrderId: "rs-sell-1",
+      brokerOrderId: "rs-broker-sell-1",
+      side: "SELL",
+      reason: "TRAILING_BUY_REPRICE",
+      outcome: "CANCELED",
+      status: "CANCELED",
+      executedQuantity: "0",
+    }, "rs-sell-cancel-outcome"),
   ]
   const result = projectHarvesterOperationalState({ records })
 
@@ -655,18 +676,19 @@ test("projects Recovery Seller order ownership, applied fills and fail-closed SE
     lifecycle.ordersByCycle[0].orders.map(({ side, purpose, status }) => ({ side, purpose, status })),
     [
       { side: "BUY", purpose: "RECOVERY_BUY", status: "FILLED" },
-      { side: "SELL", purpose: "RECOVERY_SELL", status: "FILLED" },
+      { side: "SELL", purpose: "RECOVERY_SELL", status: "OPEN" },
     ],
   )
+  assert.equal(result.data.orderCancellationOutcomes[0].status, "CANCELED")
   assert.equal(lifecycle.ordersByCycle[0].reservedSellOrders.length, 1,
-    "A terminal broker status must not release the sole-SELL reservation before durable mixed-SELL accounting reconciliation.")
+    "A terminal CANCELED broker outcome must not release the sole-SELL reservation before durable mixed-SELL accounting reconciliation.")
   assert.deepEqual(
     lifecycle.appliedFillsByCycle[0].fills.map(({ fillId, side, positionId, purpose }) => ({
       fillId, side, positionId, purpose,
     })),
     [
       { fillId: "rs-buy-fill-1", side: "BUY", positionId, purpose: "RECOVERY_BUY" },
-      { fillId: "rs-sell-fill-1", side: "SELL", positionId, purpose: "RECOVERY_SELL" },
+
     ],
   )
 })
