@@ -56,8 +56,8 @@ const CREATE_RELATIONAL_TABLES_SQL = `
     last_execution_type TEXT,
     UNIQUE (environment, provider_instance_id, provider_type, account_id, client_order_id)
   );
-  CREATE UNIQUE INDEX orders_exchange_identity_idx
-    ON orders(environment, provider_instance_id, provider_type, account_id, exchange_order_id)
+  CREATE INDEX orders_exchange_lookup_idx
+    ON orders(environment, provider_instance_id, provider_type, account_id, market_id, exchange_order_id)
     WHERE exchange_order_id IS NOT NULL;
   CREATE INDEX orders_market_time_idx
     ON orders(environment, provider_type, provider_instance_id, account_id, market_id, exchange_created_at);

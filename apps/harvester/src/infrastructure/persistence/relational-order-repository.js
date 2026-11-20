@@ -37,10 +37,8 @@ function assertFillOrderIdentity({ transaction, row } = {}) {
       AND account_id = ?
       AND (
         (client_order_id = ? AND exchange_order_id <> ?)
-        OR (exchange_order_id = ? AND (
-          market_id <> ? OR
-          (client_order_id IS NOT NULL AND client_order_id <> ?)
-        ))
+        OR (exchange_order_id = ? AND market_id = ? AND
+          client_order_id IS NOT NULL AND client_order_id <> ?)
       )
     LIMIT 1
   `).get(

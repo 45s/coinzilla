@@ -118,6 +118,11 @@ function assertFreshRelationalSchema(database) {
       "exchange_executed_at", "local_observed_at", "source_kind",
     ],
   })
+  const exchangeLookupIndex = database.prepare("PRAGMA index_list(orders)").all().find(
+    ({ name }) => name === "orders_exchange_lookup_idx",
+  )
+  assert.ok(exchangeLookupIndex, "Orders must have a provider-scoped exchange-order lookup index.")
+  assert.equal(exchangeLookupIndex.unique, 0, "Exchange order IDs must not be assumed unique across every provider market.")
   assertMigrationHistory(database)
 }
 
