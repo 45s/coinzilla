@@ -676,7 +676,7 @@ test("projects Recovery Seller order ownership, applied fills and fail-closed SE
     lifecycle.ordersByCycle[0].orders.map(({ side, purpose, status }) => ({ side, purpose, status })),
     [
       { side: "BUY", purpose: "RECOVERY_BUY", status: "FILLED" },
-      { side: "SELL", purpose: "RECOVERY_SELL", status: "OPEN" },
+      { side: "SELL", purpose: "RECOVERY_SELL", status: "CANCELED" },
     ],
   )
   assert.equal(result.data.orderCancellationOutcomes[0].status, "CANCELED")
