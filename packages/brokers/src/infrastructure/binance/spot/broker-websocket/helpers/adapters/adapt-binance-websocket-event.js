@@ -1,4 +1,4 @@
-import { adaptUser } from "./user.js"
+import { userDataEventAdapters } from "./user-data-event-adapters.js"
 import { adaptAggTrades } from "./adapt-trades.js"
 
 /** Binance user-data and public stream event-name mapping. */
@@ -70,7 +70,7 @@ source: "binance.spot.userData.executionReport",
  * @returns {object} Normalized order event, optional fill, and broker evidence.
  */
 const adaptExecutedOrder = (message) => {
-  const report = adaptUser.executionReport(message)
+  const report = userDataEventAdapters.executionReport(message)
   const executedOrder = {
     id: String(report.orderId),
 symbol: report.symbol,
@@ -119,11 +119,11 @@ brokerEvidence: createExecutionReportEvidence(message),
 
 const adaptersMap = Object.freeze({
   [wsEventsMap.executionReport]: adaptExecutedOrder,
-  [wsEventsMap.outboundAccountPosition]: adaptUser.outboundAccountPosition,
+  [wsEventsMap.outboundAccountPosition]: userDataEventAdapters.outboundAccountPosition,
   [wsEventsMap.aggTrade]: adaptAggTrades,
-  [wsEventsMap.account]: adaptUser.outboundAccountInfo,
-  [wsEventsMap.balanceUpdate]: adaptUser.balanceUpdate,
-  [wsEventsMap.listStatus]: adaptUser.listStatus,
+  [wsEventsMap.account]: userDataEventAdapters.outboundAccountInfo,
+  [wsEventsMap.balanceUpdate]: userDataEventAdapters.balanceUpdate,
+  [wsEventsMap.listStatus]: userDataEventAdapters.listStatus,
 })
 
 /**
@@ -133,7 +133,7 @@ const adaptersMap = Object.freeze({
  * @param {object} message - Raw Binance event object.
  * @returns {object} Adapted event payload.
  */
-export function adaptMsg(message) {
+export function adaptBinanceWebSocketEvent(message) {
   const adapter = Object.hasOwn(adaptersMap, message.e)
     ? adaptersMap[message.e]
     : undefined
