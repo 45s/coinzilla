@@ -453,7 +453,10 @@ test("Recovery Seller STOP status query still enforces operator authorization", 
   })
 
   const result = await operator.getRecoverySellerStopState({
-    actor: { id: "telegram-user:untrusted", roles: [] },
+    actor: {
+      id: "telegram-user:untrusted",
+      roles: [],
+    },
   })
 
   assert.equal(result.ok, false, "An untrusted actor must not read the operator STOP state.")
