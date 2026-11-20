@@ -155,6 +155,7 @@ function insertLegacyOrder({ transaction, sourceRow } = {}) {
     sourceKind: "legacy_harvester_orders",
     sourceRecordId: sourceRow.id,
     migratedAt: new Date().toISOString(),
+    includeUnfilled: false,
   })
   const statement = transaction.prepare(
     `INSERT INTO orders (${INITIAL_ORDER_COLUMNS.join(", ")})
