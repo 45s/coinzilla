@@ -110,7 +110,10 @@ test("enforces naming only for changed helper files", () => {
       "packages/example/src/helpers/process.js: vague helper filename",
     ])
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -128,7 +131,10 @@ test("changed-name check ignores deleted helper files and non-helper paths", () 
       [],
     )
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
