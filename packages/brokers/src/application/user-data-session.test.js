@@ -92,8 +92,9 @@ function findStatusByType(statuses, type) {
   return getStatusesByType(statuses, type)[0]
 }
 
-function hasStatus(statuses, type, predicate = () => true) {
-  return statuses.some((status) => status.type === type && predicate(status))
+function hasRecoveryFailureStatus(statuses) {
+  const recoveryFailedStatus = findStatusByType(statuses, "recoveryFailed")
+  return recoveryFailedStatus?.recoveryRequired === true
 }
 
 function hasLoggedError(logs, message, error) {
@@ -114,6 +115,10 @@ function countCalls(calls, method) {
   ).length
 }
 
+function getCallsByMethod(calls, method) {
+  return calls.filter((call) => Array.isArray(call) && call[0] === method)
+}
+
 function createEventRecorder(received) {
   return function recordEvent(message) {
     received.push(message)
@@ -123,6 +128,32 @@ function createEventRecorder(received) {
 function createStatusRecorder(received) {
   return function recordStatus(status) {
     received.push(status)
+  }
+}
+
+async function createTwoSubscriberRecoveryScenario() {
+  const firstStatuses = []
+  const secondStatuses = []
+  const fixture = createRecoveryFixture()
+  fixture.session.start()
+  const first = await fixture.session.subscribe({
+    onEvent() {},
+    onStatus: createStatusRecorder(firstStatuses),
+  })
+  const second = await fixture.session.subscribe({
+    onEvent() {},
+    onStatus: createStatusRecorder(secondStatuses),
+  })
+  fixture.closeInitialConnection()
+  await fixture.reconnect()
+
+  return {
+    fixture,
+    first,
+    second,
+    firstStatuses,
+    secondStatuses,
+    firstRecoveryGeneration: findStatusByType(firstStatuses, "recovered")?.recoveryGeneration,
   }
 }
 
@@ -373,15 +404,16 @@ describe("Application user-data session recovery acknowledgements", () => {
     fixture.session.start()
     const subscription = await fixture.session.subscribe({
       onEvent() {},
-      onStatus: (status) => statuses.push(status),
+      onStatus: createStatusRecorder(statuses),
     })
 
     fixture.closeInitialConnection()
     await fixture.reconnect()
 
-    assert.ok(statuses.some((status) =>
-      status.type === "recoveryFailed" && status.recoveryRequired === true
-    ), "A failed reconnect must publish a recoveryFailed status while keeping recovery required.")
+    assert.ok(
+      hasRecoveryFailureStatus(statuses),
+      "A failed reconnect must publish a recoveryFailed status while keeping recovery required.",
+    )
     assert.deepEqual(subscription.data.acknowledgeRecoveryResult(), {
       accepted: false,
       completed: false,
@@ -418,7 +450,7 @@ describe("Application user-data session recovery acknowledgements", () => {
 
     fixture.closeInitialConnection()
     await fixture.reconnect()
-    const recoveryGeneration = recoveryStatuses.find((status) => status.type === "recovered")?.recoveryGeneration
+    const recoveryGeneration = findStatusByType(recoveryStatuses, "recovered")?.recoveryGeneration
 
     assert.ok(
       Number.isSafeInteger(recoveryGeneration),
@@ -452,42 +484,33 @@ function assertReconciledGenerationStatus({ statuses, recoveryGeneration, subscr
 
 describe("Application user-data session recovery generations", () => {
   it("rejects an acknowledgement from an older recovery generation without counting it toward the newer generation", async () => {
-    const firstStatuses = []
-    const secondStatuses = []
-    const fixture = createRecoveryFixture()
-    fixture.session.start()
-    const first = await fixture.session.subscribe({
-      onEvent() {},
-      onStatus: (status) => firstStatuses.push(status),
-    })
-    const second = await fixture.session.subscribe({
-      onEvent() {},
-      onStatus: (status) => secondStatuses.push(status),
-    })
+    const scenario = await createTwoSubscriberRecoveryScenario()
+    const {
+      fixture,
+      first,
+      second,
+      firstStatuses,
+      secondStatuses,
+      firstRecoveryGeneration,
+    } = scenario
 
-    fixture.closeInitialConnection()
-    await fixture.reconnect()
-    const firstRecoveryGeneration = firstStatuses.find((status) => status.type === "recovered")?.recoveryGeneration
     assert.ok(
       Number.isSafeInteger(firstRecoveryGeneration),
       "The broker must publish an integer recovery-generation token with each recovered status.",
     )
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
-      { accepted: true,
-completed: false },
+      { accepted: true, completed: false },
       "The first subscriber may acknowledge only the generation it actually reconciled.",
     )
 
     fixture.closeCurrentConnection()
     await fixture.reconnect()
-    const recoveredStatuses = firstStatuses.filter((status) => status.type === "recovered")
-    const secondRecoveryGeneration = recoveredStatuses.at(-1)?.recoveryGeneration
+    const secondRecoveryGeneration = getStatusesByType(firstStatuses, "recovered").at(-1)?.recoveryGeneration
     assert.ok(
       Number.isSafeInteger(secondRecoveryGeneration) && secondRecoveryGeneration > firstRecoveryGeneration,
       "A later transport recovery must publish a strictly newer broker generation.",
     )
-
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(firstRecoveryGeneration),
       {
@@ -498,20 +521,18 @@ completed: false },
       "A delayed acknowledgement from the previous generation must be rejected without mutating current subscriber state.",
     )
     assert.equal(
-      firstStatuses.filter((status) => status.type === "reconciled").length,
+      getStatusesByType(firstStatuses, "reconciled").length,
       0,
       "A stale acknowledgement must never publish global completion for the newer recovery.",
     )
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
-      { accepted: true,
-completed: false },
+      { accepted: true, completed: false },
       "The current generation must remain pending until every active subscriber acknowledges it.",
     )
     assert.deepEqual(
       second.data.acknowledgeRecoveryResult(secondRecoveryGeneration),
-      { accepted: true,
-completed: true },
+      { accepted: true, completed: true },
       "Only the final current-generation acknowledgement may complete shared recovery.",
     )
     assertReconciledGenerationStatus({
@@ -567,9 +588,12 @@ describe("Application user-data session event delivery", () => {
       },
     })
     const second = await fixture.session.subscribe({
-      onEvent: (message) => received.push(message),
+      onEvent: createEventRecorder(received),
     })
-    const event = { type: "balanceUpdate", balanceDelta: "1" }
+    const event = {
+      type: "balanceUpdate",
+      balanceDelta: "1",
+    }
 
     fixture.emitEvent({
       type: "event",
@@ -587,7 +611,10 @@ describe("Application user-data session event delivery", () => {
       type: "event",
       subscriptionId: 999,
       deduplicationKey: "event-2",
-      event: { ...event, balanceDelta: "2" },
+      event: {
+        ...event,
+        balanceDelta: "2",
+      },
     })
 
     assert.deepEqual(
@@ -596,15 +623,16 @@ describe("Application user-data session event delivery", () => {
       "A valid event must be delivered once to every active subscriber, regardless of another subscriber's callback failure.",
     )
     assert.equal(
-      logs.filter(([message, error]) =>
-        message === "Binance user-data event callback failed" && error === callbackError
-      ).length,
+      countLoggedErrors(logs, "Binance user-data event callback failed", callbackError),
       1,
       "A throwing event callback must be logged once without interrupting fan-out.",
     )
 
     await first.data.disconnect()
-    const nextEvent = { type: "balanceUpdate", balanceDelta: "3" }
+    const nextEvent = {
+      type: "balanceUpdate",
+      balanceDelta: "3",
+    }
     fixture.emitEvent({
       type: "event",
       subscriptionId: 17,
@@ -649,7 +677,11 @@ describe("Application user-data session RPC errors", () => {
 
     assert.deepEqual(
       statuses,
-      [{ type: "rpcError", error: rpcError, recoveryRequired: false }],
+      [{
+        type: "rpcError",
+        error: rpcError,
+        recoveryRequired: false,
+      }],
       "An RPC error must be forwarded as a diagnostic status without claiming that reconciliation is required.",
     )
     assert.equal(
@@ -658,15 +690,11 @@ describe("Application user-data session RPC errors", () => {
       "An RPC error notification alone must not schedule a reconnect.",
     )
     assert.ok(
-      logs.some(([message, error]) =>
-        message === "Binance user data stream error" && error === rpcError
-      ),
+      hasLoggedError(logs, "Binance user data stream error", rpcError),
       "The original RPC error must be logged without replacing its identity.",
     )
     assert.ok(
-      logs.some(([message, error]) =>
-        message === "Binance user-data status callback failed" && error === callbackError
-      ),
+      hasLoggedError(logs, "Binance user-data status callback failed", callbackError),
       "A throwing status callback must be isolated and reported.",
     )
 
@@ -688,11 +716,10 @@ describe("Application user-data session recovery reminders", () => {
 
     fixture.closeInitialConnection()
     await fixture.reconnect()
-    const recoveredStatuses = () => statuses.filter((status) => status.type === "recovered")
-    const recoveryGeneration = recoveredStatuses()[0]?.recoveryGeneration
+    const recoveryGeneration = findStatusByType(statuses, "recovered")?.recoveryGeneration
 
     assert.equal(
-      recoveredStatuses().length,
+      getStatusesByType(statuses, "recovered").length,
       1,
       "A successful reconnect must notify the subscriber that reconciliation is required.",
     )
@@ -705,7 +732,7 @@ describe("Application user-data session recovery reminders", () => {
     await fixture.runNextTimer()
 
     assert.equal(
-      recoveredStatuses().length,
+      getStatusesByType(statuses, "recovered").length,
       2,
       "An unacknowledged recovery must repeat its recovered reminder.",
     )
@@ -745,7 +772,7 @@ describe("Application user-data session recovery reminders", () => {
 
     fixture.closeInitialConnection()
     await fixture.reconnect()
-    const recoveryGeneration = firstStatuses.find((status) => status.type === "recovered")?.recoveryGeneration
+    const recoveryGeneration = findStatusByType(firstStatuses, "recovered")?.recoveryGeneration
 
     assert.deepEqual(
       first.data.acknowledgeRecoveryResult(recoveryGeneration),
@@ -755,7 +782,7 @@ describe("Application user-data session recovery reminders", () => {
     await second.data.disconnect()
 
     assert.deepEqual(
-      firstStatuses.filter((status) => status.type === "reconciled"),
+      getStatusesByType(firstStatuses, "reconciled"),
       [{
         type: "reconciled",
         subscriptionId: 18,
@@ -765,7 +792,7 @@ describe("Application user-data session recovery reminders", () => {
       "Removing the final unacknowledged subscriber must complete recovery for the remaining acknowledged subscriber.",
     )
     assert.equal(
-      secondStatuses.filter((status) => status.type === "reconciled").length,
+      getStatusesByType(secondStatuses, "reconciled").length,
       0,
       "A disconnected subscriber must not receive the terminal recovery notification.",
     )
@@ -787,42 +814,19 @@ function createDeferredSubscriptionFixture() {
     markSubscribeStarted = resolve
   })
   const calls = []
-  const listeners = {
-    event: new Set(),
-    error: new Set(),
-    close: new Set(),
-  }
   const client = {}
-  const port = {
-    state: "open",
-    async connect() {},
-    async disconnect() {},
-    onEvent(listener) {
-      listeners.event.add(listener)
-      return () => listeners.event.delete(listener)
-    },
-    onError(listener) {
-      listeners.error.add(listener)
-      return () => listeners.error.delete(listener)
-    },
-    onClose(listener) {
-      listeners.close.add(listener)
-      return () => listeners.close.delete(listener)
-    },
-    subscribe() {
-      calls.push("subscribe")
+  const port = createRecoveryPort({
+    subscriptionId: 17,
+    isReconnectClient: false,
+    failReconnect: false,
+    calls,
+    subscribe: () => {
       markSubscribeStarted()
       return new Promise((resolve) => {
         resolveSubscription = resolve
       })
     },
-    async listSubscriptions() {
-      return [17]
-    },
-    async unsubscribe(subscriptionId) {
-      calls.push(["unsubscribe", subscriptionId])
-    },
-  }
+  })
   const session = new UserDataSession({
     getClient: () => client,
     createClient: () => client,
@@ -856,7 +860,7 @@ describe("Application user-data session concurrent setup", () => {
     await fixture.subscribeStarted
 
     assert.equal(
-      fixture.calls.filter((call) => call === "subscribe").length,
+      countCalls(fixture.calls, "subscribe"),
       1,
       "Concurrent local subscribers must share one in-flight remote subscription request.",
     )
@@ -868,13 +872,13 @@ describe("Application user-data session concurrent setup", () => {
 
     await first.data.disconnect()
     assert.equal(
-      fixture.calls.filter((call) => Array.isArray(call) && call[0] === "unsubscribe").length,
+      countCalls(fixture.calls, "unsubscribe"),
       0,
       "Disconnecting one of multiple subscribers must retain the shared remote subscription.",
     )
     await second.data.disconnect()
     assert.deepEqual(
-      fixture.calls.filter(Array.isArray),
+      getCallsByMethod(fixture.calls, "unsubscribe"),
       [["unsubscribe", 17]],
       "The remote subscription must be removed exactly once after the final subscriber disconnects.",
     )
