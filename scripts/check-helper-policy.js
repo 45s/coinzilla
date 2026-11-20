@@ -1,7 +1,6 @@
-import { readdirSync, readFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
-const ROOT = new URL("../", import.meta.url)
 const IGNORED_DIRECTORIES = new Set([
   "node_modules",
   ".git",
@@ -60,30 +59,27 @@ export function findHelperSources(root) {
 
   function collectHelperFiles(directory) {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      if (!entry.isFile() || !/\.(?:js|mjs|cjs)$/.test(entry.name) ||
-          /\.(?:test|spec|fixture)\.(?:js|mjs|cjs)$/.test(entry.name)) {
+      if (entry.isDirectory()) {
+        if (!IGNORED_DIRECTORIES.has(entry.name)) {
+          collectHelperFiles(join(directory, entry.name))
+        }
+        continue
+      }
+      if (!entry.isFile() || !/\\.(?:js|mjs|cjs)$/.test(entry.name) ||
+          /\\.(?:test|spec|fixture)\\.(?:js|mjs|cjs)$/.test(entry.name)) {
         continue
       }
       const file = join(directory, entry.name)
-      const extension = entry.name.match(/\.(js|mjs|cjs)$/)?.[0] ?? ".js"
+      const extension = entry.name.match(/\\.(js|mjs|cjs)$/)?.[0] ?? ".js"
       const stem = entry.name.slice(0, -extension.length)
       const testPath = join(directory, stem + ".test" + extension)
       const specPath = join(directory, stem + ".spec" + extension)
       helpers.push({
         directory,
         file,
-        testPath: testPath,
-        hasTest: exists(testPath) || exists(specPath),
+        testPath,
+        hasTest: existsSync(testPath) || existsSync(specPath),
       })
-    }
-  }
-
-  function exists(path) {
-    try {
-      readFileSync(path)
-      return true
-    } catch {
-      return false
     }
   }
 
