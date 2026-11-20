@@ -53,10 +53,10 @@ test("discovers production helper modules and colocated tests", () => {
 test("detects vague helper filename and exported function names", () => {
   assert.deepEqual(analyzeHelperNaming({
     file: "helpers/normalize.js",
-    source: "export function normalize({ value }) { return value }\\n",
+    source: "export function normalize({ value }) { return value }\\nexport const get = ({ value }) => value\\n",
   }), [
     "helpers/normalize.js: vague helper filename",
-    "helpers/normalize.js: vague exported helper name normalize",
+    "helpers/normalize.js: vague exported helper name normalize",\n    "helpers/normalize.js: vague exported helper name get",
   ])
 })
 
