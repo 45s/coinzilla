@@ -419,7 +419,7 @@ SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER
 
 After that confirmation, the command connects the mutation-enabled Broker, atomically creates the exclusive marker `packages/brokers/.diagnostics/bitunix-hypeusdt-buy-limit-attempt.json` with mode 0600 on POSIX; on Windows the marker inherits the `.diagnostics` directory ACL, so keep the package folder private, and calls `createOrder()` exactly once. The marker contains only the fixed order intent and timestamp—not credentials or account balances. Its existence blocks every subsequent invocation. Do not remove it to retry. There is no automatic retry, cancellation, transfer, or second mutation. If the Broker reports `OUTCOME_UNKNOWN`, keep the marker and reconcile manually before taking any further action.
 
-This command does not change the default `allowLiveOrderMutations: false` setting, the common Broker contract, capability declarations, or Harvester routing. It does not resolve issue [#1185](https://github.com/45s/coinzilla)'s client-order identity, unknown-outcome recovery, fill completeness, account freshness, private-event, or TESTNET blockers.
+This command does not change the default `allowLiveOrderMutations: false` setting, the common Broker contract, capability declarations, or Harvester routing. It does not resolve issue [#1185](https://github.com/45s/coinzilla/issues/1185)'s client-order identity, unknown-outcome recovery, fill completeness, account freshness, private-event, or TESTNET blockers.
 
 ## Offline tests and coverage
 
@@ -506,7 +506,7 @@ For user-data `executionReport` TRADE events, canonical Fill execution time is B
 
 The method name is shared; the delivery guarantee is not. Binance declares `SUBSCRIBE_USER_DATA: SUPPORTED`, returns `deliveryMode: "NATIVE_EVENTS"` / `nativePush: true`, and forwards authenticated exchange events through `onEvent`. Bitunix declares `OBSERVE_USER_DATA: SUPPORTED` while native `SUBSCRIBE_USER_DATA` remains unsupported; it returns `deliveryMode: "POLLING_OBSERVATIONS"` / `nativePush: false` and sends changed, explicitly scoped snapshots only through `onObservation`.
 
-Do not convert observations into execution reports, canonical fills, or account snapshots. Polling cannot replay transient states or prove complete history. Harvester keeps Bitunix outside provider registration until issue #1185's native lifecycle, authoritative snapshot, canonical fill, and recovery prerequisites are met. See [the shared Broker API contract](./BROKER_API.md#user-data-delivery-channels).
+Do not convert observations into execution reports, canonical fills, or account snapshots. Polling cannot replay transient states or prove complete history. Harvester keeps Bitunix outside provider registration until [issue #1185](https://github.com/45s/coinzilla/issues/1185)'s native lifecycle, authoritative snapshot, canonical fill, and recovery prerequisites are met. See [the shared Broker API contract](./BROKER_API.md#user-data-delivery-channels).
 
 ### Bitunix Spot order request adapters
 
