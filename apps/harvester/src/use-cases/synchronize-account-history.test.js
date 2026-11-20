@@ -8,7 +8,7 @@ import {
   Money,
   Quantity,
 } from "@coinzilla/entities"
-import { synchronizeAccountHistory } from "./synchronize-account-history.js"
+import { synchronizeAccountHistory } from "./synchronize-account-history/index.js"
 
 const identity = Object.freeze({
   providerInstanceId: "binance-primary",
