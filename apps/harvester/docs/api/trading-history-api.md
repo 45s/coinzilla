@@ -182,7 +182,6 @@ The same local listener exposes the application-level operator facade under `/ap
 
 Commands delegate to the existing operator application facade and never call the exchange from the Dashboard. The Dashboard presents an explicit confirmation step before sending a mutation. These endpoints are available only through the loopback listener; do not expose this unauthenticated development API outside the local machine.
 
-
 ## Public Bitunix Futures market data
 
 The same loopback-only Harvester HTTP listener exposes a read-only public market-data snapshot for the Dashboard Market Screener:
