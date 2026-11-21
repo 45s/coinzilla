@@ -24,13 +24,13 @@ function readOperatorMarkets(value: unknown): readonly OperatorMarketRow[] {
   return (value as { markets: unknown[] }).markets.flatMap((item) => {
     if (!item || typeof item !== 'object') return [];
     const market = item as Record<string, unknown>;
-    if (typeof market.symbol !== 'string' || typeof market.enabled !== 'boolean') return [];
+    if (typeof market['symbol'] !== 'string' || typeof market['enabled'] !== 'boolean') return [];
     return [{
-      symbol: market.symbol,
-      enabled: market.enabled,
-      operatorBuysPaused: market.operatorBuysPaused === true,
-      readiness: typeof market.readiness === 'string' ? market.readiness : 'UNKNOWN',
-      blockers: Array.isArray(market.blockers) ? market.blockers.filter((blocker): blocker is string => typeof blocker === 'string') : [],
+      symbol: market['symbol'],
+      enabled: market['enabled'],
+      operatorBuysPaused: market['operatorBuysPaused'] === true,
+      readiness: typeof market['readiness'] === 'string' ? market['readiness'] : 'UNKNOWN',
+      blockers: Array.isArray(market['blockers']) ? market['blockers'].filter((blocker): blocker is string => typeof blocker === 'string') : [],
     }];
   });
 }
