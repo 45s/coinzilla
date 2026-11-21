@@ -366,7 +366,9 @@ describe('TradingHistoryComponent', () => {
       data: {
         ...createFill('fill-1'),
         commissions: [{
-          id: 'commission-1',
+          id: 1,
+          fillId: 'fill-1',
+          ordinal: 0,
           amount: '0.00000013',
           assetId: 'bnb-asset',
           assetCode: 'BNB',
