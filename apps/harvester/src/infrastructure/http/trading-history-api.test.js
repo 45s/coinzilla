@@ -200,9 +200,6 @@ test("decodes record identifiers, returns fill commissions, and reports missing 
   })
 
   const fillResponse = await fetch(`${baseUrl}/api/v1/trading/fills/fill%2F001`, {
-    headers: {
-      Authorization: `Bearer ${API_TOKEN}`,
-    },
   })
   assert.equal(fillResponse.status, 200, "A fill detail request must return its persisted commission facts.")
   const fillPayload = await fillResponse.json()
@@ -214,9 +211,6 @@ test("decodes record identifiers, returns fill commissions, and reports missing 
   }, "The adapter must decode the record identifier before calling the application query.")
 
   const missingOrder = await fetch(`${baseUrl}/api/v1/trading/orders/missing-order`, {
-    headers: {
-      Authorization: `Bearer ${API_TOKEN}`,
-    },
   })
   assert.equal(missingOrder.status, 404, "A missing persisted record must use the not-found HTTP status.")
   assert.equal((await missingOrder.json()).error.code, "HARVESTER_TRADING_HISTORY_RECORD_NOT_FOUND")
@@ -235,12 +229,10 @@ test("rejects unsupported query parameters, methods, and unimplemented resources
 
   const unsupportedMethod = await fetch(`${baseUrl}/api/v1/trading/orders`, {
     method: "POST",
-    headers,
   })
   assert.equal(unsupportedMethod.status, 405, "The trading-history API must reject unsupported HTTP methods.")
 
   const unimplementedResource = await fetch(`${baseUrl}/api/v1/trading/sessions`, {
-    headers,
   })
   assert.equal(unimplementedResource.status, 404, "The API must not invent a sessions resource.")
 });
