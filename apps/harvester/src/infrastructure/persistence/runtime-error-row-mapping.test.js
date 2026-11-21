@@ -27,10 +27,26 @@ test("maps explicit runtime error facts and redacts credentials from searchable 
         failureCategory: "PERSISTENCE",
         failureStage: "ORDER_CURSOR_SAVE",
         historyDiagnostics: {
-          currentMarket: "ZROFDUSD",
+          currentMarket: null,
+          marketsAttempted: ["ZROFDUSD"],
+          orderMarketsQueried: [],
+          fillMarketsQueried: [],
+          marketsFailed: ["ZROFDUSD"],
           ordersPersisted: 999,
           complete: false,
-          errorMessage: "secret=must-not-be-copied",
+          failures: [{
+            market: "ZROFDUSD",
+            historyType: "orders",
+            failureStage: "ORDER_CURSOR_SAVE",
+            pageCursor: "546984",
+            recordIndex: null,
+            brokerOrderId: null,
+            clientOrderId: null,
+            lastPersistedOrderId: "661725",
+            errorName: "Error",
+            errorCode: "SQLITE_BUSY",
+            message: "Cursor write failed secret=must-not-be-copied",
+          }],
         },
         strategyId: undefined,
         errorDetails: {
@@ -48,7 +64,12 @@ test("maps explicit runtime error facts and redacts credentials from searchable 
   assert.equal(row.symbol, "ZROFDUSD", "Explicit market identity must be retained.")
   assert.equal(row.strategy_id, null, "Missing strategy attribution must remain SQL NULL.")
   assert.equal(row.execution_id, "15507", "Explicit execution identity must be retained.")
+  assert.equal(row.failure_stage, "ORDER_CURSOR_SAVE", "The operation failure stage must remain searchable.")
   assert.doesNotMatch(row.details_json, /private-key|must-not-be-copied|stack|apiKey/, "Unrestricted details and sensitive fields must not enter relational diagnostics.")
+  assert.match(row.details_json, /ORDER_CURSOR_SAVE/, "The failed synchronization stage must be retained in bounded details.")
+  assert.match(row.details_json, /546984/, "The original history page cursor must be retained.")
+  assert.match(row.details_json, /661725/, "The last successfully persisted exchange order must be retained.")
+  assert.match(row.details_json, /SQLITE_BUSY/, "The underlying safe error code must be retained.")
   assert.match(row.details_json, /ZROFDUSD/, "Allowlisted history diagnostics must remain searchable.")
 })
 
