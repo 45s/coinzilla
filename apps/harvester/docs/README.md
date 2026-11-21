@@ -23,9 +23,9 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Reliability acceptance — issue #1639
 
-The machine-readable [critical behavior inventory](critical-behaviors.json) maps each critical Harvester behavior to its owning production modules, named normal/failure regression tests, integration/replay evidence where required, and runtime limitation. The required Unit Tests workflow validates this mapping before running the complete Harvester package suite. Run the same guard locally with `pnpm --filter @coinzilla/harvester check:reliability`.
+The machine-readable [critical behavior inventory](critical-behaviors.json) maps each critical Harvester behavior to authoritative domain invariants, owning production modules, named normal/failure regression tests, integration/replay evidence where required, runtime status, and measured per-module coverage floors. The required Unit Tests workflow validates the inventory and test ownership before running the complete Harvester package suite. Run the same guard locally with `pnpm --filter @coinzilla/harvester check:reliability`.
 
-The inventory is a traceability gate, not a substitute for passing tests, measured coverage, runtime evidence, or exchange acceptance. Per-module coverage thresholds will be added only after a baseline is measured on the current `develop` source. The persistence entry explicitly records that runtime restart restoration remains offline-only/disabled pending issue #654; this task does not enable replay or restoration.
+The required Test Coverage workflow runs the full Harvester coverage suite and checks every critical module against its measured minimum with `pnpm --filter @coinzilla/harvester check:critical-coverage -- <coverage-report>`. The floors are derived from the exact `develop` source baseline, not arbitrary package-wide averages. The inventory is a traceability and regression gate, not a substitute for passing tests, runtime evidence, or exchange acceptance. The persistence entry explicitly records that runtime restart restoration remains offline-only/disabled pending issue #654; this initiative does not enable replay or restoration.
 
 ## Current architecture and domain contracts
 
