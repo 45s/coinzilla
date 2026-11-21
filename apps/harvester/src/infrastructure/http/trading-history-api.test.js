@@ -262,7 +262,7 @@ test("supports browser preflight and validates server configuration", async (t) 
       host: "0.0.0.0",
       port: 0,
     }),
-    /127\\.0\\.0\\.1/,
+    /127\.0\.0\.1/,
     "The unauthenticated local API must reject non-loopback binding.",
   )
 
