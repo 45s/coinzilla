@@ -1,14 +1,16 @@
 import { CanonicalOrder } from "@coinzilla/entities"
 import { toResult } from "@coinzilla/utils"
+import { validateRecoverySellerSubmissionOwnership } from "../domain/orders/recovery-seller-submission-ownership.js"
 
 const OUTCOMES = new Set(["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"])
-const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_SELL"])
+const SUPPORTED_PURPOSES = new Set([null, "RECOVERY_BUY", "RECOVERY_SELL"])
 
 function validateSubmissionStoreAndOrder({
     operationalStateStore,
     order,
     outcome,
     purpose,
+    ownership,
   }) {
   if (typeof operationalStateStore?.append !== "function") {
     throw new TypeError("recordOrderSubmissionOutcome requires a Operational State Store append capability")
@@ -20,14 +22,19 @@ function validateSubmissionStoreAndOrder({
     throw new TypeError("recordOrderSubmissionOutcome requires a supported submission outcome")
   }
   if (!SUPPORTED_PURPOSES.has(purpose)) {
-    throw new TypeError("Order-submission outcome purpose must be null or RECOVERY_SELL")
+    throw new TypeError("Order-submission outcome purpose must be null, RECOVERY_BUY, or RECOVERY_SELL")
   }
+  return validateRecoverySellerSubmissionOwnership({
+    order,
+    purpose,
+    ownership,
+  })
 }
 
 function validateSubmissionAcknowledgement({
-    order,
-    outcome,
-  }) {
+  order,
+  outcome,
+}) {
   const acknowledged = outcome === "ACKNOWLEDGED"
   if (acknowledged !== (typeof order.brokerOrderId === "string" && order.status !== "PENDING")) {
     throw new TypeError("Submission outcome classification contradicts canonical broker acknowledgement state")
@@ -59,12 +66,19 @@ function validateSubmissionOrderType({ order }) {
 }
 
 function validateSubmissionOutcome(options) {
-  const { operationalStateStore, order, outcome, purpose } = options
-  validateSubmissionStoreAndOrder({
+  const {
     operationalStateStore,
     order,
     outcome,
     purpose,
+    ownership,
+  } = options
+  const normalizedOwnership = validateSubmissionStoreAndOrder({
+    operationalStateStore,
+    order,
+    outcome,
+    purpose,
+    ownership,
   })
   const acknowledged = validateSubmissionAcknowledgement({
     order,
@@ -84,6 +98,7 @@ function validateSubmissionOutcome(options) {
     market,
     clientOrderId: order.clientOrderId,
     acknowledged,
+    ownership: normalizedOwnership,
   }
 }
 
@@ -95,14 +110,27 @@ function validateSubmissionOutcome(options) {
  * @param {CanonicalOrder} options.order - Canonical pending or broker-acknowledged order.
  * @param {string} options.outcome - ACKNOWLEDGED, REJECTED, REJECTED_OR_UNKNOWN, or UNKNOWN.
  * @param {string|null} options.purpose - Explicit application strategy purpose.
+ * @param {object} [options.ownership] - Exact Recovery Seller strategy, Position, and cycle ownership.
  * @returns {Promise<object>} Durable append result; success requires durable === true.
  */
 export async function recordOrderSubmissionOutcome(options = {}) {
   try {
-    const { operationalStateStore, order, outcome, purpose = null } = options
-    const { market, clientOrderId, acknowledged } = validateSubmissionOutcome({
+    const {
+      operationalStateStore,
+      order,
+      outcome,
+      purpose = null,
+      ownership,
+    } = options
+    const {
+      market,
+      clientOrderId,
+      acknowledged,
+      ownership: normalizedOwnership,
+    } = validateSubmissionOutcome({
       ...options,
       purpose,
+      ownership,
     })
     const result = await operationalStateStore.append({
       factId: `order-submission-outcome:${clientOrderId}:${outcome}`,
@@ -126,6 +154,7 @@ export async function recordOrderSubmissionOutcome(options = {}) {
         outcome,
         brokerOrderId: acknowledged ? order.brokerOrderId : null,
         status: order.status,
+        ...(normalizedOwnership ?? {}),
       },
     })
     if (result?.ok !== true || result.data?.durable !== true) {

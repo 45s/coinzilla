@@ -6,6 +6,37 @@
 
 This document defines the exchange-neutral public Broker contract, the compatibility surface retained for existing consumers, and the provider capability declaration model. Provider protocols and DTOs remain private to each provider implementation.
 
+## Public provider constructor
+
+Consumers may select either supported provider without importing an exchange-specific class:
+
+```js
+import { Broker } from "@coinzilla/brokers"
+
+const broker = new Broker({
+  provider: "binance",
+  apiKey,
+  apiSecret,
+  tradingMode: "testnet",
+})
+
+const spotBroker = new Broker({
+  provider: "bitunix",
+  apiKey,
+  apiSecret,
+  tradingMode: "live",
+})
+```
+
+- `provider` is required and must be exactly `"binance"` or `"bitunix"`; missing and unknown providers fail during construction.
+- `apiKey`, `apiSecret`, and `tradingMode` are common top-level options. The selected provider validates credentials and its supported environment.
+- Binance requires explicit `tradingMode: "testnet" | "live"`; `NODE_ENV` never selects exchange endpoints.
+- Bitunix Spot requires explicit `tradingMode: "live"`. No Spot TESTNET endpoint is documented; the constructor does not silently infer LIVE.
+- Provider-specific configuration is namespaced under `providerOptions`. For example, use `providerOptions: { baseUrl, requestTimeout }` for Bitunix or `providerOptions: { websocketApiUrl, websocketStreamsUrl }` for Binance. Provider options cannot override common credentials, logger, or environment selection.
+- The optional common `logger` is passed to the selected adapter. Unknown top-level options fail fast rather than being silently ignored.
+- The constructor returns the selected existing concrete provider instance and validates it against `assertBrokerContract`. Existing `BinanceWebSocketBroker` and `BitunixSpotBroker` constructors remain supported. Concrete provider `instanceof` checks remain valid; both providers also satisfy `instanceof Broker` via the structural contract.
+- `Broker` is a constructor convenience, not an application provider registry or market-routing policy. Consuming applications retain ownership of account/market routing and composition.
+
 ## 1. Ownership and capability-model decision
 
 The shared exchange-neutral `BrokerCapabilities` value contract is owned by **Entities** and re-exported by Brokers for compatibility. Brokers owns the provider-specific declarations and the evidence supporting each status; it does not maintain a second capability class, vocabulary, status enum, validator, or lookup implementation.
@@ -84,8 +115,6 @@ The public `contractVersion`, `provider`, `environment.selectedMode`, and `envir
 
 ## 2. Structural Broker contract
 
-The common Broker API is a **structural contract**, not a required base class. Implementations do not need to extend `CoreBroker`.
-
 The public exports `BROKER_METHODS`, `BROKER_COMPATIBILITY_METHODS`, `BROKER_MUTATION_OUTCOMES`, and `assertBrokerContract({ broker })` define and verify the contract. The conformance suite runs against both Binance and Bitunix.
 
 ### Common operations
@@ -101,17 +130,17 @@ All methods below are present on both provider facades. An unsupported implement
 | `getExchangeMarkets()` | Supported | Supported | Normalized `Market[]`. |
 | `getOpenOrders()` | Supported | Supported | Current open orders; Bitunix requires a symbol, Binance can query account-wide or by symbol. |
 | `getCanonicalOrder()` | Supported | Unsupported | Bitunix Spot does not expose the client order identity required by `CanonicalOrder`. |
-| `getCanonicalOrderHistory()` | Supported | Unsupported | One bounded Binance query; not a claim of exhaustive account history. |
+| `getCanonicalOrderHistory({ symbol, orderId?, startTime?, endTime?, limit?, includeFollowingOrders? })` | Supported | Unsupported | One bounded canonical Binance query. With `orderId`, the default is exact-order lookup; opt into inclusive lower-bound pagination with `includeFollowingOrders: true`. The caller owns pagination and coverage. |
 | `getFills()` | Supported | Unsupported | Canonical `Fill[]`; Bitunix matching details do not prove stable execution identity or fill completeness. |
 | `getPrices({ symbol })` | Supported | Supported | One-shot ticker result; not a subscription. |
 | `getCandles({ symbol, interval, ... })` | Supported | Unsupported | Bitunix Spot kline data omits volume required by the canonical OHLCV contract. |
 | `createCanonicalOrder(input)` | Supported behind readiness/permission gates | Unsupported | Bitunix mutation blockers in #1185 remain in force. |
-| `cancelOrder({ symbol, orderId })` | Supported behind readiness/permission gates | Unsupported | Mutation outcome is explicit; unknown is never treated as success. |
-| `cancelAllOpenOrders({ symbol })` | Supported behind readiness/permission gates | Unsupported | Symbol-scoped Binance operation. |
+| `cancelOrder({ symbol, orderId })` | Supported behind readiness/permission gates | Implemented behind explicit `allowLiveOrderMutations` opt-in | Requires symbol and exchange order ID; verifies final order detail; unknown outcomes require reconciliation. |
+| `cancelAllOpenOrders({ symbol })` | Supported behind readiness/permission gates | Implemented behind explicit opt-in; symbol-scoped | Cancels only rows returned by the current-order query; completeness is not proven, so this is not account-wide or exhaustive. |
 | `subscribeForPrices(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
 | `subscribeForCandles(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
 | `subscribeForBookTicker(...)` | Supported | Unsupported | Successful result supplies a cleanup handle. |
-| `subscribeForUserData(...)` | Supported | Unsupported | Binance readiness/recovery acknowledgement is mandatory before mutations. |
+| `subscribeForUserData({ symbols?, trackedOrders?, onEvent, onObservation, onStatus })` | Supported | Supported for polling observations | Binance emits native authoritative events through `onEvent`; Bitunix emits non-authoritative polling snapshots through `onObservation`. The delivery mode is explicit in the returned subscription metadata. |
 
 ### Compatibility methods
 
@@ -124,16 +153,33 @@ These methods remain present on both facades for existing consumers. They are no
 | `getOrderHistory(...)` | Legacy provider history. Binance returns its bounded `allOrders` response; Bitunix returns one symbol-scoped page. Pagination and legacy row shape are not interchangeable. Use `getCanonicalOrderHistory()` when canonical order history is required. |
 | `getMyTrades(...)` | Legacy trade-history operation. Binance supports a bounded symbol-scoped response; Bitunix explicitly reports unsupported. It is not equivalent to canonical `getFills()`. |
 | `getPrice({ symbol })` | Compatibility alias for `getPrices({ symbol })` on both providers. |
-| `createOrder(input)` | Legacy `Order` placement facade. Binance supports it behind the same safety gates; Bitunix reports unsupported. Prefer `createCanonicalOrder()`. |
+| `createOrder(input)` | Legacy `Order` placement facade. Binance supports it behind the same safety gates; Bitunix implements LIMIT with base `quantity` and MARKET with quote `quoteQuantity` behind explicit opt-in. Caller-supplied client IDs remain unsupported; canonical placement remains unsupported. |
 | `getSymbolFilters({ symbol })` | Raw provider metadata retained for existing infrastructure adapters. It is not a normalized `TradingRules` value and is not part of the canonical method catalog. |
+
+### Canonical Binance order-history query semantics
+
+`getCanonicalOrderHistory()` remains one bounded, symbol-scoped query; it does not paginate automatically.
+
+- With `includeFollowingOrders` omitted or `false`, a supplied `orderId` preserves the established exact-order lookup behavior. This remains the default for existing reconnect/reconciliation callers.
+- With `includeFollowingOrders: true`, the caller must supply `orderId`. Binance treats this value as an inclusive lower-bound cursor, and the broker returns every canonical order from that bounded `allOrders` response rather than filtering to one exact ID.
+- Continue a pagination scan from the last returned order ID plus one. A short/empty page ends that one cursor scan; it does not prove account-wide, delisted-market, or retention-window completeness.
+- The option changes only read-only result selection. It does not change order placement, cancellation, mutation outcomes, or provider capabilities. Bitunix canonical order history remains explicitly unsupported.
+
+### Order quantity denomination
+
+- `quantity` always means base-asset units.
+- `quoteQuantity` means quote-asset units, is valid only for MARKET orders, and is mutually exclusive with `quantity`.
+- Binance maps `quoteQuantity` to its native `quoteOrderQty`; Bitunix maps LIMIT `quantity` and MARKET `quoteQuantity` directly to REST `volume`.
+- Providers must reject unsupported denominations. They must never estimate quote quantity from a ticker or execution price.
+- Bitunix order mutations remain disabled by default. `allowLiveOrderMutations: true` is an explicit opt-in, not production readiness or Harvester admission. `cancelAllOpenOrders({ symbol })` is limited to rows returned by the symbol-scoped current-order query; the exchange contract does not establish exhaustive coverage.
 
 There is no `getOrders()` alias. `getOpenOrders()` means the current open-order set; `getOrderHistory()` means a historical provider response. Similar names do not imply equivalent completeness, pagination, or result semantics.
 
 ### Provider-specific extensions
 
-Bitunix-only read operations remain inside `infrastructure/bitunix`: `getDeposits`, `getDepositAddress`, `getMatchingOrderDetails`, `getWithdrawalHistory`, `getExchangeRates`, `getOrderBook`, `getKlines`, and `getKlineHistory`. They are not promoted into the common Broker contract merely to make method names identical.
+Bitunix-only provider operations remain inside `infrastructure/bitunix`: reads `getDeposits`, `getDepositAddress`, `getMatchingOrderDetails`, `getWithdrawalHistory`, `getExchangeRates`, `getTokenNetworks`, `getUserInfo`, `getTaxFilingHistory`, `getOrderBook`, `getKlines`, and `getKlineHistory`; funds mutations `withdraw`, `cancelWithdrawal`, `transferInternally`, `cancelInternalTransfer`, and `transferFunds` are separately gated by `BitunixSpotConfig.allowLiveFundsMutations` (default false). These exchange-specific methods are not promoted into the common Broker contract merely to make method names identical.
 
-The Bitunix WebSocket RPC client is a provider-specific request/response transport. Its existence does not imply a continuous market or private user-data subscription.
+The Bitunix WebSocket RPC client is a provider-specific request/response transport. It exposes authenticated market/account reads plus symbol-scoped current orders, one-page order history, and matching-order detail. It does not imply account-wide order coverage, canonical fill completeness, a continuous market feed, or a private user-data subscription.
 
 ## 3. Results, errors, and mutation outcomes
 
@@ -165,7 +211,6 @@ HTTP/RPC conflicts and server failures, timeouts, connection loss after dispatch
 - Binance owns the WebSocket API and public Streams resources; disconnect must close provider-owned connections and stop subscriptions/user-data lifecycle resources.
 - Bitunix Spot uses stateless signed/unsigned REST requests for its supported operations. Its lifecycle flag is local adapter state; it does not create a persistent exchange connection.
 - Every successful subscription exposes cleanup. Disconnect cleans up provider-owned subscriptions. Unsupported Bitunix subscriptions return an explicit failed result and create no resource.
-- `CoreBroker` remains a compatibility base for existing provider and Market Simulator consumers. The structural Broker contract does not require inheritance; replacing or removing `CoreBroker` requires a separate consumer-backed migration.
 
 ## 6. Safety and ownership boundaries
 
@@ -173,3 +218,29 @@ HTTP/RPC conflicts and server failures, timeouts, connection loss after dispatch
 - REST/WS clients, authentication/signing, DTOs, protocol mapping, and provider-specific errors remain inside each provider infrastructure folder.
 - Harvester owns its application ports, adapters, registries, orchestration, and trading workflows. Brokers must not import or absorb them.
 - Providers may use different internal REST/WebSocket architectures while satisfying the same structural public contract.
+
+## User-data delivery channels
+
+Both providers expose the same `subscribeForUserData()` method and callback shape. Consumers never inspect provider classes or provider source code to choose a transport:
+
+```js
+await broker.subscribeForUserData({
+  symbols: ["BTCUSDT"],
+  trackedOrders: [],
+  onEvent,        // native exchange events
+  onObservation,  // non-authoritative polling observations
+  onStatus,       // lifecycle and health
+})
+```
+
+- **`onEvent`** is reserved for native exchange events. Binance uses its authenticated WebSocket user-data stream and returns `deliveryMode: "NATIVE_EVENTS"` with `nativePush: true`.
+- **`onObservation`** is reserved for explicitly scoped, non-authoritative observations. Bitunix Spot uses its private REST polling reconciler and returns `deliveryMode: "POLLING_OBSERVATIONS"` with `nativePush: false`. It requires a non-empty explicit `symbols` list and optionally accepts explicitly tracked order identities.
+- **`onStatus`** reports lifecycle and polling health. A polling status never upgrades observations into native events.
+- Bitunix advertises `OBSERVE_USER_DATA: SUPPORTED` while `SUBSCRIBE_USER_DATA: UNSUPPORTED`. Its `getAccountSnapshot()` remains unsupported. Polling observations are not canonical fills, cannot replay transient states, and cannot satisfy Harvester's authoritative account/user-data readiness gates.
+- Harvester routes the two callback channels independently. Its native event handler owns execution accounting; the observation handler is diagnostic-only and has no access to order accounting, the canonical event publisher, or trading readiness.
+
+A successful observation subscription is therefore not evidence that native user-data delivery or trading readiness is available.
+
+Binance declares `SUBSCRIBE_USER_DATA: SUPPORTED` and `OBSERVE_USER_DATA: UNSUPPORTED`: its authenticated native WebSocket events use `onEvent`, not a polling observation channel. Bitunix declares the inverse delivery capabilities and remains non-authoritative.
+
+The Binance subscription result retains the live `subscriptionId` getter and recovery acknowledgement controls from `UserDataSession`. Delivery metadata is attached without spreading/snapshotting the handle, so reconnects continue to expose the current remote subscription ID.

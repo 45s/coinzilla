@@ -1,0 +1,102 @@
+/**
+ * Read a data property without invoking getters.
+ * @param {{ record: object, key: string }} options
+ * @returns {unknown}
+ */
+export function readEnsureOptionProperty({ record, key }) {
+  let descriptor
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(record, key)
+  } catch {
+    throw new TypeError("options must contain readable properties")
+  }
+  if (descriptor === undefined) {
+    return undefined
+  }
+  if (!Object.hasOwn(descriptor, "value")) {
+    throw new TypeError(`options.${key} must not be an accessor`)
+  }
+  return descriptor.value
+}
+
+/**
+ * Require a plain options record.
+ * @param {{ options: unknown }} options
+ * @returns {object}
+ */
+export function validateEnsureOptionsRecord({ options }) {
+  if (options === null || typeof options !== "object") {
+    throw new TypeError("options must be an object")
+  }
+  let prototype
+  try {
+    if (Array.isArray(options)) {
+      throw new TypeError("options must be an object")
+    }
+    prototype = Object.getPrototypeOf(options)
+  } catch {
+    throw new TypeError("options must be a readable object")
+  }
+  if (prototype !== Object.prototype && prototype !== null) {
+    throw new TypeError("options must be a plain object")
+  }
+  return options
+}
+
+/**
+ * Resolve a diagnostic field name.
+ * @param {{ name?: unknown }} options
+ * @returns {string}
+ */
+export function resolveEnsureDiagnosticName({ name }) {
+  if (name === undefined) {
+    return "value"
+  }
+  if (typeof name !== "string" || name.trim() === "") {
+    throw new TypeError("name must be a non-empty string")
+  }
+  return name.trim()
+}
+
+/**
+ * Resolve an optional custom assertion message.
+ * @param {{ errMsg?: unknown }} options
+ * @returns {string|undefined}
+ */
+export function resolveEnsureErrorMessage({ errMsg }) {
+  if (errMsg === undefined) {
+    return undefined
+  }
+  if (typeof errMsg !== "string" || errMsg.trim() === "") {
+    throw new TypeError("errMsg must be a non-empty string")
+  }
+  return errMsg
+}
+
+/**
+ * Read value and diagnostic name from a one-argument options object.
+ * @param {{ options: unknown }} options
+ * @returns {{ value: unknown, name: string, errMsg?: string, record: object }}
+ */
+export function readEnsureAssertionOptions({ options }) {
+  const record = validateEnsureOptionsRecord({ options })
+  const value = readEnsureOptionProperty({
+    record,
+    key: "value",
+  })
+  const name = readEnsureOptionProperty({
+    record,
+    key: "name",
+  })
+  const errMsg = readEnsureOptionProperty({
+    record,
+    key: "errMsg",
+  })
+  return {
+    value,
+    name: resolveEnsureDiagnosticName({ name }),
+    errMsg: resolveEnsureErrorMessage({ errMsg }),
+    record,
+  }
+}
+

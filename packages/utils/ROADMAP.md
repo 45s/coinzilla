@@ -6,6 +6,15 @@ type: roadmap
 owner: utils
 ---
 
+## Complete — S-5 Logger transport-failure fallback redaction ([#1568](https://github.com/45s/coinzilla/issues/1568); [PR #1581](https://github.com/45s/coinzilla/pull/1581))
+
+- The source audit found that the default transport-error reporter and the emergency fallback after a custom reporter failure wrote raw Error objects to stderr. This bypassed structured field-name redaction and could disclose credentials embedded in an error message or stack.
+- Test-first RED was observed on isolated test commit `6279998c4759306f19947c5ef4be712d977686eb`: both synthetic secret-leak regressions failed for the expected reason. The implementation is in commit `2d7140ed7b365fff0eb5d794f98b9da6425f8987`.
+- The fallback now emits only the transport name and safe error type. It does not emit the raw message or stack. The custom `onTransportError({ transport, error })` callback contract remains unchanged; the callback still receives the original error, and a callback failure falls back to the same bounded summary.
+- The Utils unit-test workflow passed on implementation commit `2d7140ed7b365fff0eb5d794f98b9da6425f8987`: 241 tests, 239 passed, 0 failed, 2 skipped; the Utils package coverage workflow also passed. Before synchronization, all six required contexts and all seven PR workflows passed on head `a896bf840d868f0a0b4387f2bcf5acd179c555c8`; the optional read-only Binance TESTNET integration was skipped by policy. The branch was then synchronized with `develop` at `659493ca23792e1ac339de7102e3cebb4d377cba` in merge commit `3ff076f62e9930789efa6ec224dd32e4020efd8a` (11 ahead, 0 behind). The final PR #1581 head `2d8e6cf1f7469495f8945462813e92829e41b902` passed Unit Tests, Test Coverage, JavaScript Syntax, Dependency Audit, Harvester Targeted Tests and External Documentation Links; PR #1581 merged as `38fb327ec9c468ae7ed434917e6a84f26f31b500`.
+- No public API, dependency, Harvester source/runtime, CI workflow or logger abstraction was added. The canonical repository policy is [Logging and Observability Standard](../../docs/engineering/LOGGING_OBSERVABILITY_STANDARD.md).
+- **Status:** COMPLETE — merged PR #1581; exact-head required and advisory workflows passed.
+
 ## Completed — shared SystemCustomError base (request [#1208](https://github.com/45s/coinzilla/issues/1208); merged [PR #1262](https://github.com/45s/coinzilla/pull/1262))
 
 - Added the single domain-neutral native `Error` base in `@coinzilla/utils`, preserving native `cause` and exposing optional immutable `code`, safe scalar `context`, and `retryable` diagnostics.
@@ -17,6 +26,21 @@ owner: utils
 ## Completed — package ESLint compliance ([issue #1238](https://github.com/45s/coinzilla/issues/1238))
 
 - [x] **Package ESLint cleanup — COMPLETE / superseded by the workspace gate.** Issue #1238 is closed. The required full-workspace `pnpm lint` gate checks every in-scope JavaScript file and fails on errors or warnings; progressive strict changed-file enforcement adds tighter thresholds for new and modified files. No package ESLint cleanup remains outstanding. Fix future findings in the PR that introduces them.
+
+## COMPLETED — generic validation API ([issue #1504](https://github.com/45s/coinzilla/issues/1504), [PR #1505](https://github.com/45s/coinzilla/pull/1505))
+
+- Introduced the domain-neutral public `ensure` assertions and optional immutable chain. The initial PR temporarily retained legacy `Validator`/`VR` exports and predicate semantics; the coordinated follow-up PR #1509 removed them and migrated the remaining consumers.
+- Organizes implementation as a feature module under `src/ensure/`: assertion service, chain service, thin feature index, cohesive pure `helpers/`, and adjacent tests.
+- No consumer-wide migration or business-invariant relocation is included.
+- **Merged:** PR #1505 into `develop` at `eb235e630ca7e59727343bc6819741af6ab69e11`; verified PR head `8c47d506113550bb10a42b7646064a583a23ae80`.
+- **Verification:** exact-head Utils tests, workspace tests/coverage, strict and workspace ESLint, syntax, actionlint, dependency audit, Harvester regression, and external documentation links all passed. Utils coverage reported 99.02% line / 97.31% branch overall (coverage run 237 tests, 0 failures).
+
+## Completed — custom ensure diagnostics and remove legacy Validator/VR ([#1507](https://github.com/45s/coinzilla/issues/1507), [#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
+
+- Add optional `errMsg` to direct `ensure` assertions and fluent chains. Custom diagnostics preserve the original `TypeError` / `RangeError` class; successful assertions still return the original value.
+- Remove the deprecated `Validator` / `VR` public exports, declarative implementation, and tests. The initial Entity consumer migration in PR #1509 was corrected in [PR #1512](https://github.com/45s/coinzilla/pull/1512) to use shared `ensure` assertions, preserving accepted values, domain-specific `Error` messages, and assertion causes.
+- Fix the dedicated Utils Unit Tests workflow to discover nested `ensure` tests; the prior root-only glob omitted `src/ensure/ensure.test.js`.
+- **Verification:** merged as `ab77568acfcd286560270aaac325bf65301efb0c`. Required exact-head CI passed: Utils 225 tests (223 passed, 0 failed, 2 skipped), Entities 145/145, workspace tests and coverage, JavaScript syntax/strict lint/Markdown/policy, dependency audit and Harvester targeted tests. External documentation links also passed.
 
 ## Priority execution plan — current develop direction (2026-11-10)
 
@@ -49,11 +73,10 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
 4. **Keep shared decimal arithmetic exact and bounded.**
    - **Why:** decimal helpers underpin money, quantity, fees and order filters; accepting floating-point inputs or unbounded precision can create silent financial drift or resource abuse.
    - **Do:** preserve BigInt-backed string arithmetic, explicit rounding, scale/precision bounds and rejection of JavaScript Number operands. Add a helper only when at least one real shared consumer needs it.
-   - **Verify:** retain algebraic/edge-case regressions and consumer tests across Entities, Harvester and Market Simulator.
 
 5. **[x] Harden Validator rule configuration ([issue #892](https://github.com/45s/coinzilla/issues/892)) — completed in merged [PR #918](https://github.com/45s/coinzilla/pull/918).**
    - **Why:** unknown rule identifiers were ignored and non-boolean `isSoft` values were interpreted by truthiness; a typo could silently disable validation.
-   - **Completed:** prevalidate every tuple and rule against the exported `VR` values; reject malformed rule entries and require a boolean `isSoft` when provided. Repository code search found no production callers of `Validator.validate` or `validateItems`; existing production predicate-helper consumers are unaffected.
+   - **Completed historically:** prevalidated every tuple and rule against exported `VR` values; rejected malformed rule entries and required boolean `isSoft`. Follow-up issue #1508 later removed the declarative API and migrated the remaining predicate consumers.
    - **Verify:** 198/198 dedicated Utils tests and 198/198 workspace Utils tests passed. Utils coverage is 98.53% lines, 96.33% branches, and 99.19% functions. All six required exact-head contexts passed; the dedicated Utils workflow now runs `src/*.test.js` rather than treating the package directory as one test module.
 
 ### DEFERRED
@@ -63,7 +86,7 @@ The shared capability merged in [PR #767](https://github.com/45s/coinzilla/pull/
    - **Do:** require a concrete repeated use case and a compatibility plan before expanding the public API.
    - **Verify:** dependency audit, package coverage and full workspace CI pass on the exact PR head.
 
-> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and Validator configuration hardening ([PR #918](https://github.com/45s/coinzilla/pull/918), issue [#892](https://github.com/45s/coinzilla/issues/892)) are complete. The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
+> Status: core shared-helper hardening, build-provenance/Logger consumer rollout, and ensure validation modernization are complete. The legacy Validator/VR removal is complete in merged PR #1509. The direct console/application-logger audit is complete on `develop` at `f4fd2ab8f2cd40b497aa3b931c12f0bb9513f015`; the broader reuse inventory and automated guard remain open. Optional consolidation remains demand-driven.
 
 **Owner:** `packages/utils/`
 
@@ -83,14 +106,14 @@ Read [the utils agent instructions](./AGENTS.md) and [the domain ownership guide
 
 The current audit identified these concrete items:
 
-- [x] Extract pure numeric operations and validation rules into focused modules while preserving `NH`, `Validator`, and `VR` entry points.
+- [x] Extract pure numeric operations and validation into focused modules. `NH` remains public; the temporary `Validator`/`VR` compatibility exports were removed in follow-up PR #1509.
 - [x] Validate wait durations before passing them to Node timers; reject negative, non-finite, non-numeric, and out-of-range values rather than relying on timer coercion.
 - [x] Make log formatting resilient to hostile values whose JSON serialization and string coercion both throw, and redact common credential-bearing fields from structured payloads.
 - [x] Stop including feature-flag environment variable values in warning diagnostics; return a deterministic `false` if warning reporting fails but error reporting succeeds.
 - [x] Remove the filesystem helper's import through the public package index to avoid an unnecessary circular dependency.
 - [x] Add package-specific coverage thresholds and a CI negative self-check, then expand regression coverage for the affected boundaries.
 
-Compatibility constraints: retain existing public exports and the legacy `NH` / `Validator` facade shapes; preserve existing numeric calculations, result structures, event-emitter singleton behavior, and successful filesystem append semantics. No runtime dependencies are required.
+Historical compatibility constraints retained `NH` and `Validator`/`VR` at that checkpoint. The later ensure migration removed the obsolete Validator/VR contract; `NH`, numeric calculations, result structures, event-emitter singleton behavior, and successful filesystem append semantics remain unchanged. No runtime dependencies are required.
 
 ## Roadmap
 
@@ -102,7 +125,7 @@ Compatibility constraints: retain existing public exports and the legacy `NH` / 
 - [x] Review helper APIs for consistent input validation, error semantics, and immutable behavior.
 - [x] Keep logging utilities structured, safe, and free of common credential fields in structured payloads; free-form log strings remain caller-owned.
 - [x] Capture build provenance and structured Logger context (issue #763): shared capability merged in PR #767; Harvester process-start consumer integration merged in PR #770. PR #765 was an abandoned test-first draft and is not the delivery reference.
-- [ ] Remove or consolidate genuinely duplicated generic helpers when doing so does not couple unrelated domains.
+- [ ] Remove or consolidate genuinely duplicated generic helpers when doing so does not couple unrelated domains. Use the supported `ensure` contract for generic validation; the `Validator`/`VR` facade was removed in PR #1509.
 - [x] Review dependency usage and keep the package minimal; no new runtime dependencies introduced.
 
 ## Validation record
@@ -138,7 +161,6 @@ The shared policy prohibits direct console calls in business logic and applicati
 ## Repository-wide reuse audit
 
 - [~] Audit every application/package helper and utility for domain-neutral functionality that should be reused from @coinzilla/utils.
-- [x] Consolidate exact decimal-string arithmetic shared by Harvester, Market Simulator, and Entities; shared API and consumer migrations are merged and covered by workspace tests.
 - [x] Audit direct console usage and app-local logger adapters. Current `apps/harvester/src/` uses the shared `defaultLogger`; no application/domain direct console calls or app-local logger adapters were found. Production console references are limited to the exact approved paths in the policy (shared logger, Telegram smoke CLI, and six Harvester operator/test CLIs); root repository-tool scripts remain outside the source guard, and test stubs are excluded. Fatal `process.stderr.write` review remains separate.
 - [ ] Record a disposition for every candidate: reuse existing utility, extend shared utility, keep domain-local, or intentionally duplicate with justification.
 - [ ] Add consumer migration tests and update each owning domain's docs/roadmap as shared capabilities are adopted.
@@ -153,7 +175,6 @@ The initial findings and mandatory agent workflow are in [../../docs/engineering
 - [x] Move the generic object-input assertion from EventBus into the public utils API.
 - [x] Reject JavaScript Number operands to prevent hidden precision loss; accept exact strings and bigint parsing inputs.
 - [x] Add focused tests for signed values, scientific notation bounds, maximum scale/precision, division-by-zero, explicit rounding modes, increment rounding, and deterministic arithmetic identities.
-- [x] Migrate Harvester, Market Simulator, and Entities consumers to the shared API; workspace CI remains the final validation gate.
 - [x] Migrate the standalone Harvester TESTNET sell helper's remaining local BigInt arithmetic to `parseDecimal`, `roundDecimalToIncrement`, `compareDecimal`, and `rescaleDecimal` in merged [PR #946](https://github.com/45s/coinzilla/pull/946); exchange filter selection and operator-facing quantity policy remain in Harvester.
 
 ## Scope guard

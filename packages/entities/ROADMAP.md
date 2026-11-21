@@ -6,7 +6,7 @@ type: roadmap
 owner: entities
 ---
 
-## Priority execution plan — current develop direction (2026-11-08)
+## Priority execution plan — current develop direction (2026-11-21)
 
 ### IMPORTANT — preserve canonical financial and broker contracts
 
@@ -20,10 +20,17 @@ owner: entities
    - **Do:** review imports and public exports; replace broad utility imports with narrowly scoped pure decimal/result helpers where practical. Keep exchange-specific parsing and strategy policy outside Entities.
    - **Verify:** add an architecture test that rejects imports from Brokers, Harvester, Journal, Event Bus, DB and infrastructure modules. Run package and workspace tests after each import change.
 
-3. **Establish package-owned coverage and contract-test gates.**
+3. **Establish package-owned coverage and contract-test gates — COMPLETE in merged PR #1578.**
    - **Why:** the workspace aggregate can hide a weak shared package behind the coverage of other packages. Entities contracts are high leverage and need their own regression signal.
-   - **Do:** measure production-source coverage by package, identify untested invariants and add a package-scoped coverage command with a negative self-check. Choose thresholds from a real baseline; target at least 90% lines and 80% branches without adding meaningless tests.
-   - **Verify:** CI proves the command fails below threshold and passes on the exact PR head.
+   - **Do:** measure production-source coverage by package and enforce a package-scoped threshold without counting imported Utils implementation files. [PR #1578](https://github.com/45s/coinzilla/pull/1578) adds `test:coverage` with 90% lines, 85% branches and 85% functions, based on the observed Entities source coverage report.
+   - **Verify:** the required Workspace test coverage matrix must run this package command and prove it passes on the exact PR head. Node's test runner exits non-zero when a configured threshold is missed. Mark complete only after exact-head CI is green and the PR is merged.
+
+### Coverage command
+
+- `pnpm --filter @coinzilla/entities run test:coverage` measures only Entities production source (`src/**/*.js`, excluding tests and imported packages) and enforces 90% lines, 85% branches and 85% functions.
+- The required workspace coverage matrix invokes this command once. The matrix-completeness guard verifies the package remains included and retains both `test` and `test:coverage` scripts.
+- **Measured on PR #1578 exact head `32dc8a094691d08754a3874b0719135b0c441bc5`:** 156 tests passed; production-source coverage was 96.33% lines, 94.33% branches and 95.40% functions. The configured gate is therefore below the measured baseline and passed without adding tests solely to inflate coverage.
+- This gate is complete: [PR #1578](https://github.com/45s/coinzilla/pull/1578) merged as `2979bcde1556103c351760281c375010e3655b51`; exact-head Unit Tests, Test Coverage, JavaScript Syntax, Dependency Audit, Harvester Targeted Tests and External Documentation Links all passed.
 
 ### DEFERRED — only with a demonstrated contract need
 
@@ -58,7 +65,7 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 - [x] **FR-012 — Commission.** Implemented immutable Commission values backed by exact non-negative `Money`, with explicit fee asset identity and zero/one/multiple fee entries on Fill. `COMPLETE`, `PARTIAL`, and `UNKNOWN` collection semantics prevent unknown or incomplete fees from being interpreted as zero. Integrated into `develop` via PR #302.
 - [x] **FR-013 — Balance.** Implemented immutable Balance values with exact free and locked quantities, canonical asset identity, and total derived using decimal-string arithmetic. Integrated into `develop` via PR #306.
 - [x] **FR-014 — TradingRules.** Implemented immutable, exchange-neutral Market-scoped price/quantity/notional constraints with explicit supported, unsupported, dynamic, and unknown states. Integrated into `develop` via PR #307.
-- [x] **FR-015 — Broker capability contracts.** Implemented immutable exchange-neutral capability snapshots with explicit supported, unsupported, and unknown states. Extended in PR #1455 to serve as the sole shared contract for evidence-backed provider declarations (provider/product/environment identity and generic method/guarantee/limitation/reason/condition metadata) while preserving the original capability-only value shape. Brokers re-exports and populates this Entities contract; no parallel capability model remains.
+- [x] **FR-015 — Broker capability contracts.** Implemented immutable exchange-neutral capability snapshots with explicit supported, unsupported, and unknown states. Extended in PR #1455 to serve as the sole shared contract for evidence-backed provider declarations (provider/product/environment identity and generic method/guarantee/limitation/reason/condition metadata, including separate native `SUBSCRIBE_USER_DATA` and polling `OBSERVE_USER_DATA` delivery capabilities) while preserving the original capability-only value shape. Brokers re-exports and populates this Entities contract; no parallel capability model remains.
 - [x] **FR-016 — Broker result contracts.** Implemented immutable normalized success, failure, incomplete, and unknown-outcome envelopes. Integrated into `develop` via PR #309.
 
 ### FR-009 contract boundary
@@ -141,6 +148,13 @@ Read [the entity agent instructions](./AGENTS.md) and [the domain ownership guid
 ## Completion policy
 
 An item is complete only after its focused tests pass, its PR is merged into `develop`, and affected consumers are identified. Do not implement multiple FR contracts in one broad PR. Coordinate consumer migrations through cross-domain requests.
+
+## Completed — coordinated Utils validation API removal ([#1508](https://github.com/45s/coinzilla/issues/1508), [PR #1509](https://github.com/45s/coinzilla/pull/1509))
+
+- The legacy `Validator` facade was removed and `Coin`/`Order` no longer import it.
+- **Correction completed:** PR #1509 replaced those calls with handwritten checks rather than using the shared `ensure` API, contrary to the shared-utilities policy. This was corrected in [#1511](https://github.com/45s/coinzilla/issues/1511) and merged as [PR #1512](https://github.com/45s/coinzilla/pull/1512).
+- PR #1512 uses `ensure` for generic checks while keeping domain constraints in Entities and preserving accepted values and existing domain `Error` classes/messages.
+- **Verification:** PR #1512 merged as `38204fa5cb90bd3ce9f838d5f0c525aacf2a5695`; exact PR head `3ca2a9721421404c109bc2153cfa32c10645a76b` passed Entities tests (153/153), strict changed-file ESLint, workspace ESLint, the six required `develop-core` CI contexts, and Harvester Targeted Tests. The original API-removal verification from PR #1509 (`ab77568acfcd286560270aaac325bf65301efb0c`) remains historical.
 
 ## Shared utility reuse
 

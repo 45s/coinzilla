@@ -82,7 +82,7 @@ export const BROKER_MUTATION_OUTCOMES = Object.freeze([
 ])
 
 /**
- * Validate a structural Broker implementation without requiring CoreBroker inheritance.
+ * Validate a structural Broker implementation.
  *
  * @param {{broker: object}} input
  * @returns {Broker}

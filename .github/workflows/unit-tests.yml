@@ -29,6 +29,7 @@ jobs:
       max-parallel: 5
       matrix:
         package:
+          - "@coinzilla/dashboard"
           - "@coinzilla/harvester"
           - "@coinzilla/brokers"
           - "@coinzilla/db"
@@ -36,9 +37,7 @@ jobs:
           - "@coinzilla/indicators"
           - "@coinzilla/event-bus"
           - "@coinzilla/journal"
-          - "@coinzilla/market-simulator"
           - "@coinzilla/notifiers"
-          - "@coinzilla/utils"
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -63,27 +62,84 @@ jobs:
       - name: Run ${{ matrix.package }} tests
         run: pnpm --filter "${{ matrix.package }}" test
 
+  utils-tests:
+    name: packages/utils tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Utils package tests
+        run: pnpm --filter @coinzilla/utils test
+
+  dashboard-build:
+    name: Dashboard production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Dashboard
+        run: pnpm --filter @coinzilla/dashboard build
+
   package-tests-gate:
     name: Run package tests
     if: always()
     needs:
       - test
+      - utils-tests
+      - dashboard-build
     runs-on: ubuntu-latest
     steps:
       - name: Require every package test to pass
         env:
           MATRIX_RESULT: ${{ needs.test.result }}
+          UTILS_RESULT: ${{ needs.utils-tests.result }}
+          DASHBOARD_BUILD_RESULT: ${{ needs.dashboard-build.result }}
         run: |
-          if [[ "$MATRIX_RESULT" != "success" ]]; then
-            echo "::error::At least one package unit-test matrix job did not succeed (result: $MATRIX_RESULT)."
+          if [[ "$MATRIX_RESULT" != "success" || "$UTILS_RESULT" != "success" || "$DASHBOARD_BUILD_RESULT" != "success" ]]; then
+            echo "::error::Package unit-test matrix, Utils tests, or Dashboard build did not succeed (matrix: $MATRIX_RESULT; Utils: $UTILS_RESULT; Dashboard build: $DASHBOARD_BUILD_RESULT)."
             exit 1
           fi
-          echo "All package unit-test matrix jobs passed."
+          echo "All package unit-test matrix jobs, Utils tests, and Dashboard build passed."
 
   broker-testnet-read-only:
     name: Run read-only Binance TESTNET integration
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/develop' && inputs.run_broker_testnet_read_only
-    needs: test
+    needs:
+      - test
+      - utils-tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -106,7 +162,7 @@ jobs:
 
       - name: Probe TESTNET WebSocket endpoints (no credentials)
         continue-on-error: true
-        run: node packages/brokers/src/infrastructure/binance/broker-websocket/test-helpers/testnet-websocket-diagnostics.js
+        run: node packages/brokers/src/infrastructure/binance/spot/broker-websocket/test-helpers/testnet-websocket-diagnostics.js
 
       - name: Run broker TESTNET read-only integration
         shell: bash

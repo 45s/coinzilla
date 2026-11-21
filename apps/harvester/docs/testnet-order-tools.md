@@ -136,8 +136,8 @@ this command sells the entire displayed free ZRO quantity.
 
 The command is implemented by `scripts/sell-testnet-zro.js`; its exact
 quantity validation and step-size rounding live in the pure
-`scripts/testnet-sell-utils.js` module and are covered by
-`scripts/testnet-sell-utils.test.js`. It reuses the shared signed TESTNET
+`scripts/calculate-testnet-market-sell-quantity.js` module and are covered by
+`scripts/calculate-testnet-market-sell-quantity.test.js`. It reuses the shared signed TESTNET
 request helper. No live trading host or production mode is configurable.
 
 ### Exchange metadata request behavior
@@ -198,7 +198,7 @@ a failed submission was never attempted.
 The command is implemented by
 `scripts/list-testnet-order-history.js`. Its argument parsing and order
 normalization/sorting are plain pure functions in
-`scripts/testnet-order-history-utils.js`, with deterministic offline tests.
+`scripts/testnet-order-history-inputs.js`, with deterministic offline tests.
 It reuses the existing signed TESTNET request helper and does not add
 dependencies or connect to the trading runtime.
 

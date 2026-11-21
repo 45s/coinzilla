@@ -72,9 +72,20 @@ To keep utility tests running while editing:
 pnpm --filter @coinzilla/utils test:watch
 ```
 
+## Bitunix Spot health check
+
+Store `BITUNIX_API_KEY` and `BITUNIX_API_SECRET` in `packages/brokers/.env.development`. Run the package-owned command from that directory:
+
+```sh
+cd packages/brokers
+node scripts/bitunix-healthcheck.js
+```
+
+The command must start from a clean `develop` checkout. It creates and pushes a timestamped report-only branch, then returns the local checkout to `develop`. Only sanitized diagnostics are committed; credentials and account values remain local. It does not place/cancel orders or perform withdrawals/transfers. See the [Brokers README](packages/brokers/README.md) for permissions, report contents, and failure behavior.
+
 ## Workspace layout
 
-- `apps/*` — application workspaces
+- `apps/*` — application workspaces, including the Harvester trading runtime and Angular Dashboard client
 - `packages/*` — shared packages
 - `packages/utils` — shared utility functions and Node.js tests
 - `packages/indicators` — reusable technical indicators over normalized market candles
@@ -107,7 +118,7 @@ GitHub Actions runs the repository's checks on Node.js 24.x (the supported Node.
 
 - **JavaScript Syntax** runs workspace ESLint, JavaScript syntax, agent-policy and documentation checks; pull requests to `develop` also run strict changed-file ESLint. **actionlint** is a separate required status context in the same workflow.
 - **Unit Tests** installs dependencies with `pnpm install --frozen-lockfile` and runs `pnpm test`.
-- **Utils Unit Tests** independently runs `node --test packages/utils/src/*.test.js`.
+- **Utils Unit Tests** independently discovers all Utils tests recursively with `find packages/utils/src -type f -name '*.test.js' -print0 | xargs -0 node --test`.
 - **Test Coverage** runs workspace coverage and enforces package-specific coverage thresholds.
 - **Dependency Audit** runs `pnpm audit --prod --audit-level high` on pull requests, pushes to `main` and `develop`, and a weekly schedule.
 

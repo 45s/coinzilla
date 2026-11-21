@@ -53,6 +53,18 @@ The offline DOGE/ZRO Conservative runtime replay and its simulated Binance harne
 
 The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @coinzilla/harvester recovery:market -- --context ./recovery-evidence/linkusdt.json`. Audit-only is the default; `--confirm` explicitly appends an operational record to the Operational State Store and requires an already initialized store. The command does not connect to Binance, place/cancel orders, or enable startup restoration. See the [recovery operator guide](./docs/recovery/README.md) for the evidence schema and safety contract.
 
+## Trading-history API v1 (#1635)
+
+The [Trading-history API v1](./docs/api/trading-history-api.md) serves persisted orders, individual fills, and commission facts to independent clients from the existing Harvester process. It uses a transport-independent application query facade and Harvester's already-open relational database connection. It does not add tables, change trading behavior, or connect to a broker/exchange.
+
+The API starts automatically with Harvester and binds to `127.0.0.1:4201`. No token or extra environment configuration is required. Start Harvester normally with the intended `TRADING_MODE`:
+
+```sh
+pnpm --filter @coinzilla/harvester dev
+```
+
+The API starts when Harvester has an active runtime and relational history persistence. It shares Harvester's existing database connection and closes before persistence during process shutdown; it has no separate process, script, or launch command. The unauthenticated listener is fixed to loopback for local single-user development and must not be exposed to a LAN or remote host. See the API contract for routes, filters, pagination, local-only boundary, and exact financial-value semantics.
+
 ## Operational State Store (ADR-0001)
 
 The Operational State Store is a separate Harvester-owned append-only recovery-facts ledger. It is not the SQLite history database and is not interchangeable with Journal.
@@ -88,13 +100,46 @@ See the [SQLite integration blueprint](./docs/persistence/sqlite-integration-blu
 
 ## Configuration
 
-Harvester exposes one application-wide named `appConfig` export from `config/index.js`. Strategy-level switches remain in `config/strategies/cg-coin-grabber.js`. All strategy pair definitions live in one separate JavaScript module: `apps/harvester/cg-coin-grabber.js`, exported as the flat `tradingPairs` map. A symbol is defined once; do not duplicate markets in source modules or maintain separate TESTNET/LIVE maps.
+Harvester exposes one application-wide named `appConfig` export from `config/index.js`. Follow the repository [Configuration Standard](../../docs/engineering/CONFIGURATION_STANDARD.md) for the shared ownership, loading, validation, environment, secret and compatibility rules; this section records Harvester-specific configuration contracts. Each strategy's switches live in its focused `config/strategies/` module. Conservative (CG) pair definitions live in `apps/harvester/cg-coin-grabber.js` (`tradingPairs`); Recovery Seller (RS) pair definitions live in `apps/harvester/rs-recovery-seller.js` (`recoverySellerPairs`). Each strategy owns one market map; do not duplicate a strategy's pair definitions in application source or maintain separate TESTNET/LIVE maps.
 
 Each pair must explicitly use `TRADING_ENVIRONMENTS.TESTNET`, `.LIVE`, or `.BOTH` from `src/domain/trading-environment.js`. `TRADING_MODE=testnet` includes TESTNET and BOTH; `TRADING_MODE=live` includes LIVE and BOTH. The serialized values remain `"testnet"`, `"live"`, and `"both"`. Non-matching pairs are excluded, and `tradingEnvironment` is removed from the effective runtime pair config. There is no default or fallback. If no pair matches (or no matching pair is enabled), startup fails before broker connection. The pair's `enabled` flag remains independent of its environment.
 
 Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`, `enableVolatilityProtection`, `externalOrdersPolicy`, `investment`, `orderQuantity`, `keepQuantity`, `minProfit`, and fee settings. Precision is not operator-owned pair configuration: it is resolved from `token-specification.json` by exact market symbol when `loadAppConfig` builds the effective runtime config. The external pair module uses `externalOrdersPolicy: EXTERNAL_ORDERS_POLICIES.IGNORE` (or `.BLOCK`) from `src/domain/external-orders-policy.js`; the serialized values remain `"ignore"` and `"block"`. Validation still allows the policy to be omitted and defaults it to ignore. Every unmatched startup order follows this policy regardless of client-order ID prefix: IGNORE leaves the order external without blocking strategy evaluation, while BLOCK restricts only that symbol. Unmatched execution reports with reserved `h-` IDs remain fail-closed and are never attributed to the current process.
 
 **Runtime environment contract:** `TRADING_MODE` accepts exactly `testnet` or `live` and remains the compatibility selector for the legacy single-Binance configuration. `NODE_ENV` never selects an exchange environment. When `brokers.instances` is configured, each account entry selects its own explicit `environment`; the runtime passes that value into the provider adapter and account-scoped process lock.
+
+### Recovery Seller configuration
+
+RS is explicitly disabled by default. Keep `RS_RECOVERY_SELLER_CONFIG.enabled` false until each enabled market has an explicit legacy basis and the complete RS-4/RS-5 runtime acceptance is merged. The operator-owned market map is `apps/harvester/rs-recovery-seller.js`; it is empty by default.
+
+An enabled RS market requires the following fields:
+
+```js
+export const recoverySellerPairs = {
+  ZROUSDT: {
+    enabled: true,
+    tradingEnvironment: TRADING_ENVIRONMENTS.TESTNET,
+    enableVolatilityProtection: true,
+    investment: 100,
+    orderQuantity: 5,
+    sellQuantity: 0.01,
+    minProfit: 0.01,
+    priceStepPercent: 0.05,
+    makerPercent: 0,
+    takerPercent: 0.1,
+    legacyPosition: {
+      invested: 100,
+      quantity: 50,
+    },
+  },
+}
+```
+
+`legacyPosition.invested` is the operator-declared original quote investment; `legacyPosition.quantity` is the corresponding original base quantity. RS derives the fixed historical average cost from those values. `sellQuantity` is the additive legacy base quantity for a cycle SELL and cannot exceed the declared original quantity. The optional `investment` is the independent RS recovery BUY budget; it is not the legacy historical investment. The existing per-pair `minProfit` floor is 0.01 quote units. Price/quantity precision comes only from `token-specification.json`.
+
+Configuration is authorization and historical-basis input only. It does not seed legacy inventory into Portfolio, prove Spot custody, or make EARN-held assets sellable. Before each SELL, runtime must verify Spot availability and account-wide reservations independently. Missing or invalid basis fails startup validation; an empty RS market map is valid only while RS is disabled.
+
+`loadAppConfig` resolves exchange precision for both CG and RS market maps from the same token specification registry. No TESTNET/LIVE exchange operation is part of configuration validation.
 
 ### Multiple provider accounts
 
@@ -339,7 +384,7 @@ See [TESTNET order tools — balances](./docs/testnet-order-tools.md#list-non-ze
 
 ## Standalone Binance TESTNET ZRO market sell
 
-See [TESTNET order tools — legacy ZROUSDT market sell](./docs/testnet-order-tools.md#sell-all-free-zro-at-market-destructive). This is a hardcoded ZROUSDT TESTNET MARKET SELL, not the current ZROFDUSD configured pair; it is outside the paused validation runbook and requires separate explicit authorization.
+See [TESTNET order tools — legacy ZROUSDT market sell](./docs/testnet-order-tools.md#sell-all-free-zro-at-market-destructive). This is a hardcoded ZROUSDT TESTNET MARKET SELL, not a general-purpose recovery or cleanup command; despite ZROUSDT being enabled in the committed TESTNET pair map, this command is outside the paused validation runbook and requires separate explicit authorization.
 
 ## Standalone Binance TESTNET order history
 
@@ -408,3 +453,7 @@ The Telegram Command Center is a thin authorized interface over Harvester applic
 ## Telegram Command Center
 
 The optional inbound operator interface, its inline navigation and control-confirmation behavior are documented in the [Telegram Command Center operator runbook](docs/operations/telegram-command-center.md). Inbound control is enabled by default and can be disabled with `operatorControl.telegram.enabled=false`; process-lifetime operator pauses are not restored after restart.
+
+## Dashboard operator controls
+
+The local Dashboard Operator workspace reads status, markets, portfolio positions, open orders, and balances from the running Harvester process. It also exposes confirmed BUY pause/resume commands (`pause`, `unpause`, `pauseallbuys`, `resumeallbuys`) through the same operator facade used by Telegram. The local API remains unauthenticated and must not be exposed beyond `127.0.0.1`.

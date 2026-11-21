@@ -1,6 +1,6 @@
 # Repository documentation
 
-This index is the entry point for maintained repository documentation. The governance foundation and umbrella tracking live in [#795](https://github.com/45s/coinzilla/issues/795). Full-tree Markdown style and maintained-source anchor enforcement is complete in [#1402](https://github.com/45s/coinzilla/issues/1402) (implemented in [PR #1434](https://github.com/45s/coinzilla/pull/1434)); remaining work is split into the maintained-content audit [#1401](https://github.com/45s/coinzilla/issues/1401) and reference/consolidation audit [#1403](https://github.com/45s/coinzilla/issues/1403). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
+This index is the entry point for maintained repository documentation. The governance foundation and umbrella tracking live in [#795](https://github.com/45s/coinzilla/issues/795). Full-tree Markdown style and maintained-source anchor enforcement is complete in [#1402](https://github.com/45s/coinzilla/issues/1402) (implemented in [PR #1434](https://github.com/45s/coinzilla/pull/1434)). The maintained-content and reference/consolidation audits [#1401](https://github.com/45s/coinzilla/issues/1401) and [#1403](https://github.com/45s/coinzilla/issues/1403) were completed together in [PR #1628](https://github.com/45s/coinzilla/pull/1628). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
 
 ## Start here
 
@@ -11,8 +11,9 @@ This index is the entry point for maintained repository documentation. The gover
 - [ESLint Standard](engineering/ESLINT_STANDARD.md) — rule compliance, agent preflight and suppression prevention
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
+- [Repository governance drift review](engineering/REPOSITORY_GOVERNANCE_REVIEW.md) — monthly evidence-based review of rulesets, CI, workflow supply chain, security and package matrices
 - [Markdown style standard](MARKDOWN_STYLE.md) — consistent formatting and authoring conventions
-- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (160 tracked Markdown/MDX files on `develop` at `543753d`; 89 under Harvester and 71 elsewhere)
+- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (179 tracked Markdown/MDX files on `develop` at `0f827ba`; 94 under Harvester and 85 elsewhere)
 
 ## Repository-wide engineering
 
@@ -23,7 +24,9 @@ This index is the entry point for maintained repository documentation. The gover
 - [Multi-provider migration audit and implementation plan](architecture/multi-provider-migration-plan.md) — source-verified audit, capability matrix, persistence assessment and implementation phases for #1339.
 - [Domain ownership](engineering/DOMAIN_OWNERSHIP.md)
 - [Task workflows](engineering/TASK_WORKFLOWS.md)
+- [AI task compliance standard](engineering/AI_TASK_COMPLIANCE_STANDARD.md) — mandatory standards discovery, preflight readiness and completion compliance
 - [AI refactoring and code audit standard](engineering/AI_REFACTORING_AUDIT_STANDARD.md)
+- [Logging and observability standard](engineering/LOGGING_OBSERVABILITY_STANDARD.md)
 - [Cross-domain requests](engineering/CROSS_DOMAIN_REQUESTS.md)
 - [Contributing](contributing.md)
 - [Workspace package map](workspace-package-map.md)
@@ -47,7 +50,8 @@ The AI-agent task brief and repository engineering audit are different historica
 
 Each active application/package owns its local README, agent instructions, roadmap and documentation index where applicable:
 
-- [Harvester](../apps/harvester/README.md) — application guide
+- [Harvester](../apps/harvester/README.md) — trading application guide
+- [Dashboard](../apps/dashboard/README.md) — Angular operational dashboard foundation
 - [Harvester documentation index](../apps/harvester/docs/README.md)
 - [Harvester Volatility Protection](../apps/harvester/docs/volatility-protection.md) — runtime protection implemented; historical threshold calibration remains open
 - [Harvester roadmap](../apps/harvester/ROADMAP.md)
@@ -56,12 +60,12 @@ Each active application/package owns its local README, agent instructions, roadm
 ## Shared package entry points
 
 - [Brokers](../packages/brokers/README.md) — exchange integration and broker operations
+- [Bitunix Spot development workflow](../packages/brokers/docs/BITUNIX_WORKFLOW.md) — mandatory evidence-to-implementation process and operator-only LIVE investigation boundary
 - [Database](../packages/db/README.md) — provider-neutral CRUD infrastructure with built-in SQLite provider
 - [Entities](../packages/entities/README.md) — exchange-neutral domain contracts and financial value objects
 - [Event Bus](../packages/event-bus/README.md) — bounded in-process event delivery
 - [Indicators](../packages/indicators/README.md) — exchange-neutral technical indicator calculations
 - [Journal](../packages/journal/README.md) — durable event recording and replay
-- [Market Simulator](../packages/market-simulator/README.md) — offline market simulation
 - [Notifiers](../packages/notifiers/README.md) — optional operational notifications
 - [Utils](../packages/utils/README.md) — shared domain-neutral helpers
 

@@ -1,0 +1,89 @@
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="#overview" aria-label="Coinzilla dashboard home" (click)="selectPage('overview')">
+      <span class="brand-mark">C</span>
+      <span class="brand-copy">
+        <strong>coinzilla</strong>
+        <small>CONTROL ROOM</small>
+      </span>
+    </a>
+
+    <div class="workspace-label">WORKSPACE</div>
+    <nav class="primary-nav" aria-label="Main navigation">
+      @for (item of navigationItems; track item.label) {
+        @if (item.enabled) {
+          <button
+            type="button"
+            class="nav-item"
+            [class.active]="activePage() === item.page"
+            [attr.aria-current]="activePage() === item.page ? 'page' : null"
+            (click)="selectPage(item.page)"
+          >
+            <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+            <span>{{ item.label }}</span>
+          </button>
+        } @else {
+          <span class="nav-item disabled" aria-disabled="true" [attr.title]="item.label + ' is not connected yet'">
+            <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span>
+            <span>{{ item.label }}</span>
+            <span class="nav-soon">SOON</span>
+          </span>
+        }
+      }
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-status">
+      <span class="status-dot muted"></span>
+      <div>
+        <strong>Harvester API</strong>
+        <small>Connect from a records page</small>
+      </div>
+    </div>
+    <div class="sidebar-footer">COINZILLA <span>•</span> DASHBOARD</div>
+  </aside>
+
+  <main class="main-panel" id="overview">
+    <header class="topbar">
+      <div class="breadcrumb">
+        <span>Workspace</span>
+        <span class="breadcrumb-separator">/</span>
+        <strong>{{ activeLabel() }}</strong>
+      </div>
+      <div class="topbar-actions">
+        @if (activePage() === 'overview') {
+          <span class="demo-pill"><span></span> MOCK DATA</span>
+          <span class="environment-pill">PREVIEW</span>
+        } @else if (activePage() === 'operator') {
+          <span class="demo-pill persisted-pill"><span></span> LIVE CONTROL</span>
+          <span class="environment-pill">HARVESTER</span>
+        } @else {
+          <span class="demo-pill persisted-pill"><span></span> READ ONLY</span>
+          <span class="environment-pill">HARVESTER</span>
+        }
+        <button class="avatar" type="button" disabled aria-label="User profile unavailable">CZ</button>
+      </div>
+    </header>
+
+    <section class="page-content">
+      @if (activePage() === 'overview') {
+        <app-overview />
+      } @else if (activePage() === 'operator') {
+        <app-operator />
+      } @else {
+        <app-trading-history [resource]="historyResource()" />
+      }
+      <footer class="page-footer">
+        <span>Coinzilla Dashboard</span>
+        @if (activePage() === 'overview') {
+          <span>Overview values are fictional demo data</span>
+        } @else if (activePage() === 'operator') {
+          <span>Local operator controls · Commands require confirmation</span>
+        } @else {
+          <span>Read-only persisted Harvester records</span>
+        }
+      </footer>
+    </section>
+  </main>
+</div>

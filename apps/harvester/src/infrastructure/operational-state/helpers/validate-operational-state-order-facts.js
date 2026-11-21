@@ -1,4 +1,5 @@
 import { requireNonEmptyString } from "../operational-state-canonical.js"
+import { validateRecoverySellerSubmissionOwnership } from "../../../domain/orders/recovery-seller-submission-ownership.js"
 import { MAX_FACT_ID_LENGTH } from "./operational-state-fact-schema.js"
 import {
   isCanonicalDecimalString,
@@ -35,6 +36,29 @@ function factIdForOrderOutcome(...parameters) {
   return `order-submission-outcome:${  clientOrderId  }:${  outcome}`
 }
 
+function validateDurableOrderOwnership({ canonicalData, context } = {}) {
+  const hasOwnership = ["strategyId", "positionId", "cycleId"].some(
+    (field) => canonicalData[field] !== undefined
+  )
+  const ownership = hasOwnership
+    ? {
+        strategyId: canonicalData.strategyId,
+        positionId: canonicalData.positionId,
+        cycleId: canonicalData.cycleId,
+        purpose: canonicalData.purpose,
+      }
+    : undefined
+  try {
+    validateRecoverySellerSubmissionOwnership({
+      order: { side: canonicalData.side },
+      purpose: canonicalData.purpose ?? null,
+      ownership,
+    })
+  } catch (error) {
+    throw new TypeError(`${context}: ${error.message}`, { cause: error })
+  }
+}
+
 function validateOrderSubmissionIntentFields({ canonicalData }) {
   const allowedFields = new Set([
     "clientOrderId",
@@ -51,6 +75,9 @@ function validateOrderSubmissionIntentFields({ canonicalData }) {
     "price",
     "quantity",
     "purpose",
+    "strategyId",
+    "positionId",
+    "cycleId",
   ])
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Order-submission intent fact contains unsupported fields")
@@ -108,9 +135,10 @@ function validateOrderSubmissionIntentSemantics({
   if (!isPositiveDecimalString(canonicalData.price) || !isPositiveDecimalString(canonicalData.quantity)) {
     throw new TypeError("Order-submission intent price and quantity must be positive exact decimal strings")
   }
-  if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
-    throw new TypeError("Order-submission intent purpose must be null or RECOVERY_SELL")
-  }
+  validateDurableOrderOwnership({
+    canonicalData,
+    context: "Order-submission intent",
+  })
 }
 
 export function validateOrderSubmissionIntentFact({ factType, canonicalData, factId }) {
@@ -155,9 +183,10 @@ function validateOrderSubmissionOutcomeAmounts({ canonicalData }) {
 }
 
 function validateOrderSubmissionOutcomeState({ canonicalData }) {
-  if (canonicalData.purpose !== null && canonicalData.purpose !== "RECOVERY_SELL") {
-    throw new TypeError("Order-submission outcome purpose must be null or RECOVERY_SELL")
-  }
+  validateDurableOrderOwnership({
+    canonicalData,
+    context: "Order-submission outcome",
+  })
   if (!["ACKNOWLEDGED", "REJECTED", "REJECTED_OR_UNKNOWN", "UNKNOWN"].includes(canonicalData.outcome)) {
     throw new TypeError("Order-submission outcome classification is unsupported")
   }
@@ -199,6 +228,9 @@ function validateOrderSubmissionOutcomeFields({ canonicalData }) {
     "quantity",
     "executedQuantity",
     "purpose",
+    "strategyId",
+    "positionId",
+    "cycleId",
     "outcome",
     "brokerOrderId",
     "status",

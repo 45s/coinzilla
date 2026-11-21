@@ -351,6 +351,39 @@ test("does not infer a legacy allocation from wallet balances without an authori
   )
 })
 
+test("counts EARN-held legacy quantity only after an authoritative Spot snapshot confirms its return", () => {
+  const legacyPositions = [{
+    market: btcUsdtMarket,
+    originalQuantity: "50",
+    remainingQuantity: "50",
+  }]
+  const beforeRedemption = calculateVerifiedLegacySpotAllocation({
+    balances: [createBalance({
+      asset: btcAsset,
+      free: "0.5",
+    })],
+    portfolio: new Portfolio(),
+    legacyPositions,
+  })
+  const afterRedemption = calculateVerifiedLegacySpotAllocation({
+    balances: [createBalance({
+      asset: btcAsset,
+      free: "50",
+    })],
+    portfolio: new Portfolio(),
+    legacyPositions,
+  })
+
+  assert.deepEqual(beforeRedemption, [{
+    assetId: btcAsset.id,
+    amount: "0.5",
+  }], "Only the 0.5 BTC confirmed in Spot is sellable; the remaining 49.5 BTC held in EARN is not inferred or reserved.")
+  assert.deepEqual(afterRedemption, [{
+    assetId: btcAsset.id,
+    amount: "50",
+  }], "The returned EARN quantity becomes eligible only after the authoritative Spot snapshot confirms all 50 BTC.")
+})
+
 test("does not require a Spot balance after the authorized legacy quantity reaches zero", () => {
   const allocations = calculateVerifiedLegacySpotAllocation({
     balances: [],

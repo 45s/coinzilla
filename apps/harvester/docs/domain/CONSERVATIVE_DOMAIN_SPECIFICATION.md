@@ -309,7 +309,7 @@ flowchart TD
 
 **Change control:** Amend this document only when the owner explicitly changes a rule. Update implementation, tests, reference documents, and GitHub records to conform. Never create a competing Conservative rule definition.
 
-## 9. Conservative graceful shutdown — protect trading before stopping services
+## 10. Conservative graceful shutdown — protect trading before stopping services
 
 This contract applies to the Conservative strategy only. Every other strategy must own a separate shutdown policy and safety participant. The application-level shutdown coordinator must not contain Conservative-specific order or accounting rules.
 
@@ -328,6 +328,11 @@ On SIGINT or SIGTERM:
 11. Stop operator control and disconnect Binance last. Publish STOPPED, close Journal/EventBus and release process locks only after runtime shutdown and cleanup are confirmed.
 
 There are no arbitrary sleeps, 20-second delays, quiet periods or time-based guesses. A market already meeting every condition is safe immediately. If safety cannot be proven, fail closed: retain the connections and services needed for reconciliation/recovery, report the exact strategy, market and blockers, and do not report STOPPED.
+
+**Shutdown blocker taxonomy:** `ORDER_OR_FILL_RECONCILIATION_INCOMPLETE` is reserved for failed canonical owned-order reconciliation or failed required user-data drains that may contain order/fill evidence. BUY-cancellation failures, recovery SELL input/reconciliation failures, recovery coverage findings, Journal durability failures and external integrity blockers remain separate diagnostics. Each still blocks shutdown when applicable; separating their labels never relaxes the safety proof.
+
+When recovery pricing is unavailable or stale, the participant may wait for an accepted fresh market-stream event for at most `MARKET_DATA_MAX_AGE_MS` (5,000 ms), then retry the complete recovery reconciliation once. The wait does not block the serialized transition queue. A timeout or a price that becomes stale again remains unsafe. The accepted stream event is the freshness evidence; a one-shot ticker value without a source timestamp is insufficient. The shutdown BUY gate remains active throughout.
+The participant's safety-marker loop is bounded to two complete passes: the initial proof and one re-audit for late accepted evidence. If markers are invalidated again, shutdown fails closed with `SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED:2`. The outer shutdown handler then owns callback fencing, queue draining and the final shared safety re-proof; elapsed quiet time is never treated as proof.
 
 The SAFE_TO_SHUTDOWN marker is a process-local projection, not a durable fact across restarts. On restart, rebuild safety from Journal evidence and authoritative exchange state; never trust a previous process's marker. The Journal must durably flush its published lifecycle/audit evidence before cleanup. Applied fills and order facts remain governed by [ADR-0001](../architecture/decisions/0001-application-owned-recovery-facts.md) and must be persisted before in-memory Portfolio/RecoveryLedger projections change.
 

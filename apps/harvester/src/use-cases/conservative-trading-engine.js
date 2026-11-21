@@ -1,4 +1,5 @@
 import { StrategyId } from "../domain/strategies/strategy-ids.js"
+import { linkSharedAccountOrderRegistry } from "../application/providers/account-runtime-registry.js"
 import { createPositionId } from "../domain/portfolio/position.js"
 import { createStrategyLogger } from "../application/logging/create-strategy-logger.js"
 import { CanonicalOrder, Fill, Quantity } from "@coinzilla/entities"
@@ -7,6 +8,8 @@ import { isCanonicalNonNegativeSafeInteger } from "../domain/time/is-canonical-n
 import { EXTERNAL_ORDERS_POLICIES } from "../domain/external-orders-policy.js"
 import { OrderRegistry } from "../domain/orders/order-registry.js"
 import { makeExecuteStrategyDecision } from "./execute-strategy-decision.js"
+import { createRecoverySellerOrderSubmitter } from "./create-recovery-seller-order-submitter.js"
+import { createRecoverySellerActionAuthorizer } from "./create-recovery-seller-action-authorizer.js"
 import { makeCollectOwnedOrderSnapshots } from "./collect-owned-order-snapshots.js"
 import { makeOrderEventWorkflow } from "./order-event-workflow.js"
 import { makeVolatilityProtectionWorkflow } from "./volatility-protection-workflow.js"
@@ -14,7 +17,7 @@ import { createSubmissionGate } from "./create-submission-gate.js"
 import { createShutdownRecoveryWorkflow } from "./create-shutdown-recovery-workflow.js"
 import { createConservativeShutdownSafety } from "./create-conservative-shutdown-safety.js"
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
-import { createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
+import { createFreshMarketPriceWaiter, createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
 import { validateConservativeTradingEngineOptions } from "./validate-conservative-trading-engine-options.js"
 import { failureResult, recoveryFailureError, withFailure } from "./recovery-failure.js"
 import { OperatorBuyCancellationIncompleteError } from "./errors/operator-buy-cancellation-incomplete-error.js"
@@ -1277,6 +1280,10 @@ function createInitialEngineState({ initialState = {}, pairs, initialRegistry } 
     ...createInitialEngineTrackingState({ initialState }),
     volatilityProtection: createInitialVolatilityProtection({ pairs }),
   }
+  linkSharedAccountOrderRegistry({
+    state,
+    initialState,
+  })
   return { journalFillsById,
 state }
 }
@@ -1612,6 +1619,30 @@ function createOperatorMarketSnapshotsGetter({
 }
 
 
+function bindSharedAccountOrderRegistry({ state, sharedAccountState } = {}) {
+  if (sharedAccountState === undefined) {
+    return
+  }
+  if (!sharedAccountState ||
+      typeof sharedAccountState !== "object" ||
+      !(sharedAccountState.orderRegistry instanceof OrderRegistry)) {
+    throw new TypeError("sharedAccountState must expose an OrderRegistry")
+  }
+  if (state.registry !== sharedAccountState.orderRegistry) {
+    throw new TypeError("initialState.orderRegistry must match sharedAccountState.orderRegistry")
+  }
+  Object.defineProperty(state, "registry", {
+    enumerable: true,
+    get: () => sharedAccountState.orderRegistry,
+    set: (registry) => {
+      if (!(registry instanceof OrderRegistry)) {
+        throw new TypeError("sharedAccountState.orderRegistry must remain an OrderRegistry")
+      }
+      sharedAccountState.orderRegistry = registry
+    },
+  })
+}
+
 function createConservativeEngineBaseContext({ dependencies } = {}) {
   const {
     appConfig,
@@ -1619,6 +1650,7 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     initialState,
     getVolatilityData,
     hasUnownedOpenOrdersForSymbol,
+    sharedAccountState,
   } = dependencies
   const { settings, pairs } = appConfig.strategies[StrategyId.COIN_GRABBER]
   const volatilityProtectionEnabled = typeof getVolatilityData === "function"
@@ -1634,7 +1666,11 @@ pairs })
   const { state } = createInitialEngineState({ initialState,
 pairs,
 initialRegistry })
-  const runTransition = createSerializedTransitionQueue()
+  bindSharedAccountOrderRegistry({
+    state,
+    sharedAccountState,
+  })
+  const runTransition = sharedAccountState?.runTransition ?? createSerializedTransitionQueue()
   const shutdownSafety = createConservativeShutdownSafety({
     state,
     pairs,
@@ -1755,6 +1791,23 @@ function createConservativeEngineSubmissionContext({ context } = {}) {
     isPostOnlyOrderCrossing,
     isShutdownRecoverySubmissionAllowed: () => context.shutdownRecoverySubmission.allowed,
   })
+  if (Object.keys(dependencies.recoverySellerPairs ?? {}).length > 0) {
+    const latchSubmissionFailure = (input = {}) => latchRecoverySellerSubmissionFailure({
+      recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+      ...input,
+    })
+    context.submitRecoverySellerOrder = createRecoverySellerOrderSubmitter({
+      broker: dependencies.broker,
+      recoverySellerAccountingWorkflow: dependencies.recoverySellerWorkflow,
+      onDurableSubmissionIntent: dependencies.onOperationalStateSubmissionIntent,
+      onDurableSubmissionOutcome: dependencies.onOperationalStateSubmissionOutcome,
+      onUnresolvedSubmission: latchSubmissionFailure,
+      onOrderValidationFailure: latchSubmissionFailure,
+      canSubmit: context.canSubmit,
+      onSellReserved: dependencies.onRecoverySellerSellReserved ??
+        dependencies.recoverySellerWorkflow?.reserveSellCycle,
+    })
+  }
   context.submit = makeExecuteStrategyDecision({
     broker: dependencies.broker,
     onOperationalStateSubmissionIntent: dependencies.onOperationalStateSubmissionIntent,
@@ -1836,8 +1889,28 @@ function createConservativeEngineRecoverySubmissionContext({ context } = {}) {
   })
 }
 
+function createEngineRecoverySellerActionAuthorizer({ context, dependencies } = {}) {
+  if (Object.keys(dependencies.recoverySellerPairs ?? {}).length === 0) {
+    return undefined
+  }
+  return createRecoverySellerActionAuthorizer({
+    state: context.state,
+    recoverySellerPairs: dependencies.recoverySellerPairs,
+    recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+    getPortfolio: dependencies.getPortfolio,
+    getAccountSnapshot: dependencies.getAccountSnapshot,
+    getAdditionalTrackedBaseQuantity: dependencies.getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow: dependencies.getAdditionalTrackedQuoteCashFlow,
+    allocateOrderCommitments,
+  })
+}
+
 function createConservativeEngineEvaluationContext({ context } = {}) {
   const { dependencies } = context
+  const authorizeRecoverySellerAction = createEngineRecoverySellerActionAuthorizer({
+    context,
+    dependencies,
+  })
   context.evaluateLatestTransition = createLatestTransitionEvaluator({
     state: context.state,
     hasBlockingOpenOrdersForSymbol: context.hasBlockingOpenOrdersForSymbol,
@@ -1852,6 +1925,13 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     settings: context.settings,
     logger: dependencies.logger,
     strategyPolicy: dependencies.strategyPolicy,
+    evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
+    authorizeRecoverySellerAction,
+    recoverySellerPairs: dependencies.recoverySellerPairs,
+    recoverySellerWorkflow: dependencies.recoverySellerWorkflow,
+    recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+    submitRecoverySellerOrder: context.submitRecoverySellerOrder,
+    getRecoverySellerMarketMetadata: dependencies.getRecoverySellerMarketMetadata,
     pause: context.pause,
     completeRecoveryCycle: dependencies.completeRecoveryCycle,
     eventPublisher: dependencies.eventPublisher,
@@ -1885,6 +1965,13 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
 
 function createConservativeEngineMarketEventContext({ context } = {}) {
   const { dependencies } = context
+  const freshMarketPriceWaiter = createFreshMarketPriceWaiter({
+    state: context.state,
+    isMarketPriceFresh: dependencies.isMarketPriceFresh,
+    setTimeoutFn: dependencies.setTimeoutFn,
+    clearTimeoutFn: dependencies.clearTimeoutFn,
+  })
+  context.waitForFreshMarketPrice = freshMarketPriceWaiter.waitForFreshMarketPrice
   context.processMarketBookTransition = createMarketBookTransitionHandler({
     state: context.state,
     isMarketBookFresh: dependencies.isMarketBookFresh,
@@ -1901,10 +1988,65 @@ function createConservativeEngineMarketEventContext({ context } = {}) {
     maybeReplaceTrailingBuy: context.maybeReplaceTrailingBuy,
     evaluateLatestTransition: context.evaluateLatestTransition,
     nextMarketPriceEventId: context.nextMarketPriceEventId,
+    notifyFreshMarketPrice: freshMarketPriceWaiter.notifyFreshMarketPrice,
   })
 }
 
-function createConservativeEngineOrderEventContext({ context } = {}) {
+async function latchRecoverySellerSubmissionFailure({
+  recoverySellerStopWorkflow,
+  order,
+  reason,
+  outcome,
+  error,
+} = {}) {
+  if (typeof recoverySellerStopWorkflow?.latch !== "function") {
+    return toResult({
+      error: new Error("Recovery Seller submission failure requires the durable global STOP workflow"),
+    })
+  }
+  let detail = "no additional error details"
+  if (error instanceof Error) {
+    detail = error.message
+  } else if (error !== undefined) {
+    detail = String(error)
+  }
+  const orderIdentity = typeof order?.clientOrderId === "string" && order.clientOrderId.trim()
+    ? {
+        clientOrderId: order.clientOrderId,
+        ...(typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()
+          ? { brokerOrderId: order.brokerOrderId }
+          : {}),
+      }
+    : undefined
+  return recoverySellerStopWorkflow.latch({
+    explanation: `Recovery Seller submission requires operator reconciliation (${reason ?? outcome ?? "UNRESOLVED"}): ${detail}`,
+    ...(orderIdentity === undefined ? {} : { orderIdentity }),
+  })
+}
+
+async function latchRecoverySellerTerminalFailure({
+  recoverySellerStopWorkflow,
+  order,
+  reason,
+  error,
+} = {}) {
+  if (typeof recoverySellerStopWorkflow?.latch !== "function") {
+    return toResult({
+      error: new Error("Recovery Seller terminal failure requires the durable global STOP workflow"),
+    })
+  }
+  return recoverySellerStopWorkflow.latch({
+    explanation: `Recovery Seller terminal SELL reconciliation failed (${reason}): ${error?.message ?? String(error)}`,
+    orderIdentity: {
+      clientOrderId: order.clientOrderId,
+      ...(typeof order.brokerOrderId === "string" && order.brokerOrderId.trim()
+        ? { brokerOrderId: order.brokerOrderId }
+        : {}),
+    },
+  })
+}
+
+export function createConservativeEngineOrderEventContext({ context } = {}) {
   const { dependencies } = context
   const orderEventWorkflow = makeOrderEventWorkflow({
     state: context.state,
@@ -1913,6 +2055,7 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
     logger: dependencies.logger,
     pairs: context.pairs,
     updateTradingAccounting: dependencies.updateTradingAccounting,
+    updateRecoverySellerAccounting: dependencies.updateRecoverySellerAccounting,
     recordBuyExecutionFill: context.recordBuyExecutionFill,
     recordSellExecutionFill: context.recordSellExecutionFill,
     pause: context.pause,
@@ -1925,6 +2068,14 @@ function createConservativeEngineOrderEventContext({ context } = {}) {
     publishRecoveryCycleNotCompleted: context.publishRecoveryCycleNotCompleted,
     isStopping: dependencies.isStopping,
     onUnownedExternalOrderObserved: dependencies.onUnownedExternalOrderObserved,
+    reconcileRecoverySellerMixedSell: dependencies.recoverySellerWorkflow?.reconcileTerminalMixedSell,
+    latchRecoverySellerStop: ({ order, reason, error } = {}) =>
+      latchRecoverySellerTerminalFailure({
+        recoverySellerStopWorkflow: dependencies.recoverySellerStopWorkflow,
+        order,
+        reason,
+        error,
+      }),
   })
   Object.assign(context, orderEventWorkflow)
   const ownedOrderManagement = createOwnedOrderManagementHandlers({
@@ -2117,6 +2268,7 @@ function createConservativeEngineRuntimeOperations({ context } = {}) {
 function createConservativeEnginePublicApi({ context } = {}) {
   return Object.freeze({
     processMarketPrice: context.processMarketPrice,
+    waitForFreshMarketPrice: context.waitForFreshMarketPrice,
     processBookTicker: context.processBookTicker,
     beginShutdown: context.beginShutdown,
     auditShutdownSafety: context.auditShutdownSafety,

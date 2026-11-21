@@ -1,0 +1,1050 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+import {
+  createObservedTransportFactory,
+  runDiagnostics,
+} from "./run-diagnostics.js"
+
+const validEnvironment = Object.freeze({
+  BITUNIX_API_KEY: "diagnostic-api-key",
+  BITUNIX_API_SECRET: "diagnostic-api-secret",
+})
+
+function createFakeRestClientFactory({ restCalls, options }) {
+  return (configuration) => {
+    assert.equal(configuration.apiKey, validEnvironment.BITUNIX_API_KEY, "The REST client must receive the configured API key without exposing it in reports")
+    return {
+      async request(request) {
+        restCalls.push(request)
+        if (options.restFailurePath === request.path) {
+          throw Object.assign(new Error("simulated REST failure"), {
+            code: "BITUNIX_REST_HTTP_FAILED",
+            kind: "http",
+            status: 503,
+          })
+        }
+        const isAccountRequest = request.path.endsWith("/user/account")
+        let data = [{ symbol: "BTCUSDT" }]
+        if (isAccountRequest) {
+          data = [{
+            coin: "BTC",
+            balance: "123",
+          }]
+        }
+        return { data }
+      },
+    }
+  }
+}
+
+function createFakeMarketMethods({ websocketCalls }) {
+  return {
+    async getLastPrice(args) {
+      websocketCalls.push({
+        method: "market.last_price",
+        args,
+      })
+      return "123.45"
+    },
+    async getDepth(args) {
+      websocketCalls.push({
+        method: "market.depth",
+        args,
+      })
+      return {
+        bids: [],
+        asks: [],
+      }
+    },
+    async getKline(args) {
+      websocketCalls.push({
+        method: "market.kline",
+        args,
+      })
+      return { close: "123.45" }
+    },
+    async ping() {
+      websocketCalls.push({
+        method: "ping",
+        args: {},
+      })
+      return "pong"
+    },
+  }
+}
+
+function createFakeCatalogMethods({ websocketCalls, options }) {
+  return {
+    async getTradingPairs() {
+      websocketCalls.push("common.coin_pair.list")
+      return [{ symbol: "BTCUSDT" }]
+    },
+    async getExchangeRates() {
+      websocketCalls.push("common.rate.list")
+      if (options.websocketFailureMethod === "common.rate.list") {
+        throw new Error("simulated WebSocket RPC failure")
+      }
+      return []
+    },
+    async getTokenNetworks() {
+      websocketCalls.push("common.coin.coin_network.list")
+      return []
+    },
+  }
+}
+
+function createFakeAccountMethods({ websocketCalls }) {
+  return {
+    async getAccount() {
+      websocketCalls.push("user.account")
+      return [{
+        coin: "BTC",
+        balance: "123",
+      }]
+    },
+    async getUserInfo() {
+      websocketCalls.push("user.info")
+      return { uid: 123 }
+    },
+  }
+}
+
+function createFakeOrderMethods({ websocketCalls }) {
+  return {
+    async getOpenOrders(args) {
+      websocketCalls.push({
+        method: "order.pending.list",
+        args,
+      })
+      return [{
+        orderId: "private-order-id",
+        symbol: "BTCUSDT",
+      }]
+    },
+    async getOrderHistory(args) {
+      websocketCalls.push({
+        method: "order.history.page",
+        args,
+      })
+      return [{
+        orderId: "private-history-order-id",
+        symbol: "BTCUSDT",
+      }]
+    },
+  }
+}
+
+function createFakeWebSocketClientFactory({ websocketCalls, options, clientCreations = [] }) {
+  return (configuration) => {
+    clientCreations.push(configuration)
+    assert.equal(typeof configuration.transportFactory, "function", "The real WebSocket transport must be wrapped to capture sanitized input and output")
+    return {
+      state: "idle",
+      async connect() {
+        websocketCalls.push("connect")
+        if (options.websocketConnectFailure) {
+          throw new Error("simulated WebSocket connection failure")
+        }
+        this.state = "open"
+      },
+      async disconnect() {
+        websocketCalls.push("disconnect")
+        this.state = "closed"
+      },
+      ...createFakeMarketMethods({ websocketCalls }),
+      ...createFakeCatalogMethods({
+        websocketCalls,
+        options,
+      }),
+      ...createFakeAccountMethods({ websocketCalls }),
+      ...createFakeOrderMethods({ websocketCalls }),
+    }
+  }
+}
+
+function createFakeClients({ restCalls, websocketCalls, options = {}, clientCreations = [] }) {
+  return {
+    restClientFactory: createFakeRestClientFactory({
+      restCalls,
+      options,
+    }),
+    websocketClientFactory: createFakeWebSocketClientFactory({
+      websocketCalls,
+      options,
+      clientCreations,
+    }),
+    clientCreations,
+  }
+}
+
+test("diagnostics use code defaults without diagnostic environment variables", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+  })
+  const report = await runDiagnostics({
+    env: validEnvironment,
+    restClientFactory(configuration) {
+      assert.equal(configuration.requestTimeout, 10_000, "The REST timeout must come from the diagnostic constants")
+      return factories.restClientFactory(configuration)
+    },
+    websocketClientFactory(configuration) {
+      assert.equal(configuration.requestTimeout, 10_000, "The WebSocket RPC timeout must come from the diagnostic constants")
+      assert.equal(configuration.connectTimeout, 10_000, "The WebSocket connect timeout must come from the diagnostic constants")
+      assert.equal(configuration.closeTimeout, 10_000, "The WebSocket close timeout must come from the diagnostic constants")
+      return factories.websocketClientFactory(configuration)
+    },
+  })
+
+  assert.equal(report.summary.failed, 0, "Credentials alone must be sufficient; diagnostic options must not require environment variables")
+  assert.equal(report.runtime.symbol, "BTCUSDT", "The default diagnostic symbol must come from the diagnostic constants")
+  assert.deepEqual(restCalls.find((request) => request.path.endsWith("/market/last_price")).queryParams, { symbol: "BTCUSDT" }, "REST market requests must use the constant symbol")
+  assert.equal(websocketCalls.find((call) => call?.method === "market.last_price").args.symbol, "BTCUSDT", "WebSocket market requests must use the constant symbol")
+  const restKlineRequest = restCalls.find((request) => request.path.endsWith("/market/kline"))
+  assert.equal(restKlineRequest.queryParams.interval, "1", "REST K-line requests must use the documented numeric interval")
+  const websocketKlineArgs = websocketCalls.find((call) => call?.method === "market.kline").args
+  assert.equal(websocketKlineArgs.symbol, "BTC", "WebSocket K-line requests must use the documented base-coin symbol")
+  assert.equal(websocketKlineArgs.interval, "1", "WebSocket K-line requests must use the Spot RPC interval format")
+  assert.equal(report.results.find((entry) => entry.operation === "REST public market catalog").response.type, "array", "Public response bodies must remain omitted by the constant default")
+})
+
+test("diagnostics continue after independent REST failures and always disconnect the WebSocket client", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+    options: {
+      restFailurePath: "/api/spot/v1/market/last_price",
+    },
+  })
+  const env = {
+    ...validEnvironment,
+    BITUNIX_DIAGNOSTICS_DEPTH_PRECISION: "0.01",
+  }
+  const report = await runDiagnostics({
+    env,
+    ...factories,
+  })
+
+  assert.equal(restCalls.length, 9, "A failed REST market request must not suppress any independent documented public or private read")
+  assert.equal(report.results.find((entry) => entry.operation === "REST public last price").status, "failed", "The failing REST endpoint must be reported independently")
+  assert.equal(report.results.find((entry) => entry.operation === "REST private account balances").status, "passed", "Later REST checks must still run after an earlier endpoint failure")
+  assert.equal(websocketCalls[0], "connect", "The WebSocket diagnostics must connect before issuing RPC calls")
+  assert.equal(websocketCalls.at(-1), "disconnect", "The WebSocket client must always be disconnected after diagnostics")
+  assert.equal(report.results.find((entry) => entry.operation === "user.account").response.fields.includes("balance"), true, "Private WebSocket results may expose field names but never balance values")
+  assert.equal(JSON.stringify(report).includes("diagnostic-api-secret"), false, "Diagnostic reports must never contain the configured API secret")
+})
+
+test("diagnostics skip depth RPC when its required precision is not configured", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+  })
+  const report = await runDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+
+  assert.equal(report.results.find((entry) => entry.operation === "market.depth").status, "skipped", "Depth RPC must be skipped rather than inventing undocumented precision semantics")
+  assert.equal(websocketCalls.some((entry) => entry && entry.method === "market.depth"), false, "The exchange must not receive a depth request with an inferred precision")
+  assert.equal(websocketCalls.at(-1), "disconnect", "The connection must still close when an optional RPC is skipped")
+})
+
+test("diagnostics report connection failure and skip all dependent RPC calls while cleaning up", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+    options: {
+      websocketConnectFailure: true,
+    },
+  })
+  const report = await runDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+
+  assert.equal(report.results.find((entry) => entry.operation === "WebSocket connection").status, "failed", "A failed WebSocket handshake must be distinguishable from RPC failures")
+  assert.equal(report.results.filter((entry) => entry.operation === "market.last_price").length, 1, "Every skipped RPC must still receive an individual diagnostic result")
+  assert.equal(report.results.find((entry) => entry.operation === "market.last_price").status, "skipped", "RPC calls must not be sent after a failed connection")
+  assert.equal(websocketCalls.includes("disconnect"), true, "The client cleanup path must run even after a failed connection attempt")
+})
+
+function createFakeObservedTransportFactory({ handlers, sentMessages }) {
+  return () => ({
+    async connect() {},
+    send(message) {
+      sentMessages.push(message)
+    },
+    close() {},
+    onMessage(listener) {
+      handlers.message = listener
+      return () => {}
+    },
+    onError(listener) {
+      handlers.error = listener
+      return () => {}
+    },
+    onClose(listener) {
+      handlers.close = listener
+      return () => {}
+    },
+  })
+}
+
+test("observed WebSocket transport captures sanitized request, response, errors and close events", () => {
+  const handlers = {}
+  const events = []
+  const sentMessages = []
+  const secrets = ["test-api-key", "test-api-secret"]
+  const transportFactory = createObservedTransportFactory({
+    events,
+    secrets,
+    includePublicPayloads: false,
+    now: () => 1_800_000_000_000,
+    transportFactory: createFakeObservedTransportFactory({
+      handlers,
+      sentMessages,
+    }),
+  })
+  const transport = transportFactory({
+    url: "wss://openapi.bitunix.com:443/ws-api/v1",
+  })
+  transport.onMessage(() => {})
+  transport.onError(() => {})
+  transport.onClose(() => {})
+  const request = {
+    id: "request-1",
+    method: "user.account",
+    params: {
+      apiKey: "test-api-key",
+      nonce: "nonce-value",
+      sign: "signature-value",
+    },
+  }
+  transport.send(JSON.stringify(request))
+  handlers.message(JSON.stringify({
+    id: "request-1",
+    code: "0",
+    msg: "success",
+    data: [{
+      coin: "BTC",
+      balance: "123.45",
+    }],
+  }))
+  handlers.error(new Error("transport failed with test-api-secret"))
+  handlers.close({
+    code: 1006,
+    reason: "closed test-api-secret",
+  })
+
+  assert.equal(sentMessages.length, 1, "The observer must forward the exact outgoing request to the real transport")
+  assert.equal(events[0].payload.params.apiKey, "[REDACTED]", "The captured WS input must redact API keys")
+  assert.equal(events[0].payload.params.sign, "[REDACTED]", "The captured WS input must redact signatures")
+  assert.equal(events[0].payload.params.nonce, "[REDACTED]", "The captured WS input must redact nonces")
+  assert.equal(events[1].method, "user.account", "Responses must be correlated to the request method by request ID")
+  assert.deepEqual(events[1].payload.data, {
+    type: "array",
+    itemCount: 1,
+    fields: ["balance", "coin"],
+  }, "Private WS responses must be summarized without account values")
+  assert.equal(events[2].error.message, "[error message withheld]", "Transport error text must never be persisted")
+  assert.equal(events[3].close.code, 1006, "The WebSocket close code must remain available for diagnosing abnormal disconnects")
+  assert.equal(events[3].close.reason, "closed [REDACTED]", "Close diagnostics must be sanitized")
+  assert.equal(JSON.stringify(events).includes("123.45"), false, "Private account values must never enter the event report")
+})
+
+test("a failed WebSocket RPC does not suppress later independent RPC checks", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+    options: {
+      websocketFailureMethod: "common.rate.list",
+    },
+  })
+  const report = await runDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+
+  assert.equal(report.results.find((entry) => entry.operation === "common.rate.list").status, "failed", "The failing RPC must retain its own failure result")
+  assert.equal(report.results.find((entry) => entry.operation === "user.info").status, "passed", "Later RPC checks must continue after one request fails")
+  assert.equal(websocketCalls.at(-1), "disconnect", "The WebSocket session must still close after an RPC failure")
+})
+
+
+const expectedPublicRestRequests = [
+  {
+    path: "/api/spot/v1/common/coin_pair/list",
+    authenticated: false,
+    method: "GET",
+    queryParams: {},
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/market/last_price",
+    authenticated: false,
+    method: "GET",
+    queryParams: {
+      symbol: "BTCUSDT",
+    },
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/market/kline",
+    authenticated: false,
+    method: "GET",
+    queryParams: {
+      symbol: "BTCUSDT",
+      interval: "1",
+    },
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/market/kline/history",
+    authenticated: false,
+    method: "GET",
+    queryParams: {
+      symbol: "BTCUSDT",
+      interval: "1",
+      limit: "1",
+    },
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/common/rate/list",
+    authenticated: false,
+    method: "GET",
+    queryParams: {},
+    body: undefined,
+    stateChanging: false,
+  },
+  {
+    path: "/api/spot/v1/common/coin/coin_network/list",
+    authenticated: false,
+    method: "GET",
+    queryParams: {},
+    body: undefined,
+    stateChanging: false,
+  },
+]
+
+function assertPublicRestCalls(restCalls) {
+  const actualRequests = restCalls.map(({
+    path,
+    authenticated,
+    method,
+    queryParams,
+    body,
+    stateChanging,
+  }) => ({
+    path,
+    authenticated,
+    method,
+    queryParams,
+    body,
+    stateChanging,
+  }))
+  assert.deepEqual(
+    actualRequests,
+    expectedPublicRestRequests,
+    "public-only mode must issue the documented unsigned public REST reads and no private requests",
+  )
+}
+
+function assertPublicOnlyReport(report) {
+  assert.equal(report.summary.failed, 0, "missing optional credentials must not prevent the required public-only diagnostic checks")
+  const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
+  assert.equal(configuration.response.credentialsConfigured, false, "the report must preserve public-only credential state")
+  assert.deepEqual(
+    configuration.response.missingCredentialVariables,
+    ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"],
+    "the report must identify the exact credential variables required to enable private diagnostics",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "REST public order book depth").status,
+    "skipped",
+    "depth REST must be skipped when its required precision is not explicitly configured",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "REST private account balances").status,
+    "skipped",
+    "private REST account reads must be explicitly skipped when credentials are unavailable",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "REST private open orders").status,
+    "skipped",
+    "private open-order reads must be explicitly skipped when credentials are unavailable",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "WebSocket connection").status,
+    "skipped",
+    "authenticated WebSocket connection must be explicitly skipped without credentials",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "order.pending.list").status,
+    "skipped",
+    "private WebSocket order queries must be explicitly skipped without credentials",
+  )
+  assert.equal(
+    report.results.filter((entry) => entry.operation.startsWith("user.")).every((entry) => entry.status === "skipped"),
+    true,
+    "all private WebSocket RPC operations must be individually marked skipped in public-only mode",
+  )
+}
+
+function assertPublicOnlyDiagnostics({ report, restCalls }) {
+  assertPublicRestCalls(restCalls)
+  assertPublicOnlyReport(report)
+}
+
+test("public-only diagnostics run unsigned REST checks when credentials are missing", async () => {
+  const restCalls = []
+  let websocketFactoryCalls = 0
+  const report = await runDiagnostics({
+    env: {},
+    restClientFactory() {
+      return {
+        async request(request) {
+          restCalls.push(request)
+          return { data: [] }
+        },
+      }
+    },
+    websocketClientFactory() {
+      websocketFactoryCalls += 1
+      throw new Error("authenticated WebSocket client must not be constructed without credentials")
+    },
+  })
+
+  assertPublicOnlyDiagnostics({
+    report,
+    restCalls,
+  })
+  assert.equal(websocketFactoryCalls, 0, "public-only mode must not construct or connect an authenticated WebSocket client")
+})
+
+test("partial Bitunix credentials fall back to public-only diagnostics without exposing the supplied key", async () => {
+  const restCalls = []
+  const report = await runDiagnostics({
+    env: {
+      BITUNIX_API_KEY: "partial-api-key",
+    },
+    restClientFactory() {
+      return {
+        async request(request) {
+          restCalls.push(request)
+          return { data: [] }
+        },
+      }
+    },
+    websocketClientFactory() {
+      throw new Error("private WebSocket checks must be skipped for partial credentials")
+    },
+  })
+
+  assert.equal(report.summary.failed, 0, "a partial credential pair must degrade to public-only checks rather than aborting public diagnostics")
+  const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
+  assert.deepEqual(
+    configuration.response.missingCredentialVariables,
+    ["BITUNIX_API_SECRET"],
+    "the report must identify the exact missing half of a partial credential pair",
+  )
+  assert.equal(restCalls.length, 6, "partial credentials must still allow every configured unsigned public REST check")
+  assert.equal(JSON.stringify(report).includes("partial-api-key"), false, "a partial API key must never appear in the public-only diagnostic report")
+})
+
+
+test("diagnostics query and sanitize private WebSocket open orders and order history", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+  })
+  const report = await runDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+  const openOrdersCall = websocketCalls.find((entry) => entry?.method === "order.pending.list")
+  const orderHistoryCall = websocketCalls.find((entry) => entry?.method === "order.history.page")
+
+  assert.deepEqual(openOrdersCall.args, {
+    symbol: "BTCUSDT",
+  }, "private open-order RPC must be scoped to the configured symbol")
+  assert.deepEqual(orderHistoryCall.args, {
+    symbol: "BTCUSDT",
+    page: 1,
+    pageSize: 1,
+  }, "private order-history RPC must be bounded to one small page")
+  const openOrdersResult = report.results.find((entry) => entry.operation === "order.pending.list")
+  const orderHistoryResult = report.results.find((entry) => entry.operation === "order.history.page")
+  assert.equal(openOrdersResult.response.type, "array")
+  assert.equal(openOrdersResult.response.itemCount, 1)
+  assert.deepEqual(openOrdersResult.response.fields, ["orderId", "symbol"])
+  assert.equal(orderHistoryResult.response.type, "array")
+  assert.equal(orderHistoryResult.response.itemCount, 1)
+  assert.deepEqual(orderHistoryResult.response.fields, ["orderId", "symbol"])
+  assert.equal(JSON.stringify(report).includes("private-order-id"), false, "private order IDs must not be persisted in diagnostic reports")
+  assert.equal(JSON.stringify(report).includes("private-history-order-id"), false, "private order-history IDs must not be persisted in diagnostic reports")
+})
+
+test("diagnostics reconnect the same authenticated client and do not claim subscription restoration", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const clientCreations = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+    clientCreations,
+  })
+  const report = await runDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+
+  assert.equal(
+    clientCreations.length,
+    1,
+    "the reconnect probe must reuse the original WebSocket client instance instead of creating a second client",
+  )
+  assert.equal(
+    websocketCalls.filter((entry) => entry === "connect").length,
+    2,
+    "the runner must make one explicit second connection after the initial RPC session closes",
+  )
+  assert.equal(
+    websocketCalls.filter((entry) => entry === "disconnect").length,
+    2,
+    "the runner must cleanly close both the initial and reconnected sessions",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "ping").status,
+    "passed",
+    "the initial session must verify the documented authenticated ping RPC",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "WebSocket reconnect").status,
+    "passed",
+    "the second authenticated connection and ping must be reported independently",
+  )
+  assert.equal(
+    report.results.find((entry) => entry.operation === "WebSocket subscription restoration").status,
+    "skipped",
+    "subscription restoration must be skipped because Bitunix documents one-shot RPC, not subscriptions",
+  )
+})
+
+
+test("diagnostics query current open orders through the documented read-only POST endpoint", async () => {
+  const restCalls = []
+  const websocketCalls = []
+  const factories = createFakeClients({
+    restCalls,
+    websocketCalls,
+  })
+  const report = await runDiagnostics({
+    env: validEnvironment,
+    ...factories,
+  })
+
+  const openOrdersRequest = restCalls.find((request) => request.path === "/api/spot/v1/order/pending/list")
+  assert.ok(openOrdersRequest, "the documented current-orders query must be included in authenticated REST diagnostics")
+  assert.equal(openOrdersRequest.method, "POST", "the documented current-orders query uses POST")
+  assert.deepEqual(openOrdersRequest.body, { symbol: "BTCUSDT" }, "the current-orders query must be scoped to the diagnostic symbol")
+  assert.equal(openOrdersRequest.authenticated, true, "the current-orders query must use signed authentication")
+  assert.equal(openOrdersRequest.stateChanging, false, "the current-orders POST is a read-only query, not an account-changing operation")
+  assert.equal(report.results.find((entry) => entry.operation === "REST private open orders").status, "passed")
+})
+
+
+function createBrokerApiDiagnosticRestClientFactory({ calls, expectedApiKey, invalidSchema = false }) {
+  return (configuration) => {
+    assert.equal(configuration.apiKey, expectedApiKey, "the public Broker diagnostic must receive configured credentials without logging them")
+    return {
+      async request(request) {
+        calls.push(request)
+        return createBrokerApiDiagnosticResponse({
+          request,
+          invalidSchema,
+        })
+      },
+    }
+  }
+}
+
+function createDepositDiagnosticResponse({ invalidSchema = false } = {}) {
+  return {
+    data: [{
+      id: "deposit-1",
+      transactionHash: "deposit-hash-must-not-be-persisted",
+      coin: "USDT",
+      network: null,
+      type: "deposit",
+      fromAddress: "deposit-source-must-not-be-persisted",
+      toAddress: "deposit-target-must-not-be-persisted",
+      amount: invalidSchema ? 9876.54321 : "9876.54321",
+      status: "1",
+      ctime: 1760000000000,
+      futureDepositField: "must-not-be-persisted",
+    }],
+  }
+}
+
+function createWithdrawalDiagnosticResponse({ invalidSchema = false } = {}) {
+  return {
+    data: [{
+      id: "withdrawal-1",
+      outBizId: "withdrawal-business-id",
+      type: "withdraw",
+      coin: "USDT",
+      amount: "123.456",
+      status: "1",
+      ctime: 1760000000001,
+      network: "ERC20",
+      transactionHash: null,
+      feeCoin: null,
+      fee: invalidSchema ? 0.1 : null,
+      memo: null,
+      address: "withdrawal-address-must-not-be-persisted",
+      toType: "1",
+      toUid: 987654321,
+      toPhoneCountryCode: "+1",
+      toPhoneNumber: "withdrawal-phone-must-not-be-persisted",
+      toEmail: "withdrawal-email-must-not-be-persisted",
+      remark: "withdrawal-remark-must-not-be-persisted",
+      futureWithdrawalField: "must-not-be-persisted",
+    }],
+  }
+}
+
+function createMarketDiagnosticResponse({ invalidSchema }) {
+  return {
+    data: [{
+      id: 1,
+      base: "BTC",
+      quote: "USDT",
+      basePrecision: 8,
+      quotePrecision: "8",
+      minPrice: "0.0001",
+      minVolume: "0.0001",
+      ...(invalidSchema ? {} : { isOpen: 1 }),
+      isHot: "0",
+      isRecommend: 0,
+      isShow: "1",
+      tradeArea: "Spot",
+      sort: 1,
+      openTime: null,
+      precisions: ["0.0001"],
+      baseFullNameI18n: "must-not-be-persisted",
+      baseIcon: "must-not-be-persisted",
+      ctime: 1760000000000,
+      fullName: "must-not-be-persisted",
+      maxAmount: "must-not-be-persisted",
+      maxLimitOrderAmount: "must-not-be-persisted",
+      maxMarketOrderAmount: "must-not-be-persisted",
+      maxSellPriceOffset: "must-not-be-persisted",
+      maxSlippage: "must-not-be-persisted",
+      minAmount: "must-not-be-persisted",
+      minBuyPriceOffset: "must-not-be-persisted",
+      premiumFactor: "must-not-be-persisted",
+      quoteFullNameI18n: "must-not-be-persisted",
+      quoteIcon: "must-not-be-persisted",
+      futureField: "must-not-be-persisted",
+    }],
+  }
+}
+
+function createBrokerApiDiagnosticResponse({ request, invalidSchema }) {
+  if (request.path === "/api/spot/v1/common/coin_pair/list") {
+    return createMarketDiagnosticResponse({
+      invalidSchema,
+    })
+  }
+  if (request.path === "/api/spot/v1/market/last_price") {
+    return {
+      data: invalidSchema ? 123.45 : "123.4500",
+    }
+  }
+  if (request.path === "/api/spot/v1/user/account") {
+    return {
+      data: [{
+        coin: "BTC",
+        balance: "987654.321",
+        balanceLocked: "0",
+      }],
+    }
+  }
+  if (request.path === "/api/spot/v1/order/pending/list") {
+    return {
+      data: [],
+    }
+  }
+  if (request.path === "/api/spot/v1/order/history/page") {
+    return {
+      data: {
+        pageNum: 1,
+        total: 0,
+      },
+    }
+  }
+  if (request.path === "/api/spot/v1/deposit/page") {
+    return createDepositDiagnosticResponse({
+      invalidSchema,
+    })
+  }
+  if (request.path === "/api/spot/v1/withdraw_transfer/page") {
+    return createWithdrawalDiagnosticResponse({
+      invalidSchema,
+    })
+  }
+  throw new Error(`Unexpected Broker API diagnostic request: ${request.path}`)
+}
+
+function assertBrokerApiOperationResults({ report }) {
+  const expectedOperations = [
+    "getExchangeMarkets",
+    "getPrices",
+    "getBalances",
+    "getOpenOrders",
+    "getSymbolFilters",
+    "getOrderHistory",
+    "getDeposits",
+    "getWithdrawalHistory",
+  ]
+  for (const method of expectedOperations) {
+    assert.equal(
+      report.results.find((entry) => entry.operation === `Broker API ${method}`).status,
+      "passed",
+      `the public Broker must successfully exercise ${method}`,
+    )
+  }
+}
+
+function assertBrokerApiRequestCoverage({ report, brokerApiCalls }) {
+  assert.deepEqual(brokerApiCalls.map((request) => request.path), [
+    "/api/spot/v1/common/coin_pair/list",
+    "/api/spot/v1/market/last_price",
+    "/api/spot/v1/common/coin_pair/list",
+    "/api/spot/v1/user/account",
+    "/api/spot/v1/order/pending/list",
+    "/api/spot/v1/order/history/page",
+    "/api/spot/v1/deposit/page",
+    "/api/spot/v1/withdraw_transfer/page",
+  ], "authenticated diagnostics must issue the expected public and private Broker requests in order")
+  for (const index of [0, 1, 2]) {
+    assert.equal(brokerApiCalls[index].authenticated, false, "public catalog and ticker reads must not be signed")
+  }
+  for (const index of [3, 4, 5, 6, 7]) {
+    assert.equal(brokerApiCalls[index].authenticated ?? true, true, "account and history reads must use signed authentication")
+  }
+  for (const index of [6, 7]) {
+    assert.equal(brokerApiCalls[index].method, "POST", "deposit and withdrawal history must use the documented read-only POST endpoints")
+    assert.equal(brokerApiCalls[index].stateChanging, false, "history POST requests must be explicitly classified as read-only")
+    assert.deepEqual(brokerApiCalls[index].body, {
+      limit: 1,
+    }, "each funds-history probe must request exactly one record without pagination")
+  }
+  assert.deepEqual(report.results.find((entry) => entry.operation === "Broker API getOrderHistory").request.params, {
+    symbol: "BTCUSDT",
+    page: 1,
+    limit: 10,
+  }, "the diagnostic report must retain the configured symbol and first-page order-history bounds")
+  assert.deepEqual(brokerApiCalls[5].body, {
+    symbol: "BTCUSDT",
+    page: 1,
+    pageSize: 10,
+  }, "the actual order-history request must carry its explicit symbol and bounded first page")
+  assert.deepEqual(report.results.find((entry) => entry.operation === "Broker API getSymbolFilters").request.params, {
+    symbol: "BTCUSDT",
+  }, "symbol-filter diagnostics must inspect only the configured market")
+}
+
+function assertBrokerApiSchemaAndPrivacy({ report }) {
+  const expectedSchemaPaths = [
+    "/api/spot/v1/order/history/page",
+    "/api/spot/v1/deposit/page",
+    "/api/spot/v1/withdraw_transfer/page",
+  ]
+  for (const path of expectedSchemaPaths) {
+    const observation = report.schemaObservations.find((item) => item.path === path)
+    assert.equal(observation.schemaValid, true, `${path} must satisfy its documented schema`)
+    assert.deepEqual(observation.missingRequiredFields, [], `${path} must contain every adapter-required record field`)
+    assert.deepEqual(observation.unexpectedFieldTypes, [], `${path} must preserve every documented field type, including nullable optional fields`)
+  }
+  const depositObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/deposit/page")
+  const withdrawalObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/withdraw_transfer/page")
+  assert.deepEqual(depositObservation.unexpectedFields, ["futureDepositField"], "unknown deposit fields must be reported without recording their values")
+  assert.deepEqual(withdrawalObservation.unexpectedFields, ["futureWithdrawalField"], "unknown withdrawal fields must be reported without recording their values")
+  assert.deepEqual(report.schemaObservations[0].unexpectedFields, [
+    "baseFullNameI18n",
+    "baseIcon",
+    "ctime",
+    "fullName",
+    "futureField",
+    "maxAmount",
+    "maxLimitOrderAmount",
+    "maxMarketOrderAmount",
+    "maxSellPriceOffset",
+    "maxSlippage",
+    "minAmount",
+    "minBuyPriceOffset",
+    "premiumFactor",
+    "quoteFullNameI18n",
+    "quoteIcon",
+  ], "undocumented market metadata must remain visible without being interpreted as trading constraints")
+  assert.deepEqual(report.schemaObservations[0].unexpectedFieldTypes, [], "observed numeric pair identifiers, precision counts, flags and nullable openTime must satisfy the evidence-based schema")
+  assert.equal(report.schemaObservations[0].schemaValid, true, "the observed REST pair-list representation must pass schema validation")
+  const symbolFilterObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/common/coin_pair/list" && item !== report.schemaObservations[0])
+  assert.equal(symbolFilterObservation.schemaValid, true, "getSymbolFilters must accept the same observed pair-list representation")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getExchangeMarkets").status, "passed", "the market schema check must pass when only an unknown field is added")
+  assert.equal(report.schemaObservations[0].missingRequiredFields.length, 0, "the market fixture must satisfy every required field")
+  const serializedReport = JSON.stringify(report)
+  for (const privateValue of [
+    "must-not-be-persisted",
+    "deposit-1",
+    "withdrawal-1",
+    "withdrawal-business-id",
+    "987654321",
+    "987654.321",
+    "9876.54321",
+    "123.456",
+    validEnvironment.BITUNIX_API_SECRET,
+  ]) {
+    assert.equal(serializedReport.includes(privateValue), false, "diagnostic output must never persist private record values or configured credentials")
+  }
+}
+
+test("live diagnostics exercise Bitunix Spot reads through the public Broker API and report response schema drift", async () => {
+  const rawRestCalls = []
+  const websocketCalls = []
+  const brokerApiCalls = []
+  const factories = createFakeClients({
+    restCalls: rawRestCalls,
+    websocketCalls,
+  })
+  const report = await runDiagnostics({
+    env: validEnvironment,
+    ...factories,
+    brokerApiRestClientFactory: createBrokerApiDiagnosticRestClientFactory({
+      calls: brokerApiCalls,
+      expectedApiKey: validEnvironment.BITUNIX_API_KEY,
+    }),
+  })
+
+  assertBrokerApiOperationResults({
+    report,
+  })
+  assertBrokerApiRequestCoverage({
+    report,
+    brokerApiCalls,
+  })
+  assertBrokerApiSchemaAndPrivacy({
+    report,
+  })
+})
+
+test("Broker diagnostics fail schema checks for missing required fields and unexpected scalar types", async () => {
+  const brokerApiCalls = []
+  const factories = createFakeClients({
+    restCalls: [],
+    websocketCalls: [],
+  })
+  const report = await runDiagnostics({
+    env: validEnvironment,
+    ...factories,
+    brokerApiRestClientFactory: createBrokerApiDiagnosticRestClientFactory({
+      calls: brokerApiCalls,
+      expectedApiKey: validEnvironment.BITUNIX_API_KEY,
+      invalidSchema: true,
+    }),
+  })
+
+  assert.deepEqual(report.schemaObservations[0].missingRequiredFields, [{
+    index: 0,
+    fields: ["isOpen"],
+  }], "the market response must expose missing required fields")
+  assert.equal(report.schemaObservations[0].schemaValid, false, "missing required market fields must fail schema validation")
+  assert.deepEqual(report.schemaObservations[1].unexpectedValueType, {
+    expected: ["string"],
+    actual: "number",
+  }, "the latest-price response must be validated as a decimal string")
+  assert.equal(report.schemaObservations[1].schemaValid, false, "unexpected scalar types must fail schema validation")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getExchangeMarkets").status, "failed", "the report must surface missing required fields as a failed check")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getPrices").status, "failed", "the report must surface unexpected response types as a failed check")
+  const depositObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/deposit/page")
+  const withdrawalObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/withdraw_transfer/page")
+  assert.deepEqual(depositObservation.unexpectedFieldTypes, [{
+    index: 0,
+    field: "amount",
+    expected: ["string"],
+    actual: "number",
+  }], "deposit amount must remain a decimal string at the diagnostic response boundary")
+  assert.deepEqual(withdrawalObservation.unexpectedFieldTypes, [{
+    index: 0,
+    field: "fee",
+    expected: ["null", "string"],
+    actual: "number",
+  }], "withdrawal fee must be a decimal string or null, never a JSON number")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getDeposits").status, "failed", "malformed deposit records must fail the public Broker operation")
+  assert.equal(report.results.find((entry) => entry.operation === "Broker API getWithdrawalHistory").status, "failed", "malformed withdrawal records must fail the public Broker operation")
+})
+
+test("public-only Broker diagnostics never send the internal placeholder credential", async () => {
+  const brokerApiCalls = []
+  const report = await runDiagnostics({
+    env: {},
+    restClientFactory() {
+      return {
+        async request() {
+          return { data: [] }
+        },
+      }
+    },
+    brokerApiRestClientFactory(configuration) {
+      assert.equal(configuration.apiKey, "READ_ONLY_PUBLIC_DIAGNOSTIC", "the internal placeholder is only local config needed to construct the Bitunix Spot broker")
+      assert.equal(configuration.apiSecret, "READ_ONLY_PUBLIC_DIAGNOSTIC", "the internal placeholder must never be used for signed public reads")
+      return {
+        async request(request) {
+          brokerApiCalls.push(request)
+          assert.equal(request.authenticated, false, "public Broker reads must explicitly disable authentication")
+          if (request.path === "/api/spot/v1/common/coin_pair/list") {
+            return createBrokerApiDiagnosticResponse({
+              request,
+              invalidSchema: false,
+            })
+          }
+          if (request.path === "/api/spot/v1/market/last_price") {
+            return { data: "123.4500" }
+          }
+          throw new Error(`Unexpected public-only Broker request: ${request.path}`)
+        },
+      }
+    },
+    websocketClientFactory() {
+      throw new Error("private WebSocket diagnostics must not be constructed without credentials")
+    },
+  })
+
+  assert.equal(report.summary.failed, 0, "public-only Broker diagnostics must complete without private credentials")
+  assert.deepEqual(brokerApiCalls.map((request) => request.path), [
+    "/api/spot/v1/common/coin_pair/list",
+    "/api/spot/v1/market/last_price",
+    "/api/spot/v1/common/coin_pair/list",
+  ], "public-only mode must run public market metadata and skip all private Broker methods")
+  assert.equal(JSON.stringify(report).includes("READ_ONLY_PUBLIC_DIAGNOSTIC"), false, "the internal placeholder credential must never be persisted")
+  assert.equal(report.results.some((entry) => entry.operation === "Broker API getDeposits"), false, "public-only mode must not invoke the private deposit-history Broker method")
+  assert.equal(report.results.some((entry) => entry.operation === "Broker API getWithdrawalHistory"), false, "public-only mode must not invoke the private withdrawal-history Broker method")
+})

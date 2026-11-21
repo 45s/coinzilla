@@ -28,12 +28,28 @@ function createAccountScopeKey({ identity }) {
   return JSON.stringify([identity.providerType, identity.accountId, identity.environment])
 }
 
-function createAccountTradingState() {
-  // These are in-process Conservative strategy ledgers and controls, not restart-recovery data.
-  return Object.freeze({
-    portfolio: new Portfolio(),
-    recoveryLedgers: new Map(),
-    orderRegistry: OrderRegistry.empty(),
+function defineValidatedStateProperty({
+  state,
+  property,
+  getValue,
+  setValue,
+  isValid,
+  errorMessage,
+}) {
+  Object.defineProperty(state, property, {
+    enumerable: true,
+    get: getValue,
+    set: (value) => {
+      if (!isValid(value)) {
+        throw new TypeError(errorMessage)
+      }
+      setValue(value)
+    },
+  })
+}
+
+function createAccountStateCollections() {
+  return {
     journalFills: [],
     pausedMarkets: new Set(),
     durablePausedMarkets: new Set(),
@@ -45,7 +61,189 @@ function createAccountTradingState() {
     completedOrderClientIds: new Set(),
     trailingBuySymbols: new Set(),
     requiresExchangeReconciliation: false,
+  }
+}
+
+function createSerializedAccountTransitionQueue() {
+  let transitionTail = Promise.resolve()
+  return ({ task } = {}) => {
+    if (typeof task !== "function") {
+      return Promise.reject(new TypeError("Account transition queue requires a task"))
+    }
+    const current = transitionTail.then(task)
+    transitionTail = current.catch(() => undefined)
+    return current
+  }
+}
+
+function defineCoreAccountStateProperties({
+  state,
+  getPortfolio,
+  setPortfolio,
+  getRecoveryLedgers,
+  setRecoveryLedgers,
+  getOrderRegistry,
+  setOrderRegistry,
+  getLegacyPositions,
+  setLegacyPositions,
+}) {
+  const definitions = [
+    {
+      property: "portfolio",
+      getValue: getPortfolio,
+      setValue: setPortfolio,
+      isValid: (value) => value instanceof Portfolio,
+      errorMessage: "Account workflow portfolio must be a Portfolio",
+    },
+    {
+      property: "recoveryLedgers",
+      getValue: getRecoveryLedgers,
+      setValue: setRecoveryLedgers,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow recoveryLedgers must be a Map",
+    },
+    {
+      property: "orderRegistry",
+      getValue: getOrderRegistry,
+      setValue: setOrderRegistry,
+      isValid: (value) => value instanceof OrderRegistry,
+      errorMessage: "Account workflow orderRegistry must be an OrderRegistry",
+    },
+    {
+      property: "legacyPositions",
+      getValue: getLegacyPositions,
+      setValue: setLegacyPositions,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow legacyPositions must be a Map",
+    },
+  ]
+  for (const definition of definitions) {
+    defineValidatedStateProperty({
+      state,
+      ...definition,
+    })
+  }
+}
+
+function defineRecoverySellerExecutionStateProperties({
+  state,
+  getRecoverySellerBuyExecutionByCycle,
+  setRecoverySellerBuyExecutionByCycle,
+  getRecoverySellerSellReservations,
+  setRecoverySellerSellReservations,
+}) {
+  const definitions = [
+    {
+      property: "recoverySellerBuyExecutionByCycle",
+      getValue: getRecoverySellerBuyExecutionByCycle,
+      setValue: setRecoverySellerBuyExecutionByCycle,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow recoverySellerBuyExecutionByCycle must be a Map",
+    },
+    {
+      property: "recoverySellerSellReservations",
+      getValue: getRecoverySellerSellReservations,
+      setValue: setRecoverySellerSellReservations,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow recoverySellerSellReservations must be a Map",
+    },
+  ]
+  for (const definition of definitions) {
+    defineValidatedStateProperty({
+      state,
+      ...definition,
+    })
+  }
+}
+
+function defineRecoverySellerCycleStateProperties({
+  state,
+  getRecoverySellerCycleStates,
+  setRecoverySellerCycleStates,
+  getRecoverySellerCycleOutcomes,
+  setRecoverySellerCycleOutcomes,
+}) {
+  const definitions = [
+    {
+      property: "recoverySellerCycleStates",
+      getValue: getRecoverySellerCycleStates,
+      setValue: setRecoverySellerCycleStates,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow recoverySellerCycleStates must be a Map",
+    },
+    {
+      property: "recoverySellerCycleOutcomes",
+      getValue: getRecoverySellerCycleOutcomes,
+      setValue: setRecoverySellerCycleOutcomes,
+      isValid: (value) => value instanceof Map,
+      errorMessage: "Account workflow recoverySellerCycleOutcomes must be a Map",
+    },
+  ]
+  for (const definition of definitions) {
+    defineValidatedStateProperty({
+      state,
+      ...definition,
+    })
+  }
+}
+
+function defineAccountQueueStateProperty({ state, getUpdateQueue, setUpdateQueue }) {
+  defineValidatedStateProperty({
+    state,
+    property: "updateQueue",
+    getValue: getUpdateQueue,
+    setValue: setUpdateQueue,
+    isValid: (value) => value !== null && typeof value?.then === "function",
+    errorMessage: "Account workflow updateQueue must be Promise-like",
   })
+}
+
+function defineRecoverySellerAccountStateProperties(input) {
+  defineRecoverySellerExecutionStateProperties(input)
+  defineRecoverySellerCycleStateProperties(input)
+  defineAccountQueueStateProperty(input)
+}
+
+function defineAccountTradingStateProperties(input) {
+  defineCoreAccountStateProperties(input)
+  defineRecoverySellerAccountStateProperties(input)
+}
+
+function createAccountTradingState() {
+  // CG and RS accounting share one account-level serialization queue and canonical state.
+  let portfolio = new Portfolio()
+  let recoveryLedgers = new Map()
+  let orderRegistry = OrderRegistry.empty()
+  let legacyPositions = new Map()
+  let recoverySellerBuyExecutionByCycle = new Map()
+  let recoverySellerSellReservations = new Map()
+  let recoverySellerCycleStates = new Map()
+  let recoverySellerCycleOutcomes = new Map()
+  let updateQueue = Promise.resolve()
+  const state = createAccountStateCollections()
+  state.runTransition = createSerializedAccountTransitionQueue()
+  defineAccountTradingStateProperties({
+    state,
+    getPortfolio: () => portfolio,
+    setPortfolio: (value) => { portfolio = value },
+    getRecoveryLedgers: () => recoveryLedgers,
+    setRecoveryLedgers: (value) => { recoveryLedgers = value },
+    getOrderRegistry: () => orderRegistry,
+    setOrderRegistry: (value) => { orderRegistry = value },
+    getLegacyPositions: () => legacyPositions,
+    setLegacyPositions: (value) => { legacyPositions = value },
+    getRecoverySellerBuyExecutionByCycle: () => recoverySellerBuyExecutionByCycle,
+    setRecoverySellerBuyExecutionByCycle: (value) => { recoverySellerBuyExecutionByCycle = value },
+    getRecoverySellerSellReservations: () => recoverySellerSellReservations,
+    setRecoverySellerSellReservations: (value) => { recoverySellerSellReservations = value },
+    getRecoverySellerCycleStates: () => recoverySellerCycleStates,
+    setRecoverySellerCycleStates: (value) => { recoverySellerCycleStates = value },
+    getRecoverySellerCycleOutcomes: () => recoverySellerCycleOutcomes,
+    setRecoverySellerCycleOutcomes: (value) => { recoverySellerCycleOutcomes = value },
+    getUpdateQueue: () => updateQueue,
+    setUpdateQueue: (value) => { updateQueue = value },
+  })
+  return Object.freeze(state)
 }
 
 function createAccountRuntime({ identity }) {
@@ -106,5 +304,25 @@ export function createAccountRuntimeRegistry({ providers } = {}) {
       return account
     },
     list: () => Object.freeze([...accounts.values()].map(({ identity }) => identity)),
+  })
+}
+
+/**
+ * Keep the engine's OrderRegistry reference linked to the account-scoped registry.
+ * The account runtime exposes an accessor so every workflow sees replacements,
+ * not only the initial immutable registry snapshot.
+ */
+export function linkSharedAccountOrderRegistry({ state, initialState } = {}) {
+  const descriptor = Object.getOwnPropertyDescriptor(initialState, "orderRegistry")
+  if (!descriptor ||
+      (typeof descriptor.set !== "function" && descriptor.writable !== true)) {
+    return
+  }
+  Object.defineProperty(state, "registry", {
+    enumerable: true,
+    get: () => initialState.orderRegistry,
+    set: (registry) => {
+      initialState.orderRegistry = registry
+    },
   })
 }

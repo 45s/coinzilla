@@ -31,7 +31,7 @@ Do not silently change another domain's implementation, tests, roadmap, or publi
 - **Ports:** define narrow broker-owned interfaces for exchange operations, streams, user-data sessions, clocks/schedulers, and other external effects where application behavior needs them. Avoid speculative abstractions and one-wrapper-per-RPC interfaces.
 - **Infrastructure:** own Binance RPC/Streams clients, transport, signing, configuration, protocol DTOs, and Binance-to-domain/entity mapping. Infrastructure implements the package's ports.
 - **Composition/public API:** preserve the public broker contract while wiring application services to Binance adapters. Keep `src/index.js` and exchange entry points thin.
-- The existing `broker-websocket/broker.js`, `src/application/user-data-session.js`, `src/application/ports/user-data-client-port.js`, `helpers/`, `utils/`, and `shared/` are the evolving implementation. `src/application/user-data-session.js` owns the exchange-neutral user-data lifecycle; `src/application/ports/user-data-client-port.js` owns its injected client contract; `src/infrastructure/binance/user-data-client-adapter.js` implements that contract. Move remaining infrastructure responsibilities incrementally when tests demonstrate a better boundary.
+- The existing `broker-websocket/broker.js`, `src/application/user-data-session.js`, `src/application/ports/user-data-client-port.js`, `helpers/`, `utils/`, and `shared/` are the evolving implementation. `src/application/user-data-session.js` owns the exchange-neutral user-data lifecycle; `src/application/ports/user-data-client-port.js` owns its injected client contract; `src/infrastructure/binance/spot/user-data-client-adapter.js` implements that contract. Move remaining infrastructure responsibilities incrementally when tests demonstrate a better boundary.
 - `apps/harvester` owns portfolio/position policy, strategies, and bot application behavior. That boundary does not make brokers merely an infrastructure-only package.
 - Create `domain/`, `application/`, `application/ports/`, or `infrastructure/` modules only when they contain real responsibilities; do not create empty template folders or a separate top-level `ports/` directory.
 
@@ -61,15 +61,15 @@ These rules are mandatory for every AI agent working on the existing broker pack
 - Characterize existing behavior before moving/refactoring it. Follow RED → GREEN → REFACTOR in small increments. Keep tests green after each increment; add regression tests for defects and tests for every intentional behavior change.
 - Separate genuine Domain, Application, Ports, and Infrastructure responsibilities where the code has real concepts and boundaries. Do not create empty/template folders or wrappers without a concrete architectural benefit.
 
-### Autonomous PR and merge loop
+### Autonomous PR delivery loop
 
 - **Create as many focused PRs as needed.** Prefer small, reviewable vertical slices over a risky all-at-once rewrite. Every task branch must be short-lived, based on the latest `develop`, and every task PR must target `develop`.
-- **Do not pause for routine user approval, ask the user to merge, or wait for the user to tell you to continue.** The responsible agent owns implementation, testing, synchronization, PR creation, CI monitoring, merge, cleanup, and progression to the next task.
-- Once a PR is fully validated—its exact head is current with `develop`, all required CI checks are green, broker package tests and applicable coverage checks pass, the final diff is focused and safe, and existing broker behavior/contracts remain intact—**merge it into `develop` without waiting for human approval**. Never bypass branch protection or merge with pending, failed, missing, or unexpectedly skipped required checks.
-- After a successful merge, verify the merge and resulting `develop` state, update the roadmap, delete the merged task branch when safe, then immediately start the next incomplete DDD refactoring slice on a fresh branch from the latest `develop`. Continue until the agreed DDD refactor scope is complete or a concrete external blocker prevents safe progress.
+- **Do not pause for routine approval to continue implementation or wait for the user to tell you to continue.** The responsible agent owns implementation, testing, synchronization, PR creation, CI monitoring, review-ready handoff, cleanup after the user's merge, and progression to the next task. The user owns review and merge.
+- Once a PR is fully validated—its exact head is current with `develop`, all required CI checks are green, broker package tests and applicable coverage checks pass, the final diff is focused and safe, and existing broker behavior/contracts remain intact—**leave it open for user review and merge**. Never merge or enable auto-merge on the user's behalf, and never bypass branch protection or hand over a PR with pending, failed, missing, or unexpectedly skipped required checks.
+- After the user merges, verify the merge and resulting `develop` state, update the roadmap, delete the merged task branch when safe, then immediately start the next incomplete DDD refactoring slice on a fresh branch from the latest `develop`. Continue until the agreed DDD refactor scope is complete or a concrete external blocker prevents safe progress.
 - Multiple commits per branch and multiple PRs across the overall refactor are expected. Commit in coherent increments with meaningful messages. Each PR must be well tested, documented, and independently safe to integrate.
-- A green CI run alone is not sufficient if broker behavior or compatibility is broken. Do not hold a validated task PR open for routine approval when required gates are green and the broker remains correct.
-- If tests, CI, permissions, branch protection, conflicts, or a compatibility risk prevent a safe merge, fix the issue autonomously where possible. If genuinely blocked, report the exact evidence and continue with independent safe work where possible; never invent a passing result or silently bypass a gate.
+- A green CI run alone is not sufficient if broker behavior or compatibility is broken. Keep a validated task PR open for user review and merge; continue independent implementation work without treating pending human review as a blocker to other safe tasks.
+- If tests, CI, permissions, branch protection, conflicts, or a compatibility risk prevent a review-ready handoff, fix the issue autonomously where possible. If genuinely blocked, report the exact evidence and continue with independent safe work where possible; never invent a passing result or silently bypass a gate.
 
 ### Definition of success for each merged slice
 
@@ -79,6 +79,12 @@ These rules are mandatory for every AI agent working on the existing broker pack
 4. Documentation and this roadmap reflect the actual change.
 5. The PR is merged into `develop`, the merge is verified, and the task branch is cleaned up.
 6. The next DDD slice starts without requiring another user prompt.
+
+## Mandatory Bitunix workflow — required for every agent
+
+Before any Bitunix Spot task, read and follow [BITUNIX_WORKFLOW.md](./docs/BITUNIX_WORKFLOW.md) in addition to this mandatory reference audit. It defines the common Broker API-first development cycle, evidence-to-source/test requirements, error handling, operator-controlled LIVE investigation boundary, and completion criteria. This is a hard requirement for every AI agent and automated contributor, not optional guidance.
+
+**Keep the safety boundary strict:** all automated tests, CI, scheduled jobs, and AI-agent-executed commands remain forbidden from making LIVE mutations. Broker order-mutation integration tests remain TESTNET-only. A human may separately initiate a guarded local LIVE investigation on their own machine; it is not a test, must not be executed by an agent, and does not waive issue #1185 or establish production readiness. Follow the exact controls in [BITUNIX_WORKFLOW.md](./docs/BITUNIX_WORKFLOW.md#5-operator-controlled-local-live-experiments-are-a-separate-activity).
 
 ## Bitunix Spot development — mandatory reference audit
 
@@ -110,7 +116,7 @@ These rules are mandatory for every AI agent working on the existing broker pack
 
 The primary pair above is not an exclusive search boundary. When JKorf or the TypeScript MCP does not cover the requested method, or when their source/tests conflict with each other or official docs, search GitHub for the exact endpoint path, method name, and Bitunix Spot capability. Inspect additional language clients and connector packages before concluding that no reference exists.
 
-Known supplementary references from the maintained [Bitunix external implementation audit](./BITUNIX_REFERENCE_AUDIT.md) include:
+Known supplementary references from the maintained [Bitunix external implementation audit](./docs/BITUNIX_REFERENCE_AUDIT.md) include:
 
 - [StockSharp/Connectors](https://github.com/StockSharp/Connectors/tree/master/Bitunix) — independent C# Spot connector and DTOs.
 - [0xCherryBlueZu/bitunix](https://github.com/0xCherryBlueZu/bitunix) — Python Spot REST client; inspect signing/logging defects before reuse.
@@ -139,5 +145,5 @@ For each additional repository, record the exact inspected commit/path and wheth
 - Distinguish Spot from Futures throughout the audit. Never copy a Futures-only WebSocket subscription or endpoint into Spot without official Spot evidence.
 - A WebSocket RPC request/response method is not a continuous subscription. Do not claim a private order/execution stream exists unless official Spot documentation and implementation evidence demonstrate push events, subscription lifecycle, event identity, and reconnect/recovery semantics.
 - Third-party tests are useful examples, not proof that Bitunix guarantees the behavior. Confirm pagination/completeness, stable identifiers, source timestamps, quantity semantics, and unknown-outcome reconciliation independently.
-- Keep order placement/cancellation disabled when required identity, quantity, execution-history, lifecycle, or mutation-environment guarantees remain unresolved. No live order placement, cancellation, or account mutation as part of ordinary development or tests. Default tests remain offline and credential-free.
+- Keep order placement/cancellation disabled when required identity, quantity, execution-history, lifecycle, or mutation-environment guarantees remain unresolved. No LIVE mutation may be executed by an AI agent or as part of ordinary development, automated tests, CI, or scheduled work. A human-initiated local LIVE experiment is a separate operator-controlled investigation governed by [BITUNIX_WORKFLOW.md](./docs/BITUNIX_WORKFLOW.md); it does not change capability status, production readiness, or issue #1185. Default tests remain offline and credential-free.
 - Keep [issue #1185](https://github.com/45s/coinzilla/issues/1185) and the [Bitunix capability contract](../../docs/brokers-websocket-contract.md#bitunix-spot-capability-contract) aligned with verified findings. Do not silently remove an existing blocker because a third-party SDK implements a method.

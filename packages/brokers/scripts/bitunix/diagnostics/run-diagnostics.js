@@ -1,0 +1,2023 @@
+import { Broker } from "../../../src/index.js"
+import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/rest-client.js"
+import { BitunixSpotWebSocketClient } from "../../../src/infrastructure/bitunix/spot/api/websocket-client.js"
+import { BitunixWebSocketTransport } from "../../../src/infrastructure/bitunix/spot/api/websocket-transport.js"
+import {
+  createDiagnosticReport,
+  createDiagnosticResult,
+} from "../helpers/create-diagnostic-report.js"
+import { getDiagnosticSchemaIssueCodes, inspectDiagnosticSchema } from "../helpers/inspect-diagnostic-schema.js"
+import {
+  sanitizeDiagnosticError,
+  sanitizeDiagnosticValue,
+} from "../helpers/sanitize-diagnostic-data.js"
+import { DiagnosticError } from "./diagnostic-error.js"
+import {
+  getConfiguredApiSecrets,
+  getMissingApiCredentialNames,
+  hasApiCredentials,
+} from "../helpers/api-credentials.js"
+import {
+  createReadOnlyBrokerRequest,
+  createReadOnlyRestRequest,
+  getReadOnlyBrokerOperations,
+  getRestDiagnosticSkipReason,
+  parseDiagnosticDepthPrecision,
+} from "../helpers/create-read-only-diagnostic-requests.js"
+import {
+  createSanitizedInboundPayload,
+  normalizeWebSocketMessageText,
+} from "../helpers/sanitize-websocket-message.js"
+
+const DIAGNOSTIC_CONFIG = Object.freeze({
+  confirmLiveReads: true,
+  symbol: "BTCUSDT",
+  // REST Spot uses numeric minute intervals; WebSocket RPC documents the "1min" form and base-coin symbol.
+  klineInterval: "1",
+  websocketKlineSymbol: "BTC",
+  websocketKlineInterval: "1",
+  timeoutMs: 10_000,
+  includePublicPayloads: false,
+})
+
+
+const BITUNIX_RESPONSE_SCHEMAS = Object.freeze({
+  "/api/spot/v1/common/coin_pair/list": Object.freeze({
+    expectedFields: ["id", "base", "quote", "basePrecision", "quotePrecision", "minPrice", "minVolume", "isOpen", "isHot", "isRecommend", "isShow", "tradeArea", "sort", "openTime", "precisions", "symbol"],
+    requiredFields: ["base", "quote", "isOpen"],
+    expectedFieldTypes: {
+      id: ["string", "number"],
+      base: "string",
+      quote: "string",
+      basePrecision: ["string", "number"],
+      quotePrecision: ["string", "number"],
+      minPrice: "string",
+      minVolume: "string",
+      isOpen: ["string", "number"],
+      isHot: ["string", "number"],
+      isRecommend: ["string", "number"],
+      isShow: ["string", "number"],
+      tradeArea: "string",
+      sort: ["string", "number"],
+      openTime: ["null", "string"],
+      precisions: "array",
+      symbol: "string",
+    },
+  }),
+  "/api/spot/v1/market/last_price": Object.freeze({
+    expectedValueTypes: ["string"],
+  }),
+  "/api/spot/v1/user/account": Object.freeze({
+    expectedFields: ["coin", "balance", "balanceLocked"],
+    requiredFields: ["coin", "balance", "balanceLocked"],
+    expectedFieldTypes: {
+      coin: "string",
+      balance: "string",
+      balanceLocked: "string",
+    },
+  }),
+  "/api/spot/v1/order/pending/list": Object.freeze({
+    expectedFields: ["orderId", "userId", "orderType", "amount", "dealAmount", "volume", "leftAmount", "dealVolume", "leftVolume", "status", "type", "side", "price", "avgPrice", "progress", "ctime", "utime", "base", "quote", "symbol", "fee", "feeCoin"],
+    requiredFields: ["orderId", "userId", "orderType", "amount", "dealAmount", "volume", "leftAmount", "dealVolume", "leftVolume", "status", "type", "side", "price", "avgPrice", "progress", "ctime", "utime", "base", "quote", "symbol", "fee", "feeCoin"],
+    expectedFieldTypes: {
+      orderId: "string",
+      userId: "string",
+      orderType: "string",
+      amount: "string",
+      dealAmount: "string",
+      volume: "string",
+      leftAmount: "string",
+      dealVolume: "string",
+      leftVolume: "string",
+      status: "string",
+      type: "string",
+      side: "string",
+      price: "string",
+      avgPrice: "string",
+      progress: "string",
+      ctime: "string",
+      utime: "string",
+      base: "string",
+      quote: "string",
+      symbol: "string",
+      fee: "string",
+      feeCoin: "string",
+    },
+  }),
+  "/api/spot/v1/order/history/page": Object.freeze({
+    expectedFields: ["pageNum", "total", "data"],
+    requiredFields: ["pageNum", "total"],
+    expectedFieldTypes: {
+      pageNum: ["string", "number"],
+      total: "number",
+      data: "array",
+    },
+  }),
+  "/api/spot/v1/deposit/page": Object.freeze({
+    expectedFields: [
+      "id",
+      "transactionHash",
+      "coin",
+      "network",
+      "type",
+      "fromAddress",
+      "toAddress",
+      "amount",
+      "status",
+      "ctime",
+    ],
+    requiredFields: ["id", "coin", "type", "fromAddress", "toAddress", "amount", "status", "ctime"],
+    expectedFieldTypes: {
+      id: ["string", "number"],
+      transactionHash: ["null", "string"],
+      coin: "string",
+      network: ["null", "string"],
+      type: "string",
+      fromAddress: "string",
+      toAddress: "string",
+      amount: "string",
+      status: "string",
+      ctime: ["string", "number"],
+    },
+  }),
+  "/api/spot/v1/withdraw_transfer/page": Object.freeze({
+    expectedFields: [
+      "id",
+      "outBizId",
+      "type",
+      "coin",
+      "amount",
+      "status",
+      "ctime",
+      "network",
+      "transactionHash",
+      "feeCoin",
+      "fee",
+      "memo",
+      "address",
+      "toAddress",
+      "toType",
+      "toUid",
+      "toPhoneCountryCode",
+      "toPhoneNumber",
+      "toEmail",
+      "remark",
+    ],
+    requiredFields: ["id", "type", "coin", "amount", "status", "ctime"],
+    expectedFieldTypes: {
+      id: ["string", "number"],
+      outBizId: ["null", "string"],
+      type: "string",
+      coin: "string",
+      amount: "string",
+      status: "string",
+      ctime: ["string", "number"],
+      network: ["null", "string"],
+      transactionHash: ["null", "string"],
+      feeCoin: ["null", "string"],
+      fee: ["null", "string"],
+      memo: ["null", "string"],
+      address: ["null", "string"],
+      toAddress: ["null", "string"],
+      toType: ["null", "string"],
+      toUid: ["null", "number", "string"],
+      toPhoneCountryCode: ["null", "string"],
+      toPhoneNumber: ["null", "string"],
+      toEmail: ["null", "string"],
+      remark: ["null", "string"],
+    },
+  }),
+})
+
+const PUBLIC_ONLY_DIAGNOSTIC_CREDENTIAL = "READ_ONLY_PUBLIC_DIAGNOSTIC"
+
+const REST_ENDPOINTS = Object.freeze([
+  {
+    operation: "REST public market catalog",
+    path: "/api/spot/v1/common/coin_pair/list",
+    privateResponse: false,
+    queryParams: {},
+  },
+  {
+    operation: "REST public last price",
+    path: "/api/spot/v1/market/last_price",
+    privateResponse: false,
+    queryParams: null,
+  },
+  {
+    operation: "REST public order book depth",
+    path: "/api/spot/v1/market/depth",
+    privateResponse: false,
+    requiresDepthPrecision: true,
+    getQueryParams: ({ symbol, depthPrecision }) => ({
+      symbol,
+      precision: depthPrecision,
+    }),
+  },
+  {
+    operation: "REST public K-line",
+    path: "/api/spot/v1/market/kline",
+    privateResponse: false,
+    getQueryParams: ({ symbol, klineInterval }) => ({
+      symbol,
+      interval: klineInterval,
+    }),
+  },
+  {
+    operation: "REST public K-line history",
+    path: "/api/spot/v1/market/kline/history",
+    privateResponse: false,
+    getQueryParams: ({ symbol, klineInterval }) => ({
+      symbol,
+      interval: klineInterval,
+      limit: "1",
+    }),
+  },
+  {
+    operation: "REST public exchange rates",
+    path: "/api/spot/v1/common/rate/list",
+    privateResponse: false,
+    queryParams: {},
+  },
+  {
+    operation: "REST public token networks",
+    path: "/api/spot/v1/common/coin/coin_network/list",
+    privateResponse: false,
+    queryParams: {},
+  },
+  {
+    operation: "REST private account balances",
+    path: "/api/spot/v1/user/account",
+    privateResponse: true,
+    queryParams: {},
+  },
+  {
+    operation: "REST private open orders",
+    path: "/api/spot/v1/order/pending/list",
+    method: "POST",
+    privateResponse: true,
+    getBody: ({ symbol }) => ({
+      symbol,
+    }),
+  },
+])
+
+const WEBSOCKET_OPERATIONS = Object.freeze([
+  {
+    operation: "ping",
+    method: "ping",
+    privateResponse: false,
+    getArguments: () => ({}),
+  },
+  {
+    operation: "market.last_price",
+    method: "getLastPrice",
+    privateResponse: false,
+    getArguments: ({ symbol }) => ({ symbol }),
+  },
+  {
+    operation: "market.depth",
+    method: "getDepth",
+    privateResponse: false,
+    getArguments: ({ symbol, depthPrecision }) => ({
+      symbol,
+      precision: depthPrecision,
+    }),
+    requiresDepthPrecision: true,
+  },
+  {
+    operation: "market.kline",
+    method: "getKline",
+    privateResponse: false,
+    getArguments: ({ websocketKlineSymbol, websocketKlineInterval }) => ({
+      symbol: websocketKlineSymbol,
+      interval: websocketKlineInterval,
+    }),
+  },
+  {
+    operation: "common.coin_pair.list",
+    method: "getTradingPairs",
+    privateResponse: false,
+    getArguments: () => ({}),
+  },
+  {
+    operation: "common.rate.list",
+    method: "getExchangeRates",
+    privateResponse: false,
+    getArguments: () => ({}),
+  },
+  {
+    operation: "common.coin.coin_network.list",
+    method: "getTokenNetworks",
+    privateResponse: false,
+    getArguments: () => ({}),
+  },
+  {
+    operation: "user.account",
+    method: "getAccount",
+    privateResponse: true,
+    getArguments: () => ({}),
+  },
+  {
+    operation: "user.info",
+    method: "getUserInfo",
+    privateResponse: true,
+    getArguments: () => ({}),
+  },
+  {
+    operation: "order.pending.list",
+    method: "getOpenOrders",
+    privateResponse: true,
+    getArguments: ({ symbol }) => ({ symbol }),
+  },
+  {
+    operation: "order.history.page",
+    method: "getOrderHistory",
+    privateResponse: true,
+    getArguments: ({ symbol }) => ({
+      symbol,
+      page: 1,
+      pageSize: 1,
+    }),
+  },
+])
+
+function emitProgress({ onProgress, area, operation, status }) {
+  onProgress?.({ message: `      ${area}: ${operation} ... ${status}` })
+}
+
+function createObservedConnect({ transport, events, secrets, now }) {
+  return async () => {
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      type: "connect_started",
+    })
+    try {
+      await transport.connect()
+      events.push({
+        timestamp: new Date(now()).toISOString(),
+        type: "connected",
+      })
+    } catch (error) {
+      events.push({
+        timestamp: new Date(now()).toISOString(),
+        type: "connect_error",
+        error: sanitizeDiagnosticError({
+          error,
+          secrets,
+        }),
+      })
+      throw error
+    }
+  }
+}
+
+function createObservedSend({ transport, events, secrets, now, methodsByRequestId }) {
+  return (message) => {
+    let request
+    try {
+      request = JSON.parse(message)
+    } catch (error) {
+      events.push({
+        timestamp: new Date(now()).toISOString(),
+        type: "outbound_parse_error",
+        error: sanitizeDiagnosticError({
+          error,
+          secrets,
+        }),
+      })
+      throw error
+    }
+    methodsByRequestId.set(String(request.id), request.method)
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      direction: "outbound",
+      method: request.method,
+      requestId: request.id,
+      payload: sanitizeDiagnosticValue({
+        value: request,
+        secrets,
+      }),
+    })
+    transport.send(message)
+  }
+}
+
+function createObservedMessageHandler({ transport, events, secrets, now, methodsByRequestId, includePublicPayloads }) {
+  return (listener) => transport.onMessage((message) => {
+    let response
+    try {
+      response = JSON.parse(normalizeWebSocketMessageText({ message }))
+    } catch (error) {
+      events.push({
+        timestamp: new Date(now()).toISOString(),
+        direction: "inbound",
+        type: "invalid_json",
+        error: sanitizeDiagnosticError({
+          error,
+          secrets,
+        }),
+      })
+      listener(message)
+      return
+    }
+    const method = methodsByRequestId.get(String(response.id)) ?? "unknown"
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      direction: "inbound",
+      method,
+      requestId: response.id,
+      payload: createSanitizedInboundPayload({
+        response,
+        method,
+        secrets,
+        includePublicPayloads,
+      }),
+    })
+    listener(message)
+  })
+}
+
+function createObservedErrorHandler({ transport, events, secrets, now }) {
+  return (listener) => transport.onError((error) => {
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      type: "transport_error",
+      error: sanitizeDiagnosticError({
+          error,
+          secrets,
+        }),
+    })
+    listener(error)
+  })
+}
+
+function createObservedCloseHandler({ transport, events, secrets, now }) {
+  return (listener) => transport.onClose((event) => {
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      type: "closed",
+      close: sanitizeDiagnosticValue({
+        value: {
+          code: event?.code,
+          reason: event?.reason,
+          wasClean: event?.wasClean,
+        },
+        secrets,
+      }),
+    })
+    listener(event)
+  })
+}
+
+export function createObservedTransportFactory({
+  events,
+  secrets,
+  includePublicPayloads,
+  now,
+  transportFactory = (options) => new BitunixWebSocketTransport(options),
+}) {
+  return (options) => {
+    const transport = transportFactory(options)
+    const methodsByRequestId = new Map()
+    return {
+      connect: createObservedConnect({
+        transport,
+        events,
+        secrets,
+        now,
+      }),
+      send: createObservedSend({
+        transport,
+        events,
+        secrets,
+        now,
+        methodsByRequestId,
+      }),
+      onMessage: createObservedMessageHandler({
+        transport,
+        events,
+        secrets,
+        now,
+        methodsByRequestId,
+        includePublicPayloads,
+      }),
+      onError: createObservedErrorHandler({
+        transport,
+        events,
+        secrets,
+        now,
+      }),
+      onClose: createObservedCloseHandler({
+        transport,
+        events,
+        secrets,
+        now,
+      }),
+      close: () => transport.close(),
+    }
+  }
+}
+
+function createResult({
+  operation,
+  startedAt,
+  now,
+  status,
+  request,
+  response,
+  error,
+  privateResponse,
+  includePublicPayloads,
+  secrets,
+}) {
+  return createDiagnosticResult({
+    operation,
+    status,
+    durationMs: now() - startedAt,
+    request,
+    response,
+    error,
+    privateResponse,
+    includePublicPayload: includePublicPayloads,
+    secrets,
+  })
+}
+
+function recordRestSkipped({ endpoint, startedAt, now, results, secrets, authenticated, reason }) {
+  results.push(createResult({
+    operation: endpoint.operation,
+    startedAt,
+    now,
+    status: "skipped",
+    request: {
+      method: endpoint.method ?? "GET",
+      path: endpoint.path,
+      authenticated,
+      stateChanging: false,
+      reason,
+    },
+    secrets,
+  }))
+}
+
+function recordRestSuccess({ endpoint, startedAt, now, results, request, response, includePublicPayloads, secrets }) {
+  results.push(createResult({
+    operation: endpoint.operation,
+    startedAt,
+    now,
+    status: "passed",
+    request,
+    response: response.data,
+    privateResponse: endpoint.privateResponse,
+    includePublicPayloads,
+    secrets,
+  }))
+}
+
+function recordRestFailure({ endpoint, startedAt, now, results, request, error, includePublicPayloads, secrets }) {
+  results.push(createResult({
+    operation: endpoint.operation,
+    startedAt,
+    now,
+    status: "failed",
+    request,
+    error,
+    includePublicPayloads,
+    secrets,
+  }))
+}
+
+async function executeRestRequest({
+  client,
+  endpoint,
+  startedAt,
+  now,
+  results,
+  request,
+  includePublicPayloads,
+  secrets,
+  onProgress,
+}) {
+  try {
+    const response = await client.request(request)
+    recordRestSuccess({
+      endpoint,
+      startedAt,
+      now,
+      results,
+      request,
+      response,
+      includePublicPayloads,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "PASS",
+    })
+  } catch (error) {
+    recordRestFailure({
+      endpoint,
+      startedAt,
+      now,
+      results,
+      request,
+      error,
+      includePublicPayloads,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "FAIL",
+    })
+  }
+}
+
+async function runRestOperation({
+  client,
+  endpoint,
+  symbol,
+  depthPrecision,
+  klineInterval,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+  credentialsConfigured,
+  onProgress,
+}) {
+  const startedAt = now()
+  emitProgress({
+    onProgress,
+    area: "REST",
+    operation: endpoint.operation,
+    status: "RUNNING",
+  })
+  const skipReason = getRestDiagnosticSkipReason({
+    endpoint,
+    depthPrecision,
+    credentialsConfigured,
+  })
+  if (skipReason) {
+    recordRestSkipped({
+      endpoint,
+      startedAt,
+      now,
+      results,
+      secrets,
+      ...skipReason,
+    })
+    emitProgress({
+      onProgress,
+      area: "REST",
+      operation: endpoint.operation,
+      status: "SKIPPED",
+    })
+    return
+  }
+  const request = createReadOnlyRestRequest({
+    endpoint,
+    symbol,
+    depthPrecision,
+    klineInterval,
+  })
+  await executeRestRequest({
+    client,
+    endpoint,
+    startedAt,
+    now,
+    results,
+    request,
+    includePublicPayloads,
+    secrets,
+    onProgress,
+  })
+}
+
+async function runRestChecks({
+  env,
+  requestTimeout,
+  symbol,
+  depthPrecision,
+  klineInterval,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+  credentialsConfigured,
+  restClientFactory,
+  onProgress,
+}) {
+  const client = restClientFactory({
+    apiKey: credentialsConfigured ? env.BITUNIX_API_KEY : undefined,
+    apiSecret: credentialsConfigured ? env.BITUNIX_API_SECRET : undefined,
+    requestTimeout,
+  })
+  for (const endpoint of REST_ENDPOINTS) {
+    await runRestOperation({
+      client,
+      endpoint,
+      symbol,
+      depthPrecision,
+      klineInterval,
+      now,
+      results,
+      secrets,
+      includePublicPayloads,
+      credentialsConfigured,
+      onProgress,
+    })
+  }
+}
+
+function recordWebSocketSkippedOperation({ definition, startedAt, now, results, includePublicPayloads, secrets }) {
+  results.push(createResult({
+    operation: definition.operation,
+    startedAt,
+    now,
+    status: "skipped",
+    request: {
+      method: definition.operation,
+      reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is not configured",
+    },
+    includePublicPayloads,
+    secrets,
+  }))
+}
+
+async function executeWebSocketRequest({
+  client,
+  definition,
+  args,
+  startedAt,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+  onProgress,
+}) {
+  try {
+    const response = await client[definition.method](args)
+    results.push(createResult({
+      operation: definition.operation,
+      startedAt,
+      now,
+      status: "passed",
+      request: {
+        method: definition.operation,
+        params: args,
+      },
+      response,
+      privateResponse: definition.privateResponse,
+      includePublicPayloads,
+      secrets,
+    }))
+    emitProgress({
+      onProgress,
+      area: "WebSocket",
+      operation: definition.operation,
+      status: "PASS",
+    })
+  } catch (error) {
+    results.push(createResult({
+      operation: definition.operation,
+      startedAt,
+      now,
+      status: "failed",
+      request: {
+        method: definition.operation,
+        params: args,
+      },
+      error,
+      includePublicPayloads,
+      secrets,
+    }))
+    emitProgress({
+      onProgress,
+      area: "WebSocket",
+      operation: definition.operation,
+      status: "FAIL",
+    })
+  }
+}
+
+async function runWebSocketOperation({
+  client,
+  definition,
+  context,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+  onProgress,
+}) {
+  const startedAt = now()
+  emitProgress({
+    onProgress,
+    area: "WebSocket",
+    operation: definition.operation,
+    status: "RUNNING",
+  })
+  if (definition.requiresDepthPrecision && context.depthPrecision === null) {
+    recordWebSocketSkippedOperation({
+      definition,
+      startedAt,
+      now,
+      results,
+      includePublicPayloads,
+      secrets,
+    })
+    emitProgress({
+      onProgress,
+      area: "WebSocket",
+      operation: definition.operation,
+      status: "SKIPPED",
+    })
+    return
+  }
+  await executeWebSocketRequest({
+    client,
+    definition,
+    args: definition.getArguments(context),
+    startedAt,
+    now,
+    results,
+    secrets,
+    includePublicPayloads,
+    onProgress,
+  })
+}
+
+function createRuntimeMetadata() {
+  return {
+    node: process.version,
+    platform: process.platform,
+    symbol: DIAGNOSTIC_CONFIG.symbol,
+    restEndpoint: "https://openapi.bitunix.com",
+    websocketEndpoint: "wss://openapi.bitunix.com:443/ws-api/v1",
+    websocketMode: "authenticated request/response RPC; no documented continuous Spot subscription",
+  }
+}
+
+function createSafetyConfirmationResult({ startedAt, now, secrets }) {
+  return createResult({
+    operation: "diagnostic safety confirmation",
+    startedAt,
+    now,
+    status: DIAGNOSTIC_CONFIG.confirmLiveReads === true ? "passed" : "failed",
+    ...(DIAGNOSTIC_CONFIG.confirmLiveReads === true ? {} : {
+      error: new Error("Set DIAGNOSTIC_CONFIG.confirmLiveReads to true to confirm read-only requests against the configured LIVE Spot API account"),
+    }),
+    secrets,
+  })
+}
+
+function createConfigurationResult({ env, startedAt, now, secrets }) {
+  const missingCredentialVariables = getMissingApiCredentialNames({ env })
+  const credentialsConfigured = missingCredentialVariables.length === 0
+  return createResult({
+    operation: "diagnostic configuration",
+    startedAt,
+    now,
+    status: "passed",
+    response: {
+      credentialsConfigured,
+      privateChecks: credentialsConfigured ? "enabled" : "skipped",
+      missingCredentialVariables,
+      liveReadConfirmation: DIAGNOSTIC_CONFIG.confirmLiveReads,
+    },
+    includePublicPayloads: true,
+    secrets,
+  })
+}
+
+function createReport({ startedAtIso, now, results, events, schemaObservations = [] }) {
+  return createDiagnosticReport({
+    startedAt: startedAtIso,
+    finishedAt: new Date(now()).toISOString(),
+    runtime: createRuntimeMetadata(),
+    results,
+    events,
+    schemaObservations,
+  })
+}
+
+function createOptionFailure({ error, startedAtIso, now, results, events, secrets }) {
+  results.push(createResult({
+    operation: "diagnostic options",
+    startedAt: now(),
+    now,
+    status: "failed",
+    error,
+    secrets,
+  }))
+  return createReport({
+    startedAtIso,
+    now,
+    results,
+    events,
+  })
+}
+
+function createWebSocketClient({ env, requestTimeout, transportFactory, websocketClientFactory }) {
+  return websocketClientFactory({
+    apiKey: env.BITUNIX_API_KEY,
+    apiSecret: env.BITUNIX_API_SECRET,
+    requestTimeout,
+    connectTimeout: requestTimeout,
+    closeTimeout: requestTimeout,
+    transportFactory,
+  })
+}
+
+function recordWebSocketConnectionFailure({ error, now, results, secrets }) {
+  results.push(createResult({
+    operation: "WebSocket connection",
+    startedAt: now(),
+    now,
+    status: "failed",
+    error,
+    secrets,
+  }))
+  for (const definition of WEBSOCKET_OPERATIONS) {
+    results.push(createResult({
+      operation: definition.operation,
+      startedAt: now(),
+      now,
+      status: "skipped",
+      error: new Error("WebSocket RPC skipped because connection setup failed"),
+      secrets,
+    }))
+  }
+}
+
+async function executeWebSocketOperations({
+  client,
+  symbol,
+  depthPrecision,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+  onProgress,
+}) {
+  const context = {
+    symbol,
+    depthPrecision,
+    websocketKlineSymbol: DIAGNOSTIC_CONFIG.websocketKlineSymbol,
+    websocketKlineInterval: DIAGNOSTIC_CONFIG.websocketKlineInterval,
+  }
+  for (const definition of WEBSOCKET_OPERATIONS) {
+    await runWebSocketOperation({
+      client,
+      definition,
+      context,
+      now,
+      results,
+      secrets,
+      includePublicPayloads,
+      onProgress,
+    })
+  }
+}
+
+async function cleanupWebSocket({ client, isConnected, now, results, events, secrets }) {
+  try {
+    await client.disconnect()
+    events.push({
+      timestamp: new Date(now()).toISOString(),
+      type: "client_disconnected",
+      wasConnected: isConnected,
+    })
+  } catch (error) {
+    results.push(createResult({
+      operation: "WebSocket cleanup",
+      startedAt: now(),
+      now,
+      status: "failed",
+      error,
+      secrets,
+    }))
+  }
+}
+
+async function connectWebSocket({ client, now, results, secrets, onProgress }) {
+  const startedAt = now()
+  onProgress?.({ message: "      WebSocket: connecting authenticated Spot RPC ... RUNNING" })
+  try {
+    await client.connect()
+    results.push(createResult({
+      operation: "WebSocket connection",
+      startedAt,
+      now,
+      status: "passed",
+      response: { state: client.state },
+      secrets,
+    }))
+    onProgress?.({ message: "      WebSocket: connection ... PASS" })
+    return true
+  } catch (error) {
+    recordWebSocketConnectionFailure({
+      error,
+      now,
+      results,
+      secrets,
+    })
+    onProgress?.({ message: "      WebSocket: connection ... FAIL" })
+    return false
+  }
+}
+
+function createConfiguredWebSocketClient({
+  env,
+  requestTimeout,
+  events,
+  secrets,
+  includePublicPayloads,
+  now,
+  websocketClientFactory,
+}) {
+  const transportFactory = createObservedTransportFactory({
+    events,
+    secrets,
+    includePublicPayloads,
+    now,
+  })
+  return createWebSocketClient({
+    env,
+    requestTimeout,
+    transportFactory,
+    websocketClientFactory,
+  })
+}
+
+async function runWebSocketSession({
+  client,
+  symbol,
+  depthPrecision,
+  now,
+  results,
+  events,
+  secrets,
+  includePublicPayloads,
+  onProgress,
+}) {
+  const isConnected = await connectWebSocket({
+    client,
+    now,
+    results,
+    secrets,
+    onProgress,
+  })
+  try {
+    if (isConnected) {
+      await executeWebSocketOperations({
+        client,
+        symbol,
+        depthPrecision,
+        now,
+        results,
+        secrets,
+        includePublicPayloads,
+        onProgress,
+      })
+    }
+  } finally {
+    await cleanupWebSocket({
+      client,
+      isConnected,
+      now,
+      results,
+      events,
+      secrets,
+    })
+  }
+  return isConnected
+}
+
+async function recordWebSocketReconnectPing({
+  client,
+  startedAt,
+  now,
+  results,
+  secrets,
+  includePublicPayloads,
+}) {
+  const pingResponse = await client.ping()
+  results.push(createResult({
+    operation: "WebSocket reconnect",
+    startedAt,
+    now,
+    status: "passed",
+    request: {
+      method: "ping",
+      attempt: 1,
+    },
+    response: {
+      state: client.state,
+      pingResponse,
+    },
+    includePublicPayloads,
+    secrets,
+  }))
+}
+
+function recordWebSocketReconnectFailure({ error, startedAt, now, results, secrets }) {
+  results.push(createResult({
+    operation: "WebSocket reconnect",
+    startedAt,
+    now,
+    status: "failed",
+    request: {
+      method: "ping",
+      attempt: 1,
+    },
+    error,
+    secrets,
+  }))
+}
+
+async function runWebSocketReconnectCheck({
+  client,
+  events,
+  secrets,
+  includePublicPayloads,
+  now,
+  results,
+}) {
+  const startedAt = now()
+  let isConnected = false
+  try {
+    await client.connect()
+    isConnected = true
+    await recordWebSocketReconnectPing({
+      client,
+      startedAt,
+      now,
+      results,
+      secrets,
+      includePublicPayloads,
+    })
+  } catch (error) {
+    recordWebSocketReconnectFailure({
+      error,
+      startedAt,
+      now,
+      results,
+      secrets,
+    })
+  } finally {
+    await cleanupWebSocket({
+      client,
+      isConnected,
+      now,
+      results,
+      events,
+      secrets,
+    })
+  }
+  recordWebSocketSubscriptionSkipped({
+    now,
+    results,
+    secrets,
+  })
+}
+
+function recordWebSocketReconnectSkipped({ now, results, secrets, reason }) {
+  results.push(createResult({
+    operation: "WebSocket reconnect",
+    startedAt: now(),
+    now,
+    status: "skipped",
+    request: { reason },
+    secrets,
+  }))
+}
+
+function recordWebSocketSubscriptionSkipped({ now, results, secrets }) {
+  results.push(createResult({
+    operation: "WebSocket subscription restoration",
+    startedAt: now(),
+    now,
+    status: "skipped",
+    request: {
+      reason: "Bitunix Spot documents authenticated request/response RPC methods, not subscriptions; there is no subscription state to restore",
+    },
+    secrets,
+  }))
+}
+
+function recordWebSocketSkipped({ now, results, secrets }) {
+  const reason = "BITUNIX_API_KEY and BITUNIX_API_SECRET are required for authenticated WebSocket RPC diagnostics"
+  results.push(createResult({
+    operation: "WebSocket connection",
+    startedAt: now(),
+    now,
+    status: "skipped",
+    request: { reason },
+    secrets,
+  }))
+  for (const definition of WEBSOCKET_OPERATIONS) {
+    results.push(createResult({
+      operation: definition.operation,
+      startedAt: now(),
+      now,
+      status: "skipped",
+      request: {
+        method: definition.operation,
+        reason,
+      },
+      secrets,
+    }))
+  }
+  recordWebSocketReconnectSkipped({
+    now,
+    results,
+    secrets,
+    reason: "Authenticated credentials are unavailable; no initial connection was attempted",
+  })
+  recordWebSocketSubscriptionSkipped({
+    now,
+    results,
+    secrets,
+  })
+}
+
+function recordWebSocketClientCreationFailure({ error, now, results, secrets }) {
+  recordWebSocketConnectionFailure({
+    error,
+    now,
+    results,
+    secrets,
+  })
+  recordWebSocketReconnectSkipped({
+    now,
+    results,
+    secrets,
+    reason: "The initial WebSocket client could not be created; no reconnect attempt was made",
+  })
+  recordWebSocketSubscriptionSkipped({
+    now,
+    results,
+    secrets,
+  })
+}
+
+async function runWebSocketLifecycle({
+  client,
+  symbol,
+  depthPrecision,
+  now,
+  results,
+  events,
+  secrets,
+  includePublicPayloads,
+  onProgress,
+}) {
+  const initialConnectionEstablished = await runWebSocketSession({
+    client,
+    symbol,
+    depthPrecision,
+    now,
+    results,
+    events,
+    secrets,
+    includePublicPayloads,
+    onProgress,
+  })
+  if (!initialConnectionEstablished) {
+    recordWebSocketReconnectSkipped({
+      now,
+      results,
+      secrets,
+      reason: "The initial WebSocket connection was not established; no reconnect attempt was made",
+    })
+    recordWebSocketSubscriptionSkipped({
+      now,
+      results,
+      secrets,
+    })
+    return
+  }
+  await runWebSocketReconnectCheck({
+    client,
+    events,
+    secrets,
+    includePublicPayloads,
+    now,
+    results,
+  })
+}
+
+async function runWebSocketChecks({
+  env,
+  requestTimeout,
+  symbol,
+  depthPrecision,
+  now,
+  results,
+  events,
+  secrets,
+  includePublicPayloads,
+  credentialsConfigured,
+  websocketClientFactory,
+  onProgress,
+}) {
+  if (!credentialsConfigured) {
+    recordWebSocketSkipped({
+      now,
+      results,
+      secrets,
+    })
+    return
+  }
+  let client
+  try {
+    client = createConfiguredWebSocketClient({
+      env,
+      requestTimeout,
+      events,
+      secrets,
+      includePublicPayloads,
+      now,
+      websocketClientFactory,
+    })
+  } catch (error) {
+    recordWebSocketClientCreationFailure({
+      error,
+      now,
+      results,
+      secrets,
+    })
+    return
+  }
+  await runWebSocketLifecycle({
+    client,
+    symbol,
+    depthPrecision,
+    now,
+    results,
+    events,
+    secrets,
+    includePublicPayloads,
+    onProgress,
+  })
+}
+
+
+
+function recordBrokerApiSchemaResult({ method, observation, now, results, secrets }) {
+  if (!observation || !Object.hasOwn(observation, "schemaValid")) {
+    return
+  }
+  const { schemaValid } = observation
+  const error = schemaValid
+    ? undefined
+    : new DiagnosticError({
+      code: "BROKER_DIAGNOSTIC_SCHEMA_MISMATCH",
+      message: `Bitunix response schema mismatch for ${observation.path}`,
+      context: {
+        path: observation.path,
+        issues: observation.schemaIssues.join(","),
+      },
+    })
+  results.push(createResult({
+    operation: `Broker API schema ${method}`,
+    startedAt: now(),
+    now,
+    status: schemaValid ? "passed" : "failed",
+    request: {
+      api: "Broker",
+      method: "inspectResponseSchema",
+      path: observation.path,
+      stateChanging: false,
+    },
+    response: {
+      schemaValid,
+      unexpectedFields: observation.unexpectedFields,
+      missingRequiredFieldCount: observation.missingRequiredFields.length,
+      unexpectedFieldTypeCount: observation.unexpectedFieldTypes.length,
+      invalidRowCount: observation.invalidRowIndexes.length,
+    },
+    error,
+    secrets,
+  }))
+}
+
+function createObservedBrokerRestClientFactory({
+  restClientFactory,
+  schemaObservations,
+  secrets,
+  now,
+}) {
+  return (configuration) => {
+    const client = restClientFactory(configuration)
+    return {
+      async request(request) {
+        try {
+          const response = await client.request(request)
+          const schema = BITUNIX_RESPONSE_SCHEMAS[request.path]
+          if (schema) {
+            const inspection = inspectDiagnosticSchema({
+              value: response.data,
+              ...schema,
+            })
+            const schemaIssues = getDiagnosticSchemaIssueCodes({ inspection })
+            schemaObservations.push({
+              timestamp: new Date(now()).toISOString(),
+              provider: "bitunix",
+              path: request.path,
+              method: request.method,
+              authenticated: request.authenticated ?? true,
+              stateChanging: request.stateChanging ?? false,
+              schemaValid: schemaIssues.length === 0,
+              schemaIssues,
+              ...inspection,
+            })
+          }
+          return response
+        } catch (error) {
+          schemaObservations.push({
+            timestamp: new Date(now()).toISOString(),
+            provider: "bitunix",
+            path: request.path,
+            method: request.method,
+            authenticated: request.authenticated ?? true,
+            error: sanitizeDiagnosticError({
+              error,
+              secrets,
+            }),
+          })
+          throw error
+        }
+      },
+    }
+  }
+}
+
+function recordBrokerApiSuccess({
+  method,
+  args,
+  result,
+  privateResponse,
+  startedAt,
+  now,
+  results,
+  secrets,
+}) {
+  results.push(createResult({
+    operation: `Broker API ${method}`,
+    startedAt,
+    now,
+    status: "passed",
+    request: createReadOnlyBrokerRequest({
+      method,
+      args,
+    }),
+    response: result.data,
+    privateResponse,
+    secrets,
+  }))
+}
+
+function recordBrokerApiFailure({
+  method,
+  args,
+  error,
+  startedAt,
+  now,
+  results,
+  secrets,
+}) {
+  results.push(createResult({
+    operation: `Broker API ${method}`,
+    startedAt,
+    now,
+    status: "failed",
+    request: createReadOnlyBrokerRequest({
+      method,
+      args,
+    }),
+    error,
+    secrets,
+  }))
+}
+
+
+function emitBrokerApiProgress({ method, status, onProgress }) {
+  emitProgress({
+    onProgress,
+    area: "Broker API",
+    operation: method,
+    status,
+  })
+}
+
+
+function recordBrokerApiOperationFailure({
+  method,
+  args,
+  error,
+  startedAt,
+  now,
+  results,
+  secrets,
+  onProgress,
+}) {
+  recordBrokerApiFailure({
+    method,
+    args,
+    error,
+    startedAt,
+    now,
+    results,
+    secrets,
+  })
+  emitBrokerApiProgress({
+    method,
+    status: "FAIL",
+    onProgress,
+  })
+}
+
+
+function recordLatestBrokerApiSchemaResult({ definition, schemaObservations, now, results, secrets }) {
+  recordBrokerApiSchemaResult({
+    method: definition.method,
+    observation: schemaObservations.at(-1),
+    now,
+    results,
+    secrets,
+  })
+}
+
+
+function recordBrokerApiOperationResult({
+  definition,
+  result,
+  startedAt,
+  now,
+  results,
+  secrets,
+  onProgress,
+}) {
+  if (!result || result.ok !== true) {
+    recordBrokerApiOperationFailure({
+      method: definition.method,
+      args: definition.args,
+      error: result?.errors?.[0] ?? new DiagnosticError({
+        code: "BROKER_DIAGNOSTIC_RESULT_INVALID",
+        message: "Broker read returned no successful result envelope",
+        context: {
+          method: definition.method,
+        },
+      }),
+      startedAt,
+      now,
+      results,
+      secrets,
+      onProgress,
+    })
+    return
+  }
+  recordBrokerApiSuccess({
+    method: definition.method,
+    args: definition.args,
+    result,
+    privateResponse: definition.privateResponse,
+    startedAt,
+    now,
+    results,
+    secrets,
+  })
+  emitBrokerApiProgress({
+    method: definition.method,
+    status: "PASS",
+    onProgress,
+  })
+}
+
+async function runBrokerApiOperation({
+  broker,
+  definition,
+  now,
+  results,
+  secrets,
+  schemaObservations,
+  onProgress,
+}) {
+  const startedAt = now()
+  emitBrokerApiProgress({
+    method: definition.method,
+    status: "RUNNING",
+    onProgress,
+  })
+  try {
+    const result = await broker[definition.method](...definition.args)
+    recordBrokerApiOperationResult({
+      definition,
+      result,
+      startedAt,
+      now,
+      results,
+      secrets,
+      onProgress,
+    })
+  } catch (error) {
+    recordBrokerApiOperationFailure({
+      method: definition.method,
+      args: definition.args,
+      error,
+      startedAt,
+      now,
+      results,
+      secrets,
+      onProgress,
+    })
+  }
+  recordLatestBrokerApiSchemaResult({
+    definition,
+    schemaObservations,
+    now,
+    results,
+    secrets,
+  })
+}
+
+function createBrokerDiagnostic({
+  env,
+  requestTimeout,
+  credentialsConfigured,
+  brokerApiRestClientFactory,
+  schemaObservations,
+  secrets,
+  now,
+}) {
+  const apiKey = credentialsConfigured
+    ? env.BITUNIX_API_KEY
+    : PUBLIC_ONLY_DIAGNOSTIC_CREDENTIAL
+  const apiSecret = credentialsConfigured
+    ? env.BITUNIX_API_SECRET
+    : PUBLIC_ONLY_DIAGNOSTIC_CREDENTIAL
+  const restClientFactory = createObservedBrokerRestClientFactory({
+    restClientFactory: brokerApiRestClientFactory,
+    schemaObservations,
+    secrets,
+    now,
+  })
+  return new Broker({
+    provider: "bitunix",
+    apiKey,
+    apiSecret,
+    tradingMode: "live",
+    providerOptions: {
+      requestTimeout,
+      dependencies: {
+        restClientFactory,
+      },
+    },
+  })
+}
+
+function recordBrokerLifecycle({ method, status, error, now, results, secrets }) {
+  if (status === "failed") {
+    recordBrokerApiFailure({
+      method,
+      args: [],
+      error,
+      startedAt: now(),
+      now,
+      results,
+      secrets,
+    })
+    return
+  }
+  const response = {}
+  if (method === "connect") {
+    response.connected = true
+  } else {
+    response.disconnected = true
+  }
+  results.push(createResult({
+    operation: `Broker API ${method}`,
+    startedAt: now(),
+    now,
+    status: "passed",
+    request: {
+      api: "Broker",
+      method,
+      networkConnection: false,
+    },
+    response,
+    secrets,
+  }))
+}
+
+async function connectBrokerForDiagnostics({ broker, now, results, secrets }) {
+  try {
+    await broker.connect()
+    recordBrokerLifecycle({
+      method: "connect",
+      status: "passed",
+      now,
+      results,
+      secrets,
+    })
+    return true
+  } catch (error) {
+    recordBrokerLifecycle({
+      method: "connect",
+      status: "failed",
+      error,
+      now,
+      results,
+      secrets,
+    })
+    return false
+  }
+}
+
+async function disconnectBrokerAfterDiagnostics({ broker, now, results, secrets }) {
+  try {
+    await broker.disconnect()
+    recordBrokerLifecycle({
+      method: "disconnect",
+      status: "passed",
+      now,
+      results,
+      secrets,
+    })
+  } catch (error) {
+    recordBrokerLifecycle({
+      method: "disconnect",
+      status: "failed",
+      error,
+      now,
+      results,
+      secrets,
+    })
+  }
+}
+
+async function runBrokerApiChecks({
+  env,
+  requestTimeout,
+  symbol,
+  now,
+  results,
+  secrets,
+  credentialsConfigured,
+  brokerApiRestClientFactory,
+  schemaObservations,
+  onProgress,
+}) {
+  const broker = createBrokerDiagnostic({
+    env,
+    requestTimeout,
+    credentialsConfigured,
+    brokerApiRestClientFactory,
+    schemaObservations,
+    secrets,
+    now,
+  })
+  const connected = await connectBrokerForDiagnostics({
+    broker,
+    now,
+    results,
+    secrets,
+  })
+  if (connected) {
+    const operations = getReadOnlyBrokerOperations({
+      symbol,
+      credentialsConfigured,
+    })
+    for (const definition of operations) {
+      await runBrokerApiOperation({
+        broker,
+        definition,
+        now,
+        results,
+        secrets,
+        schemaObservations,
+        onProgress,
+      })
+    }
+  }
+  await disconnectBrokerAfterDiagnostics({
+    broker,
+    now,
+    results,
+    secrets,
+  })
+}
+
+async function runOptionalBrokerApiChecks({
+  brokerApiRestClientFactory,
+  env,
+  requestTimeout,
+  symbol,
+  now,
+  results,
+  secrets,
+  credentialsConfigured,
+  schemaObservations,
+  onProgress,
+}) {
+  if (!brokerApiRestClientFactory) {
+    return
+  }
+  await runBrokerApiChecks({
+    env,
+    requestTimeout,
+    symbol,
+    now,
+    results,
+    secrets,
+    credentialsConfigured,
+    brokerApiRestClientFactory,
+    schemaObservations,
+    onProgress,
+  })
+}
+
+async function runConfiguredProbes({
+  env,
+  requestTimeout,
+  symbol,
+  depthPrecision,
+  klineInterval,
+  now,
+  results,
+  events,
+  secrets,
+  includePublicPayloads,
+  credentialsConfigured,
+  restClientFactory,
+  brokerApiRestClientFactory,
+  schemaObservations,
+  websocketClientFactory,
+  onProgress,
+}) {
+  await runRestChecks({
+    env,
+    requestTimeout,
+    symbol,
+    depthPrecision,
+    klineInterval,
+    now,
+    results,
+    secrets,
+    includePublicPayloads,
+    credentialsConfigured,
+    restClientFactory,
+    onProgress,
+  })
+  await runOptionalBrokerApiChecks({
+    brokerApiRestClientFactory,
+    env,
+    requestTimeout,
+    symbol,
+    now,
+    results,
+    secrets,
+    credentialsConfigured,
+    schemaObservations,
+    onProgress,
+  })
+  await runWebSocketChecks({
+    env,
+    requestTimeout,
+    symbol,
+    depthPrecision,
+    now,
+    results,
+    events,
+    secrets,
+    includePublicPayloads,
+    credentialsConfigured,
+    websocketClientFactory,
+    onProgress,
+  })
+}
+
+async function runConfiguredDiagnostics({
+  env,
+  now,
+  startedAtIso,
+  results,
+  events,
+  secrets,
+  includePublicPayloads,
+  restClientFactory,
+  brokerApiRestClientFactory,
+  websocketClientFactory,
+  schemaObservations,
+  onProgress,
+}) {
+  const { symbol, klineInterval, timeoutMs: requestTimeout } = DIAGNOSTIC_CONFIG
+  let depthPrecision
+  try {
+    if (!Number.isInteger(requestTimeout) || requestTimeout < 1 || requestTimeout > 60_000) {
+      throw new RangeError("DIAGNOSTIC_CONFIG.timeoutMs must be an integer between 1 and 60000")
+    }
+    depthPrecision = parseDiagnosticDepthPrecision({
+      value: env.BITUNIX_DIAGNOSTICS_DEPTH_PRECISION,
+    })
+  } catch (error) {
+    return createOptionFailure({
+      error,
+      startedAtIso,
+      now,
+      results,
+      events,
+      secrets,
+    })
+  }
+
+  const credentialsConfigured = hasApiCredentials({ env })
+  await runConfiguredProbes({
+    env,
+    requestTimeout,
+    symbol,
+    depthPrecision,
+    klineInterval,
+    now,
+    results,
+    events,
+    secrets,
+    includePublicPayloads,
+    credentialsConfigured,
+    restClientFactory,
+    brokerApiRestClientFactory,
+    schemaObservations,
+    websocketClientFactory,
+    onProgress,
+  })
+  return createReport({
+    startedAtIso,
+    now,
+    results,
+    events,
+    schemaObservations,
+  })
+}
+
+export async function runDiagnostics({
+  env = process.env,
+  now = Date.now,
+  restClientFactory = (options) => new BitunixRestClient(options),
+  brokerApiRestClientFactory,
+  websocketClientFactory = (options) => new BitunixSpotWebSocketClient(options),
+  onProgress,
+} = {}) {
+  const startedAt = now()
+  const startedAtIso = new Date(startedAt).toISOString()
+  const secrets = getConfiguredApiSecrets({ env })
+  const results = []
+  const events = []
+  const schemaObservations = []
+  const { includePublicPayloads } = DIAGNOSTIC_CONFIG
+  const safetyConfirmation = createSafetyConfirmationResult({
+    startedAt,
+    now,
+    secrets,
+  })
+  results.push(safetyConfirmation)
+  if (safetyConfirmation.status !== "passed") {
+    return createReport({
+      startedAtIso,
+      now,
+      results,
+      events,
+      schemaObservations,
+    })
+  }
+  const configuration = createConfigurationResult({
+    env,
+    startedAt,
+    now,
+    secrets,
+  })
+  results.push(configuration)
+  onProgress?.({ message: "      Configuration: credentials and live-read safety ... PASS" })
+  return runConfiguredDiagnostics({
+    env,
+    now,
+    startedAtIso,
+    results,
+    events,
+    secrets,
+    includePublicPayloads,
+    restClientFactory,
+    brokerApiRestClientFactory,
+    schemaObservations,
+    websocketClientFactory,
+    onProgress,
+  })
+}
+
+export { WEBSOCKET_OPERATIONS }

@@ -1,7 +1,31 @@
-import { capitalize, Validator } from "@coinzilla/utils"
+import { capitalize, ensure } from "@coinzilla/utils"
+import { assertWithDomainError } from "../helpers/assert-with-domain-error.js"
 import { errMsgs } from "./err-msgs.js"
 
 const supportedTypes = ["LIMIT", "LIMIT_MAKER", "MARKET"]
+const supportedSides = ["BUY", "SELL"]
+
+function assertValidString({ value, name, errorMessage }) {
+  assertWithDomainError({
+    validate: () => ensure.nonEmptyString({
+      value,
+      name,
+      errMsg: errorMessage,
+    }),
+    errorMessage,
+  })
+}
+
+function assertValidNumber({ value, name, errorMessage }) {
+  assertWithDomainError({
+    validate: () => ensure.number({
+      value,
+      name,
+      errMsg: errorMessage,
+    }),
+    errorMessage,
+  })
+}
 
 export class Order {
   #id
@@ -25,39 +49,66 @@ export class Order {
   }
 
   constructor({ symbol, type, side, quantity, price, id, clientOrderId }) {
-    if (typeof symbol !== "string" || !symbol.trim()) {
-      throw new Error(errMsgs.symbol)
-    }
+    assertValidString({
+      value: symbol,
+      name: "symbol",
+      errorMessage: errMsgs.symbol,
+    })
     this.#symbol = capitalize(symbol.trim())
 
+    assertValidString({
+      value: type,
+      name: "type",
+      errorMessage: errMsgs.type,
+    })
     if (!supportedTypes.includes(type)) {
       throw new Error(errMsgs.type)
     }
     this.#type = type
 
-    if (!["BUY", "SELL"].includes(side)) {
+    assertValidString({
+      value: side,
+      name: "side",
+      errorMessage: errMsgs.side,
+    })
+    if (!supportedSides.includes(side)) {
       throw new Error(errMsgs.side)
     }
     this.#side = side
 
-    if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity < 0) {
+    assertValidNumber({
+      value: quantity,
+      name: "quantity",
+      errorMessage: errMsgs.quantity,
+    })
+    if (quantity < 0) {
       throw new Error(errMsgs.quantity)
     }
     this.#quantity = quantity
 
-    if (!Validator.isRequiredNumberValid(price) || price < 0) {
+    assertValidNumber({
+      value: price,
+      name: "price",
+      errorMessage: errMsgs.price,
+    })
+    if (price <= 0) {
       throw new Error(errMsgs.price)
     }
     this.#price = price
 
-    if (!Validator.isRequiredNotEmptyString(id)) {
-      throw new Error(errMsgs.id)
-    }
+    assertValidString({
+      value: id,
+      name: "id",
+      errorMessage: errMsgs.id,
+    })
     this.#id = id
 
-    if (clientOrderId !== undefined && clientOrderId !== null &&
-        !Validator.isRequiredNotEmptyString(clientOrderId)) {
-      throw new Error(errMsgs.clientOrderId)
+    if (clientOrderId !== undefined && clientOrderId !== null) {
+      assertValidString({
+        value: clientOrderId,
+        name: "clientOrderId",
+        errorMessage: errMsgs.clientOrderId,
+      })
     }
     this.#clientOrderId = clientOrderId ?? undefined
   }

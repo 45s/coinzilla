@@ -10,14 +10,15 @@ Harvester's mandatory execution order is defined only in [TRADING_FIRST.md](apps
 
 Visual workflow diagrams follow the canonical [visual documentation and workflow schemas standard](ENGINEERING_STANDARDS.md#visual-documentation-and-workflow-schemas). Consider flowcharts and sequence diagrams for complex work, and keep them aligned with source code and tests.
 
-## 1. The short version
 ## 0. Mandatory documentation and requirements preflight
 
-Before **any** task or state-changing action, every agent MUST complete the documentation preflight defined in the repository-root [AGENTS.md](AGENTS.md#mandatory-documentation-and-requirements-preflight--hard-gate) and follow [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md). Start from the [repository documentation index](docs/README.md) and the owning domain's local index. Inventory and read in full all repository-wide policies and every applicable task checklist, domain instruction, roadmap, specification, architecture/ADR, runbook, contract, configuration guide, and test requirement; follow applicable document links recursively. Then inspect the affected implementation, consumers, tests, and configuration, and provide a concise readiness summary with the documents read, constraints, acceptance criteria, and blockers. **Do not implement, edit, mutate configuration/state, or start adjacent work until this review is complete and understanding is established.** If anything required is inaccessible, unclear, or contradictory, stop and report the blocker. Each agent must do this independently.
+The task-start gate and readiness record are owned by the canonical [AI Task Compliance Standard](docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md). Every agent must complete that standard independently before any state-changing work and follow [Documentation Governance](docs/DOCUMENTATION_GOVERNANCE.md). Use [Task Workflows](docs/engineering/TASK_WORKFLOWS.md) for the task-specific checklist and the owning domain's instructions/roadmap for local constraints. Do not reproduce the compliance checklist here; the standard is the single source of truth. Read-only discovery is allowed; do not implement or mutate state until the gate is complete. If required material is missing or contradictory, stop and report the exact blocker.
 
 Before implementing a shared helper or cross-cutting capability, follow the single [shared-utilities policy](docs/engineering/SHARED_UTILITIES_POLICY.md).
 
 For any refactoring or code-audit task, use the canonical [AI Refactoring and Code Audit Standard](docs/engineering/AI_REFACTORING_AUDIT_STANDARD.md) together with the applicable checklist in [Task Workflows](docs/engineering/TASK_WORKFLOWS.md). Treat its scope, evidence, test-first, compatibility, verification, and reporting requirements as mandatory.
+
+## 1. The short version
 
 1. Read the repository-root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, this document, and the owning domain's `AGENTS.md` and `ROADMAP.md`.
 2. Identify one owning domain and one focused task.
@@ -25,8 +26,8 @@ For any refactoring or code-audit task, use the canonical [AI Refactoring and Co
 4. Change only files owned by that domain, unless a coordinated cross-domain task explicitly authorizes otherwise.
 5. Add tests and follow the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact).
 6. Commit the implementation, strong regression tests, and documentation, then open a PR targeting `develop`. GitHub Actions is the required verification runner; run local checks when a working local environment is available, but local execution is not a prerequisite for implementation or PR creation.
-7. The responsible agent synchronizes and merges the task PR after all automated requirements pass. No routine human approval is expected for `develop`.
-8. Never merge task work directly into `main`.
+7. The responsible agent synchronizes, verifies, and prepares the task PR for review. The user reviews and merges every task PR; agents must never merge or enable auto-merge.
+8. Never merge any task or release PR on the user's behalf. Never merge task work directly into `main`.
 9. When the agreed milestone is ready, prepare one release PR from `develop` to `main`. The user reviews and approves that release PR.
 
 ## 1.1 Incremental commits and resumable task handoffs — mandatory
@@ -48,6 +49,19 @@ Every non-trivial task MUST have a GitHub Issue (or an existing issue explicitly
 
 An issue title/body is not frozen after kickoff. The responsible agent MUST update it when scope, acceptance criteria, decisions, dependencies, blockers or status materially change. Keep the description concise and current; put dated progress/checkpoint detail in comments rather than accumulating an event log in the issue body. Link the issue from the branch/PR and the owning roadmap where appropriate. If the task is genuinely a tiny standalone change, use an existing tracking issue or create a concise issue; do not invent bureaucracy for a one-line typo.
 
+### One task, one branch, one PR — mandatory
+
+A coherent task MUST be implemented on one short-lived task branch and delivered through one task PR. The branch and PR are the unit of review, validation, integration and handoff.
+
+- Keep the task's implementation, regression tests, configuration/schema changes, and all affected living-documentation updates in that same branch and PR.
+- Do not split implementation and its required documentation into parallel branches or separate PRs merely because the files live in different directories or have different formats. Documentation is part of the change, not follow-up housekeeping.
+- Keep commits small and logically ordered inside that one branch/PR. A test-first commit, implementation commit, focused refactor and related documentation/status update may be separate commits when each is independently understandable.
+- Do not combine unrelated tasks in one branch/PR. Split work only when the outcomes are independently deliverable, have distinct ownership/review or release constraints, or one is explicitly deferred; record the dependency between them.
+- A genuinely independent documentation-policy or documentation-only task may have its own issue, branch and PR. It must not be used to offload docs required by an active implementation task.
+- If the task scope changes materially, update the issue and PR rather than silently creating a second branch. If the scope must be split, explain the reason and link the follow-up task before proceeding.
+
+This rule does not require one commit per task. It requires one coherent task branch and one reviewable PR containing all work needed to deliver that task.
+
 ### Small, meaningful commits
 
 Commit continuously in coherent increments. A commit should represent one reviewable intention (for example: a failing regression test, the minimal fix, a focused refactor, or the corresponding documentation/status update), not an arbitrary number of changed lines.
@@ -59,6 +73,24 @@ Commit continuously in coherent increments. A commit should represent one review
 - After each meaningful increment, inspect the diff and run the narrowest relevant checks when available. Before handing off or pausing, push a coherent checkpoint; do not leave the only copy of work in an uncommitted local workspace. If an unfinished change cannot yet pass checks, record exactly why and what remains.
 - Do not create empty/progress-only commits. Do not rewrite or squash away the only test-first evidence or commits needed to understand the task. Never force-push shared history.
 - A commit is not proof that the task is complete. Report validation status separately and identify the exact commit/PR head on which it was observed.
+
+### Commit-to-checkpoint loop — mandatory while work is active
+
+A task is not safely resumable only at the end of a session. **Every meaningful increment must become a pushed, understandable checkpoint before the agent moves on to a different increment.** Apply this loop continuously:
+
+1. **Choose one reviewable outcome.** State the behavior, test, refactor, documentation correction, or other result this increment will deliver. Keep unrelated work out of the increment.
+2. **Complete the increment coherently.** Include the tests and the living-documentation changes required to keep the repository truthful about that result. If the increment has no documentation impact, record that reason in the commit or current PR/issue summary; do not manufacture a documentation edit.
+3. **Inspect and validate before committing.** Review the complete diff, check for unrelated changes and whitespace errors, and run the narrowest relevant checks available. For behavior changes, preserve the required RED → GREEN evidence; a deliberate RED checkpoint must say what failed and why.
+4. **Commit with an outcome-focused message.** Use the required Conventional Commit format. A commit must be understandable from its message and diff without the author explaining it in chat. Do not create empty, vague, progress-only, or arbitrary line-count commits.
+5. **Synchronize and push the checkpoint.** Before every push, verify the latest task-PR target and task branch using §6. Merge the latest `develop` into a task branch when required, resolve conflicts on that branch, inspect the complete diff, and push the coherent checkpoint. Do not wait until the end of the task to publish several accumulated commits.
+6. **Refresh the GitHub task record.** After each meaningful pushed checkpoint, update the issue's current-state section with the exact branch/head SHA, completed outcome, current in-progress slice, next action, and validation status. Update the PR description when the review summary, delivered scope, risks, or validation changes materially. Keep the roadmap status accurate when the task's planned/in-progress/blocked/done state changes; do not turn it into a commit diary.
+7. **Check consistency before continuing.** Confirm the issue, branch, PR (if open), roadmap and living documentation do not contradict the pushed code. Then begin the next increment.
+
+The checkpoint is the **combination** of a pushed commit and current GitHub task context—not the commit alone. A pushed commit with stale task status, missing required documentation, an outdated task branch, or an unsupported green-test claim is not a valid handoff checkpoint.
+
+Keep updates proportionate: update the issue's current-state summary for each meaningful increment, but add a dated issue comment only for a handoff, blocker, material decision, or other event that benefits from a durable chronological record. Do not spam comments for every routine commit. The issue body is the current contract/status; comments preserve significant history. The PR body is the current review summary, not a duplicate event log.
+
+If work is interrupted immediately after a commit, another owner must be able to identify from the issue and branch what that commit accomplished, whether its tests are expected to be red or green, what remains, and the next safe action. Never rely on unpushed local changes, hidden chat context, or a later end-of-task cleanup to make the work understandable.
 
 ### Checkpoint and handoff — required whenever work pauses or changes owner
 
@@ -97,11 +129,11 @@ The next agent must be able to continue from the issue, PR, branch and canonical
 
 | Branch | Purpose | Who merges |
 | --- | --- | --- |
-| `main` | Stable, releasable history | User approves final release PR |
-| `develop` | Shared integration branch for ongoing work | Responsible agent after all required gates pass |
-| `feature/<domain>/<task>` | Short-lived feature task | Responsible agent into `develop` |
-| `fix/<domain>/<task>` | Short-lived bug-fix task | Responsible agent into `develop` |
-| `docs/<task>` | Short-lived documentation task | Responsible agent into `develop` |
+| `main` | Stable, releasable history | User reviews and merges the final release PR |
+| `develop` | Shared integration branch for ongoing work | User, after reviewing the PR and required gates |
+| `feature/<domain>/<task>` | Short-lived feature task | User, after reviewing the PR |
+| `fix/<domain>/<task>` | Short-lived bug-fix task | User, after reviewing the PR |
+| `docs/<task>` | Short-lived documentation task | User, after reviewing the PR |
 
 Examples:
 
@@ -180,9 +212,9 @@ A task PR targeting `develop` must:
 - Satisfy the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact) for every meaningful change; do not leave required documentation as an untracked follow-up.
 - Have a reviewed final diff with no secrets, generated noise, weakened tests, or unrelated edits.
 
-**Human approval is not a routine gate for `develop`.** After all required checks pass, branch freshness is verified, and the diff/ownership checks are satisfied, the responsible agent may merge its own task PR into `develop`. Prefer GitHub auto-merge if the repository enables it; otherwise merge only after the required checks have completed successfully. Never bypass branch protection or merge with pending/failed checks.
+**User review and merge are mandatory for every task PR.** After all required checks pass, branch freshness is verified, and the diff/ownership checks are satisfied, the responsible agent must leave the PR open for the user to review and merge. Agents must not merge task PRs, enable auto-merge, or treat passing CI as authorization to integrate changes.
 
-The agent is responsible for merge execution and cleanup. Do not ask the user to merge routine task PRs or update branches manually.
+The agent remains responsible for implementation, branch freshness, CI diagnosis, and review-ready handoff. The user owns the merge decision and execution.
 
 ## 6. Branch freshness and conflict handling — required on every PR update
 
@@ -203,9 +235,9 @@ Before **each** action that updates an existing PR or its source branch—includ
 
 This procedure applies every time, not only once per PR and not only before merge. If a PR is already current, record/confirm that result and proceed without creating an unnecessary synchronization commit. Metadata-only changes still require the pre-update freshness check.
 
-### Mandatory final merge check
+### Mandatory pre-handoff merge-readiness check
 
-Immediately before merging, repeat the full freshness check against the PR's actual target. If either ref changes during validation, repeat synchronization and required checks. Merge only when the latest target tip is an ancestor of the exact PR head being merged and every required gate is satisfied.
+Before handing a PR to the user for review, repeat the full freshness check against the PR's actual target. If either ref changes during validation, repeat synchronization and required checks. Report the exact PR head and confirm that the latest target tip is an ancestor of that head and every required gate is satisfied. The user performs the merge; agents must not do so.
 
 Never force-push shared history, discard another agent's work, use empty commits to restart CI, or ask the user to perform routine synchronization. If permissions or tools prevent safe synchronization or verification, stop and report the exact blocker. Never merge a stale PR or bypass branch protection.
 
@@ -225,19 +257,19 @@ Each domain roadmap is the source of truth for that domain's planned work and st
 **GitHub is both the source-control interface and the required remote execution environment. A missing local terminal is never, by itself, a blocker.** Agents are expected to use GitHub repository operations and GitHub Actions to implement, test, lint, build, inspect failures, and iterate.
 
 - Local checkout, shell, package manager, and local test execution are optional conveniences. Do not use their absence, a failed `git clone`, or lack of a local workflow runner as an excuse to stop, hand commands to the user, or leave the requested implementation undone.
-- Use GitHub to create/update the task branch and commit the actual source, tests, and documentation. Open or update a Draft PR targeting `develop`; its pull-request workflows are the default remote execution trigger. If an applicable workflow is manual-only, dispatch it through GitHub Actions. Do not wait for the user to trigger routine CI.
+- Use GitHub to create/update the task branch and commit the actual source, tests, and documentation. For an ordinary, short-lived task branch, create/update the PR targeting `develop` as a normal **open (non-draft) PR** once the change is coherent and reviewable; do not use Draft merely to wait for CI, branch synchronization, or routine implementation steps. If an applicable workflow is manual-only, dispatch it through GitHub Actions. Do not wait for the user to trigger routine CI. Reserve Draft for genuine WIP as defined in §15.
 - **Remote TDD is mandatory when local execution is unavailable.** First commit the regression test without the production fix and let the applicable GitHub Actions workflow execute it. Inspect the job log and verify that the test itself fails for the expected behavioral reason. A workflow/setup failure, missing test discovery, syntax error, timeout, or unrelated failure is not valid RED evidence. Then commit the smallest implementation and let GitHub Actions run the same test again for GREEN. Repeat this cycle for meaningful behavior increments. Keep the test-first commit/evidence in branch history; do not squash away the only evidence before review.
 - If no existing workflow executes the relevant test or check, add or extend a narrowly scoped GitHub Actions workflow in the task PR so GitHub can run it. Keep it deterministic, least-privilege, and safe for pull-request code. Do not add credentials, live exchange access, production side effects, or privileged write permissions to make tests run. Never dispatch TESTNET or LIVE operations without the separate authorization required by the broker safety policy.
 - Use the GitHub Actions run, job, and step logs to diagnose failures. Fix the source, tests, or genuine workflow defect; commit the correction and allow GitHub to run it again. Do not skip, weaken, delete, loosen, or mask tests, coverage, lint, security checks, or required status contexts to obtain green.
 - Verify every required check against the **exact current PR head SHA**. Record the SHA and the relevant Actions run/check evidence in the PR. A green run on an earlier commit, a workflow that merely started, or a locally inferred result does not count.
 - If an Actions run fails for infrastructure reasons, retry only the failed job/run when appropriate and safe; distinguish infrastructure failure from a product/test failure. If the workflow itself is broken, repair it in the same task or a focused supporting PR. Do not report the work as verified until the required checks pass.
 - If GitHub permissions or repository services prevent a specific GitHub operation, continue with every other safe implementation and repository step possible. Report the exact denied operation and its effect; do not convert a missing local terminal into a blocker or ask the user to run routine commands.
-- Merge the task PR into `develop` only after every required check passes on the exact head SHA and branch freshness/ownership requirements are satisfied. Never claim a test/check passed unless GitHub reports success for the relevant commit.
+- Leave the task PR open for the user to review and merge after every required check passes on the exact head SHA and branch freshness/ownership requirements are satisfied. Never merge or enable auto-merge on the user's behalf. Never claim a test/check passed unless GitHub reports success for the relevant commit.
 
 For broker changes, keep live/network integration tests separate from default unit tests. Tests that place orders must use TESTNET only, and only under explicit authorization. Never use production credentials or trigger LIVE broker actions as part of CI verification.
-## 9. Final release: one human review
+## 9. Final release: milestone review
 
-The purpose of `develop` is to accumulate independently implemented, automatically validated work. Do not ask the user to review every task PR.
+The purpose of `develop` is to accumulate independently implemented, automatically validated work. **Every task PR must still be left open for user review and merge**, as required by §§1 and 8 and by the repository's issue/PR governance. The final release PR provides the milestone-level review of the accumulated `develop` changes; it does not replace task-PR review.
 
 When the user-approved milestone is ready:
 
@@ -245,7 +277,7 @@ When the user-approved milestone is ready:
 2. Synchronize and validate `develop` against the latest `main`.
 3. Run the full release validation and inspect the complete `develop` → `main` diff.
 4. Prepare one release PR with a concise milestone summary, roadmap items included, test evidence, compatibility/migration notes, and known risks.
-5. The user performs the final review and approval. Agents must not merge this PR unless the user explicitly authorizes that merge.
+5. The user performs the final review, approval, and merge. Agents must not merge this PR or any task PR.
 
 Do not turn every small commit into a separate human decision. Keep the final PR understandable with a summary and links to task PRs/issues.
 
@@ -256,7 +288,7 @@ A successful `develop` → `main` release PR creates a merge commit on `main` th
 1. Re-fetch and record the exact `main` and `develop` HEAD SHAs. Verify the merged PR was exactly `develop` → `main`, inspect its merge commit and both parents, confirm the user's approving review is recorded, and confirm every required check passed on the exact release PR head. If the approval is absent, the live `main` ruleset does not require at least one approval, or the ruleset cannot be verified, stop: do not merge another release PR.
 2. Compare the branches and inspect every commit exclusive to `main`. Do not infer that commits are harmless from their count or message. For each release merge commit, verify its second parent is the exact release PR head, its tree SHA equals that second parent's tree SHA, and that source/head commit is an ancestor of the current `develop`. Inspect file-level differences as well. If any main-only commit contains content not already present in `develop`, any source head is not an ancestor, or any tree/diff is unexpected, stop and prepare a separately reviewed reconciliation; never use a blanket `ours`/ `theirs` resolution.
 3. When the evidence proves that only release-merge ancestry is missing and the `main` tree introduces no content absent from `develop`, create a short-lived task branch from the exact latest `develop` SHA. Merge the exact latest `main` into that task branch, preserving both histories with `develop` as the first parent. Inspect the complete resulting tree and diff; the resulting tree must retain the full `develop` tree unchanged. Do not force-push or update either integration branch directly.
-4. Open a PR from that task branch into `develop`. Include the before/after SHAs, release PR links, parent/tree verification, and an explicit statement that this is ancestry-only reconciliation with no runtime/content changes. Run all required checks on the exact PR head, verify branch freshness, and merge only under the ordinary `develop` PR gates. Delete the task branch after successful merge.
+4. Open a PR from that task branch into `develop`. Include the before/after SHAs, release PR links, parent/tree verification, and an explicit statement that this is ancestry-only reconciliation with no runtime/content changes. Run all required checks on the exact PR head and verify branch freshness. Leave the PR open for user review and merge; delete the task branch after the user merges.
 5. Re-fetch both integration refs and verify `main` is now an ancestor of `develop` (`main` → `develop` comparison has `behind_by = 0`). Record the resulting SHAs. If either branch advanced during the procedure, repeat the audit against the new tips.
 
 This is repository-history maintenance, not permission to merge task work into `main`. The only permitted PR target for this reconciliation is `develop`; the only permitted PR target for a release remains `main` with source `develop` and explicit user approval. Never reset, rebase, force-push, delete, or recreate either integration branch.
@@ -271,7 +303,7 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 - Require **all** CI checks: `Run package tests`, `Workspace test coverage`, `Check JavaScript syntax`, `packages/utils tests`, `Audit production dependencies`, and `actionlint`.
 - Require branches to be up to date before merging (`strict_required_status_checks_policy: true`).
 - Require conversation resolution.
-- Require zero human approvals; agents may merge their own PRs only after every required check is green.
+- Require at least one approving human review. The user reviews and merges task PRs; agents must never merge or enable auto-merge.
 - Block force pushes and deletion of `develop` itself; task source branches are deleted after merge.
 - Keep GitHub automatic head-branch deletion enabled.
 - Do not configure bypass actors or admin bypass for these gates.
@@ -283,7 +315,7 @@ Documentation is not enforcement. Configure GitHub rulesets/branch protection as
 - Require at least one approving review so the final release approval is technically enforced, not merely documented.
 - Block force pushes and branch deletion.
 
-Enable repository **Allow auto-merge** only if desired and supported by the chosen merge strategy. If it remains disabled, agents may merge task PRs themselves after all rules are satisfied. Do not describe auto-merge as active until the repository setting is actually enabled.
+Keep repository **Allow auto-merge** disabled for task PRs. The user performs the merge manually after review. Do not describe approval enforcement as active until the live ruleset has been updated and read back.
 
 After configuration, read back both live rulesets and verify they match the requirements above. Derive exact required-check context names from successful workflow runs; never assume a workflow name is its status context. Do not claim a rule is active until the live ruleset confirms it.
 
@@ -363,15 +395,18 @@ Every AI agent and coding assistant MUST execute clear user requests to implemen
 
 ## 15. Pull-request draft and ready-for-review lifecycle — mandatory
 
-A pull request's GitHub lifecycle state and its draft/ready-for-review state are different. GitHub reports an unmerged draft PR as `state: open` with `draft: true`. In this policy, **READY/OPEN** means explicitly marked ready for review (`draft: false`); **DRAFT/WIP** means work is still in progress (`draft: true`).
+A pull request's GitHub lifecycle state and its draft/ready-for-review state are different. GitHub reports an unmerged draft PR as `state: open` with `draft: true`. A normal open PR has `draft: false`.
 
-- Create every task PR as a **draft**. Keep it draft throughout implementation, investigation, conflict resolution, and verification.
-- Never mark a PR ready for review merely because a PR exists, a branch is mergeable, or some checks have passed.
-- A PR may be marked **ready for review (OPEN)** only when the task is genuinely complete: all agreed acceptance criteria and implementation are finished; tests and required documentation are included; the complete diff has been reviewed; there are no known unresolved blockers or requested changes; and every required CI check has passed on the exact current PR head SHA.
-- **Branch freshness is an absolute precondition to marking a PR ready.** Immediately before the transition, fetch the latest target branch and PR head, compare them, and verify the latest target tip is an ancestor of the exact PR head (`behind_by = 0`). If behind or diverged, keep the PR draft, synchronize safely, inspect the complete diff, and rerun affected checks. Do not mark ready while stale, conflicted, or while required checks are pending or failing.
-- After marking ready, immediately fetch and compare the refs again and verify that the PR is still current. If the target advanced during the transition, or any completion gate is no longer satisfied, convert the PR back to draft, synchronize, and repeat verification.
-- If implementation resumes, a new commit is pushed, a required check fails, a new blocker is found, or requested changes remain unresolved after a PR was marked ready, convert it back to draft immediately. It stays draft until every completion gate is satisfied again.
-- Agents must report the PR's actual draft flag, mergeability, ahead/behind counts, and exact-head CI result. Never describe a draft PR as ready/open for review, and never describe a merely open GitHub state as proof that work is complete.
-- A PR being ready for review is not the same as being merged. Follow the separate merge gates and ownership rules in this workflow; never merge solely because the PR was marked ready.
+**Default: ordinary task PRs MUST be created as normal open (non-draft) PRs. Draft is an exception for genuine work in progress, not the default workflow state.** The purpose of this rule is to stop routine status flipping and avoid making the user convert completed task PRs from Draft to Ready.
 
-This rule applies to every AI agent, coding assistant, human contributor and automation. Draft is the default working state; ready-for-review is an explicit completion signal, not a progress indicator.
+- For a focused, short-lived task branch, create the PR as `draft: false` once the implementation slice is coherent and reviewable. Do not create it as Draft merely because CI is pending/running, because the branch may need routine synchronization, or because more routine polish/verification is expected.
+- Do not open a PR prematurely just to expose an unfinished idea. Finish the agreed implementation slice, include its tests and required documentation, inspect the full diff, and then open it normally.
+- **Use Draft only when the PR is genuinely WIP**, such as an incomplete implementation, unresolved design/acceptance criteria, a deliberately staged multi-phase change that is not yet reviewable, or an explicitly long-lived integration/workstream branch whose purpose is to collect ongoing work before review. A long-lived branch alone does not require Draft; use Draft only while its PR is actually not ready for review.
+- If work is complete and reviewable, do not leave the PR in Draft for administrative convenience. If a Draft PR becomes coherent and reviewable, mark it ready promptly; do not wait for the user to do so.
+- If a normal open PR later becomes genuinely WIP again (implementation resumes materially, scope/acceptance criteria are unresolved, or a blocking issue makes the proposed change not reviewable), convert it to Draft and explain the concrete WIP reason in the PR. Do not toggle states for ordinary CI retries, routine branch freshness updates, or small follow-up commits that preserve reviewability.
+- A normal open PR may have checks pending or failing. That does **not** make it a Draft PR. The agent owns fixing failures and rerunning checks; never merge until every required check passes on the exact current head SHA.
+- Before creating/updating a PR or changing its draft state, follow the mandatory branch-freshness procedure in §6. A PR must not be knowingly stale or conflicted.
+- Agents must report the actual GitHub `draft` flag, mergeability, ahead/behind counts, and exact-head CI result. Never claim CI passed when it is pending, absent, or failing.
+- A PR being open/ready for review is not the same as being merged. Follow the separate merge gates and ownership rules in this workflow; never merge solely because the PR is open.
+
+This rule applies to every AI agent, coding assistant, human contributor and automation. **Normal open PR is the default; Draft is reserved for genuine WIP.**

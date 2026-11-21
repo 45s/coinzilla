@@ -37,7 +37,7 @@ Include:
 2. Owning-domain agent evaluates it and decides whether to accept, defer, or reject it with a reason.
 3. Accepted work is added to the owner's roadmap.
 4. Owner implements and tests the change on a short-lived task branch from `develop`.
-5. Owner opens a focused PR to `develop`; it is merged after required automated gates pass.
+5. Owner opens a focused PR to `develop`; the user reviews and merges it after required automated gates pass. The owning agent must leave the PR open and must not merge or enable auto-merge.
 6. Consumer synchronizes from `develop`, then updates its own code and tests.
 7. Link request, owner PR, and consumer PR to preserve traceability.
 

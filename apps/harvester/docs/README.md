@@ -4,11 +4,12 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 ## Current Harvester priority
 
-**Multi-provider execution and independent market-data routing (#1339): Phases 1–6 are complete and merged.** Harvester now supports multiple configured Binance account runtimes, explicit per-symbol market-data source routing, and explicit `(strategyId, symbol)` execution routing with immutable provider/account provenance. See the [migration plan](../../../docs/architecture/multi-provider-migration-plan.md), [provider-instance registry](infrastructure/provider-instance-registry.md), and [execution-routing contract](infrastructure/execution-routing.md). The production adapter catalog remains Binance-only: Bitunix is not registered until [#1185](https://github.com/45s/coinzilla/issues/1185) is resolved and the complete standard provider contract is satisfied. Recovery Seller execution and process-restart recovery remain separate deferred workstreams.
+**Multi-provider execution and independent market-data routing (#1339): Phases 1–6 are complete and merged.** Harvester now supports multiple configured Binance account runtimes, explicit per-symbol market-data source routing, and explicit `(strategyId, symbol)` execution routing with immutable provider/account provenance. See the [migration plan](../../../docs/architecture/multi-provider-migration-plan.md), [provider-instance registry](infrastructure/provider-instance-registry.md), and [execution-routing contract](infrastructure/execution-routing.md). The production adapter catalog remains Binance-only: Bitunix is not registered until [#1185](https://github.com/45s/coinzilla/issues/1185) is resolved and the complete standard provider contract is satisfied. Recovery Seller RS-4 production runtime composition and scoped RS-5 offline lifecycle/failure/concurrency acceptance are complete in PR #1515. The runtime acceptance gate is open, but RS remains disabled by default (`enabled: false`, no configured pairs). Restart/replay and third-asset commission valuation are deferred; STOP is terminal and CC-operator exposes read-only status only. Exact-head CI is the final merge check.
 
 ## Start here
 
 - [Application configuration and Telegram notification profiles](../README.md#configuration) — the named `appConfig` export composed from named modules, including `config/operator-control.js` and `config/notifications-tg-profiles.js`; profile behavior, event overrides, and environment-only credentials.
+- [Repository Configuration Standard](../../../docs/engineering/CONFIGURATION_STANDARD.md) — shared ownership, validation, defaults, environment access, secrets and migration rules.
 
 - [Harvester README](../README.md) — setup, runtime, configuration and operational overview
 - [Shared token specification generator](../README.md#generate-or-refresh-market-metadata) — retrieve and maintain exchange-derived market precision through `pnpm run config:symbol`; strategy pairs remain operator-owned
@@ -23,8 +24,11 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
-- [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — source-verified persistence inventory, target architecture, repository contracts, TESTNET/LIVE isolation, operations and phased migration.
-- [Ordinary persistence and trading-session repository contract](persistence/README.md) — merged trading-session history implementation and lifecycle contract.
+- [Strategy extensibility architecture roadmap](architecture/strategy-extensibility-audit-roadmap.md) — S-1/S-2 boundary decisions and S-4 CG/RS runtime-composition evidence are complete; S-3 future-strategy onboarding template remains.
+- [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — historical source-verified design/audit snapshot; current implementation is governed by the Harvester persistence README.
+- [Harvester ordinary persistence](persistence/README.md) — current relational orders/fills, live-fill, startup history-sync, backup and full JSON export commands and safety contract.
+- [Trading-history persistence roadmap](persistence/trading-history-roadmap.md) — completed Phases 1–3 and planned attribution, analytics and remaining operational hardening.
+- [Trading-history API v1 (in-process Harvester HTTP lifecycle)](api/trading-history-api.md) — versioned HTTP contract for browsing persisted orders, individual fills, and commission facts from independent clients.
 - [ADR-0003: Multi-provider execution and market-data routing](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) — accepted target architecture; implementation is tracked by [#1339](https://github.com/45s/coinzilla/issues/1339).
 - [ADR-0004: Complete Bitunix provider integration](../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md) — Bitunix admission requires a complete Brokers and Harvester provider contract; no interim partial facade.
 - [Multi-provider migration audit and implementation plan](../../../docs/architecture/multi-provider-migration-plan.md) — source-verified Harvester composition, order provenance, account isolation, recovery prerequisites and phased implementation plan.
@@ -49,8 +53,9 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 - [Operations index](operations/README.md) — Journal, logging, TESTNET procedures and safety boundaries
 - [Submission deferrals and missing-order diagnostics](operations/submission-deferrals.md) — stable reasons for withheld broker submissions and safe LIMIT_MAKER diagnosis.
+- [Relational trading-history backup runbook](operations/trading-history-backups.md) — routine online backups, explicit TESTNET/LIVE selection, restore checks and retention.
 
-- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier DOGEUSDT/ZROUSDT plan no longer matches the LINKFDUSD and ZROFDUSD default config. Reconcile scope before any future session.
+- [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier two-pair DOGEUSDT/ZROUSDT plan is superseded: the committed CG configuration enables four TESTNET markets (LINKUSDT, ZROUSDT, DOGEUSDT and ADAUSDT) and three LIVE markets (LINKFDUSD, ZROFDUSD and WLDFDUSD). The runbook remains CLOSED / PAUSED; no replacement session scope is approved.
 - [Journal operations](JOURNAL_OPERATIONS.md)
 - [Error vocabulary](error-vocabulary.md) — stable operator-facing diagnostic identifiers and recovery procedures.
 - [Journal evidence contract](JOURNAL_EVIDENCE_CONTRACT.md)
@@ -61,6 +66,8 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Conservative session audit checklist](CONSERVATIVE_SESSION_AUDIT.md)
 
 ## Audit process
+
+- [2026-11-19 TESTNET Conservative session audit](audits/sessions/AUDIT_SESSION_2026-11-19_02-16-31Z.md) — latest historical session record: runbook gate conflict, external orders, failed shutdown safety proof and missing final evidence; no acceptance or exchange authorization.
 
 - [Conservative Recovery Lifecycle Audit](CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md) — acceptance evidence, confirmed outcomes, and the remaining recovery-SELL filter-freshness gap for #1359/#1362.
 

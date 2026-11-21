@@ -4,7 +4,7 @@ import { StrategyId } from "../strategy-ids.js"
 import { calculateInitialBuyPrice } from "./initial-buy-price.js"
 import { calculateRecoverySellPlan } from "./recovery-sell-plan.js"
 import { calculateSellFeeRate } from "./sell-fee-rate.js"
-import { hasActiveOrder, hasActivePosition, hasOutstandingRecovery, hasSellableInventory } from "./helpers.js"
+import { hasActiveOrder, hasActivePosition, hasOutstandingRecovery, hasSellableInventory } from "./state-predicates.js"
 
 /**
  * Evaluate the broker-independent Conservative (Free-Roll) policy.

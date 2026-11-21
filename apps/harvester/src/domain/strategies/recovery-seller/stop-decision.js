@@ -1,3 +1,5 @@
+import { ensure } from "@coinzilla/utils"
+
 /**
  * Stable lifecycle outcomes shared by the pure Recovery Seller policy.
  */
@@ -30,14 +32,15 @@ const VALID_OUTCOMES = new Set(Object.values(RECOVERY_SELLER_LIFECYCLE_OUTCOMES)
  * @returns {object} Immutable global STOP decision.
  */
 export function createRecoverySellerStopDecision({ explanation } = {}) {
-  if (typeof explanation !== "string" || explanation.trim().length === 0) {
-    throw new TypeError("explanation must be a non-empty string")
-  }
+  const validatedExplanation = ensure.nonEmptyString({
+    value: explanation,
+    name: "explanation",
+  })
 
   return Object.freeze({
     outcome: RECOVERY_SELLER_LIFECYCLE_OUTCOMES.BLOCK,
     reasonCode: RECOVERY_SELLER_STOP_REASON_CODE,
-    explanation: explanation.trim(),
+    explanation: validatedExplanation.trim(),
     blocksNewTradingActions: true,
     reconciliationRequired: true,
     operatorReviewRequired: true,
@@ -48,8 +51,9 @@ export function createRecoverySellerStopDecision({ explanation } = {}) {
 /**
  * Create the initial immutable RS STOP latch.
  *
- * There is intentionally no automatic clear operation. A future clear path
- * requires a separately approved and evidenced resolution contract.
+ * There is intentionally no automatic clear operation. The owner-approved manual
+ * clear path requires a fixed cause, authoritative order/fill/balance reconciliation,
+ * verified accounting and a durable operator-resolution fact.
  *
  * @returns {{ status: "CLEAR", decision: null }} Initial lifecycle STOP state.
  */
@@ -77,9 +81,11 @@ function isValidStopDecision(decision) {
 }
 
 function assertStopState({ state } = {}) {
-  if (!state || typeof state !== "object" || Array.isArray(state)) {
-    throw new TypeError("Recovery Seller STOP gate requires a valid STOP state")
-  }
+  ensure.object({
+    value: state,
+    name: "state",
+    errMsg: "Recovery Seller STOP gate requires a valid STOP state",
+  })
   if (state.status === "CLEAR" && state.decision === null) {
     return
   }
@@ -137,6 +143,113 @@ export function latchRecoverySellerStop({ state, decision } = {}) {
   })
 }
 
+
+function assertCanonicalOperatorIdentity({ value, field }) {
+  const identity = ensure.nonEmptyString({
+    value,
+    name: field,
+    errMsg: `Recovery Seller STOP reset requires a canonical ${field}`,
+  })
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(identity)) {
+    throw new TypeError(`Recovery Seller STOP reset requires a canonical ${field}`)
+  }
+}
+
+function assertZeroCount({ value, field }) {
+  ensure.nonNegativeInteger({
+    value,
+    name: field,
+    errMsg: `Recovery Seller STOP reset requires a non-negative safe integer for ${field}`,
+  })
+  if (value !== 0) {
+    throw new Error(`Recovery Seller STOP reset is blocked by unresolved ${field}`)
+  }
+}
+
+function assertStopReconciliationEvidence({ reconciliation }) {
+  ensure.object({
+    value: reconciliation,
+    name: "reconciliation",
+    errMsg: "Recovery Seller STOP reset requires authoritative order, fill and balance reconciliation",
+  })
+  if (reconciliation.ordersReconciled !== true ||
+      reconciliation.fillsReconciled !== true ||
+      reconciliation.balancesReconciled !== true) {
+    throw new Error("Recovery Seller STOP reset requires authoritative order, fill and balance reconciliation")
+  }
+  assertZeroCount({
+    value: reconciliation.unresolvedOrderCount,
+    field: "orders",
+  })
+  assertZeroCount({
+    value: reconciliation.unresolvedFillCount,
+    field: "fills",
+  })
+  assertZeroCount({
+    value: reconciliation.balanceDiscrepancyCount,
+    field: "balance discrepancies",
+  })
+}
+
+function assertStopAccountingEvidence({ accounting }) {
+  ensure.object({
+    value: accounting,
+    name: "accounting",
+    errMsg: "Recovery Seller STOP reset requires accounting must be verified",
+  })
+  if (accounting.verified !== true) {
+    throw new Error("Recovery Seller STOP reset requires accounting must be verified")
+  }
+  for (const field of ["portfolioConsistent", "legacyConsistent", "reservationsConsistent"]) {
+    if (accounting[field] !== true) {
+      throw new Error(`Recovery Seller STOP reset requires ${field} accounting verification`)
+    }
+  }
+}
+
+/**
+ * Clear a latched STOP only after an explicit operator action and complete
+ * exchange/accounting reconciliation. Persistence of the resolution fact is
+ * owned by the application use case; callers must persist before replacing
+ * their active state with this returned clear state.
+ *
+ * @param {object} input
+ * @param {object} input.state Current immutable STOP state.
+ * @param {string} input.operatorId Stable operator identity.
+ * @param {string} input.actionId Unique operator action identity.
+ * @param {boolean} input.causeFixed True only after the original cause is fixed.
+ * @param {object} input.reconciliation Authoritative order/fill/balance reconciliation result.
+ * @param {object} input.accounting Verified Portfolio, legacy and reservation accounting result.
+ * @returns {{ status: "CLEAR", decision: null }} New immutable clear state.
+ * @throws {TypeError|Error} If any reset prerequisite is missing or unresolved.
+ */
+export function resolveRecoverySellerStopState({
+  state,
+  operatorId,
+  actionId,
+  causeFixed,
+  reconciliation,
+  accounting,
+} = {}) {
+  assertStopState({ state })
+  if (state.status !== "STOPPED") {
+    throw new Error("Only a stopped Recovery Seller state may be resolved")
+  }
+  assertCanonicalOperatorIdentity({
+    value: operatorId,
+    field: "operator identity",
+  })
+  assertCanonicalOperatorIdentity({
+    value: actionId,
+    field: "operator action identity",
+  })
+  if (causeFixed !== true) {
+    throw new Error("Recovery Seller STOP reset requires the underlying cause must be fixed")
+  }
+  assertStopReconciliationEvidence({ reconciliation })
+  assertStopAccountingEvidence({ accounting })
+  return createRecoverySellerStopState()
+}
 /**
  * Apply the global STOP gate to one lifecycle decision.
  *

@@ -1,8 +1,86 @@
 import { StrategyId } from "../../domain/strategies/strategy-ids.js"
+import { MARKET_DATA_MAX_AGE_MS } from "../../domain/market/is-market-data-fresh.js"
+
+const MAX_CONSERVATIVE_SHUTDOWN_SAFETY_PASSES = 2
+
+function getRecoveryErrorReason(error) {
+  if (typeof error?.reason === "string") {
+    return error.reason
+  }
+  const message = typeof error?.message === "string" ? error.message : ""
+  const separatorIndex = message.lastIndexOf(": ")
+  return separatorIndex >= 0 ? message.slice(separatorIndex + 2) : undefined
+}
+
+function isRefreshableRecoveryPriceFailure(result) {
+  return result?.ok === false && result.errors?.some((error) =>
+    error?.code === "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE" &&
+    ["MARKET_PRICE_UNAVAILABLE", "STALE_MARKET_PRICE"].includes(getRecoveryErrorReason(error))
+  )
+}
+
+function createRecoveryPriceRefreshFailure({ symbol, error } = {}) {
+  const reason = error?.code === "MARKET_PRICE_REFRESH_TIMEOUT"
+    ? "MARKET_PRICE_REFRESH_TIMEOUT"
+    : "MARKET_PRICE_REFRESH_ABORTED"
+  return {
+    ok: false,
+    errors: [Object.assign(
+      new Error(`Shutdown recovery for ${symbol} could not obtain a fresh market-price event: ${reason}`),
+      {
+        code: "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+        reason,
+        timeoutMs: error?.timeoutMs ?? MARKET_DATA_MAX_AGE_MS,
+        retryable: error?.code === "MARKET_PRICE_REFRESH_TIMEOUT",
+        cause: error,
+      },
+    )],
+  }
+}
+
+function throwIfShutdownAborted(signal) {
+  if (!signal?.aborted) {
+    return
+  }
+  if (signal.reason instanceof Error) {
+    throw signal.reason
+  }
+  throw Object.assign(
+    new Error("Conservative shutdown safety wait was aborted", {
+      cause: signal.reason,
+    }),
+    {
+      code: "SHUTDOWN_SAFETY_ABORTED",
+    },
+  )
+}
+
+function getStageBlockerDetails(error) {
+  const details = []
+  const recoveryCodes = [
+    "SHUTDOWN_RECOVERY_INPUT_UNAVAILABLE",
+    "SHUTDOWN_RECOVERY_COVERAGE_INCOMPLETE",
+  ]
+  const detail = recoveryCodes.includes(error?.code)
+    ? getRecoveryErrorReason(error)
+    : error?.reason
+  const timeoutMs = error?.timeoutMs ?? error?.cause?.timeoutMs
+  if (detail) {
+    details.push(detail)
+  }
+  if (Number.isSafeInteger(timeoutMs)) {
+    details.push(`timeoutMs=${timeoutMs}`)
+  }
+  if (typeof error?.retryable === "boolean") {
+    details.push(`retryable=${error.retryable}`)
+  }
+  return details
+}
 
 function createStageBlocker({ stage, error } = {}) {
   const reason = error?.code ?? error?.message ?? "FAILED"
-  return `${stage}:${reason}`
+  const details = getStageBlockerDetails(error)
+  return `${stage}:${reason}${details.length > 0 ? `:${details.join(":")}` : ""}`
 }
 
 async function runStage({ stage, operation } = {}) {
@@ -25,7 +103,23 @@ async function runStage({ stage, operation } = {}) {
 
 async function drainUserData(drainUserDataEvents) {
   try {
-    await drainUserDataEvents()
+    const result = await drainUserDataEvents()
+    if (result?.ok === false) {
+      const { errors: resultErrors, error: resultError } = result
+      let errors = []
+      if (Array.isArray(resultErrors)) {
+        errors = resultErrors
+      } else if (resultError) {
+        errors = [resultError]
+      }
+      if (errors.length > 0) {
+        return errors.map((error) => createStageBlocker({
+          stage: "USER_DATA_DRAIN",
+          error,
+        }))
+      }
+      return ["USER_DATA_DRAIN:UNCONFIRMED"]
+    }
     return []
   } catch (error) {
     return [createStageBlocker({
@@ -106,79 +200,125 @@ function createMarketSafetyError({ symbol, blockers } = {}) {
   return error
 }
 
-async function collectStageBlockers({ blockers, stage, operation } = {}) {
+async function collectStageBlockers({ blockers, reconciliationBlockers, stage, operation } = {}) {
   const stageBlockers = await runStage({ stage,
     operation })
   blockers.push(...stageBlockers)
+  reconciliationBlockers?.push(...stageBlockers)
 }
 
-async function collectDrainBlockers({ blockers, drainUserDataEvents } = {}) {
+async function collectDrainBlockers({ blockers, reconciliationBlockers, drainUserDataEvents } = {}) {
   const drainBlockers = await drainUserData(drainUserDataEvents)
   blockers.push(...drainBlockers)
+  reconciliationBlockers?.push(...drainBlockers)
 }
 
 async function reconcileOwnedOrders({
   engine,
   symbol,
   blockers,
+  reconciliationBlockers,
   drainUserDataEvents,
 } = {}) {
   await collectStageBlockers({
     blockers,
+    reconciliationBlockers,
     stage: "OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
   })
-  await collectDrainBlockers({ blockers,
-    drainUserDataEvents })
+  await collectDrainBlockers({
+    blockers,
+    reconciliationBlockers,
+    drainUserDataEvents,
+  })
 
   await collectStageBlockers({
     blockers,
     stage: "OWNED_BUY_CANCELLATION",
     operation: () => engine.cancelOwnedBuyOrdersForShutdown({ symbol }),
   })
-  await collectDrainBlockers({ blockers,
-    drainUserDataEvents })
+  await collectDrainBlockers({
+    blockers,
+    reconciliationBlockers,
+    drainUserDataEvents,
+  })
 
   await collectStageBlockers({
     blockers,
+    reconciliationBlockers,
     stage: "FINAL_OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
   })
-  await collectDrainBlockers({ blockers,
-    drainUserDataEvents })
+  await collectDrainBlockers({
+    blockers,
+    reconciliationBlockers,
+    drainUserDataEvents,
+  })
 }
 
 async function reconcileRecoverySells({
   engine,
   symbol,
   blockers,
+  reconciliationBlockers,
   drainUserDataEvents,
+  signal,
 } = {}) {
   if (blockers.length > 0) {
-    return false
+    return
   }
+  throwIfShutdownAborted(signal)
 
   const recoveryBlockers = await runStage({
     stage: "RECOVERY_SELL_RECONCILIATION",
-    operation: () => engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] }),
+    operation: async () => {
+      const result = await engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] })
+      if (
+        !isRefreshableRecoveryPriceFailure(result) ||
+        typeof engine.waitForFreshMarketPrice !== "function"
+      ) {
+        return result
+      }
+
+      try {
+        await engine.waitForFreshMarketPrice({
+          symbol,
+          timeoutMs: MARKET_DATA_MAX_AGE_MS,
+          signal,
+        })
+      } catch (error) {
+        return createRecoveryPriceRefreshFailure({
+          symbol,
+          error,
+        })
+      }
+
+      throwIfShutdownAborted(signal)
+      return engine.reconcileRecoverySellsForShutdown({ symbols: [symbol] })
+    },
   })
   blockers.push(...recoveryBlockers)
-  await collectDrainBlockers({ blockers,
-    drainUserDataEvents })
+  await collectDrainBlockers({
+    blockers,
+    reconciliationBlockers,
+    drainUserDataEvents,
+  })
 
   if (blockers.length > 0) {
-    return false
+    return
   }
 
   await collectStageBlockers({
     blockers,
+    reconciliationBlockers,
     stage: "POST_RECOVERY_OWNED_ORDER_RECONCILIATION",
     operation: () => engine.reconcileOwnedOrders({ symbol }),
   })
-  await collectDrainBlockers({ blockers,
-    drainUserDataEvents })
-
-  return recoveryBlockers.length === 0 && blockers.length === 0
+  await collectDrainBlockers({
+    blockers,
+    reconciliationBlockers,
+    drainUserDataEvents,
+  })
 }
 
 async function auditRecoverySellCoverage({ engine, symbol, blockers } = {}) {
@@ -220,7 +360,7 @@ async function assessMarketSafety({
   engine,
   symbol,
   blockers,
-  recoveryReconciled,
+  reconciliationComplete,
   journalDurable,
   coverageResult,
   getShutdownBlockers,
@@ -231,7 +371,7 @@ async function assessMarketSafety({
 
   const safety = await engine.auditShutdownSafety({
     symbol,
-    reconciliationComplete: blockers.length === 0 && recoveryReconciled,
+    reconciliationComplete,
     journalDurable,
     coverageResult,
     externalBlockers: blockers,
@@ -288,20 +428,25 @@ async function secureMarket({
   logger,
   symbol,
   initialDrainBlockers,
+  signal,
 } = {}) {
   const blockers = [...initialDrainBlockers]
+  const reconciliationBlockers = [...initialDrainBlockers]
   await reconcileOwnedOrders({
     engine,
     symbol,
     blockers,
+    reconciliationBlockers,
     drainUserDataEvents,
   })
 
-  const recoveryReconciled = await reconcileRecoverySells({
+  await reconcileRecoverySells({
     engine,
     symbol,
     blockers,
+    reconciliationBlockers,
     drainUserDataEvents,
+    signal,
   })
   const coverageResult = await auditRecoverySellCoverage({
     engine,
@@ -315,7 +460,7 @@ async function secureMarket({
     engine,
     symbol,
     blockers,
-    recoveryReconciled,
+    reconciliationComplete: reconciliationBlockers.length === 0,
     journalDurable: journal.durable,
     coverageResult,
     getShutdownBlockers,
@@ -356,71 +501,124 @@ function throwForUnsafeConservativeMarkets({ failedMarkets } = {}) {
   throw error
 }
 
-async function waitForConservativeMarkets({
-engine,
-eventPublisher,
-drainUserDataEvents,
-getShutdownBlockers,
-logger,
+async function secureUnsafeMarket({
+  engine,
+  eventPublisher,
+  drainUserDataEvents,
+  getShutdownBlockers,
+  logger,
+  symbol,
+  initialDrainBlockers,
+  signal,
 } = {}) {
-  // Start cancelling every known owned BUY before any service is stopped.
+  try {
+    throwIfShutdownAborted(signal)
+    const result = await secureMarket({
+      engine,
+      eventPublisher,
+      drainUserDataEvents,
+      getShutdownBlockers,
+      logger,
+      symbol,
+      initialDrainBlockers,
+      signal,
+    })
+    return {
+      symbol,
+      result,
+    }
+  } catch (error) {
+    return {
+      symbol,
+      result: {
+        ok: false,
+        blockers: [error?.code ?? error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"],
+        error,
+      },
+    }
+  }
+}
+
+async function secureUnsafeMarkets({
+  engine,
+  snapshot,
+  eventPublisher,
+  drainUserDataEvents,
+  getShutdownBlockers,
+  logger,
+  initialDrainBlockers,
+  signal,
+} = {}) {
+  const unsafeMarkets = initialDrainBlockers.length > 0
+    ? snapshot.markets
+    : snapshot.markets.filter((market) => market.status !== "SAFE_TO_SHUTDOWN")
+  const results = await Promise.all(unsafeMarkets.map(({ symbol }) => secureUnsafeMarket({
+    engine,
+    eventPublisher,
+    drainUserDataEvents,
+    getShutdownBlockers,
+    logger,
+    symbol,
+    initialDrainBlockers,
+    signal,
+  })))
+  const failedMarkets = results
+    .filter(({ result }) => result.ok !== true)
+    .map(({ symbol, result }) => createMarketFailure({
+      symbol,
+      result,
+    }))
+  throwForUnsafeConservativeMarkets({ failedMarkets })
+  return engine.getShutdownSafetySnapshot()
+}
+
+function createSafetyReevaluationLimitFailures({ snapshot } = {}) {
+  return snapshot.markets
+    .filter((market) => market.status !== "SAFE_TO_SHUTDOWN")
+    .map(({ symbol }) => ({
+      symbol,
+      blockers: [
+        `SHUTDOWN_SAFETY_REEVALUATION_LIMIT_EXCEEDED:${MAX_CONSERVATIVE_SHUTDOWN_SAFETY_PASSES}`,
+      ],
+    }))
+}
+
+async function waitForConservativeMarkets({
+  engine,
+  eventPublisher,
+  drainUserDataEvents,
+  getShutdownBlockers,
+  logger,
+  signal,
+} = {}) {
+  throwIfShutdownAborted(signal)
   await runStage({
     stage: "INITIAL_OWNED_BUY_CANCELLATION",
     operation: () => engine.cancelOwnedBuyOrdersForShutdown(),
   })
   const initialDrainBlockers = await drainUserData(drainUserDataEvents)
+  throwIfShutdownAborted(signal)
   let snapshot = engine.getShutdownSafetySnapshot()
+  let safetyPassCount = 0
 
   while (true) {
-    const unsafeMarkets = snapshot.markets.filter((market) =>
-      market.status !== "SAFE_TO_SHUTDOWN")
-    if (unsafeMarkets.length === 0) {
-      return {
-        ok: true,
-        data: {
-          markets: snapshot.markets,
-          revision: snapshot.revision,
-        },
-      }
+    if (safetyPassCount >= MAX_CONSERVATIVE_SHUTDOWN_SAFETY_PASSES) {
+      throwForUnsafeConservativeMarkets({
+        failedMarkets: createSafetyReevaluationLimitFailures({ snapshot }),
+      })
     }
-
-    const results = await Promise.all(unsafeMarkets.map(async (market) => {
-      try {
-        const result = await secureMarket({
-          engine,
-          eventPublisher,
-          drainUserDataEvents,
-          getShutdownBlockers,
-          logger,
-          symbol: market.symbol,
-          initialDrainBlockers,
-        })
-        return {
-          symbol: market.symbol,
-          result,
-        }
-      } catch (error) {
-        return {
-          symbol: market.symbol,
-          result: {
-            ok: false,
-            blockers: [error?.code ?? error?.message ?? "MARKET_SAFETY_ASSESSMENT_FAILED"],
-            error,
-          },
-        }
-      }
-    }))
-
-    const failedMarkets = results
-      .filter(({ result }) => result.ok !== true)
-      .map(({ symbol, result }) => createMarketFailure({ symbol,
-        result }))
-    snapshot = engine.getShutdownSafetySnapshot()
-
-    throwForUnsafeConservativeMarkets({ failedMarkets })
-
-    // Late execution evidence can invalidate a market while another market
-    // is being audited. Re-evaluate it immediately; never use a quiet timer.
+    throwIfShutdownAborted(signal)
+    safetyPassCount += 1
+    snapshot = await secureUnsafeMarkets({
+      engine,
+      snapshot,
+      eventPublisher,
+      drainUserDataEvents,
+      getShutdownBlockers,
+      logger,
+      initialDrainBlockers,
+      signal,
+    })
     if (snapshot.markets.every((market) => market.status === "SAFE_TO_SHUTDOWN")) {
       return {
         ok: true,
@@ -450,12 +648,13 @@ export function createConservativeShutdownParticipant({
 
   const beginShutdown = () => engine.beginShutdown()
 
-  const waitUntilSafe = () => waitForConservativeMarkets({
+  const waitUntilSafe = ({ signal } = {}) => waitForConservativeMarkets({
     engine,
     eventPublisher,
     drainUserDataEvents,
     getShutdownBlockers,
     logger,
+    signal,
   })
 
   const isSafeToShutdown = () => engine.getShutdownSafetySnapshot().markets

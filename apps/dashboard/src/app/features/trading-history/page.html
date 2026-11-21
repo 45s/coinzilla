@@ -1,0 +1,203 @@
+<section class="history-page">
+  <header class="page-heading">
+    <div>
+      <div class="eyebrow">HARVESTER / PERSISTED RECORDS</div>
+      <h1>{{ resourceTitle() }}<span>.</span></h1>
+      <p class="page-description">Read-only records persisted by Harvester. Values are shown exactly as stored.</p>
+    </div>
+    @if (metadata(); as summary) {
+      <div class="environment-summary">
+        <span class="environment-tag" [class.live]="summary.environment === 'live'">{{ summary.environment.toUpperCase() }}</span>
+        <span>{{ summary.records.orders }} orders</span>
+        <span>{{ summary.records.fills }} fills</span>
+        <span>{{ summary.records.commissions }} commissions</span>
+      </div>
+    }
+  </header>
+
+  @if (!connected()) {
+    <section class="connection-panel" aria-labelledby="connection-title">
+      <div class="connection-icon" aria-hidden="true">↔</div>
+      <div class="connection-copy">
+        <div class="eyebrow">LOCAL HARVESTER CONNECTION</div>
+        <h2 id="connection-title">Connecting to Harvester</h2>
+        <p>The Dashboard connects directly to the local read-only API at 127.0.0.1:4201. No token or credential setup is required.</p>
+        <button type="button" (click)="connect()" [disabled]="connecting()">
+          {{ connecting() ? 'Connecting…' : 'Retry connection' }}
+        </button>
+        @if (errorMessage(); as message) {
+          <p class="inline-error" role="alert">{{ message }}</p>
+        }
+      </div>
+    </section>
+  } @else {
+    <div class="connection-strip">
+      <span
+        class="connection-indicator"
+        [class.live]="liveStatus() === 'live'"
+        [class.reconnecting]="liveStatus() === 'reconnecting' || liveStatus() === 'connecting'"
+        [class.offline]="liveStatus() === 'offline'"
+      ></span>
+      <span>Connected to local Harvester</span>
+      <span class="strip-divider">·</span>
+      <span>{{ liveStatusLabel() }}</span>
+      <span class="strip-divider">·</span>
+      <span>Read-only API</span>
+    </div>
+
+    <section class="filter-panel" aria-label="Trading history filters">
+      <label>
+        <span>Market</span>
+        <input data-testid="symbol-filter" [value]="symbolFilter()" (input)="updateSymbol($event)" placeholder="e.g. BTCUSDT" />
+      </label>
+      <label>
+        <span>Side</span>
+        <select [value]="sideFilter()" (change)="updateSide($event)">
+          <option value="">All sides</option>
+          <option value="BUY">BUY</option>
+          <option value="SELL">SELL</option>
+        </select>
+      </label>
+      @if (currentResource() === 'orders') {
+        <label>
+          <span>Status</span>
+          <input [value]="statusFilter()" (input)="updateStatus($event)" placeholder="e.g. FILLED" />
+        </label>
+      } @else if (currentResource() === 'fills') {
+        <label>
+          <span>Commission status</span>
+          <input [value]="statusFilter()" (input)="updateStatus($event)" placeholder="e.g. RECORDED" />
+        </label>
+      } @else {
+        <label>
+          <span>Fee asset</span>
+          <input [value]="assetFilter()" (input)="updateAsset($event)" placeholder="e.g. BNB" />
+        </label>
+      }
+      <div class="filter-actions">
+        <button type="button" class="apply-button" data-testid="apply-filters" (click)="applyFilters()">Apply filters</button>
+        <button type="button" class="quiet-button" (click)="clearFilters()">Reset</button>
+      </div>
+    </section>
+
+    @if (errorMessage(); as message) {
+      <div class="request-error" role="alert">{{ message }}</div>
+    }
+
+    @if (loading()) {
+      <div class="state-panel" role="status">
+        <span class="loading-mark"></span>
+        <strong>Loading persisted {{ currentResource() }}…</strong>
+      </div>
+    } @else if (page() && records().length === 0) {
+      <div class="state-panel empty-state">
+        <span class="empty-mark">—</span>
+        <strong>{{ emptyMessage() }}</strong>
+        <p>Harvester returned no matching rows. No sample records are substituted.</p>
+      </div>
+    } @else if (page()) {
+      <section class="records-panel">
+        <div class="table-heading">
+          <div>
+            <h2>{{ resourceTitle() }} records</h2>
+            <p>{{ page()?.pagination.total }} persisted records · newest first</p>
+          </div>
+          <span class="page-size-label">25 PER PAGE</span>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Market</th>
+                <th>Side</th>
+                <th>{{ currentResource() === 'commissions' ? 'Fee amount' : 'Quantity' }}</th>
+                <th>{{ recordPriceLabel() }}</th>
+                <th>{{ recordStatusLabel() }}</th>
+                <th>Observed / exchange time</th>
+                <th><span class="visually-hidden">Details</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (record of records(); track record.id) {
+                <tr>
+                  <td>
+                    <strong>{{ record.symbol }}</strong>
+                    <small [title]="record.id">{{ recordReference(record) }}</small>
+                  </td>
+                  <td><span class="side-tag" [class.sell]="record.side === 'SELL'">{{ record.side }}</span></td>
+                  <td class="numeric">{{ recordAmount(record) }}</td>
+                  <td class="numeric">{{ recordPrice(record) }}</td>
+                  <td>{{ currentResource() === 'commissions' ? recordAsset(record) : recordStatus(record) }}</td>
+                  <td>{{ recordTimestamp(record) }}</td>
+                  <td><button type="button" class="details-button" data-testid="record-details" (click)="selectRecord(record)">Details</button></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <footer class="pagination">
+          <span>Page {{ currentPage() }} of {{ pageCount() }}</span>
+          <div>
+            <button type="button" class="quiet-button" [disabled]="!hasPreviousPage()" (click)="previousPage()">Previous</button>
+            <button type="button" class="quiet-button" [disabled]="!hasNextPage()" (click)="nextPage()">Next</button>
+          </div>
+        </footer>
+      </section>
+    }
+
+    @if (detailsLoading()) {
+      <div class="details-loading" role="status">Loading persisted record details…</div>
+    }
+
+    @if (selectedRecord(); as detail) {
+      <aside class="details-panel" aria-labelledby="details-title">
+        <div class="details-heading">
+          <div>
+            <div class="eyebrow">PERSISTED RECORD</div>
+            <h2 id="details-title">{{ resourceTitle() }} details</h2>
+            <p>{{ recordReference(detail) }}</p>
+          </div>
+          <button type="button" class="quiet-button" (click)="selectedRecord.set(null)">Close</button>
+        </div>
+        <details class="technical-identity">
+          <summary>Internal persistence ID</summary>
+          <code>{{ detail.id }}</code>
+        </details>
+        <details class="raw-record-details" open>
+          <summary>Raw record · every persisted field</summary>
+          <pre>{{ detailJson() }}</pre>
+        </details>
+        <dl class="details-grid">
+          @for (entry of detailEntries(); track entry.label) {
+            <div>
+              <dt>{{ entry.label }}</dt>
+              <dd>{{ entry.value }}</dd>
+            </div>
+          }
+        </dl>
+        @if (detailCommissions().length > 0) {
+          <section class="commission-details">
+            <h3>Persisted commission facts</h3>
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr><th>Amount</th><th>Asset</th><th>Quote valuation</th><th>Valuation asset</th></tr>
+                </thead>
+                <tbody>
+                  @for (commission of detailCommissions(); track commission.id) {
+                    <tr>
+                      <td class="numeric">{{ commission.amount }}</td>
+                      <td>{{ commission.assetCode ?? 'Not recorded' }}</td>
+                      <td class="numeric">{{ commission.quoteValueAmount ?? 'Not recorded' }}</td>
+                      <td>{{ commission.quoteValueAssetCode ?? 'Not recorded' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
+      </aside>
+    }
+  }
+</section>

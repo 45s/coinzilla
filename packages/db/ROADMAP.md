@@ -12,6 +12,16 @@ The accepted architecture is recorded in [ADR-0001](./docs/decisions/0001-provid
 
 `@coinzilla/db` provides a provider-neutral record CRUD and transaction API. Node.js built-in `node:sqlite` is the first concrete provider. The package owns generic persistence infrastructure contracts only; application domains own their business entities, schemas and repository interfaces.
 
+## Application-owned relational schema infrastructure — #1486
+
+**Status: Done.** [PR #1489](https://github.com/45s/coinzilla/pull/1489) merged into `develop` on 2026-11-19 as `ee38250521d6386ce53b080b4fb6414812cf9e91`. All required checks passed on the exact final PR head before merge.
+
+The audit confirmed that the low-level SQL, prepared-statement, transaction, migration, backup and restore APIs already exist. The demonstrated gaps are migration callback mutation detection and rejection of a pending lower version after a higher version has already been applied.
+
+The scoped implementation adds source fingerprints to newly applied migration history, safely upgrades legacy `schema_migrations` tables while preserving their existing rows, rejects modified checksummed migrations and out-of-order pending versions, and adds regression coverage for legacy upgrades, reconnect persistence and migrated-schema backup/restore. Legacy rows retain an explicit `legacy-unverified` marker and continue to use version/name validation because their original callback source cannot be reconstructed.
+
+The accepted boundary remains unchanged: applications own physical relational schemas, migrations, repositories and business rules; this package owns generic SQLite infrastructure. No Harvester tables or persistence changes belong in this task. Mark complete only after the PR is merged and all required checks pass on its exact final head.
+
 ## SQLite infrastructure audit and hardening — #1395
 
 **Status: Done.** [PR #1396](https://github.com/45s/coinzilla/pull/1396) merged into `develop` on 2026-11-18 as `81669ce2be6794b9bd03067f89b57f8fdb55f957`. The audit hardened SQLite connection lifecycle and cleanup, concurrent WAL initialization, transaction-handle lifetime, backup/restore failure preservation, and filesystem error classification. All implementation remains within this package's infrastructure boundary.
@@ -150,7 +160,7 @@ The package already provides and must retain:
 - Foreign-key enforcement, WAL for file-backed databases and configurable lock timeout.
 - Explicit connection lifecycle and close-time transaction draining.
 - Synchronous SQLite transactions with commit/rollback and nested/async callback rejection; transaction handles and prepared statements are invalidated after commit or rollback.
-- Ordered, atomic, versioned schema migrations and migration-history validation.
+- Ordered, atomic, versioned schema migrations with source checksums for newly applied migrations, legacy-history compatibility, identity validation and out-of-order protection.
 - WAL-aware native online backups, integrity and foreign-key validation, atomic backup publication, and atomic no-overwrite restore.
 - Deterministic tests using real in-memory and temporary file-backed SQLite databases.
 

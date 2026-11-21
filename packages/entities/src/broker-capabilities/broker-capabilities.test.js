@@ -216,3 +216,34 @@ test("BrokerCapabilities preserves legacy snapshots without provider evidence me
   })
   assert.equal(declaration.getStatus({ type: "READ_BALANCES" }), "SUPPORTED")
 })
+
+
+test("BrokerCapabilities distinguishes polling observations from native user-data events", () => {
+  assert.ok(BROKER_CAPABILITY_TYPES.includes("OBSERVE_USER_DATA"))
+  const capabilities = new BrokerCapabilities({
+    provider: "bitunix",
+    product: "spot",
+    environment: {
+      selector: "tradingMode",
+      selectedMode: "live",
+      supportedModes: ["live"],
+    },
+    capabilities: [
+      {
+        type: "OBSERVE_USER_DATA",
+        status: "SUPPORTED",
+        method: "subscribeForUserData",
+        guarantee: "Delivers explicitly scoped non-authoritative polling observations.",
+      },
+      {
+        type: "SUBSCRIBE_USER_DATA",
+        status: "UNSUPPORTED",
+        method: "subscribeForUserData",
+        reason: "A continuous native private execution stream is not documented.",
+      },
+    ],
+  })
+
+  assert.equal(capabilities.getStatus({ type: "OBSERVE_USER_DATA" }), "SUPPORTED")
+  assert.equal(capabilities.getStatus({ type: "SUBSCRIBE_USER_DATA" }), "UNSUPPORTED")
+})

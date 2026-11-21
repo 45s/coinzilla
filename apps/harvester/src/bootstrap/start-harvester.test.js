@@ -5,7 +5,9 @@ import path from "node:path"
 import assert from "node:assert/strict"
 import { Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules } from "@coinzilla/entities"
 import { multiplyDecimal } from "@coinzilla/utils"
-import { startHarvester } from "./start-harvester.js"
+import { prepareHarvesterStartupState, startHarvester } from "./start-harvester.js"
+import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
+import { createRecoverySellerStopWorkflow } from "../use-cases/create-recovery-seller-stop-workflow.js"
 import { createFileOperationalStateStore } from "../infrastructure/operational-state/create-file-operational-state-store.js"
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
@@ -18,6 +20,10 @@ const testEventPublisher = Object.freeze({
   }),
 })
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
+import {
+  assertRecoverySellerEvaluatorConfigured,
+  assertRecoverySellerRuntimeAcceptance,
+} from "./harvester-runtime-setup.js"
 
 // Include the source file in every reporter test name so failures are identifiable
 // even when the spec reporter output is copied without its surrounding file header.
@@ -557,6 +563,31 @@ const createFill = ({
 }
 
 
+test("rejects configured RS routes when the runtime acceptance gate is closed", () => {
+  const recoverySellerPairs = {
+    BTCUSDT: {
+      enabled: true,
+    },
+  }
+  assert.throws(() => assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs,
+  }), /RS-4 integration and RS-5 offline lifecycle acceptance/)
+  assert.doesNotThrow(() => assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs: {},
+  }))
+  assert.doesNotThrow(() => assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs,
+    acceptanceComplete: true,
+  }))
+  assert.throws(() => assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs,
+  }), /before broker connection/)
+  assert.doesNotThrow(() => assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs,
+    evaluateRecoverySellerTransition: async () => ({ ok: true }),
+  }))
+})
+
 test("rejects enabled Telegram operator control without a bot token before connecting to Binance", async () => {
   const config = {
     ...appConfig,
@@ -714,6 +745,8 @@ test("keeps inbound operator control disabled without constructing its store or 
   try {
     assert.equal(storeFactoryCalls, 0, "Disabled operator control must not inspect or open the Operational State Store.")
     assert.equal(adapterFactoryCalls, 0, "Disabled operator control must not construct an inbound Telegram adapter.")
+    assert.equal(typeof runtime.getOperator, "function", "The local API must be able to access the operator even when Telegram control is disabled.")
+    assert.equal(typeof runtime.getOperator()?.getStatus, "function", "The disabled Telegram lifecycle must still compose the shared read-only operator facade.")
   } finally { await runtime.stop() }
 })
 
@@ -823,6 +856,8 @@ test("starts/stops Telegram CC and applies process-local pause without recovery 
   const runtime = await fixture.runtime
   const operator = fixture.getOperator()
   try {
+    assert.equal(typeof runtime.getOperator, "function", "The started Harvester runtime must expose its composed operator facade to local adapters.")
+    assert.equal(runtime.getOperator(), operator, "The runtime operator accessor must return the same facade used by Telegram.")
     assert.equal(calls.includes("create-Operational State Store records-store"), false)
     assert.equal(calls.includes("verify-Operational State Store records"), false)
     assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"))
@@ -1144,6 +1179,201 @@ test("subscribes every enabled market before waiting for the first market's REST
   assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT"])
   assert.equal(race.getPlaceOrderCalls(), 0)
   await runtime.stop()
+})
+
+function configureStartupHistoryBroker({ broker, calls }) {
+  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
+    calls.push(`history:orders:${symbol}:${orderId}`)
+    return {
+      ok: true,
+      data: [],
+    }
+  }
+  broker.getFills = async ({ symbol, fromId }) => {
+    calls.push(`history:fills:${symbol}:${fromId}`)
+    return {
+      ok: true,
+      data: [],
+    }
+  }
+}
+
+function createStartupHistoryPersistence({ persistedOrders, persistedFills }) {
+  return {
+    orderRepository: {
+      upsertHistorical: async (record) => persistedOrders.push(record),
+      findByExchangeOrderIdentity: async () => null,
+      getOldestPendingOrderId: async () => null,
+    },
+    fillRepository: {
+      upsert: async (input) => persistedFills.push(input),
+    },
+    historySyncCursorRepository: {
+      get: async () => ({
+        lastOrderId: null,
+        lastTradeId: null,
+      }),
+      saveOrderCursor: async () => {},
+      saveTradeCursor: async () => {},
+    },
+  }
+}
+
+test("synchronizes configured Binance history before activating the trading engine", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  configureStartupHistoryBroker({
+    broker,
+    calls,
+  })
+  const persistedOrders = []
+  const persistedFills = []
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: binanceEnv,
+    providerIdentity: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    },
+    orderHistoryPersistence: createStartupHistoryPersistence({
+      persistedOrders,
+      persistedFills,
+    }),
+    brokerAdapterFactory: () => broker,
+    logger: {
+      info() {},
+      warn() {},
+      error() {},
+    },
+  })
+  try {
+    const orderHistoryIndex = calls.indexOf("history:orders:BTCUSDT:0")
+    const fillHistoryIndex = calls.indexOf("history:fills:BTCUSDT:0")
+    const marketDataIndex = calls.indexOf("subscribe:BTCUSDT")
+    assert.ok(orderHistoryIndex >= 0, "Startup must query canonical order history for the configured execution market.")
+    assert.ok(fillHistoryIndex > orderHistoryIndex, "Startup must query trade history after loading the market's order identities.")
+    assert.ok(fillHistoryIndex < marketDataIndex, "Startup history synchronization must finish before market-data activation.")
+    assert.equal(runtime.tradingEnabled, true, "A read-only history scan must not change trading enablement.")
+    assert.equal(persistedOrders.length, 0, "An empty exchange history must not fabricate orders.")
+    assert.equal(persistedFills.length, 0, "An empty exchange history must not fabricate fills.")
+  } finally {
+    await runtime.stop()
+  }
+})
+
+function createHistoryCursorFailureFixture({ calls } = {}) {
+  const broker = createBroker(calls)
+  const metadata = createMarketMetadata("BTCUSDT")
+  const historicalOrder = new CanonicalOrder({
+    clientOrderId: "h-history-cursor-failure",
+    brokerOrderId: "100",
+    market: metadata.market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "65000",
+      asset: metadata.market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.01",
+      asset: metadata.market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0.01",
+      asset: metadata.market.baseAsset,
+    }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+    completedAt: 1,
+  })
+  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
+    calls.push(`history:orders:${symbol}:${orderId}`)
+    return {
+      ok: true,
+      data: [historicalOrder],
+    }
+  }
+  const persistedOrders = []
+  const persistedFills = []
+  const orderHistoryPersistence = createStartupHistoryPersistence({
+    persistedOrders,
+    persistedFills,
+  })
+  const cursorError = new Error("simulated cursor write failure")
+  cursorError.code = "HARVESTER_HISTORY_CURSOR_WRITE_FAILED"
+  orderHistoryPersistence.historySyncCursorRepository.saveOrderCursor = async () => {
+    throw cursorError
+  }
+  return {
+    broker,
+    orderHistoryPersistence,
+    persistedOrders,
+    persistedFills,
+  }
+}
+
+function assertHistoryCursorFailureDiagnostics({
+  errors,
+  runtime,
+  persistedOrders,
+  persistedFills,
+  calls,
+} = {}) {
+  const failure = errors.find((entry) =>
+    entry.message === "Exchange history synchronization failed; historical coverage is incomplete")
+  assert.ok(failure, "A failed startup cursor write must emit an actionable history-sync error.")
+  assert.equal(failure.errorName, "Error")
+  assert.equal(failure.errorCode, "HARVESTER_HISTORY_CURSOR_WRITE_FAILED")
+  assert.equal(failure.errorMessage, "simulated cursor write failure")
+  assert.equal(failure.historyDiagnostics.currentMarket, "BTCUSDT")
+  assert.equal(failure.historyDiagnostics.orderPagesChecked, 1)
+  assert.equal(failure.historyDiagnostics.ordersObserved, 1)
+  assert.equal(failure.historyDiagnostics.ordersPersisted, 1)
+  assert.equal(failure.historyDiagnostics.fillPagesChecked, 0)
+  assert.equal(failure.historyDiagnostics.failureCount, 1)
+  assert.equal(failure.historyDiagnostics.failures[0].market, "BTCUSDT")
+  assert.equal(failure.historyDiagnostics.historyPagesComplete, false)
+  assert.equal(runtime.tradingEnabled, true, "A history-projection failure must remain visible without becoming trading-state authority.")
+  assert.equal(persistedOrders.length, 1, "The page's order must remain persisted when only cursor advancement fails.")
+  assert.equal(persistedFills.length, 0, "Fill history must not start after the order cursor write fails.")
+  assert.equal(calls.some((call) => call.startsWith("history:fills:")), false, "The failed order cursor must stop the market scan before trade-history requests.")
+}
+
+test("logs partial startup history diagnostics when an order cursor write fails", async () => {
+  const calls = []
+  const fixture = createHistoryCursorFailureFixture({ calls })
+  const errors = []
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: binanceEnv,
+    providerIdentity: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    },
+    orderHistoryPersistence: fixture.orderHistoryPersistence,
+    brokerAdapterFactory: () => fixture.broker,
+    logger: {
+      info() {},
+      warn() {},
+      error: (entry) => errors.push(entry),
+    },
+  })
+
+  try {
+    assertHistoryCursorFailureDiagnostics({
+      errors,
+      runtime,
+      persistedOrders: fixture.persistedOrders,
+      persistedFills: fixture.persistedFills,
+      calls,
+    })
+  } finally {
+    await runtime.stop()
+  }
 })
 
 test("starts the Conservative trading engine and applies fills to Portfolio", async () => {
@@ -3249,7 +3479,7 @@ function assertLifecycleLogLevels({ calls }) {
   assert.notEqual(targetMarketEvaluation.action, "UNKNOWN")
   for (const message of [
     "App configuration validated",
-    "User-data stream connected",
+    "Broker user-data delivery established",
     "Exchange account snapshot loaded",
     "Conservative TESTNET trading engine activated",
     "Book ticker subscribed",
@@ -5181,6 +5411,132 @@ test("verifies an injected Operational State Store before connecting to the brok
   assert.deepEqual(calls, [], "An unverified Operational State Store must block broker connection and subscriptions.")
 })
 
+
+async function seedRecoverySellerStopStore({ directory } = {}) {
+  const previousStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "rs-stop-bootstrap-previous-session",
+  })
+  const initialized = await previousStore.initialize()
+  assert.equal(initialized.ok, true, initialized.errors?.[0]?.message)
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore: previousStore,
+    appConfig,
+  })
+  assert.equal(baseline.ok, true, baseline.errors?.[0]?.message)
+  const previousProcess = await recordProcessStarted({
+    operationalStateStore: previousStore,
+    configurationFingerprint: baseline.data.fingerprint,
+    strategyName: baseline.data.strategyName,
+    markets: baseline.data.markets,
+    tradingEnabled: true,
+  })
+  assert.equal(previousProcess.ok, true, previousProcess.errors?.[0]?.message)
+  const workflow = await createRecoverySellerStopWorkflow({
+    operationalStateStore: previousStore,
+  })
+  assert.equal(workflow.ok, true, workflow.errors?.[0]?.message)
+  const blocker = await workflow.data.latch({
+    explanation: "Persisted RS test blocker",
+    orderIdentity: {
+      clientOrderId: "h-btcusdt-rs-stop-test",
+    },
+  })
+  assert.equal(blocker.ok, true, blocker.errors?.[0]?.message)
+  const stopped = await recordProcessStopped({
+    operationalStateStore: previousStore,
+    reason: "NORMAL",
+    clean: true,
+  })
+  assert.equal(stopped.ok, true, stopped.errors?.[0]?.message)
+  return blocker
+}
+
+function createObservedRecoverySellerStore({ directory } = {}) {
+  const store = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "rs-stop-bootstrap-current-session",
+  })
+  const calls = []
+  const operationalStateStore = {
+    runtimeSessionId: store.runtimeSessionId,
+    append: async (input) => {
+      calls.push(input.factType)
+      return store.append(input)
+    },
+    verify: async (...args) => store.verify(...args),
+    readAll: async (...args) => {
+      calls.push("READ_ALL")
+      return store.readAll(...args)
+    },
+  }
+  return {
+    calls,
+    operationalStateStore,
+  }
+}
+
+async function createRecoverySellerStartupConfig() {
+  const baseResolved = await resolveHarvesterOptions({
+    appConfig,
+    env: binanceEnv,
+    eventPublisher: testEventPublisher,
+    logger: {},
+    executionRoutes: [
+      {
+        strategyId: "CG_coinGrabber",
+        symbol: "BTCUSDT",
+      },
+    ],
+  })
+  return Object.freeze({
+    ...baseResolved,
+    recoverySellerPairs: {
+      BTCUSDT: {
+        enabled: true,
+        investment: 100,
+        orderQuantity: 0.01,
+        sellQuantity: 0.001,
+        minProfit: 0.01,
+        priceStepPercent: 0.05,
+        makerPercent: 0,
+        takerPercent: 0,
+        legacyPosition: {
+          invested: 65,
+          quantity: 0.001,
+        },
+      },
+    },
+  })
+}
+
+test("restores the durable RS STOP latch before writing PROCESS_STARTED", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-rs-stop-bootstrap-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const blocker = await seedRecoverySellerStopStore({ directory })
+  const { calls, operationalStateStore } = createObservedRecoverySellerStore({ directory })
+  const resolved = await createRecoverySellerStartupConfig()
+  const startup = await prepareHarvesterStartupState({
+    dependencies: {
+      env: binanceEnv,
+      runtimeSessionId: "rs-stop-bootstrap-current-session",
+      suppliedOperationalStateStore: operationalStateStore,
+      logger: {},
+    },
+    resolved,
+  })
+
+  assert.equal(startup.recoverySellerStopWorkflow.getStopState().status, "STOPPED")
+  assert.equal(startup.recoverySellerStopWorkflow.getBlockerId(), blocker.data.record.data.blockerId)
+  assert.equal(startup.startupOptions.tradingEnabled, false, "A prior-process RS STOP may restart only in observation-only mode.")
+  const processStartIndex = calls.indexOf("PROCESS_STARTED")
+  const lastReadIndex = calls.lastIndexOf("READ_ALL")
+  assert.ok(processStartIndex >= 0, "The current process boundary must be persisted.")
+  assert.ok(lastReadIndex >= 0 && lastReadIndex < processStartIndex, "RS STOP history must be restored before PROCESS_STARTED is written.")
+})
 
 test("records configuration and process boundaries before broker startup and after shutdown", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-process-boundaries-"))

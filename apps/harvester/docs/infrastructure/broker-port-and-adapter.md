@@ -23,8 +23,6 @@ Binance broker adapter (Harvester infrastructure)
 Binance WebSocket API and Streams
 ```
 
-The port belongs to Harvester because it describes the capabilities this application needs. The adapter belongs to infrastructure because it knows how to satisfy those needs with a concrete broker. Domain policies, Portfolio, and use cases must not import `@coinzilla/brokers`, `CoreBroker`, Binance classes, exchange SDK types, or raw exchange payloads.
-
 ## Multi-provider target architecture — issue #1339
 
 The current implementation below is still a single Binance adapter. The accepted target permits multiple named provider instances in one Harvester process. Harvester bootstrap constructs each configured instance and assembles an application-owned registry/router; the Brokers package supplies exchange clients and verified capabilities but does not own strategy/market routing. The source-verified current-state assessment, provenance gaps and ordered implementation prerequisites are maintained in the [multi-provider migration audit and implementation plan](../../../../docs/architecture/multi-provider-migration-plan.md).
@@ -86,12 +84,6 @@ A state-changing timeout remains an unknown outcome. Never retry it on another p
 
 The durable routing contract is [ADR-0003](../../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md), and Bitunix admission is governed by [ADR-0004](../../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md); this file remains the Harvester-specific port/adapter guide.
 
-## Why not depend on CoreBroker directly?
-
-`CoreBroker` is currently a base class whose methods throw when not implemented; it is not a formal, capability-checked application port. Depending on it couples Harvester to the broker package's class hierarchy instead of the small set of operations its use cases require.
-
-The Brokers package now exposes `getPrice()` as a compatibility alias for `getPrices({ symbol })` on both Binance and Bitunix. New application ports should prefer `getPrices()` as the canonical one-shot market-price operation; the alias does not make `CoreBroker` a formal Harvester application port.
-
 Owning the port does not mean copying shared entities. Reuse canonical Order, Fill, Market, Quantity, Balance, BrokerResult, and utility contracts from `@coinzilla/entities` / `@coinzilla/utils` wherever they fit.
 
 ## Responsibilities
@@ -105,8 +97,6 @@ Owning the port does not mean copying shared entities. Reuse canonical Order, Fi
 | Bootstrap | Loads config, creates adapters, injects dependencies, owns connection/shutdown lifecycle |
 | `@coinzilla/brokers` | Exchange transport, protocol handling, broker-level normalization and recovery behavior |
 
-Do not mirror every `CoreBroker` method automatically. Add a capability only when a Harvester use case needs it.
-
 ## Current `@coinzilla/brokers` methods
 
 | Operation | Current method |
@@ -116,15 +106,17 @@ Do not mirror every `CoreBroker` method automatically. Add a capability only whe
 | Cancel order | `cancelOrder({ symbol, orderId })` |
 | Read open orders | `getOpenOrders({ symbol? } = {})`; omit `symbol` for an account-wide snapshot |
 | Read fills | `getFills(input)` |
-| Read canonical order history | `getCanonicalOrderHistory({ symbol, orderId })` |
+| Read canonical order history | `getCanonicalOrderHistory({ symbol, orderId, includeFollowingOrders? })` |
 | Account snapshot | `getAccountSnapshot()` |
 | Symbol filters | `getSymbolFilters({ symbol })` |
 | Price subscription | `subscribeForPrices({ symbol, onPrice })` |
 | Historical candles | `getCandles({ symbol, interval, limit, startTime?, endTime? })` |
 | Live candle subscription | `subscribeForCandles({ symbol, interval, onCandle })` |
-| User-data subscription | `subscribeForUserData({ onEvent, onStatus })` |
+| User-data subscription | `subscribeForUserData({ symbols?, trackedOrders?, onEvent, onObservation, onStatus })` |
 
 Query/order methods generally return `{ ok, data }` or `{ ok: false, errors }` using the shared result convention. Connection lifecycle methods throw on failure. Consult the package source/tests for exact input/output contracts.
+
+For Binance canonical history, the default `getCanonicalOrderHistory({ symbol, orderId })` behavior remains an exact-order lookup for reconnect reconciliation. Harvester startup history synchronization opts into the bounded inclusive lower-bound page with `includeFollowingOrders: true`; it supplies `orderId` and owns pagination/cursor durability. The adapter forwards the complete input unchanged so this read-only option is not dropped.
 
 `getOpenOrders({ symbol? } = {})` returns the shared legacy `Order[]` shape, not `CanonicalOrder[]`. An omitted options object and an explicit empty object both mean account-wide; a supplied `symbol` scopes the query to that market. The Harvester adapter must default its optional options argument to `{}` because bootstrap and read-only operator queries intentionally call `getOpenOrders()` for account-wide visibility. Its numeric `quantity` and `price` fields are not suitable for exact financial comparisons. Reconciliation uses only its string broker `id`, symbol/side/type, and the exact string `originalQuantity` / `executedQuantity` metadata preserved by the broker adapter; canonical status and financial execution facts come from `getCanonicalOrderHistory()` and `getFills()`.
 
@@ -162,7 +154,7 @@ export const createBinanceBrokerAdapter = ({ config, logger }) => {
     cancelOrder: ({ symbol, orderId }) => client.cancelOrder({ symbol, orderId }),
     getOpenOrders: (options = {}) => client.getOpenOrders(options),
     getFills: ({ symbol, ...query }) => client.getFills({ symbol, ...query }),
-    getCanonicalOrderHistory: ({ symbol, orderId }) => client.getCanonicalOrderHistory({ symbol, orderId }),
+    getCanonicalOrderHistory: (input) => client.getCanonicalOrderHistory(input),
     getAccountSnapshot: () => client.getAccountSnapshot(),
     getSymbolFilters: ({ symbol }) => client.getSymbolFilters({ symbol }),
     getExchangeMarkets: () => client.getExchangeMarkets(),
@@ -266,3 +258,23 @@ For Conservative, order-type selection, POST-ONLY crossing constraints, and fail
 ## Bitunix provider boundary
 
 Bitunix Spot is not a registered Harvester provider. The partial query operations in `@coinzilla/brokers` do not yet satisfy the complete order, fill, account-lifecycle, private-event/reconciliation, market-constraint and environment-safety contract in [issue #1185](https://github.com/45s/coinzilla/issues/1185). Keep Bitunix outside the provider registry and all execution/market-data routes until that work is complete. Do not add a temporary observer or partial provider facade. Future integration must use the same complete provider-instance, BrokerPort, capability, account-lifecycle and routing contracts as every other provider. Exchange-specific Bitunix market normalization belongs in `@coinzilla/brokers`, not in a Harvester-specific metadata helper.
+
+## User-data callback separation
+
+Harvester supplies both callback channels through the same application-owned BrokerPort:
+
+- `onEvent` receives native exchange events and is the only input to canonical execution accounting and the user-data event queue.
+- `onObservation` receives non-authoritative polling snapshots. It is handled separately and must never be converted into an event, fill, account snapshot, or readiness signal.
+- `onStatus` reports lifecycle and delivery health.
+
+The broker's returned `deliveryMode` and `nativePush` metadata describe the actual delivery semantics. Harvester does not inspect provider source code or branch on provider identity. Bitunix remains excluded from the provider registry while its native user-data, authoritative snapshot, and canonical-fill capabilities remain unsupported.
+
+The Binance infrastructure adapter forwards the complete callback object unchanged. Binance emits native user-data messages through `onEvent`; the optional `onObservation` callback is accepted by the common adapter contract but is not used by the native Binance stream.
+
+After subscription establishment, bootstrap explicitly returns readiness to `AUTHORITATIVE_RECONCILIATION_REQUIRED` (or preserves the execution-accounting failure state). Polling observations do not alter this state; only the existing authoritative snapshot and native event/reconciliation gates can permit trading.
+
+The bootstrap helper keeps the accounting-failure check ahead of the PREFLIGHT open-orders read. The separate observation callback does not participate in that gate and cannot change its state.
+
+The callback options are part of one generic application-port method; delivery semantics are carried by the subscription metadata and callback channel, not by provider-specific method selection.
+
+The startup and established log messages are emitted by small helpers; the readiness state transition remains explicit and unchanged.

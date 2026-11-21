@@ -18,6 +18,45 @@ function resolveConfigUrl(source) {
   return pathToFileURL(resolve(source))
 }
 
+function resolveLoadOptions(sourceOrOptions) {
+  const options = sourceOrOptions instanceof URL || typeof sourceOrOptions === "string"
+    ? { source: sourceOrOptions }
+    : sourceOrOptions
+  if (options === null || typeof options !== "object" || Array.isArray(options)) {
+    throw new TypeError("App config options must be a file URL, path, or options object")
+  }
+  const tokenSpecificationsPath = options.tokenSpecificationsPath ?? DEFAULT_TOKEN_SPECIFICATIONS_PATH
+  if (typeof tokenSpecificationsPath !== "string" || !tokenSpecificationsPath.trim()) {
+    throw new TypeError("tokenSpecificationsPath must be a non-empty file path")
+  }
+  return {
+    source: options.source ?? DEFAULT_CONFIG_URL,
+    tokenSpecificationsPath,
+  }
+}
+
+async function importAppConfig({ sourceUrl }) {
+  const sourcePath = fileURLToPath(sourceUrl)
+  const importUrl = new URL(sourceUrl.href)
+  importUrl.searchParams.set("app-config-load", randomUUID())
+  try {
+    const configModule = await import(importUrl.href)
+    if (!Object.hasOwn(configModule, "appConfig")) {
+      throw new TypeError(`App config module at "${sourcePath}" must export a named appConfig value`)
+    }
+    return configModule.appConfig
+  } catch (cause) {
+    const message = `Unable to load app config module from "${sourcePath}": ${cause.message}`
+    if (cause instanceof SyntaxError) {
+      throw new SyntaxError(message, { cause })
+    }
+    if (cause instanceof TypeError && cause.message.startsWith("App config module")) {
+      throw cause
+    }
+    throw new Error(message, { cause })
+  }
+}
+
 async function readTokenSpecifications(specificationPath) {
   let source
   try {
@@ -33,6 +72,35 @@ async function readTokenSpecifications(specificationPath) {
   }
 }
 
+function resolveConfiguredStrategies({ strategies, tokenSpecifications, tokenSpecificationsPath }) {
+  if (!strategies || typeof strategies !== "object" || Array.isArray(strategies)) {
+    return strategies
+  }
+  const resolvedStrategies = { ...strategies }
+  for (const strategyId of ["CG_coinGrabber", "RS_recoverySeller"]) {
+    const strategy = strategies[strategyId]
+    const pairs = strategy?.pairs
+    if (!pairs || typeof pairs !== "object" || Array.isArray(pairs) || Object.keys(pairs).length === 0) {
+      continue
+    }
+    try {
+      resolvedStrategies[strategyId] = {
+        ...strategy,
+        pairs: resolvePairSpecifications({
+          pairs,
+          tokenSpecifications,
+        }),
+      }
+    } catch (cause) {
+      throw new Error(
+        `Unable to resolve configured market precision for ${strategyId} using token specifications at ${resolve(tokenSpecificationsPath)}: ${cause.message}`,
+        { cause },
+      )
+    }
+  }
+  return resolvedStrategies
+}
+
 /**
  * Load and validate the named appConfig export, enriching strategy pairs from the shared token registry.
  *
@@ -45,63 +113,18 @@ async function readTokenSpecifications(specificationPath) {
  * @throws {TypeError|SyntaxError|Error} If either source is missing, malformed, or inconsistent.
  */
 export async function loadAppConfig(sourceOrOptions = {}) {
-  const options = sourceOrOptions instanceof URL || typeof sourceOrOptions === "string"
-    ? { source: sourceOrOptions }
-    : sourceOrOptions
-  if (options === null || typeof options !== "object" || Array.isArray(options)) {
-    throw new TypeError("App config options must be a file URL, path, or options object")
-  }
-  const source = options.source ?? DEFAULT_CONFIG_URL
-  const tokenSpecificationsPath = options.tokenSpecificationsPath ?? DEFAULT_TOKEN_SPECIFICATIONS_PATH
-  if (typeof tokenSpecificationsPath !== "string" || !tokenSpecificationsPath.trim()) {
-    throw new TypeError("tokenSpecificationsPath must be a non-empty file path")
-  }
-  const sourceUrl = resolveConfigUrl(source)
-  const sourcePath = fileURLToPath(sourceUrl)
-  const importUrl = new URL(sourceUrl.href)
-  importUrl.searchParams.set("app-config-load", randomUUID())
-
-  let configModule
-  try {
-    configModule = await import(importUrl.href)
-  } catch (cause) {
-    const message = `Unable to load app config module from "${sourcePath}": ${cause.message}`
-    if (cause instanceof SyntaxError) {
-      throw new SyntaxError(message, { cause })
-    }
-    throw new Error(message, { cause })
-  }
-
-  if (!Object.hasOwn(configModule, "appConfig")) {
-    throw new TypeError(`App config module at "${sourcePath}" must export a named appConfig value`)
-  }
-
-  const tokenSpecifications = await readTokenSpecifications(resolve(tokenSpecificationsPath))
-  const rawConfig = configModule.appConfig
-  const strategy = rawConfig?.strategies?.CG_coinGrabber
-  if (!strategy || typeof strategy !== "object" || Array.isArray(strategy)) {
-    return validateAppConfig(rawConfig)
-  }
-
-  let resolvedPairs
-  try {
-    resolvedPairs = resolvePairSpecifications({
-      pairs: strategy.pairs,
-      tokenSpecifications,
-    })
-  } catch (cause) {
-    throw new Error(`Unable to resolve configured market precision using token specifications at ${resolve(tokenSpecificationsPath)}: ${cause.message}`, { cause })
-  }
-
-  const effectiveConfig = {
+  const options = resolveLoadOptions(sourceOrOptions)
+  const sourceUrl = resolveConfigUrl(options.source)
+  const rawConfig = await importAppConfig({
+    sourceUrl,
+  })
+  const tokenSpecifications = await readTokenSpecifications(resolve(options.tokenSpecificationsPath))
+  return validateAppConfig({
     ...rawConfig,
-    strategies: {
-      ...rawConfig.strategies,
-      CG_coinGrabber: {
-        ...strategy,
-        pairs: resolvedPairs,
-      },
-    },
-  }
-  return validateAppConfig(effectiveConfig)
+    strategies: resolveConfiguredStrategies({
+      strategies: rawConfig?.strategies,
+      tokenSpecifications,
+      tokenSpecificationsPath: options.tokenSpecificationsPath,
+    }),
+  })
 }

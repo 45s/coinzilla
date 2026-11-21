@@ -1,6 +1,6 @@
 # Harvester SQLite integration blueprint
 
-- **Status:** preparation/design only; no runtime migration is authorized by this document.
+- **Status:** historical design/audit snapshot (2026-11-18). Its trading-session-history implementation inventory was superseded by the filled-order-history slice in PR #1469; do not treat the session-history paths below as the current runtime composition.
 - **Tracking:** [#1327 — Provider-neutral DB API and Harvester persistence integration](https://github.com/45s/coinzilla/issues/1327)
 - **Source baseline:** [develop commit 007f631a3db04b1a2d1ca3d21bb9af65123bd014](https://github.com/45s/coinzilla/commit/007f631a3db04b1a2d1ca3d21bb9af65123bd014) (2026-11-18)
 - **Primary owner:** Harvester (apps/harvester)
@@ -21,7 +21,7 @@ This document does not authorize:
 - introducing a new provider, ORM, SQL layer, database dependency, or Harvester business repository in packages/db;
 - deleting, rewriting, or silently migrating existing Journal/Operational State Store files.
 
-The first Harvester consumer already exists: process trading-session history merged in [PR #1369](https://github.com/45s/coinzilla/pull/1369). The remaining work is to decide, one concrete use case at a time, whether another projection belongs in SQLite at all.
+At the time of this source snapshot, the first Harvester consumer was process trading-session history from [PR #1369](https://github.com/45s/coinzilla/pull/1369). That projection was subsequently removed by the explicitly scoped filled-order-history migration in [PR #1469](https://github.com/45s/coinzilla/pull/1469). The current collection, identity, and observer contract is documented in [the persistence README](./README.md).
 
 ### ADR-0001 naming
 

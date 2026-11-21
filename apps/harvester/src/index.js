@@ -23,8 +23,9 @@ import { configureHarvesterLogging } from "./infrastructure/logging/configure-ha
 import { createLogCommandInterface } from "./infrastructure/logging/create-log-command-interface.js"
 import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notifications/subscribe-harvester-telegram-notifications.js"
 import { prepareProcessOperationalStateStore } from "./bootstrap/operational-state/prepare-process-operational-state-store.js"
-import { prepareTradingSessionPersistence as prepareTradingSessionPersistenceDefault } from "./infrastructure/persistence/prepare-trading-session-persistence.js"
-import { closeTradingSessionPersistence } from "./infrastructure/persistence/close-trading-session-persistence.js"
+import { prepareOrderHistoryPersistence as prepareOrderHistoryPersistenceDefault } from "./infrastructure/persistence/prepare-order-history-persistence.js"
+import { closeHarvesterPersistence } from "./infrastructure/persistence/close-harvester-persistence.js"
+import { startTradingHistoryApi as startTradingHistoryApiDefault } from "./infrastructure/http/start-trading-history-api.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 const PROCESS_IDENTITY = createHarvesterProcessIdentity()
@@ -137,17 +138,24 @@ async function closeEventBus({ eventBus } = {}) {
   }
 }
 
-async function releaseProcessLock({ processLock, allowProcessLockRelease, journalClosed } = {}) {
+async function releaseProcessLock({
+  processLock,
+  allowProcessLockRelease,
+  journalClosed,
+  tradingHistoryApiClosed,
+} = {}) {
   if (!processLock) {
     return []
   }
 
-  if (!allowProcessLockRelease || !journalClosed) {
-    return [new Error(
-      !allowProcessLockRelease
-        ? "Harvester trading process lock retained because runtime shutdown was not confirmed"
-        : "Harvester trading process lock retained because Journal shutdown was not confirmed",
-    )]
+  if (!allowProcessLockRelease || !journalClosed || !tradingHistoryApiClosed) {
+    let reason = "Harvester trading process lock retained because trading-history API shutdown was not confirmed"
+    if (!allowProcessLockRelease) {
+      reason = "Harvester trading process lock retained because runtime shutdown was not confirmed"
+    } else if (!journalClosed) {
+      reason = "Harvester trading process lock retained because Journal shutdown was not confirmed"
+    }
+    return [new Error(reason)]
   }
 
   try {
@@ -180,27 +188,63 @@ function reportObservabilityCleanupErrors({ errors, logger } = {}) {
   }
 }
 
+async function closeTradingHistoryApi({ service, logger } = {}) {
+  if (typeof service?.close !== "function") {
+    return []
+  }
+  try {
+    await service.close()
+    return []
+  } catch (error) {
+    try {
+      logger?.error?.({
+        message: "Harvester trading-history API shutdown failed.",
+        errorName: error?.name ?? "Error",
+        errorCode: error?.code ?? "HARVESTER_TRADING_HISTORY_API_SHUTDOWN_FAILED",
+      })
+    } catch {
+      // Optional API diagnostics must not interrupt remaining process cleanup.
+    }
+    return [error]
+  }
+}
+
 async function closeObservability({
   journalService,
   eventBus,
   processLock,
-  processIdDatabase,
+  orderHistoryPersistence,
+  tradingHistoryApi,
   allowProcessLockRelease = true,
   logger,
 } = {}) {
   const journalResult = await closeJournalService({ journalService })
   const eventBusErrors = await closeEventBus({ eventBus })
-  const databaseErrors = await closeTradingSessionPersistence({
-    database: processIdDatabase,
+  const tradingHistoryApiErrors = await closeTradingHistoryApi({
+    service: tradingHistoryApi,
+    logger,
   })
+  const databaseErrors = tradingHistoryApiErrors.length > 0
+    ? [new Error("Harvester persistence was retained because the trading-history API listener did not confirm shutdown.")]
+    : await closeHarvesterPersistence({
+        observer: orderHistoryPersistence?.observer,
+        relationalOrderObserver: orderHistoryPersistence?.relationalOrderObserver,
+        fillObserver: orderHistoryPersistence?.fillObserver,
+        runtimeErrorObserver: orderHistoryPersistence?.runtimeErrorObserver,
+        database: orderHistoryPersistence?.database,
+        relationalDatabase: orderHistoryPersistence?.relationalDatabase,
+        logger,
+      })
   const processLockErrors = await releaseProcessLock({
     processLock,
     allowProcessLockRelease,
     journalClosed: journalResult.journalClosed,
+    tradingHistoryApiClosed: tradingHistoryApiErrors.length === 0,
   })
   const errors = [
     ...journalResult.errors,
     ...eventBusErrors,
+    ...tradingHistoryApiErrors,
     ...databaseErrors,
     ...processLockErrors,
   ]
@@ -290,20 +334,36 @@ function publishProcessStartedEvidence({ processStartedDataResult, resources, lo
     })
 }
 
-async function prepareProcessIdDatabase({
+async function prepareOrderHistoryPersistenceResources({
   runtimeConfig,
   env,
   logger,
-  processId,
-  prepareTradingSessionPersistence,
+  eventBus,
+  prepareOrderHistoryPersistence,
+  processIdentity,
+  errorBuffer,
 }) {
-  const persistence = await prepareTradingSessionPersistence({
-    tradingMode: runtimeConfig.tradingMode,
-    env,
-    logger,
-    processId,
-  })
-  return persistence?.database ?? null
+  try {
+    return await prepareOrderHistoryPersistence({
+      tradingMode: runtimeConfig.tradingMode,
+      env,
+      logger,
+      eventBus,
+      runtimeSessionId: processIdentity.runtimeSessionId,
+      errorBuffer,
+    })
+  } catch (error) {
+    try {
+      logger?.error?.({
+        message: "Order history persistence is unavailable",
+        errorName: error?.name ?? "Error",
+        errorCode: error?.code ?? "HARVESTER_ORDER_HISTORY_PERSISTENCE_FAILED",
+      })
+    } catch {
+      // Optional history persistence must never prevent Harvester startup.
+    }
+    return null
+  }
 }
 
 async function acquireEnvironmentProcessLock({ provider, acquireProcessLock, logger }) {
@@ -548,7 +608,7 @@ async function acquireProcessStartupResources({ options, resources, processStart
     processIdentity,
     createOperationalStateStore,
     createJournalService,
-    prepareTradingSessionPersistence,
+    prepareOrderHistoryPersistence,
     providerAdapterFactories,
   } = options
   resources.eventBus = createEventBus({ logger })
@@ -577,12 +637,14 @@ async function acquireProcessStartupResources({ options, resources, processStart
     journalService: resources.journalService,
     resources,
   })
-  resources.processIdDatabase = await prepareProcessIdDatabase({
+  resources.orderHistoryPersistence = await prepareOrderHistoryPersistenceResources({
     runtimeConfig: resources.runtimeConfig,
     env,
     logger,
-    processId: processStartedDataResult.data?.processId,
-    prepareTradingSessionPersistence,
+    eventBus: resources.eventBus,
+    prepareOrderHistoryPersistence,
+    processIdentity,
+    errorBuffer: options.errorBuffer,
   })
   resources.processStartedPublication = publishProcessStartedEvidence({
     processStartedDataResult,
@@ -774,10 +836,99 @@ function publishRuntimeStarted({
   })
 }
 
+function shouldStartTradingHistoryApi({ runtime } = {}) {
+  return typeof runtime?.stop === "function"
+}
+
+function logOptionalTradingHistoryApi({ logger, level, details } = {}) {
+  try {
+    logger?.[level]?.(details)
+  } catch {
+    // Optional API diagnostics must never block trading startup or shutdown.
+  }
+}
+
+function createTradingHistoryApiStartInput({ options, resources, database, environment, operator } = {}) {
+  return {
+    database,
+    environment,
+    env: options.env,
+    logger: options.logger,
+    eventBus: resources.eventBus,
+    ...(operator === undefined ? {} : { operator }),
+  }
+}
+
+async function startTradingHistoryApiService({ options, resources, database, environment, operator } = {}) {
+  try {
+    const service = await options.startTradingHistoryApi(
+      createTradingHistoryApiStartInput({
+        options,
+        resources,
+        database,
+        environment,
+        operator,
+      }),
+    )
+    resources.tradingHistoryApi = service
+    if (service?.address) {
+      logOptionalTradingHistoryApi({
+        logger: options.logger,
+        level: "info",
+        details: {
+          message: "Harvester trading-history API started.",
+          environment,
+          host: service.address.address,
+          port: service.address.port,
+        },
+      })
+    }
+  } catch (error) {
+    logOptionalTradingHistoryApi({
+      logger: options.logger,
+      level: "error",
+      details: {
+        message: "Harvester trading-history API startup failed; trading will continue without the optional API.",
+        errorName: error?.name ?? "Error",
+        errorCode: error?.code ?? "HARVESTER_TRADING_HISTORY_API_STARTUP_FAILED",
+      },
+    })
+  }
+}
+
+async function startOptionalTradingHistoryApi({ options, resources, runtime } = {}) {
+  if (!shouldStartTradingHistoryApi({ runtime })) {
+    return
+  }
+  const database = resources.orderHistoryPersistence?.relationalDatabase
+  const environment = resources.runtimeConfig?.tradingMode ?? options.env.TRADING_MODE
+  if (!database) {
+    logOptionalTradingHistoryApi({
+      logger: options.logger,
+      level: "warn",
+      details: {
+        message: "Harvester trading-history API is not started because relational history persistence is unavailable.",
+        environment: environment ?? "unknown",
+      },
+    })
+    return
+  }
+  await startTradingHistoryApiService({
+    options,
+    resources,
+    database,
+    environment,
+    operator: runtime.getOperator?.() ?? runtime.accountRuntimes?.[0]?.getOperator?.(),
+  })
+}
+
 async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } = {}) {
   const runtime = await startProviderAccounts({
     providers: resources.providerInstances,
-    start: options.start,
+    start: (startOptions) => options.start({
+      ...startOptions,
+      orderHistoryPersistence: resources.orderHistoryPersistence,
+    }),
     appConfig: resources.appConfig,
     env: options.env,
     eventPublisher: resources.eventPublisher,
@@ -794,6 +945,11 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
     eventPublisher: resources.eventPublisher,
     logger: options.logger,
   })
+  await startOptionalTradingHistoryApi({
+    options,
+    resources,
+    runtime,
+  })
   if (typeof runtime.stop === "function") {
     const shutdown = createRuntimeShutdownHandler({
       runtime,
@@ -806,7 +962,8 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
       closeLogger: options.closeLogger,
       closeObservability: (cleanupOptions) => closeObservability({
         ...cleanupOptions,
-        processIdDatabase: resources.processIdDatabase,
+        orderHistoryPersistence: resources.orderHistoryPersistence,
+        tradingHistoryApi: resources.tradingHistoryApi,
       }),
       logTelegramNotificationSummary,
     })
@@ -899,7 +1056,8 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
     journalService: resources.journalService,
     eventBus: resources.eventBus,
     processLock: resources.processLock,
-    processIdDatabase: resources.processIdDatabase,
+    orderHistoryPersistence: resources.orderHistoryPersistence,
+    tradingHistoryApi: resources.tradingHistoryApi,
     allowProcessLockRelease: !resources.runtimeStartAttempted,
     logger,
   })
@@ -913,7 +1071,7 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
   process.exitCode = 1
 }
 
-function resolveTradingSessionPersistencePreparer({
+function resolveOrderHistoryPersistencePreparer({
   start,
   override,
   logger,
@@ -922,11 +1080,11 @@ function resolveTradingSessionPersistencePreparer({
     return override
   }
   if (start === startHarvester) {
-    return prepareTradingSessionPersistenceDefault
+    return prepareOrderHistoryPersistenceDefault
   }
   try {
     logger?.warn?.({
-      message: "Ordinary trading-session history is disabled for a custom start adapter unless an explicit persistence preparer is supplied.",
+      message: "Filled-order history is disabled for a custom start adapter unless an explicit persistence preparer is supplied.",
     })
   } catch {
     // Optional configuration diagnostics must not affect startup.
@@ -948,7 +1106,8 @@ function createMainDependencies({ options }) {
     closeLogger = async () => {},
     createTelegramNotifier = (notifierOptions) => new TelegramNotifier(notifierOptions),
     createOperationalStateStore,
-    prepareTradingSessionPersistence: prepareOverride,
+    prepareOrderHistoryPersistence: prepareOverride,
+    startTradingHistoryApi: startApiOverride,
     processIdentity = PROCESS_IDENTITY,
   } = options
   return {
@@ -964,11 +1123,12 @@ function createMainDependencies({ options }) {
     closeLogger,
     createTelegramNotifier,
     createOperationalStateStore,
-    prepareTradingSessionPersistence: resolveTradingSessionPersistencePreparer({
+    prepareOrderHistoryPersistence: resolveOrderHistoryPersistencePreparer({
       start,
       override: prepareOverride,
       logger,
     }),
+    startTradingHistoryApi: startApiOverride ?? startTradingHistoryApiDefault,
     providerAdapterFactories: {
       binance: createBinanceBrokerAdapter,
       ...(options.providerAdapterFactories ?? {}),
@@ -984,7 +1144,8 @@ function createInitialProcessResources() {
       skipped: true,
     }),
     runtimeStartAttempted: false,
-    processIdDatabase: null,
+    orderHistoryPersistence: null,
+    tradingHistoryApi: null,
   }
 }
 
@@ -1041,13 +1202,13 @@ const isDirectExecution = process.argv[1]
 
 if (isDirectExecution) {
   const processStartedContext = mapHarvesterProcessStartedData(PROCESS_IDENTITY)
-  if (processStartedContext.ok) {
-    defaultLogger.setContext(processStartedContext.data)
-  }
   const logging = await configureHarvesterLogging({
     logger: defaultLogger,
     processIdentity: PROCESS_IDENTITY,
   })
+  if (processStartedContext.ok) {
+    defaultLogger.setContext(processStartedContext.data)
+  }
   let commandInterface
   try {
     commandInterface = createLogCommandInterface({ logger: defaultLogger })
@@ -1058,6 +1219,7 @@ if (isDirectExecution) {
 
   await main({
     processIdentity: PROCESS_IDENTITY,
+    errorBuffer: logging.errorBuffer,
     closeLogger: async () => {
       commandInterface.close()
       await logging.close()

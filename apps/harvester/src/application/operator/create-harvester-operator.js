@@ -1,3 +1,4 @@
+import { authorizeOperatorActor } from "./authorize-operator-actor.js"
 import {
   createPauseAllBuys,
   createPauseBuys,
@@ -6,6 +7,26 @@ import {
 } from "../../use-cases/operator-control/buy-controls.js"
 import { createReadOperatorState } from "../../use-cases/operator-control/read-operator-state.js"
 import { createReadOperatorTradingState } from "../../use-cases/operator-control/read-operator-trading-state.js"
+
+function createReadRecoverySellerStopState({ recoverySellerStopWorkflow }) {
+  return async ({ actor } = {}) => {
+    try {
+      authorizeOperatorActor({ actor })
+      return {
+        ok: true,
+        data: {
+          stopState: recoverySellerStopWorkflow.getStopState(),
+          blockerId: recoverySellerStopWorkflow.getBlockerId(),
+        },
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        errors: [error],
+      }
+    }
+  }
+}
 
 /**
  * Compose Harvester's transport-independent operator capability.
@@ -19,7 +40,16 @@ import { createReadOperatorTradingState } from "../../use-cases/operator-control
  * @param {Function} [options.getRuntimeSnapshot] - Read-only process runtime snapshot provider.
  * @returns {Readonly<object>} Explicit operator command and query methods.
  */
-export function createHarvesterOperator({ engine, operationalStateStore, getRuntimeSnapshot, getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders } = {}) {
+export function createHarvesterOperator({
+  engine,
+  operationalStateStore,
+  getRuntimeSnapshot,
+  getPortfolio,
+  getRecoveryLedger,
+  getAccountSnapshot,
+  getOpenOrders,
+  recoverySellerStopWorkflow,
+} = {}) {
   const pauseBuys = createPauseBuys({ engine,
     operationalStateStore })
   const resumeBuys = createResumeBuys({ engine,
@@ -39,6 +69,9 @@ export function createHarvesterOperator({ engine, operationalStateStore, getRunt
       getRuntimeSnapshot })
     operator.getStatus = readState.getStatus
     operator.getMarkets = readState.getMarkets
+  }
+  if (recoverySellerStopWorkflow !== undefined) {
+    operator.getRecoverySellerStopState = createReadRecoverySellerStopState({ recoverySellerStopWorkflow })
   }
   if ([getPortfolio, getRecoveryLedger, getAccountSnapshot, getOpenOrders].some((provider) => provider !== undefined)) {
     const readTradingState = createReadOperatorTradingState({ engine,

@@ -36,11 +36,25 @@ function publishUserDataSubscriptionFailure({ eventPublisher, brokerName, error 
   })
 }
 
-async function createUserDataSubscription({ broker, brokerName, eventPublisher, onEvent, onStatus }) {
+async function createUserDataSubscription({
+  broker,
+  brokerName,
+  eventPublisher,
+  symbols,
+  trackedOrders,
+  onEvent,
+  onObservation,
+  onStatus,
+}) {
   let result
   try {
-    result = await broker.subscribeForUserData({ onEvent,
-onStatus })
+    result = await broker.subscribeForUserData({
+      symbols,
+      trackedOrders,
+      onEvent,
+      onObservation,
+      onStatus,
+    })
   } catch (error) {
     publishUserDataSubscriptionFailure({ eventPublisher,
 brokerName,
@@ -124,50 +138,61 @@ function activateTradingEngine({
   })
 }
 
+function markUserDataReconciliationRequired(state) {
+  state.ready = false
+  state.status = state.accountingFailed
+    ? "EXECUTION_ACCOUNTING_FAILED"
+    : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+}
+
 /**
- * Subscribe to broker user-data events and complete the initial account audit gate.
+ * Subscribe to broker user-data delivery and complete the authoritative account audit gate.
  * The caller owns failure cleanup; this module owns subscription evidence and
  * the PREFLIGHT account/open-order checks that must precede trading readiness.
  */
+function logUserDataSubscriptionStarting(logger) {
+  logSystem({
+    logger,
+    message: "Subscribing to broker user-data delivery",
+  })
+}
+
+function logUserDataSubscriptionEstablished(logger) {
+  logSystem({
+    logger,
+    message: "Broker user-data delivery established",
+  })
+}
+
 export async function subscribeToUserData({
-  broker,
-  brokerName,
-  eventPublisher,
-  logger,
-  state,
-  tradingMode,
-  tradingEnabled,
-  enabledSymbols,
-  onEvent,
-  onStatus,
-  onSubscriptionEstablished,
-  publishAccountSnapshot,
-  publishOpenOrdersSnapshot,
-  getAccountSnapshot,
+  broker, brokerName, eventPublisher, logger, state,
+  tradingMode, tradingEnabled, enabledSymbols, trackedOrders = [],
+  onEvent, onObservation, onStatus, onSubscriptionEstablished,
+  publishAccountSnapshot, publishOpenOrdersSnapshot, getAccountSnapshot,
   resumeDeferredStrategyEvaluations,
 } = {}) {
   const tradingModeLabel = tradingMode === "live" ? "LIVE" : "TESTNET"
-  logSystem({ logger,
-message: "Subscribing to Binance user-data events" })
+  logUserDataSubscriptionStarting(logger)
 
   const userDataSubscription = await createUserDataSubscription({
     broker,
     brokerName,
     eventPublisher,
+    symbols: enabledSymbols,
+    trackedOrders,
     onEvent,
+    onObservation,
     onStatus,
   })
   onSubscriptionEstablished?.(userDataSubscription)
-  logSystem({ logger,
-message: "User-data stream connected" })
+  logUserDataSubscriptionEstablished(logger)
 
-  state.ready = false
-  state.status = state.accountingFailed
-    ? "EXECUTION_ACCOUNTING_FAILED"
-    : "AUTHORITATIVE_RECONCILIATION_REQUIRED"
+  markUserDataReconciliationRequired(state)
 
-  await publishInitialAccountSnapshot({ state,
-publishAccountSnapshot })
+  await publishInitialAccountSnapshot({
+    state,
+    publishAccountSnapshot,
+  })
 
   if (!tradingEnabled) {
     await publishOpenOrdersSnapshot({ phase: "PREFLIGHT" })

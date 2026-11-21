@@ -8,10 +8,88 @@ created: 2026-11-14
 
 # Recovery Seller (RS) — Implementation Roadmap
 
-**Status:** RS-1, RS-2a and RS-2b are COMPLETE. RS-3 foundations include the fee-aware mixed-SELL planner, sticky global STOP, deterministic lifecycle outcomes, Conservative-compatible BUY-tranche evaluation, immutable cycle state and one SELL per cycle. PRs #1325 and #1379 are merged. On 2026-11-18 the owner confirmed the existing per-pair `minProfit` only, Conservative-compatible order type/fee reserve, and STOP on any exchange-filter violation. The existing `minProfit >= 0.01` quote-asset floor is enforced by the pure planner. The pure pre-submission SELL evaluator is implemented and verified on code head `96315757e74a4851770716b04d8dae5cf9580ece`: Conservative-compatible order type/fee reserve, supported min/max exchange-filter checks, pair-configured `minProfit`, and sticky STOP on missing required filters, planning failures or filter violations. The evaluator suite passes 13/13; the full Harvester suite passes 2,101/2,101. Full workspace Unit Tests, Test Coverage, strict ESLint, workspace JavaScript quality/syntax, actionlint, Utils tests and dependency audit pass. Post-fill adverse outcomes, terminal partial/canceled SELL resolution, third-asset valuation source, and STOP reset/resume remain fail-closed; see the [policy blocker audit](./RECOVERY_SELLER_POLICY_BLOCKERS.md). RS-4 shared Trading Engine wiring and RS-5 offline lifecycle proof remain separate phases. RS is still non-executable.
-**Tracking:** RS-3 pure policy is completed in [PR #1127](https://github.com/45s/coinzilla/pull/1127). RS-4 shared-engine integration and RS-5 offline lifecycle proof remain separate phases. [PR #1118](https://github.com/45s/coinzilla/pull/1118), [PR #1131](https://github.com/45s/coinzilla/pull/1131), [PR #1137](https://github.com/45s/coinzilla/pull/1137), [PR #1144](https://github.com/45s/coinzilla/pull/1144) and [PR #1152](https://github.com/45s/coinzilla/pull/1152) are merged.
+**Status:** RS-1 through RS-5 offline acceptance are COMPLETE. PR #1515 implements production runtime dispatch, shared serialized-engine execution, account-wide quote/base authorization, terminal mixed-SELL reconciliation and durable STOP. `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is `true`; exact-head required CI passed on all six workflows; no merge checks remain. RS remains disabled by default (`RS_RECOVERY_SELLER_CONFIG.enabled = false` and the pair map is empty). Restart/replay and third-asset commission valuation are explicitly deferred. STOP is terminal: CC-operator exposes authorized read-only status but cannot clear, unpause or reset it. An unexpected error must be debugged and fixed before a controlled external restart. See the [policy blocker audit](./RECOVERY_SELLER_POLICY_BLOCKERS.md).
+**Tracking:** RS-3 pure policy is completed in [PR #1127](https://github.com/45s/coinzilla/pull/1127). RS-4 shared-engine runtime integration and RS-5 offline lifecycle acceptance are complete in merged PR #1515. [PR #1118](https://github.com/45s/coinzilla/pull/1118), [PR #1131](https://github.com/45s/coinzilla/pull/1131), [PR #1137](https://github.com/45s/coinzilla/pull/1137), [PR #1144](https://github.com/45s/coinzilla/pull/1144) and [PR #1152](https://github.com/45s/coinzilla/pull/1152) are merged.
 **Domain contract:** [Recovery Seller Domain Specification](./recovery-seller-domain-specification.md).
 **CG baseline:** [Conservative Domain Specification](./CONSERVATIVE_DOMAIN_SPECIFICATION.md).
+
+## Current RS-4 checkpoint — provider route handoff
+
+The exact `{ strategyId, symbol }` assignments survive provider-account startup and remain separate from deduplicated `executionSymbols`. PR #1515 now composes the production RS evaluator and shared account allocator through the existing Trading Engine rather than creating a parallel engine. The scoped RS-5 offline acceptance is complete and `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is `true`. `RS_RECOVERY_SELLER_CONFIG.enabled` remains `false` by default; no RS route activates without an explicit configuration change. Restart/replay is explicitly deferred and is not an acceptance blocker.
+
+The strict ESLint findings in the already changed route and Telegram test fixtures were corrected as formatting-only changes; no test coverage or lint rules were weakened, and runtime behavior is unchanged.
+
+The latest routing guard and regression tests ensure that a provider account's RS-only symbol is never passed into the CG Conservative pair map. Until the RS runtime is registered, a provider account with no CG-owned route fails startup explicitly rather than silently running an idle or misattributed strategy. This guard was temporary before runtime integration. PR #1515 replaces it with production RS strategy dispatch through the shared Trading Engine; do not weaken the CG ownership boundary.
+
+### Shared transition queue integration regression
+
+The first full-workspace run after the queue wiring exposed one stale test fixture: `shared-order-registry.integration.test.js` manually constructed account state without the newly required queue. The fixture now uses the production `createAccountRuntimeRegistry` factory, so the integration test exercises the real account-state contract rather than duplicating it. No production behavior was changed to accommodate the test.
+
+## RS order-event accounting ownership — implementation checkpoint
+
+The streamed RS SELL path now stages canonical fills without applying either accounting projection. The terminal reconciliation hook is covered by a strategy-ownership regression and is invoked only after the complete distinct canonical REST/stream fill set passes quantity reconciliation. PR #1515 now composes the RS-specific terminal reconciler into the shared engine: it atomically commits recovery and legacy projections and releases the cycle reservation only after success. A missing or failed mixed-SELL commit latches durable global STOP and never enters Conservative recovery-cycle completion. Restart reconstruction of the cycle/reservation state is explicitly deferred and is not an acceptance blocker.
+
+Canonical streamed RS BUY fills now dispatch through the RS accounting workflow based on immutable OrderRegistry ownership. RS BUYs do not enter Conservative accounting or Conservative execution totals. RS SELL fills remain fail-closed in the streamed-fill path and must be handled by terminal mixed-SELL reconciliation; they are not applied as standalone CG fills.
+
+## RS-4
+
+The production runtime dispatch now composes the pure BUY/SELL policies with canonical market/account/STOP snapshots and the engine-owned durable submitter. Before a SUBMIT decision reaches the broker adapter, `createRecoverySellerActionAuthorizer` invokes the shared account-wide order commitment allocator using the current Portfolio, AccountSnapshot, OrderRegistry commitments, RS pair budget and RS recovery/verified-legacy inventory. Insufficient quote or pair budget defers normally; missing or contradictory allocation inputs latch durable global STOP. The accounting workflow's one-SELL-per-cycle reservation is created after the durable submission intent and released only after successful terminal mixed-SELL accounting. This composition is present in PR #1515; scoped RS-5 offline acceptance is complete and the runtime gate is open. RS remains disabled by default in configuration.
+
+With the RS acceptance gate open, bootstrap restores the account-scoped durable STOP workflow from the verified Operational State Store before appending the current `PROCESS_STARTED` fact and carries it through the trading-engine composition. The operator facade exposes only an authorized read-only STOP status query; it has no clear, reset or resume method. Process-restart recovery remains deferred. The strategy configuration remains disabled by default; explicitly configured RS routes pass the completed runtime acceptance gate and still require the existing evaluator, account snapshot and STOP dependencies.
+
+- `createLatestTransitionEvaluator` dispatches the RS callback after Conservative evaluation inside the shared account transition queue.
+- Bootstrap contains the production composition path from the shared accounting workflow, durable STOP workflow, canonical market metadata and account snapshot. The runtime acceptance gate is open after RS-5 acceptance; RS remains disabled by default through `RS_RECOVERY_SELLER_CONFIG.enabled = false` and an empty pair map.
+- The engine injects an account-wide action authorizer backed by `allocateStrategyOrderCommitments`; the callback cannot submit without that authorization.
+- RS orders use the engine-owned submitter, immutable OrderRegistry ownership and the existing terminal mixed-SELL reconciler; CG policy, budgets and Positions remain separate.
+- The scoped RS-5 offline lifecycle matrix is covered by deterministic tests; the acceptance gate is open. Restart/recovery and third-asset commission valuation are deferred.
+
+## RS-4 account transition queue — shared coordinator foundation
+
+- The provider-account runtime now owns one serialized `runTransition({ task })` queue.
+- The Conservative engine uses that account-owned queue whenever it is composed with a provider-account runtime from `createAccountRuntimeRegistry`. Standalone and legacy test-only shared-state fixtures without the new queue retain their local serialized queue for compatibility.
+- The queue recovers after a rejected task without allowing later transitions to overlap or remain blocked.
+- The offline regression verifies ordered execution and result preservation for two strategy transitions.
+- At this intermediate checkpoint, only the shared serialization primitive was present. PR #1515 subsequently wired RS evaluation, order/fill routing and cycle reservations into the same coordinator.
+
+## Approved RS-4 architecture direction — 2026-11-19
+
+The owner approved the architecture direction recorded in [Strategy extensibility architecture](../architecture/strategy-extensibility-audit-roadmap.md): one shared provider-account execution coordinator, explicit `{ strategyId, symbol }` dispatch, and one serialized account-level decision/order-transition path across CG and RS. Strategy policies, lifecycle semantics, accounting attribution and budgets remain independent; Portfolio custody, canonical order/fill processing, broker submission and quote/base reservations are coordinated account-wide. This is the implementation direction for #1475 / PR #1476, not a pending design question.
+
+Do not interpret the shared accounting queue as satisfying the coordinator requirement: strategy decisions, intent allocation, submissions/acknowledgements and canonical order/fill transitions must also be serialized. Preserve CG behavior. RS-4 integration and scoped RS-5 acceptance are complete; the runtime acceptance gate is open, but RS remains disabled by default in configuration. No broker-package changes or exchange mutations are part of this work.
+
+## Next RS-4 checkpoint — shared account workflow state
+
+The account-workflow state is shared by the Conservative Portfolio workflow and the RS accounting workflow. Both accounting workflows serialize fill/accounting updates through the same queue and expose the same immutable Portfolio snapshot. The live OrderRegistry is also reachable from this account state, and the Conservative engine now publishes each registry replacement through its validated accessor. At this intermediate checkpoint, the broader event/decision queue and RS submission were still outstanding. PR #1515 subsequently composed the cross-strategy dispatcher, engine-owned submitter and order/fill transitions; shared Portfolio visibility and independent strategy-owned Positions remain covered by regressions.
+
+Bootstrap now creates the Conservative Portfolio workflow and RS accounting workflow over the provider account's same state object. The shared state owns one immutable Portfolio snapshot, one OrderRegistry, one legacy-position map, and one serialized update queue; the account-runtime regression proves both workflows receive the same Portfolio and OrderRegistry while validated Portfolio, RecoveryLedger-map, OrderRegistry, legacy-position-map and queue accessors preserve a frozen state interface. PR #1515 now composes RS with the shared Trading Engine and engine-owned submitter, including strategy-aware dispatch, canonical RS order lifecycle, account-wide reservations and terminal mixed-SELL reconciliation. The acceptance gate is open after scoped RS-5 offline acceptance; RS remains disabled by default in configuration.
+
+Shared-state constructor validation is isolated in small helpers to keep the use-case entry points within the repository's complexity/length standards. The same commit also removes strict-lint violations from changed bootstrap/provider and notification fixtures without disabling rules.
+
+The Conservative Trading Engine now binds its internal OrderRegistry to the account runtime's validated shared `orderRegistry` accessor. Pending registration, acknowledgement, cancellation and terminal reconciliation replace the shared registry snapshot through that accessor, so the RS accounting workflow sees the same current registry rather than a startup-only copy. A dedicated deterministic offline integration test in `shared-order-registry.integration.test.js` seeds the engine from the account registry and proves that a submitted Conservative BUY is visible through the RS accounting workflow's shared registry accessor. The legacy Conservative engine test file remains untouched so this focused coverage does not pull unrelated historical lint debt into the PR's changed-file checks. The dedicated test fixture follows Harvester's multiline object-property formatting rules; the exact-head lint check exposed one final object-property formatting finding, corrected in the follow-up commit. No legacy test files or lint rules were changed. This closes the shared-registry foundation at that historical checkpoint. PR #1515 subsequently completed strategy-owned RS dispatch and RS order/fill lifecycle integration.
+
+The RS order-submission adapter now converts one approved RS lifecycle `SUBMIT` decision into the existing `makeExecuteStrategyDecision` workflow. It attaches immutable RS strategy/Position/cycle/purpose ownership, registers PENDING before broker I/O through the shared OrderRegistry callbacks, persists submission intent/outcome, and retains UNKNOWN plus a durably acknowledged sticky-STOP callback on uncertain outcomes. A BLOCK/WAIT/RECONCILE decision never reaches the broker. Offline tests cover pending-before-network ordering, acknowledged RS ownership, unknown acknowledgement timeout with no retry, and non-SUBMIT suppression. PR #1515 wires this adapter into Harvester bootstrap and user-data order/fill/terminal reconciliation; RS remains disabled by default. Exact-head required CI is the final merge check.
+
+The strategy-owned route filter is kept in a small resolver helper so the public startup option function remains within the repository's 60-line function standard. Exact-head CI caught this size regression and it is corrected here; no lint rule is suppressed.
+
+The order-submission factory delegates shared executor construction to a focused helper so both the route resolver and submitter stay within the 60-line function standard. Exact-head CI exposed these size findings; they are fixed without suppressing lint rules.
+
+Configuration evidence publication/logging is isolated in a helper so provider route filtering and effective pair selection remain within the 60-line startup-function limit. The order-submission executor construction is likewise extracted; these are structural quality fixes only.
+
+The initial evidence-helper extraction accidentally left the public resolver calling the helper body recursively and did not shorten the caller. This was caught during exact-head source review before accepting the change; the helper now owns the publish/log operations and the resolver delegates to it. CI must verify this corrected revision.
+
+The first full Harvester run confirmed the shared OrderRegistry ownership record also carries the canonical `clientOrderId`; the submitter integration assertion now checks that identity explicitly alongside RS strategy, Position, purpose, cycle and broker IDs. The unknown-submission and non-SUBMIT cases passed in that run.
+
+A durable RS STOP workflow restores an unresolved account-scoped RS blocker from the Operational State Store, persists the first STOP before exposing the in-memory STOPPED state, and keeps the first evidence sticky. CC-operator has no STOP clear/reset/resume capability; it exposes only a read-only status query. The historical internal resolution use-case is not wired into the runtime operator facade. Offline tests cover persistence-before-latch, restoration/idempotency, and persistence failure. The submitter's required `onUnresolvedSubmission` callback can be wired directly to this workflow's `latch`.
+
+Strict changed-file ESLint caught one prefer-destructuring warning in the submitter integration assertion; it now uses array destructuring. No lint rules or warning thresholds were changed.
+
+The RS submitter integration test now uses the real durable STOP workflow instead of a stub: a broker acknowledgement timeout leaves the order UNKNOWN, appends one `SAFETY_BLOCKER_RAISED` fact, and latches STOP; no retry occurs. This proves the submission adapter's unresolved callback contract against the persisted STOP implementation. Bootstrap still needs to construct and inject this workflow for the live RS runtime.
+
+The STOP workflow's blocker-ID extraction now follows the repository's destructuring rule. The prior exact-head lint run also included the submitter-test warning already corrected in the immediately following commit; this follow-up removes the remaining STOP-workflow warning without relaxing lint.
+
+The real-STOP integration test now records the unresolved order identity in a multiline object literal to satisfy the use-case ESLint suite. This is a test-only formatting correction; the assertions still require one durable STOP fact and an UNKNOWN registered order.
+
+The RS submission adapter now refuses SELL when no durable sole-cycle reservation callback is supplied. For SELL, it now persists the canonical order intent before reserving the sole cycle and before PENDING registry registration. The shared executor reuses that acknowledged intent write rather than appending a duplicate; a regression verifies intent → reservation → registration → broker ordering. When supplied, it runs that reservation before pending-order registration and broker I/O. Any post-reservation deferral, rejection, or unknown outcome latches durable STOP; BUY known rejection remains distinct. Offline coverage proves SELL cannot bypass reservation and that a reserved SELL deferred by failed durable submission intent is removed from active orders and STOPped. The callback still must be wired to the durable cycle-state transition in the eventual runtime; the adapter does not invent that transition itself.
 
 ## Objective and delivery order
 
@@ -20,9 +98,9 @@ Implement RS as an independent strategy policy using Harvester's existing domain
 1. [x] Audit CG source, callers and tests; produce a function-by-function reuse map (completed as an audit only; no source code moved).
 2. [x] **RS-2a — Shared Portfolio foundation:** merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118). One Portfolio now supports multiple independently owned Positions per market and multiple Positions per strategy; canonical fill ownership/deduplication, aggregate market inventory, centralized custody/reservation boundaries and CG ownership-scoped consumers are covered.
 3. [x] **RS-2b — RS-specific domain accounting:** complete through merged PRs #1131, #1137, #1144, #1152, #1153, #1203, #1212, #1213, #1262 and #1276. The application workflow now coordinates exact-once terminal accounting, verified external custody/quote-flow providers, separate allocation diagnostics, one independent recovery, legacy and combined-cycle profitability result and reservation release. No RS runtime registration or order submission is included.
-4. [x] **RS-3 — Pure RS strategy policy:** independent profitability gates, mixed-SELL planning, pair-configured `minProfit` floor, Conservative-compatible order type/fee reserve, min/max filter validation and sticky fail-closed STOP are implemented and verified in PR #1127. Adverse/terminal/third-asset/STOP-resume cases remain explicitly fail-closed; RS is not registered or executable.
-5. [ ] **RS-4 — Shared Trading Engine integration:** register RS through the existing engine and shared order/broker/accounting workflows; prove same-market CG/RS concurrency.
-6. [ ] **RS-5 — Offline lifecycle verification:** prove the complete lifecycle and exact-head CI without TESTNET/LIVE activity.
+4. [x] **RS-3 — Pure RS strategy policy:** independent profitability gates, mixed-SELL planning, pair-configured `minProfit` floor, Conservative-compatible order type/fee reserve, min/max filter validation and sticky fail-closed STOP are implemented and verified in PR #1127. Adverse/terminal and third-asset cases remain explicitly fail-closed; STOP is terminal with no CC-operator clear/resume capability; RS remains disabled by default.
+5. [x] **RS-4 — Shared Trading Engine integration:** complete in PR #1515 through the existing engine and shared order/broker/accounting workflows; offline same-market CG/RS concurrency is covered.
+6. [x] **RS-5 — Offline lifecycle verification:** scoped lifecycle, concurrency and failure acceptance is complete in PR #1515; exact-head CI remains the final delivery gate. No TESTNET/LIVE activity.
 
 **Ongoing reuse rule:** whenever RS needs an existing CG capability, first characterize its current behavior with tests. If its contract is genuinely strategy-neutral, extract the smallest cohesive function into the appropriate shared domain location, add direct shared tests, and retain CG regression coverage in the same change. If it embeds CG policy, keep it in CG and implement an RS-specific rule. Do not create abstractions solely because they might be reusable later.
 
@@ -68,21 +146,21 @@ These capabilities are shared infrastructure, not RS extraction tasks.
 
 | Function | Current source | RS decision | Reason / condition |
 |---|---|---|---|
-| `isActiveOrderStatus` | `src/domain/strategies/conservative/helpers.js` | Extract candidate | Generic order lifecycle predicate; verify its blocking-status contract against RS order lifecycle. |
-| `hasActiveOrder` | `src/domain/strategies/conservative/helpers.js` | Extract candidate | Market/side duplicate-order predicate; verify strategy ownership filtering before sharing. |
-| `hasActivePosition` | `src/domain/strategies/conservative/helpers.js` | Extract candidate | Pure positive-quantity predicate with no CG-specific retained-inventory rule. |
+| `isActiveOrderStatus` | `src/domain/strategies/conservative/state-predicates.js` | Extract candidate | Generic order lifecycle predicate; verify its blocking-status contract against RS order lifecycle. |
+| `hasActiveOrder` | `src/domain/strategies/conservative/state-predicates.js` | Extract candidate | Market/side duplicate-order predicate; verify strategy ownership filtering before sharing. |
+| `hasActivePosition` | `src/domain/strategies/conservative/state-predicates.js` | Extract candidate | Pure positive-quantity predicate with no CG-specific retained-inventory rule. |
 | `calculateSellFeeRate` | `src/domain/strategies/conservative/sell-fee-rate.js` | Conditional extract | Reuse only if RS uses the same maker/taker fee-reserve semantics and order-type assumptions. |
 | `calculateInitialBuyPrice` | `src/domain/strategies/conservative/initial-buy-price.js` | Conditional extract | Reuse only if RS uses the same percentage/tick-rounding rule; do not force CG's BUY pricing into RS. |
-| `hasOutstandingRecovery` | `src/domain/strategies/conservative/helpers.js` | Conditional reuse | Its spent-versus-net-proceeds predicate may fit the RS recovery tranche, but must receive RS-tranche values only, never combined legacy basis. |
+| `hasOutstandingRecovery` | `src/domain/strategies/conservative/state-predicates.js` | Conditional reuse | Its spent-versus-net-proceeds predicate may fit the RS recovery tranche, but must receive RS-tranche values only, never combined legacy basis. |
 
-Relevant existing Conservative tests located: `helpers.test.js`, `sell-fee-rate.test.js`, and `initial-buy-price.test.js`. If RS-2 exposes a concrete need for one of these capabilities, add/strengthen characterization tests before extracting it; otherwise leave CG source untouched.
+Relevant existing Conservative tests located: `state-predicates.test.js`, `sell-fee-rate.test.js`, and `initial-buy-price.test.js`. If RS-2 exposes a concrete need for one of these capabilities, add/strengthen characterization tests before extracting it; otherwise leave CG source untouched.
 
 ### Keep inside Conservative
 
 | Function / model | Current source | Why it is not shared |
 |---|---|---|
 | `evaluateConservativeStrategy` | `src/domain/strategies/conservative/strategy.js` | Complete CG policy composition and order-intent rules. |
-| `hasSellableInventory` | `src/domain/strategies/conservative/helpers.js` | Defined specifically as inventory above CG's `keepQuantity`. |
+| `hasSellableInventory` | `src/domain/strategies/conservative/state-predicates.js` | Defined specifically as inventory above CG's `keepQuantity`. |
 | `calculateRecoverySellPlan` | `src/domain/strategies/conservative/recovery-sell-plan.js` | Uses CG active quantity, `keepQuantity`, pooled recovery cost/proceeds and CG fee-reserve assumptions. |
 | `evaluateRecoveryCompletion` | `src/domain/strategies/conservative/recovery-completion.js` | Owns CG's full-fill, minimum-profit, retained-inventory and constrained-dust completion semantics. |
 | `RecoveryLedger` | `src/domain/strategies/conservative/recovery-ledger.js` | Stores CG-specific recovery-cycle accounting. RS needs separate attribution and legacy basis semantics. |
@@ -105,7 +183,7 @@ Relevant tests located include `strategy.test.js`, `recovery-sell-plan.test.js`,
 
 **First RS-2b logical-accounting slice implemented in merged PR #1131:** `src/domain/strategies/recovery-seller/legacy-position.js` now creates the operator-declared logical legacy position, calculates its original average cost once (36 decimal places, rounded away from zero), caps each cycle's configured legacy slice at the remaining quantity, and records the actual legacy quantity sold while preserving the original invested amount and average cost. Focused tests cover the initial basis, fixed basis after disposal, smaller final remainder, exhausted legacy quantity, and invalid inputs.
 
-That PR's original scope was pure logical accounting. Subsequent merged RS-2b slices completed the verified custody, canonical allocation, terminal reconciliation and application commit boundaries described above. The resulting workflow still does not register RS or submit orders; RS remains non-executable.
+That PR's original scope was pure logical accounting. Subsequent RS-2b slices completed verified custody, canonical allocation, terminal reconciliation and application commit boundaries. PR #1515 later registered the production runtime dispatch and engine-owned order submission; the acceptance gate is now open while RS remains disabled by default in configuration.
 
 Before implementing each rule, add a focused test that expresses the agreed business invariant and observe it fail. The mixed SELL allocation, partial-fill reconciliation, atomic cross-projection accounting, account-snapshot baseline and shared quote-allocation regression suites are registered in `apps/harvester/package.json` `targetedTestFiles` so focused Harvester CI exercises these boundaries directly. Reuse existing domain capabilities directly where their contracts fit. If a required CG function is a genuine strategy-neutral capability, characterize it, extract it in the same focused change, add direct shared tests, and prove CG behavior is unchanged. Do not perform a separate speculative extraction pass.
 
@@ -220,7 +298,7 @@ The current owner contract requires three independent profitability gates: recov
 | Post-fill adverse result | Account confirmed fills/fees exactly once, leave cycle unresolved and STOP all new trading actions. No automatic recovery SELL/BUY or cycle reset. | **FAIL-CLOSED; no automatic resolution policy approved.** |
 | Terminal partial/canceled/rejected/expired SELL | One SELL lifecycle per cycle. Keep unresolved and reconcile; no second SELL or next BUY. | **FAIL-CLOSED; operator resolution path remains outside this policy slice.** |
 | Third-asset fee valuation | Explicit reliable quote value required. Missing value is not zero; no valuation source/timestamp/freshness policy approved. | **FAIL-CLOSED; source policy remains open.** |
-| Sticky STOP reset/resume | No automatic clear on market event or restart. Only non-trading WAIT/RECONCILE may proceed while stopped. | **FAIL-CLOSED; no reset path in this task.** |
+| Sticky STOP | No automatic clear on market event. CC-operator cannot unpause or reset STOP; investigate and fix the underlying unexpected error before controlled restart. | **TERMINAL; operator resolution removed from the operator facade.** |
 | Trailing BUY repricing | Current RS BUY behavior remains initial/next tranche pricing only. | **Not changed; no new behavior inferred.** |
 
 The final-residual-without-a-new-BUY liquidation remains explicitly deferred under FITDIB and is not an RS-3 deliverable. Advanced pause/disable/abandon/resume/restart semantics also remain deferred.
@@ -250,11 +328,18 @@ Preserve manual/external order ownership. EARN/off-Spot quantity is never availa
 
 **Acceptance:** application tests prove CG and RS run concurrently on different and same markets; fills are applied once to the shared Portfolio and attributed to the correct strategy; shared reservations prevent double-spend/oversell; order lifecycle and broker safety remain correct. Advanced pause/disable/abandon/resume/restart lifecycle functionality is deferred under FITDIB. No parallel execution engine or strategy-specific broker.
 
+### Durable RS lifecycle projection checkpoint (PR #1515)
+
+The verified Operational State Store candidate projector now keeps RS-owned order intents, acknowledged submission outcomes, terminal cancellation outcomes and canonical applied fills grouped by immutable cycle/Position ownership. It validates each RS fill against its original acknowledged client/broker order identity. RS fills are excluded from the Conservative recovery-cycle fill boundary, including when both strategies trade the same market.
+
+Terminal mixed-SELL accounting now requires a dedicated durable reconciliation fact after exact canonical fill reconciliation and successful shared Portfolio/legacy accounting calculation, but before either projection is published or the sole-SELL reservation is released. An append failure leaves the prior state and reservation intact; an identical replay is an exact no-op against the committed cycle/order/fill boundary. The candidate projector accepts a terminal status from the durable reconciliation boundary when the last observed order status is still OPEN, but rejects a contradictory already-terminal status; it releases the reservation only when the fact matches the acknowledged owned SELL and its complete canonical SELL fill set. Identity checks are decomposed into ownership, acknowledged-order and commit-boundary predicates so each invariant remains independently auditable. The exact-head workspace quality job also reports one pre-existing unresolved local heading link in the Conservative audit report on `develop`; it is unrelated to RS and is not changed by this task.
+
+The projection remains candidate-only: it never restores an executable Portfolio or OrderRegistry, never opens trading readiness and still requires authoritative exchange/history reconciliation. Durable writer failures and invalid fill ownership now use stable, component-owned Recovery Seller error codes with safe cycle/order context and preserved native causes. The workflow regression checks the append failure through the native cause rather than expecting the cause text to replace the stable component-owned message. The append path, input validation, error normalization and serialized terminal transition are split into bounded helpers so persistence and state publication remain separately auditable. The typed-error regression suite is included in the configured Harvester targeted runner.
 ## RS-5 — Offline lifecycle verification and delivery
 
 **Deliverable:** deterministic end-to-end RS lifecycle proof and current documentation.
 
-Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent recovery, legacy and combined-cycle profitability gates and max-of-allocation SELL price target; partial/terminal fills and base/quote/third-asset commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; fixed original average cost and decreasing remaining legacy quantity/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints.
+Cover: 50 ZRO / 100 USDT average-cost calculation; 0.5 Spot / 49.5 EARN custody; 0.01 legacy slice; independent recovery, legacy and combined-cycle profitability gates and max-of-allocation SELL price target; partial/terminal fills and base/quote commissions; exact-once reservations/accounting; cycle completion after terminal reconciliation; fixed original average cost and decreasing remaining legacy quantity/custody across cycles; EARN redemption and authoritative Spot reconciliation; unknown outcomes, external orders, concurrent CG/RS operation on the same and different markets, shared reservations, strategy-specific attribution and exchange constraints. Restart/recovery and third-asset commission valuation are out of scope for this initial runtime acceptance.
 
 Update the canonical RS specification, architecture, runtime config docs only when config is approved, tests index, docs index, Harvester roadmap and PR descriptions.
 
@@ -268,8 +353,8 @@ Update the canonical RS specification, architecture, runtime config docs only wh
 | RS-2a | Shared Portfolio/multi-Position accounting foundation | **COMPLETE** — merged in [PR #1118](https://github.com/45s/coinzilla/pull/1118); exact-head required CI passed |
 | RS-2b | RS-specific domain accounting, custody and profitability | **COMPLETE** — PR #1276 merged as `9276b6c01bec62b743727548786c5af4a04b7908` from exact head `19448d63d117f563c31d8ab9422ac73623974782`; full Harvester suite 1,847/1,847 and all required checks passed. No exchange operations. |
 | RS-3 | RS pure policy | **COMPLETE** — merged PR #1127 adds the pure pre-submission SELL evaluator: independent profitability gates, pair-configured `minProfit`, Conservative-compatible order type/fee reserve, supported min/max filter validation and sticky fail-closed STOP; exact-head evaluator and Harvester tests passed |
-| RS-4 | Concurrent Trading Engine integration | Existing execution and safety infrastructure reused |
-| RS-5 | Offline lifecycle and docs | Full lifecycle and exact-head CI green |
+| RS-4 | Concurrent Trading Engine integration | **COMPLETE in PR #1515** — production dispatch, engine-owned submission, account-wide authorization and same-market CG/RS concurrency regressions |
+| RS-5 | Offline lifecycle and docs | **IMPLEMENTED in PR #1515** — scoped offline lifecycle/concurrency/failure matrix and documentation complete; exact-head CI is the final delivery gate |
 
 Each phase is a focused PR into develop. Every implementation commit includes tests and documentation. A phase is complete only after merge and required exact-head checks pass.
 
@@ -326,4 +411,63 @@ flowchart TD
   J -->|"Yes"| K["Shared Trading Engine safety and order gates"]
 ~~~
 
-The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged in PR #1276; PR #1379 adds independent profitability gates and allocation-safe SELL price planning; PR #1127 completes the pure pre-submission SELL evaluator and owner-approved filter/order-type/fee policy. RS remains non-executable. RS-4 must wire the policy into the shared engine, and RS-5 must prove the offline lifecycle before runtime registration or exchange operations. Advanced lifecycle functionality remains deferred under FITDIB.
+The diagrams do not override the [RS Domain Specification](./recovery-seller-domain-specification.md). RS-2b application accounting, verified custody and profitability integration are merged; PR #1127 completes the pure pre-submission SELL evaluator. PR #1515 implements the shared-engine runtime dispatch, account-wide quote/base authorization and terminal mixed-SELL integration, and the RS-5 offline lifecycle/concurrency/failure matrix is complete. The acceptance gate is open; RS remains disabled by default in configuration. Restart/recovery and third-asset commission valuation are deferred. STOP is terminal with no CC-operator reset/resume capability. Advanced lifecycle functionality remains deferred under FITDIB.
+
+## RS-4 configuration boundary — PR #1476
+
+- [x] Add a separate operator-owned `recoverySellerPairs` map; keep it empty by default.
+- [x] Register `RS_recoverySeller` in the single application config with `enabled: false`.
+- [x] Validate explicit per-market legacy historical basis, additive `sellQuantity`, strategy BUY sizing/budget, fee and environment settings.
+- [x] Resolve RS exchange precision from the same token specification registry as CG.
+- [x] Preserve strategy identity in provider execution routes while keeping market subscriptions deduplicated (resolver contract only).
+- [x] Resolve strategy-owned CG/RS execution routes into separate effective pair maps and a deduplicated market subscription set; RS-only provider accounts remain fail-closed.
+- [x] Validate RS markets against canonical exchange trading rules and initialize explicitly configured legacy basis in the shared provider-account state before engine activation.
+- [x] Wire RS additional tracked Spot-base and realized quote-cash-flow providers into account snapshots and CG account-baseline evaluation; authoritative unreserved Spot custody is still required before SELL planning.
+- [x] Correct the exact-head validator-ordering regression and align offline bootstrap/notification fixtures with the explicit execution-route contract; retain fail-closed route validation.
+- [x] Route RS strategy/market intents into the shared serialized Trading Engine transition queue.
+- [x] Share account Portfolio, OrderRegistry, snapshots, account-wide quote/base commitment allocation and canonical fill processing without sharing strategy budgets/Positions.
+- [x] Prove same-market and different-market CG+RS accounting concurrency offline with exact-once shared-Portfolio attribution.
+- [x] Complete the scoped RS-5 offline lifecycle, partial/terminal outcome, reservation and failure matrix in PR #1515; exact-head required CI is the final delivery gate.
+- [x] Keep STOP terminal: CC-operator exposes status only and cannot clear, reset or resume it.
+
+Restart/replay and third-asset commission valuation are explicitly deferred from this initial runtime acceptance.
+
+RS configuration is not execution permission by itself. RS-4 and scoped RS-5 acceptance are complete in PR #1515; the runtime gate is open, but RS remains disabled by default. Exact-head required CI is the final merge check.
+
+### Canonical fill ownership dispatch — checkpoint
+
+The order-event workflow resolves immutable OrderRegistry ownership before accounting. RS BUY fills are routed through RS accounting and excluded from CG execution totals. RS SELL fills are staged until terminal mixed-SELL reconciliation can atomically allocate the complete canonical fill set and commit recovery/legacy projections; reservation release occurs only after successful commit. PR #1515 wires this reconciler into the production engine, and missing/failing reconciliation latches durable global STOP. Restart replay of the resulting cycle and reservation state is explicitly deferred from this initial runtime acceptance.
+
+### Runtime wiring correction — checkpoint
+
+The first callback composition attempt placed the callback in the options destructuring and caused a startup-module syntax error. GitHub Actions exposed this before delivery. The callback is now composed in the returned engine options, and exact-head targeted verification is rerunning. RS BUY accounting dispatch remains an integration slice; no production RS order execution is enabled.
+
+### Engine callback composition correction — checkpoint
+
+The RS BUY accounting callback is now exposed from the engine-options return object, not the input destructuring. GitHub Actions caught and verified the startup syntax error from the prior attempt. The exact corrected head is under remote targeted and full verification.
+
+### Unsupported strategy fill attribution — test-first checkpoint
+
+The order-event workflow must not treat an explicitly registered non-CG/non-RS order as Conservative-owned. Unsupported strategy ownership must fail closed before any accounting projection is mutated. The regression test is committed before the production dispatch change.
+
+### Explicit unsupported strategy ownership — implementation checkpoint
+
+Canonical fill accounting now distinguishes RS ownership, explicit CG ownership, legacy unowned orders, and unsupported registered strategy ownership. Explicit non-CG/non-RS owners fail closed before any Conservative accounting mutation. Legacy orders without recorded ownership retain the established CG accounting fallback. The regression test covers this unsupported-owner boundary.
+
+### 2026-11-20 — exact-head integration safety corrections
+
+- The engine's \`registry\` reference now stays linked to the provider-account \`orderRegistry\` accessor when immutable registry snapshots are replaced. This prevents RS accounting from reading a stale startup-only registry.
+- A terminal RS SELL whose mixed-SELL reconciler is missing or fails now attempts to persist the account-wide sticky STOP before pausing the affected market. The failure cannot silently degrade into a market-only pause or Conservative recovery-cycle completion.
+- Configured RS routes now require a production transition evaluator during startup configuration preflight. Missing evaluator registration aborts before \`PROCESS_STARTED\` is persisted and before broker connection.
+- Exact-head Harvester targeted tests and strict changed-file ESLint pass for these corrections. Full workspace checks are still running; no all-checks-passed claim is made.
+
+**Runtime acceptance status:** RS-4 production composition and the scoped RS-5 offline lifecycle/partial-terminal outcome/reservation/failure matrix are complete in PR #1515. `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is `true`; `RS_RECOVERY_SELLER_CONFIG.enabled` remains `false` by default. Restart/replay and third-asset commission valuation are deferred. STOP is terminal; CC-operator can inspect status but cannot clear, reset or resume it. Keep RS disabled by default and do not enable exchange execution without an explicit configuration change.
+
+### 2026-11-20 — production runtime dispatch and shared allocation checkpoint (PR #1515)
+
+- Added the bootstrap production-composition path for an RS runtime dispatcher using the shared accounting workflow, durable STOP workflow, canonical market metadata and shared account snapshot. The acceptance gate is now open after scoped RS-5 offline acceptance; RS remains disabled by default.
+- The dispatcher uses the existing serialized account Trading Engine path and engine-owned order submitter; no parallel RS engine was added.
+- Added an account-wide action authorizer using the shared `allocateStrategyOrderCommitments` path. It accounts for active quote/base commitments across strategies while preserving RS-specific pair budgets and cycle inventory. Normal quote/budget exhaustion defers; missing or contradictory inputs latch durable global STOP.
+- Connected the terminal RS SELL path to complete canonical fill-history reconciliation and atomic recovery/legacy accounting. Reservation release follows successful commit only.
+- The code-level gate (`RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = true`) reflects completed RS-5 offline acceptance; RS remains disabled by default through `RS_RECOVERY_SELLER_CONFIG.enabled = false`.
+- Historical checkpoint superseded by the completed RS-5 implementation and verification scope documented above. Restart/recovery and third-asset commission valuation remain explicitly deferred; STOP is terminal and cannot be cleared through CC-operator. No exchange operations were performed.

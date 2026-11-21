@@ -16,9 +16,9 @@ test("package entry point exposes only the supported public contracts", () => {
     "BitunixSpotConfig",
     "BitunixSpotWebSocketClient",
     "BitunixWebSocketError",
+    "Broker",
     "BrokerCapabilities",
     "BrokerUnsupportedOperationError",
-    "CoreBroker",
     "assertBrokerContract",
     "brokerCapabilitiesErrMsgs",
     "getBrokerMutationOutcome",
@@ -33,7 +33,6 @@ test("public Binance broker can be constructed without opening network connectio
     tradingMode: "testnet",
   })
 
-  assert.ok(broker instanceof brokers.CoreBroker)
   for (const method of [
     "connect",
     "disconnect",
@@ -79,6 +78,10 @@ test("both public broker facades implement the same exchange-neutral method surf
     assert.ok(broker.capabilities instanceof brokers.BrokerCapabilities)
     assert.equal(broker.capabilities.provider, broker instanceof brokers.BinanceWebSocketBroker ? "binance" : "bitunix")
   }
+})
+
+test("Bitunix polling reconciliation remains private to the provider implementation", () => {
+  assert.equal(brokers.BitunixSpotReconciler, undefined)
 })
 
 test("public Bitunix Spot WebSocket client is independently constructible without connecting", () => {

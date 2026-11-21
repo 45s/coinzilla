@@ -8,8 +8,8 @@ import {
   BROKER_MUTATION_OUTCOMES,
   getBrokerMutationOutcome,
 } from "./broker-contract.js"
-import { BinanceWebSocketBroker } from "../infrastructure/binance/broker-websocket/broker.js"
-import { BitunixSpotBroker } from "../infrastructure/bitunix/broker.js"
+import { BinanceWebSocketBroker } from "../infrastructure/binance/spot/broker-websocket/broker.js"
+import { BitunixSpotBroker } from "../infrastructure/bitunix/spot/broker.js"
 
 function createBrokers() {
   return [
@@ -52,7 +52,7 @@ test("mutation outcomes distinguish local rejection from uncertain exchange resu
   ])
 })
 
-test("assertBrokerContract reports all missing methods without requiring inheritance", () => {
+test("assertBrokerContract reports all missing methods", () => {
   assert.throws(
     () => assertBrokerContract({ broker: {} }),
     /connect, disconnect, getBalances/,

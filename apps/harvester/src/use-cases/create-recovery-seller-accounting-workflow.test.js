@@ -16,6 +16,7 @@ import {
   stageMixedSellFillAllocation,
 } from "../domain/strategies/recovery-seller/mixed-sell-fill-reconciliation.js"
 import { createRecoverySellerAccountingWorkflow } from "./create-recovery-seller-accounting-workflow.js"
+import { createPortfolioWorkflow } from "./create-portfolio-workflow.js"
 
 const baseAsset = new Asset({
   id: "binance:ZRO",
@@ -58,12 +59,18 @@ function makeFill({ tradeId = "sell-1", quantity = "5.01", quoteQuantity = "10.5
   })
 }
 
-function makeOrder({ status = "OPEN", executedQuantity = "0" } = {}) {
+function makeOrder({
+  status = "OPEN",
+  executedQuantity = "0",
+  clientOrderId = "rs-sell-1",
+  brokerOrderId = "broker-sell-1",
+  side = "SELL",
+} = {}) {
   return new CanonicalOrder({
-    clientOrderId: "rs-sell-1",
-    brokerOrderId: "broker-sell-1",
+    clientOrderId,
+    brokerOrderId,
     market,
-    side: "SELL",
+    side,
     type: "LIMIT_MAKER",
     limitPrice: new Money({
       amount: "2",
@@ -169,7 +176,41 @@ function makeContext({ fill = makeFill() } = {}) {
   }
 }
 
-function makeWorkflow(context) {
+function makeTransitionSnapshotInput() {
+  return {
+    marketMetadata: { market },
+    pairConfig: {
+      sellQuantity: "50",
+      thirdAssetFeeQuoteValue: "0",
+    },
+    accountSnapshot: {
+      balances: [
+        new Balance({
+          free: new Quantity({
+            amount: "55.01",
+            asset: baseAsset,
+          }),
+          locked: new Quantity({
+            amount: "0",
+            asset: baseAsset,
+          }),
+        }),
+      ],
+    },
+    stopState: { status: "RUNNING" },
+    strategyStopped: false,
+    marketPaused: false,
+    reconciliationComplete: true,
+  }
+}
+
+function makeWorkflow({
+  context,
+  onOperationalStateRecoverySellerMixedSellReconciled = async () => ({
+    ok: true,
+    data: { durable: true },
+  }),
+} = {}) {
   return createRecoverySellerAccountingWorkflow({
     initialPortfolio: context.portfolio,
     initialOrderRegistry: context.openRegistry,
@@ -178,24 +219,197 @@ function makeWorkflow(context) {
       position: context.legacyPosition,
       accounting: context.legacyAccounting,
     }],
+    onOperationalStateRecoverySellerMixedSellReconciled,
   })
 }
 
-test("commits reconciled RS projections and releases the shared SELL reservation atomically", async () => {
-  const context = makeContext()
-  const workflow = makeWorkflow(context)
-
-  assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1,
-    "An open RS SELL must remain in the shared reservation registry before terminal reconciliation.")
-
-  const result = await workflow.reconcileTerminalMixedSell({
-    reconciliation: context.reconciliation,
-    terminalOrder: context.terminalOrder,
-    canonicalFills: [context.fill],
-    canonicalFillAllocations: [context.allocation],
-    minProfit: "0.2",
+test("keeps a stable current cycle identity until the cycle is completed", () => {
+  let nextCycle = 0
+  const workflow = createRecoverySellerAccountingWorkflow({
+    createCycleId: () => `rs-cycle-${++nextCycle}`,
   })
 
+  const first = workflow.getOrCreateCycleState({
+    marketId: market.id,
+  })
+  const repeated = workflow.getOrCreateCycleState({
+    marketId: market.id,
+  })
+
+  assert.deepEqual(repeated, first)
+  assert.equal(first.cycleId, "rs-cycle-1")
+  assert.equal(first.status, "ACCUMULATING")
+  assert.equal(workflow.getLatestBuyExecutionForMarket({
+    marketId: market.id,
+  }), undefined)
+})
+
+test("builds a normalized transition snapshot from active SELL and verified legacy Spot state", () => {
+  const context = makeContext()
+  const workflow = makeWorkflow({ context })
+  const snapshot = workflow.getTransitionSnapshot(makeTransitionSnapshotInput())
+
+  assert.equal(snapshot.cycleState.cycleId, "rs-cycle-1")
+  assert.equal(snapshot.cycleState.status, "SELL_SUBMITTED")
+  assert.equal(snapshot.recoveryPosition.quantity, "5.01")
+  assert.equal(snapshot.recoveryPosition.spent, "10.02")
+  assert.equal(snapshot.planInput.configuredLegacyQuantity, "50")
+  assert.equal(snapshot.planInput.legacyRemainingQuantity, "50")
+  assert.equal(snapshot.planInput.verifiedUnreservedLegacyQuantity, "50")
+  assert.equal(snapshot.planInput.recoveryCostBasis, "10.02")
+  assert.equal(snapshot.planInput.legacyAverageCost, "2")
+  assert.equal(snapshot.planInput.thirdAssetFeeQuoteValue, "0")
+  assert.equal(snapshot.pendingBuyCommitment, "0")
+  assert.equal(snapshot.activeOrders[0].ownership.cycleId, "rs-cycle-1")
+  assert.equal(snapshot.reconciliationComplete, true)
+})
+
+test("includes pending BUY quote commitment in the transition snapshot", () => {
+  const context = makeContext()
+  const order = makeOrder({
+    clientOrderId: "rs-buy-1",
+    brokerOrderId: "broker-buy-1",
+    side: "BUY",
+  })
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-buy",
+    },
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+  })
+  const workflow = makeWorkflow({
+    context: {
+      ...context,
+      openRegistry: new OrderRegistry({
+        orders: [order],
+        ownerships: [ownership],
+      }),
+    },
+  })
+  const snapshot = workflow.getTransitionSnapshot(makeTransitionSnapshotInput())
+
+  assert.equal(snapshot.cycleState.cycleId, "rs-cycle-buy")
+  assert.equal(snapshot.cycleState.status, "ACCUMULATING")
+  assert.equal(snapshot.pendingBuyCommitment, "10.02")
+  assert.equal(snapshot.activeOrders[0].ownership.purpose, "RECOVERY_BUY")
+})
+
+test("creates a stable first-cycle snapshot when the market has no active orders or BUY fills", () => {
+  let nextCycle = 0
+  const context = makeContext()
+  const workflow = createRecoverySellerAccountingWorkflow({
+    initialPortfolio: context.portfolio,
+    initialOrderRegistry: new OrderRegistry(),
+    initialLegacyPositions: [{
+      market,
+      position: context.legacyPosition,
+      accounting: context.legacyAccounting,
+    }],
+    createCycleId: () => `new-cycle-${++nextCycle}`,
+  })
+  const snapshot = workflow.getTransitionSnapshot(makeTransitionSnapshotInput())
+
+  assert.equal(snapshot.cycleState.cycleId, "new-cycle-1")
+  assert.equal(snapshot.cycleState.status, "ACCUMULATING")
+  assert.equal(snapshot.recoveryPosition, undefined)
+  assert.equal(snapshot.pendingBuyCommitment, "0")
+  assert.equal(workflow.getOrCreateCycleState({ marketId: market.id }).cycleId, "new-cycle-1")
+})
+
+
+
+
+function createReservedRecoverySellerSellFixture() {
+  const context = makeContext()
+  const workflow = makeWorkflow({
+    context: {
+      ...context,
+      openRegistry: new OrderRegistry(),
+    },
+  })
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: "rs-sell-1",
+    brokerOrderId: "broker-sell-1",
+  })
+  return {
+    workflow,
+    ownership,
+    order: makeOrder(),
+  }
+}
+
+test("reserves one durable RS SELL per cycle before shared order registration", async () => {
+  const { workflow, ownership, order } = createReservedRecoverySellerSellFixture()
+  const withoutDurableIntent = await workflow.reserveSellCycle({
+    order,
+    ownership,
+    durableIntent: false,
+  })
+  assert.equal(
+    withoutDurableIntent.ok,
+    false,
+    "A process-local reservation must never substitute for the durable submission intent.",
+  )
+  const reserved = await workflow.reserveSellCycle({
+    order,
+    ownership,
+    durableIntent: true,
+  })
+  assert.equal(reserved.ok, true, "A durable SELL intent must permit the matching cycle reservation.")
+  assert.equal(reserved.data.durable, true, "The reservation must confirm its durable intent boundary.")
+  assert.equal(
+    workflow.getOrderRegistry().getActiveOrders().length,
+    0,
+    "The cycle reservation must exist before the order enters the shared registry.",
+  )
+  assert.equal(
+    workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
+    "rs-sell-1",
+    "The reserved cycle must point to the exact owned SELL client order.",
+  )
+})
+
+test("rejects a second SELL reservation for the same recovery cycle", async () => {
+  const { workflow, ownership, order } = createReservedRecoverySellerSellFixture()
+  await workflow.reserveSellCycle({
+    order,
+    ownership,
+    durableIntent: true,
+  })
+  const duplicateOwnership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: "rs-sell-2",
+    brokerOrderId: "broker-sell-2",
+  })
+  const duplicate = await workflow.reserveSellCycle({
+    order: makeOrder({
+      clientOrderId: "rs-sell-2",
+      brokerOrderId: "broker-sell-2",
+    }),
+    ownership: duplicateOwnership,
+    durableIntent: true,
+  })
+  assert.equal(duplicate.ok, false, "A second SELL must not reserve the same recovery cycle.")
+  assert.match(duplicate.errors[0].message, /already reserved/i, "The duplicate reservation error must explain the conflict.")
+})
+
+
+function assertSuccessfulTerminalMixedSellCommit({ workflow, result } = {}) {
   assert.equal(result.ok, true, result.errors?.[0]?.message)
   assert.equal(result.data.applied, true,
     "A fully reconciled mixed SELL must apply both immutable accounting projections.")
@@ -209,11 +423,130 @@ test("commits reconciled RS projections and releases the shared SELL reservation
     "Only the legacy-allocated SELL quantity may debit authorized legacy inventory.")
   assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 0,
     "The central SELL reservation must be released only after both projections commit.")
+  assert.equal(workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }), undefined,
+    "The cycle-scoped SELL reservation must release only after both accounting projections commit.")
+  const cycleOutcome = workflow.getCycleOutcome({ cycleId: "rs-cycle-1" })
+  assert.equal(cycleOutcome.status, "CLOSED",
+    "A fully reconciled profitable mixed SELL must close its cycle.")
+  assert.equal(workflow.getCycleStateForMarket({ marketId: market.id }).status, "CLOSED",
+    "The market cycle state must publish the same terminal CLOSED outcome.")
+  const nextCycle = workflow.getOrCreateCycleState({ marketId: market.id })
+  assert.notEqual(nextCycle.cycleId, "rs-cycle-1",
+    "A new cycle may be allocated only after the prior mixed SELL has fully reconciled and closed.")
+  assert.equal(nextCycle.status, "ACCUMULATING",
+    "A fully reconciled profitable cycle may transition to a fresh accumulating cycle.")
+}
+
+async function reserveRecoverySellerSell({ workflow, openOrder } = {}) {
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: openOrder.clientOrderId,
+    brokerOrderId: openOrder.brokerOrderId,
+  })
+  return workflow.reserveSellCycle({
+    order: openOrder,
+    ownership,
+    durableIntent: true,
+  })
+}
+
+async function reconcileTerminalMixedSell({ workflow, context } = {}) {
+  return workflow.reconcileTerminalMixedSell({
+    reconciliation: context.reconciliation,
+    terminalOrder: context.terminalOrder,
+    canonicalFills: [context.fill],
+    canonicalFillAllocations: [context.allocation],
+    minProfit: "0.2",
+  })
+}
+
+test("commits reconciled RS projections and releases the shared SELL reservation atomically", async () => {
+  const context = makeContext()
+  const workflow = makeWorkflow({ context })
+  const openOrder = context.openRegistry.getOrder({ clientOrderId: "rs-sell-1" })
+  const reservation = await reserveRecoverySellerSell({
+    workflow,
+    openOrder,
+  })
+
+  assert.equal(reservation.ok, true, reservation.errors?.[0]?.message)
+  assert.equal(
+    workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
+    openOrder.clientOrderId,
+    "The cycle reservation must retain the exact SELL identity until terminal reconciliation commits.",
+  )
+  assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1,
+    "An open RS SELL must remain in the shared reservation registry before terminal reconciliation.")
+  const result = await reconcileTerminalMixedSell({
+    workflow,
+    context,
+  })
+  assertSuccessfulTerminalMixedSellCommit({
+    workflow,
+    result,
+  })
+})
+
+test("keeps both accounting projections and the SELL reservation unchanged when durable reconciliation commit fails", async () => {
+  const context = makeContext()
+  const workflow = makeWorkflow({
+    context,
+    onOperationalStateRecoverySellerMixedSellReconciled: async () => ({
+      ok: false,
+      errors: [new Error("durable fact append failed")],
+    }),
+  })
+  const openOrder = context.openRegistry.getOrder({
+    clientOrderId: "rs-sell-1",
+  })
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_SELL",
+      cycleId: "rs-cycle-1",
+    },
+    clientOrderId: openOrder.clientOrderId,
+    brokerOrderId: openOrder.brokerOrderId,
+  })
+  await workflow.reserveSellCycle({
+    order: openOrder,
+    ownership,
+    durableIntent: true,
+  })
+  const portfolioBefore = workflow.getPortfolio()
+  const legacyBefore = workflow.getLegacyPosition({ marketId: market.id })
+  const registryBefore = workflow.getOrderRegistry()
+
+  const result = await workflow.reconcileTerminalMixedSell({
+    reconciliation: context.reconciliation,
+    terminalOrder: context.terminalOrder,
+    canonicalFills: [context.fill],
+    canonicalFillAllocations: [context.allocation],
+    minProfit: "0.2",
+  })
+
+  assert.equal(result.ok, false, "A failed durable reconciliation append must abort the terminal accounting transition.")
+  assert.equal(result.errors[0].code, "RS_MIXED_SELL_DURABLE_FACT_COMMIT_FAILED", "A durable append failure must expose a stable Recovery Seller error code.")
+  assert.match(result.errors[0].cause.message, /durable fact append failed/, "The original durable append failure must remain available as the native cause.")
+  assert.equal(workflow.getPortfolio(), portfolioBefore, "Portfolio publication must wait for durable reconciliation.")
+  assert.equal(workflow.getLegacyPosition({ marketId: market.id }), legacyBefore, "Legacy accounting publication must wait for durable reconciliation.")
+  assert.equal(workflow.getOrderRegistry(), registryBefore, "The terminal OrderRegistry projection must not publish after a failed append.")
+  assert.equal(workflow.getOrderRegistry().getActiveOrders().length, 1, "The failed append must leave the prior active order registered.")
+  assert.equal(
+    workflow.getReservedSellCycle({ cycleId: "rs-cycle-1" }).clientOrderId,
+    openOrder.clientOrderId,
+  )
 })
 
 test("keeps the SELL reservation and both projections unchanged when terminal fill history is incomplete", async () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const portfolioBefore = workflow.getPortfolio()
   const legacyBefore = workflow.getLegacyPosition({ marketId: market.id })
   const registryBefore = workflow.getOrderRegistry()
@@ -239,7 +572,7 @@ test("keeps the SELL reservation and both projections unchanged when terminal fi
 
 test("exposes separately tracked legacy quote proceeds to the shared account snapshot baseline", async () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const result = await workflow.reconcileTerminalMixedSell({
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
@@ -257,7 +590,7 @@ test("exposes separately tracked legacy quote proceeds to the shared account sna
 
 test("exposes only verified untracked Spot legacy quantity outside the shared Portfolio", async () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const result = await workflow.reconcileTerminalMixedSell({
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
@@ -292,7 +625,7 @@ test("exposes only verified untracked Spot legacy quantity outside the shared Po
 
 test("fails closed when the legacy Spot base asset is missing from the authoritative account snapshot", () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   assert.throws(
     () => workflow.getAdditionalTrackedBaseQuantity({
       balances: [],
@@ -305,7 +638,7 @@ test("fails closed when the legacy Spot base asset is missing from the authorita
 
 test("treats a repeated terminal RS accounting event as an exact no-op", async () => {
   const context = makeContext()
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const input = {
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
@@ -352,6 +685,10 @@ test("accounts a loss-making legacy allocation but marks the mixed SELL ineligib
       position: legacyPosition,
       accounting: createLegacyPositionAccounting(),
     }],
+    onOperationalStateRecoverySellerMixedSellReconciled: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
   })
 
   const result = await workflow.reconcileTerminalMixedSell({
@@ -394,6 +731,10 @@ test("commits actual fills when the combined cycle misses minProfit", async () =
       position: legacyPosition,
       accounting: createLegacyPositionAccounting(),
     }],
+    onOperationalStateRecoverySellerMixedSellReconciled: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
   })
 
   const result = await workflow.reconcileTerminalMixedSell({
@@ -453,7 +794,7 @@ test("allocates quote, base and valued third-asset commissions before independen
     ],
   })
   const context = makeContext({ fill })
-  const workflow = makeWorkflow(context)
+  const workflow = makeWorkflow({ context })
   const result = await workflow.reconcileTerminalMixedSell({
     reconciliation: context.reconciliation,
     terminalOrder: context.terminalOrder,
@@ -501,11 +842,15 @@ test("rejects inconsistent restored legacy basis before exposing custody provide
 })
 
 
-function makeRecoveryBuyOrder() {
+function makeRecoveryBuyOrder({
+  targetMarket = market,
+  clientOrderId = "rs-buy-1",
+  brokerOrderId = "broker-buy-1",
+} = {}) {
   return new CanonicalOrder({
-    clientOrderId: "rs-buy-1",
-    brokerOrderId: "broker-buy-1",
-    market,
+    clientOrderId,
+    brokerOrderId,
+    market: targetMarket,
     side: "BUY",
     type: "LIMIT_MAKER",
     limitPrice: new Money({
@@ -514,11 +859,11 @@ function makeRecoveryBuyOrder() {
     }),
     originalQuantity: new Quantity({
       amount: "5.01",
-      asset: baseAsset,
+      asset: targetMarket.baseAsset,
     }),
     executedQuantity: new Quantity({
       amount: "0",
-      asset: baseAsset,
+      asset: targetMarket.baseAsset,
     }),
     status: "OPEN",
     createdAt: 100,
@@ -527,20 +872,27 @@ function makeRecoveryBuyOrder() {
   })
 }
 
-function makeRecoveryBuyFill({ tradeId, brokerOrderId = "broker-buy-1", quantity, quoteQuantity } = {}) {
+function makeRecoveryBuyFill({
+  tradeId,
+  brokerOrderId = "broker-buy-1",
+  clientOrderId = "rs-buy-1",
+  targetMarket = market,
+  quantity,
+  quoteQuantity,
+} = {}) {
   return new Fill({
     tradeId,
     brokerOrderId,
-    clientOrderId: "rs-buy-1",
-    market,
+    clientOrderId,
+    market: targetMarket,
     side: "BUY",
     price: new Money({
       amount: "2",
-      asset: quoteAsset,
+      asset: targetMarket.quoteAsset,
     }),
     quantity: new Quantity({
       amount: quantity,
-      asset: baseAsset,
+      asset: targetMarket.baseAsset,
     }),
     quoteQuantity: new Money({
       amount: quoteQuantity,
@@ -551,11 +903,11 @@ function makeRecoveryBuyFill({ tradeId, brokerOrderId = "broker-buy-1", quantity
   })
 }
 
-function makeRecoveryBuyRegistry(order) {
+function makeRecoveryBuyRegistry({ order, targetPositionId = positionId } = {}) {
   const ownership = createOrderOwnership({
     ownership: {
       strategyId,
-      positionId,
+      positionId: targetPositionId,
       purpose: "RECOVERY_BUY",
       cycleId: "rs-cycle-1",
     },
@@ -572,7 +924,7 @@ test("applies RS BUY fills to the registered Position exactly once and rejects m
   const order = makeRecoveryBuyOrder()
   const workflow = createRecoverySellerAccountingWorkflow({
     initialPortfolio: new Portfolio(),
-    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+    initialOrderRegistry: makeRecoveryBuyRegistry({ order }),
   })
   const firstFill = makeRecoveryBuyFill({
     tradeId: "rs-buy-fill-1",
@@ -670,6 +1022,126 @@ function makeAcknowledgedRecoveryBuyOrder({ pendingOrder, brokerOrderId = "broke
     updatedAt: 101,
   })
 }
+
+function makeRecoverySellerVwapBuyOrder() {
+  return new CanonicalOrder({
+    clientOrderId: "rs-buy-vwap-1",
+    brokerOrderId: "broker-rs-buy-vwap-1",
+    market,
+    side: "BUY",
+    type: "LIMIT",
+    limitPrice: new Money({
+      amount: "6",
+      asset: quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "3",
+      asset: baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 100,
+    acknowledgedAt: 101,
+    updatedAt: 102,
+  })
+}
+
+function makeRecoverySellerVwapFills({ buyOrder } = {}) {
+  return [
+    new Fill({
+      tradeId: "rs-buy-vwap-fill-1",
+      brokerOrderId: buyOrder.brokerOrderId,
+      clientOrderId: buyOrder.clientOrderId,
+      market,
+      side: "BUY",
+      price: new Money({
+        amount: "5",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "2",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "10",
+        asset: quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    }),
+    new Fill({
+      tradeId: "rs-buy-vwap-fill-2",
+      brokerOrderId: buyOrder.brokerOrderId,
+      clientOrderId: buyOrder.clientOrderId,
+      market,
+      side: "BUY",
+      price: new Money({
+        amount: "6",
+        asset: quoteAsset,
+      }),
+      quantity: new Quantity({
+        amount: "1",
+        asset: baseAsset,
+      }),
+      quoteQuantity: new Money({
+        amount: "6",
+        asset: quoteAsset,
+      }),
+      commissions: [],
+      commissionStatus: "COMPLETE",
+    }),
+  ]
+}
+
+function makeRecoverySellerVwapWorkflow({ buyOrder } = {}) {
+  const ownership = createOrderOwnership({
+    ownership: {
+      strategyId,
+      positionId,
+      purpose: "RECOVERY_BUY",
+      cycleId: "rs-cycle-vwap-1",
+    },
+    clientOrderId: buyOrder.clientOrderId,
+    brokerOrderId: buyOrder.brokerOrderId,
+  })
+  return createRecoverySellerAccountingWorkflow({
+    initialPortfolio: new Portfolio(),
+    initialOrderRegistry: new OrderRegistry({
+      orders: [buyOrder],
+      ownerships: [ownership],
+    }),
+    initialLegacyPositions: [],
+    onOperationalStateExecutionFill: async () => ({
+      ok: true,
+      data: { durable: true },
+    }),
+  })
+}
+
+test("tracks cycle-scoped actual BUY execution VWAP from distinct canonical fills", async () => {
+  const buyOrder = makeRecoverySellerVwapBuyOrder()
+  const workflow = makeRecoverySellerVwapWorkflow({ buyOrder })
+  const fills = makeRecoverySellerVwapFills({ buyOrder })
+
+  for (const fill of fills) {
+    const result = await workflow.applyBuyFill({
+      order: buyOrder,
+      fill,
+    })
+    assert.equal(result.ok, true, result.errors?.[0]?.message)
+  }
+  const duplicateFill = await workflow.applyBuyFill({
+    order: buyOrder,
+    fill: fills[0],
+  })
+  assert.equal(duplicateFill.ok, true, duplicateFill.errors?.[0]?.message)
+  assert.equal(workflow.getBuyExecutionQuantity({ cycleId: "rs-cycle-vwap-1" }), "3")
+  assert.equal(workflow.getBuyExecutionVwap({ cycleId: "rs-cycle-vwap-1" }), "5.333333333333333333")
+  assert.equal(workflow.getBuyExecutionVwap({ cycleId: "different-cycle" }), undefined)
+})
 
 test("exposes RS submission callbacks that preserve ownership across acknowledgement, uncertainty, rejection and deferral", () => {
   const ownership = {
@@ -774,7 +1246,7 @@ test("persists a BUY execution fact before publishing RS Portfolio accounting", 
   const persistenceCalls = []
   const workflow = createRecoverySellerAccountingWorkflow({
     initialPortfolio: new Portfolio(),
-    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+    initialOrderRegistry: makeRecoveryBuyRegistry({ order }),
     onOperationalStateExecutionFill: async ({ fill: received }) => {
       persistenceCalls.push(received)
       assert.equal(workflow.getPortfolio().positions.length, 0,
@@ -807,7 +1279,7 @@ test("does not publish RS BUY accounting when the durable execution-fill append 
   })
   const workflow = createRecoverySellerAccountingWorkflow({
     initialPortfolio: new Portfolio(),
-    initialOrderRegistry: makeRecoveryBuyRegistry(order),
+    initialOrderRegistry: makeRecoveryBuyRegistry({ order }),
     onOperationalStateExecutionFill: async () => ({
       ok: false,
       errors: [new Error("execution fact fsync failed")],
@@ -821,4 +1293,235 @@ test("does not publish RS BUY accounting when the durable execution-fill append 
   assert.match(result.errors[0].message, /execution fact fsync failed/)
   assert.equal(workflow.getPortfolio().positions.length, 0)
   assert.deepEqual(workflow.getPortfolio().appliedFillIds, [])
+})
+
+
+function createSharedAccountWorkflowFixture() {
+  const buyOrder = makeRecoveryBuyOrder()
+  const sharedState = {
+    portfolio: new Portfolio(),
+    recoveryLedgers: new Map(),
+    orderRegistry: makeRecoveryBuyRegistry({ order: buyOrder }),
+    legacyPositions: new Map(),
+    recoverySellerBuyExecutionByCycle: new Map(),
+    updateQueue: Promise.resolve(),
+  }
+  const conservative = createPortfolioWorkflow({
+    sharedState,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+  })
+  const recoverySeller = createRecoverySellerAccountingWorkflow({ sharedState })
+  const recoveryBuyFill = makeRecoveryBuyFill({
+    tradeId: "shared-account-rs-buy",
+    quantity: "5.01",
+    quoteQuantity: "10.02",
+  })
+  const conservativeBuyFill = new Fill({
+    tradeId: "shared-account-cg-buy",
+    brokerOrderId: "broker-shared-cg-buy",
+    clientOrderId: "cg-shared-buy",
+    market,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "2",
+      asset: quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+  return {
+    sharedState,
+    conservative,
+    recoverySeller,
+    recoveryBuyFill,
+    conservativeBuyFill,
+  }
+}
+
+test("initializes operator-authorized legacy positions once in the shared account workflow", async () => {
+  const sharedState = {
+    portfolio: new Portfolio(),
+    recoveryLedgers: new Map(),
+    orderRegistry: OrderRegistry.empty(),
+    legacyPositions: new Map(),
+    recoverySellerBuyExecutionByCycle: new Map(),
+    updateQueue: Promise.resolve(),
+  }
+  const workflow = createRecoverySellerAccountingWorkflow({ sharedState })
+  const record = {
+    market,
+    position: createLegacyPosition({
+      invested: "50",
+      quantity: "10",
+    }),
+    accounting: createLegacyPositionAccounting(),
+  }
+
+  const initialized = await workflow.initializeLegacyPositions({
+    records: [record],
+  })
+
+  assert.equal(initialized.ok, true, initialized.errors?.[0]?.message)
+  assert.equal(initialized.data.initialized, 1)
+  assert.deepEqual(workflow.getLegacyPosition({ marketId: market.id }), record.position)
+  assert.deepEqual(workflow.getLegacyAccounting({ marketId: market.id }), record.accounting)
+
+  const duplicate = await workflow.initializeLegacyPositions({
+    records: [record],
+  })
+
+  assert.equal(duplicate.ok, false)
+  assert.match(duplicate.errors[0].message, /already exists/i)
+  assert.deepEqual(workflow.getLegacyPosition({ marketId: market.id }), record.position)
+})
+
+function createAdditionalTestMarket() {
+  const additionalBaseAsset = new Asset({
+    id: "binance:SOL",
+    code: "SOL",
+  })
+  return new Market({
+    venue: "binance",
+    symbol: "SOLUSDT",
+    baseAsset: additionalBaseAsset,
+    quoteAsset,
+  })
+}
+
+function makeConservativeBuyFill({ targetMarket, tradeId } = {}) {
+  return new Fill({
+    tradeId,
+    brokerOrderId: `broker-${tradeId}`,
+    clientOrderId: tradeId,
+    market: targetMarket,
+    side: "BUY",
+    price: new Money({
+      amount: "2",
+      asset: targetMarket.quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "1",
+      asset: targetMarket.baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "2",
+      asset: targetMarket.quoteAsset,
+    }),
+    commissions: [],
+    commissionStatus: "COMPLETE",
+  })
+}
+
+async function assertConcurrentStrategyAccounting({ recoveryMarket, conservativeMarket, scenario } = {}) {
+  const recoveryOrder = makeRecoveryBuyOrder({
+    targetMarket: recoveryMarket,
+    clientOrderId: `rs-buy-${scenario}`,
+    brokerOrderId: `broker-rs-buy-${scenario}`,
+  })
+  const sharedState = {
+    portfolio: new Portfolio(),
+    recoveryLedgers: new Map(),
+    orderRegistry: makeRecoveryBuyRegistry({
+      order: recoveryOrder,
+      targetPositionId: `rs-position-${scenario}`,
+    }),
+    legacyPositions: new Map(),
+    recoverySellerBuyExecutionByCycle: new Map(),
+    updateQueue: Promise.resolve(),
+  }
+  const conservative = createPortfolioWorkflow({
+    sharedState,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {},
+  })
+  const recoverySeller = createRecoverySellerAccountingWorkflow({ sharedState })
+  const recoveryFill = makeRecoveryBuyFill({
+    tradeId: `rs-fill-${scenario}`,
+    brokerOrderId: recoveryOrder.brokerOrderId,
+    clientOrderId: recoveryOrder.clientOrderId,
+    targetMarket: recoveryMarket,
+    quantity: "5.01",
+    quoteQuantity: "10.02",
+  })
+  const conservativeFill = makeConservativeBuyFill({
+    targetMarket: conservativeMarket,
+    tradeId: `cg-fill-${scenario}`,
+  })
+
+  const [recoveryResult, conservativeResult] = await Promise.all([
+    recoverySeller.applyBuyFill({ fill: recoveryFill }),
+    conservative.updateTradingAccounting({ fill: conservativeFill }),
+  ])
+
+  assert.equal(recoveryResult.ok, true, recoveryResult.errors?.[0]?.message)
+  assert.equal(conservativeResult.ok, true, conservativeResult.errors?.[0]?.message)
+  assert.strictEqual(conservative.getPortfolio(), recoverySeller.getPortfolio(),
+    "Both strategies must publish into the exact same account Portfolio instance.")
+  assert.equal(sharedState.portfolio.positions.length, 2,
+    "Concurrent strategy fills must create two independently owned Positions.")
+  assert.equal(sharedState.portfolio.appliedFillIds.length, 2,
+    "Both canonical fills must be accounted exactly once.")
+  assert.equal(sharedState.portfolio.getPosition({
+    marketId: recoveryMarket.id,
+    strategyId: StrategyId.RECOVERY_SELLER,
+    positionId: `rs-position-${scenario}`,
+  }).baseQuantity.amount, "5.01",
+  "The RS fill must update only its owned Position with its exact base quantity.")
+  assert.equal(sharedState.portfolio.getPosition({
+    marketId: conservativeMarket.id,
+    strategyId: StrategyId.COIN_GRABBER,
+  }).baseQuantity.amount, "1",
+  "The CG fill must update only its owned Position with its exact base quantity.")
+}
+
+test("accounts concurrent CG and RS fills on the same market without cross-attribution", async () => {
+  await assertConcurrentStrategyAccounting({
+    recoveryMarket: market,
+    conservativeMarket: market,
+    scenario: "same-market",
+  })
+})
+
+test("accounts concurrent CG and RS fills on different markets within one account", async () => {
+  await assertConcurrentStrategyAccounting({
+    recoveryMarket: market,
+    conservativeMarket: createAdditionalTestMarket(),
+    scenario: "different-markets",
+  })
+})
+
+test("Conservative and RS accounting workflows can share one serialized account Portfolio", async () => {
+  const fixture = createSharedAccountWorkflowFixture()
+  const { sharedState, conservative, recoverySeller } = fixture
+  const rsResult = await recoverySeller.applyBuyFill({ fill: fixture.recoveryBuyFill })
+  const cgResult = await conservative.updateTradingAccounting({ fill: fixture.conservativeBuyFill })
+
+  assert.equal(rsResult.ok, true, rsResult.errors?.[0]?.message)
+  assert.equal(cgResult.ok, true, cgResult.errors?.[0]?.message)
+  assert.equal(conservative.getPortfolio(), recoverySeller.getPortfolio())
+  assert.equal(conservative.getPortfolio(), sharedState.portfolio)
+  assert.equal(recoverySeller.getOrderRegistry(), sharedState.orderRegistry)
+  assert.equal(
+    conservative.getPortfolio().getPosition({
+      marketId: market.id,
+      strategyId: StrategyId.RECOVERY_SELLER,
+    }).baseQuantity.amount,
+    "5.01",
+  )
+  assert.equal(
+    conservative.getPortfolio().getPosition({
+      marketId: market.id,
+      strategyId: StrategyId.COIN_GRABBER,
+    }).baseQuantity.amount,
+    "1",
+  )
 })

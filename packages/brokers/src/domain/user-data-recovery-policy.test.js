@@ -8,7 +8,7 @@ describe("user-data recovery domain policy", () => {
       recoveryRequired: false,
       hasActiveSubscription: true,
       subscriberAcknowledgements: [true],
-    }), false)
+    }), false, "Recovery cannot complete when no recovery is required.")
   })
 
   it("does not complete before a remote subscription is established", () => {
@@ -16,7 +16,7 @@ describe("user-data recovery domain policy", () => {
       recoveryRequired: true,
       hasActiveSubscription: false,
       subscriberAcknowledgements: [true],
-    }), false)
+    }), false, "Recovery cannot complete before a remote subscription is active.")
   })
 
   it("does not complete without active subscribers", () => {
@@ -24,7 +24,7 @@ describe("user-data recovery domain policy", () => {
       recoveryRequired: true,
       hasActiveSubscription: true,
       subscriberAcknowledgements: [],
-    }), false)
+    }), false, "Recovery cannot complete without active subscribers.")
   })
 
   it("waits until every active subscriber acknowledges reconciliation", () => {
@@ -32,7 +32,7 @@ describe("user-data recovery domain policy", () => {
       recoveryRequired: true,
       hasActiveSubscription: true,
       subscriberAcknowledgements: [true, false],
-    }), false)
+    }), false, "Every active subscriber must acknowledge before recovery completes.")
   })
 
   it("completes only when every active subscriber explicitly acknowledges", () => {
@@ -40,7 +40,7 @@ describe("user-data recovery domain policy", () => {
       recoveryRequired: true,
       hasActiveSubscription: true,
       subscriberAcknowledgements: [true, true],
-    }), true)
+    }), true, "Recovery completes only after every active subscriber acknowledges.")
   })
 
   it("does not treat truthy non-boolean values as acknowledgements", () => {
@@ -48,6 +48,6 @@ describe("user-data recovery domain policy", () => {
       recoveryRequired: true,
       hasActiveSubscription: true,
       subscriberAcknowledgements: [true, "yes"],
-    }), false)
+    }), false, "Truthy non-boolean values must not count as acknowledgements.")
   })
 })

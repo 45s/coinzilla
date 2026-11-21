@@ -1,4 +1,8 @@
 import { toResult } from "@coinzilla/utils"
+import {
+  RECOVERY_SELLER_ACCOUNTING_ERROR_CODES,
+  RecoverySellerAccountingError,
+} from "../../domain/strategies/recovery-seller/recovery-seller-accounting-error.js"
 import { projectHarvesterJournalRecovery } from "../journal/project-harvester-journal-recovery.js"
 
 const EVENT = Object.freeze({
@@ -130,6 +134,12 @@ function mapOrderSubmissionIntentFact({ data, orderIntents }) {
       price: data.price,
       quantity: data.quantity,
       status: "PENDING",
+      ...(data.strategyId === undefined ? {} : {
+        strategyId: data.strategyId,
+        positionId: data.positionId,
+        cycleId: data.cycleId,
+        purpose: data.purpose,
+      }),
     },
   }]
 }
@@ -142,7 +152,7 @@ function mapOrderSubmissionOutcomeFact({ data, orderIntents }) {
   assertIntentMatches({
     intent,
     data,
-    fields: ["providerInstanceId", "providerType", "accountId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "purpose"],
+    fields: ["providerInstanceId", "providerType", "accountId", "marketId", "venue", "symbol", "baseAssetId", "quoteAssetId", "side", "type", "price", "quantity", "purpose", "strategyId", "positionId", "cycleId"],
     context: "Durable submission outcome",
   })
   const immutableIntent = {
@@ -157,6 +167,12 @@ function mapOrderSubmissionOutcomeFact({ data, orderIntents }) {
     type: data.type,
     price: data.price,
     quantity: data.quantity,
+    ...(data.strategyId === undefined ? {} : {
+      strategyId: data.strategyId,
+      positionId: data.positionId,
+      cycleId: data.cycleId,
+      purpose: data.purpose,
+    }),
   }
   if (data.outcome === "ACKNOWLEDGED") {
     return [{
@@ -273,8 +289,8 @@ function mapOrderCancellationOutcomeFact({ data, orderIntents, cancellationInten
 }
 
 function mapExecutionFillFact({ data, orderIntents }) {
+  const intent = data.clientOrderId == null ? undefined : orderIntents.get(data.clientOrderId)
   if (data.providerInstanceId !== undefined) {
-    const intent = orderIntents.get(data.clientOrderId)
     if (!intent) {
       throw new Error(`Provider-attributed execution fill has no preceding submission intent: ${data.clientOrderId}`)
     }
@@ -285,9 +301,20 @@ function mapExecutionFillFact({ data, orderIntents }) {
       context: "Execution fill",
     })
   }
+  const ownership = intent?.strategyId === "RS_recoverySeller"
+    ? {
+        strategyId: intent.strategyId,
+        positionId: intent.positionId,
+        cycleId: intent.cycleId,
+        purpose: intent.purpose,
+      }
+    : {}
   return [{
     name: EVENT.FILL_APPLIED,
-    data: mapFill({ data }),
+    data: {
+      ...mapFill({ data }),
+      ...ownership,
+    },
   }]
 }
 
@@ -373,6 +400,7 @@ const TRADING_FACT_TYPES = new Set([
   "EXECUTION_FILL_APPLIED",
   "RECOVERY_CYCLE_COMPLETED",
   "RECOVERY_CYCLE_NOT_COMPLETED",
+  "RECOVERY_SELLER_MIXED_SELL_RECONCILED",
 ])
 
 function createOperationalProjectionState() {
@@ -386,6 +414,10 @@ function createOperationalProjectionState() {
     marketHistoryCoverageBySymbol: new Map(),
     orderIntents: new Map(),
     cancellationIntents: new Map(),
+    recoverySellerOrdersByCycle: new Map(),
+    recoverySellerFillsByCycle: new Map(),
+    reconciledRecoverySellerSellOrderClientIds: new Set(),
+    recoverySellerMixedSellReconciliations: [],
     cycleFillIdsByMarket: new Map(),
     orderSubmissionOutcomes: [],
     orderCancellationOutcomes: [],
@@ -553,6 +585,316 @@ function handleStrategyMarketResumedFact({ record, state }) {
   state.strategyPauses.delete(record.data.symbol)
 }
 
+function projectRecoverySellerSubmissionIntent({
+      record,
+      state,
+    }) {
+  const intent = record.data
+  const expectedPurpose = intent.side === "BUY" ? "RECOVERY_BUY" : "RECOVERY_SELL"
+  if (!intent.clientOrderId || !intent.cycleId || !intent.positionId ||
+      intent.purpose !== expectedPurpose ||
+      state.orderIntents.has(intent.clientOrderId)) {
+    throw new Error("Recovery Seller durable order intent has missing, contradictory or reused ownership")
+  }
+  state.orderIntents.set(intent.clientOrderId, intent)
+  const orders = state.recoverySellerOrdersByCycle.get(intent.cycleId) ?? []
+  orders.push(Object.freeze({
+    clientOrderId: intent.clientOrderId,
+    marketId: intent.marketId,
+    symbol: intent.symbol,
+    side: intent.side,
+    purpose: intent.purpose,
+    positionId: intent.positionId,
+    cycleId: intent.cycleId,
+    sequence: record.sequence,
+    status: "SUBMISSION_OUTCOME_PENDING",
+  }))
+  state.recoverySellerOrdersByCycle.set(intent.cycleId, orders)
+}
+
+function updateRecoverySellerOrderFromFact({ record, state, fields, context, patch }) {
+  const intent = state.orderIntents.get(record.data.clientOrderId)
+  if (intent?.strategyId !== "RS_recoverySeller") {
+    return
+  }
+  assertIntentMatches({
+    intent,
+    data: record.data,
+    fields,
+    context,
+  })
+  const orders = state.recoverySellerOrdersByCycle.get(intent.cycleId) ?? []
+  state.recoverySellerOrdersByCycle.set(intent.cycleId, orders.map((order) =>
+    order.clientOrderId === intent.clientOrderId
+      ? Object.freeze({
+          ...order,
+          ...patch(record),
+        })
+      : order
+  ))
+}
+
+function projectRecoverySellerExecutionFill({
+    record,
+    state,
+    intent,
+  }) {
+  if (intent?.strategyId !== "RS_recoverySeller") {
+    if (record.data.strategyId === "RS_recoverySeller") {
+      throw new Error("Recovery Seller execution fill has no preceding durable owned order intent")
+    }
+    return
+  }
+  assertIntentMatches({
+    intent,
+    data: record.data,
+    fields: ["marketId", "symbol", "side"],
+    context: "Recovery Seller execution fill",
+  })
+  const orders = state.recoverySellerOrdersByCycle.get(intent.cycleId) ?? []
+  const ownedOrder = orders.find((order) => order.clientOrderId === intent.clientOrderId)
+  if (!record.data.brokerOrderId ||
+      ownedOrder?.submissionOutcome !== "ACKNOWLEDGED" ||
+      ownedOrder.brokerOrderId !== record.data.brokerOrderId) {
+    throw new Error("Recovery Seller execution fill has no matching acknowledged broker order ownership")
+  }
+  const fills = state.recoverySellerFillsByCycle.get(intent.cycleId) ?? []
+  if (fills.some((fill) => fill.fillId === record.data.fillId)) {
+    throw new Error("Recovery Seller cycle contains a duplicate canonical fill identity")
+  }
+  fills.push(Object.freeze({
+    ...record.data,
+    factId: record.factId,
+    sequence: record.sequence,
+    strategyId: intent.strategyId,
+    positionId: intent.positionId,
+    cycleId: intent.cycleId,
+    purpose: intent.purpose,
+  }))
+  state.recoverySellerFillsByCycle.set(intent.cycleId, fills)
+}
+
+function projectConservativeRecoveryFillBoundary({
+      record,
+      state,
+    }) {
+  const appliedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
+  if (appliedFillIds.includes(record.data.fillId)) {
+    throw new Error(`Durable recovery cycle contains a duplicate applied fill identity: ${record.data.fillId}`)
+  }
+  appliedFillIds.push(record.data.fillId)
+  state.cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
+}
+
+function hasMatchingRecoverySellerReconciledIntent({ data, intent }) {
+  return intent?.strategyId === "RS_recoverySeller" &&
+    intent.purpose === "RECOVERY_SELL" &&
+    intent.cycleId === data.cycleId &&
+    intent.marketId === data.marketId &&
+    intent.venue === data.venue &&
+    intent.symbol === data.symbol &&
+    intent.baseAssetId === data.baseAssetId &&
+    intent.quoteAssetId === data.quoteAssetId
+}
+
+function hasMatchingRecoverySellerReconciledOrder({ data, ownedOrder }) {
+  return ownedOrder?.brokerOrderId === data.sellOrderBrokerOrderId &&
+    ownedOrder.submissionOutcome === "ACKNOWLEDGED" &&
+    (ownedOrder.status === data.terminalStatus || ownedOrder.status === "OPEN")
+}
+
+function hasUncommittedRecoverySellerReconciliation({ data, state }) {
+  return !state.reconciledRecoverySellerSellOrderClientIds.has(data.sellOrderClientId) &&
+    data.accountingApplied === true &&
+    typeof data.eligible === "boolean"
+}
+
+function hasMatchingRecoverySellerReconciledSellIdentity({
+  data,
+  intent,
+  ownedOrder,
+  state,
+}) {
+  return hasMatchingRecoverySellerReconciledIntent({
+    data,
+    intent,
+  }) &&
+    hasMatchingRecoverySellerReconciledOrder({
+      data,
+      ownedOrder,
+    }) &&
+    hasUncommittedRecoverySellerReconciliation({
+      data,
+      state,
+    })
+}
+
+function assertRecoverySellerReconciledSellOrder({ data, state }) {
+  const intent = state.orderIntents.get(data.sellOrderClientId)
+  const orders = state.recoverySellerOrdersByCycle.get(data.cycleId) ?? []
+  const ownedOrder = orders.find((order) => order.clientOrderId === data.sellOrderClientId)
+  if (!hasMatchingRecoverySellerReconciledSellIdentity({
+    data,
+    intent,
+    ownedOrder,
+    state,
+  })) {
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.RECONCILIATION_INVALID,
+      message: "Recovery Seller mixed-SELL reconciliation does not match one acknowledged terminal owned SELL order",
+      context: {
+        marketId: data.marketId,
+        cycleId: data.cycleId,
+        sellOrderClientId: data.sellOrderClientId,
+      },
+    })
+  }
+  return { ownedOrder }
+}
+
+function assertRecoverySellerReconciledFillSet({ data, state }) {
+  const expectedFillIds = (state.recoverySellerFillsByCycle.get(data.cycleId) ?? [])
+    .filter((fill) =>
+      fill.clientOrderId === data.sellOrderClientId && fill.side === "SELL"
+    )
+    .map((fill) => fill.fillId)
+    .sort()
+  const appliedFillIds = [...data.appliedFillIds].sort()
+  if (
+    expectedFillIds.length === 0 ||
+    JSON.stringify(expectedFillIds) !== JSON.stringify(appliedFillIds)
+  ) {
+    throw new RecoverySellerAccountingError({
+      code: RECOVERY_SELLER_ACCOUNTING_ERROR_CODES.RECONCILIATION_INVALID,
+      message: "Recovery Seller mixed-SELL reconciliation does not match the exact canonical SELL fill set",
+      context: {
+        marketId: data.marketId,
+        cycleId: data.cycleId,
+        sellOrderClientId: data.sellOrderClientId,
+      },
+    })
+  }
+}
+
+function projectRecoverySellerMixedSellReconciledFact({
+  record,
+  state,
+}) {
+  const { data } = record
+  const { ownedOrder } = assertRecoverySellerReconciledSellOrder({
+    data,
+    state,
+  })
+  assertRecoverySellerReconciledFillSet({
+    data,
+    state,
+  })
+  const orders = state.recoverySellerOrdersByCycle.get(data.cycleId) ?? []
+  state.recoverySellerOrdersByCycle.set(data.cycleId, orders.map((order) =>
+    order.clientOrderId === data.sellOrderClientId
+      ? Object.freeze({
+          ...order,
+          status: data.terminalStatus,
+          mixedSellReconciled: true,
+          reconciliationSequence: record.sequence,
+        })
+      : order
+  ))
+  state.reconciledRecoverySellerSellOrderClientIds.add(data.sellOrderClientId)
+  state.recoverySellerMixedSellReconciliations.push(Object.freeze({
+    factId: record.factId,
+    sequence: record.sequence,
+    ...data,
+    priorStatus: ownedOrder.status,
+  }))
+}
+
+function projectRecoveryCycleOutcome({
+      record,
+      state,
+    }) {
+  const expectedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
+  if (JSON.stringify(expectedFillIds) !== JSON.stringify(record.data.appliedFillIds)) {
+    throw new Error(`Durable recovery-cycle outcome does not match the exact applied-fill boundary for ${record.data.marketId}`)
+  }
+  const fact = Object.freeze({
+    factId: record.factId,
+    sequence: record.sequence,
+    data: record.data,
+  })
+  if (record.factType === "RECOVERY_CYCLE_COMPLETED") {
+    state.recoveryCycleCompletedFacts.push(fact)
+    state.cycleFillIdsByMarket.set(record.data.marketId, [])
+    return
+  }
+  state.recoveryCycleNotCompletedFacts.push(fact)
+}
+
+function projectSubmissionOutcomeFact({
+      record,
+      state,
+    }) {
+  updateRecoverySellerOrderFromFact({
+    record,
+    state,
+    fields: ["marketId", "symbol", "side", "purpose", "strategyId", "positionId", "cycleId"],
+    context: "Recovery Seller durable submission outcome",
+    patch: (currentRecord) => ({
+      brokerOrderId: currentRecord.data.brokerOrderId ?? null,
+      submissionOutcome: currentRecord.data.outcome,
+      status: currentRecord.data.status ?? currentRecord.data.outcome,
+      outcomeSequence: currentRecord.sequence,
+    }),
+  })
+  state.orderSubmissionOutcomes.push(Object.freeze({
+    ...record.data,
+    factId: record.factId,
+    sequence: record.sequence,
+  }))
+}
+
+function projectCancellationOutcomeFact({
+      record,
+      state,
+    }) {
+  updateRecoverySellerOrderFromFact({
+    record,
+    state,
+    fields: ["marketId", "symbol", "side"],
+    context: "Recovery Seller durable cancellation outcome",
+    patch: (currentRecord) => ({
+      status: currentRecord.data.status,
+      cancellationOutcome: currentRecord.data.outcome,
+      cancellationSequence: currentRecord.sequence,
+    }),
+  })
+  state.orderCancellationOutcomes.push(Object.freeze({
+    ...record.data,
+    factId: record.factId,
+    sequence: record.sequence,
+  }))
+}
+
+function projectExecutionFillFact({
+      record,
+      state,
+    }) {
+  const intent = record.data.clientOrderId == null
+    ? undefined
+    : state.orderIntents.get(record.data.clientOrderId)
+  projectRecoverySellerExecutionFill({
+    record,
+    state,
+    intent,
+  })
+  if (intent?.strategyId !== "RS_recoverySeller") {
+    projectConservativeRecoveryFillBoundary({
+      record,
+      state,
+    })
+  }
+}
+
 function handleTradingOperationalFact({ record, state }) {
   const session = requireActiveOperationalSession({
     record,
@@ -562,47 +904,45 @@ function handleTradingOperationalFact({ record, state }) {
   if (!TRADING_FACT_TYPES.has(record.factType)) {
     throw new Error(`Unsupported Operational State Store projection type: ${record.factType}`)
   }
+  if (record.factType === "ORDER_SUBMISSION_INTENT" &&
+      record.data.strategyId === "RS_recoverySeller") {
+    projectRecoverySellerSubmissionIntent({
+      record,
+      state,
+    })
+  }
   if (record.factType === "ORDER_SUBMISSION_OUTCOME") {
-    state.orderSubmissionOutcomes.push(Object.freeze({
-      ...record.data,
-      factId: record.factId,
-      sequence: record.sequence,
-    }))
+    projectSubmissionOutcomeFact({
+      record,
+      state,
+    })
   }
   if (record.factType === "ORDER_CANCELLATION_OUTCOME") {
-    state.orderCancellationOutcomes.push(Object.freeze({
-      ...record.data,
-      factId: record.factId,
-      sequence: record.sequence,
-    }))
+    projectCancellationOutcomeFact({
+      record,
+      state,
+    })
   }
   if (record.factType === "EXECUTION_FILL_APPLIED") {
-    const appliedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
-    if (appliedFillIds.includes(record.data.fillId)) {
-      throw new Error(`Durable recovery cycle contains a duplicate applied fill identity: ${record.data.fillId}`)
-    }
-    appliedFillIds.push(record.data.fillId)
-    state.cycleFillIdsByMarket.set(record.data.marketId, appliedFillIds)
+    projectExecutionFillFact({
+      record,
+      state,
+    })
   }
   if (
     record.factType === "RECOVERY_CYCLE_COMPLETED" ||
     record.factType === "RECOVERY_CYCLE_NOT_COMPLETED"
   ) {
-    const expectedFillIds = state.cycleFillIdsByMarket.get(record.data.marketId) ?? []
-    if (JSON.stringify(expectedFillIds) !== JSON.stringify(record.data.appliedFillIds)) {
-      throw new Error(`Durable recovery-cycle outcome does not match the exact applied-fill boundary for ${record.data.marketId}`)
-    }
-    const fact = Object.freeze({
-      factId: record.factId,
-      sequence: record.sequence,
-      data: record.data,
+    projectRecoveryCycleOutcome({
+      record,
+      state,
     })
-    if (record.factType === "RECOVERY_CYCLE_COMPLETED") {
-      state.recoveryCycleCompletedFacts.push(fact)
-      state.cycleFillIdsByMarket.set(record.data.marketId, [])
-    } else {
-      state.recoveryCycleNotCompletedFacts.push(fact)
-    }
+  }
+  if (record.factType === "RECOVERY_SELLER_MIXED_SELL_RECONCILED") {
+    projectRecoverySellerMixedSellReconciledFact({
+      record,
+      state,
+    })
   }
   session.facts.push(record)
 }
@@ -731,6 +1071,15 @@ function emitLatestSessionState({ session, latestSession, state, emit }) {
   }
 }
 
+function isRecoverySellerOperationalRecord({ record, state }) {
+  const clientOrderId = record.data.clientOrderId ?? record.data.sellOrderClientId
+  const intent = clientOrderId == null
+    ? undefined
+    : state.orderIntents.get(clientOrderId)
+  return record.data.strategyId === "RS_recoverySeller" ||
+    intent?.strategyId === "RS_recoverySeller"
+}
+
 function createSessionSyntheticRecords({ session, latestSession, state }) {
   const syntheticRecords = []
   let lineNumber = 0
@@ -754,6 +1103,12 @@ function createSessionSyntheticRecords({ session, latestSession, state }) {
     emit,
   })
   for (const record of remaining) {
+    if (isRecoverySellerOperationalRecord({
+      record,
+      state,
+    })) {
+      continue
+    }
     const events = mapFact({
       record,
       orderIntents: state.orderIntents,
@@ -872,6 +1227,37 @@ factId: fact.factId }),
   return Object.freeze(mappedEvaluations)
 }
 
+function createRecoverySellerLifecycleProjection({ state }) {
+  const ordersByCycle = [...state.recoverySellerOrdersByCycle].map(([cycleId, orders]) => {
+    const projectedOrders = orders.map((order) => Object.freeze({
+      ...order,
+      reconciled: state.reconciledRecoverySellerSellOrderClientIds.has(order.clientOrderId),
+    }))
+    const reservedSellOrders = projectedOrders.filter((order) =>
+      order.side === "SELL" && !order.reconciled
+    )
+    return Object.freeze({
+      cycleId,
+      orders: Object.freeze(projectedOrders),
+      reservedSellOrders: Object.freeze(reservedSellOrders),
+    })
+  })
+  const appliedFillsByCycle = [...state.recoverySellerFillsByCycle].map(([cycleId, fills]) =>
+    Object.freeze({
+      cycleId,
+      fills: Object.freeze(fills),
+    })
+  )
+  return Object.freeze({
+    candidateOnly: true,
+    restorationEnabled: false,
+    requiresExchangeReconciliation: true,
+    ordersByCycle: Object.freeze(ordersByCycle),
+    appliedFillsByCycle: Object.freeze(appliedFillsByCycle),
+    reconciledSellOrders: Object.freeze(state.recoverySellerMixedSellReconciliations),
+  })
+}
+
 function createOperationalProjectionResult({ projected, state }) {
   const recoveryCycles = mapCompletedRecoveryCycles({
     cycles: projected.data.recoveryCycles,
@@ -882,12 +1268,16 @@ function createOperationalProjectionResult({ projected, state }) {
     facts: state.recoveryCycleNotCompletedFacts,
   })
   const stickySafetyBlockers = Object.freeze([...state.activeBlockers.values()].map((blocker) =>
-    Object.freeze({ ...blocker,
-scope: blocker.scope })
+    Object.freeze({
+      ...blocker,
+      scope: blocker.scope,
+    })
   ))
   const pausedMarkets = Object.freeze([...state.strategyPauses].map(([symbol, pause]) =>
-    Object.freeze({ symbol,
-reason: pause.reason })
+    Object.freeze({
+      symbol,
+      reason: pause.reason,
+    })
   ))
   return toResult({
     data: Object.freeze({
@@ -896,6 +1286,7 @@ reason: pause.reason })
       recoveryCycleEvaluations,
       orderSubmissionOutcomes: Object.freeze(state.orderSubmissionOutcomes),
       orderCancellationOutcomes: Object.freeze(state.orderCancellationOutcomes),
+      recoverySellerLifecycle: createRecoverySellerLifecycleProjection({ state }),
       source: "DURABLE_FACTS",
       candidateOnly: true,
       restorationEnabled: false,

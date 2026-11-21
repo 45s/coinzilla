@@ -231,8 +231,9 @@ function createBrokerPort({ client, capabilities }) {
       symbol,
       onBookTicker,
     }),
-    subscribeForUserData: ({ onEvent, onStatus }) => client.subscribeForUserData({
+    subscribeForUserData: ({ onEvent, onObservation, onStatus }) => client.subscribeForUserData({
       onEvent,
+      onObservation,
       onStatus,
     }),
   }

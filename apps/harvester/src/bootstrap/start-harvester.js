@@ -8,6 +8,11 @@ import { conservativeStrategyPolicy } from "../domain/strategies/conservative/st
 import { loadAppConfig } from "../infrastructure/config/load-app-config.js"
 import { createBinanceBrokerAdapter } from "../infrastructure/brokers/binance-broker-adapter.js"
 import { createPortfolioWorkflow } from "../use-cases/create-portfolio-workflow.js"
+import { createRecoverySellerAccountingWorkflow } from "../use-cases/create-recovery-seller-accounting-workflow.js"
+import { createRecoverySellerStopWorkflow } from "../use-cases/create-recovery-seller-stop-workflow.js"
+import { createRecoverySellerRuntimeDispatch } from "./create-recovery-seller-runtime-dispatch.js"
+import { createLegacyPosition, createLegacyPositionAccounting } from "../domain/strategies/recovery-seller/legacy-position.js"
+import { validateMarketTradingReadiness } from "../domain/market/validate-market-trading-readiness.js"
 import { createAccountIntegritySafetyHalt } from "../use-cases/create-account-integrity-safety-halt.js"
 import { resolveHarvesterOptions } from "./config/resolve-harvester-options.js"
 import { EffectiveConfigurationError } from "../domain/configuration/create-effective-strategy-configuration-fingerprint.js"
@@ -15,6 +20,7 @@ import { cleanupBroker } from "./broker/cleanup-broker.js"
 import { createAccountSnapshotManager } from "./account/create-account-snapshot-manager.js"
 import { loadMarketMetadata } from "./market/load-market-metadata.js"
 import { createUserDataEventHandler } from "./user-data/create-user-data-event-handler.js"
+import { createUserDataObservationHandler } from "./user-data/create-user-data-observation-handler.js"
 import { createUserDataStatusHandler } from "./user-data/create-user-data-status-handler.js"
 import { createUserDataRecoveryHandler } from "./user-data/create-user-data-recovery-handler.js"
 import { createShutdownHandler } from "./shutdown/create-shutdown-handler.js"
@@ -25,10 +31,12 @@ import { subscribeToUserData } from "./user-data/subscribe-to-user-data.js"
 import { recordOrderSubmissionIntent } from "../use-cases/record-order-submission-intent.js"
 import { recordOrderSubmissionOutcome } from "../use-cases/record-order-submission-outcome.js"
 import { recordExecutionFill } from "../use-cases/record-execution-fill.js"
+import { synchronizeAccountHistory } from "../use-cases/synchronize-account-history/index.js"
 import { recordOrderCancellationIntent } from "../use-cases/record-order-cancellation-intent.js"
 import { recordOrderCancellationOutcome } from "../use-cases/record-order-cancellation-outcome.js"
 import { recordRecoveryCycleCompleted } from "../use-cases/record-recovery-cycle-completed.js"
 import { recordRecoveryCycleNotCompleted } from "../use-cases/record-recovery-cycle-not-completed.js"
+import { recordRecoverySellerMixedSellReconciled } from "../use-cases/record-recovery-seller-mixed-sell-reconciled.js"
 import { recordConfigurationBaseline } from "../use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../use-cases/record-process-started.js"
 import { recordProcessStopped } from "../use-cases/record-process-stopped.js"
@@ -40,7 +48,11 @@ import { createAccountRuntimeRegistry } from "../application/providers/account-r
 import { resolveBinanceProviderIdentity } from "../domain/provider-identity.js"
 import { mapUserDataReadinessChangedData } from "../application/events/user-data-readiness-event-dto.js"
 import { publishLifecycleEvent } from "../application/events/publish-lifecycle-event.js"
-import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop } from "./harvester-runtime-helpers.js"
+import { createHarvesterCandleHistoryService, createOperationalStateCallbacks, createHarvesterTradingEngine, createHarvesterUserDataState, drainHarvesterUserDataEvents, getHarvesterOperatorRuntimeSnapshot, handleHarvesterUserDataStatus, isHarvesterMarketBookFresh, isHarvesterMarketPriceFresh, resumeHarvesterDeferredStrategyEvaluations, createHarvesterStop, assertRecoverySellerEvaluatorConfigured, assertRecoverySellerRuntimeAcceptance } from "./harvester-runtime-setup.js"
+
+// RS-4/RS-5 offline acceptance is complete. RS itself remains disabled by default in config.
+const RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE = true
+
 
 function assertOperationalStateStoreInterface({ operationalStateStore } = {}) {
   if (typeof operationalStateStore?.append !== "function" ||
@@ -85,15 +97,39 @@ async function readVerifiedOperationalStateHistory({ operationalStateStore } = {
   assertVerifiedOperationalStateHistory({ existingFacts })
   const existingProjection = projectHarvesterOperationalState({ records: existingFacts.data.records })
   assertOperationalStateProjection({ existingProjection })
-  return existingProjection
+  return {
+    projection: existingProjection,
+    records: existingFacts.data.records,
+  }
 }
 
-function assertOperationalStateCanStart({ projection } = {}) {
-  if (projection.data.sessions.length > 0) {
-    throw new Error(
-      "Automatic Harvester process restart is disabled until ADR-0001 Step 9 crash/restart proof and the complete exchange-reconciliation gate are accepted; the durable ledger already contains a prior PROCESS_STARTED session.",
-    )
+function assertOperationalStateCanStart({ projection, records } = {}) {
+  const processStarts = records.filter((record) => record.factType === "PROCESS_STARTED")
+  if (processStarts.length === 0) {
+    return false
   }
+  const stoppedSessionIds = new Set(records
+    .filter((record) => record.factType === "PROCESS_STOPPED")
+    .map((record) => record.runtimeSessionId))
+  const allSessionsStopped = processStarts.every((record) => stoppedSessionIds.has(record.runtimeSessionId))
+  const latestProcessStart = processStarts.at(-1)
+  const stickySafetyBlockers = projection.data.stickySafetyBlockers ?? []
+  const observationOnlyRestart = latestProcessStart.data.tradingEnabled === false &&
+    stickySafetyBlockers.length === 0
+  const singleRecoverySellerStop = stickySafetyBlockers.length === 1 &&
+    stickySafetyBlockers[0].scope === "ACCOUNT" &&
+    stickySafetyBlockers[0].reason === "RECOVERY_SELLER_UNEXPECTED_CONDITION"
+  if (
+    projection.data.candidateOnly === true &&
+    projection.data.restorationEnabled === false &&
+    allSessionsStopped &&
+    (observationOnlyRestart || singleRecoverySellerStop)
+  ) {
+    return true
+  }
+  throw new Error(
+    "Automatic Harvester trading-state restoration remains disabled until ADR-0001 Step 9 crash/restart proof and exchange reconciliation are accepted; only a clean prior session with an RS STOP latch or an observation-only session may restart, and trading remains disabled.",
+  )
 }
 
 async function verifyOperationalStateStore({ operationalStateStore,
@@ -104,9 +140,12 @@ async function verifyOperationalStateStore({ operationalStateStore,
   assertOperationalStateStoreInterface({ operationalStateStore })
   await verifyOperationalStateStoreDurability({ operationalStateStore })
   if (recoveryEnabled === true) {
-    const projection = await readVerifiedOperationalStateHistory({ operationalStateStore })
-    assertOperationalStateCanStart({ projection })
-    return { previousProcessStarted: false }
+    const history = await readVerifiedOperationalStateHistory({ operationalStateStore })
+    const previousProcessStarted = assertOperationalStateCanStart({
+      projection: history.projection,
+      records: history.records,
+    })
+    return { previousProcessStarted }
   }
   const existingFacts = await operationalStateStore.readAll()
   if (existingFacts?.ok !== true ||
@@ -239,6 +278,7 @@ function createHarvesterOperationalStateCallbacks({ operationalStateStore } = {}
     recordExecutionFill,
     recordRecoveryCycleCompleted,
     recordRecoveryCycleNotCompleted,
+    recordRecoverySellerMixedSellReconciled,
     recordOrderSubmissionIntent,
     recordOrderSubmissionOutcome,
     recordOrderCancellationIntent,
@@ -264,8 +304,10 @@ function createCoinGrabberMarketPriceErrorHandler({ logger } = {}) {
 
 async function resolveStartupOptionsForProcessRecovery({ resolved,
   operationalStateStore,
-  logger } = {}) {
-  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true
+  logger,
+  recoverySellerEnabled = false } = {}) {
+  const recoveryEnabled = resolved.appConfig.strategies?.CG_coinGrabber?.settings?.recovery?.enabled === true ||
+    recoverySellerEnabled
   const operationalState = await verifyOperationalStateStore({
     operationalStateStore,
     recoveryEnabled,
@@ -298,7 +340,7 @@ function createCommissionAssetPublisher({ accountSnapshotManagerRef }) {
   }
 }
 
-async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
+export async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
   const {
     env,
     runtimeSessionId,
@@ -319,11 +361,27 @@ async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
     logger,
   })
   const operationalStateStore = suppliedOperationalStateStore ?? operatorControlLifecycle.operationalStateStore
+  const recoverySellerEnabled = Object.keys(resolved.recoverySellerPairs ?? {}).length > 0
   const startupOptions = await resolveStartupOptionsForProcessRecovery({
     resolved,
     operationalStateStore,
     logger,
+    recoverySellerEnabled,
   })
+  let recoverySellerStopWorkflow
+  if (recoverySellerEnabled) {
+    if (!operationalStateStore) {
+      throw new Error("Configured Recovery Seller routes require a verified durable Operational State Store")
+    }
+    const stopWorkflowResult = await createRecoverySellerStopWorkflow({
+      operationalStateStore,
+    })
+    if (stopWorkflowResult?.ok !== true) {
+      throw stopWorkflowResult?.errors?.[0] ??
+        new Error("Recovery Seller durable STOP state could not be restored before process start")
+    }
+    recoverySellerStopWorkflow = stopWorkflowResult.data
+  }
   await persistHarvesterProcessStart({
     operationalStateStore,
     appConfig: startupOptions.appConfig,
@@ -335,6 +393,7 @@ async function prepareHarvesterStartupState({ dependencies, resolved } = {}) {
     operatorControlLifecycle,
     operationalStateStore,
     startupOptions,
+    recoverySellerStopWorkflow,
   }
 }
 
@@ -366,6 +425,7 @@ async function resolveHarvesterStartupConfiguration({ dependencies }) {
     eventPublisher: dependencies.eventPublisher,
     logger: dependencies.logger,
     executionSymbols: dependencies.executionSymbols,
+    executionRoutes: dependencies.executionRoutes,
   })
   const providerResolved = dependencies.providerIdentity === undefined
     ? resolved
@@ -373,6 +433,10 @@ async function resolveHarvesterStartupConfiguration({ dependencies }) {
       ...resolved,
       brokerName: dependencies.providerIdentity.providerType,
     })
+  assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs: providerResolved.recoverySellerPairs,
+    acceptanceComplete: RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE,
+  })
   return { resolved: providerResolved }
 }
 
@@ -393,11 +457,16 @@ async function createHarvesterStartupContext({ options } = {}) {
     ...startupState.startupOptions,
     env: dependencies.env,
     brokerAdapterFactory: dependencies.brokerAdapterFactory,
+    orderHistoryPersistence: dependencies.orderHistoryPersistence,
     providerIdentity: dependencies.providerIdentity,
     providerRequired: dependencies.providerRequired !== false,
     marketDataProviderInstanceId: dependencies.marketDataProviderInstanceId,
     marketDataSymbols: dependencies.marketDataSymbols,
     executionSymbols: resolved.executionSymbols,
+    marketSymbols: resolved.marketSymbols,
+    recoverySellerPairs: resolved.recoverySellerPairs,
+    evaluateRecoverySellerTransition: dependencies.evaluateRecoverySellerTransition,
+    executionRoutes: Object.freeze([...(dependencies.executionRoutes ?? [])]),
     marketDataSources: dependencies.marketDataSources,
     marketDataProviderTypes: dependencies.marketDataProviderTypes,
     marketDataProviderIdentities: dependencies.marketDataProviderIdentities,
@@ -417,10 +486,36 @@ async function createHarvesterStartupContext({ options } = {}) {
     strategyShutdownParticipants: dependencies.strategyShutdownParticipants,
     operatorControlLifecycle: startupState.operatorControlLifecycle,
     operationalStateStore: startupState.operationalStateStore,
+    recoverySellerStopWorkflow: startupState.recoverySellerStopWorkflow,
     accountSnapshotManagerRef,
     onCommissionAsset,
     ...operationalStateCallbacks,
   }
+}
+
+function configureRecoverySellerRuntimeDispatch({
+  startup,
+  context,
+  recoverySellerWorkflow,
+} = {}) {
+  if (Object.keys(startup.recoverySellerPairs ?? {}).length === 0) {
+    return
+  }
+  assertRecoverySellerRuntimeAcceptance({
+    recoverySellerPairs: startup.recoverySellerPairs,
+    acceptanceComplete: RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE,
+  })
+  startup.evaluateRecoverySellerTransition ??= createRecoverySellerRuntimeDispatch({
+    recoverySellerWorkflow,
+    recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
+    recoverySellerPairs: startup.recoverySellerPairs,
+    getRecoverySellerMarketMetadata: context.getRecoverySellerMarketMetadata,
+    getAccountSnapshot: context.getAccountSnapshot,
+  })
+  assertRecoverySellerEvaluatorConfigured({
+    recoverySellerPairs: startup.recoverySellerPairs,
+    evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
+  })
 }
 
 function createHarvesterPortfolioContext({ startup } = {}) {
@@ -436,10 +531,20 @@ function createHarvesterPortfolioContext({ startup } = {}) {
     }],
   })
   const accountRuntime = accountRuntimeRegistry.get(providerIdentity.providerInstanceId)
+  const recoverySellerWorkflow = createRecoverySellerAccountingWorkflow({
+    sharedState: accountRuntime.state,
+    onOperationalStateRecoverySellerMixedSellReconciled: startup.onOperationalStateRecoverySellerMixedSellReconciled,
+  })
   const context = {
     accountRuntime,
     accountRuntimeRegistry,
+    recoverySellerWorkflow,
+    recoverySellerMarketMetadata: new Map(),
+    getRecoverySellerMarketMetadata: ({ symbol } = {}) => context.recoverySellerMarketMetadata.get(symbol),
+    getAdditionalTrackedBaseQuantity: (...args) => recoverySellerWorkflow.getAdditionalTrackedBaseQuantity(...args),
+    getAdditionalTrackedQuoteCashFlow: () => recoverySellerWorkflow.getAdditionalTrackedQuoteCashFlow(),
     portfolioWorkflow: createPortfolioWorkflow({
+      sharedState: accountRuntime.state,
       evaluateStrategy: startup.evaluateStrategy,
       logger: createStrategyLogger({
         logger: startup.logger,
@@ -463,6 +568,11 @@ reason: "TRADING_ENGINE_NOT_READY" } })
   context.completeRecoveryCycle = (...args) => context.portfolioWorkflow.completeRecoveryCycle(...args)
   context.getMarketMetadata = ({ symbol } = {}) => context.marketMetadata.get(symbol)
   context.getAccountSnapshot = () => startup.accountSnapshotManagerRef.current?.getAccountSnapshot()
+  configureRecoverySellerRuntimeDispatch({
+    startup,
+    context,
+    recoverySellerWorkflow,
+  })
   return context
 }
 
@@ -520,6 +630,8 @@ function createHarvesterAccountSnapshotRuntime({ startup,
     eventPublisher: startup.eventPublisher,
     marketMetadata: portfolio.marketMetadata,
     getPortfolio: portfolio.getPortfolio,
+    getAdditionalTrackedBaseQuantity: portfolio.getAdditionalTrackedBaseQuantity,
+    getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
     getTradingEngine: () => resources.tradingEngine,
     getRecoveredState: () => portfolio.recoveredState,
     getHasCanonicalOwnershipReconciliation: () => resources.hasCanonicalOwnershipReconciliation,
@@ -574,8 +686,12 @@ function createHarvesterUserDataEventRuntime({ startup,
     resumeDeferredStrategyEvaluations: accountSnapshots.resumeDeferredStrategyEvaluations,
     onSafetyBlockerRaised: startup.onSafetyBlockerRaised,
   })
+  const handleUserDataObservation = createUserDataObservationHandler({
+    logger: startup.logger,
+  })
   return {
     handleUserDataEvent,
+    handleUserDataObservation,
     drainUserDataEvents: () => drainHarvesterUserDataEvents({ userDataState }),
   }
 }
@@ -658,7 +774,15 @@ function createHarvesterTradingEngineActivator({ startup,
       getRecoveryLedger: portfolio.getRecoveryLedger,
       getMarketMetadata: portfolio.getMarketMetadata,
       getAccountSnapshot: portfolio.getAccountSnapshot,
+      getAdditionalTrackedBaseQuantity: portfolio.getAdditionalTrackedBaseQuantity,
+      getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
+      recoverySellerPairs: startup.recoverySellerPairs,
+      recoverySellerWorkflow: portfolio.recoverySellerWorkflow,
+      recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
+      evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
+      getRecoverySellerMarketMetadata: portfolio.getRecoverySellerMarketMetadata,
       updateTradingAccounting: portfolio.updateTradingAccounting,
+      updateRecoverySellerAccounting: portfolio.recoverySellerWorkflow.applyBuyFill,
       completeRecoveryCycle: portfolio.completeRecoveryCycle,
       userDataState: resources.userDataState,
       accountSnapshotManagerRef: startup.accountSnapshotManagerRef,
@@ -670,6 +794,7 @@ function createHarvesterTradingEngineActivator({ startup,
       onOperationalStateStrategyMarketPaused: startup.onOperationalStateStrategyMarketPaused,
       logger: startup.logger,
       recoveredState: portfolio.recoveredState,
+      sharedAccountState: portfolio.accountRuntime.state,
       isMarketPriceFresh: freshness.isMarketPriceFresh,
       isMarketBookFresh: freshness.isMarketBookFresh,
     })
@@ -678,13 +803,7 @@ function createHarvesterTradingEngineActivator({ startup,
   }
 }
 
-async function startHarvesterPreflightServices({ startup,
-  portfolio,
-  resources,
-  accountSnapshots,
-  userDataEvents,
-  recoveryRuntime,
-  activateTradingEngine } = {}) {
+async function initializeHarvesterMarketMetadata({ startup, portfolio, resources } = {}) {
   await loadMarketMetadata({
     broker: resources.broker,
     pairs: startup.pairs,
@@ -692,16 +811,38 @@ async function startHarvesterPreflightServices({ startup,
     eventPublisher: startup.eventPublisher,
     logger: startup.logger,
   })
-  activateTradingEngine()
-  await startup.operatorControlLifecycle.start({
-    engine: resources.tradingEngine,
-    getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
-    getPortfolio: portfolio.getPortfolio,
-    getRecoveryLedger: portfolio.getRecoveryLedger,
-    getAccountSnapshot: portfolio.getAccountSnapshot,
-    getOpenOrders: () => resources.broker.getOpenOrders(),
+  const records = []
+  for (const [symbol, pairConfig] of Object.entries(startup.recoverySellerPairs ?? {})) {
+    const metadata = portfolio.marketMetadata.get(symbol)
+    if (!metadata) {
+      throw new Error(`Recovery Seller market metadata is unavailable for ${symbol}`)
+    }
+    portfolio.recoverySellerMarketMetadata.set(symbol, validateMarketTradingReadiness({
+      symbol,
+      pairConfig,
+      marketMetadata: metadata,
+    }))
+    records.push({
+      market: metadata.market,
+      position: createLegacyPosition({
+        invested: String(pairConfig.legacyPosition.invested),
+        quantity: String(pairConfig.legacyPosition.quantity),
+      }),
+      accounting: createLegacyPositionAccounting(),
+    })
+  }
+  const initialized = await portfolio.recoverySellerWorkflow.initializeLegacyPositions({
+    records,
   })
-  portfolio.portfolioWorkflow = createPortfolioWorkflow({
+  if (initialized?.ok !== true) {
+    throw initialized?.errors?.[0] ??
+      new Error("Recovery Seller legacy basis initialization was not committed")
+  }
+}
+
+function createHarvesterPortfolioWorkflow({ startup, portfolio } = {}) {
+  return createPortfolioWorkflow({
+    sharedState: portfolio.accountRuntime.state,
     evaluateStrategy: startup.evaluateStrategy,
     logger: createStrategyLogger({
       logger: startup.logger,
@@ -712,6 +853,20 @@ async function startHarvesterPreflightServices({ startup,
     onOperationalStateRecoveryCycleCompleted: startup.onOperationalStateRecoveryCycleCompleted,
     onOperationalStateRecoveryCycleNotCompleted: startup.onOperationalStateRecoveryCycleNotCompleted,
   })
+}
+
+async function startHarvesterUserDataServices({
+  startup,
+  portfolio,
+  resources,
+  accountSnapshots,
+  userDataEvents,
+  recoveryRuntime,
+} = {}) {
+  portfolio.portfolioWorkflow = createHarvesterPortfolioWorkflow({
+    startup,
+    portfolio,
+  })
   resources.userDataSubscription = await subscribeToUserData({
     broker: resources.broker,
     brokerName: startup.brokerName,
@@ -720,8 +875,9 @@ async function startHarvesterPreflightServices({ startup,
     state: resources.userDataState,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled,
-    enabledSymbols: startup.enabledSymbols,
+    enabledSymbols: startup.marketSymbols ?? startup.enabledSymbols,
     onEvent: userDataEvents.handleUserDataEvent,
+    onObservation: userDataEvents.handleUserDataObservation,
     onStatus: recoveryRuntime.handleUserDataStatus,
     onSubscriptionEstablished: (subscription) => { resources.userDataSubscription = subscription },
     publishAccountSnapshot: accountSnapshots.publishAccountSnapshot,
@@ -735,6 +891,151 @@ async function startHarvesterPreflightServices({ startup,
     eventPublisher: startup.eventPublisher,
     brokerName: startup.brokerName,
     userDataState: resources.userDataState,
+  })
+}
+
+function shouldSynchronizeStartupHistory({ identity, symbols } = {}) {
+  return identity?.providerType === "binance" &&
+    Array.isArray(symbols) &&
+    symbols.length > 0
+}
+
+function hasOrderHistoryRepository({ persistence } = {}) {
+  const repository = persistence?.orderRepository
+  return typeof repository?.upsertHistorical === "function" &&
+    typeof repository?.findByExchangeOrderIdentity === "function" &&
+    typeof repository?.getOldestPendingOrderId === "function"
+}
+
+function hasFillHistoryRepository({ persistence } = {}) {
+  return typeof persistence?.fillRepository?.upsert === "function"
+}
+
+function hasHistoryCursorRepository({ persistence } = {}) {
+  const repository = persistence?.historySyncCursorRepository
+  return typeof repository?.get === "function" &&
+    typeof repository?.saveOrderCursor === "function" &&
+    typeof repository?.saveTradeCursor === "function"
+}
+
+function hasHistoryPersistence({ persistence } = {}) {
+  return hasOrderHistoryRepository({ persistence }) &&
+    hasFillHistoryRepository({ persistence }) &&
+    hasHistoryCursorRepository({ persistence })
+}
+
+function logHistorySyncSkipped({ startup, identity } = {}) {
+  startup.logger.warn?.({
+    message: "Exchange history synchronization skipped because relational history persistence is unavailable",
+    providerInstanceId: identity?.providerInstanceId,
+    environment: startup.tradingMode,
+  })
+}
+
+function logHistorySyncFailure({ startup, identity, result } = {}) {
+  const error = result?.errors?.[0]
+  startup.logger.error?.({
+    message: "Exchange history synchronization failed; historical coverage is incomplete",
+    providerType: identity.providerType,
+    providerInstanceId: identity.providerInstanceId,
+    accountId: identity.accountId,
+    environment: startup.tradingMode,
+    symbol: error?.historyDiagnostics?.currentMarket,
+    errorName: error?.name ?? "Error",
+    errorCode: error?.code ?? "HARVESTER_HISTORY_SYNC_FAILED",
+    errorMessage: error?.message ?? "Exchange history synchronization failed",
+    component: "synchronize-account-history",
+    operation: "synchronizeStartupExchangeHistory",
+    historyDiagnostics: error?.historyDiagnostics,
+    errors: result?.errors,
+  })
+}
+
+function logHistorySyncSuccess({ startup, identity, result } = {}) {
+  startup.logger.info?.({
+    message: "Exchange history pages scanned for configured markets; global coverage remains unverified",
+    providerInstanceId: identity.providerInstanceId,
+    environment: startup.tradingMode,
+    ...result.data,
+  })
+}
+
+async function synchronizeStartupExchangeHistory({ startup, portfolio, resources } = {}) {
+  const identity = startup.providerIdentity ?? portfolio.accountRuntime.identity
+  const persistence = startup.orderHistoryPersistence
+  if (!shouldSynchronizeStartupHistory({
+    identity,
+    symbols: startup.executionSymbols,
+  })) {
+    return
+  }
+  if (!hasHistoryPersistence({
+    persistence,
+  })) {
+    logHistorySyncSkipped({
+      startup,
+      identity,
+    })
+    return
+  }
+  const result = await synchronizeAccountHistory({
+    broker: resources.broker,
+    symbols: startup.executionSymbols,
+    providerIdentity: identity,
+    environment: startup.tradingMode,
+    orderRepository: persistence.orderRepository,
+    fillRepository: persistence.fillRepository,
+    cursorRepository: persistence.historySyncCursorRepository,
+  })
+  if (result?.ok !== true) {
+    logHistorySyncFailure({
+      startup,
+      identity,
+      result,
+    })
+    return
+  }
+  logHistorySyncSuccess({
+    startup,
+    identity,
+    result,
+  })
+}
+
+async function startHarvesterPreflightServices({ startup,
+  portfolio,
+  resources,
+  accountSnapshots,
+  userDataEvents,
+  recoveryRuntime,
+  activateTradingEngine } = {}) {
+  await initializeHarvesterMarketMetadata({
+    startup,
+    portfolio,
+    resources,
+  })
+  await synchronizeStartupExchangeHistory({
+    startup,
+    portfolio,
+    resources,
+  })
+  activateTradingEngine()
+  await startup.operatorControlLifecycle.start({
+    engine: resources.tradingEngine,
+    getRuntimeSnapshot: accountSnapshots.getOperatorRuntimeSnapshot,
+    getPortfolio: portfolio.getPortfolio,
+    getRecoveryLedger: portfolio.getRecoveryLedger,
+    getAccountSnapshot: portfolio.getAccountSnapshot,
+    getOpenOrders: () => resources.broker.getOpenOrders(),
+    recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
+  })
+  await startHarvesterUserDataServices({
+    startup,
+    portfolio,
+    resources,
+    accountSnapshots,
+    userDataEvents,
+    recoveryRuntime,
   })
 }
 
@@ -1101,10 +1402,12 @@ function createHarvesterRuntimeResult({
     accountId: identity.accountId,
     required: startup.providerRequired !== false,
     ...marketData,
+    executionRoutes: Object.freeze([...(startup.executionRoutes ?? [])]),
     executionEnabled: startup.tradingEnabled === true && marketData.executionSymbols.length > 0,
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled === true && marketData.executionSymbols.length > 0,
     strategyMode: "conservative",
+    getOperator: () => startup.operatorControlLifecycle?.getOperator?.(),
     get userDataReady() { return resources.userDataState.ready },
     get userDataStatus() { return resources.userDataState.status },
     processMarketPrice: portfolio.processMarketPrice,

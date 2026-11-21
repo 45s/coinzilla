@@ -1,6 +1,16 @@
 # Task-specific agent workflows
 
-All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the owning domain's AGENTS.md, and its roadmap. Use the smallest applicable checklist below; high-risk requirements are additive.
+All tasks must follow root AGENTS.md, AI_AGENT_WORKFLOW.md, the mandatory [AI Task Compliance Standard](AI_TASK_COMPLIANCE_STANDARD.md), the owning domain's AGENTS.md, and its roadmap. Use the smallest applicable checklist below; high-risk requirements are additive.
+
+## Mandatory standards-compliance preflight
+
+- [ ] Completed the task-start gate in [AI Task Compliance Standard](AI_TASK_COMPLIANCE_STANDARD.md) before changing state.
+- [ ] Identified and read all applicable canonical standards, domain requirements, task checklist and linked specifications in full.
+- [ ] Inspected the actual source, consumers, tests, configuration and file tree; did not rely on memory or summaries.
+- [ ] Recorded task scope, constraints/invariants, acceptance criteria, verification and documentation impact.
+- [ ] Reviewed names for new or materially changed modules/functions/exports/variables: helpers are fully self-descriptive; core/domain functions are behavior-descriptive with contextual brevity; orchestration names express the action/transition; modules/services/classes remain concise and responsibility-oriented.
+- [ ] Resolved applicable requirements conflicts or documented a concrete blocker/exception; none were silently bypassed.
+- [ ] Repeated standards discovery if task scope or affected domains changed.
 
 ## Task contract, incremental commits and handoff
 
@@ -9,13 +19,15 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 - [ ] A GitHub Issue (or explicitly adopted existing issue) describes the goal, owning scope, exclusions, requirements/invariants, acceptance criteria, dependencies, verification and documentation impact.
 - [ ] The issue, branch, PR and owning roadmap link to one another where applicable; update task state as scope, decisions, blockers and progress change.
 - [ ] Work is split into cohesive, reviewable commits using `<type>(<scope>): <imperative outcome>`; preserve test-first RED/GREEN evidence and avoid unrelated or progress-only commits.
-- [ ] Each meaningful checkpoint is committed and pushed; validation status is recorded against the exact commit SHA.
+- [ ] Follow the commit-to-checkpoint loop in the canonical workflow: after each meaningful increment, inspect and validate it, commit and push it, synchronize with latest `develop` before pushing, and refresh the issue's current-state summary with the exact head SHA and next action before starting another increment.
+- [ ] Keep implementation, tests, and affected living documentation consistent in the same logical increment; when no documentation change is warranted, record the reason. Keep the roadmap status accurate without turning it into a commit diary.
 - [ ] Before pausing or changing owners, add a handoff checkpoint to the issue (and update the PR when applicable) with exact branch/head, base freshness, completed/in-progress work, next action, decisions, checks/CI SHA, blockers, safety boundaries and documentation/roadmap status.
 - [ ] The task can be resumed from GitHub issue, branch, PR and canonical docs without relying on private chat history.
 
 ## Documentation-only change
 
 - Confirm the owning documentation/domain, canonical source of truth and linked references.
+- Review names of new or materially changed document headings, filenames and identifiers in examples for clarity; keep names concise where the surrounding context is explicit.
 - Follow [Documentation Governance](../DOCUMENTATION_GOVERNANCE.md): classify the document, preserve historical provenance, and avoid creating competing sources of truth.
 - Follow the canonical [Markdown style standard](../MARKDOWN_STYLE.md) for formatting and authoring conventions.
 - Update the nearest documentation index when adding, moving, renaming, superseding or archiving a document.
@@ -25,6 +37,7 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 - If a domain roadmap status/priority/blocker changes, inspect and synchronize the root `ROADMAP.md` when it tracks that item; verify the owner roadmap agrees with any changed root priority.
 - Do not equate passing link validation with factual freshness; compare affected docs against current source, tests, configuration and merged PR status.
 - Run `pnpm run check:agent-policy` when ownership or agent instructions change.
+- When helper naming policy or helper names change, run `pnpm run check:helper-names`; review all findings, recognizing the scan is heuristic and report-only pending baseline review.
 - When Markdown/MDX changes, run `node --test scripts/markdown-path-policy.test.js scripts/check-markdown-style.test.js` and `node scripts/check-markdown-style.js --all-maintained`.
 - When headings or local links change, run `node --test scripts/check-maintained-markdown-anchors.test.js` and `node scripts/check-maintained-markdown-anchors.js`; historical-source findings remain report-only.
 - For pull requests, run `node scripts/check-markdown-style.js <exact-40-character-target-base-sha>` for the changed-file guard.
@@ -49,6 +62,10 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 ## Refactoring or code audit
 
 - Read the canonical [AI Refactoring and Code Audit Standard](AI_REFACTORING_AUDIT_STANDARD.md) before inspecting or changing code.
+- Keep one task on one task branch and one PR; include implementation, tests and affected living documentation together. Do not open a separate docs PR for documentation required by the same implementation.
+- Audit architecture, dependencies, correctness, reliability, maintainability, tests, lint/static-analysis, security and performance where relevant to the authorized scope.
+- Back bottleneck/performance claims with measurements or reproducible evidence; label unmeasured concerns as hypotheses, not confirmed defects.
+- Prioritize findings by concrete risk and impact; record a disposition for each significant finding rather than creating an unbounded cleanup list.
 - Confirm the exact user-authorized folder/package scope and owning domain; do not expand scope silently.
 - Read applicable domain instructions, roadmap, specifications, contracts, implementation, consumers, tests, and configuration.
 - Establish existing public behavior and invariants before proposing structural changes.
@@ -57,6 +74,7 @@ For every non-trivial task, follow the mandatory [incremental commit and handoff
 - Preserve public contracts unless an intentional, documented, tested behavior change is required.
 - Prefer cohesive modules and meaningful pure-function extraction; avoid speculative abstractions and mechanical churn.
 - Verify every changed file and relevant package/workspace checks; report exact results, skipped checks, and the final PR head.
+- When the audit touches `helpers/`, run `pnpm run check:helper-policy`; inspect all detected violations and indirect dependencies rather than treating the scanner as a purity proof.
 - Update affected living documentation and indexes; preserve historical evidence and include a Documentation impact note in the PR.
 
 ## Cross-domain or shared-infrastructure change

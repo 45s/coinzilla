@@ -58,9 +58,9 @@ Read AGENTS.md, README.md, and the repository's mandatory AI_AGENT_WORKFLOW.md.
           notifier.test.js
           event-subscriber.test.js
           helpers/                 # pure supporting functions only
-            run-validation.js
-            run-response-validation.js
-            get-safe-error-msg.js
+            validate-telegram-inputs.js
+            validate-telegram-api-response.js
+            sanitize-error-message.js
         email/                    # future; create when implemented
         discord/                  # future; create when implemented
 

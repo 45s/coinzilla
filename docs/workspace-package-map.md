@@ -20,6 +20,14 @@ Event-driven spot-trading application. Owns Conservative strategy workflows, Por
 - Roadmap: [apps/harvester/ROADMAP.md](../apps/harvester/ROADMAP.md)
 - Operational guide: [apps/harvester/README.md](../apps/harvester/README.md)
 
+### `apps/dashboard/` — `@coinzilla/dashboard`
+
+Angular + TypeScript web client for the Coinzilla operational dashboard. The initial Overview screen is demo-only and has no backend or exchange connection. The dashboard must remain a client of authenticated application APIs and must not own trading decisions, direct database access or broker integration.
+
+- README: [Dashboard application guide](../apps/dashboard/README.md)
+- Roadmap: [Dashboard roadmap](../apps/dashboard/ROADMAP.md)
+- Agent instructions: [Dashboard AGENTS](../apps/dashboard/AGENTS.md)
+
 ## Shared packages
 
 ### `packages/brokers/` — `@coinzilla/brokers`
@@ -54,11 +62,7 @@ Durable JSONL event recording and recovery of persisted records. Journal stores 
 
 - Roadmap: [packages/journal/ROADMAP.md](../packages/journal/ROADMAP.md)
 
-### `packages/market-simulator/` — `@coinzilla/market-simulator`
-
 Offline historical market replay and simulated spot execution through the existing broker contract. No current application or production workflow consumes it, so it is a low-priority optional tool; enhancements are deferred until a concrete consumer exists. History and market metadata are supplied explicitly by the caller; do not assume a bundled market-history fixture.
-
-- Roadmap: [packages/market-simulator/ROADMAP.md](../packages/market-simulator/ROADMAP.md)
 
 ### `packages/notifiers/` — `@coinzilla/notifiers`
 
