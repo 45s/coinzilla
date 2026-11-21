@@ -229,8 +229,13 @@ function handleCommandRequestError({ response, error } = {}) {
 }
 
 async function handleCommandRequest({ request, response, operator }) {
-  if (!validateCommandOrigin({ request, response }) ||
-      !validateCommandContentType({ request, response })) {
+  if (!validateCommandOrigin({
+    request,
+    response,
+  }) || !validateCommandContentType({
+    request,
+    response,
+  })) {
     return
   }
   try {
@@ -267,7 +272,10 @@ async function handleCommandRequest({ request, response, operator }) {
       },
     })
   } catch (error) {
-    handleCommandRequestError({ response, error })
+    handleCommandRequestError({
+      response,
+      error,
+    })
   }
 }
 
