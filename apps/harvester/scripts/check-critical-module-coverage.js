@@ -7,6 +7,57 @@ const APP_ROOT = fileURLToPath(new URL("../", import.meta.url))
 const CONTRACT_PATH = path.join(APP_ROOT, "docs", "critical-behaviors.json")
 const METRICS = ["lines", "branches", "functions"]
 
+function parseCoverageRow(tableLine) {
+  const row = /^(\s*)([^|]+?)\s*\|\s*([^|]*)\|\s*([^|]*)\|\s*([^|]*)\|/.exec(tableLine)
+  if (!row) {
+    return undefined
+  }
+
+  const [, indentationText, nameText, linesText, branchesText, functionsText] = row
+  const name = nameText.trim()
+  if (name === "all files") {
+    return undefined
+  }
+  const depth = Math.max(0, indentationText.length - 1)
+  if (linesText.trim().length === 0) {
+    return {
+      type: "directory",
+      depth,
+      name,
+    }
+  }
+
+  const values = [linesText, branchesText, functionsText]
+    .map((value) => Number.parseFloat(value.trim()))
+  if (!values.every(Number.isFinite)) {
+    return undefined
+  }
+  return {
+    type: "file",
+    depth,
+    name,
+    coverage: {
+      lines: values[0],
+      branches: values[1],
+      functions: values[2],
+    },
+  }
+}
+
+function updateDirectoryStack({ directories, depth, name }) {
+  if (name === "src") {
+    directories.length = 0
+    return
+  }
+  directories.length = depth + 1
+  directories[depth] = name
+}
+
+function buildModulePath({ directories, depth, name }) {
+  const parentDirectories = directories.slice(1, depth).filter(Boolean)
+  return ["src", ...parentDirectories, name].join("/")
+}
+
 /**
  * Parse the hierarchical table emitted by Node's built-in test coverage reporter.
  *
@@ -15,58 +66,32 @@ const METRICS = ["lines", "branches", "functions"]
  */
 export function parseNodeCoverageReport(reportText) {
   const coverage = new Map()
-  const directories = new Map()
-  const reportLines = reportText.split(/\r?\n/)
-
-  for (const reportLine of reportLines) {
+  const directories = []
+  for (const reportLine of reportText.split(/\r?\n/)) {
     const markerIndex = reportLine.indexOf("ℹ")
     if (markerIndex < 0) {
       continue
     }
-    const tableLine = reportLine.slice(markerIndex + 1).replace(/\u001b\[[0-9;]*m/g, "")
-    const row = /^(\s*)([^|]+?)\s*\|\s*([^|]*)\|\s*([^|]*)\|\s*([^|]*)\|/.exec(tableLine)
-    if (!row) {
+    const parsedRow = parseCoverageRow(reportLine.slice(markerIndex + 1))
+    if (!parsedRow) {
+      continue
+    }
+    if (parsedRow.type === "directory") {
+      updateDirectoryStack({
+        directories,
+        depth: parsedRow.depth,
+        name: parsedRow.name,
+      })
       continue
     }
 
-    const indentation = row[1].length
-    const name = row[2].trim()
-    const lineCoverage = row[3].trim()
-    if (name === "all files") {
-      continue
-    }
-
-    const depth = Math.max(0, indentation - 1)
-    if (lineCoverage.length === 0) {
-      if (name === "src") {
-        directories.clear()
-        continue
-      }
-      directories.set(depth, name)
-      for (const directoryDepth of directories.keys()) {
-        if (directoryDepth > depth) {
-          directories.delete(directoryDepth)
-        }
-      }
-      continue
-    }
-
-    const values = [row[3], row[4], row[5]].map((value) => Number.parseFloat(value.trim()))
-    if (!values.every(Number.isFinite)) {
-      continue
-    }
-    const parentDirectories = [...directories.entries()]
-      .filter(([directoryDepth]) => directoryDepth < depth)
-      .sort(([leftDepth], [rightDepth]) => leftDepth - rightDepth)
-      .map(([, directoryName]) => directoryName)
-    const modulePath = ["src", ...parentDirectories, name].join("/")
-    coverage.set(modulePath, {
-      lines: values[0],
-      branches: values[1],
-      functions: values[2],
+    const modulePath = buildModulePath({
+      directories,
+      depth: parsedRow.depth,
+      name: parsedRow.name,
     })
+    coverage.set(modulePath, parsedRow.coverage)
   }
-
   return coverage
 }
 
@@ -127,7 +152,7 @@ export function validateCriticalModuleCoverage({ moduleCoverage, coverage } = {}
 }
 
 function runCriticalModuleCoverageCheck() {
-  const reportPath = process.argv[2]
+  const [, , reportPath] = process.argv
   if (!reportPath) {
     defaultLogger.error({
       message: "Harvester critical module coverage report path is required",
