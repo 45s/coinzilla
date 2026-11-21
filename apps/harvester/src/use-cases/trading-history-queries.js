@@ -45,6 +45,34 @@ function createInvalidQueryError({ operation, field, cause } = {}) {
   })
 }
 
+function isEmptyFilterValue(value) {
+  return value === undefined || value === null || value === ""
+}
+
+function validateFilterValue({ value, rule, operation, field } = {}) {
+  if (typeof value !== "string" || value.trim() !== value) {
+    throw createInvalidQueryError({
+      operation,
+      field,
+    })
+  }
+  if (Array.isArray(rule)) {
+    if (!rule.includes(value)) {
+      throw createInvalidQueryError({
+        operation,
+        field,
+      })
+    }
+    return
+  }
+  if (value.length > rule) {
+    throw createInvalidQueryError({
+      operation,
+      field,
+    })
+  }
+}
+
 function normalizeFilters({ filters, operation } = {}) {
   if (filters === undefined) {
     return Object.freeze({})
@@ -65,42 +93,34 @@ function normalizeFilters({ filters, operation } = {}) {
         field,
       })
     }
-    if (value === undefined || value === null || value === "") {
+    if (isEmptyFilterValue(value)) {
       continue
     }
-    if (typeof value !== "string" || value.trim() !== value) {
-      throw createInvalidQueryError({
-        operation,
-        field,
-      })
-    }
-    if (Array.isArray(rule)) {
-      if (!rule.includes(value)) {
-        throw createInvalidQueryError({
-          operation,
-          field,
-        })
-      }
-    } else if (value.length > rule) {
-      throw createInvalidQueryError({
-        operation,
-        field,
-      })
-    }
+    validateFilterValue({
+      value,
+      rule,
+      operation,
+      field,
+    })
     normalized[field] = value
   }
   return Object.freeze(normalized)
 }
 
-function normalizePagination({ pagination, operation } = {}) {
-  if (pagination !== undefined &&
-    (!pagination || typeof pagination !== "object" || Array.isArray(pagination))) {
+function normalizePaginationInput({ pagination, operation } = {}) {
+  if (pagination === undefined) {
+    return {}
+  }
+  if (!pagination || typeof pagination !== "object" || Array.isArray(pagination)) {
     throw createInvalidQueryError({
       operation,
       field: "pagination",
     })
   }
-  const input = pagination ?? {}
+  return pagination
+}
+
+function assertSupportedPaginationFields({ input, operation } = {}) {
   for (const field of Object.keys(input)) {
     if (field !== "limit" && field !== "offset") {
       throw createInvalidQueryError({
@@ -109,23 +129,46 @@ function normalizePagination({ pagination, operation } = {}) {
       })
     }
   }
-  const limit = input.limit ?? DEFAULT_PAGE_LIMIT
-  const offset = input.offset ?? 0
-  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PAGE_LIMIT) {
+}
+
+function normalizePageLimit({ value, operation } = {}) {
+  if (!Number.isSafeInteger(value) || value < 1 || value > MAX_PAGE_LIMIT) {
     throw createInvalidQueryError({
       operation,
       field: "pagination.limit",
     })
   }
-  if (!Number.isSafeInteger(offset) || offset < 0) {
+  return value
+}
+
+function normalizePageOffset({ value, operation } = {}) {
+  if (!Number.isSafeInteger(value) || value < 0) {
     throw createInvalidQueryError({
       operation,
       field: "pagination.offset",
     })
   }
+  return value
+}
+
+function normalizePagination({ pagination, operation } = {}) {
+  const input = normalizePaginationInput({
+    pagination,
+    operation,
+  })
+  assertSupportedPaginationFields({
+    input,
+    operation,
+  })
   return Object.freeze({
-    limit,
-    offset,
+    limit: normalizePageLimit({
+      value: input.limit ?? DEFAULT_PAGE_LIMIT,
+      operation,
+    }),
+    offset: normalizePageOffset({
+      value: input.offset ?? 0,
+      operation,
+    }),
   })
 }
 
