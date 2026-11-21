@@ -192,7 +192,7 @@ The complete recursive tree at `543753da5938eba2d95ad19d74c3f98a991e6461` contai
 | Added path | Purpose and disposition |
 | --- | --- |
 | `apps/harvester/docs/CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md` | Maintained source/test evidence map for the Conservative ADA recovery lifecycle follow-up; KEEP and link from the Harvester roadmap. |
-| `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | Maintained read-only observer configuration and boundary contract; KEEP, linked from the Harvester docs index and separate from provider routing/readiness. |
+| `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | At this 543753 checkpoint it was a maintained interim observer guide. It was later **RETIRED** with the observer runtime/configuration/adapter in merged PR #1455; see the current removal disposition below. Preserve this row as historical inventory provenance only. |
 | `apps/harvester/docs/persistence/sqlite-integration-blueprint.md` | Source-verified inventory, repository boundaries, environment isolation, operational constraints and phased persistence migration plan; KEEP as the design/audit authority, with implementation status delegated to the persistence README and #1327. |
 
 This path inventory does not imply that all current behavior claims in the 89 files have been source-verified; that remains tracked by #1401. Full-tree Markdown classification and reference tracing remain tracked by #1402 and #1403.
