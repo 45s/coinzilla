@@ -17,7 +17,7 @@ const REQUIRED_METHODS = Object.freeze([
 export function assertTradingHistoryQueryRepository({ repository } = {}) {
   for (const method of REQUIRED_METHODS) {
     if (typeof repository?.[method] !== "function") {
-      throw new TypeError("TradingHistoryQueryRepository must implement " + method + "()")
+      throw new TypeError(`TradingHistoryQueryRepository must implement ${method}()`)
     }
   }
   return repository
