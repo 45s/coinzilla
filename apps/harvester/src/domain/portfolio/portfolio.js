@@ -73,7 +73,16 @@ function validatePortfolioState({ positions, appliedFillIds, appliedFillFingerpr
   if (new Set(appliedFillIds).size !== appliedFillIds.length) {
     throw new TypeError("Portfolio cannot contain duplicate fill IDs")
   }
-  validatePortfolioFillIdentity({ appliedFillIds, appliedFillFingerprints })
+  validatePortfolioFillIdentity({
+    appliedFillIds,
+    appliedFillFingerprints,
+  })
+}
+
+function validatePortfolioSelectorValue({ value, errorMessage } = {}) {
+  if (value !== undefined && (typeof value !== "string" || !value.trim())) {
+    throw new TypeError(errorMessage)
+  }
 }
 
 function normalizePortfolioPositionSelector({
@@ -82,15 +91,18 @@ function normalizePortfolioPositionSelector({
   symbol,
   strategyId,
 } = {}) {
-  if (positionId !== undefined && (typeof positionId !== "string" || !positionId.trim())) {
-    throw new TypeError("Portfolio.getPositions positionId must be a non-empty string")
-  }
-  if (marketId !== undefined && (typeof marketId !== "string" || !marketId.trim())) {
-    throw new TypeError("Portfolio.getPositions marketId must be a non-empty string")
-  }
-  if (symbol !== undefined && (typeof symbol !== "string" || !symbol.trim())) {
-    throw new TypeError("Portfolio.getPositions symbol must be a non-empty string")
-  }
+  validatePortfolioSelectorValue({
+    value: positionId,
+    errorMessage: "Portfolio.getPositions positionId must be a non-empty string",
+  })
+  validatePortfolioSelectorValue({
+    value: marketId,
+    errorMessage: "Portfolio.getPositions marketId must be a non-empty string",
+  })
+  validatePortfolioSelectorValue({
+    value: symbol,
+    errorMessage: "Portfolio.getPositions symbol must be a non-empty string",
+  })
   const owner = strategyId === undefined
     ? undefined
     : normalizeStrategyId({
@@ -100,7 +112,12 @@ function normalizePortfolioPositionSelector({
   if (positionId === undefined && marketId === undefined && symbol === undefined && owner === undefined) {
     throw new TypeError("Portfolio.getPositions requires a Position, market, symbol, or strategy selector")
   }
-  return { positionId, marketId, symbol, owner }
+  return {
+    positionId,
+    marketId,
+    symbol,
+    owner,
+  }
 }
 
 function matchesPortfolioPosition({ position, selector } = {}) {
@@ -145,7 +162,11 @@ function resolveSellAllocationPosition({ positions, fill, positionId, strategyId
   }) > 0) {
     throw new RangeError("Allocated SELL quantity exceeds canonical Fill quantity")
   }
-  return { owner, id, current }
+  return {
+    owner,
+    id,
+    current,
+  }
 }
 
 function resolveSellAllocationReplay({
@@ -216,7 +237,10 @@ export class Portfolio {
       strategyId,
     })
     return Object.freeze(this.#positions.filter((position) =>
-      matchesPortfolioPosition({ position, selector })
+      matchesPortfolioPosition({
+        position,
+        selector,
+      })
     ))
   }
 
@@ -317,7 +341,11 @@ strategyId: owner },
     positionId,
     strategyId,
   } = {}) {
-    validateSellAllocationInput({ fill, allocationFingerprint, allocationSide })
+    validateSellAllocationInput({
+      fill,
+      allocationFingerprint,
+      allocationSide,
+    })
     const { owner, id, current } = resolveSellAllocationPosition({
       positions: this.#positions,
       fill,
