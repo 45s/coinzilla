@@ -10,14 +10,23 @@
     "src/bootstrap/start-harvester.js",
     "src/infrastructure/operational-state/",
     "src/index.js",
-    "src/infrastructure/process-lock/"
+    "src/infrastructure/process-lock/",
+    "src/domain/fills/",
+    "src/bootstrap/shutdown/",
+    "src/infrastructure/process/",
+    "src/infrastructure/brokers/",
+    "src/use-cases/collect-owned-order-snapshots.js",
+    "src/use-cases/reconcile-terminal-order-fills.js",
+    "src/use-cases/fetch-account-trade-history.js",
+    "src/use-cases/create-user-data-event-transition.js"
   ],
   "behaviors": [
     {
       "id": "ORDER_SUBMISSION_UNKNOWN",
       "title": "Order submission intent, acknowledgement and unknown outcomes",
       "sourceModules": [
-        "src/use-cases/conservative-trading-engine.js"
+        "src/use-cases/conservative-trading-engine.js",
+        "src/infrastructure/brokers/binance-broker-adapter.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -74,7 +83,8 @@
         "src/use-cases/conservative-trading-engine.js",
         "src/use-cases/collect-owned-order-snapshots.js",
         "src/use-cases/reconcile-terminal-order-fills.js",
-        "src/use-cases/fetch-account-trade-history.js"
+        "src/use-cases/fetch-account-trade-history.js",
+        "src/infrastructure/brokers/binance-broker-adapter.js"
       ],
       "runtimeStatus": "active",
       "tests": [
@@ -277,7 +287,8 @@
         "src/bootstrap/account/create-account-snapshot-manager.js",
         "src/bootstrap/start-harvester.js",
         "src/use-cases/collect-owned-order-snapshots.js",
-        "src/use-cases/fetch-account-trade-history.js"
+        "src/use-cases/fetch-account-trade-history.js",
+        "src/infrastructure/brokers/binance-broker-adapter.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -308,7 +319,8 @@
       "title": "User-data disconnect, reconnect, event draining and readiness recovery",
       "sourceModules": [
         "src/bootstrap/start-harvester.js",
-        "src/use-cases/create-user-data-event-transition.js"
+        "src/use-cases/create-user-data-event-transition.js",
+        "src/infrastructure/brokers/binance-broker-adapter.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -816,6 +828,19 @@
         "lines": 85,
         "branches": 75,
         "functions": 80
+      }
+    },
+    {
+      "path": "src/infrastructure/brokers/binance-broker-adapter.js",
+      "baseline": {
+        "lines": 88.4,
+        "branches": 85.14,
+        "functions": 94.12
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 85,
+        "functions": 90
       }
     }
   ],
