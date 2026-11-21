@@ -195,7 +195,7 @@ The complete recursive tree at `543753da5938eba2d95ad19d74c3f98a991e6461` contai
 | `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | At this 543753 checkpoint it was a maintained interim observer guide. It was later **RETIRED** with the observer runtime/configuration/adapter in merged PR #1455; see the current removal disposition below. Preserve this row as historical inventory provenance only. |
 | `apps/harvester/docs/persistence/sqlite-integration-blueprint.md` | Source-verified inventory, repository boundaries, environment isolation, operational constraints and phased persistence migration plan; KEEP as the design/audit authority, with implementation status delegated to the persistence README and #1327. |
 
-This path inventory does not imply that all current behavior claims in the 89 files have been source-verified; that remains tracked by #1401. Full-tree Markdown classification and reference tracing remain tracked by #1402 and #1403.
+This historical path inventory does not imply that all behavior claims in the 89 files were source-verified. Full-tree maintained Markdown style and local-anchor enforcement were completed in merged PR #1434 (closes #1402); S-10 source dispositions and reference decisions are recorded in #1401/#1403 and combined draft PR #1628.
 
 ## Current recursive inventory checkpoint — develop `0f827ba7551be61a1be58f8dced191fb0a090870` (2026-11-21)
 
@@ -216,7 +216,7 @@ The complete recursive Git tree at this checkpoint contains **94 Harvester Markd
 | --- | --- |
 | `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | **RETIRED** with the interim Bitunix observer runtime/configuration/adapter in merged [PR #1455](https://github.com/45s/coinzilla/pull/1455). That PR explicitly removed the observer-only runtime and its documentation; Bitunix remains unregistered until [#1185](https://github.com/45s/coinzilla/issues/1185) and the complete-provider gate in [ADR-0004](../../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md). The current execution-routing guide covers general provider routing, not a replacement observer contract. Preserve this row as migration provenance; do not restore the retired guide as current guidance. |
 
-The current count is a path-completeness result only. Historical audits and session records remain preserved; no historical conclusions or timestamps were rewritten. Factual review of maintained documents and cross-repository reference tracing remain open under #1401 and #1403.
+The current count is a path-completeness result. Historical audits and session records remain preserved; no historical conclusions or timestamps were rewritten. The S-10 disposition/reference pass is recorded in draft PR #1628; maintained claims without a distinct source-review record are explicitly marked not independently revalidated and must not be treated as current behavior.
 
 ## S-10 factual-review boundary — 2026-11-21
 
