@@ -35,7 +35,8 @@
           "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
           "kind": "integration"
         }
-      ]
+      ],
+      "runtimeStatus": "active"
     },
     {
       "id": "ORDER_IDENTITY_TRANSITIONS",
@@ -52,6 +53,27 @@
         {
           "path": "src/domain/orders/order-registry.test.js",
           "name": "ignores FILLED-to-OPEN regressions regardless of event timestamp",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "active"
+    },
+    {
+      "id": "BROKER_HISTORY_RECONCILIATION",
+      "title": "REST order/fill reconciliation with stream overlap and incomplete-history gates",
+      "sourceModules": [
+        "src/use-cases/conservative-trading-engine.js"
+      ],
+      "runtimeStatus": "active",
+      "tests": [
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "reconciles missing REST fills for an owned order and deduplicates overlapping stream delivery",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "fails closed without applying partial REST fills when cumulative history is incomplete",
           "kind": "failure"
         }
       ]
@@ -79,7 +101,8 @@
           "name": "reconciles missing REST fills for an owned order and deduplicates overlapping stream delivery",
           "kind": "integration"
         }
-      ]
+      ],
+      "runtimeStatus": "active"
     },
     {
       "id": "EXACT_FINANCIAL_ACCOUNTING",
@@ -106,7 +129,8 @@
           "name": "completes the recovery cycle only after the SELL fill report is received and reconciled",
           "kind": "integration"
         }
-      ]
+      ],
+      "runtimeStatus": "active"
     },
     {
       "id": "PORTFOLIO_RECOVERY_LEDGER_ALIGNMENT",
@@ -126,7 +150,8 @@
           "name": "rejects a reused Fill ID when recovery execution facts differ",
           "kind": "failure"
         }
-      ]
+      ],
+      "runtimeStatus": "active"
     },
     {
       "id": "STRATEGY_BUY_SELL_SAFETY_GATES",
@@ -152,7 +177,8 @@
           "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
           "kind": "integration"
         }
-      ]
+      ],
+      "runtimeStatus": "active"
     },
     {
       "id": "RECOVERY_SELL_ECONOMICS",
@@ -177,7 +203,8 @@
           "name": "combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory",
           "kind": "integration"
         }
-      ]
+      ],
+      "runtimeStatus": "active"
     },
     {
       "id": "CANCELLATION_UNKNOWN_OUTCOMES",
@@ -196,7 +223,8 @@
           "name": "cancellation intent publication failure prevents broker cancellation and pauses the pair",
           "kind": "failure"
         }
-      ]
+      ],
+      "runtimeStatus": "active"
     },
     {
       "id": "STARTUP_ACCOUNT_RECONCILIATION",
@@ -222,7 +250,8 @@
           "name": "journals PREFLIGHT balances and open orders before trading and CLOSING balances before broker disconnect",
           "kind": "integration"
         }
-      ]
+      ],
+      "runtimeStatus": "active"
     },
     {
       "id": "USER_DATA_DISCONNECT_RECOVERY",
@@ -247,7 +276,8 @@
           "name": "reconciles the in-memory order registry before reopening trading after stream recovery",
           "kind": "integration"
         }
-      ]
+      ],
+      "runtimeStatus": "active"
     },
     {
       "id": "PERSISTENCE_RESTART_SAFETY_BOUNDARY",
@@ -273,7 +303,9 @@
           "name": "reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries",
           "kind": "integration"
         }
-      ]
+      ],
+      "runtimeStatus": "offline-only",
+      "limitation": "The durable-fact store and crash matrix are verified offline; default runtime restoration and Journal replay remain disabled pending the separate #654 acceptance gates. This inventory does not authorize or claim runtime state restoration."
     },
     {
       "id": "SHUTDOWN_PROCESS_OWNERSHIP",
@@ -292,7 +324,8 @@
           "name": "retains the process lock when runtime shutdown throws",
           "kind": "failure"
         }
-      ]
+      ],
+      "runtimeStatus": "active"
     }
   ]
 }
