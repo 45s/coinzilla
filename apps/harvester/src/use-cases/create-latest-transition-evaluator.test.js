@@ -264,7 +264,10 @@ test("stops Conservative evaluation when recovery filter refresh fails", async (
   })
   dependencies.strategyPolicy.evaluate = () => {
     strategyEvaluated = true
-    return { actions: [], reason: "NO_ACTION" }
+    return {
+      actions: [],
+      reason: "NO_ACTION",
+    }
   }
   const evaluate = createLatestTransitionEvaluator(dependencies)
 
