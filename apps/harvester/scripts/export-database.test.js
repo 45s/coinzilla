@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { spawnSync } from "node:child_process"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -140,5 +141,39 @@ test("rejects unsupported database environment arguments", () => {
     }),
     /Environment must be "testnet" or "live"/i,
     "The export command must reject environments other than TESTNET and LIVE.",
+  )
+})
+
+test("prints concise usage when the command argument is missing", () => {
+  const scriptFilename = new URL("./export-database.js", import.meta.url)
+  const result = spawnSync(process.execPath, [scriptFilename], {
+    encoding: "utf8",
+  })
+  assert.equal(
+    result.status,
+    1,
+    "The CLI must exit unsuccessfully when no database environment is supplied.",
+  )
+  assert.equal(
+    result.stderr.trim(),
+    "Usage: pnpm run db:export <testnet|live>",
+    "The CLI must show the exact supported command syntax without a stack trace.",
+  )
+})
+
+test("prints concise usage when the command argument is invalid", () => {
+  const scriptFilename = new URL("./export-database.js", import.meta.url)
+  const result = spawnSync(process.execPath, [scriptFilename, "staging"], {
+    encoding: "utf8",
+  })
+  assert.equal(
+    result.status,
+    1,
+    "The CLI must exit unsuccessfully when an unsupported database environment is supplied.",
+  )
+  assert.equal(
+    result.stderr.trim(),
+    "Usage: pnpm run db:export <testnet|live>",
+    "The CLI must show usage instead of forwarding an invalid value to database resolution.",
   )
 })
