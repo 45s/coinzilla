@@ -19,11 +19,15 @@ function createDatabase(directory) {
       id TEXT PRIMARY KEY,
       symbol TEXT NOT NULL,
       quantity TEXT,
+      safe_integer INTEGER,
+      unsafe_integer INTEGER,
       large_integer INTEGER,
       payload BLOB
     );
     CREATE TABLE empty_table (id TEXT PRIMARY KEY);
-    INSERT INTO orders VALUES ('order-1', 'DOGEUSDT', '12.500', 9223372036854775807, X'00FF');
+    CREATE TABLE "__proto__" ("__proto__" TEXT);
+    INSERT INTO orders VALUES ('order-1', 'DOGEUSDT', '12.500', 9007199254740991, 9007199254740992, 9223372036854775807, X'00FF');
+    INSERT INTO "__proto__" VALUES ('preserved');
   `)
   database.close()
   return filename
@@ -41,7 +45,7 @@ test("exports every user table and row as lossless JSON arrays", () => {
     const dump = JSON.parse(readFileSync(outputFilename, "utf8"))
     assert.deepEqual(
       Object.keys(dump.database).sort(),
-      ["empty_table", "orders"],
+      ["__proto__", "empty_table", "orders"],
       "The dump must include every non-internal table, including empty tables.",
     )
     assert.deepEqual(
@@ -50,6 +54,8 @@ test("exports every user table and row as lossless JSON arrays", () => {
         id: "order-1",
         symbol: "DOGEUSDT",
         quantity: "12.500",
+        safe_integer: 9007199254740991,
+        unsafe_integer: "9007199254740992",
         large_integer: "9223372036854775807",
         payload: {
           encoding: "base64",
@@ -63,13 +69,19 @@ test("exports every user table and row as lossless JSON arrays", () => {
       [],
       "An empty table must be represented by an empty array.",
     )
+    assert.equal(
+      dump.database["__proto__"][0]["__proto__"],
+      "preserved",
+      "The exporter must preserve a valid __proto__ column instead of treating it as an object prototype setter.",
+    )
     assert.deepEqual(
       result.tableCounts,
-      {
-        empty_table: 0,
-        orders: 1,
-      },
-      "The export summary must report the row count for each table.",
+      Object.fromEntries([
+        ["__proto__", 1],
+        ["empty_table", 0],
+        ["orders", 1],
+      ]),
+      "The export summary must retain counts for every valid table name, including __proto__.",
     )
   } finally {
     rmSync(directory, {
