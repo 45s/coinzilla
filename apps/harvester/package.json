@@ -72,6 +72,7 @@
       "test/bootstrap/shutdown-lifecycle.test.js",
       "test/bootstrap/external-order-ownership.test.js",
       "test/bootstrap/user-data-recovery.test.js",
+      "test/bootstrap/account-preflight.test.js",
       "src/infrastructure/telegram/telegram-operator-keyboard.test.js",
       "test/bootstrap/start-harvester.test.js",
       "test/recovery/operational-state-crash-matrix.test.js",
