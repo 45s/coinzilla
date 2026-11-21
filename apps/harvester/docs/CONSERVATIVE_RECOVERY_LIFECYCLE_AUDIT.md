@@ -118,3 +118,5 @@ The audit is intentionally evidence-led. If a later reviewer finds a criterion n
 - The first GREEN CI attempt passed the new filter-cache and evaluator regressions but failed the existing Harvester startup recovery scenario: the trailing-BUY transition context did not receive the shared filter-refresh operation.
 - The implementation now forwards the cache refresh operation into that reduced context. The temporary additions to the oversized Conservative engine test file are being moved into focused cache/evaluator test modules; the original file is restored unchanged to keep strict changed-file lint meaningful.
 - Exact-head targeted tests, strict ESLint, and full CI are pending for the corrected commit. The RED evidence from `6f8718f4a204f7eff8a1a62cedf7f70ae471f53e` remains the source-gap proof.
+
+- The multi-market broker fixture now applies caller-provided `getSymbolFilters` overrides first, then supplies a deterministic same-market snapshot when no override exists. This prevents undefined overrides from disabling the broker capability under test.

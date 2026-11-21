@@ -1663,9 +1663,19 @@ function createConservativeMarketMetadataCache({ dependencies, getMarketMetadata
 }
 
 function createConservativeEngineState({ initialState, pairs, sharedAccountState } = {}) {
-  const initialRegistry = validateInitialEngineState({ initialState, pairs })
-  const { state } = createInitialEngineState({ initialState, pairs, initialRegistry })
-  bindSharedAccountOrderRegistry({ state, sharedAccountState })
+  const initialRegistry = validateInitialEngineState({
+    initialState,
+    pairs,
+  })
+  const { state } = createInitialEngineState({
+    initialState,
+    pairs,
+    initialRegistry,
+  })
+  bindSharedAccountOrderRegistry({
+    state,
+    sharedAccountState,
+  })
   return state
 }
 
@@ -3567,8 +3577,14 @@ async function refreshRecoverySellMarketMetadataForEvaluation({ context, symbol 
   const metadata = context.getCurrentMarketMetadata({ symbol })
   const marketId = metadata.market.id
   const portfolio = context.dependencies.getPortfolio()
-  const hasActivePosition = hasActiveRecoveryPosition({ portfolio, marketId })
-  const hasActiveSell = hasActiveRecoverySell({ state: context.state, marketId })
+  const hasActivePosition = hasActiveRecoveryPosition({
+    portfolio,
+    marketId,
+  })
+  const hasActiveSell = hasActiveRecoverySell({
+    state: context.state,
+    marketId,
+  })
   if (!hasActivePosition || hasActiveSell) {
     return toResult({ data: metadata })
   }
