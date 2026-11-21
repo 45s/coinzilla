@@ -36,29 +36,32 @@ function makeOrder({
   brokerOrderId = "broker-order-1",
   clientOrderId = "h-dogeusdt-order-1",
   includeProviderProvenance = true,
+  market: orderMarket = market,
+  providerInstanceId = "binanceTestnet",
+  accountId = "binance-primary",
 } = {}) {
   return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
     ...(includeProviderProvenance ? {
-      providerInstanceId: "binanceTestnet",
+      providerInstanceId,
       providerType: "binance",
-      accountId: "binance-primary",
+      accountId,
     } : {}),
-    market,
+    market: orderMarket,
     side,
     type: "LIMIT",
     limitPrice: new Money({
       amount: "100",
-      asset: quoteAsset
+      asset: orderMarket.quoteAsset
     }),
     originalQuantity: new Quantity({
       amount: quantity,
-      asset: baseAsset
+      asset: orderMarket.baseAsset
     }),
     executedQuantity: new Quantity({
       amount: executedQuantity,
-      asset: baseAsset
+      asset: orderMarket.baseAsset
     }),
     status,
     createdAt: 1,
@@ -78,6 +81,7 @@ function makeFill({
   brokerOrderId = "broker-order-1",
   clientOrderId = "h-dogeusdt-order-1",
   includeProviderProvenance = true,
+  market: fillMarket = market,
 } = {}) {
   return new Fill({
     tradeId,
@@ -88,19 +92,19 @@ function makeFill({
       providerType: "binance",
       accountId: "binance-primary",
     } : {}),
-    market,
+    market: fillMarket,
     side,
     price: new Money({
       amount: "100",
-      asset: quoteAsset
+      asset: fillMarket.quoteAsset
     }),
     quantity: new Quantity({
       amount: quantity,
-      asset: baseAsset
+      asset: fillMarket.baseAsset
     }),
     quoteQuantity: new Money({
       amount: quoteQuantity,
-      asset: quoteAsset
+      asset: fillMarket.quoteAsset
     }),
     executedAt: 10,
     commissions: [],
@@ -198,15 +202,18 @@ function createWorkflowDependencies({
   return {
     state,
     broker: {
-      getFills: async () => toResult({ data: terminalFills }),
+      getFills: async ({ symbol }) => toResult({
+        data: terminalFills.filter((fill) => fill.market.symbol === symbol),
+      }),
     },
-    pairs: {
-      [market.symbol]: {
-        keepQuantity: "0",
-        minProfit: "0.01",
-        externalOrdersPolicy,
-      },
-    },
+    pairs: Object.fromEntries(
+      [...new Set([market.symbol, ...terminalFills.map((fill) => fill.market.symbol)])]
+        .map((symbol) => [symbol, {
+          keepQuantity: "0",
+          minProfit: "0.01",
+          externalOrdersPolicy,
+        }]),
+    ),
     eventPublisher: createWorkflowEventPublisher({ calls }),
     updateTradingAccounting: createWorkflowAccountingRecorder({
       calls,
@@ -439,6 +446,88 @@ test("reconciles a terminal SELL before durably completing its recovery cycle", 
   assert.equal(state.trailingBuy.get(market.symbol), true, "A completed recovery cycle must re-enable trailing BUY.")
   assert.equal(state.sellExecutionTotals.has(order.brokerOrderId), false, "Completed SELL execution totals must be reset.")
   assert.deepEqual(calls.pauses, [], "A fully reconciled and durably completed SELL must not pause the market.")
+})
+
+test("attributes terminal fill history by market when broker order IDs collide", async () => {
+  const otherBaseAsset = new Asset({
+    id: "eth",
+    code: "ETH",
+  })
+  const otherMarket = new Market({
+    venue: "binance",
+    symbol: "ETHUSDT",
+    baseAsset: otherBaseAsset,
+    quoteAsset,
+  })
+  const firstOrder = makeOrder({
+    side: "SELL",
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+    brokerOrderId: "shared-broker-order",
+    clientOrderId: "h-doge-terminal",
+    providerInstanceId: "binance-primary",
+    accountId: "account-primary",
+  })
+  const secondOrder = makeOrder({
+    side: "SELL",
+    status: "FILLED",
+    quantity: "1",
+    executedQuantity: "1",
+    brokerOrderId: "shared-broker-order",
+    clientOrderId: "h-eth-terminal",
+    market: otherMarket,
+    providerInstanceId: "binance-secondary",
+    accountId: "account-secondary",
+  })
+  const fills = [
+    makeFill({
+      side: "SELL",
+      quantity: "1",
+      quoteQuantity: "100",
+      brokerOrderId: "shared-broker-order",
+      clientOrderId: firstOrder.clientOrderId,
+      includeProviderProvenance: false,
+    }),
+    makeFill({
+      side: "SELL",
+      quantity: "1",
+      quoteQuantity: "100",
+      brokerOrderId: "shared-broker-order",
+      clientOrderId: secondOrder.clientOrderId,
+      market: otherMarket,
+      includeProviderProvenance: false,
+    }),
+  ]
+  const registry = new OrderRegistry({
+    orders: [firstOrder, secondOrder],
+  })
+  const { workflow, calls } = makeWorkflow({
+    registry,
+    terminalFills: fills,
+  })
+
+  await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: firstOrder,
+    },
+  })
+  await workflow.processUserDataEventTransition({
+    event: {
+      eventType: "executionReport",
+      executedOrder: secondOrder,
+    },
+  })
+
+  assert.deepEqual(
+    calls.sellFills.map((fill) => [fill.market.symbol, fill.providerInstanceId, fill.accountId]),
+    [
+      ["DOGEUSDT", "binance-primary", "account-primary"],
+      ["ETHUSDT", "binance-secondary", "account-secondary"],
+    ],
+    "Terminal history must use the order identity from the same market, never a colliding broker ID from another market.",
+  )
 })
 
 test("uses the reconciled weighted BUY execution price after terminal fill history", async () => {
