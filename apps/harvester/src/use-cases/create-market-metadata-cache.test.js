@@ -126,7 +126,10 @@ test("retains the last validated snapshot but reports failure when refresh is un
       }
       return {
         ok: true,
-        data: makeMetadata({ symbol, version: 1 }),
+        data: makeMetadata({
+          symbol,
+          version: 1,
+        }),
       }
     },
   })
