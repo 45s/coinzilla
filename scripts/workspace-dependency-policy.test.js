@@ -66,6 +66,17 @@ test("rejects a missing policy section and duplicate package rows", () => {
   )
 })
 
+test("rejects malformed dependency policy rows", () => {
+  assert.throws(
+    () => parseWorkspaceDependencyPolicy(policy.replace(
+      "| `@coinzilla/core` | None |",
+      "| @coinzilla/core | None |",
+    )),
+    /Malformed workspace dependency policy consumer/,
+    "Policy consumers must use the documented package-name cell format.",
+  )
+})
+
 test("accepts manifests whose workspace dependencies match the canonical allowlist", () => {
   assert.deepEqual(
     validateWorkspaceDependencyPolicy({
@@ -130,6 +141,24 @@ test("rejects stale allowlist entries and missing policy rows", () => {
   assert.ok(
     violations.some((violation) => violation.includes("@coinzilla/unknown") && violation.includes("unknown")),
     "Policy references to packages outside the workspace must be reported.",
+  )
+})
+
+test("rejects workspace-protocol dependencies that target an unknown package", () => {
+  const packages = createPackages()
+  packages[0].workspaceDependencies.push({
+    name: "@coinzilla/missing",
+    version: "workspace:*",
+    section: "dependencies",
+  })
+  const violations = validateWorkspaceDependencyPolicy({
+    packages,
+    allowedDependencies: parseWorkspaceDependencyPolicy(policy),
+  })
+  assert.ok(
+    violations.some((violation) => violation.includes("@coinzilla/missing") &&
+      violation.includes("unknown workspace package")),
+    "A workspace protocol edge without a matching workspace manifest must fail.",
   )
 })
 
