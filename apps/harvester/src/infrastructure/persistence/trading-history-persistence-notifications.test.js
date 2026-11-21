@@ -70,7 +70,10 @@ test("does not publish an order-history notification when the order upsert fails
     environment: "testnet",
     logger: { error() {} },
   })
-  const subscription = subscribeToHistoryChanges(eventBus, notifications)
+  const subscription = subscribeToHistoryChanges({
+    eventBus,
+    notifications,
+  })
   t.after(async () => {
     subscription.unsubscribe()
     await observer.close()
