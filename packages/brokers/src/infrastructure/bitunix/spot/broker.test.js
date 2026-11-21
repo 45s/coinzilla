@@ -2455,3 +2455,33 @@ test("Bitunix Spot placement is NOT_SENT when local request signing fails before
   assert.equal(result.mutationOutcome, "NOT_SENT")
   assert.equal(calls.length, 0, "invalid local signing input must fail before the HTTP transport is called")
 })
+
+
+test("Bitunix Spot placement treats a mismatched acknowledgement as unknown and does not read order detail", async () => {
+  const { broker, calls } = createBroker({
+    responses: {
+      "/api/spot/v1/order/place_order": {
+        orderId: "128",
+        symbol: "BTCUSDT",
+        side: 2,
+        type: 1,
+        volume: "0.9",
+        price: "100",
+        placeStatus: "1",
+      },
+    },
+  })
+
+  const result = await broker.createOrder({
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    quantity: "1",
+    price: "100",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
+  assert.match(result.errors[0].message, /volume does not match/i)
+  assert.equal(calls.length, 1, "an uncorrelated placement acknowledgement must not trigger a detail lookup")
+})
