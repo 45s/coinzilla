@@ -97,6 +97,7 @@ Trading first does not mean careless execution. Implement the smallest safety bo
 - Never submit duplicate orders because of repeated market events or duplicate execution events.
 - Apply only incremental actual fills; handle partial fills without double-counting.
 - Do not sell more base quantity than is available to the strategy's current in-process position and not already committed to another active SELL.
+- **Recovery SELL filter freshness:** before evaluating an active Conservative recovery Position for a new/replacement SELL or dust completion, require validated same-market exchange filters refreshed within the documented 30-second cache window. A failed, stale, malformed, or wrong-market refresh pauses only that market; startup metadata is never a fallback for that evaluation. See [the canonical Conservative specification](./domain/CONSERVATIVE_DOMAIN_SPECIFICATION.md#exchange-filters-and-dust).
 - On disconnect, stale data, unknown order outcome, unsupported commission, or inconsistent state: stop creating new orders, expose the reason, and require safe refresh/reconciliation before continuing.
 - Use a clean, controlled TESTNET account for the first cycle. If pre-existing open orders or unexplained inventory make the test state ambiguous, do not trade blindly; report the blocker.
 
