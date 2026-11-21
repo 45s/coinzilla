@@ -24,7 +24,10 @@ function isFreshMarketMetadata({
 }
 
 function validateRefreshedMarketIdentity({ refreshed, metadata, symbol } = {}) {
-  return validateRefreshedMarketIdentity({ refreshed, metadata, symbol })
+  if (refreshed?.market?.id !== metadata?.market?.id || refreshed?.market?.symbol !== symbol) {
+    throw new Error(`Fresh exchange metadata does not match the active market ${symbol}`)
+  }
+  return refreshed
 }
 
 async function retrieveValidatedMarketMetadata({
@@ -44,10 +47,11 @@ async function retrieveValidatedMarketMetadata({
     pairConfig,
     marketMetadata: result.data,
   })
-  if (refreshed?.market?.id !== metadata?.market?.id || refreshed?.market?.symbol !== symbol) {
-    throw new Error(`Fresh exchange metadata does not match the active market ${symbol}`)
-  }
-  return refreshed
+  return validateRefreshedMarketIdentity({
+    refreshed,
+    metadata,
+    symbol,
+  })
 }
 
 function storeRefreshedMarketMetadata({
