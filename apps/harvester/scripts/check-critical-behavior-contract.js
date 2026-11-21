@@ -261,7 +261,7 @@ export function validateCriticalBehaviorContract({
   if (contract?.schemaVersion !== 1 || !Array.isArray(contract.behaviors)) {
     errors.push("Critical behavior inventory must use schemaVersion 1 and define behaviors.")
   }
-  if (contract.behaviors.length === 0) {
+  if (Array.isArray(contract?.behaviors) && contract.behaviors.length === 0) {
     errors.push("Critical behavior inventory must define at least one critical behavior.")
   }
   if (errors.length > 0) {
