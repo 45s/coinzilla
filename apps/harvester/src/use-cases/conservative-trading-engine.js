@@ -445,16 +445,21 @@ error })
 function createOrderCancellationEventPublishers({ eventPublisher, logger, state } = {}) {
   return {
     publishOrderCancelled: ({ order }) => {
+      const ownership = state?.registry?.getOwnership?.({
+        clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+        marketId: order.market.id,
+      })
       logOrderLifecycle({
         logger,
         order,
-        ownership: state?.registry?.getOwnership?.({ clientOrderId: order.clientOrderId }),
+        ownership,
         status: "CANCELLED",
       })
       return publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_CANCELLED,
-        dataResult: mapOrderCancelledData({ order }),
+        dataResult: mapOrderCancelledData({ order, ownership }),
       })
     },
     publishOrderCancelFailed: ({ order, outcome, error }) => {
@@ -466,6 +471,8 @@ function createOrderCancellationEventPublishers({ eventPublisher, logger, state 
       }
       const ownership = state?.registry?.getOwnership?.({
         clientOrderId: order.clientOrderId,
+        brokerOrderId: order.brokerOrderId,
+        marketId: order.market.id,
       })
       logOrderLifecycle({ logger,
 order,
@@ -475,6 +482,7 @@ status: lifecycleStatus })
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
         dataResult: mapOrderCancelFailedData({ order,
+ownership,
 outcome,
 error }),
       })
@@ -946,9 +954,6 @@ function createAcknowledgedOrderLifecycleHandler({
   logger,
 } = {}) {
   return async ({ order }) => {
-    const ownership = state.registry.getOwnership({
-      clientOrderId: order.clientOrderId,
-    })
     if (order.status === "FILLED") {
       const registered = state.registry.orders.some(
         (item) => item.clientOrderId === order.clientOrderId,
@@ -964,10 +969,15 @@ function createAcknowledgedOrderLifecycleHandler({
       }
       state.registry = update.registry
     }
+    const ownership = state.registry.getOwnership({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      marketId: order.market.id,
+    })
     publishLifecycleEvent({
       eventPublisher,
       eventName: HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
-      dataResult: mapOrderSubmittedData({ order }),
+      dataResult: mapOrderSubmittedData({ order, ownership }),
     })
     const acceptedOrder = state.registry.getOrder({
       clientOrderId: order.clientOrderId,
@@ -975,9 +985,7 @@ function createAcknowledgedOrderLifecycleHandler({
     logOrderLifecycle({
       logger,
       order: acceptedOrder,
-      ownership: state.registry.getOwnership({
-        clientOrderId: order.clientOrderId,
-      }) ?? ownership,
+      ownership,
       status: "ACCEPTED",
     })
     const reconciliation = await reconcileFilledAcknowledgement({ order })
