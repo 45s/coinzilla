@@ -16,9 +16,9 @@ Consolidate every Bitunix script under `scripts/bitunix/` with one CLI entry poi
 
 ## Bitunix Spot order mutation outcome classification — #1655
 
-**Status: IN PROGRESS** — [issue #1655](https://github.com/45s/coinzilla/issues/1655) / [PR #1663](https://github.com/45s/coinzilla/pull/1663).
+**Status: COMPLETE and merged** — [issue #1655](https://github.com/45s/coinzilla/issues/1655) / [PR #1663](https://github.com/45s/coinzilla/pull/1663), merge commit `124888020d7648d369aab6094a9e410a4f0ce576`.
 
-The follow-up regression suite exercises non-JSON HTTP responses through both the Bitunix REST client and `BitunixSpotBroker.createOrder()`. A non-JSON HTTP 400/429 must be a definitive `REJECTED`; 408/409/5xx remain `OUTCOME_UNKNOWN`. All paths must preserve HTTP status and retry metadata and must never retry the placement. The original pre-dispatch classification work merged in PR #1656; this task closes the remaining non-JSON failure-path gap. No LIVE/TESTNET mutation is used by tests, and issue #1185 production-readiness blockers remain unchanged.
+The REST client now classifies non-JSON state-changing HTTP failures using the same status contract as JSON failures: HTTP 400/429 are definitive `REJECTED` outcomes; 408/409/5xx remain `OUTCOME_UNKNOWN`. The offline regression suite covers all six statuses through the REST client and the real `BitunixSpotBroker.createOrder()` path, with exactly one placement POST and no detail GET after a rejected or ambiguous response. Additional lifecycle cases cover explicit exchange and matching-engine rejection, malformed/mismatched acknowledgements, accepted placement with failed detail reconciliation, transport loss, and local pre-dispatch signing failure. The final PR head passed 921 Brokers tests, Brokers and workspace coverage, workspace unit tests, strict changed-file and workspace ESLint, JavaScript syntax, actionlint, dependency audit, Harvester targeted tests, and external documentation links. No Bitunix LIVE/TESTNET mutation was performed. Issue #1185 production-readiness blockers remain unchanged.
 
 ## One-shot local Bitunix HYPEUSDT operator attempt — #1608
 
