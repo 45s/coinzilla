@@ -50,7 +50,7 @@ async function createQueryContext({ t } = {}) {
       HARVESTER_DATABASE_DIRECTORY: directory,
     },
   })
-  let persistence
+  let persistence = null
   t.after(async () => {
     await closeHarvesterPersistence(persistence ?? {})
     await eventBus.close()
@@ -109,8 +109,13 @@ test("lists exact persisted order, fill and commission values without deriving f
   assert.ok(repository, "The relational query repository must be available before record queries can run.")
 
   const orderPage = repository.listOrders({
-    filters: { symbol: "BTCUSDT" },
-    pagination: { limit: 10, offset: 0 },
+    filters: {
+      symbol: "BTCUSDT",
+    },
+    pagination: {
+      limit: 10,
+      offset: 0,
+    },
   })
   assert.equal(orderPage.pagination.total, 1, "The BTCUSDT filter must count only the persisted order matching that market.")
   assert.equal(orderPage.items[0].originalQuantity, "1.0000", "The order query must preserve the exact persisted original quantity.")
@@ -118,8 +123,14 @@ test("lists exact persisted order, fill and commission values without deriving f
   assert.equal(orderPage.items[0].averageExecutionPrice, null, "An unknown average execution price must remain null instead of being estimated.")
 
   const fillPage = repository.listFills({
-    filters: { symbol: "BTCUSDT", side: "BUY" },
-    pagination: { limit: 10, offset: 0 },
+    filters: {
+      symbol: "BTCUSDT",
+      side: "BUY",
+    },
+    pagination: {
+      limit: 10,
+      offset: 0,
+    },
   })
   assert.equal(fillPage.pagination.total, 1, "The fill query must return the actual individual execution matching the market and side.")
   assert.equal(fillPage.items[0].executionPrice, "65000.0000", "The fill query must preserve the exact execution price string.")
@@ -132,8 +143,13 @@ test("lists exact persisted order, fill and commission values without deriving f
   assert.equal(fill.commissions[0].quoteValueAmount, "0.05000000", "A supplied commission valuation must be preserved without recalculation.")
 
   const commissionPage = repository.listCommissions({
-    filters: { assetCode: "BNB" },
-    pagination: { limit: 10, offset: 0 },
+    filters: {
+      assetCode: "BNB",
+    },
+    pagination: {
+      limit: 10,
+      offset: 0,
+    },
   })
   assert.equal(commissionPage.pagination.total, 1, "The commission asset filter must return the persisted BNB commission fact.")
   assert.equal(commissionPage.items[0].amount, "0.00025000", "The commission list must preserve the exact stored amount.")
@@ -146,7 +162,10 @@ test("returns deterministic pagination metadata and explicit missing-record resu
 
   const page = repository.listOrders({
     filters: {},
-    pagination: { limit: 1, offset: 1 },
+    pagination: {
+      limit: 1,
+      offset: 1,
+    },
   })
   assert.deepEqual(page.pagination, {
     limit: 1,
