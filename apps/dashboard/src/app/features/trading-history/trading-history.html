@@ -119,8 +119,8 @@
                 <th>Market</th>
                 <th>Side</th>
                 <th>{{ currentResource() === 'commissions' ? 'Fee amount' : 'Quantity' }}</th>
-                <th>{{ currentResource() === 'commissions' ? 'Fee value' : 'Price' }}</th>
-                <th>{{ currentResource() === 'commissions' ? 'Asset' : 'Status' }}</th>
+                <th>{{ recordPriceLabel() }}</th>
+                <th>{{ recordStatusLabel() }}</th>
                 <th>Observed / exchange time</th>
                 <th><span class="visually-hidden">Details</span></th>
               </tr>
@@ -130,7 +130,7 @@
                 <tr>
                   <td>
                     <strong>{{ record.symbol }}</strong>
-                    <small>{{ record.id }}</small>
+                    <small [title]="record.id">{{ recordReference(record) }}</small>
                   </td>
                   <td><span class="side-tag" [class.sell]="record.side === 'SELL'">{{ record.side }}</span></td>
                   <td class="numeric">{{ recordAmount(record) }}</td>
@@ -163,10 +163,14 @@
           <div>
             <div class="eyebrow">PERSISTED RECORD</div>
             <h2 id="details-title">{{ resourceTitle() }} details</h2>
-            <p>{{ detail.id }}</p>
+            <p>{{ recordReference(detail) }}</p>
           </div>
           <button type="button" class="quiet-button" (click)="selectedRecord.set(null)">Close</button>
         </div>
+        <details class="technical-identity">
+          <summary>Internal persistence ID</summary>
+          <code>{{ detail.id }}</code>
+        </details>
         <dl class="details-grid">
           @for (entry of detailEntries(); track entry.label) {
             <div>

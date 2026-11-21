@@ -135,6 +135,8 @@ Record identifiers are URL path segments and must be percent-encoded by clients 
 - Commissions are the actual stored commission facts associated with a fill.
 - Decimal financial values are returned as strings. Clients must not convert them to binary floating-point numbers for accounting or comparisons.
 - Unknown or unavailable values remain `null`; they are not replaced with zero.
+- The persisted `id` is an opaque composite identity key; clients should display exchange order/trade IDs or client order IDs as human-readable references.
+- A fill's `orderId` may be `null` until its matching order projection is observed. The fill remains queryable and retains available `exchangeOrderId` and `clientOrderId` values.
 - Order average execution price is `null` unless an actual canonical value was persisted.
 - Commission quote valuation is `null` unless an actual supplied valuation was persisted. The API does not estimate fees or valuations.
 - Strategy, position, and cycle attribution is returned only when the persisted relationship is verified. Missing attribution stays `null`.

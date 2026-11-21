@@ -19,7 +19,7 @@ export class TradingHistoryApiStartupError extends SystemCustomError {
   }
 }
 
-function resolveStartupConfiguration({ env, environment } = {}) {
+function resolveTradingHistoryApiEnvironment({ env, environment } = {}) {
   const selectedEnvironment = environment ?? env.TRADING_MODE
   if (selectedEnvironment !== "testnet" && selectedEnvironment !== "live") {
     throw new TradingHistoryApiStartupError({
@@ -28,37 +28,66 @@ function resolveStartupConfiguration({ env, environment } = {}) {
       environment: selectedEnvironment ?? "unknown",
     })
   }
+  return selectedEnvironment
+}
+
+function resolveTradingHistoryApiToken({ env, environment } = {}) {
   const token = env.HARVESTER_API_TOKEN
   if (typeof token !== "string" || token.trim() !== token || Buffer.byteLength(token, "utf8") < MINIMUM_API_TOKEN_BYTES) {
     throw new TradingHistoryApiStartupError({
       message: "HARVESTER_API_TOKEN must contain at least 32 non-whitespace characters.",
       code: "HARVESTER_TRADING_HISTORY_API_CONFIGURATION_INVALID",
-      environment: selectedEnvironment,
+      environment,
     })
   }
+  return token
+}
+
+function resolveTradingHistoryApiHost({ env, environment } = {}) {
   const host = env.HARVESTER_API_HOST || DEFAULT_API_HOST
-  const port = env.HARVESTER_API_PORT === undefined
-    ? DEFAULT_API_PORT
-    : Number(env.HARVESTER_API_PORT)
   if (typeof host !== "string" || host.trim() !== host || host.length === 0) {
     throw new TradingHistoryApiStartupError({
       message: "HARVESTER_API_HOST must be a non-empty host name or IP address.",
       code: "HARVESTER_TRADING_HISTORY_API_CONFIGURATION_INVALID",
-      environment: selectedEnvironment,
+      environment,
     })
   }
+  return host
+}
+
+function resolveTradingHistoryApiPort({ env, environment } = {}) {
+  const port = env.HARVESTER_API_PORT === undefined
+    ? DEFAULT_API_PORT
+    : Number(env.HARVESTER_API_PORT)
   if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
     throw new TradingHistoryApiStartupError({
       message: "HARVESTER_API_PORT must be an integer between 0 and 65535.",
       code: "HARVESTER_TRADING_HISTORY_API_CONFIGURATION_INVALID",
-      environment: selectedEnvironment,
+      environment,
     })
   }
+  return port
+}
+
+function resolveStartupConfiguration({ env, environment } = {}) {
+  const selectedEnvironment = resolveTradingHistoryApiEnvironment({
+    env,
+    environment,
+  })
   return Object.freeze({
     environment: selectedEnvironment,
-    token,
-    host,
-    port,
+    token: resolveTradingHistoryApiToken({
+      env,
+      environment: selectedEnvironment,
+    }),
+    host: resolveTradingHistoryApiHost({
+      env,
+      environment: selectedEnvironment,
+    }),
+    port: resolveTradingHistoryApiPort({
+      env,
+      environment: selectedEnvironment,
+    }),
   })
 }
 

@@ -509,3 +509,22 @@ td small {
     min-width: calc(50% - 8px);
   }
 }
+
+.technical-identity {
+  margin: 0 0 14px;
+  color: #8794a8;
+  font-size: 9px;
+}
+
+.technical-identity summary {
+  cursor: pointer;
+}
+
+.technical-identity code {
+  display: block;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  color: #aab6c6;
+  font-size: 9px;
+}

@@ -256,6 +256,9 @@ describe('TradingHistoryComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
+    const orderRow = fixture.nativeElement.querySelector('tbody tr') as HTMLTableRowElement;
+    expect(orderRow.textContent).toContain('Order 12345');
+    expect(orderRow.textContent).not.toContain('order-1');
     expect(fixture.nativeElement.textContent).toContain('Orders details');
     expect(fixture.nativeElement.textContent).toContain('65000.00000000');
     expect(fixture.nativeElement.textContent).toContain('Not recorded');
@@ -295,6 +298,9 @@ describe('TradingHistoryComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
+    const headerText = fixture.nativeElement.querySelector('thead')?.textContent ?? '';
+    expect(headerText).toContain('Execution price');
+    expect(headerText).toContain('Commission status');
     const row = fixture.nativeElement.querySelector('tbody tr') as HTMLTableRowElement;
     expect(row.textContent).toContain('Trade 15507');
     expect(row.textContent).not.toContain(compositeId);

@@ -83,7 +83,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges {
       return [];
     }
     return Object.entries(record)
-      .filter(([key, value]) => key !== 'commissions' && (value === null || typeof value !== 'object'))
+      .filter(([key, value]) => key !== 'id' && key !== 'commissions' && (value === null || typeof value !== 'object'))
       .map(([key, value]) => ({
         label: this.labelFor(key),
         value: value === null ? 'Not recorded' : String(value),
@@ -199,6 +199,41 @@ export class TradingHistoryComponent implements OnInit, OnChanges {
     }
   }
 
+  recordReference(record: TradingHistoryRecord): string {
+    if ('exchangeTradeId' in record && record.exchangeTradeId) {
+      return `Trade ${record.exchangeTradeId}`;
+    }
+    if ('exchangeOrderId' in record && record.exchangeOrderId) {
+      return `Order ${record.exchangeOrderId}`;
+    }
+    if ('clientOrderId' in record && record.clientOrderId) {
+      return `Client ${record.clientOrderId}`;
+    }
+    const id = record.id;
+    const shortenedId = id.length > 18 ? `${id.slice(0, 10)}…${id.slice(-6)}` : id;
+    return `Record ${shortenedId}`;
+  }
+
+  recordPriceLabel(): string {
+    if (this.currentResource() === 'orders') {
+      return 'Limit price';
+    }
+    if (this.currentResource() === 'fills') {
+      return 'Execution price';
+    }
+    return 'Quote valuation';
+  }
+
+  recordStatusLabel(): string {
+    if (this.currentResource() === 'orders') {
+      return 'Order status';
+    }
+    if (this.currentResource() === 'fills') {
+      return 'Commission status';
+    }
+    return 'Asset';
+  }
+
   recordStatus(record: TradingHistoryRecord): string {
     if ('status' in record) {
       return record.status;
@@ -226,7 +261,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges {
       return record.executionPrice;
     }
     if ('limitPrice' in record) {
-      return record.averageExecutionPrice ?? record.limitPrice ?? 'Not recorded';
+      return record.limitPrice ?? 'Not recorded';
     }
     return record.quoteValueAmount ?? 'Not recorded';
   }
