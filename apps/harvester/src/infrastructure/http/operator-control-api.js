@@ -182,6 +182,16 @@ async function handleCommandRequest({ request, response, operator }) {
     )
     return
   }
+  const contentType = request.headers["content-type"]?.split(";")[0].trim()
+  if (contentType !== "application/json") {
+    sendFailure(
+      response,
+      415,
+      "HARVESTER_OPERATOR_CONTENT_TYPE_INVALID",
+      "Operator commands require an application/json request body.",
+    )
+    return
+  }
   try {
     const body = await readJsonBody(request)
     const parsed = parseCommand({ body })
