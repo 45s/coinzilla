@@ -1,8 +1,22 @@
+import { execFileSync } from "node:child_process"
 import { DatabaseSync } from "node:sqlite"
 import { existsSync, writeFileSync } from "node:fs"
 import path from "node:path"
-import { pathToFileURL } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { resolveHarvesterDatabaseFilename } from "../src/infrastructure/persistence/resolve-harvester-database-filename.js"
+
+
+function resolveExporterCommit() {
+  try {
+    return execFileSync("git", ["rev-parse", "--short=12", "HEAD"], {
+      cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.."),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+  } catch {
+    return "unavailable"
+  }
+}
 
 function escapeIdentifier(identifier) {
   return `"${identifier.replaceAll('"', '""')}"`
@@ -100,6 +114,7 @@ export function runDatabaseExport({ env = process.env } = {}) {
     outputFilename,
   })
 
+  process.stdout.write(`Exporter commit: ${resolveExporterCommit()}\n`)
   process.stdout.write(`Exported ${result.tableCount} tables to ${result.outputFilename}\n`)
   for (const [tableName, rowCount] of Object.entries(result.tableCounts)) {
     process.stdout.write(`- ${tableName}: ${rowCount} records\n`)
