@@ -26,8 +26,8 @@ export class OperatorApi {
     return this.http.get<OperatorEnvelope<unknown>>(`${this.baseUrl}/markets`);
   }
 
-  getPositions(): Observable<OperatorEnvelope<unknown>> {
-    return this.http.get<OperatorEnvelope<unknown>>(`${this.baseUrl}/positions`);
+  getPortfolio(): Observable<OperatorEnvelope<unknown>> {
+    return this.http.get<OperatorEnvelope<unknown>>(`${this.baseUrl}/portfolio`);
   }
 
   getOrders(): Observable<OperatorEnvelope<unknown>> {
