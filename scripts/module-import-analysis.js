@@ -2,7 +2,7 @@ import { Linter } from "eslint"
 
 const captureModuleImports = ({ imports }) => ({
   create() {
-    const recordImport = (node, kind) => {
+    const recordImport = ({ node, kind }) => {
       imports.push({
         specifier: node.value,
         kind,
@@ -11,11 +11,11 @@ const captureModuleImports = ({ imports }) => ({
 
     return {
       ImportDeclaration(node) {
-        recordImport(node.source, "import")
+        recordImport({ node: node.source, kind: "import" })
       },
       ExportNamedDeclaration(node) {
         if (node.source) {
-          recordImport(node.source, "re-export")
+          recordImport({ node: node.source, kind: "re-export" })
         }
       },
       ExportAllDeclaration(node) {
@@ -23,7 +23,7 @@ const captureModuleImports = ({ imports }) => ({
       },
       ImportExpression(node) {
         if (node.source.type === "Literal" && typeof node.source.value === "string") {
-          recordImport(node.source, "dynamic-import")
+          recordImport({ node: node.source, kind: "dynamic-import" })
         }
       },
       CallExpression(node) {
@@ -36,7 +36,7 @@ const captureModuleImports = ({ imports }) => ({
         )
 
         if (isLiteralRequire) {
-          recordImport(argument, "require")
+          recordImport({ node: argument, kind: "require" })
         }
       },
     }
