@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { spawnSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -145,7 +146,7 @@ test("rejects unsupported database environment arguments", () => {
 })
 
 test("prints concise usage when the command argument is missing", () => {
-  const scriptFilename = new URL("./export-database.js", import.meta.url)
+  const scriptFilename = fileURLToPath(new URL("./export-database.js", import.meta.url))
   const result = spawnSync(process.execPath, [scriptFilename], {
     encoding: "utf8",
   })
@@ -162,7 +163,7 @@ test("prints concise usage when the command argument is missing", () => {
 })
 
 test("prints concise usage when the command argument is invalid", () => {
-  const scriptFilename = new URL("./export-database.js", import.meta.url)
+  const scriptFilename = fileURLToPath(new URL("./export-database.js", import.meta.url))
   const result = spawnSync(process.execPath, [scriptFilename, "staging"], {
     encoding: "utf8",
   })
