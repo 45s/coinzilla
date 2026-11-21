@@ -118,3 +118,22 @@ test("OrderRegistry ownership preserves normalized strategy identity", () => {
     "Canonical order ownership must normalize strategy identity before freezing its attribution.",
   )
 })
+
+test("Portfolio rejects blank strategy IDs for fill ownership", () => {
+  assert.throws(
+    () => new Portfolio().applyFill({
+      fill: makeFill(),
+      strategyId: "   ",
+    }),
+    TypeError,
+    "Portfolio fill ownership must reject a blank strategy ID using the same canonical normalization rule.",
+  )
+})
+
+test("Portfolio rejects blank strategy IDs for ownership selectors", () => {
+  assert.throws(
+    () => new Portfolio().getPositions({ strategyId: "   " }),
+    TypeError,
+    "Portfolio strategy selectors must reject blank identifiers instead of matching ambiguous ownership.",
+  )
+})
