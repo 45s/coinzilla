@@ -6,13 +6,29 @@ import {
   createDiagnosticReport,
   createDiagnosticResult,
 } from "../helpers/create-diagnostic-report.js"
-import { inspectDiagnosticSchema } from "../helpers/inspect-diagnostic-schema.js"
+import { getDiagnosticSchemaIssueCodes, inspectDiagnosticSchema } from "../helpers/inspect-diagnostic-schema.js"
 import {
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
   summarizePrivatePayload,
 } from "../helpers/sanitize-diagnostic-data.js"
 import { DiagnosticError } from "./diagnostic-error.js"
+import {
+  getConfiguredApiSecrets,
+  getMissingApiCredentialNames,
+  hasApiCredentials,
+} from "../helpers/api-credentials.js"
+import {
+  createReadOnlyBrokerRequest,
+  createReadOnlyRestRequest,
+  getReadOnlyBrokerOperations,
+  getRestDiagnosticSkipReason,
+  parseDepthPrecision,
+} from "../helpers/create-read-only-diagnostic-requests.js"
+import {
+  createSanitizedInboundPayload,
+  normalizeWebSocketMessageText,
+} from "../helpers/sanitize-websocket-message.js"
 
 const DIAGNOSTIC_CONFIG = Object.freeze({
   confirmLiveReads: true,
@@ -331,29 +347,6 @@ function emitProgress({ onProgress, area, operation, status }) {
   onProgress?.({ message: `      ${area}: ${operation} ... ${status}` })
 }
 
-function getSecrets({ env }) {
-  return [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
-}
-
-function getMissingCredentialNames({ env }) {
-  return ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"].filter((key) =>
-    typeof env[key] !== "string" || !env[key].trim())
-}
-
-function hasCredentials({ env }) {
-  return getMissingCredentialNames({ env }).length === 0
-}
-
-function normalizeMessageText({ message }) {
-  if (typeof message === "string") {
-    return message
-  }
-  if (message instanceof ArrayBuffer || ArrayBuffer.isView(message)) {
-    return new TextDecoder().decode(message)
-  }
-  throw new TypeError("Bitunix diagnostic received a non-text WebSocket message")
-}
-
 function createObservedConnect({ transport, events, secrets, now }) {
   return async () => {
     events.push({
@@ -411,33 +404,11 @@ function createObservedSend({ transport, events, secrets, now, methodsByRequestI
   }
 }
 
-function createInboundPayload({ response, method, secrets, includePublicPayloads }) {
-  const isPrivate = ["user.account", "user.info", "order.pending.list", "order.history.page", "order.deal.list"].includes(method)
-  let data
-  if (isPrivate || !includePublicPayloads) {
-    data = summarizePrivatePayload(response.data)
-  } else {
-    data = sanitizeDiagnosticValue({
-      value: response.data,
-      secrets,
-    })
-  }
-  return {
-    id: response.id,
-    code: response.code,
-    msg: sanitizeDiagnosticValue({
-      value: response.msg,
-      secrets,
-    }),
-    data,
-  }
-}
-
 function createObservedMessageHandler({ transport, events, secrets, now, methodsByRequestId, includePublicPayloads }) {
   return (listener) => transport.onMessage((message) => {
     let response
     try {
-      response = JSON.parse(normalizeMessageText({ message }))
+      response = JSON.parse(normalizeWebSocketMessageText({ message }))
     } catch (error) {
       events.push({
         timestamp: new Date(now()).toISOString(),
@@ -457,7 +428,7 @@ function createObservedMessageHandler({ transport, events, secrets, now, methods
       direction: "inbound",
       method,
       requestId: response.id,
-      payload: createInboundPayload({
+      payload: createSanitizedInboundPayload({
         response,
         method,
         secrets,
@@ -549,17 +520,6 @@ export function createObservedTransportFactory({
   }
 }
 
-function parseDepthPrecision({ value }) {
-  if (typeof value !== "string" || !value.trim()) {
-    return null
-  }
-  const precision = Number(value)
-  if (!Number.isFinite(precision) || precision < 0) {
-    throw new RangeError("BITUNIX_DIAGNOSTICS_DEPTH_PRECISION must be a non-negative number")
-  }
-  return precision
-}
-
 function createResult({
   operation,
   startedAt,
@@ -583,29 +543,6 @@ function createResult({
     includePublicPayload: includePublicPayloads,
     secrets,
   })
-}
-
-function createRestDiagnosticRequest({ endpoint, symbol, depthPrecision, klineInterval }) {
-  const context = {
-    symbol,
-    depthPrecision,
-    klineInterval,
-  }
-  let queryParams = endpoint.queryParams ?? {}
-  if (endpoint.queryParams === null) {
-    queryParams = { symbol }
-  }
-  if (endpoint.getQueryParams) {
-    queryParams = endpoint.getQueryParams(context)
-  }
-  const body = endpoint.getBody?.(context)
-  return {
-    method: endpoint.method ?? "GET",
-    path: endpoint.path,
-    ...(body === undefined ? { queryParams } : { body }),
-    authenticated: endpoint.privateResponse,
-    stateChanging: false,
-  }
 }
 
 function recordRestSkipped({ endpoint, startedAt, now, results, secrets, authenticated, reason }) {
@@ -650,22 +587,6 @@ function recordRestFailure({ endpoint, startedAt, now, results, request, error, 
     includePublicPayloads,
     secrets,
   }))
-}
-
-function getRestSkipReason({ endpoint, depthPrecision, credentialsConfigured }) {
-  if (endpoint.requiresDepthPrecision && depthPrecision === null) {
-    return {
-      authenticated: false,
-      reason: "BITUNIX_DIAGNOSTICS_DEPTH_PRECISION is required for the documented depth endpoint",
-    }
-  }
-  if (endpoint.privateResponse && !credentialsConfigured) {
-    return {
-      authenticated: true,
-      reason: "BITUNIX_API_KEY and BITUNIX_API_SECRET are required for private REST diagnostics",
-    }
-  }
-  return null
 }
 
 async function executeRestRequest({
@@ -737,7 +658,7 @@ async function runRestOperation({
     operation: endpoint.operation,
     status: "RUNNING",
   })
-  const skipReason = getRestSkipReason({
+  const skipReason = getRestDiagnosticSkipReason({
     endpoint,
     depthPrecision,
     credentialsConfigured,
@@ -759,7 +680,7 @@ async function runRestOperation({
     })
     return
   }
-  const request = createRestDiagnosticRequest({
+  const request = createReadOnlyRestRequest({
     endpoint,
     symbol,
     depthPrecision,
@@ -957,7 +878,7 @@ function createSafetyConfirmationResult({ startedAt, now, secrets }) {
 }
 
 function createConfigurationResult({ env, startedAt, now, secrets }) {
-  const missingCredentialVariables = getMissingCredentialNames({ env })
+  const missingCredentialVariables = getMissingApiCredentialNames({ env })
   const credentialsConfigured = missingCredentialVariables.length === 0
   return createResult({
     operation: "diagnostic configuration",
@@ -1450,23 +1371,6 @@ async function runWebSocketChecks({
 
 
 
-function getDiagnosticSchemaIssues({ inspection }) {
-  const issues = []
-  if (inspection.unexpectedValueType) {
-    issues.push("unexpected_value_type")
-  }
-  if (inspection.missingRequiredFields.length > 0) {
-    issues.push("missing_required_fields")
-  }
-  if (inspection.unexpectedFieldTypes.length > 0) {
-    issues.push("unexpected_field_types")
-  }
-  if (inspection.invalidRowIndexes.length > 0) {
-    issues.push("invalid_rows")
-  }
-  return issues
-}
-
 function recordBrokerApiSchemaResult({ method, observation, now, results, secrets }) {
   if (!observation || !Object.hasOwn(observation, "schemaValid")) {
     return
@@ -1523,7 +1427,7 @@ function createObservedBrokerRestClientFactory({
               value: response.data,
               ...schema,
             })
-            const schemaIssues = getDiagnosticSchemaIssues({ inspection })
+            const schemaIssues = getDiagnosticSchemaIssueCodes({ inspection })
             schemaObservations.push({
               timestamp: new Date(now()).toISOString(),
               provider: "bitunix",
@@ -1556,18 +1460,6 @@ function createObservedBrokerRestClientFactory({
   }
 }
 
-function createBrokerApiRequest({
-      method,
-      args,
-    }) {
-  return {
-    api: "Broker",
-    method,
-    params: args[0] ?? {},
-    stateChanging: false,
-  }
-}
-
 function recordBrokerApiSuccess({
   method,
   args,
@@ -1583,7 +1475,7 @@ function recordBrokerApiSuccess({
     startedAt,
     now,
     status: "passed",
-    request: createBrokerApiRequest({
+    request: createReadOnlyBrokerRequest({
       method,
       args,
     }),
@@ -1607,7 +1499,7 @@ function recordBrokerApiFailure({
     startedAt,
     now,
     status: "failed",
-    request: createBrokerApiRequest({
+    request: createReadOnlyBrokerRequest({
       method,
       args,
     }),
@@ -1792,64 +1684,6 @@ function createBrokerDiagnostic({
   })
 }
 
-function getBrokerApiOperations({ symbol, credentialsConfigured }) {
-  const operations = [
-    {
-      method: "getExchangeMarkets",
-      args: [],
-      privateResponse: false,
-    },
-    {
-      method: "getPrices",
-      args: [{ symbol }],
-      privateResponse: false,
-    },
-    {
-      method: "getSymbolFilters",
-      args: [{ symbol }],
-      privateResponse: false,
-    },
-  ]
-  if (credentialsConfigured) {
-    operations.push(
-      {
-        method: "getBalances",
-        args: [],
-        privateResponse: true,
-      },
-      {
-        method: "getOpenOrders",
-        args: [{ symbol }],
-        privateResponse: true,
-      },
-      {
-        method: "getOrderHistory",
-        args: [{
-          symbol,
-          page: 1,
-          limit: 10,
-        }],
-        privateResponse: true,
-      },
-      {
-        method: "getDeposits",
-        args: [{
-          limit: 1,
-        }],
-        privateResponse: true,
-      },
-      {
-        method: "getWithdrawalHistory",
-        args: [{
-          limit: 1,
-        }],
-        privateResponse: true,
-      },
-    )
-  }
-  return operations
-}
-
 function recordBrokerLifecycle({ method, status, error, now, results, secrets }) {
   if (status === "failed") {
     recordBrokerApiFailure({
@@ -1958,7 +1792,7 @@ async function runBrokerApiChecks({
     secrets,
   })
   if (connected) {
-    const operations = getBrokerApiOperations({
+    const operations = getReadOnlyBrokerOperations({
       symbol,
       credentialsConfigured,
     })
@@ -2105,7 +1939,7 @@ async function runConfiguredDiagnostics({
     })
   }
 
-  const credentialsConfigured = hasCredentials({ env })
+  const credentialsConfigured = hasApiCredentials({ env })
   await runConfiguredProbes({
     env,
     requestTimeout,
@@ -2143,7 +1977,7 @@ export async function runDiagnostics({
 } = {}) {
   const startedAt = now()
   const startedAtIso = new Date(startedAt).toISOString()
-  const secrets = getSecrets({ env })
+  const secrets = getConfiguredApiSecrets({ env })
   const results = []
   const events = []
   const schemaObservations = []

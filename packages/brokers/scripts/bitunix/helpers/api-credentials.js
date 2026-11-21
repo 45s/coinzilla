@@ -19,3 +19,16 @@ export function redactApiSecrets({ message, secrets }) {
   }
   return safeMessage
 }
+
+export function getConfiguredApiSecrets({ env }) {
+  return [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
+}
+
+export function getMissingApiCredentialNames({ env }) {
+  return ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"].filter((key) =>
+    typeof env[key] !== "string" || !env[key].trim())
+}
+
+export function hasApiCredentials({ env }) {
+  return getMissingApiCredentialNames({ env }).length === 0
+}

@@ -156,3 +156,20 @@ export function inspectDiagnosticSchema({
   }
   return inspection
 }
+
+export function getDiagnosticSchemaIssueCodes({ inspection }) {
+  const issues = []
+  if (inspection.unexpectedValueType) {
+    issues.push("unexpected_value_type")
+  }
+  if (inspection.missingRequiredFields.length > 0) {
+    issues.push("missing_required_fields")
+  }
+  if (inspection.unexpectedFieldTypes.length > 0) {
+    issues.push("unexpected_field_types")
+  }
+  if (inspection.invalidRowIndexes.length > 0) {
+    issues.push("invalid_rows")
+  }
+  return issues
+}

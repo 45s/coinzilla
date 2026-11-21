@@ -1,6 +1,9 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { inspectDiagnosticSchema } from "./inspect-diagnostic-schema.js"
+import {
+  getDiagnosticSchemaIssueCodes,
+  inspectDiagnosticSchema,
+} from "./inspect-diagnostic-schema.js"
 
 test("schema diagnostics detect unknown fields, missing required fields, and unexpected types without values", () => {
   const inspection = inspectDiagnosticSchema({
@@ -65,4 +68,15 @@ test("schema diagnostics identify an unexpected top-level value type", () => {
       actual: "number",
     },
   }, "scalar response schema drift must be visible without retaining the scalar value")
+})
+
+test("diagnostic schema issue codes identify each observed mismatch category", () => {
+  assert.deepEqual(getDiagnosticSchemaIssueCodes({
+    inspection: {
+      unexpectedValueType: true,
+      missingRequiredFields: ["id"],
+      unexpectedFieldTypes: [],
+      invalidRowIndexes: [],
+    },
+  }), ["unexpected_value_type", "missing_required_fields"], "schema issue codes must describe only observed response-shape mismatches")
 })
