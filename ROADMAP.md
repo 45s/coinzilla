@@ -5,7 +5,13 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-21
-**Latest source-verified develop checkpoint:** `c6a16b0eca8a2d2700cb3924b56c859a0849cec2` (2026-11-21; includes merged S-7 naming policy/remediation PR #1605). The recursive tree contains 1,247 files, including 174 Markdown/MDX files and 1,045 JavaScript files (517 `.test.js` files); 579 JavaScript files are under Harvester. The detailed S-7 tree evidence is recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
+**Latest source-verified develop checkpoint:** `f2dd1f23fa842c8bac140f7da10ef86cf4cfc9f9` (2026-11-21; includes merged S-8 templates PR #1610). The recursive tree contains 1,257 files, including 179 Markdown/MDX files and 1,050 JavaScript files (519 `.test.js` files); 579 JavaScript files are under Harvester. The S-7 naming/tree baseline and later S-8 additions are recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
+
+## Repository engineering standards initiative — [#1568](https://github.com/45s/coinzilla/issues/1568)
+
+- **S-0 through S-8:** completed/merged. S-8 practical templates merged in [PR #1610](https://github.com/45s/coinzilla/pull/1610) as `f2dd1f23fa842c8bac140f7da10ef86cf4cfc9f9`.
+- **S-9:** in progress in consolidated [PR #1618](https://github.com/45s/coinzilla/pull/1618), combining the source graph from #1612 and workspace-package dependency guard from #1615; overlapping draft #1617 is superseded. The AST graph scans production JavaScript under `apps/`, `packages/`, and `scripts/`, including Harvester; its verified baseline is 523 modules, 864 resolved relative edges and 0 cycle components. It is report-only and does not block on legacy cycles. The manifest checker parses the canonical [Domain Ownership](docs/engineering/DOMAIN_OWNERSHIP.md) allowlist, scans all 9 workspace packages and all four dependency sections, enforces workspace protocol/allowed edges/package existence, and blocks package dependency cycles. Both run in the existing required JavaScript Syntax quality workflow without adding a required status context. Source graph limitations (computed imports, non-literal `require`, package-name source imports and internal layer semantics) remain explicit; no runtime/trading behavior is in scope.
+- **S-10:** pending; documentation governance reconciliation follows S-9.
 
 ## Multi-provider Harvester execution and market-data routing — #1339
 
