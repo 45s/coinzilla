@@ -52,7 +52,7 @@ function resolveRegisteredOrderOwnership({ fill, orderRegistry }) {
     marketId: fill.market.id,
   })
   if (!order) {
-    throw new TypeError("Mixed SELL Fill broker order identity does not match a registered canonical order")
+    throw new TypeError("Mixed SELL Fill broker order identity does not match a registered canonical order for the same market identity")
   }
   if (fill.clientOrderId !== undefined && fill.clientOrderId !== order.clientOrderId) {
     throw new TypeError("Mixed SELL Fill clientOrderId does not match registered order clientOrderId")
@@ -87,24 +87,7 @@ function resolveRegisteredOrderOwnership({ fill, orderRegistry }) {
   })
 }
 
-function validateAllocationInput({
-  fill,
-  orderRegistry,
-  recoveryQuantity,
-  legacyQuantity,
-}) {
-  if (!(fill instanceof Fill)) {
-    throw new TypeError("Mixed SELL allocation requires a canonical Fill")
-  }
-  if (fill.side !== "SELL") {
-    throw new TypeError("Mixed SELL allocation requires a SELL canonical Fill")
-  }
-
-  const { order, orderOwnership } = resolveRegisteredOrderOwnership({
-    fill,
-    orderRegistry,
-  })
-
+function validateAllocationQuantities({ fill, order, recoveryQuantity, legacyQuantity }) {
   assertPositiveDecimal({
     value: fill.quantity.amount,
     field: "fill.quantity.amount",
@@ -123,7 +106,6 @@ function validateAllocationInput({
   }) > 0) {
     throw new RangeError("Canonical Fill quantity exceeds registered order quantity")
   }
-
   assertPositiveDecimal({
     value: recoveryQuantity,
     field: "recoveryQuantity",
@@ -142,6 +124,32 @@ function validateAllocationInput({
   }) !== 0) {
     throw new RangeError("Recovery and legacy allocations must sum to the canonical Fill quantity")
   }
+}
+
+function validateAllocationInput({
+  fill,
+  orderRegistry,
+  recoveryQuantity,
+  legacyQuantity,
+}) {
+  if (!(fill instanceof Fill)) {
+    throw new TypeError("Mixed SELL allocation requires a canonical Fill")
+  }
+  if (fill.side !== "SELL") {
+    throw new TypeError("Mixed SELL allocation requires a SELL canonical Fill")
+  }
+
+  const { order, orderOwnership } = resolveRegisteredOrderOwnership({
+    fill,
+    orderRegistry,
+  })
+
+  validateAllocationQuantities({
+    fill,
+    order,
+    recoveryQuantity,
+    legacyQuantity,
+  })
 
   validateFillCommissions({
     market: fill.market,
