@@ -854,6 +854,8 @@ test("starts/stops Telegram CC and applies process-local pause without recovery 
   const runtime = await fixture.runtime
   const operator = fixture.getOperator()
   try {
+    assert.equal(typeof runtime.getOperator, "function", "The started Harvester runtime must expose its composed operator facade to local adapters.")
+    assert.equal(runtime.getOperator(), operator, "The runtime operator accessor must return the same facade used by Telegram.")
     assert.equal(calls.includes("create-Operational State Store records-store"), false)
     assert.equal(calls.includes("verify-Operational State Store records"), false)
     assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"))
