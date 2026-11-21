@@ -393,6 +393,14 @@ Use a dedicated API key with account-read permission only. The health check cont
 
 This is a deliberately fixed, human-operated LIVE investigation—not a general order CLI, an integration test, a TESTNET substitute, or proof of production readiness. The agent, unit tests, CI, scheduled jobs, and Harvester must never invoke it.
 
+Check the exact local script revision without loading credentials or contacting Bitunix:
+
+```sh
+node packages/brokers/scripts/bitunix/run-healthcheck.js --version
+```
+
+Every invocation also prints this identity before starting the workflow. It includes the full Git commit SHA and whether the worktree is clean or dirty.
+
 From the repository root, run this command manually in an interactive terminal:
 
 ```sh

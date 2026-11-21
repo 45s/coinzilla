@@ -39,6 +39,22 @@ All JavaScript contributors, including AI agents, MUST follow the canonical [ESL
 
 Follow the canonical [Configuration Standard](docs/engineering/CONFIGURATION_STANDARD.md) for ownership, loading, validation, defaults, environment access, immutability, secrets, compatibility and tests. Domain instructions may add stricter application-specific requirements but must link to this standard rather than redefine the repository-wide contract.
 
+## Executable CLI identity — mandatory
+
+Every maintained, user-invoked executable CLI entrypoint MUST make its running source revision identifiable before performing work.
+
+- Print an identity banner at startup, before loading credentials, contacting external services, changing branches, writing reports, or performing mutations.
+- Provide a side-effect-free `--version` (or the platform's equivalent) that prints the same identity and exits without credentials, network access, external-service calls, or state changes.
+- Include the script/command name, owning package version, full Git commit SHA, worktree state (`clean`, `dirty`, or `unknown`), and runtime version where applicable.
+- Resolve the commit from the exact checkout used to execute the script. Do not use a branch name, a moving tag, a guessed version, or a short SHA as a substitute for the full commit.
+- If Git metadata cannot be read, print `commit unknown` and/or `worktree unknown`; never silently claim a version or clean state.
+- Do not print secrets, environment values, private paths, or unrelated Git status details in the identity banner.
+- Reuse a shared identity helper where appropriate. Do not copy/paste Git subprocess logic into every entrypoint.
+- Inventory maintained executable CLI entrypoints and migrate them in coherent increments. Exclude libraries, imported modules, generated artifacts, test fixtures, and non-user-invoked scripts; document justified exceptions.
+- Keep identity discovery read-only and deterministic. It must not fetch from remotes or alter the working tree.
+
+The owning package documents any command-specific presentation details; this section is the repository-wide source of truth.
+
 ## Exchange environment configuration
 
 Binance exchange endpoint selection is governed by [ADR-0002: Explicit Binance trading environment](docs/architecture/decisions/ADR-0002-explicit-binance-trading-environment.md). All consumers MUST pass an explicit `TRADING_MODE=testnet|live`; missing or invalid values fail closed. `NODE_ENV` is application runtime metadata only and MUST NOT select or influence Binance endpoints. Keep the ADR as the cross-workspace decision source and the Brokers/Harvester documentation as the operational guides.
