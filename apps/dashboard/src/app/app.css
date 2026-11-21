@@ -70,16 +70,21 @@
 
 .nav-item {
   display: flex;
+  width: 100%;
   min-height: 43px;
   align-items: center;
   gap: 12px;
   padding: 0 11px;
   border: 1px solid transparent;
   border-radius: 8px;
+  background: transparent;
   color: #a4afc0;
+  font-family: inherit;
   font-size: 12px;
   font-weight: 600;
+  text-align: left;
   text-decoration: none;
+  cursor: pointer;
 }
 
 .nav-item.active {
@@ -93,6 +98,11 @@
   opacity: 0.55;
 }
 
+.nav-item:focus-visible {
+  outline: 2px solid #65d6ad;
+  outline-offset: 2px;
+}
+
 .nav-icon {
   width: 18px;
   color: #8b98ab;
@@ -101,6 +111,11 @@
 }
 
 .nav-item.active .nav-icon {
+  color: #83e3c0;
+}
+
+.persisted-pill {
+  border-color: rgba(101, 214, 173, 0.22);
   color: #83e3c0;
 }
 

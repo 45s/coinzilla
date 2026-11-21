@@ -1,10 +1,10 @@
 # Coinzilla Dashboard
 
-Angular + TypeScript application workspace for the future Coinzilla operational dashboard.
+Angular + TypeScript client for the Coinzilla operational dashboard.
 
 ## Current state
 
-The first milestone provides a responsive dashboard shell and an Overview screen populated with fictional demo data. It is not connected to Harvester, an exchange, a database, or a live event stream. The UI deliberately labels the sample data and reports the backend as disconnected.
+The Overview screen remains an explicitly labeled fictional preview. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the authenticated `/api/v1` HTTP contract. They never use demo fixtures as a fallback. The selected TESTNET/LIVE environment is taken from API metadata.
 
 ## Requirements
 
@@ -21,7 +21,7 @@ pnpm install
 pnpm --filter @coinzilla/dashboard start
 ```
 
-The development server binds to `127.0.0.1`. Open the URL printed by Angular CLI.
+The development server binds to `127.0.0.1`. Open the URL printed by Angular CLI. To enable trading history, set a strong `HARVESTER_API_TOKEN` in Harvester's local `.env.development` file and run `pnpm --filter @coinzilla/harvester dev` in a separate terminal. The API starts with Harvester at `http://127.0.0.1:4201`; enter the same token in the Dashboard connection panel. The browser stores it only in `sessionStorage`.
 
 Build and test:
 
@@ -33,7 +33,7 @@ pnpm --filter @coinzilla/dashboard test:coverage
 
 ## Architecture boundary
 
-The dashboard is a separate client application. Its future data access belongs behind typed, authenticated backend API contracts. Browser code must not open Harvester database files, import Harvester internals, or call exchange APIs. Order entry and operator controls are deferred until backend endpoints can route through existing application use cases and safety gates.
+The dashboard is a separate client application. Trading-history data access uses a typed, authenticated Harvester API client. Browser code must not open Harvester database files, import Harvester internals, or call exchange APIs. Financial decimal values remain strings and missing values remain null. Order entry and operator controls remain deferred until backend endpoints can route through existing application use cases and safety gates.
 
 ## Documentation
 

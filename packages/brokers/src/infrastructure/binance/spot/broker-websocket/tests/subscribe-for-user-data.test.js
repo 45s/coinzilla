@@ -529,5 +529,47 @@ it("removes local observers when remote unsubscribe fails and does not replay it
   assert.equal(rpc.calls.filter((call) => call.method === "userDataStream.unsubscribe").length, 1)
 })
 
+it("warns at the broker boundary when Binance sends an unsupported user-data event", async () => {
+  const rpc = createFakeRpcClient({
+    "userDataStream.subscribe.signature": () => ({ subscriptionId: 9 }),
+    "userDataStream.unsubscribe": () => ({}),
+  })
+  rpc.state = "open"
+  const warnings = []
+  const received = []
+  const broker = new BinanceSdkBroker({
+    apiKey: "test-key",
+    apiSecret: "test-secret",
+    tradingMode: "testnet",
+    logger: {
+      warn: (...args) => warnings.push(args),
+    },
+  }, { apiClientFactory: () => rpc })
+  broker.connected = true
 
+  const subscription = await broker.subscribeForUserData({
+    onEvent: (input) => received.push(input),
+  })
+  rpc.emitEvent({
+    subscriptionId: 9,
+    event: {
+      e: "futureEvent",
+      secret: "must-not-be-logged",
+    },
+  })
 
+  assert.deepEqual(received, [{
+    event: {
+      e: "futureEvent",
+      secret: "must-not-be-logged",
+    },
+  }])
+  assert.deepEqual(warnings, [[
+    "Unsupported Binance user-data event",
+    {
+      eventType: "futureEvent",
+    },
+  ]])
+  assert.equal(JSON.stringify(warnings).includes("must-not-be-logged"), false)
+  await subscription.data.disconnect()
+})
