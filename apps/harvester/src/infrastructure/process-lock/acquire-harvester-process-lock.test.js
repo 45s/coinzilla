@@ -1,5 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
+import { writeFileSync } from "node:fs"
 import { mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -167,10 +168,68 @@ force: true })
 })
 
 test("rejects invalid process lock inputs", async () => {
-  const result = await acquireHarvesterProcessLock({ directory: " ",
-pid: 0 })
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /non-empty directory/)
+  const directory = await createTempDirectory()
+  const invalidInputs = [
+    {
+      name: "empty directory",
+      input: { directory: " " },
+      expectedMessage: /non-empty directory/,
+    },
+    {
+      name: "dot lock file name",
+      input: { directory, lockFileName: "." },
+      expectedMessage: /file name/,
+    },
+    {
+      name: "dot-dot lock file name",
+      input: { directory, lockFileName: ".." },
+      expectedMessage: /file name/,
+    },
+    {
+      name: "path traversal lock file name",
+      input: { directory, lockFileName: "../outside.lock" },
+      expectedMessage: /file name/,
+    },
+    {
+      name: "invalid process id",
+      input: { directory, pid: 0 },
+      expectedMessage: /positive safe integer/,
+    },
+    {
+      name: "empty hostname",
+      input: { directory, hostname: " " },
+      expectedMessage: /hostname/,
+    },
+    {
+      name: "empty start time",
+      input: { directory, startedAt: " " },
+      expectedMessage: /startedAt/,
+    },
+    {
+      name: "empty ownership token",
+      input: { directory, token: " " },
+      expectedMessage: /token/,
+    },
+    {
+      name: "invalid process liveness probe",
+      input: { directory, isProcessAlive: null },
+      expectedMessage: /isProcessAlive/,
+    },
+  ]
+
+  try {
+    for (const invalidInput of invalidInputs) {
+      const result = await acquireHarvesterProcessLock(invalidInput.input)
+      assert.equal(result.ok, false, `${invalidInput.name} must fail before lock acquisition.`)
+      assert.match(
+        result.errors[0].message,
+        invalidInput.expectedMessage,
+        `${invalidInput.name} must report the specific invalid input.`,
+      )
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
 })
 
 
@@ -200,5 +259,92 @@ isProcessAlive: () => true }),
   } finally {
     await rm(directory, { recursive: true,
 force: true })
+  }
+})
+
+
+test("does not reclaim a malformed lock file", async () => {
+  const directory = await createTempDirectory()
+  const lockPath = path.join(directory, ".harvester-trading.lock")
+  try {
+    await writeFile(lockPath, "{malformed")
+    const result = await acquireHarvesterProcessLock({
+      directory,
+      pid: 987,
+      hostname: os.hostname(),
+      token: "new-owner-token",
+      isProcessAlive: () => false,
+    })
+
+    assert.equal(result.ok, false, "An unreadable lock must remain a hard ownership conflict.")
+    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
+    assert.equal(await readFile(lockPath, "utf8"), "{malformed", "The unreadable lock must not be deleted or replaced.")
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("treats a missing lock file as an idempotent release", async () => {
+  const directory = await createTempDirectory()
+  try {
+    const acquired = await acquireHarvesterProcessLock({
+      directory,
+      token: "released-owner-token",
+    })
+    await unlink(acquired.lockPath)
+
+    const released = await acquired.release()
+    assert.deepEqual(
+      released,
+      {
+        ok: true,
+        released: false,
+        alreadyReleased: true,
+      },
+      "A lock already removed by the operating system must be reported as already released.",
+    )
+    assert.deepEqual(await acquired.release(), released, "Repeated release after external removal must remain idempotent.")
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("does not remove a replacement lock after a stale-owner race", async () => {
+  const directory = await createTempDirectory()
+  const lockPath = path.join(directory, ".harvester-trading.lock")
+  const replacementOwner = {
+    pid: 999,
+    hostname: "replacement-host",
+    startedAt: "2026-11-05T00:00:00.000Z",
+    token: "replacement-token",
+  }
+  try {
+    await writeFile(lockPath, JSON.stringify({
+      pid: 456,
+      hostname: os.hostname(),
+      startedAt: "2026-11-05T00:00:00.000Z",
+      token: "stale-owner-token",
+    }))
+
+    const result = await acquireHarvesterProcessLock({
+      directory,
+      pid: 987,
+      hostname: os.hostname(),
+      token: "new-owner-token",
+      isProcessAlive: () => {
+        writeFileSync(lockPath, JSON.stringify(replacementOwner))
+        return false
+      },
+    })
+
+    assert.equal(result.ok, false, "A replacement owner discovered by the pre-unlink re-read must keep the lock.")
+    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
+    assert.deepEqual(
+      JSON.parse(await readFile(lockPath, "utf8")),
+      replacementOwner,
+      "The lock contents changed by the racing owner must be preserved byte-for-byte as the current owner.",
+    )
+  } finally {
+    await rm(directory, { recursive: true, force: true })
   }
 })

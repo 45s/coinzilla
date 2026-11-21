@@ -442,6 +442,21 @@
           "path": "src/index.test.js",
           "name": "retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved",
           "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "does not reclaim a malformed lock file",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "treats a missing lock file as an idempotent release",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "does not remove a replacement lock after a stale-owner race",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",

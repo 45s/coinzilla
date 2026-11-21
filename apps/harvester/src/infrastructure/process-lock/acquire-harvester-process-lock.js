@@ -26,7 +26,13 @@ function validateProcessLockInput({
   if (typeof directory !== "string" || !directory.trim()) {
     throw new TypeError("Harvester process lock requires a non-empty directory")
   }
-  if (typeof lockFileName !== "string" || !lockFileName.trim() || path.basename(lockFileName) !== lockFileName) {
+  if (
+    typeof lockFileName !== "string" ||
+    !lockFileName.trim() ||
+    lockFileName === "." ||
+    lockFileName === ".." ||
+    path.basename(lockFileName) !== lockFileName
+  ) {
     throw new TypeError("Harvester process lock file name must be a non-empty file name")
   }
   if (!Number.isSafeInteger(pid) || pid < 1) {
