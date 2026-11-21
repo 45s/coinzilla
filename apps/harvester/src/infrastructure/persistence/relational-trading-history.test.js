@@ -14,10 +14,35 @@ import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { createOrderHistoryRecord } from "../../domain/order-history/order-history-record.js"
 import { closeHarvesterPersistence } from "./close-harvester-persistence.js"
 import { createFillHistoryObserver } from "./create-fill-history-observer.js"
+import { configureHarvesterLogging } from "../logging/configure-harvester-logging.js"
 import { prepareOrderHistoryPersistence } from "./prepare-order-history-persistence.js"
 import { resolveHarvesterDatabaseFilename } from "./resolve-harvester-database-filename.js"
 import { HARVESTER_RELATIONAL_MIGRATIONS } from "./relational-migrations.js"
 import { createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
+
+function createPersistenceTestLogger() {
+  const transports = new Map()
+  return {
+    transports,
+    addTransport(transport) {
+      transports.set(transport.name, transport)
+    },
+    async removeTransport(name) {
+      const transport = transports.get(name)
+      if (!transport) {
+        return false
+      }
+      transports.delete(name)
+      await transport.close?.()
+      return true
+    },
+    setLevel() {
+      return { transports: [...transports.values()] }
+    },
+    warn() {},
+    error() {},
+  }
+}
 
 async function createTestContext({ t } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-relational-history-"))
@@ -81,8 +106,8 @@ function assertMigrationHistory(database) {
   const migrations = database.prepare(
     "SELECT version, name, checksum FROM schema_migrations ORDER BY version",
   ).all()
-  assert.equal(migrations.length, 3, "A fresh database must record schema, provenance, and cursor migrations.")
-  assert.deepEqual(migrations.map(({ version }) => version), [1, 2, 3], "A fresh database must apply all ordered relational migrations.")
+  assert.equal(migrations.length, 4, "A fresh database must record schema, provenance, cursor, and runtime-error migrations.")
+  assert.deepEqual(migrations.map(({ version }) => version), [1, 2, 3, 4], "A fresh database must apply all ordered relational migrations.")
   assert.ok(migrations[0].checksum, "The migration history must record the implementation checksum.")
 }
 
@@ -90,11 +115,11 @@ function assertFreshRelationalSchema(database) {
   const tables = database.prepare(
     "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name",
   ).all().map(({ name }) => name)
-  for (const table of ["orders", "fills", "fill_commissions", "history_sync_cursors", "schema_migrations"]) {
+  for (const table of ["orders", "fills", "fill_commissions", "history_sync_cursors", "runtime_errors", "schema_migrations"]) {
     assert.ok(tables.includes(table), `A fresh Harvester database must contain the physical ${table} table.`)
   }
-  assert.ok(!tables.includes("sessions"), "Phase 1 must not add a sessions table.")
-  assert.ok(!tables.includes("errors"), "Phase 1 must not add an errors table.")
+  assert.ok(!tables.includes("sessions"), "Runtime error correlation must not require a sessions table.")
+  assert.ok(!tables.includes("errors"), "Operational diagnostics must use the explicit runtime_errors table, not a generic errors table.")
   assertColumnsPresent({
     database,
     table: "orders",
@@ -125,6 +150,17 @@ function assertFreshRelationalSchema(database) {
   )
   assert.ok(exchangeLookupIndex, "Orders must have a provider-scoped exchange-order lookup index.")
   assert.equal(exchangeLookupIndex.unique, 0, "Exchange order IDs must not be assumed unique across every provider market.")
+  assertColumnsPresent({
+    database,
+    table: "runtime_errors",
+    columns: [
+      "id", "runtime_session_id", "occurred_at", "severity", "error_name",
+      "error_code", "message", "component", "operation", "provider_type",
+      "provider_instance_id", "account_id", "environment", "symbol",
+      "strategy_id", "broker_order_id", "client_order_id", "execution_id",
+      "failure_category", "failure_stage", "details_json",
+    ],
+  })
   assertMigrationHistory(database)
 }
 
@@ -418,7 +454,7 @@ async function assertBackupAndRollback({ filename, backupFilename, legacyRecord 
 
 function createInterruptedMigration() {
   return {
-    version: 4,
+    version: 5,
     name: "harvester-relational-interrupted-test",
     up(transaction) {
       transaction.exec("CREATE TABLE interrupted_probe (id TEXT PRIMARY KEY)")
@@ -429,7 +465,7 @@ function createInterruptedMigration() {
 
 function createRetryMigration() {
   return {
-    version: 4,
+    version: 5,
     name: "harvester-relational-interrupted-test",
     up(transaction) {
       transaction.exec("CREATE TABLE retry_probe (id TEXT PRIMARY KEY)")
@@ -488,6 +524,247 @@ test("creates versioned physical orders, fills, and commission tables on a fresh
   await assertMigrationRetry({
     database: persistence.relationalDatabase,
   })
+})
+
+test("adds runtime error records to an existing version 3 database without changing saved cursors", async (t) => {
+  const context = await createTestContext({ t })
+  const originalDatabase = createSqliteDatabase({ filename: context.filename })
+  await originalDatabase.connect()
+  try {
+    await originalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS.slice(0, 3))
+    originalDatabase.prepare(
+      "INSERT INTO history_sync_cursors (id, provider_type, provider_instance_id, account_id, environment, symbol, last_order_id, last_trade_id, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      "existing-zro-cursor",
+      "binance",
+      "binanceTestnet",
+      "binance-primary",
+      "testnet",
+      "ZROFDUSD",
+      "981545",
+      "15507",
+      "2026-11-21T08:44:20.000Z",
+    )
+  } finally {
+    await originalDatabase.close()
+  }
+
+  const upgradedDatabase = createSqliteDatabase({ filename: context.filename })
+  await upgradedDatabase.connect()
+  try {
+    await upgradedDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
+    const cursor = upgradedDatabase.prepare(
+      "SELECT last_order_id, last_trade_id, updated_at FROM history_sync_cursors WHERE id = ?",
+    ).get("existing-zro-cursor")
+    assert.equal(cursor.last_order_id, "981545", "The v4 migration must preserve the existing order cursor.")
+    assert.equal(cursor.last_trade_id, "15507", "The v4 migration must preserve the existing trade cursor.")
+    assert.equal(cursor.updated_at, "2026-11-21T08:44:20.000Z", "The v4 migration must preserve the cursor timestamp.")
+    assert.equal(
+      upgradedDatabase.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get("runtime_errors") !== undefined,
+      true,
+      "The v4 migration must add runtime_errors to an existing v3 database.",
+    )
+    assert.equal(
+      upgradedDatabase.prepare("SELECT COUNT(*) AS count FROM runtime_errors").get().count,
+      0,
+      "Upgrading a v3 database must create an empty runtime-error projection without inventing past errors.",
+    )
+  } finally {
+    await upgradedDatabase.close()
+  }
+})
+
+function createHistorySyncErrorEntry() {
+  return {
+    timestamp: "2026-11-21T08:44:20.000Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "Exchange history synchronization failed; token=top-secret",
+      errorName: "HistorySyncError",
+      errorCode: "HISTORY_SYNC_CURSOR_WRITE_FAILED",
+      errorMessage: "Cursor write failed token=top-secret",
+      component: "synchronize-account-history",
+      operation: "saveOrderCursor",
+      providerType: "binance",
+      providerInstanceId: "binanceTestnet",
+      accountId: "binance-primary",
+      environment: "testnet",
+      symbol: "ZROFDUSD",
+      failureCategory: "PERSISTENCE",
+      failureStage: "ORDER_CURSOR_SAVE",
+      historyDiagnostics: {
+        historyScope: "CONFIGURED_MARKETS",
+        marketsAttempted: ["ZROFDUSD"],
+        marketsQueried: [],
+        currentMarket: "ZROFDUSD",
+        orderPagesChecked: 1,
+        fillPagesChecked: 0,
+        ordersObserved: 999,
+        ordersPersisted: 999,
+        fillsObserved: 0,
+        fillsPersisted: 0,
+        requestCount: 1,
+        failureCount: 1,
+        failures: [{
+          market: "ZROFDUSD",
+          message: "Cursor write failed token=top-secret",
+        }],
+        historyPagesComplete: false,
+        marketHistoryPagesComplete: false,
+        marketUniverseComplete: false,
+        retentionCoverageConfirmed: false,
+        complete: false,
+        errorMessage: "Cursor write failed token=top-secret",
+      },
+      apiKey: "secret-value",
+      errorDetails: {
+        name: "Error",
+        message: "token=top-secret",
+        stack: "Error: token=top-secret",
+      },
+    },
+  }
+}
+
+function createUnknownExternalOrderPauseErrorEntry() {
+  return {
+    timestamp: "2026-11-21T08:44:20.100Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "Paused trading pair after an unknown or external order event",
+      errorName: "ExternalOrderEventError",
+      errorCode: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+      symbol: "LINKFDUSD",
+      side: "SELL",
+      reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+      brokerOrderId: "617765818",
+      clientOrderId: "h-34afc4ca9c1a473ea7c060-30",
+      failureCategory: "ORDER_OWNERSHIP",
+      failureStage: "ORDER_REGISTRY_MATCH",
+    },
+  }
+}
+
+function createUnownedOrderRejectionErrorEntry() {
+  return {
+    timestamp: "2026-11-21T08:44:20.200Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "Rejected an unowned or invalid order event",
+      errorName: "UnownedOrderEventError",
+      errorCode: "UNOWNED_ORDER_EVENT_REJECTED",
+      symbol: "LINKFDUSD",
+      side: "SELL",
+      brokerOrderId: "617765818",
+      clientOrderId: "h-34afc4ca9c1a473ea7c060-30",
+      executionId: "15507",
+      failureCategory: "ORDER_OWNERSHIP",
+      failureStage: "ORDER_EVENT_VALIDATION",
+    },
+  }
+}
+
+function assertPersistedRuntimeErrorRows({ database } = {}) {
+  const rows = database.prepare(
+    "SELECT * FROM runtime_errors ORDER BY occurred_at",
+  ).all()
+  assert.equal(rows.length, 3, "Every buffered and live ERROR record must be persisted exactly once.")
+  assert.equal(rows[0].runtime_session_id, "runtime-session-1650")
+  assert.equal(rows[0].occurred_at, "2026-11-21T08:44:20.000Z")
+  assert.equal(rows[0].severity, "error")
+  assert.equal(rows[0].error_name, "HistorySyncError")
+  assert.equal(rows[0].error_code, "HISTORY_SYNC_CURSOR_WRITE_FAILED")
+  assert.equal(rows[0].symbol, "ZROFDUSD")
+  assert.equal(rows[0].environment, "testnet")
+  assert.equal(rows[0].strategy_id, null, "Missing strategy ownership must remain SQL NULL.")
+  assert.equal(rows[0].failure_stage, "ORDER_CURSOR_SAVE")
+  assert.doesNotMatch(rows[0].message, /top-secret/, "Free-form messages must redact obvious credential assignments.")
+  assert.doesNotMatch(rows[0].details_json, /top-secret|apiKey|stack/, "The relational projection must omit sensitive keys and unrestricted stack text.")
+  const historyDetails = JSON.parse(rows[0].details_json).historyDiagnostics
+  assert.equal(historyDetails.currentMarket, "ZROFDUSD")
+  assert.equal(historyDetails.ordersPersisted, 999)
+  assert.equal(historyDetails.fillPagesChecked, 0)
+  assert.equal(rows[1].error_code, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT")
+  assert.equal(rows[1].symbol, "LINKFDUSD")
+  assert.equal(Object.hasOwn(rows[1], "side"), false, "Unlisted diagnostic fields must not become arbitrary SQL columns.")
+  assert.equal(rows[1].strategy_id, null, "An external SELL event must not receive inferred strategy ownership.")
+  assert.equal(rows[2].error_code, "UNOWNED_ORDER_EVENT_REJECTED")
+  assert.equal(rows[2].broker_order_id, "617765818")
+  assert.equal(rows[2].client_order_id, "h-34afc4ca9c1a473ea7c060-30")
+  assert.equal(rows[2].execution_id, "15507")
+  assert.equal(rows[2].strategy_id, null)
+}
+
+async function createRuntimeErrorPersistenceFixture({ context, logger } = {}) {
+  const logging = await configureHarvesterLogging({
+    logger,
+    directory: path.join(context.directory, "logs"),
+    processIdentity: {
+      startedAt: "2026-11-21T08:00:00.000Z",
+      runtimeSessionId: "runtime-session-1650",
+    },
+  })
+  logging.errorBuffer.transport.write(createHistorySyncErrorEntry())
+  const persistence = await prepareOrderHistoryPersistence({
+    tradingMode: "testnet",
+    env: {
+      HARVESTER_DATABASE_DIRECTORY: context.directory,
+    },
+    eventBus: context.eventBus,
+    logger,
+    runtimeSessionId: "runtime-session-1650",
+    errorBuffer: logging.errorBuffer,
+  })
+  context.setPersistence(persistence)
+  return {
+    logging,
+    persistence,
+  }
+}
+
+function publishRuntimeErrorExamples({ logging } = {}) {
+  logging.errorBuffer.transport.write(createUnknownExternalOrderPauseErrorEntry())
+  logging.errorBuffer.transport.write(createUnownedOrderRejectionErrorEntry())
+}
+
+async function verifyRuntimeErrorProjection({ filename } = {}) {
+  await inspectSqlite({
+    filename,
+    work: (database) => assertPersistedRuntimeErrorRows({ database }),
+  })
+}
+
+test("persists pre-startup and live session errors as safe relational diagnostics", async (t) => {
+  const context = await createTestContext({ t })
+  const logger = createPersistenceTestLogger()
+  const fixture = await createRuntimeErrorPersistenceFixture({
+    context,
+    logger,
+  })
+  try {
+    assert.equal(
+      typeof fixture.logging.errorBuffer.transport.write,
+      "function",
+      "Harvester logging must expose a session error buffer before relational persistence is ready.",
+    )
+    assert.equal(
+      typeof fixture.persistence.runtimeErrorObserver?.close,
+      "function",
+      "Relational startup must activate the session error observer after the schema is ready.",
+    )
+    publishRuntimeErrorExamples({
+      logging: fixture.logging,
+    })
+    await closeHarvesterPersistence(fixture.persistence)
+    await verifyRuntimeErrorProjection({
+      filename: context.filename,
+    })
+  } finally {
+    await fixture.logging.close()
+  }
 })
 
 test("migrates legacy harvester_orders without deleting source records or fabricating fills", async (t) => {

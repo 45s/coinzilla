@@ -745,6 +745,8 @@ test("keeps inbound operator control disabled without constructing its store or 
   try {
     assert.equal(storeFactoryCalls, 0, "Disabled operator control must not inspect or open the Operational State Store.")
     assert.equal(adapterFactoryCalls, 0, "Disabled operator control must not construct an inbound Telegram adapter.")
+    assert.equal(typeof runtime.getOperator, "function", "The local API must be able to access the operator even when Telegram control is disabled.")
+    assert.equal(typeof runtime.getOperator()?.getStatus, "function", "The disabled Telegram lifecycle must still compose the shared read-only operator facade.")
   } finally { await runtime.stop() }
 })
 
@@ -854,6 +856,8 @@ test("starts/stops Telegram CC and applies process-local pause without recovery 
   const runtime = await fixture.runtime
   const operator = fixture.getOperator()
   try {
+    assert.equal(typeof runtime.getOperator, "function", "The started Harvester runtime must expose its composed operator facade to local adapters.")
+    assert.equal(runtime.getOperator(), operator, "The runtime operator accessor must return the same facade used by Telegram.")
     assert.equal(calls.includes("create-Operational State Store records-store"), false)
     assert.equal(calls.includes("verify-Operational State Store records"), false)
     assert.ok(calls.indexOf("start-telegram-poller") < calls.indexOf("subscribe:user-data"))
@@ -1253,6 +1257,120 @@ test("synchronizes configured Binance history before activating the trading engi
     assert.equal(runtime.tradingEnabled, true, "A read-only history scan must not change trading enablement.")
     assert.equal(persistedOrders.length, 0, "An empty exchange history must not fabricate orders.")
     assert.equal(persistedFills.length, 0, "An empty exchange history must not fabricate fills.")
+  } finally {
+    await runtime.stop()
+  }
+})
+
+function createHistoryCursorFailureFixture({ calls } = {}) {
+  const broker = createBroker(calls)
+  const metadata = createMarketMetadata("BTCUSDT")
+  const historicalOrder = new CanonicalOrder({
+    clientOrderId: "h-history-cursor-failure",
+    brokerOrderId: "100",
+    market: metadata.market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: "65000",
+      asset: metadata.market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.01",
+      asset: metadata.market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0.01",
+      asset: metadata.market.baseAsset,
+    }),
+    status: "FILLED",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+    completedAt: 1,
+  })
+  broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
+    calls.push(`history:orders:${symbol}:${orderId}`)
+    return {
+      ok: true,
+      data: [historicalOrder],
+    }
+  }
+  const persistedOrders = []
+  const persistedFills = []
+  const orderHistoryPersistence = createStartupHistoryPersistence({
+    persistedOrders,
+    persistedFills,
+  })
+  const cursorError = new Error("simulated cursor write failure")
+  cursorError.code = "HARVESTER_HISTORY_CURSOR_WRITE_FAILED"
+  orderHistoryPersistence.historySyncCursorRepository.saveOrderCursor = async () => {
+    throw cursorError
+  }
+  return {
+    broker,
+    orderHistoryPersistence,
+    persistedOrders,
+    persistedFills,
+  }
+}
+
+function assertHistoryCursorFailureDiagnostics({
+  errors,
+  runtime,
+  persistedOrders,
+  persistedFills,
+  calls,
+} = {}) {
+  const failure = errors.find((entry) =>
+    entry.message === "Exchange history synchronization failed; historical coverage is incomplete")
+  assert.ok(failure, "A failed startup cursor write must emit an actionable history-sync error.")
+  assert.equal(failure.errorName, "Error")
+  assert.equal(failure.errorCode, "HARVESTER_HISTORY_CURSOR_WRITE_FAILED")
+  assert.equal(failure.errorMessage, "simulated cursor write failure")
+  assert.equal(failure.historyDiagnostics.currentMarket, "BTCUSDT")
+  assert.equal(failure.historyDiagnostics.orderPagesChecked, 1)
+  assert.equal(failure.historyDiagnostics.ordersObserved, 1)
+  assert.equal(failure.historyDiagnostics.ordersPersisted, 1)
+  assert.equal(failure.historyDiagnostics.fillPagesChecked, 0)
+  assert.equal(failure.historyDiagnostics.failureCount, 1)
+  assert.equal(failure.historyDiagnostics.failures[0].market, "BTCUSDT")
+  assert.equal(failure.historyDiagnostics.historyPagesComplete, false)
+  assert.equal(runtime.tradingEnabled, true, "A history-projection failure must remain visible without becoming trading-state authority.")
+  assert.equal(persistedOrders.length, 1, "The page's order must remain persisted when only cursor advancement fails.")
+  assert.equal(persistedFills.length, 0, "Fill history must not start after the order cursor write fails.")
+  assert.equal(calls.some((call) => call.startsWith("history:fills:")), false, "The failed order cursor must stop the market scan before trade-history requests.")
+}
+
+test("logs partial startup history diagnostics when an order cursor write fails", async () => {
+  const calls = []
+  const fixture = createHistoryCursorFailureFixture({ calls })
+  const errors = []
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: binanceEnv,
+    providerIdentity: {
+      providerInstanceId: "binanceTestnet",
+      providerType: "binance",
+      accountId: "binance-primary",
+    },
+    orderHistoryPersistence: fixture.orderHistoryPersistence,
+    brokerAdapterFactory: () => fixture.broker,
+    logger: {
+      info() {},
+      warn() {},
+      error: (entry) => errors.push(entry),
+    },
+  })
+
+  try {
+    assertHistoryCursorFailureDiagnostics({
+      errors,
+      runtime,
+      persistedOrders: fixture.persistedOrders,
+      persistedFills: fixture.persistedFills,
+      calls,
+    })
   } finally {
     await runtime.stop()
   }

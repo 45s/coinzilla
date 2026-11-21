@@ -933,10 +933,20 @@ function logHistorySyncSkipped({ startup, identity } = {}) {
 }
 
 function logHistorySyncFailure({ startup, identity, result } = {}) {
+  const error = result?.errors?.[0]
   startup.logger.error?.({
     message: "Exchange history synchronization failed; historical coverage is incomplete",
+    providerType: identity.providerType,
     providerInstanceId: identity.providerInstanceId,
+    accountId: identity.accountId,
     environment: startup.tradingMode,
+    symbol: error?.historyDiagnostics?.currentMarket,
+    errorName: error?.name ?? "Error",
+    errorCode: error?.code ?? "HARVESTER_HISTORY_SYNC_FAILED",
+    errorMessage: error?.message ?? "Exchange history synchronization failed",
+    component: "synchronize-account-history",
+    operation: "synchronizeStartupExchangeHistory",
+    historyDiagnostics: error?.historyDiagnostics,
     errors: result?.errors,
   })
 }
@@ -1397,6 +1407,7 @@ function createHarvesterRuntimeResult({
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled === true && marketData.executionSymbols.length > 0,
     strategyMode: "conservative",
+    getOperator: () => startup.operatorControlLifecycle?.getOperator?.(),
     get userDataReady() { return resources.userDataState.ready },
     get userDataStatus() { return resources.userDataState.status },
     processMarketPrice: portfolio.processMarketPrice,

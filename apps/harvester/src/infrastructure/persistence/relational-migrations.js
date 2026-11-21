@@ -286,6 +286,40 @@ function migrateHistorySyncCursors(transaction) {
   `)
 }
 
+function migrateRuntimeErrors(transaction) {
+  transaction.exec(`
+    CREATE TABLE runtime_errors (
+      id TEXT PRIMARY KEY,
+      runtime_session_id TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      severity TEXT NOT NULL CHECK (severity = 'error'),
+      error_name TEXT,
+      error_code TEXT,
+      message TEXT NOT NULL,
+      component TEXT,
+      operation TEXT,
+      provider_type TEXT,
+      provider_instance_id TEXT,
+      account_id TEXT,
+      environment TEXT,
+      symbol TEXT,
+      strategy_id TEXT,
+      broker_order_id TEXT,
+      client_order_id TEXT,
+      execution_id TEXT,
+      failure_category TEXT,
+      failure_stage TEXT,
+      details_json TEXT
+    );
+    CREATE INDEX runtime_errors_session_time_idx
+      ON runtime_errors(runtime_session_id, occurred_at, id);
+    CREATE INDEX runtime_errors_market_time_idx
+      ON runtime_errors(environment, provider_type, provider_instance_id, account_id, symbol, occurred_at);
+    CREATE INDEX runtime_errors_code_time_idx
+      ON runtime_errors(error_code, occurred_at);
+  `)
+}
+
 export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([
   Object.freeze({
     version: 1,
@@ -301,5 +335,10 @@ export const HARVESTER_RELATIONAL_MIGRATIONS = Object.freeze([
     version: 3,
     name: "harvester-history-sync-cursors",
     up: migrateHistorySyncCursors,
+  }),
+  Object.freeze({
+    version: 4,
+    name: "harvester-session-runtime-errors",
+    up: migrateRuntimeErrors,
   }),
 ])
