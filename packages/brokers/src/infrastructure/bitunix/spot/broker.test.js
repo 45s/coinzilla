@@ -530,12 +530,30 @@ test("Bitunix Spot placement reports confirmed acceptance if order-detail reconc
 
 test("Bitunix Spot createOrder classifies non-JSON HTTP failures through the real REST client", async () => {
   const scenarios = [
-    { status: 400, mutationOutcome: "REJECTED" },
-    { status: 408, mutationOutcome: "OUTCOME_UNKNOWN" },
-    { status: 409, mutationOutcome: "OUTCOME_UNKNOWN" },
-    { status: 429, mutationOutcome: "REJECTED" },
-    { status: 500, mutationOutcome: "OUTCOME_UNKNOWN" },
-    { status: 502, mutationOutcome: "OUTCOME_UNKNOWN" },
+    {
+      status: 400,
+      mutationOutcome: "REJECTED",
+    },
+    {
+      status: 408,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+    },
+    {
+      status: 409,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+    },
+    {
+      status: 429,
+      mutationOutcome: "REJECTED",
+    },
+    {
+      status: 500,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+    },
+    {
+      status: 502,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+    },
   ]
 
   for (const scenario of scenarios) {
