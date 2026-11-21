@@ -8,8 +8,14 @@ test("returns no cycles for an acyclic dependency graph", () => {
     findDependencyCycles({
       nodes: ["a.js", "b.js", "c.js"],
       edges: [
-        { from: "a.js", to: "b.js" },
-        { from: "b.js", to: "c.js" },
+        {
+          from: "a.js",
+          to: "b.js",
+        },
+        {
+          from: "b.js",
+          to: "c.js",
+        },
       ],
     }),
     [],
@@ -22,11 +28,26 @@ test("detects multi-module cycles and self-dependencies", () => {
     findDependencyCycles({
       nodes: ["a.js", "b.js", "c.js", "d.js"],
       edges: [
-        { from: "a.js", to: "b.js" },
-        { from: "b.js", to: "a.js" },
-        { from: "b.js", to: "c.js" },
-        { from: "c.js", to: "c.js" },
-        { from: "c.js", to: "d.js" },
+        {
+          from: "a.js",
+          to: "b.js",
+        },
+        {
+          from: "b.js",
+          to: "a.js",
+        },
+        {
+          from: "b.js",
+          to: "c.js",
+        },
+        {
+          from: "c.js",
+          to: "c.js",
+        },
+        {
+          from: "c.js",
+          to: "d.js",
+        },
       ],
     }),
     [
@@ -41,9 +62,18 @@ test("detects longer cycles and returns stable sorted results", () => {
   const graph = {
     nodes: ["c.js", "a.js", "b.js"],
     edges: [
-      { from: "c.js", to: "a.js" },
-      { from: "b.js", to: "c.js" },
-      { from: "a.js", to: "b.js" },
+      {
+        from: "c.js",
+        to: "a.js",
+      },
+      {
+        from: "b.js",
+        to: "c.js",
+      },
+      {
+        from: "a.js",
+        to: "b.js",
+      },
     ],
   }
 
@@ -75,7 +105,12 @@ test("rejects duplicate graph nodes and edges to unknown modules", () => {
   assert.throws(
     () => findDependencyCycles({
       nodes: ["a.js"],
-      edges: [{ from: "a.js", to: "missing.js" }],
+      edges: [
+        {
+          from: "a.js",
+          to: "missing.js",
+        },
+      ],
     }),
     /Dependency edge references unknown module: a\.js -> missing\.js/,
     "Edges outside the supplied graph must fail with an actionable diagnostic.",
