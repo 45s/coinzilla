@@ -556,11 +556,14 @@ test("adds runtime error records to an existing version 3 database without chang
     const cursor = upgradedDatabase.prepare(
       "SELECT last_order_id, last_trade_id, updated_at FROM history_sync_cursors WHERE id = ?",
     ).get("existing-zro-cursor")
-    assert.deepEqual(cursor, {
-      last_order_id: "981545",
-      last_trade_id: "15507",
-      updated_at: "2026-11-21T08:44:20.000Z",
-    }, "The additive runtime-error migration must preserve every existing history cursor exactly.")
+    assert.equal(cursor.last_order_id, "981545", "The v4 migration must preserve the existing order cursor.")
+    assert.equal(cursor.last_trade_id, "15507", "The v4 migration must preserve the existing trade cursor.")
+    assert.equal(cursor.updated_at, "2026-11-21T08:44:20.000Z", "The v4 migration must preserve the cursor timestamp.")
+    assert.equal(
+      upgradedDatabase.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get("runtime_errors") !== undefined,
+      true,
+      "The v4 migration must add runtime_errors to an existing v3 database.",
+    )
     assert.equal(
       upgradedDatabase.prepare("SELECT COUNT(*) AS count FROM runtime_errors").get().count,
       0,
@@ -570,6 +573,130 @@ test("adds runtime error records to an existing version 3 database without chang
     await upgradedDatabase.close()
   }
 })
+
+function createHistorySyncErrorEntry() {
+  return {
+    timestamp: "2026-11-21T08:44:20.000Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "Exchange history synchronization failed; token=top-secret",
+      errorName: "HistorySyncError",
+      errorCode: "HISTORY_SYNC_CURSOR_WRITE_FAILED",
+      errorMessage: "Cursor write failed token=top-secret",
+      component: "synchronize-account-history",
+      operation: "saveOrderCursor",
+      providerType: "binance",
+      providerInstanceId: "binanceTestnet",
+      accountId: "binance-primary",
+      environment: "testnet",
+      symbol: "ZROFDUSD",
+      failureCategory: "PERSISTENCE",
+      failureStage: "ORDER_CURSOR_SAVE",
+      historyDiagnostics: {
+        historyScope: "CONFIGURED_MARKETS",
+        marketsAttempted: ["ZROFDUSD"],
+        marketsQueried: [],
+        currentMarket: "ZROFDUSD",
+        orderPagesChecked: 1,
+        fillPagesChecked: 0,
+        ordersObserved: 999,
+        ordersPersisted: 999,
+        fillsObserved: 0,
+        fillsPersisted: 0,
+        requestCount: 1,
+        failureCount: 1,
+        failures: [{
+          market: "ZROFDUSD",
+          message: "Cursor write failed token=top-secret",
+        }],
+        historyPagesComplete: false,
+        marketHistoryPagesComplete: false,
+        marketUniverseComplete: false,
+        retentionCoverageConfirmed: false,
+        complete: false,
+        errorMessage: "Cursor write failed token=top-secret",
+      },
+      apiKey: "secret-value",
+      errorDetails: {
+        name: "Error",
+        message: "token=top-secret",
+        stack: "Error: token=top-secret",
+      },
+    },
+  }
+}
+
+function createUnknownExternalOrderPauseErrorEntry() {
+  return {
+    timestamp: "2026-11-21T08:44:20.100Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "Paused trading pair after an unknown or external order event",
+      errorName: "ExternalOrderEventError",
+      errorCode: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+      symbol: "LINKFDUSD",
+      side: "SELL",
+      reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
+      brokerOrderId: "617765818",
+      clientOrderId: "h-34afc4ca9c1a473ea7c060-30",
+      failureCategory: "ORDER_OWNERSHIP",
+      failureStage: "ORDER_REGISTRY_MATCH",
+    },
+  }
+}
+
+function createUnownedOrderRejectionErrorEntry() {
+  return {
+    timestamp: "2026-11-21T08:44:20.200Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "Rejected an unowned or invalid order event",
+      errorName: "UnownedOrderEventError",
+      errorCode: "UNOWNED_ORDER_EVENT_REJECTED",
+      symbol: "LINKFDUSD",
+      side: "SELL",
+      brokerOrderId: "617765818",
+      clientOrderId: "h-34afc4ca9c1a473ea7c060-30",
+      executionId: "15507",
+      failureCategory: "ORDER_OWNERSHIP",
+      failureStage: "ORDER_EVENT_VALIDATION",
+    },
+  }
+}
+
+function assertPersistedRuntimeErrorRows({ database } = {}) {
+  const rows = database.prepare(
+    "SELECT * FROM runtime_errors ORDER BY occurred_at",
+  ).all()
+  assert.equal(rows.length, 3, "Every buffered and live ERROR record must be persisted exactly once.")
+  assert.equal(rows[0].runtime_session_id, "runtime-session-1650")
+  assert.equal(rows[0].occurred_at, "2026-11-21T08:44:20.000Z")
+  assert.equal(rows[0].severity, "error")
+  assert.equal(rows[0].error_name, "HistorySyncError")
+  assert.equal(rows[0].error_code, "HISTORY_SYNC_CURSOR_WRITE_FAILED")
+  assert.equal(rows[0].symbol, "ZROFDUSD")
+  assert.equal(rows[0].environment, "testnet")
+  assert.equal(rows[0].strategy_id, null, "Missing strategy ownership must remain SQL NULL.")
+  assert.equal(rows[0].failure_stage, "ORDER_CURSOR_SAVE")
+  assert.doesNotMatch(rows[0].message, /top-secret/, "Free-form messages must redact obvious credential assignments.")
+  assert.doesNotMatch(rows[0].details_json, /top-secret|apiKey|stack/, "The relational projection must omit sensitive keys and unrestricted stack text.")
+  const historyDetails = JSON.parse(rows[0].details_json).historyDiagnostics
+  assert.equal(historyDetails.currentMarket, "ZROFDUSD")
+  assert.equal(historyDetails.ordersPersisted, 999)
+  assert.equal(historyDetails.fillPagesChecked, 0)
+  assert.equal(rows[1].error_code, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT")
+  assert.equal(rows[1].symbol, "LINKFDUSD")
+  assert.equal(Object.hasOwn(rows[1], "side"), false, "Unlisted diagnostic fields must not become arbitrary SQL columns.")
+  assert.equal(rows[1].strategy_id, null, "An external SELL event must not receive inferred strategy ownership.")
+  assert.equal(rows[2].error_code, "UNOWNED_ORDER_EVENT_REJECTED")
+  assert.equal(rows[2].broker_order_id, "617765818")
+  assert.equal(rows[2].client_order_id, "h-34afc4ca9c1a473ea7c060-30")
+  assert.equal(rows[2].execution_id, "15507")
+  assert.equal(rows[2].strategy_id, null)
+}
 
 test("persists pre-startup and live session errors as safe relational diagnostics", async (t) => {
   const context = await createTestContext({ t })
@@ -589,55 +716,7 @@ test("persists pre-startup and live session errors as safe relational diagnostic
       "function",
       "Harvester logging must expose a session error buffer before relational persistence is ready.",
     )
-    const bufferedEntry = {
-      timestamp: "2026-11-21T08:44:20.000Z",
-      level: "error",
-      method: "error",
-      data: {
-        message: "Exchange history synchronization failed; token=top-secret",
-        errorName: "HistorySyncError",
-        errorCode: "HISTORY_SYNC_CURSOR_WRITE_FAILED",
-        errorMessage: "Cursor write failed token=top-secret",
-        component: "synchronize-account-history",
-        operation: "saveOrderCursor",
-        providerType: "binance",
-        providerInstanceId: "binanceTestnet",
-        accountId: "binance-primary",
-        environment: "testnet",
-        symbol: "ZROFDUSD",
-        failureCategory: "PERSISTENCE",
-        failureStage: "ORDER_CURSOR_SAVE",
-        historyDiagnostics: {
-          historyScope: "CONFIGURED_MARKETS",
-          marketsAttempted: ["ZROFDUSD"],
-          marketsQueried: [],
-          currentMarket: "ZROFDUSD",
-          orderPagesChecked: 1,
-          fillPagesChecked: 0,
-          ordersObserved: 999,
-          ordersPersisted: 999,
-          fillsObserved: 0,
-          fillsPersisted: 0,
-          requestCount: 1,
-          failureCount: 1,
-          failures: [{ market: "ZROFDUSD", message: "Cursor write failed token=top-secret" }],
-          historyPagesComplete: false,
-          marketHistoryPagesComplete: false,
-          marketUniverseComplete: false,
-          retentionCoverageConfirmed: false,
-          complete: false,
-          errorMessage: "Cursor write failed token=top-secret",
-        },
-        apiKey: "secret-value",
-        errorDetails: {
-          name: "Error",
-          message: "token=top-secret",
-          stack: "Error: token=top-secret",
-        },
-      },
-    }
-    logging.errorBuffer.transport.write(bufferedEntry)
-
+    logging.errorBuffer.transport.write(createHistorySyncErrorEntry())
     const persistence = await prepareOrderHistoryPersistence({
       tradingMode: "testnet",
       env: { HARVESTER_DATABASE_DIRECTORY: context.directory },
@@ -652,74 +731,12 @@ test("persists pre-startup and live session errors as safe relational diagnostic
       "function",
       "Relational startup must activate the session error observer after the schema is ready.",
     )
-
-    logging.errorBuffer.transport.write({
-      timestamp: "2026-11-21T08:44:20.100Z",
-      level: "error",
-      method: "error",
-      data: {
-        message: "Paused trading pair after an unknown or external order event",
-        errorName: "ExternalOrderEventError",
-        errorCode: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
-        symbol: "LINKFDUSD",
-        side: "SELL",
-        reason: "UNKNOWN_OR_EXTERNAL_ORDER_EVENT",
-        brokerOrderId: "617765818",
-        clientOrderId: "h-34afc4ca9c1a473ea7c060-30",
-        failureCategory: "ORDER_OWNERSHIP",
-        failureStage: "ORDER_REGISTRY_MATCH",
-      },
-    })
-    logging.errorBuffer.transport.write({
-      timestamp: "2026-11-21T08:44:20.200Z",
-      level: "error",
-      method: "error",
-      data: {
-        message: "Rejected an unowned or invalid order event",
-        errorName: "UnownedOrderEventError",
-        errorCode: "UNOWNED_ORDER_EVENT_REJECTED",
-        symbol: "LINKFDUSD",
-        side: "SELL",
-        brokerOrderId: "617765818",
-        clientOrderId: "h-34afc4ca9c1a473ea7c060-30",
-        executionId: "15507",
-        failureCategory: "ORDER_OWNERSHIP",
-        failureStage: "ORDER_EVENT_VALIDATION",
-      },
-    })
-
+    logging.errorBuffer.transport.write(createUnknownExternalOrderPauseErrorEntry())
+    logging.errorBuffer.transport.write(createUnownedOrderRejectionErrorEntry())
     await closeHarvesterPersistence(persistence)
     await inspectSqlite({
       filename: context.filename,
-      work: (database) => {
-        const rows = database.prepare(
-          "SELECT * FROM runtime_errors ORDER BY occurred_at",
-        ).all()
-        assert.equal(rows.length, 3, "Every buffered and live ERROR record must be persisted exactly once.")
-        assert.equal(rows[0].runtime_session_id, "runtime-session-1650")
-        assert.equal(rows[0].occurred_at, "2026-11-21T08:44:20.000Z")
-        assert.equal(rows[0].severity, "error")
-        assert.equal(rows[0].error_name, "HistorySyncError")
-        assert.equal(rows[0].error_code, "HISTORY_SYNC_CURSOR_WRITE_FAILED")
-        assert.equal(rows[0].symbol, "ZROFDUSD")
-        assert.equal(rows[0].strategy_id, null, "Missing strategy ownership must remain SQL NULL.")
-        assert.equal(rows[0].failure_stage, "ORDER_CURSOR_SAVE")
-        assert.doesNotMatch(rows[0].message, /top-secret/, "Free-form messages must redact obvious credential assignments.")
-        assert.doesNotMatch(rows[0].details_json, /top-secret|apiKey|stack/, "The relational projection must omit sensitive keys and unrestricted stack text.")
-        const historyDetails = JSON.parse(rows[0].details_json).historyDiagnostics
-        assert.equal(historyDetails.currentMarket, "ZROFDUSD")
-        assert.equal(historyDetails.ordersPersisted, 999)
-        assert.equal(historyDetails.fillPagesChecked, 0)
-        assert.equal(rows[1].error_code, "UNKNOWN_OR_EXTERNAL_ORDER_EVENT")
-        assert.equal(rows[1].symbol, "LINKFDUSD")
-        assert.equal(rows[1].side, undefined, "Unlisted diagnostic fields must not become arbitrary SQL columns.")
-        assert.equal(rows[1].strategy_id, null, "An external SELL event must not receive inferred strategy ownership.")
-        assert.equal(rows[2].error_code, "UNOWNED_ORDER_EVENT_REJECTED")
-        assert.equal(rows[2].broker_order_id, "617765818")
-        assert.equal(rows[2].client_order_id, "h-34afc4ca9c1a473ea7c060-30")
-        assert.equal(rows[2].execution_id, "15507")
-        assert.equal(rows[2].strategy_id, null)
-      },
+      work: (database) => assertPersistedRuntimeErrorRows({ database }),
     })
   } finally {
     await logging.close()

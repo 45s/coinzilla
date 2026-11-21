@@ -947,12 +947,20 @@ test("buffers startup ERROR records and streams later errors without duplicating
     assert.deepEqual(persisted, [first, second], "The handoff must persist prior errors and stream later errors exactly once.")
     assert.deepEqual(
       logging.errorBuffer.getDiagnostics(),
-      { bufferedCount: 0, droppedCount: 0, active: true, closed: false },
+      {
+        bufferedCount: 0,
+        droppedCount: 0,
+        active: true,
+        closed: false,
+      },
       "The active error buffer must expose an empty queue and no capture loss.",
     )
     await logging.close()
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -973,7 +981,10 @@ test("bounds pre-persistence error buffering and reports every dropped record", 
         timestamp: "2026-11-21T08:00:01.000Z",
         level: "error",
         method: "error",
-        data: { message: "Buffered startup error", index },
+        data: {
+          message: "Buffered startup error",
+          index,
+        },
       })
     }
     logging.errorBuffer.transport.write({
@@ -984,7 +995,12 @@ test("bounds pre-persistence error buffering and reports every dropped record", 
     })
     assert.deepEqual(
       logging.errorBuffer.getDiagnostics(),
-      { bufferedCount: 10000, droppedCount: 1, active: false, closed: false },
+      {
+        bufferedCount: 10000,
+        droppedCount: 1,
+        active: false,
+        closed: false,
+      },
       "The pre-database buffer must be bounded and make overflow visible without retaining unbounded memory.",
     )
     await logging.close()

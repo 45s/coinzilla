@@ -1268,9 +1268,18 @@ test("logs partial startup history diagnostics when an order cursor write fails"
     market: metadata.market,
     side: "BUY",
     type: "LIMIT_MAKER",
-    limitPrice: new Money({ amount: "65000", asset: metadata.market.quoteAsset }),
-    originalQuantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
-    executedQuantity: new Quantity({ amount: "0.01", asset: metadata.market.baseAsset }),
+    limitPrice: new Money({
+      amount: "65000",
+      asset: metadata.market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: "0.01",
+      asset: metadata.market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0.01",
+      asset: metadata.market.baseAsset,
+    }),
     status: "FILLED",
     createdAt: 1,
     acknowledgedAt: 1,
@@ -1278,8 +1287,11 @@ test("logs partial startup history diagnostics when an order cursor write fails"
     completedAt: 1,
   })
   broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
-    calls.push("history:orders:" + symbol + ":" + orderId)
-    return { ok: true, data: [historicalOrder] }
+    calls.push(`history:orders:${symbol}:${orderId}`)
+    return {
+      ok: true,
+      data: [historicalOrder],
+    }
   }
   const persistedOrders = []
   const persistedFills = []
