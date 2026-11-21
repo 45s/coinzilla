@@ -6335,28 +6335,28 @@ async function emitTwoMarketPrices({ broker, debugLogs } = {}) {
 }
 
 function assertEachEnabledMarketWasEvaluated({ debugLogs } = {}) {
-      const receivedMarketPrices = new Set(
-        debugLogs
-          .filter(({ message }) => message === "Harvester market price event received")
-          .map(({ symbol, price }) => `${symbol}:${price}`),
-      )
-      assert.deepEqual(
-        receivedMarketPrices,
-        new Set(["BTCUSDT:65000.12", "ETHUSDT:3500.12"]),
-        "Each enabled symbol's price event must reach the runtime through its own subscription.",
-      )
-  
-      const evaluatedMarketPrices = new Set(
-        debugLogs
-          .filter(({ message }) => message === "Market price evaluated")
-          .map(({ symbol, price }) => `${symbol}:${price}`),
-      )
-      assert.deepEqual(
-        evaluatedMarketPrices,
-        new Set(["BTCUSDT:65000.12", "ETHUSDT:3500.12"]),
-        "Each enabled market must be evaluated independently after its own price event.",
-      )
-  
+    const receivedMarketPrices = new Set(
+      debugLogs
+        .filter(({ message }) => message === "Harvester market price event received")
+        .map(({ symbol, price }) => `${symbol}:${price}`),
+    )
+    assert.deepEqual(
+      receivedMarketPrices,
+      new Set(["BTCUSDT:65000.12", "ETHUSDT:3500.12"]),
+      "Each enabled symbol's price event must reach the runtime through its own subscription.",
+    )
+
+    const evaluatedMarketPrices = new Set(
+      debugLogs
+        .filter(({ message }) => message === "Market price evaluated")
+        .map(({ symbol, price }) => `${symbol}:${price}`),
+    )
+    assert.deepEqual(
+      evaluatedMarketPrices,
+      new Set(["BTCUSDT:65000.12", "ETHUSDT:3500.12"]),
+      "Each enabled market must be evaluated independently after its own price event.",
+    )
+
 }
 
 test("delivers market price events independently for every enabled market", async () => {
@@ -6364,7 +6364,7 @@ test("delivers market price events independently for every enabled market", asyn
   const debugLogs = []
   const broker = createBroker(calls)
   const placeOrderCalls = []
-  const placeOrder = broker.placeOrder
+  const { placeOrder } = broker
   broker.placeOrder = async (input) => {
     placeOrderCalls.push(input)
     return placeOrder(input)
