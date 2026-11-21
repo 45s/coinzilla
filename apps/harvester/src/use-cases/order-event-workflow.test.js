@@ -28,6 +28,20 @@ const market = new Market({
   quoteAsset
 })
 
+function createOrderProviderProvenance({ includeProviderProvenance, providerInstanceId, accountId }) {
+  return includeProviderProvenance
+    ? {
+      providerInstanceId,
+      providerType: "binance",
+      accountId,
+    }
+    : {}
+}
+
+function isTerminalOrderStatus({ status }) {
+  return ["FILLED", "CANCELED", "EXPIRED", "REJECTED"].includes(status)
+}
+
 function makeOrder({
   side = "BUY",
   status = "PARTIALLY_FILLED",
@@ -43,33 +57,31 @@ function makeOrder({
   return new CanonicalOrder({
     clientOrderId,
     brokerOrderId,
-    ...(includeProviderProvenance ? {
+    ...createOrderProviderProvenance({
+      includeProviderProvenance,
       providerInstanceId,
-      providerType: "binance",
       accountId,
-    } : {}),
+    }),
     market: orderMarket,
     side,
     type: "LIMIT",
     limitPrice: new Money({
       amount: "100",
-      asset: orderMarket.quoteAsset
+      asset: orderMarket.quoteAsset,
     }),
     originalQuantity: new Quantity({
       amount: quantity,
-      asset: orderMarket.baseAsset
+      asset: orderMarket.baseAsset,
     }),
     executedQuantity: new Quantity({
       amount: executedQuantity,
-      asset: orderMarket.baseAsset
+      asset: orderMarket.baseAsset,
     }),
     status,
     createdAt: 1,
     acknowledgedAt: 1,
     updatedAt: 2,
-    ...(status === "FILLED" || status === "CANCELED" || status === "EXPIRED" || status === "REJECTED"
-      ? { completedAt: 2 }
-      : {}),
+    ...(isTerminalOrderStatus({ status }) ? { completedAt: 2 } : {}),
   })
 }
 
@@ -186,6 +198,18 @@ duplicate: true } })
   }
 }
 
+function createWorkflowPairs({ terminalFills, externalOrdersPolicy }) {
+  const symbols = new Set([
+    market.symbol,
+    ...terminalFills.map((fill) => fill.market.symbol),
+  ])
+  return Object.fromEntries([...symbols].map((symbol) => [symbol, {
+    keepQuantity: "0",
+    minProfit: "0.01",
+    externalOrdersPolicy,
+  }]))
+}
+
 function createWorkflowDependencies({
   state,
   calls,
@@ -206,14 +230,10 @@ function createWorkflowDependencies({
         data: terminalFills.filter((fill) => fill.market.symbol === symbol),
       }),
     },
-    pairs: Object.fromEntries(
-      [...new Set([market.symbol, ...terminalFills.map((fill) => fill.market.symbol)])]
-        .map((symbol) => [symbol, {
-          keepQuantity: "0",
-          minProfit: "0.01",
-          externalOrdersPolicy,
-        }]),
-    ),
+    pairs: createWorkflowPairs({
+      terminalFills,
+      externalOrdersPolicy,
+    }),
     eventPublisher: createWorkflowEventPublisher({ calls }),
     updateTradingAccounting: createWorkflowAccountingRecorder({
       calls,
@@ -448,7 +468,7 @@ test("reconciles a terminal SELL before durably completing its recovery cycle", 
   assert.deepEqual(calls.pauses, [], "A fully reconciled and durably completed SELL must not pause the market.")
 })
 
-test("attributes terminal fill history by market when broker order IDs collide", async () => {
+function createCollidingMarketTerminalFixture() {
   const otherBaseAsset = new Asset({
     id: "eth",
     code: "ETH",
@@ -499,25 +519,38 @@ test("attributes terminal fill history by market when broker order IDs collide",
       includeProviderProvenance: false,
     }),
   ]
-  const registry = new OrderRegistry({
-    orders: [firstOrder, secondOrder],
-  })
-  const { workflow, calls } = makeWorkflow({
-    registry,
-    terminalFills: fills,
-  })
+  return {
+    firstOrder,
+    secondOrder,
+    fills,
+    registry: new OrderRegistry({
+      orders: [firstOrder, secondOrder],
+    }),
+  }
+}
 
-  await workflow.processUserDataEventTransition({
+async function processTerminalOrder({ workflow, order }) {
+  return workflow.processUserDataEventTransition({
     event: {
       eventType: "executionReport",
-      executedOrder: firstOrder,
+      executedOrder: order,
     },
   })
-  await workflow.processUserDataEventTransition({
-    event: {
-      eventType: "executionReport",
-      executedOrder: secondOrder,
-    },
+}
+
+test("attributes terminal fill history by market when broker order IDs collide", async () => {
+  const fixture = createCollidingMarketTerminalFixture()
+  const { workflow, calls } = makeWorkflow({
+    registry: fixture.registry,
+    terminalFills: fixture.fills,
+  })
+  await processTerminalOrder({
+    workflow,
+    order: fixture.firstOrder,
+  })
+  await processTerminalOrder({
+    workflow,
+    order: fixture.secondOrder,
   })
 
   assert.deepEqual(
