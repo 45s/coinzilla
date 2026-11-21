@@ -5,7 +5,7 @@
 - Owner: Brokers
 - Applies to: Every human contributor, AI coding agent, and automated contributor changing Bitunix Spot behavior
 
-This document is the mandatory Bitunix-specific workflow. It supplements, and never weakens, the repository [engineering standards](../../../ENGINEERING_STANDARDS.md), [AI-agent workflow](../../../AI_AGENT_WORKFLOW.md), [structured error handling standard](../../../../docs/engineering/structured-error-handling.md), and [Broker API contract](../BROKER_API.md).
+This document is the mandatory Bitunix-specific workflow. It supplements, and never weakens, the repository [engineering standards](../../../ENGINEERING_STANDARDS.md), [AI-agent workflow](../../../AI_AGENT_WORKFLOW.md), [structured error handling standard](../../../docs/engineering/structured-error-handling.md), and [Broker API contract](../BROKER_API.md).
 
 ## 1. Objective and architectural boundary
 

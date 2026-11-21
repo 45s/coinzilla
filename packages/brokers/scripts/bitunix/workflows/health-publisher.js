@@ -23,7 +23,6 @@ const REPORT_COMMIT_MESSAGE = "chore(brokers): publish sanitized Bitunix health 
 
 
 
-export 
 async function executeGitCommand({ repositoryRoot, args }) {
   const gitEnv = createGitEnvironment({ env: process.env })
   const { stdout } = await execFileAsync("git", args, {

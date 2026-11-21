@@ -11,7 +11,6 @@ import {
 
 const BITUNIX_OPERATOR_ORDER_CONFIRMATION = "SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER"
 
-export 
 /**
  * Persist an exclusive one-shot marker before dispatching the order request.
  *

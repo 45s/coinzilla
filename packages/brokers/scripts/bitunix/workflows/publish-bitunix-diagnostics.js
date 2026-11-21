@@ -10,7 +10,7 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../.
 function printHelp() {
   process.stdout.write([
     "Run read-only Bitunix Spot diagnostics and publish a sanitized report branch.",
-    "Run from packages/brokers on a clean develop checkout: node scripts/bitunix-healthcheck.js",
+    "Run from packages/brokers on a clean develop checkout: node scripts/bitunix/bitunix-healthcheck.js",
     "Credentials are loaded from packages/brokers/.env.development.",
     "The report branch is pushed to origin and the local checkout returns to develop.",
     "Only redacted diagnostic metadata is committed; local reports stay ignored.",
