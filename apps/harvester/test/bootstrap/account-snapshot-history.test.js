@@ -274,7 +274,7 @@ function createConfiguredMarketSnapshotFixture({ broker }) {
     },
   })
   return {
-    config: createConfiguredAssetSnapshotConfig(),
+    config: createConfiguredMarketSnapshotConfig(),
     expectedAssetCodes: ["BTC", "DOGE", "ETH", "FDUSD", "SOL", "USDT", "ZRO"],
   }
 }
