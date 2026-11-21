@@ -183,7 +183,15 @@ function normalizePagination({ pagination = {} } = {}) {
   })
 }
 
-function listRecords({ database, table, mapper, filters, columns, orderBy, pagination } = {}) {
+function listRecords({
+  database,
+  table,
+  mapper,
+  filters,
+  columns,
+  orderBy,
+  pagination,
+} = {}) {
   const normalizedFilters = normalizeFilters({ filters, columns })
   const normalizedPagination = normalizePagination({ pagination })
   const { total } = database.prepare(
