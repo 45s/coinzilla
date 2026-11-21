@@ -252,7 +252,7 @@ test("supports browser preflight and validates server configuration", async (t) 
   await assert.rejects(
     () => module.startTradingHistoryApiServer({
       queries,
-      environment: "testnet",
+      environment: "sandbox",
       port: 0,
     }),
     /environment/,
