@@ -100,14 +100,25 @@ export function reportOperatorFailure({
   env,
   stderr = process.stderr,
 } = {}) {
+  const secrets = [
+    env.BITUNIX_API_KEY,
+    env.BITUNIX_API_SECRET,
+  ]
   const message = redactApiSecrets({
     message: error?.message ?? error,
-    secrets: [
-      env.BITUNIX_API_KEY,
-      env.BITUNIX_API_SECRET,
-    ],
+    secrets,
   })
   stderr.write(`Bitunix operator order attempt stopped: ${message}\n`)
+  for (const [label, value] of [
+    ["Broker error code", error?.code],
+    ["Bitunix exchange code", error?.exchangeCode],
+    ["HTTP status", error?.status],
+    ["Error kind", error?.kind],
+  ]) {
+    if (value !== undefined && value !== null) {
+      stderr.write(`${label}: ${redactApiSecrets({ message: String(value), secrets })}\n`)
+    }
+  }
   stderr.write(
     "If the one-shot marker exists or dispatch may have started, do not rerun; reconcile manually first.\n",
   )
