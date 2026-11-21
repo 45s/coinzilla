@@ -321,7 +321,9 @@ function createResponseReadError({ error, response, path, stateChanging }) {
     cause: error,
     path,
     status: hasValidMetadata ? response.status : null,
-    outcomeUnknown: stateChanging,
+    outcomeUnknown: isHttpFailure
+      ? stateChanging && isAmbiguousMutationHttpStatus({ status: response.status })
+      : stateChanging,
     retryAfterMs: isHttpFailure ? parseRetryAfterMs({ response }) : null,
   })
 }

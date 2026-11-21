@@ -14,6 +14,12 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 Consolidate every Bitunix script under `scripts/bitunix/` with one CLI entry point, `run-healthcheck.js`. The default remains a read-only health check with sanitized report publishing; `--local` runs local-only diagnostics; `--place-order` runs the read-only health checks first and, only when healthy, performs the already guarded fixed HYPEUSDT attempt inside the same report-branch workflow. The sanitized outcome is published and the checkout returns to `develop`. Pure supporting functions live in `helpers/` with colocated tests. The mandatory workflow document is maintained under `docs/BITUNIX_WORKFLOW.md`. This is a tooling/layout change, not a provider capability or production-readiness change.
 
+## Bitunix Spot order mutation outcome classification — #1655
+
+**Status: IN PROGRESS** — [issue #1655](https://github.com/45s/coinzilla/issues/1655) / [PR #1663](https://github.com/45s/coinzilla/pull/1663).
+
+The follow-up regression suite exercises non-JSON HTTP responses through both the Bitunix REST client and `BitunixSpotBroker.createOrder()`. A non-JSON HTTP 400/429 must be a definitive `REJECTED`; 408/409/5xx remain `OUTCOME_UNKNOWN`. All paths must preserve HTTP status and retry metadata and must never retry the placement. The original pre-dispatch classification work merged in PR #1656; this task closes the remaining non-JSON failure-path gap. No LIVE/TESTNET mutation is used by tests, and issue #1185 production-readiness blockers remain unchanged.
+
 ## One-shot local Bitunix HYPEUSDT operator attempt — #1608
 
 **Status: COMPLETE** — [issue #1608](https://github.com/45s/coinzilla/issues/1608) · [PR #1609](https://github.com/45s/coinzilla/pull/1609) merged into `develop` on 2026-11-21.
