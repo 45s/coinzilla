@@ -21,6 +21,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Startup open-order boundary plan](plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md) — completed design and implementation record for #1157
 - [Trading First](TRADING_FIRST.md) — authoritative trading priority and exchange-safety requirements
 
+
 ## Reliability acceptance — issue #1639
 
 The machine-readable [critical behavior inventory](critical-behaviors.json) maps each critical Harvester behavior to authoritative domain invariants, owning production modules, named normal/failure regression tests, integration/replay evidence where required, runtime status, and measured per-module coverage floors. The required Unit Tests workflow validates the inventory and test ownership before running the complete Harvester package suite. Run the same guard locally with `pnpm --filter @coinzilla/harvester check:reliability`.
@@ -40,7 +41,7 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
-- [Strategy extensibility architecture discussion and audit roadmap](architecture/strategy-extensibility-audit-roadmap.md) — current source observations, agreed design direction, open decisions and S-1 through S-4 audit roadmap.
+- [Strategy extensibility architecture roadmap](architecture/strategy-extensibility-audit-roadmap.md) — S-1/S-2 boundary decisions and S-4 CG/RS runtime-composition evidence are complete; S-3 future-strategy onboarding template remains.
 - [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — historical source-verified design/audit snapshot; current implementation is governed by the Harvester persistence README.
 - [Harvester ordinary persistence](persistence/README.md) — current relational orders/fills, live-fill, startup history-sync, backup and full JSON export commands and safety contract.
 - [Trading-history persistence roadmap](persistence/trading-history-roadmap.md) — completed Phases 1–3 and planned attribution, analytics and remaining operational hardening.
