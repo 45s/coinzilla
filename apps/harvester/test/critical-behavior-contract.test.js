@@ -35,11 +35,11 @@ const fileContents = {
   ].join("\n"),
 }
 
-function validate({ contract = validContract, changedFiles = [] } = {}) {
+function validate({ contract = validContract, changedFiles = [], files = fileContents } = {}) {
   return validateCriticalBehaviorContract({
     contract,
     changedFiles,
-    readFile: (path) => fileContents[path],
+    readFile: (path) => files[path],
   })
 }
 
@@ -160,5 +160,22 @@ test("rejects a non-boolean integration evidence requirement", () => {
   assert.ok(
     result.errors.some((error) => error.includes("ORDER-IDENTITY") && error.includes("integrationRequired")),
     "Integration evidence requirements must be explicit booleans.",
+  )
+})
+
+test("does not accept a regression title that appears only in a source comment", () => {
+  const files = {
+    ...fileContents,
+    "src/domain/orders/order-registry.test.js": [
+      '// test("matches an execution report by broker order ID when Binance client ID differs", () => {})',
+      'test("ignores FILLED-to-OPEN regressions regardless of event timestamp", () => {})',
+    ].join("\\n"),
+  }
+
+  const result = validate({ files })
+
+  assert.ok(
+    result.errors.some((error) => error.includes("matches an execution report")),
+    "A comment containing a deleted test title must not count as executable regression evidence.",
   )
 })
