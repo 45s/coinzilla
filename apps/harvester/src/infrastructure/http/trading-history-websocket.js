@@ -280,6 +280,12 @@ function getUpgradeKey({ request, socket, clients } = {}) {
     })
     return null
   }
+  if (url.searchParams.has("token")) {
+    rejectUpgrade({
+      socket,
+    })
+    return null
+  }
   if (!isUpgradeRequest(request)) {
     rejectUpgrade({
       socket,
