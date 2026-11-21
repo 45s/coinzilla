@@ -49,8 +49,13 @@ test("CLI identity resolves the exact Git HEAD and worktree state without a shel
     packageVersion: "1.0.0",
     repositoryRoot: "/repo",
     nodeVersion: "v26.13.0",
-    runGit: (command, args, options) => {
-      calls.push({ command, args, options })
+    runGit: (...gitCall) => {
+      const [command, args, options] = gitCall
+      calls.push({
+        command,
+        args,
+        options,
+      })
       return args[0] === "rev-parse"
         ? "d82cf8f0bd7ac2a2db540c17f6283c0b82395fa1\n"
         : ""
