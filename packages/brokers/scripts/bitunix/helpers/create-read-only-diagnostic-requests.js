@@ -1,4 +1,4 @@
-export function parseDepthPrecision({ value }) {
+export function parseDiagnosticDepthPrecision({ value }) {
   if (typeof value !== "string" || !value.trim()) {
     return null
   }

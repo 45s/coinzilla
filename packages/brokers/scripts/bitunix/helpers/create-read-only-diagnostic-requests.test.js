@@ -5,14 +5,14 @@ import {
   createReadOnlyRestRequest,
   getReadOnlyBrokerOperations,
   getRestDiagnosticSkipReason,
-  parseDepthPrecision,
+  parseDiagnosticDepthPrecision,
 } from "./create-read-only-diagnostic-requests.js"
 
 test("diagnostic depth precision accepts an explicit non-negative number", () => {
-  assert.equal(parseDepthPrecision({ value: "" }), null, "omitted precision should skip optional probes")
-  assert.equal(parseDepthPrecision({ value: "0" }), 0, "zero precision is valid")
-  assert.throws(() => parseDepthPrecision({ value: "-1" }), /non-negative number/, "negative precision must fail closed")
-  assert.throws(() => parseDepthPrecision({ value: "Infinity" }), /non-negative number/, "non-finite precision must fail closed")
+  assert.equal(parseDiagnosticDepthPrecision({ value: "" }), null, "omitted precision should skip optional probes")
+  assert.equal(parseDiagnosticDepthPrecision({ value: "0" }), 0, "zero precision is valid")
+  assert.throws(() => parseDiagnosticDepthPrecision({ value: "-1" }), /non-negative number/, "negative precision must fail closed")
+  assert.throws(() => parseDiagnosticDepthPrecision({ value: "Infinity" }), /non-negative number/, "non-finite precision must fail closed")
 })
 
 test("REST diagnostic requests remain explicitly read-only", () => {

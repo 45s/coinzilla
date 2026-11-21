@@ -6,12 +6,12 @@ import { publishHealthReport } from "./publish-health-report.js"
 import { evaluateReadOnlyHealthCheck } from "../helpers/health-report.js"
 import { appendOrderAttemptResult } from "../helpers/append-order-attempt-result.js"
 
-function createLocalReportPath({ brokersRoot, now }) {
+function createLocalDiagnosticReportPath({ brokersRoot, now }) {
   const timestamp = new Date(now()).toISOString().replaceAll(/[:.]/g, "-")
   return resolve(brokersRoot, ".diagnostics", `bitunix-${timestamp}.json`)
 }
 
-async function writeLocalReport({ report, outputPath }) {
+async function writeLocalDiagnosticReport({ report, outputPath }) {
   await mkdir(dirname(outputPath), {
     recursive: true,
     mode: 0o700,
@@ -23,7 +23,7 @@ async function writeLocalReport({ report, outputPath }) {
   })
 }
 
-function printLocalSummary({ report, outputPath, stdout }) {
+function printLocalDiagnosticSummary({ report, outputPath, stdout }) {
   const { passed, failed, skipped, total } = report.summary
   const configuration = report.results.find((entry) => entry.operation === "diagnostic configuration")
   const missingCredentials = configuration?.response?.missingCredentialVariables ?? []
@@ -45,15 +45,15 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
     env,
     brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
   })
-  const outputPath = createLocalReportPath({
+  const outputPath = createLocalDiagnosticReportPath({
     brokersRoot,
     now: Date.now,
   })
-  await writeLocalReport({
+  await writeLocalDiagnosticReport({
     report,
     outputPath,
   })
-  printLocalSummary({
+  printLocalDiagnosticSummary({
     report,
     outputPath,
     stdout,

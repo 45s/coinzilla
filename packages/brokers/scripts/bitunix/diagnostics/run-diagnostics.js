@@ -23,7 +23,7 @@ import {
   createReadOnlyRestRequest,
   getReadOnlyBrokerOperations,
   getRestDiagnosticSkipReason,
-  parseDepthPrecision,
+  parseDiagnosticDepthPrecision,
 } from "../helpers/create-read-only-diagnostic-requests.js"
 import {
   createSanitizedInboundPayload,
@@ -1925,7 +1925,7 @@ async function runConfiguredDiagnostics({
     if (!Number.isInteger(requestTimeout) || requestTimeout < 1 || requestTimeout > 60_000) {
       throw new RangeError("DIAGNOSTIC_CONFIG.timeoutMs must be an integer between 1 and 60000")
     }
-    depthPrecision = parseDepthPrecision({
+    depthPrecision = parseDiagnosticDepthPrecision({
       value: env.BITUNIX_DIAGNOSTICS_DEPTH_PRECISION,
     })
   } catch (error) {
