@@ -1478,7 +1478,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 
 ## 2026-11-19 — Bitunix polling recovery delivery (#1516)
 
-**Status: In progress.** PR [#1516](https://github.com/45s/coinzilla/pull/1516) closes a delivery gap in the existing read-only observation lifecycle.
+**Status: COMPLETE and merged** — [PR #1516](https://github.com/45s/coinzilla/pull/1516), merge commit `afae5d04ad5fba8657e13b3b8dda38a408b02622`. Exact PR-head required workflow runs passed; no live Bitunix request or exchange mutation was performed.
 
 - A failed polling cycle invalidates the previous semantic fingerprint; the next successful cycle republishes a complete observation even when exchange data is unchanged.
 - Recovery resets the exponential backoff to the configured interval. Failed cycles and callback failures do not publish partial snapshots.
@@ -1486,7 +1486,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Added a failure-path regression for scheduler cancellation: local stop state and cleanup remain idempotent even when the injected cancel function throws.
 - Updated the polling contract and production-readiness matrix to distinguish this recovery guarantee from authoritative event/fill reconciliation.
 - No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
-- Required CI must pass on the exact final PR head before this item is marked complete.
+- Verified on exact PR head `63906b7df5b2ef13b0ec47fb5625f12c41e2e49a`: all seven required workflows passed.
 
 ## Bitunix Spot history request-adapter decomposition (#1517)
 
