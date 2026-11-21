@@ -30,18 +30,6 @@ function resolveTradingHistoryApiEnvironment({ env, environment } = {}) {
   return selectedEnvironment
 }
 
-function resolveTradingHistoryApiHost({ env, environment } = {}) {
-  const host = env.HARVESTER_API_HOST || DEFAULT_API_HOST
-  if (typeof host !== "string" || host.trim() !== host || host.length === 0) {
-    throw new TradingHistoryApiStartupError({
-      message: "HARVESTER_API_HOST must be a non-empty host name or IP address.",
-      code: "HARVESTER_TRADING_HISTORY_API_CONFIGURATION_INVALID",
-      environment,
-    })
-  }
-  return host
-}
-
 function resolveTradingHistoryApiPort({ env, environment } = {}) {
   const port = env.HARVESTER_API_PORT === undefined
     ? DEFAULT_API_PORT
@@ -63,10 +51,7 @@ function resolveStartupConfiguration({ env, environment } = {}) {
   })
   return Object.freeze({
     environment: selectedEnvironment,
-    host: resolveTradingHistoryApiHost({
-      env,
-      environment: selectedEnvironment,
-    }),
+    host: DEFAULT_API_HOST,
     port: resolveTradingHistoryApiPort({
       env,
       environment: selectedEnvironment,
