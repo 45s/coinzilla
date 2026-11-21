@@ -298,7 +298,6 @@ The Harvester documentation index and persistence index link the new blueprint. 
 | --- | --- |
 | `docs/architecture/decisions/ADR-0005-generic-user-data-observation-channel.md` | Defines the provider-neutral distinction between native user-data events and non-authoritative polling observations, while preserving Bitunix provider-admission and trading-readiness barriers. |
 
-
 ## Current recursive inventory checkpoint — develop `0f827ba7551be61a1be58f8dced191fb0a090870` (2026-11-21)
 
 A fresh recursive Git tree request returned `truncated: false` and contains **179 tracked Markdown/MDX files**: **94 under `apps/harvester/` and 85 elsewhere**. This is 19 more paths than the prior 160-file checkpoint at `543753da5938eba2d95ad19d74c3f98a991e6461`. A direct path-set comparison found 24 additions and 5 removals (net +19); no file-content or factual-accuracy claim is implied by this inventory update.
@@ -351,13 +350,9 @@ These paths are absent from the current recursive tree. Their inbound-reference 
 - This checkpoint records path additions/removals only. It does **not** mark the 179 documents as factually verified. #1401 owns the complete maintained-document source audit; #1403 owns reference tracing and migration decisions.
 - Historical session/audit/evidence records remain preserved. No historical conclusion or timestamp was rewritten.
 
-
 ### Current maintained/historical classification — develop `0f827ba7551be61a1be58f8dced191fb0a090870`
 
 The complete recursive tree contains 179 Markdown/MDX files. Applying the current `scripts/markdown-path-policy.js` classification yields **150 maintained paths and 29 historical paths**. This supersedes the prior 160-file / 132-maintained / 28-historical checkpoint for current counts only; all older checkpoint rows remain historical evidence. The classification is a path policy, not a claim that every maintained document has passed factual source review.
-
-
-
 
 ## S-10 factual-review coverage and known unknowns — 2026-11-21
 
