@@ -205,6 +205,23 @@ async function disconnectMutationBroker({ orderBroker, writeLine }) {
   }
 }
 
+async function readAndConfirmHypeUsdtOrder({ readBroker, confirm, writeLine }) {
+  const preflight = await readHypeUsdtOperatorPreflight({
+    readBroker,
+  })
+  writeLine(formatOrderPreflightSummary({
+    preflight,
+  }))
+  const approved = await confirm({
+    preflight,
+    order: preflight.order,
+  })
+  return {
+    preflight,
+    approved,
+  }
+}
+
 /**
  * Run read-only preflight, require human approval, then submit exactly one order.
  *
@@ -233,15 +250,10 @@ export async function runGuardedHypeUsdtOrderAttempt({
       createMarker,
       writeLine,
     })
-    const preflight = await readHypeUsdtOperatorPreflight({
+    const { preflight, approved } = await readAndConfirmHypeUsdtOrder({
       readBroker,
-    })
-    writeLine(formatOrderPreflightSummary({
-      preflight,
-    }))
-    const approved = await confirm({
-      preflight,
-      order: preflight.order,
+      confirm,
+      writeLine,
     })
     if (approved !== true) {
       writeLine("Operator did not confirm the displayed order. No order was sent.")
