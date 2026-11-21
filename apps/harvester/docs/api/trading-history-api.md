@@ -156,6 +156,7 @@ After authentication, clients may receive resource-only messages:
 The `resources` array contains one or more of `orders`, `fills`, and `commissions`. Order notifications are published only after an order-history repository upsert succeeds. Fill notifications are published only after the fill and its commission facts have been persisted successfully; they invalidate both `fills` and `commissions`. Failed persistence writes never produce success notifications. The WebSocket does not include financial record values or account identifiers.
 
 These messages are invalidation hints, not a durable event stream:
+
 - EventBus delivery is in-memory and best-effort. Messages can be missed while disconnected or when a process/socket fails.
 - There are no replay cursors, acknowledgements, exactly-once guarantees, or client-side event offsets.
 - REST list/detail resources remain authoritative.
