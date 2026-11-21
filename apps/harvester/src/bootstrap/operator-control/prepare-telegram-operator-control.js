@@ -14,6 +14,7 @@ export class OperatorControlStartupError extends Error {
 const disabledLifecycle = Object.freeze({
   enabled: false,
   operationalStateStore: undefined,
+  getOperator() { return undefined },
   async start() {
     return Object.freeze({
       started: false,
@@ -80,6 +81,7 @@ function createTelegramAdapterStartedResult(alreadyStarted) {
 async function startTelegramOperatorAdapter({
   getAdapter,
   setAdapter,
+  setOperator,
   botToken,
   telegramConfig,
   createAdapter,
@@ -107,6 +109,7 @@ async function startTelegramOperatorAdapter({
     getOpenOrders,
     recoverySellerStopWorkflow,
   })
+  setOperator(operator)
   try {
     const adapter = createAndValidateTelegramAdapter({
       createAdapter,
@@ -168,13 +171,17 @@ function createAdapterStopHandler({ getAdapter, setAdapter } = {}) {
 
 function createEnabledLifecycle(options = {}) {
   let adapter
+  let operator
   const getAdapter = () => adapter
+  const setOperator = (nextOperator) => { operator = nextOperator }
+  const getOperator = () => operator
   const setAdapter = (nextAdapter) => {
     adapter = nextAdapter
   }
   return Object.freeze({
     enabled: true,
     operationalStateStore: options.operationalStateStore,
+    getOperator,
     start: createAdapterStartHandler({
       ...options,
       getAdapter,
