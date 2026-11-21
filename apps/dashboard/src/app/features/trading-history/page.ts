@@ -515,6 +515,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
 
   private stopLiveUpdates(): void {
     this.manuallyDisconnected = true;
+    this.reconnectAttempt = 0;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
