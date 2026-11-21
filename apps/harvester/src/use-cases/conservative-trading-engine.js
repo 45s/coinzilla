@@ -1699,8 +1699,7 @@ initialRegistry })
     pairs,
     runTransition,
   })
-  let strategyEvaluationSequence = 0
-  let marketPriceEventSequence = 0
+  let strategyEvaluationSequence = 0, marketPriceEventSequence = 0
   const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
   const rememberProcessedFill = createProcessedFillTracker({ state })
   const executionFillAccounting = createExecutionFillAccounting({ state,
