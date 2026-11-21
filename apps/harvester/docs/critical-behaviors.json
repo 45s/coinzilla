@@ -205,7 +205,8 @@
       "sourceModules": [
         "src/domain/portfolio/portfolio.js",
         "src/domain/strategies/conservative/recovery-ledger.js",
-        "src/domain/portfolio/position-accounting.js"
+        "src/domain/portfolio/position-accounting.js",
+        "src/use-cases/conservative-trading-engine.js"
       ],
       "tests": [
         {
@@ -217,13 +218,19 @@
           "path": "src/domain/strategies/conservative/recovery-ledger.test.js",
           "name": "rejects a reused Fill ID when recovery execution facts differ",
           "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "accounts streamed partial BUY executions before advancing the completed-BUY lifecycle",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
         "Portfolio and RecoveryLedger consume the same canonical fill exactly once and preserve consistent quote basis/proceeds.",
         "Reset cycle basis only after verified profitable SELL completion and retained-inventory allocation."
-      ]
+      ],
+      "integrationRequired": true
     },
     {
       "id": "STRATEGY_BUY_SELL_SAFETY_GATES",
