@@ -119,4 +119,49 @@ describe('MarketScreenerComponent', () => {
     });
     await fixture.whenStable();
   });
+  it('filters only against the native percentage for the selected window', async () => {
+    await TestBed.configureTestingModule({
+      imports: [MarketScreenerComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+
+    const fixture = TestBed.createComponent(MarketScreenerComponent);
+    fixture.detectChanges();
+    const snapshot = createSnapshot();
+    const market = {
+      ...snapshot.markets[0],
+      change1h: '-0.25',
+    };
+    http.expectOne(MARKET_DATA_URL).flush({
+      ok: true,
+      data: {
+        ...snapshot,
+        markets: [market],
+      },
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const movementWindow = fixture.nativeElement.querySelector('select[aria-label="Movement window"]') as HTMLSelectElement;
+    const movementDirection = fixture.nativeElement.querySelector('select[aria-label="Movement direction"]') as HTMLSelectElement;
+    expect(movementWindow.disabled).toBe(false);
+    expect(movementDirection.disabled).toBe(true);
+
+    movementWindow.value = 'change1h';
+    movementWindow.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(movementDirection.disabled).toBe(false);
+
+    movementDirection.value = 'negative';
+    movementDirection.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('BTCUSDT');
+
+    movementDirection.value = 'positive';
+    movementDirection.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('BTCUSDT');
+  });
+
 });
