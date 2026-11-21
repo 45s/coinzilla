@@ -61,8 +61,14 @@ test("createRestSignature preserves whitespace inside JSON string values", () =>
     secretKey: "secret",
   }
   assert.equal(
-    createRestSignature({ ...options, body: '{ "note": "two words" }' }),
-    createRestSignature({ ...options, body: { note: "two words" } }),
+    createRestSignature({
+      ...options,
+      body: '{ "note": "two words" }',
+    }),
+    createRestSignature({
+      ...options,
+      body: { note: "two words" },
+    }),
   )
 })
 
@@ -75,7 +81,11 @@ test("createRestSignature signs the exact serialized JSON body when requested", 
   }
   const body = '{"toUid":9223372036854775807,"amount":"1.000"}'
   assert.equal(
-    createRestSignature({ ...options, body, bodyIsSerialized: true }),
+    createRestSignature({
+      ...options,
+      body,
+      bodyIsSerialized: true,
+    }),
     "c3ed4f3685c001d3d53b720ff23cc61de0b5fc2ec57279e28cdad4fc031d002a",
   )
   assert.throws(
