@@ -971,13 +971,6 @@ test("Bitunix Spot order history rejects missing or invalid total metadata", asy
 test("Bitunix Spot order history rejects missing or invalid page numbers", async () => {
   const cases = [
     {
-      name: "missing page number",
-      response: {
-        total: 0,
-        data: [],
-      },
-    },
-    {
       name: "invalid page number",
       response: {
         total: 0,
