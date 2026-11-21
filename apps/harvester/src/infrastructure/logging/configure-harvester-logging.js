@@ -144,7 +144,8 @@ function observeHarvesterLogStreamErrors({ streams, streamErrors } = {}) {
 }
 
 async function openHarvesterLogStreams(streams) {
-  const results = await Promise.allSettled(streams.map((stream) => new Promise((resolve, reject) => {
+  const results = await Promise.allSettled(streams.map((stream) => new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
     stream.once("open", resolve)
     stream.once("error", reject)
   })))
@@ -176,8 +177,8 @@ function writeHarvesterLogRecord({ entry, streams, streamErrors } = {}) {
   } catch (error) {
     return Promise.reject(error)
   }
-  return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
-    stream.write(`${serialized}\\n`, (error) => {
+  return Promise.all(Array.from(streams.entries()).map(([index, stream]) => new Promise((resolve, reject) => {
+    stream.write(`${serialized}\n`, (error) => {
       const currentError = error ?? streamErrors.get(index)
       if (currentError) {
         reject(currentError)
@@ -525,7 +526,7 @@ function writeConsoleTransportEntry({ entry, output, color, state } = {}) {
       level,
       method,
       color,
-    })}\\n`)
+    })}\n`)
     return
   }
   if (presentation.isOrderLifecycle) {

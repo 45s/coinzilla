@@ -221,8 +221,7 @@ async function prepareRelationalResources({
       environment,
       logger,
     })
-    relationalOrderObserver = observers.relationalOrderObserver
-    fillObserver = observers.fillObserver
+    ({ relationalOrderObserver, fillObserver } = observers)
     runtimeErrorObserver = createRuntimeErrorProjection({
       database: relationalDatabase,
       runtimeSessionId,

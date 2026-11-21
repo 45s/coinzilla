@@ -49,7 +49,11 @@ async function createLoggingFixture() {
       runtimeSessionId: "runtime-session-buffer",
     },
   })
-  return { directory, logger, logging }
+  return {
+    directory,
+    logger,
+    logging,
+  }
 }
 
 test("registers a session-scoped ERROR transport before relational persistence is ready", async () => {
@@ -72,8 +76,14 @@ test("registers a session-scoped ERROR transport before relational persistence i
 test("buffers startup errors and streams later errors through one exactly-once handoff", async () => {
   const fixture = await createLoggingFixture()
   try {
-    const first = createErrorEntry({ message: "Startup error", timestamp: "2026-11-21T08:00:01.000Z" })
-    const second = createErrorEntry({ message: "Runtime error", timestamp: "2026-11-21T08:00:02.000Z" })
+    const first = createErrorEntry({
+      message: "Startup error",
+      timestamp: "2026-11-21T08:00:01.000Z",
+    })
+    const second = createErrorEntry({
+      message: "Runtime error",
+      timestamp: "2026-11-21T08:00:02.000Z",
+    })
     fixture.logging.errorBuffer.transport.write(first)
     const persisted = []
     const activation = fixture.logging.errorBuffer.activate((entry) => persisted.push(entry))
@@ -100,7 +110,10 @@ test("bounds the pre-database buffer and counts dropped ERROR records", async ()
   try {
     for (let index = 0; index < 10001; index += 1) {
       fixture.logging.errorBuffer.transport.write(
-        createErrorEntry({ message: "Buffered startup error", timestamp: "2026-11-21T08:00:01.000Z" }),
+        createErrorEntry({
+          message: "Buffered startup error",
+          timestamp: "2026-11-21T08:00:01.000Z",
+        }),
       )
     }
     fixture.logging.errorBuffer.transport.write({

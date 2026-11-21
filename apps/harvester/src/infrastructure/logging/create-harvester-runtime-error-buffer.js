@@ -36,13 +36,19 @@ function writeBufferedEntry({ entry, state, capacity, logger } = {}) {
       state.handler(entry)
     } catch {
       state.droppedCount += 1
-      recordBufferLoss({ state, logger })
+      recordBufferLoss({
+        state,
+        logger,
+      })
     }
     return
   }
   if (state.entries.length >= capacity) {
     state.droppedCount += 1
-    recordBufferLoss({ state, logger })
+    recordBufferLoss({
+        state,
+        logger,
+      })
     return
   }
   state.entries.push(entry)
@@ -66,7 +72,10 @@ function activateBuffer({ state, handler, logger } = {}) {
       handler(entry)
     } catch {
       state.droppedCount += 1
-      recordBufferLoss({ state, logger })
+      recordBufferLoss({
+        state,
+        logger,
+      })
     }
   }
   return Object.freeze({
@@ -85,7 +94,10 @@ function getBufferDiagnostics(state) {
 
 async function closeBuffer({ state, logger } = {}) {
   if (state.droppedCount > 0) {
-    recordBufferLoss({ state, logger })
+    recordBufferLoss({
+        state,
+        logger,
+      })
   }
   state.closed = true
   state.active = false
