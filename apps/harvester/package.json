@@ -107,6 +107,7 @@
       "src/infrastructure/persistence/trading-history-backups/backup-schema.test.js",
       "src/infrastructure/persistence/trading-history-backups/backup-sqlite.test.js",
       "src/use-cases/create-latest-transition-evaluator.test.js",
+      "src/use-cases/create-market-metadata-cache.test.js",
       "src/use-cases/conservative-engine-order-event-composition.test.js",
       "src/use-cases/order-event-workflow.test.js",
       "src/use-cases/create-recovery-seller-order-submitter.test.js",
