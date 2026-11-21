@@ -305,32 +305,34 @@ A fresh recursive Git tree request returned `truncated: false` and contains **17
 
 ### Added paths since the 160-file checkpoint
 
-| Path | Initial classification / disposition |
-| --- | --- |
-| `apps/harvester/docs/architecture/decisions/0006-market-pause-cancels-owned-buys.md` | Living decision record; source/consumer verification pending. |
-| `apps/harvester/docs/architecture/strategy-extensibility-audit-roadmap.md` | Audit/roadmap; preserve evidence and verify current status before disposition. |
-| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-19_02-16-31Z.md` | Historical session evidence; preserve provenance, not a living behavior contract. |
-| `apps/harvester/docs/infrastructure/execution-routing.md` | Living infrastructure contract; source/consumer verification pending. |
-| `apps/harvester/docs/operations/trading-history-backups.md` | Living operational guide; source/config/test verification pending. |
-| `apps/harvester/docs/persistence/trading-history-roadmap.md` | Living persistence roadmap; reconcile with implementation and owning roadmap. |
-| `docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md` | Repository decision record; verify status and linked implementation. |
-| `docs/architecture/decisions/ADR-0005-generic-user-data-observation-channel.md` | Repository decision record; verify status and linked implementation. |
-| `docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md` | Canonical repository policy; added to maintained policy set. |
-| `docs/engineering/APPLICATION_HANDLER_TEMPLATE.md` | Reusable engineering template; verify index and template guidance. |
-| `docs/engineering/CONFIGURATION_STANDARD.md` | Canonical repository policy; added to maintained policy set. |
-| `docs/engineering/DOMAIN_POLICY_TEMPLATE.md` | Reusable engineering template; verify index and template guidance. |
-| `docs/engineering/ENGINEERING_STANDARDS_MATRIX.md` | Canonical engineering standards matrix; reconcile against current standards and CI. |
-| `docs/engineering/INFRASTRUCTURE_ADAPTER_TEMPLATE.md` | Reusable engineering template; verify index and template guidance. |
-| `docs/engineering/LOGGING_OBSERVABILITY_STANDARD.md` | Canonical repository policy; added to maintained policy set. |
-| `docs/engineering/PURE_MODULE_TEMPLATE.md` | Reusable engineering template; verify index and template guidance. |
-| `docs/engineering/STATEFUL_LIFECYCLE_TEMPLATE.md` | Reusable engineering template; verify index and template guidance. |
-| `packages/brokers/BROKER_API.md` | Living public package contract; verify exported API and conformance tests. |
-| `packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md` | Evidence/audit document; preserve provenance and verify status references. |
-| `packages/brokers/docs/BITUNIX_SPOT_POLLING.md` | Living provider integration guide; verify against source and tests. |
-| `packages/brokers/docs/BITUNIX_WORKFLOW.md` | Living mandatory workflow; verify source references and policy links. |
-| `packages/brokers/docs/README.md` | Local documentation index; verify inbound/outbound references. |
-| `packages/brokers/docs/ROADMAP.md` | Owning subdomain roadmap; reconcile with parent Brokers roadmap. |
-| `packages/brokers/docs/bitunix-production-readiness-gap-matrix.md` | Readiness evidence matrix; verify evidence dates and linked source/issue state. |
+The following 24 path additions have been classified and source-checked. One is historical evidence, one is a superseded decision record, and the remaining current documents are retained with the source evidence below. The relocated Brokers audit is a path move, not a duplicate document.
+
+| Path | Disposition | Source / status evidence |
+| --- | --- | --- |
+| `apps/harvester/docs/architecture/decisions/0006-market-pause-cancels-owned-buys.md` | **KEEP — accepted decision** | Matches the owned-BUY pause/cancel contract delivered by merged [PR #1436](https://github.com/45s/coinzilla/pull/1436); exact-head tests and required CI passed. |
+| `apps/harvester/docs/architecture/strategy-extensibility-audit-roadmap.md` | **KEEP — draft architecture discussion, not a runtime contract** | Owner-approved direction and RS-4/RS-5 completion state match merged [PR #1515](https://github.com/45s/coinzilla/pull/1515); referenced source paths exist. Last verified 2026-11-20. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-19_02-16-31Z.md` | **HISTORICAL — preserve unchanged** | Timestamped audit-session evidence; no current behavior authority is assigned to it. |
+| `apps/harvester/docs/infrastructure/execution-routing.md` | **KEEP — current infrastructure contract** | Routing/account-isolation boundary matches merged [PR #1455](https://github.com/45s/coinzilla/pull/1455), source and targeted tests; Binance remains the only registered Harvester execution provider. |
+| `apps/harvester/docs/operations/trading-history-backups.md` | **KEEP — current operational runbook** | Commands, environment selection, online/WAL-safe backup, restore-check, manifest, retention and permissions match merged [PR #1567](https://github.com/45s/coinzilla/pull/1567), implementation and exact-head CI. No exchange operation is involved. |
+| `apps/harvester/docs/persistence/trading-history-roadmap.md` | **KEEP — current persistence roadmap** | Phases 1–3 match merged [PR #1555](https://github.com/45s/coinzilla/pull/1555), [#1557](https://github.com/45s/coinzilla/pull/1557) and [#1559](https://github.com/45s/coinzilla/pull/1559); Phase 6 correctly marks only the backup slice complete in [#1567](https://github.com/45s/coinzilla/pull/1567). |
+| `docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md` | **SUPERSEDED — preserve decision history** | Its own status metadata marks it superseded; PR #1455 removed the interim observer-only runtime. Do not treat it as current admission authorization. |
+| `docs/architecture/decisions/ADR-0005-generic-user-data-observation-channel.md` | **KEEP — accepted delivery contract** | Native event delivery and non-authoritative polling are distinct in current Brokers Application session and Bitunix polling source/tests; does not relax #1185. |
+| `docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md` | **KEEP — canonical mandatory policy** | Cross-linked by root agent instructions, AI workflow, task workflows, engineering index and PR template; used as the S-10 implementation preflight. |
+| `docs/engineering/APPLICATION_HANDLER_TEMPLATE.md` | **KEEP — optional reusable template** | Its DB provider-neutral composition example and source/test paths exist; it is guidance, not a required abstraction. |
+| `docs/engineering/CONFIGURATION_STANDARD.md` | **KEEP — canonical configuration policy** | Matches Harvester's named `appConfig`, bootstrap resolver, explicit `TRADING_MODE` and colocated validation tests; no speculative environment scanner is claimed. |
+| `docs/engineering/DOMAIN_POLICY_TEMPLATE.md` | **KEEP — optional reusable template** | Source-backed domain-policy/decision-matrix example; no runtime behavior is asserted by the template. |
+| `docs/engineering/ENGINEERING_STANDARDS_MATRIX.md` | **KEEP — governance inventory** | S-9 merged state and S-10 current checkpoint corrected; current tree/classifier counts recorded. |
+| `docs/engineering/INFRASTRUCTURE_ADAPTER_TEMPLATE.md` | **KEEP — optional reusable template** | DB provider-port, SQLite adapter and conformance-test examples exist in the current tree. |
+| `docs/engineering/LOGGING_OBSERVABILITY_STANDARD.md` | **KEEP — canonical logging policy** | Shared Logger implementation and tests exist at `packages/utils/src/logger.js` and colocated test files; policy remains transport- and application-neutral. |
+| `docs/engineering/PURE_MODULE_TEMPLATE.md` | **KEEP — optional reusable template** | Source-backed pure-module/direct-test example; no generator or new dependency is introduced. |
+| `docs/engineering/STATEFUL_LIFECYCLE_TEMPLATE.md` | **KEEP — optional reusable template** | DB lifecycle aggregate and transition-test example paths exist; template remains optional. |
+| `packages/brokers/BROKER_API.md` | **KEEP — canonical public Broker contract** | Structural method catalog and mutation outcomes match `src/broker/broker-contract.js`, its contract tests, and Binance/Bitunix implementations. |
+| `packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md` | **KEEP — current external/source audit** | Current Brokers index and cross-repository Broker contract link to this relocated path; section numbering corrected. It remains evidence, not official specification or production-readiness approval. |
+| `packages/brokers/docs/BITUNIX_SPOT_POLLING.md` | **KEEP — current private read-only contract** | Source path corrected to `src/infrastructure/bitunix/spot/reconciler.js`; implementation/tests and merged [PR #1516](https://github.com/45s/coinzilla/pull/1516) verify failure recovery. Polling remains non-authoritative and cannot synthesize fills. |
+| `packages/brokers/docs/BITUNIX_WORKFLOW.md` | **KEEP — mandatory operator/developer workflow** | One CLI entry point and package command match merged [PR #1616](https://github.com/45s/coinzilla/pull/1616); exact-head required and advisory workflows passed. Default/local modes are read-only; the LIVE mode is human-only and was not invoked. |
+| `packages/brokers/docs/README.md` | **KEEP — current package documentation index** | Links to the current Bitunix audit, polling contract, workflow, readiness matrix, roadmap and package-wide references. |
+| `packages/brokers/docs/ROADMAP.md` | **KEEP — current Bitunix subdomain roadmap** | Current implementation status and issue/PR references are reconciled against merged #1516/#1616; #1185 remains the production-readiness blocker. |
+| `packages/brokers/docs/bitunix-production-readiness-gap-matrix.md` | **KEEP — current evidence/gap matrix** | Distinguishes implemented offline behavior from unverified exchange guarantees; polling recovery does not satisfy authoritative event/fill or Harvester readiness requirements. |
 
 ### Removed paths since the 160-file checkpoint
 
