@@ -448,3 +448,61 @@ test("Bitunix operator attempt classifies every failed read-only preflight as NO
     assert.equal(events.some((event) => event.operation === "createOrder"), false)
   }
 })
+
+
+test("Bitunix operator attempt persists an explicit exchange rejection after exactly one dispatch", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "bitunix-operator-rejection-"))
+  const markerPath = join(directory, "attempt.json")
+  const events = []
+  const preflightInput = createValidBitunixOperatorPreflightInput()
+  const readBroker = createMockBitunixReadBroker({
+    events,
+    input: preflightInput,
+  })
+  const rejection = Object.assign(new Error("Insufficient available balance"), {
+    code: "BITUNIX_REST_EXCHANGE_REJECTED",
+    exchangeCode: "10005",
+    status: 200,
+    kind: "exchange",
+  })
+  const orderBroker = createMockBitunixOrderBroker({
+    events,
+    orderResult: {
+      ok: false,
+      mutationOutcome: "REJECTED",
+      errors: [rejection],
+    },
+  })
+
+  try {
+    const result = await runGuardedHypeUsdtOrderAttempt({
+      readBroker,
+      createOrderBroker: () => orderBroker,
+      async confirm() {
+        return true
+      },
+      createMarker: ({ preflight }) => createOneShotMarker({
+        markerPath,
+        preflight,
+      }),
+      writeLine() {},
+    })
+    const marker = JSON.parse(await readFile(markerPath, "utf8"))
+
+    assert.equal(result.mutationOutcome, "REJECTED")
+    assert.equal(marker.status, "REJECTED")
+    assert.deepEqual(marker.result, {
+      brokerCode: "BITUNIX_REST_EXCHANGE_REJECTED",
+      exchangeCode: "10005",
+      httpStatus: "200",
+      errorKind: "exchange",
+    })
+    assert.equal(events.filter((event) => event.operation === "createOrder").length, 1)
+    assert.equal(events.includes("order.disconnect"), true)
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
