@@ -203,6 +203,10 @@ export class TradingHistoryApi {
     return this.get<TradingHistoryMetadata>('/metadata');
   }
 
+  createEventSocket(): WebSocket {
+    return new WebSocket('ws://127.0.0.1:4201/api/v1/trading/events');
+  }
+
   listOrders(query: ListQuery): Observable<TradingHistoryPage<OrderRecord>> {
     return this.list<OrderRecord>('/orders', query);
   }
