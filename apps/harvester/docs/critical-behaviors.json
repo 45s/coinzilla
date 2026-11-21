@@ -818,5 +818,20 @@
         "functions": 80
       }
     }
-  ]
+  ],
+  "runtimeScope": {
+    "activeStrategy": "CG_coinGrabber",
+    "active": true,
+    "conservativeEnabled": true,
+    "aggressiveEnabled": false,
+    "recoveryRestorationEnabled": false,
+    "recoverySellerStrategyEnabled": false,
+    "recoverySellerConfiguredPairCount": 0,
+    "notes": [
+      "The inventory covers the active CG_coinGrabber Conservative execution path.",
+      "CG_coinGrabber Aggressive mode is disabled in the current configuration.",
+      "RS_recoverySeller is disabled and its operator pair map is empty; its inactive modules are not represented as active runtime guarantees.",
+      "Process-restart restoration remains disabled; the operational-state crash matrix is offline evidence only."
+    ]
+  }
 }
