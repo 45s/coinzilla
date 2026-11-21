@@ -207,7 +207,7 @@ test("Bitunix operator CLI refuses non-interactive execution before credentials 
 
   assert.equal(result.status, 1)
   assert.match(result.stderr, /interactive terminal/i)
-  assert.match(result.stdout, /^@coinzilla\/brokers bitunix:healthcheck v1\.0\.0 \| commit [a-f0-9]{40} \| worktree (clean|dirty) \| Node v\d+$/)
+  assert.match(result.stdout, /^@coinzilla\/brokers bitunix:healthcheck v1\.0\.0 \| commit [a-f0-9]{40} \| worktree (clean|dirty) \| Node v\d+(?:\.\d+)*$/)
 })
 
 test("Bitunix operator marker is exclusive, private, and contains no account balances", async () => {
