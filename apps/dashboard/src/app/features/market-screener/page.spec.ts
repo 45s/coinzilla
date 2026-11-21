@@ -239,7 +239,8 @@ describe('MarketScreenerComponent', () => {
     minimumPrice.value = '70000';
     minimumPrice.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    expect(rows()).toHaveLength(0);\n    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No markets match these filters.');
+    expect(rows()).toHaveLength(0);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No markets match these filters.');
   });
 
 });
