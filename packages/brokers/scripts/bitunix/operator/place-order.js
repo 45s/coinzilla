@@ -184,6 +184,27 @@ async function dispatchOrderAndPersistOutcome({ orderBroker, preflight, markerPa
   return result
 }
 
+
+function createNotSentOrderAttemptError({ error }) {
+  const notSentError = new Error(error?.message ?? "Bitunix operator order attempt stopped before dispatch", {
+    cause: error,
+  })
+  notSentError.name = "BitunixOrderNotSentError"
+  notSentError.mutationOutcome = "NOT_SENT"
+  return notSentError
+}
+
+async function disconnectMutationBroker({ orderBroker, writeLine }) {
+  if (!orderBroker) {
+    return
+  }
+  try {
+    await orderBroker.disconnect()
+  } catch (error) {
+    writeLine(`Warning: mutation Broker disconnect failed after the placement attempt: ${error.message}`)
+  }
+}
+
 /**
  * Run read-only preflight, require human approval, then submit exactly one order.
  *
@@ -249,19 +270,13 @@ export async function runGuardedHypeUsdtOrderAttempt({
     if (dispatchStarted) {
       throw error
     }
-    const notSentError = new Error(error?.message ?? "Bitunix operator order attempt stopped before dispatch", {
-      cause: error,
+    throw createNotSentOrderAttemptError({
+      error,
     })
-    notSentError.name = "BitunixOrderNotSentError"
-    notSentError.mutationOutcome = "NOT_SENT"
-    throw notSentError
   } finally {
-    if (orderBroker) {
-      try {
-        await orderBroker.disconnect()
-      } catch (error) {
-        writeLine(`Warning: mutation Broker disconnect failed after the placement attempt: ${error.message}`)
-      }
-    }
+    await disconnectMutationBroker({
+      orderBroker,
+      writeLine,
+    })
   }
 }
