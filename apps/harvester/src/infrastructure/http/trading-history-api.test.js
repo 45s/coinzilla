@@ -7,18 +7,8 @@ async function loadApi() {
   return import("./trading-history-api.js").catch(() => null)
 }
 
-function createQueries(overrides = {}) {
-  const calls = []
-  const emptyPage = {
-    items: [],
-    pagination: {
-      limit: 50,
-      offset: 0,
-      total: 0,
-      hasMore: false,
-    },
-  }
-  const queries = {
+function createMetadataQueries() {
+  return {
     getSummary: () => ({
       ok: true,
       data: {
@@ -27,6 +17,11 @@ function createQueries(overrides = {}) {
         commissions: 1,
       },
     }),
+  }
+}
+
+function createOrderQueries({ calls, emptyPage } = {}) {
+  return {
     listOrders: (input) => {
       calls.push({
         operation: "listOrders",
@@ -47,6 +42,11 @@ function createQueries(overrides = {}) {
         data: null,
       }
     },
+  }
+}
+
+function createFillQueries({ calls, emptyPage } = {}) {
+  return {
     listFills: (input) => {
       calls.push({
         operation: "listFills",
@@ -74,6 +74,11 @@ function createQueries(overrides = {}) {
         },
       }
     },
+  }
+}
+
+function createCommissionQueries({ calls, emptyPage } = {}) {
+  return {
     listCommissions: (input) => {
       calls.push({
         operation: "listCommissions",
@@ -84,6 +89,34 @@ function createQueries(overrides = {}) {
         data: emptyPage,
       }
     },
+  }
+}
+
+function createQueries(overrides = {}) {
+  const calls = []
+  const emptyPage = {
+    items: [],
+    pagination: {
+      limit: 50,
+      offset: 0,
+      total: 0,
+      hasMore: false,
+    },
+  }
+  const queries = {
+    ...createMetadataQueries(),
+    ...createOrderQueries({
+      calls,
+      emptyPage,
+    }),
+    ...createFillQueries({
+      calls,
+      emptyPage,
+    }),
+    ...createCommissionQueries({
+      calls,
+      emptyPage,
+    }),
     ...overrides,
   }
   return {
@@ -110,7 +143,7 @@ async function startApi({ t, queries, token = API_TOKEN } = {}) {
   return {
     module,
     api,
-    baseUrl: "http://127.0.0.1:" + api.address.port,
+    baseUrl: `http://127.0.0.1:${api.address.port}`,
   }
 }
 
@@ -121,7 +154,7 @@ test("requires a bearer token and returns selected environment metadata", async 
     queries,
   })
 
-  const missingToken = await fetch(baseUrl + "/api/v1/trading/metadata")
+  const missingToken = await fetch(`${baseUrl}/api/v1/trading/metadata`)
   assert.equal(missingToken.status, 401, "Metadata must require a valid bearer token.")
 
   const invalidToken = await fetch(baseUrl + "/api/v1/trading/metadata", {
@@ -133,7 +166,7 @@ test("requires a bearer token and returns selected environment metadata", async 
 
   const response = await fetch(baseUrl + "/api/v1/trading/metadata", {
     headers: {
-      Authorization: "Bearer " + API_TOKEN,
+      Authorization: `Bearer ${API_TOKEN}`,
     },
   })
   assert.equal(response.status, 200, "A valid bearer token must access API metadata.")
@@ -155,7 +188,7 @@ test("routes order list filters and bounded pagination to the application query 
     queries,
   })
   const response = await fetch(
-    baseUrl + "/api/v1/trading/orders?symbol=BTCUSDT&side=BUY&status=FILLED&limit=25&offset=50",
+    `${baseUrl}/api/v1/trading/orders?symbol=BTCUSDT&side=BUY&status=FILLED&limit=25&offset=50`,
     {
       headers: {
         Authorization: "Bearer " + API_TOKEN,
@@ -187,7 +220,7 @@ test("decodes record identifiers, returns fill commissions, and reports missing 
     queries,
   })
 
-  const fillResponse = await fetch(baseUrl + "/api/v1/trading/fills/fill%2F001", {
+  const fillResponse = await fetch(`${baseUrl}/api/v1/trading/fills/fill%2F001`, {
     headers: {
       Authorization: "Bearer " + API_TOKEN,
     },
@@ -201,7 +234,7 @@ test("decodes record identifiers, returns fill commissions, and reports missing 
     id: "fill/001",
   }, "The adapter must decode the record identifier before calling the application query.")
 
-  const missingOrder = await fetch(baseUrl + "/api/v1/trading/orders/missing-order", {
+  const missingOrder = await fetch(`${baseUrl}/api/v1/trading/orders/missing-order`, {
     headers: {
       Authorization: "Bearer " + API_TOKEN,
     },
@@ -220,19 +253,19 @@ test("rejects unsupported query parameters, methods, and unimplemented resources
     Authorization: "Bearer " + API_TOKEN,
   }
 
-  const invalidFilter = await fetch(baseUrl + "/api/v1/trading/orders?rawSql=DROP", {
+  const invalidFilter = await fetch(`${baseUrl}/api/v1/trading/orders?rawSql=DROP`, {
     headers,
   })
   assert.equal(invalidFilter.status, 400, "Unsupported query parameters must be rejected before application access.")
   assert.equal((await invalidFilter.json()).error.code, "HARVESTER_TRADING_HISTORY_QUERY_INVALID")
 
-  const unsupportedMethod = await fetch(baseUrl + "/api/v1/trading/orders", {
+  const unsupportedMethod = await fetch(`${baseUrl}/api/v1/trading/orders`, {
     method: "POST",
     headers,
   })
   assert.equal(unsupportedMethod.status, 405, "The trading-history API must reject unsupported HTTP methods.")
 
-  const unimplementedResource = await fetch(baseUrl + "/api/v1/trading/sessions", {
+  const unimplementedResource = await fetch(`${baseUrl}/api/v1/trading/sessions`, {
     headers,
   })
   assert.equal(unimplementedResource.status, 404, "The API must not invent a sessions resource.")
