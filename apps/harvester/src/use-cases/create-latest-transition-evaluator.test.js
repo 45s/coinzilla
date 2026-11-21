@@ -234,7 +234,10 @@ test("refreshes recovery filters before Conservative strategy evaluation", async
   }
   dependencies.strategyPolicy.evaluate = () => {
     calls.push("evaluate")
-    return { actions: [], reason: "NO_ACTION" }
+    return {
+      actions: [],
+      reason: "NO_ACTION",
+    }
   }
   const evaluate = createLatestTransitionEvaluator(dependencies)
 
