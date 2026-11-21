@@ -92,10 +92,13 @@ function createMockBitunixReadBroker({ events, input }) {
   }
 }
 
-function createMockBitunixOrderBroker({ events, orderResult, orderDisconnectError }) {
+function createMockBitunixOrderBroker({ events, orderResult, orderConnectError, orderDisconnectError }) {
   return {
     async connect() {
       events.push("order.connect")
+      if (orderConnectError) {
+        throw orderConnectError
+      }
     },
     async createOrder(order) {
       events.push({
@@ -400,4 +403,46 @@ test("Bitunix operator attempt does not ask for confirmation after a failed pref
   )
   assert.equal(events.some((event) => event.operation === "confirm"), false)
   assert.equal(events.includes("order.construct"), false)
+})
+
+
+test("Bitunix operator attempt classifies mutation Broker connection failure as NOT_SENT", async () => {
+  const { events, run } = createBitunixOperatorAttemptDependencies({
+    orderConnectError: new Error("mutation Broker connection failed"),
+  })
+
+  await assert.rejects(
+    run(),
+    (error) => error.message.includes("mutation Broker connection failed") &&
+      error.mutationOutcome === "NOT_SENT",
+  )
+  assert.equal(events.includes("marker"), false)
+  assert.equal(events.some((event) => event.operation === "createOrder"), false)
+  assert.equal(events.includes("order.disconnect"), true)
+})
+
+test("Bitunix operator attempt classifies every failed read-only preflight as NOT_SENT", async () => {
+  const failures = [
+    ["market catalog", "marketResult"],
+    ["symbol metadata", "filtersResult"],
+    ["account balances", "balancesResult"],
+    ["symbol-scoped open orders", "openOrdersResult"],
+  ]
+  for (const [operation, field] of failures) {
+    const { events, run } = createBitunixOperatorAttemptDependencies({
+      overrides: {
+        [field]: {
+          ok: false,
+          errors: [new Error(`${operation} unavailable`)],
+        },
+      },
+    })
+    await assert.rejects(
+      run(),
+      (error) => error.message.includes(`${operation} failed`) &&
+        error.mutationOutcome === "NOT_SENT",
+    )
+    assert.equal(events.some((event) => event.operation === "confirm"), false)
+    assert.equal(events.some((event) => event.operation === "createOrder"), false)
+  }
 })
