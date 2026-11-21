@@ -389,7 +389,8 @@
         "src/infrastructure/process/harvester-process-shutdown.js",
         "src/bootstrap/shutdown/create-shutdown-handler.js",
         "src/bootstrap/shutdown/create-conservative-shutdown-participant.js",
-        "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js"
+        "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js",
+        "src/infrastructure/process/create-harvester-process-identity.js"
       ],
       "tests": [
         {
@@ -841,6 +842,19 @@
         "lines": 85,
         "branches": 85,
         "functions": 90
+      }
+    },
+    {
+      "path": "src/infrastructure/process/create-harvester-process-identity.js",
+      "baseline": {
+        "lines": 98.08,
+        "branches": 83.33,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 80,
+        "functions": 95
       }
     }
   ],
