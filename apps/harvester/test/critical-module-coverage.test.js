@@ -41,11 +41,26 @@ test("parses Node coverage rows into unambiguous source-relative module paths", 
 test("accepts critical modules that meet every measured minimum", () => {
   const moduleCoverage = [{
     path: "src/domain/orders/order-registry.js",
-    baseline: { lines: 94.05, branches: 89.84, functions: 100 },
-    minimum: { lines: 90, branches: 85, functions: 95 },
+    baseline: {
+      lines: 94.05,
+      branches: 89.84,
+      functions: 100,
+    },
+    minimum: {
+      lines: 90,
+      branches: 85,
+      functions: 95,
+    },
   }]
   const coverage = new Map([
-    ["src/domain/orders/order-registry.js", { lines: 90, branches: 85, functions: 95 }],
+    [
+      "src/domain/orders/order-registry.js",
+      {
+        lines: 90,
+        branches: 85,
+        functions: 95,
+      },
+    ],
   ])
 
   const result = validateCriticalModuleCoverage({ moduleCoverage, coverage })
@@ -61,7 +76,14 @@ test("rejects a critical module when any one coverage dimension falls below its 
     minimum: { lines: 90, branches: 85, functions: 95 },
   }]
   const coverage = new Map([
-    ["src/domain/orders/order-registry.js", { lines: 90, branches: 84.99, functions: 95 }],
+    [
+      "src/domain/orders/order-registry.js",
+      {
+        lines: 90,
+        branches: 84.99,
+        functions: 95,
+      },
+    ],
   ])
 
   const result = validateCriticalModuleCoverage({ moduleCoverage, coverage })
