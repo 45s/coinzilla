@@ -277,6 +277,11 @@ async function normalizeUserDataExecution({ broker, event, isTrade }) {
 
 function createUserDataEventForwarder({ broker, onEvent, onStatus, logger }) {
   return ({ event } = {}) => {
+    if (event?.e !== "eventStreamTerminated" && typeof event?.eventType !== "string") {
+      const eventType = typeof event?.e === "string" ? event.e : "unknown"
+      logSafely(logger, "warn", "Unsupported Binance user-data event", { eventType })
+    }
+
     if (event?.eventType !== "executionReport") {
       forwardSafely(onEvent, onStatus, event, logger)
       return
