@@ -585,7 +585,7 @@
       ],
       "runtimeStatus": "active",
       "invariants": [
-        "Before evaluating an active Conservative recovery position, refresh and validate the exact market's exchange filters; strategy sizing and submission must consume the refreshed metadata rather than the startup snapshot.",
+        "Before an evaluation can plan a new recovery SELL or classify recovery dust for an active Conservative Position, require a validated same-market filter snapshot no older than 30,000 milliseconds. An owned active recovery SELL suppresses duplicate intents and remains untouched, so no refresh is required until it becomes terminal or is reconciled.",
         "If current filters are unavailable, invalid, stale, or belong to another market, pause the affected market and do not submit a recovery SELL."
       ]
     }

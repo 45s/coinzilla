@@ -27,7 +27,11 @@ function isFreshMarketMetadata({
   return matchesMarket && age >= 0 && age < MARKET_METADATA_FRESHNESS_MAX_AGE_MS
 }
 
-function matchesActiveMarketIdentity({ refreshed, metadata, symbol } = {}) {
+function matchesActiveMarketIdentity({
+  refreshed,
+  metadata,
+  symbol,
+} = {}) {
   return refreshed?.market?.id === metadata?.market?.id &&
     refreshed?.market?.symbol === symbol
 }

@@ -96,7 +96,6 @@ Latest verified PR head at the time of this audit update: `c676e0254269b70b21bfa
 
 The audit is intentionally evidence-led. If a later reviewer finds a criterion not covered by the cited assertion, add a focused RED → GREEN test and update this document, the domain test inventory, the accounting invariants, and the roadmap in the same commit. Do not weaken exchange-filter, minimum-profit, Journal durability, reconciliation, readiness, or shutdown gates.
 
-
 ## 2026-11-21 — Recovery SELL filter freshness test-first checkpoint
 
 - Added deterministic engine regressions for an active Conservative recovery position: the strategy must receive a refreshed same-market filter snapshot, reuse it only within 30 seconds, and refresh after expiry.
@@ -104,14 +103,12 @@ The audit is intentionally evidence-led. If a later reviewer finds a criterion n
 - Exact-head targeted CI confirmed RED on commit `6f8718f4a204f7eff8a1a62cedf7f70ae471f53e`: the fresh-rule assertion observed `5` instead of `1000`, and the unavailable-filter assertion observed `ok: true` instead of `false`. The GREEN implementation is now present in PR #1670; exact-head verification is pending.
 - No TESTNET/LIVE API calls, order placement/cancellation, or account mutations were performed.
 
-
 ## 2026-11-21 — Recovery filter freshness implementation
 
 - The Conservative engine now refreshes validated exchange filters on demand before evaluating an active recovery Position whenever the per-symbol snapshot is older than 30 seconds.
 - The refresh validates the configured pair and exact market identity, shares the same cache with forced trailing-BUY refresh, and fails closed with `RECOVERY_SELL_FILTERS_UNAVAILABLE` when current evidence cannot be obtained.
 - No background polling was introduced. Existing acknowledged exchange orders are not canceled or replaced by this filter-read path.
 - Exact-head GREEN verification remains pending; do not mark the full #1359/#1362 lifecycle acceptance complete from this change alone.
-
 
 ## 2026-11-21 — GREEN implementation follow-up
 
