@@ -65,9 +65,10 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
     prepareOrderHistoryPersistence: async () => ({
       relationalDatabase: database,
     }),
-    startTradingHistoryApi: startTradingHistoryApi ?? (async ({ database: suppliedDatabase, environment }) => {
+    startTradingHistoryApi: startTradingHistoryApi ?? (async ({ database: suppliedDatabase, environment, eventBus }) => {
       assert.equal(suppliedDatabase, database, "The API must reuse Harvester's existing relational database connection.")
       assert.equal(environment, "testnet", "The API environment must come from Harvester's selected runtime configuration.")
+      assert.equal(typeof eventBus?.subscribe, "function", "The WebSocket adapter must share Harvester's existing EventBus.")
       calls.push("api-start")
       return {
         address: {

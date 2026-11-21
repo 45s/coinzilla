@@ -3,6 +3,7 @@ import { assertOrderHistoryRepository } from "../../application/ports/order-hist
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { createOrderHistoryRecord } from "../../domain/order-history/order-history-record.js"
 import { OrderHistoryPersistenceError } from "./order-history-persistence-error.js"
+import { publishTradingHistoryChange } from "./publish-trading-history-change.js"
 
 const ORDER_HISTORY_EVENT_NAMES = new Set([
   HARVESTER_EVENT_NAMES.ORDER_SUBMITTED,
@@ -110,7 +111,14 @@ function enqueueOrderHistoryRecord({
   }
   state.pendingCount += 1
   state.queue = state.queue
-    .then(async () => repository.upsert(record))
+    .then(async () => {
+      await repository.upsert(record)
+      publishTradingHistoryChange({
+        eventBus: state.eventBus,
+        resources: ["orders"],
+        logger,
+      })
+    })
     .catch((error) => {
       recordObserverFailure({
         state,
@@ -244,6 +252,7 @@ export function createOrderHistoryObserver({
     repository,
   })
   const state = {
+    eventBus,
     pendingCount: 0,
     droppedCount: 0,
     failureCount: 0,
