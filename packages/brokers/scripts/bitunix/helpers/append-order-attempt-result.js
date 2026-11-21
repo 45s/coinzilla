@@ -5,7 +5,7 @@ function createOperatorAttemptError({ result, codeOverride }) {
   const error = new Error("Bitunix operator order attempt did not complete successfully")
   error.name = typeof sourceError?.name === "string"
     ? sourceError.name
-    : "BitunixOperatorOrderError"
+    : "OperatorOrderError"
   error.code = codeOverride ?? (typeof sourceError?.code === "string"
     ? sourceError.code
     : result.mutationOutcome ?? "ORDER_ATTEMPT_FAILED")

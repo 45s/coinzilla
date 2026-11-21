@@ -1,20 +1,20 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { parseBitunixHealthcheckMode } from "./parse-healthcheck-mode.js"
+import { parseHealthcheckMode } from "./parse-healthcheck-mode.js"
 
 test("default Bitunix health-check mode remains read-only report publishing", () => {
-  assert.equal(parseBitunixHealthcheckMode({ args: [] }), "publish")
+  assert.equal(parseHealthcheckMode({ args: [] }), "publish")
 })
 
 test("explicit CLI arguments select each supported mode", () => {
-  assert.equal(parseBitunixHealthcheckMode({ args: ["--local"] }), "local")
-  assert.equal(parseBitunixHealthcheckMode({ args: ["--publish"] }), "publish")
-  assert.equal(parseBitunixHealthcheckMode({ args: ["--place-order"] }), "place-order")
-  assert.equal(parseBitunixHealthcheckMode({ args: ["--help"] }), "help")
+  assert.equal(parseHealthcheckMode({ args: ["--local"] }), "local")
+  assert.equal(parseHealthcheckMode({ args: ["--publish"] }), "publish")
+  assert.equal(parseHealthcheckMode({ args: ["--place-order"] }), "place-order")
+  assert.equal(parseHealthcheckMode({ args: ["--help"] }), "help")
 })
 
 test("unknown and conflicting CLI modes fail before a command is run", () => {
-  assert.throws(() => parseBitunixHealthcheckMode({ args: ["--place-order", "--local"] }), /only one.*mode/i)
-  assert.throws(() => parseBitunixHealthcheckMode({ args: ["--force"] }), /only one.*mode/i)
-  assert.throws(() => parseBitunixHealthcheckMode({ args: [null] }), /array of strings/i)
+  assert.throws(() => parseHealthcheckMode({ args: ["--place-order", "--local"] }), /only one.*mode/i)
+  assert.throws(() => parseHealthcheckMode({ args: ["--force"] }), /only one.*mode/i)
+  assert.throws(() => parseHealthcheckMode({ args: [null] }), /array of strings/i)
 })

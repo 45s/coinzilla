@@ -6,7 +6,6 @@ import {
   createHypeUsdtOrderPreflight,
 } from "../helpers/create-hypeusdt-order-preflight.js"
 import {
-  assertInteractiveTerminal,
   assertMutationBroker,
   assertOrderAttemptDependencies,
 } from "../helpers/validate-order-attempt.js"

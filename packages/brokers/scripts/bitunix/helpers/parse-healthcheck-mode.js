@@ -11,7 +11,7 @@ const MODE_BY_ARGUMENT = Object.freeze({
  * @param {{args?: string[]}} input
  * @returns {"help"|"local"|"publish"|"place-order"}
  */
-export function parseBitunixHealthcheckMode({ args = [] } = {}) {
+export function parseHealthcheckMode({ args = [] } = {}) {
   if (!Array.isArray(args) || args.some((argument) => typeof argument !== "string")) {
     throw new TypeError("Bitunix health-check arguments must be an array of strings")
   }
