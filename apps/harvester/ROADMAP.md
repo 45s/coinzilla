@@ -1,5 +1,13 @@
 # Harvester Roadmap
 
+## Session-scoped runtime error persistence (#1650)
+
+- **In progress:** add a Harvester-owned `runtime_errors` table and non-blocking capture of every shared-Logger ERROR record, including failures emitted before relational persistence becomes available.
+- Correlate diagnostic rows to the existing runtime session ID. Keep full stack/cause evidence in per-session DEBUG/TRACE logs; store only safe, allowlisted searchable fields in SQLite.
+- Include partial exchange-history page/cursor diagnostics in startup failure records. Preserve fail-closed unknown/external-order handling and keep the reporting database non-authoritative for trading readiness, ownership, and recovery.
+- No generic `errors` table, no `sessions` table, no `packages/db` changes, and no exchange calls or order operations.
+
+
 ## Trading-history real-time notifications (#1643)
 
 - **In progress in coordinated [PR #1641](https://github.com/45s/coinzilla/pull/1641):** add an authenticated WebSocket endpoint to the existing optional trading-history API listener. The endpoint shares the HTTP listener, bearer-token secret, process lifecycle and environment-specific relational persistence connection.
