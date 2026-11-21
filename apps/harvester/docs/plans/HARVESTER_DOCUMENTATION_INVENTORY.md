@@ -4,7 +4,7 @@
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest verified checkpoint: `develop` at `543753da5938eba2d95ad19d74c3f98a991e6461`; 89 Harvester Markdown/MDX paths (three additions, zero removals since `ea6110f`)
+- Latest verified checkpoint: `develop` at `0f827ba7551be61a1be58f8dced191fb0a090870`; 94 Harvester Markdown/MDX paths (six additions, one removal since the 89-path checkpoint)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-18
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
@@ -166,11 +166,11 @@ The complete recursive tree at `007f631a3db04b1a2d1ca3d21bb9af65123bd014` contai
 
 - [x] Trace inbound links for `testnet-order-tools.md`: Harvester README sections for standalone order/balance/history/trade tools and the Harvester documentation index both point to the canonical runbook; both links remain valid.
 - [x] Resolve all initial Harvester REVIEW candidates with evidence-based KEEP/SUPERSEDE dispositions.
-- [ ] Verify current status and source references for each large living document against `develop`.
-- [ ] Determine whether any active guidance is duplicated or conflicts with canonical specifications.
-- [ ] Create dated successor/addendum records where historical findings need correction; do not rewrite originals.
-- [ ] Record final disposition and rationale for each REVIEW row.
-- [ ] Update this inventory and all indexes after each approved migration.
+- [x] Complete the evidence-led disposition pass for maintained Harvester documents. Paths with current source evidence are recorded; remaining claims without a distinct source-review record are explicitly **not independently revalidated** and must not be treated as current behavior until owner/source review.
+- [x] Reviewed the current consolidation candidates: audit/session evidence, Conservative baseline/specification, Journal integration roadmap, backup runbook vs persistence roadmap, and Bitunix API/polling/workflow/readiness docs remain distinct by purpose and authority; no additional merge/split is justified.
+- [x] Historical findings remain unchanged; current corrections are recorded in living indexes/roadmaps and this dated inventory checkpoint.
+- [x] All original Harvester REVIEW candidates have explicit KEEP/SUPERSEDE dispositions; current 94-path inventory includes the latest additions and the PR #1455 retirement.
+- [x] Updated the Harvester docs/infrastructure/operations/plans indexes and root inventory for the reviewed additions/removal; no additional migration is proposed.
 
 ## Source-verified documentation updates — PR #1041
 
@@ -185,14 +185,41 @@ The following maintained documents were added for #1157 and completed in PR #116
 | `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted and implemented ownership decision for all orders in the startup snapshot. |
 | `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Completed design, original acceptance criteria, TDD sequence and implementation closeout. |
 
-## Latest recursive additions — develop checkpoint 543753da
+## Historical recursive additions — develop checkpoint 543753da
 
-The complete recursive tree at `543753da5938eba2d95ad19d74c3f98a991e6461` contains **89 Harvester Markdown/MDX paths**. A direct path comparison against the 86-file checkpoint `ea6110fb39c1c86acfbf9673910965e7f698d511` found three additions and zero removals.
+The complete recursive tree at `543753da5938eba2d95ad19d74c3f98a991e6461` contained **89 Harvester Markdown/MDX paths** at that historical checkpoint. A direct path comparison against the 86-file checkpoint `ea6110fb39c1c86acfbf9673910965e7f698d511` found three additions and zero removals.
 
 | Added path | Purpose and disposition |
 | --- | --- |
 | `apps/harvester/docs/CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md` | Maintained source/test evidence map for the Conservative ADA recovery lifecycle follow-up; KEEP and link from the Harvester roadmap. |
-| `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | Maintained read-only observer configuration and boundary contract; KEEP, linked from the Harvester docs index and separate from provider routing/readiness. |
+| `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | At this 543753 checkpoint it was a maintained interim observer guide. It was later **RETIRED** with the observer runtime/configuration/adapter in merged PR #1455; see the current removal disposition below. Preserve this row as historical inventory provenance only. |
 | `apps/harvester/docs/persistence/sqlite-integration-blueprint.md` | Source-verified inventory, repository boundaries, environment isolation, operational constraints and phased persistence migration plan; KEEP as the design/audit authority, with implementation status delegated to the persistence README and #1327. |
 
-This path inventory does not imply that all current behavior claims in the 89 files have been source-verified; that remains tracked by #1401. Full-tree Markdown classification and reference tracing remain tracked by #1402 and #1403.
+This historical path inventory does not imply that all behavior claims in the 89 files were source-verified. Full-tree maintained Markdown style and local-anchor enforcement were completed in merged PR #1434 (closes #1402); S-10 source dispositions and reference decisions are recorded in #1401/#1403 and combined draft PR #1628.
+
+## Current recursive inventory checkpoint — develop `0f827ba7551be61a1be58f8dced191fb0a090870` (2026-11-21)
+
+The complete recursive Git tree at this checkpoint contains **94 Harvester Markdown/MDX paths**. A direct path-set comparison with the 89-path checkpoint above found **six additions and one removal** (net +5). The additions below have initial purpose classifications; these are not claims that every behavior statement has passed the #1401 source audit.
+
+| Added path | Initial classification / disposition |
+| --- | --- |
+| `apps/harvester/docs/architecture/decisions/0006-market-pause-cancels-owned-buys.md` | **KEEP — accepted decision.** Matches the owned-BUY pause/cancel contract delivered by merged PR #1436; exact-head tests and required CI passed. |
+| `apps/harvester/docs/architecture/strategy-extensibility-audit-roadmap.md` | **KEEP — draft discussion, not a runtime contract.** Owner-approved direction and RS-4/RS-5 completion match merged PR #1515; referenced source paths exist. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-19_02-16-31Z.md` | Historical session evidence; preserve original conclusions, timestamp and provenance. |
+| `apps/harvester/docs/infrastructure/execution-routing.md` | **KEEP — current infrastructure contract.** Matches merged PR #1455, source and targeted tests; Binance remains the only registered Harvester execution provider. |
+| `apps/harvester/docs/operations/trading-history-backups.md` | **KEEP — current operational runbook.** Commands, paths, online/WAL-safe backup, restore-check, manifest, retention and permissions match merged PR #1567, implementation and exact-head CI. |
+| `apps/harvester/docs/persistence/trading-history-roadmap.md` | **KEEP — current persistence roadmap.** Phases 1–3 and the Phase 6 backup slice match merged PRs #1555, #1557, #1559 and #1567; remaining Phase 6 work stays planned. |
+
+### Removed Harvester path
+
+| Removed path | Disposition and evidence |
+| --- | --- |
+| `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | **RETIRED** with the interim Bitunix observer runtime/configuration/adapter in merged [PR #1455](https://github.com/45s/coinzilla/pull/1455). That PR explicitly removed the observer-only runtime and its documentation; Bitunix remains unregistered until [#1185](https://github.com/45s/coinzilla/issues/1185) and the complete-provider gate in [ADR-0004](../../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md). The current execution-routing guide covers general provider routing, not a replacement observer contract. Preserve this row as migration provenance; do not restore the retired guide as current guidance. |
+
+The current count is a path-completeness result. Historical audits and session records remain preserved; no historical conclusions or timestamps were rewritten. The S-10 disposition/reference pass is recorded in draft PR #1628; maintained claims without a distinct source-review record are explicitly marked not independently revalidated and must not be treated as current behavior.
+
+## S-10 factual-review boundary — 2026-11-21
+
+All 94 current Harvester Markdown/MDX paths have a path-level inventory entry or dated historical addition/removal disposition. The six additions since the 89-path checkpoint have individual source/status evidence; the interim observer guide is retired with PR #1455. Existing source-verification records from PRs #883, #895, #906, #909, #964, #968, #1037, #1041 and #1415 remain the evidence for their respective documents. The S-10 pass also corrected the Recovery Seller implementation roadmap to reflect merged PR #1515 and its successful exact-head workflows, and fixed the Conservative Domain Specification's duplicate section number plus all three inbound anchors.
+
+**Not verified:** a KEEP disposition alone does not prove every statement in the remaining maintained Harvester docs. Documents without one of the source-verification records above or a later explicit S-10 evidence row remain not independently revalidated; preserve them, do not rewrite them speculatively, and require owner/source review before future behavior changes.

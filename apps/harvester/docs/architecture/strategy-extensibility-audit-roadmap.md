@@ -4,7 +4,7 @@ status: draft
 type: architecture-plan
 owner: harvester
 created: 2026-11-19
-last_verified: 2026-11-19
+last_verified: 2026-11-20
 ---
 
 # Strategy extensibility architecture discussion and audit roadmap

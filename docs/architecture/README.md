@@ -8,6 +8,7 @@ This directory records cross-cutting architecture principles and decisions for t
 - [ADR-0002: Explicit Binance trading environment](./decisions/ADR-0002-explicit-binance-trading-environment.md) — `TRADING_MODE` is the sole Binance endpoint selector; `NODE_ENV` is not used.
 - [ADR-0003: Explicit multi-provider execution and market-data routing](./decisions/ADR-0003-multi-provider-routing.md) — provider instances, Harvester-owned strategy/market execution routes, independent market-data routes, provenance and account isolation.
 - [ADR-0004: Complete Bitunix provider integration](./decisions/ADR-0004-complete-bitunix-provider-integration.md) — no partial observer runtime; Bitunix joins Harvester only after the complete Brokers and account-lifecycle contract is satisfied.
+- [ADR-0005: Generic native-event and polling-observation delivery](./decisions/ADR-0005-generic-user-data-observation-channel.md) — distinguishes authoritative native user-data events from non-authoritative polling observations.
 - [Multi-provider migration audit and implementation plan](./multi-provider-migration-plan.md) — source-verified current-state findings, provider capability matrix, provenance gaps, compatibility baseline and phased delivery plan for #1339.
 
 ## Templates

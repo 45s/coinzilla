@@ -112,7 +112,7 @@ status: active
 type: architecture
 owner: harvester
 created: 2026-11-09
-last_verified: 2026-11-09
+last_verified: 2026-11-21
 ---
 ```
 
@@ -235,7 +235,7 @@ Enforce objective, low-cost rules first:
 
 1. `pnpm run check:agent-policy` validates ownership maps, required roadmaps, required documentation entry points, balanced fenced-code delimiters, and relative local target paths across discovered repository Markdown/MDX files. It also prints a full-tree local heading-anchor baseline; that baseline is report-only and includes historical sources.
    - The required `check-maintained-markdown-anchors.js` step blocks unresolved local anchors when the source document is maintained. Historical-source findings remain report-only. It uses GitHub-compatible duplicate heading slugs, Setext headings and explicit HTML `id`/`name` anchors; external URLs, non-Markdown targets, code examples and text fragments are excluded.
-   - `scripts/markdown-style-baseline.js` remains a report-only measurement across the full tree. The blocking `check-markdown-style.js --all-maintained` step enforces all 14 style metrics across 132 maintained Markdown/MDX paths; 28 historical paths are excluded. GitHub issue/PR templates are exempt only from H1 and heading-hierarchy findings.
+   - `scripts/markdown-style-baseline.js` remains a report-only measurement across the full tree. The blocking `check-markdown-style.js --all-maintained` step enforces all 14 style metrics across 150 maintained Markdown/MDX paths at the current 179-file checkpoint; 29 historical paths are excluded. GitHub issue/PR templates are exempt only from H1 and heading-hierarchy findings.
    - On pull requests, `check-markdown-style.js` also checks changed maintained documents against the exact PR base SHA. Existing files are checked in changed hunks and two lines of context, plus file-level newline/line-ending rules; new files are checked in full. Historical evidence is not mass-reformatted.
    - The shared scanner excludes fenced and four-space-indented code blocks, including internal blank lines, from prose/list/table metrics while continuing to analyze valid nested lists.
 2. GitHub Actions must run the repository policy checks on pull requests to `develop` and `main`; required branch rulesets must require the intended status checks.
