@@ -136,6 +136,29 @@ async function closePartialRelationalResources({
   }
 }
 
+function createRelationalHistoryObservers({
+  eventBus,
+  orderRepository,
+  fillRepository,
+  environment,
+  logger,
+} = {}) {
+  return {
+    relationalOrderObserver: createOrderHistoryObserver({
+      eventBus,
+      repository: orderRepository,
+      environment,
+      logger,
+    }),
+    fillObserver: createFillHistoryObserver({
+      eventBus,
+      repository: fillRepository,
+      environment,
+      logger,
+    }),
+  }
+}
+
 async function prepareRelationalResources({
   filename,
   eventBus,
@@ -164,22 +187,18 @@ async function prepareRelationalResources({
     const historySyncCursorRepository = createHistorySyncCursorRepository({
       database: relationalDatabase,
     })
-    relationalOrderObserver = createOrderHistoryObserver({
+    const observers = createRelationalHistoryObservers({
       eventBus,
-      repository: orderRepository,
+      orderRepository,
+      fillRepository,
       environment,
       logger,
     })
-    fillObserver = createFillHistoryObserver({
-      eventBus,
-      repository: fillRepository,
-      environment,
-      logger,
-    })
+    relationalOrderObserver = observers.relationalOrderObserver
+    fillObserver = observers.fillObserver
     return {
       relationalDatabase,
-      relationalOrderObserver,
-      fillObserver,
+      ...observers,
       orderRepository,
       fillRepository,
       historySyncCursorRepository,
