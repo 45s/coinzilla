@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 async function loadTradingHistoryQueries() {
-  return import("./trading-history-queries.js").catch(() => null)
+  return import("./queries.js").catch(() => null)
 }
 
 function createRepository(overrides = {}) {

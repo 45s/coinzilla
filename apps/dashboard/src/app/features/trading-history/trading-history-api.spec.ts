@@ -1,7 +1,7 @@
-import { provideHttpClient } from '@angular/common/http';
-import { HttpErrorResponse } from '@angular/common/http';
-import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting, type HttpTestingController } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { firstValueFrom } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -45,7 +45,7 @@ describe('TradingHistoryApi', () => {
         hasMore: false,
       },
     };
-    const resultPromise = import('rxjs').then(({ firstValueFrom }) => firstValueFrom(api.listOrders({
+    const resultPromise = firstValueFrom(api.listOrders({
       filters: {
         symbol: 'BTCUSDT',
         side: 'BUY',
@@ -53,7 +53,7 @@ describe('TradingHistoryApi', () => {
       },
       limit: 25,
       offset: 50,
-    })));
+    }));
 
     const request = http.expectOne((candidate) =>
       candidate.url.endsWith('/api/v1/trading/orders')
@@ -90,9 +90,7 @@ describe('TradingHistoryApi', () => {
         },
       ],
     };
-    const resultPromise = import('rxjs').then(({ firstValueFrom }) =>
-      firstValueFrom(api.getFill(detail.id)),
-    );
+    const resultPromise = firstValueFrom(api.getFill(detail.id));
     const request = http.expectOne((candidate) =>
       candidate.url.endsWith('/api/v1/trading/fills/fill%2Fwith%20reserved%20chars'),
     );
@@ -111,9 +109,7 @@ describe('TradingHistoryApi', () => {
   });
 
   it('surfaces HTTP authentication failures without converting them into successful empty pages', async () => {
-    const resultPromise = import('rxjs').then(({ firstValueFrom }) =>
-      firstValueFrom(api.getMetadata()),
-    );
+    const resultPromise = firstValueFrom(api.getMetadata());
     const request = http.expectOne((candidate) =>
       candidate.url.endsWith('/api/v1/trading/metadata'),
     );

@@ -12,10 +12,12 @@ This file adds Dashboard-specific constraints. Repository-wide engineering, task
 
 ## Current implementation boundary
 
-- The initial dashboard is a static Angular shell populated only by explicitly named demo data.
+- Overview remains a static Angular preview populated only by explicitly named demo data.
+- Orders, Fills, and Commissions are read-only client pages backed by Harvester's authenticated, versioned `/api/v1` contract. They display persisted API responses only and never fall back to demo fixtures.
 - Do not present mock values as live account, exchange, service-health, or trading-runtime observations.
-- Do not add secrets, API credentials, production environment values, or user-specific configuration to source control.
-- Keep TESTNET/LIVE selection and readiness semantics explicit when real backend integration is introduced. Do not infer trading readiness from HTTP connectivity.
+- Keep the bearer token in browser `sessionStorage` only. Do not commit secrets, API credentials, production environment values, or user-specific configuration.
+- Display TESTNET/LIVE from Harvester API metadata. Do not infer trading readiness from HTTP connectivity.
+- Browser code must not access SQLite/database files, import Harvester-private modules, or call brokers/exchanges.
 
 ## Development
 

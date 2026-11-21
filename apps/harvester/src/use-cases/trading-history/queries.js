@@ -1,6 +1,6 @@
 import { toResult } from "@coinzilla/utils"
-import { assertTradingHistoryQueryRepository } from "../application/ports/trading-history-query-repository.js"
-import { TradingHistoryQueryError } from "./trading-history-query-error.js"
+import { assertTradingHistoryQueryRepository } from "../../application/ports/trading-history-query-repository.js"
+import { TradingHistoryQueryError } from "./query-error.js"
 
 const DEFAULT_PAGE_LIMIT = 50
 const MAX_PAGE_LIMIT = 100

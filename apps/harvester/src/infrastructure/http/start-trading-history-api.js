@@ -5,7 +5,7 @@ import {
 import { defaultLogger, SystemCustomError } from "@coinzilla/utils"
 import { assertHarvesterDatabaseIsolation } from "../persistence/resolve-harvester-database-filename.js"
 import { createTradingHistoryQueryRepository } from "../persistence/trading-history-query-repository.js"
-import { createTradingHistoryQueries } from "../../use-cases/trading-history-queries.js"
+import { createTradingHistoryQueries } from "../../use-cases/trading-history/queries.js"
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
 
 const MINIMUM_API_TOKEN_BYTES = 32

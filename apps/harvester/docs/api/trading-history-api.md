@@ -1,12 +1,12 @@
 # Trading-history API v1
 
-The Harvester trading-history API exposes persisted order, execution, and commission facts through a stable HTTP contract. It is a separate Harvester-owned query service over the existing environment-specific SQLite database.
+The Harvester trading-history API exposes persisted order, execution, and commission facts through a stable HTTP contract. It is an optional HTTP service started and stopped by the existing Harvester process over its already-open environment-specific relational database connection.
 
 The application query layer is independent of HTTP and client identity. Angular, React, mobile clients, Telegram integrations, and other consumers use the same contract; none of them are dependencies of Harvester's domain or persistence model.
 
 ## Start locally
 
-The API opens an existing database. Start Harvester once with the intended environment so its normal persistence setup creates and migrates that environment's database.
+Harvester's normal startup prepares and migrates the environment-specific relational database. The API reuses that already-open connection; it does not open another SQLite connection, create schema, or own database shutdown.
 
 Generate a local token:
 
@@ -14,7 +14,7 @@ Generate a local token:
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
-Put the generated value in `apps/harvester/.env.development` (or `.env` for the non-development script). Do not commit it:
+Put the generated value in `apps/harvester/.env.development` (or `.env` for the normal start command). Do not commit it:
 
 ```dotenv
 TRADING_MODE=testnet
@@ -29,7 +29,7 @@ Start the API in a separate terminal:
 pnpm --filter @coinzilla/harvester history:api:dev
 ```
 
-The default address is `http://127.0.0.1:4201`. The API process uses the same `TRADING_MODE` and `HARVESTER_DATABASE_DIRECTORY` resolution as Harvester. TESTNET and LIVE remain separate database files.
+The default address is `http://127.0.0.1:4201`. The API uses Harvester's selected `TRADING_MODE` and `HARVESTER_DATABASE_DIRECTORY`; TESTNET and LIVE remain separate database files. If `HARVESTER_API_TOKEN` is empty or absent, the API stays disabled without preventing Harvester startup. Invalid API configuration or an API bind failure is logged and isolated from trading startup.
 
 Check the selected environment and local record counts:
 
@@ -40,7 +40,7 @@ curl -H "Authorization: Bearer $HARVESTER_API_TOKEN" \
 
 On Windows PowerShell, use `$env:HARVESTER_API_TOKEN` in place of the shell variable syntax above.
 
-The service fails if the selected database does not exist or does not contain the required relational trading-history schema. It does not create a new database, run migrations, or repair schema. It opens its own SQLite connection to the selected database. SQLite WAL requires both processes to use same-host local storage; do not place the database on NFS/SMB or a shared network volume.
+Harvester's normal persistence setup owns database creation, migration, and closure. The API is started only when that relational persistence connection is available. Harvester closes the API listener before closing the shared database connection. The API does not change SQLite connection mode or impose a database-level read-only restriction.
 
 ## Authentication and network boundary
 
@@ -172,7 +172,7 @@ Existing orders / fills / fill_commissions tables
 
 HTTP authentication and response serialization stay in the transport adapter. Query validation and application error codes stay in the application layer. SQL and row mapping stay in Harvester infrastructure. The Harvester domain does not depend on the HTTP framework, route names, UI, or consumer identity.
 
-The service is deliberately a separate process from the trading runtime. It exposes the initial versioned GET resources listed above. Future operations can be added through explicit application use cases and versioned routes without coupling the domain to HTTP or a client. The service does not subscribe to trading events, create schema, or affect trading readiness and lifecycle.
+The HTTP listener runs inside the existing Harvester process and is owned by the process composition root. It exposes the initial versioned GET resources listed above. Future operations can be added through explicit application use cases and versioned routes without coupling the domain to HTTP or a client. The listener does not subscribe to trading events, create schema, change trading readiness, or own the shared database connection.
 
 ## Verification
 

@@ -55,16 +55,16 @@ The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @co
 
 ## Trading-history API v1 (#1635)
 
-The standalone [Trading-history API v1](./docs/api/trading-history-api.md) serves persisted orders, individual fills, and commission facts to independent clients. It uses a transport-independent application query facade and the existing Harvester-owned relational tables. It does not add tables, change trading behavior, or connect to a broker/exchange.
+The [Trading-history API v1](./docs/api/trading-history-api.md) serves persisted orders, individual fills, and commission facts to independent clients from the existing Harvester process. It uses a transport-independent application query facade and Harvester's already-open relational database connection. It does not add tables, change trading behavior, or connect to a broker/exchange.
 
-Start Harvester once with the intended `TRADING_MODE` so its normal startup initializes the environment-specific database. Generate a 32-byte token and set `HARVESTER_API_TOKEN` in the local `.env.development` file, then start the API in a separate terminal:
+Generate a 32-byte token and set `HARVESTER_API_TOKEN` in the local `.env.development` file. Start Harvester normally with the intended `TRADING_MODE`:
 
 ```sh
 node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-pnpm --filter @coinzilla/harvester history:api:dev
+pnpm --filter @coinzilla/harvester dev
 ```
 
-The API binds to `127.0.0.1:4201` by default. It opens the existing selected database on a separate connection. The first routes expose persisted trading records; additional operations can be added through application use cases and versioned routes. See the API contract for routes, filters, pagination, authentication, remote-access requirements, and exact financial-value semantics.
+When the token is configured and relational history persistence is available, Harvester starts the API at `127.0.0.1:4201` by default. Without a token, Harvester runs normally and the optional API stays disabled. The API shares Harvester's existing database connection and closes before persistence during process shutdown; it has no separate process, script, or launch command. See the API contract for routes, filters, pagination, authentication, remote-access requirements, and exact financial-value semantics.
 
 ## Operational State Store (ADR-0001)
 
