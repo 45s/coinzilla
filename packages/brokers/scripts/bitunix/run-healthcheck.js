@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
 import { loadEnvFile } from "node:process"
 import { dirname, resolve } from "node:path"
@@ -7,7 +8,7 @@ import { runOperatorOrderCommand, reportOperatorFailure } from "./operator/run-o
 import { runHealthcheckWorkflow } from "./workflows/run-healthcheck.js"
 import { parseHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
 import { sanitizeDiagnosticError } from "./helpers/sanitize-diagnostic-data.js"
-import { resolveCliIdentity } from "./helpers/cli-identity.js"
+import { formatCliIdentity } from "./helpers/cli-identity.js"
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const brokersRoot = resolve(scriptDirectory, "../..")
@@ -15,12 +16,37 @@ const repositoryRoot = resolve(brokersRoot, "../..")
 const envPath = resolve(brokersRoot, ".env.development")
 const packageMetadata = JSON.parse(readFileSync(resolve(brokersRoot, "package.json"), "utf8"))
 
+function readGitOutput({ args }) {
+  try {
+    return execFileSync("git", args, {
+      cwd: repositoryRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim()
+  } catch {
+    return null
+  }
+}
+
 function printCliIdentity({ stdout = process.stdout } = {}) {
-  const identity = resolveCliIdentity({
+  const commitSha = readGitOutput({
+    args: ["rev-parse", "HEAD"],
+  })
+  const worktreeStatus = readGitOutput({
+    args: ["status", "--porcelain"],
+  })
+  const worktree = worktreeStatus === null
+    ? "unknown"
+    : worktreeStatus.length === 0
+      ? "clean"
+      : "dirty"
+  const identity = formatCliIdentity({
     packageName: packageMetadata.name,
     scriptName: "bitunix:healthcheck",
     packageVersion: packageMetadata.version,
-    repositoryRoot,
+    commitSha,
+    worktree,
+    nodeVersion: process.version,
   })
   stdout.write(`${identity}\n`)
 }
