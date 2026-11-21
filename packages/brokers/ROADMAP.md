@@ -10,7 +10,7 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 ## Bitunix health-check and operator CLI consolidation — #1614
 
-**Status: IMPLEMENTED and merged** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) / [PR #1616](https://github.com/45s/coinzilla/pull/1616), merge commit `488949b668e1291b5cfc64032250f6d2a4568274`. Exact-head required workflow runs and advisory External Documentation Links passed; issue closeout is recorded separately.
+**Status: IMPLEMENTED and merged** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) / [PR #1616](https://github.com/45s/coinzilla/pull/1616), merge commit `488949b668e1291b5cfc64032250f6d2a4568274`. Exact-head required workflow runs and advisory External Documentation Links passed; issue #1614 is closed after acceptance and exact-head CI verification.
 
 Consolidate every Bitunix script under `scripts/bitunix/` with one CLI entry point, `run-healthcheck.js`. The default remains a read-only health check with sanitized report publishing; `--local` runs local-only diagnostics; `--place-order` runs the read-only health checks first and, only when healthy, performs the already guarded fixed HYPEUSDT attempt inside the same report-branch workflow. The sanitized outcome is published and the checkout returns to `develop`. Pure supporting functions live in `helpers/` with colocated tests. The mandatory workflow document is maintained under `docs/BITUNIX_WORKFLOW.md`. This is a tooling/layout change, not a provider capability or production-readiness change.
 
@@ -1486,7 +1486,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Added a failure-path regression for scheduler cancellation: local stop state and cleanup remain idempotent even when the injected cancel function throws.
 - Updated the polling contract and production-readiness matrix to distinguish this recovery guarantee from authoritative event/fill reconciliation.
 - No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
-- Verified on exact PR head `63906b7df5b2ef13b0ec47fb5625f12c41e2e49a`: all seven required workflows passed.
+- Verified on exact PR head `63906b7df5b2ef13b0ec47fb5625f12c41e2e49a`: all seven required workflows passed; issue #1516 is closed.
 
 ## Bitunix Spot history request-adapter decomposition (#1517)
 
