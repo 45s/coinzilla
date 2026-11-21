@@ -258,6 +258,17 @@ test("supports browser preflight and validates server configuration", async (t) 
   await assert.rejects(
     () => module.startTradingHistoryApiServer({
       queries,
+      environment: "testnet",
+      host: "0.0.0.0",
+      port: 0,
+    }),
+    /127\\.0\\.0\\.1/,
+    "The unauthenticated local API must reject non-loopback binding.",
+  )
+
+  await assert.rejects(
+    () => module.startTradingHistoryApiServer({
+      queries,
       environment: "sandbox",
       port: 0,
     }),
