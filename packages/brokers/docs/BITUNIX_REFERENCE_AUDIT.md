@@ -536,7 +536,7 @@ The intended longer-term scope is full Bitunix broker and Harvester provider sup
 
 This follow-up adds offline regression tests; exact-head CI and an actual operator-local network run must be reported separately. No live Bitunix request or account-changing operation is implied by this source change.
 
-## 9. Bitunix Spot order-detail lookup — .NET parity follow-up (2026-11-19)
+## 16. Bitunix Spot order-detail lookup — .NET parity follow-up (2026-11-19)
 
 **Reference inspected:** `JKorf/Bitunix.Net/Bitunix.Net/Clients/SpotApi/Rest/BitunixRestClientSpotApiTrading.cs`, `GetOrderAsync(string id)`, and `Bitunix.Net/Objects/Models/BitunixOrder.cs`.
 
@@ -546,7 +546,7 @@ The .NET REST implementation sends `GET /api/spot/v1/order/detail` with only the
 
 This compatibility improvement does not change the canonical-order, fill-completeness, private-event, or Harvester-admission blockers in issue #1185. No live order mutation is enabled or tested.
 
-## 10. Bitunix Spot polling-backed observation primitive (2026-11-19)
+## 17. Bitunix Spot polling-backed observation primitive (2026-11-19)
 
 Coinzilla now has a broker-specific `BitunixSpotReconciler` implementation in `src/infrastructure/bitunix/bitunix-spot-reconciler.js`. It uses existing read-only broker methods and does not create a second REST client or pretend the Spot RPC socket is a push stream.
 
