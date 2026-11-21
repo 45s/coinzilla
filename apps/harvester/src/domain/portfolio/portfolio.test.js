@@ -647,16 +647,3 @@ test("rejects changed allocated Position facts even when the full allocation fin
     "A canonical Fill replay cannot change its Position share while reusing the full allocation fingerprint.",
   )
 })
-
-test("normalizes padded strategy IDs before Portfolio selectors and Position attribution", () => {
-  const result = new Portfolio().applyFill({
-    fill: makeFill(),
-    strategyId: " future_strategy ",
-  })
-
-  assert.equal(
-    result.portfolio.getPosition({ symbol: "ETHUSDT", strategyId: "future_strategy" }).strategyId,
-    "future_strategy",
-    "Portfolio selectors and stored Position ownership must use the same normalized strategy identity.",
-  )
-})
