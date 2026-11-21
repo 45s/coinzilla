@@ -172,3 +172,12 @@ The HTTP and WebSocket listener runs inside the existing Harvester process and i
 ## Verification
 
 The API and WebSocket tests use temporary SQLite files, fake application dependencies, an in-memory EventBus, native WebSocket clients, and ephemeral loopback ports. Persistence notification tests verify that events follow successful upserts and are absent after failed writes. Dashboard tests cover automatic local connections, live updates, reconnect backoff, and REST snapshot resynchronization. Tests do not connect to an exchange or require credentials.
+
+## Operator API
+
+The same local listener exposes the application-level operator facade under `/api/v1/trading/operator`:
+
+- `GET /status`, `GET /markets`, `GET /portfolio`, `GET /orders`, and `GET /balances` return read-only Harvester snapshots.
+- `POST /commands` accepts `{ "command": "pause", "symbol": "BTCUSDT", "requestId": "..." }` or the global commands `pauseallbuys` / `resumeallbuys`. `unpause` maps to the existing market resume use case.
+
+Commands delegate to the existing operator application facade and never call the exchange from the Dashboard. The Dashboard presents an explicit confirmation step before sending a mutation. These endpoints are available only through the loopback listener; do not expose this unauthenticated development API outside the local machine.
