@@ -209,45 +209,59 @@ export async function runGuardedHypeUsdtOrderAttempt({
     createMarker,
     writeLine,
   })
-  const preflight = await readHypeUsdtOperatorPreflight({
-    readBroker,
-  })
-  writeLine(formatOrderPreflightSummary({
-    preflight,
-  }))
-  const approved = await confirm({
-    preflight,
-    order: preflight.order,
-  })
-  if (approved !== true) {
-    writeLine("Operator did not confirm the displayed order. No order was sent.")
-    return Object.freeze({
-      ok: false,
-      mutationOutcome: "NOT_SENT",
-      declined: true,
-    })
-  }
-  const orderBroker = createOrderBroker()
-  assertMutationBroker({
-    broker: orderBroker,
-  })
-  await orderBroker.connect()
+  let orderBroker = null
+  let dispatchStarted = false
   try {
+    const preflight = await readHypeUsdtOperatorPreflight({
+      readBroker,
+    })
+    writeLine(formatOrderPreflightSummary({
+      preflight,
+    }))
+    const approved = await confirm({
+      preflight,
+      order: preflight.order,
+    })
+    if (approved !== true) {
+      writeLine("Operator did not confirm the displayed order. No order was sent.")
+      return Object.freeze({
+        ok: false,
+        mutationOutcome: "NOT_SENT",
+        declined: true,
+      })
+    }
+    orderBroker = createOrderBroker()
+    assertMutationBroker({
+      broker: orderBroker,
+    })
+    await orderBroker.connect()
     const markerPath = await createMarker({
       preflight,
     })
+    dispatchStarted = true
     return await dispatchOrderAndPersistOutcome({
       orderBroker,
       preflight,
       markerPath,
       writeLine,
     })
+  } catch (error) {
+    if (dispatchStarted) {
+      throw error
+    }
+    const notSentError = new Error(error?.message ?? "Bitunix operator order attempt stopped before dispatch", {
+      cause: error,
+    })
+    notSentError.name = "BitunixOrderNotSentError"
+    notSentError.mutationOutcome = "NOT_SENT"
+    throw notSentError
   } finally {
-    try {
-      await orderBroker.disconnect()
-    } catch (error) {
-      writeLine(`Warning: mutation Broker disconnect failed after the placement attempt: ${error.message}`)
+    if (orderBroker) {
+      try {
+        await orderBroker.disconnect()
+      } catch (error) {
+        writeLine(`Warning: mutation Broker disconnect failed after the placement attempt: ${error.message}`)
+      }
     }
   }
 }
-
