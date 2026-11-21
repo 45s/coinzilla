@@ -29,7 +29,13 @@ test("starts the local API without token configuration", async () => {
     env: { TRADING_MODE: "testnet" },
     startServer: async (input) => {
       serverInput = input
-      return { address: { address: "127.0.0.1", port: 4201 }, close: async () => {} }
+      return {
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
+        close: async () => {},
+      }
     },
   })
   assert.equal(typeof service.close, "function")
