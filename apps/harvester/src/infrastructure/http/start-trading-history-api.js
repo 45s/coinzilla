@@ -3,7 +3,7 @@ import {
   createSqliteDatabase,
 } from "@coinzilla/db"
 import { defaultLogger, SystemCustomError } from "@coinzilla/utils"
-import { resolveHarvesterDatabaseFilename } from "../persistence/resolve-harvester-database-filename.js"
+import { assertHarvesterDatabaseIsolation } from "../persistence/resolve-harvester-database-filename.js"
 import { createTradingHistoryQueryRepository } from "../persistence/trading-history-query-repository.js"
 import { createTradingHistoryQueries } from "../../use-cases/trading-history-queries.js"
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
@@ -126,7 +126,7 @@ export async function startTradingHistoryApi({
   startServer = startTradingHistoryApiServer,
 } = {}) {
   const configuration = validateStartupConfiguration({ env })
-  const filename = resolveHarvesterDatabaseFilename({
+  const filename = await assertHarvesterDatabaseIsolation({
     tradingMode: configuration.environment,
     env,
   })
