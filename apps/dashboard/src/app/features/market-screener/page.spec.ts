@@ -68,6 +68,7 @@ describe('MarketScreenerComponent', () => {
     const movementDirection = fixture.nativeElement.querySelector('select[aria-label="Movement direction"]') as HTMLSelectElement;
     expect(movementWindow.value).toBe('change24h');
     expect(movementWindow.disabled).toBe(true);
+    expect(movementDirection.value).toBe('all');
     expect(movementDirection.disabled).toBe(true);
     expect(Array.from(movementWindow.options)).toHaveLength(4);
     expect(Array.from(movementDirection.options)).toHaveLength(3);
