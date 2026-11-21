@@ -112,7 +112,7 @@ status: active
 type: architecture
 owner: harvester
 created: 2026-11-09
-last_verified: 2026-11-09
+last_verified: 2026-11-21
 ---
 ```
 
