@@ -1662,6 +1662,13 @@ function createConservativeMarketMetadataCache({ dependencies, getMarketMetadata
   })
 }
 
+function createConservativeEngineState({ initialState, pairs, sharedAccountState } = {}) {
+  const initialRegistry = validateInitialEngineState({ initialState, pairs })
+  const { state } = createInitialEngineState({ initialState, pairs, initialRegistry })
+  bindSharedAccountOrderRegistry({ state, sharedAccountState })
+  return state
+}
+
 function createConservativeEngineBaseContext({ dependencies } = {}) {
   const {
     appConfig,
@@ -1678,20 +1685,14 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
     pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
     hasUnownedOpenOrdersForSymbol({ symbol })
-  const initialRegistry = validateInitialEngineState({
+  const state = createConservativeEngineState({
     initialState,
     pairs,
+    sharedAccountState,
   })
   const marketMetadataCache = createConservativeMarketMetadataCache({
     dependencies,
     getMarketMetadata,
-  })
-  const { state } = createInitialEngineState({ initialState,
-pairs,
-initialRegistry })
-  bindSharedAccountOrderRegistry({
-    state,
-    sharedAccountState,
   })
   const runTransition = sharedAccountState?.runTransition ?? createSerializedTransitionQueue()
   const shutdownSafety = createConservativeShutdownSafety({
@@ -1699,11 +1700,14 @@ initialRegistry })
     pairs,
     runTransition,
   })
-  let strategyEvaluationSequence = 0, marketPriceEventSequence = 0
+  let strategyEvaluationSequence = 0
+  let marketPriceEventSequence = 0
   const recoveryCancellationState = createRecoveryManagedCancellationState({ state })
   const rememberProcessedFill = createProcessedFillTracker({ state })
-  const executionFillAccounting = createExecutionFillAccounting({ state,
-rememberProcessedFill })
+  const executionFillAccounting = createExecutionFillAccounting({
+    state,
+    rememberProcessedFill,
+  })
   return {
     dependencies,
     settings,
@@ -3545,13 +3549,27 @@ function hasActiveRecoveryPosition({ portfolio, marketId } = {}) {
   }) > 0
 }
 
+function hasActiveRecoverySell({ state, marketId } = {}) {
+  return state.registry.getActiveOrders({ marketId }).some((order) => {
+    if (order.side !== "SELL") {
+      return false
+    }
+    const ownership = state.registry.getOwnership({
+      clientOrderId: order.clientOrderId,
+      brokerOrderId: order.brokerOrderId,
+      marketId,
+    })
+    return ownership?.strategyId === StrategyId.COIN_GRABBER
+  })
+}
+
 async function refreshRecoverySellMarketMetadataForEvaluation({ context, symbol } = {}) {
   const metadata = context.getCurrentMarketMetadata({ symbol })
+  const marketId = metadata.market.id
   const portfolio = context.dependencies.getPortfolio()
-  if (!hasActiveRecoveryPosition({
-    portfolio,
-    marketId: metadata.market.id,
-  })) {
+  const hasActivePosition = hasActiveRecoveryPosition({ portfolio, marketId })
+  const hasActiveSell = hasActiveRecoverySell({ state: context.state, marketId })
+  if (!hasActivePosition || hasActiveSell) {
     return toResult({ data: metadata })
   }
   const result = await context.refreshMarketMetadata({

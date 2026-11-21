@@ -175,6 +175,10 @@ asset: market.baseAsset }),
       }),
     }
     },
+    getSymbolFilters: async ({ symbol }) => ({
+      ok: true,
+      data: makeMarketMetadata(marketsBySymbol.get(symbol)),
+    }),
     getFills: async () => ({ ok: true,
 data: [] }),
     ...brokerOverrides,
