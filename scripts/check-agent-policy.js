@@ -88,13 +88,109 @@ length: fence[1].length };
   return output.join('\n').replace(/(`+)[\s\S]*?\1/g, '');
 }
 /**
+ * Remove HTML comments without treating arbitrary regular-expression matches as markup.
+ * Unterminated comments are removed through the end of the document, as HTML parsers do.
+ * @param {string} content
+ * @returns {string}
+ */
+export function removeHtmlComments(content) {
+  let output = '';
+  let cursor = 0;
+  while (cursor < content.length) {
+    const opening = content.indexOf('<!--', cursor);
+    if (opening === -1) {
+      output += content.slice(cursor);
+      break;
+    }
+    output += content.slice(cursor, opening);
+    const closing = content.indexOf('-->', opening + 4);
+    if (closing === -1) { break; }
+    cursor = closing + 3;
+  }
+  return output;
+}
+
+/**
+ * Decode the HTML character references used by Markdown heading text.
+ * @param {string} value
+ * @returns {string}
+ */
+function decodeNumericHeadingEntity(entity) {
+  const numeric = entity[0] === '#' ? entity.slice(1) : '';
+  const hexadecimal = numeric[0]?.toLowerCase() === 'x';
+  const digits = hexadecimal ? numeric.slice(1) : numeric;
+  const validDigits = digits && (hexadecimal ? /^[0-9a-f]+$/i : /^[0-9]+$/).test(digits);
+  if (!validDigits) { return null; }
+  const codePoint = Number.parseInt(digits, hexadecimal ? 16 : 10);
+  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff ||
+      (codePoint >= 0xd800 && codePoint <= 0xdfff)) { return null; }
+  return String.fromCodePoint(codePoint);
+}
+
+function decodeHeadingEntities(value) {
+  const named = new Map([
+    ['amp', '&'], ['lt', '<'], ['gt', '>'], ['quot', '"'],
+    ['apos', "'"], ['nbsp', ' '], ['#39', "'"],
+  ]);
+  let output = '';
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] !== '&') { output += value[index]; continue; }
+    const terminator = value.indexOf(';', index + 1);
+    if (terminator === -1) { output += '&'; continue; }
+    const entity = value.slice(index + 1, terminator);
+    const normalized = entity.toLowerCase();
+    const decoded = named.get(normalized) ?? decodeNumericHeadingEntity(entity);
+    if (decoded === null || decoded === undefined) {
+      output += '&';
+      continue;
+    }
+    output += decoded;
+    index = terminator;
+  }
+  return output;
+}
+
+/**
+ * Remove HTML tags from a heading while retaining text between tag delimiters.
+ * @param {string} value
+ * @returns {string}
+ */
+function removeHeadingHtmlTags(value) {
+  let output = '';
+  let insideTag = false;
+  for (const character of value) {
+    if (character === '<') { insideTag = true; continue; }
+    if (character === '>' && insideTag) { insideTag = false; continue; }
+    if (!insideTag) { output += character; }
+  }
+  return output;
+}
+
+/**
+ * Unescape Markdown punctuation without a broad replacement expression.
+ * @param {string} value
+ * @returns {string}
+ */
+function unescapeMarkdownPunctuation(value) {
+  const escapable = new Set('#.+!?()[]{}\\');
+  let output = '';
+  for (let index = 0; index < value.length; index += 1) {
+    if (value[index] === '\\' && index + 1 < value.length && escapable.has(value[index + 1])) {
+      index += 1;
+    }
+    output += value[index];
+  }
+  return output;
+}
+
+/**
  * Extract destinations from Markdown inline links and reference definitions.
  * Code examples and HTML comments are excluded.
  * @param {string} content Markdown source.
  * @returns {string[]} Link destinations in source order.
  */
 function extractMarkdownLinkDestinations(content) {
-  const source = removeCodeExamples(content).replace(/<!--[\s\S]*?-->/g, '');
+  const source = removeHtmlComments(removeCodeExamples(content));
   const destinations = [];
   const inlineLinks = /!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))/g;
   const referenceDefinitions = /^[ \t]{0,3}\[(?!\^)[^\]]+\]:[ \t]*(?:<([^>]+)>|([^\s]+))/gm;
@@ -206,40 +302,34 @@ export function findMissingLocalLinks(...args) {
  * @returns {Set<string>} Anchor identifiers present in the document.
  */
 function addMarkdownHeadingAnchor({ rawHeading, anchors, inlineCodePattern }) {
-  if (/[{}]/.test(rawHeading)) {return}
+  if (/[{}]/.test(rawHeading)) { return; }
 
-  const plainText = rawHeading
-    .replace(/<!--.*?-->/g, '')
+  const normalizedHeading = rawHeading
     .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/gi, '$1')
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
     .replace(inlineCodePattern, '$1')
-    .replace(/<[^>]*>/g, '')
-    .replace(/\\([#.+!?()[\]{}])/g, '$1')
     .replace(/[*~]/g, '')
-    .replace(/(^|\s)_([^_]+)_($|\s)/g, '$1$2$3')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&nbsp;/gi, ' ')
+    .replace(/(^|\s)_([^_]+)_($|\s)/g, '$1$2$3');
+  const plainText = decodeHeadingEntities(
+    unescapeMarkdownPunctuation(removeHeadingHtmlTags(normalizedHeading)),
+  );
 
   const baseSlug = plainText
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\p{M}\-_ ]/gu, '')
     .trim()
-    .replace(/ /g, '-')
-  if (!baseSlug) {return}
+    .replace(/ /g, '-');
+  if (!baseSlug) { return; }
 
-  let slug = baseSlug
-  let suffix = 0
+  let slug = baseSlug;
+  let suffix = 0;
   while (anchors.has(slug)) {
-    suffix += 1
-    slug = `${baseSlug}-${suffix}`
+    suffix += 1;
+    slug = `${baseSlug}-${suffix}`;
   }
-  anchors.add(slug)
+  anchors.add(slug);
 }
 
 function prepareMarkdownHeadingLine({ line, index, state, fencePattern }) {
@@ -269,7 +359,7 @@ function prepareMarkdownHeadingLine({ line, index, state, fencePattern }) {
       skip: true,
     }
     }
-    normalizedLine = line.replace(/<!--.*?-->/g, '')
+    normalizedLine = removeHtmlComments(line)
   }
 
   const fenceMatch = normalizedLine.match(fencePattern)
@@ -365,6 +455,42 @@ function collectMarkdownHeadingAnchors(content) {
  * @param {{ path: string, content: string }[]} documents Documents to inspect.
  * @returns {string[]} Human-readable heading-anchor errors.
  */
+function findMissingAnchorForTarget({ root, document, target, documentsByAbsolutePath, anchorCache }) {
+  if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(target)) { return null; }
+  const hashIndex = target.indexOf('#');
+  if (hashIndex < 0) { return null; }
+  const rawFragment = target.slice(hashIndex + 1);
+  if (!rawFragment || rawFragment.startsWith(':~:text=')) { return null; }
+
+  const pathAndQuery = target.slice(0, hashIndex);
+  const [rawPath] = pathAndQuery.split('?', 1);
+  let decodedPath;
+  try {
+    decodedPath = decodeURIComponent(rawPath);
+  } catch {
+    return `${document.path} has malformed URL-encoded local link path "${rawPath}"`;
+  }
+  const absoluteTarget = decodedPath
+    ? resolve(root, dirname(document.path), decodedPath)
+    : resolve(root, document.path);
+  if (!existsSync(absoluteTarget) || !/\.mdx?$/i.test(absoluteTarget)) { return null; }
+  const targetDocument = documentsByAbsolutePath.get(absoluteTarget);
+  if (!targetDocument) { return null; }
+
+  let fragment;
+  try {
+    fragment = decodeURIComponent(rawFragment);
+  } catch {
+    return `${document.path} has malformed URL-encoded heading fragment "#${rawFragment}"`;
+  }
+  if (!anchorCache.has(absoluteTarget)) {
+    anchorCache.set(absoluteTarget, collectMarkdownHeadingAnchors(targetDocument.content));
+  }
+  return anchorCache.get(absoluteTarget).has(fragment)
+    ? null
+    : `${document.path} links to missing heading anchor "#${fragment}" in ${targetDocument.path}`;
+}
+
 export function findMissingLocalAnchors(...args) {
   const [root, documents] = args;
   const gaps = [];
@@ -375,47 +501,16 @@ export function findMissingLocalAnchors(...args) {
 
   for (const document of documents) {
     for (const target of extractMarkdownLinkDestinations(document.content)) {
-      if (/^(?:[a-z][a-z\d+.-]*:|\/\/)/i.test(target)) {continue;}
-
-      const hashIndex = target.indexOf('#');
-      if (hashIndex < 0) {continue;}
-      const rawFragment = target.slice(hashIndex + 1);
-      if (!rawFragment || rawFragment.startsWith(':~:text=')) {continue;}
-
-      const pathAndQuery = target.slice(0, hashIndex);
-      const [rawPath] = pathAndQuery.split('?', 1);
-      let decodedPath;
-      try {
-        decodedPath = decodeURIComponent(rawPath);
-      } catch {
-        gaps.push(`${document.path  } has malformed URL-encoded local link path "${  rawPath  }"`);
-        continue;
-      }
-      const absoluteTarget = decodedPath
-        ? resolve(root, dirname(document.path), decodedPath)
-        : resolve(root, document.path);
-
-      if (!existsSync(absoluteTarget) || !/\.mdx?$/i.test(absoluteTarget)) {continue;}
-      const targetDocument = documentsByAbsolutePath.get(absoluteTarget);
-      if (!targetDocument) {continue;}
-
-      let fragment;
-      try {
-        fragment = decodeURIComponent(rawFragment);
-      } catch {
-        gaps.push(`${document.path  } has malformed URL-encoded heading fragment "#${  rawFragment  }"`);
-        continue;
-      }
-
-      if (!anchorCache.has(absoluteTarget)) {
-        anchorCache.set(absoluteTarget, collectMarkdownHeadingAnchors(targetDocument.content));
-      }
-      if (!anchorCache.get(absoluteTarget).has(fragment)) {
-        gaps.push(`${document.path  } links to missing heading anchor "#${  fragment  }" in ${  targetDocument.path}`);
-      }
+      const gap = findMissingAnchorForTarget({
+        root,
+        document,
+        target,
+        documentsByAbsolutePath,
+        anchorCache,
+      });
+      if (gap) { gaps.push(gap); }
     }
   }
-
   return gaps.sort();
 }
 
@@ -649,14 +744,7 @@ function isRegexStart({ character, previousToken }) {
   )
 }
 
-function scanJavaScriptNonCodeToken({
-  source,
-  output,
-  index,
-  character,
-  next,
-  previousToken,
-}) {
+function scanJavaScriptLiteral({ source, output, index, character }) {
   if (character === "'" || character === '"') {
     return {
       nextIndex: skipQuotedJavaScript({
@@ -666,7 +754,7 @@ function scanJavaScriptNonCodeToken({
         quote: character,
       }),
       previousToken: 'value',
-    }
+    };
   }
   if (character === String.fromCharCode(96)) {
     return {
@@ -676,8 +764,12 @@ function scanJavaScriptNonCodeToken({
         startIndex: index + 1,
       }),
       previousToken: 'value',
-    }
+    };
   }
+  return null;
+}
+
+function scanJavaScriptCommentOrRegex({ source, output, index, character, next, previousToken }) {
   if (character === '/' && next === '/') {
     return {
       nextIndex: skipLineComment({
@@ -685,7 +777,7 @@ function scanJavaScriptNonCodeToken({
         output,
         startIndex: index,
       }),
-    }
+    };
   }
   if (character === '/' && next === '*') {
     return {
@@ -694,7 +786,7 @@ function scanJavaScriptNonCodeToken({
         output,
         startIndex: index,
       }),
-    }
+    };
   }
   if (isRegexStart({
     character,
@@ -707,73 +799,102 @@ function scanJavaScriptNonCodeToken({
         startIndex: index,
       }),
       previousToken: 'value',
-    }
+    };
   }
-  return null
+  return null;
+}
+
+function scanJavaScriptNonCodeToken(args) {
+  return scanJavaScriptLiteral(args) ?? scanJavaScriptCommentOrRegex(args);
+}
+
+function nextTemplateBraceDepth({ character, nestedBraces }) {
+  if (character === '{') { return nestedBraces + 1; }
+  if (character === '}') { return nestedBraces - 1; }
+  return nestedBraces;
+}
+
+function handleTemplateExpressionBrace({ output, index, nestedBraces, stopAtTemplateBrace, character }) {
+  if (!stopAtTemplateBrace) {
+    return {
+      nextIndex: index,
+      nestedBraces,
+      closed: false,
+    };
+  }
+  if (character === '}' && nestedBraces === 0) {
+    blankJavaScriptSource({
+      output,
+      start: index,
+      end: index + 1,
+    });
+    return {
+      nextIndex: index + 1,
+      nestedBraces,
+      closed: true,
+    };
+  }
+  return {
+    nextIndex: index,
+    nestedBraces: nextTemplateBraceDepth({
+      character,
+      nestedBraces,
+    }),
+    closed: false,
+  };
 }
 
 function scanJavaScriptCode({ source, output, startIndex, stopAtTemplateBrace = false }) {
-  let index = startIndex
-  let nestedBraces = 0
-  let previousToken = ''
+  let index = startIndex;
+  let nestedBraces = 0;
+  let previousToken = '';
 
   while (index < source.length) {
-    const character = source[index]
-    const next = source[index + 1]
-
-    if (stopAtTemplateBrace && character === '}') {
-      if (nestedBraces === 0) {
-        blankJavaScriptSource({
-          output,
-          start: index,
-          end: index + 1,
-        })
-        return index + 1
-      }
-      nestedBraces -= 1
-    } else if (stopAtTemplateBrace && character === '{') {
-      nestedBraces += 1
-    }
+    const character = source[index];
+    const brace = handleTemplateExpressionBrace({
+      output,
+      index,
+      nestedBraces,
+      stopAtTemplateBrace,
+      character,
+    });
+    if (brace.closed) { return brace.nextIndex; }
+    const { nestedBraces: nextNestedBraces } = brace;
+    nestedBraces = nextNestedBraces;
 
     const nonCodeToken = scanJavaScriptNonCodeToken({
       source,
       output,
       index,
       character,
-      next,
+      next: source[index + 1],
       previousToken,
-    })
+    });
     if (nonCodeToken) {
-      index = nonCodeToken.nextIndex
-      const { previousToken: nextPreviousToken } = nonCodeToken
-      if (nextPreviousToken) {
-        previousToken = nextPreviousToken
-      }
-      continue
+      index = nonCodeToken.nextIndex;
+      previousToken = nonCodeToken.previousToken ?? previousToken;
+      continue;
     }
 
-    const pair = source.slice(index, index + 2)
+    const pair = source.slice(index, index + 2);
     if (TWO_CHARACTER_TOKENS.has(pair)) {
-      previousToken = pair
-      index += 2
-      continue
+      previousToken = pair;
+      index += 2;
+      continue;
     }
-
     if (/[A-Za-z_$]/.test(character)) {
       const identifier = readJavaScriptIdentifier({
         source,
         startIndex: index,
-      })
-      previousToken = identifier.token
-      index = identifier.nextIndex
-      continue
+      });
+      previousToken = identifier.token;
+      index = identifier.nextIndex;
+      continue;
     }
-
-    if (!/\s/.test(character)) {previousToken = character}
-    index += 1
+    if (!/\s/.test(character)) { previousToken = character; }
+    index += 1;
   }
-
-  return index
+  return index;
 }
 
 function maskJavaScriptNonCode(source) {

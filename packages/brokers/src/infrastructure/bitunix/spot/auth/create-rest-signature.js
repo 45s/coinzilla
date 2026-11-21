@@ -53,14 +53,14 @@ export function createRestSignature(options = {}) {
     throw new TypeError("Bitunix REST signature options must be an object")
   }
 
-  const { nonce, timestamp, apiKey, secretKey } = options
+  const { nonce, timestamp, apiKey: publicApiKey, secretKey: signingSecret } = options
   assertNonEmptyString({ value: nonce,
     name: "nonce" })
   assertNonEmptyString({ value: timestamp,
     name: "timestamp" })
-  assertNonEmptyString({ value: apiKey,
+  assertNonEmptyString({ value: publicApiKey,
     name: "apiKey" })
-  assertNonEmptyString({ value: secretKey,
+  assertNonEmptyString({ value: signingSecret,
     name: "secretKey" })
 
   const query = serializeQueryParams({ queryParams: options.queryParams })
@@ -68,8 +68,8 @@ export function createRestSignature(options = {}) {
     body: options.body,
     bodyIsSerialized: options.bodyIsSerialized,
   })
-  const payload = `${nonce}${timestamp}${apiKey}${query}${body}`
+  const payload = `${nonce}${timestamp}${publicApiKey}${query}${body}`
   const digest = createHash("sha256").update(payload).digest("hex")
 
-  return createHash("sha256").update(`${digest}${secretKey}`).digest("hex")
+  return createHash("sha256").update(`${digest}${signingSecret}`).digest("hex")
 }
