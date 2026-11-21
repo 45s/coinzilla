@@ -73,7 +73,9 @@ describe('TradingHistoryApi', () => {
       executedQuoteQuantity: '8.12500000',
       commissions: [
         {
-          id: 'commission-1',
+          id: 1,
+          fillId: 'fill/with reserved chars',
+          ordinal: 0,
           amount: '0.00000013',
           assetCode: 'BNB',
           quoteValueAmount: null,
