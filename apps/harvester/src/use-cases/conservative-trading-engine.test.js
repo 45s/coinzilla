@@ -83,6 +83,26 @@ const marketMetadata = {
     ],
   }),
 }
+function createMarketMetadataWithMinimumNotional({ minimumNotional } = {}) {
+  return {
+    ...marketMetadata,
+    tradingRules: new TradingRules({
+      market,
+      constraints: marketMetadata.tradingRules.constraints.map((constraint) =>
+        constraint.type === "MIN_NOTIONAL"
+          ? {
+              ...constraint,
+              value: new Money({
+                amount: minimumNotional,
+                asset: quoteAsset,
+              }),
+            }
+          : constraint,
+      ),
+    }),
+  }
+}
+
 const appConfig = {
   strategies: {
     [StrategyId.COIN_GRABBER]: {
@@ -419,6 +439,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     recoveryCompletion,
     additionalTrackedQuoteCashFlow,
     additionalTrackedBaseQuantity,
+    now,
     initialState,
   } = options
   const effectiveEventPublisher = createHarnessEventPublisher({ eventPublisher })
@@ -460,6 +481,7 @@ function createHarnessEngine({ options, brokerState, state } = {}) {
     }),
     canTrade: canTradeOverride,
     isStopping: isStoppingOverride,
+    now,
     initialState,
   })
 }
@@ -1775,6 +1797,115 @@ fill }).portfolio,
 fill }).ledger,
   }
 }
+
+test("refreshes recovery SELL filters before evaluation and reuses them only within the freshness window", async () => {
+  const seeded = makeSeededRecoveryState()
+  const refreshedMetadata = createMarketMetadataWithMinimumNotional({
+    minimumNotional: "1000",
+  })
+  const observedMinimumNotionals = []
+  const strategyPolicy = {
+    ...conservativeStrategyPolicy,
+    evaluate: ({ marketMetadata: currentMetadata }) => {
+      const minimumNotional = currentMetadata.tradingRules.constraints
+        .find(({ type }) => type === "MIN_NOTIONAL").value.amount
+      observedMinimumNotionals.push(minimumNotional)
+      return {
+        action: "NO_ACTION",
+        reason: "TEST_FILTER_OBSERVATION",
+        actions: [],
+        position: null,
+      }
+    },
+  }
+  let currentTime = 1000
+  let filterRefreshCount = 0
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    strategyPolicy,
+    now: () => currentTime,
+    getSymbolFilters: async ({ symbol }) => {
+      assert.equal(symbol, "DOGEUSDT", "Recovery filter refresh must target the active position's exact market.")
+      filterRefreshCount += 1
+      return {
+        ok: true,
+        data: refreshedMetadata,
+      }
+    },
+  })
+  const evaluateMarket = () => harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: currentTime,
+    },
+  })
+
+  const firstEvaluation = await evaluateMarket()
+  assert.equal(firstEvaluation.ok, true, "A valid fresh filter snapshot must allow the recovery evaluation to proceed.")
+  assert.equal(observedMinimumNotionals[0], "1000", "Recovery decisions must receive the freshly retrieved minimum-notional rule instead of the startup value.")
+  assert.equal(filterRefreshCount, 1, "The first recovery evaluation must retrieve current exchange filters.")
+
+  currentTime = 20_000
+  const secondEvaluation = await evaluateMarket()
+  assert.equal(secondEvaluation.ok, true, "A recovery evaluation inside the freshness window must remain available.")
+  assert.equal(filterRefreshCount, 1, "A validated per-market filter snapshot must be reused while it remains within the 30-second freshness window.")
+
+  currentTime = 31_001
+  const thirdEvaluation = await evaluateMarket()
+  assert.equal(thirdEvaluation.ok, true, "A recovery evaluation after filter expiry must refresh successfully.")
+  assert.equal(filterRefreshCount, 2, "A recovery evaluation after 30 seconds must fetch a new exchange-filter snapshot.")
+  assert.deepEqual(
+    observedMinimumNotionals,
+    ["1000", "1000", "1000"],
+    "Every recovery evaluation must use the latest validated filter snapshot, never the process-start rules.",
+  )
+})
+
+
+test("blocks recovery evaluation and pauses the market when current exchange filters are unavailable", async () => {
+  const seeded = makeSeededRecoveryState()
+  let strategyEvaluationCount = 0
+  const strategyPolicy = {
+    ...conservativeStrategyPolicy,
+    evaluate: () => {
+      strategyEvaluationCount += 1
+      return {
+        action: "NO_ACTION",
+        reason: "TEST_FILTER_FAILURE",
+        actions: [],
+        position: null,
+      }
+    },
+  }
+  const harness = await createHarness({
+    initialPortfolio: seeded.portfolio,
+    initialRecoveryLedger: seeded.recoveryLedger,
+    strategyPolicy,
+    now: () => 1000,
+    getSymbolFilters: async () => ({
+      ok: false,
+      errors: [new Error("exchange metadata unavailable")],
+    }),
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1000,
+    },
+  })
+
+  assert.equal(result.ok, false, "An active recovery position must not be evaluated with an unavailable current exchange-filter snapshot.")
+  assert.equal(strategyEvaluationCount, 0, "The strategy must not calculate a recovery SELL from stale startup filters after refresh failure.")
+  assert.equal(harness.orders.length, 0, "No recovery order may be submitted when current exchange filters cannot be verified.")
+  assert.ok(harness.pauses.includes("RECOVERY_SELL_FILTERS_UNAVAILABLE"), "The affected market must be paused with the explicit recovery-filter freshness reason.")
+})
+
 
 const makeFilledOrder = ({ order }) => new CanonicalOrder({
   clientOrderId: order.clientOrderId,
