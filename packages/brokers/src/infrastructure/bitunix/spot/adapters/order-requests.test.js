@@ -168,13 +168,13 @@ test("Bitunix order adapter correlates placement acknowledgement with requested 
   )
 })
 
-test("Bitunix order adapter preserves matching-engine rejection metadata", () => {
+test("Bitunix order adapter preserves synthetic matching-engine rejection metadata", () => {
   assert.throws(
     () => validateSpotOrderPlacementResponse({
       response: {
         placeStatus: "0",
-        placeCode: 10005,
-        placeMsg: "Insufficient available balance",
+        placeCode: 987654321,
+        placeMsg: "synthetic insufficient-balance rejection",
       },
       symbol: "BTCUSDT",
       side: 2,
@@ -183,15 +183,15 @@ test("Bitunix order adapter preserves matching-engine rejection metadata", () =>
     (error) => {
       assert.ok(error instanceof BitunixRestError)
       assert.equal(error.kind, "exchange")
-      assert.equal(error.exchangeCode, "10005")
-      assert.equal(error.message, "Insufficient available balance")
+      assert.equal(error.exchangeCode, "987654321")
+      assert.equal(error.message, "synthetic insufficient-balance rejection")
       assert.equal(error.path, BITUNIX_SPOT_ORDER_API.placeOrder)
       return true
     },
   )
 })
 
-test("Bitunix order adapter rejects a non-zero placeCode even when placeStatus reports success", () => {
+test("Bitunix order adapter keeps non-zero placeCode ambiguous when placeStatus reports success", () => {
   assert.throws(
     () => validateSpotOrderPlacementResponse({
       response: {
@@ -212,35 +212,62 @@ test("Bitunix order adapter rejects a non-zero placeCode even when placeStatus r
       price: "100",
     }),
     (error) => {
-      assert.ok(error instanceof BitunixRestError, "a matching-engine rejection must use the structured Bitunix REST error")
-      assert.equal(error.kind, "exchange", "a non-zero placeCode must be a definitive exchange rejection")
+      assert.ok(error instanceof BitunixRestError, "a contradictory placement acknowledgement must use the structured Bitunix REST error")
+      assert.equal(error.kind, "response", "conflicting placement metadata must remain an ambiguous response")
+      assert.equal(error.outcomeUnknown, true, "a contradictory acknowledgement must never be classified as a definitive rejection")
       assert.equal(error.exchangeCode, "opaque-engine-rejection", "the original matching-engine code must be preserved")
-      assert.equal(error.message, "synthetic matching-engine rejection", "the matching-engine message must be preserved")
+      assert.match(error.message, /synthetic matching-engine rejection/, "the matching-engine message must be preserved")
       return true
     },
   )
 })
 
-test("Bitunix order adapter accepts a zero placeCode when placeStatus confirms success", () => {
-  const response = validateSpotOrderPlacementResponse({
-    response: {
-      placeStatus: "1",
-      placeCode: 0,
+test("Bitunix order adapter accepts missing, null, and zero placeCode when placeStatus confirms success", () => {
+  for (const placeCode of [undefined, null, 0, "0"]) {
+    const response = validateSpotOrderPlacementResponse({
+      response: {
+        placeStatus: "1",
+        placeCode,
+        symbol: "BTCUSDT",
+        side: 2,
+        type: 1,
+        orderId: "123",
+        volume: "1",
+        price: "100",
+      },
       symbol: "BTCUSDT",
       side: 2,
       type: 1,
-      orderId: "123",
       volume: "1",
       price: "100",
-    },
-    symbol: "BTCUSDT",
-    side: 2,
-    type: 1,
-    volume: "1",
-    price: "100",
-  })
+    })
 
-  assert.equal(response.orderId, "123", "a zero matching-engine code must not reject a successful placement acknowledgement")
+    assert.equal(response.orderId, "123", "a missing, null, or zero matching-engine code must not override successful placeStatus")
+  }
+})
+
+test("Bitunix order adapter preserves numeric placeCode values when acknowledgement fields conflict", () => {
+  assert.throws(
+    () => validateSpotOrderPlacementResponse({
+      response: {
+        placeStatus: "1",
+        placeCode: 987654321,
+        placeMsg: "synthetic matching-engine rejection",
+        symbol: "BTCUSDT",
+        side: 2,
+        type: 1,
+        orderId: "123",
+      },
+      symbol: "BTCUSDT",
+      side: 2,
+      type: 1,
+    }),
+    (error) => error instanceof BitunixRestError &&
+      error.kind === "response" &&
+      error.outcomeUnknown === true &&
+      error.exchangeCode === "987654321",
+    "a numeric non-zero placeCode must remain exact diagnostic metadata on an ambiguous acknowledgement",
+  )
 })
 
 test("Bitunix order adapter rejects malformed placeCode values as unknown responses", () => {

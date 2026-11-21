@@ -410,7 +410,7 @@ test("Bitunix Spot quote quantities in scientific notation are expanded before e
   assert.equal(calls[0].options.body.volume, "0.00000001")
 })
 
-test("Bitunix Spot placement preserves matching-engine rejection code and message", async () => {
+test("Bitunix Spot placement preserves synthetic numeric matching-engine rejection metadata", async () => {
   const { broker } = createBroker({
     responses: {
       "/api/spot/v1/order/place_order": {
@@ -421,8 +421,8 @@ test("Bitunix Spot placement preserves matching-engine rejection code and messag
         volume: "1",
         price: "100",
         placeStatus: "0",
-        placeCode: 10005,
-        placeMsg: "Insufficient available balance",
+        placeCode: 987654321,
+        placeMsg: "synthetic insufficient-balance rejection",
       },
     },
   })
@@ -437,9 +437,9 @@ test("Bitunix Spot placement preserves matching-engine rejection code and messag
 
   assert.equal(result.ok, false)
   assert.equal(result.mutationOutcome, "REJECTED")
-  assert.equal(result.errors[0].exchangeCode, "10005")
+  assert.equal(result.errors[0].exchangeCode, "987654321")
   assert.equal(result.errors[0].code, "BITUNIX_REST_EXCHANGE_REJECTED")
-  assert.equal(result.errors[0].message, "Insufficient available balance")
+  assert.equal(result.errors[0].message, "synthetic insufficient-balance rejection")
   assert.equal(result.errors[0].path, "/api/spot/v1/order/place_order")
 })
 
@@ -667,10 +667,10 @@ test("Bitunix Spot createOrder classifies matching-engine placement rejections",
   })
 })
 
-test("Bitunix Spot createOrder rejects non-zero placeCode despite successful placeStatus", async () => {
+test("Bitunix Spot createOrder keeps conflicting placement status and placeCode unknown", async () => {
   const { result, requests } = await assertCreateOrderLifecycleScenario({
-    name: "matching-engine rejection despite successful placement status",
-    mutationOutcome: "REJECTED",
+    name: "conflicting successful placement status and non-zero matching-engine code",
+    mutationOutcome: "OUTCOME_UNKNOWN",
     expectedRequests: 1,
     expectedPosts: 1,
     expectedGets: 0,
@@ -693,9 +693,41 @@ test("Bitunix Spot createOrder rejects non-zero placeCode despite successful pla
     ],
   })
 
-  assert.equal(result.errors[0].exchangeCode, "opaque-engine-rejection", "createOrder must preserve the non-zero matching-engine rejection code")
-  assert.equal(result.errors[0].message, "synthetic matching-engine rejection", "createOrder must preserve the matching-engine rejection message")
+  assert.equal(result.errors[0].kind, "response", "conflicting exchange acknowledgement fields must remain an ambiguous response")
+  assert.equal(result.errors[0].exchangeCode, "opaque-engine-rejection", "createOrder must preserve the non-zero matching-engine code")
+  assert.match(result.errors[0].message, /synthetic matching-engine rejection/, "createOrder must preserve the matching-engine message")
   assert.equal(requests[0].url.pathname, "/api/spot/v1/order/place_order", "the rejection must come from the single placement request")
+})
+
+test("Bitunix Spot createOrder keeps malformed placeCode unknown after dispatch", async () => {
+  const { result, requests } = await assertCreateOrderLifecycleScenario({
+    name: "malformed matching-engine placement code",
+    mutationOutcome: "OUTCOME_UNKNOWN",
+    expectedRequests: 1,
+    expectedPosts: 1,
+    expectedGets: 0,
+    responses: [
+      {
+        code: "0",
+        msg: "success",
+        data: {
+          orderId: "12345678901234567890",
+          symbol: "BTCUSDT",
+          side: 2,
+          type: 1,
+          volume: "1",
+          price: "100",
+          placeStatus: "1",
+          placeCode: {},
+          placeMsg: "synthetic malformed matching-engine code",
+        },
+      },
+    ],
+  })
+
+  assert.equal(result.errors[0].kind, "response", "malformed placement metadata must remain a response error")
+  assert.equal(result.errors[0].outcomeUnknown, true, "a malformed code after dispatch must not be treated as a rejection")
+  assert.equal(requests[0].url.pathname, "/api/spot/v1/order/place_order", "the ambiguous result must follow the single placement POST")
 })
 
 test("Bitunix Spot createOrder keeps malformed success envelopes unknown", async () => {
