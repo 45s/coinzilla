@@ -131,6 +131,48 @@ test("authenticates WebSocket clients with a first message and broadcasts only p
   }, "Authenticated clients must receive resource-only invalidation hints after persistence.")
 })
 
+test("ignores malformed resource notifications without breaking the EventBus subscriber", async (t) => {
+  const errors = []
+  const eventBus = new EventBus({
+    onError: ({ error }) => errors.push(error),
+  })
+  const api = await startApi({
+    t,
+    eventBus,
+  })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+
+  await waitForSocketOpen(socket)
+  socket.send(JSON.stringify({
+    type: "authenticate",
+    token: API_TOKEN,
+  }))
+  await waitForMessage(socket)
+
+  eventBus.publish({
+    name: TRADING_HISTORY_UPDATED,
+    source: "test",
+    data: {
+      resources: null,
+    },
+  })
+  await eventBus.flush()
+  assert.deepEqual(errors, [], "Malformed internal notifications must be ignored without a subscriber failure.")
+
+  eventBus.publish({
+    name: TRADING_HISTORY_UPDATED,
+    source: "test",
+    data: {
+      resources: ["orders"],
+    },
+  })
+  assert.deepEqual(await waitForMessage(socket), {
+    type: "trading-history.updated",
+    resources: ["orders"],
+  })
+})
+
 test("rejects bearer tokens supplied in the WebSocket URL", async (t) => {
   const eventBus = new EventBus()
   const api = await startApi({
