@@ -128,13 +128,13 @@ function validateBehavior({ behavior, errors, readFile, sourceOwners }) {
   validateTestMappings({ behavior, errors, readFile })
 }
 
-function validateChangedFiles({ contract, changedFiles, sourceOwners, errors }) {
+function validateChangedFiles({ criticalPathPrefixes, changedFiles, sourceOwners, errors }) {
   const affectedBehaviorIds = new Set()
   for (const changedPath of changedFiles) {
     if (changedPath.endsWith(".test.js")) {
       continue
     }
-    const isCriticalPath = contract.criticalPathPrefixes.some((prefix) =>
+    const isCriticalPath = criticalPathPrefixes.some((prefix) =>
       changedPath === prefix || (prefix.endsWith("/") && changedPath.startsWith(prefix)),
     )
     if (!isCriticalPath) {
@@ -181,8 +181,19 @@ export function validateCriticalBehaviorContract({
 
   const errors = []
   const sourceOwners = new Map()
-  if (!Array.isArray(contract.criticalPathPrefixes) || contract.criticalPathPrefixes.length === 0) {
+  const criticalPathPrefixes = Array.isArray(contract.criticalPathPrefixes)
+    ? contract.criticalPathPrefixes
+    : []
+  if (criticalPathPrefixes.length === 0) {
     errors.push("Critical behavior inventory must define at least one critical source path prefix.")
+  }
+  for (const prefix of criticalPathPrefixes) {
+    if (!isSafeRelativePath(prefix) || !prefix.startsWith("src/")) {
+      errors.push(`Critical behavior inventory contains an invalid critical source path prefix: ${prefix}.`)
+    }
+  }
+  if (!Array.isArray(changedFiles)) {
+    errors.push("Changed critical source paths must be supplied as an array.")
   }
 
   const behaviorIds = new Set()
@@ -198,7 +209,12 @@ export function validateCriticalBehaviorContract({
 
   return {
     errors,
-    affectedBehaviorIds: validateChangedFiles({ contract, changedFiles, sourceOwners, errors }),
+    affectedBehaviorIds: validateChangedFiles({
+      criticalPathPrefixes,
+      changedFiles: Array.isArray(changedFiles) ? changedFiles : [],
+      sourceOwners,
+      errors,
+    }),
   }
 }
 
@@ -222,14 +238,13 @@ function runCriticalBehaviorContractCheck() {
       errors: result.errors,
     })
     process.exitCode = 1
-    return
+  } else {
+    defaultLogger.info({
+      message: "Harvester critical behavior inventory validated",
+      behaviorCount: contract.behaviors.length,
+      affectedBehaviorIds: result.affectedBehaviorIds,
+    })
   }
-
-  defaultLogger.info({
-    message: "Harvester critical behavior inventory validated",
-    behaviorCount: contract.behaviors.length,
-    affectedBehaviorIds: result.affectedBehaviorIds,
-  })
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
