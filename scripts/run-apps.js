@@ -8,11 +8,15 @@ const commands = {
 }
 
 const [, , requested] = process.argv
-const selected = requested === 'app'
-  ? ['server', 'client']
-  : requested === 'app:prod'
-    ? ['server:prod', 'client:prod']
-    : [requested]
+let selected
+
+if (requested === 'app') {
+  selected = ['server', 'client']
+} else if (requested === 'app:prod') {
+  selected = ['server:prod', 'client:prod']
+} else {
+  selected = [requested]
+}
 
 if (!selected.every((name) => Object.hasOwn(commands, name))) {
   process.stderr.write('Usage: pnpm run server | client | app | app:prod\n')
