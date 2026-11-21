@@ -43,3 +43,21 @@ test("mutation formatter makes unknown outcomes explicit and forbids retry", () 
   assert.match(value, /OUTCOME_UNKNOWN/, "mutation outcome should be explicit")
   assert.match(value, /Do not retry/, "unknown outcome must require manual reconciliation")
 })
+
+test("mutation formatter preserves Bitunix rejection metadata for operator diagnosis", () => {
+  const value = formatOrderMutationResult({
+    result: {
+      ok: false,
+      mutationOutcome: "REJECTED",
+      errors: [Object.assign(new Error("insufficient balance"), {
+        code: "BROKER_REQUEST_FAILED",
+        exchangeCode: "INSUFFICIENT_BALANCE",
+        status: 400,
+        kind: "exchange",
+      })],
+    },
+  })
+  assert.match(value, /Bitunix exchange code: INSUFFICIENT_BALANCE/)
+  assert.match(value, /HTTP status: 400/)
+  assert.match(value, /Broker message: insufficient balance/)
+})
