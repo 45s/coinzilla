@@ -639,146 +639,20 @@
   },
   "moduleCoverage": [
     {
-      "path": "src/bootstrap/account/create-account-snapshot-manager.js",
+      "path": "src/domain/orders/order-registry.js",
       "baseline": {
-        "lines": 83.47,
-        "branches": 81.92,
-        "functions": 95.18
-      },
-      "minimum": {
-        "lines": 80,
-        "branches": 80,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 83.47,
-        "branches": 81.92,
-        "functions": 95.18
-      }
-    },
-    {
-      "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.js",
-      "baseline": {
-        "lines": 88.36,
-        "branches": 83.82,
-        "functions": 98.18
-      },
-      "minimum": {
-        "lines": 85,
-        "branches": 80,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 88.36,
-        "branches": 83.82,
-        "functions": 98.18
-      }
-    },
-    {
-      "path": "src/bootstrap/shutdown/create-shutdown-handler.js",
-      "baseline": {
-        "lines": 92.02,
-        "branches": 82.63,
-        "functions": 93.67
-      },
-      "minimum": {
-        "lines": 90,
-        "branches": 80,
-        "functions": 90
-      },
-      "latestObserved": {
-        "lines": 92.02,
-        "branches": 82.63,
-        "functions": 93.67
-      }
-    },
-    {
-      "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js",
-      "baseline": {
-        "lines": 86.6,
-        "branches": 76.36,
-        "functions": 84.21
-      },
-      "minimum": {
-        "lines": 85,
-        "branches": 75,
-        "functions": 80
-      },
-      "latestObserved": {
-        "lines": 86.6,
-        "branches": 76.36,
-        "functions": 84.21
-      }
-    },
-    {
-      "path": "src/bootstrap/start-harvester.js",
-      "baseline": {
-        "lines": 90,
-        "branches": 83.53,
-        "functions": 92.54
-      },
-      "minimum": {
-        "lines": 90,
-        "branches": 80,
-        "functions": 90
-      },
-      "latestObserved": {
-        "lines": 90,
-        "branches": 83.53,
-        "functions": 92.54
-      }
-    },
-    {
-      "path": "src/domain/fills/fill-fingerprint.js",
-      "baseline": {
-        "lines": 96.08,
-        "branches": 91.67,
-        "functions": 100
-      },
-      "minimum": {
-        "lines": 95,
-        "branches": 90,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 96.08,
-        "branches": 91.67,
-        "functions": 100
-      }
-    },
-    {
-      "path": "src/domain/fills/validate-fill-commissions.js",
-      "baseline": {
-        "lines": 94.63,
-        "branches": 90.91,
+        "lines": 94.05,
+        "branches": 89.84,
         "functions": 100
       },
       "minimum": {
         "lines": 90,
-        "branches": 90,
+        "branches": 85,
         "functions": 95
       },
       "latestObserved": {
-        "lines": 94.63,
-        "branches": 90.91,
-        "functions": 100
-      }
-    },
-    {
-      "path": "src/domain/orders/allocate-order-commitments.js",
-      "baseline": {
-        "lines": 100,
-        "branches": 100,
-        "functions": 100
-      },
-      "minimum": {
-        "lines": 95,
-        "branches": 95,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 100,
-        "branches": 100,
+        "lines": 94.05,
+        "branches": 89.84,
         "functions": 100
       }
     },
@@ -801,28 +675,10 @@
       }
     },
     {
-      "path": "src/domain/orders/order-registry.js",
+      "path": "src/domain/orders/allocate-order-commitments.js",
       "baseline": {
-        "lines": 94.05,
-        "branches": 89.84,
-        "functions": 100
-      },
-      "minimum": {
-        "lines": 90,
-        "branches": 85,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 94.05,
-        "branches": 89.84,
-        "functions": 100
-      }
-    },
-    {
-      "path": "src/domain/orders/recovery-seller-submission-ownership.js",
-      "baseline": {
-        "lines": 97.14,
-        "branches": 95,
+        "lines": 100,
+        "branches": 100,
         "functions": 100
       },
       "minimum": {
@@ -831,8 +687,8 @@
         "functions": 95
       },
       "latestObserved": {
-        "lines": 97.14,
-        "branches": 95,
+        "lines": 100,
+        "branches": 100,
         "functions": 100
       }
     },
@@ -873,6 +729,42 @@
       }
     },
     {
+      "path": "src/domain/fills/fill-fingerprint.js",
+      "baseline": {
+        "lines": 96.08,
+        "branches": 91.67,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 96.08,
+        "branches": 91.67,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/fills/validate-fill-commissions.js",
+      "baseline": {
+        "lines": 94.63,
+        "branches": 90.91,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 94.63,
+        "branches": 90.91,
+        "functions": 100
+      }
+    },
+    {
       "path": "src/domain/strategies/conservative/recovery-fill-accounting.js",
       "baseline": {
         "lines": 82.61,
@@ -909,6 +801,24 @@
       }
     },
     {
+      "path": "src/domain/strategies/conservative/strategy.js",
+      "baseline": {
+        "lines": 93.64,
+        "branches": 86.93,
+        "functions": 97.5
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 85,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 93.64,
+        "branches": 86.93,
+        "functions": 97.5
+      }
+    },
+    {
       "path": "src/domain/strategies/conservative/recovery-sell-plan.js",
       "baseline": {
         "lines": 100,
@@ -927,39 +837,183 @@
       }
     },
     {
-      "path": "src/domain/strategies/conservative/state-predicates.js",
+      "path": "src/use-cases/conservative-trading-engine.js",
       "baseline": {
-        "lines": 100,
-        "branches": 100,
-        "functions": 100
+        "lines": 85.51,
+        "branches": 79.6,
+        "functions": 95.65
       },
       "minimum": {
-        "lines": 95,
-        "branches": 95,
+        "lines": 85,
+        "branches": 75,
         "functions": 95
       },
       "latestObserved": {
-        "lines": 100,
-        "branches": 100,
-        "functions": 100
+        "lines": 85.51,
+        "branches": 79.6,
+        "functions": 95.65
       }
     },
     {
-      "path": "src/domain/strategies/conservative/strategy.js",
+      "path": "src/use-cases/collect-owned-order-snapshots.js",
       "baseline": {
-        "lines": 93.64,
-        "branches": 86.93,
-        "functions": 97.5
+        "lines": 83.9,
+        "branches": 87.41,
+        "functions": 96.67
       },
       "minimum": {
-        "lines": 90,
+        "lines": 80,
         "branches": 85,
         "functions": 95
       },
       "latestObserved": {
-        "lines": 93.64,
-        "branches": 86.93,
-        "functions": 97.5
+        "lines": 83.9,
+        "branches": 87.41,
+        "functions": 96.67
+      }
+    },
+    {
+      "path": "src/use-cases/reconcile-terminal-order-fills.js",
+      "baseline": {
+        "lines": 87.44,
+        "branches": 90.53,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 87.44,
+        "branches": 90.53,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/use-cases/fetch-account-trade-history.js",
+      "baseline": {
+        "lines": 90,
+        "branches": 81.82,
+        "functions": 90.91
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 80,
+        "functions": 90
+      },
+      "latestObserved": {
+        "lines": 90,
+        "branches": 81.82,
+        "functions": 90.91
+      }
+    },
+    {
+      "path": "src/bootstrap/account/create-account-snapshot-manager.js",
+      "baseline": {
+        "lines": 83.47,
+        "branches": 81.92,
+        "functions": 95.18
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 80,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 83.47,
+        "branches": 81.92,
+        "functions": 95.18
+      }
+    },
+    {
+      "path": "src/bootstrap/start-harvester.js",
+      "baseline": {
+        "lines": 90,
+        "branches": 83.53,
+        "functions": 92.54
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 80,
+        "functions": 90
+      },
+      "latestObserved": {
+        "lines": 90,
+        "branches": 83.53,
+        "functions": 92.54
+      }
+    },
+    {
+      "path": "src/use-cases/create-user-data-event-transition.js",
+      "baseline": {
+        "lines": 83.37,
+        "branches": 90.09,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 83.37,
+        "branches": 90.09,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/create-file-operational-state-store.js",
+      "baseline": {
+        "lines": 96.07,
+        "branches": 89.34,
+        "functions": 98.08
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 85,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 96.07,
+        "branches": 89.34,
+        "functions": 98.08
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/project-harvester-operational-state.js",
+      "baseline": {
+        "lines": 81.97,
+        "branches": 76.39,
+        "functions": 82.05
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 75,
+        "functions": 80
+      },
+      "latestObserved": {
+        "lines": 81.97,
+        "branches": 76.39,
+        "functions": 82.05
+      }
+    },
+    {
+      "path": "src/use-cases/restore-harvester-operational-state.js",
+      "baseline": {
+        "lines": 92.21,
+        "branches": 73.68,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 70,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
       }
     },
     {
@@ -981,6 +1035,114 @@
       }
     },
     {
+      "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.js",
+      "baseline": {
+        "lines": 83.33,
+        "branches": 74.42,
+        "functions": 72.73
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 70,
+        "functions": 70
+      },
+      "latestObserved": {
+        "lines": 96.31,
+        "branches": 92.73,
+        "functions": 80
+      }
+    },
+    {
+      "path": "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
+      "baseline": {
+        "lines": 84.88,
+        "branches": 77.05,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 75,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 84.88,
+        "branches": 77.05,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/process/harvester-process-shutdown.js",
+      "baseline": {
+        "lines": 76.81,
+        "branches": 81.08,
+        "functions": 90
+      },
+      "minimum": {
+        "lines": 75,
+        "branches": 80,
+        "functions": 90
+      },
+      "latestObserved": {
+        "lines": 76.81,
+        "branches": 81.08,
+        "functions": 90
+      }
+    },
+    {
+      "path": "src/bootstrap/shutdown/create-shutdown-handler.js",
+      "baseline": {
+        "lines": 92.02,
+        "branches": 82.63,
+        "functions": 93.67
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 80,
+        "functions": 90
+      },
+      "latestObserved": {
+        "lines": 92.02,
+        "branches": 82.63,
+        "functions": 93.67
+      }
+    },
+    {
+      "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.js",
+      "baseline": {
+        "lines": 88.36,
+        "branches": 83.82,
+        "functions": 98.18
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 80,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 88.36,
+        "branches": 83.82,
+        "functions": 98.18
+      }
+    },
+    {
+      "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js",
+      "baseline": {
+        "lines": 86.6,
+        "branches": 76.36,
+        "functions": 84.21
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 75,
+        "functions": 80
+      },
+      "latestObserved": {
+        "lines": 86.6,
+        "branches": 76.36,
+        "functions": 84.21
+      }
+    },
+    {
       "path": "src/infrastructure/brokers/binance-broker-adapter.js",
       "baseline": {
         "lines": 88.4,
@@ -999,21 +1161,57 @@
       }
     },
     {
-      "path": "src/infrastructure/operational-state/create-file-operational-state-store.js",
+      "path": "src/infrastructure/process/create-harvester-process-identity.js",
       "baseline": {
-        "lines": 96.07,
-        "branches": 89.34,
-        "functions": 98.08
+        "lines": 98.08,
+        "branches": 83.33,
+        "functions": 100
       },
       "minimum": {
         "lines": 95,
-        "branches": 85,
+        "branches": 80,
         "functions": 95
       },
       "latestObserved": {
-        "lines": 96.07,
-        "branches": 89.34,
-        "functions": 98.08
+        "lines": 98.08,
+        "branches": 83.33,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/orders/recovery-seller-submission-ownership.js",
+      "baseline": {
+        "lines": 97.14,
+        "branches": 95,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 97.14,
+        "branches": 95,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/strategies/conservative/state-predicates.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
       }
     },
     {
@@ -1103,204 +1301,6 @@
       "latestObserved": {
         "lines": 99.21,
         "branches": 96.59,
-        "functions": 100
-      }
-    },
-    {
-      "path": "src/infrastructure/operational-state/project-harvester-operational-state.js",
-      "baseline": {
-        "lines": 81.97,
-        "branches": 76.39,
-        "functions": 82.05
-      },
-      "minimum": {
-        "lines": 80,
-        "branches": 75,
-        "functions": 80
-      },
-      "latestObserved": {
-        "lines": 81.97,
-        "branches": 76.39,
-        "functions": 82.05
-      }
-    },
-    {
-      "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.js",
-      "baseline": {
-        "lines": 83.33,
-        "branches": 74.42,
-        "functions": 72.73
-      },
-      "minimum": {
-        "lines": 80,
-        "branches": 70,
-        "functions": 70
-      },
-      "latestObserved": {
-        "lines": 96.31,
-        "branches": 92.73,
-        "functions": 80
-      }
-    },
-    {
-      "path": "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
-      "baseline": {
-        "lines": 84.88,
-        "branches": 77.05,
-        "functions": 100
-      },
-      "minimum": {
-        "lines": 80,
-        "branches": 75,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 84.88,
-        "branches": 77.05,
-        "functions": 100
-      }
-    },
-    {
-      "path": "src/infrastructure/process/create-harvester-process-identity.js",
-      "baseline": {
-        "lines": 98.08,
-        "branches": 83.33,
-        "functions": 100
-      },
-      "minimum": {
-        "lines": 95,
-        "branches": 80,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 98.08,
-        "branches": 83.33,
-        "functions": 100
-      }
-    },
-    {
-      "path": "src/infrastructure/process/harvester-process-shutdown.js",
-      "baseline": {
-        "lines": 76.81,
-        "branches": 81.08,
-        "functions": 90
-      },
-      "minimum": {
-        "lines": 75,
-        "branches": 80,
-        "functions": 90
-      },
-      "latestObserved": {
-        "lines": 76.81,
-        "branches": 81.08,
-        "functions": 90
-      }
-    },
-    {
-      "path": "src/use-cases/collect-owned-order-snapshots.js",
-      "baseline": {
-        "lines": 83.9,
-        "branches": 87.41,
-        "functions": 96.67
-      },
-      "minimum": {
-        "lines": 80,
-        "branches": 85,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 83.9,
-        "branches": 87.41,
-        "functions": 96.67
-      }
-    },
-    {
-      "path": "src/use-cases/conservative-trading-engine.js",
-      "baseline": {
-        "lines": 85.51,
-        "branches": 79.6,
-        "functions": 95.65
-      },
-      "minimum": {
-        "lines": 85,
-        "branches": 75,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 85.51,
-        "branches": 79.6,
-        "functions": 95.65
-      }
-    },
-    {
-      "path": "src/use-cases/create-user-data-event-transition.js",
-      "baseline": {
-        "lines": 83.37,
-        "branches": 90.09,
-        "functions": 100
-      },
-      "minimum": {
-        "lines": 80,
-        "branches": 90,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 83.37,
-        "branches": 90.09,
-        "functions": 100
-      }
-    },
-    {
-      "path": "src/use-cases/fetch-account-trade-history.js",
-      "baseline": {
-        "lines": 90,
-        "branches": 81.82,
-        "functions": 90.91
-      },
-      "minimum": {
-        "lines": 90,
-        "branches": 80,
-        "functions": 90
-      },
-      "latestObserved": {
-        "lines": 90,
-        "branches": 81.82,
-        "functions": 90.91
-      }
-    },
-    {
-      "path": "src/use-cases/reconcile-terminal-order-fills.js",
-      "baseline": {
-        "lines": 87.44,
-        "branches": 90.53,
-        "functions": 100
-      },
-      "minimum": {
-        "lines": 85,
-        "branches": 90,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 87.44,
-        "branches": 90.53,
-        "functions": 100
-      }
-    },
-    {
-      "path": "src/use-cases/restore-harvester-operational-state.js",
-      "baseline": {
-        "lines": 92.21,
-        "branches": 73.68,
-        "functions": 100
-      },
-      "minimum": {
-        "lines": 90,
-        "branches": 70,
-        "functions": 95
-      },
-      "latestObserved": {
-        "lines": 100,
-        "branches": 100,
         "functions": 100
       }
     }
