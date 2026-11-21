@@ -91,7 +91,7 @@ function createRequestError({ message, code, status = 400, cause } = {}) {
 
 function createResponseHeaders({ origin } = {}) {
   const headers = {
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "600",
     "Cache-Control": "no-store",
@@ -384,7 +384,7 @@ async function handleTradingHistoryRequest({
 }
 
 function createRequestHandler({ queries, environment, logger, operator } = {}) {
-  return (...requestArguments) => {
+  return async (...requestArguments) => {
     const [request, response] = requestArguments
     response.tradingHistoryOrigin = ALLOWED_BROWSER_ORIGINS.has(request.headers.origin)
       ? request.headers.origin
