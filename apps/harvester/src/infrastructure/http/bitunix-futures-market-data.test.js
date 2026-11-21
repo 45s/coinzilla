@@ -203,4 +203,11 @@ test("rejects non-HTTPS REST, non-WSS streaming origins, and invalid timeouts", 
     /timeout/,
     "The upstream request timeout must be bounded and positive.",
   )
+  assert.throws(
+    () => createBitunixFuturesMarketDataClient({
+      websocketTimeoutMs: 0,
+    }),
+    /WebSocket timeout/,
+    "The public ticker snapshot timeout must be bounded and positive.",
+  )
 })
