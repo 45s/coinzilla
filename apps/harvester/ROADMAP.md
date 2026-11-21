@@ -1,5 +1,13 @@
 # Harvester Roadmap
 
+## Trading-history real-time notifications (#1643)
+
+- **In progress in coordinated [PR #1641](https://github.com/45s/coinzilla/pull/1641):** add an authenticated WebSocket endpoint to the existing optional trading-history API listener. The endpoint shares the HTTP listener, bearer-token secret, process lifecycle and environment-specific relational persistence connection.
+- Order and fill history observers publish resource-only invalidation events only after their respective relational upserts succeed. Fill persistence invalidates both Fills and Commissions. Failed writes never produce a success notification.
+- Notifications are best-effort in-memory EventBus messages, not durable replay, exactly-once delivery or an audit log. REST list/detail resources remain authoritative; browser clients must load fresh snapshots on connection and every reconnect.
+- The transport is read-only and does not call brokers/exchanges, change trading decisions, or introduce database schema/migration changes. The Dashboard is a client and owns its reconnect and UI state.
+- Tracked by [#1643](https://github.com/45s/coinzilla/issues/1643). Do not mark complete until exact-head CI, API lifecycle/security tests, persistence ordering tests, Dashboard reconnect/resync tests and documentation checks pass and the PR is merged.
+
 ## Read-only SQLite JSON export (#1629)
 
 - **Exporter delivered:** the read-only all-table JSON export was introduced in merged [PR #1630](https://github.com/45s/coinzilla/pull/1630); explicit positional `testnet` / `live` selection and argument validation were completed in merged [PR #1629](https://github.com/45s/coinzilla/pull/1629). The command exports every non-internal table, including empty tables, preserves decimal text and out-of-safe-range integer values, and makes no exchange calls or trading-runtime changes.

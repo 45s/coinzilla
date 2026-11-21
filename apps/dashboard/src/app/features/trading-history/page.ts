@@ -7,6 +7,7 @@ import {
   inject,
   signal,
   type OnChanges,
+  type OnDestroy,
   type OnInit,
   type SimpleChanges,
 } from '@angular/core';
@@ -36,16 +37,35 @@ interface DetailEntry {
   styleUrl: './page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class TradingHistoryComponent implements OnInit, OnChanges {
+export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
   @Input() resource: TradingHistoryResource = 'orders';
 
   private readonly api = inject(TradingHistoryApi);
   private readonly session = inject(TradingHistorySession);
   private readonly pageSize = 25;
+  private readonly reconnectDelays = [1000, 2000, 4000, 8000, 16000, 30000];
+  private eventSocket: WebSocket | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private metadataRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempt = 0;
+  private manuallyDisconnected = false;
+  private refreshPromise: Promise<void> | null = null;
+  private refreshPending = false;
+  private activeQueryKey: string | null = null;
 
   readonly currentResource = signal<TradingHistoryResource>('orders');
   readonly tokenInput = signal('');
   readonly connected = signal(false);
+  readonly liveStatus = signal<'connecting' | 'live' | 'reconnecting' | 'offline'>('offline');
+  readonly liveStatusLabel = computed(() => {
+    const labels = {
+      connecting: 'Opening live connection',
+      live: 'Live updates',
+      reconnecting: 'Reconnecting · snapshot sync on reconnect',
+      offline: 'Live updates offline',
+    };
+    return labels[this.liveStatus()];
+  });
   readonly connecting = signal(false);
   readonly loading = signal(false);
   readonly detailsLoading = signal(false);
@@ -114,6 +134,10 @@ export class TradingHistoryComponent implements OnInit, OnChanges {
     }
   }
 
+  ngOnDestroy(): void {
+    this.stopLiveUpdates();
+  }
+
   updateToken(event: Event): void {
     this.tokenInput.set((event.target as HTMLInputElement).value);
   }
@@ -140,6 +164,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges {
   }
 
   disconnect(): void {
+    this.stopLiveUpdates();
     this.session.clearToken();
     this.tokenInput.set('');
     this.connected.set(false);
@@ -294,6 +319,8 @@ export class TradingHistoryComponent implements OnInit, OnChanges {
       this.connected.set(true);
       this.pageIndexReset();
       await this.loadRecords();
+      this.manuallyDisconnected = false;
+      this.openEventSocket(false);
     } catch (error) {
       this.connected.set(false);
       this.handleRequestError(error);
@@ -302,11 +329,49 @@ export class TradingHistoryComponent implements OnInit, OnChanges {
     }
   }
 
-  private async loadRecords(): Promise<void> {
+  private loadRecords({ force = false }: { readonly force?: boolean } = {}): Promise<void> {
     if (!this.connected()) {
-      return;
+      return Promise.resolve();
     }
+    const queryKey = this.currentQueryKey();
+    if (this.refreshPromise) {
+      if (force || queryKey !== this.activeQueryKey) {
+        this.refreshPending = true;
+      }
+      return this.refreshPromise;
+    }
+    this.activeQueryKey = queryKey;
+    this.refreshPromise = this.drainRecordRefreshes();
+    return this.refreshPromise;
+  }
+
+  private currentQueryKey(): string {
+    return JSON.stringify({
+      resource: this.currentResource(),
+      filters: this.filters(),
+      offset: this.page()?.pagination.offset ?? 0,
+    });
+  }
+
+  private async drainRecordRefreshes(): Promise<void> {
     this.loading.set(true);
+    try {
+      do {
+        this.refreshPending = false;
+        this.activeQueryKey = this.currentQueryKey();
+        await this.loadCurrentRecords();
+      } while (
+        this.connected()
+        && (this.refreshPending || this.currentQueryKey() !== this.activeQueryKey)
+      );
+    } finally {
+      this.loading.set(false);
+      this.refreshPromise = null;
+      this.activeQueryKey = null;
+    }
+  }
+
+  private async loadCurrentRecords(): Promise<void> {
     this.errorMessage.set(null);
     try {
       const query = {
@@ -325,9 +390,146 @@ export class TradingHistoryComponent implements OnInit, OnChanges {
       this.page.set(result);
     } catch (error) {
       this.handleRequestError(error);
-    } finally {
-      this.loading.set(false);
     }
+  }
+
+  private openEventSocket(reconnecting: boolean): void {
+    if (!this.connected() || this.manuallyDisconnected) {
+      return;
+    }
+    this.liveStatus.set(reconnecting ? 'reconnecting' : 'connecting');
+    let socket: WebSocket;
+    try {
+      socket = this.api.createEventSocket();
+    } catch {
+      this.scheduleReconnect();
+      return;
+    }
+    this.eventSocket = socket;
+    socket.addEventListener('open', () => {
+      if (this.eventSocket !== socket) {
+        return;
+      }
+      const token = this.session.getToken();
+      if (!token) {
+        this.stopLiveUpdates();
+        return;
+      }
+      socket.send(JSON.stringify({
+        type: 'authenticate',
+        token,
+      }));
+    });
+    socket.addEventListener('message', (event) => this.handleEventSocketMessage(socket, event));
+    socket.addEventListener('close', () => {
+      if (this.eventSocket !== socket) {
+        return;
+      }
+      this.eventSocket = null;
+      this.scheduleReconnect();
+    });
+    socket.addEventListener('error', () => socket.close());
+  }
+
+  private handleEventSocketMessage(socket: WebSocket, event: MessageEvent): void {
+    if (this.eventSocket !== socket || typeof event.data !== 'string') {
+      return;
+    }
+    let message: {
+      readonly type?: string;
+      readonly code?: string;
+      readonly resources?: readonly string[];
+    };
+    try {
+      message = JSON.parse(event.data);
+    } catch {
+      socket.close();
+      return;
+    }
+    if (message.type === 'authenticated') {
+      this.reconnectAttempt = 0;
+      this.liveStatus.set('live');
+      this.selectedRecord.set(null);
+      void this.refreshMetadata();
+      void this.loadRecords();
+      return;
+    }
+    if (message.type === 'error' && message.code === 'HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED') {
+      this.stopLiveUpdates();
+      this.session.clearToken();
+      this.connected.set(false);
+      this.metadata.set(null);
+      this.tokenInput.set('');
+      this.errorMessage.set('Token was rejected. Check the Harvester bearer token and reconnect.');
+      return;
+    }
+    if (message.type === 'trading-history.updated') {
+      this.scheduleMetadataRefresh();
+      if (message.resources?.includes(this.currentResource())) {
+        this.selectedRecord.set(null);
+        void this.loadRecords({ force: true });
+      }
+    }
+  }
+
+  private scheduleMetadataRefresh(): void {
+    if (this.metadataRefreshTimer) {
+      clearTimeout(this.metadataRefreshTimer);
+    }
+    this.metadataRefreshTimer = setTimeout(() => {
+      this.metadataRefreshTimer = null;
+      void this.refreshMetadata();
+    }, 250);
+  }
+
+  private async refreshMetadata(): Promise<void> {
+    if (this.metadataRefreshTimer) {
+      clearTimeout(this.metadataRefreshTimer);
+      this.metadataRefreshTimer = null;
+    }
+    if (!this.connected()) {
+      return;
+    }
+    try {
+      this.metadata.set(await firstValueFrom(this.api.getMetadata()));
+    } catch (error) {
+      this.handleRequestError(error);
+    }
+  }
+
+  private scheduleReconnect(): void {
+    if (!this.connected() || this.manuallyDisconnected || this.reconnectTimer) {
+      return;
+    }
+    this.liveStatus.set(
+      this.reconnectAttempt >= this.reconnectDelays.length ? 'offline' : 'reconnecting',
+    );
+    const delayIndex = Math.min(this.reconnectAttempt, this.reconnectDelays.length - 1);
+    const delay = this.reconnectDelays[delayIndex];
+    this.reconnectAttempt += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.openEventSocket(true);
+    }, delay);
+  }
+
+  private stopLiveUpdates(): void {
+    this.manuallyDisconnected = true;
+    this.reconnectAttempt = 0;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.metadataRefreshTimer) {
+      clearTimeout(this.metadataRefreshTimer);
+      this.metadataRefreshTimer = null;
+    }
+    const socket = this.eventSocket;
+    this.eventSocket = null;
+    if (socket && socket.readyState < 2) {
+      socket.close();
+    }
+    this.liveStatus.set('offline');
   }
 
   private filters(): Readonly<Record<string, string>> {
@@ -354,6 +556,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges {
 
   private handleRequestError(error: unknown): void {
     if (error instanceof HttpErrorResponse && error.status === 401) {
+      this.stopLiveUpdates();
       this.session.clearToken();
       this.connected.set(false);
       this.metadata.set(null);

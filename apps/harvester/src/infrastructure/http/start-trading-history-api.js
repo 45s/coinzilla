@@ -92,12 +92,13 @@ function resolveStartupConfiguration({ env, environment } = {}) {
 }
 
 /**
- * Start the optional trading-history HTTP API inside the existing Harvester process.
+ * Start the optional trading-history HTTP and WebSocket API inside the existing Harvester process.
  *
- * The API composes its query facade over Harvester's already-open relational database.
- * Harvester retains ownership of that database and closes the HTTP listener first.
+ * The API composes its query facade over Harvester's already-open relational database and
+ * subscribes to persisted-history invalidation events on the existing EventBus.
+ * Harvester retains ownership of the database and closes the listener before persistence.
  *
- * @param {object} input
+ * @param {{database: object, env?: object, environment?: string, logger?: object, eventBus: object, startServer?: Function}} input
  * @returns {Promise<Readonly<object>|null>} API lifecycle or null when disabled.
  */
 export async function startTradingHistoryApi({
@@ -105,6 +106,7 @@ export async function startTradingHistoryApi({
   env = process.env,
   environment,
   logger = defaultLogger,
+  eventBus,
   startServer = startTradingHistoryApiServer,
 } = {}) {
   if (!env.HARVESTER_API_TOKEN) {
@@ -121,6 +123,13 @@ export async function startTradingHistoryApi({
       environment: configuration.environment,
     })
   }
+  if (!eventBus || typeof eventBus.subscribe !== "function") {
+    throw new TradingHistoryApiStartupError({
+      message: "The Harvester EventBus is unavailable; the optional trading-history API cannot start.",
+      code: "HARVESTER_TRADING_HISTORY_API_EVENT_BUS_UNAVAILABLE",
+      environment: configuration.environment,
+    })
+  }
   const repository = createTradingHistoryQueryRepository({
     database,
   })
@@ -134,6 +143,7 @@ export async function startTradingHistoryApi({
     host: configuration.host,
     port: configuration.port,
     logger,
+    eventBus,
   })
   return Object.freeze({
     address: server.address,

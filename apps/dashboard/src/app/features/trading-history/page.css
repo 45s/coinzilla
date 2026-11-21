@@ -195,8 +195,23 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
+  background: #7b8797;
+  box-shadow: 0 0 0 4px rgba(123, 135, 151, 0.1);
+}
+
+.connection-indicator.live {
   background: #65d6ad;
   box-shadow: 0 0 0 4px rgba(101, 214, 173, 0.1);
+}
+
+.connection-indicator.reconnecting {
+  background: #e6b65c;
+  box-shadow: 0 0 0 4px rgba(230, 182, 92, 0.12);
+}
+
+.connection-indicator.offline {
+  background: #7b8797;
+  box-shadow: 0 0 0 4px rgba(123, 135, 151, 0.1);
 }
 
 .strip-divider {

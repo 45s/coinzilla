@@ -6,7 +6,8 @@
 
 ## Current milestone
 
-- **In progress in [PR #1636](https://github.com/45s/coinzilla/pull/1636), tracked by [#1634](https://github.com/45s/coinzilla/issues/1634):** authenticated read-only Orders, Fills, and Commissions pages backed by Harvester's versioned API, with session-only token handling, backend-selected environment, filters, bounded pagination, record details, readable exchange references, distinct limit/execution/fee-valuation labels, nullable fill-order links, explicit connection/error/empty states, and frontend regression tests. This is a coordinated client/server delivery; Harvester retains API and persistence ownership.
+- **Read-only trading-history pages complete in merged [PR #1636](https://github.com/45s/coinzilla/pull/1636), tracked by [#1634](https://github.com/45s/coinzilla/issues/1634):** authenticated Orders, Fills, and Commissions pages backed by Harvester's versioned API, session-only token handling, backend-selected environment, filters, bounded pagination, record details, readable exchange references, distinct limit/execution/fee-valuation labels, nullable fill-order links, explicit connection/error/empty states, and frontend regression tests.
+- **In progress in [PR #1641](https://github.com/45s/coinzilla/pull/1641), tracked by [#1643](https://github.com/45s/coinzilla/issues/1643):** authenticated WebSocket invalidation notifications for persisted order, fill, and commission changes; live/reconnecting/offline UI status; bounded reconnect backoff; and REST snapshot reconciliation after every successful socket authentication. REST remains the source of truth. Notifications are best-effort and are not durable replay.
 - [x] Initialize the Angular + TypeScript workspace, responsive shell, Overview screen, demo-only view models, tests and repository ownership/CI registration.
 - [x] Generate and commit the pnpm lockfile after local dependency installation.
 - [x] Verify the Angular production build and tests through GitHub Actions on the exact task PR head.
@@ -17,7 +18,6 @@ These are planning areas, not commitments to bypass backend ownership or existin
 
 - Authenticated, typed, read-only API integration for account snapshots, positions and service diagnostics.
 - Environment-aware TESTNET/LIVE presentation with explicit backend-reported state and readiness.
-- Reconnecting real-time event transport with snapshot reconciliation after disconnects.
 - Searchable diagnostics views backed by server APIs.
 - Order-entry and operator-control workflows only after the backend exposes authorized endpoints that use existing Harvester application use cases.
 - Optional desktop packaging with Tauri after the web application and its API contracts are stable.
