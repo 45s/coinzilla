@@ -3,6 +3,26 @@
   "version": "1.0.0",
   "private": true,
   "description": "",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=24"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.11.2",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@12.11.2",
+  "type": "module",
+  "devDependencies": {
+    "@eslint/js": "~10.0.1",
+    "eslint": "~10.15.0",
+    "globals": "~17.14.0"
+  },
   "scripts": {
     "server": "node scripts/run-apps.js server",
     "client": "node scripts/run-apps.js client",
@@ -33,25 +53,5 @@
     "server:prod": "pnpm --filter @coinzilla/harvester start",
     "client:prod": "pnpm --filter @coinzilla/dashboard build",
     "app:prod": "node scripts/run-apps.js app:prod"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "engines": {
-    "node": ">=24"
-  },
-  "devEngines": {
-    "packageManager": {
-      "name": "pnpm",
-      "version": "12.11.2",
-      "onFail": "download"
-    }
-  },
-  "packageManager": "pnpm@12.11.2",
-  "type": "module",
-  "devDependencies": {
-    "@eslint/js": "~10.0.1",
-    "eslint": "~10.15.0",
-    "globals": "~17.14.0"
   }
 }
