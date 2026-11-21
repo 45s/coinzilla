@@ -117,16 +117,19 @@ function makeMarketMetadataWithMinimumNotional({ market, minimumNotional } = {})
   }
 }
 
-function createRecoverySellTestStrategyPolicy({ onEvaluate } = {}) {
+function createRecoverySellTestStrategyPolicy({ onEvaluate, lastBuyPrice = "100" } = {}) {
+  const withSeededVwap = (input = {}) => ({
+    ...input,
+    lastBuyPrice,
+  })
   return {
     ...conservativeStrategyPolicy,
     evaluate: (input) => {
       onEvaluate?.(input)
-      return conservativeStrategyPolicy.evaluate({
-        ...input,
-        lastBuyPrice: "100",
-      })
+      return conservativeStrategyPolicy.evaluate(withSeededVwap(input))
     },
+    evaluateTrailingBuyRepricing: (input) =>
+      conservativeStrategyPolicy.evaluateTrailingBuyRepricing(withSeededVwap(input)),
   }
 }
 
@@ -1986,6 +1989,7 @@ test("uses refreshed exchange filters when planning a recovery SELL", async () =
       onEvaluate: (input) => {
         evaluatedMetadata = input.marketMetadata
       },
+      lastBuyPrice: seeded.fill.price.amount,
     }),
     brokerOverrides: {
       getSymbolFilters: async ({ symbol }) => {
@@ -2067,7 +2071,7 @@ test("submits a valid recovery SELL when refreshed exchange filters remain valid
     symbols: ["DOGEUSDT"],
     portfolio: seeded.portfolio,
     recoveryLedgersByMarket,
-    strategyPolicy: createRecoverySellTestStrategyPolicy(),
+    strategyPolicy: createRecoverySellTestStrategyPolicy({ lastBuyPrice: seeded.fill.price.amount }),
     brokerOverrides: {
       getSymbolFilters: async ({ symbol }) => {
         refreshedRuleReads += 1

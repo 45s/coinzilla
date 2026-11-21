@@ -120,3 +120,6 @@ The audit is intentionally evidence-led. If a later reviewer finds a criterion n
 - Exact-head targeted tests, strict ESLint, and full CI are pending for the corrected commit. The RED evidence from `6f8718f4a204f7eff8a1a62cedf7f70ae471f53e` remains the source-gap proof.
 
 - The multi-market broker fixture now applies caller-provided `getSymbolFilters` overrides first, then supplies a deterministic same-market snapshot when no override exists. This prevents undefined overrides from disabling the broker capability under test.
+
+
+- The recovery-filter integration policy fixture now supplies the seeded completed-BUY VWAP to both normal strategy evaluation and trailing-BUY repricing. This keeps the filter tests independent of the separate persisted/reconciled VWAP guard while preserving the production policy implementation.

@@ -1976,3 +1976,6 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 
 
 - **Test-fixture contract:** the multi-market broker harness preserves explicit `getSymbolFilters` overrides and supplies a deterministic same-market default when none is provided.
+
+
+- **Policy fixture:** current-filter integration tests pass the seeded completed-BUY VWAP to both policy evaluation paths; production VWAP reconciliation behavior remains separately guarded.
