@@ -1,154 +1,111 @@
-const DEFAULT_QUEUE_CAPACITY = 10_000
-const MAX_RETAINED_ERRORS = 20
+import { randomUUID } from "node:crypto"
 
-function reportPersistenceFailure({ logger, error } = {}) {
-  try {
-    logger?.warn?.({
-      message: "Harvester runtime error relational projection failed; full diagnostics remain in session logs",
-      errorName: error?.name ?? "Error",
-      errorCode: error?.code ?? "HARVESTER_RUNTIME_ERROR_PERSISTENCE_FAILED",
-    })
-  } catch {
-    // A diagnostic projection must never recurse into or disrupt the Logger.
+const MAX_MESSAGE_LENGTH = 1_000
+const MAX_DETAIL_STRING_LENGTH = 500
+const SECRET_ASSIGNMENT_PATTERN = /\b(api[_-]?key|secret|token|signature|authorization|password)\b\s*[:=]\s*["']?[^,\s"'&]+/gi
+const HISTORY_DIAGNOSTIC_FIELDS = Object.freeze([
+  "historyScope",
+  "marketsAttempted",
+  "marketsQueried",
+  "currentMarket",
+  "orderPagesChecked",
+  "fillPagesChecked",
+  "ordersObserved",
+  "ordersPersisted",
+  "fillsObserved",
+  "fillsPersisted",
+  "requestCount",
+  "failureCount",
+  "historyPagesComplete",
+  "marketHistoryPagesComplete",
+  "marketUniverseComplete",
+  "retentionCoverageConfirmed",
+  "complete",
+])
+
+function redactMessage(value, maximumLength = MAX_MESSAGE_LENGTH) {
+  if (typeof value !== "string") {
+    return null
+  }
+  return value
+    .replace(/[\r\n]+/g, " ")
+    .replace(SECRET_ASSIGNMENT_PATTERN, "$1=[REDACTED]")
+    .slice(0, maximumLength)
+}
+
+function mapHistoryFailure(failure) {
+  if (!failure || typeof failure !== "object" || Array.isArray(failure)) {
+    return null
+  }
+  return {
+    ...(typeof failure.market === "string" ? { market: redactMessage(failure.market, 100) } : {}),
+    ...(typeof failure.message === "string" ? { message: redactMessage(failure.message, MAX_DETAIL_STRING_LENGTH) } : {}),
   }
 }
 
-function reportQueueOverflow({ logger, droppedCount } = {}) {
-  try {
-    logger?.warn?.({
-      message: "Harvester runtime error persistence queue overflow; additional ERROR records remain available only in session logs",
-      droppedCount,
-    })
-  } catch {
-    // Queue diagnostics must never recurse into or disrupt the Logger.
+function mapHistoryDiagnostics(diagnostics) {
+  if (!diagnostics || typeof diagnostics !== "object" || Array.isArray(diagnostics)) {
+    return null
   }
-}
-
-function createQueueDrain({ state, repository, logger } = {}) {
-  return async function drain() {
-    if (state.draining) {
-      await state.drainPromise
-      return
+  const safe = {}
+  for (const field of HISTORY_DIAGNOSTIC_FIELDS) {
+    const value = diagnostics[field]
+    if (typeof value === "string") {
+      safe[field] = redactMessage(value, MAX_DETAIL_STRING_LENGTH)
+    } else if (typeof value === "number" && Number.isFinite(value)) {
+      safe[field] = value
+    } else if (typeof value === "boolean") {
+      safe[field] = value
+    } else if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+      safe[field] = value.slice(0, 100).map((item) => redactMessage(item, 100))
     }
-    state.draining = true
-    state.drainPromise = (async () => {
-      while (state.queue.length > 0) {
-        const entry = state.queue.shift()
-        try {
-          await repository.create({ entry })
-        } catch (error) {
-          state.failedCount += 1
-          if (state.errors.length < MAX_RETAINED_ERRORS) {
-            state.errors.push(error)
-          }
-          reportPersistenceFailure({
-            logger,
-            error,
-          })
-        }
-      }
-    })()
-    try {
-      await state.drainPromise
-    } finally {
-      state.draining = false
-    }
   }
-}
-
-function enqueueRuntimeError({ entry, state, queueCapacity, logger, drain } = {}) {
-  if (state.closed) {
-    return false
+  if (Array.isArray(diagnostics.failures)) {
+    safe.failures = diagnostics.failures.slice(0, 100).map(mapHistoryFailure).filter(Boolean)
   }
-  if (state.queue.length >= queueCapacity) {
-    state.droppedCount += 1
-    if (!state.overflowReported) {
-      state.overflowReported = true
-      reportQueueOverflow({
-        logger,
-        droppedCount: state.droppedCount,
-      })
-    }
-    return false
-  }
-  state.queue.push(entry)
-  void drain()
-  return true
-}
-
-function getObserverDiagnostics(state) {
-  return Object.freeze({
-    queuedCount: state.queue.length,
-    droppedCount: state.droppedCount,
-    failedCount: state.failedCount,
-    closed: state.closed,
-  })
+  return Object.keys(safe).length > 0 ? safe : null
 }
 
 /**
- * Bridge the process-start error buffer to a bounded, non-blocking SQLite writer.
+ * Convert a shared Logger ERROR entry into a safe, searchable relational row.
  *
- * @param {{repository: object, errorBuffer: object, logger?: object, queueCapacity?: number}} options
+ * @param {{entry: object, runtimeSessionId: string}} input
  * @returns {object}
  */
-export function createRuntimeErrorObserver({
-  repository,
-  errorBuffer,
-  logger,
-  queueCapacity = DEFAULT_QUEUE_CAPACITY,
-} = {}) {
-  if (typeof repository?.create !== "function") {
-    throw new TypeError("Runtime error observer requires a repository")
+export function mapRuntimeErrorEntryToRow({ entry, runtimeSessionId } = {}) {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+    throw new TypeError("Runtime error entry must be an object")
   }
-  if (typeof errorBuffer?.activate !== "function") {
-    throw new TypeError("Runtime error observer requires the process error buffer")
+  if (typeof runtimeSessionId !== "string" || runtimeSessionId.length === 0) {
+    throw new TypeError("Runtime error row requires the existing runtime session ID")
   }
-  if (!Number.isSafeInteger(queueCapacity) || queueCapacity < 1) {
-    throw new RangeError("Runtime error persistence queue capacity must be a positive safe integer")
-  }
-  const state = {
-    queue: [],
-    errors: [],
-    droppedCount: 0,
-    failedCount: 0,
-    closed: false,
-    draining: false,
-    overflowReported: false,
-    drainPromise: Promise.resolve(),
-  }
-  const drain = createQueueDrain({
-    state,
-    repository,
-    logger,
-  })
-  const enqueue = (entry) => enqueueRuntimeError({
-    entry,
-    state,
-    queueCapacity,
-    logger,
-    drain,
-  })
-  const activation = errorBuffer.activate(enqueue)
-  const flush = async () => {
-    await drain()
-    return Object.freeze({
-      ok: state.errors.length === 0 && state.droppedCount === 0,
-      errors: [...state.errors],
-    })
-  }
+  const data = entry.data && typeof entry.data === "object" && !Array.isArray(entry.data)
+    ? entry.data
+    : {}
+  const error = data.error && typeof data.error === "object" ? data.error : {}
+  const details = mapHistoryDiagnostics(data.historyDiagnostics)
+  const message = redactMessage(data.errorMessage ?? data.message ?? error.message) ?? "Runtime error record"
   return Object.freeze({
-    activation,
-    enqueue,
-    flush,
-    getDiagnostics: () => getObserverDiagnostics(state),
-    async close() {
-      if (state.closed) {
-        return flush()
-      }
-      await errorBuffer.close()
-      state.closed = true
-      await drain()
-      return flush()
-    },
+    id: randomUUID(),
+    runtime_session_id: runtimeSessionId,
+    occurred_at: String(entry.timestamp ?? new Date().toISOString()),
+    severity: "error",
+    error_name: redactMessage(data.errorName ?? error.name, 200),
+    error_code: redactMessage(data.errorCode ?? error.code, 200),
+    message,
+    component: redactMessage(data.component, 200),
+    operation: redactMessage(data.operation, 200),
+    provider_type: redactMessage(data.providerType, 100),
+    provider_instance_id: redactMessage(data.providerInstanceId, 200),
+    account_id: redactMessage(data.accountId, 200),
+    environment: redactMessage(data.environment, 32),
+    symbol: redactMessage(data.symbol, 100),
+    strategy_id: redactMessage(data.strategyId, 200),
+    broker_order_id: redactMessage(data.brokerOrderId, 200),
+    client_order_id: redactMessage(data.clientOrderId, 200),
+    execution_id: redactMessage(data.executionId, 200),
+    failure_category: redactMessage(data.failureCategory, 100),
+    failure_stage: redactMessage(data.failureStage, 100),
+    details_json: details ? JSON.stringify({ historyDiagnostics: details }) : null,
   })
 }
