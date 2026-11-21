@@ -97,7 +97,7 @@ export async function persistOneShotMarkerOutcome({
   marker.completedAt = new Date(now()).toISOString()
   if (Object.keys(metadata).length > 0) marker.result = metadata
   const temporaryPath = `${markerPath}.tmp`
-  await writeFile(temporaryPath, `${JSON.stringify(marker, null, 2)}\\n`, {
+  await writeFile(temporaryPath, `${JSON.stringify(marker, null, 2)}\n`, {
     encoding: "utf8",
     flag: "wx",
     mode: 0o600,
