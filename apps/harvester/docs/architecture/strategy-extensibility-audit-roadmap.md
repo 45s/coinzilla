@@ -307,25 +307,23 @@ Avoid making every strategy implement irrelevant methods just to satisfy an inte
 
 The implementation-oriented checklist is maintained in [Strategy onboarding standard](strategy-onboarding-standard.md). It turns the following requirements into actionable acceptance gates:
 
+- strategy identity and domain vocabulary;
+- specification and explicit behavior/invariants;
+- configuration shape, defaults, validation and environment;
+- pure policy inputs/outputs and decision types;
+- strategy state/cycle ownership;
+- application workflow/lifecycle composition;
+- execution request contract and shared safety gates;
+- order ownership and correlation;
+- actual-fill accounting and Portfolio integration;
+- reservation/commitment behavior for shared Spot custody;
+- operator control/pause/shutdown semantics;
+- reconciliation/recovery and uncertain outcomes;
+- tests: pure policy, lifecycle, execution integration, failure paths, isolation and offline simulation;
+- bootstrap/config registration;
+- documentation, roadmap and acceptance evidence.
 
-
-1. strategy identity and domain vocabulary;
-2. specification and explicit behavior/invariants;
-3. configuration shape, defaults, validation and environment;
-4. pure policy inputs/outputs and decision types;
-5. strategy state/cycle ownership;
-6. application workflow/lifecycle composition;
-7. execution request contract and shared safety gates;
-8. order ownership and correlation;
-9. actual-fill accounting and Portfolio integration;
-10. reservation/commitment behavior for shared Spot custody;
-11. operator control/pause/shutdown semantics;
-12. reconciliation/recovery and uncertain outcomes;
-13. tests: pure policy, lifecycle, execution integration, failure paths, isolation and offline simulation;
-14. bootstrap/config registration;
-15. documentation, roadmap and acceptance evidence.
-
-This is a future template deliverable, not a mandatory interface to implement now.
+The checklist is integration guidance, not a mandatory universal interface. A strategy-specific item is marked not applicable only with a reason; shared safety and accounting gates cannot be waived by declaring them out of scope.
 
 ## 12. S-4 proof criteria using CG and RS
 
