@@ -341,7 +341,7 @@ test("Bitunix Spot quote quantities in scientific notation are expanded before e
   assert.equal(calls[0].options.body.volume, "0.00000001")
 })
 
-test("Bitunix Spot placement reports exchange rejection as REJECTED", async () => {
+test("Bitunix Spot placement preserves matching-engine rejection code and message", async () => {
   const { broker } = createBroker({
     responses: {
       "/api/spot/v1/order/place_order": {
@@ -352,6 +352,8 @@ test("Bitunix Spot placement reports exchange rejection as REJECTED", async () =
         volume: "1",
         price: "100",
         placeStatus: "0",
+        placeCode: 10005,
+        placeMsg: "Insufficient available balance",
       },
     },
   })
@@ -366,7 +368,10 @@ test("Bitunix Spot placement reports exchange rejection as REJECTED", async () =
 
   assert.equal(result.ok, false)
   assert.equal(result.mutationOutcome, "REJECTED")
-  assert.match(result.errors[0].message, /rejected the order placement/i)
+  assert.equal(result.errors[0].exchangeCode, "10005")
+  assert.equal(result.errors[0].code, "BITUNIX_REST_EXCHANGE_REJECTED")
+  assert.equal(result.errors[0].message, "Insufficient available balance")
+  assert.equal(result.errors[0].path, "/api/spot/v1/order/place_order")
 })
 
 test("Bitunix Spot placement rejects unsupported identity and order fields before dispatch", async () => {
