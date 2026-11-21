@@ -380,6 +380,37 @@ function handleRequestPreconditions({ request, response } = {}) {
   return false
 }
 
+
+async function handleEarlyRequestRoutes({
+  request,
+  response,
+  url,
+  operator,
+  marketData,
+  logger,
+} = {}) {
+  if (await handleOperatorControlRequest({
+    request,
+    response,
+    pathname: url.pathname,
+    operator,
+  })) {
+    return true
+  }
+  if (handleRequestPreconditions({
+    request,
+    response,
+  })) {
+    return true
+  }
+  return handleBitunixFuturesMarketsRoute({
+    url,
+    response,
+    marketData,
+    logger,
+  })
+}
+
 async function handleTradingHistoryRequest({
   request,
   response,
@@ -390,21 +421,14 @@ async function handleTradingHistoryRequest({
   logger,
 } = {}) {
   const url = new URL(request.url ?? "/", "http://127.0.0.1")
-  if (await handleOperatorControlRequest({
+  if (await handleEarlyRequestRoutes({
     request,
     response,
-    pathname: url.pathname,
+    url,
     operator,
+    marketData,
+    logger,
   })) {
-    return
-  }
-  if (handleRequestPreconditions({
-    request,
-    response,
-  })) {
-    return
-  }
-  if (await handleBitunixFuturesMarketsRoute({ url, response, marketData, logger })) {
     return
   }
   if (url.pathname === METADATA_ROUTE) {
