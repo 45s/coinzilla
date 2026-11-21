@@ -97,19 +97,17 @@ function isValidTestCase(testCase) {
 function hasNamedTestCase({ testSource, name }) {
   const expectedTitle = JSON.stringify(name)
   const callNames = ["nodeTest", "test", "runDogeTradingReplayTest"]
-  for (const callName of callNames) {
-    const callPrefix = `${callName}(`
-    let searchFrom = 0
-    while (searchFrom < testSource.length) {
-      const callIndex = testSource.indexOf(callPrefix, searchFrom)
-      if (callIndex < 0) {
-        break
+  for (const line of testSource.split("\n")) {
+    const candidate = line.trimStart()
+    for (const callName of callNames) {
+      const callPrefix = `${callName}(`
+      if (!candidate.startsWith(callPrefix)) {
+        continue
       }
-      const actualTitle = testSource.slice(callIndex + callPrefix.length).trimStart()
+      const actualTitle = candidate.slice(callPrefix.length).trimStart()
       if (actualTitle.startsWith(expectedTitle)) {
         return true
       }
-      searchFrom = callIndex + callPrefix.length
     }
   }
   return false
