@@ -111,7 +111,8 @@ class FakeWebSocket {
     this.closed = true
   }
 
-  emit(type, event) {
+  emit(...argumentsList) {
+    const [type, event] = argumentsList
     for (const listener of this.listeners.get(type) ?? []) {
       listener(event)
     }
@@ -147,7 +148,7 @@ test("passes through Bitunix's native rolling 24-hour WebSocket fluctuation unch
   })
 
   const snapshot = await client.getBitunixFuturesMarkets()
-  const socket = FakeWebSocket.instances[0]
+  const [socket] = FakeWebSocket.instances
 
   assert.equal(snapshot.markets[0].change24h, "-0.7097029863", "The native exchange percentage must be passed through without rounding or calculation.")
   assert.equal(snapshot.markets[0].change5m, null, "A 5-minute movement must remain unavailable when the API does not provide it.")

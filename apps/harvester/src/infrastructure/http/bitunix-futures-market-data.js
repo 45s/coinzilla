@@ -42,7 +42,7 @@ function parseNativeTickerMessage(data) {
   }
 }
 
-function collectNativeTickerChanges(tickers, changes) {
+function collectNativeTickerChanges({ tickers, changes } = {}) {
   for (const ticker of tickers) {
     if (typeof ticker?.s === "string" && typeof ticker.r === "string") {
       changes.set(ticker.s, ticker.r)
@@ -79,6 +79,9 @@ function readNativeTickerChunk({ WebSocketImpl, websocketUrl, symbols, timeoutMs
       socket = new WebSocketImpl(websocketUrl)
       timeout = setTimeout(finish, timeoutMs)
       socket.addEventListener("open", () => {
+        if (settled) {
+          return
+        }
         try {
           socket.send(JSON.stringify({
             op: "subscribe",
@@ -92,7 +95,10 @@ function readNativeTickerChunk({ WebSocketImpl, websocketUrl, symbols, timeoutMs
         }
       }, { once: true })
       socket.addEventListener("message", (event) => {
-        collectNativeTickerChanges(parseNativeTickerMessage(event.data), changes)
+        collectNativeTickerChanges({
+          tickers: parseNativeTickerMessage(event.data),
+          changes,
+        })
         if (changes.size >= symbols.length) {
           finish()
         }
@@ -133,7 +139,7 @@ async function readNative24hChanges({ WebSocketImpl, websocketUrl, symbols, time
   return changes
 }
 
-function mapTickerFields(ticker, native24hChange) {
+function mapTickerFields({ ticker, native24hChange } = {}) {
   return {
     lastPrice: readString(ticker?.lastPrice),
     markPrice: readString(ticker?.markPrice),
@@ -157,7 +163,75 @@ function mapFuturesContract({ contract, ticker, native24hChange } = {}) {
     symbolStatus: readString(contract.symbolStatus),
     isApiSupported: readBoolean(contract.isApiSupported),
     maxLeverage: typeof contract.maxLeverage === "number" ? contract.maxLeverage : null,
-    ...mapTickerFields(ticker, native24hChange),
+    ...mapTickerFields({
+      ticker,
+      native24hChange,
+    }),
+  }
+}
+
+async function fetchBitunixFuturesData({ fetchImpl, baseUrl, timeoutMs } = {}) {
+  const contractsUrl = new URL("/api/v1/futures/market/trading_pairs", baseUrl)
+  const tickersUrl = new URL("/api/v1/futures/market/tickers", baseUrl)
+  const [contractsPayload, tickersPayload] = await Promise.all([
+    requestMarketData({
+      fetchImpl,
+      url: contractsUrl,
+      timeoutMs,
+    }),
+    requestMarketData({
+      fetchImpl,
+      url: tickersUrl,
+      timeoutMs,
+    }),
+  ])
+  const contracts = parseMarketDataPayload({
+    payload: contractsPayload,
+    endpoint: "trading-pairs",
+  }).filter((contract) => contract && typeof contract.symbol === "string")
+  const tickers = parseMarketDataPayload({
+    payload: tickersPayload,
+    endpoint: "tickers",
+  })
+  const tickersBySymbol = new Map(tickers
+    .filter((ticker) => ticker && typeof ticker.symbol === "string")
+    .map((ticker) => [ticker.symbol, ticker]))
+  return {
+    contracts,
+    tickersBySymbol,
+  }
+}
+
+async function createBitunixFuturesSnapshot({
+  fetchImpl,
+  WebSocketImpl,
+  baseUrl,
+  websocketUrl,
+  timeoutMs,
+  websocketTimeoutMs,
+  now,
+} = {}) {
+  const { contracts, tickersBySymbol } = await fetchBitunixFuturesData({
+    fetchImpl,
+    baseUrl,
+    timeoutMs,
+  })
+  const native24hChanges = await readNative24hChanges({
+    WebSocketImpl,
+    websocketUrl,
+    symbols: contracts.map((contract) => contract.symbol),
+    timeoutMs: websocketTimeoutMs,
+  })
+  const markets = contracts.map((contract) => mapFuturesContract({
+    contract,
+    ticker: tickersBySymbol.get(contract.symbol),
+    native24hChange: native24hChanges.get(contract.symbol),
+  }))
+  return {
+    provider: "bitunix",
+    marketType: "futures",
+    observedAt: now().toISOString(),
+    markets,
   }
 }
 
@@ -195,50 +269,14 @@ export function createBitunixFuturesMarketDataClient({
   }
 
   return Object.freeze({
-    async getBitunixFuturesMarkets() {
-      const contractsUrl = new URL("/api/v1/futures/market/trading_pairs", normalizedBaseUrl)
-      const tickersUrl = new URL("/api/v1/futures/market/tickers", normalizedBaseUrl)
-      const [contractsPayload, tickersPayload] = await Promise.all([
-        requestMarketData({
-          fetchImpl,
-          url: contractsUrl,
-          timeoutMs,
-        }),
-        requestMarketData({
-          fetchImpl,
-          url: tickersUrl,
-          timeoutMs,
-        }),
-      ])
-      const contracts = parseMarketDataPayload({
-        payload: contractsPayload,
-        endpoint: "trading-pairs",
-      }).filter((contract) => contract && typeof contract.symbol === "string")
-      const tickers = parseMarketDataPayload({
-        payload: tickersPayload,
-        endpoint: "tickers",
-      })
-      const tickersBySymbol = new Map(tickers
-        .filter((ticker) => ticker && typeof ticker.symbol === "string")
-        .map((ticker) => [ticker.symbol, ticker]))
-      const native24hChanges = await readNative24hChanges({
-        WebSocketImpl,
-        websocketUrl: normalizedWebsocketUrl.toString(),
-        symbols: contracts.map((contract) => contract.symbol),
-        timeoutMs: websocketTimeoutMs,
-      })
-      const markets = contracts.map((contract) => mapFuturesContract({
-        contract,
-        ticker: tickersBySymbol.get(contract.symbol),
-        native24hChange: native24hChanges.get(contract.symbol),
-      }))
-
-      return {
-        provider: "bitunix",
-        marketType: "futures",
-        observedAt: now().toISOString(),
-        markets,
-      }
-    },
+    getBitunixFuturesMarkets: () => createBitunixFuturesSnapshot({
+      fetchImpl,
+      WebSocketImpl,
+      baseUrl: normalizedBaseUrl,
+      websocketUrl: normalizedWebsocketUrl.toString(),
+      timeoutMs,
+      websocketTimeoutMs,
+      now,
+    }),
   })
 }
