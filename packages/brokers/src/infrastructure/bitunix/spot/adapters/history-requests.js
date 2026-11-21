@@ -202,7 +202,9 @@ function normalizeReturnedHistoryPage({ pageNum, requestedPage }) {
 
   const returnedPage = Number(normalizedPageNum)
   if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
-    if (requestedPage === 1) return
+    if (requestedPage === 1) {
+      return
+    }
     throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
   }
   if (returnedPage !== requestedPage) {
