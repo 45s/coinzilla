@@ -119,7 +119,8 @@ function createDiagnosticReport({ failed = 0, omitOperation } = {}) {
 function assertFailedHealthReport({ result, calls }) {
   assert.equal(result.exitCode, 1, "an API diagnostic failure must make the command fail")
   assert.equal(result.report.summary.failed, 1, "the pushed report must preserve the failed Bitunix operation")
-  assert.equal(result.healthCheck.healthy, false, "a failed required Bitunix probe must fail the overall health check")
+  assert.equal(result.healthCheck.healthy, true, "a failed optional WebSocket account probe must not block the separate guarded REST preflight")
+  assert.deepEqual(result.healthCheck.nonBlockingFailedOperations, ["user.account"], "the optional failure must remain visible as a non-blocking diagnostic")
   const publicError = result.report.results.find((item) => item.operation === "user.account").error
   assert.equal(publicError.message, undefined, "the public allowlist must omit free-form private error text")
   assert.equal(publicError.cause, undefined, "the public allowlist must omit nested error details")
