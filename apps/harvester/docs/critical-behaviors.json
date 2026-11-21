@@ -1,0 +1,298 @@
+{
+  "schemaVersion": 1,
+  "criticalPathPrefixes": [
+    "src/domain/orders/",
+    "src/domain/portfolio/",
+    "src/domain/strategies/conservative/",
+    "src/use-cases/conservative-trading-engine.js",
+    "src/use-cases/restore-harvester-operational-state.js",
+    "src/bootstrap/account/",
+    "src/bootstrap/start-harvester.js",
+    "src/infrastructure/operational-state/",
+    "src/index.js"
+  ],
+  "behaviors": [
+    {
+      "id": "ORDER_SUBMISSION_UNKNOWN",
+      "title": "Order submission intent, acknowledgement and unknown outcomes",
+      "sourceModules": [
+        "src/use-cases/conservative-trading-engine.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "durably journals the submission intent before calling the broker",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "publishes unknown submission outcome after a transport exception",
+          "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "ORDER_IDENTITY_TRANSITIONS",
+      "title": "Broker/client order identity and canonical order-state transitions",
+      "sourceModules": [
+        "src/domain/orders/order-registry.js"
+      ],
+      "tests": [
+        {
+          "path": "src/domain/orders/order-registry.test.js",
+          "name": "matches an execution report by broker order ID when Binance client ID differs",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/orders/order-registry.test.js",
+          "name": "ignores FILLED-to-OPEN regressions regardless of event timestamp",
+          "kind": "failure"
+        }
+      ]
+    },
+    {
+      "id": "FILL_IDENTITY_DEDUPLICATION",
+      "title": "Canonical execution identity, duplicate delivery and conflicting replay",
+      "sourceModules": [
+        "src/domain/portfolio/portfolio.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/domain/portfolio/portfolio.test.js",
+          "name": "deduplicates equivalent history-response and user-data stream fills in either delivery order",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/portfolio/portfolio.test.js",
+          "name": "rejects a reused Fill ID when execution facts differ without mutating Portfolio accounting",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "reconciles missing REST fills for an owned order and deduplicates overlapping stream delivery",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "EXACT_FINANCIAL_ACCOUNTING",
+      "title": "Exact Portfolio/recovery accounting and actual commission treatment",
+      "sourceModules": [
+        "src/domain/strategies/conservative/recovery-fill-accounting.js",
+        "src/domain/strategies/conservative/recovery-ledger.js",
+        "src/domain/portfolio/portfolio.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/domain/strategies/conservative/recovery-fill-accounting.test.js",
+          "name": "adds actual quote commission to BUY recovery cost",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/recovery-fill-accounting.test.js",
+          "name": "rejects incomplete commission data and unvalued third-asset fees",
+          "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "completes the recovery cycle only after the SELL fill report is received and reconciled",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "PORTFOLIO_RECOVERY_LEDGER_ALIGNMENT",
+      "title": "Portfolio and RecoveryLedger consistency across canonical fills and cycles",
+      "sourceModules": [
+        "src/domain/portfolio/portfolio.js",
+        "src/domain/strategies/conservative/recovery-ledger.js"
+      ],
+      "tests": [
+        {
+          "path": "src/domain/strategies/conservative/recovery-ledger.test.js",
+          "name": "accumulates BUY costs and confirmed net SELL proceeds across replacement orders",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/recovery-ledger.test.js",
+          "name": "rejects a reused Fill ID when recovery execution facts differ",
+          "kind": "failure"
+        }
+      ]
+    },
+    {
+      "id": "STRATEGY_BUY_SELL_SAFETY_GATES",
+      "title": "Conservative BUY/SELL ordering and active-position trailing gates",
+      "sourceModules": [
+        "src/domain/strategies/conservative/strategy.js",
+        "src/use-cases/conservative-trading-engine.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "suppresses trailing BUY repricing while an actual active Position exists",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "does not submit the next standing BUY when recovery SELL submission fails",
+          "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "RECOVERY_SELL_ECONOMICS",
+      "title": "Recovery SELL quantity, price, fee reserve and retained inventory",
+      "sourceModules": [
+        "src/domain/strategies/conservative/recovery-sell-plan.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/domain/strategies/conservative/recovery-sell-plan.test.js",
+          "name": "plans a recovery SELL that retains keepQuantity and covers cost plus minProfit",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/recovery-sell-plan.test.js",
+          "name": "rejects invalid financial inputs and missing exchange increments",
+          "kind": "failure"
+        },
+        {
+          "path": "test/replays/doge-zro-conservative-replay.test.js",
+          "name": "combines four completed BUY fills into one profitable recovery SELL and retains the configured inventory",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "CANCELLATION_UNKNOWN_OUTCOMES",
+      "title": "Owned-order cancellation, raced fills and unknown outcomes",
+      "sourceModules": [
+        "src/use-cases/conservative-trading-engine.js"
+      ],
+      "tests": [
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "publishes thrown cancellation outcomes as UNKNOWN and pauses the pair",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "cancellation intent publication failure prevents broker cancellation and pauses the pair",
+          "kind": "failure"
+        }
+      ]
+    },
+    {
+      "id": "STARTUP_ACCOUNT_RECONCILIATION",
+      "title": "Startup PREFLIGHT balances, account-wide open orders and ownership gates",
+      "sourceModules": [
+        "src/bootstrap/account/create-account-snapshot-manager.js",
+        "src/bootstrap/start-harvester.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "name": "captures configured-asset balances and durably publishes the account audit",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
+          "name": "fails closed when an account snapshot omits a configured market asset",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "journals PREFLIGHT balances and open orders before trading and CLOSING balances before broker disconnect",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "USER_DATA_DISCONNECT_RECOVERY",
+      "title": "User-data disconnect, reconnect, event draining and readiness recovery",
+      "sourceModules": [
+        "src/bootstrap/start-harvester.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "starts application reconciliation on transport recovery and acknowledges only after durable audits",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "keeps recovery blocked and does not acknowledge when the fresh account snapshot fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "reconciles the in-memory order registry before reopening trading after stream recovery",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "PERSISTENCE_RESTART_SAFETY_BOUNDARY",
+      "title": "Operational State Store integrity and offline crash/restart projection",
+      "sourceModules": [
+        "src/infrastructure/operational-state/create-file-operational-state-store.js",
+        "src/use-cases/restore-harvester-operational-state.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/infrastructure/operational-state/create-file-operational-state-store.test.js",
+          "name": "appends exact facts with global monotonic sequences across runtime sessions",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/create-file-operational-state-store.test.js",
+          "name": "detects tampered fact-record digests",
+          "kind": "failure"
+        },
+        {
+          "path": "test/recovery/operational-state-crash-matrix.test.js",
+          "name": "reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries",
+          "kind": "integration"
+        }
+      ]
+    },
+    {
+      "id": "SHUTDOWN_PROCESS_OWNERSHIP",
+      "title": "Shutdown ordering, process-lock retention and safe release",
+      "sourceModules": [
+        "src/index.js"
+      ],
+      "tests": [
+        {
+          "path": "src/index.test.js",
+          "name": "acquires the process lock before starting Journal and releases it after clean shutdown",
+          "kind": "normal"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains the process lock when runtime shutdown throws",
+          "kind": "failure"
+        }
+      ]
+    }
+  ]
+}
