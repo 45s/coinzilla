@@ -46,6 +46,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
   private readonly reconnectDelays = [1000, 2000, 4000, 8000, 16000, 30000];
   private eventSocket: WebSocket | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private metadataRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private reconnectAttempt = 0;
   private manuallyDisconnected = false;
   private refreshPromise: Promise<void> | null = null;
@@ -430,6 +431,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     if (message.type === 'authenticated') {
       this.liveStatus.set('live');
       this.selectedRecord.set(null);
+      void this.refreshMetadata();
       void this.loadRecords();
       return;
     }
@@ -442,10 +444,33 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
       this.errorMessage.set('Token was rejected. Check the Harvester bearer token and reconnect.');
       return;
     }
-    if (message.type === 'trading-history.updated'
-      && message.resources?.includes(this.currentResource())) {
-      this.selectedRecord.set(null);
-      void this.loadRecords();
+    if (message.type === 'trading-history.updated') {
+      this.scheduleMetadataRefresh();
+      if (message.resources?.includes(this.currentResource())) {
+        this.selectedRecord.set(null);
+        void this.loadRecords();
+      }
+    }
+  }
+
+  private scheduleMetadataRefresh(): void {
+    if (this.metadataRefreshTimer) {
+      clearTimeout(this.metadataRefreshTimer);
+    }
+    this.metadataRefreshTimer = setTimeout(() => {
+      this.metadataRefreshTimer = null;
+      void this.refreshMetadata();
+    }, 250);
+  }
+
+  private async refreshMetadata(): Promise<void> {
+    if (!this.connected()) {
+      return;
+    }
+    try {
+      this.metadata.set(await firstValueFrom(this.api.getMetadata()));
+    } catch (error) {
+      this.handleRequestError(error);
     }
   }
 
@@ -468,6 +493,10 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+    if (this.metadataRefreshTimer) {
+      clearTimeout(this.metadataRefreshTimer);
+      this.metadataRefreshTimer = null;
     }
     const socket = this.eventSocket;
     this.eventSocket = null;
