@@ -187,7 +187,7 @@ export function createWithdrawalHistoryRequest({ input }) {
 function normalizeReturnedHistoryPage({ pageNum, requestedPage }) {
   // The live REST history endpoint can omit this redundant response echo.
   // Page 1 remains unambiguous; later pages still require an explicit match.
-  if (pageNum === undefined && requestedPage === 1) {
+  if ((pageNum === undefined || pageNum === null) && requestedPage === 1) {
     return
   }
   const normalizedPageNum = typeof pageNum === "string" ? pageNum.trim() : pageNum
