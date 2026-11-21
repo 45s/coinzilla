@@ -51,9 +51,9 @@ test("refreshes on first use and reuses filters only until the 30-second freshne
     metadata,
   })
 
-  assert.equal(first.ok, true)
-  assert.equal(first.data.version, 1)
-  assert.equal(MARKET_METADATA_FRESHNESS_MAX_AGE_MS, 30_000)
+  assert.equal(first.ok, true, "The first metadata access must refresh exchange filters.")
+  assert.equal(first.data.version, 1, "The first access must return the current exchange metadata.")
+  assert.equal(MARKET_METADATA_FRESHNESS_MAX_AGE_MS, 30_000, "The cache freshness window must remain bounded to thirty seconds.")
 
   currentTime = 1000 + MARKET_METADATA_FRESHNESS_MAX_AGE_MS - 1
   const cached = await cache.refreshMarketMetadata({
@@ -61,8 +61,8 @@ test("refreshes on first use and reuses filters only until the 30-second freshne
     pairConfig: {},
     metadata,
   })
-  assert.equal(cached.data.version, 1)
-  assert.equal(refreshCount, 1)
+  assert.equal(cached.data.version, 1, "A fresh validated snapshot must be reused inside the freshness window.")
+  assert.equal(refreshCount, 1, "A fresh cache hit must not trigger another exchange request.")
 
   currentTime = 1000 + MARKET_METADATA_FRESHNESS_MAX_AGE_MS
   const refreshed = await cache.refreshMarketMetadata({
@@ -70,8 +70,8 @@ test("refreshes on first use and reuses filters only until the 30-second freshne
     pairConfig: {},
     metadata,
   })
-  assert.equal(refreshed.data.version, 2)
-  assert.equal(refreshCount, 2)
+  assert.equal(refreshed.data.version, 2, "Expired metadata must be replaced by the refreshed exchange snapshot.")
+  assert.equal(refreshCount, 2, "Expired metadata must cause exactly one new exchange request.")
 })
 
 test("keeps freshness per symbol and lets trailing-BUY refresh force a new snapshot", async () => {
@@ -106,9 +106,9 @@ test("keeps freshness per symbol and lets trailing-BUY refresh force a new snaps
     force: true,
   })
 
-  assert.equal(forced.ok, true)
-  assert.equal(forced.data.version, 3)
-  assert.equal(refreshCount, 3)
+  assert.equal(forced.ok, true, "A forced metadata refresh must succeed with valid exchange filters.")
+  assert.equal(forced.data.version, 3, "A forced refresh must replace the previously cached snapshot.")
+  assert.equal(refreshCount, 3, "A forced refresh must bypass the freshness cache.")
 })
 
 test("retains the last validated snapshot but reports failure when refresh is unavailable", async () => {
@@ -149,10 +149,13 @@ test("retains the last validated snapshot but reports failure when refresh is un
     metadata,
   })
 
-  assert.equal(first.ok, true)
-  assert.equal(failed.ok, false)
-  assert.equal(failed.errors[0], refreshError)
-  assert.equal(cache.getCurrentMarketMetadata({ symbol }).version, 1)
+  assert.equal(first.ok, true, "The initial exchange metadata snapshot must be accepted.")
+  assert.equal(failed.ok, false, "A failed refresh must not be reported as a successful metadata read.")
+  assert.ok(failed.errors[0] instanceof MarketMetadataRefreshError, "A refresh failure must use the typed market metadata error.")
+  assert.equal(failed.errors[0].code, MARKET_METADATA_REFRESH_ERROR_CODES.EXCHANGE_FILTERS_UNAVAILABLE, "A refresh failure must expose its stable diagnostic code.")
+  assert.equal(failed.errors[0].cause, refreshError, "A refresh failure must preserve the original exchange error as its cause.")
+  assert.deepEqual(failed.errors[0].context, { symbol }, "A refresh failure must identify the affected market safely.")
+  assert.equal(cache.getCurrentMarketMetadata({ symbol }).version, 1, "Failed refresh must not replace the previously validated cache entry.")
 })
 
 test("rejects a refreshed filter snapshot for a different market", async () => {
@@ -175,9 +178,10 @@ test("rejects a refreshed filter snapshot for a different market", async () => {
     metadata,
   })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /does not match the active market/)
-  assert.equal(cache.getCurrentMarketMetadata({ symbol }).version, 0)
+  assert.equal(result.ok, false, "Metadata for another market must be rejected.")
+  assert.match(result.errors[0].message, /does not match the active market/, "The error must identify the market identity mismatch.")
+  assert.equal(result.errors[0].code, MARKET_METADATA_REFRESH_ERROR_CODES.MARKET_IDENTITY_MISMATCH, "A wrong-market response must expose its stable diagnostic code.")
+  assert.equal(cache.getCurrentMarketMetadata({ symbol }).version, 0, "A wrong-market response must not replace the startup metadata fallback.")
 })
 
 test("fails before exchange access when the injected clock is invalid", async () => {
@@ -201,8 +205,8 @@ test("fails before exchange access when the injected clock is invalid", async ()
   })
 
   assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /clock must return/)
-  assert.equal(refreshCount, 0)
+  assert.match(result.errors[0].message, /clock must return/, "An invalid clock must be rejected before an exchange request.")
+  assert.equal(refreshCount, 0, "An invalid clock must prevent exchange metadata retrieval.")
 })
 
 
@@ -234,7 +238,7 @@ test("refreshes instead of reusing a cache entry when the clock moves backwards"
     metadata,
   })
 
-  assert.equal(refreshed.ok, true)
-  assert.equal(refreshed.data.version, 2)
-  assert.equal(refreshCount, 2)
+  assert.equal(refreshed.ok, true, "A refresh after the freshness window must succeed.")
+  assert.equal(refreshed.data.version, 2, "The refreshed snapshot must replace expired metadata.")
+  assert.equal(refreshCount, 2, "The cache must perform one initial and one expired refresh.")
 })
