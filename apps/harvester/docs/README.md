@@ -26,7 +26,7 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
 - [Strategy extensibility architecture discussion and audit roadmap](architecture/strategy-extensibility-audit-roadmap.md) — current source observations, agreed design direction, open decisions and S-1 through S-4 audit roadmap.
 - [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — historical source-verified design/audit snapshot; current implementation is governed by the Harvester persistence README.
-- [Harvester ordinary persistence](persistence/README.md) — current relational orders/fills, live-fill, startup history-sync and backup implementation and safety contract.
+- [Harvester ordinary persistence](persistence/README.md) — current relational orders/fills, live-fill, startup history-sync, backup and full JSON export commands and safety contract.
 - [Trading-history persistence roadmap](persistence/trading-history-roadmap.md) — completed Phases 1–3 and planned attribution, analytics and remaining operational hardening.
 - [Trading-history API v1](api/trading-history-api.md) — versioned HTTP contract for browsing persisted orders, individual fills, and commission facts from independent clients.
 - [ADR-0003: Multi-provider execution and market-data routing](../../../docs/architecture/decisions/ADR-0003-multi-provider-routing.md) — accepted target architecture; implementation is tracked by [#1339](https://github.com/45s/coinzilla/issues/1339).

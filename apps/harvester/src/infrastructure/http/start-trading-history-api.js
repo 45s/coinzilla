@@ -113,8 +113,8 @@ async function closeResources({ server, database } = {}) {
 /**
  * Compose the standalone Harvester trading-history query service over the selected database.
  *
- * The service opens an existing environment-specific database, applies SQLite query_only
- * mode to its own connection, and exposes the transport-independent application queries.
+ * The service opens an existing environment-specific database on a separate connection
+ * and exposes the transport-independent application queries.
  *
  * @param {{env?: object, logger?: object, createDatabase?: Function, startServer?: Function}} input
  * @returns {Promise<Readonly<{address: object, close: Function}>>} Running service lifecycle handle.
@@ -132,22 +132,13 @@ async function assertExistingDatabase({ filename, environment } = {}) {
   }
 }
 
-async function openQueryDatabase({ filename, environment, createDatabase } = {}) {
+async function openTradingHistoryDatabase({ filename, environment, createDatabase } = {}) {
   const database = createDatabase({
     filename,
     timeout: 5_000,
   })
   try {
     await database.connect()
-    database.exec("PRAGMA query_only = ON")
-    const queryOnly = database.prepare("PRAGMA query_only").get()
-    if (queryOnly?.query_only !== 1) {
-      throw new TradingHistoryApiStartupError({
-        message: "The trading-history API database connection could not enable query-only SQLite mode.",
-        code: "HARVESTER_TRADING_HISTORY_API_DATABASE_CONFIGURATION_FAILED",
-        environment,
-      })
-    }
     assertTradingHistorySchema({
       database,
       environment,
@@ -207,8 +198,8 @@ async function startServerWithDatabase({
 /**
  * Compose the standalone Harvester trading-history query service over the selected database.
  *
- * The service opens an existing environment-specific database, applies SQLite query_only
- * mode to its own connection, and exposes the transport-independent application queries.
+ * The service opens an existing environment-specific database on a separate connection
+ * and exposes the transport-independent application queries.
  *
  * @param {{env?: object, logger?: object, createDatabase?: Function, startServer?: Function}} input
  * @returns {Promise<Readonly<{address: object, close: Function}>>} Running service lifecycle handle.
@@ -230,7 +221,7 @@ export async function startTradingHistoryApi({
     filename,
     environment: configuration.environment,
   })
-  const database = await openQueryDatabase({
+  const database = await openTradingHistoryDatabase({
     filename,
     environment: configuration.environment,
     createDatabase,

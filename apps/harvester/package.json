@@ -23,6 +23,7 @@
     "volatility:calibrate": "node scripts/calibrate-volatility-thresholds.js",
     "operational-state:init": "node --env-file=.env scripts/initialize-operational-state.js",
     "operational-state:init:dev": "node --env-file=.env.development scripts/initialize-operational-state.js",
+    "persistence:export": "node scripts/export-database.js",
     "persistence:backup": "node scripts/trading-history-backups.js create",
     "persistence:restore-check": "node scripts/trading-history-backups.js verify",
     "history:api": "node --env-file=.env scripts/trading-history-api.js",

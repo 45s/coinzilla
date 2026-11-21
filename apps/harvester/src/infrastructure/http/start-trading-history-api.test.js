@@ -43,7 +43,7 @@ async function createExistingTradingHistoryDatabase({ t } = {}) {
   }
 }
 
-test("starts a standalone API over an existing environment database and closes its query connection", async (t) => {
+test("starts a standalone API over an existing environment database and closes its database connection", async (t) => {
   const { env } = await createExistingTradingHistoryDatabase({ t })
   let database
   const service = await startTradingHistoryApi({
@@ -57,7 +57,7 @@ test("starts a standalone API over an existing environment database and closes i
     await service.close()
   })
 
-  assert.equal(database.prepare("PRAGMA query_only").get().query_only, 1, "The API connection must enable SQLite query-only mode.")
+  assert.equal(database.prepare("PRAGMA query_only").get().query_only, 0, "The API connection must not impose a database-level restriction on future application operations.")
   const apiUrl = `http://127.0.0.1:${service.address.port}/api/v1/trading/metadata`
   const response = await fetch(apiUrl, {
     headers: {

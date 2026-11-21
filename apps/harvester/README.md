@@ -64,7 +64,7 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 pnpm --filter @coinzilla/harvester history:api:dev
 ```
 
-The API binds to `127.0.0.1:4201` by default. It opens the existing selected database and enables SQLite query-only mode on its own connection. See the API contract for routes, filters, pagination, authentication, remote-access requirements, and exact financial-value semantics.
+The API binds to `127.0.0.1:4201` by default. It opens the existing selected database on a separate connection. The first routes expose persisted trading records; additional operations can be added through application use cases and versioned routes. See the API contract for routes, filters, pagination, authentication, remote-access requirements, and exact financial-value semantics.
 
 ## Operational State Store (ADR-0001)
 

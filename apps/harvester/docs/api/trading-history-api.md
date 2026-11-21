@@ -40,7 +40,7 @@ curl -H "Authorization: Bearer $HARVESTER_API_TOKEN" \
 
 On Windows PowerShell, use `$env:HARVESTER_API_TOKEN` in place of the shell variable syntax above.
 
-The service fails if the selected database does not exist or does not contain the required relational trading-history schema. It does not create a new database, run migrations, or repair schema. It opens its own SQLite connection and enables `PRAGMA query_only = ON` for that connection. SQLite WAL requires both processes to use same-host local storage; do not place the database on NFS/SMB or a shared network volume.
+The service fails if the selected database does not exist or does not contain the required relational trading-history schema. It does not create a new database, run migrations, or repair schema. It opens its own SQLite connection to the selected database. SQLite WAL requires both processes to use same-host local storage; do not place the database on NFS/SMB or a shared network volume.
 
 ## Authentication and network boundary
 
@@ -172,7 +172,7 @@ Existing orders / fills / fill_commissions tables
 
 HTTP authentication and response serialization stay in the transport adapter. Query validation and application error codes stay in the application layer. SQL and row mapping stay in Harvester infrastructure. The Harvester domain does not depend on the HTTP framework, route names, UI, or consumer identity.
 
-The service is deliberately a separate process from the trading runtime. Its connection has SQLite query-only mode enabled and it exposes only the versioned GET resources listed above. It does not subscribe to trading events, create schema, or affect trading readiness and lifecycle.
+The service is deliberately a separate process from the trading runtime. It exposes the initial versioned GET resources listed above. Future operations can be added through explicit application use cases and versioned routes without coupling the domain to HTTP or a client. The service does not subscribe to trading events, create schema, or affect trading readiness and lifecycle.
 
 ## Verification
 
