@@ -124,7 +124,9 @@ async function runDiagnosticsWithOperatorAttempt({
   } catch (error) {
     operatorResult = {
       ok: false,
-      mutationOutcome: "OUTCOME_UNKNOWN",
+      mutationOutcome: error?.mutationOutcome === "NOT_SENT"
+        ? "NOT_SENT"
+        : "OUTCOME_UNKNOWN",
       errors: [error],
     }
   }
