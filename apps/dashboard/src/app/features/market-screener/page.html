@@ -100,7 +100,7 @@
     <div class="label-list">
       @for (label of labels(); track label.id) {
         <span class="custom-label" [style.backgroundColor]="label.color + '22'" [style.borderColor]="label.color" [style.color]="label.color">
-          {{ label.name }} <button type="button" [attr.aria-label]="'Remove label ' + label.name" (click)="removeLabel(label.id)">×</button>
+          {{ label.name }} <input type="color" [attr.aria-label]="'Change color for label ' + label.name" [value]="label.color" (input)="updateLabelColor(label.id, $event)" /> <button type="button" [attr.aria-label]="'Remove label ' + label.name" (click)="removeLabel(label.id)">×</button>
         </span>
       } @empty { <span class="muted-hint">Create labels to organize markets.</span> }
     </div>
