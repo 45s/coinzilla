@@ -65,7 +65,8 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
     prepareOrderHistoryPersistence: async () => ({
       relationalDatabase: database,
     }),
-    startTradingHistoryApi: startTradingHistoryApi ?? (async ({ database: suppliedDatabase, environment, eventBus }) => {
+    startTradingHistoryApi: startTradingHistoryApi ?? (async ({ database: suppliedDatabase, environment, eventBus, operator }) => {
+      assert.deepEqual(operator, { facade: "shared-harvester-operator" }, "The local API must receive the same operator facade exposed by the running Harvester runtime.");
       assert.equal(suppliedDatabase, database, "The API must reuse Harvester's existing relational database connection.")
       assert.equal(environment, "testnet", "The API environment must come from Harvester's selected runtime configuration.")
       assert.equal(typeof eventBus?.subscribe, "function", "The WebSocket adapter must share Harvester's existing EventBus.")
@@ -79,6 +80,7 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
       }
     }),
     start: async () => ({
+      getOperator: () => ({ facade: "shared-harvester-operator" }),
       stop: async () => { calls.push("runtime-stop") },
     }),
     registerSignalHandler: (...args) => {

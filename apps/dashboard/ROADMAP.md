@@ -4,12 +4,13 @@
 **Scope:** `apps/dashboard/`
 **Tracking:** [Issue #1623](https://github.com/45s/coinzilla/issues/1623)
 
-- **Next — full record inspection and local operator console:** show every persisted key/value (including nested data) for Orders, Fills, and Commissions; then add an Operator workspace that reuses Harvester's existing operator-control application commands and safety gates. Do not implement UI-only pause state or call exchange APIs from the browser.
+- **Next — full record inspection and operator-console hardening:** show every persisted key/value (including nested data) for Orders, Fills, and Commissions; harden the existing local Operator workspace and its backend integration. Do not implement UI-only pause state or call exchange APIs from the browser.
 
 ## Current milestone
 
 - **Read-only trading-history pages complete in merged [PR #1636](https://github.com/45s/coinzilla/pull/1636), tracked by [#1634](https://github.com/45s/coinzilla/issues/1634):** Orders, Fills, and Commissions pages backed by Harvester's unauthenticated loopback-only versioned API, backend-selected environment, filters, bounded pagination, record details, readable exchange references, distinct limit/execution/fee-valuation labels, nullable fill-order links, explicit connection/error/empty states, and frontend regression tests.
 - **In progress in [PR #1641](https://github.com/45s/coinzilla/pull/1641), tracked by [#1643](https://github.com/45s/coinzilla/issues/1643):** local WebSocket invalidation notifications for persisted order, fill, and commission changes; live/reconnecting/offline UI status; bounded reconnect backoff; and REST snapshot reconciliation after every successful socket connection. REST remains the source of truth. Notifications are best-effort and are not durable replay.
+- **Operator workspace runtime integration in [PR #1654](https://github.com/45s/coinzilla/pull/1654):** the Dashboard Operator page and typed client already exist; this PR wires the running Harvester's composed operator facade into the loopback API. The API remains unauthenticated and loopback-only under the explicitly approved local-development exception.
 - [x] Initialize the Angular + TypeScript workspace, responsive shell, Overview screen, demo-only view models, tests and repository ownership/CI registration.
 - [x] Generate and commit the pnpm lockfile after local dependency installation.
 - [x] Verify the Angular production build and tests through GitHub Actions on the exact task PR head.
