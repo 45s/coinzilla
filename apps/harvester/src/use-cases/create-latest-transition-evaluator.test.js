@@ -217,3 +217,57 @@ test("passes the complete account-scoped RS runtime dependencies to its producti
     assert.equal(received[key], value, `The production RS evaluator must receive the shared ${key} dependency.`)
   }
 })
+
+
+test("refreshes recovery filters before Conservative strategy evaluation", async () => {
+  const dependencies = createDependencies()
+  const symbol = "DOGEUSDT"
+  const calls = []
+  dependencies.state.shutdownBuyGate = false
+  dependencies.state.paused.delete(symbol)
+  dependencies.state.recoveryManagedPausedMarkets.delete(symbol)
+  dependencies.isStopping = () => false
+  dependencies.canTrade = () => true
+  dependencies.refreshRecoverySellMarketMetadata = async ({ symbol: refreshedSymbol }) => {
+    calls.push(`refresh:${refreshedSymbol}`)
+    return { ok: true }
+  }
+  dependencies.strategyPolicy.evaluate = () => {
+    calls.push("evaluate")
+    return { actions: [], reason: "NO_ACTION" }
+  }
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  const result = await evaluate({ symbol })
+
+  assert.equal(result.ok, true)
+  assert.deepEqual(calls, [`refresh:${symbol}`, "evaluate"])
+})
+
+
+test("stops Conservative evaluation when recovery filter refresh fails", async () => {
+  const dependencies = createDependencies()
+  const symbol = "DOGEUSDT"
+  const refreshError = new Error("exchange filters unavailable")
+  let strategyEvaluated = false
+  dependencies.state.shutdownBuyGate = false
+  dependencies.state.paused.delete(symbol)
+  dependencies.state.recoveryManagedPausedMarkets.delete(symbol)
+  dependencies.isStopping = () => false
+  dependencies.canTrade = () => true
+  dependencies.refreshRecoverySellMarketMetadata = async () => ({
+    ok: false,
+    errors: [refreshError],
+  })
+  dependencies.strategyPolicy.evaluate = () => {
+    strategyEvaluated = true
+    return { actions: [], reason: "NO_ACTION" }
+  }
+  const evaluate = createLatestTransitionEvaluator(dependencies)
+
+  const result = await evaluate({ symbol })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.errors[0], refreshError)
+  assert.equal(strategyEvaluated, false)
+})

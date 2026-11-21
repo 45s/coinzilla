@@ -112,3 +112,10 @@ The audit is intentionally evidence-led. If a later reviewer finds a criterion n
 - No background polling was introduced. Existing acknowledged exchange orders are not canceled or replaced by this filter-read path.
 - The no-active-Position regression verifies that ordinary initial BUY evaluation does not incur an unnecessary filter request.
 - Exact-head GREEN verification remains pending; do not mark the full #1359/#1362 lifecycle acceptance complete from this change alone.
+
+
+## 2026-11-21 — GREEN implementation follow-up
+
+- The first GREEN CI attempt passed the new filter-cache and evaluator regressions but failed the existing Harvester startup recovery scenario: the trailing-BUY transition context did not receive the shared filter-refresh operation.
+- The implementation now forwards the cache refresh operation into that reduced context. The temporary additions to the oversized Conservative engine test file are being moved into focused cache/evaluator test modules; the original file is restored unchanged to keep strict changed-file lint meaningful.
+- Exact-head targeted tests, strict ESLint, and full CI are pending for the corrected commit. The RED evidence from `6f8718f4a204f7eff8a1a62cedf7f70ae471f53e` remains the source-gap proof.

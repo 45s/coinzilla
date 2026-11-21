@@ -17,6 +17,7 @@ import { createSubmissionGate } from "./create-submission-gate.js"
 import { createShutdownRecoveryWorkflow } from "./create-shutdown-recovery-workflow.js"
 import { createConservativeShutdownSafety } from "./create-conservative-shutdown-safety.js"
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
+import { createMarketMetadataCache } from "./create-market-metadata-cache.js"
 import { createFreshMarketPriceWaiter, createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
 import { validateConservativeTradingEngineOptions } from "./validate-conservative-trading-engine-options.js"
 import { failureResult, recoveryFailureError, withFailure } from "./recovery-failure.js"
@@ -43,8 +44,6 @@ import {
   createVolatilityProtectionState,
   VOLATILITY_PROTECTION_MODES,
 } from "../domain/market/volatility-protection-state.js"
-
-const MARKET_METADATA_FRESHNESS_MAX_AGE_MS = 30_000
 
 export function createMarketBook({ bookTicker } = {}) {
   if (!bookTicker || typeof bookTicker !== "object" || Array.isArray(bookTicker)) {
@@ -1308,61 +1307,6 @@ function createInitialEngineState({ initialState = {}, pairs, initialRegistry } 
 state }
 }
 
-function readMarketMetadataClock({ now } = {}) {
-  const timestamp = now()
-  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
-    throw new TypeError("Market metadata clock must return a non-negative safe integer timestamp")
-  }
-  return timestamp
-}
-
-function createMarketMetadataCache({ getMarketMetadata, getSymbolFilters, now } = {}) {
-  const refreshedMarketMetadata = new Map()
-  const refreshedAtBySymbol = new Map()
-  const refreshMarketMetadata = async ({
-    symbol,
-    pairConfig,
-    metadata,
-    force = false,
-  } = {}) => {
-    try {
-      const currentTime = readMarketMetadataClock({ now })
-      const refreshedAt = refreshedAtBySymbol.get(symbol)
-      const cachedMetadata = refreshedMarketMetadata.get(symbol)
-      const age = refreshedAt === undefined ? undefined : currentTime - refreshedAt
-      const cacheMatchesMarket = cachedMetadata?.market.id === metadata?.market?.id &&
-        cachedMetadata?.market.symbol === symbol
-      if (!force && cacheMatchesMarket && age >= 0 && age < MARKET_METADATA_FRESHNESS_MAX_AGE_MS) {
-        return toResult({ data: cachedMetadata })
-      }
-      const result = await getSymbolFilters({ symbol })
-      if (!result?.ok || !result.data) {
-        throw result?.errors?.[0] ?? new Error(`Fresh Binance exchange metadata is unavailable for ${symbol}`)
-      }
-      const refreshed = validateMarketTradingReadiness({
-        symbol,
-        pairConfig,
-        marketMetadata: result.data,
-      })
-      if (refreshed.market.id !== metadata.market.id || refreshed.market.symbol !== symbol) {
-        throw new Error(`Fresh exchange metadata does not match the active market ${symbol}`)
-      }
-      const refreshedAtTime = readMarketMetadataClock({ now })
-      refreshedMarketMetadata.set(symbol, refreshed)
-      refreshedAtBySymbol.set(symbol, refreshedAtTime)
-      return toResult({ data: refreshed })
-    } catch (error) {
-      return toResult({ error })
-    }
-  }
-  return {
-    refreshedMarketMetadata,
-    getCurrentMarketMetadata: ({ symbol } = {}) =>
-      refreshedMarketMetadata.get(symbol) ?? getMarketMetadata({ symbol }),
-    refreshMarketMetadata,
-  }
-}
-
 function createSerializedTransitionQueue() {
   let transitionTail = Promise.resolve()
   return ({ task } = {}) => {
@@ -1709,6 +1653,15 @@ function bindSharedAccountOrderRegistry({ state, sharedAccountState } = {}) {
   })
 }
 
+function createConservativeMarketMetadataCache({ dependencies, getMarketMetadata } = {}) {
+  return createMarketMetadataCache({
+    getMarketMetadata,
+    getSymbolFilters: ({ symbol }) => dependencies.broker.getSymbolFilters({ symbol }),
+    validateMarketMetadata: validateMarketTradingReadiness,
+    now: dependencies.now,
+  })
+}
+
 function createConservativeEngineBaseContext({ dependencies } = {}) {
   const {
     appConfig,
@@ -1727,16 +1680,7 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     hasUnownedOpenOrdersForSymbol({ symbol })
   const initialRegistry = validateInitialEngineState({ initialState,
 pairs })
-  const marketMetadataCache = createMarketMetadataCache({
-    getMarketMetadata,
-    getSymbolFilters: ({ symbol }) => dependencies.broker.getSymbolFilters({ symbol }),
-    now: dependencies.now,
-  })
-  const {
-    refreshedMarketMetadata,
-    getCurrentMarketMetadata,
-    refreshMarketMetadata,
-  } = marketMetadataCache
+  const marketMetadataCache = createConservativeMarketMetadataCache({ dependencies, getMarketMetadata })
   const { state } = createInitialEngineState({ initialState,
 pairs,
 initialRegistry })
@@ -1764,9 +1708,7 @@ rememberProcessedFill })
     isVolatilityProtectionEnabledForSymbol,
     hasBlockingOpenOrdersForSymbol,
     marketMetadataCache,
-    refreshedMarketMetadata,
-    getCurrentMarketMetadata,
-    refreshMarketMetadata,
+    ...marketMetadataCache,
     state,
     runTransition,
     nextEvaluationId: () => ++strategyEvaluationSequence,
@@ -1954,6 +1896,7 @@ function createConservativeEngineRecoverySubmissionContext({ context } = {}) {
       getPortfolio: dependencies.getPortfolio,
       broker: dependencies.broker,
       refreshedMarketMetadata: context.refreshedMarketMetadata,
+      refreshMarketMetadata: context.refreshMarketMetadata,
       pause: context.pause,
       evaluateLatestTransition: (transitionOptions) => context.evaluateLatestTransition(transitionOptions),
       cancelAndReconcileTrailingBuy: context.cancelAndReconcileTrailingBuy,
@@ -1993,10 +1936,7 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     canTrade: dependencies.canTrade,
     isMarketPriceFresh: dependencies.isMarketPriceFresh,
     getCurrentMarketMetadata: context.getCurrentMarketMetadata,
-    refreshRecoverySellMarketMetadata: (options = {}) => refreshRecoverySellMarketMetadataForEvaluation({
-      context,
-      ...options,
-    }),
+    refreshRecoverySellMarketMetadata: (options = {}) => refreshRecoverySellMarketMetadataForEvaluation({ context, ...options }),
     nextEvaluationId: context.nextEvaluationId,
     getPortfolio: dependencies.getPortfolio,
     getRecoveryLedger: dependencies.getRecoveryLedger,
