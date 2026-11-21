@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
 import { BitunixRestClient } from "./api/rest-client.js"
-import { createRestSignature } from "../auth/create-rest-signature.js"
+import { createRestSignature } from "./auth/create-rest-signature.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 
 
