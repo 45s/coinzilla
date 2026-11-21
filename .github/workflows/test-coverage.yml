@@ -54,7 +54,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run and enforce ${{ matrix.package }} coverage
+      - name: Run and enforce Harvester coverage and critical module floors
+        if: matrix.package == '@coinzilla/harvester'
+        run: |
+          set -o pipefail
+          pnpm --filter @coinzilla/harvester run test:coverage 2>&1 | tee "$RUNNER_TEMP/harvester-coverage.log"
+          pnpm --filter @coinzilla/harvester run check:critical-coverage "$RUNNER_TEMP/harvester-coverage.log"
+
+      - name: Run and enforce other package coverage
+        if: matrix.package != '@coinzilla/harvester'
         run: pnpm --filter "${{ matrix.package }}" run test:coverage
 
   workspace-coverage-gate:

@@ -352,3 +352,223 @@
     flex-direction: column;
   }
 }
+
+
+.filter-workspace,
+.label-manager {
+  display: grid;
+  gap: 13px;
+  padding: 15px;
+  border: 1px solid #293648;
+  border-radius: 9px;
+  background: #111a27;
+}
+
+.filter-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #dce5ef;
+  font-size: 11px;
+}
+
+.filter-heading span,
+.muted-hint {
+  color: #738198;
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.range-filters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(100px, 1fr));
+  gap: 9px;
+}
+
+.range-filters label,
+.preset-controls label {
+  display: grid;
+  gap: 6px;
+  color: #8491a5;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .6px;
+}
+
+.range-filters input,
+.preset-controls input,
+.preset-controls select,
+.label-filter select,
+.label-create input:not([type="color"]) {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid #303d50;
+  border-radius: 6px;
+  background: #151e2b;
+  color: #dce5ef;
+  font: inherit;
+  font-size: 10px;
+}
+
+.filter-bottom,
+.preset-controls,
+.label-create {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.label-filter {
+  display: grid;
+  min-width: 170px;
+  gap: 6px;
+  color: #8491a5;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.label-filter select {
+  min-height: 72px;
+  padding: 5px;
+}
+
+.preset-controls {
+  margin-left: auto;
+}
+
+.preset-controls button,
+.label-create button {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(101, 214, 173, .3);
+  border-radius: 6px;
+  background: rgba(101, 214, 173, .09);
+  color: #83e3c0;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.preset-controls button:disabled,
+.label-create button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.label-create input[type="color"] {
+  width: 42px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid #303d50;
+  border-radius: 6px;
+  background: #151e2b;
+}
+
+.label-create input:not([type="color"]) {
+  max-width: 360px;
+}
+
+.label-list,
+.assigned-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.custom-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 7px;
+  border: 1px solid;
+  border-radius: 5px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .3px;
+}
+
+.custom-label button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.custom-label.compact {
+  padding: 2px 5px;
+  font-size: 7px;
+}
+
+.favorite-row {
+  background: rgba(230, 187, 101, .035);
+}
+
+.market-label-editor {
+  position: relative;
+  color: #9aabc0;
+  font-size: 9px;
+}
+
+.market-label-editor summary {
+  cursor: pointer;
+  color: #8dcdb7;
+  font-weight: 700;
+}
+
+.market-label-options {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  top: 22px;
+  display: grid;
+  min-width: 130px;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #35445a;
+  border-radius: 7px;
+  background: #172232;
+  box-shadow: 0 8px 24px #0008;
+}
+
+.market-label-options label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.market-label-options input {
+  accent-color: #72d9b4;
+}
+
+@media (max-width: 900px) {
+  .range-filters { grid-template-columns: repeat(3, minmax(100px, 1fr)); }
+  .filter-bottom, .preset-controls { align-items: stretch; flex-wrap: wrap; }
+  .preset-controls { margin-left: 0; }
+}
+
+@media (max-width: 540px) {
+  .range-filters { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
+  .filter-heading { align-items: flex-start; flex-direction: column; }
+  .preset-controls { width: 100%; flex-direction: column; }
+  .preset-controls label { width: 100%; }
+  .label-create { align-items: stretch; flex-wrap: wrap; }
+}
+
+.custom-label input[type="color"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}

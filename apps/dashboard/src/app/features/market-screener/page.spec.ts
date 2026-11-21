@@ -40,6 +40,8 @@ describe('MarketScreenerComponent', () => {
   afterEach(() => {
     http.verify();
     document.cookie = 'coinzilla_market_favorites_bitunix_futures=; Path=/; Max-Age=0';
+    localStorage.removeItem('coinzilla_market_screener_preferences_v1');
+    localStorage.removeItem('coinzilla_market_screener_presets_v1');
   });
 
   it('defaults to Bitunix Futures and renders absent native movement fields as N/A', async () => {
@@ -187,5 +189,58 @@ describe('MarketScreenerComponent', () => {
     secondFixture.destroy();
   });
 
+
+  it('pins favourites above other markets and filters by custom labels and numeric ranges', async () => {
+    await TestBed.configureTestingModule({
+      imports: [MarketScreenerComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+
+    const fixture = TestBed.createComponent(MarketScreenerComponent);
+    fixture.detectChanges();
+    const snapshot = createSnapshot();
+    const secondMarket = { ...snapshot.markets[0], symbol: 'ETHUSDT', base: 'ETH', lastPrice: '3200.00' };
+    http.expectOne(MARKET_DATA_URL).flush({
+      ok: true,
+      data: { ...snapshot, markets: [secondMarket, snapshot.markets[0]] },
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const rows = () => Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr')).filter((row) => !row.querySelector('.empty-state'));
+    expect(rows()[0].textContent).toContain('ETHUSDT');
+
+    const btcFavorite = fixture.nativeElement.querySelector('button[aria-label^="Add BTCUSDT"]') as HTMLButtonElement;
+    btcFavorite.click();
+    fixture.detectChanges();
+    expect(rows()[0].textContent).toContain('BTCUSDT');
+
+    const labelName = fixture.nativeElement.querySelector('input[aria-label="New label name"]') as HTMLInputElement;
+    labelName.value = 'JOHN';
+    labelName.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const addLabel = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Add label')) as HTMLButtonElement;
+    addLabel.click();
+    fixture.detectChanges();
+
+    const labelToggle = fixture.nativeElement.querySelector('.market-label-editor input[type="checkbox"]') as HTMLInputElement;
+    labelToggle.click();
+    fixture.detectChanges();
+    const labelFilter = fixture.nativeElement.querySelector('select[aria-label="Filter by labels"]') as HTMLSelectElement;
+    labelFilter.options[0].selected = true;
+    labelFilter.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0].textContent).toContain('BTCUSDT');
+
+    const minimumPrice = fixture.nativeElement.querySelector('input[aria-label="Minimum price"]') as HTMLInputElement;
+    minimumPrice.value = '70000';
+    minimumPrice.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(rows()).toHaveLength(0);
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No markets match these filters.');
+  });
 
 });

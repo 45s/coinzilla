@@ -16,56 +16,54 @@
     <span>127.0.0.1:4201</span>
   </div>
 
-  @if (errorMessage(); as message) {
-    <div class="operator-error" role="alert">{{ message }}</div>
-  }
-  @if (successMessage(); as message) {
-    <div class="operator-success" role="status">{{ message }}</div>
-  }
+  @if (errorMessage(); as message) { <div class="operator-error" role="alert">{{ message }}</div> }
+  @if (successMessage(); as message) { <div class="operator-success" role="status">{{ message }}</div> }
 
   <section class="command-panel" aria-labelledby="commands-title">
     <div class="panel-heading">
-      <div>
-        <div class="eyebrow">TRADING CONTROLS</div>
-        <h2 id="commands-title">Operator commands</h2>
-      </div>
+      <div><div class="eyebrow">TRADING CONTROLS</div><h2 id="commands-title">Market BUY controls</h2></div>
       <span class="local-only-tag">LOCAL ONLY</span>
     </div>
-    <label class="symbol-field">
-      <span>Market symbol</span>
-      <input [value]="symbol()" (input)="updateSymbol($event)" placeholder="BTCUSDT" autocomplete="off" spellcheck="false" />
-    </label>
-    <div class="command-console">
-      <label>
-        <span>Command</span>
-        <input
-          [value]="commandInput()"
-          (input)="updateCommandInput($event)"
-          (keydown.enter)="runCommandLine()"
-          placeholder="status · portfolio · pause BTCUSDT"
-          autocomplete="off"
-          spellcheck="false"
-        />
-      </label>
-      <button type="button" (click)="runCommandLine()">Run command</button>
-      <small>Type <code>help</code> to list available commands. Mutations still require confirmation below.</small>
+    <p class="control-description">Pause or unpause a configured market directly. Each action requires confirmation and uses Harvester's existing BUY-gate and owned-order reconciliation workflow.</p>
+    <div class="market-control-list">
+      @for (market of marketRows(); track market.symbol) {
+        <article class="market-control-row">
+          <div class="market-control-identity">
+            <strong>{{ market.symbol }}</strong>
+            <span class="market-readiness" [class.blocked]="market.readiness !== 'READY'">{{ market.enabled ? market.readiness : 'DISABLED' }}</span>
+            @if (market.blockers.length) { <small>{{ market.blockers.join(' · ') }}</small> }
+          </div>
+          <div class="market-control-state">
+            <span class="pause-state" [class.paused]="market.operatorBuysPaused">
+              {{ market.operatorBuysPaused ? 'BUYs paused' : 'BUYs active' }}
+            </span>
+            @if (market.operatorBuysPaused) {
+              <button type="button" class="resume-command" (click)="requestCommand('unpause', market.symbol)" [disabled]="!connected() || commandRunning() || !market.enabled">Unpause</button>
+            } @else {
+              <button type="button" class="danger-command" (click)="requestCommand('pause', market.symbol)" [disabled]="!connected() || commandRunning() || !market.enabled">Pause</button>
+            }
+          </div>
+        </article>
+      } @empty {
+        <div class="market-control-empty">
+          {{ loading() ? 'Loading configured markets…' : 'No market snapshots available. Check the local Harvester connection and refresh.' }}
+        </div>
+      }
     </div>
     <div class="command-actions">
-      <button type="button" class="danger-command" (click)="requestCommand('pause')">Pause market BUYs</button>
-      <button type="button" class="resume-command" (click)="requestCommand('unpause')">Unpause market BUYs</button>
-      <button type="button" class="danger-command" (click)="requestCommand('pauseallbuys')">Pause all BUYs</button>
-      <button type="button" class="resume-command" (click)="requestCommand('resumeallbuys')">Resume all BUYs</button>
+      <button type="button" class="danger-command" (click)="requestCommand('pauseallbuys')" [disabled]="!connected() || commandRunning()">Pause all BUYs</button>
+      <button type="button" class="resume-command" (click)="requestCommand('resumeallbuys')" [disabled]="!connected() || commandRunning()">Resume all BUYs</button>
     </div>
 
     @if (pendingCommand(); as pending) {
       <div class="confirmation-panel" role="alertdialog" aria-label="Confirm operator command">
         <div>
           <strong>Confirm: {{ pending.label }}</strong>
-          <p>This sends a live command to the running Harvester process. It is not a simulation.</p>
+          <p>This sends a live command to the running Harvester process. Pause uses the existing cancellation/reconciliation workflow for current-process-owned BUY orders only. Resume removes only the operator BUY gate; other safety gates remain active.</p>
         </div>
         <div class="confirmation-actions">
           <button type="button" class="quiet-command" (click)="cancelCommand()" [disabled]="commandRunning()">Cancel</button>
-          <button type="button" class="confirm-command" (click)="confirmCommand()" [disabled]="commandRunning()">
+          <button type="button" class="confirm-command" (click)="confirmCommand()" [disabled]="commandRunning() || !connected()">
             {{ commandRunning() ? 'Sending…' : 'Confirm command' }}
           </button>
         </div>
@@ -74,25 +72,10 @@
   </section>
 
   <section class="snapshot-grid" aria-label="Live operator snapshots">
-    <article class="snapshot-card">
-      <div class="snapshot-heading"><h2>Runtime status</h2><span>LIVE QUERY</span></div>
-      <pre>{{ formatJson(status()) }}</pre>
-    </article>
-    <article class="snapshot-card">
-      <div class="snapshot-heading"><h2>Markets</h2><span>LIVE QUERY</span></div>
-      <pre>{{ formatJson(markets()) }}</pre>
-    </article>
-    <article class="snapshot-card">
-      <div class="snapshot-heading"><h2>Portfolio / positions</h2><span>LIVE QUERY</span></div>
-      <pre>{{ formatJson(positions()) }}</pre>
-    </article>
-    <article class="snapshot-card">
-      <div class="snapshot-heading"><h2>Open orders</h2><span>LIVE QUERY</span></div>
-      <pre>{{ formatJson(orders()) }}</pre>
-    </article>
-    <article class="snapshot-card">
-      <div class="snapshot-heading"><h2>Balances</h2><span>LIVE QUERY</span></div>
-      <pre>{{ formatJson(balances()) }}</pre>
-    </article>
+    <article class="snapshot-card"><div class="snapshot-heading"><h2>Runtime status</h2><span>LIVE QUERY</span></div><pre>{{ formatJson(status()) }}</pre></article>
+    <article class="snapshot-card"><div class="snapshot-heading"><h2>Markets</h2><span>LIVE QUERY</span></div><pre>{{ formatJson(markets()) }}</pre></article>
+    <article class="snapshot-card"><div class="snapshot-heading"><h2>Portfolio / positions</h2><span>LIVE QUERY</span></div><pre>{{ formatJson(positions()) }}</pre></article>
+    <article class="snapshot-card"><div class="snapshot-heading"><h2>Open orders</h2><span>LIVE QUERY</span></div><pre>{{ formatJson(orders()) }}</pre></article>
+    <article class="snapshot-card"><div class="snapshot-heading"><h2>Balances</h2><span>LIVE QUERY</span></div><pre>{{ formatJson(balances()) }}</pre></article>
   </section>
 </section>

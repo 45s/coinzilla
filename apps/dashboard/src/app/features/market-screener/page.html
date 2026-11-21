@@ -48,56 +48,90 @@
     <label class="movement-filter">
       <span>WINDOW</span>
       <select aria-label="Movement window" [value]="movementWindow()" [disabled]="!hasAnyNativeMovement()" (change)="updateMovementWindow($event)">
-        <option value="change5m">5m</option>
-        <option value="change1h">1h</option>
-        <option value="change4h">4h</option>
-        <option value="change24h">24h</option>
+        <option value="change5m">5m</option><option value="change1h">1h</option>
+        <option value="change4h">4h</option><option value="change24h">24h</option>
       </select>
     </label>
     <label class="movement-filter">
       <span>DIRECTION</span>
       <select aria-label="Movement direction" [value]="movementFilter()" [disabled]="!hasNativeMovementForSelectedWindow()" (change)="updateMovementFilter($event)">
-        <option value="all">All</option>
-        <option value="positive">Non-negative</option>
-        <option value="negative">Negative</option>
+        <option value="all">All</option><option value="positive">Non-negative</option><option value="negative">Negative</option>
       </select>
     </label>
     <div class="market-count">{{ visibleMarkets().length }} <span>markets</span></div>
   </section>
 
+  <section class="filter-workspace" aria-label="Advanced market filters">
+    <div class="filter-heading"><strong>Advanced filters</strong><span>Combine ranges and labels</span></div>
+    <div class="range-filters">
+      <label><span>LAST PRICE · MIN</span><input aria-label="Minimum price" type="number" min="0" step="any" [value]="minPrice()" (input)="updateRange($event, 'minPrice')" placeholder="Any" /></label>
+      <label><span>MAX</span><input aria-label="Maximum price" type="number" min="0" step="any" [value]="maxPrice()" (input)="updateRange($event, 'maxPrice')" placeholder="Any" /></label>
+      <label><span>24H QUOTE VOLUME · MIN</span><input aria-label="Minimum volume" type="number" min="0" step="any" [value]="minVolume()" (input)="updateRange($event, 'minVolume')" placeholder="Any" /></label>
+      <label><span>MAX</span><input aria-label="Maximum volume" type="number" min="0" step="any" [value]="maxVolume()" (input)="updateRange($event, 'maxVolume')" placeholder="Any" /></label>
+      <label><span>CHANGE · MIN %</span><input aria-label="Minimum change" type="number" step="any" [value]="minChange()" (input)="updateRange($event, 'minChange')" placeholder="Any" /></label>
+      <label><span>MAX %</span><input aria-label="Maximum change" type="number" step="any" [value]="maxChange()" (input)="updateRange($event, 'maxChange')" placeholder="Any" /></label>
+    </div>
+    <div class="filter-bottom">
+      <label class="label-filter"><span>LABELS · ALL SELECTED</span>
+        <select aria-label="Filter by labels" multiple (change)="updateSelectedLabels($event)">
+          @for (label of labels(); track label.id) { <option [value]="label.id" [selected]="selectedLabels().has(label.id)">{{ label.name }}</option> }
+        </select>
+      </label>
+      <div class="preset-controls">
+        <label><span>SAVED FILTERS</span>
+          <select aria-label="Load filter preset" (change)="loadPreset($event)">
+            <option value="">Choose preset…</option>
+            @for (preset of presets(); track preset.name) { <option [value]="preset.name">{{ preset.name }}</option> }
+          </select>
+        </label>
+        <label><span>PRESET NAME</span><input aria-label="Preset name" [value]="presetName()" (input)="presetName.set(($any($event.target)).value)" placeholder="e.g. High volume" /></label>
+        <button type="button" (click)="savePreset()" [disabled]="!presetName().trim()">Save filter</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="label-manager" aria-label="Custom market labels">
+    <div class="filter-heading"><strong>My market labels</strong><span>Assign multiple labels to each market</span></div>
+    <div class="label-create">
+      <input aria-label="New label name" [value]="newLabelName()" (input)="updateNewLabelName($event)" placeholder="New label · e.g. SPOT, APR22, JOHN, LIQ" maxlength="24" />
+      <input aria-label="New label color" type="color" [value]="newLabelColor()" (input)="updateNewLabelColor($event)" />
+      <button type="button" (click)="addLabel()" [disabled]="!newLabelName().trim()">Add label</button>
+    </div>
+    <div class="label-list">
+      @for (label of labels(); track label.id) {
+        <span class="custom-label" [style.backgroundColor]="label.color + '22'" [style.borderColor]="label.color" [style.color]="label.color">
+          {{ label.name }} <input type="color" [attr.aria-label]="'Change color for label ' + label.name" [value]="label.color" (input)="updateLabelColor(label.id, $event)" /> <button type="button" [attr.aria-label]="'Remove label ' + label.name" (click)="removeLabel(label.id)">×</button>
+        </span>
+      } @empty { <span class="muted-hint">Create labels to organize markets.</span> }
+    </div>
+  </section>
+
   <section class="screener-table-panel" aria-label="Bitunix Futures markets">
     <div class="table-scroll">
       <table class="market-table">
-        <thead>
-          <tr>
-            <th class="favorite-column" scope="col" aria-label="Favourite"></th>
-            <th scope="col">Pair</th>
-            <th scope="col">Status</th>
-            <th class="numeric" scope="col">Last price</th>
-            <th class="numeric" scope="col">Mark price</th>
-            <th class="numeric" scope="col">5m</th>
-            <th class="numeric" scope="col">1h</th>
-            <th class="numeric" scope="col">4h</th>
-            <th class="numeric" scope="col">24h</th>
-            <th class="numeric" scope="col">24h volume</th>
-          </tr>
-        </thead>
+        <thead><tr>
+          <th class="favorite-column" scope="col" aria-label="Favourite"></th>
+          <th scope="col">Pair / labels</th><th scope="col">Status</th>
+          <th class="numeric" scope="col">Last price</th><th class="numeric" scope="col">Mark price</th>
+          <th class="numeric" scope="col">5m</th><th class="numeric" scope="col">1h</th>
+          <th class="numeric" scope="col">4h</th><th class="numeric" scope="col">24h</th>
+          <th class="numeric" scope="col">24h volume</th><th scope="col">Organize</th>
+        </tr></thead>
         <tbody>
           @for (market of visibleMarkets(); track trackBySymbol($index, market)) {
-            <tr>
-              <td class="favorite-column">
-                <button
-                  class="favorite-toggle"
-                  type="button"
-                  [class.selected]="isFavorite(market.symbol)"
-                  [attr.aria-label]="(isFavorite(market.symbol) ? 'Remove ' : 'Add ') + market.symbol + (isFavorite(market.symbol) ? ' from' : ' to') + ' favourites'"
-                  [attr.aria-pressed]="isFavorite(market.symbol)"
-                  (click)="toggleFavorite(market.symbol)"
-                >{{ isFavorite(market.symbol) ? '★' : '☆' }}</button>
-              </td>
+            <tr [class.favorite-row]="isFavorite(market.symbol)">
+              <td class="favorite-column"><button class="favorite-toggle" type="button"
+                [class.selected]="isFavorite(market.symbol)"
+                [attr.aria-label]="(isFavorite(market.symbol) ? 'Remove ' : 'Add ') + market.symbol + (isFavorite(market.symbol) ? ' from' : ' to') + ' favourites'"
+                [attr.aria-pressed]="isFavorite(market.symbol)" (click)="toggleFavorite(market.symbol)">{{ isFavorite(market.symbol) ? '★' : '☆' }}</button></td>
               <td>
                 <strong class="pair-symbol">{{ market.symbol }}</strong>
                 <small>{{ displayValue(market.base) }} / {{ displayValue(market.quote) }}</small>
+                <div class="assigned-labels">
+                  @for (label of labelsForMarket(market.symbol); track label.id) {
+                    <span class="custom-label compact" [style.backgroundColor]="label.color + '22'" [style.borderColor]="label.color" [style.color]="label.color">{{ label.name }}</span>
+                  }
+                </div>
               </td>
               <td><span class="market-status" [class.open]="market.symbolStatus === 'OPEN'">{{ displayValue(market.symbolStatus) }}</span></td>
               <td class="numeric price-value">{{ displayValue(market.lastPrice) }}</td>
@@ -107,26 +141,27 @@
               <td class="numeric movement-na">{{ movementValue(market.change4h) }}</td>
               <td class="numeric movement-value">{{ movementValue(market.change24h) }}</td>
               <td class="numeric volume-value">{{ displayValue(market.quoteVol) }}</td>
+              <td><details class="market-label-editor"><summary>Labels</summary>
+                <div class="market-label-options">
+                  @for (label of labels(); track label.id) {
+                    <label><input type="checkbox" [checked]="isMarketLabelAssigned(market.symbol, label.id)" (change)="toggleMarketLabel(market.symbol, label.id, $event)" /><span [style.color]="label.color">{{ label.name }}</span></label>
+                  } @empty { <span class="muted-hint">Add a label above</span> }
+                </div>
+              </details></td>
             </tr>
           } @empty {
-            <tr>
-              <td class="empty-state" colspan="10">
-                @if (loading()) {
-                  Loading Bitunix Futures markets…
-                } @else if (favoritesOnly() && favoriteSymbols().size === 0) {
-                  No favourites yet. Star a pair to add it to your watchlist.
-                } @else {
-                  No markets match this search.
-                }
-              </td>
-            </tr>
+            <tr><td class="empty-state" colspan="11">
+              @if (loading()) { Loading Bitunix Futures markets… }
+              @else if (favoritesOnly() && favoriteSymbols().size === 0) { No favourites yet. Star a pair to add it to your watchlist. }
+              @else { No markets match these filters. }
+            </td></tr>
           }
         </tbody>
       </table>
     </div>
     <footer class="table-footer">
       <span>Movement values are shown only when returned by Bitunix. Missing fields are N/A.</span>
-      <span>Favourites are stored in this browser's cookies.</span>
+      <span>Favourites use cookies; labels and filter presets are stored in this browser.</span>
     </footer>
   </section>
 </section>
