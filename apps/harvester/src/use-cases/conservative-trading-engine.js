@@ -1941,10 +1941,7 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     canTrade: dependencies.canTrade,
     isMarketPriceFresh: dependencies.isMarketPriceFresh,
     getCurrentMarketMetadata: context.getCurrentMarketMetadata,
-    refreshRecoverySellMarketMetadata: (options = {}) => refreshRecoverySellMarketMetadataForEvaluation({
-      context,
-      ...options,
-    }),
+    refreshRecoverySellMarketMetadata: createRecoverySellMetadataRefreshOperation({ context }),
     nextEvaluationId: context.nextEvaluationId,
     getPortfolio: dependencies.getPortfolio,
     getRecoveryLedger: dependencies.getRecoveryLedger,
@@ -3571,6 +3568,13 @@ async function refreshRecoverySellMarketMetadataForEvaluation({ context, symbol 
     })
   }
   return result
+}
+
+function createRecoverySellMetadataRefreshOperation({ context } = {}) {
+  return (options = {}) => refreshRecoverySellMarketMetadataForEvaluation({
+    context,
+    ...options,
+  })
 }
 
 async function refreshTrailingBuyMarketMetadata({ context, symbol, pairConfig, metadata }) {
