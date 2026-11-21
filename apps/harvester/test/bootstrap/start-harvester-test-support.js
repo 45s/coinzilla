@@ -1,3 +1,4 @@
+import assert from "node:assert/strict"
 import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
@@ -25,14 +26,6 @@ export const testEventPublisher = Object.freeze({
     durable: true
   }),
 })
-                                                                                                
-        
-                                          
-                                        
-                                     
-
-// Include the source file in every reporter test name so failures are identifiable
-// even when the spec reporter output is copied without its surrounding file header.
 
 export async function waitForTestSignal(...args) {
   const [promise, label, getDiagnostics, timeoutMs = 15_000] = args

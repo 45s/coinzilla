@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 
-const { appConfig, createBroker, binanceEnv, startHarvesterForTest, createFill, createBinanceCapabilities, testEventPublisher, createOpenOrderSnapshot, createMarketMetadata, createPriorProcessHistory, waitForTestSignal, makeVolatilityReadyBroker, withExternalOrdersPolicy, mkdtemp, rm, os, path, Asset, Balance, CanonicalOrder, Fill, Market, Money, Order, Quantity, TradingRules, multiplyDecimal, prepareHarvesterStartupState, resolveHarvesterOptions, createRecoverySellerStopWorkflow, createFileOperationalStateStore, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped, createBinanceBrokerAdapter } = shared
+const { appConfig, createBroker, binanceEnv, startHarvesterForTest, createFill, createBinanceCapabilities, testEventPublisher, createOpenOrderSnapshot, createMarketMetadata, createPriorProcessHistory, waitForTestSignal, makeVolatilityReadyBroker, withExternalOrdersPolicy, mkdtemp, rm, os, path, Asset, Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, prepareHarvesterStartupState, resolveHarvesterOptions, createRecoverySellerStopWorkflow, createFileOperationalStateStore, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped, createBinanceBrokerAdapter } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
 function createTelegramOperatorConfig() {
@@ -603,7 +603,7 @@ test("subscribes every enabled market before waiting for the first market's REST
     },
   })
   const runtime = await startup
-  assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT"])
+  assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT"], "The runtime must subscribe to every enabled market exactly once.")
   assert.equal(race.getPlaceOrderCalls(), 0)
   await runtime.stop()
 })
@@ -5665,13 +5665,22 @@ test("does not expose or construct a partial Bitunix runtime from credentials", 
 
 function assertMultiMarketRuntimeMetadata({ runtime } = {}) {
   assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT"])
-  assert.equal(runtime.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT")
-  assert.equal(runtime.getMarketMetadata({ symbol: "ETHUSDT" }).market.symbol, "ETHUSDT")
+  assert.equal(runtime.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT", "BTCUSDT runtime metadata must resolve to its own market identity.")
+  assert.equal(runtime.getMarketMetadata({ symbol: "ETHUSDT" }).market.symbol, "ETHUSDT", "ETHUSDT runtime metadata must resolve independently from BTCUSDT.")
 }
 
 async function emitTwoMarketPrices({ broker, debugLogs } = {}) {
-  await broker.emitPrice("BTCUSDT", { symbol: "BTCUSDT", price: "65000.12", timestamp: Date.now() })
-  await broker.emitPrice("ETHUSDT", { symbol: "ETHUSDT", price: "3500.12", timestamp: Date.now() })
+  const timestamp = 1_700_000_000_000
+  await broker.emitPrice("BTCUSDT", {
+    symbol: "BTCUSDT",
+    price: "65000.12",
+    timestamp,
+  })
+  await broker.emitPrice("ETHUSDT", {
+    symbol: "ETHUSDT",
+    price: "3500.12",
+    timestamp,
+  })
   assertEachEnabledMarketWasEvaluated({ debugLogs })
 }
 
@@ -5729,7 +5738,10 @@ test("delivers market price events independently for every enabled market", asyn
   try {
     assertMultiMarketRuntimeMetadata({ runtime })
     debugLogs.length = 0
-    await emitTwoMarketPrices({ broker, debugLogs })
+    await emitTwoMarketPrices({
+      broker,
+      debugLogs,
+    })
     assert.deepEqual(
       placeOrderCalls,
       [],
