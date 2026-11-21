@@ -19,6 +19,7 @@ import {
 import { createMarketFavoritesCookie, readMarketFavorites } from './favorites-cookie';
 
 type MarketMovementFilter = 'all' | 'positive' | 'negative';
+type MarketMovementWindow = 'change5m' | 'change1h' | 'change4h' | 'change24h';
 
 @Component({
   selector: 'app-market-screener',
@@ -38,13 +39,15 @@ export class MarketScreenerComponent implements OnInit {
   readonly searchQuery = signal('');
   readonly favoritesOnly = signal(false);
   readonly movementFilter = signal<MarketMovementFilter>('all');
+  readonly movementWindow = signal<MarketMovementWindow>('change24h');
   readonly favoriteSymbols = signal<ReadonlySet<string>>(
     new Set(readMarketFavorites(this.document.cookie, 'bitunix-futures')),
   );
   readonly markets = computed(() => this.snapshot()?.markets ?? []);
-  readonly hasNative24hMovement = computed(() =>
-    this.markets().some((market) => market.change24h !== null),
-  );
+  readonly hasNativeMovement = computed(() => this.markets().some((market) =>
+    market.change5m !== null || market.change1h !== null
+      || market.change4h !== null || market.change24h !== null,
+  ));
   readonly visibleMarkets = computed(() => {
     const query = this.searchQuery().trim().toUpperCase();
     const favorites = this.favoriteSymbols();
@@ -54,9 +57,9 @@ export class MarketScreenerComponent implements OnInit {
         || (market.base ?? '').includes(query)
         || (market.quote ?? '').includes(query);
       const matchesFavorites = !this.favoritesOnly() || favorites.has(market.symbol);
-      const change24h = market.change24h;
-      const matchesMovement = movementFilter === 'all' || (change24h !== null
-        && (movementFilter === 'negative' ? change24h.startsWith('-') : !change24h.startsWith('-')));
+      const movement = market[this.movementWindow()];
+      const matchesMovement = movementFilter === 'all' || (movement !== null
+        && (movementFilter === 'negative' ? movement.startsWith('-') : !movement.startsWith('-')));
       return matchesQuery && matchesFavorites && matchesMovement;
     });
   });
@@ -99,6 +102,10 @@ export class MarketScreenerComponent implements OnInit {
 
   updateMovementFilter(event: Event): void {
     this.movementFilter.set((event.target as HTMLSelectElement).value as MarketMovementFilter);
+  }
+
+  updateMovementWindow(event: Event): void {
+    this.movementWindow.set((event.target as HTMLSelectElement).value as MarketMovementWindow);
   }
 
   toggleFavorite(symbol: string): void {

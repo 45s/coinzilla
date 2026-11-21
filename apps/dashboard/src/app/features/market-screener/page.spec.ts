@@ -64,9 +64,12 @@ describe('MarketScreenerComponent', () => {
     expect(renderedText).toContain('67000.10');
     expect(renderedText).toContain('N/A');
     expect(renderedText).toContain('Movement values are shown only when returned by Bitunix');
-    const movementFilter = fixture.nativeElement.querySelector('select[aria-label="24-hour movement filter"]') as HTMLSelectElement;
-    expect(movementFilter.disabled).toBe(true);
-    expect(Array.from(movementFilter.options)).toHaveLength(3);
+    const movementWindow = fixture.nativeElement.querySelector('select[aria-label="Movement window"]') as HTMLSelectElement;
+    const movementDirection = fixture.nativeElement.querySelector('select[aria-label="Movement direction"]') as HTMLSelectElement;
+    expect(movementWindow.disabled).toBe(true);
+    expect(movementDirection.disabled).toBe(true);
+    expect(Array.from(movementWindow.options)).toHaveLength(4);
+    expect(Array.from(movementDirection.options)).toHaveLength(3);
   });
 
   it('persists a favourite in the Bitunix Futures cookie when the star is toggled', async () => {
