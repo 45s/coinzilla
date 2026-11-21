@@ -1,5 +1,5 @@
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting, type HttpTestingController } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';

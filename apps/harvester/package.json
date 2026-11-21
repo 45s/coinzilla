@@ -50,6 +50,7 @@
       "src/infrastructure/persistence/order-history-persistence.test.js",
       "src/infrastructure/persistence/relational-trading-history.test.js",
       "src/index.order-history.test.js",
+      "src/index.trading-history-api.test.js",
       "src/application/events/lifecycle-event-dtos.order-history.test.js",
       "src/domain/trading-session/trading-session.test.js",
       "src/infrastructure/persistence/trading-session-repository.test.js",
@@ -124,7 +125,7 @@
       "src/use-cases/restore-harvester-operational-state.test.js",
       "src/bootstrap/recovery-seller-runtime.integration.test.js",
       "src/infrastructure/persistence/trading-history-query-repository.test.js",
-      "src/use-cases/trading-history-queries.test.js",
+      "src/use-cases/trading-history/queries.test.js",
       "src/infrastructure/http/trading-history-api.test.js",
       "src/infrastructure/http/start-trading-history-api.test.js"
     ]

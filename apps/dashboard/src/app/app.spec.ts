@@ -32,20 +32,21 @@ describe('AppComponent', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
 
-    const ordersButton = Array.from(fixture.nativeElement.querySelectorAll<HTMLButtonElement>('button.nav-item'))
+    const root = fixture.nativeElement as HTMLElement;
+    const ordersButton = Array.from(root.querySelectorAll('button.nav-item'))
       .find((button) => button.textContent?.includes('Orders')) as HTMLButtonElement;
     ordersButton.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Connect to Harvester');
     expect(fixture.nativeElement.textContent).toContain('Orders');
 
-    const fillsButton = Array.from(fixture.nativeElement.querySelectorAll<HTMLButtonElement>('button.nav-item'))
+    const fillsButton = Array.from(root.querySelectorAll('button.nav-item'))
       .find((button) => button.textContent?.includes('Fills')) as HTMLButtonElement;
     fillsButton.click();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Fills');
 
-    const commissionsButton = Array.from(fixture.nativeElement.querySelectorAll<HTMLButtonElement>('button.nav-item'))
+    const commissionsButton = Array.from(root.querySelectorAll('button.nav-item'))
       .find((button) => button.textContent?.includes('Commissions')) as HTMLButtonElement;
     commissionsButton.click();
     fixture.detectChanges();

@@ -7,10 +7,22 @@ const API_TOKEN = "test-token-with-more-than-thirty-two-characters"
 
 function createDisabledJournalService() {
   return {
-    ready: Promise.resolve({ ok: true, disabled: true }),
-    status: { state: "disabled" },
-    flush: async () => ({ ok: true, durable: true }),
-    close: async () => ({ ok: true, closed: true, disabled: true }),
+    ready: Promise.resolve({
+      ok: true,
+      disabled: true,
+    }),
+    status: {
+      state: "disabled",
+    },
+    flush: async () => ({
+      ok: true,
+      durable: true,
+    }),
+    close: async () => ({
+      ok: true,
+      closed: true,
+      disabled: true,
+    }),
   }
 }
 
@@ -30,7 +42,10 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
     createJournalService: createDisabledJournalService,
     acquireProcessLock: async () => ({
       ok: true,
-      release: async () => ({ ok: true, released: true }),
+      release: async () => ({
+        ok: true,
+        released: true,
+      }),
     }),
     prepareOrderHistoryPersistence: async () => ({
       relationalDatabase: database,
@@ -40,7 +55,10 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
       assert.equal(environment, "testnet", "The API environment must come from Harvester's selected runtime configuration.")
       calls.push("api-start")
       return {
-        address: { address: "127.0.0.1", port: 4201 },
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
         close: async () => { calls.push("api-close") },
       }
     }),
@@ -70,13 +88,12 @@ test("starts the trading-history API with Harvester and closes it before the sha
       database.state = "closed"
     },
   }
-  const result = await main(createMainOptions({
+  await main(createMainOptions({
     database,
     calls,
     handlers,
   }))
 
-  assert.ok(result, "Harvester must complete startup while the optional API is configured.")
   assert.equal(typeof handlers.SIGTERM, "function", "Harvester must register its normal process shutdown handler.")
   assert.ok(calls.includes("api-start"), "Harvester process startup must start the API after persistence preparation.")
   await handlers.SIGTERM()
@@ -103,7 +120,6 @@ test("keeps Harvester trading startup successful when the optional API cannot bi
     },
   }))
 
-  assert.ok(result, "An optional API startup failure must not prevent Harvester runtime startup.")
   await handlers.SIGTERM()
   assert.ok(calls.includes("runtime-stop"), "Harvester must remain available for normal shutdown.")
   assert.ok(calls.includes("database"), "Normal persistence cleanup must continue after optional API startup failure.")

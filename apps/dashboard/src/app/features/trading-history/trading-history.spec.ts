@@ -1,5 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting, type HttpTestingController } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -216,7 +216,8 @@ describe('TradingHistoryComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const nextButton = Array.from(fixture.nativeElement.querySelectorAll<HTMLButtonElement>('button'))
+    const root = fixture.nativeElement as HTMLElement;
+    const nextButton = Array.from(root.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Next')) as HTMLButtonElement;
     nextButton.click();
     fixture.detectChanges();

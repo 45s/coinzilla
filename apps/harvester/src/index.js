@@ -829,44 +829,68 @@ function publishRuntimeStarted({
   })
 }
 
+function shouldStartTradingHistoryApi({ env, runtime } = {}) {
+  return typeof runtime?.stop === "function" && Boolean(env.HARVESTER_API_TOKEN)
+}
+
+function logOptionalTradingHistoryApi({ logger, level, details } = {}) {
+  try {
+    logger?.[level]?.(details)
+  } catch {
+    // Optional API diagnostics must never block trading startup or shutdown.
+  }
+}
+
 async function startOptionalTradingHistoryApi({ options, resources, runtime } = {}) {
-  if (typeof runtime?.stop !== "function" || !options.env.HARVESTER_API_TOKEN) {
+  if (!shouldStartTradingHistoryApi({
+    env: options.env,
+    runtime,
+  })) {
     return
   }
   const database = resources.orderHistoryPersistence?.relationalDatabase
+  const environment = resources.runtimeConfig?.tradingMode ?? options.env.TRADING_MODE
   if (!database) {
-    options.logger?.warn?.({
-      message: "Harvester trading-history API is not started because relational history persistence is unavailable.",
-      environment: options.env.TRADING_MODE ?? "unknown",
+    logOptionalTradingHistoryApi({
+      logger: options.logger,
+      level: "warn",
+      details: {
+        message: "Harvester trading-history API is not started because relational history persistence is unavailable.",
+        environment: environment ?? "unknown",
+      },
     })
     return
   }
   try {
     const service = await options.startTradingHistoryApi({
       database,
-      environment: resources.runtimeConfig?.tradingMode ?? options.env.TRADING_MODE,
+      environment,
       env: options.env,
       logger: options.logger,
     })
     resources.tradingHistoryApi = service
     if (service?.address) {
-      options.logger?.info?.({
-        message: "Harvester trading-history API started.",
-        environment: resources.runtimeConfig?.tradingMode ?? options.env.TRADING_MODE,
-        host: service.address.address,
-        port: service.address.port,
+      logOptionalTradingHistoryApi({
+        logger: options.logger,
+        level: "info",
+        details: {
+          message: "Harvester trading-history API started.",
+          environment,
+          host: service.address.address,
+          port: service.address.port,
+        },
       })
     }
   } catch (error) {
-    try {
-      options.logger?.error?.({
+    logOptionalTradingHistoryApi({
+      logger: options.logger,
+      level: "error",
+      details: {
         message: "Harvester trading-history API startup failed; trading will continue without the optional API.",
         errorName: error?.name ?? "Error",
         errorCode: error?.code ?? "HARVESTER_TRADING_HISTORY_API_STARTUP_FAILED",
-      })
-    } catch {
-      // Optional API diagnostics must never block trading startup.
-    }
+      },
+    })
   }
 }
 
