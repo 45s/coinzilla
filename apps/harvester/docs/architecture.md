@@ -685,6 +685,15 @@ acknowledgement-registration failures are `UNKNOWN`. Do not claim a
 definitive exchange rejection unless the broker port later exposes that
 distinction. Price and quantity remain exact decimal strings.
 
+For `order.submitted`, `order.updated`, `order.cancelled`, and
+`order.cancel_failed`, the publisher resolves ownership from the current
+OrderRegistry entry using the exact client-order ID, broker-order ID, and market
+ID. When present, the DTO carries only the registered strategy ID, Position ID,
+purpose, and optional cycle ID. An absent or mismatched ownership record is
+omitted; ownership is never inferred from the symbol, current configuration,
+timestamp, or client-ID shape. This enriches the non-authoritative Journal and
+history projections only; it does not change order execution or accounting.
+
 Strategy-decision, acknowledgement/failure diagnostics, pause and trailing BUY
 cancellation telemetry remain best-effort; they do not replace the durable
 request/deferral barriers. Pair pause and trailing BUY cancellation events are
