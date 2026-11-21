@@ -2,12 +2,12 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { appendOperatorAttemptResult } from "./operator-attempt-report.js"
 
-function createReport() {
+function createReport({ failed = 0 } = {}) {
   return {
     summary: {
       total: 2,
-      passed: 2,
-      failed: 0,
+      passed: 2 - failed,
+      failed,
       skipped: 0,
     },
     results: [
@@ -51,6 +51,24 @@ test("declined order adds a skipped result and does not claim a mutation", () =>
   assert.equal(report.summary.failed, 0)
   assert.equal(report.results[2].status, "skipped")
   assert.equal(Object.hasOwn(report.results[2], "error"), false)
+})
+
+test("a failed health check skips the order and publishes only its safe skip code", () => {
+  const report = appendOperatorAttemptResult({
+    report: createReport({ failed: 1 }),
+    operatorResult: {
+      ok: false,
+      mutationOutcome: "NOT_SENT",
+      skipped: true,
+      skipCode: "HEALTHCHECK_NOT_HEALTHY",
+    },
+    durationMs: 0,
+  })
+
+  assert.equal(report.summary.failed, 1)
+  assert.equal(report.summary.skipped, 1)
+  assert.equal(report.results[2].status, "skipped")
+  assert.equal(report.results[2].error.code, "HEALTHCHECK_NOT_HEALTHY")
 })
 
 test("rejected and unknown outcomes expose safe codes but withhold messages and order identifiers", () => {

@@ -1,14 +1,14 @@
 import { createDiagnosticResult } from "./diagnostic-values.js"
 
-function createOperatorAttemptError({ result }) {
+function createOperatorAttemptError({ result, codeOverride }) {
   const sourceError = result.errors?.[0]
   const error = new Error("Bitunix operator order attempt did not complete successfully")
   error.name = typeof sourceError?.name === "string"
     ? sourceError.name
     : "BitunixOperatorOrderError"
-  error.code = typeof sourceError?.code === "string"
+  error.code = codeOverride ?? (typeof sourceError?.code === "string"
     ? sourceError.code
-    : result.mutationOutcome ?? "ORDER_ATTEMPT_FAILED"
+    : result.mutationOutcome ?? "ORDER_ATTEMPT_FAILED")
   for (const field of ["kind", "status", "exchangeCode"]) {
     if (sourceError?.[field] !== undefined && sourceError[field] !== null) {
       error[field] = sourceError[field]
@@ -30,7 +30,8 @@ export function appendOperatorAttemptResult({
   durationMs,
   secrets = [],
 }) {
-  const status = operatorResult.declined
+  const skipped = operatorResult.declined === true || operatorResult.skipped === true
+  const status = skipped
     ? "skipped"
     : operatorResult.ok === true && operatorResult.mutationOutcome === "CONFIRMED"
       ? "passed"
@@ -39,8 +40,11 @@ export function appendOperatorAttemptResult({
     operation: "operator order attempt",
     status,
     durationMs,
-    error: status === "failed"
-      ? createOperatorAttemptError({ result: operatorResult })
+    error: status === "failed" || operatorResult.skipCode
+      ? createOperatorAttemptError({
+        result: operatorResult,
+        codeOverride: operatorResult.skipCode,
+      })
       : null,
     secrets,
   })
