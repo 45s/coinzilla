@@ -3,6 +3,7 @@ import { createServer } from "node:http"
 import { SystemCustomError } from "@coinzilla/utils"
 
 const API_PREFIX = "/api/v1/trading"
+const METADATA_ROUTE = `${API_PREFIX}/metadata`
 const DEFAULT_HOST = "127.0.0.1"
 const DEFAULT_PORT = 4201
 const MAX_HEADER_SIZE = 8_192
@@ -39,6 +40,21 @@ const COMMISSION_FILTERS = new Set([
   "accountId",
   "strategyId",
 ])
+
+const LIST_ROUTES = Object.freeze({
+  [`${API_PREFIX}/orders`]: Object.freeze({
+    method: "listOrders",
+    allowedFilters: ORDER_FILTERS,
+  }),
+  [`${API_PREFIX}/fills`]: Object.freeze({
+    method: "listFills",
+    allowedFilters: FILL_FILTERS,
+  }),
+  [`${API_PREFIX}/commissions`]: Object.freeze({
+    method: "listCommissions",
+    allowedFilters: COMMISSION_FILTERS,
+  }),
+})
 
 const REQUIRED_QUERY_METHODS = Object.freeze([
   "getSummary",
@@ -228,17 +244,89 @@ function logRequestFailure({ logger, error } = {}) {
   }
 }
 
+function handleOptionsRequest({ request, response } = {}) {
+  if (request.method !== "OPTIONS") {
+    return false
+  }
+  response.writeHead(204, createResponseHeaders())
+  response.end()
+  return true
+}
+
+function handleMetadataRequest({ response, queries, environment } = {}) {
+  const result = queries.getSummary()
+  if (result?.ok !== true) {
+    sendQueryResult({
+      response,
+      result,
+    })
+    return
+  }
+  sendJson({
+    response,
+    status: 200,
+    body: {
+      ok: true,
+      data: {
+        environment,
+        records: result.data,
+      },
+    },
+  })
+}
+
+function handleListRequest({ response, queries, url, route } = {}) {
+  const input = parseListQuery({
+    searchParams: url.searchParams,
+    allowedFilters: route.allowedFilters,
+  })
+  sendQueryResult({
+    response,
+    result: queries[route.method](input),
+  })
+}
+
+function resolveDetailRoute(route) {
+  const orderMatch = route.match(/^\\/api\\/v1\\/trading\\/orders\\/([^/]+)$/)
+  if (orderMatch) {
+    return {
+      method: "getOrder",
+      encodedId: orderMatch[1],
+    }
+  }
+  const fillMatch = route.match(/^\\/api\\/v1\\/trading\\/fills\\/([^/]+)$/)
+  if (fillMatch) {
+    return {
+      method: "getFill",
+      encodedId: fillMatch[1],
+    }
+  }
+  return null
+}
+
+function handleDetailRequest({ response, queries, route } = {}) {
+  sendQueryResult({
+    response,
+    result: queries[route.method]({
+      id: decodeRecordId({
+        encodedId: route.encodedId,
+      }),
+    }),
+    notFound: true,
+  })
+}
+
 function handleTradingHistoryRequest({
   request,
   response,
   queries,
   token,
   environment,
-  logger,
 } = {}) {
-  if (request.method === "OPTIONS") {
-    response.writeHead(204, createResponseHeaders())
-    response.end()
+  if (handleOptionsRequest({
+    request,
+    response,
+  })) {
     return
   }
   if (request.method !== "GET") {
@@ -264,92 +352,33 @@ function handleTradingHistoryRequest({
   }
 
   const url = new URL(request.url ?? "/", "http://127.0.0.1")
-  const route = url.pathname
-
-  if (route === API_PREFIX + "/metadata") {
-    const result = queries.getSummary()
-    if (result?.ok !== true) {
-      sendQueryResult({
-        response,
-        result,
-      })
-      return
-    }
-    sendJson({
+  if (url.pathname === METADATA_ROUTE) {
+    handleMetadataRequest({
       response,
-      status: 200,
-      body: {
-        ok: true,
-        data: {
-          environment,
-          records: result.data,
-        },
-      },
+      queries,
+      environment,
     })
     return
   }
-
-  if (route === API_PREFIX + "/orders") {
-    sendQueryResult({
+  const listRoute = LIST_ROUTES[url.pathname]
+  if (listRoute) {
+    handleListRequest({
       response,
-      result: queries.listOrders(parseListQuery({
-        searchParams: url.searchParams,
-        allowedFilters: ORDER_FILTERS,
-      })),
+      queries,
+      url,
+      route: listRoute,
     })
     return
   }
-
-  if (route === API_PREFIX + "/fills") {
-    sendQueryResult({
+  const detailRoute = resolveDetailRoute(url.pathname)
+  if (detailRoute) {
+    handleDetailRequest({
       response,
-      result: queries.listFills(parseListQuery({
-        searchParams: url.searchParams,
-        allowedFilters: FILL_FILTERS,
-      })),
+      queries,
+      route: detailRoute,
     })
     return
   }
-
-  if (route === API_PREFIX + "/commissions") {
-    sendQueryResult({
-      response,
-      result: queries.listCommissions(parseListQuery({
-        searchParams: url.searchParams,
-        allowedFilters: COMMISSION_FILTERS,
-      })),
-    })
-    return
-  }
-
-  const orderMatch = route.match(/^\/api\/v1\/trading\/orders\/([^/]+)$/)
-  if (orderMatch) {
-    sendQueryResult({
-      response,
-      result: queries.getOrder({
-        id: decodeRecordId({
-          encodedId: orderMatch[1],
-        }),
-      }),
-      notFound: true,
-    })
-    return
-  }
-
-  const fillMatch = route.match(/^\/api\/v1\/trading\/fills\/([^/]+)$/)
-  if (fillMatch) {
-    sendQueryResult({
-      response,
-      result: queries.getFill({
-        id: decodeRecordId({
-          encodedId: fillMatch[1],
-        }),
-      }),
-      notFound: true,
-    })
-    return
-  }
-
   sendApiError({
     response,
     status: 404,
@@ -358,56 +387,9 @@ function handleTradingHistoryRequest({
   })
 }
 
-async function closeServer(server) {
-  if (!server.listening) {
-    return
-  }
-  await new Promise((resolve, reject) => {
-    server.close((error) => {
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve()
-    })
-  })
-}
-
-/**
- * Start the versioned HTTP adapter for Harvester's trading-history query facade.
- *
- * @param {{queries: object, token: string, environment: "testnet"|"live", host?: string, port?: number, logger?: object}} input
- * @returns {Promise<Readonly<{address: object, close: Function}>>} Bound server and lifecycle handle.
- */
-export async function startTradingHistoryApiServer({
-  queries,
-  token,
-  environment,
-  host = DEFAULT_HOST,
-  port = DEFAULT_PORT,
-  logger,
-} = {}) {
-  if (typeof token !== "string" || token.trim() !== token || Buffer.byteLength(token, "utf8") < 32) {
-    throw new TypeError("HARVESTER_API_TOKEN must contain at least 32 non-whitespace characters.")
-  }
-  if (environment !== "testnet" && environment !== "live") {
-    throw new TypeError("Trading-history API environment must be exactly testnet or live.")
-  }
-  if (typeof host !== "string" || host.trim() !== host || host.length === 0) {
-    throw new TypeError("HARVESTER_API_HOST must be a non-empty host name or IP address.")
-  }
-  if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
-    throw new TypeError("HARVESTER_API_PORT must be an integer between 0 and 65535.")
-  }
-  for (const method of REQUIRED_QUERY_METHODS) {
-    if (typeof queries?.[method] !== "function") {
-      throw new TypeError("Trading-history API requires the application query " + method + "()")
-    }
-  }
-
-  const server = createServer({
-    maxHeaderSize: MAX_HEADER_SIZE,
-  }, (request, response) => {
+function createRequestHandler({ queries, token, environment, logger } = {}) {
+  return (...requestArguments) => {
+    const [request, response] = requestArguments
     try {
       handleTradingHistoryRequest({
         request,
@@ -415,7 +397,6 @@ export async function startTradingHistoryApiServer({
         queries,
         token,
         environment,
-        logger,
       })
     } catch (error) {
       if (error instanceof TradingHistoryApiRequestError) {
@@ -440,27 +421,123 @@ export async function startTradingHistoryApiServer({
         message: "Trading-history API request failed.",
       })
     }
-  })
+  }
+}
 
+async function closeServer(server) {
+  if (!server.listening) {
+    return
+  }
+  await new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
+    server.close((error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve()
+    })
+  })
+}
+
+function validateApiServerConfiguration({
+  queries,
+  token,
+  environment,
+  host = DEFAULT_HOST,
+  port = DEFAULT_PORT,
+} = {}) {
+  if (typeof token !== "string" || token.trim() !== token || Buffer.byteLength(token, "utf8") < 32) {
+    throw new TypeError("HARVESTER_API_TOKEN must contain at least 32 non-whitespace characters.")
+  }
+  if (environment !== "testnet" && environment !== "live") {
+    throw new TypeError("Trading-history API environment must be exactly testnet or live.")
+  }
+  if (typeof host !== "string" || host.trim() !== host || host.length === 0) {
+    throw new TypeError("HARVESTER_API_HOST must be a non-empty host name or IP address.")
+  }
+  if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
+    throw new TypeError("HARVESTER_API_PORT must be an integer between 0 and 65535.")
+  }
+  for (const method of REQUIRED_QUERY_METHODS) {
+    if (typeof queries?.[method] !== "function") {
+      throw new TypeError(`Trading-history API requires the application query ${method}()`)
+    }
+  }
+  return Object.freeze({
+    queries,
+    token,
+    environment,
+    host,
+    port,
+  })
+}
+
+function createConfiguredServer({ queries, token, environment, logger } = {}) {
+  const server = createServer({
+    maxHeaderSize: MAX_HEADER_SIZE,
+  }, createRequestHandler({
+    queries,
+    token,
+    environment,
+    logger,
+  }))
   server.requestTimeout = REQUEST_TIMEOUT_MS
   server.headersTimeout = HEADERS_TIMEOUT_MS
   server.keepAliveTimeout = KEEP_ALIVE_TIMEOUT_MS
   server.maxRequestsPerSocket = 100
+  return server
+}
 
-  await new Promise((resolve, reject) => {
-    const onError = (error) => {
-      server.off("listening", onListening)
-      reject(error)
-    }
+async function listenServer({ server, host, port } = {}) {
+  await new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
     const onListening = () => {
       server.off("error", onError)
       resolve()
+    }
+    const onError = (error) => {
+      server.off("listening", onListening)
+      reject(error)
     }
     server.once("error", onError)
     server.once("listening", onListening)
     server.listen(port, host)
   })
+}
 
+/**
+ * Start the versioned HTTP adapter for Harvester's trading-history query facade.
+ *
+ * @param {{queries: object, token: string, environment: "testnet"|"live", host?: string, port?: number, logger?: object}} input
+ * @returns {Promise<Readonly<{address: object, close: Function}>>} Bound server and lifecycle handle.
+ */
+export async function startTradingHistoryApiServer({
+  queries,
+  token,
+  environment,
+  host = DEFAULT_HOST,
+  port = DEFAULT_PORT,
+  logger,
+} = {}) {
+  const configuration = validateApiServerConfiguration({
+    queries,
+    token,
+    environment,
+    host,
+    port,
+  })
+  const server = createConfiguredServer({
+    queries: configuration.queries,
+    token: configuration.token,
+    environment: configuration.environment,
+    logger,
+  })
+  await listenServer({
+    server,
+    host: configuration.host,
+    port: configuration.port,
+  })
   return Object.freeze({
     address: server.address(),
     close: () => closeServer(server),
