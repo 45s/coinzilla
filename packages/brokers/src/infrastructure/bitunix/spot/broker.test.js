@@ -667,6 +667,37 @@ test("Bitunix Spot createOrder classifies matching-engine placement rejections",
   })
 })
 
+test("Bitunix Spot createOrder rejects non-zero placeCode despite successful placeStatus", async () => {
+  const { result, requests } = await assertCreateOrderLifecycleScenario({
+    name: "matching-engine rejection despite successful placement status",
+    mutationOutcome: "REJECTED",
+    expectedRequests: 1,
+    expectedPosts: 1,
+    expectedGets: 0,
+    responses: [
+      {
+        code: "0",
+        msg: "success",
+        data: {
+          orderId: "12345678901234567890",
+          symbol: "BTCUSDT",
+          side: 2,
+          type: 1,
+          volume: "1",
+          price: "100",
+          placeStatus: "1",
+          placeCode: "opaque-engine-rejection",
+          placeMsg: "synthetic matching-engine rejection",
+        },
+      },
+    ],
+  })
+
+  assert.equal(result.errors[0].exchangeCode, "opaque-engine-rejection", "createOrder must preserve the non-zero matching-engine rejection code")
+  assert.equal(result.errors[0].message, "synthetic matching-engine rejection", "createOrder must preserve the matching-engine rejection message")
+  assert.equal(requests[0].url.pathname, "/api/spot/v1/order/place_order", "the rejection must come from the single placement request")
+})
+
 test("Bitunix Spot createOrder keeps malformed success envelopes unknown", async () => {
   await assertCreateOrderLifecycleScenario({
     name: "malformed success envelope",
