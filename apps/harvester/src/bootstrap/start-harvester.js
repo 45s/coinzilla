@@ -933,10 +933,17 @@ function logHistorySyncSkipped({ startup, identity } = {}) {
 }
 
 function logHistorySyncFailure({ startup, identity, result } = {}) {
+  const error = result?.errors?.[0]
   startup.logger.error?.({
     message: "Exchange history synchronization failed; historical coverage is incomplete",
     providerInstanceId: identity.providerInstanceId,
     environment: startup.tradingMode,
+    errorName: error?.name ?? "Error",
+    errorCode: error?.code ?? "HARVESTER_HISTORY_SYNC_FAILED",
+    errorMessage: error?.message ?? "Exchange history synchronization failed",
+    component: "synchronize-account-history",
+    operation: "synchronizeStartupExchangeHistory",
+    historyDiagnostics: error?.historyDiagnostics,
     errors: result?.errors,
   })
 }

@@ -24,16 +24,39 @@ export function formatOrderPreflightSummary({ preflight }) {
   ].join("\n")
 }
 
+function formatErrorMetadata(error) {
+  if (!error || typeof error !== "object") {
+    return []
+  }
+  return [
+    ...(error.code !== undefined ? [`Broker error code: ${String(error.code)}`] : []),
+    ...(error.exchangeCode !== undefined ? [`Bitunix exchange code: ${String(error.exchangeCode)}`] : []),
+    ...(error.status !== undefined ? [`HTTP status: ${String(error.status)}`] : []),
+    ...(error.kind !== undefined ? [`Error kind: ${String(error.kind)}`] : []),
+  ]
+}
+
 export function formatOrderMutationResult({ result }) {
   const outcome = result?.mutationOutcome ?? "UNREPORTED"
   const orderId = result?.data?.id
-  const errorMessage = result?.errors?.[0]?.message
+  const error = result?.errors?.[0]
+  const errorMessage = error?.message
   return [
     `Broker result: ${result?.ok === true ? "success" : "not successful"}; mutation outcome: ${outcome}.`,
     ...(orderId ? [`Exchange order ID: ${orderId}`] : []),
+    ...formatErrorMetadata(error),
     ...(errorMessage ? [`Broker message: ${errorMessage}`] : []),
     ...(outcome === "OUTCOME_UNKNOWN"
       ? ["WARNING: outcome is unknown. Do not retry; reconcile manually before any further action."]
       : []),
+  ].join("\n")
+}
+
+export function formatOrderMutationError({ error }) {
+  return [
+    "Broker call threw instead of returning a placement result.",
+    ...formatErrorMetadata(error),
+    ...(error?.message ? [`Broker message: ${error.message}`] : []),
+    "Mutation outcome: OUTCOME_UNKNOWN. Do not retry; reconcile manually before any further action.",
   ].join("\n")
 }

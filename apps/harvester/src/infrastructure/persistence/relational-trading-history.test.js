@@ -698,9 +698,7 @@ function assertPersistedRuntimeErrorRows({ database } = {}) {
   assert.equal(rows[2].strategy_id, null)
 }
 
-test("persists pre-startup and live session errors as safe relational diagnostics", async (t) => {
-  const context = await createTestContext({ t })
-  const logger = createPersistenceTestLogger()
+async function createRuntimeErrorPersistenceFixture({ context, logger } = {}) {
   const logging = await configureHarvesterLogging({
     logger,
     directory: path.join(context.directory, "logs"),
@@ -709,37 +707,63 @@ test("persists pre-startup and live session errors as safe relational diagnostic
       runtimeSessionId: "runtime-session-1650",
     },
   })
+  logging.errorBuffer.transport.write(createHistorySyncErrorEntry())
+  const persistence = await prepareOrderHistoryPersistence({
+    tradingMode: "testnet",
+    env: {
+      HARVESTER_DATABASE_DIRECTORY: context.directory,
+    },
+    eventBus: context.eventBus,
+    logger,
+    runtimeSessionId: "runtime-session-1650",
+    errorBuffer: logging.errorBuffer,
+  })
+  context.setPersistence(persistence)
+  return {
+    logging,
+    persistence,
+  }
+}
 
+function publishRuntimeErrorExamples({ logging } = {}) {
+  logging.errorBuffer.transport.write(createUnknownExternalOrderPauseErrorEntry())
+  logging.errorBuffer.transport.write(createUnownedOrderRejectionErrorEntry())
+}
+
+async function verifyRuntimeErrorProjection({ filename } = {}) {
+  await inspectSqlite({
+    filename,
+    work: (database) => assertPersistedRuntimeErrorRows({ database }),
+  })
+}
+
+test("persists pre-startup and live session errors as safe relational diagnostics", async (t) => {
+  const context = await createTestContext({ t })
+  const logger = createPersistenceTestLogger()
+  const fixture = await createRuntimeErrorPersistenceFixture({
+    context,
+    logger,
+  })
   try {
     assert.equal(
-      typeof logging.errorBuffer?.transport?.write,
+      typeof fixture.logging.errorBuffer.transport.write,
       "function",
       "Harvester logging must expose a session error buffer before relational persistence is ready.",
     )
-    logging.errorBuffer.transport.write(createHistorySyncErrorEntry())
-    const persistence = await prepareOrderHistoryPersistence({
-      tradingMode: "testnet",
-      env: { HARVESTER_DATABASE_DIRECTORY: context.directory },
-      eventBus: context.eventBus,
-      logger,
-      runtimeSessionId: "runtime-session-1650",
-      errorBuffer: logging.errorBuffer,
-    })
-    context.setPersistence(persistence)
     assert.equal(
-      typeof persistence.runtimeErrorObserver?.close,
+      typeof fixture.persistence.runtimeErrorObserver?.close,
       "function",
       "Relational startup must activate the session error observer after the schema is ready.",
     )
-    logging.errorBuffer.transport.write(createUnknownExternalOrderPauseErrorEntry())
-    logging.errorBuffer.transport.write(createUnownedOrderRejectionErrorEntry())
-    await closeHarvesterPersistence(persistence)
-    await inspectSqlite({
+    publishRuntimeErrorExamples({
+      logging: fixture.logging,
+    })
+    await closeHarvesterPersistence(fixture.persistence)
+    await verifyRuntimeErrorProjection({
       filename: context.filename,
-      work: (database) => assertPersistedRuntimeErrorRows({ database }),
     })
   } finally {
-    await logging.close()
+    await fixture.logging.close()
   }
 })
 

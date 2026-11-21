@@ -6,12 +6,14 @@ import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { defaultLogger } from "@coinzilla/utils"
 import { strategyLogMarkers } from "../../application/logging/strategy-log-markers.js"
+import { createHarvesterRuntimeErrorBuffer } from "./create-harvester-runtime-error-buffer.js"
 import { createHarvesterLogSessionPaths } from "./create-harvester-log-session-paths.js"
 import { createConsoleRecordPresentation } from "./create-console-record-presentation.js"
 
 const CONSOLE_TRANSPORT_NAME = "console"
 const DEBUG_TRANSPORT_NAME = "harvester-debug-file"
 const TRACE_TRANSPORT_NAME = "harvester-trace-file"
+const RUNTIME_ERROR_TRANSPORT_NAME = "harvester-runtime-error-buffer"
 
 const MAX_CONSOLE_LINE_LENGTH = 200
 const LEVEL_COLORS = Object.freeze({
@@ -260,6 +262,7 @@ function createHarvesterLogCloseHandler({ logger } = {}) {
     }
     closed = true
     const results = await Promise.allSettled([
+      logger.removeTransport(RUNTIME_ERROR_TRANSPORT_NAME),
       logger.removeTransport(DEBUG_TRANSPORT_NAME),
       logger.removeTransport(TRACE_TRANSPORT_NAME),
     ])
@@ -308,17 +311,25 @@ export async function configureHarvesterLogging({
     mkdir(cumulativeDirectory, { recursive: true }),
     mkdir(sessionPaths.sessionDirectory, { recursive: true }),
   ])
-  await registerHarvesterLogTransports({
-    logger,
-    consoleTransport: createHarvesterConsoleTransport({ output }),
-    cumulativeDirectory,
-    sessionPaths,
-  })
+  const errorBuffer = createHarvesterRuntimeErrorBuffer({ logger })
+  logger.addTransport(errorBuffer.transport)
+  try {
+    await registerHarvesterLogTransports({
+      logger,
+      consoleTransport: createHarvesterConsoleTransport({ output }),
+      cumulativeDirectory,
+      sessionPaths,
+    })
+  } catch (error) {
+    await logger.removeTransport(RUNTIME_ERROR_TRANSPORT_NAME)
+    throw error
+  }
 
   return Object.freeze({
     directory,
     cumulativeDirectory,
     sessionPaths,
+    errorBuffer,
     close: createHarvesterLogCloseHandler({ logger }),
   })
 }
