@@ -1,9 +1,8 @@
-import { createHash, timingSafeEqual } from "node:crypto"
+import { createHash } from "node:crypto"
 import { consumeWebSocketFrames } from "./trading-history-websocket-frame.js"
 
 const WEBSOCKET_PATH = "/api/v1/trading/events"
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-const AUTHENTICATION_TIMEOUT_MS = 5000
 const HEARTBEAT_INTERVAL_MS = 30_000
 const MAX_CONNECTIONS = 32
 const MAX_FRAME_BYTES = 1024
@@ -49,7 +48,6 @@ function closeClient({ client, code = 1000, reason = "" } = {}) {
     return
   }
   client.closed = true
-  clearTimeout(client.authenticationTimer)
   clearInterval(client.heartbeatTimer)
   const reasonBytes = Buffer.from(reason, "utf8").subarray(0, 123)
   const payload = Buffer.alloc(2 + reasonBytes.length)
@@ -62,63 +60,6 @@ function closeClient({ client, code = 1000, reason = "" } = {}) {
     }))
   }
   client.clients.delete(client)
-}
-
-function isValidToken({ suppliedToken, expectedToken } = {}) {
-  if (typeof suppliedToken !== "string" || suppliedToken.length === 0 || suppliedToken.length > 512) {
-    return false
-  }
-  const expected = Buffer.from(expectedToken, "utf8")
-  const actual = Buffer.from(suppliedToken, "utf8")
-  return expected.length === actual.length && timingSafeEqual(expected, actual)
-}
-
-function rejectAuthentication({ client } = {}) {
-  sendJson({
-    client,
-    message: {
-      type: "error",
-      code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
-    },
-  })
-  closeClient({
-    client,
-    code: 1008,
-    reason: "Authentication required.",
-  })
-}
-
-function authenticateClient({ client, message, token } = {}) {
-  let authentication
-  try {
-    authentication = JSON.parse(message.toString("utf8"))
-  } catch {
-    rejectAuthentication({
-      client,
-    })
-    return
-  }
-  const validMessage = authentication?.type === "authenticate"
-  const validToken = isValidToken({
-    suppliedToken: authentication?.token,
-    expectedToken: token,
-  })
-  if (!validMessage || !validToken) {
-    rejectAuthentication({
-      client,
-    })
-    return
-  }
-  client.authenticated = true
-  startHeartbeat(client)
-  clearTimeout(client.authenticationTimer)
-  client.authenticationTimer = null
-  sendJson({
-    client,
-    message: {
-      type: "authenticated",
-    },
-  })
 }
 
 function startHeartbeat(client) {
@@ -139,7 +80,7 @@ function startHeartbeat(client) {
   client.heartbeatTimer.unref?.()
 }
 
-function handleClientFrame({ client, frame, token } = {}) {
+function handleClientFrame({ client, frame } = {}) {
   if (frame.opcode === 0x8) {
     closeClient({
       client,
@@ -170,11 +111,10 @@ function handleClientFrame({ client, frame, token } = {}) {
   authenticateClient({
     client,
     message: frame.payload,
-    token,
   })
 }
 
-function handleSocketData({ client, chunk, token } = {}) {
+function handleSocketData({ client, chunk } = {}) {
   const result = consumeWebSocketFrames({
     buffer: client.buffer,
     chunk,
@@ -193,7 +133,6 @@ function handleSocketData({ client, chunk, token } = {}) {
     handleClientFrame({
       client,
       frame,
-      token,
     })
     if (client.closed) {
       return
@@ -220,32 +159,17 @@ function isUpgradeRequest(request) {
     && request.headers["sec-websocket-version"] === "13"
 }
 
-function createClient({ socket, clients, token } = {}) {
+function createClient({ socket, clients } = {}) {
   const client = {
     socket,
     clients,
     buffer: Buffer.alloc(0),
-    authenticated: false,
+    authenticated: true,
     awaitingPong: false,
     heartbeatTimer: null,
     closed: false,
-    authenticationTimer: null,
   }
-  client.authenticationTimer = setTimeout(() => {
-    sendJson({
-      client,
-      message: {
-        type: "error",
-        code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
-      },
-    })
-    closeClient({
-      client,
-      code: 1008,
-      reason: "Authentication timeout.",
-    })
-  }, AUTHENTICATION_TIMEOUT_MS)
-  client.authenticationTimer.unref?.()
+  startHeartbeat(client)
   clients.add(client)
   socket.on("data", (chunk) => handleSocketData({
     client,
@@ -326,7 +250,7 @@ function writeUpgradeResponse({ socket, key } = {}) {
   ].join("\r\n"))
 }
 
-function handleUpgrade({ request, socket, head, clients, token } = {}) {
+function handleUpgrade({ request, socket, head, clients } = {}) {
   const key = getUpgradeKey({
     request,
     socket,
@@ -368,12 +292,10 @@ function broadcastHistoryUpdate({ clients, event } = {}) {
     resources,
   }
   for (const client of clients) {
-    if (client.authenticated) {
-      sendJson({
+    sendJson({
         client,
         message,
       })
-    }
   }
 }
 
@@ -395,19 +317,16 @@ function subscribeToHistoryUpdates({ eventBus, clients } = {}) {
 }
 
 /**
- * Attach the authenticated trading-history WebSocket endpoint to the existing HTTP server.
+ * Attach the local trading-history WebSocket endpoint to the existing HTTP server.
  *
  * The socket carries resource invalidation hints only. REST snapshots remain authoritative.
  *
- * @param {{server: object, eventBus: object, token: string}} input
+ * @param {{server: object, eventBus: object}} input
  * @returns {Readonly<{close: () => Promise<void>}>}
  */
-export function attachTradingHistoryWebSocket({ server, eventBus, token } = {}) {
+export function attachTradingHistoryWebSocket({ server, eventBus } = {}) {
   if (!server || typeof server.on !== "function" || typeof server.off !== "function") {
     throw new TypeError("Trading-history WebSocket requires the existing HTTP server.")
-  }
-  if (typeof token !== "string" || token.trim() !== token || Buffer.byteLength(token, "utf8") < 32) {
-    throw new TypeError("Trading-history WebSocket requires a valid API token.")
   }
   const clients = new Set()
   const subscription = subscribeToHistoryUpdates({
