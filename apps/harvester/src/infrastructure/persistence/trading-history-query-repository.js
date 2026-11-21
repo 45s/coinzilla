@@ -192,7 +192,10 @@ function listRecords({
   orderBy,
   pagination,
 } = {}) {
-  const normalizedFilters = normalizeFilters({ filters, columns })
+  const normalizedFilters = normalizeFilters({
+    filters,
+    columns,
+  })
   const normalizedPagination = normalizePagination({ pagination })
   const { total } = database.prepare(
     `SELECT COUNT(*) AS total FROM ${table} ${normalizedFilters.where}`,
