@@ -19,7 +19,7 @@ Use the read-only maintenance command when you need to inspect every stored reco
 From the repository root in Bash:
 
 ```bash
-TRADING_MODE=testnet pnpm --filter @coinzilla/harvester persistence:export
+TRADING_MODE=testnet pnpm db:export
 ```
 
 Use `TRADING_MODE=live` only when you intentionally want to export the LIVE database. The command uses Harvester's existing database-path resolver, including the optional `HARVESTER_DATABASE_DIRECTORY` override. It does not infer the environment from `NODE_ENV`.
@@ -47,7 +47,7 @@ Every non-internal SQLite table is included. Each table is an array so rows are 
 
 The source database is opened read-only. A missing source file or missing/invalid `TRADING_MODE` fails visibly; the command never creates an empty database. It performs no exchange calls and does not change trading behavior. The JSON dump may contain account and trading history, so keep it private and do not commit it.
 
-The command requires the repository's Node.js 24+ runtime and adds no dependency.
+The command prints the current Git commit (short hash) as `Exporter commit` before the table counts, so each dump log identifies the exact repository revision running the exporter. If Git metadata is unavailable, the log prints `unavailable`. The command requires the repository's Node.js 24+ runtime and adds no dependency.
 
 ## 1. Separate orders, fills, and strategy cycles
 
