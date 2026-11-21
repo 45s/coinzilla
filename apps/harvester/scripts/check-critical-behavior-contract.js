@@ -70,15 +70,57 @@ function validateSourceModules({ behavior, errors, readFile, sourceOwners }) {
       errors.push(`Critical behavior ${behavior.id} has an invalid production source path: ${sourcePath}.`)
       continue
     }
-    if (!readContractFile({
+    const source = readContractFile({
       readFile,
       relativePath: sourcePath,
-    })) {
+    })
+    if (typeof source !== "string") {
       errors.push(`Critical behavior ${behavior.id} references missing production source: ${sourcePath}.`)
     }
     const owners = sourceOwners.get(sourcePath) ?? new Set()
     owners.add(behavior.id)
     sourceOwners.set(sourcePath, owners)
+  }
+}
+
+function isValidTestCase(testCase) {
+  return Boolean(
+    testCase &&
+    isSafeRelativePath(testCase.path) &&
+    (testCase.path.startsWith("src/") || testCase.path.startsWith("test/")) &&
+    typeof testCase.name === "string" &&
+    testCase.name.length > 0 &&
+    VALID_TEST_KINDS.has(testCase.kind),
+  )
+}
+
+function validateTestCase({ behavior, testCase, errors, readFile, testKinds }) {
+  if (!isValidTestCase(testCase)) {
+    errors.push(`Critical behavior ${behavior.id} contains an invalid named test mapping.`)
+    return
+  }
+
+  testKinds.add(testCase.kind)
+  const testSource = readContractFile({
+    readFile,
+    relativePath: testCase.path,
+  })
+  if (typeof testSource !== "string") {
+    errors.push(`Critical behavior ${behavior.id} references missing test file: ${testCase.path}.`)
+  } else if (!testSource.includes(testCase.name)) {
+    errors.push(`Critical behavior ${behavior.id} references missing regression test "${testCase.name}" in ${testCase.path}.`)
+  }
+}
+
+function validateTestKinds({ behavior, testKinds, errors }) {
+  if (!testKinds.has("normal")) {
+    errors.push(`Critical behavior ${behavior.id} must map at least one normal-path regression test.`)
+  }
+  if (!testKinds.has("failure")) {
+    errors.push(`Critical behavior ${behavior.id} must map at least one failure-path regression test.`)
+  }
+  if (behavior.integrationRequired === true && !testKinds.has("integration")) {
+    errors.push(`Critical behavior ${behavior.id} requires integration/replay evidence but none is mapped.`)
   }
 }
 
@@ -90,38 +132,19 @@ function validateTestMappings({ behavior, errors, readFile }) {
 
   const testKinds = new Set()
   for (const testCase of behavior.tests) {
-    if (
-      !testCase ||
-      !isSafeRelativePath(testCase.path) ||
-      !(testCase.path.startsWith("src/") || testCase.path.startsWith("test/")) ||
-      typeof testCase.name !== "string" ||
-      testCase.name.length === 0 ||
-      !VALID_TEST_KINDS.has(testCase.kind)
-    ) {
-      errors.push(`Critical behavior ${behavior.id} contains an invalid named test mapping.`)
-      continue
-    }
-    testKinds.add(testCase.kind)
-    const testSource = readContractFile({
+    validateTestCase({
+      behavior,
+      testCase,
+      errors,
       readFile,
-      relativePath: testCase.path,
+      testKinds,
     })
-    if (typeof testSource !== "string") {
-      errors.push(`Critical behavior ${behavior.id} references missing test file: ${testCase.path}.`)
-    } else if (!testSource.includes(testCase.name)) {
-      errors.push(`Critical behavior ${behavior.id} references missing regression test "${testCase.name}" in ${testCase.path}.`)
-    }
   }
-
-  if (!testKinds.has("normal")) {
-    errors.push(`Critical behavior ${behavior.id} must map at least one normal-path regression test.`)
-  }
-  if (!testKinds.has("failure")) {
-    errors.push(`Critical behavior ${behavior.id} must map at least one failure-path regression test.`)
-  }
-  if (behavior.integrationRequired === true && !testKinds.has("integration")) {
-    errors.push(`Critical behavior ${behavior.id} requires integration/replay evidence but none is mapped.`)
-  }
+  validateTestKinds({
+    behavior,
+    testKinds,
+    errors,
+  })
 }
 
 function validateBehavior({ behavior, errors, readFile, sourceOwners }) {
@@ -147,6 +170,40 @@ function validateBehavior({ behavior, errors, readFile, sourceOwners }) {
     errors,
     readFile,
   })
+}
+
+function validateBehaviorInventory({ behaviors, errors, readFile, sourceOwners }) {
+  const behaviorIds = new Set()
+  for (const behavior of behaviors) {
+    if (behavior?.id && behaviorIds.has(behavior.id)) {
+      errors.push(`Critical behavior id ${behavior.id} is duplicated.`)
+    }
+    if (behavior?.id) {
+      behaviorIds.add(behavior.id)
+    }
+    validateBehavior({
+      behavior,
+      errors,
+      readFile,
+      sourceOwners,
+    })
+  }
+}
+
+function validateCriticalPathPrefixes({ contract, errors }) {
+  const declaredPrefixes = Array.isArray(contract.criticalPathPrefixes)
+    ? contract.criticalPathPrefixes
+    : []
+  const criticalPathPrefixes = declaredPrefixes.filter((prefix) =>
+    isSafeRelativePath(prefix) && prefix.startsWith("src/"),
+  )
+  if (criticalPathPrefixes.length === 0) {
+    errors.push("Critical behavior inventory must define at least one valid critical source path prefix.")
+  }
+  if (criticalPathPrefixes.length !== declaredPrefixes.length) {
+    errors.push("Critical behavior inventory contains an invalid critical source path prefix.")
+  }
+  return criticalPathPrefixes
 }
 
 function validateChangedFiles({ criticalPathPrefixes, changedFiles, sourceOwners, errors }) {
@@ -191,61 +248,43 @@ export function validateCriticalBehaviorContract({
   changedFiles = [],
   readFile,
 } = {}) {
+  const errors = []
   if (typeof readFile !== "function") {
-    return {
-      errors: ["A file reader is required to validate critical behavior evidence."],
-      affectedBehaviorIds: [],
-    }
+    errors.push("A file reader is required to validate critical behavior evidence.")
   }
   if (contract?.schemaVersion !== 1 || !Array.isArray(contract.behaviors)) {
+    errors.push("Critical behavior inventory must use schemaVersion 1 and define behaviors.")
+  }
+  if (errors.length > 0) {
     return {
-      errors: ["Critical behavior inventory must use schemaVersion 1 and define behaviors."],
+      errors,
       affectedBehaviorIds: [],
     }
   }
 
-  const errors = []
-  const sourceOwners = new Map()
-  const declaredPrefixes = Array.isArray(contract.criticalPathPrefixes)
-    ? contract.criticalPathPrefixes
-    : []
-  const criticalPathPrefixes = declaredPrefixes.filter((prefix) =>
-    isSafeRelativePath(prefix) && prefix.startsWith("src/"),
-  )
-  if (criticalPathPrefixes.length === 0) {
-    errors.push("Critical behavior inventory must define at least one valid critical source path prefix.")
-  }
-  if (criticalPathPrefixes.length !== declaredPrefixes.length) {
-    errors.push("Critical behavior inventory contains an invalid critical source path prefix.")
-  }
   if (!Array.isArray(changedFiles)) {
     errors.push("Changed critical source paths must be supplied as an array.")
   }
-
-  const behaviorIds = new Set()
-  for (const behavior of contract.behaviors) {
-    if (behavior?.id && behaviorIds.has(behavior.id)) {
-      errors.push(`Critical behavior id ${behavior.id} is duplicated.`)
-    }
-    if (behavior?.id) {
-      behaviorIds.add(behavior.id)
-    }
-    validateBehavior({
-      behavior,
-      errors,
-      readFile,
-      sourceOwners,
-    })
-  }
-
+  const criticalPathPrefixes = validateCriticalPathPrefixes({
+    contract,
+    errors,
+  })
+  const sourceOwners = new Map()
+  validateBehaviorInventory({
+    behaviors: contract.behaviors,
+    errors,
+    readFile,
+    sourceOwners,
+  })
+  const affectedBehaviorIds = validateChangedFiles({
+    criticalPathPrefixes,
+    changedFiles: Array.isArray(changedFiles) ? changedFiles : [],
+    sourceOwners,
+    errors,
+  })
   return {
     errors,
-    affectedBehaviorIds: validateChangedFiles({
-      criticalPathPrefixes,
-      changedFiles: Array.isArray(changedFiles) ? changedFiles : [],
-      sourceOwners,
-      errors,
-    }),
+    affectedBehaviorIds,
   }
 }
 
