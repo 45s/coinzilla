@@ -117,6 +117,18 @@ function makeMarketMetadataWithMinimumNotional({ market, minimumNotional } = {})
   }
 }
 
+function createRecoverySellTestStrategyPolicy({ onEvaluate } = {}) {
+  return {
+    evaluate: (input) => {
+      onEvaluate?.(input)
+      return conservativeStrategyPolicy.evaluate({
+        ...input,
+        lastBuyPrice: "100",
+      })
+    },
+  }
+}
+
 function createHarnessAppConfig({
   externalOrdersPolicyBySymbol = {},
   symbols = ["DOGEUSDT", "SOLUSDT"],
@@ -1969,12 +1981,11 @@ test("uses refreshed exchange filters when planning a recovery SELL", async () =
     symbols: ["DOGEUSDT"],
     portfolio: seeded.portfolio,
     recoveryLedgersByMarket,
-    strategyPolicy: {
-      evaluate: (input) => {
+    strategyPolicy: createRecoverySellTestStrategyPolicy({
+      onEvaluate: (input) => {
         evaluatedMetadata = input.marketMetadata
-        return conservativeStrategyPolicy.evaluate(input)
       },
-    },
+    }),
     brokerOverrides: {
       getSymbolFilters: async ({ symbol }) => {
         refreshedRuleReads += 1
@@ -2055,11 +2066,8 @@ test("submits a valid recovery SELL when refreshed exchange filters remain valid
     symbols: ["DOGEUSDT"],
     portfolio: seeded.portfolio,
     recoveryLedgersByMarket,
+    strategyPolicy: createRecoverySellTestStrategyPolicy(),
     brokerOverrides: {
-      getFills: async () => ({
-        ok: true,
-        data: [seeded.fill],
-      }),
       getSymbolFilters: async ({ symbol }) => {
         refreshedRuleReads += 1
         assert.equal(symbol, market.symbol, "Recovery planning must refresh the exact active market's filters")
