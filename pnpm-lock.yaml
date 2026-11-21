@@ -165,6 +165,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  follow-redirects: 1.16.2
+
 importers:
 
   .:
