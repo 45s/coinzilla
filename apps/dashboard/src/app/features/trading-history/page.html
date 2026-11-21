@@ -46,8 +46,15 @@
     </section>
   } @else {
     <div class="connection-strip">
-      <span class="connection-indicator"></span>
+      <span
+        class="connection-indicator"
+        [class.live]="liveStatus() === 'live'"
+        [class.reconnecting]="liveStatus() === 'reconnecting' || liveStatus() === 'connecting'"
+        [class.offline]="liveStatus() === 'offline'"
+      ></span>
       <span>Connected to Harvester</span>
+      <span class="strip-divider">·</span>
+      <span>{{ liveStatusLabel() }}</span>
       <span class="strip-divider">·</span>
       <span>Read-only API</span>
       <button type="button" class="quiet-button" (click)="disconnect()">Disconnect</button>
