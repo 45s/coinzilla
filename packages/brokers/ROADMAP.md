@@ -8,15 +8,21 @@ owner: brokers
 
 This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may retain consumer-integration context for provenance, but application ports, adapters, routing, and runtime composition remain owned by each consuming application.
 
+## Bitunix health-check and operator CLI consolidation — #1614
+
+**Status: In progress** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) · [draft PR #1616](https://github.com/45s/coinzilla/pull/1616).
+
+Consolidate every Bitunix script under `scripts/bitunix/` with one CLI entry point, `run-healthcheck.js`. The default remains a read-only health check with sanitized report publishing; `--local` runs local-only diagnostics; `--place-order` runs the read-only health checks first and, only when healthy, performs the already guarded fixed HYPEUSDT attempt inside the same report-branch workflow. The sanitized outcome is published and the checkout returns to `develop`. Pure supporting functions live in `helpers/` with colocated tests. The mandatory workflow document is maintained under `docs/BITUNIX_WORKFLOW.md`. This is a tooling/layout change, not a provider capability or production-readiness change.
+
 ## One-shot local Bitunix HYPEUSDT operator attempt — #1608
 
-**Status: In progress** — [issue #1608](https://github.com/45s/coinzilla/issues/1608) · [draft PR #1609](https://github.com/45s/coinzilla/pull/1609).
+**Status: COMPLETE** — [issue #1608](https://github.com/45s/coinzilla/issues/1608) · [PR #1609](https://github.com/45s/coinzilla/pull/1609) merged into `develop` on 2026-11-21.
 
-This is a fixed, human-operated local LIVE investigation, not a general order API, integration test, CI task, AI-agent action, or Harvester execution path. The command uses the common `Broker` facade and attempts only HYPEUSDT BUY LIMIT at 30 USDT for 0.4 HYPE (exact 12 USDT notional). The read-only Broker keeps `allowLiveOrderMutations: false`; a separate mutation-enabled Broker is constructed only after interactive terminal checks, read-only market/balance/open-order preflight, and the exact operator confirmation.
+The fixed, human-operated local LIVE investigation uses the common `Broker` facade and attempts only HYPEUSDT BUY LIMIT at 30 USDT for 0.4 HYPE (exact 12 USDT notional). The read-only Broker keeps `allowLiveOrderMutations: false`; a separate mutation-enabled Broker is constructed only after interactive terminal checks, read-only market/balance/open-order preflight, and final operator approval.
 
-The preflight verifies explicit market-open status and HYPE/USDT identity, exact `minVolume` base quantity and `minPrice` quote notional constraints, the provisional 11 USDT local notional floor, free USDT below 12, and no rows from the symbol-scoped open-order query. It displays that the open-order response completeness is not established, the balance is a point-in-time response without an authoritative source timestamp, tick/step remain UNKNOWN, low free USDT does not guarantee exchange rejection, and the 30 USDT limit may fill immediately if accepted. An exclusive marker under ignored `.diagnostics/` (0600 on POSIX; Windows inherits the directory ACL) is persisted before the single `createOrder()` call. The marker blocks another invocation; no automatic retry, cancellation, transfer, or second mutation is possible. `OUTCOME_UNKNOWN` remains unknown and requires manual reconciliation.
+The preflight verifies explicit market-open status and HYPE/USDT identity, exact `minVolume` base quantity and `minPrice` quote notional constraints, the provisional 11 USDT local notional floor, free USDT below 12, and no rows from the symbol-scoped open-order query. It displays that open-order response completeness is not established, the balance is a point-in-time response without an authoritative source timestamp, tick/step remain UNKNOWN, low free USDT does not guarantee exchange rejection, and the 30 USDT limit may fill immediately if accepted. An exclusive marker under ignored `.diagnostics/` is persisted before the single `createOrder()` call. No automatic retry, cancellation, transfer, or second mutation is possible. `OUTCOME_UNKNOWN` remains unknown and requires manual reconciliation.
 
-The agent, tests, CI and scheduled jobs must never invoke the command. This task does not change the common Broker contract, capability declarations, default mutation gate, Harvester registration, or any issue [#1185](https://github.com/45s/coinzilla)'s production-readiness blocker. Operator instructions are in the [Brokers README](./README.md#one-shot-bitunix-hypeusdt-operator-order-attempt).
+The agent, tests, CI and scheduled jobs must never invoke the LIVE operator mode. This task does not change the common Broker contract, capability declarations, default mutation gate, Harvester registration, or any issue [#1185](https://github.com/45s/coinzilla)'s production-readiness blocker. Operator instructions are in the [Brokers README](./README.md#one-shot-bitunix-hypeusdt-operator-order-attempt).
 
 ## User-data session lifecycle test hardening — #1602
 

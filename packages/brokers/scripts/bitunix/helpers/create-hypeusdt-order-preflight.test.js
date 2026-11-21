@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createBitunixOperatorOrderPreflight } from "./bitunix-hypeusdt-order-preflight.js"
+import { createHypeUsdtOrderPreflight } from "./create-hypeusdt-order-preflight.js"
 
 function createValidBitunixOperatorPreflightInput({ overrides = {} } = {}) {
   const market = {
@@ -56,7 +56,7 @@ function createValidBitunixOperatorPreflightInput({ overrides = {} } = {}) {
 }
 
 test("Bitunix operator preflight fixes the exact HYPEUSDT BUY LIMIT intent", () => {
-  const preflight = createBitunixOperatorOrderPreflight(createValidBitunixOperatorPreflightInput())
+  const preflight = createHypeUsdtOrderPreflight(createValidBitunixOperatorPreflightInput())
 
   assert.deepEqual(preflight.order, {
     symbol: "HYPEUSDT",
@@ -79,7 +79,7 @@ test("Bitunix operator preflight rejects a market not returned as explicitly ope
   input.marketResult.data = []
 
   assert.throws(
-    () => createBitunixOperatorOrderPreflight(input),
+    () => createHypeUsdtOrderPreflight(input),
     /HYPEUSDT.*explicitly open/i,
   )
 })
@@ -89,7 +89,7 @@ test("Bitunix operator preflight rejects mismatched pair identity", () => {
   input.filtersResult.data.base = "BTC"
 
   assert.throws(
-    () => createBitunixOperatorOrderPreflight(input),
+    () => createHypeUsdtOrderPreflight(input),
     /base.*quote.*HYPEUSDT|HYPEUSDT.*base.*quote/i,
   )
 })
@@ -99,7 +99,7 @@ test("Bitunix operator preflight rejects a market not explicitly marked open", (
   input.filtersResult.data.isOpen = "unknown"
 
   assert.throws(
-    () => createBitunixOperatorOrderPreflight(input),
+    () => createHypeUsdtOrderPreflight(input),
     /not explicitly open/i,
   )
 })
@@ -110,7 +110,7 @@ test("Bitunix operator preflight requires documented minimum quantity and notion
     delete input.filtersResult.data[field]
 
     assert.throws(
-      () => createBitunixOperatorOrderPreflight(input),
+      () => createHypeUsdtOrderPreflight(input),
       new RegExp(field, "i"),
       `missing ${field} must stop the operator attempt`,
     )
@@ -123,7 +123,7 @@ test("Bitunix operator preflight rejects invalid or negative market minima", () 
     input.filtersResult.data.minVolume = value
 
     assert.throws(
-      () => createBitunixOperatorOrderPreflight(input),
+      () => createHypeUsdtOrderPreflight(input),
       /minVolume/i,
       `invalid minVolume ${JSON.stringify(value)} must fail closed`,
     )
@@ -135,7 +135,7 @@ test("Bitunix operator preflight rejects an order below the documented minimum q
   input.filtersResult.data.minVolume = "0.4000001"
 
   assert.throws(
-    () => createBitunixOperatorOrderPreflight(input),
+    () => createHypeUsdtOrderPreflight(input),
     /minimum quantity/i,
   )
 })
@@ -145,7 +145,7 @@ test("Bitunix operator preflight rejects an order below the documented minimum n
   input.filtersResult.data.minPrice = "12.0001"
 
   assert.throws(
-    () => createBitunixOperatorOrderPreflight(input),
+    () => createHypeUsdtOrderPreflight(input),
     /minimum notional/i,
   )
 })
@@ -156,7 +156,7 @@ test("Bitunix operator preflight rejects free USDT sufficient to cover the order
     input.balancesResult.data[0].free.amount = amount
 
     assert.throws(
-      () => createBitunixOperatorOrderPreflight(input),
+      () => createHypeUsdtOrderPreflight(input),
       /free USDT.*at least.*12/i,
       `free USDT ${amount} must stop an insufficient-balance probe`,
     )
@@ -168,7 +168,7 @@ test("Bitunix operator preflight requires an explicit USDT balance row", () => {
   input.balancesResult.data = []
 
   assert.throws(
-    () => createBitunixOperatorOrderPreflight(input),
+    () => createHypeUsdtOrderPreflight(input),
     /USDT balance/i,
   )
 })
@@ -180,7 +180,7 @@ test("Bitunix operator preflight rejects any existing HYPEUSDT open order", () =
   }]
 
   assert.throws(
-    () => createBitunixOperatorOrderPreflight(input),
+    () => createHypeUsdtOrderPreflight(input),
     /existing HYPEUSDT open order/i,
   )
 })
@@ -201,7 +201,7 @@ test("Bitunix operator preflight fails closed when any broker read fails", () =>
     }
 
     assert.throws(
-      () => createBitunixOperatorOrderPreflight(input),
+      () => createHypeUsdtOrderPreflight(input),
       new RegExp(operation.replace("Result", ""), "i"),
       `${operation} failure must stop before the order confirmation`,
     )

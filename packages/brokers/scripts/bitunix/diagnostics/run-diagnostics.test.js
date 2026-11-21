@@ -2,8 +2,8 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import {
   createObservedTransportFactory,
-  runBitunixDiagnostics,
-} from "./diagnostic-runner.js"
+  runDiagnostics,
+} from "./run-diagnostics.js"
 
 const validEnvironment = Object.freeze({
   BITUNIX_API_KEY: "diagnostic-api-key",
@@ -184,7 +184,7 @@ test("diagnostics use code defaults without diagnostic environment variables", a
     restCalls,
     websocketCalls,
   })
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: validEnvironment,
     restClientFactory(configuration) {
       assert.equal(configuration.requestTimeout, 10_000, "The REST timeout must come from the diagnostic constants")
@@ -224,7 +224,7 @@ test("diagnostics continue after independent REST failures and always disconnect
     ...validEnvironment,
     BITUNIX_DIAGNOSTICS_DEPTH_PRECISION: "0.01",
   }
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env,
     ...factories,
   })
@@ -245,7 +245,7 @@ test("diagnostics skip depth RPC when its required precision is not configured",
     restCalls,
     websocketCalls,
   })
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: validEnvironment,
     ...factories,
   })
@@ -265,7 +265,7 @@ test("diagnostics report connection failure and skip all dependent RPC calls whi
       websocketConnectFailure: true,
     },
   })
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: validEnvironment,
     ...factories,
   })
@@ -370,7 +370,7 @@ test("a failed WebSocket RPC does not suppress later independent RPC checks", as
       websocketFailureMethod: "common.rate.list",
     },
   })
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: validEnvironment,
     ...factories,
   })
@@ -513,7 +513,7 @@ function assertPublicOnlyDiagnostics({ report, restCalls }) {
 test("public-only diagnostics run unsigned REST checks when credentials are missing", async () => {
   const restCalls = []
   let websocketFactoryCalls = 0
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: {},
     restClientFactory() {
       return {
@@ -538,7 +538,7 @@ test("public-only diagnostics run unsigned REST checks when credentials are miss
 
 test("partial Bitunix credentials fall back to public-only diagnostics without exposing the supplied key", async () => {
   const restCalls = []
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: {
       BITUNIX_API_KEY: "partial-api-key",
     },
@@ -574,7 +574,7 @@ test("diagnostics query and sanitize private WebSocket open orders and order his
     restCalls,
     websocketCalls,
   })
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: validEnvironment,
     ...factories,
   })
@@ -610,7 +610,7 @@ test("diagnostics reconnect the same authenticated client and do not claim subsc
     websocketCalls,
     clientCreations,
   })
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: validEnvironment,
     ...factories,
   })
@@ -655,7 +655,7 @@ test("diagnostics query current open orders through the documented read-only POS
     restCalls,
     websocketCalls,
   })
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: validEnvironment,
     ...factories,
   })
@@ -902,7 +902,7 @@ test("live diagnostics exercise Bitunix Spot reads through the public Broker API
     restCalls: rawRestCalls,
     websocketCalls,
   })
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: validEnvironment,
     ...factories,
     brokerApiRestClientFactory: createBrokerApiDiagnosticRestClientFactory({
@@ -929,7 +929,7 @@ test("Broker diagnostics fail schema checks for missing required fields and unex
     restCalls: [],
     websocketCalls: [],
   })
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: validEnvironment,
     ...factories,
     brokerApiRestClientFactory: createBrokerApiDiagnosticRestClientFactory({
@@ -971,7 +971,7 @@ test("Broker diagnostics fail schema checks for missing required fields and unex
 
 test("public-only Broker diagnostics never send the internal placeholder credential", async () => {
   const brokerApiCalls = []
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env: {},
     restClientFactory() {
       return {
