@@ -145,10 +145,10 @@ function createBitunixOperatorAttemptDependencies({
       events.push("order.construct")
       return orderBroker
     },
-    async confirm({ confirmationPhrase }) {
+    async confirm(confirmationInput) {
       events.push({
         operation: "confirm",
-        confirmationPhrase,
+        confirmationInput,
       })
       return confirmation
     },
@@ -268,10 +268,16 @@ test("Bitunix operator attempt confirms before creating a mutation-enabled broke
 
   assert.equal(result.ok, true)
   assert.equal(result.mutationOutcome, "CONFIRMED")
-  assert.equal(
-    events.find((event) => event.operation === "confirm").confirmationPhrase,
-    "SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER",
-  )
+  const confirmation = events.find((event) => event.operation === "confirm").confirmationInput
+  assert.deepEqual(confirmation.order, {
+    symbol: "HYPEUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    price: "30",
+    quantity: "0.4",
+    notional: "12",
+  }, "the final approval prompt must identify the exact fixed order being submitted")
+  assert.equal(Object.hasOwn(confirmation, "confirmationPhrase"), false, "operator approval must not require manually typing a long confirmation phrase")
   assert.ok(events.indexOf("read.disconnect") < events.findIndex((event) => event.operation === "confirm"))
   assert.ok(events.findIndex((event) => event.operation === "confirm") < events.indexOf("order.construct"))
   assert.ok(events.indexOf("order.connect") < events.indexOf("marker"))
