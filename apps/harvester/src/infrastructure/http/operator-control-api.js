@@ -121,7 +121,11 @@ async function handleReadRequest({ response, pathname, operator }) {
   }
   const result = await operator[method]({ actor: ACTOR })
   if (result?.ok !== true) {
-    sendJson({ response, status: 422, body: normalizeFailure(result) })
+    sendJson({
+      response,
+      status: 422,
+      body: normalizeFailure(result),
+    })
     return
   }
   sendJson({
@@ -230,14 +234,20 @@ async function handleCommandRequest({ request, response, operator }) {
       },
     })
   } catch (error) {
-    const status = error.status ?? 500
+    const { status: errorStatus } = error
+    const status = errorStatus ?? 500
     const code = status === 413
       ? "HARVESTER_OPERATOR_BODY_TOO_LARGE"
       : "HARVESTER_OPERATOR_REQUEST_INVALID"
     const message = status === 400 || status === 413
       ? error.message
       : "Operator request failed."
-    sendFailure({ response, status, code, message })
+    sendFailure({
+      response,
+      status,
+      code,
+      message,
+    })
   }
 }
 
