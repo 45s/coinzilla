@@ -185,28 +185,28 @@ export function createWithdrawalHistoryRequest({ input }) {
 }
 
 function normalizeReturnedHistoryPage({ pageNum, requestedPage }) {
-  // The live REST history endpoint can omit this redundant response echo.
-  // Page 1 remains unambiguous; later pages still require an explicit match.
-  if ((pageNum === undefined || pageNum === null) && requestedPage === 1) {
-    return
-  }
   const normalizedPageNum = typeof pageNum === "string" ? pageNum.trim() : pageNum
   const pageNumIsNumber = typeof normalizedPageNum === "number" && Number.isSafeInteger(normalizedPageNum)
   const pageNumIsString = typeof normalizedPageNum === "string" &&
-    /^[0-9]+(?:\.0+)?$/.test(normalizedPageNum)
+    /^[0-9]+(?:\\.0+)?$/.test(normalizedPageNum)
+
+  // Page 1 is unambiguous: tolerate an absent or malformed redundant echo,
+  // but never accept a valid echo that identifies a different page.
+  // Later pages require an explicit, valid page identity.
   if (!pageNumIsNumber && !pageNumIsString) {
+    if (requestedPage === 1) return
     throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
   }
 
   const returnedPage = Number(normalizedPageNum)
   if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
+    if (requestedPage === 1) return
     throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
   }
   if (returnedPage !== requestedPage) {
     throw new TypeError("Bitunix Spot order history returned pageNum does not match the requested page")
   }
 }
-
 function normalizeHistoryRows({ data, total }) {
   if (data === undefined && total !== 0) {
     throw new TypeError("Bitunix Spot order history data is required when total is positive")
