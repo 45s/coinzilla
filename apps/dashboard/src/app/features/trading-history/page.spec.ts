@@ -3,10 +3,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TradingHistorySession } from './api';
 import { TradingHistoryComponent } from './page';
 
-const API_TOKEN = 'a-session-only-token-that-is-long-enough-for-tests';
 
 class FakeWebSocket extends EventTarget {
   static instances: FakeWebSocket[] = [];
@@ -122,10 +120,8 @@ function createFill(id: string) {
 async function connectToResource(
   fixture: ComponentFixture<TradingHistoryComponent>,
   http: HttpTestingController,
-  session: TradingHistorySession,
   resource: 'orders' | 'fills' | 'commissions' = 'orders',
 ) {
-  session.setToken(API_TOKEN);
   fixture.componentRef.setInput('resource', resource);
   fixture.detectChanges();
   http.expectOne((request) => request.url.endsWith('/api/v1/trading/metadata')).flush({
@@ -146,7 +142,6 @@ async function connectToResource(
 describe('TradingHistoryComponent', () => {
   let fixture: ComponentFixture<TradingHistoryComponent>;
   let http: HttpTestingController;
-  let session: TradingHistorySession;
 
   beforeEach(async () => {
     FakeWebSocket.instances = [];
@@ -160,14 +155,12 @@ describe('TradingHistoryComponent', () => {
     }).compileComponents();
 
     http = TestBed.inject(HttpTestingController);
-    session = TestBed.inject(TradingHistorySession);
     fixture = TestBed.createComponent(TradingHistoryComponent);
   });
 
   afterEach(() => {
     fixture.destroy();
     http.verify();
-    session.clearToken();
     vi.unstubAllGlobals();
   });
 
@@ -179,7 +172,6 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('clears a rejected session token and reports invalid credentials', async () => {
-    session.setToken(API_TOKEN);
     fixture.detectChanges();
 
     http.expectOne((request) => request.url.endsWith('/api/v1/trading/metadata')).flush({
@@ -200,7 +192,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('loads real orders, displays backend environment and renders an honest empty state', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http);
     request.flush({
       ok: true,
       data: createPage([], 0),
@@ -310,7 +302,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('labels an order limit price separately from a fill execution price', async () => {
-    const request = await connectToResource(fixture, http, session, 'orders');
+    const request = await connectToResource(fixture, http, 'orders');
     request.flush({
       ok: true,
       data: createPage([createOrder('order-1')], 1),
@@ -453,7 +445,6 @@ describe('TradingHistoryComponent', () => {
 
     const firstSocket = FakeWebSocket.instances[0];
     firstSocket.open();
-    firstSocket.receive({ type: 'authenticated' });
     http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
       ok: true,
       data: {
@@ -495,7 +486,6 @@ describe('TradingHistoryComponent', () => {
     const reconnectSocket = FakeWebSocket.instances[1];
     expect(reconnectSocket).toBeDefined();
     reconnectSocket.open();
-    reconnectSocket.receive({ type: 'authenticated' });
     http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
       ok: true,
       data: {
