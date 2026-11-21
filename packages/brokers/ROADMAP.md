@@ -8,6 +8,10 @@ owner: brokers
 
 This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may retain consumer-integration context for provenance, but application ports, adapters, routing, and runtime composition remain owned by each consuming application.
 
+## Bitunix Spot signature CodeQL classification — #1674
+
+**Status: IN PROGRESS** — [issue #1674](https://github.com/45s/coinzilla/issues/1674) / [PR #1675](https://github.com/45s/coinzilla/pull/1675). CodeQL's `js/insufficient-password-hash` heuristic flags the double-SHA-256 operations in the Bitunix REST and WebSocket signers. The official [Bitunix Spot signing contract](https://www.bitunix.com/api-docs/spots/en_us/sign/) explicitly mandates both operations for request authentication; these are not password-storage or password-verification hashes. Each protocol operation has a narrowly scoped source suppression with its REST or WebSocket rationale. Both signing algorithms and the existing deterministic signature vectors remain unchanged. The earlier credential-bearing test-side hash was replaced with a fixed expected signature before this task; keep the regression vector literal.
+
 ## Executable CLI source identity — #1631\n\n**Status: IN PROGRESS** — [issue #1631](https://github.com/45s/coinzilla/issues/1631) / [PR #1632](https://github.com/45s/coinzilla/pull/1632). Establishes a repository-wide requirement for user-invoked CLI entrypoints to print their exact source commit, package/script version, worktree state, and runtime before doing work, with a side-effect-free version command. The first implementation is the Bitunix healthcheck entrypoint; the repository-wide CLI inventory and remaining migrations are tracked by the issue.\n\n## Bitunix health-check and operator CLI consolidation — #1614
 
 **Status: IMPLEMENTED and merged** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) / [PR #1616](https://github.com/45s/coinzilla/pull/1616), merge commit `488949b668e1291b5cfc64032250f6d2a4568274`. Exact-head required workflow runs and advisory External Documentation Links passed; issue #1614 is closed after acceptance and exact-head CI verification.
