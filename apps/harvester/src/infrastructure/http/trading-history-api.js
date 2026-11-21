@@ -316,18 +316,12 @@ function handleDetailRequest({ response, queries, route } = {}) {
   })
 }
 
-function handleTradingHistoryRequest({
-  request,
-  response,
-  queries,
-  token,
-  environment,
-} = {}) {
+function handleRequestPreconditions({ request, response, token } = {}) {
   if (handleOptionsRequest({
     request,
     response,
   })) {
-    return
+    return true
   }
   if (request.method !== "GET") {
     sendApiError({
@@ -336,7 +330,7 @@ function handleTradingHistoryRequest({
       code: "HARVESTER_TRADING_HISTORY_METHOD_NOT_ALLOWED",
       message: "This API resource supports GET requests only.",
     })
-    return
+    return true
   }
   if (!isAuthorized({
     authorization: request.headers.authorization,
@@ -348,9 +342,25 @@ function handleTradingHistoryRequest({
       code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
       message: "A valid bearer token is required.",
     })
+    return true
+  }
+  return false
+}
+
+function handleTradingHistoryRequest({
+  request,
+  response,
+  queries,
+  token,
+  environment,
+} = {}) {
+  if (handleRequestPreconditions({
+    request,
+    response,
+    token,
+  })) {
     return
   }
-
   const url = new URL(request.url ?? "/", "http://127.0.0.1")
   if (url.pathname === METADATA_ROUTE) {
     handleMetadataRequest({
@@ -440,6 +450,38 @@ async function closeServer(server) {
   })
 }
 
+function validateApiToken(token) {
+  if (typeof token !== "string" || token.trim() !== token || Buffer.byteLength(token, "utf8") < 32) {
+    throw new TypeError("HARVESTER_API_TOKEN must contain at least 32 non-whitespace characters.")
+  }
+}
+
+function validateApiEnvironment(environment) {
+  if (environment !== "testnet" && environment !== "live") {
+    throw new TypeError("Trading-history API environment must be exactly testnet or live.")
+  }
+}
+
+function validateApiHost(host) {
+  if (typeof host !== "string" || host.trim() !== host || host.length === 0) {
+    throw new TypeError("HARVESTER_API_HOST must be a non-empty host name or IP address.")
+  }
+}
+
+function validateApiPort(port) {
+  if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
+    throw new TypeError("HARVESTER_API_PORT must be an integer between 0 and 65535.")
+  }
+}
+
+function validateQueryOperations(queries) {
+  for (const method of REQUIRED_QUERY_METHODS) {
+    if (typeof queries?.[method] !== "function") {
+      throw new TypeError(`Trading-history API requires the application query ${method}()`)
+    }
+  }
+}
+
 function validateApiServerConfiguration({
   queries,
   token,
@@ -447,23 +489,11 @@ function validateApiServerConfiguration({
   host = DEFAULT_HOST,
   port = DEFAULT_PORT,
 } = {}) {
-  if (typeof token !== "string" || token.trim() !== token || Buffer.byteLength(token, "utf8") < 32) {
-    throw new TypeError("HARVESTER_API_TOKEN must contain at least 32 non-whitespace characters.")
-  }
-  if (environment !== "testnet" && environment !== "live") {
-    throw new TypeError("Trading-history API environment must be exactly testnet or live.")
-  }
-  if (typeof host !== "string" || host.trim() !== host || host.length === 0) {
-    throw new TypeError("HARVESTER_API_HOST must be a non-empty host name or IP address.")
-  }
-  if (!Number.isSafeInteger(port) || port < 0 || port > 65_535) {
-    throw new TypeError("HARVESTER_API_PORT must be an integer between 0 and 65535.")
-  }
-  for (const method of REQUIRED_QUERY_METHODS) {
-    if (typeof queries?.[method] !== "function") {
-      throw new TypeError(`Trading-history API requires the application query ${method}()`)
-    }
-  }
+  validateApiToken(token)
+  validateApiEnvironment(environment)
+  validateApiHost(host)
+  validateApiPort(port)
+  validateQueryOperations(queries)
   return Object.freeze({
     queries,
     token,
