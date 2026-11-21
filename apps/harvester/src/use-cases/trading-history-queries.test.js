@@ -7,31 +7,62 @@ async function loadTradingHistoryQueries() {
 
 function createRepository(overrides = {}) {
   const calls = []
+  const emptyPage = {
+    items: [],
+    pagination: {
+      limit: 50,
+      offset: 0,
+      total: 0,
+      hasMore: false,
+    },
+  }
   const repository = {
-    getSummary: () => ({ orders: 3, fills: 2, commissions: 1 }),
+    getSummary: () => ({
+      orders: 3,
+      fills: 2,
+      commissions: 1,
+    }),
     listOrders: (input) => {
-      calls.push({ operation: "listOrders", input })
-      return { items: [], pagination: { limit: 50, offset: 0, total: 0, hasMore: false } }
+      calls.push({
+        operation: "listOrders",
+        input,
+      })
+      return emptyPage
     },
     findOrderById: ({ id }) => {
-      calls.push({ operation: "findOrderById", id })
+      calls.push({
+        operation: "findOrderById",
+        id,
+      })
       return null
     },
     listFills: (input) => {
-      calls.push({ operation: "listFills", input })
-      return { items: [], pagination: { limit: 50, offset: 0, total: 0, hasMore: false } }
+      calls.push({
+        operation: "listFills",
+        input,
+      })
+      return emptyPage
     },
     findFillById: ({ id }) => {
-      calls.push({ operation: "findFillById", id })
+      calls.push({
+        operation: "findFillById",
+        id,
+      })
       return null
     },
     listCommissions: (input) => {
-      calls.push({ operation: "listCommissions", input })
-      return { items: [], pagination: { limit: 50, offset: 0, total: 0, hasMore: false } }
+      calls.push({
+        operation: "listCommissions",
+        input,
+      })
+      return emptyPage
     },
     ...overrides,
   }
-  return { repository, calls }
+  return {
+    repository,
+    calls,
+  }
 }
 
 test("creates transport-independent trading-history query operations", async () => {
@@ -61,7 +92,10 @@ test("validates and normalizes list filters and bounded pagination before reposi
       providerInstanceId: "binanceTestnet",
       accountId: "binance-primary",
     },
-    pagination: { limit: 25, offset: 50 },
+    pagination: {
+      limit: 25,
+      offset: 50,
+    },
   })
   assert.equal(result.ok, true, "A valid order query must return a successful application result.")
   assert.deepEqual(calls[0], {
@@ -74,7 +108,10 @@ test("validates and normalizes list filters and bounded pagination before reposi
         providerInstanceId: "binanceTestnet",
         accountId: "binance-primary",
       },
-      pagination: { limit: 25, offset: 50 },
+      pagination: {
+        limit: 25,
+        offset: 50,
+      },
     },
   }, "The application must pass validated query criteria and pagination to the repository without HTTP-specific values.")
 
@@ -82,7 +119,10 @@ test("validates and normalizes list filters and bounded pagination before reposi
   assert.equal(defaults.ok, true, "A fill query without optional filters must use the bounded default page.")
   assert.deepEqual(calls[1].input, {
     filters: {},
-    pagination: { limit: 50, offset: 0 },
+    pagination: {
+      limit: 50,
+      offset: 0,
+    },
   }, "The application must apply consistent default filters and pagination for every list operation.")
 });
 
@@ -92,15 +132,28 @@ test("rejects unsupported filters, invalid sides, and out-of-range pagination wi
   const { repository, calls } = createRepository()
   const queries = module.createTradingHistoryQueries({ repository })
 
-  const unsupportedFilter = queries.listOrders({ filters: { rawSql: "DROP TABLE orders" } })
+  const unsupportedFilter = queries.listOrders({
+    filters: {
+      rawSql: "DROP TABLE orders",
+    },
+  })
   assert.equal(unsupportedFilter.ok, false, "An unsupported filter must be rejected before repository access.")
   assert.equal(unsupportedFilter.errors[0].code, "HARVESTER_TRADING_HISTORY_QUERY_INVALID", "Invalid filters must use the stable trading-history query error code.")
 
-  const invalidSide = queries.listFills({ filters: { side: "LONG" } })
+  const invalidSide = queries.listFills({
+    filters: {
+      side: "LONG",
+    },
+  })
   assert.equal(invalidSide.ok, false, "A side outside the persisted BUY/SELL vocabulary must be rejected.")
   assert.equal(invalidSide.errors[0].code, "HARVESTER_TRADING_HISTORY_QUERY_INVALID", "Invalid side values must use the stable query validation code.")
 
-  const invalidLimit = queries.listCommissions({ pagination: { limit: 101, offset: 0 } })
+  const invalidLimit = queries.listCommissions({
+    pagination: {
+      limit: 101,
+      offset: 0,
+    },
+  })
   assert.equal(invalidLimit.ok, false, "A page size above the server-side bound must be rejected.")
   assert.equal(invalidLimit.errors[0].code, "HARVESTER_TRADING_HISTORY_QUERY_INVALID", "Invalid pagination must use the stable query validation code.")
   assert.equal(calls.length, 0, "Invalid query inputs must not reach the persistence repository.")
@@ -127,7 +180,11 @@ test("rejects incomplete query repository ports at application composition", asy
   const module = await loadTradingHistoryQueries()
   assert.ok(module, "Harvester must provide the application query module before repository-port validation can be verified.")
   assert.throws(
-    () => module.createTradingHistoryQueries({ repository: { listOrders() {} } }),
+    () => module.createTradingHistoryQueries({
+      repository: {
+        listOrders() {},
+      },
+    }),
     /TradingHistoryQueryRepository/,
     "Application composition must fail when the query repository does not implement its complete contract.",
   )
