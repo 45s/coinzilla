@@ -333,7 +333,7 @@
           "kind": "integration"
         },
         {
-          "path": "test/bootstrap/account-preflight.test.js",
+          "path": "test/bootstrap/account-snapshot-history.test.js",
           "name": "account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets",
           "kind": "integration"
         }
