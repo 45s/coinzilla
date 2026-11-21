@@ -354,7 +354,10 @@ function handleUpgrade({ request, socket, head, clients, token } = {}) {
 }
 
 function broadcastHistoryUpdate({ clients, event } = {}) {
-  const resources = [...new Set(event?.data?.resources)]
+  const requestedResources = Array.isArray(event?.data?.resources)
+    ? event.data.resources
+    : []
+  const resources = [...new Set(requestedResources)]
     .filter((resource) => ALLOWED_RESOURCES.has(resource))
     .sort()
   if (resources.length === 0) {
