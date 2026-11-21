@@ -4,18 +4,12 @@
   "private": true,
   "description": "",
   "scripts": {
-    "server": "node scripts/run-apps.js server",
-    "client": "node scripts/run-apps.js client",
-    "app": "node scripts/run-apps.js app",
+    "app:dev": "pnpm --parallel --filter './apps/*' run \"/^(dev|start)$/\"",
+    "app:prod": "pnpm --parallel --filter './apps/*' run \"/^(build|start)$/\"",
     "test": "pnpm --recursive --if-present test",
     "test:coverage": "pnpm --filter './packages/*' --filter './apps/*' --recursive exec node --test --experimental-test-coverage",
     "check:syntax": "node --check scripts/check-syntax.js && node scripts/check-syntax.js",
     "check:agent-policy": "node --test scripts/check-agent-policy.test.js && node scripts/check-agent-policy.js",
-    "check:helper-policy": "node --test scripts/check-helper-policy.test.js && node scripts/check-helper-policy.js",
-    "check:helper-names": "node --test scripts/check-helper-policy.test.js && node scripts/check-helper-policy.js --check-names",
-    "check:helper-names:changed": "node --test scripts/check-helper-policy.test.js && node scripts/check-helper-policy.js --changed-names",
-    "check:module-names": "node --test scripts/check-module-naming.test.js && node scripts/check-module-naming.js --check",
-    "check:module-names:changed": "node --test scripts/check-module-naming.test.js && node scripts/check-module-naming.js --changed",
     "quality": "pnpm test && pnpm lint && pnpm run check:syntax && pnpm run check:agent-policy && pnpm run test:external-links",
     "check:external-links": "node scripts/check-external-links.js",
     "test:external-links": "node --test scripts/check-external-links.test.js",
@@ -23,12 +17,7 @@
     "lint:changed": "node scripts/lint-changed.js",
     "lint:fix": "eslint . --fix",
     "test:sync-main": "node --test scripts/sync-main.test.js",
-    "sync:main": "node scripts/sync-main.js",
-    "db:export": "pnpm --filter @coinzilla/harvester persistence:export",
-    "check:test-matrix": "node --test scripts/workspace-test-matrix.test.js && node scripts/check-workspace-test-matrix.js",
-    "test:module-dependency-analysis": "node --test scripts/module-import-analysis.test.js scripts/module-import-resolution.test.js scripts/module-dependency-graph.test.js scripts/module-dependency-cycles.test.js scripts/repository-module-discovery.test.js scripts/repository-module-graph-report.test.js",
-    "report:module-graph": "node scripts/report-module-graph.js",
-    "check:workspace-dependency-policy": "node --test scripts/workspace-dependency-policy.test.js && node scripts/check-workspace-dependency-policy.js"
+    "sync:main": "node scripts/sync-main.js"
   },
   "keywords": [],
   "author": "",
@@ -45,9 +34,14 @@
   },
   "packageManager": "pnpm@12.11.2",
   "type": "module",
+  "pnpm": {
+    "overrides": {
+      "follow-redirects": "1.16.2"
+    }
+  },
   "devDependencies": {
     "@eslint/js": "~10.0.1",
-    "eslint": "~10.15.0",
+    "eslint": "~10.14.0",
     "globals": "~17.14.0"
   }
 }
