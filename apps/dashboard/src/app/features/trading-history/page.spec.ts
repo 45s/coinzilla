@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TradingHistoryComponent } from './page';
 
-
 class FakeWebSocket extends EventTarget {
   static instances: FakeWebSocket[] = [];
 
