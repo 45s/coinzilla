@@ -21,7 +21,7 @@ function printCliIdentity({ stdout = process.stdout } = {}) {
     packageVersion: packageMetadata.version,
     repositoryRoot,
   })
-  stdout.write(`${identity}\\n`)
+  stdout.write(`${identity}\n`)
 }
 
 function printHelp() {
@@ -37,7 +37,7 @@ function printHelp() {
     "The default mode never places or cancels orders, transfers funds, or withdraws.",
     "The LIVE order mode is human-only and must never be invoked by AI agents, tests, CI, or scheduled jobs.",
     "",
-  ].join("\\n"))
+  ].join("\n"))
 }
 
 function loadLocalEnvironment({ allowMissing = false } = {}) {
@@ -118,7 +118,7 @@ if (isMainModule) {
       error,
       secrets: [process.env.BITUNIX_API_KEY, process.env.BITUNIX_API_SECRET].filter(Boolean),
     })
-    process.stderr.write(`Bitunix health check failed: ${JSON.stringify(sanitized)}\\n`)
+    process.stderr.write(`Bitunix health check failed: ${JSON.stringify(sanitized)}\n`)
     process.exitCode = 1
   })
 }
