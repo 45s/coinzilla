@@ -1467,7 +1467,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 **Status: read-only polling observations are exposed through the common Broker `subscribeForUserData()` method; no native private event stream or Harvester provider registration.**
 
-- The polling helper is kept under `src/infrastructure/bitunix/reconciler.js`; its implementation is not exported from the public Brokers package or the Bitunix infrastructure entry point.
+- The polling helper is kept under `src/infrastructure/bitunix/spot/reconciler.js`; its implementation is not exported from the public Brokers package or the Bitunix infrastructure entry point.
 - Regression tests prove semantic deduplication ignores the changing local observation timestamp and that tracked-order symbols are validated synchronously before scheduling.
 - Polling remains explicitly non-authoritative: local `observedAt` is not an exchange `sourceTime`; order history is page 1 only; open orders are symbol-scoped; matching-order detail is not a canonical Fill.
 - `OBSERVE_USER_DATA` is supported through `subscribeForUserData()` and the `onObservation` callback. Native `SUBSCRIBE_USER_DATA` (`onEvent`) and `getAccountSnapshot()` remain unsupported. The helper does not fabricate Binance lifecycle events or claim that transient states between polls are recoverable.
