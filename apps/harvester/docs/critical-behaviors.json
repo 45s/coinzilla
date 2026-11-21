@@ -328,7 +328,7 @@
           "kind": "failure"
         },
         {
-          "path": "src/bootstrap/start-harvester.test.js",
+          "path": "test/bootstrap/account-snapshot-history.test.js",
           "name": "journals PREFLIGHT balances and open orders before trading and CLOSING balances before broker disconnect",
           "kind": "integration"
         }
