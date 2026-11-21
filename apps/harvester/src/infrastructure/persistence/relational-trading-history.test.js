@@ -82,6 +82,11 @@ async function preparePersistence({ context, logger = { error() {} } } = {}) {
     logger,
   })
   context.setPersistence(persistence)
+  assert.equal(
+    persistence?.relationalError ?? null,
+    null,
+    `Relational persistence setup must succeed: ${persistence?.relationalError?.message ?? "no persistence result"}`,
+  )
   return persistence
 }
 
