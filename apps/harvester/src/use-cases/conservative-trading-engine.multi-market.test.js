@@ -1992,7 +1992,7 @@ test("uses refreshed exchange filters when planning a recovery SELL", async () =
       onEvaluate: (input) => {
         evaluatedMetadata = input.marketMetadata
       },
-      lastBuyPrice: seeded.fill.price.amount,
+      lastBuyPrice: "100",
     }),
     brokerOverrides: {
       getSymbolFilters: async ({ symbol }) => {
@@ -2015,8 +2015,7 @@ test("uses refreshed exchange filters when planning a recovery SELL", async () =
     },
   })
 
-  const refreshedMinimumNotional = evaluatedMetadata?.tradingRules?.constraints
-    .find((constraint) => constraint.type === "MIN_NOTIONAL")?.value?.amount
+  const refreshedMinimumNotional = evaluatedMetadata?.tradingRules?.constraints?.find((constraint) => constraint.type === "MIN_NOTIONAL")?.value?.amount
   assert.equal(refreshedRuleReads, 1, "An active recovery position must trigger a current exchange-filter read")
   assert.equal(refreshedMinimumNotional, "200", "Strategy evaluation must receive the refreshed minimum-notional filter")
   assert.equal(
