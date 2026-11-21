@@ -509,14 +509,12 @@ export async function startTradingHistoryApiServer({
 } = {}) {
   const configuration = validateApiServerConfiguration({
     queries,
-    token,
     environment,
     host,
     port,
   })
   const server = createConfiguredServer({
     queries: configuration.queries,
-    token: configuration.token,
     environment: configuration.environment,
     logger,
   })
