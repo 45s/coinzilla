@@ -3,6 +3,34 @@ import { Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { calculatePositionFill, calculatePositionSellAllocation } from "./position-accounting.js"
 import { normalizeStrategyId } from "../strategies/strategy-ids.js"
 
+function normalizePositionFreeBaseQuantity({ freeBaseQuantity, market } = {}) {
+  const normalizedFreeBaseQuantity = freeBaseQuantity ?? new Quantity({
+    amount: "0",
+    asset: market.baseAsset,
+  })
+  if (
+    !(normalizedFreeBaseQuantity instanceof Quantity) ||
+    normalizedFreeBaseQuantity.asset.id !== market.baseAsset.id
+  ) {
+    throw new TypeError("Position.freeBaseQuantity must use the market base Asset")
+  }
+  return normalizedFreeBaseQuantity
+}
+
+function normalizePositionSpent({ spent, market } = {}) {
+  const normalizedSpent = spent ?? new Money({
+    amount: "0",
+    asset: market.quoteAsset,
+  })
+  if (!(normalizedSpent instanceof Money) || normalizedSpent.asset.id !== market.quoteAsset.id) {
+    throw new TypeError("Position.spent must use the market quote Asset")
+  }
+  if (normalizedSpent.amount.startsWith("-")) {
+    throw new RangeError("Position.spent must be non-negative")
+  }
+  return normalizedSpent
+}
+
 function validatePositionConstructorInput({
   positionId,
   strategyId,
@@ -25,29 +53,14 @@ function validatePositionConstructorInput({
   if (!(baseQuantity instanceof Quantity) || baseQuantity.asset.id !== market.baseAsset.id) {
     throw new TypeError("Position.baseQuantity must use the market base Asset")
   }
-  const normalizedFreeBaseQuantity = freeBaseQuantity ?? new Quantity({
-    amount: "0",
-    asset: market.baseAsset,
+  const normalizedFreeBaseQuantity = normalizePositionFreeBaseQuantity({
+    freeBaseQuantity,
+    market,
   })
-  if (
-    !(normalizedFreeBaseQuantity instanceof Quantity) ||
-    normalizedFreeBaseQuantity.asset.id !== market.baseAsset.id
-  ) {
-    throw new TypeError("Position.freeBaseQuantity must use the market base Asset")
-  }
   if (!(quoteNetCashFlow instanceof Money) || quoteNetCashFlow.asset.id !== market.quoteAsset.id) {
     throw new TypeError("Position.quoteNetCashFlow must use the market quote Asset")
   }
-  const normalizedSpent = spent ?? new Money({
-    amount: "0",
-    asset: market.quoteAsset,
-  })
-  if (!(normalizedSpent instanceof Money) || normalizedSpent.asset.id !== market.quoteAsset.id) {
-    throw new TypeError("Position.spent must use the market quote Asset")
-  }
-  if (normalizedSpent.amount.startsWith("-")) {
-    throw new RangeError("Position.spent must be non-negative")
-  }
+  const normalizedSpent = normalizePositionSpent({ spent, market })
 
   return {
     normalizedStrategyId,
