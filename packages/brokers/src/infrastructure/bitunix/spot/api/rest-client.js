@@ -534,22 +534,37 @@ export class BitunixRestClient {
         message: "Bitunix REST credentials are required for authenticated requests",
         kind: "authentication",
         path,
+        outcomeUnknown: stateChanging ? false : undefined,
       })
     }
-    const request = authenticated
-      ? createSignedRequest({
-        client: this,
-        method,
+    let request
+    try {
+      request = authenticated
+        ? createSignedRequest({
+          client: this,
+          method,
+          path,
+          queryParams,
+          body,
+        })
+        : createPublicRequest({
+          client: this,
+          method,
+          path,
+          queryParams,
+        })
+    } catch (error) {
+      if (!stateChanging) {
+        throw error
+      }
+      throw new BitunixRestError({
+        message: error instanceof Error ? error.message : String(error),
+        kind: "response",
+        cause: error,
         path,
-        queryParams,
-        body,
+        outcomeUnknown: false,
       })
-      : createPublicRequest({
-        client: this,
-        method,
-        path,
-        queryParams,
-      })
+    }
     const response = await sendRequest({
       client: this,
       request,
