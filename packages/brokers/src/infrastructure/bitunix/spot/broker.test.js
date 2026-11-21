@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
 import { BitunixRestClient } from "./api/rest-client.js"
+import { createRestSignature } from "../auth/create-rest-signature.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 
 
@@ -2587,7 +2588,17 @@ test("Bitunix Spot createOrder completes signed REST placement and order-detail 
   assert.equal(requests[0].url.pathname, "/api/spot/v1/order/place_order")
   assert.equal(requests[0].options.method, "POST")
   assert.equal(requests[0].options.headers["api-key"], "test-api-key")
-  assert.equal(requests[0].options.headers.sign.length, 64)
+  assert.equal(
+    requests[0].options.headers.sign,
+    createRestSignature({
+      nonce: "test-nonce-0",
+      timestamp: "1795262400000",
+      apiKey: "test-api-key",
+      secretKey: "test-api-secret",
+      body: requests[0].options.body,
+      bodyIsSerialized: true,
+    }),
+  )
   assert.equal(requests[0].options.body, '{"symbol":"BTCUSDT","side":2,"type":1,"volume":"1.00","price":"100.00"}')
   assert.equal(requests[1].url.pathname, "/api/spot/v1/order/detail")
   assert.equal(requests[1].url.searchParams.get("orderId"), "12345678901234567890")
