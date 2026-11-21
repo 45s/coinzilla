@@ -141,7 +141,7 @@ export class OperatorComponent {
     this.successMessage.set(null);
     const request: OperatorCommand = {
       command: pending.command,
-      requestId: `dashboard-${Date.now()}`,
+      requestId: `dashboard-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       ...(pending.symbol ? { symbol: pending.symbol } : {}),
     };
     try {
