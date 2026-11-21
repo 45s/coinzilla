@@ -6,7 +6,10 @@ import { handleOperatorControlRequest } from "./operator-control-api.js"
 function createRequest({ method = "GET", body, origin } = {}) {
   const request = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
   request.method = method
-  request.headers = origin ? { origin } : {}
+  request.headers = {
+    ...(origin ? { origin } : {}),
+    ...(method === "POST" ? { "content-type": "application/json" } : {}),
+  }
   return request
 }
 
