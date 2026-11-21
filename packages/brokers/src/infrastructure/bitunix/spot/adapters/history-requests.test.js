@@ -116,6 +116,19 @@ test("order-history response accepts a matching page and an explicitly empty res
   assert.deepEqual(rows, [], "an explicit empty first page must normalize to an empty row list")
 })
 
+test("order-history response accepts integer-valued decimal page strings from the live API", () => {
+  const rows = normalizeOrderHistoryPage({
+    value: {
+      total: 0,
+      pageNum: " 1.0 ",
+      data: [],
+    },
+    requestedPage: 1,
+  })
+
+  assert.deepEqual(rows, [], "an integer-valued page string must normalize without weakening page identity validation")
+})
+
 test("order-history response rejects incomplete or inconsistent page envelopes", () => {
   assert.throws(
     () => normalizeOrderHistoryPage({
