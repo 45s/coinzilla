@@ -42,3 +42,17 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .command-console small { grid-column: 1 / -1; color: var(--muted, #8992a5); font-size: 10px; }
 .command-console code { color: var(--text, #e8eaf0); }
 @media (max-width: 540px) { .command-console { grid-template-columns: 1fr; } .command-console small { grid-column: auto; } }
+
+
+.control-description { margin: 12px 0 0; max-width: 760px; color: var(--muted, #8992a5); font-size: 11px; line-height: 1.55; }
+.market-control-list { display: grid; gap: 8px; margin: 17px 0; }
+.market-control-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 13px; border: 1px solid var(--border, #293044); border-radius: 9px; background: var(--surface, #171c29); }
+.market-control-identity { display: grid; gap: 4px; min-width: 0; }
+.market-control-identity strong { color: var(--text, #e8eaf0); font: 700 13px monospace; }
+.market-control-identity small { color: var(--muted, #8992a5); font-size: 10px; overflow-wrap: anywhere; }
+.market-readiness { color: #8fe0b3; font-size: 9px; font-weight: 800; letter-spacing: .5px; }
+.market-readiness.blocked { color: #d8ad75; }
+.market-control-state { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-shrink: 0; }
+.pause-state { color: #8fe0b3; font-size: 10px; font-weight: 700; }
+.pause-state.paused { color: #ffb2b2; }
+.market-control-empty { padding: 24px 12px; color: var(--muted, #8992a5); text-align: center; font-size: 11px; }

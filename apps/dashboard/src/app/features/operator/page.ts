@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
 import { OperatorApi, type OperatorCommand } from './api';
@@ -10,6 +10,29 @@ interface PendingCommand {
   readonly command: OperatorCommandName;
   readonly symbol?: string;
   readonly label: string;
+}
+interface OperatorMarketRow {
+  readonly symbol: string;
+  readonly enabled: boolean;
+  readonly operatorBuysPaused: boolean;
+  readonly readiness: string;
+  readonly blockers: readonly string[];
+}
+
+function readOperatorMarkets(value: unknown): readonly OperatorMarketRow[] {
+  if (!value || typeof value !== 'object' || !Array.isArray((value as { markets?: unknown }).markets)) return [];
+  return (value as { markets: unknown[] }).markets.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const market = item as Record<string, unknown>;
+    if (typeof market['symbol'] !== 'string' || typeof market['enabled'] !== 'boolean') return [];
+    return [{
+      symbol: market['symbol'],
+      enabled: market['enabled'],
+      operatorBuysPaused: market['operatorBuysPaused'] === true,
+      readiness: typeof market['readiness'] === 'string' ? market['readiness'] : 'UNKNOWN',
+      blockers: Array.isArray(market['blockers']) ? market['blockers'].filter((blocker): blocker is string => typeof blocker === 'string') : [],
+    }];
+  });
 }
 
 @Component({
@@ -27,59 +50,16 @@ export class OperatorComponent {
   readonly commandRunning = signal(false);
   readonly errorMessage = signal<string | null>(null);
   readonly successMessage = signal<string | null>(null);
-  readonly symbol = signal('');
-  readonly commandInput = signal('');
   readonly status = signal<unknown>(null);
   readonly markets = signal<unknown>(null);
   readonly positions = signal<unknown>(null);
   readonly orders = signal<unknown>(null);
   readonly balances = signal<unknown>(null);
   readonly pendingCommand = signal<PendingCommand | null>(null);
+  readonly marketRows = computed(() => readOperatorMarkets(this.markets()));
 
   constructor() {
     void this.refresh();
-  }
-
-  updateCommandInput(event: Event): void {
-    this.commandInput.set((event.target as HTMLInputElement).value);
-  }
-
-  async runCommandLine(): Promise<void> {
-    const [command, symbol] = this.commandInput().trim().split(/\s+/, 2);
-    if (!command) {
-      return;
-    }
-    const normalized = command.toLowerCase();
-    if (normalized === 'pause' || normalized === 'unpause') {
-      if (!symbol) {
-        this.errorMessage.set(`Usage: ${normalized} SYMBOL`);
-        return;
-      }
-      this.symbol.set(symbol.toUpperCase());
-      this.requestCommand(normalized);
-      return;
-    }
-    if (normalized === 'pauseallbuys' || normalized === 'resumeallbuys') {
-      this.requestCommand(normalized);
-      return;
-    }
-    if (['status', 'markets', 'portfolio', 'orders', 'balances'].includes(normalized)) {
-      await this.refresh();
-      if (this.connected()) {
-        this.successMessage.set(`Refreshed ${normalized}.`);
-      }
-      return;
-    }
-    if (normalized === 'help') {
-      this.successMessage.set('Commands: status, markets, portfolio, orders, balances, pause SYMBOL, unpause SYMBOL, pauseallbuys, resumeallbuys.');
-      this.errorMessage.set(null);
-      return;
-    }
-    this.errorMessage.set('Unknown command. Type help to see available commands.');
-  }
-
-  updateSymbol(event: Event): void {
-    this.symbol.set((event.target as HTMLInputElement).value.toUpperCase().replace(/[^A-Z0-9._-]/g, ''));
   }
 
   async refresh(): Promise<void> {
@@ -107,11 +87,11 @@ export class OperatorComponent {
     }
   }
 
-  requestCommand(command: OperatorCommandName): void {
+  requestCommand(command: OperatorCommandName, selectedSymbol?: string): void {
     const requiresSymbol = command === 'pause' || command === 'unpause';
-    const symbol = this.symbol().trim();
+    const symbol = selectedSymbol?.trim().toUpperCase() ?? '';
     if (requiresSymbol && !symbol) {
-      this.errorMessage.set('Enter a market symbol first.');
+      this.errorMessage.set('Choose a configured market before requesting Pause or Unpause.');
       return;
     }
     const labels: Record<OperatorCommandName, string> = {
@@ -135,7 +115,7 @@ export class OperatorComponent {
 
   async confirmCommand(): Promise<void> {
     const pending = this.pendingCommand();
-    if (!pending || this.commandRunning()) return;
+    if (!pending || this.commandRunning() || !this.connected()) return;
     this.commandRunning.set(true);
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -145,13 +125,10 @@ export class OperatorComponent {
       ...(pending.symbol ? { symbol: pending.symbol } : {}),
     };
     try {
-      const result = await firstValueFrom(this.api.execute(request));
-      this.successMessage.set(`${pending.label} completed. Harvester accepted the command.`);
+      await firstValueFrom(this.api.execute(request));
       this.pendingCommand.set(null);
+      this.successMessage.set(`${pending.label} completed. Harvester accepted the command.`);
       await this.refresh();
-      if (result.data !== undefined) {
-        this.successMessage.set(`${pending.label} completed. Harvester accepted the command.`);
-      }
     } catch (error) {
       this.errorMessage.set(this.describeError(error));
     } finally {
