@@ -64,8 +64,8 @@ jobs:
       - name: Validate Harvester critical behavior ownership and regression evidence
         if: matrix.package == '@coinzilla/harvester'
         env:
-          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
-          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: pnpm --filter @coinzilla/harvester check:reliability
 
       - name: Run ${{ matrix.package }} tests
