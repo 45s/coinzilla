@@ -2,28 +2,8 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "./start-harvester-test-support.js"
 
-const { appConfig, createBroker, binanceEnv, startHarvesterForTest, waitForTestSignal, Asset, Balance, Quantity } = shared
+const { createBroker, binanceEnv, startHarvesterForTest, waitForTestSignal, Asset, Balance, Quantity, createTwoMarketStartupConfig } = shared
 const test = (...args) => nodeTest(`[market-subscriptions.test.js] ${args[0]}`, ...args.slice(1))
-
-function createTwoMarketStartupConfig() {
-  const strategy = appConfig.strategies.CG_coinGrabber
-  return {
-    ...appConfig,
-    strategies: {
-      ...appConfig.strategies,
-      CG_coinGrabber: {
-        ...strategy,
-        pairs: {
-          ...strategy.pairs,
-          ETHUSDT: {
-            ...strategy.pairs.ETHUSDT,
-            enabled: true,
-          },
-        },
-      },
-    },
-  }
-}
 
 function configureDelayedTickerPricePort({ broker, calls, firstTicker, resolveFirstTickerRequested }) {
   broker.getPrices = async ({ symbol }) => {

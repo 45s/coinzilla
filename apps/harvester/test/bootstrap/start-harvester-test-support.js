@@ -513,6 +513,26 @@ export const startHarvesterForTest = (input = {}) => {
   })
 }
 
+export function createTwoMarketStartupConfig() {
+  const strategy = appConfig.strategies.CG_coinGrabber
+  return {
+    ...appConfig,
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...strategy,
+        pairs: {
+          ...strategy.pairs,
+          ETHUSDT: {
+            ...strategy.pairs.ETHUSDT,
+            enabled: true,
+          },
+        },
+      },
+    },
+  }
+}
+
 export const createFill = ({
   tradeId = "trade-1",
   quantity = "0.01"

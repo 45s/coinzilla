@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 
-const { appConfig, createBroker, binanceEnv, startHarvesterForTest, createFill, createBinanceCapabilities, testEventPublisher, createOpenOrderSnapshot, createMarketMetadata, createPriorProcessHistory, waitForTestSignal, makeVolatilityReadyBroker, withExternalOrdersPolicy, mkdtemp, rm, os, path, Asset, Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, prepareHarvesterStartupState, resolveHarvesterOptions, createRecoverySellerStopWorkflow, createFileOperationalStateStore, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped } = shared
+const { appConfig, createBroker, binanceEnv, startHarvesterForTest, createFill, createBinanceCapabilities, testEventPublisher, createOpenOrderSnapshot, createMarketMetadata, createPriorProcessHistory, waitForTestSignal, makeVolatilityReadyBroker, withExternalOrdersPolicy, mkdtemp, rm, os, path, Asset, Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, prepareHarvesterStartupState, resolveHarvesterOptions, createRecoverySellerStopWorkflow, createFileOperationalStateStore, recordConfigurationBaseline, recordProcessStarted, recordProcessStopped, createTwoMarketStartupConfig } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
 
