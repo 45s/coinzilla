@@ -10,7 +10,6 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 
 - [Application configuration and Telegram notification profiles](../README.md#configuration) — the named `appConfig` export composed from named modules, including `config/operator-control.js` and `config/notifications-tg-profiles.js`; profile behavior, event overrides, and environment-only credentials.
 - [Repository Configuration Standard](../../../docs/engineering/CONFIGURATION_STANDARD.md) — shared ownership, validation, defaults, environment access, secrets and migration rules.
-
 - [Harvester README](../README.md) — setup, runtime, configuration and operational overview
 - [Shared token specification generator](../README.md#generate-or-refresh-market-metadata) — retrieve and maintain exchange-derived market precision through `pnpm run config:symbol`; strategy pairs remain operator-owned
 - [Harvester agent instructions](../AGENTS.md) — mandatory preflight and domain-specific constraints
@@ -21,7 +20,6 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Startup open-order boundary plan](plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md) — completed design and implementation record for #1157
 - [Trading First](TRADING_FIRST.md) — authoritative trading priority and exchange-safety requirements
 
-
 ## Reliability acceptance — issue #1639
 
 The machine-readable [critical behavior inventory](critical-behaviors.json) maps each critical Harvester behavior to authoritative domain invariants, owning production modules, named normal/failure regression tests, integration/replay evidence where required, runtime status, and measured per-module coverage floors. The required Unit Tests workflow validates the inventory and test ownership before running the complete Harvester package suite. Run the same guard locally with `pnpm --filter @coinzilla/harvester check:reliability`.
@@ -29,6 +27,7 @@ The machine-readable [critical behavior inventory](critical-behaviors.json) maps
 The required Test Coverage workflow runs the full Harvester coverage suite and checks every critical module against its measured minimum with `pnpm --filter @coinzilla/harvester check:critical-coverage <coverage-report>`.
 
 The focused Harvester Targeted Tests suite runs both reliability-guard regression files, the remaining startup-composition tests, and the responsibility-focused bootstrap suites:
+
 - `account-preflight.test.js` and `account-snapshot-history.test.js`
 - `broker-boundaries.test.js`, `external-order-ownership.test.js`, and `shutdown-lifecycle.test.js`
 - `market-subscriptions.test.js` and `market-evaluation.test.js`
@@ -71,7 +70,6 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 - [Operations index](operations/README.md) — Journal, logging, TESTNET procedures and safety boundaries
 - [Submission deferrals and missing-order diagnostics](operations/submission-deferrals.md) — stable reasons for withheld broker submissions and safe LIMIT_MAKER diagnosis.
 - [Relational trading-history backup runbook](operations/trading-history-backups.md) — routine online backups, explicit TESTNET/LIVE selection, restore checks and retention.
-
 - [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier two-pair DOGEUSDT/ZROUSDT plan is superseded: the committed CG configuration enables four TESTNET markets (LINKUSDT, ZROUSDT, DOGEUSDT and ADAUSDT) and three LIVE markets (LINKFDUSD, ZROFDUSD and WLDFDUSD). The runbook remains CLOSED / PAUSED; no replacement session scope is approved.
 - [Journal operations](JOURNAL_OPERATIONS.md)
 - [Error vocabulary](error-vocabulary.md) — stable operator-facing diagnostic identifiers and recovery procedures.
@@ -85,9 +83,7 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 ## Audit process
 
 - [2026-11-19 TESTNET Conservative session audit](audits/sessions/AUDIT_SESSION_2026-11-19_02-16-31Z.md) — latest historical session record: runbook gate conflict, external orders, failed shutdown safety proof and missing final evidence; no acceptance or exchange authorization.
-
 - [Conservative Recovery Lifecycle Audit](CONSERVATIVE_RECOVERY_LIFECYCLE_AUDIT.md) — acceptance evidence, confirmed outcomes, and the remaining recovery-SELL filter-freshness gap for #1359/#1362.
-
 - [Harvester audit working rules](AUDIT_WORKING_RULES.md) — scope pointer to the repository-wide agent workflow and Harvester-specific audit boundaries.
 - [Harvester audit records index](audits/README.md) — historical evidence and investigation records.
 
