@@ -481,6 +481,36 @@ function validateClientOptions({ apiKey, apiSecret, baseUrl, requestTimeout, fet
  * Requests are signed by default; public requests must explicitly opt into read-only GET mode.
  * The client never retries a request, especially a state-changing order operation.
  */
+function createPreparedRequest({ client, method, path, queryParams, body, authenticated, stateChanging }) {
+  try {
+    return authenticated
+      ? createSignedRequest({
+        client,
+        method,
+        path,
+        queryParams,
+        body,
+      })
+      : createPublicRequest({
+        client,
+        method,
+        path,
+        queryParams,
+      })
+  } catch (error) {
+    if (!stateChanging) {
+      throw error
+    }
+    throw new BitunixRestError({
+      message: error instanceof Error ? error.message : String(error),
+      kind: "response",
+      cause: error,
+      path,
+      outcomeUnknown: false,
+    })
+  }
+}
+
 export class BitunixRestClient {
   /**
    * @param {{apiKey?: string, apiSecret?: string, baseUrl?: string, requestTimeout?: number, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string}} options
@@ -537,34 +567,15 @@ export class BitunixRestClient {
         outcomeUnknown: false,
       })
     }
-    let request
-    try {
-      request = authenticated
-        ? createSignedRequest({
-          client: this,
-          method,
-          path,
-          queryParams,
-          body,
-        })
-        : createPublicRequest({
-          client: this,
-          method,
-          path,
-          queryParams,
-        })
-    } catch (error) {
-      if (!stateChanging) {
-        throw error
-      }
-      throw new BitunixRestError({
-        message: error instanceof Error ? error.message : String(error),
-        kind: "response",
-        cause: error,
-        path,
-        outcomeUnknown: false,
-      })
-    }
+    const request = createPreparedRequest({
+      client: this,
+      method,
+      path,
+      queryParams,
+      body,
+      authenticated,
+      stateChanging,
+    })
     const response = await sendRequest({
       client: this,
       request,
