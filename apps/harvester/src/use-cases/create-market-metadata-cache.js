@@ -1,4 +1,8 @@
 import { toResult } from "@coinzilla/utils"
+import {
+  MARKET_METADATA_REFRESH_ERROR_CODES,
+  MarketMetadataRefreshError,
+} from "./market-metadata-refresh-error.js"
 
 export const MARKET_METADATA_FRESHNESS_MAX_AGE_MS = 30_000
 
@@ -25,7 +29,15 @@ function isFreshMarketMetadata({
 
 function validateRefreshedMarketIdentity({ refreshed, metadata, symbol } = {}) {
   if (refreshed?.market?.id !== metadata?.market?.id || refreshed?.market?.symbol !== symbol) {
-    throw new Error(`Fresh exchange metadata does not match the active market ${symbol}`)
+    throw new MarketMetadataRefreshError({
+      code: MARKET_METADATA_REFRESH_ERROR_CODES.MARKET_IDENTITY_MISMATCH,
+      message: `Fresh exchange metadata does not match the active market ${symbol}`,
+      context: {
+        symbol,
+        receivedSymbol: refreshed?.market?.symbol ?? null,
+        receivedMarketId: refreshed?.market?.id ?? null,
+      },
+    })
   }
   return refreshed
 }
@@ -37,9 +49,26 @@ async function retrieveValidatedMarketMetadata({
   getSymbolFilters,
   validateMarketMetadata,
 } = {}) {
-  const result = await getSymbolFilters({ symbol })
+  let result
+  try {
+    result = await getSymbolFilters({ symbol })
+  } catch (cause) {
+    throw new MarketMetadataRefreshError({
+      code: MARKET_METADATA_REFRESH_ERROR_CODES.EXCHANGE_FILTERS_UNAVAILABLE,
+      message: `Unable to retrieve current Binance exchange filters for ${symbol}`,
+      context: { symbol },
+      cause,
+      retryable: true,
+    })
+  }
   if (!result?.ok || !result.data) {
-    throw result?.errors?.[0] ?? new Error(`Fresh Binance exchange metadata is unavailable for ${symbol}`)
+    throw new MarketMetadataRefreshError({
+      code: MARKET_METADATA_REFRESH_ERROR_CODES.EXCHANGE_FILTERS_UNAVAILABLE,
+      message: `Unable to retrieve current Binance exchange filters for ${symbol}`,
+      context: { symbol },
+      cause: result?.errors?.[0],
+      retryable: true,
+    })
   }
 
   const refreshed = validateMarketMetadata({
@@ -64,7 +93,15 @@ function storeRefreshedMarketMetadata({
 } = {}) {
   const refreshedAtTimestamp = readMarketMetadataClock({ now })
   if (refreshedAtTimestamp < currentTime) {
-    throw new Error("Market metadata clock moved backwards during refresh")
+    throw new MarketMetadataRefreshError({
+      code: MARKET_METADATA_REFRESH_ERROR_CODES.CLOCK_MOVED_BACKWARDS,
+      message: `Market metadata clock moved backwards while refreshing ${symbol}`,
+      context: {
+        symbol,
+        startedAt: currentTime,
+        completedAt: refreshedAtTimestamp,
+      },
+    })
   }
   refreshedMarketMetadata.set(symbol, refreshed)
   refreshedAtBySymbol.set(symbol, refreshedAtTimestamp)
