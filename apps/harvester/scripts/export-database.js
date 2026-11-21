@@ -82,7 +82,7 @@ export function exportDatabase({ databaseFilename, outputFilename } = {}) {
       outputFilename,
       `${JSON.stringify({
         database: exportedTables,
-      }, null, 2)}\\n`,
+      }, null, 2)}\n`,
       {
         encoding: "utf8",
         mode: 0o600,
@@ -122,10 +122,10 @@ export function runDatabaseExport({ env = process.env, tradingMode } = {}) {
     outputFilename,
   })
 
-  process.stdout.write(`Exporter commit: ${resolveExporterCommit()}\\n`)
-  process.stdout.write(`Exported ${result.tableCount} tables to ${result.outputFilename}\\n`)
+  process.stdout.write(`Exporter commit: ${resolveExporterCommit()}\n`)
+  process.stdout.write(`Exported ${result.tableCount} tables to ${result.outputFilename}\n`)
   for (const [tableName, rowCount] of Object.entries(result.tableCounts)) {
-    process.stdout.write(`- ${tableName}: ${rowCount} records\\n`)
+    process.stdout.write(`- ${tableName}: ${rowCount} records\n`)
   }
   return result
 }
@@ -136,7 +136,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     (tradingMode !== "testnet" && tradingMode !== "live")
     || unexpectedArguments.length > 0
   ) {
-    process.stderr.write("Usage: pnpm run db:export <testnet|live>\\n")
+    process.stderr.write("Usage: pnpm run db:export <testnet|live>\n")
     process.exitCode = 1
   } else {
     try {
@@ -144,7 +144,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         tradingMode,
       })
     } catch (error) {
-      process.stderr.write(`Database export failed: ${error.message}\\n`)
+      process.stderr.write(`Database export failed: ${error.message}\n`)
       process.exitCode = 1
     }
   }
