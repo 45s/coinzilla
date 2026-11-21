@@ -514,22 +514,14 @@ test("publishes verified ownership with a broker-confirmed cancellation event", 
       }),
     },
   })
-  await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1,
-    },
+  await startBothMarkets({
+    engine,
+    symbols: ["DOGEUSDT"],
   })
-  await engine.processMarketPrice({
+  const cancellation = await engine.cancelOwnedBuyOrdersForShutdown({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2,
-    },
   })
+  assert.equal(cancellation.ok, true, "The owned BUY cancellation must be confirmed by the test broker.")
 
   const cancelledEvent = events.find(({ name }) => name === "order.cancelled")
   assert.ok(cancelledEvent, "A broker-confirmed cancellation must publish its lifecycle event.")
@@ -558,22 +550,14 @@ test("publishes verified ownership with an unconfirmed cancellation failure", as
       }),
     },
   })
-  await engine.processMarketPrice({
-    symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100",
-      timestamp: 1,
-    },
+  await startBothMarkets({
+    engine,
+    symbols: ["DOGEUSDT"],
   })
-  await engine.processMarketPrice({
+  const cancellation = await engine.cancelOwnedBuyOrdersForShutdown({
     symbol: "DOGEUSDT",
-    priceEvent: {
-      symbol: "DOGEUSDT",
-      price: "100.06",
-      timestamp: 2,
-    },
   })
+  assert.equal(cancellation.ok, false, "A thrown broker cancellation must remain unconfirmed.")
 
   const failedEvent = events.find(({ name }) => name === "order.cancel_failed")
   assert.ok(failedEvent, "An unconfirmed cancellation must publish its lifecycle failure event.")
