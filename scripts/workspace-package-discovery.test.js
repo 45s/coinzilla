@@ -99,7 +99,10 @@ test("discovers direct workspace package manifests from declared patterns", () =
       discoverWorkspacePackages({
         repositoryRoot,
         patterns: ["apps/*", "packages/*"],
-      }).map(({ file, name }) => ({ file, name })),
+      }).map(({ file, name }) => ({
+        file,
+        name,
+      })),
       [
         {
           file: "apps/harvester/package.json",
