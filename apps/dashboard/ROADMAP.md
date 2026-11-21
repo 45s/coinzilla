@@ -6,10 +6,10 @@
 
 ## Current milestone
 
-- **In progress in [PR #1636](https://github.com/45s/coinzilla/pull/1636), tracked by [#1634](https://github.com/45s/coinzilla/issues/1634):** authenticated read-only Orders, Fills, and Commissions pages backed by Harvester's versioned API, with session-only token handling, backend-selected environment, filters, bounded pagination, record details, explicit connection/error/empty states, and frontend regression tests. This is a coordinated client/server delivery; Harvester retains API and persistence ownership.
-- [ ] Initialize the Angular + TypeScript workspace, responsive shell, Overview screen, demo-only view models, tests and repository ownership/CI registration.
-- [ ] Generate and commit the pnpm lockfile after local dependency installation.
-- [ ] Verify Angular build and tests locally and through GitHub Actions on the exact task PR head.
+- **In progress in [PR #1636](https://github.com/45s/coinzilla/pull/1636), tracked by [#1634](https://github.com/45s/coinzilla/issues/1634):** authenticated read-only Orders, Fills, and Commissions pages backed by Harvester's versioned API, with session-only token handling, backend-selected environment, filters, bounded pagination, record details, readable exchange references, distinct limit/execution/fee-valuation labels, nullable fill-order links, explicit connection/error/empty states, and frontend regression tests. This is a coordinated client/server delivery; Harvester retains API and persistence ownership.
+- [x] Initialize the Angular + TypeScript workspace, responsive shell, Overview screen, demo-only view models, tests and repository ownership/CI registration.
+- [x] Generate and commit the pnpm lockfile after local dependency installation.
+- [x] Verify the Angular production build and tests through GitHub Actions on the exact task PR head.
 
 ## Future capability areas
 
