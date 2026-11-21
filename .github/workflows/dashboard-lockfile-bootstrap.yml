@@ -1,12 +1,9 @@
 name: Bootstrap dashboard lockfile
 
 on:
-  push:
+  pull_request:
     branches:
-      - feat/dashboard/angular-foundation-1623
-    paths:
-      - "apps/dashboard/package.json"
-      - ".github/workflows/dashboard-lockfile-bootstrap.yml"
+      - develop
 
 permissions:
   contents: write
