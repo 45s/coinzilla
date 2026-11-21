@@ -33,3 +33,12 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .snapshot-heading h2 { margin: 0; font-size: 13px; }
 .snapshot-card pre { overflow: auto; max-height: 330px; margin: 13px 0 0; padding: 12px; border-radius: 8px; background: #0b0f18; color: #b8c6dc; font-size: 10px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 760px) { .page-heading, .confirmation-panel { align-items: stretch; flex-direction: column; } .snapshot-grid { grid-template-columns: 1fr; } .confirmation-actions { justify-content: flex-end; } }
+
+.command-console { display: grid; grid-template-columns: minmax(220px, 1fr) auto; align-items: end; gap: 9px 12px; margin: 14px 0; max-width: 650px; }
+.command-console label { display: grid; gap: 7px; }
+.command-console label span { color: var(--muted, #8992a5); font-size: 11px; font-weight: 700; }
+.command-console input { min-width: 0; border: 1px solid var(--border, #293044); border-radius: 8px; padding: 11px 12px; background: var(--surface, #171c29); color: var(--text, #e8eaf0); font: inherit; font-family: monospace; }
+.command-console button { border: 1px solid var(--border, #293044); border-radius: 8px; padding: 11px 15px; background: var(--surface, #171c29); color: var(--text, #e8eaf0); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.command-console small { grid-column: 1 / -1; color: var(--muted, #8992a5); font-size: 10px; }
+.command-console code { color: var(--text, #e8eaf0); }
+@media (max-width: 540px) { .command-console { grid-template-columns: 1fr; } .command-console small { grid-column: auto; } }
