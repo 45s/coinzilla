@@ -429,8 +429,8 @@ function validateApiEnvironment(environment) {
 }
 
 function validateApiHost(host) {
-  if (typeof host !== "string" || host.trim() !== host || host.length === 0) {
-    throw new TypeError("HARVESTER_API_HOST must be a non-empty host name or IP address.")
+  if (host !== DEFAULT_HOST) {
+    throw new TypeError("The unauthenticated trading-history API must bind to 127.0.0.1.")
   }
 }
 
