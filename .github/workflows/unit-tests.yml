@@ -114,7 +114,7 @@ jobs:
         run: pnpm --filter @coinzilla/dashboard build
 
   package-tests-gate:
-    name: Run package tests and dashboard build
+    name: Run package tests
     if: always()
     needs:
       - test
