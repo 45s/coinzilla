@@ -8,7 +8,7 @@ owner: brokers
 
 This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may retain consumer-integration context for provenance, but application ports, adapters, routing, and runtime composition remain owned by each consuming application.
 
-## Bitunix health-check and operator CLI consolidation — #1614
+## Executable CLI source identity — #1631\n\n**Status: IN PROGRESS** — [issue #1631](https://github.com/45s/coinzilla/issues/1631) / [PR #1632](https://github.com/45s/coinzilla/pull/1632). Establishes a repository-wide requirement for user-invoked CLI entrypoints to print their exact source commit, package/script version, worktree state, and runtime before doing work, with a side-effect-free version command. The first implementation is the Bitunix healthcheck entrypoint; the repository-wide CLI inventory and remaining migrations are tracked by the issue.\n\n## Bitunix health-check and operator CLI consolidation — #1614
 
 **Status: IMPLEMENTED and merged** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) / [PR #1616](https://github.com/45s/coinzilla/pull/1616), merge commit `488949b668e1291b5cfc64032250f6d2a4568274`. Exact-head required workflow runs and advisory External Documentation Links passed; issue #1614 is closed after acceptance and exact-head CI verification.
 
