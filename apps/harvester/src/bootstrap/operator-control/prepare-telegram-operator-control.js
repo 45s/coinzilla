@@ -20,7 +20,7 @@ function createDisabledLifecycle() {
     async start(context = {}) {
       operator = createHarvesterOperator(context)
       return Object.freeze({
-        started: true,
+        started: false,
         disabled: true,
       })
     },
