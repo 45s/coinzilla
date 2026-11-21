@@ -1,11 +1,6 @@
 const REQUIRED_HEALTH_OPERATIONS = Object.freeze([
   "diagnostic safety confirmation",
   "diagnostic configuration",
-  "REST private account balances",
-  "WebSocket connection",
-  "ping",
-  "user.account",
-  "user.info",
 ])
 
 export function withholdFreeFormErrorMessages({ value }) {
@@ -44,8 +39,10 @@ export function createSanitizedHealthReport({ report }) {
       skipped: report.summary.skipped,
     },
     healthCheck: {
+      scope: report.healthCheck.scope,
       requiredOperations: report.healthCheck.requiredOperations,
       missingRequiredOperations: report.healthCheck.missingRequiredOperations,
+      nonBlockingFailedOperations: report.healthCheck.nonBlockingFailedOperations,
       healthy: report.healthCheck.healthy,
     },
     results: report.results.map((result) => ({
@@ -71,12 +68,17 @@ export function evaluateReadOnlyHealthCheck({ report }) {
   )
   const missingRequiredOperations = REQUIRED_HEALTH_OPERATIONS.filter((operation) =>
     !passedOperations.has(operation))
-  const failedDiagnosticOperations = report.results.filter((result) =>
-    result.operation !== "operator order attempt" && result.status === "failed")
+  const nonBlockingFailedOperations = report.results
+    .filter((result) => result.status === "failed" &&
+      !REQUIRED_HEALTH_OPERATIONS.includes(result.operation) &&
+      result.operation !== "operator order attempt")
+    .map((result) => result.operation)
   return {
+    scope: "operator-order-preflight",
     requiredOperations: REQUIRED_HEALTH_OPERATIONS,
     missingRequiredOperations,
-    healthy: failedDiagnosticOperations.length === 0 && missingRequiredOperations.length === 0,
+    nonBlockingFailedOperations,
+    healthy: missingRequiredOperations.length === 0,
   }
 }
 
