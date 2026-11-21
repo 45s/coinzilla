@@ -10,7 +10,7 @@
 
 - Exact `develop` source baseline: `7767ea8ce871b658a4bd68a03cc4c4999f582b49`.
 - Coverage was measured by [Test Coverage run #44883479973](https://github.com/45s/coinzilla/actions/runs/44883479973), Harvester job `136783705310`.
-- The measurement ran on PR #1642 head `23e5aa3211ef324866f305eaf7bdef2c0f0fdc50`. The PR diff contained no `apps/harvester/src/**` changes, so the production source under test was byte-for-byte the `develop` source at the recorded base SHA.
+- The measurement ran on PR #1642 head `23e5aa3211ef324866f305eaf7bdef2c0f0fdc50`. At that measured revision, the PR diff contained no `apps/harvester/src/**` changes, so the production source under test was byte-for-byte the `develop` source at the recorded base SHA. Later commits in this PR add a narrowly scoped process-lock input-validation fix; they do not change the provenance of the recorded baseline.
 - The package coverage command includes `src/**/*.js` and excludes `src/**/*.test.js`; the additional test and validation scripts in PR #1642 do not alter production-source coverage.
 - The run completed successfully with **90.35% lines, 83.22% branches, and 96.00% functions** across the Harvester package.
 

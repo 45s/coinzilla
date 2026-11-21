@@ -504,7 +504,7 @@
       "branches": 83.22,
       "functions": 96
     },
-    "note": "The measured PR changed no apps/harvester/src files; test coverage includes src/**/*.js and excludes src/**/*.test.js, so these module measurements are the exact develop production-source baseline."
+    "note": "At the measured PR head, the PR changed no apps/harvester/src files; the coverage command includes src/**/*.js and excludes src/**/*.test.js, so these module measurements are the exact develop production-source baseline. Later PR commits add a narrowly scoped process-lock input-validation fix; the recorded baseline provenance remains unchanged."
   },
   "moduleCoverage": [
     {
