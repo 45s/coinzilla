@@ -1,12 +1,16 @@
-import { timingSafeEqual } from "node:crypto"
 import { createServer } from "node:http"
 import { SystemCustomError } from "@coinzilla/utils"
 import { attachTradingHistoryWebSocket } from "./trading-history-websocket.js"
+import { handleOperatorControlRequest } from "./operator-control-api.js"
 
 const API_PREFIX = "/api/v1/trading"
 const METADATA_ROUTE = `${API_PREFIX}/metadata`
 const DEFAULT_HOST = "127.0.0.1"
 const DEFAULT_PORT = 4201
+const ALLOWED_BROWSER_ORIGINS = new Set([
+  "http://127.0.0.1:4200",
+  "http://localhost:4200",
+])
 const MAX_HEADER_SIZE = 8_192
 const REQUEST_TIMEOUT_MS = 5_000
 const HEADERS_TIMEOUT_MS = 6_000
@@ -85,23 +89,27 @@ function createRequestError({ message, code, status = 400, cause } = {}) {
   })
 }
 
-function createResponseHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+function createResponseHeaders({ origin } = {}) {
+  const headers = {
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "600",
     "Cache-Control": "no-store",
     "Content-Type": "application/json; charset=utf-8",
     "X-Content-Type-Options": "nosniff",
   }
+  if (ALLOWED_BROWSER_ORIGINS.has(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin
+    headers.Vary = "Origin"
+  }
+  return headers
 }
 
 function sendJson({ response, status, body } = {}) {
   if (response.destroyed || response.writableEnded) {
     return
   }
-  response.writeHead(status, createResponseHeaders())
+  response.writeHead(status, createResponseHeaders({ origin: response.tradingHistoryOrigin }))
   response.end(JSON.stringify(body))
 }
 
@@ -117,19 +125,6 @@ function sendApiError({ response, status, code, message } = {}) {
       },
     },
   })
-}
-
-function isAuthorized({ authorization, token } = {}) {
-  if (typeof authorization !== "string" || !authorization.startsWith("Bearer ")) {
-    return false
-  }
-  const suppliedToken = authorization.slice("Bearer ".length)
-  if (suppliedToken.length === 0 || suppliedToken.trim() !== suppliedToken) {
-    return false
-  }
-  const expected = Buffer.from(token, "utf8")
-  const actual = Buffer.from(suppliedToken, "utf8")
-  return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 
 function parseIntegerParameter({ searchParams, name, fallback } = {}) {
@@ -249,7 +244,7 @@ function handleOptionsRequest({ request, response } = {}) {
   if (request.method !== "OPTIONS") {
     return false
   }
-  response.writeHead(204, createResponseHeaders())
+  response.writeHead(204, createResponseHeaders({ origin: response.tradingHistoryOrigin }))
   response.end()
   return true
 }
@@ -317,7 +312,7 @@ function handleDetailRequest({ response, queries, route } = {}) {
   })
 }
 
-function handleRequestPreconditions({ request, response, token } = {}) {
+function handleRequestPreconditions({ request, response } = {}) {
   if (handleOptionsRequest({
     request,
     response,
@@ -333,36 +328,31 @@ function handleRequestPreconditions({ request, response, token } = {}) {
     })
     return true
   }
-  if (!isAuthorized({
-    authorization: request.headers.authorization,
-    token,
-  })) {
-    sendApiError({
-      response,
-      status: 401,
-      code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
-      message: "A valid bearer token is required.",
-    })
-    return true
-  }
   return false
 }
 
-function handleTradingHistoryRequest({
+async function handleTradingHistoryRequest({
   request,
   response,
   queries,
-  token,
   environment,
+  operator,
 } = {}) {
-  if (handleRequestPreconditions({
+  const url = new URL(request.url ?? "/", "http://127.0.0.1")
+  if (await handleOperatorControlRequest({
     request,
     response,
-    token,
+    pathname: url.pathname,
+    operator,
   })) {
     return
   }
-  const url = new URL(request.url ?? "/", "http://127.0.0.1")
+  if (handleRequestPreconditions({
+    request,
+    response,
+  })) {
+    return
+  }
   if (url.pathname === METADATA_ROUTE) {
     handleMetadataRequest({
       response,
@@ -398,16 +388,19 @@ function handleTradingHistoryRequest({
   })
 }
 
-function createRequestHandler({ queries, token, environment, logger } = {}) {
-  return (...requestArguments) => {
+function createRequestHandler({ queries, environment, logger, operator } = {}) {
+  return async (...requestArguments) => {
     const [request, response] = requestArguments
+    response.tradingHistoryOrigin = ALLOWED_BROWSER_ORIGINS.has(request.headers.origin)
+      ? request.headers.origin
+      : undefined
     try {
-      handleTradingHistoryRequest({
+      await handleTradingHistoryRequest({
         request,
         response,
         queries,
-        token,
         environment,
+        operator,
       })
     } catch (error) {
       if (error instanceof TradingHistoryApiRequestError) {
@@ -451,12 +444,6 @@ async function closeServer(server) {
   })
 }
 
-function validateApiToken(token) {
-  if (typeof token !== "string" || token.trim() !== token || Buffer.byteLength(token, "utf8") < 32) {
-    throw new TypeError("HARVESTER_API_TOKEN must contain at least 32 non-whitespace characters.")
-  }
-}
-
 function validateApiEnvironment(environment) {
   if (environment !== "testnet" && environment !== "live") {
     throw new TypeError("Trading-history API environment must be exactly testnet or live.")
@@ -464,8 +451,8 @@ function validateApiEnvironment(environment) {
 }
 
 function validateApiHost(host) {
-  if (typeof host !== "string" || host.trim() !== host || host.length === 0) {
-    throw new TypeError("HARVESTER_API_HOST must be a non-empty host name or IP address.")
+  if (host !== DEFAULT_HOST) {
+    throw new TypeError("The unauthenticated trading-history API must bind to 127.0.0.1.")
   }
 }
 
@@ -485,33 +472,30 @@ function validateQueryOperations(queries) {
 
 function validateApiServerConfiguration({
   queries,
-  token,
   environment,
   host = DEFAULT_HOST,
   port = DEFAULT_PORT,
 } = {}) {
-  validateApiToken(token)
   validateApiEnvironment(environment)
   validateApiHost(host)
   validateApiPort(port)
   validateQueryOperations(queries)
   return Object.freeze({
     queries,
-    token,
     environment,
     host,
     port,
   })
 }
 
-function createConfiguredServer({ queries, token, environment, logger } = {}) {
+function createConfiguredServer({ queries, environment, logger, operator } = {}) {
   const server = createServer({
     maxHeaderSize: MAX_HEADER_SIZE,
   }, createRequestHandler({
     queries,
-    token,
     environment,
     logger,
+    operator,
   }))
   server.requestTimeout = REQUEST_TIMEOUT_MS
   server.headersTimeout = HEADERS_TIMEOUT_MS
@@ -533,38 +517,36 @@ async function listenServer({ server, host, port } = {}) {
 }
 
 /**
- * Start the versioned HTTP and optional authenticated WebSocket adapters for trading history.
+ * Start the versioned local HTTP and WebSocket adapters for trading history.
  *
- * @param {{queries: object, token: string, environment: "testnet"|"live", host?: string, port?: number, logger?: object, eventBus?: object}} input
+ * @param {{queries: object, environment: "testnet"|"live", host?: string, port?: number, logger?: object, eventBus?: object}} input
  * @returns {Promise<Readonly<{address: object, close: Function}>>} Bound server and lifecycle handle.
  */
 export async function startTradingHistoryApiServer({
   queries,
-  token,
   environment,
   host = DEFAULT_HOST,
   port = DEFAULT_PORT,
   logger,
   eventBus,
+  operator,
 } = {}) {
   const configuration = validateApiServerConfiguration({
     queries,
-    token,
     environment,
     host,
     port,
   })
   const server = createConfiguredServer({
     queries: configuration.queries,
-    token: configuration.token,
     environment: configuration.environment,
     logger,
+    operator,
   })
   const websocket = eventBus
     ? attachTradingHistoryWebSocket({
         server,
         eventBus,
-        token: configuration.token,
       })
     : null
   try {

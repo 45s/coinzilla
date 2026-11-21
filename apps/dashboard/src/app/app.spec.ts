@@ -37,7 +37,7 @@ describe('AppComponent', () => {
       .find((button) => button.textContent?.includes('Orders')) as HTMLButtonElement;
     ordersButton.click();
     fixture.detectChanges();
-    expect(fixture.nativeElement.textContent).toContain('Connect to Harvester');
+    expect(fixture.nativeElement.textContent).toContain('Connecting to Harvester');
     expect(fixture.nativeElement.textContent).toContain('Orders');
 
     const fillsButton = Array.from(root.querySelectorAll('button.nav-item'))

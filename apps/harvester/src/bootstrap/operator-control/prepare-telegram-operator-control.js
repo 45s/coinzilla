@@ -11,22 +11,31 @@ export class OperatorControlStartupError extends Error {
   }
 }
 
-const disabledLifecycle = Object.freeze({
-  enabled: false,
-  operationalStateStore: undefined,
-  async start() {
-    return Object.freeze({
-      started: false,
-      disabled: true,
-    })
-  },
-  async stop() {
-    return Object.freeze({
-      stopped: true,
-      alreadyStopped: true,
-    })
-  },
-})
+function createDisabledLifecycle({ operationalStateStore } = {}) {
+  let operator
+  return Object.freeze({
+    enabled: false,
+    operationalStateStore,
+    getOperator() { return operator },
+    async start(context = {}) {
+      operator = createHarvesterOperator({
+        ...context,
+        operationalStateStore,
+      })
+      return Object.freeze({
+        started: false,
+        disabled: true,
+      })
+    },
+    async stop() {
+      operator = undefined
+      return Object.freeze({
+        stopped: true,
+        alreadyStopped: true,
+      })
+    },
+  })
+}
 
 async function cleanupFailedTelegramAdapter({ getAdapter, setAdapter, cause } = {}) {
   const adapter = getAdapter()
@@ -80,6 +89,7 @@ function createTelegramAdapterStartedResult(alreadyStarted) {
 async function startTelegramOperatorAdapter({
   getAdapter,
   setAdapter,
+  setOperator,
   botToken,
   telegramConfig,
   createAdapter,
@@ -107,6 +117,7 @@ async function startTelegramOperatorAdapter({
     getOpenOrders,
     recoverySellerStopWorkflow,
   })
+  setOperator(operator)
   try {
     const adapter = createAndValidateTelegramAdapter({
       createAdapter,
@@ -168,17 +179,22 @@ function createAdapterStopHandler({ getAdapter, setAdapter } = {}) {
 
 function createEnabledLifecycle(options = {}) {
   let adapter
+  let operator
   const getAdapter = () => adapter
+  const setOperator = (nextOperator) => { operator = nextOperator }
+  const getOperator = () => operator
   const setAdapter = (nextAdapter) => {
     adapter = nextAdapter
   }
   return Object.freeze({
     enabled: true,
     operationalStateStore: options.operationalStateStore,
+    getOperator,
     start: createAdapterStartHandler({
       ...options,
       getAdapter,
       setAdapter,
+      setOperator,
     }),
     stop: createAdapterStopHandler({
       getAdapter,
@@ -200,7 +216,7 @@ export async function prepareTelegramOperatorControl({
   logger,
 } = {}) {
   if (telegramConfig?.enabled !== true) {
-    return disabledLifecycle
+    return createDisabledLifecycle({ operationalStateStore })
   }
   const botToken = env.TELEGRAM_BOT_TOKEN?.trim()
   if (!botToken) {

@@ -42,6 +42,28 @@ async function stopOperatorControl({ operatorControlLifecycle, logShutdownPhase 
   }
 }
 
+function assertDurableProcessStop(stopped) {
+  if (stopped?.ok === true && stopped.data?.durable === true) {
+    return
+  }
+  throw new Error(`Harvester shutdown completed but its clean process-stop boundary was not durable: ${stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
+}
+
+function logDurableProcessStopFailure({ error, userDataState, logShutdownPhase, startedAt } = {}) {
+  userDataState.status = "SHUTDOWN_INCOMPLETE"
+  logShutdownPhase({
+    phase: "PROCESS_STOP_DURABILITY",
+    status: "FAILED",
+    startedAt,
+    failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "PROCESS_STOP_DURABILITY_FAILED",
+  })
+  logShutdownPhase({
+    phase: "SHUTDOWN_FAILED",
+    status: "FAILED",
+    failureReason: "PROCESS_STOP_DURABILITY_FAILED",
+  })
+}
+
 async function recordDurableProcessStop({
   operationalStateStore,
   recordProcessStopped,
@@ -59,26 +81,18 @@ async function recordDurableProcessStop({
       reason: "SHUTDOWN_COMPLETED",
       clean: true,
     })
-    if (stopped?.ok !== true || stopped.data?.durable !== true) {
-      throw new Error(`Harvester shutdown completed but its clean process-stop boundary was not durable: ${stopped?.errors?.[0]?.message ?? "durable acknowledgement missing"}`)
-    }
+    assertDurableProcessStop(stopped)
     logShutdownPhase({
       phase: "PROCESS_STOP_DURABILITY",
       status: "COMPLETED",
       startedAt,
     })
   } catch (error) {
-    userDataState.status = "SHUTDOWN_INCOMPLETE"
-    logShutdownPhase({
-      phase: "PROCESS_STOP_DURABILITY",
-      status: "FAILED",
+    logDurableProcessStopFailure({
+      error,
+      userDataState,
+      logShutdownPhase,
       startedAt,
-      failureReason: error?.recoveryFailure?.stage ?? error?.code ?? error?.name ?? "PROCESS_STOP_DURABILITY_FAILED",
-    })
-    logShutdownPhase({
-      phase: "SHUTDOWN_FAILED",
-      status: "FAILED",
-      failureReason: "PROCESS_STOP_DURABILITY_FAILED",
     })
     throw error
   }
@@ -141,7 +155,7 @@ async function executeShutdown({
 
 export function createHarvesterStop(dependencies = {}) {
   let stopPromise
-  return () => {
+  const stop = () => {
     if (!stopPromise) {
       stopPromise = executeShutdown(dependencies).catch((error) => {
         stopPromise = undefined
@@ -150,4 +164,8 @@ export function createHarvesterStop(dependencies = {}) {
     }
     return stopPromise
   }
+  Object.defineProperty(stop, "getOperator", {
+    value: () => dependencies.operatorControlLifecycle?.getOperator?.(),
+  })
+  return stop
 }
