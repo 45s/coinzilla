@@ -4,8 +4,8 @@
 
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
-**Last reviewed:** 2026-11-20
-**Latest source-verified develop checkpoint:** `895f3aa4a9ebb93a12dd95168b2e56118cc3173a` (2026-11-20; includes merged S-6, changed-helper naming CI PR #1587, and Telegram helper naming PR #1589). The recursive tree at the S-7 baseline contains 173 Markdown/MDX files (94 under Harvester, 79 elsewhere) and 1,023 JavaScript files; all JavaScript filenames use lowercase kebab-case word segments, with 37 dot-qualified role/scope suffixes, 505 `.test.js` files and no `.spec.js` files. The detailed S-7 tree evidence is recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
+**Last reviewed:** 2026-11-21
+**Latest source-verified develop checkpoint:** `8d12903d439abcd4a13a844aabb49d60aeaeb6c5` (2026-11-21; includes the merged one-shot Bitunix HYPEUSDT operator command, PR #1609). The recursive tree at the S-7 baseline contains 173 Markdown/MDX files (94 under Harvester, 79 elsewhere) and 1,023 JavaScript files; all JavaScript filenames use lowercase kebab-case word segments, with 37 dot-qualified role/scope suffixes, 505 `.test.js` files and no `.spec.js` files. The detailed S-7 tree evidence is recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
 
 ## Multi-provider Harvester execution and market-data routing — #1339
 

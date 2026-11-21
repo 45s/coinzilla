@@ -8,9 +8,15 @@ owner: brokers
 
 This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may retain consumer-integration context for provenance, but application ports, adapters, routing, and runtime composition remain owned by each consuming application.
 
+## Bitunix script layout and pure-helper extraction — #1611
+
+**Status: In progress** — [issue #1611](https://github.com/45s/coinzilla/issues/1611).
+
+Consolidate Bitunix operator and diagnostic commands under `scripts/bitunix/`. Keep executable entry points at the feature root, pure deterministic functions in `helpers/` with colocated unit tests, and effectful workflows under `workflows/`. The mandatory workflow document is maintained at `docs/BITUNIX_WORKFLOW.md`. This is a behavior-preserving structure change; command names, report behavior, redaction, and all LIVE/TESTNET safety boundaries remain unchanged.
+
 ## One-shot local Bitunix HYPEUSDT operator attempt — #1608
 
-**Status: In progress** — [issue #1608](https://github.com/45s/coinzilla/issues/1608) · [draft PR #1609](https://github.com/45s/coinzilla/pull/1609).
+**Status: COMPLETE.** Merged in [PR #1609](https://github.com/45s/coinzilla/pull/1609) as `8d12903d439abcd4a13a844aabb49d60aeaeb6c5`; tracking [issue #1608](https://github.com/45s/coinzilla/issues/1608) is closed.
 
 This is a fixed, human-operated local LIVE investigation, not a general order API, integration test, CI task, AI-agent action, or Harvester execution path. The command uses the common `Broker` facade and attempts only HYPEUSDT BUY LIMIT at 30 USDT for 0.4 HYPE (exact 12 USDT notional). The read-only Broker keeps `allowLiveOrderMutations: false`; a separate mutation-enabled Broker is constructed only after interactive terminal checks, read-only market/balance/open-order preflight, and the exact operator confirmation.
 

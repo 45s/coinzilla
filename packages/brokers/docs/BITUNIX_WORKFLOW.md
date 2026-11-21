@@ -5,13 +5,13 @@
 - Owner: Brokers
 - Applies to: Every human contributor, AI coding agent, and automated contributor changing Bitunix Spot behavior
 
-This document is the mandatory Bitunix-specific workflow. It supplements, and never weakens, the repository [engineering standards](../../ENGINEERING_STANDARDS.md), [AI-agent workflow](../../AI_AGENT_WORKFLOW.md), [structured error handling standard](../../docs/engineering/structured-error-handling.md), and [Broker API contract](./BROKER_API.md).
+This document is the mandatory Bitunix-specific workflow. It supplements, and never weakens, the repository [engineering standards](../../../ENGINEERING_STANDARDS.md), [AI-agent workflow](../../../AI_AGENT_WORKFLOW.md), [structured error handling standard](../../../../docs/engineering/structured-error-handling.md), and [Broker API contract](../BROKER_API.md).
 
 ## 1. Objective and architectural boundary
 
 Implement and verify Bitunix through the **common Broker API contract and the Bitunix provider facade**. The deliverable is working provider behavior exposed through the exchange-neutral contract—not a standalone Bitunix script, a parallel API, or a diagnostic-only abstraction.
 
-- Read [Broker API and capability contract](./BROKER_API.md) first. The common API is a structural contract; do not invent a generic `new Broker({ provider })` constructor or require inheritance from `CoreBroker` unless the actual public contract has changed.
+- Read [Broker API and capability contract](../BROKER_API.md) first. The common API is a structural contract; do not invent a generic `new Broker({ provider })` constructor or require inheritance from `CoreBroker` unless the actual public contract has changed.
 - Use the same common method names, result/error semantics, decimal guarantees, capability declarations, and conformance expectations as other providers.
 - Keep Bitunix REST/WS signing, wire DTOs, response parsing, and provider-specific normalization inside the Bitunix implementation.
 - Do not make consumers inspect provider source code to decide which method to call. Use the common contract and declared capabilities.
@@ -24,7 +24,7 @@ Before editing or making any state-changing action, the agent MUST:
 
 1. Read the root `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, `docs/engineering/TASK_WORKFLOWS.md`, `docs/engineering/structured-error-handling.md`, this file, `packages/brokers/AGENTS.md`, `packages/brokers/ROADMAP.md`, and the relevant section of `BROKER_API.md`.
 2. Identify the owning common Broker API method/capability, Bitunix provider implementation, callers/consumers, tests, configuration, and tracking issue.
-3. Follow the mandatory external-reference audit in [Brokers AGENTS.md](./AGENTS.md): inspect JKorf/Bitunix.Net first, the TypeScript reference where relevant, and official Bitunix Spot documentation. Distinguish official specification, third-party source, fixtures, and observed exchange behavior.
+3. Follow the mandatory external-reference audit in [Brokers AGENTS.md](../AGENTS.md): inspect JKorf/Bitunix.Net first, the TypeScript reference where relevant, and official Bitunix Spot documentation. Distinguish official specification, third-party source, fixtures, and observed exchange behavior.
 4. Record the exact question being resolved, verified facts, discrepancies, unknowns, safety implications, and acceptance criteria in the task issue/PR.
 5. Inspect existing adapters and tests before deciding where a change belongs. Reuse the existing contract and patterns; do not add duplicate error models, capability models, transport clients, or one-off scripts.
 
@@ -92,7 +92,7 @@ This distinction does not weaken Section 4:
 - Capture only the minimum sanitized request/response evidence needed to improve the implementation. Redact API keys, signatures, nonces, account identifiers, personal data, and sensitive balances. Keep local diagnostic artifacts ignored by Git and protected by restrictive file permissions.
 - A successful or rejected LIVE request is one observation, not a substitute for documented lifecycle guarantees, TESTNET, or a production-readiness decision.
 
-The current fixed HYPEUSDT operator command is documented in the [Brokers README](./README.md#one-shot-bitunix-hypeusdt-operator-order-attempt) and tracked in [issue #1608](https://github.com/45s/coinzilla/issues/1608). Its order parameters are fixed; any different order requires a separately reviewed task. This reference does not relax any rule above or resolve issue [#1185](https://github.com/45s/coinzilla/issues/1185).
+The current fixed HYPEUSDT operator command is documented in the [Brokers README](../README.md#one-shot-bitunix-hypeusdt-operator-order-attempt) and tracked in [issue #1608](https://github.com/45s/coinzilla/issues/1608). Its order parameters are fixed; any different order requires a separately reviewed task. This reference does not relax any rule above or resolve issue [#1185](https://github.com/45s/coinzilla/issues/1185).
 
 The local operator tool is separate from the automated test suite. Do not describe its invocation as running tests or add it to `pnpm test`, CI, or a default development command.
 
