@@ -57,6 +57,7 @@ jobs:
       - name: Run and enforce Harvester coverage and critical module floors
         if: matrix.package == '@coinzilla/harvester'
         run: |
+          set -o pipefail
           pnpm --filter @coinzilla/harvester run test:coverage 2>&1 | tee "$RUNNER_TEMP/harvester-coverage.log"
           pnpm --filter @coinzilla/harvester run check:critical-coverage "$RUNNER_TEMP/harvester-coverage.log"
 
