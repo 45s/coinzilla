@@ -17,4 +17,26 @@ export function assertBitunixOperatorAttemptDependencies({
   confirm,
   createMarker,
   writeLine,
+}) {
+  const requiredReadMethods = [
+    "connect",
+    "getExchangeMarkets",
+    "getSymbolFilters",
+    "getBalances",
+    "getOpenOrders",
+    "disconnect",
+  ]
+  if (!readBroker || requiredReadMethods.some((method) => typeof readBroker[method] !== "function")) {
+    throw new TypeError("Bitunix operator attempt requires a read Broker with market, balance, and open-order queries")
+  }
+  for (const [name, dependency] of [
+    ["createOrderBroker", createOrderBroker],
+    ["confirm", confirm],
+    ["createMarker", createMarker],
+    ["writeLine", writeLine],
+  ]) {
+    if (typeof dependency !== "function") {
+      throw new TypeError(`Bitunix operator attempt requires ${name}()`)
+    }
+  }
 }
