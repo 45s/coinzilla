@@ -25,7 +25,9 @@
     "operational-state:init:dev": "node --env-file=.env.development scripts/initialize-operational-state.js",
     "persistence:export": "node scripts/export-database.js",
     "persistence:backup": "node scripts/trading-history-backups.js create",
-    "persistence:restore-check": "node scripts/trading-history-backups.js verify"
+    "persistence:restore-check": "node scripts/trading-history-backups.js verify",
+    "check:reliability": "node scripts/check-critical-behavior-contract.js",
+    "check:critical-coverage": "node scripts/check-critical-module-coverage.js"
   },
   "engines": {
     "node": ">=24"
@@ -43,6 +45,8 @@
   },
   "config": {
     "targetedTestFiles": [
+      "test/critical-module-coverage.test.js",
+      "test/critical-behavior-contract.test.js",
       "src/domain/order-history/order-history-record.test.js",
       "src/domain/order-history/order-history-transition.test.js",
       "src/infrastructure/persistence/order-history-repository.test.js",
@@ -60,6 +64,19 @@
       "src/use-cases/synchronize-account-history/sync-acc-history.test.js",
       "test/replays/doge-zro-conservative-replay.test.js",
       "src/bootstrap/start-harvester.test.js",
+      "test/bootstrap/trading-safety.test.js",
+      "test/bootstrap/operator-control.test.js",
+      "test/bootstrap/broker-boundaries.test.js",
+      "test/bootstrap/market-subscriptions.test.js",
+      "test/bootstrap/market-evaluation.test.js",
+      "test/bootstrap/shutdown-lifecycle.test.js",
+      "test/bootstrap/external-order-ownership.test.js",
+      "test/bootstrap/user-data-recovery.test.js",
+      "test/bootstrap/user-data-stream-safety.test.js",
+      "test/bootstrap/user-data-event-reconciliation.test.js",
+      "test/bootstrap/account-preflight.test.js",
+      "test/bootstrap/process-lifecycle-recovery.test.js",
+      "test/bootstrap/account-snapshot-history.test.js",
       "src/infrastructure/telegram/telegram-operator-keyboard.test.js",
       "test/bootstrap/start-harvester.test.js",
       "test/recovery/operational-state-crash-matrix.test.js",
