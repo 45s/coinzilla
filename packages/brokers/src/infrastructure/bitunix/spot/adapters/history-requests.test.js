@@ -116,6 +116,40 @@ test("order-history response accepts a matching page and an explicitly empty res
   assert.deepEqual(rows, [], "an explicit empty first page must normalize to an empty row list")
 })
 
+test("order-history response accepts the first page when the REST response omits its page echo", () => {
+  const rows = normalizeOrderHistoryPage({
+    value: {
+      total: 0,
+      data: [],
+    },
+    requestedPage: 1,
+  })
+
+  assert.deepEqual(rows, [], "the first page remains usable when the live REST response omits pageNum")
+
+  const nullEchoRows = normalizeOrderHistoryPage({
+    value: {
+      total: 0,
+      pageNum: null,
+      data: [],
+    },
+    requestedPage: 1,
+  })
+  assert.deepEqual(nullEchoRows, [], "a null first-page echo is treated the same as an omitted echo")
+
+  assert.throws(
+    () => normalizeOrderHistoryPage({
+      value: {
+        total: 0,
+        data: [],
+      },
+      requestedPage: 2,
+    }),
+    /pageNum must be a positive integer/,
+    "later pages must retain strict page-identity validation when the response omits pageNum",
+  )
+})
+
 test("order-history response accepts integer-valued decimal page strings from the live API", () => {
   const rows = normalizeOrderHistoryPage({
     value: {
