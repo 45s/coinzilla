@@ -157,14 +157,14 @@ test("requires a bearer token and returns selected environment metadata", async 
   const missingToken = await fetch(`${baseUrl}/api/v1/trading/metadata`)
   assert.equal(missingToken.status, 401, "Metadata must require a valid bearer token.")
 
-  const invalidToken = await fetch(baseUrl + "/api/v1/trading/metadata", {
+  const invalidToken = await fetch(`${baseUrl}/api/v1/trading/metadata`, {
     headers: {
       Authorization: "Bearer invalid-token",
     },
   })
   assert.equal(invalidToken.status, 401, "An invalid bearer token must be rejected.")
 
-  const response = await fetch(baseUrl + "/api/v1/trading/metadata", {
+  const response = await fetch(`${baseUrl}/api/v1/trading/metadata`, {
     headers: {
       Authorization: `Bearer ${API_TOKEN}`,
     },
@@ -191,7 +191,7 @@ test("routes order list filters and bounded pagination to the application query 
     `${baseUrl}/api/v1/trading/orders?symbol=BTCUSDT&side=BUY&status=FILLED&limit=25&offset=50`,
     {
       headers: {
-        Authorization: "Bearer " + API_TOKEN,
+        Authorization: `Bearer ${API_TOKEN}`,
       },
     },
   )
@@ -222,7 +222,7 @@ test("decodes record identifiers, returns fill commissions, and reports missing 
 
   const fillResponse = await fetch(`${baseUrl}/api/v1/trading/fills/fill%2F001`, {
     headers: {
-      Authorization: "Bearer " + API_TOKEN,
+      Authorization: `Bearer ${API_TOKEN}`,
     },
   })
   assert.equal(fillResponse.status, 200, "A fill detail request must return its persisted commission facts.")
@@ -236,7 +236,7 @@ test("decodes record identifiers, returns fill commissions, and reports missing 
 
   const missingOrder = await fetch(`${baseUrl}/api/v1/trading/orders/missing-order`, {
     headers: {
-      Authorization: "Bearer " + API_TOKEN,
+      Authorization: `Bearer ${API_TOKEN}`,
     },
   })
   assert.equal(missingOrder.status, 404, "A missing persisted record must use the not-found HTTP status.")
@@ -250,7 +250,7 @@ test("rejects unsupported query parameters, methods, and unimplemented resources
     queries,
   })
   const headers = {
-    Authorization: "Bearer " + API_TOKEN,
+    Authorization: `Bearer ${API_TOKEN}`,
   }
 
   const invalidFilter = await fetch(`${baseUrl}/api/v1/trading/orders?rawSql=DROP`, {
@@ -277,7 +277,7 @@ test("supports browser preflight and validates server authentication configurati
     t,
     queries,
   })
-  const preflight = await fetch(baseUrl + "/api/v1/trading/orders", {
+  const preflight = await fetch(`${baseUrl}/api/v1/trading/orders`, {
     method: "OPTIONS",
     headers: {
       Origin: "http://127.0.0.1:4200",
