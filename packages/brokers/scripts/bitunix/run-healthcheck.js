@@ -1,5 +1,6 @@
 import { loadEnvFile } from "node:process"
 import { readFileSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { assertInteractiveTerminal } from "./helpers/validate-order-attempt.js"
@@ -8,11 +9,22 @@ import { runHealthcheckWorkflow } from "./workflows/run-healthcheck.js"
 import { parseHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
 import { sanitizeDiagnosticError } from "./helpers/sanitize-diagnostic-data.js"
 import { resolveCliIdentity } from "./helpers/cli-identity.js"
+import { resolveCliIdentity } from "./helpers/cli-identity.js"
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const brokersRoot = resolve(scriptDirectory, "../..")
 const repositoryRoot = resolve(brokersRoot, "../..")
 const envPath = resolve(brokersRoot, ".env.development")
+const packageMetadata = JSON.parse(readFileSync(resolve(brokersRoot, "package.json"), "utf8"))
+
+function printCliIdentity({ stdout = process.stdout } = {}) {
+  const identity = resolveCliIdentity({
+    scriptName: "bitunix:healthcheck",
+    packageVersion: packageMetadata.version,
+    repositoryRoot,
+  })
+  stdout.write(`${identity}\\n`)
+}
 const packageMetadata = JSON.parse(readFileSync(resolve(brokersRoot, "package.json"), "utf8"))
 
 function printCliIdentity({ stdout = process.stdout } = {}) {
@@ -53,9 +65,13 @@ function loadLocalEnvironment({ allowMissing = false } = {}) {
 }
 
 async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
+  printCliIdentity()
   const mode = parseHealthcheckMode({ args })
   if (mode === "help") {
     printHelp()
+    return
+  }
+  if (mode === "version") {
     return
   }
   if (mode === "place-order") {
