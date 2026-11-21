@@ -9,11 +9,6 @@ import {
 const requiredOperations = [
   "diagnostic safety confirmation",
   "diagnostic configuration",
-  "REST private account balances",
-  "WebSocket connection",
-  "ping",
-  "user.account",
-  "user.info",
 ]
 
 test("health evaluation fails when a required read-only operation is missing", () => {
@@ -22,14 +17,14 @@ test("health evaluation fails when a required read-only operation is missing", (
       failed: 0,
     },
     results: requiredOperations
-      .filter((operation) => operation !== "user.info")
+      .filter((operation) => operation !== "diagnostic configuration")
       .map((operation) => ({
         operation,
         status: "passed",
       })),
   }
   const result = evaluateReadOnlyHealthCheck({ report })
-  assert.deepEqual(result.missingRequiredOperations, ["user.info"])
+  assert.deepEqual(result.missingRequiredOperations, ["diagnostic configuration"], "the gate must name the exact missing safety/configuration prerequisite")
   assert.equal(result.healthy, false)
 })
 
@@ -70,7 +65,12 @@ test("optional order-history failures do not block the guarded order preflight",
     results,
   }
 
-  assert.equal(evaluateReadOnlyHealthCheck({ report }).healthy, true, "the order-history read is not used by the fixed order preflight and must not block it")
+  const result = evaluateReadOnlyHealthCheck({ report })
+  assert.equal(result.healthy, true, "the order-history read is not used by the fixed order preflight and must not block it")
+  assert.deepEqual(result.nonBlockingFailedOperations, [
+    "Broker API getOrderHistory",
+    "Broker API schema getOrderHistory",
+  ], "optional failures must remain visible in the report even though they do not block the guarded order preflight")
 })
 
 test("public health reports copy only allowlisted fields and omit private account payloads", () => {
