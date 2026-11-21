@@ -27,7 +27,7 @@ test("serves the Bitunix Futures public market snapshot through the local API", 
       lastPrice: "67000.10",
       markPrice: "67001.20",
       quoteVol: "123456.78",
-      change24h: null,
+      change24h: "1.25",
       change5m: null,
       change1h: null,
       change4h: null,
@@ -51,7 +51,7 @@ test("serves the Bitunix Futures public market snapshot through the local API", 
 
   assert.equal(response.status, 200, "The local market screener endpoint must return a public Bitunix Futures snapshot.")
   assert.equal(response.headers.get("access-control-allow-origin"), "http://127.0.0.1:4200", "The existing local Dashboard Origin allowlist must apply to market data.")
-  assert.deepEqual((await response.json()).data, snapshot, "The API must pass through native market fields and preserve absent percentage fields as null.")
+  assert.deepEqual((await response.json()).data, snapshot, "The API must pass through the native 24h percentage and preserve absent shorter-window percentages as null.")
 })
 
 test("returns a safe API error when the Bitunix Futures market-data provider fails", async (t) => {
