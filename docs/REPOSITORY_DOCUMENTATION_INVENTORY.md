@@ -297,3 +297,54 @@ The Harvester documentation index and persistence index link the new blueprint. 
 | Added path | Purpose |
 | --- | --- |
 | `docs/architecture/decisions/ADR-0005-generic-user-data-observation-channel.md` | Defines the provider-neutral distinction between native user-data events and non-authoritative polling observations, while preserving Bitunix provider-admission and trading-readiness barriers. |
+
+
+## Current recursive inventory checkpoint — develop `0f827ba7551be61a1be58f8dced191fb0a090870` (2026-11-21)
+
+A fresh recursive Git tree request returned `truncated: false` and contains **179 tracked Markdown/MDX files**: **94 under `apps/harvester/` and 85 elsewhere**. This is 19 more paths than the prior 160-file checkpoint at `543753da5938eba2d95ad19d74c3f98a991e6461`. A direct path-set comparison found 24 additions and 5 removals (net +19); no file-content or factual-accuracy claim is implied by this inventory update.
+
+### Added paths since the 160-file checkpoint
+
+| Path | Initial classification / disposition |
+| --- | --- |
+| `apps/harvester/docs/architecture/decisions/0006-market-pause-cancels-owned-buys.md` | Living decision record; source/consumer verification pending. |
+| `apps/harvester/docs/architecture/strategy-extensibility-audit-roadmap.md` | Audit/roadmap; preserve evidence and verify current status before disposition. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-19_02-16-31Z.md` | Historical session evidence; preserve provenance, not a living behavior contract. |
+| `apps/harvester/docs/infrastructure/execution-routing.md` | Living infrastructure contract; source/consumer verification pending. |
+| `apps/harvester/docs/operations/trading-history-backups.md` | Living operational guide; source/config/test verification pending. |
+| `apps/harvester/docs/persistence/trading-history-roadmap.md` | Living persistence roadmap; reconcile with implementation and owning roadmap. |
+| `docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md` | Repository decision record; verify status and linked implementation. |
+| `docs/architecture/decisions/ADR-0005-generic-user-data-observation-channel.md` | Repository decision record; verify status and linked implementation. |
+| `docs/engineering/AI_TASK_COMPLIANCE_STANDARD.md` | Canonical repository policy; added to maintained policy set. |
+| `docs/engineering/APPLICATION_HANDLER_TEMPLATE.md` | Reusable engineering template; verify index and template guidance. |
+| `docs/engineering/CONFIGURATION_STANDARD.md` | Canonical repository policy; added to maintained policy set. |
+| `docs/engineering/DOMAIN_POLICY_TEMPLATE.md` | Reusable engineering template; verify index and template guidance. |
+| `docs/engineering/ENGINEERING_STANDARDS_MATRIX.md` | Canonical engineering standards matrix; reconcile against current standards and CI. |
+| `docs/engineering/INFRASTRUCTURE_ADAPTER_TEMPLATE.md` | Reusable engineering template; verify index and template guidance. |
+| `docs/engineering/LOGGING_OBSERVABILITY_STANDARD.md` | Canonical repository policy; added to maintained policy set. |
+| `docs/engineering/PURE_MODULE_TEMPLATE.md` | Reusable engineering template; verify index and template guidance. |
+| `docs/engineering/STATEFUL_LIFECYCLE_TEMPLATE.md` | Reusable engineering template; verify index and template guidance. |
+| `packages/brokers/BROKER_API.md` | Living public package contract; verify exported API and conformance tests. |
+| `packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md` | Evidence/audit document; preserve provenance and verify status references. |
+| `packages/brokers/docs/BITUNIX_SPOT_POLLING.md` | Living provider integration guide; verify against source and tests. |
+| `packages/brokers/docs/BITUNIX_WORKFLOW.md` | Living mandatory workflow; verify source references and policy links. |
+| `packages/brokers/docs/README.md` | Local documentation index; verify inbound/outbound references. |
+| `packages/brokers/docs/ROADMAP.md` | Owning subdomain roadmap; reconcile with parent Brokers roadmap. |
+| `packages/brokers/docs/bitunix-production-readiness-gap-matrix.md` | Readiness evidence matrix; verify evidence dates and linked source/issue state. |
+
+### Removed paths since the 160-file checkpoint
+
+These paths are absent from the current recursive tree. Their inbound-reference and Git-history dispositions remain part of #1403; absence alone is not proof that they were safely superseded or that references were updated.
+
+- `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` — removed from current tree; reference/history disposition pending.
+- `packages/brokers/BITUNIX_REFERENCE_AUDIT.md` — removed from current tree; reference/history disposition pending.
+- `packages/market-simulator/AGENTS.md` — removed from current tree; reference/history disposition pending.
+- `packages/market-simulator/README.md` — removed from current tree; reference/history disposition pending.
+- `packages/market-simulator/ROADMAP.md` — removed from current tree; reference/history disposition pending.
+
+### Audit boundary
+
+- The current path count and Harvester/non-Harvester split are verified against the complete recursive Git tree at the exact commit above.
+- The prior 160-path checkpoint and its historical evidence remain unchanged.
+- This checkpoint records path additions/removals only. It does **not** mark the 179 documents as factually verified. #1401 owns the complete maintained-document source audit; #1403 owns reference tracing and migration decisions.
+- Historical session/audit/evidence records remain preserved. No historical conclusion or timestamp was rewritten.
