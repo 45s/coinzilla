@@ -208,7 +208,7 @@ describe('MarketScreenerComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const rows = () => Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'));
+    const rows = () => Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr')).filter((row) => !row.querySelector('.empty-state'));
     expect(rows()[0].textContent).toContain('ETHUSDT');
 
     const btcFavorite = fixture.nativeElement.querySelector('button[aria-label^="Add BTCUSDT"]') as HTMLButtonElement;
@@ -239,7 +239,7 @@ describe('MarketScreenerComponent', () => {
     minimumPrice.value = '70000';
     minimumPrice.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    expect(rows()).toHaveLength(0);
+    expect(rows()).toHaveLength(0);\n    expect((fixture.nativeElement as HTMLElement).textContent).toContain('No markets match these filters.');
   });
 
 });
