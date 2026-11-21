@@ -70,7 +70,7 @@ function normalizeFailure(result) {
  * existing application facade; it never calls the broker or engine directly.
  */
 export async function handleOperatorControlRequest({ request, response, pathname, operator } = {}) {
-  if (!pathname?.startsWith("/api/v1/trading/operator/")) return false
+  if (!pathname?.startsWith("/api/v1/trading/operator/") || request.method === "OPTIONS") return false
 
   if (!operator) {
     sendJson(response, 503, {
