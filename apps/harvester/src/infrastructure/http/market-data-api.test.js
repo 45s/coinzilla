@@ -5,17 +5,63 @@ import { startTradingHistoryApiServer } from "./trading-history-api.js"
 
 function createTradingHistoryQueries() {
   return {
-    getSummary: () => ({ ok: true, data: { orders: 0, fills: 0, commissions: 0 } }),
-    listOrders: () => ({ ok: true, data: { items: [], pagination: { limit: 50, offset: 0, total: 0, hasMore: false } } }),
-    getOrder: () => ({ ok: true, data: null }),
-    listFills: () => ({ ok: true, data: { items: [], pagination: { limit: 50, offset: 0, total: 0, hasMore: false } } }),
-    getFill: () => ({ ok: true, data: null }),
-    listCommissions: () => ({ ok: true, data: { items: [], pagination: { limit: 50, offset: 0, total: 0, hasMore: false } } }),
+    getSummary: () => ({
+      ok: true,
+      data: {
+        orders: 0,
+        fills: 0,
+        commissions: 0,
+      },
+    }),
+    listOrders: () => ({
+      ok: true,
+      data: {
+        items: [],
+        pagination: {
+          limit: 50,
+          offset: 0,
+          total: 0,
+          hasMore: false,
+        },
+      },
+    }),
+    getOrder: () => ({
+      ok: true,
+      data: null,
+    }),
+    listFills: () => ({
+      ok: true,
+      data: {
+        items: [],
+        pagination: {
+          limit: 50,
+          offset: 0,
+          total: 0,
+          hasMore: false,
+        },
+      },
+    }),
+    getFill: () => ({
+      ok: true,
+      data: null,
+    }),
+    listCommissions: () => ({
+      ok: true,
+      data: {
+        items: [],
+        pagination: {
+          limit: 50,
+          offset: 0,
+          total: 0,
+          hasMore: false,
+        },
+      },
+    }),
   }
 }
 
-test("serves the Bitunix Futures public market snapshot through the local API", async (t) => {
-  const snapshot = {
+function createMarketSnapshot() {
+  return {
     provider: "bitunix",
     marketType: "futures",
     observedAt: "2026-11-21T12:00:00.000Z",
@@ -33,42 +79,53 @@ test("serves the Bitunix Futures public market snapshot through the local API", 
       change4h: null,
     }],
   }
-  const marketData = {
-    getBitunixFuturesMarkets: async () => snapshot,
-  }
+}
+
+async function startMarketApi({ t, marketData } = {}) {
   const api = await startTradingHistoryApiServer({
     queries: createTradingHistoryQueries(),
     marketData,
     environment: "testnet",
     port: 0,
-    logger: { error() {} },
+    logger: {
+      error() {},
+    },
   })
   t.after(async () => api.close())
+  return `http://127.0.0.1:${api.address.port}`
+}
 
-  const response = await fetch(`http://127.0.0.1:${api.address.port}/api/v1/markets/bitunix/futures`, {
-    headers: { Origin: "http://127.0.0.1:4200" },
+test("serves the Bitunix Futures public market snapshot through the local API", async (t) => {
+  const snapshot = createMarketSnapshot()
+  const baseUrl = await startMarketApi({
+    t,
+    marketData: {
+      getBitunixFuturesMarkets: async () => snapshot,
+    },
+  })
+
+  const response = await fetch(`${baseUrl}/api/v1/markets/bitunix/futures`, {
+    headers: {
+      Origin: "http://127.0.0.1:4200",
+    },
   })
 
   assert.equal(response.status, 200, "The local market screener endpoint must return a public Bitunix Futures snapshot.")
   assert.equal(response.headers.get("access-control-allow-origin"), "http://127.0.0.1:4200", "The existing local Dashboard Origin allowlist must apply to market data.")
-  assert.deepEqual((await response.json()).data, snapshot, "The API must pass through the native 24h percentage and preserve absent shorter-window percentages as null.")
+  assert.deepEqual((await response.json()).data, snapshot, "The API must pass through native values and preserve missing percentages as null.")
 })
 
 test("returns a safe API error when the Bitunix Futures market-data provider fails", async (t) => {
-  const api = await startTradingHistoryApiServer({
-    queries: createTradingHistoryQueries(),
+  const baseUrl = await startMarketApi({
+    t,
     marketData: {
       getBitunixFuturesMarkets: async () => {
         throw new Error("private upstream diagnostic must not leak")
       },
     },
-    environment: "testnet",
-    port: 0,
-    logger: { error() {} },
   })
-  t.after(async () => api.close())
 
-  const response = await fetch(`http://127.0.0.1:${api.address.port}/api/v1/markets/bitunix/futures`)
+  const response = await fetch(`${baseUrl}/api/v1/markets/bitunix/futures`)
 
   assert.equal(response.status, 502, "An unavailable upstream market-data provider must be represented as a bad gateway.")
   assert.deepEqual(await response.json(), {

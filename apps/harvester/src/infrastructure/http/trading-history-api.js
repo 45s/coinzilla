@@ -288,10 +288,16 @@ async function handleBitunixFuturesMarketsRequest({ response, marketData, logger
     sendJson({
       response,
       status: 200,
-      body: { ok: true, data },
+      body: {
+        ok: true,
+        data,
+      },
     })
   } catch (error) {
-    logRequestFailure({ logger, error })
+    logRequestFailure({
+      logger,
+      error,
+    })
     sendApiError({
       response,
       status: 502,
@@ -299,6 +305,19 @@ async function handleBitunixFuturesMarketsRequest({ response, marketData, logger
       message: "Public market data is temporarily unavailable.",
     })
   }
+}
+
+
+async function handleBitunixFuturesMarketsRoute({ url, response, marketData, logger } = {}) {
+  if (url.pathname !== BITUNIX_FUTURES_MARKETS_ROUTE) {
+    return false
+  }
+  await handleBitunixFuturesMarketsRequest({
+    response,
+    marketData,
+    logger,
+  })
+  return true
 }
 
 function handleListRequest({ response, queries, url, route } = {}) {
@@ -385,8 +404,7 @@ async function handleTradingHistoryRequest({
   })) {
     return
   }
-  if (url.pathname === BITUNIX_FUTURES_MARKETS_ROUTE) {
-    await handleBitunixFuturesMarketsRequest({ response, marketData, logger })
+  if (await handleBitunixFuturesMarketsRoute({ url, response, marketData, logger })) {
     return
   }
   if (url.pathname === METADATA_ROUTE) {

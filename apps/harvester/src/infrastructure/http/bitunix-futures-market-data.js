@@ -84,8 +84,16 @@ export function createBitunixFuturesMarketDataClient({
       const contractsUrl = new URL("/api/v1/futures/market/trading_pairs", normalizedBaseUrl)
       const tickersUrl = new URL("/api/v1/futures/market/tickers", normalizedBaseUrl)
       const [contractsPayload, tickersPayload] = await Promise.all([
-        requestMarketData({ fetchImpl, url: contractsUrl, timeoutMs }),
-        requestMarketData({ fetchImpl, url: tickersUrl, timeoutMs }),
+        requestMarketData({
+          fetchImpl,
+          url: contractsUrl,
+          timeoutMs,
+        }),
+        requestMarketData({
+          fetchImpl,
+          url: tickersUrl,
+          timeoutMs,
+        }),
       ])
       const contracts = parseMarketDataPayload({
         payload: contractsPayload,
@@ -95,14 +103,15 @@ export function createBitunixFuturesMarketDataClient({
         payload: tickersPayload,
         endpoint: "tickers",
       })
-      const tickersBySymbol = new Map(tickers.map((ticker) => [ticker.symbol, ticker]))
+      const tickersBySymbol = new Map(tickers
+        .filter((ticker) => ticker && typeof ticker.symbol === "string")
+        .map((ticker) => [ticker.symbol, ticker]))
       const markets = contracts
         .filter((contract) => typeof contract.symbol === "string")
         .map((contract) => mapFuturesContract({
           contract,
           ticker: tickersBySymbol.get(contract.symbol),
         }))
-        .sort((left, right) => left.symbol.localeCompare(right.symbol))
 
       return {
         provider: "bitunix",
