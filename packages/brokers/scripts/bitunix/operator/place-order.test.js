@@ -7,10 +7,10 @@ import { fileURLToPath } from "node:url"
 import test from "node:test"
 import { createHypeUsdtOrderPreflight } from "../helpers/create-hypeusdt-order-preflight.js"
 import {
-  assertInteractiveTerminal,
   createOneShotMarker,
   runGuardedHypeUsdtOrderAttempt,
 } from "./place-order.js"
+import { assertInteractiveTerminal } from "../helpers/validate-order-attempt.js"
 
 function createValidBitunixOperatorPreflightInput({ overrides = {} } = {}) {
   const market = {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { evaluateHealthCheck } from "../helpers/health-report.js"
+import { evaluateReadOnlyHealthCheck } from "../helpers/health-report.js"
 import { runHealthcheckWorkflow } from "./run-healthcheck.js"
 
 const requiredOperations = [
@@ -50,7 +50,7 @@ function createPublisher({ events, publishedReports }) {
       onProgress: () => {},
     })
     publishedReports.push(report)
-    const healthCheck = evaluateHealthCheck({ report })
+    const healthCheck = evaluateReadOnlyHealthCheck({ report })
     return {
       report,
       healthCheck,

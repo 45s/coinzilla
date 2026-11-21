@@ -1,11 +1,11 @@
 import { loadEnvFile } from "node:process"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { assertInteractiveTerminal } from "./operator/place-order.js"
+import { assertInteractiveTerminal } from "./helpers/validate-order-attempt.js"
 import { runOperatorOrderCommand, reportOperatorFailure } from "./operator/run-order-command.js"
-import { runHealthcheckDiagnostics } from "./workflows/run-healthcheck.js"
+import { runHealthcheckWorkflow } from "./workflows/run-healthcheck.js"
 import { parseHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
-import { sanitizeDiagnosticError } from "./helpers/diagnostic-values.js"
+import { sanitizeDiagnosticError } from "./helpers/sanitize-diagnostic-data.js"
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const brokersRoot = resolve(scriptDirectory, "../..")
@@ -52,7 +52,7 @@ async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
       stdout: process.stdout,
     })
     loadLocalEnvironment()
-    process.exitCode = await runHealthcheckDiagnostics({
+    process.exitCode = await runHealthcheckWorkflow({
       mode,
       brokersRoot,
       repositoryRoot,
@@ -75,7 +75,7 @@ async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
     return
   }
   loadLocalEnvironment({ allowMissing: mode === "local" })
-  process.exitCode = await runHealthcheckDiagnostics({
+  process.exitCode = await runHealthcheckWorkflow({
     mode,
     brokersRoot,
     repositoryRoot,

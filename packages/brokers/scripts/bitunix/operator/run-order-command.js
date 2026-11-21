@@ -2,10 +2,10 @@ import { createInterface } from "node:readline"
 import { resolve } from "node:path"
 import { Broker } from "../../../src/index.js"
 import {
-  assertInteractiveTerminal,
   createOneShotMarker,
   runGuardedHypeUsdtOrderAttempt,
 } from "./place-order.js"
+import { assertInteractiveTerminal } from "../helpers/validate-order-attempt.js"
 import {
   parseApiCredentials,
   redactApiSecrets,
