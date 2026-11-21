@@ -60,7 +60,7 @@ Broker execution -> canonical Fill + originating ownership -> Portfolio
 
 ## Strategy identifiers
 
-Strategy ownership uses the immutable, named `StrategyId` registry exported from `src/domain/strategies/strategy-ids.js`. Use `StrategyId.COIN_GRABBER` and `StrategyId.RECOVERY_SELLER` rather than repeating serialized identifier strings at call sites. The underlying values (`CG_coinGrabber` and `RS_recoverySeller`) remain stable because they are persisted in Portfolio and Journal state. Adding a strategy means adding its stable identifier to this registry; it does not make the registry a runtime restriction on strategy composition.
+Strategy ownership uses the immutable, named `StrategyId` registry exported from `src/domain/strategies/strategy-ids.js`. Use `StrategyId.COIN_GRABBER` and `StrategyId.RECOVERY_SELLER` rather than repeating serialized identifier strings at call sites. The underlying values (`CG_coinGrabber` and `RS_recoverySeller`) remain stable because they are persisted in Portfolio and Journal state. Adding a strategy means adding its stable identifier to this registry; it does not make the registry a runtime restriction on strategy composition. Domain consumers normalize strategy IDs through `normalizeStrategyId`: surrounding whitespace is trimmed and missing, blank, or non-string values are rejected. The helper intentionally does not restrict IDs to the currently registered strategies.
 
 ## Core concepts
 
