@@ -860,6 +860,7 @@ async function startOptionalTradingHistoryApi({ options, resources, runtime } = 
     })
     return
   }
+  const operator = runtime.getOperator?.()
   try {
     const service = await options.startTradingHistoryApi({
       database,
@@ -867,7 +868,7 @@ async function startOptionalTradingHistoryApi({ options, resources, runtime } = 
       env: options.env,
       logger: options.logger,
       eventBus: resources.eventBus,
-      ...(runtime.getOperator?.() === undefined ? {} : { operator: runtime.getOperator() }),
+      ...(operator === undefined ? {} : { operator }),
     })
     resources.tradingHistoryApi = service
     if (service?.address) {
