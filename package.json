@@ -41,11 +41,6 @@
   },
   "packageManager": "pnpm@12.11.2",
   "type": "module",
-  "pnpm": {
-    "overrides": {
-      "follow-redirects": "1.16.2"
-    }
-  },
   "devDependencies": {
     "@eslint/js": "~10.0.1",
     "eslint": "~10.15.0",

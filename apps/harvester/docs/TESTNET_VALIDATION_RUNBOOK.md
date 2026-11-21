@@ -32,7 +32,7 @@ These values preserve the previous plan for provenance; they are not current rep
 
 Hard operational limits for any future session (none is currently approved):
 
-- Pair selection is unresolved. The previous plan targeted DOGEUSDT and ZROUSDT; the current config enables LINKFDUSD and ZROFDUSD. Do not enable or disable pairs to make these documents agree without an explicit scope decision.
+- Pair selection is unresolved. The previous plan targeted only DOGEUSDT and ZROUSDT; the current TESTNET config enables LINKUSDT, ZROUSDT, DOGEUSDT and ADAUSDT. The old plan omits LINKUSDT and ADAUSDT and is not a complete current configuration scope. Do not enable or disable pairs to make these documents agree without an explicit scope decision.
 - Exactly one Harvester process and one operator-controlled session.
 - At most one active Harvester-owned BUY and one active recovery SELL per pair. A replacement SELL is allowed only after the previous SELL's terminal exchange state and all actual fills/commissions are reconciled.
 - No manual orders during the run. This is a controlled validation/reproducibility constraint, not the normal runtime ownership policy: manual Binance Web/CScalp orders are ignored by default, but they can still change free balances and make exchange submissions fail. Record and classify every pre-existing/external open order before starting.
@@ -56,7 +56,7 @@ Hard operational limits for any future session (none is currently approved):
 
 ## 3. Read-only command reference
 
-> The ZROUSDT-specific history/trade commands below are read-only references for the previous incident; ZROUSDT is currently disabled. They do not establish the next session's pair scope. The standalone `testnet:sell-zro` helper is a ZROUSDT MARKET SELL exchange write and is not authorized by this CLOSED / PAUSED runbook; do not invoke it. The `testnet:cancel-orders` helper is an account-wide cancellation write that proceeds automatically after a warning without interactive confirmation; it is also not authorized.
+> The ZROUSDT-specific history/trade commands below are read-only references for the previous incident; ZROUSDT is enabled in the committed TESTNET configuration, but the runbook remains CLOSED / PAUSED and this historical incident record does not authorize a session using it. These commands do not establish the next session's pair scope. The standalone `testnet:sell-zro` helper is a ZROUSDT MARKET SELL exchange write and is not authorized by this CLOSED / PAUSED runbook; do not invoke it. The `testnet:cancel-orders` helper is an account-wide cancellation write that proceeds automatically after a warning without interactive confirmation; it is also not authorized.
 
 Run these commands from `apps/harvester` after confirming `.env.development` contains TESTNET-only credentials. These commands read account state; they do not submit or cancel orders.
 
@@ -94,7 +94,7 @@ Before starting Harvester, its broker-connected startup audit (including read-on
 
 - `account.snapshot_captured`: configured-market base/quote assets (including disabled configured pairs) plus third-asset commission baselines actually used, with exact free/locked/total quantities and exchange source timestamp. Unrelated wallet assets are excluded.
 - `account.open_orders_captured`: all account-wide open orders, including symbol, broker/client order IDs, side, type, price, original/executed quantity, status, and observation time.
-- Historical incident evidence: relevant account trades for ZROUSDT, including trade ID, order ID, side, price, base quantity, quote quantity, commission amount, commission asset, and timestamp. ZROUSDT is not currently enabled.
+- Historical incident evidence: relevant account trades for ZROUSDT, including trade ID, order ID, side, price, base quantity, quote quantity, commission amount, commission asset, and timestamp. ZROUSDT is enabled in the committed TESTNET configuration, but no session is authorized by this closed/paused runbook.
 - Any deposits, withdrawals, transfers, conversions, or manual trades relevant to the session window.
 - Account commission setting and timestamp of verification.
 
