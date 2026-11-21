@@ -20,11 +20,16 @@ function createDiagnosticReport({ failed = 0, failedOperation = requiredOperatio
     durationMs: 1,
   }))
   if (failed > 0) {
-    results.push({
-      operation: failedOperation,
-      status: "failed",
-      durationMs: 1,
-    })
+    const requiredResult = results.find((result) => result.operation === failedOperation)
+    if (requiredResult) {
+      requiredResult.status = "failed"
+    } else {
+      results.push({
+        operation: failedOperation,
+        status: "failed",
+        durationMs: 1,
+      })
+    }
   }
   return {
     schemaVersion: 1,
@@ -53,8 +58,9 @@ function createPublisher({ events, publishedReports }) {
       env,
       onProgress: () => {},
     })
-    publishedReports.push(report)
     const healthCheck = evaluateReadOnlyHealthCheck({ report })
+    report.healthCheck = healthCheck
+    publishedReports.push(report)
     return {
       report,
       healthCheck,
