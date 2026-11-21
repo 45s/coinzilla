@@ -2437,3 +2437,21 @@ test("Bitunix Spot polling subscription requires explicit symbol scope", async (
   assert.match(result.errors[0].message, /symbol/i, "The failure must identify the missing polling scope.")
   assert.equal(calls.length, 0, "Invalid observation scope must not issue authenticated reads.")
 })
+
+
+test("Bitunix Spot placement is NOT_SENT when local request signing fails before fetch", async () => {
+  const { broker, calls } = createBroker()
+  broker.restClient.nonceFactory = () => ""
+
+  const result = await broker.createOrder({
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    quantity: "1",
+    price: "100",
+  })
+
+  assert.equal(result.ok, false)
+  assert.equal(result.mutationOutcome, "NOT_SENT")
+  assert.equal(calls.length, 0, "invalid local signing input must fail before the HTTP transport is called")
+})
