@@ -2,13 +2,7 @@ import { addDecimal, compareDecimal } from "@coinzilla/utils"
 import { Fill, Market, Quantity } from "@coinzilla/entities"
 import { createFillFingerprint } from "../fills/fill-fingerprint.js"
 import { createPositionId, Position } from "./position.js"
-
-function normalizeStrategyId({ strategyId } = {}) {
-  if (typeof strategyId !== "string" || !strategyId.trim()) {
-    throw new TypeError("Portfolio operation requires a non-empty strategyId")
-  }
-  return strategyId.trim()
-}
+import { normalizeStrategyId } from "../strategies/strategy-ids.js"
 
 function resolvePositionId({ positionId, marketId, strategyId } = {}) {
   if (positionId !== undefined) {
@@ -24,6 +18,189 @@ function resolvePositionId({ positionId, marketId, strategyId } = {}) {
 strategyId })
 }
 
+function validatePortfolioPositions({ positions } = {}) {
+  if (!Array.isArray(positions) || positions.some((position) => !(position instanceof Position))) {
+    throw new TypeError("Portfolio.positions must contain Position values")
+  }
+}
+
+function validatePortfolioAppliedFillIds({ appliedFillIds } = {}) {
+  if (!Array.isArray(appliedFillIds) || appliedFillIds.some((id) => typeof id !== "string" || !id.trim())) {
+    throw new TypeError("Portfolio.appliedFillIds must contain non-empty strings")
+  }
+}
+
+function validatePortfolioAppliedFillFingerprints({ appliedFillFingerprints } = {}) {
+  if (
+    !Array.isArray(appliedFillFingerprints) ||
+    appliedFillFingerprints.some((item) =>
+      !item ||
+      typeof item.id !== "string" ||
+      !item.id.trim() ||
+      typeof item.fingerprint !== "string" ||
+      !item.fingerprint ||
+      typeof item.positionId !== "string" ||
+      !item.positionId.trim() ||
+      typeof item.strategyId !== "string" ||
+      !item.strategyId.trim() ||
+      (item.allocationFingerprint !== undefined &&
+        (typeof item.allocationFingerprint !== "string" || !item.allocationFingerprint.trim())) ||
+      (item.allocationSideFingerprint !== undefined &&
+        (typeof item.allocationSideFingerprint !== "string" || !item.allocationSideFingerprint.trim()))
+    )
+  ) {
+    throw new TypeError("Portfolio.appliedFillFingerprints must contain fill identity and ownership records")
+  }
+}
+
+function validatePortfolioFillIdentity({ appliedFillIds, appliedFillFingerprints } = {}) {
+  if (
+    new Set(appliedFillFingerprints.map((item) => item.id)).size !== appliedFillFingerprints.length ||
+    appliedFillFingerprints.length !== appliedFillIds.length ||
+    appliedFillFingerprints.some((item) => !appliedFillIds.includes(item.id))
+  ) {
+    throw new TypeError("Portfolio fill IDs and fingerprints must match exactly")
+  }
+}
+
+function validatePortfolioState({ positions, appliedFillIds, appliedFillFingerprints } = {}) {
+  validatePortfolioPositions({ positions })
+  validatePortfolioAppliedFillIds({ appliedFillIds })
+  validatePortfolioAppliedFillFingerprints({ appliedFillFingerprints })
+  if (new Set(positions.map((position) => position.positionId)).size !== positions.length) {
+    throw new TypeError("Portfolio cannot contain duplicate Position IDs")
+  }
+  if (new Set(appliedFillIds).size !== appliedFillIds.length) {
+    throw new TypeError("Portfolio cannot contain duplicate fill IDs")
+  }
+  validatePortfolioFillIdentity({
+    appliedFillIds,
+    appliedFillFingerprints,
+  })
+}
+
+function validatePortfolioSelectorValue({ value, errorMessage } = {}) {
+  if (value !== undefined && (typeof value !== "string" || !value.trim())) {
+    throw new TypeError(errorMessage)
+  }
+}
+
+function normalizePortfolioPositionSelector({
+  positionId,
+  marketId,
+  symbol,
+  strategyId,
+} = {}) {
+  validatePortfolioSelectorValue({
+    value: positionId,
+    errorMessage: "Portfolio.getPositions positionId must be a non-empty string",
+  })
+  validatePortfolioSelectorValue({
+    value: marketId,
+    errorMessage: "Portfolio.getPositions marketId must be a non-empty string",
+  })
+  validatePortfolioSelectorValue({
+    value: symbol,
+    errorMessage: "Portfolio.getPositions symbol must be a non-empty string",
+  })
+  const owner = strategyId === undefined
+    ? undefined
+    : normalizeStrategyId({
+      strategyId,
+      errorMessage: "Portfolio operation requires a non-empty strategyId",
+    })
+  if (positionId === undefined && marketId === undefined && symbol === undefined && owner === undefined) {
+    throw new TypeError("Portfolio.getPositions requires a Position, market, symbol, or strategy selector")
+  }
+  return {
+    positionId,
+    marketId,
+    symbol,
+    owner,
+  }
+}
+
+function matchesPortfolioPosition({ position, selector } = {}) {
+  return (selector.positionId === undefined || position.positionId === selector.positionId) &&
+    (selector.marketId === undefined || position.market.id === selector.marketId) &&
+    (selector.symbol === undefined || position.market.symbol === selector.symbol) &&
+    (selector.owner === undefined || position.strategyId === selector.owner)
+}
+
+function validateSellAllocationInput({ fill, allocationFingerprint, allocationSide } = {}) {
+  if (!(fill instanceof Fill) || fill.side !== "SELL") {
+    throw new TypeError("Portfolio.applySellAllocation requires a canonical SELL Fill")
+  }
+  if (typeof allocationFingerprint !== "string" || !allocationFingerprint.trim()) {
+    throw new TypeError("Portfolio.applySellAllocation requires a non-empty allocationFingerprint")
+  }
+  if (!allocationSide || typeof allocationSide !== "object") {
+    throw new TypeError("Portfolio.applySellAllocation requires an allocated SELL side")
+  }
+}
+
+function resolveSellAllocationPosition({ positions, fill, positionId, strategyId, allocationSide } = {}) {
+  const owner = normalizeStrategyId({
+    strategyId,
+    errorMessage: "Portfolio operation requires a non-empty strategyId",
+  })
+  const id = resolvePositionId({
+    positionId,
+    marketId: fill.market.id,
+    strategyId: owner,
+  })
+  const current = positions.find((position) => position.positionId === id)
+  if (!current) {
+    throw new RangeError(`Portfolio has no Position ${id} for allocated SELL`)
+  }
+  if (current.market.id !== fill.market.id || current.strategyId !== owner) {
+    throw new Error(`Allocated SELL market or strategy owner conflicts with Position ${id}`)
+  }
+  if (compareDecimal({
+    left: allocationSide.grossBaseQuantity,
+    right: fill.quantity.amount,
+  }) > 0) {
+    throw new RangeError("Allocated SELL quantity exceeds canonical Fill quantity")
+  }
+  return {
+    owner,
+    id,
+    current,
+  }
+}
+
+function resolveSellAllocationReplay({
+  existingFingerprint,
+  portfolio,
+  fill,
+  id,
+  owner,
+  allocationFingerprint,
+  allocationSideFingerprint,
+  fingerprint,
+} = {}) {
+  if (!existingFingerprint) {
+    return undefined
+  }
+  if (existingFingerprint.positionId !== id || existingFingerprint.strategyId !== owner) {
+    throw new Error(`Conflicting strategy attribution reused Fill ID ${fill.id}`)
+  }
+  if (existingFingerprint.fingerprint !== fingerprint) {
+    throw new Error(`Conflicting execution facts reused Fill ID ${fill.id}`)
+  }
+  if (existingFingerprint.allocationFingerprint !== allocationFingerprint) {
+    throw new Error(`Conflicting allocation facts reused Fill ID ${fill.id}`)
+  }
+  if (existingFingerprint.allocationSideFingerprint !== allocationSideFingerprint) {
+    throw new Error(`Conflicting allocation side reused Fill ID ${fill.id}`)
+  }
+  return Object.freeze({
+    portfolio,
+    applied: false,
+    duplicate: true,
+  })
+}
+
 export class Portfolio {
   #positions
   #appliedFillIds
@@ -34,47 +211,11 @@ export class Portfolio {
     appliedFillIds = [],
     appliedFillFingerprints = [],
   } = {}) {
-    if (!Array.isArray(positions) || positions.some((position) => !(position instanceof Position))) {
-      throw new TypeError("Portfolio.positions must contain Position values")
-    }
-    if (!Array.isArray(appliedFillIds) || appliedFillIds.some((id) => typeof id !== "string" || !id.trim())) {
-      throw new TypeError("Portfolio.appliedFillIds must contain non-empty strings")
-    }
-    if (
-      !Array.isArray(appliedFillFingerprints) ||
-      appliedFillFingerprints.some((item) =>
-        !item ||
-        typeof item.id !== "string" ||
-        !item.id.trim() ||
-        typeof item.fingerprint !== "string" ||
-        !item.fingerprint ||
-        typeof item.positionId !== "string" ||
-        !item.positionId.trim() ||
-        typeof item.strategyId !== "string" ||
-        !item.strategyId.trim() ||
-        (item.allocationFingerprint !== undefined &&
-          (typeof item.allocationFingerprint !== "string" || !item.allocationFingerprint.trim())) ||
-        (item.allocationSideFingerprint !== undefined &&
-          (typeof item.allocationSideFingerprint !== "string" || !item.allocationSideFingerprint.trim()))
-      )
-    ) {
-      throw new TypeError("Portfolio.appliedFillFingerprints must contain fill identity and ownership records")
-    }
-
-    const positionIds = positions.map((position) => position.positionId)
-    if (new Set(positionIds).size !== positionIds.length) {
-      throw new TypeError("Portfolio cannot contain duplicate Position IDs")
-    }
-    if (new Set(appliedFillIds).size !== appliedFillIds.length) {
-      throw new TypeError("Portfolio cannot contain duplicate fill IDs")
-    }
-    if (
-      new Set(appliedFillFingerprints.map((item) => item.id)).size !== appliedFillFingerprints.length ||
-      appliedFillFingerprints.length !== appliedFillIds.length ||
-      appliedFillFingerprints.some((item) => !appliedFillIds.includes(item.id))
-    ) {
-      throw new TypeError("Portfolio fill IDs and fingerprints must match exactly")
-    }
+    validatePortfolioState({
+      positions,
+      appliedFillIds,
+      appliedFillFingerprints,
+    })
 
     this.#positions = Object.freeze([...positions])
     this.#appliedFillIds = Object.freeze([...appliedFillIds])
@@ -89,26 +230,17 @@ export class Portfolio {
   get appliedFillFingerprints() { return this.#appliedFillFingerprints }
 
   getPositions({ positionId, marketId, symbol, strategyId } = {}) {
-    if (positionId !== undefined && (typeof positionId !== "string" || !positionId.trim())) {
-      throw new TypeError("Portfolio.getPositions positionId must be a non-empty string")
-    }
-    if (marketId !== undefined && (typeof marketId !== "string" || !marketId.trim())) {
-      throw new TypeError("Portfolio.getPositions marketId must be a non-empty string")
-    }
-    if (symbol !== undefined && (typeof symbol !== "string" || !symbol.trim())) {
-      throw new TypeError("Portfolio.getPositions symbol must be a non-empty string")
-    }
-
-    const owner = strategyId === undefined ? undefined : normalizeStrategyId({ strategyId })
-    if (positionId === undefined && marketId === undefined && symbol === undefined && owner === undefined) {
-      throw new TypeError("Portfolio.getPositions requires a Position, market, symbol, or strategy selector")
-    }
-
+    const selector = normalizePortfolioPositionSelector({
+      positionId,
+      marketId,
+      symbol,
+      strategyId,
+    })
     return Object.freeze(this.#positions.filter((position) =>
-      (positionId === undefined || position.positionId === positionId) &&
-      (marketId === undefined || position.market.id === marketId) &&
-      (symbol === undefined || position.market.symbol === symbol) &&
-      (owner === undefined || position.strategyId === owner)
+      matchesPortfolioPosition({
+        position,
+        selector,
+      })
     ))
   }
 
@@ -144,7 +276,10 @@ asset: market.baseAsset })
     if (!(fill instanceof Fill)) {
       throw new TypeError("Portfolio.applyFill requires a canonical Fill")
     }
-    const owner = normalizeStrategyId({ strategyId })
+    const owner = normalizeStrategyId({
+      strategyId,
+      errorMessage: "Portfolio operation requires a non-empty strategyId",
+    })
     const id = resolvePositionId({
       positionId,
       marketId: fill.market.id,
@@ -206,56 +341,35 @@ strategyId: owner },
     positionId,
     strategyId,
   } = {}) {
-    if (!(fill instanceof Fill) || fill.side !== "SELL") {
-      throw new TypeError("Portfolio.applySellAllocation requires a canonical SELL Fill")
-    }
-    if (typeof allocationFingerprint !== "string" || !allocationFingerprint.trim()) {
-      throw new TypeError("Portfolio.applySellAllocation requires a non-empty allocationFingerprint")
-    }
-    if (!allocationSide || typeof allocationSide !== "object") {
-      throw new TypeError("Portfolio.applySellAllocation requires an allocated SELL side")
-    }
-    const owner = normalizeStrategyId({ strategyId })
-    const id = resolvePositionId({
-      positionId,
-      marketId: fill.market.id,
-      strategyId: owner,
+    validateSellAllocationInput({
+      fill,
+      allocationFingerprint,
+      allocationSide,
     })
-    const current = this.#positions.find((position) => position.positionId === id)
-    if (!current) {
-      throw new RangeError(`Portfolio has no Position ${id} for allocated SELL`)
-    }
-    if (current.market.id !== fill.market.id || current.strategyId !== owner) {
-      throw new Error(`Allocated SELL market or strategy owner conflicts with Position ${id}`)
-    }
-    if (compareDecimal({
-      left: allocationSide.grossBaseQuantity,
-      right: fill.quantity.amount,
-    }) > 0) {
-      throw new RangeError("Allocated SELL quantity exceeds canonical Fill quantity")
-    }
+    const { owner, id, current } = resolveSellAllocationPosition({
+      positions: this.#positions,
+      fill,
+      positionId,
+      strategyId,
+      allocationSide,
+    })
     const allocationSideFingerprint = JSON.stringify(allocationSide)
     const fingerprint = createFillFingerprint({ fill })
     const existingFingerprint = this.#appliedFillFingerprints.find((item) => item.id === fill.id)
-    if (existingFingerprint) {
-      if (existingFingerprint.positionId !== id || existingFingerprint.strategyId !== owner) {
-        throw new Error(`Conflicting strategy attribution reused Fill ID ${fill.id}`)
-      }
-      if (existingFingerprint.fingerprint !== fingerprint) {
-        throw new Error(`Conflicting execution facts reused Fill ID ${fill.id}`)
-      }
-      if (existingFingerprint.allocationFingerprint !== allocationFingerprint) {
-        throw new Error(`Conflicting allocation facts reused Fill ID ${fill.id}`)
-      }
-      if (existingFingerprint.allocationSideFingerprint !== allocationSideFingerprint) {
-        throw new Error(`Conflicting allocation side reused Fill ID ${fill.id}`)
-      }
-      return Object.freeze({
-        portfolio: this,
-        applied: false,
-        duplicate: true,
-      })
+    const replay = resolveSellAllocationReplay({
+      existingFingerprint,
+      portfolio: this,
+      fill,
+      id,
+      owner,
+      allocationFingerprint,
+      allocationSideFingerprint,
+      fingerprint,
+    })
+    if (replay) {
+      return replay
     }
+
     const position = current.applySellAllocation({
       allocation: allocationSide,
     })
@@ -279,7 +393,6 @@ strategyId: owner },
       duplicate: false,
     })
   }
-
 
   allocateFreeQuantity({ marketId, positionId, strategyId, quantity } = {}) {
     const owner = normalizeStrategyId({ strategyId })
