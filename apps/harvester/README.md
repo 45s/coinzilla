@@ -53,6 +53,19 @@ The offline DOGE/ZRO Conservative runtime replay and its simulated Binance harne
 
 The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @coinzilla/harvester recovery:market -- --context ./recovery-evidence/linkusdt.json`. Audit-only is the default; `--confirm` explicitly appends an operational record to the Operational State Store and requires an already initialized store. The command does not connect to Binance, place/cancel orders, or enable startup restoration. See the [recovery operator guide](./docs/recovery/README.md) for the evidence schema and safety contract.
 
+## Trading-history API v1 (#1635)
+
+The standalone [Trading-history API v1](./docs/api/trading-history-api.md) serves persisted orders, individual fills, and commission facts to independent clients. It uses a transport-independent application query facade and the existing Harvester-owned relational tables. It does not add tables, change trading behavior, or connect to a broker/exchange.
+
+Start Harvester once with the intended `TRADING_MODE` so its normal startup initializes the environment-specific database. Generate a 32-byte token and set `HARVESTER_API_TOKEN` in the local `.env.development` file, then start the API in a separate terminal:
+
+```sh
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+pnpm --filter @coinzilla/harvester history:api:dev
+```
+
+The API binds to `127.0.0.1:4201` by default. It opens the existing selected database and enables SQLite query-only mode on its own connection. See the API contract for routes, filters, pagination, authentication, remote-access requirements, and exact financial-value semantics.
+
 ## Operational State Store (ADR-0001)
 
 The Operational State Store is a separate Harvester-owned append-only recovery-facts ledger. It is not the SQLite history database and is not interchangeable with Journal.
