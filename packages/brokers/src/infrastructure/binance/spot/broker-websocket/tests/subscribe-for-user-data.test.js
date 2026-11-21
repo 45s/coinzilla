@@ -559,7 +559,10 @@ it("warns at the broker boundary when Binance sends an unsupported user-data eve
   })
 
   assert.deepEqual(received, [{
-    event: { e: "futureEvent", secret: "must-not-be-logged" },
+    event: {
+      e: "futureEvent",
+      secret: "must-not-be-logged",
+    },
   }])
   assert.deepEqual(warnings, [[
     "Unsupported Binance user-data event",
