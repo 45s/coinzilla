@@ -101,7 +101,10 @@ test("one-shot marker persists sanitized terminal outcome", async () => {
       /not awaiting an outcome/,
     )
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
