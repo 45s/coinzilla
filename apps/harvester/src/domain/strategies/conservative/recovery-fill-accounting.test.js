@@ -316,3 +316,101 @@ fill }), {
     netSellProceeds: "11.97",
   }, "A valid third-asset quote valuation must reduce SELL proceeds by its supplied quote value.")
 })
+
+
+test("rejects missing market or fill before accounting", () => {
+  assert.throws(
+    () => calculateRecoveryFillAccounting({ fill: makeFill() }),
+    /requires market and fill/,
+    "A canonical Fill cannot be accounted without its Market.",
+  )
+  assert.throws(
+    () => calculateRecoveryFillAccounting({ market }),
+    /requires market and fill/,
+    "A Market cannot be accounted without its canonical Fill.",
+  )
+})
+
+test("rejects a fill from a different market", () => {
+  const otherMarket = new Market({
+    venue: "binance",
+    symbol: "DOGEBNB",
+    baseAsset,
+    quoteAsset: thirdAsset,
+  })
+
+  assert.throws(
+    () => calculateRecoveryFillAccounting({
+      market,
+      fill: {
+        market: otherMarket,
+        side: "BUY",
+      },
+    }),
+    /Fill market does not match recovery accounting market/,
+    "A fill from another symbol must never change this market's recovery accounting.",
+  )
+})
+
+test("rejects unsupported fill sides", () => {
+  assert.throws(
+    () => calculateRecoveryFillAccounting({
+      market,
+      fill: {
+        market,
+        side: "HOLD",
+      },
+    }),
+    /Fill side must be BUY or SELL/,
+    "Only canonical BUY and SELL executions may enter recovery accounting.",
+  )
+})
+
+test("rejects missing quote notional and mismatched quote assets", () => {
+  assert.throws(
+    () => calculateRecoveryFillAccounting({
+      market,
+      fill: {
+        market,
+        side: "BUY",
+      },
+    }),
+    undefined,
+    "A missing executed quote notional must not be interpreted as zero."
+  )
+  assert.throws(
+    () => calculateRecoveryFillAccounting({
+      market,
+      fill: {
+        market,
+        side: "BUY",
+        quoteQuantity: {
+          amount: "1",
+          asset: baseAsset,
+        },
+      },
+    }),
+    /Fill quote quantity must use the market quote asset/,
+    "Executed quote notional denominated in the base asset must be rejected.",
+  )
+})
+
+test("rejects zero and negative quote notionals", () => {
+  for (const quoteAmount of ["0", "-0.01"]) {
+    assert.throws(
+      () => calculateRecoveryFillAccounting({
+        market,
+        fill: {
+          market,
+          side: "BUY",
+          quoteQuantity: {
+            amount: quoteAmount,
+            asset: quoteAsset,
+          },
+        },
+      }),
+      /Fill quote quantity must be greater than zero/,
+      `Executed quote notional ${quoteAmount} must be strictly positive.`,
+    )
+  }
+})

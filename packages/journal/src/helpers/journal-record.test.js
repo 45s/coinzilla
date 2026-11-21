@@ -67,7 +67,7 @@ test("rejects reserved metadata, invalid identities, and cyclic event values", (
 
 test("rejects incomplete, malformed, and oversized JSONL records", () => {
   assert.throws(() => parseJournalSession({
-    content: '{"id":"event-1"}',
+    content: JSON.stringify({ id: "event-1" }),
     fileName: "session.jsonl",
     maxRecordBytes: 1024,
   }), (error) => error.code === "JOURNAL_INCOMPLETE_RECORD")
@@ -77,7 +77,7 @@ test("rejects incomplete, malformed, and oversized JSONL records", () => {
     maxRecordBytes: 1024,
   }), (error) => error.code === "JOURNAL_MALFORMED_RECORD")
   assert.throws(() => parseJournalSession({
-    content: '{"id":"event-1"}\n',
+    content: `${JSON.stringify({ id: "event-1" })}\n`,
     fileName: "session.jsonl",
     maxRecordBytes: 1,
   }), (error) => error.code === "JOURNAL_RECORD_TOO_LARGE")

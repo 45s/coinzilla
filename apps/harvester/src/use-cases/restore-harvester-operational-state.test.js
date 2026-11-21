@@ -233,14 +233,14 @@ test("restores an offline candidate Portfolio, RecoveryLedger map, and UNKNOWN o
   assert.equal(result.data.portfolio.getPosition({ marketId: market.id }).spent.amount, "2", "Durable BUY fills must rebuild exact quote cost.")
   assert.equal(result.data.recoveryLedgers.get(market.id).buyCost, "2", "The candidate RecoveryLedger must remain aligned with Portfolio.spent.")
   assert.equal(result.data.orderSubmissionOutcomes.length, 1, "Exact broker acknowledgement facts must remain available beside the UNKNOWN candidate order.")
-  assert.equal(result.data.orderSubmissionOutcomes[0].executedQuantity, "0")
-  assert.deepEqual(result.data.orderCancellationOutcomes, [])
-  assert.deepEqual(result.data.recoveryCycles, [])
-  assert.deepEqual(result.data.recoveryCycleEvaluations, [])
+  assert.equal(result.data.orderSubmissionOutcomes[0].executedQuantity, "0", "Operational-state restoration regression: expected result.data.orderSubmissionOutcomes[0].executedQuantity to equal \"0\".")
+  assert.deepEqual(result.data.orderCancellationOutcomes, [], "Operational-state restoration regression: expected result.data.orderCancellationOutcomes to deeply equal [].")
+  assert.deepEqual(result.data.recoveryCycles, [], "Operational-state restoration regression: expected result.data.recoveryCycles to deeply equal [].")
+  assert.deepEqual(result.data.recoveryCycleEvaluations, [], "Operational-state restoration regression: expected result.data.recoveryCycleEvaluations to deeply equal [].")
   assert.equal(result.data.requiresExchangeReconciliation, true, "Candidate restoration must not open the trading gate.")
   assert.equal(result.data.historyCoverageComplete, false, "The candidate must not infer global market-history completeness.")
-  assert.equal(result.data.candidateOnly, true)
-  assert.equal(result.data.restorationEnabled, false)
+  assert.equal(result.data.candidateOnly, true, "Operational-state restoration regression: expected result.data.candidateOnly to equal true.")
+  assert.equal(result.data.restorationEnabled, false, "Operational-state restoration regression: expected result.data.restorationEnabled to equal false.")
 })
 
 test("expands an account-scoped blocker to every configured market in the candidate pause set", async () => {
@@ -251,8 +251,8 @@ test("expands an account-scoped blocker to every configured market in the candid
 
   assert.equal(result.ok, true, result.errors?.map(({ message }) => message).join("; "))
   assert.deepEqual([...result.data.durablePausedMarkets], ["BTCUSDT"], "An account-level blocker must pause every configured market.")
-  assert.equal(result.data.stickySafetyBlockers[0].scope, "ACCOUNT")
-  assert.equal(result.data.stickySafetyBlockers[0].symbol, null)
+  assert.equal(result.data.stickySafetyBlockers[0].scope, "ACCOUNT", "Operational-state restoration regression: expected result.data.stickySafetyBlockers[0].scope to equal \"ACCOUNT\".")
+  assert.equal(result.data.stickySafetyBlockers[0].symbol, null, "Operational-state restoration regression: expected result.data.stickySafetyBlockers[0].symbol to equal null.")
 })
 
 test("fails closed when an account blocker cannot be expanded to canonical configured markets", async () => {
@@ -286,7 +286,7 @@ test("preserves external account-wide open orders as evidence without adopting t
   assert.equal(result.data.orderRegistry.getOrder({ clientOrderId: "manual-client-1" }), undefined, "A matching clientOrderId in an account snapshot is not proof of Harvester ownership.")
   assert.equal(result.data.orderRegistry.getActiveOrders().length, 1, "Only the durable Harvester-owned order intent may enter the candidate registry.")
   assert.equal(result.data.openOrderSnapshots.length, 1, "The external order must remain available as reconciliation evidence.")
-  assert.equal(result.data.requiresExchangeReconciliation, true)
+  assert.equal(result.data.requiresExchangeReconciliation, true, "Operational-state restoration regression: expected result.data.requiresExchangeReconciliation to equal true.")
 })
 
 
@@ -661,10 +661,10 @@ test("fails closed on Recovery Seller BUY Journal activity while replay is defer
     marketMetadata: new Map([[market.symbol, { market }]]),
   })
 
-  assert.equal(result.ok, false)
+  assert.equal(result.ok, false, "Operational-state restoration regression: expected result.ok to equal false.")
   assert.match(
     result.errors?.map(({ message }) => message).join("; "),
-    /Recovery Seller Journal replay is deferred/,
+    /Recovery Seller Journal replay is deferred/, "Operational-state restoration regression: expected result.errors?.map(({ message }) => message).join(\"; \") to match /Recovery Seller Journal replay is deferred/."
   )
 })
 
@@ -682,9 +682,67 @@ test("fails closed on Recovery Seller SELL Journal activity while replay is defe
     marketMetadata: new Map([[market.symbol, { market }]]),
   })
 
-  assert.equal(result.ok, false)
+  assert.equal(result.ok, false, "Operational-state restoration regression: expected result.ok to equal false.")
   assert.match(
     result.errors?.map(({ message }) => message).join("; "),
-    /Recovery Seller Journal replay is deferred/,
+    /Recovery Seller Journal replay is deferred/, "Operational-state restoration regression: expected result.errors?.map(({ message }) => message).join(\"; \") to match /Recovery Seller Journal replay is deferred/."
   )
+})
+
+
+test("requires an initialized Operational State Store and projector port", async () => {
+  const missingStore = await restoreCandidate({
+    operationalStateStore: undefined,
+  })
+  const missingProjector = await restoreCandidate({
+    operationalStateStore: makeStore(records()),
+    projectOperationalState: undefined,
+  })
+
+  assert.equal(missingStore.ok, false, "Candidate restoration must reject a missing durable-fact read port.")
+  assert.match(missingStore.errors[0].message, /initialized durable-fact read port/, "Operational-state restoration regression: expected missingStore.errors[0].message to match /initialized durable-fact read port/.")
+  assert.equal(missingProjector.ok, false, "Candidate restoration must reject a missing Operational State projector.")
+  assert.match(missingProjector.errors[0].message, /injected Operational State projector/, "Operational-state restoration regression: expected missingProjector.errors[0].message to match /injected Operational State projector/.")
+})
+
+test("preserves a failed Operational State Store read result", async () => {
+  const readError = new Error("Injected durable-fact read failure")
+  const result = await restoreCandidate({
+    operationalStateStore: {
+      readAll: async () => ({
+        ok: false,
+        errors: [readError],
+      }),
+    },
+  })
+
+  assert.equal(result.ok, false, "A failed durable-fact read must stop candidate restoration.")
+  assert.strictEqual(result.errors[0], readError, "The original store read error must be preserved.")
+})
+
+test("converts a thrown Operational State Store read into a failure result", async () => {
+  const readError = new Error("Injected thrown durable-fact read")
+  const result = await restoreCandidate({
+    operationalStateStore: {
+      readAll: async () => {
+        throw readError
+      },
+    },
+  })
+
+  assert.equal(result.ok, false, "A thrown store read must not escape or create a partial candidate.")
+  assert.match(result.errors[0].message, /Injected thrown durable-fact read/, "Operational-state restoration regression: expected result.errors[0].message to match /Injected thrown durable-fact read/.")
+})
+
+test("converts a thrown Operational State projection into a failure result", async () => {
+  const projectionError = new Error("Injected thrown Operational State projection")
+  const result = await restoreCandidate({
+    operationalStateStore: makeStore(records()),
+    projectOperationalState: () => {
+      throw projectionError
+    },
+  })
+
+  assert.equal(result.ok, false, "A thrown projection must not produce a candidate or reopen trading readiness.")
+  assert.match(result.errors[0].message, /Injected thrown Operational State projection/, "Operational-state restoration regression: expected result.errors[0].message to match /Injected thrown Operational State projection/.")
 })

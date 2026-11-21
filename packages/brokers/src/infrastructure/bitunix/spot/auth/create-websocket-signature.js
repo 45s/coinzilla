@@ -47,21 +47,21 @@ export function createBitunixWebSocketSignature(input = {}) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new TypeError("Bitunix WebSocket signature input must be an object")
   }
-  const { nonce, timestamp, apiKey, secretKey, params } = input
+  const { nonce, timestamp, apiKey: publicApiKey, secretKey: signingSecret, params } = input
   assertNonEmptyString({ value: nonce,
     name: "nonce" })
   assertNonEmptyString({ value: timestamp,
     name: "timestamp" })
-  assertNonEmptyString({ value: apiKey,
+  assertNonEmptyString({ value: publicApiKey,
     name: "apiKey" })
-  assertNonEmptyString({ value: secretKey,
+  assertNonEmptyString({ value: signingSecret,
     name: "secretKey" })
 
   const parameterString = serializeBitunixWebSocketParams({ params })
   const digest = createHash("sha256")
-    .update(`${nonce}${timestamp}${apiKey}${parameterString}`, "utf8")
+    .update(`${nonce}${timestamp}${publicApiKey}${parameterString}`, "utf8")
     .digest("hex")
   return createHash("sha256")
-    .update(`${digest}${secretKey}`, "utf8")
+    .update(`${digest}${signingSecret}`, "utf8")
     .digest("hex")
 }

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 import { isLocalHostname } from './external-link-address-policy.js';
 import { fetchPinned } from './external-link-network.js';
-import { findMarkdownDocuments, removeCodeExamples } from './check-agent-policy.js';
+import { findMarkdownDocuments, removeCodeExamples, removeHtmlComments } from './check-agent-policy.js';
 import { isHistoricalPath } from './check-markdown-style.js';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -30,11 +30,15 @@ function countCharacter(...args) {
 }
 
 function trimUrlPunctuation(value) {
-  let result = value.trim().replace(/^<|>$/g, '');
-  while (/[.,;:]$/.test(result)) {result = result.slice(0, -1);}
+  let result = value.trim();
+  if (result.startsWith('<') && result.endsWith('>')) { result = result.slice(1, -1); }
+  while (result.length > 0 && '.,;:'.includes(result.at(-1))) {
+    result = result.slice(0, -1);
+  }
   const pairs = [['(', ')'], ['[', ']'], ['{', '}']];
   for (const [opening, closing] of pairs) {
-    while (result.endsWith(closing) && countCharacter(result, closing) > countCharacter(result, opening)) {
+    while (result.endsWith(closing) &&
+      countCharacter(result, closing) > countCharacter(result, opening)) {
       result = result.slice(0, -1);
     }
   }
@@ -46,30 +50,50 @@ function isCredentialQueryParameter(name) {
 }
 
 function redactCredentials(value) {
-  const userInfoRedacted = value.replace(/(https?:\/\/)[^/@\s]+@/i, '$1[redacted]@');
+  const schemeSeparator = value.indexOf('://');
+  let safeValue = value;
+  if (schemeSeparator !== -1) {
+    const authorityStart = schemeSeparator + 3;
+    let authorityEnd = value.length;
+    for (const delimiter of ['/', '?', '#']) {
+      const position = value.indexOf(delimiter, authorityStart);
+      if (position !== -1 && position < authorityEnd) { authorityEnd = position; }
+    }
+    const authority = value.slice(authorityStart, authorityEnd);
+    const at = authority.lastIndexOf('@');
+    if (at !== -1) {
+      safeValue = `${value.slice(0, authorityStart)}[redacted]@${authority.slice(at + 1)}${value.slice(authorityEnd)}`;
+    }
+  }
 
   try {
-    const parsed = new URL(userInfoRedacted);
+    const parsed = new URL(safeValue);
     for (const key of parsed.searchParams.keys()) {
-      if (isCredentialQueryParameter(key)) {parsed.searchParams.set(key, '[redacted]');}
+      if (isCredentialQueryParameter(key)) { parsed.searchParams.set(key, '[redacted]'); }
     }
     parsed.hash = '';
     return parsed.href;
   } catch {
-    return userInfoRedacted
-      .replace(/([?&])([^=&#]+)=([^&#]*)/g, (...args) => {
-        const [match, separator, name] = args;
-        let decodedName = name;
-        try {
-          decodedName = decodeURIComponent(name.replace(/\+/g, ' '));
-        } catch {
-          // Keep malformed parameter names unchanged.
-        }
-        return isCredentialQueryParameter(decodedName)
-          ? `${separator + name  }=[redacted]`
-          : match;
-      })
-      .split('#', 1)[0];
+    const queryStart = safeValue.indexOf('?');
+    if (queryStart === -1) { return safeValue.split('#')[0]; }
+    const fragmentStart = safeValue.indexOf('#', queryStart);
+    const queryEnd = fragmentStart === -1 ? safeValue.length : fragmentStart;
+    const query = safeValue.slice(queryStart + 1, queryEnd);
+    const redactedQuery = query.split('&').map((parameter) => {
+      const separator = parameter.indexOf('=');
+      if (separator === -1) { return parameter; }
+      const rawName = parameter.slice(0, separator);
+      let decodedName = rawName;
+      try {
+        decodedName = decodeURIComponent(rawName.replaceAll('+', ' '));
+      } catch {
+        // Preserve malformed parameter names; they cannot be classified safely.
+      }
+      return isCredentialQueryParameter(decodedName)
+        ? `${rawName}=[redacted]`
+        : parameter;
+    }).join('&');
+    return `${safeValue.slice(0, queryStart)}?${redactedQuery}`;
   }
 }
 
@@ -81,7 +105,14 @@ function redactCredentials(value) {
  * @returns {{status: 'candidate'|'skipped'|'invalid', url: string, host?: string, reason?: string}|null}
  */
 export function parseExternalUrl(raw) {
-  const value = String(raw).trim().replace(/^<([^>]+)>$/, '$1').replace(/&amp;/g, '&');
+  let value = String(raw).trim();
+  if (value.startsWith('<') && value.endsWith('>')) { value = value.slice(1, -1); }
+  let decodedValue = '';
+  for (let index = 0; index < value.length; index += 1) {
+    if (value.startsWith('&amp;', index)) { decodedValue += '&'; index += 4; }
+    else { decodedValue += value[index]; }
+  }
+  value = decodedValue;
   if (!/^https?:\/\//i.test(value)) {return null;}
 
   let parsed;
@@ -144,7 +175,7 @@ originalUrls: [] };
   }
 
   for (const document of documents) {
-    const content = removeCodeExamples(document.content).replace(/<!--[\s\S]*?-->/g, '');
+    const content = removeHtmlComments(removeCodeExamples(document.content));
     const inlineLinks = /!?\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))/g;
     const referenceDefinitions = /^\s{0,3}\[[^\]]+\]:\s*(?:<([^>]+)>|([^\s]+))/gm;
     const autolinks = /<(https?:\/\/[^>\s]+)>/gi;
@@ -253,6 +284,43 @@ async function cancelResponseBody(...args) {
   }
 }
 
+async function retryAfterFailure({ error, attempt, maxRetries, baseDelayMs, maxRetryAfterMs, sleep }) {
+  if (error?.code === 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS' || attempt === maxRetries) {
+    return { error };
+  }
+  await sleep(Math.min(maxRetryAfterMs, baseDelayMs * (2 ** attempt)));
+  return null;
+}
+
+async function requestExternalResource({ url, method, options }) {
+  const signal = AbortSignal.timeout(options.timeoutMs ?? 10_000);
+  const fetchImpl = options.fetchImpl ?? ((...fetchArguments) => {
+    const [target, init] = fetchArguments;
+    return fetchPinned(target, init, options);
+  });
+  const { hostLimiter } = options;
+  return hostLimiter(new URL(url).hostname, () => fetchImpl(url, {
+    method,
+    redirect: 'manual',
+    headers: {
+      'user-agent': USER_AGENT,
+      accept: '*/*',
+      ...(method === 'GET' ? { range: 'bytes=0-0' } : {}),
+    },
+    signal,
+  }));
+}
+
+function shouldRetryResponse({ response, attempt, maxRetries }) {
+  return RETRYABLE_STATUSES.has(response.status) && attempt < maxRetries;
+}
+
+async function waitBeforeRetry({ response, attempt, baseDelayMs, maxRetryAfterMs, sleep, now }) {
+  const retryAfter = parseRetryAfter(response.headers?.get?.('retry-after'), now(), maxRetryAfterMs);
+  const backoff = Math.min(maxRetryAfterMs, baseDelayMs * (2 ** attempt));
+  await sleep(retryAfter ?? backoff);
+}
+
 async function fetchWithRetries(...args) {
   const [url, method, options] = args;
   const maxRetries = options.maxRetries ?? 2;
@@ -260,43 +328,45 @@ async function fetchWithRetries(...args) {
   const maxRetryAfterMs = options.maxRetryAfterMs ?? 30_000;
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
-  const fetchImpl = options.fetchImpl ?? ((...fetchArguments) => {
-    const [target, init] = fetchArguments;
-    return fetchPinned(target, init, options);
-  });
-  const {hostLimiter} = options;
   let lastError;
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
-      const signal = AbortSignal.timeout(options.timeoutMs ?? 10_000);
-      const response = await hostLimiter(new URL(url).hostname, () => fetchImpl(url, {
+      const response = await requestExternalResource({
+        url,
         method,
-        redirect: 'manual',
-        headers: {
-          'user-agent': USER_AGENT,
-          accept: '*/*',
-          ...(method === 'GET' ? { range: 'bytes=0-0' } : {}),
-        },
-        signal,
-      }));
+        options,
+      });
       await cancelResponseBody(response, method);
-
-      if (!RETRYABLE_STATUSES.has(response.status) || attempt === maxRetries) {
-        return { response };
+      if (shouldRetryResponse({
+        response,
+        attempt,
+        maxRetries,
+      })) {
+        await waitBeforeRetry({
+          response,
+          attempt,
+          baseDelayMs,
+          maxRetryAfterMs,
+          sleep,
+          now,
+        });
+        continue;
       }
-
-      const retryAfter = parseRetryAfter(response.headers?.get?.('retry-after'), now(), maxRetryAfterMs);
-      const backoff = Math.min(maxRetryAfterMs, baseDelayMs * (2 ** attempt));
-      await sleep(retryAfter ?? backoff);
+      return { response };
     } catch (error) {
       lastError = error;
-      if (error?.code === 'ERR_EXTERNAL_LINK_UNSAFE_ADDRESS') {return { error: lastError };}
-      if (attempt === maxRetries) {return { error: lastError };}
-      await sleep(Math.min(maxRetryAfterMs, baseDelayMs * (2 ** attempt)));
+      const terminal = await retryAfterFailure({
+        error,
+        attempt,
+        maxRetries,
+        baseDelayMs,
+        maxRetryAfterMs,
+        sleep,
+      });
+      if (terminal) { return terminal; }
     }
   }
-
   return { error: lastError ?? new Error('Request attempts exhausted') };
 }
 
@@ -354,9 +424,84 @@ function isBrokenStatus(status) {
  * @param {object} options Injectable network/rate-limit options for tests.
  * @returns {Promise<object>}
  */
+function classifyHeadResponse({ link, head }) {
+  if (head.blocked) {
+    return {
+      ...link,
+      status: 'skipped',
+      reason: head.reason,
+    };
+  }
+  if (head.reason) {
+    return {
+      ...link,
+      status: 'unverifiable',
+      reason: head.reason,
+    };
+  }
+  if (isSuccessfulStatus(head.response.status)) {
+    return {
+      ...link,
+      status: 'ok',
+      checkedUrl: head.finalUrl,
+    };
+  }
+  if (!GET_FALLBACK_STATUSES.has(head.response.status)) {
+    return {
+      ...link,
+      status: 'unverifiable',
+      reason: `HEAD returned HTTP ${head.response.status}`,
+    };
+  }
+  return null;
+}
+
+function classifyGetResponse({ link, head, get }) {
+  if (get.blocked) {
+    return {
+      ...link,
+      status: 'skipped',
+      reason: get.reason,
+    };
+  }
+  if (get.reason) {
+    return {
+      ...link,
+      status: 'unverifiable',
+      reason: get.reason,
+    };
+  }
+  if (isSuccessfulStatus(get.response.status)) {
+    return {
+      ...link,
+      status: 'ok',
+      checkedUrl: get.finalUrl,
+    };
+  }
+  if (!isBrokenStatus(get.response.status)) {
+    return {
+      ...link,
+      status: 'unverifiable',
+      reason: `GET returned HTTP ${get.response.status}`,
+    };
+  }
+  if (head.response.status === 401 || head.response.status === 403) {
+    return {
+      ...link,
+      status: 'unverifiable',
+      reason: `GET returned HTTP ${get.response.status} after HEAD returned an access-control response (HTTP ${head.response.status})`,
+    };
+  }
+  return {
+    ...link,
+    status: 'broken',
+    reason: `GET confirmed HTTP ${get.response.status}`,
+  };
+}
+
 export async function checkExternalLink(...args) {
   const [link, options = {}] = args;
-  if (link.status === 'invalid' || link.status === 'skipped') {return link;}
+  if (link.status === 'invalid' || link.status === 'skipped') { return link; }
 
   const sleep = options.sleep ?? defaultSleep;
   const now = options.now ?? Date.now;
@@ -365,64 +510,25 @@ export async function checkExternalLink(...args) {
     now,
     sleep,
   });
-  const requestOptions = { ...options,
-sleep,
-now,
-hostLimiter };
+  const requestOptions = {
+    ...options,
+    sleep,
+    now,
+    hostLimiter,
+  };
   const head = await fetchFollowingRedirects(link.url, 'HEAD', requestOptions);
-
-  if (head.blocked) {
-    return { ...link,
-status: 'skipped',
-reason: head.reason };
-  }
-  if (head.reason) {
-    return { ...link,
-status: 'unverifiable',
-reason: head.reason };
-  }
-  if (isSuccessfulStatus(head.response.status)) {
-    return { ...link,
-status: 'ok',
-checkedUrl: head.finalUrl };
-  }
-  if (!GET_FALLBACK_STATUSES.has(head.response.status)) {
-    return { ...link,
-status: 'unverifiable',
-reason: `HEAD returned HTTP ${  head.response.status}` };
-  }
+  const headResult = classifyHeadResponse({
+    link,
+    head,
+  });
+  if (headResult) { return headResult; }
 
   const get = await fetchFollowingRedirects(link.url, 'GET', requestOptions);
-  if (get.blocked) {
-    return { ...link,
-status: 'skipped',
-reason: get.reason };
-  }
-  if (get.reason) {
-    return { ...link,
-status: 'unverifiable',
-reason: get.reason };
-  }
-  if (isSuccessfulStatus(get.response.status)) {
-    return { ...link,
-status: 'ok',
-checkedUrl: get.finalUrl };
-  }
-  if (isBrokenStatus(get.response.status)) {
-    if (head.response.status === 401 || head.response.status === 403) {
-      return {
-        ...link,
-        status: 'unverifiable',
-        reason: `GET returned HTTP ${  get.response.status  } after HEAD returned an access-control response (HTTP ${  head.response.status  })`,
-      };
-    }
-    return { ...link,
-status: 'broken',
-reason: `GET confirmed HTTP ${  get.response.status}` };
-  }
-  return { ...link,
-status: 'unverifiable',
-reason: `GET returned HTTP ${  get.response.status}` };
+  return classifyGetResponse({
+    link,
+    head,
+    get,
+  });
 }
 
 /**
