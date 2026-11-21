@@ -12,6 +12,17 @@ function reportNotificationFailure({ logger, errorCode, errorName } = {}) {
   }
 }
 
+function getNotificationFailure(result) {
+  if (result?.ok === true) {
+    return null
+  }
+  const error = result?.error ?? result?.errors?.[0]
+  return {
+    errorCode: error?.code ?? "HARVESTER_TRADING_HISTORY_EVENT_REJECTED",
+    errorName: error?.name ?? "EventBusPublicationRejected",
+  }
+}
+
 /**
  * Publish a resource-only invalidation hint after a history upsert has succeeded.
  *
@@ -35,11 +46,11 @@ export function publishTradingHistoryChange({ eventBus, resources, logger } = {}
         resources,
       },
     })
-    if (result?.ok !== true) {
+    const failure = getNotificationFailure(result)
+    if (failure) {
       reportNotificationFailure({
         logger,
-        errorCode: result?.errors?.[0]?.code ?? "HARVESTER_TRADING_HISTORY_EVENT_REJECTED",
-        errorName: result?.errors?.[0]?.name ?? "EventBusPublicationRejected",
+        ...failure,
       })
     }
   } catch (error) {
