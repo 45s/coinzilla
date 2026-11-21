@@ -830,7 +830,7 @@ function publishRuntimeStarted({
 }
 
 function shouldStartTradingHistoryApi({ env, runtime } = {}) {
-  return typeof runtime?.stop === "function" && Boolean(env.HARVESTER_API_TOKEN)
+  return typeof runtime?.stop === "function"
 }
 
 function logOptionalTradingHistoryApi({ logger, level, details } = {}) {
