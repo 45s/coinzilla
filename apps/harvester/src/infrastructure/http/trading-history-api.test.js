@@ -199,8 +199,7 @@ test("decodes record identifiers, returns fill commissions, and reports missing 
     queries,
   })
 
-  const fillResponse = await fetch(`${baseUrl}/api/v1/trading/fills/fill%2F001`, {
-  })
+  const fillResponse = await fetch(`${baseUrl}/api/v1/trading/fills/fill%2F001`)
   assert.equal(fillResponse.status, 200, "A fill detail request must return its persisted commission facts.")
   const fillPayload = await fillResponse.json()
   assert.equal(fillPayload.data.id, "fill/001")
@@ -210,8 +209,7 @@ test("decodes record identifiers, returns fill commissions, and reports missing 
     id: "fill/001",
   }, "The adapter must decode the record identifier before calling the application query.")
 
-  const missingOrder = await fetch(`${baseUrl}/api/v1/trading/orders/missing-order`, {
-  })
+  const missingOrder = await fetch(`${baseUrl}/api/v1/trading/orders/missing-order`)
   assert.equal(missingOrder.status, 404, "A missing persisted record must use the not-found HTTP status.")
   assert.equal((await missingOrder.json()).error.code, "HARVESTER_TRADING_HISTORY_RECORD_NOT_FOUND")
 });
@@ -222,8 +220,7 @@ test("rejects unsupported query parameters, methods, and unimplemented resources
     t,
     queries,
   })
-  const invalidFilter = await fetch(`${baseUrl}/api/v1/trading/orders?rawSql=DROP`, {
-  })
+  const invalidFilter = await fetch(`${baseUrl}/api/v1/trading/orders?rawSql=DROP`)
   assert.equal(invalidFilter.status, 400, "Unsupported query parameters must be rejected before application access.")
   assert.equal((await invalidFilter.json()).error.code, "HARVESTER_TRADING_HISTORY_QUERY_INVALID")
 
@@ -232,8 +229,7 @@ test("rejects unsupported query parameters, methods, and unimplemented resources
   })
   assert.equal(unsupportedMethod.status, 405, "The trading-history API must reject unsupported HTTP methods.")
 
-  const unimplementedResource = await fetch(`${baseUrl}/api/v1/trading/sessions`, {
-  })
+  const unimplementedResource = await fetch(`${baseUrl}/api/v1/trading/sessions`)
   assert.equal(unimplementedResource.status, 404, "The API must not invent a sessions resource.")
 });
 
@@ -247,7 +243,7 @@ test("supports browser preflight and validates server configuration", async (t) 
     method: "OPTIONS",
     headers: {
       Origin: "http://127.0.0.1:4200",
-      "Access-Control-Request-Headers": "authorization",
+      "Access-Control-Request-Headers": "content-type",
     },
   })
   assert.equal(preflight.status, 204, "Browser preflight must complete without requiring a token.")
