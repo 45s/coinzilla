@@ -4,7 +4,6 @@ import { firstValueFrom } from 'rxjs';
 
 import { OperatorApi, type OperatorCommand } from './api';
 
-type OperatorRead = 'status' | 'markets' | 'positions' | 'orders' | 'balances';
 type OperatorCommandName = OperatorCommand['command'];
 
 interface PendingCommand {
@@ -46,8 +45,10 @@ export class OperatorComponent {
   }
 
   async runCommandLine(): Promise<void> {
-    const [command, symbol] = this.commandInput().trim().split(/\\s+/, 2);
-    if (!command) return;
+    const [command, symbol] = this.commandInput().trim().split(/\s+/, 2);
+    if (!command) {
+      return;
+    }
     const normalized = command.toLowerCase();
     if (normalized === 'pause' || normalized === 'unpause') {
       if (!symbol) {
@@ -64,7 +65,9 @@ export class OperatorComponent {
     }
     if (['status', 'markets', 'portfolio', 'orders', 'balances'].includes(normalized)) {
       await this.refresh();
-      if (this.connected()) this.successMessage.set(`Refreshed ${normalized}.`);
+      if (this.connected()) {
+        this.successMessage.set(`Refreshed ${normalized}.`);
+      }
       return;
     }
     if (normalized === 'help') {
