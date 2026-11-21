@@ -91,55 +91,6 @@ function assertDurableStartupAudit({ fixture, calls }) {
   assert.ok(marketSubscription > lastAuditFlush, "assertDurableStartupAudit: expected marketSubscription > lastAuditFlush to be truthy.")
 }
 
-function createConfiguredAssetSnapshotFixture({ broker }) {
-  const configuredMarkets = ["BTCUSDT", "ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]
-  const assetsByCode = new Map()
-  for (const symbol of configuredMarkets) {
-    const { market } = createMarketMetadata(symbol)
-    assetsByCode.set(market.baseAsset.code, market.baseAsset)
-    assetsByCode.set(market.quoteAsset.code, market.quoteAsset)
-  }
-  const unrelatedAsset = new Asset({
-    id: "asset:XRP",
-    code: "XRP",
-  })
-  const sourceBalances = [...assetsByCode.values(), unrelatedAsset].map((asset) => new Balance({
-    free: new Quantity({
-      amount: "10",
-      asset,
-    }),
-    locked: new Quantity({
-      amount: "0",
-      asset,
-    }),
-  }))
-  broker.getAccountSnapshot = async () => ({
-    ok: true,
-    data: {
-      balances: sourceBalances,
-      sourceTime: 1,
-    },
-  })
-  return {
-    config: createConfiguredAssetSnapshotConfig(),
-    expectedAssetCodes: ["BTC", "DOGE", "ETH", "FDUSD", "SOL", "USDT", "ZRO"],
-  }
-}
-
-function assertConfiguredAssetPreflight({ events, runtime, calls, expectedAssetCodes }) {
-  const preflight = events.find((event) =>
-    event.name === "account.snapshot_captured" && event.data.phase === "PREFLIGHT")
-  assert.ok(preflight, "trading-enabled startup must durably capture its configured-asset PREFLIGHT snapshot")
-  assert.deepEqual(
-    preflight.data.balances.map((balance) => balance.asset),
-    expectedAssetCodes,
-    "PREFLIGHT Journal snapshot must include every configured base/quote asset, including disabled pairs, and exclude unrelated XRP",
-  )
-  assert.deepEquaclosing.data.balances.map((balance) => balance.asset),
-    expectedAssetCodes,
-    "CLOSING Journal snapshot must preserve the same configured-asset allowlist as PREFLIGHT",
-  )
-}
 
 test("marks trading ready only after the mandatory account preflight audit", async () => {
   const broker = createBroker()
@@ -332,50 +283,4 @@ test("blocks trading startup when either PREFLIGHT audit event publication fails
     assert.equal(calls.includes("disconnect"), true, "blocks trading startup when either PREFLIGHT audit event publication fails: expected calls.includes(\"disconnect\") to equal true.")
     assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false, "blocks trading startup when either PREFLIGHT audit event publication fails: expected calls.some((call) => call.startsWith(\"subscribe:BTCUSDT\")) to equal false.")
   }
-})
-
-test("account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets", async () => {
-  const calls = []
-  const broker = createBroker(calls)
-  const fixture = createConfiguredAssetSnapshotFixture({
-    broker,
-  })
-  const events = []
-  const runtime = await startHarvesterForTest({
-    loadConfig: async () => fixture.config,
-    env: {
-      ...binanceEnv,
-      NODE_ENV: "development",
-    },
-    brokerAdapterFactory: () => broker,
-    eventPublisher: {
-      publish: (event) => {
-        events.push(event)
-        return {
-          ok: true,
-        }
-      },
-      flush: async () => ({
-        ok: true,
-        durable: true,
-      }),
-    },
-    logger: {
-      info() {},
-      error() {},
-      debug() {},
-    },
-  })
-
-  assertConfiguredAssetPreflight({
-    events,
-    runtime,
-    calls,
-    expectedAssetCodes: fixture.expectedAssetCodes,
-  })
-  await runtime.stop()
-  assertConfiguredAssetClosing({
-    events,
-    expectedAssetCodes: fixture.expectedAssetCodes,
-  })
 })

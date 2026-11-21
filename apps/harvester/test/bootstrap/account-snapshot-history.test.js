@@ -274,7 +274,7 @@ function createConfiguredMarketSnapshotFixture({ broker }) {
     },
   })
   return {
-    config: createConfiguredAssetSnapshotConfig(),
+    config: createConfiguredMarketSnapshotConfig()
     expectedAssetCodes: ["BTC", "DOGE", "ETH", "FDUSD", "SOL", "USDT", "ZRO"],
   }
 }
@@ -294,7 +294,7 @@ function assertConfiguredMarketPreflight({ events, runtime, calls, expectedAsset
     "the in-memory account snapshot must use the same configured-asset allowlist rather than retaining unrelated wallet assets",
   )
   for (const symbol of ["ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]) {
-    assert.ok(calls.includes(`filters:${  symbol}`), "assertConfiguredAssetPreflight: expected calls.includes(`filters:${  symbol}`) to be truthy.")
+    assert.ok(calls.includes(`filters:${symbol}`), "assertConfiguredAssetPreflight: expected calls.includes(`filters:${symbol}`) to be truthy.")
     assert.equal(
       calls.includes(`subscribe:${  symbol}`) || calls.includes(`subscribe:book:${  symbol}`),
       false,
