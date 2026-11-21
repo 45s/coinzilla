@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { createConnection } from "node:net"
 import { EventBus } from "@coinzilla/event-bus"
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
 
@@ -159,12 +160,28 @@ test("ignores malformed resource notifications without breaking the EventBus sub
 test("rejects browser WebSocket upgrades from untrusted origins", async (t) => {
   const eventBus = new EventBus()
   const api = await startApi({ t, eventBus })
-  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`, {
-    headers: { Origin: "https://attacker.example" },
+  const socket = createConnection({
+    host: "127.0.0.1",
+    port: api.address.port,
   })
-  t.after(() => socket.close())
-  await new Promise((resolve) => socket.addEventListener("close", resolve, { once: true }))
-  assert.equal(socket.readyState, WebSocket.CLOSED)
+  t.after(() => socket.destroy())
+  const response = new Promise((resolve, reject) => {
+    socket.once("data", (chunk) => resolve(chunk.toString("utf8")))
+    socket.once("error", reject)
+  })
+  await new Promise((resolve) => socket.once("connect", resolve))
+  socket.write([
+    "GET /api/v1/trading/events HTTP/1.1",
+    `Host: 127.0.0.1:${api.address.port}`,
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+    "Sec-WebSocket-Version: 13",
+    "Origin: https://attacker.example",
+    "",
+    "",
+  ].join("\\r\\n"))
+  assert.match(await response, /^HTTP\\/1\\.1 403 Forbidden/)
 })
 
 test("closes local WebSocket clients before the shared HTTP listener shuts down", async (t) => {
