@@ -84,4 +84,28 @@ describe('MarketScreenerComponent', () => {
     expect(document.cookie).toContain('coinzilla_market_favorites_bitunix_futures=');
     expect(favoriteButton.getAttribute('aria-pressed')).toBe('true');
   });
+
+  it('shows future providers as unavailable options instead of presenting fake market data', async () => {
+    await TestBed.configureTestingModule({
+      imports: [MarketScreenerComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+
+    const fixture = TestBed.createComponent(MarketScreenerComponent);
+    fixture.detectChanges();
+    const selector = fixture.nativeElement.querySelector('select[aria-label="Market source"]') as HTMLSelectElement;
+
+    expect(selector.disabled).toBe(false);
+    expect(Array.from(selector.options).filter((option) => option.disabled)).toHaveLength(3);
+    http.expectOne(MARKET_DATA_URL).flush({
+      ok: true,
+      data: {
+        provider: 'bitunix',
+        marketType: 'futures',
+        observedAt: '2026-11-21T12:00:00.000Z',
+        markets: [],
+      },
+    });
+  });
 });
