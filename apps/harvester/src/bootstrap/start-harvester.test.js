@@ -745,6 +745,8 @@ test("keeps inbound operator control disabled without constructing its store or 
   try {
     assert.equal(storeFactoryCalls, 0, "Disabled operator control must not inspect or open the Operational State Store.")
     assert.equal(adapterFactoryCalls, 0, "Disabled operator control must not construct an inbound Telegram adapter.")
+    assert.equal(typeof runtime.getOperator, "function", "The local API must be able to access the operator even when Telegram control is disabled.")
+    assert.equal(typeof runtime.getOperator()?.getStatus, "function", "The disabled Telegram lifecycle must still compose the shared read-only operator facade.")
   } finally { await runtime.stop() }
 })
 
