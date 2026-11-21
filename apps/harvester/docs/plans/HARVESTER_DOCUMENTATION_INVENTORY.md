@@ -204,12 +204,12 @@ The complete recursive Git tree at this checkpoint contains **94 Harvester Markd
 
 | Added path | Initial classification / disposition |
 | --- | --- |
-| `apps/harvester/docs/architecture/decisions/0006-market-pause-cancels-owned-buys.md` | Living decision record; retain as the decision authority and verify current implementation/tests. |
-| `apps/harvester/docs/architecture/strategy-extensibility-audit-roadmap.md` | Audit/roadmap; preserve its evidence and verify current status before any supersession. |
+| `apps/harvester/docs/architecture/decisions/0006-market-pause-cancels-owned-buys.md` | **KEEP — accepted decision.** Matches the owned-BUY pause/cancel contract delivered by merged PR #1436; exact-head tests and required CI passed. |
+| `apps/harvester/docs/architecture/strategy-extensibility-audit-roadmap.md` | **KEEP — draft discussion, not a runtime contract.** Owner-approved direction and RS-4/RS-5 completion match merged PR #1515; referenced source paths exist. |
 | `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-19_02-16-31Z.md` | Historical session evidence; preserve original conclusions, timestamp and provenance. |
-| `apps/harvester/docs/infrastructure/execution-routing.md` | Living Harvester infrastructure contract; verify against provider routing source/tests and ADR-0003. |
-| `apps/harvester/docs/operations/trading-history-backups.md` | Living operational guide; verify commands, paths and backup guarantees against source/config/tests. |
-| `apps/harvester/docs/persistence/trading-history-roadmap.md` | Living persistence roadmap; reconcile with persistence implementation and owning roadmap. |
+| `apps/harvester/docs/infrastructure/execution-routing.md` | **KEEP — current infrastructure contract.** Matches merged PR #1455, source and targeted tests; Binance remains the only registered Harvester execution provider. |
+| `apps/harvester/docs/operations/trading-history-backups.md` | **KEEP — current operational runbook.** Commands, paths, online/WAL-safe backup, restore-check, manifest, retention and permissions match merged PR #1567, implementation and exact-head CI. |
+| `apps/harvester/docs/persistence/trading-history-roadmap.md` | **KEEP — current persistence roadmap.** Phases 1–3 and the Phase 6 backup slice match merged PRs #1555, #1557, #1559 and #1567; remaining Phase 6 work stays planned. |
 
 ### Removed Harvester path
 
