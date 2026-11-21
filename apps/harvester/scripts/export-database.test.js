@@ -10,9 +10,9 @@ function createDatabase(directory) {
   const filename = path.join(directory, "harvester.db")
   const database = new DatabaseSync(filename)
   database.exec(`
-    CREATE TABLE orders (id TEXT PRIMARY KEY, symbol TEXT NOT NULL, quantity TEXT);
+    CREATE TABLE orders (id TEXT PRIMARY KEY, symbol TEXT NOT NULL, quantity TEXT, large_integer INTEGER, payload BLOB);
     CREATE TABLE empty_table (id TEXT PRIMARY KEY);
-    INSERT INTO orders VALUES ('order-1', 'DOGEUSDT', '12.500');
+    INSERT INTO orders VALUES ('order-1', 'DOGEUSDT', '12.500', 9223372036854775807, X'00FF');
   `)
   database.close()
   return filename
@@ -26,7 +26,7 @@ test("exports every user table and row as lossless JSON arrays", () => {
     const result = exportDatabase({ databaseFilename, outputFilename })
     const dump = JSON.parse(readFileSync(outputFilename, "utf8"))
     assert.deepEqual(Object.keys(dump.database).sort(), ["empty_table", "orders"], "The dump must include every non-internal table, including empty tables.")
-    assert.deepEqual(dump.database.orders, [{ id: "order-1", symbol: "DOGEUSDT", quantity: "12.500" }], "The dump must preserve every row and the exact stored decimal text.")
+    assert.deepEqual(dump.database.orders, [{ id: "order-1", symbol: "DOGEUSDT", quantity: "12.500", large_integer: "9223372036854775807", payload: { encoding: "base64", data: "AP8=" } }], "The dump must preserve every row and the exact stored decimal text.")
     assert.deepEqual(dump.database.empty_table, [], "An empty table must be represented by an empty array.")
     assert.deepEqual(result.tableCounts, { empty_table: 0, orders: 1 }, "The export summary must report the row count for each table.")
   } finally {
