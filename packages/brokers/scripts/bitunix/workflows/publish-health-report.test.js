@@ -386,14 +386,14 @@ test("requires both private API credentials before fetching or contacting Bituni
 })
 
 
-test("fails the health check when a required authenticated operation is skipped", async () => {
+test("blocks the operator preflight gate when diagnostic configuration is skipped", async () => {
   const repositoryRoot = await createRepositoryDirectory()
   const { calls, runGit } = createFakeGit({ repositoryRoot })
   try {
     const result = await publishHealthReport({
       repositoryRoot,
       runGit,
-      runDiagnostics: async () => createDiagnosticReport({ omitOperation: "user.info" }),
+      runDiagnostics: async () => createDiagnosticReport({ omitOperation: "diagnostic configuration" }),
       env: {
         BITUNIX_API_KEY: apiKey,
         BITUNIX_API_SECRET: apiSecret,
@@ -402,7 +402,7 @@ test("fails the health check when a required authenticated operation is skipped"
     })
 
     assert.equal(result.exitCode, 1, "skipping a required authenticated operation must not produce a healthy result")
-    assert.deepEqual(result.healthCheck.missingRequiredOperations, ["user.info"], "the report must identify the required operation that did not pass")
+    assert.deepEqual(result.healthCheck.missingRequiredOperations, ["diagnostic configuration"], "the report must identify the exact safety/configuration prerequisite that did not pass")
     assert.equal(calls.some((args) => args[0] === "push"), true, "the incomplete health report must still be pushed for diagnosis")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "an incomplete health report must still return the checkout to develop")
   } finally {
