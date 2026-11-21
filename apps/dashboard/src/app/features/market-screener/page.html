@@ -73,8 +73,8 @@
     </div>
     <div class="filter-bottom">
       <label class="label-filter"><span>LABELS · ALL SELECTED</span>
-        <select aria-label="Filter by labels" multiple [value]="[]" (change)="updateSelectedLabels($event)">
-          @for (label of labels(); track label.id) { <option [value]="label.id">{{ label.name }}</option> }
+        <select aria-label="Filter by labels" multiple (change)="updateSelectedLabels($event)">
+          @for (label of labels(); track label.id) { <option [value]="label.id" [selected]="selectedLabels().has(label.id)">{{ label.name }}</option> }
         </select>
       </label>
       <div class="preset-controls">
