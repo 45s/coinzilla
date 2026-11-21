@@ -122,7 +122,7 @@ export class OperatorComponent {
   }
 
   formatJson(value: unknown): string {
-    return value === null ? 'Waiting for Harvester…' : JSON.stringify(value, null, 2);
+    return value === null ? 'Waiting for Harvester…' : JSON.stringify(value, null, 2) ?? String(value);
   }
 
   private describeError(error: unknown): string {
