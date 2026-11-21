@@ -222,6 +222,14 @@ export class MarketScreenerComponent implements OnInit {
     this.persistPreferences();
   }
 
+  updateLabelColor(labelId: string, event: Event): void {
+    const color = (event.target as HTMLInputElement).value;
+    this.labels.update((labels) => labels.map((label) =>
+      label.id === labelId ? { ...label, color } : label,
+    ));
+    this.persistPreferences();
+  }
+
   removeLabel(labelId: string): void {
     this.labels.update((labels) => labels.filter((label) => label.id !== labelId));
     const next: Record<string, readonly string[]> = {};
