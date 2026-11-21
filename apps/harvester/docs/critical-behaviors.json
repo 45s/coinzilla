@@ -331,6 +331,11 @@
           "path": "test/bootstrap/account-snapshot-history.test.js",
           "name": "journals PREFLIGHT balances and open orders before trading and CLOSING balances before broker disconnect",
           "kind": "integration"
+        },
+        {
+          "path": "test/bootstrap/account-snapshot-history.test.js",
+          "name": "account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets",
+          "kind": "integration"
         }
       ],
       "runtimeStatus": "active",
