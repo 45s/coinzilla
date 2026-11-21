@@ -1,5 +1,6 @@
 import { assertDecimalString, compareDecimal } from "@coinzilla/utils"
 import { BrokerUnsupportedOperationError } from "../../../../broker/errors/broker-unsupported-operation-error.js"
+import { BitunixRestError } from "../api/rest-client.js"
 
 export const BITUNIX_SPOT_ORDER_API = Object.freeze({
   orderDetail: "/api/spot/v1/order/detail",
@@ -200,13 +201,33 @@ export function validateSpotOrderPlacementResponse({ response, symbol, side, typ
   if (!response || typeof response !== "object" || Array.isArray(response)) {
     throw new TypeError("Bitunix Spot place-order response must be an object")
   }
-  if (String(response.placeStatus) !== "1") {
-    throw Object.assign(
-      new Error("Bitunix Spot rejected the order placement"),
-      {
-        kind: "exchange",
-      },
-    )
+  const placementSucceeded = response.placeStatus === true ||
+    response.placeStatus === 1 ||
+    response.placeStatus === "1"
+  const placementRejected = response.placeStatus === false ||
+    response.placeStatus === 0 ||
+    response.placeStatus === "0"
+  if (placementRejected) {
+    const exchangeCode = response.placeCode === undefined || response.placeCode === null
+      ? null
+      : String(response.placeCode)
+    const message = typeof response.placeMsg === "string" && response.placeMsg.trim()
+      ? response.placeMsg
+      : "Bitunix Spot rejected the order placement"
+    throw new BitunixRestError({
+      message,
+      kind: "exchange",
+      exchangeCode,
+      path: BITUNIX_SPOT_ORDER_API.placeOrder,
+    })
+  }
+  if (!placementSucceeded) {
+    throw new BitunixRestError({
+      message: "Bitunix Spot place-order response has a missing or invalid placeStatus",
+      kind: "response",
+      path: BITUNIX_SPOT_ORDER_API.placeOrder,
+      outcomeUnknown: true,
+    })
   }
   if (String(response.symbol).toUpperCase() !== symbol) {
     throw new TypeError("Bitunix Spot place-order response symbol does not match the request")
