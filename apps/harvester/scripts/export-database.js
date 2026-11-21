@@ -2,7 +2,7 @@ import { DatabaseSync } from "node:sqlite"
 import { existsSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
-import { resolveTradingSessionDatabaseFilename } from "../src/infrastructure/persistence/resolve-trading-session-database-filename.js"
+import { resolveTradingSessionDatabaseFilename } from "../src/infrastructure/persistence/resolve-harvester-database-filename.js"
 
 function escapeIdentifier(identifier) {
   return `"${identifier.replaceAll('"', '""')}"`
@@ -43,11 +43,13 @@ export function exportDatabase({ databaseFilename, outputFilename } = {}) {
         AND name NOT LIKE 'sqlite_%'
       ORDER BY name
     `).all()
-    const exportedTables = {}
+    const exportedTables = Object.create(null)
     const tableCounts = {}
 
     for (const { name } of tableRows) {
-      const rows = database.prepare(`SELECT * FROM ${escapeIdentifier(name)}`).all()
+      const statement = database.prepare(`SELECT * FROM ${escapeIdentifier(name)}`)
+      statement.setReadBigInts(true)
+      const rows = statement.all()
       exportedTables[name] = rows
       tableCounts[name] = rows.length
     }
@@ -73,7 +75,7 @@ export function runDatabaseExport({ env = process.env } = {}) {
   if (tradingMode !== "testnet" && tradingMode !== "live") {
     throw new TypeError("TRADING_MODE must be explicitly set to testnet or live.")
   }
-  const databaseFilename = resolveTradingSessionDatabaseFilename({
+  const databaseFilename = resolveHarvesterDatabaseFilename({
     tradingMode,
     env,
   })
