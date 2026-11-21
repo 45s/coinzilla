@@ -128,7 +128,8 @@
       "src/use-cases/trading-history/queries.test.js",
       "src/infrastructure/http/trading-history-api.test.js",
       "src/infrastructure/http/start-trading-history-api.test.js",
-      "src/infrastructure/http/market-data-api.test.js"
+      "src/infrastructure/http/market-data-api.test.js",
+      "src/infrastructure/http/bitunix-futures-market-data.test.js"
     ]
   }
 }

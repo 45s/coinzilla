@@ -1,5 +1,6 @@
 import { defaultLogger, SystemCustomError } from "@coinzilla/utils"
 import { createTradingHistoryQueryRepository } from "../persistence/trading-history-query-repository.js"
+import { createBitunixFuturesMarketDataClient } from "./bitunix-futures-market-data.js"
 import { createTradingHistoryQueries } from "../../use-cases/trading-history/queries.js"
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
 
@@ -76,6 +77,7 @@ export async function startTradingHistoryApi({
   logger = defaultLogger,
   eventBus,
   operator,
+  marketData = createBitunixFuturesMarketDataClient(),
   startServer = startTradingHistoryApiServer,
 } = {}) {
   const configuration = resolveStartupConfiguration({
@@ -110,6 +112,7 @@ export async function startTradingHistoryApi({
     logger,
     eventBus,
     ...(operator === undefined ? {} : { operator }),
+    marketData,
   })
   return Object.freeze({
     address: server.address,

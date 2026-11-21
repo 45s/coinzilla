@@ -5,6 +5,7 @@ import { handleOperatorControlRequest } from "./operator-control-api.js"
 
 const API_PREFIX = "/api/v1/trading"
 const METADATA_ROUTE = `${API_PREFIX}/metadata`
+const BITUNIX_FUTURES_MARKETS_ROUTE = "/api/v1/markets/bitunix/futures"
 const DEFAULT_HOST = "127.0.0.1"
 const DEFAULT_PORT = 4201
 const ALLOWED_BROWSER_ORIGINS = new Set([
@@ -271,6 +272,35 @@ function handleMetadataRequest({ response, queries, environment } = {}) {
   })
 }
 
+
+async function handleBitunixFuturesMarketsRequest({ response, marketData, logger } = {}) {
+  if (typeof marketData?.getBitunixFuturesMarkets !== "function") {
+    sendApiError({
+      response,
+      status: 503,
+      code: "HARVESTER_MARKET_DATA_UNAVAILABLE",
+      message: "Public market data is not configured.",
+    })
+    return
+  }
+  try {
+    const data = await marketData.getBitunixFuturesMarkets()
+    sendJson({
+      response,
+      status: 200,
+      body: { ok: true, data },
+    })
+  } catch (error) {
+    logRequestFailure({ logger, error })
+    sendApiError({
+      response,
+      status: 502,
+      code: "HARVESTER_MARKET_DATA_UPSTREAM_UNAVAILABLE",
+      message: "Public market data is temporarily unavailable.",
+    })
+  }
+}
+
 function handleListRequest({ response, queries, url, route } = {}) {
   const input = parseListQuery({
     searchParams: url.searchParams,
@@ -337,6 +367,8 @@ async function handleTradingHistoryRequest({
   queries,
   environment,
   operator,
+  marketData,
+  logger,
 } = {}) {
   const url = new URL(request.url ?? "/", "http://127.0.0.1")
   if (await handleOperatorControlRequest({
@@ -351,6 +383,10 @@ async function handleTradingHistoryRequest({
     request,
     response,
   })) {
+    return
+  }
+  if (url.pathname === BITUNIX_FUTURES_MARKETS_ROUTE) {
+    await handleBitunixFuturesMarketsRequest({ response, marketData, logger })
     return
   }
   if (url.pathname === METADATA_ROUTE) {
@@ -388,7 +424,7 @@ async function handleTradingHistoryRequest({
   })
 }
 
-function createRequestHandler({ queries, environment, logger, operator } = {}) {
+function createRequestHandler({ queries, environment, logger, operator, marketData } = {}) {
   return async (...requestArguments) => {
     const [request, response] = requestArguments
     response.tradingHistoryOrigin = ALLOWED_BROWSER_ORIGINS.has(request.headers.origin)
@@ -401,6 +437,8 @@ function createRequestHandler({ queries, environment, logger, operator } = {}) {
         queries,
         environment,
         operator,
+        marketData,
+        logger,
       })
     } catch (error) {
       if (error instanceof TradingHistoryApiRequestError) {
@@ -488,7 +526,7 @@ function validateApiServerConfiguration({
   })
 }
 
-function createConfiguredServer({ queries, environment, logger, operator } = {}) {
+function createConfiguredServer({ queries, environment, logger, operator, marketData } = {}) {
   const server = createServer({
     maxHeaderSize: MAX_HEADER_SIZE,
   }, createRequestHandler({
@@ -496,6 +534,7 @@ function createConfiguredServer({ queries, environment, logger, operator } = {})
     environment,
     logger,
     operator,
+    marketData,
   }))
   server.requestTimeout = REQUEST_TIMEOUT_MS
   server.headersTimeout = HEADERS_TIMEOUT_MS
@@ -519,7 +558,7 @@ async function listenServer({ server, host, port } = {}) {
 /**
  * Start the versioned local HTTP and WebSocket adapters for trading history.
  *
- * @param {{queries: object, environment: "testnet"|"live", host?: string, port?: number, logger?: object, eventBus?: object}} input
+ * @param {{queries: object, environment: "testnet"|"live", host?: string, port?: number, logger?: object, eventBus?: object, marketData?: object}} input
  * @returns {Promise<Readonly<{address: object, close: Function}>>} Bound server and lifecycle handle.
  */
 export async function startTradingHistoryApiServer({
@@ -530,6 +569,7 @@ export async function startTradingHistoryApiServer({
   logger,
   eventBus,
   operator,
+  marketData,
 } = {}) {
   const configuration = validateApiServerConfiguration({
     queries,
@@ -542,6 +582,7 @@ export async function startTradingHistoryApiServer({
     environment: configuration.environment,
     logger,
     operator,
+    marketData,
   })
   const websocket = eventBus
     ? attachTradingHistoryWebSocket({
