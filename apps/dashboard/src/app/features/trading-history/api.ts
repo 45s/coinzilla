@@ -1,4 +1,4 @@
-import { HttpClient, HttpHeaders, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { map, type Observable } from 'rxjs';
 
@@ -159,44 +159,9 @@ interface ListQuery {
   readonly offset: number;
 }
 
-export const TRADING_HISTORY_SESSION_TOKEN_KEY = 'coinzilla.trading-history.api-token';
-
-@Injectable({ providedIn: 'root' })
-export class TradingHistorySession {
-  getToken(): string | null {
-    try {
-      return sessionStorage.getItem(TRADING_HISTORY_SESSION_TOKEN_KEY);
-    } catch {
-      return null;
-    }
-  }
-
-  setToken(token: string): void {
-    const normalized = token.trim();
-    if (!normalized) {
-      this.clearToken();
-      return;
-    }
-    try {
-      sessionStorage.setItem(TRADING_HISTORY_SESSION_TOKEN_KEY, normalized);
-    } catch {
-      // A blocked session store leaves the client disconnected rather than persisting a secret elsewhere.
-    }
-  }
-
-  clearToken(): void {
-    try {
-      sessionStorage.removeItem(TRADING_HISTORY_SESSION_TOKEN_KEY);
-    } catch {
-      // The client remains disconnected even when the browser denies storage access.
-    }
-  }
-}
-
 @Injectable({ providedIn: 'root' })
 export class TradingHistoryApi {
   private readonly http = inject(HttpClient);
-  private readonly session = inject(TradingHistorySession);
   private readonly baseUrl = 'http://127.0.0.1:4201/api/v1/trading';
 
   getMetadata(): Observable<TradingHistoryMetadata> {
@@ -241,12 +206,7 @@ export class TradingHistoryApi {
   }
 
   private get<T>(path: string, params?: HttpParams): Observable<T> {
-    const token = this.session.getToken();
-    const headers = token
-      ? new HttpHeaders({ Authorization: `Bearer ${token}` })
-      : new HttpHeaders();
     return this.http.get<ApiEnvelope<T>>(`${this.baseUrl}${path}`, {
-      headers,
       params,
     }).pipe(map((response) => response.data));
   }
