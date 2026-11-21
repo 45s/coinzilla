@@ -53,22 +53,36 @@ const collectFinishOrder = ({ nodes, adjacency }) => {
       const [current, nextTargetIndex] = frame
       const targets = adjacency.get(current)
 
-      if (nextTargetIndex < targets.length) {
-        const target = targets[nextTargetIndex]
-        frame[1] += 1
-
-        if (!visited.has(target)) {
-          visited.add(target)
-          pending.push([target, 0])
-        }
-      } else {
+      if (nextTargetIndex >= targets.length) {
         finishOrder.push(current)
         pending.pop()
+        continue
       }
+
+      const target = targets[nextTargetIndex]
+      frame[1] += 1
+
+      if (visited.has(target)) {
+        continue
+      }
+
+      visited.add(target)
+      pending.push([target, 0])
     }
   }
 
   return finishOrder
+}
+
+const addUnvisitedSources = ({ sources, visited, pending }) => {
+  for (const source of sources) {
+    if (visited.has(source)) {
+      continue
+    }
+
+    visited.add(source)
+    pending.push(source)
+  }
 }
 
 const collectDependencyCycles = ({ finishOrder, reverseAdjacency, adjacency }) => {
@@ -87,13 +101,11 @@ const collectDependencyCycles = ({ finishOrder, reverseAdjacency, adjacency }) =
     while (pending.length > 0) {
       const current = pending.pop()
       component.push(current)
-
-      for (const source of reverseAdjacency.get(current)) {
-        if (!visited.has(source)) {
-          visited.add(source)
-          pending.push(source)
-        }
-      }
+      addUnvisitedSources({
+        sources: reverseAdjacency.get(current),
+        visited,
+        pending,
+      })
     }
 
     component.sort()
