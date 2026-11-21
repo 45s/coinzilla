@@ -17,6 +17,7 @@ const packageMetadata = JSON.parse(readFileSync(resolve(brokersRoot, "package.js
 
 function printCliIdentity({ stdout = process.stdout } = {}) {
   const identity = resolveCliIdentity({
+    packageName: packageMetadata.name,
     scriptName: "bitunix:healthcheck",
     packageVersion: packageMetadata.version,
     repositoryRoot,
