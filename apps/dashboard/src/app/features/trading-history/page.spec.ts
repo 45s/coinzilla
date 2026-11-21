@@ -227,7 +227,9 @@ describe('TradingHistoryComponent', () => {
     symbolInput.dispatchEvent(new Event('input'));
     fixture.detectChanges();
     const applyButton = fixture.nativeElement.querySelector('[data-testid="apply-filters"]') as HTMLButtonElement;
+    const applySpy = vi.spyOn(fixture.componentInstance, 'applyFilters');
     applyButton.click();
+    const applyPromise = applySpy.mock.results[0].value as Promise<void>;
     fixture.detectChanges();
 
     const filteredRequest = http.expectOne((candidate) =>
@@ -239,6 +241,7 @@ describe('TradingHistoryComponent', () => {
       ok: true,
       data: createPage([createOrder('order-filtered')], 1),
     });
+    await applyPromise;
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -258,7 +261,9 @@ describe('TradingHistoryComponent', () => {
     const root = fixture.nativeElement as HTMLElement;
     const nextButton = Array.from(root.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Next')) as HTMLButtonElement;
+    const nextPageSpy = vi.spyOn(fixture.componentInstance, 'nextPage');
     nextButton.click();
+    const nextPagePromise = nextPageSpy.mock.results[0].value as Promise<void>;
     fixture.detectChanges();
     const nextRequest = http.expectOne((candidate) =>
       candidate.url.endsWith('/api/v1/trading/orders')
@@ -269,6 +274,7 @@ describe('TradingHistoryComponent', () => {
       ok: true,
       data: createPage([createOrder('order-page-2')], 26, 25),
     });
+    await nextPagePromise;
     await fixture.whenStable();
     fixture.detectChanges();
 
