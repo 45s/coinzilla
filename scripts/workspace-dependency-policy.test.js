@@ -25,7 +25,11 @@ function createPackages() {
     {
       name: "@coinzilla/app",
       workspaceDependencies: [
-        { name: "@coinzilla/core", version: "workspace:*", section: "dependencies" },
+        {
+          name: "@coinzilla/core",
+          version: "workspace:*",
+          section: "dependencies",
+        },
       ],
     },
     {
@@ -151,7 +155,10 @@ test("discovers workspace packages and dependencies from every manifest dependen
     mkdirSync(join(root, "packages", "core"), { recursive: true })
     writeFileSync(join(root, "apps", "app", "package.json"), JSON.stringify({
       name: "@coinzilla/app",
-      dependencies: { "@coinzilla/core": "workspace:*", "external-package": "^1.0.0" },
+      dependencies: {
+        "@coinzilla/core": "workspace:*",
+        "external-package": "^1.0.0",
+      },
       devDependencies: { "@coinzilla/core": "workspace:^" },
     }))
     writeFileSync(join(root, "packages", "core", "package.json"), JSON.stringify({
@@ -164,7 +171,11 @@ test("discovers workspace packages and dependencies from every manifest dependen
           name: "@coinzilla/app",
           workspaceDependencies: [
             { name: "@coinzilla/core", version: "workspace:*", section: "dependencies" },
-            { name: "@coinzilla/core", version: "workspace:^", section: "devDependencies" },
+            {
+          name: "@coinzilla/core",
+          version: "workspace:^",
+          section: "devDependencies",
+        },
           ],
         },
         {
@@ -175,6 +186,9 @@ test("discovers workspace packages and dependencies from every manifest dependen
       "The scanner must discover actual workspace packages and include runtime and development edges.",
     )
   } finally {
-    rmSync(root, { recursive: true, force: true })
+    rmSync(root, {
+      recursive: true,
+      force: true,
+    })
   }
 })
