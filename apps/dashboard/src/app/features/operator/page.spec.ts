@@ -61,6 +61,7 @@ describe('OperatorComponent', () => {
     expect(command.request.body).toMatchObject({ command: 'pause', symbol: 'BTCUSDT' });
     expect(command.request.body.requestId).toEqual(expect.any(String));
     command.flush({ ok: true, data: { accepted: true } });
+    await Promise.resolve();
     flushReadSnapshots({ http, paused: true });
     await fixture.whenStable();
     fixture.detectChanges();
