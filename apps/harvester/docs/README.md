@@ -21,6 +21,24 @@ This is the entry point for Harvester-specific documentation. Repository-wide ru
 - [Startup open-order boundary plan](plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md) — completed design and implementation record for #1157
 - [Trading First](TRADING_FIRST.md) — authoritative trading priority and exchange-safety requirements
 
+## Reliability acceptance — issue #1639
+
+The machine-readable [critical behavior inventory](critical-behaviors.json) maps each critical Harvester behavior to authoritative domain invariants, owning production modules, named normal/failure regression tests, integration/replay evidence where required, runtime status, and measured per-module coverage floors. The required Unit Tests workflow validates the inventory and test ownership before running the complete Harvester package suite. Run the same guard locally with `pnpm --filter @coinzilla/harvester check:reliability`.
+
+The required Test Coverage workflow runs the full Harvester coverage suite and checks every critical module against its measured minimum with `pnpm --filter @coinzilla/harvester check:critical-coverage <coverage-report>`.
+
+The focused Harvester Targeted Tests suite runs both reliability-guard regression files, the remaining startup-composition tests, and the responsibility-focused bootstrap suites:
+
+- `account-preflight.test.js` and `account-snapshot-history.test.js`
+- `broker-boundaries.test.js`, `external-order-ownership.test.js`, and `shutdown-lifecycle.test.js`
+- `market-subscriptions.test.js` and `market-evaluation.test.js`
+- `operator-control.test.js` and `trading-safety.test.js`
+- `process-lifecycle-recovery.test.js`
+- `user-data-event-reconciliation.test.js`, `user-data-recovery.test.js`, and `user-data-stream-safety.test.js`
+
+Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harvester-test-support.js`. The floors are derived from the exact `develop` source baseline, not arbitrary package-wide averages. The contract validator rejects an empty coverage matrix and any critical source module without a measured floor. The inventory is a traceability and regression gate, not a substitute for passing tests, runtime evidence, or exchange acceptance. The persistence entry explicitly records that runtime restart restoration remains offline-only/disabled pending issue #654; this initiative does not enable replay or restoration. See the dated [Harvester reliability baseline report](./RELIABILITY_BASELINE_2026-11-21.md) for the coverage provenance, current runtime scope, test evidence, and unresolved audit questions.
+
+
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
