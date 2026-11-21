@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { BrokerUnsupportedOperationError } from "../../../../broker/errors/broker-unsupported-operation-error.js"
+import { BitunixRestError } from "../api/rest-client.js"
 import {
   BITUNIX_SPOT_ORDER_API,
   createSpotCancelRequest,
@@ -169,12 +170,34 @@ test("Bitunix order adapter correlates placement acknowledgement with requested 
     () => validateSpotOrderPlacementResponse({
       response: {
         placeStatus: "0",
+        placeCode: 10005,
+        placeMsg: "Insufficient available balance",
       },
       symbol: "BTCUSDT",
       side: 2,
       type: 1,
     }),
-    (error) => error.kind === "exchange",
+    (error) => {
+      assert.ok(error instanceof BitunixRestError)
+      assert.equal(error.kind, "exchange")
+      assert.equal(error.exchangeCode, "10005")
+      assert.equal(error.message, "Insufficient available balance")
+      assert.equal(error.path, BITUNIX_SPOT_ORDER_API.placeOrder)
+      return true
+    },
+  )
+  assert.throws(
+    () => validateSpotOrderPlacementResponse({
+      response: {
+        placeStatus: "pending",
+      },
+      symbol: "BTCUSDT",
+      side: 2,
+      type: 1,
+    }),
+    (error) => error instanceof BitunixRestError &&
+      error.kind === "response" &&
+      error.outcomeUnknown === true,
   )
 })
 
