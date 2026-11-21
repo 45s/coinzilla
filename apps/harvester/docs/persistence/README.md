@@ -12,6 +12,43 @@
 
 **Relational implementation:** Phases 1/2 are complete in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555); Phase 3 is complete in merged [PR #1557](https://github.com/45s/coinzilla/pull/1557). The merged implementation and its documented coverage limitations are described below.
 
+## 0. Export the complete SQLite database as JSON
+
+Use the read-only maintenance command when you need to inspect every stored record outside the database viewer.
+
+From the repository root in Bash:
+
+```bash
+TRADING_MODE=testnet pnpm db:export
+```
+
+Use `TRADING_MODE=live` only when you intentionally want to export the LIVE database. The command uses Harvester's existing database-path resolver, including the optional `HARVESTER_DATABASE_DIRECTORY` override. It does not infer the environment from `NODE_ENV`.
+
+The output is written beside the selected database as `database-dump.json`:
+
+- TESTNET: `apps/harvester/data/testnet/database-dump.json`
+- LIVE: `apps/harvester/data/production/database-dump.json`
+
+The JSON shape is:
+
+```json
+{
+  "database": {
+    "db_records": [
+      { "record_kind": "example", "id": "record-1", "data": {} }
+    ],
+    "fills": [],
+    "orders": []
+  }
+}
+```
+
+Every non-internal SQLite table is included. Each table is an array so rows are never overwritten by duplicate or composite identifiers. Every row includes all its columns. Empty tables are included as empty arrays. SQLite BLOB values are represented as an object with `encoding: "base64"` and `data`; integer values outside JavaScript's safe range are serialized as decimal strings.
+
+The source database is opened read-only. A missing source file or missing/invalid `TRADING_MODE` fails visibly; the command never creates an empty database. It performs no exchange calls and does not change trading behavior. The JSON dump may contain account and trading history, so keep it private and do not commit it.
+
+The command prints the current Git commit (short hash) as `Exporter commit` before the table counts, so each dump log identifies the exact repository revision running the exporter. If Git metadata is unavailable, the log prints `unavailable`. The command requires the repository's Node.js 24+ runtime and adds no dependency.
+
 ## 1. Separate orders, fills, and strategy cycles
 
 An **order** is an exchange instruction with a lifecycle. It may be partially executed, fully executed, cancelled, rejected, or remain open.

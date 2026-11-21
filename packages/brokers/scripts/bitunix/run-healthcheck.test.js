@@ -20,3 +20,21 @@ test("Bitunix health-check help lists every mode without credentials or network 
   assert.match(result.stdout, /--place-order/, "help must describe the guarded operator order mode")
   assert.equal(result.stderr, "", "help must not emit credential or runtime errors")
 })
+
+test("Bitunix --version prints source identity and exits without credentials", () => {
+  const env = { ...process.env }
+  delete env.BITUNIX_API_KEY
+  delete env.BITUNIX_API_SECRET
+  const result = spawnSync(process.execPath, [scriptPath, "--version"], {
+    encoding: "utf8",
+    env,
+  })
+
+  assert.equal(result.error, undefined)
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(
+    result.stdout,
+    /@coinzilla\/brokers bitunix:healthcheck v1\.0\.0 \| commit [a-f0-9]{40} \| worktree (clean|dirty) \| Node v\d+(?:\.\d+)*/,
+  )
+  assert.equal(result.stderr, "")
+})
