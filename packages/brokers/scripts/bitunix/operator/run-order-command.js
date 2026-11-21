@@ -86,7 +86,7 @@ export async function runOperatorOrderCommand({
     writeLine: (message) => stdout.write(`${redactApiSecrets({
       message,
       secrets: [credentials.apiKey, credentials.apiSecret],
-    })}\n`),
+    })}\\n`),
   })
 }
 
@@ -108,7 +108,7 @@ export function reportOperatorFailure({
     message: error?.message ?? error,
     secrets,
   })
-  stderr.write(`Bitunix operator order attempt stopped: ${message}\n`)
+  stderr.write(`Bitunix operator order attempt stopped: ${message}\\n`)
   for (const [label, value] of [
     ["Broker error code", error?.code],
     ["Bitunix exchange code", error?.exchangeCode],
@@ -116,7 +116,10 @@ export function reportOperatorFailure({
     ["Error kind", error?.kind],
   ]) {
     if (value !== undefined && value !== null) {
-      stderr.write(`${label}: ${redactApiSecrets({\n        message: String(value),\n        secrets,\n      })}\n`)
+      stderr.write(`${label}: ${redactApiSecrets({
+        message: String(value),
+        secrets,
+      })}\\n`)
     }
   }
   stderr.write(
