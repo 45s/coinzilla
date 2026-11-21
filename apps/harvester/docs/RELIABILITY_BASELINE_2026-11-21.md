@@ -79,3 +79,19 @@ Recorded baseline-run results: Unit Tests, Test Coverage, and Harvester Targeted
 5. Keep actual TESTNET validation separate and paused until the runbook's pair-scope and regional-eligibility blockers are resolved by an explicitly authorized session.
 
 This report is a dated baseline checkpoint, not a completion certificate for issue #1639.
+
+## Newly tracked critical modules — 2026-11-21
+
+The original baseline above predates seven critical modules subsequently added to `develop`. Their first measured baseline was captured by Test Coverage run [#44954027193](https://github.com/45s/coinzilla/actions/runs/44954027193), Harvester job `136998032842`, on exact source revision `132b36c3381aaadd561691dd59ef404c072ff2bc`. The run passed the existing 30-module coverage floors and reported:
+
+| Critical module | Lines | Branches | Functions | Minimum lines / branches / functions |
+| --- | ---: | ---: | ---: | ---: |
+| `recovery-seller-submission-ownership.js` | 97.14% | 95.00% | 100.00% | 95 / 95 / 95 |
+| `state-predicates.js` | 100.00% | 100.00% | 100.00% | 95 / 95 / 95 |
+| `operational-state-fact-schema.js` | 100.00% | 100.00% | 100.00% | 95 / 95 / 95 |
+| `validate-operational-state-order-facts.js` | 100.00% | 100.00% | 100.00% | 95 / 95 / 95 |
+| `validate-operational-state-recovery-seller-facts.js` | 96.85% | 90.91% | 100.00% | 95 / 90 / 95 |
+| `operational-state-fact-validation.js` | 97.40% | 85.71% | 100.00% | 95 / 85 / 95 |
+| `operational-state-record-validation.js` | 99.21% | 96.59% | 100.00% | 95 / 95 / 95 |
+
+These are first-observed baselines for modules absent from the earlier source baseline, not a claim that the historical `7767ea8` baseline included them. Floors follow the existing policy: round down to five-point increments and cap 100% measurements at 95%. The machine-readable values and behavior/test ownership are maintained in [critical-behaviors.json](./critical-behaviors.json).
