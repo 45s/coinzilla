@@ -10,13 +10,15 @@ import {
   validateWorkspaceDependencyPolicy,
 } from "./workspace-dependency-policy.js"
 
-const policy = `## Workspace package dependency policy
-
-| Consumer | Allowed direct workspace dependencies |
-| --- | --- |
-| `@coinzilla/app` | `@coinzilla/core` |
-| `@coinzilla/core` | None |
-`
+const policy = [
+  "## Workspace package dependency policy",
+  "",
+  "| Consumer | Allowed direct workspace dependencies |",
+  "| --- | --- |",
+  "| `@coinzilla/app` | `@coinzilla/core` |",
+  "| `@coinzilla/core` | None |",
+  "",
+].join("\n")
 
 function createPackages() {
   return [
