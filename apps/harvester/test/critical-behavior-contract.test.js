@@ -10,6 +10,7 @@ const validContract = {
       id: "ORDER-IDENTITY",
       title: "Canonical order identity and monotonic state",
       runtimeStatus: "active",
+      invariants: ["Order identity is canonical and terminal state is monotonic."],
       sourceModules: ["src/domain/orders/order-registry.js"],
       tests: [
         {
@@ -23,6 +24,21 @@ const validContract = {
           kind: "failure",
         },
       ],
+    },
+  ],
+  coverageBaseline: {
+    baseDevelopSha: "develop-sha",
+    measuredPrHeadSha: "measured-head-sha",
+    sourceTreeMatchesDevelop: true,
+    workflowRunId: 1,
+    harvesterJobId: 2,
+    aggregate: { lines: 90, branches: 83, functions: 96 },
+  },
+  moduleCoverage: [
+    {
+      path: "src/domain/orders/order-registry.js",
+      baseline: { lines: 94.05, branches: 89.84, functions: 100 },
+      minimum: { lines: 90, branches: 85, functions: 95 },
     },
   ],
 }
@@ -177,5 +193,41 @@ test("does not accept a regression title that appears only in a source comment",
   assert.ok(
     result.errors.some((error) => error.includes("matches an execution report")),
     "A comment containing a deleted test title must not count as executable regression evidence.",
+  )
+})
+
+test("requires authoritative invariants for each critical behavior", () => {
+  const contract = structuredClone(validContract)
+  delete contract.behaviors[0].invariants
+
+  const result = validate({ contract })
+
+  assert.ok(
+    result.errors.some((error) => error.includes("ORDER-IDENTITY") && error.includes("invariant")),
+    "A critical behavior without explicit domain invariants must fail the inventory gate.",
+  )
+})
+
+test("requires a measured coverage floor for every critical production module", () => {
+  const contract = structuredClone(validContract)
+  contract.moduleCoverage = []
+
+  const result = validate({ contract })
+
+  assert.ok(
+    result.errors.some((error) => error.includes("order-registry.js") && error.includes("coverage")),
+    "A critical source module without a measured coverage floor must fail validation.",
+  )
+})
+
+test("rejects a critical-module coverage floor above its measured baseline", () => {
+  const contract = structuredClone(validContract)
+  contract.moduleCoverage[0].minimum.branches = 95
+
+  const result = validate({ contract })
+
+  assert.ok(
+    result.errors.some((error) => error.includes("order-registry.js") && error.includes("baseline")),
+    "A coverage floor must not exceed its measured baseline.",
   )
 })
