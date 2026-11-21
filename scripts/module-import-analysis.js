@@ -19,20 +19,23 @@ const captureModuleImports = ({ imports }) => ({
       ExportNamedDeclaration(node) {
         if (node.source) {
           recordImport({
-          node: node.source,
-          kind: "re-export",
-        })
+            node: node.source,
+            kind: "re-export",
+          })
         }
       },
       ExportAllDeclaration(node) {
-        recordImport({ node: node.source, kind: "re-export" })
+        recordImport({
+          node: node.source,
+          kind: "re-export",
+        })
       },
       ImportExpression(node) {
         if (node.source.type === "Literal" && typeof node.source.value === "string") {
           recordImport({
-          node: node.source,
-          kind: "dynamic-import",
-        })
+            node: node.source,
+            kind: "dynamic-import",
+          })
         }
       },
       CallExpression(node) {
@@ -46,9 +49,9 @@ const captureModuleImports = ({ imports }) => ({
 
         if (isLiteralRequire) {
           recordImport({
-          node: argument,
-          kind: "require",
-        })
+            node: argument,
+            kind: "require",
+          })
         }
       },
     }
