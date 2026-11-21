@@ -33,7 +33,11 @@ function matchesActiveMarketIdentity({ refreshed, metadata, symbol } = {}) {
 }
 
 function validateRefreshedMarketIdentity({ refreshed, metadata, symbol } = {}) {
-  if (matchesActiveMarketIdentity({ refreshed, metadata, symbol })) {
+  if (matchesActiveMarketIdentity({
+    refreshed,
+    metadata,
+    symbol,
+  })) {
     return refreshed
   }
   throw new MarketMetadataRefreshError({
