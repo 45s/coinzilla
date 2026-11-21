@@ -11,14 +11,17 @@ export class OperatorControlStartupError extends Error {
   }
 }
 
-function createDisabledLifecycle() {
+function createDisabledLifecycle({ operationalStateStore } = {}) {
   let operator
   return Object.freeze({
     enabled: false,
-    operationalStateStore: undefined,
+    operationalStateStore,
     getOperator() { return operator },
     async start(context = {}) {
-      operator = createHarvesterOperator(context)
+      operator = createHarvesterOperator({
+        ...context,
+        operationalStateStore,
+      })
       return Object.freeze({
         started: false,
         disabled: true,
@@ -213,7 +216,7 @@ export async function prepareTelegramOperatorControl({
   logger,
 } = {}) {
   if (telegramConfig?.enabled !== true) {
-    return createDisabledLifecycle()
+    return createDisabledLifecycle({ operationalStateStore })
   }
   const botToken = env.TELEGRAM_BOT_TOKEN?.trim()
   if (!botToken) {
