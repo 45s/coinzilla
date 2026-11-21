@@ -18,7 +18,7 @@ import {
 test("health report helpers preserve paths and timestamps", () => {
   assert.equal(createTimestamp({
     timestamp: Date.parse("2026-11-19T08:30:00.000Z"),
-  }), "20261119083000000Z", "report timestamps should retain UTC format")
+  }), "20261119T083000000Z", "report timestamps should retain UTC format")
   assert.deepEqual(createReportPaths({
     repositoryRoot: "/repo",
     timestamp: "t",
