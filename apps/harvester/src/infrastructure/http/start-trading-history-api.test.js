@@ -32,6 +32,7 @@ test("starts the local API without requiring bearer-token configuration", async 
     eventBus,
     env: {
       TRADING_MODE: "testnet",
+      HARVESTER_API_HOST: "0.0.0.0",
     },
     logger: {
       info() {},
