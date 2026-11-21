@@ -235,6 +235,42 @@ async function createBitunixFuturesSnapshot({
   }
 }
 
+
+function validateMarketDataClientConfiguration({
+  fetchImpl,
+  WebSocketImpl,
+  baseUrl,
+  websocketUrl,
+  timeoutMs,
+  websocketTimeoutMs,
+} = {}) {
+  if (typeof fetchImpl !== "function") {
+    throw new TypeError("Bitunix market-data client requires a fetch implementation.")
+  }
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) {
+    throw new TypeError("Bitunix market-data timeout must be between 1 and 30000 milliseconds.")
+  }
+  if (!Number.isSafeInteger(websocketTimeoutMs) || websocketTimeoutMs < 1 || websocketTimeoutMs > 10_000) {
+    throw new TypeError("Bitunix ticker WebSocket timeout must be between 1 and 10000 milliseconds.")
+  }
+  const normalizedBaseUrl = new URL(baseUrl)
+  if (normalizedBaseUrl.protocol !== "https:") {
+    throw new TypeError("Bitunix public market-data must use HTTPS.")
+  }
+  const normalizedWebsocketUrl = new URL(websocketUrl)
+  if (normalizedWebsocketUrl.protocol !== "wss:") {
+    throw new TypeError("Bitunix public market-data WebSocket must use WSS.")
+  }
+  return {
+    fetchImpl,
+    WebSocketImpl,
+    baseUrl: normalizedBaseUrl,
+    websocketUrl: normalizedWebsocketUrl.toString(),
+    timeoutMs,
+    websocketTimeoutMs,
+  }
+}
+
 /**
  * Create a read-only client for Bitunix public Futures market metadata and tickers.
  *
@@ -249,6 +285,21 @@ export function createBitunixFuturesMarketDataClient({
   timeoutMs = DEFAULT_TIMEOUT_MS,
   websocketTimeoutMs = DEFAULT_WEBSOCKET_TIMEOUT_MS,
   now = () => new Date(),
+} = {}) {
+  const configuration = validateMarketDataClientConfiguration({
+    fetchImpl,
+    WebSocketImpl,
+    baseUrl,
+    websocketUrl,
+    timeoutMs,
+    websocketTimeoutMs,
+  })
+  return Object.freeze({
+    getBitunixFuturesMarkets: () => createBitunixFuturesSnapshot({
+      ...configuration,
+      now,
+    }),
+  })
 } = {}) {
   if (typeof fetchImpl !== "function") {
     throw new TypeError("Bitunix market-data client requires a fetch implementation.")
