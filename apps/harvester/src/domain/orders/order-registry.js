@@ -154,7 +154,10 @@ function validateOrderUpdate({ current, next }) {
 function findOrderUpdateIndex({ orders, order } = {}) {
   const brokerIdIndex = order.brokerOrderId === undefined
     ? -1
-    : orders.findIndex((item) => item.brokerOrderId === order.brokerOrderId)
+    : orders.findIndex((item) =>
+      item.brokerOrderId === order.brokerOrderId &&
+      item.market.id === order.market.id,
+    )
   const clientIdIndex = orders.findIndex((item) => item.clientOrderId === order.clientOrderId)
   if (brokerIdIndex >= 0 && clientIdIndex >= 0 && brokerIdIndex !== clientIdIndex) {
     throw new Error("Order update brokerOrderId and clientOrderId identify different registered orders")
@@ -210,13 +213,13 @@ export class OrderRegistry {
       throw new TypeError("OrderRegistry.orders must contain CanonicalOrder values")
     }
     const clientOrderIds = orders.map((order) => order.clientOrderId)
-    const brokerOrderIds = orders
-      .map((order) => order.brokerOrderId)
-      .filter((id) => id !== undefined)
+    const brokerOrderKeys = orders
+      .filter((order) => order.brokerOrderId !== undefined)
+      .map((order) => `${order.market.id}:${order.brokerOrderId}`)
     if (new Set(clientOrderIds).size !== clientOrderIds.length) {
       throw new TypeError("OrderRegistry cannot contain duplicate clientOrderIds")
     }
-    if (new Set(brokerOrderIds).size !== brokerOrderIds.length) {
+    if (new Set(brokerOrderKeys).size !== brokerOrderKeys.length) {
       throw new TypeError("OrderRegistry cannot contain duplicate brokerOrderIds")
     }
 
@@ -236,18 +239,39 @@ ownerships })
     return this.#orders.find((order) => order.clientOrderId === clientOrderId)
   }
 
-  getOrderByBrokerOrderId({ brokerOrderId } = {}) {
+  getOrderByBrokerOrderId({ brokerOrderId, marketId } = {}) {
     if (typeof brokerOrderId !== "string" || !brokerOrderId.trim()) {
       throw new TypeError("OrderRegistry.getOrderByBrokerOrderId requires brokerOrderId")
     }
-    return this.#orders.find((order) => order.brokerOrderId === brokerOrderId)
+    const matches = this.#orders.filter((order) =>
+      order.brokerOrderId === brokerOrderId &&
+      (marketId === undefined || order.market.id === marketId),
+    )
+    if (matches.length > 1) {
+      throw new TypeError("OrderRegistry.getOrderByBrokerOrderId requires marketId when brokerOrderId is ambiguous")
+    }
+    return matches[0]
   }
 
-  getOwnership({ clientOrderId, brokerOrderId } = {}) {
+  getOwnership({ clientOrderId, brokerOrderId, marketId } = {}) {
+    const order = clientOrderId === undefined
+      ? this.getOrderByBrokerOrderId({
+        brokerOrderId,
+        marketId,
+      })
+      : this.getOrder({ clientOrderId })
+    if (!order) {
+      return undefined
+    }
+    if (marketId !== undefined && order.market.id !== marketId) {
+      throw new Error("Order ownership marketId does not match the registered canonical order")
+    }
+    if (brokerOrderId !== undefined && order.brokerOrderId !== brokerOrderId) {
+      throw new Error("Order ownership clientOrderId and brokerOrderId identify different registered orders")
+    }
     return findOrderOwnership({
       ownerships: this.#ownerships,
-      clientOrderId,
-      brokerOrderId,
+      clientOrderId: order.clientOrderId,
     })
   }
 
@@ -496,7 +520,10 @@ function validateAcknowledgementCanAttach({
   if (current.brokerOrderId !== undefined && current.brokerOrderId !== order.brokerOrderId) {
     throw new Error("Acknowledged order changed brokerOrderId")
   }
-  if (orders.some((item) => item.brokerOrderId === order.brokerOrderId)) {
+  if (orders.some((item) =>
+    item.brokerOrderId === order.brokerOrderId &&
+    item.market.id === order.market.id,
+  )) {
     throw new Error("Broker order ID is already owned by another Harvester order")
   }
 }
