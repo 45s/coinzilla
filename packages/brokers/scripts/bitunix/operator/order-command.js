@@ -13,7 +13,10 @@ function readBitunixApiCredentials({ env }) {
   if (!apiKey || !apiSecret) {
     throw new Error("Set BITUNIX_API_KEY and BITUNIX_API_SECRET in packages/brokers/.env.development")
   }
-  return { apiKey, apiSecret }
+  return {
+    apiKey,
+    apiSecret,
+  }
 }
 
 function createBitunixBroker({ credentials, allowLiveOrderMutations }) {

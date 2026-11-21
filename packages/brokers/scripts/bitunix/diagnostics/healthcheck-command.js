@@ -111,10 +111,18 @@ export async function runBitunixHealthcheckDiagnostics({
   stdout = process.stdout,
 } = {}) {
   if (mode === "local") {
-    return runLocalDiagnostics({ brokersRoot, env, stdout })
+    return runLocalDiagnostics({
+      brokersRoot,
+      env,
+      stdout,
+    })
   }
   if (mode === "publish") {
-    return runPublishedHealthCheck({ repositoryRoot, env, stdout })
+    return runPublishedHealthCheck({
+      repositoryRoot,
+      env,
+      stdout,
+    })
   }
   throw new TypeError(`Unsupported read-only Bitunix health-check mode: ${mode}`)
 }
