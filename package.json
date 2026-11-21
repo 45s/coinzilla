@@ -21,7 +21,8 @@
     "lint:fix": "eslint . --fix",
     "test:sync-main": "node --test scripts/sync-main.test.js",
     "sync:main": "node scripts/sync-main.js",
-    "check:test-matrix": "node --test scripts/workspace-test-matrix.test.js && node scripts/check-workspace-test-matrix.js"
+    "check:test-matrix": "node --test scripts/workspace-test-matrix.test.js && node scripts/check-workspace-test-matrix.js",
+    "test:module-import-analysis": "node --test scripts/module-import-analysis.test.js"
   },
   "keywords": [],
   "author": "",
