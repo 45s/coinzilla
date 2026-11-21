@@ -186,7 +186,10 @@ function assertAllocationIdentity({ allocation, reconciliation }) {
       !NON_EMPTY(allocation.fillFingerprint) ||
       !NON_EMPTY(allocation.allocationFingerprint) ||
       allocation.marketId !== reconciliation.order.marketId ||
-      !hasMatchingOwnership({ allocation, reconciliation })) {
+      !hasMatchingOwnership({
+        allocation,
+        reconciliation,
+      })) {
     fail({
       code: "RS_MIXED_SELL_RECONCILIATION_ORDER_OWNERSHIP_MISMATCH",
       message: "Mixed SELL allocation market or immutable order ownership does not match its staging reconciliation.",
@@ -196,7 +199,10 @@ function assertAllocationIdentity({ allocation, reconciliation }) {
 
 function validateAllocation({ reconciliation, allocation }) {
   assertStagingAllocationState({ reconciliation })
-  assertAllocationIdentity({ allocation, reconciliation })
+  assertAllocationIdentity({
+    allocation,
+    reconciliation,
+  })
   assertDecimal({
     value: allocation.recovery?.grossBaseQuantity,
     field: "allocation.recovery.grossBaseQuantity",
@@ -238,6 +244,7 @@ function findDuplicateAllocation({ reconciliation, allocation }) {
     code: "RS_MIXED_SELL_RECONCILIATION_ALLOCATION_CONFLICT",
     message: `Canonical Fill ${allocation.fillId} was replayed with conflicting execution or allocation facts.`,
   })
+  return null
 }
 
 function createStagedAllocation({ reconciliation, allocation, fillQuantity }) {
@@ -290,7 +297,10 @@ export function stageMixedSellFillAllocation({ reconciliation, allocation } = {}
     reconciliation,
     allocation,
   })
-  const duplicate = findDuplicateAllocation({ reconciliation, allocation })
+  const duplicate = findDuplicateAllocation({
+    reconciliation,
+    allocation,
+  })
   return duplicate ?? createStagedAllocation({
     reconciliation,
     allocation,
@@ -388,9 +398,19 @@ function assertTerminalOrder({ reconciliation, terminalOrder, orderRegistry }) {
       message: "Terminal reconciliation requires FILLED, CANCELED, EXPIRED or REJECTED broker status.",
     })
   }
-  assertTerminalOrderIdentity({ reconciliation, terminalOrder, orderRegistry })
-  assertRegisteredTerminalOrder({ terminalOrder, orderRegistry })
-  assertTerminalExecutedQuantity({ reconciliation, terminalOrder })
+  assertTerminalOrderIdentity({
+    reconciliation,
+    terminalOrder,
+    orderRegistry,
+  })
+  assertRegisteredTerminalOrder({
+    terminalOrder,
+    orderRegistry,
+  })
+  assertTerminalExecutedQuantity({
+    reconciliation,
+    terminalOrder,
+  })
 }
 
 function validateTerminalFillHistory({ reconciliation, canonicalFillAllocations }) {
