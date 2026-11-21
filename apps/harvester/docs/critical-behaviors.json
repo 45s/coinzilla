@@ -9,7 +9,8 @@
     "src/bootstrap/account/",
     "src/bootstrap/start-harvester.js",
     "src/infrastructure/operational-state/",
-    "src/index.js"
+    "src/index.js",
+    "src/infrastructure/process-lock/"
   ],
   "behaviors": [
     {
@@ -311,7 +312,9 @@
       "id": "SHUTDOWN_PROCESS_OWNERSHIP",
       "title": "Shutdown ordering, process-lock retention and safe release",
       "sourceModules": [
-        "src/index.js"
+        "src/index.js",
+        "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
+        "src/infrastructure/process-lock/acquire-harvester-process-lock.js"
       ],
       "tests": [
         {
@@ -323,9 +326,25 @@
           "path": "src/index.test.js",
           "name": "retains the process lock when runtime shutdown throws",
           "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "acquires an exclusive lock and releases it idempotently",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.test.js",
+          "name": "refuses to remove a lock whose ownership token changed",
+          "kind": "failure"
+        },
+        {
+          "path": "src/index.test.js",
+          "name": "retains Journal, EventBus, process lock when strategy shutdown safety is unresolved",
+          "kind": "integration"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "integrationRequired": true
     }
   ]
 }
