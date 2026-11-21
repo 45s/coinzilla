@@ -482,6 +482,10 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private async refreshMetadata(): Promise<void> {
+    if (this.metadataRefreshTimer) {
+      clearTimeout(this.metadataRefreshTimer);
+      this.metadataRefreshTimer = null;
+    }
     if (!this.connected()) {
       return;
     }
@@ -496,7 +500,9 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.connected() || this.manuallyDisconnected || this.reconnectTimer) {
       return;
     }
-    this.liveStatus.set('reconnecting');
+    this.liveStatus.set(
+      this.reconnectAttempt >= this.reconnectDelays.length ? 'offline' : 'reconnecting',
+    );
     const delayIndex = Math.min(this.reconnectAttempt, this.reconnectDelays.length - 1);
     const delay = this.reconnectDelays[delayIndex];
     this.reconnectAttempt += 1;
