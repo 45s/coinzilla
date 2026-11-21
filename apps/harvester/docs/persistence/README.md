@@ -197,6 +197,6 @@ The maintenance CLI is outside Harvester startup and trading paths. It never cre
 
 ## Trading-history query service
 
-The versioned [Trading-history API v1](../api/trading-history-api.md) exposes the existing `orders`, `fills`, and `fill_commissions` tables through Harvester-owned application queries. It adds no schema or migration. The API service opens the database selected by `TRADING_MODE`, verifies the existing relational schema, and uses a separate SQLite connection.
+The versioned [Trading-history API v1](../api/trading-history-api.md) exposes the existing `orders`, `fills`, and `fill_commissions` tables through Harvester-owned application queries. It adds no schema or migration. Harvester starts the optional HTTP listener as part of its existing process lifecycle and composes the query repository over the already-open relational database connection selected by `TRADING_MODE`. It does not open a second SQLite connection; Harvester closes the listener before closing persistence.
 
 The API does not change the best-effort persistence observers, trading lifecycle, order ownership, or database authority. Metadata counts describe the selected local database only; they do not establish exchange-history completeness. The API contract documents its versioned routes, exact-value semantics, authentication, and deployment boundary.
