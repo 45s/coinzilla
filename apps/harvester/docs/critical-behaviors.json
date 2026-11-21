@@ -517,7 +517,7 @@
           "kind": "integration"
         },
         {
-          "path": "src/bootstrap/start-harvester.test.js",
+          "path": "test/bootstrap/market-evaluation.test.js",
           "name": "delivers market price events independently for every enabled market",
           "kind": "integration"
         },
