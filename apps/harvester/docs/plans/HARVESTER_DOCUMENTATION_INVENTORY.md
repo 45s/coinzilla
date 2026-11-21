@@ -197,7 +197,6 @@ The complete recursive tree at `543753da5938eba2d95ad19d74c3f98a991e6461` contai
 
 This path inventory does not imply that all current behavior claims in the 89 files have been source-verified; that remains tracked by #1401. Full-tree Markdown classification and reference tracing remain tracked by #1402 and #1403.
 
-
 ## Current recursive inventory checkpoint — develop `0f827ba7551be61a1be58f8dced191fb0a090870` (2026-11-21)
 
 The complete recursive Git tree at this checkpoint contains **94 Harvester Markdown/MDX paths**. A direct path-set comparison with the 89-path checkpoint above found **six additions and one removal** (net +5). The additions below have initial purpose classifications; these are not claims that every behavior statement has passed the #1401 source audit.
@@ -218,7 +217,6 @@ The complete recursive Git tree at this checkpoint contains **94 Harvester Markd
 | `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | **RETIRED** with the interim Bitunix observer runtime/configuration/adapter in merged [PR #1455](https://github.com/45s/coinzilla/pull/1455). That PR explicitly removed the observer-only runtime and its documentation; Bitunix remains unregistered until [#1185](https://github.com/45s/coinzilla/issues/1185) and the complete-provider gate in [ADR-0004](../../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md). The current execution-routing guide covers general provider routing, not a replacement observer contract. Preserve this row as migration provenance; do not restore the retired guide as current guidance. |
 
 The current count is a path-completeness result only. Historical audits and session records remain preserved; no historical conclusions or timestamps were rewritten. Factual review of maintained documents and cross-repository reference tracing remain open under #1401 and #1403.
-
 
 ## S-10 factual-review boundary — 2026-11-21
 
