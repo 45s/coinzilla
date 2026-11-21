@@ -10,7 +10,7 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 ## Bitunix health-check and operator CLI consolidation — #1614
 
-**Status: In progress** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) · [draft PR #1616](https://github.com/45s/coinzilla/pull/1616).
+**Status: IMPLEMENTED and merged** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) / [PR #1616](https://github.com/45s/coinzilla/pull/1616), merge commit `488949b668e1291b5cfc64032250f6d2a4568274`. Exact-head required workflow runs and advisory External Documentation Links passed; issue #1614 is closed after acceptance and exact-head CI verification.
 
 Consolidate every Bitunix script under `scripts/bitunix/` with one CLI entry point, `run-healthcheck.js`. The default remains a read-only health check with sanitized report publishing; `--local` runs local-only diagnostics; `--place-order` runs the read-only health checks first and, only when healthy, performs the already guarded fixed HYPEUSDT attempt inside the same report-branch workflow. The sanitized outcome is published and the checkout returns to `develop`. Pure supporting functions live in `helpers/` with colocated tests. The mandatory workflow document is maintained under `docs/BITUNIX_WORKFLOW.md`. This is a tooling/layout change, not a provider capability or production-readiness change.
 
@@ -26,18 +26,18 @@ The agent, tests, CI and scheduled jobs must never invoke the LIVE operator mode
 
 ## User-data session lifecycle test hardening — #1602
 
-**Status: In review** — [issue #1602](https://github.com/45s/coinzilla/issues/1602) · [PR #1606](https://github.com/45s/coinzilla/pull/1606).
+**Status: COMPLETE and merged** — [issue #1602](https://github.com/45s/coinzilla/issues/1602) / [PR #1606](https://github.com/45s/coinzilla/pull/1606), merge commit `92de48c01f48fa343b12b735b6b2d9fcebc34fda`. Exact-head unit, coverage, syntax, dependency, Harvester targeted and advisory documentation-link workflows passed.
 
 The direct Application suite now characterizes subscriber event filtering/deduplication, callback isolation, RPC error notification, recovery reminders, subscriber removal during recovery, concurrent subscription coalescing, and cleanup when a remote subscription resolves after session shutdown. Supporting port and recovery-policy tests include scenario-specific assertion diagnostics. Tests remain offline and exercise the injected application port; existing Binance composition coverage remains in its infrastructure test suites. No production behavior or public contract changes are intended.
 
-## S-7 naming remediation — staged
+## S-7 naming remediation — COMPLETE
 
 Tracking: [repository standards issue #1568](https://github.com/45s/coinzilla/issues/1568) and [naming audit issue #1582](https://github.com/45s/coinzilla/issues/1582).
 
 - **Merged:** [PR #1591](https://github.com/45s/coinzilla/pull/1591) renamed `adapt-msg.js` / `adaptMsg` to `adapt-binance-websocket-event.js` / `adaptBinanceWebSocketEvent`, and `user.js` / `adaptUser` to `user-data-event-adapters.js` / `userDataEventAdapters`. It updated the production user-data client and all direct tests. Merge commit: `895f3aa4a9ebb93a12dd95168b2e56118cc3173a`.
-- **S-7 closeout in review:** [PR #1593](https://github.com/45s/coinzilla/pull/1593) completes the repository file-tree/naming standard and clarifies the remaining Binance event-map identifiers. These are private implementation names; no public Broker contract, event payload, exchange behavior, or trading lifecycle changes are intended.
+- **S-7 closeout COMPLETE:** [PR #1593](https://github.com/45s/coinzilla/pull/1593) merged as `ff1e86da8c7d41ae431f12cd1beaa7a39dabd071`. Its exact head passed JavaScript Syntax, Test Coverage, Unit Tests, Dependency Audit, Harvester Targeted Tests and External Documentation Links. The file-tree/naming standard and Binance event-map identifiers are reconciled; these are private implementation names with no public Broker contract or trading lifecycle change.
 
-**Status:** the primary module rename is merged; the S-7 policy/documentation closeout is in [PR #1593](https://github.com/45s/coinzilla/pull/1593). Final exact-head verification is recorded in the PR body; mark the S-7 closeout complete after user merge.
+**Status:** the Brokers S-7 slice is complete and merged in [PR #1593](https://github.com/45s/coinzilla/pull/1593); exact-head required and advisory workflows passed. Umbrella issue #1582 remains open for any other package slices.
 
 ## Common exchange-neutral Broker API
 
@@ -1395,7 +1395,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Add the current method/capability matrix and result/error/decimal/timestamp/pagination/lifecycle contract in [BROKER_API.md](./BROKER_API.md).
 - [x] Complete the same-contract Binance/Bitunix implementation and offline conformance suite in [PR #1451](https://github.com/45s/coinzilla/pull/1451), merged into `develop` as `e6d3e60aaaa26ad23705564ffc17f786c995b3dd`.
 - [x] Verify the exact PR head: 688 Brokers tests passed; workspace unit tests and coverage passed; JavaScript Syntax/workspace quality, strict changed-file ESLint, actionlint, Harvester targeted tests, Utils tests, and dependency audit passed. Read-only Binance TESTNET integration was skipped by workflow policy.
-- [~] Advisory external documentation-link workflow remained in progress at merge; it is not a required ruleset check.
+- [x] Advisory External Documentation Links workflow completed successfully on the exact PR #1451 head; it is not a required ruleset check.
 - **Safety:** Bitunix Spot order placement/cancellation/fill support remains blocked by [#1185](https://github.com/45s/coinzilla/issues/1185). No live mutations are authorized.
 
 ## 2026-11-19 — Bitunix Spot WebSocket explicit reconnection (PR #1459)
@@ -1467,7 +1467,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 
 **Status: read-only polling observations are exposed through the common Broker `subscribeForUserData()` method; no native private event stream or Harvester provider registration.**
 
-- The polling helper is kept under `src/infrastructure/bitunix/reconciler.js`; its implementation is not exported from the public Brokers package or the Bitunix infrastructure entry point.
+- The polling helper is kept under `src/infrastructure/bitunix/spot/reconciler.js`; its implementation is not exported from the public Brokers package or the Bitunix infrastructure entry point.
 - Regression tests prove semantic deduplication ignores the changing local observation timestamp and that tracked-order symbols are validated synchronously before scheduling.
 - Polling remains explicitly non-authoritative: local `observedAt` is not an exchange `sourceTime`; order history is page 1 only; open orders are symbol-scoped; matching-order detail is not a canonical Fill.
 - `OBSERVE_USER_DATA` is supported through `subscribeForUserData()` and the `onObservation` callback. Native `SUBSCRIBE_USER_DATA` (`onEvent`) and `getAccountSnapshot()` remain unsupported. The helper does not fabricate Binance lifecycle events or claim that transient states between polls are recoverable.
@@ -1478,7 +1478,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 
 ## 2026-11-19 — Bitunix polling recovery delivery (#1516)
 
-**Status: In progress.** PR [#1516](https://github.com/45s/coinzilla/pull/1516) closes a delivery gap in the existing read-only observation lifecycle.
+**Status: COMPLETE and merged** — [PR #1516](https://github.com/45s/coinzilla/pull/1516), merge commit `afae5d04ad5fba8657e13b3b8dda38a408b02622`. Exact PR-head required workflow runs passed; no live Bitunix request or exchange mutation was performed.
 
 - A failed polling cycle invalidates the previous semantic fingerprint; the next successful cycle republishes a complete observation even when exchange data is unchanged.
 - Recovery resets the exponential backoff to the configured interval. Failed cycles and callback failures do not publish partial snapshots.
@@ -1486,7 +1486,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Added a failure-path regression for scheduler cancellation: local stop state and cleanup remain idempotent even when the injected cancel function throws.
 - Updated the polling contract and production-readiness matrix to distinguish this recovery guarantee from authoritative event/fill reconciliation.
 - No order/funds mutations, canonical fill synthesis, source timestamp inference, or Harvester provider registration.
-- Required CI must pass on the exact final PR head before this item is marked complete.
+- Verified on exact PR head `63906b7df5b2ef13b0ec47fb5625f12c41e2e49a`: all seven required workflows passed; issue #1516 is closed.
 
 ## Bitunix Spot history request-adapter decomposition (#1517)
 

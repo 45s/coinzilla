@@ -8,7 +8,7 @@ Bitunix Spot exposes authenticated WebSocket request/response RPC, not a documen
 
 ## Internal boundary
 
-The implementation lives under `src/infrastructure/bitunix/reconciler.js` and is not exported from the public `@coinzilla/brokers` package entry point. It is an infrastructure detail, not a second Broker facade or a Harvester-facing observer API.
+The implementation lives under `src/infrastructure/bitunix/spot/reconciler.js` and is not exported from the public `@coinzilla/brokers` package entry point. It is an infrastructure detail, not a second Broker facade or a Harvester-facing observer API.
 
 Each poll reads account balances, symbol-scoped open orders, the first order-history page for each explicitly configured symbol, and matching-order detail only for explicitly tracked broker order IDs.
 

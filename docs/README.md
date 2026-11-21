@@ -12,7 +12,7 @@ This index is the entry point for maintained repository documentation. The gover
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
 - [Markdown style standard](MARKDOWN_STYLE.md) — consistent formatting and authoring conventions
-- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (160 tracked Markdown/MDX files on `develop` at `543753d`; 89 under Harvester and 71 elsewhere)
+- [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (179 tracked Markdown/MDX files on `develop` at `0f827ba`; 94 under Harvester and 85 elsewhere)
 
 ## Repository-wide engineering
 
@@ -49,7 +49,8 @@ The AI-agent task brief and repository engineering audit are different historica
 
 Each active application/package owns its local README, agent instructions, roadmap and documentation index where applicable:
 
-- [Harvester](../apps/harvester/README.md) — application guide
+- [Harvester](../apps/harvester/README.md) — trading application guide
+- [Dashboard](../apps/dashboard/README.md) — Angular operational dashboard foundation
 - [Harvester documentation index](../apps/harvester/docs/README.md)
 - [Harvester Volatility Protection](../apps/harvester/docs/volatility-protection.md) — runtime protection implemented; historical threshold calibration remains open
 - [Harvester roadmap](../apps/harvester/ROADMAP.md)
