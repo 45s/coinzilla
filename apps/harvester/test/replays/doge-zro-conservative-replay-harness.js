@@ -173,34 +173,42 @@ function waitForRecoveryCycleCompletion(state) {
 }
 
 function notifyLifecycleEventWaiters({ state, event }) {
-  const matchingWaiters = state.lifecycleEventWaiters.filter(({ eventName }) => eventName === event.name);
-  state.lifecycleEventWaiters = state.lifecycleEventWaiters.filter(({ eventName }) => eventName !== event.name);
+  const matchingEvents = state.receivedLifecycleEvents.filter(({ name }) => name === event.name)
+  const matchingWaiters = state.lifecycleEventWaiters.filter(({ eventName, occurrence }) =>
+    eventName === event.name && matchingEvents.length >= occurrence)
+  state.lifecycleEventWaiters = state.lifecycleEventWaiters.filter(
+    (waiter) => !matchingWaiters.includes(waiter),
+  )
   for (const waiter of matchingWaiters) {
-    clearTimeout(waiter.timeout);
-    waiter.resolve(event);
+    clearTimeout(waiter.timeout)
+    waiter.resolve(matchingEvents[waiter.occurrence - 1])
   }
 }
 
-function waitForLifecycleEvent({ state, eventName }) {
-  const existing = state.receivedLifecycleEvents.find(({ name }) => name === eventName);
-  if (existing) {
-    return Promise.resolve(existing);
+function waitForLifecycleEvent({ state, eventName, occurrence = 1 }) {
+  if (!Number.isInteger(occurrence) || occurrence < 1) {
+    throw new RangeError("Lifecycle event occurrence must be a positive integer")
+  }
+  const existing = state.receivedLifecycleEvents.filter(({ name }) => name === eventName)
+  if (existing.length >= occurrence) {
+    return Promise.resolve(existing[occurrence - 1])
   }
   return new Promise((...settlers) => {
-    const [resolve, reject] = settlers;
+    const [resolve, reject] = settlers
     const waiter = {
       eventName,
+      occurrence,
       resolve,
       timeout: undefined,
-    };
+    }
     waiter.timeout = setTimeout(() => {
-      state.lifecycleEventWaiters = state.lifecycleEventWaiters.filter((candidate) => candidate !== waiter);
+      state.lifecycleEventWaiters = state.lifecycleEventWaiters.filter((candidate) => candidate !== waiter)
       reject(new Error(
-        `Timed out waiting for ${eventName} for ${state.marketSymbol}; observed events: ${state.receivedLifecycleEvents.map(({ name }) => name).join(", ")}; runtime errors: ${state.harvesterRuntimeErrors.map((error) => error.message ?? String(error)).join("; ")} `,
-      ));
-    }, 5000);
-    state.lifecycleEventWaiters.push(waiter);
-  });
+        `Timed out waiting for ${eventName} occurrence ${occurrence} for ${state.marketSymbol}; observed events: ${state.receivedLifecycleEvents.map(({ name }) => name).join(", ")}; runtime errors: ${state.harvesterRuntimeErrors.map((error) => error.message ?? String(error)).join("; ")} `,
+      ))
+    }, 5000)
+    state.lifecycleEventWaiters.push(waiter)
+  })
 }
 
 function createDogeReplayTradingRequest(state) {
@@ -855,9 +863,10 @@ side,
 occurrence });
     },
     waitForRecoveryCycleCompletion: () => waitForRecoveryCycleCompletion(state),
-    waitForLifecycleEvent: (eventName) => waitForLifecycleEvent({
+    waitForLifecycleEvent: (eventName, occurrence = 1) => waitForLifecycleEvent({
       state,
       eventName,
+      occurrence,
     }),
     publishMarketPrice: (price) => publishDogeReplayMarketPrice({
       state,

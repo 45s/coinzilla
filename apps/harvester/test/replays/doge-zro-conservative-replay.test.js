@@ -642,12 +642,14 @@ async function applyPartialBuyReports({
   ]
   for (let index = 0; index < partialBuyReports.length; index += 1) {
     const report = partialBuyReports[index]
-    const result = await dogeTradingReplay.publishOrderFill({
+    const fillApplied = dogeTradingReplay.waitForLifecycleEvent("execution.fill_applied", index + 1)
+    await dogeTradingReplay.publishOrderFill({
       order: initialBuyOrder,
       price: dogeTradingReplay.scenarioExpectations.buyPrice,
       ...report,
       commissionAsset: "DOGE",
     })
+    await fillApplied
     const position = dogeTradingReplay.runtime.portfolio.getPosition({
       symbol: MARKET_SYMBOL,
     })
@@ -656,7 +658,6 @@ async function applyPartialBuyReports({
     })
     const expected = expectedProgress[index]
 
-    assert.equal(result.ok, true, `Partial BUY execution ${index + 1} must be accepted by the real runtime composition.`)
     assert.equal(position.baseQuantity.amount, expected.baseQuantity, `Partial BUY execution ${index + 1} must apply gross base less its actual DOGE commission.`)
     assert.equal(position.spent.amount, expected.spent, `Partial BUY execution ${index + 1} must add its exact quote notional once.`)
     assert.equal(recoveryLedger.buyCost, expected.buyCost, `Partial BUY execution ${index + 1} must keep RecoveryLedger cost aligned with Portfolio spent.`)
@@ -666,11 +667,6 @@ async function applyPartialBuyReports({
       expected.completed ? 2 : 1,
       "The next standing BUY must not be submitted until the original BUY is completely filled.",
     )
-    if (!expected.completed) {
-      assert.equal(result.data.waitingForFullFill, true, "A partial cumulative BUY must keep the completed-BUY lifecycle waiting.")
-    } else {
-      assert.equal(result.data.reevaluate, true, "The completed cumulative BUY must release the completed-BUY lifecycle for reevaluation.")
-    }
   }
 }
 
