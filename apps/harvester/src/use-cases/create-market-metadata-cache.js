@@ -27,9 +27,16 @@ function isFreshMarketMetadata({
   return matchesMarket && age >= 0 && age < MARKET_METADATA_FRESHNESS_MAX_AGE_MS
 }
 
+function matchesActiveMarketIdentity({ refreshed, metadata, symbol } = {}) {
+  return refreshed?.market?.id === metadata?.market?.id &&
+    refreshed?.market?.symbol === symbol
+}
+
 function validateRefreshedMarketIdentity({ refreshed, metadata, symbol } = {}) {
-  if (refreshed?.market?.id !== metadata?.market?.id || refreshed?.market?.symbol !== symbol) {
-    throw new MarketMetadataRefreshError({
+  if (matchesActiveMarketIdentity({ refreshed, metadata, symbol })) {
+    return refreshed
+  }
+  throw new MarketMetadataRefreshError({
       code: MARKET_METADATA_REFRESH_ERROR_CODES.MARKET_IDENTITY_MISMATCH,
       message: `Fresh exchange metadata does not match the active market ${symbol}`,
       context: {
@@ -38,8 +45,6 @@ function validateRefreshedMarketIdentity({ refreshed, metadata, symbol } = {}) {
         receivedMarketId: refreshed?.market?.id ?? null,
       },
     })
-  }
-  return refreshed
 }
 
 async function retrieveValidatedMarketMetadata({
