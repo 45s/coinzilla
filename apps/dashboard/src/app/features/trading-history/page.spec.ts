@@ -470,7 +470,6 @@ describe('TradingHistoryComponent', () => {
       ok: true,
       data: createPage([createOrder('order-live')], 1),
     });
-    await fixture.whenStable();
     await new Promise((resolve) => setTimeout(resolve, 300));
     http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
       ok: true,
