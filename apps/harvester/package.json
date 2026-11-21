@@ -67,6 +67,7 @@
       "test/bootstrap/trading-safety.test.js",
       "test/bootstrap/operator-control.test.js",
       "test/bootstrap/broker-boundaries.test.js",
+      "test/bootstrap/market-subscriptions.test.js",
       "src/infrastructure/telegram/telegram-operator-keyboard.test.js",
       "test/bootstrap/start-harvester.test.js",
       "test/recovery/operational-state-crash-matrix.test.js",
