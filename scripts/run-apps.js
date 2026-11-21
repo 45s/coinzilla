@@ -5,11 +5,11 @@ const commands = {
   client: ['--filter', '@coinzilla/dashboard', 'start'],
 }
 
-const requested = process.argv[2]
+const [, , requested] = process.argv
 const selected = requested === 'app' ? Object.keys(commands) : [requested]
 
 if (!selected.every((name) => Object.hasOwn(commands, name))) {
-  console.error('Usage: pnpm run server | client | app')
+  process.stderr.write('Usage: pnpm run server | client | app\n')
   process.exit(1)
 }
 
@@ -18,11 +18,15 @@ const children = new Map()
 let stopping = false
 
 function stopChildren(exitCode = 0) {
-  if (stopping) return
+  if (stopping) {
+    return
+  }
   stopping = true
 
   for (const child of children.values()) {
-    if (child.exitCode === null && !child.killed) child.kill('SIGTERM')
+    if (child.exitCode === null && !child.killed) {
+      child.kill('SIGTERM')
+    }
   }
 
   process.exitCode = exitCode
@@ -36,14 +40,17 @@ for (const name of selected) {
 
   children.set(name, child)
   child.on('error', (error) => {
-    console.error(`Unable to start ${name}: ${error.message}`)
+    process.stderr.write(`Unable to start ${name}: ${error.message}\n`)
     stopChildren(1)
   })
-  child.on('exit', (code, signal) => {
+  child.on('exit', (...exitArguments) => {
+    const [code, signal] = exitArguments
     children.delete(name)
     if (!stopping) {
       const exitCode = code ?? (signal ? 1 : 0)
-      if (exitCode !== 0 || selected.length > 1) stopChildren(exitCode)
+      if (exitCode !== 0 || selected.length > 1) {
+        stopChildren(exitCode)
+      }
     }
   })
 }
