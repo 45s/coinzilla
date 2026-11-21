@@ -170,12 +170,16 @@ test("discovers workspace packages and dependencies from every manifest dependen
         {
           name: "@coinzilla/app",
           workspaceDependencies: [
-            { name: "@coinzilla/core", version: "workspace:*", section: "dependencies" },
             {
-          name: "@coinzilla/core",
-          version: "workspace:^",
-          section: "devDependencies",
-        },
+              name: "@coinzilla/core",
+              version: "workspace:*",
+              section: "dependencies",
+            },
+            {
+              name: "@coinzilla/core",
+              version: "workspace:^",
+              section: "devDependencies",
+            },
           ],
         },
         {
