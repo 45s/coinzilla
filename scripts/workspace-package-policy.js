@@ -25,13 +25,14 @@ const parseAllowedDependencies = ({ cell, consumer }) => {
   }
 
   const dependencies = matches.map((match) => match[1])
-  const uniqueDependencies = new Set(dependencies)
+  const uniqueDependencies = new Set()
 
-  if (uniqueDependencies.size !== dependencies.length) {
-    const duplicate = dependencies.find((dependency, index) => (
-      dependencies.indexOf(dependency) !== index
-    ))
-    throw new Error(`Duplicate allowed workspace dependency: ${duplicate}`)
+  for (const dependency of dependencies) {
+    if (uniqueDependencies.has(dependency)) {
+      throw new Error(`Duplicate allowed workspace dependency: ${dependency}`)
+    }
+
+    uniqueDependencies.add(dependency)
   }
 
   if (uniqueDependencies.has(consumer)) {
