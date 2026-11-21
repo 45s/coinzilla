@@ -122,12 +122,23 @@ test("opens the source read-only and leaves database bytes unchanged", () => {
   }
 })
 
-test("requires an explicit TESTNET or LIVE environment", () => {
+test("requires an explicit TESTNET or LIVE command argument", () => {
   assert.throws(
     () => runDatabaseExport({
       env: {},
     }),
-    /TRADING_MODE must be explicitly set/i,
-    "The export command must not infer TESTNET or LIVE from NODE_ENV or another default.",
+    /Environment must be "testnet" or "live"/i,
+    "The export command must require an explicit environment argument.",
+  )
+})
+
+test("rejects unsupported database environment arguments", () => {
+  assert.throws(
+    () => runDatabaseExport({
+      env: {},
+      tradingMode: "staging",
+    }),
+    /Environment must be "testnet" or "live"/i,
+    "The export command must reject environments other than TESTNET and LIVE.",
   )
 })
