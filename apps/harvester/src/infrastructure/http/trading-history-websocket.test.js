@@ -181,7 +181,7 @@ test("rejects browser WebSocket upgrades from untrusted origins", async (t) => {
     "",
     "",
   ].join("\r\n"))
-  assert.match(await response, /^HTTP\\/1\\.1 403 Forbidden/)
+  assert.match(await response, /^HTTP\/1\.1 403 Forbidden/)
 })
 
 test("closes local WebSocket clients before the shared HTTP listener shuts down", async (t) => {
