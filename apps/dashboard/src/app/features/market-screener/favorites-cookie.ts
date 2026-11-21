@@ -1,4 +1,4 @@
-import type { MarketSource } from './api';
+import type { MarketSource } from './market-source';
 
 const COOKIE_NAMES: Readonly<Record<MarketSource, string>> = Object.freeze({
   'bitunix-futures': 'coinzilla_market_favorites_bitunix_futures',

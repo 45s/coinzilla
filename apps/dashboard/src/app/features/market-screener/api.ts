@@ -2,11 +2,9 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { map, type Observable } from 'rxjs';
 
-export type MarketSource =
-  | 'bitunix-futures'
-  | 'bitunix-spot'
-  | 'binance-futures'
-  | 'binance-spot';
+import type { MarketSource } from './market-source';
+
+export type { MarketSource } from './market-source';
 
 export interface MarketScreenerRow {
   readonly symbol: string;

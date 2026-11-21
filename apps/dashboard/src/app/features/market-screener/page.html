@@ -47,7 +47,7 @@
     </label>
     <label class="movement-filter">
       <span>WINDOW</span>
-      <select aria-label="Movement window" [value]="movementWindow()" [disabled]="!hasNativeMovement()" (change)="updateMovementWindow($event)">
+      <select aria-label="Movement window" [value]="movementWindow()" [disabled]="!hasAnyNativeMovement()" (change)="updateMovementWindow($event)">
         <option value="change5m">5m</option>
         <option value="change1h">1h</option>
         <option value="change4h">4h</option>
@@ -56,7 +56,7 @@
     </label>
     <label class="movement-filter">
       <span>DIRECTION</span>
-      <select aria-label="Movement direction" [value]="movementFilter()" [disabled]="!hasNativeMovement()" (change)="updateMovementFilter($event)">
+      <select aria-label="Movement direction" [value]="movementFilter()" [disabled]="!hasNativeMovementForSelectedWindow()" (change)="updateMovementFilter($event)">
         <option value="all">All</option>
         <option value="positive">Non-negative</option>
         <option value="negative">Negative</option>

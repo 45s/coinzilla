@@ -44,9 +44,12 @@ export class MarketScreenerComponent implements OnInit {
     new Set(readMarketFavorites(this.document.cookie, 'bitunix-futures')),
   );
   readonly markets = computed(() => this.snapshot()?.markets ?? []);
-  readonly hasNativeMovement = computed(() => this.markets().some((market) =>
+  readonly hasAnyNativeMovement = computed(() => this.markets().some((market) =>
     market.change5m !== null || market.change1h !== null
       || market.change4h !== null || market.change24h !== null,
+  ));
+  readonly hasNativeMovementForSelectedWindow = computed(() => this.markets().some(
+    (market) => market[this.movementWindow()] !== null,
   ));
   readonly visibleMarkets = computed(() => {
     const query = this.searchQuery().trim().toUpperCase();
@@ -105,7 +108,11 @@ export class MarketScreenerComponent implements OnInit {
   }
 
   updateMovementWindow(event: Event): void {
-    this.movementWindow.set((event.target as HTMLSelectElement).value as MarketMovementWindow);
+    const nextWindow = (event.target as HTMLSelectElement).value as MarketMovementWindow;
+    this.movementWindow.set(nextWindow);
+    if (!this.markets().some((market) => market[nextWindow] !== null)) {
+      this.movementFilter.set('all');
+    }
   }
 
   toggleFavorite(symbol: string): void {
