@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -146,9 +147,23 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     this.assetFilter.set((event.target as HTMLInputElement).value);
   }
 
-  async connect(event?: Event): Promise<void> {
-    event?.preventDefault();
-    await this.connect();
+  async connect(): Promise<void> {
+    this.connecting.set(true);
+    this.errorMessage.set(null);
+    try {
+      const metadata = await firstValueFrom(this.api.getMetadata());
+      this.metadata.set(metadata);
+      this.connected.set(true);
+      this.pageIndexReset();
+      await this.loadRecords();
+      this.manuallyDisconnected = false;
+      this.openEventSocket(false);
+    } catch (error) {
+      this.connected.set(false);
+      this.handleRequestError(error);
+    } finally {
+      this.connecting.set(false);
+    }
   }
 
   disconnect(): void {
@@ -514,7 +529,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private handleRequestError(error: unknown): void {
-    if (error instanceof Error) {
+    if (error instanceof HttpErrorResponse && error.status === 0) {
       this.errorMessage.set('Harvester API is unavailable. Check that Harvester is running and the local API is enabled.');
       return;
     }
