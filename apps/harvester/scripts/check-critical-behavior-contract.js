@@ -115,15 +115,6 @@ function hasNamedTestCase({ testSource, name }) {
   return false
 }
 
-function validateTestCase({ behavior, testCase, errors, readFile, testKinds }) {")
-  const pattern = new RegExp(
-    "(?:nodeTest|test|runDogeTradingReplayTest)\\(\\s*[\"'`]" +
-    escapedName +
-    "[\"'`]",
-  )
-  return pattern.test(testSource)
-}
-
 function validateTestCase({ behavior, testCase, errors, readFile, testKinds }) {
   if (!isValidTestCase(testCase)) {
     errors.push(`Critical behavior ${behavior.id} contains an invalid named test mapping.`)
