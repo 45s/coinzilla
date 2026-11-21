@@ -149,7 +149,7 @@ async function runPublishedHealthCheck({
 }
 
 /**
- * Run one of the two read-only health-check modes.
+ * Run a read-only health-check mode or the guarded order mode inside the report workflow.
  *
  * @param {{mode: "local"|"publish"|"place-order", brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>}} input
  * @returns {Promise<number>} Process exit code.
