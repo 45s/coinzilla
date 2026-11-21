@@ -25,7 +25,7 @@ function encodeFrame({ opcode, payload = Buffer.alloc(0) } = {}) {
   return Buffer.concat([header, body])
 }
 
-function sendJson(client, message) {
+function sendJson({ client, message } = {}) {
   if (client.closed || client.socket.destroyed || !client.socket.writable) {
     return false
   }
@@ -34,7 +34,8 @@ function sendJson(client, message) {
     payload: JSON.stringify(message),
   })
   if (client.socket.writableLength + frame.length > MAX_BUFFERED_BYTES) {
-    closeClient(client, {
+    closeClient({
+      client,
       code: 1013,
       reason: "Client is not keeping up.",
     })
@@ -43,7 +44,7 @@ function sendJson(client, message) {
   return client.socket.write(frame)
 }
 
-function closeClient(client, { code = 1000, reason = "" } = {}) {
+function closeClient({ client, code = 1000, reason = "" } = {}) {
   if (client.closed) {
     return
   }
@@ -72,32 +73,39 @@ function isValidToken({ suppliedToken, expectedToken } = {}) {
   return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 
+function rejectAuthentication({ client } = {}) {
+  sendJson({
+    client,
+    message: {
+      type: "error",
+      code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
+    },
+  })
+  closeClient({
+    client,
+    code: 1008,
+    reason: "Authentication required.",
+  })
+}
+
 function authenticateClient({ client, message, token } = {}) {
   let authentication
   try {
     authentication = JSON.parse(message.toString("utf8"))
   } catch {
-    sendJson(client, {
-      type: "error",
-      code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
-    })
-    closeClient(client, {
-      code: 1008,
-      reason: "Authentication required.",
+    rejectAuthentication({
+      client,
     })
     return
   }
-  if (authentication?.type !== "authenticate" || !isValidToken({
-    suppliedToken: authentication.token,
+  const validMessage = authentication?.type === "authenticate"
+  const validToken = isValidToken({
+    suppliedToken: authentication?.token,
     expectedToken: token,
-  })) {
-    sendJson(client, {
-      type: "error",
-      code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
-    })
-    closeClient(client, {
-      code: 1008,
-      reason: "Authentication required.",
+  })
+  if (!validMessage || !validToken) {
+    rejectAuthentication({
+      client,
     })
     return
   }
@@ -105,15 +113,19 @@ function authenticateClient({ client, message, token } = {}) {
   startHeartbeat(client)
   clearTimeout(client.authenticationTimer)
   client.authenticationTimer = null
-  sendJson(client, {
-    type: "authenticated",
+  sendJson({
+    client,
+    message: {
+      type: "authenticated",
+    },
   })
 }
 
 function startHeartbeat(client) {
   client.heartbeatTimer = setInterval(() => {
     if (client.awaitingPong) {
-      closeClient(client, {
+      closeClient({
+        client,
         code: 1001,
         reason: "Heartbeat timed out.",
       })
@@ -129,7 +141,9 @@ function startHeartbeat(client) {
 
 function handleClientFrame({ client, frame, token } = {}) {
   if (frame.opcode === 0x8) {
-    closeClient(client)
+    closeClient({
+      client,
+    })
     return
   }
   if (frame.opcode === 0x9) {
@@ -146,7 +160,8 @@ function handleClientFrame({ client, frame, token } = {}) {
     return
   }
   if (client.authenticated) {
-    closeClient(client, {
+    closeClient({
+      client,
       code: 1008,
       reason: "Client messages are not supported.",
     })
@@ -166,7 +181,8 @@ function handleSocketData({ client, chunk, token } = {}) {
     maxFrameBytes: MAX_FRAME_BYTES,
   })
   if (result.error) {
-    closeClient(client, {
+    closeClient({
+      client,
       code: 1002,
       reason: "Invalid WebSocket frame.",
     })
@@ -185,8 +201,11 @@ function handleSocketData({ client, chunk, token } = {}) {
   }
 }
 
-function rejectUpgrade(socket, status = 400) {
-  const reasons = { 404: "Not Found", 503: "Service Unavailable" }
+function rejectUpgrade({ socket, status = 400 } = {}) {
+  const reasons = {
+    404: "Not Found",
+    503: "Service Unavailable",
+  }
   const reason = reasons[status] ?? "Bad Request"
   socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
 }
@@ -213,11 +232,15 @@ function createClient({ socket, clients, token } = {}) {
     authenticationTimer: null,
   }
   client.authenticationTimer = setTimeout(() => {
-    sendJson(client, {
-      type: "error",
-      code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
+    sendJson({
+      client,
+      message: {
+        type: "error",
+        code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
+      },
     })
-    closeClient(client, {
+    closeClient({
+      client,
       code: 1008,
       reason: "Authentication timeout.",
     })
@@ -229,8 +252,11 @@ function createClient({ socket, clients, token } = {}) {
     chunk,
     token,
   }))
-  socket.once("close", () => closeClient(client))
-  socket.once("error", () => closeClient(client, {
+  socket.once("close", () => closeClient({
+    client,
+  }))
+  socket.once("error", () => closeClient({
+    client,
     code: 1011,
     reason: "Connection error.",
   }))
@@ -242,25 +268,39 @@ function handleUpgrade({ request, socket, head, clients, token } = {}) {
   try {
     url = new URL(request.url ?? "/", "http://127.0.0.1")
   } catch {
-    rejectUpgrade(socket)
+    rejectUpgrade({
+      socket,
+    })
     return
   }
   if (url.pathname !== WEBSOCKET_PATH) {
-    rejectUpgrade(socket, 404)
+    rejectUpgrade({
+      socket,
+      status: 404,
+    })
     return
   }
   if (!isUpgradeRequest(request)) {
-    rejectUpgrade(socket)
+    rejectUpgrade({
+      socket,
+    })
     return
   }
   if (clients.size >= MAX_CONNECTIONS) {
-    rejectUpgrade(socket, 503)
+    rejectUpgrade({
+      socket,
+      status: 503,
+    })
     return
   }
   const key = request.headers["sec-websocket-key"]
-  const decodedKey = typeof key === "string" ? Buffer.from(key, "base64") : Buffer.alloc(0)
+  const decodedKey = typeof key === "string"
+    ? Buffer.from(key, "base64")
+    : Buffer.alloc(0)
   if (decodedKey.length !== 16 || decodedKey.toString("base64") !== key) {
-    rejectUpgrade(socket)
+    rejectUpgrade({
+      socket,
+    })
     return
   }
   const accept = createHash("sha1")
@@ -301,7 +341,10 @@ function broadcastHistoryUpdate({ clients, event } = {}) {
   }
   for (const client of clients) {
     if (client.authenticated) {
-      sendJson(client, message)
+      sendJson({
+        client,
+        message,
+      })
     }
   }
 }
@@ -343,20 +386,24 @@ export function attachTradingHistoryWebSocket({ server, eventBus, token } = {}) 
     eventBus,
     clients,
   })
-  const onUpgrade = (request, socket, head) => handleUpgrade({
-    request,
-    socket,
-    head,
-    clients,
-    token,
-  })
+  const onUpgrade = (...upgradeArguments) => {
+    const [request, socket, head] = upgradeArguments
+    handleUpgrade({
+      request,
+      socket,
+      head,
+      clients,
+      token,
+    })
+  }
   server.on("upgrade", onUpgrade)
   return Object.freeze({
     close: async () => {
       server.off("upgrade", onUpgrade)
       subscription.unsubscribe()
       for (const client of [...clients]) {
-        closeClient(client, {
+        closeClient({
+          client,
           code: 1001,
           reason: "Harvester is shutting down.",
         })
