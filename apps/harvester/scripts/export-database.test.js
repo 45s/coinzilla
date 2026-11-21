@@ -19,11 +19,24 @@ function createDatabase(directory) {
       id TEXT PRIMARY KEY,
       symbol TEXT NOT NULL,
       quantity TEXT,
+      safe_integer INTEGER,
+      unsafe_integer INTEGER,
       large_integer INTEGER,
       payload BLOB
     );
     CREATE TABLE empty_table (id TEXT PRIMARY KEY);
-    INSERT INTO orders VALUES ('order-1', 'DOGEUSDT', '12.500', 9223372036854775807, X'00FF');
+    INSERT INTO orders VALUES ('order-1', 'DOGEUSDT', '12.500', 9007199254740991, 9007199254740992, 9223372036854775807, X'00FF');
+  `)
+  database.close()
+  return filename
+}
+
+function createSpecialIdentifierDatabase(directory) {
+  const filename = path.join(directory, "special-identifiers.db")
+  const database = new DatabaseSync(filename)
+  database.exec(`
+    CREATE TABLE "__proto__" ("__proto__" TEXT);
+    INSERT INTO "__proto__" VALUES ('preserved');
   `)
   database.close()
   return filename
@@ -50,6 +63,8 @@ test("exports every user table and row as lossless JSON arrays", () => {
         id: "order-1",
         symbol: "DOGEUSDT",
         quantity: "12.500",
+        safe_integer: 9007199254740991,
+        unsafe_integer: "9007199254740992",
         large_integer: "9223372036854775807",
         payload: {
           encoding: "base64",
@@ -70,6 +85,58 @@ test("exports every user table and row as lossless JSON arrays", () => {
         orders: 1,
       },
       "The export summary must report the row count for each table.",
+    )
+  } finally {
+    rmSync(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+
+test("preserves a __proto__ table name in the returned table counts", () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "harvester-json-export-"))
+  try {
+    const databaseFilename = createSpecialIdentifierDatabase(directory)
+    const outputFilename = path.join(directory, "database-dump.json")
+    const result = exportDatabase({
+      databaseFilename,
+      outputFilename,
+    })
+    assert.equal(
+      Object.hasOwn(result.tableCounts, "__proto__"),
+      true,
+      "The table-count summary must retain __proto__ as an own table-name property.",
+    )
+    assert.equal(
+      Reflect.get(result.tableCounts, "__proto__"),
+      1,
+      "The table-count summary must report the row count for the __proto__ table.",
+    )
+  } finally {
+    rmSync(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
+test("preserves a __proto__ column name in exported rows", () => {
+  const directory = mkdtempSync(path.join(os.tmpdir(), "harvester-json-export-"))
+  try {
+    const databaseFilename = createSpecialIdentifierDatabase(directory)
+    const outputFilename = path.join(directory, "database-dump.json")
+    exportDatabase({
+      databaseFilename,
+      outputFilename,
+    })
+    const dump = JSON.parse(readFileSync(outputFilename, "utf8"))
+    const specialTableRows = Reflect.get(dump.database, "__proto__")
+    assert.equal(
+      Reflect.get(specialTableRows[0], "__proto__"),
+      "preserved",
+      "The exported row must preserve __proto__ as a data column rather than a prototype setter.",
     )
   } finally {
     rmSync(directory, {
