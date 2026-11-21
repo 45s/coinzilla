@@ -66,6 +66,7 @@ describe('MarketScreenerComponent', () => {
     expect(renderedText).toContain('Movement values are shown only when returned by Bitunix');
     const movementWindow = fixture.nativeElement.querySelector('select[aria-label="Movement window"]') as HTMLSelectElement;
     const movementDirection = fixture.nativeElement.querySelector('select[aria-label="Movement direction"]') as HTMLSelectElement;
+    expect(movementWindow.value).toBe('change24h');
     expect(movementWindow.disabled).toBe(true);
     expect(movementDirection.disabled).toBe(true);
     expect(Array.from(movementWindow.options)).toHaveLength(4);
