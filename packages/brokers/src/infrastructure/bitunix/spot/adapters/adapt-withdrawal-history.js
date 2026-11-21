@@ -40,6 +40,22 @@ function readOptionalString({ record, field }) {
   })
 }
 
+function readOptionalMemo({ record }) {
+  if (!Object.hasOwn(record, "memo")) {
+    return undefined
+  }
+  if (record.memo === null) {
+    return null
+  }
+  if (typeof record.memo === "string" && !record.memo.trim()) {
+    return null
+  }
+  return requireNonEmptyString({
+    value: record.memo,
+    field: "memo",
+  })
+}
+
 function readOptionalIdentifier({ record, field }) {
   if (!Object.hasOwn(record, field)) {
     return undefined
@@ -143,10 +159,7 @@ function readWithdrawalAccountFields({ record }) {
     record,
     field: "fee",
   })
-  const memo = readOptionalString({
-    record,
-    field: "memo",
-  })
+  const memo = readOptionalMemo({ record })
   return {
     ...(network === undefined ? {} : { network }),
     ...(transactionHash === undefined ? {} : { transactionHash }),

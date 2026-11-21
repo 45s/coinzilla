@@ -95,6 +95,28 @@ test("Bitunix Spot broker retrieves one filtered withdrawal-history page", async
   assert.ok(Object.isFrozen(result.data[0]), "each returned withdrawal record must be immutable")
 })
 
+test("Bitunix Spot broker treats an empty optional withdrawal memo as absent", async () => {
+  const { broker } = createBroker({
+    response: [createWithdrawalRecord({ memo: "" })],
+  })
+
+  const result = await broker.getWithdrawalHistory()
+
+  assert.equal(result.ok, true, "an empty optional memo must not invalidate an otherwise valid withdrawal record")
+  assert.equal(result.data[0].memo, null, "an empty optional memo must normalize to null")
+})
+
+test("Bitunix Spot broker treats a whitespace-only optional withdrawal memo as absent", async () => {
+  const { broker } = createBroker({
+    response: [createWithdrawalRecord({ memo: "   " })],
+  })
+
+  const result = await broker.getWithdrawalHistory()
+
+  assert.equal(result.ok, true, "a blank optional memo must not invalidate an otherwise valid withdrawal record")
+  assert.equal(result.data[0].memo, null, "a blank optional memo must normalize to null")
+})
+
 test("Bitunix Spot broker supports the schema's object response and preserves internal-transfer recipient data", async () => {
   const transfer = createWithdrawalRecord({
     id: 681979174,
