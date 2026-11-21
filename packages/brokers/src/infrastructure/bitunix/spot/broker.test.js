@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { BitunixSpotBroker } from "./broker.js"
+import { BitunixRestClient } from "./api/rest-client.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 
 function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcilerFactory } = {}) {
@@ -2484,4 +2485,88 @@ test("Bitunix Spot placement treats a mismatched acknowledgement as unknown and 
   assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
   assert.match(result.errors[0].message, /volume does not match/i)
   assert.equal(calls.length, 1, "an uncorrelated placement acknowledgement must not trigger a detail lookup")
+})
+
+
+test("Bitunix Spot createOrder completes signed REST placement and order-detail reconciliation offline", async () => {
+  const requests = []
+  const responses = [
+    {
+      code: "0",
+      msg: "success",
+      data: {
+        orderId: "12345678901234567890",
+        symbol: "BTCUSDT",
+        side: 2,
+        type: 1,
+        volume: "1.00",
+        price: "100.00",
+        placeStatus: "1",
+      },
+    },
+    {
+      code: "0",
+      msg: "success",
+      data: {
+        orderId: "12345678901234567890",
+        symbol: "BTCUSDT",
+        side: "2",
+        type: "1",
+        status: "1",
+        volume: "1.00",
+        dealVolume: "0",
+        price: "100.00",
+        ctime: "2026-11-21T12:00:00Z",
+        utime: "2026-11-21T12:00:00Z",
+      },
+    },
+  ]
+  const broker = new BitunixSpotBroker({
+    apiKey: "test-api-key",
+    apiSecret: "test-api-secret",
+    tradingMode: "live",
+    allowLiveOrderMutations: true,
+    dependencies: {
+      restClientFactory: (config) => new BitunixRestClient({
+        ...config,
+        now: () => 1795262400000,
+        nonceFactory: () => `test-nonce-${requests.length}`,
+        fetchFn: async (url, options) => {
+          requests.push({
+            url: new URL(url),
+            options,
+          })
+          const payload = responses.shift()
+          return new Response(JSON.stringify(payload), {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          })
+        },
+      }),
+    },
+  })
+
+  const result = await broker.createOrder({
+    symbol: "btcusdt",
+    side: "BUY",
+    type: "LIMIT",
+    quantity: "1.00",
+    price: "100.00",
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.mutationOutcome, "CONFIRMED")
+  assert.equal(result.data.id, "12345678901234567890")
+  assert.equal(result.data.status, "OPEN")
+  assert.equal(requests.length, 2, "one placement and one order-detail read must complete without retries")
+  assert.equal(requests[0].url.pathname, "/api/spot/v1/order/place_order")
+  assert.equal(requests[0].options.method, "POST")
+  assert.equal(requests[0].options.headers["api-key"], "test-api-key")
+  assert.equal(requests[0].options.headers.sign.length, 64)
+  assert.equal(requests[0].options.body, '{"symbol":"BTCUSDT","side":2,"type":1,"volume":"1.00","price":"100.00"}')
+  assert.equal(requests[1].url.pathname, "/api/spot/v1/order/detail")
+  assert.equal(requests[1].url.searchParams.get("orderId"), "12345678901234567890")
+  assert.equal(requests[1].options.method, "GET")
 })
