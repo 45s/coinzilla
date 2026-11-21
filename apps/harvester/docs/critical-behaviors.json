@@ -205,7 +205,9 @@
       "sourceModules": [
         "src/domain/portfolio/portfolio.js",
         "src/domain/strategies/conservative/recovery-ledger.js",
-        "src/domain/portfolio/position-accounting.js"
+        "src/domain/portfolio/position-accounting.js",
+        "src/domain/portfolio/position.js",
+        "src/domain/strategies/strategy-ids.js"
       ],
       "tests": [
         {
@@ -217,11 +219,22 @@
           "path": "src/domain/strategies/conservative/recovery-ledger.test.js",
           "name": "rejects a reused Fill ID when recovery execution facts differ",
           "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/strategy-id-normalization.test.js",
+          "name": "Position normalizes its strategy owner and derived identity",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/strategy-id-normalization.test.js",
+          "name": "rejects missing, blank, and non-string strategy IDs",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
       "invariants": [
         "Portfolio and RecoveryLedger consume the same canonical fill exactly once and preserve consistent quote basis/proceeds.",
+        "Strategy IDs are normalized to non-empty trimmed strings for Position ownership and derived identity; normalization does not restrict IDs to the current strategy registry.",
         "Reset cycle basis only after verified profitable SELL completion and retained-inventory allocation."
       ]
     },
