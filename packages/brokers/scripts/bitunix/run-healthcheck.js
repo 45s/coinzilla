@@ -52,13 +52,26 @@ async function runBitunixHealthcheck({ args = process.argv.slice(2) } = {}) {
       stdout: process.stdout,
     })
     loadLocalEnvironment()
-    const result = await runBitunixOperatorOrderCommand({
-      env: process.env,
+    process.exitCode = await runBitunixHealthcheckDiagnostics({
+      mode,
       brokersRoot,
+      repositoryRoot,
+      env: process.env,
+      runOperatorOrder: async ({ env }) => {
+        try {
+          return await runBitunixOperatorOrderCommand({
+            env,
+            brokersRoot,
+          })
+        } catch (error) {
+          reportBitunixOperatorFailure({
+            error,
+            env,
+          })
+          throw error
+        }
+      },
     })
-    if (!result.declined && (result.ok !== true || result.mutationOutcome !== "CONFIRMED")) {
-      process.exitCode = 1
-    }
     return
   }
   loadLocalEnvironment({ allowMissing: mode === "local" })
