@@ -191,6 +191,7 @@ function createEnabledLifecycle(options = {}) {
       ...options,
       getAdapter,
       setAdapter,
+      setOperator,
     }),
     stop: createAdapterStopHandler({
       getAdapter,
