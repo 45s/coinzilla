@@ -128,3 +128,10 @@ test("requires an explicit limitation when runtime restoration is intentionally 
     "An intentionally disabled critical capability must state its safety limitation rather than imply runtime support.",
   )
 })
+
+test("does not treat a changed colocated test file as an unowned production module", () => {
+  const result = validate({ changedFiles: ["src/domain/orders/order-registry.test.js"] })
+
+  assert.deepEqual(result.errors, [], "Changing a mapped regression test must not be mistaken for an unowned production module.")
+  assert.deepEqual(result.affectedBehaviorIds, [], "A test-only file change must not be reported as a production behavior change.")
+})
