@@ -3,6 +3,8 @@ import { dirname, resolve } from "node:path"
 import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/rest-client.js"
 import { runBitunixDiagnostics } from "./diagnostic-runner.js"
 import { publishBitunixDiagnostics } from "./health-publisher.js"
+import { evaluateHealthCheck } from "../helpers/health-report.js"
+import { appendOperatorAttemptResult } from "../helpers/operator-attempt-report.js"
 
 function createLocalReportPath({ brokersRoot, now }) {
   const timestamp = new Date(now()).toISOString().replaceAll(/[:.]/g, "-")
@@ -61,10 +63,12 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
 
 function printPublishedResult({ result, stdout }) {
   const { passed, failed, skipped, total } = result.report.summary
+  const operatorAttempt = result.report.results.find((entry) => entry.operation === "operator order attempt")
   stdout.write([
     "Bitunix Spot health check completed.",
     `Checks: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
     `Overall: ${result.exitCode === 0 ? "HEALTHY" : "FAILED"}`,
+    ...(operatorAttempt ? [`Operator order attempt: ${operatorAttempt.status.toUpperCase()}`] : []),
     ...(result.healthCheck.missingRequiredOperations.length > 0
       ? [`Required checks not passed: ${result.healthCheck.missingRequiredOperations.join(", ")}`]
       : []),
@@ -78,15 +82,62 @@ function printPublishedResult({ result, stdout }) {
   ].join("\n"))
 }
 
-async function runPublishedHealthCheck({ repositoryRoot, env, stdout }) {
-  stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n")
-  const result = await publishBitunixDiagnostics({
+async function runPublishedHealthCheck({
+  repositoryRoot,
+  env,
+  stdout,
+  runDiagnostics,
+  publishDiagnostics,
+  runOperatorOrder,
+}) {
+  stdout.write(runOperatorOrder
+    ? "WARNING: this mode runs LIVE read-only diagnostics, then may submit one fixed LIVE HYPEUSDT order after the health check and operator preflight pass.\n"
+    : "WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n")
+  const result = await publishDiagnostics({
     repositoryRoot,
-    runDiagnostics: ({ env: diagnosticEnv, onProgress }) => runBitunixDiagnostics({
-      env: diagnosticEnv,
-      onProgress,
-      brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
-    }),
+    runDiagnostics: async ({ env: diagnosticEnv, onProgress }) => {
+      const report = await runDiagnostics({
+        env: diagnosticEnv,
+        onProgress,
+        brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
+      })
+      if (!runOperatorOrder) {
+        return report
+      }
+      if (!evaluateHealthCheck({ report }).healthy) {
+        return appendOperatorAttemptResult({
+          report,
+          operatorResult: {
+            ok: false,
+            mutationOutcome: "NOT_SENT",
+            skipped: true,
+            skipCode: "HEALTHCHECK_NOT_HEALTHY",
+          },
+          durationMs: 0,
+          secrets: [diagnosticEnv.BITUNIX_API_KEY, diagnosticEnv.BITUNIX_API_SECRET].filter(Boolean),
+        })
+      }
+      onProgress?.({ message: "      Read-only health checks passed; starting the guarded HYPEUSDT operator attempt" })
+      const startedAt = Date.now()
+      let operatorResult
+      try {
+        operatorResult = await runOperatorOrder({
+          env: diagnosticEnv,
+        })
+      } catch (error) {
+        operatorResult = {
+          ok: false,
+          mutationOutcome: "OUTCOME_UNKNOWN",
+          errors: [error],
+        }
+      }
+      return appendOperatorAttemptResult({
+        report,
+        operatorResult,
+        durationMs: Date.now() - startedAt,
+        secrets: [diagnosticEnv.BITUNIX_API_KEY, diagnosticEnv.BITUNIX_API_SECRET].filter(Boolean),
+      })
+    },
     env,
     onProgress: ({ message }) => stdout.write(`${message}\n`),
   })
@@ -109,6 +160,9 @@ export async function runBitunixHealthcheckDiagnostics({
   repositoryRoot,
   env,
   stdout = process.stdout,
+  runDiagnostics = runBitunixDiagnostics,
+  publishDiagnostics = publishBitunixDiagnostics,
+  runOperatorOrder,
 } = {}) {
   if (mode === "local") {
     return runLocalDiagnostics({
@@ -117,12 +171,18 @@ export async function runBitunixHealthcheckDiagnostics({
       stdout,
     })
   }
-  if (mode === "publish") {
+  if (mode === "publish" || mode === "place-order") {
+    if (mode === "place-order" && typeof runOperatorOrder !== "function") {
+      throw new TypeError("The Bitunix place-order mode requires an operator order runner")
+    }
     return runPublishedHealthCheck({
       repositoryRoot,
       env,
       stdout,
+      runDiagnostics,
+      publishDiagnostics,
+      runOperatorOrder,
     })
   }
-  throw new TypeError(`Unsupported read-only Bitunix health-check mode: ${mode}`)
+  throw new TypeError(`Unsupported Bitunix health-check mode: ${mode}`)
 }
