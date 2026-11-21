@@ -312,7 +312,11 @@ test("Bitunix operator attempt stops before mutation when the one-shot marker ca
     }),
   })
 
-  await assert.rejects(run(), /marker already exists/)
+  await assert.rejects(
+    run(),
+    (error) => error.message.includes("marker already exists") &&
+      error.mutationOutcome === "NOT_SENT",
+  )
   assert.equal(events.includes("order.construct"), true)
   assert.equal(events.some((event) => event.operation === "createOrder"), false)
 })
@@ -389,7 +393,11 @@ test("Bitunix operator attempt does not ask for confirmation after a failed pref
     },
   })
 
-  await assert.rejects(run(), /account balances failed/)
+  await assert.rejects(
+    run(),
+    (error) => error.message.includes("account balances failed") &&
+      error.mutationOutcome === "NOT_SENT",
+  )
   assert.equal(events.some((event) => event.operation === "confirm"), false)
   assert.equal(events.includes("order.construct"), false)
 })
