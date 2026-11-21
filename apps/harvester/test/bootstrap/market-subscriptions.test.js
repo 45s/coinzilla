@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "./start-harvester-test-support.js"
 
-const { createBroker, binanceEnv, startHarvesterForTest, waitForTestSignal, Asset, Balance, Quantity, createTwoMarketStartupConfig } = shared
+const { appConfig, createBroker, binanceEnv, startHarvesterForTest, waitForTestSignal, Asset, Balance, Quantity, createTwoMarketStartupConfig } = shared
 const test = (...args) => nodeTest(`[market-subscriptions.test.js] ${args[0]}`, ...args.slice(1))
 
 function configureDelayedTickerPricePort({ broker, calls, firstTicker, resolveFirstTickerRequested }) {
