@@ -185,13 +185,15 @@ export function createWithdrawalHistoryRequest({ input }) {
 }
 
 function normalizeReturnedHistoryPage({ pageNum, requestedPage }) {
-  const pageNumIsNumber = typeof pageNum === "number" && Number.isSafeInteger(pageNum)
-  const pageNumIsString = typeof pageNum === "string" && /^[0-9]+$/.test(pageNum)
+  const normalizedPageNum = typeof pageNum === "string" ? pageNum.trim() : pageNum
+  const pageNumIsNumber = typeof normalizedPageNum === "number" && Number.isSafeInteger(normalizedPageNum)
+  const pageNumIsString = typeof normalizedPageNum === "string" &&
+    /^[0-9]+(?:\\.0+)?$/.test(normalizedPageNum)
   if (!pageNumIsNumber && !pageNumIsString) {
     throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
   }
 
-  const returnedPage = Number(pageNum)
+  const returnedPage = Number(normalizedPageNum)
   if (!Number.isSafeInteger(returnedPage) || returnedPage < 1) {
     throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
   }
