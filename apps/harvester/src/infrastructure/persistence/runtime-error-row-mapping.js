@@ -55,8 +55,12 @@ function mapHistoryFailure(failure) {
     return null
   }
   return {
-    ...(typeof failure.market === "string" ? { market: redactMessage({ value: failure.market, maximumLength: 100 }) } : {}),
-    ...(typeof failure.message === "string" ? { message: redactMessage({ value: failure.message, maximumLength: MAX_DETAIL_STRING_LENGTH }) } : {}),
+    ...(typeof failure.market === "string" ? {
+      market: redactMessage({ value: failure.market, maximumLength: 100 }),
+    } : {}),
+    ...(typeof failure.message === "string" ? {
+      message: redactMessage({ value: failure.message, maximumLength: MAX_DETAIL_STRING_LENGTH }),
+    } : {}),
   }
 }
 
@@ -74,7 +78,10 @@ function mapHistoryDiagnostics(diagnostics) {
     } else if (typeof value === "boolean") {
       safe[field] = value
     } else if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
-      safe[field] = value.slice(0, 100).map((item) => redactMessage({ value: item, maximumLength: 100 }))
+      safe[field] = value.slice(0, 100).map((item) => redactMessage({
+        value: item,
+        maximumLength: 100,
+      }))
     }
   }
   if (Array.isArray(diagnostics.failures)) {
@@ -93,7 +100,7 @@ function getNestedError(data) {
   return data.error && typeof data.error === "object" ? data.error : {}
 }
 
-function mapExplicitErrorContext(data, error) {
+function mapExplicitErrorContext({ data, error } = {}) {
   return Object.fromEntries(ERROR_CONTEXT_FIELDS.map(([column, dataField, errorField, maximumLength]) => [
     column,
     redactMessage({
@@ -127,7 +134,10 @@ export function mapRuntimeErrorEntryToRow({ entry, runtimeSessionId } = {}) {
     runtime_session_id: runtimeSessionId,
     occurred_at: String(entry.timestamp ?? new Date().toISOString()),
     severity: "error",
-    ...mapExplicitErrorContext(data, error),
+    ...mapExplicitErrorContext({
+      data,
+      error,
+    }),
     message,
     details_json: details ? JSON.stringify({ historyDiagnostics: details }) : null,
   })

@@ -201,8 +201,6 @@ async function prepareRelationalResources({
     filename,
     timeout: 5000,
   })
-  let relationalOrderObserver
-  let fillObserver
   let runtimeErrorObserver
   try {
     await relationalDatabase.connect()
@@ -221,7 +219,7 @@ async function prepareRelationalResources({
       environment,
       logger,
     })
-    ({ relationalOrderObserver, fillObserver } = observers)
+    const { relationalOrderObserver, fillObserver } = observers
     runtimeErrorObserver = createRuntimeErrorProjection({
       database: relationalDatabase,
       runtimeSessionId,
@@ -230,7 +228,8 @@ async function prepareRelationalResources({
     })
     return {
       relationalDatabase,
-      ...observers,
+      relationalOrderObserver,
+      fillObserver,
       runtimeErrorObserver,
       ...repositories,
       migrationBackupFilename,
