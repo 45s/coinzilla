@@ -37,7 +37,7 @@ const FILTER_RULES = Object.freeze({
 
 function createInvalidQueryError({ operation, field, cause } = {}) {
   return new TradingHistoryQueryError({
-    message: "Trading-history " + operation + " query contains an invalid " + field,
+    message: `Trading-history ${operation} query contains an invalid ${field}`,
     code: "HARVESTER_TRADING_HISTORY_QUERY_INVALID",
     operation,
     field,
@@ -105,7 +105,7 @@ function normalizePagination({ pagination, operation } = {}) {
     if (field !== "limit" && field !== "offset") {
       throw createInvalidQueryError({
         operation,
-        field: "pagination." + field,
+        field: `pagination.${field}`,
       })
     }
   }
@@ -123,7 +123,10 @@ function normalizePagination({ pagination, operation } = {}) {
       field: "pagination.offset",
     })
   }
-  return Object.freeze({ limit, offset })
+  return Object.freeze({
+    limit,
+    offset,
+  })
 }
 
 function normalizeRecordId({ id, operation } = {}) {
@@ -143,7 +146,7 @@ function executeQuery({ operation, read } = {}) {
     const error = cause instanceof TradingHistoryQueryError
       ? cause
       : new TradingHistoryQueryError({
-          message: "Harvester trading-history " + operation + " query failed",
+          message: `Harvester trading-history ${operation} query failed`,
           code: "HARVESTER_TRADING_HISTORY_QUERY_FAILED",
           operation,
           cause,
@@ -156,8 +159,14 @@ function createListQuery({ repository, method, operation } = {}) {
   return ({ filters, pagination } = {}) => executeQuery({
     operation,
     read: () => repository[method]({
-      filters: normalizeFilters({ filters, operation }),
-      pagination: normalizePagination({ pagination, operation }),
+      filters: normalizeFilters({
+        filters,
+        operation,
+      }),
+      pagination: normalizePagination({
+        pagination,
+        operation,
+      }),
     }),
   })
 }
@@ -166,7 +175,10 @@ function createDetailQuery({ repository, method, operation } = {}) {
   return ({ id } = {}) => executeQuery({
     operation,
     read: () => repository[method]({
-      id: normalizeRecordId({ id, operation }),
+      id: normalizeRecordId({
+        id,
+        operation,
+      }),
     }),
   })
 }
