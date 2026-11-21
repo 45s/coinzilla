@@ -35,6 +35,8 @@ test("normalizes and freezes valid ownership while preserving optional broker id
     cycleId: "cycle-1",
   }, "Valid ownership fields must be normalized and retain client identity.")
   assert.equal(Object.isFrozen(ownership), true, "Normalized ownership must be immutable.")
+  const ownershipWithoutCycleId = createOrderOwnership({ ownership: makeOwnership({ cycleId: undefined }), clientOrderId: "client-2" })
+  assert.equal(Object.hasOwn(ownershipWithoutCycleId, "cycleId"), false, "Undefined optional cycle identity must not be serialized.")
 })
 
 test("rejects invalid ownership shape and required fields", () => {
@@ -60,6 +62,11 @@ test("validates ownership references and rejects duplicate canonical identities"
   const valid = validateOrderOwnerships({ orders, ownerships: [makeOwnership(), makeOwnership({ positionId: "position-2" })] })
   assert.equal(valid.length, 2, "Each registered canonical order must receive one ownership record.")
   assert.equal(Object.isFrozen(valid), true, "Validated ownership collection must be immutable.")
+  const ownershipWithoutBrokerIdentity = validateOrderOwnerships({
+    orders: [{ clientOrderId: "client-no-broker", market: { id: "DOGEUSDT" } }],
+    ownerships: [makeOwnership({ clientOrderId: "client-no-broker" })],
+  })
+  assert.equal(ownershipWithoutBrokerIdentity.length, 1, "Canonical orders without broker identity must retain valid ownership.")
   assert.throws(() => validateOrderOwnerships({ orders, ownerships: "invalid" }), /must be an array/, "Non-array ownership data must be rejected.")
   assert.throws(() => validateOrderOwnerships({ orders, ownerships: [makeOwnership({ clientOrderId: "unknown" })] }), /registered canonical order/, "Ownership must reference a registered order.")
   assert.throws(() => validateOrderOwnerships({ orders, ownerships: [makeOwnership(), makeOwnership()] }), /duplicate ownership clientOrderIds/, "Duplicate client identity must be rejected.")
