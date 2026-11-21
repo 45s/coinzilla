@@ -162,7 +162,7 @@ async function openQueryDatabase({ filename, environment, createDatabase } = {})
       throw new AggregateError([
         error,
         cleanupError,
-      ], "Trading-history API database initialization and cleanup failed.", { cause: error })
+      ], "Trading-history API database initialization and cleanup failed.", { cause: cleanupError })
     }
     throw error
   }
@@ -198,7 +198,7 @@ async function startServerWithDatabase({
       throw new AggregateError([
         error,
         cleanupError,
-      ], "Trading-history API startup and database cleanup failed.", { cause: error })
+      ], "Trading-history API startup and database cleanup failed.", { cause: cleanupError })
     }
     throw error
   }
