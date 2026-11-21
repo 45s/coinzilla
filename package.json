@@ -21,6 +21,7 @@
     "lint:fix": "eslint . --fix",
     "test:sync-main": "node --test scripts/sync-main.test.js",
     "sync:main": "node scripts/sync-main.js",
+    "harvester:persistence:export": "pnpm --filter @coinzilla/harvester persistence:export",
     "check:test-matrix": "node --test scripts/workspace-test-matrix.test.js && node scripts/check-workspace-test-matrix.js",
     "test:module-dependency-analysis": "node --test scripts/module-import-analysis.test.js scripts/module-import-resolution.test.js scripts/module-dependency-graph.test.js scripts/module-dependency-cycles.test.js scripts/repository-module-discovery.test.js scripts/repository-module-graph-report.test.js",
     "report:module-graph": "node scripts/report-module-graph.js",
