@@ -73,7 +73,7 @@ test("creates transport-independent trading-history query operations", async () 
   const queries = module.createTradingHistoryQueries({ repository })
 
   for (const operation of ["getSummary", "listOrders", "getOrder", "listFills", "getFill", "listCommissions"]) {
-    assert.equal(typeof queries[operation], "function", "The application query facade must expose " + operation + ".")
+    assert.equal(typeof queries[operation], "function", `The application query facade must expose ${operation}.`)
   }
   assert.equal(Object.isFrozen(queries), true, "The composed application query facade must be immutable.")
 });
