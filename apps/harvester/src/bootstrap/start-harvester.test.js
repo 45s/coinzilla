@@ -6322,6 +6322,31 @@ test("does not expose or construct a partial Bitunix runtime from credentials", 
 })
 
 
+function assertEachEnabledMarketWasEvaluated({ debugLogs } = {}) {
+      const receivedMarketPrices = new Set(
+        debugLogs
+          .filter(({ message }) => message === "Harvester market price event received")
+          .map(({ symbol, price }) => `${symbol}:${price}`),
+      )
+      assert.deepEqual(
+        receivedMarketPrices,
+        new Set(["BTCUSDT:65000.12", "ETHUSDT:3500.12"]),
+        "Each enabled symbol's price event must reach the runtime through its own subscription.",
+      )
+  
+      const evaluatedMarketPrices = new Set(
+        debugLogs
+          .filter(({ message }) => message === "Market price evaluated")
+          .map(({ symbol, price }) => `${symbol}:${price}`),
+      )
+      assert.deepEqual(
+        evaluatedMarketPrices,
+        new Set(["BTCUSDT:65000.12", "ETHUSDT:3500.12"]),
+        "Each enabled market must be evaluated independently after its own price event.",
+      )
+  
+}
+
 test("delivers market price events independently for every enabled market", async () => {
   const calls = []
   const debugLogs = []
@@ -6377,27 +6402,19 @@ test("delivers market price events independently for every enabled market", asyn
       timestamp: Date.now(),
     })
 
-    const receivedMarketPrices = new Set(
-      debugLogs
-        .filter(({ message }) => message === "Harvester market price event received")
-        .map(({ symbol, price }) => `${symbol}:${price}`),
-    )
-    assert.deepEqual(
-      receivedMarketPrices,
-      new Set(["BTCUSDT:65000.12", "ETHUSDT:3500.12"]),
-      "Each enabled symbol's price event must reach the runtime through its own subscription.",
-    )
+    debugLogs.length = 0
+    await broker.emitPrice("BTCUSDT", {
+      symbol: "BTCUSDT",
+      price: "65000.12",
+      timestamp: Date.now(),
+    })
+    await broker.emitPrice("ETHUSDT", {
+      symbol: "ETHUSDT",
+      price: "3500.12",
+      timestamp: Date.now(),
+    })
 
-    const evaluatedMarketPrices = new Set(
-      debugLogs
-        .filter(({ message }) => message === "Market price evaluated")
-        .map(({ symbol, price }) => `${symbol}:${price}`),
-    )
-    assert.deepEqual(
-      evaluatedMarketPrices,
-      new Set(["BTCUSDT:65000.12", "ETHUSDT:3500.12"]),
-      "Each enabled market must be evaluated independently after its own price event.",
-    )
+    assertEachEnabledMarketWasEvaluated({ debugLogs })
     assert.deepEqual(
       placeOrderCalls,
       [],
