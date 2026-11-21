@@ -133,9 +133,18 @@ function findOwnershipByBrokerId({ ownerships, brokerOrderId }) {
 }
 
 export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId } = {}) {
-  validateOwnershipLookup({ clientOrderId, brokerOrderId })
-  const byClientOrderId = findOwnershipByClientId({ ownerships, clientOrderId })
-  const byBrokerOrderId = findOwnershipByBrokerId({ ownerships, brokerOrderId })
+  validateOwnershipLookup({
+    clientOrderId,
+    brokerOrderId,
+  })
+  const byClientOrderId = findOwnershipByClientId({
+    ownerships,
+    clientOrderId,
+  })
+  const byBrokerOrderId = findOwnershipByBrokerId({
+    ownerships,
+    brokerOrderId,
+  })
   if (clientOrderId !== undefined && brokerOrderId !== undefined &&
       byClientOrderId !== byBrokerOrderId) {
     throw new Error("Order ownership clientOrderId and brokerOrderId identify different registered orders")
