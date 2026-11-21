@@ -2,13 +2,7 @@ import { addDecimal, compareDecimal } from "@coinzilla/utils"
 import { Fill, Market, Quantity } from "@coinzilla/entities"
 import { createFillFingerprint } from "../fills/fill-fingerprint.js"
 import { createPositionId, Position } from "./position.js"
-
-function normalizeStrategyId({ strategyId } = {}) {
-  if (typeof strategyId !== "string" || !strategyId.trim()) {
-    throw new TypeError("Portfolio operation requires a non-empty strategyId")
-  }
-  return strategyId.trim()
-}
+import { normalizeStrategyId } from "../strategies/strategy-ids.js"
 
 function resolvePositionId({ positionId, marketId, strategyId } = {}) {
   if (positionId !== undefined) {
@@ -99,7 +93,12 @@ export class Portfolio {
       throw new TypeError("Portfolio.getPositions symbol must be a non-empty string")
     }
 
-    const owner = strategyId === undefined ? undefined : normalizeStrategyId({ strategyId })
+    const owner = strategyId === undefined
+      ? undefined
+      : normalizeStrategyId({
+        strategyId,
+        errorMessage: "Portfolio operation requires a non-empty strategyId",
+      }
     if (positionId === undefined && marketId === undefined && symbol === undefined && owner === undefined) {
       throw new TypeError("Portfolio.getPositions requires a Position, market, symbol, or strategy selector")
     }
