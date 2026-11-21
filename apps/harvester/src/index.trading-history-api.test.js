@@ -26,6 +26,21 @@ function createDisabledJournalService() {
   }
 }
 
+function createTradingHistoryTestConfig() {
+  return {
+    strategies: {
+      CG_coinGrabber: {
+        pairs: {
+          DOGEUSDT: {
+            enabled: true,
+            tradingEnvironment: "testnet",
+          },
+        },
+      },
+    },
+  }
+}
+
 function createMainOptions({ database, calls, handlers, startTradingHistoryApi } = {}) {
   return {
     env: {
@@ -37,18 +52,7 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
       NODE_ENV: "test",
       HARVESTER_API_TOKEN: API_TOKEN,
     },
-    loadConfig: async () => ({
-      strategies: {
-        CG_coinGrabber: {
-          pairs: {
-            DOGEUSDT: {
-              enabled: true,
-              tradingEnvironment: "testnet",
-            },
-          },
-        },
-      },
-    }),
+    loadConfig: async () => createTradingHistoryTestConfig(),
     createEventBus: () => new EventBus(),
     createJournalService: createDisabledJournalService,
     acquireProcessLock: async () => ({
