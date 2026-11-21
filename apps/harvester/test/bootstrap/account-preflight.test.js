@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "./start-harvester-test-support.js"
 
-const { appConfig, createBroker, binanceEnv, startHarvesterForTest } = shared
+const { Asset, Balance, Quantity, appConfig, createMarketMetadata, createBroker, binanceEnv, startHarvesterForTest } = shared
 const test = (...args) => nodeTest(`[account-preflight.test.js] ${args[0]}`, ...args.slice(1))
 
 function configureDurableStartupAuditBroker({ broker, calls, counters }) {
@@ -91,6 +91,132 @@ function assertDurableStartupAudit({ fixture, calls }) {
   assert.ok(marketSubscription > lastAuditFlush, "assertDurableStartupAudit: expected marketSubscription > lastAuditFlush to be truthy.")
 }
 
+function createConfiguredAssetSnapshotConfig() {
+  return {
+    ...appConfig,
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        pairs: {
+          ...appConfig.strategies.CG_coinGrabber.pairs,
+          DOGEUSDT: {
+            enabled: false,
+            tradingEnvironment: "both",
+            enableVolatilityProtection: true,
+            investment: 100,
+            orderQuantity: 400,
+            keepQuantity: 1,
+            minProfit: 0.01,
+            priceStepPercent: 0.05,
+            pricePrecision: 5,
+            quantityPrecision: 0,
+            makerPercent: 0,
+            takerPercent: 0.1,
+          },
+          ZROFDUSD: {
+            enabled: false,
+            tradingEnvironment: "both",
+            enableVolatilityProtection: true,
+            investment: 100,
+            orderQuantity: 5,
+            keepQuantity: 0.01,
+            minProfit: 0.01,
+            priceStepPercent: 0.5,
+            pricePrecision: 3,
+            quantityPrecision: 1,
+            makerPercent: 0,
+            takerPercent: 0.1,
+          },
+          SOLFDUSD: {
+            enabled: false,
+            tradingEnvironment: "both",
+            enableVolatilityProtection: true,
+            investment: 100,
+            orderQuantity: 1,
+            keepQuantity: 0.01,
+            minProfit: 0.01,
+            priceStepPercent: 0.05,
+            pricePrecision: 2,
+            quantityPrecision: 3,
+            makerPercent: 0,
+            takerPercent: 0.1,
+          },
+        },
+      },
+    },
+  }
+}
+
+function createConfiguredAssetSnapshotFixture({ broker }) {
+  const configuredMarkets = ["BTCUSDT", "ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]
+  const assetsByCode = new Map()
+  for (const symbol of configuredMarkets) {
+    const { market } = createMarketMetadata(symbol)
+    assetsByCode.set(market.baseAsset.code, market.baseAsset)
+    assetsByCode.set(market.quoteAsset.code, market.quoteAsset)
+  }
+  const unrelatedAsset = new Asset({
+    id: "asset:XRP",
+    code: "XRP",
+  })
+  const sourceBalances = [...assetsByCode.values(), unrelatedAsset].map((asset) => new Balance({
+    free: new Quantity({
+      amount: "10",
+      asset,
+    }),
+    locked: new Quantity({
+      amount: "0",
+      asset,
+    }),
+  }))
+  broker.getAccountSnapshot = async () => ({
+    ok: true,
+    data: {
+      balances: sourceBalances,
+      sourceTime: 1,
+    },
+  })
+  return {
+    config: createConfiguredAssetSnapshotConfig(),
+    expectedAssetCodes: ["BTC", "DOGE", "ETH", "FDUSD", "SOL", "USDT", "ZRO"],
+  }
+}
+
+function assertConfiguredAssetPreflight({ events, runtime, calls, expectedAssetCodes }) {
+  const preflight = events.find((event) =>
+    event.name === "account.snapshot_captured" && event.data.phase === "PREFLIGHT")
+  assert.ok(preflight, "trading-enabled startup must durably capture its configured-asset PREFLIGHT snapshot")
+  assert.deepEqual(
+    preflight.data.balances.map((balance) => balance.asset),
+    expectedAssetCodes,
+    "PREFLIGHT Journal snapshot must include every configured base/quote asset, including disabled pairs, and exclude unrelated XRP",
+  )
+  assert.deepEqual(
+    runtime.getAccountSnapshot().balances.map((balance) => balance.asset.code).sort(),
+    expectedAssetCodes,
+    "the in-memory account snapshot must use the same configured-asset allowlist rather than retaining unrelated wallet assets",
+  )
+  for (const symbol of ["ETHUSDT", "DOGEUSDT", "ZROFDUSD", "SOLFDUSD"]) {
+    assert.ok(calls.includes(`filters:${  symbol}`), "assertConfiguredAssetPreflight: expected calls.includes(`filters:${  symbol}`) to be truthy.")
+    assert.equal(
+      calls.includes(`subscribe:${  symbol}`) || calls.includes(`subscribe:book:${  symbol}`),
+      false,
+      `resolving disabled configured pair ${  symbol  } must not enable market subscriptions or trading`,
+    )
+  }
+}
+
+function assertConfiguredAssetClosing({ events, expectedAssetCodes }) {
+  const closing = events.find((event) =>
+    event.name === "account.snapshot_captured" && event.data.phase === "CLOSING")
+  assert.ok(closing, "shutdown must retain a CLOSING account snapshot")
+  assert.deepEqual(
+    closing.data.balances.map((balance) => balance.asset),
+    expectedAssetCodes,
+    "CLOSING Journal snapshot must preserve the same configured-asset allowlist as PREFLIGHT",
+  )
+}
 
 test("marks trading ready only after the mandatory account preflight audit", async () => {
   const broker = createBroker()
@@ -109,7 +235,34 @@ test("marks trading ready only after the mandatory account preflight audit", asy
     recoveryRequired: false
   })
   assert.equal(result.userDataReady, true, "marks trading ready only after the mandatory account preflight audit: expected result.userDataReady to equal true.")
-  assert.equal(result.placeOrder, undefined, "marks trading ready only after the mandatory  () => ({\n        ok: false,\n        errors: [new Error(\"fsync failed\")]\n      }),\n    },\n    logger: {\n      info() {},\n      error() {},\n      debug() {}\n    },\n  }) to reject or throw with /Unable to durably persist PREFLIGHT account snapshot/ as required by the account preflight gate.")
+  assert.equal(result.placeOrder, undefined, "marks trading ready only after the mandatory account preflight audit: expected result.placeOrder to equal undefined.")
+  assert.equal(result.broker, undefined, "marks trading ready only after the mandatory account preflight audit: expected result.broker to equal undefined.")
+  await result.stop()
+})
+
+test("fails startup before market subscriptions when PREFLIGHT account snapshot cannot be durably flushed", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: () => ({ ok: true }),
+      flush: async () => ({
+        ok: false,
+        errors: [new Error("fsync failed")]
+      }),
+    },
+    logger: {
+      info() {},
+      error() {},
+      debug() {}
+    },
+  }), /Unable to durably persist PREFLIGHT account snapshot/, "fails startup before market subscriptions when PREFLIGHT account snapshot cannot be durably flushed: expected startHarvesterForTest({\n    loadConfig: async () => appConfig,\n    env: {\n      ...binanceEnv,\n      NODE_ENV: \"development\"\n    },\n    brokerAdapterFactory: () => broker,\n    eventPublisher: {\n      publish: () => ({ ok: true }),\n      flush: async () => ({\n        ok: false,\n        errors: [new Error(\"fsync failed\")]\n      }),\n    },\n    logger: {\n      info() {},\n      error() {},\n      debug() {}\n    },\n  }) to reject or throw with /Unable to durably persist PREFLIGHT account snapshot/ as required by the account preflight gate.")
   assert.ok(calls.includes("disconnect"), "fails startup before market subscriptions when PREFLIGHT account snapshot cannot be durably flushed: expected calls.includes(\"disconnect\") to be truthy.")
   assert.equal(calls.some((call) => call.startsWith("subscribe:book:")), false, "fails startup before market subscriptions when PREFLIGHT account snapshot cannot be durably flushed: expected calls.some((call) => call.startsWith(\"subscribe:book:\")) to equal false.")
   assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false, "fails startup before market subscriptions when PREFLIGHT account snapshot cannot be durably flushed: expected calls.some((call) => call.startsWith(\"subscribe:BTCUSDT\")) to equal false.")
@@ -121,7 +274,25 @@ test("fails closed before market subscriptions when the account-wide open-order 
   const events = []
   broker.getOpenOrders = async () => ({
     ok: false,
-    errors: [new {},
+    errors: [new Error("Binance openOrders.status unavailable")],
+  })
+  await assert.rejects(startHarvesterForTest({
+    loadConfig: async () => appConfig,
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development"
+    },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => { events.push(event); return { ok: true } },
+      flush: async () => ({
+        ok: true,
+        durable: true
+      }),
+    },
+    logger: {
+      info() {},
+      error() {},
       debug() {}
     },
   }), /Unable to load authoritative account-wide open orders/, "fails closed before market subscriptions when the account-wide open-order query fails: expected startHarvesterForTest({\n    loadConfig: async () => appConfig,\n    env: {\n      ...binanceEnv,\n      NODE_ENV: \"development\"\n    },\n    brokerAdapterFactory: () => broker,\n    eventPublisher: {\n      publish: (event) => { events.push(event); return { ok: true } },\n      flush: async () => ({\n        ok: true,\n        durable: true\n      }),\n    },\n    logger: {\n      info() {},\n      error() {},\n      debug() {}\n    },\n  }) to reject or throw with /Unable to load authoritative account-wide open orders/ as required by the account preflight gate.")
@@ -283,4 +454,50 @@ test("blocks trading startup when either PREFLIGHT audit event publication fails
     assert.equal(calls.includes("disconnect"), true, "blocks trading startup when either PREFLIGHT audit event publication fails: expected calls.includes(\"disconnect\") to equal true.")
     assert.equal(calls.some((call) => call.startsWith("subscribe:BTCUSDT")), false, "blocks trading startup when either PREFLIGHT audit event publication fails: expected calls.some((call) => call.startsWith(\"subscribe:BTCUSDT\")) to equal false.")
   }
+})
+
+test("account snapshots include every configured pair asset, including disabled pairs, and exclude unrelated wallet assets", async () => {
+  const calls = []
+  const broker = createBroker(calls)
+  const fixture = createConfiguredAssetSnapshotFixture({
+    broker,
+  })
+  const events = []
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => fixture.config,
+    env: {
+      ...binanceEnv,
+      NODE_ENV: "development",
+    },
+    brokerAdapterFactory: () => broker,
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return {
+          ok: true,
+        }
+      },
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+    },
+    logger: {
+      info() {},
+      error() {},
+      debug() {},
+    },
+  })
+
+  assertConfiguredAssetPreflight({
+    events,
+    runtime,
+    calls,
+    expectedAssetCodes: fixture.expectedAssetCodes,
+  })
+  await runtime.stop()
+  assertConfiguredAssetClosing({
+    events,
+    expectedAssetCodes: fixture.expectedAssetCodes,
+  })
 })
