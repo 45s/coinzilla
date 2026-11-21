@@ -159,13 +159,17 @@ test("ignores malformed resource notifications without breaking the EventBus sub
 
 test("rejects browser WebSocket upgrades from untrusted origins", async (t) => {
   const eventBus = new EventBus()
-  const api = await startApi({ t, eventBus })
+  const api = await startApi({
+    t,
+    eventBus,
+  })
   const socket = createConnection({
     host: "127.0.0.1",
     port: api.address.port,
   })
   t.after(() => socket.destroy())
-  const response = new Promise((resolve, reject) => {
+  const response = new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
     socket.once("data", (chunk) => resolve(chunk.toString("utf8")))
     socket.once("error", reject)
   })
