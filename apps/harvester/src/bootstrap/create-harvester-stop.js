@@ -141,7 +141,7 @@ async function executeShutdown({
 
 export function createHarvesterStop(dependencies = {}) {
   let stopPromise
-  return () => {
+  const stop = () => {
     if (!stopPromise) {
       stopPromise = executeShutdown(dependencies).catch((error) => {
         stopPromise = undefined
@@ -150,4 +150,8 @@ export function createHarvesterStop(dependencies = {}) {
     }
     return stopPromise
   }
+  Object.defineProperty(stop, "getOperator", {
+    value: () => dependencies.operatorControlLifecycle?.getOperator?.(),
+  })
+  return stop
 }
