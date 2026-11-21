@@ -24,7 +24,7 @@
     "check:test-matrix": "node --test scripts/workspace-test-matrix.test.js && node scripts/check-workspace-test-matrix.js",
     "test:module-dependency-analysis": "node --test scripts/module-import-analysis.test.js scripts/module-import-resolution.test.js scripts/module-dependency-graph.test.js scripts/module-dependency-cycles.test.js scripts/repository-module-discovery.test.js scripts/repository-module-graph-report.test.js",
     "report:module-graph": "node scripts/report-module-graph.js",
-    "test:workspace-dependency-policy": "node --test scripts/workspace-package-policy.test.js"
+    "test:workspace-dependency-policy": "node --test scripts/workspace-package-policy.test.js scripts/workspace-package-discovery.test.js"
   },
   "keywords": [],
   "author": "",
