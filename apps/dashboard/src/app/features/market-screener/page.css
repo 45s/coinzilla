@@ -562,3 +562,13 @@
   .preset-controls label { width: 100%; }
   .label-create { align-items: stretch; flex-wrap: wrap; }
 }
+
+.custom-label input[type="color"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
