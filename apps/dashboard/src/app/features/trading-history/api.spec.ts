@@ -4,16 +4,10 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  TradingHistoryApi,
-  TradingHistorySession,
-} from './api';
-
-const API_TOKEN = 'a-session-only-token-that-is-long-enough-for-tests';
+import { TradingHistoryApi } from './api';
 
 describe('TradingHistoryApi', () => {
   let api: TradingHistoryApi;
-  let session: TradingHistorySession;
   let http: HttpTestingController;
 
   beforeEach(() => {
@@ -25,17 +19,14 @@ describe('TradingHistoryApi', () => {
     });
 
     api = TestBed.inject(TradingHistoryApi);
-    session = TestBed.inject(TradingHistorySession);
     http = TestBed.inject(HttpTestingController);
-    session.setToken(API_TOKEN);
   });
 
   afterEach(() => {
     http.verify();
-    session.clearToken();
   });
 
-  it('sends authenticated, bounded order filters and pagination to the versioned API', async () => {
+  it('sends bounded order filters and pagination without credentials to the versioned API', async () => {
     const response = {
       items: [],
       pagination: {
@@ -64,7 +55,7 @@ describe('TradingHistoryApi', () => {
       && candidate.params.get('offset') === '50',
     );
     expect(request.request.method).toBe('GET');
-    expect(request.request.headers.get('Authorization')).toBe(`Bearer ${API_TOKEN}`);
+    expect(request.request.headers.has('Authorization')).toBe(false);
     request.flush({
       ok: true,
       data: response,
@@ -82,7 +73,9 @@ describe('TradingHistoryApi', () => {
       executedQuoteQuantity: '8.12500000',
       commissions: [
         {
-          id: 'commission-1',
+          id: 1,
+          fillId: 'fill/with reserved chars',
+          ordinal: 0,
           amount: '0.00000013',
           assetCode: 'BNB',
           quoteValueAmount: null,
@@ -94,7 +87,7 @@ describe('TradingHistoryApi', () => {
     const request = http.expectOne((candidate) =>
       candidate.url.endsWith('/api/v1/trading/fills/fill%2Fwith%20reserved%20chars'),
     );
-    expect(request.request.headers.get('Authorization')).toBe(`Bearer ${API_TOKEN}`);
+    expect(request.request.headers.has('Authorization')).toBe(false);
     request.flush({
       ok: true,
       data: detail,
@@ -103,12 +96,7 @@ describe('TradingHistoryApi', () => {
     await expect(resultPromise).resolves.toEqual(detail);
   });
 
-  it('keeps the bearer token in session storage rather than persistent local storage', () => {
-    expect(sessionStorage.getItem('coinzilla.trading-history.api-token')).toBe(API_TOKEN);
-    expect(localStorage.getItem('coinzilla.trading-history.api-token')).toBeNull();
-  });
-
-  it('surfaces HTTP authentication failures without converting them into successful empty pages', async () => {
+  it('surfaces API failures without converting them into successful empty pages', async () => {
     const resultPromise = firstValueFrom(api.getMetadata());
     const request = http.expectOne((candidate) =>
       candidate.url.endsWith('/api/v1/trading/metadata'),
@@ -116,12 +104,12 @@ describe('TradingHistoryApi', () => {
     request.flush({
       ok: false,
       error: {
-        code: 'HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED',
-        message: 'Authentication required.',
+        code: 'HARVESTER_TRADING_HISTORY_API_REQUEST_FAILED',
+        message: 'Trading-history API request failed.',
       },
     }, {
-      status: 401,
-      statusText: 'Unauthorized',
+      status: 500,
+      statusText: 'Server Error',
     });
 
     await expect(resultPromise).rejects.toBeInstanceOf(HttpErrorResponse);

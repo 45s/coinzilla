@@ -123,6 +123,7 @@ function mapCommissionRow(row) {
   return Object.freeze({
     id: row.id,
     fillId: row.fill_id,
+    ordinal: row.ordinal,
     amount: row.amount,
     assetId: row.asset_id,
     assetCode: row.asset_code,
@@ -139,6 +140,7 @@ function mapCommissionRow(row) {
     exchangeOrderId: row.exchange_order_id,
     strategyId: row.strategy_id,
     exchangeExecutedAt: row.exchange_executed_at,
+    localObservedAt: row.local_observed_at,
   })
 }
 
@@ -250,7 +252,7 @@ function listFills({ database, filters, pagination } = {}) {
 
 function listFillCommissions({ database, fillId } = {}) {
   const rows = database.prepare(
-    `SELECT id, fill_id, amount, asset_id, asset_code, quote_value_amount,
+    `SELECT id, fill_id, ordinal, amount, asset_id, asset_code, quote_value_amount,
       quote_value_asset_id, quote_value_asset_code
     FROM fill_commissions
     WHERE fill_id = ?
@@ -258,6 +260,8 @@ function listFillCommissions({ database, fillId } = {}) {
   ).all(fillId)
   return rows.map((row) => Object.freeze({
     id: row.id,
+    fillId: row.fill_id,
+    ordinal: row.ordinal,
     amount: row.amount,
     assetId: row.asset_id,
     assetCode: row.asset_code,
@@ -292,7 +296,7 @@ function listCommissions({ database, filters, pagination } = {}) {
     `SELECT COUNT(*) AS total ${from} ${normalizedFilters.where}`,
   ).get(...normalizedFilters.parameters)
   const rows = database.prepare(
-    `SELECT c.id, c.fill_id, c.amount, c.asset_id, c.asset_code,
+    `SELECT c.id, c.fill_id, c.ordinal, c.amount, c.asset_id, c.asset_code,
       c.quote_value_amount, c.quote_value_asset_id, c.quote_value_asset_code,
       f.environment, f.provider_type, f.provider_instance_id, f.account_id,
       f.symbol, f.side, f.exchange_trade_id, f.exchange_order_id, f.strategy_id,

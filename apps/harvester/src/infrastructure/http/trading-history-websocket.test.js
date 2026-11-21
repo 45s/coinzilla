@@ -1,9 +1,9 @@
 import assert from "node:assert/strict"
+import { createConnection } from "node:net"
 import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
 
-const API_TOKEN = "test-token-with-more-than-thirty-two-characters"
 const TRADING_HISTORY_UPDATED = "trading-history.updated"
 
 function createQueries() {
@@ -81,7 +81,6 @@ function waitForMessage(socket) {
 async function startApi({ t, eventBus } = {}) {
   const api = await startTradingHistoryApiServer({
     queries: createQueries(),
-    token: API_TOKEN,
     environment: "testnet",
     host: "127.0.0.1",
     port: 0,
@@ -97,7 +96,7 @@ async function startApi({ t, eventBus } = {}) {
   return api
 }
 
-test("authenticates WebSocket clients with a first message and broadcasts only persisted-change notifications", async (t) => {
+test("accepts local WebSocket clients and broadcasts persisted-change notifications", async (t) => {
   const eventBus = new EventBus()
   const api = await startApi({
     t,
@@ -107,15 +106,6 @@ test("authenticates WebSocket clients with a first message and broadcasts only p
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
-  socket.send(JSON.stringify({
-    type: "authenticate",
-    token: API_TOKEN,
-  }))
-
-  assert.deepEqual(await waitForMessage(socket), {
-    type: "authenticated",
-  }, "A valid token must authenticate the WebSocket without putting the secret in the URL.")
-
   const publication = eventBus.publish({
     name: TRADING_HISTORY_UPDATED,
     source: "harvester.trading-history-persistence",
@@ -128,7 +118,7 @@ test("authenticates WebSocket clients with a first message and broadcasts only p
   assert.deepEqual(await waitForMessage(socket), {
     type: "trading-history.updated",
     resources: ["orders"],
-  }, "Authenticated clients must receive resource-only invalidation hints after persistence.")
+  }, "Connected local clients must receive resource-only invalidation hints after persistence.")
 })
 
 test("ignores malformed resource notifications without breaking the EventBus subscriber", async (t) => {
@@ -144,12 +134,6 @@ test("ignores malformed resource notifications without breaking the EventBus sub
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
-  socket.send(JSON.stringify({
-    type: "authenticate",
-    token: API_TOKEN,
-  }))
-  await waitForMessage(socket)
-
   eventBus.publish({
     name: TRADING_HISTORY_UPDATED,
     source: "test",
@@ -173,24 +157,38 @@ test("ignores malformed resource notifications without breaking the EventBus sub
   })
 })
 
-test("rejects bearer tokens supplied in the WebSocket URL", async (t) => {
+test("rejects browser WebSocket upgrades from untrusted origins", async (t) => {
   const eventBus = new EventBus()
   const api = await startApi({
     t,
     eventBus,
   })
-  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events?token=${API_TOKEN}`)
-  t.after(() => socket.close())
-
-  await new Promise((resolve) => {
-    socket.addEventListener("close", resolve, {
-      once: true,
-    })
+  const socket = createConnection({
+    host: "127.0.0.1",
+    port: api.address.port,
   })
-  assert.equal(socket.readyState, WebSocket.CLOSED, "Bearer tokens in query strings must not be accepted.")
+  t.after(() => socket.destroy())
+  const response = new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
+    socket.once("data", (chunk) => resolve(chunk.toString("utf8")))
+    socket.once("error", reject)
+  })
+  await new Promise((resolve) => socket.once("connect", resolve))
+  socket.write([
+    "GET /api/v1/trading/events HTTP/1.1",
+    `Host: 127.0.0.1:${api.address.port}`,
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+    "Sec-WebSocket-Version: 13",
+    "Origin: https://attacker.example",
+    "",
+    "",
+  ].join("\r\n"))
+  assert.match(await response, /^HTTP\/1\.1 403 Forbidden/)
 })
 
-test("rejects invalid WebSocket credentials and does not send authenticated events", async (t) => {
+test("closes local WebSocket clients before the shared HTTP listener shuts down", async (t) => {
   const eventBus = new EventBus()
   const api = await startApi({
     t,
@@ -200,33 +198,6 @@ test("rejects invalid WebSocket credentials and does not send authenticated even
   t.after(() => socket.close())
 
   await waitForSocketOpen(socket)
-  socket.send(JSON.stringify({
-    type: "authenticate",
-    token: "incorrect-token",
-  }))
-
-  assert.deepEqual(await waitForMessage(socket), {
-    type: "error",
-    code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
-  }, "Invalid credentials must receive a stable authentication failure.")
-})
-
-test("closes authenticated sockets before the shared HTTP listener shuts down", async (t) => {
-  const eventBus = new EventBus()
-  const api = await startApi({
-    t,
-    eventBus,
-  })
-  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
-  t.after(() => socket.close())
-
-  await waitForSocketOpen(socket)
-  socket.send(JSON.stringify({
-    type: "authenticate",
-    token: API_TOKEN,
-  }))
-  await waitForMessage(socket)
-
   const closed = new Promise((resolve) => {
     socket.addEventListener("close", resolve, {
       once: true,
@@ -235,6 +206,6 @@ test("closes authenticated sockets before the shared HTTP listener shuts down", 
   await api.close()
   await closed
 
-  assert.equal(socket.readyState, WebSocket.CLOSED, "API shutdown must close authenticated WebSocket clients.")
+  assert.equal(socket.readyState, WebSocket.CLOSED, "API shutdown must close local WebSocket clients.")
   assert.equal(eventBus.getDiagnostics().closed, false, "The API must not own or close Harvester's EventBus.")
 })
