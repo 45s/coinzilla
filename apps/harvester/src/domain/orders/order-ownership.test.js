@@ -56,7 +56,7 @@ test("rejects invalid and conflicting canonical order identities", () => {
 })
 
 test("validates ownership references and rejects duplicate canonical identities", () => {
-  const orders = [makeOrder(), makeOrder({ clientOrderId: "client-2", brokerOrderId: "broker-2" })]
+  const orders = [makeOrder(), makeOrder({ clientOrderId: "client-2", brokerOrderId: "broker-1" })]
   const valid = validateOrderOwnerships({ orders, ownerships: [makeOwnership(), makeOwnership({ positionId: "position-2" })] })
   assert.equal(valid.length, 2, "Each registered canonical order must receive one ownership record.")
   assert.equal(Object.isFrozen(valid), true, "Validated ownership collection must be immutable.")
