@@ -51,7 +51,7 @@ export class OperatorComponent {
       const [status, markets, positions, orders, balances] = await Promise.all([
         firstValueFrom(this.api.getStatus()),
         firstValueFrom(this.api.getMarkets()),
-        firstValueFrom(this.api.getPositions()),
+        firstValueFrom(this.api.getPortfolio()),
         firstValueFrom(this.api.getOrders()),
         firstValueFrom(this.api.getBalances()),
       ]);
