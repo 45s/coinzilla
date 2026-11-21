@@ -2,23 +2,27 @@ import { DatabaseSync } from "node:sqlite"
 import { existsSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
-import { resolveTradingSessionDatabaseFilename } from "../src/infrastructure/persistence/resolve-harvester-database-filename.js"
+import { resolveHarvesterDatabaseFilename } from "../src/infrastructure/persistence/resolve-harvester-database-filename.js"
 
 function escapeIdentifier(identifier) {
   return `"${identifier.replaceAll('"', '""')}"`
 }
 
-function serializeDatabaseValue(_key, value) {
-  if (typeof value === "bigint") {
-    return value.toString()
-  }
-  if (value instanceof Uint8Array) {
-    return {
-      encoding: "base64",
-      data: Buffer.from(value).toString("base64"),
+function serializeDatabaseRow({ row } = {}) {
+  const serializedRow = {}
+  for (const [columnName, columnValue] of Object.entries(row)) {
+    if (typeof columnValue === "bigint") {
+      serializedRow[columnName] = columnValue.toString()
+    } else if (columnValue instanceof Uint8Array) {
+      serializedRow[columnName] = {
+        encoding: "base64",
+        data: Buffer.from(columnValue).toString("base64"),
+      }
+    } else {
+      serializedRow[columnName] = columnValue
     }
   }
-  return value
+  return serializedRow
 }
 
 export function exportDatabase({ databaseFilename, outputFilename } = {}) {
@@ -50,14 +54,25 @@ export function exportDatabase({ databaseFilename, outputFilename } = {}) {
       const statement = database.prepare(`SELECT * FROM ${escapeIdentifier(name)}`)
       statement.setReadBigInts(true)
       const rows = statement.all()
-      exportedTables[name] = rows
-      tableCounts[name] = rows.length
+      const serializedRows = []
+      for (const row of rows) {
+        serializedRows.push(serializeDatabaseRow({
+          row,
+        }))
+      }
+      exportedTables[name] = serializedRows
+      tableCounts[name] = serializedRows.length
     }
 
     writeFileSync(
       outputFilename,
-      JSON.stringify({ database: exportedTables }, serializeDatabaseValue, 2) + "\n",
-      { encoding: "utf8", mode: 0o600 },
+      `${JSON.stringify({
+        database: exportedTables,
+      }, null, 2)}\n`,
+      {
+        encoding: "utf8",
+        mode: 0o600,
+      },
     )
 
     return {
