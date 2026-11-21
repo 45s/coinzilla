@@ -1,4 +1,10 @@
-# Harvester Roadmap
+## Critical trading reliability initiative (#1639)
+
+- **In progress — first executable gate in [PR #1642](https://github.com/45s/coinzilla/pull/1642):** add a machine-readable critical behavior inventory mapping production owners to named normal/failure regressions and required replay evidence. The required Unit Tests workflow validates that mappings and rejects unmapped changes under declared critical source boundaries before running the full Harvester package suite.
+- **Inventory scope:** submission/unknown outcomes, order identity/transitions, REST/stream reconciliation, fill identity/deduplication, exact commission accounting, Portfolio/RecoveryLedger alignment, BUY/SELL safety gates, recovery SELL economics, cancellation uncertainty, startup account reconciliation, user-data recovery, persistence/restart safety, and shutdown/process ownership.
+- **Restart boundary:** the durable-fact store and crash matrix are offline evidence only. Default runtime restoration and Journal replay remain disabled pending the independent #654 acceptance gates. This initiative does not authorize enabling them.
+- **Coverage baseline:** the existing package-wide gate remains 80% lines/branches/functions. Per-module figures were measured on PR #1636 head `38e26aca14e8c146ea974dbf42fe133524ad83c6` (90.36% lines / 83.26% branches / 96.00% functions aggregate), not directly on current `develop`; do not set critical-module thresholds from that snapshot. Measure the exact current production source baseline before selecting thresholds.
+- **Next:** prove the validator's negative cases in required CI, capture exact current-source per-module coverage, then close meaningful coverage gaps and audit each lifecycle/recovery failure path with deterministic end-to-end tests. No TESTNET mutation or LIVE operation is authorized.
 
 ## Read-only SQLite JSON export (#1629)
 
