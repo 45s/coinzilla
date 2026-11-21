@@ -131,6 +131,23 @@ test("authenticates WebSocket clients with a first message and broadcasts only p
   }, "Authenticated clients must receive resource-only invalidation hints after persistence.")
 })
 
+test("rejects bearer tokens supplied in the WebSocket URL", async (t) => {
+  const eventBus = new EventBus()
+  const api = await startApi({
+    t,
+    eventBus,
+  })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events?token=${API_TOKEN}`)
+  t.after(() => socket.close())
+
+  await new Promise((resolve) => {
+    socket.addEventListener("error", resolve, {
+      once: true,
+    })
+  })
+  assert.equal(socket.readyState, WebSocket.CLOSED, "Bearer tokens in query strings must not be accepted.")
+})
+
 test("rejects invalid WebSocket credentials and does not send authenticated events", async (t) => {
   const eventBus = new EventBus()
   const api = await startApi({
