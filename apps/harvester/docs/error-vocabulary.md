@@ -72,3 +72,15 @@ The Telegram Command Center uses the feature-owned `OperatorQueryError` for fail
 | `HARVESTER_OPERATOR_MARKET_SNAPSHOT_READ_FAILED` | `/markets` or `/status` cannot collect engine market state | The serialized engine snapshot failed or returned an unclassified failure | Inspect the preserved cause and engine diagnostics; retry the read-only command after the engine is healthy. |
 | `HARVESTER_OPERATOR_MARKET_SNAPSHOT_INVALID` | Market status is unavailable for a malformed engine snapshot | A market DTO is missing its symbol, enabled flag, blocker list, or market collection | Inspect the affected symbol and engine snapshot producer; do not return partial market state. |
 | `HARVESTER_OPERATOR_QUERY_FAILED` | An unexpected operator read query failure is returned | An unclassified exception crossed the application query boundary | Inspect the preserved cause and operation context in Harvester logs. No trading action is performed. |
+
+## Exchange history synchronization
+
+**Stable operation error code:** `HARVESTER_ACCOUNT_HISTORY_SYNC_FAILED`
+
+| Symptom | Likely cause | Safe recovery |
+| --- | --- | --- |
+| Startup logs an incomplete exchange-history synchronization result | One or more configured markets failed while reading, validating, persisting, or advancing an order/trade-history page | Inspect the correlated `runtime_errors` row and `details_json.historyDiagnostics.failures`. Use `market`, `historyType`, `failureStage`, `pageCursor`, `recordIndex`, exchange IDs, and last-persisted IDs to locate the failure. The failed page cursor is not advanced and partial writes are replayable on the next normal startup. Do not manually advance a cursor, fabricate a fill, or change an order to hide a history gap. |
+| An order-history failure is recorded for one market | The market's order page could not be completed | Its fill scan is deliberately skipped because safe fill-to-order identity may depend on the order scan. Other configured markets continue. Resolve the underlying failure before relying on that market's history. |
+| A trade-history failure is recorded for one market | The trade page could not be completed after order history succeeded | The completed order history remains persisted; the trade cursor remains unchanged. Other configured markets continue. The trade page is replayed on the next normal startup. |
+
+The operation error aggregates the original failures as causes. The relational `runtime_errors` projection stores only bounded, allowlisted and redacted context; inspect the session DEBUG/TRACE JSONL logs for complete stack/cause evidence. This diagnostic failure does not itself change trading readiness, order ownership, or exchange state. History coverage remains incomplete until the failed page is successfully synchronized.
