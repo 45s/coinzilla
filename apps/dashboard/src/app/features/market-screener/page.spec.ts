@@ -218,7 +218,6 @@ describe('MarketScreenerComponent', () => {
     labelName.value = 'JOHN';
     labelName.dispatchEvent(new Event('input'));
     fixture.detectChanges();
-    (fixture.nativeElement.querySelector('button') as HTMLButtonElement);
     const addLabel = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Add label')) as HTMLButtonElement;
     addLabel.click();
