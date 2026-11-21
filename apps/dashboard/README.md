@@ -4,7 +4,7 @@ Angular + TypeScript client for the Coinzilla operational dashboard.
 
 ## Current state
 
-The Overview screen remains an explicitly labeled fictional preview. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the local `/api/v1` HTTP contract. They never use demo fixtures as a fallback. The selected TESTNET/LIVE environment is taken from API metadata.
+The Overview screen remains an explicitly labeled fictional preview. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the unauthenticated loopback-only `/api/v1` HTTP contract. They never use demo fixtures as a fallback. The selected TESTNET/LIVE environment is taken from API metadata.
 
 ## Requirements
 
