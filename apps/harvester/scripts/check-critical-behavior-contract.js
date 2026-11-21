@@ -27,7 +27,10 @@ function readChangedFiles() {
   const output = execFileSync(
     "git",
     ["diff", "--name-only", "-z", `${baseSha}...${headSha}`],
-    { cwd: APP_ROOT, encoding: "utf8" },
+    {
+      cwd: APP_ROOT,
+      encoding: "utf8",
+    },
   )
   return output.split("\0")
     .filter(Boolean)
@@ -67,7 +70,10 @@ function validateSourceModules({ behavior, errors, readFile, sourceOwners }) {
       errors.push(`Critical behavior ${behavior.id} has an invalid production source path: ${sourcePath}.`)
       continue
     }
-    if (!readContractFile({ readFile, relativePath: sourcePath })) {
+    if (!readContractFile({
+      readFile,
+      relativePath: sourcePath,
+    })) {
       errors.push(`Critical behavior ${behavior.id} references missing production source: ${sourcePath}.`)
     }
     const owners = sourceOwners.get(sourcePath) ?? new Set()
@@ -96,7 +102,10 @@ function validateTestMappings({ behavior, errors, readFile }) {
       continue
     }
     testKinds.add(testCase.kind)
-    const testSource = readContractFile({ readFile, relativePath: testCase.path })
+    const testSource = readContractFile({
+      readFile,
+      relativePath: testCase.path,
+    })
     if (typeof testSource !== "string") {
       errors.push(`Critical behavior ${behavior.id} references missing test file: ${testCase.path}.`)
     } else if (!testSource.includes(testCase.name)) {
@@ -123,9 +132,21 @@ function validateBehavior({ behavior, errors, readFile, sourceOwners }) {
   if (typeof behavior.title !== "string" || behavior.title.length === 0) {
     errors.push(`Critical behavior ${behavior.id} must have a descriptive title.`)
   }
-  validateRuntimeStatus({ behavior, errors })
-  validateSourceModules({ behavior, errors, readFile, sourceOwners })
-  validateTestMappings({ behavior, errors, readFile })
+  validateRuntimeStatus({
+    behavior,
+    errors,
+  })
+  validateSourceModules({
+    behavior,
+    errors,
+    readFile,
+    sourceOwners,
+  })
+  validateTestMappings({
+    behavior,
+    errors,
+    readFile,
+  })
 }
 
 function validateChangedFiles({ criticalPathPrefixes, changedFiles, sourceOwners, errors }) {
@@ -209,7 +230,12 @@ export function validateCriticalBehaviorContract({
     if (behavior?.id) {
       behaviorIds.add(behavior.id)
     }
-    validateBehavior({ behavior, errors, readFile, sourceOwners })
+    validateBehavior({
+      behavior,
+      errors,
+      readFile,
+      sourceOwners,
+    })
   }
 
   return {
