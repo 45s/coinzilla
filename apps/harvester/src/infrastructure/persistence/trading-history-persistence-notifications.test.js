@@ -7,7 +7,7 @@ import { createOrderHistoryEventData } from "../../../test-support/order-history
 
 const HISTORY_UPDATED_EVENT = "trading-history.updated"
 
-function subscribeToHistoryChanges(eventBus, notifications) {
+function subscribeToHistoryChanges({ eventBus, notifications } = {}) {
   const result = eventBus.subscribe({
     name: HISTORY_UPDATED_EVENT,
     handler: (event) => notifications.push(event.data.resources),
@@ -30,7 +30,7 @@ test("publishes an order-history notification only after the order upsert succee
     },
     environment: "testnet",
   })
-  const subscription = subscribeToHistoryChanges(eventBus, notifications)
+  const subscription = subscribeToHistoryChanges({ eventBus, notifications })
   t.after(async () => {
     finishUpsert()
     subscription.unsubscribe()
