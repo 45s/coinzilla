@@ -18,40 +18,53 @@ const coverageReport = [
   "2026-11-21T08:10:25Z ℹ all files                                                  |  90.35 |    83.22 |   96.00 |",
 ].join("\n")
 
+const orderRegistryCoverage = {
+  path: "src/domain/orders/order-registry.js",
+  baseline: {
+    lines: 94.05,
+    branches: 89.84,
+    functions: 100,
+  },
+  minimum: {
+    lines: 90,
+    branches: 85,
+    functions: 95,
+  },
+}
+
 test("parses Node coverage rows into unambiguous source-relative module paths", () => {
   const coverage = parseNodeCoverageReport(coverageReport)
 
   assert.deepEqual(
     coverage.get("src/index.js"),
-    { lines: 84.57, branches: 81.14, functions: 93.75 },
+    {
+      lines: 84.57,
+      branches: 81.14,
+      functions: 93.75,
+    },
     "The root index module must not be confused with nested files named index.js.",
   )
   assert.deepEqual(
     coverage.get("src/domain/orders/order-registry.js"),
-    { lines: 94.05, branches: 89.84, functions: 100 },
+    {
+      lines: 94.05,
+      branches: 89.84,
+      functions: 100,
+    },
     "Nested source directories must be reconstructed from the coverage table.",
   )
   assert.deepEqual(
     coverage.get("src/domain/orders/index.js"),
-    { lines: 100, branches: 100, functions: 100 },
+    {
+      lines: 100,
+      branches: 100,
+      functions: 100,
+    },
     "A nested index module must retain its own full path.",
   )
 })
 
 test("accepts critical modules that meet every measured minimum", () => {
-  const moduleCoverage = [{
-    path: "src/domain/orders/order-registry.js",
-    baseline: {
-      lines: 94.05,
-      branches: 89.84,
-      functions: 100,
-    },
-    minimum: {
-      lines: 90,
-      branches: 85,
-      functions: 95,
-    },
-  }]
   const coverage = new Map([
     [
       "src/domain/orders/order-registry.js",
@@ -63,18 +76,20 @@ test("accepts critical modules that meet every measured minimum", () => {
     ],
   ])
 
-  const result = validateCriticalModuleCoverage({ moduleCoverage, coverage })
+  const result = validateCriticalModuleCoverage({
+    moduleCoverage: [orderRegistryCoverage],
+    coverage,
+  })
 
   assert.deepEqual(result.errors, [], "A module meeting every coverage floor must pass.")
-  assert.deepEqual(result.checkedModules, ["src/domain/orders/order-registry.js"], "The checker must report the exact module checked.")
+  assert.deepEqual(
+    result.checkedModules,
+    ["src/domain/orders/order-registry.js"],
+    "The checker must report the exact module checked.",
+  )
 })
 
 test("rejects a critical module when any one coverage dimension falls below its floor", () => {
-  const moduleCoverage = [{
-    path: "src/domain/orders/order-registry.js",
-    baseline: { lines: 94.05, branches: 89.84, functions: 100 },
-    minimum: { lines: 90, branches: 85, functions: 95 },
-  }]
   const coverage = new Map([
     [
       "src/domain/orders/order-registry.js",
@@ -86,7 +101,10 @@ test("rejects a critical module when any one coverage dimension falls below its 
     ],
   ])
 
-  const result = validateCriticalModuleCoverage({ moduleCoverage, coverage })
+  const result = validateCriticalModuleCoverage({
+    moduleCoverage: [orderRegistryCoverage],
+    coverage,
+  })
 
   assert.ok(
     result.errors.some((error) => error.includes("order-registry.js") && error.includes("branches")),
@@ -95,14 +113,8 @@ test("rejects a critical module when any one coverage dimension falls below its 
 })
 
 test("rejects a critical module missing from the coverage report", () => {
-  const moduleCoverage = [{
-    path: "src/domain/orders/order-registry.js",
-    baseline: { lines: 94.05, branches: 89.84, functions: 100 },
-    minimum: { lines: 90, branches: 85, functions: 95 },
-  }]
-
   const result = validateCriticalModuleCoverage({
-    moduleCoverage,
+    moduleCoverage: [orderRegistryCoverage],
     coverage: new Map(),
   })
 
