@@ -6,8 +6,14 @@ import { Portfolio } from "../portfolio/portfolio.js"
 import { createOrderOwnership } from "../orders/order-ownership.js"
 import { StrategyId, normalizeStrategyId } from "./strategy-ids.js"
 
-const baseAsset = new Asset({ id: "asset:ETH", code: "ETH" })
-const quoteAsset = new Asset({ id: "asset:USDT", code: "USDT" })
+const baseAsset = new Asset({
+  id: "asset:ETH",
+  code: "ETH",
+})
+const quoteAsset = new Asset({
+  id: "asset:USDT",
+  code: "USDT",
+})
 const market = new Market({
   venue: "binance",
   symbol: "ETHUSDT",
@@ -21,9 +27,18 @@ function makeFill() {
     brokerOrderId: "order-1",
     market,
     side: "BUY",
-    price: new Money({ amount: "100", asset: quoteAsset }),
-    quantity: new Quantity({ amount: "1", asset: baseAsset }),
-    quoteQuantity: new Money({ amount: "100", asset: quoteAsset }),
+    price: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
+    quantity: new Quantity({
+      amount: "1",
+      asset: baseAsset,
+    }),
+    quoteQuantity: new Money({
+      amount: "100",
+      asset: quoteAsset,
+    }),
     commissions: [],
     commissionStatus: "COMPLETE",
   })
@@ -53,7 +68,10 @@ test("rejects missing, blank, and non-string strategy IDs", () => {
 })
 
 test("Position normalizes its strategy owner and derived identity", () => {
-  const position = Position.empty({ market, strategyId: " future_strategy " })
+  const position = Position.empty({
+    market,
+    strategyId: " future_strategy ",
+  })
 
   assert.equal(
     position.strategyId,
@@ -74,7 +92,10 @@ test("Portfolio normalizes strategy ownership before Position storage and select
   })
 
   assert.equal(
-    result.portfolio.getPosition({ symbol: "ETHUSDT", strategyId: "future_strategy" }).strategyId,
+    result.portfolio.getPosition({
+      symbol: "ETHUSDT",
+      strategyId: "future_strategy",
+    }).strategyId,
     "future_strategy",
     "Portfolio selectors and stored Position ownership must use the same normalized strategy identity.",
   )
