@@ -183,25 +183,54 @@ function parseCommand({ body } = {}) {
   }
 }
 
-async function handleCommandRequest({ request, response, operator }) {
+function validateCommandOrigin({ request, response } = {}) {
   const { origin } = request.headers
-  if (origin && !LOCAL_ORIGINS.has(origin)) {
-    sendFailure({
-      response,
-      status: 403,
-      code: "HARVESTER_OPERATOR_ORIGIN_FORBIDDEN",
-      message: "Operator commands are only accepted from the local Dashboard.",
-    })
-    return
+  if (!origin || LOCAL_ORIGINS.has(origin)) {
+    return true
   }
+  sendFailure({
+    response,
+    status: 403,
+    code: "HARVESTER_OPERATOR_ORIGIN_FORBIDDEN",
+    message: "Operator commands are only accepted from the local Dashboard.",
+  })
+  return false
+}
+
+function validateCommandContentType({ request, response } = {}) {
   const contentType = request.headers["content-type"]?.split(";")[0].trim()
-  if (contentType !== "application/json") {
-    sendFailure({
-      response,
-      status: 415,
-      code: "HARVESTER_OPERATOR_CONTENT_TYPE_INVALID",
-      message: "Operator commands require an application/json request body.",
-    })
+  if (contentType === "application/json") {
+    return true
+  }
+  sendFailure({
+    response,
+    status: 415,
+    code: "HARVESTER_OPERATOR_CONTENT_TYPE_INVALID",
+    message: "Operator commands require an application/json request body.",
+  })
+  return false
+}
+
+function handleCommandRequestError({ response, error } = {}) {
+  const { status: errorStatus } = error
+  const status = errorStatus ?? 500
+  const code = status === 413
+    ? "HARVESTER_OPERATOR_BODY_TOO_LARGE"
+    : "HARVESTER_OPERATOR_REQUEST_INVALID"
+  const message = status === 400 || status === 413
+    ? error.message
+    : "Operator request failed."
+  sendFailure({
+    response,
+    status,
+    code,
+    message,
+  })
+}
+
+async function handleCommandRequest({ request, response, operator }) {
+  if (!validateCommandOrigin({ request, response }) ||
+      !validateCommandContentType({ request, response })) {
     return
   }
   try {
@@ -223,10 +252,10 @@ async function handleCommandRequest({ request, response, operator }) {
     })
     if (result?.ok !== true) {
       sendJson({
-      response,
-      status: 422,
-      body: normalizeFailure(result),
-    })
+        response,
+        status: 422,
+        body: normalizeFailure(result),
+      })
       return
     }
     sendJson({
@@ -238,20 +267,7 @@ async function handleCommandRequest({ request, response, operator }) {
       },
     })
   } catch (error) {
-    const { status: errorStatus } = error
-    const status = errorStatus ?? 500
-    const code = status === 413
-      ? "HARVESTER_OPERATOR_BODY_TOO_LARGE"
-      : "HARVESTER_OPERATOR_REQUEST_INVALID"
-    const message = status === 400 || status === 413
-      ? error.message
-      : "Operator request failed."
-    sendFailure({
-      response,
-      status,
-      code,
-      message,
-    })
+    handleCommandRequestError({ response, error })
   }
 }
 
