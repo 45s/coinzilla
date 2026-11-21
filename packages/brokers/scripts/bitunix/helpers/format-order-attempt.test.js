@@ -119,6 +119,9 @@ test("unknown one-shot marker outcomes are normalized fail-closed", async () => 
     })
     assert.equal(JSON.parse(await readFile(markerPath, "utf8")).status, "OUTCOME_UNKNOWN")
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
