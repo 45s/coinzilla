@@ -106,7 +106,10 @@ test("publishes fill and commission notifications only after the fill upsert suc
     },
     environment: "testnet",
   })
-  const subscription = subscribeToHistoryChanges(eventBus, notifications)
+  const subscription = subscribeToHistoryChanges({
+    eventBus,
+    notifications,
+  })
   t.after(async () => {
     finishUpsert()
     subscription.unsubscribe()
@@ -145,7 +148,10 @@ test("does not publish fill or commission notifications when the fill upsert fai
     environment: "testnet",
     logger: { error() {} },
   })
-  const subscription = subscribeToHistoryChanges(eventBus, notifications)
+  const subscription = subscribeToHistoryChanges({
+    eventBus,
+    notifications,
+  })
   t.after(async () => {
     subscription.unsubscribe()
     await observer.close()
