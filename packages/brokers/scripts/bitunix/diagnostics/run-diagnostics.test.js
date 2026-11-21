@@ -733,21 +733,35 @@ function createWithdrawalDiagnosticResponse({ invalidSchema = false } = {}) {
 function createMarketDiagnosticResponse({ invalidSchema }) {
   return {
     data: [{
-      id: "1",
+      id: 1,
       base: "BTC",
       quote: "USDT",
-      basePrecision: "8",
-      quotePrecision: "8",
+      basePrecision: 8,
+      quotePrecision: 8,
       minPrice: "0.0001",
       minVolume: "0.0001",
-      ...(invalidSchema ? {} : { isOpen: "1" }),
-      isHot: "0",
-      isRecommend: "0",
-      isShow: "1",
+      ...(invalidSchema ? {} : { isOpen: 1 }),
+      isHot: 0,
+      isRecommend: 0,
+      isShow: 1,
       tradeArea: "Spot",
-      sort: "1",
-      openTime: "2026-01-01T00:00:00Z",
+      sort: 1,
+      openTime: null,
       precisions: ["0.0001"],
+      baseFullNameI18n: "must-not-be-persisted",
+      baseIcon: "must-not-be-persisted",
+      ctime: 1760000000000,
+      fullName: "must-not-be-persisted",
+      maxAmount: "must-not-be-persisted",
+      maxLimitOrderAmount: "must-not-be-persisted",
+      maxMarketOrderAmount: "must-not-be-persisted",
+      maxSellPriceOffset: "must-not-be-persisted",
+      maxSlippage: "must-not-be-persisted",
+      minAmount: "must-not-be-persisted",
+      minBuyPriceOffset: "must-not-be-persisted",
+      premiumFactor: "must-not-be-persisted",
+      quoteFullNameI18n: "must-not-be-persisted",
+      quoteIcon: "must-not-be-persisted",
       futureField: "must-not-be-persisted",
     }],
   }
@@ -874,8 +888,27 @@ function assertBrokerApiSchemaAndPrivacy({ report }) {
   const withdrawalObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/withdraw_transfer/page")
   assert.deepEqual(depositObservation.unexpectedFields, ["futureDepositField"], "unknown deposit fields must be reported without recording their values")
   assert.deepEqual(withdrawalObservation.unexpectedFields, ["futureWithdrawalField"], "unknown withdrawal fields must be reported without recording their values")
-  assert.deepEqual(report.schemaObservations[0].unexpectedFields, ["futureField"], "unknown market fields must remain visible as schema drift")
-  assert.equal(report.schemaObservations[0].schemaValid, true, "unknown market fields alone must not fail a valid response")
+  assert.deepEqual(report.schemaObservations[0].unexpectedFields, [
+    "baseFullNameI18n",
+    "baseIcon",
+    "ctime",
+    "fullName",
+    "futureField",
+    "maxAmount",
+    "maxLimitOrderAmount",
+    "maxMarketOrderAmount",
+    "maxSellPriceOffset",
+    "maxSlippage",
+    "minAmount",
+    "minBuyPriceOffset",
+    "premiumFactor",
+    "quoteFullNameI18n",
+    "quoteIcon",
+  ], "undocumented market metadata must remain visible without being interpreted as trading constraints")
+  assert.deepEqual(report.schemaObservations[0].unexpectedFieldTypes, [], "observed numeric pair identifiers, precision counts, flags and nullable openTime must satisfy the evidence-based schema")
+  assert.equal(report.schemaObservations[0].schemaValid, true, "the observed REST pair-list representation must pass schema validation")
+  const symbolFilterObservation = report.schemaObservations.find((item) => item.path === "/api/spot/v1/common/coin_pair/list" && item !== report.schemaObservations[0])
+  assert.equal(symbolFilterObservation.schemaValid, true, "getSymbolFilters must accept the same observed pair-list representation")
   assert.equal(report.results.find((entry) => entry.operation === "Broker API schema getExchangeMarkets").status, "passed", "the market schema check must pass when only an unknown field is added")
   assert.equal(report.schemaObservations[0].missingRequiredFields.length, 0, "the market fixture must satisfy every required field")
   const serializedReport = JSON.stringify(report)
