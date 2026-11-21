@@ -180,7 +180,7 @@ test("rejects browser WebSocket upgrades from untrusted origins", async (t) => {
     "Origin: https://attacker.example",
     "",
     "",
-  ].join("\\r\\n"))
+  ].join("\r\n"))
   assert.match(await response, /^HTTP\\/1\\.1 403 Forbidden/)
 })
 
