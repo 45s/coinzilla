@@ -3,10 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TradingHistorySession } from './api';
 import { TradingHistoryComponent } from './page';
-
-const API_TOKEN = 'a-session-only-token-that-is-long-enough-for-tests';
 
 class FakeWebSocket extends EventTarget {
   static instances: FakeWebSocket[] = [];
@@ -122,10 +119,8 @@ function createFill(id: string) {
 async function connectToResource(
   fixture: ComponentFixture<TradingHistoryComponent>,
   http: HttpTestingController,
-  session: TradingHistorySession,
   resource: 'orders' | 'fills' | 'commissions' = 'orders',
 ) {
-  session.setToken(API_TOKEN);
   fixture.componentRef.setInput('resource', resource);
   fixture.detectChanges();
   http.expectOne((request) => request.url.endsWith('/api/v1/trading/metadata')).flush({
@@ -146,7 +141,6 @@ async function connectToResource(
 describe('TradingHistoryComponent', () => {
   let fixture: ComponentFixture<TradingHistoryComponent>;
   let http: HttpTestingController;
-  let session: TradingHistorySession;
 
   beforeEach(async () => {
     FakeWebSocket.instances = [];
@@ -160,47 +154,30 @@ describe('TradingHistoryComponent', () => {
     }).compileComponents();
 
     http = TestBed.inject(HttpTestingController);
-    session = TestBed.inject(TradingHistorySession);
     fixture = TestBed.createComponent(TradingHistoryComponent);
   });
 
   afterEach(() => {
     fixture.destroy();
     http.verify();
-    session.clearToken();
     vi.unstubAllGlobals();
   });
 
-  it('shows an explicit connection form when no session token is available', () => {
+  it('connects automatically to local Harvester without credentials', async () => {
     fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).toContain('Connect to Harvester');
-    expect(fixture.nativeElement.textContent).toContain('Bearer token');
-  });
-
-  it('clears a rejected session token and reports invalid credentials', async () => {
-    session.setToken(API_TOKEN);
-    fixture.detectChanges();
-
     http.expectOne((request) => request.url.endsWith('/api/v1/trading/metadata')).flush({
-      ok: false,
-      error: {
-        code: 'HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED',
-        message: 'Authentication required.',
-      },
-    }, {
-      status: 401,
-      statusText: 'Unauthorized',
+      ok: true,
+      data: { environment: 'testnet', records: { orders: 0, fills: 0, commissions: 0 } },
     });
     await fixture.whenStable();
+    http.expectOne((request) => request.url.endsWith('/api/v1/trading/orders')).flush({ ok: true, data: createPage([], 0) });
+    await fixture.whenStable();
     fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).toContain('Token was rejected');
-    expect(session.getToken()).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Connected to local Harvester');
   });
 
   it('loads real orders, displays backend environment and renders an honest empty state', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http);
     request.flush({
       ok: true,
       data: createPage([], 0),
@@ -214,7 +191,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('applies market filters through the API and resets the offset', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http);
     request.flush({
       ok: true,
       data: createPage(Array.from({ length: 25 }, (_, index) => createOrder(`order-${index}`)), 26),
@@ -250,7 +227,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('uses bounded server pagination when advancing to the next page', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http);
     request.flush({
       ok: true,
       data: createPage(Array.from({ length: 25 }, (_, index) => createOrder(`order-${index}`)), 26),
@@ -283,7 +260,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('loads persisted order details and preserves null financial values', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http);
     request.flush({
       ok: true,
       data: createPage([createOrder('order-1')], 1),
@@ -305,12 +282,16 @@ describe('TradingHistoryComponent', () => {
     expect(orderRow.textContent).toContain('Order broker-1');
     expect(orderRow.textContent).not.toContain('order-1');
     expect(fixture.nativeElement.textContent).toContain('Orders details');
+    expect(fixture.nativeElement.textContent).toContain('Raw record · every persisted field');
+    const rawRecord = fixture.nativeElement.querySelector('.raw-record-details pre') as HTMLElement;
+    expect(rawRecord.textContent).toContain('"providerType": "binance"');
+    expect(rawRecord.textContent).toContain('"averageExecutionPrice": null');
     expect(fixture.nativeElement.textContent).toContain('65000.00000000');
     expect(fixture.nativeElement.textContent).toContain('Not recorded');
   });
 
   it('labels an order limit price separately from a fill execution price', async () => {
-    const request = await connectToResource(fixture, http, session, 'orders');
+    const request = await connectToResource(fixture, http, 'orders');
     request.flush({
       ok: true,
       data: createPage([createOrder('order-1')], 1),
@@ -328,7 +309,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('shows an exchange trade reference when a fill has no linked order projection', async () => {
-    const request = await connectToResource(fixture, http, session, 'fills');
+    const request = await connectToResource(fixture, http, 'fills');
     const compositeId = '["testnet","binanceTestnet","binance","binance-primary","binance:ZROUSDT","15507"]';
     const unlinkedFill = {
       ...createFill(compositeId),
@@ -370,7 +351,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('shows persisted commission facts when a fill is opened', async () => {
-    const request = await connectToResource(fixture, http, session, 'fills');
+    const request = await connectToResource(fixture, http, 'fills');
     request.flush({
       ok: true,
       data: createPage([createFill('fill-1')], 1),
@@ -386,7 +367,9 @@ describe('TradingHistoryComponent', () => {
       data: {
         ...createFill('fill-1'),
         commissions: [{
-          id: 'commission-1',
+          id: 1,
+          fillId: 'fill-1',
+          ordinal: 0,
           amount: '0.00000013',
           assetId: 'bnb-asset',
           assetCode: 'BNB',
@@ -405,46 +388,28 @@ describe('TradingHistoryComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Not recorded');
   });
 
-  it('authenticates the WebSocket without placing the token in the URL and resyncs after connection', async () => {
-    const request = await connectToResource(fixture, http, session);
-    request.flush({
-      ok: true,
-      data: createPage([createOrder('order-initial')], 1),
-    });
+  it('opens local WebSocket without authentication and resyncs after connection', async () => {
+    const request = await connectToResource(fixture, http);
+    request.flush({ ok: true, data: createPage([createOrder('order-initial')], 1) });
     await fixture.whenStable();
-
     const socket = FakeWebSocket.instances[0];
     expect(socket.url).toBe('ws://127.0.0.1:4201/api/v1/trading/events');
-    expect(socket.url).not.toContain(API_TOKEN);
     socket.open();
-    expect(JSON.parse(socket.sent[0])).toEqual({
-      type: 'authenticate',
-      token: API_TOKEN,
-    });
-
-    socket.receive({ type: 'authenticated' });
+    expect(socket.sent).toEqual([]);
     http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
-      ok: true,
-      data: {
-        environment: 'testnet',
-        records: { orders: 1, fills: 0, commissions: 0 },
-      },
+      ok: true, data: { environment: 'testnet', records: { orders: 1, fills: 0, commissions: 0 } },
     });
-    const resync = http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders'));
-    resync.flush({
-      ok: true,
-      data: createPage([createOrder('order-resynced')], 1),
+    http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders')).flush({
+      ok: true, data: createPage([createOrder('order-resynced')], 1),
     });
     await fixture.whenStable();
     fixture.detectChanges();
-
     expect(fixture.componentInstance.liveStatus()).toBe('live');
-    expect(fixture.nativeElement.textContent).toContain('Live updates');
     expect(fixture.nativeElement.textContent).toContain('Order broker-resynced');
   });
 
   it('refreshes the active resource after a persisted-change notification and reconnects with a fresh snapshot', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http, );
     request.flush({
       ok: true,
       data: createPage([createOrder('order-initial')], 1),
@@ -453,7 +418,6 @@ describe('TradingHistoryComponent', () => {
 
     const firstSocket = FakeWebSocket.instances[0];
     firstSocket.open();
-    firstSocket.receive({ type: 'authenticated' });
     http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
       ok: true,
       data: {
@@ -495,7 +459,6 @@ describe('TradingHistoryComponent', () => {
     const reconnectSocket = FakeWebSocket.instances[1];
     expect(reconnectSocket).toBeDefined();
     reconnectSocket.open();
-    reconnectSocket.receive({ type: 'authenticated' });
     http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
       ok: true,
       data: {
@@ -520,7 +483,6 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('shows an API-unavailable state instead of replacing a failed request with sample records', async () => {
-    session.setToken(API_TOKEN);
     fixture.detectChanges();
     http.expectOne((request) => request.url.endsWith('/api/v1/trading/metadata')).error(new ProgressEvent('error'));
     await fixture.whenStable();
@@ -531,7 +493,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('shows API request errors instead of presenting empty or sample records', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http, );
     request.flush({
       ok: false,
       error: {

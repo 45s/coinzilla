@@ -543,3 +543,24 @@ td small {
   color: #aab6c6;
   font-size: 9px;
 }
+
+.raw-record-details {
+  margin: 1rem 0;
+  border: 1px solid var(--border-color, #30343b);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.raw-record-details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.raw-record-details pre {
+  max-height: 32rem;
+  overflow: auto;
+  margin: 0.75rem 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
