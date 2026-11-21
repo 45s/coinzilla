@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
 import { mkdir, writeFile } from "node:fs/promises"
-import { dirname, relative, resolve, sep } from "node:path"
+import { dirname, resolve } from "node:path"
 import { promisify } from "node:util"
 import {
   createDiagnosticReport,
@@ -8,54 +8,22 @@ import {
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
 } from "../helpers/diagnostics.js"
+import {
+  REQUIRED_HEALTH_OPERATIONS, createGitEnvironment, createPublishedReport, createReportPaths,
+  createTimestamp, evaluateHealthCheck, getRelativePath, getSecrets, throwWorkflowErrors,
+  validateDiagnosticReport, validatePrivateCredentials, withholdFreeFormErrorMessages,
+} from "../helpers/health-report.js"
+export { createGitEnvironment }
 
 const execFileAsync = promisify(execFile)
 const REPORT_COMMIT_MESSAGE = "chore(brokers): publish sanitized Bitunix health report"
-const REQUIRED_HEALTH_OPERATIONS = Object.freeze([
-  "diagnostic safety confirmation",
-  "diagnostic configuration",
-  "REST private account balances",
-  "WebSocket connection",
-  "ping",
-  "user.account",
-  "user.info",
-])
 
-function createTimestamp({ now }) {
-  return new Date(now()).toISOString().replaceAll(/[-:.]/g, "")
-}
 
-function createReportPaths({ repositoryRoot, timestamp }) {
-  const filename = `bitunix-health-${timestamp}.json`
-  return {
-    local: resolve(repositoryRoot, "packages/brokers/.diagnostics", filename),
-    published: resolve(repositoryRoot, "packages/brokers/diagnostics/reports", filename),
-  }
-}
 
-function getRelativePath({ repositoryRoot, path }) {
-  return relative(repositoryRoot, path).split(sep).join("/")
-}
 
-function getSecrets({ env }) {
-  return [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
-}
 
-function validatePrivateCredentials({ env }) {
-  const missing = ["BITUNIX_API_KEY", "BITUNIX_API_SECRET"].filter((name) =>
-    typeof env[name] !== "string" || !env[name].trim())
-  if (missing.length > 0) {
-    throw new Error(`Bitunix health check requires both read-only credentials; missing: ${missing.join(", ")}`)
-  }
-}
 
-export function createGitEnvironment({ env = process.env } = {}) {
-  return Object.fromEntries(
-    Object.entries(env).filter(([name]) =>
-      name !== "BITUNIX_API_KEY" && name !== "BITUNIX_API_SECRET"),
-  )
-}
-
+export 
 async function executeGitCommand({ repositoryRoot, args }) {
   const gitEnv = createGitEnvironment({ env: process.env })
   const { stdout } = await execFileAsync("git", args, {
@@ -135,14 +103,6 @@ async function runDiagnosticsSafely({ runDiagnostics, env, now, onProgress }) {
   }
 }
 
-function validateDiagnosticReport({ report }) {
-  if (!report || typeof report !== "object" || !Array.isArray(report.results) || !report.summary) {
-    throw new TypeError("Bitunix diagnostics returned an invalid report; refusing to publish it")
-  }
-  if (!Number.isInteger(report.summary.failed) || report.summary.failed < 0) {
-    throw new TypeError("Bitunix diagnostics report has an invalid failed-check count")
-  }
-}
 
 async function writeDiagnosticReport({ path, report }) {
   await mkdir(dirname(path), {
@@ -155,60 +115,7 @@ async function writeDiagnosticReport({ path, report }) {
   })
 }
 
-function withholdFreeFormErrorMessages({ value }) {
-  if (Array.isArray(value)) {
-    return value.map((item) => withholdFreeFormErrorMessages({ value: item }))
-  }
-  if (!value || typeof value !== "object") {
-    return value
-  }
-  const sanitized = Object.fromEntries(Object.entries(value).map(([key, entryValue]) => [
-    key,
-    withholdFreeFormErrorMessages({ value: entryValue }),
-  ]))
-  if (typeof sanitized.name === "string" && typeof sanitized.message === "string") {
-    sanitized.message = "[error message withheld]"
-  }
-  return sanitized
-}
 
-function createPublishedReport({ report }) {
-  // Public reports use an allowlist, not recursive redaction. No request or
-  // response payload, arbitrary error text, account identifier, or amount is
-  // eligible for publication.
-  return {
-    schemaVersion: report.schemaVersion,
-    startedAt: report.startedAt,
-    finishedAt: report.finishedAt,
-    runtime: {
-      node: report.runtime?.node ?? null,
-      platform: report.runtime?.platform ?? null,
-    },
-    summary: {
-      total: report.summary.total,
-      passed: report.summary.passed,
-      failed: report.summary.failed,
-      skipped: report.summary.skipped,
-    },
-    healthCheck: {
-      requiredOperations: report.healthCheck.requiredOperations,
-      missingRequiredOperations: report.healthCheck.missingRequiredOperations,
-      healthy: report.healthCheck.healthy,
-    },
-    results: report.results.map((result) => ({
-      operation: result.operation,
-      status: result.status,
-      durationMs: result.durationMs ?? null,
-      ...(result.error ? {
-        error: Object.fromEntries(
-          ["name", "code", "kind", "status", "exchangeCode"]
-            .filter((field) => result.error[field] !== undefined && result.error[field] !== null)
-            .map((field) => [field, result.error[field]]),
-        ),
-      } : {}),
-    })),
-  }
-}
 
 async function writeReports({ paths, report, env }) {
   const sanitized = withholdFreeFormErrorMessages({
@@ -275,20 +182,6 @@ async function switchBackToDevelop({ repositoryRoot, runGit }) {
   })
 }
 
-function evaluateHealthCheck({ report }) {
-  const passedOperations = new Set(
-    report.results
-      .filter((result) => result.status === "passed")
-      .map((result) => result.operation),
-  )
-  const missingRequiredOperations = REQUIRED_HEALTH_OPERATIONS.filter((operation) =>
-    !passedOperations.has(operation))
-  return {
-    requiredOperations: REQUIRED_HEALTH_OPERATIONS,
-    missingRequiredOperations,
-    healthy: report.summary.failed === 0 && missingRequiredOperations.length === 0,
-  }
-}
 
 async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now, onProgress }) {
   onProgress?.({ message: "[3/5] Running Bitunix REST and authenticated WebSocket diagnostics" })
@@ -324,20 +217,6 @@ async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publis
   }
 }
 
-function throwWorkflowErrors({ operationError, cleanupError }) {
-  if (operationError && cleanupError) {
-    throw new AggregateError(
-      [operationError, cleanupError],
-      "Bitunix diagnostics failed and the checkout could not be returned to develop",
-    )
-  }
-  if (operationError) {
-    throw operationError
-  }
-  if (cleanupError) {
-    throw cleanupError
-  }
-}
 
 async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now, onProgress }) {
   let branchCreated = false
@@ -413,7 +292,7 @@ export async function publishBitunixDiagnostics({
   })
   validatePrivateCredentials({ env })
   onProgress({ message: "      Credentials and repository state verified" })
-  const timestamp = createTimestamp({ now })
+  const timestamp = createTimestamp({ timestamp: now() })
   const branch = `diagnostics/bitunix-health-${timestamp}`
   const paths = createReportPaths({
     repositoryRoot: root,

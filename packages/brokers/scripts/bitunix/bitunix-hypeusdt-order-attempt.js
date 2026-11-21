@@ -2,28 +2,15 @@ import { createInterface } from "node:readline/promises"
 import { resolve } from "node:path"
 import { pathToFileURL, fileURLToPath } from "node:url"
 import { Broker } from "../../src/index.js"
-import {
-  assertBitunixOperatorInteractiveTerminal,
-  createOneShotMarker,
-  runBitunixOperatorOrderAttempt,
-} from "./workflows/bitunix-operator-order-attempt.js"
+import { parseBitunixApiCredentials, redactBitunixApiSecrets } from "./helpers/operator-credentials.js"
+import { assertBitunixOperatorInteractiveTerminal } from "./helpers/operator-order-validation.js"
+import { createOneShotMarker, runBitunixOperatorOrderAttempt } from "./workflows/bitunix-operator-order-attempt.js"
 
 const markerPath = fileURLToPath(new URL(
   "../../.diagnostics/bitunix-hypeusdt-buy-limit-attempt.json",
   import.meta.url,
 ))
 
-function readBitunixApiCredentials({ env }) {
-  const apiKey = env.BITUNIX_API_KEY?.trim()
-  const apiSecret = env.BITUNIX_API_SECRET?.trim()
-  if (!apiKey || !apiSecret) {
-    throw new Error("Set BITUNIX_API_KEY and BITUNIX_API_SECRET in packages/brokers/.env.development")
-  }
-  return {
-    apiKey,
-    apiSecret,
-  }
-}
 
 function createBitunixBroker({ credentials, allowLiveOrderMutations }) {
   return new Broker({
@@ -37,15 +24,6 @@ function createBitunixBroker({ credentials, allowLiveOrderMutations }) {
   })
 }
 
-function redactBitunixApiSecrets({ message, secrets }) {
-  let safeMessage = String(message)
-  for (const secret of secrets) {
-    if (secret) {
-      safeMessage = safeMessage.replaceAll(secret, "[REDACTED]")
-    }
-  }
-  return safeMessage
-}
 
 async function askForBitunixOrderConfirmation({ confirmationPhrase }) {
   const readline = createInterface({
@@ -67,7 +45,7 @@ async function main() {
     stdin: process.stdin,
     stdout: process.stdout,
   })
-  const credentials = readBitunixApiCredentials({
+  const credentials = parseBitunixApiCredentials({
     env: process.env,
   })
   process.stdout.write(
