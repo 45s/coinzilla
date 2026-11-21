@@ -1,7 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-const API_TOKEN = "test-token-with-more-than-thirty-two-characters"
 
 async function loadApi() {
   return import("./trading-history-api.js").catch(() => null)
@@ -125,12 +124,11 @@ function createQueries(overrides = {}) {
   }
 }
 
-async function startApi({ t, queries, token = API_TOKEN } = {}) {
+async function startApi({ t, queries } = {}) {
   const module = await loadApi()
   assert.ok(module, "Harvester must provide a versioned trading-history HTTP adapter.")
   const api = await module.startTradingHistoryApiServer({
     queries,
-    token,
     environment: "testnet",
     port: 0,
     logger: {
@@ -147,30 +145,16 @@ async function startApi({ t, queries, token = API_TOKEN } = {}) {
   }
 }
 
-test("requires a bearer token and returns selected environment metadata", async (t) => {
+test("serves local metadata without bearer authentication", async (t) => {
   const { queries } = createQueries()
   const { baseUrl } = await startApi({
     t,
     queries,
   })
 
-  const missingToken = await fetch(`${baseUrl}/api/v1/trading/metadata`)
-  assert.equal(missingToken.status, 401, "Metadata must require a valid bearer token.")
-
-  const invalidToken = await fetch(`${baseUrl}/api/v1/trading/metadata`, {
-    headers: {
-      Authorization: "Bearer invalid-token",
-    },
-  })
-  assert.equal(invalidToken.status, 401, "An invalid bearer token must be rejected.")
-
-  const response = await fetch(`${baseUrl}/api/v1/trading/metadata`, {
-    headers: {
-      Authorization: `Bearer ${API_TOKEN}`,
-    },
-  })
-  assert.equal(response.status, 200, "A valid bearer token must access API metadata.")
-  assert.equal(response.headers.get("access-control-allow-origin"), "*", "Token-authenticated clients must not require a consumer-specific CORS allowlist.")
+  const response = await fetch(`${baseUrl}/api/v1/trading/metadata`)
+  assert.equal(response.status, 200, "Local API metadata must be available without a bearer token.")
+  assert.equal(response.headers.get("access-control-allow-origin"), "*", "The local API must not require authorization headers.")
   assert.deepEqual((await response.json()).data, {
     environment: "testnet",
     records: {
@@ -189,11 +173,6 @@ test("routes order list filters and bounded pagination to the application query 
   })
   const response = await fetch(
     `${baseUrl}/api/v1/trading/orders?symbol=BTCUSDT&side=BUY&status=FILLED&limit=25&offset=50`,
-    {
-      headers: {
-        Authorization: `Bearer ${API_TOKEN}`,
-      },
-    },
   )
 
   assert.equal(response.status, 200, "A valid order-list request must return its application result.")
@@ -249,12 +228,7 @@ test("rejects unsupported query parameters, methods, and unimplemented resources
     t,
     queries,
   })
-  const headers = {
-    Authorization: `Bearer ${API_TOKEN}`,
-  }
-
   const invalidFilter = await fetch(`${baseUrl}/api/v1/trading/orders?rawSql=DROP`, {
-    headers,
   })
   assert.equal(invalidFilter.status, 400, "Unsupported query parameters must be rejected before application access.")
   assert.equal((await invalidFilter.json()).error.code, "HARVESTER_TRADING_HISTORY_QUERY_INVALID")
@@ -271,7 +245,7 @@ test("rejects unsupported query parameters, methods, and unimplemented resources
   assert.equal(unimplementedResource.status, 404, "The API must not invent a sessions resource.")
 });
 
-test("supports browser preflight and validates server authentication configuration", async (t) => {
+test("supports browser preflight and validates server configuration", async (t) => {
   const { queries } = createQueries()
   const { baseUrl, module } = await startApi({
     t,
@@ -285,16 +259,15 @@ test("supports browser preflight and validates server authentication configurati
     },
   })
   assert.equal(preflight.status, 204, "Browser preflight must complete without requiring a token.")
-  assert.match(preflight.headers.get("access-control-allow-headers"), /authorization/i)
+  assert.match(preflight.headers.get("access-control-allow-headers"), /content-type/i)
 
   await assert.rejects(
     () => module.startTradingHistoryApiServer({
       queries,
-      token: "too-short",
       environment: "testnet",
       port: 0,
     }),
-    /HARVESTER_API_TOKEN/,
-    "The API must reject weak or missing bearer-token configuration.",
+    /environment/,
+    "The API must reject invalid environment configuration.",
   )
 });
