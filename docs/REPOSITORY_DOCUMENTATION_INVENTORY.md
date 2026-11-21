@@ -335,7 +335,7 @@ The following 24 path additions have been classified and source-checked. One is 
 
 ### Removed paths since the 160-file checkpoint
 
-These paths are absent from the current recursive tree. Their inbound-reference and Git-history dispositions remain part of #1403; absence alone is not proof that they were safely superseded or that references were updated.
+These paths are absent from the current recursive tree. The dispositions below are based on the relevant migration PR diffs, current indexes/workspace manifests and GitHub issue/PR history; historical inventory rows are retained as provenance.
 
 - `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` — **RETIRED** with the interim observer runtime/configuration/adapter in merged [PR #1455](https://github.com/45s/coinzilla/pull/1455); Bitunix remains unregistered until #1185 and the complete-provider gate in ADR-0004. Current Harvester infrastructure indexes point to the general execution-routing contract, not a replacement observer surface.
 - `packages/brokers/BITUNIX_REFERENCE_AUDIT.md` — **MOVED** to `packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md`; the current Brokers docs index and `docs/brokers-websocket-contract.md` link to the new location. The old path remains here only as historical inventory provenance.
