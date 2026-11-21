@@ -1,120 +1,94 @@
 import assert from "node:assert/strict"
-import { mkdtemp, rm } from "node:fs/promises"
-import os from "node:os"
-import path from "node:path"
 import test from "node:test"
-import { createSqliteDatabase } from "@coinzilla/db"
-import { EventBus } from "@coinzilla/event-bus"
-import { closeHarvesterPersistence } from "../persistence/close-harvester-persistence.js"
-import { prepareOrderHistoryPersistence } from "../persistence/prepare-order-history-persistence.js"
 import { startTradingHistoryApi } from "./start-trading-history-api.js"
 
 const API_TOKEN = "test-token-with-more-than-thirty-two-characters"
 
-async function createExistingTradingHistoryDatabase({ t } = {}) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-trading-history-api-"))
-  const eventBus = new EventBus()
-  const env = {
-    TRADING_MODE: "testnet",
-    HARVESTER_DATABASE_DIRECTORY: directory,
-    HARVESTER_API_TOKEN: API_TOKEN,
-    HARVESTER_API_PORT: "0",
-  }
-  const persistence = await prepareOrderHistoryPersistence({
-    tradingMode: "testnet",
-    env,
-    eventBus,
-    logger: {
-      error() {},
-    },
-  })
-  assert.ok(persistence?.relationalDatabase, "The API service test requires an initialized relational trading-history database.")
-  await closeHarvesterPersistence(persistence)
-  await eventBus.close()
-  t.after(async () => {
-    await rm(directory, {
-      recursive: true,
-      force: true,
-    })
-  })
+function createDatabase() {
+  let closeCalls = 0
   return {
-    directory,
-    env,
+    get closeCalls() {
+      return closeCalls
+    },
+    prepare() {
+      return {
+        get: () => ({ total: 0 }),
+      }
+    },
+    async close() {
+      closeCalls += 1
+    },
   }
 }
 
-test("starts a standalone API over an existing environment database and closes its database connection", async (t) => {
-  const { env } = await createExistingTradingHistoryDatabase({ t })
-  let database
+test("does not start the optional API when no token is configured", async () => {
   const service = await startTradingHistoryApi({
-    env,
-    createDatabase: (options) => {
-      database = createSqliteDatabase(options)
-      return database
+    database: createDatabase(),
+    env: {
+      TRADING_MODE: "testnet",
+      HARVESTER_API_TOKEN: "",
     },
-  })
-  t.after(async () => {
-    await service.close()
   })
 
-  assert.equal(database.prepare("PRAGMA query_only").get().query_only, 0, "The API connection must not impose a database-level restriction on future application operations.")
-  const apiUrl = `http://127.0.0.1:${service.address.port}/api/v1/trading/metadata`
-  const response = await fetch(apiUrl, {
-    headers: {
-      Authorization: `Bearer ${API_TOKEN}`,
+  assert.equal(service, null, "Harvester must remain usable without enabling the optional HTTP API.")
+})
+
+test("starts the API over Harvester's already-open relational database without owning that database", async () => {
+  const database = createDatabase()
+  let serverInput
+  let serverCloseCalls = 0
+  const service = await startTradingHistoryApi({
+    database,
+    env: {
+      TRADING_MODE: "testnet",
+      HARVESTER_API_TOKEN: API_TOKEN,
+      HARVESTER_API_PORT: "0",
+    },
+    logger: {
+      info() {},
+    },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
+        close: async () => {
+          serverCloseCalls += 1
+        },
+      }
     },
   })
-  assert.equal(response.status, 200, "The standalone API must serve metadata from the selected persisted database.")
-  assert.deepEqual((await response.json()).data, {
-    environment: "testnet",
-    records: {
-      orders: 0,
-      fills: 0,
-      commissions: 0,
-    },
-  }, "A fresh trading-history database must report its actual empty record counts.")
+
+  assert.equal(serverInput.environment, "testnet", "The API must report the environment selected by Harvester.")
+  assert.equal(serverInput.queries.getSummary().ok, true, "The query facade must be composed over the supplied relational connection.")
+  assert.deepEqual(service.address, {
+    address: "127.0.0.1",
+    port: 4201,
+  }, "The service must expose the HTTP listener address for process diagnostics.")
   await service.close()
-  assert.equal(database.state, "closed", "Service shutdown must close its database connection.")
-});
+  assert.equal(serverCloseCalls, 1, "The service must close its HTTP listener.")
+  assert.equal(database.closeCalls, 0, "The API lifecycle must not close the database connection owned by Harvester.")
+})
 
-test("does not create a database when the selected environment file does not exist", async (t) => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-trading-history-api-missing-"))
-  t.after(async () => {
-    await rm(directory, {
-      recursive: true,
-      force: true,
-    })
-  })
-  const env = {
-    TRADING_MODE: "testnet",
-    HARVESTER_DATABASE_DIRECTORY: directory,
-    HARVESTER_API_TOKEN: API_TOKEN,
-  }
-  await assert.rejects(
-    () => startTradingHistoryApi({ env }),
-    (error) => error.code === "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
-    "The API must report a missing Harvester database instead of creating a new empty database.",
-  )
-});
-
-test("closes the database connection when the HTTP server fails to start", async (t) => {
-  const { env } = await createExistingTradingHistoryDatabase({ t })
-  let database
+test("preserves the HTTP startup error without closing Harvester's shared database", async () => {
+  const database = createDatabase()
   const startupFailure = new Error("simulated HTTP bind failure")
 
   await assert.rejects(
     () => startTradingHistoryApi({
-      env,
-      createDatabase: (options) => {
-        database = createSqliteDatabase(options)
-        return database
+      database,
+      env: {
+        TRADING_MODE: "testnet",
+        HARVESTER_API_TOKEN: API_TOKEN,
       },
       startServer: async () => {
         throw startupFailure
       },
     }),
     (error) => error === startupFailure,
-    "The original server startup failure must be preserved.",
+    "The original HTTP startup failure must remain available to Harvester diagnostics.",
   )
-  assert.equal(database.state, "closed", "Database resources must be closed after a failed HTTP server startup.")
-});
+  assert.equal(database.closeCalls, 0, "A failed optional API startup must not close Harvester's database.")
+})
