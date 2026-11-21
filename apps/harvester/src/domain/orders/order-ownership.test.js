@@ -36,7 +36,7 @@ test("normalizes and freezes valid ownership while preserving optional broker id
     cycleId: "cycle-1",
   }, "Valid ownership fields must be normalized and retain client identity.")
   assert.equal(Object.isFrozen(ownership), true, "Normalized ownership must be immutable.")
-  const ownershipWithoutCycleId = createOrderOwnership({ ownership: makeOwnership({ cycleId: undefined }), clientOrderId: "client-2" })
+  const ownershipWithoutCycleId = createOrderOwnership({ ownership: makeOwnership({ cycleId: undefined, clientOrderId: "client-2" }), clientOrderId: "client-2" })
   assert.equal(Object.hasOwn(ownershipWithoutCycleId, "cycleId"), false, "Undefined optional cycle identity must not be serialized.")
 })
 
@@ -60,7 +60,7 @@ test("rejects invalid and conflicting canonical order identities", () => {
 
 test("validates ownership references and rejects duplicate canonical identities", () => {
   const orders = [makeOrder(), makeOrder({ clientOrderId: "client-2", brokerOrderId: "broker-1" })]
-  const valid = validateOrderOwnerships({ orders, ownerships: [makeOwnership(), makeOwnership({ positionId: "position-2" })] })
+  const valid = validateOrderOwnerships({ orders, ownerships: [makeOwnership(), makeOwnership({ positionId: "position-2", clientOrderId: "client-2" })] })
   assert.equal(valid.length, 2, "Each registered canonical order must receive one ownership record.")
   assert.equal(Object.isFrozen(valid), true, "Validated ownership collection must be immutable.")
   const ownershipWithoutBrokerIdentity = validateOrderOwnerships({
@@ -93,7 +93,7 @@ test("compares ownership and attaches broker identity immutably", () => {
   const changed = createOrderOwnership({ ownership: makeOwnership({ positionId: "position-2" }), clientOrderId: "client-1" })
   assert.equal(hasSameOrderOwnership({ current, next: same }), true, "Equivalent ownership records must compare equal.")
   assert.equal(hasSameOrderOwnership({ current, next: changed }), false, "Different position ownership must compare unequal.")
-  const other = createOrderOwnership({ ownership: makeOwnership({ positionId: "position-2" }), clientOrderId: "client-2" })
+  const other = createOrderOwnership({ ownership: makeOwnership({ positionId: "position-2", clientOrderId: "client-2" }), clientOrderId: "client-2" })
   const ownerships = [current, other]
   const attached = attachBrokerOrderIdToOwnership({ ownerships, clientOrderId: "client-1", brokerOrderId: "broker-1" })
   assert.equal(attached[0].brokerOrderId, "broker-1", "Matching client identity must receive broker identity.")

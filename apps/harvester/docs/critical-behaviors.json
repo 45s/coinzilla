@@ -62,12 +62,12 @@
         {
           "path": "src/domain/orders/order-registry.test.js",
           "name": "matches an execution report by broker order ID when Binance client ID differs",
-          "kind": "normal",
+          "kind": "normal"
+        },
         {
           "path": "src/domain/orders/order-ownership.test.js",
           "name": "normalizes and freezes valid ownership while preserving optional broker identity",
           "kind": "normal"
-        }
         },
         {
           "path": "src/domain/orders/order-registry.test.js",
