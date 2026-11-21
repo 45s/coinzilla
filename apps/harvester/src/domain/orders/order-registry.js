@@ -255,7 +255,10 @@ ownerships })
 
   getOwnership({ clientOrderId, brokerOrderId, marketId } = {}) {
     const order = clientOrderId === undefined
-      ? this.getOrderByBrokerOrderId({ brokerOrderId, marketId })
+      ? this.getOrderByBrokerOrderId({
+        brokerOrderId,
+        marketId,
+      })
       : this.getOrder({ clientOrderId })
     if (!order) {
       return undefined
