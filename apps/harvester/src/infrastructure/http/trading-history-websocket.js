@@ -100,18 +100,7 @@ function handleClientFrame({ client, frame } = {}) {
     client.awaitingPong = false
     return
   }
-  if (client.authenticated) {
-    closeClient({
-      client,
-      code: 1008,
-      reason: "Client messages are not supported.",
-    })
-    return
-  }
-  authenticateClient({
-    client,
-    message: frame.payload,
-  })
+  closeClient({ client, code: 1008, reason: "Client messages are not supported." })
 }
 
 function handleSocketData({ client, chunk } = {}) {
@@ -174,7 +163,6 @@ function createClient({ socket, clients } = {}) {
   socket.on("data", (chunk) => handleSocketData({
     client,
     chunk,
-    token,
   }))
   socket.once("close", () => closeClient({
     client,
@@ -266,13 +254,11 @@ function handleUpgrade({ request, socket, head, clients } = {}) {
   const client = createClient({
     socket,
     clients,
-    token,
   })
   if (head.length > 0) {
     handleSocketData({
       client,
       chunk: head,
-      token,
     })
   }
 }
