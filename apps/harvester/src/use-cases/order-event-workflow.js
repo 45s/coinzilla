@@ -24,9 +24,19 @@ function resolveRegisteredOrder({ state, order }) {
   }) ?? order
 }
 
-function findRegisteredOrderByBrokerId({ state, brokerOrderId }) {
-  return state.registry?.getOrderByBrokerOrderId?.({ brokerOrderId }) ??
-    state.registry?.orders?.find((order) => order.brokerOrderId === brokerOrderId)
+function createBrokerOrderCacheKey({ marketId, brokerOrderId }) {
+  return `${marketId}:${brokerOrderId}`
+}
+
+function findRegisteredOrderByBrokerId({ state, brokerOrderId, symbol }) {
+  const matches = state.registry?.orders?.filter((order) =>
+    order.brokerOrderId === brokerOrderId &&
+    order.market.symbol === symbol,
+  ) ?? []
+  if (matches.length > 1) {
+    throw new Error("Broker order identity is ambiguous within the requested market")
+  }
+  return matches[0]
 }
 
 function createProviderAttributedFillHistoryBroker({ broker, state, ordersByBrokerId }) {
@@ -40,10 +50,17 @@ function createProviderAttributedFillHistoryBroker({ broker, state, ordersByBrok
       if (result?.ok !== true || !Array.isArray(result.data)) {
         return result
       }
-      const order = ordersByBrokerId.get(orderId) ?? findRegisteredOrderByBrokerId({
+      const registeredOrder = findRegisteredOrderByBrokerId({
         state,
         brokerOrderId: orderId,
+        symbol,
       })
+      const order = registeredOrder
+        ? ordersByBrokerId.get(createBrokerOrderCacheKey({
+            marketId: registeredOrder.market.id,
+            brokerOrderId: registeredOrder.brokerOrderId,
+          })) ?? registeredOrder
+        : undefined
       if (!order) {
         return result
       }
@@ -204,7 +221,10 @@ function createReconcileTerminalOrderFillsTransition({
       })
     }
     if (typeof registeredOrder.brokerOrderId === "string") {
-      ordersByBrokerId.set(registeredOrder.brokerOrderId, registeredOrder)
+      ordersByBrokerId.set(createBrokerOrderCacheKey({
+        marketId: registeredOrder.market.id,
+        brokerOrderId: registeredOrder.brokerOrderId,
+      }), registeredOrder)
     }
     const attributedEventFill = eventFill === undefined
       ? undefined

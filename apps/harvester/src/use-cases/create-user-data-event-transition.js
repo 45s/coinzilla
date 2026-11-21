@@ -126,6 +126,7 @@ function getRegisteredOrder({ registry, order } = {}) {
   if (order.brokerOrderId && typeof registry.getOrderByBrokerOrderId === "function") {
     return registry.getOrderByBrokerOrderId({
       brokerOrderId: order.brokerOrderId,
+      marketId: order.market.id,
     })
   }
   return undefined
