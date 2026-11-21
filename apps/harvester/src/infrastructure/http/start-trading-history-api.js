@@ -123,6 +123,13 @@ export async function startTradingHistoryApi({
       environment: configuration.environment,
     })
   }
+  if (!eventBus || typeof eventBus.subscribe !== "function") {
+    throw new TradingHistoryApiStartupError({
+      message: "The Harvester EventBus is unavailable; the optional trading-history API cannot start.",
+      code: "HARVESTER_TRADING_HISTORY_API_EVENT_BUS_UNAVAILABLE",
+      environment: configuration.environment,
+    })
+  }
   const repository = createTradingHistoryQueryRepository({
     database,
   })
