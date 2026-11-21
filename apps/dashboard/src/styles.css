@@ -403,3 +403,14 @@ html[data-theme]:not([data-theme="current"]) .theme-picker select {
     border-color: var(--line);
   }
 }
+
+
+/* Keep the original theme's focus and selection treatment unchanged. */
+html[data-theme="current"] button:focus-visible,
+html[data-theme="current"] a:focus-visible {
+  outline-color: #76dfbd;
+}
+
+html[data-theme="current"] ::selection {
+  background: rgba(101, 214, 173, 0.28);
+}
