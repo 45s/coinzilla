@@ -94,7 +94,6 @@ test("rejects invalid API configuration before opening the HTTP listener", async
       name: "host",
       env: {
         TRADING_MODE: "testnet",
-        HARVESTER_API_TOKEN: API_TOKEN,
         HARVESTER_API_HOST: " ",
       },
     },
@@ -102,7 +101,6 @@ test("rejects invalid API configuration before opening the HTTP listener", async
       name: "port",
       env: {
         TRADING_MODE: "testnet",
-        HARVESTER_API_TOKEN: API_TOKEN,
         HARVESTER_API_PORT: "65536",
       },
     },
@@ -134,7 +132,6 @@ test("preserves the HTTP startup error without closing Harvester's shared databa
       eventBus,
       env: {
         TRADING_MODE: "testnet",
-        HARVESTER_API_TOKEN: API_TOKEN,
       },
       startServer: async () => {
         throw startupFailure
