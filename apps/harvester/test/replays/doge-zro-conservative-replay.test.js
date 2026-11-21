@@ -585,8 +585,6 @@ function assertOrderMatches(...orderArguments) {
   )
 }
 
-
-
 function createPartialBuyReports({ initialBuyOrder } = {}) {
   const firstExecutionTimestamp = Math.max(Date.now(), initialBuyOrder.createdAt + 1)
   return [
@@ -623,9 +621,24 @@ async function applyPartialBuyReports({
   partialBuyReports,
 }) {
   const expectedProgress = [
-    { baseQuantity: "99.9", spent: "7.157", buyCost: "7.157", completed: false },
-    { baseQuantity: "249.75", spent: "17.8925", buyCost: "17.8925", completed: false },
-    { baseQuantity: "399.6", spent: "28.628", buyCost: "28.628", completed: true },
+    {
+      baseQuantity: "99.9",
+      spent: "7.157",
+      buyCost: "7.157",
+      completed: false,
+    },
+    {
+      baseQuantity: "249.75",
+      spent: "17.8925",
+      buyCost: "17.8925",
+      completed: false,
+    },
+    {
+      baseQuantity: "399.6",
+      spent: "28.628",
+      buyCost: "28.628",
+      completed: true,
+    },
   ]
   for (let index = 0; index < partialBuyReports.length; index += 1) {
     const report = partialBuyReports[index]

@@ -705,8 +705,6 @@ async function publishDogeReplayFullOrderFill({
   });
 }
 
-
-
 function createDogeReplayOrderSnapshot({
   order,
   cumulativeExecutedQuantity,
