@@ -14,6 +14,7 @@ This page summarizes the workflows in `.github/workflows/` and what each one ver
 | `harvester-targeted-tests.yml` (**Harvester Targeted Tests**) | Pull requests; manual dispatch | Runs `pnpm --filter @coinzilla/harvester test:targeted`. | Additional PR workflow; not required by either active ruleset. |
 | `harvester-process-lock.yml` (**Harvester Process Lock**) | Path-filtered pull requests/pushes; manual dispatch | Runs the process-lock regression test on Ubuntu and Windows when process-lock code, Harvester entrypoint, or this workflow changes. | Additional path-filtered workflow; not required by either active ruleset. |
 | `external-links.yml` (**External Documentation Links**) | Pull requests to `develop` changing Markdown/MDX or checker sources; weekly schedule; manual dispatch | Checks changed maintained Markdown/MDX; weekly/manual full-tree scans include historical docs and are report-only. DNS answers are validated and connections pinned before requests; redirects are independently revalidated. | Additional advisory workflow; not one of the six `develop-core` required contexts. |
+| `governance-drift-review.yml` (**Repository Governance Drift Review**) | Monthly schedule; manual dispatch | Opens one monthly issue for an evidence-based review of live rulesets, review ownership, required CI contexts, workflow action pins/permissions, security setup, package matrices, architecture exceptions and governance documentation. It uses the runner's GitHub CLI and a narrowly scoped `issues: write` token; it does not change repository settings. | Additional maintenance workflow; not a required context. |
 
 ## Dependabot version updates
 
@@ -152,3 +153,7 @@ The package test commands and pull-request workflow remain deterministic, creden
 5. Re-run the relevant tests and checks, then confirm the pull request's checks have completed successfully.
 
 The coverage workflow emits command output in the Actions job log; it does not write a custom step summary. A failed coverage command still fails the job.
+
+## Periodic governance maintenance
+
+The monthly `Repository Governance Drift Review` workflow opens one issue per month and avoids duplicate issues on reruns. GitHub scheduled workflows run from the repository default branch (`main`), so the monthly schedule becomes active after this workflow reaches `main` through the normal release PR; manual dispatch is available once the workflow exists on the default branch. The review is evidence-driven and read-only: it records live ruleset/branch-protection settings, required status contexts, exact-head CI, action pinning and permissions, security/code-scanning setup, package test-matrix consistency, policy exceptions, and documentation freshness. The checklist and evidence requirements are in [Repository Governance Drift Review](engineering/REPOSITORY_GOVERNANCE_REVIEW.md). The workflow does not mutate GitHub settings or make security alerts blocking by itself.

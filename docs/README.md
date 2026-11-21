@@ -1,6 +1,6 @@
 # Repository documentation
 
-This index is the entry point for maintained repository documentation. The governance foundation and umbrella tracking live in [#795](https://github.com/45s/coinzilla/issues/795). Full-tree Markdown style and maintained-source anchor enforcement is complete in [#1402](https://github.com/45s/coinzilla/issues/1402) (implemented in [PR #1434](https://github.com/45s/coinzilla/pull/1434)); remaining work is split into the maintained-content audit [#1401](https://github.com/45s/coinzilla/issues/1401) and reference/consolidation audit [#1403](https://github.com/45s/coinzilla/issues/1403). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
+This index is the entry point for maintained repository documentation. The governance foundation and umbrella tracking live in [#795](https://github.com/45s/coinzilla/issues/795). Full-tree Markdown style and maintained-source anchor enforcement is complete in [#1402](https://github.com/45s/coinzilla/issues/1402) (implemented in [PR #1434](https://github.com/45s/coinzilla/pull/1434)). The maintained-content and reference/consolidation audits [#1401](https://github.com/45s/coinzilla/issues/1401) and [#1403](https://github.com/45s/coinzilla/issues/1403) were completed together in [PR #1628](https://github.com/45s/coinzilla/pull/1628). The canonical placement, ownership, lifecycle, naming, AI-agent requirements and enforcement rules are defined in [Documentation Governance](DOCUMENTATION_GOVERNANCE.md).
 
 ## Start here
 
@@ -11,6 +11,7 @@ This index is the entry point for maintained repository documentation. The gover
 - [ESLint Standard](engineering/ESLINT_STANDARD.md) — rule compliance, agent preflight and suppression prevention
 - [Repository roadmap](../ROADMAP.md) — cross-workspace engineering and release work
 - [Documentation Governance](DOCUMENTATION_GOVERNANCE.md) — the documentation vision and maintenance contract
+- [Repository governance drift review](engineering/REPOSITORY_GOVERNANCE_REVIEW.md) — monthly evidence-based review of rulesets, CI, workflow supply chain, security and package matrices
 - [Markdown style standard](MARKDOWN_STYLE.md) — consistent formatting and authoring conventions
 - [Repository documentation inventory](REPOSITORY_DOCUMENTATION_INVENTORY.md) — frozen 97-file baseline plus subsequent recursive checkpoints (179 tracked Markdown/MDX files on `develop` at `0f827ba`; 94 under Harvester and 85 elsewhere)
 
