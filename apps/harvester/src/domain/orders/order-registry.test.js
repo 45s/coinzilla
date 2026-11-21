@@ -155,7 +155,13 @@ test("matches an execution report by broker order ID when Binance client ID diff
   })
   const result = registry.applyUpdate({ order: canceledReport })
 
-  assert.equal(registry.getOrderByBrokerOrderId({ brokerOrderId: "666845" }).clientOrderId, "h-ZROUSDT-1")
+  assert.equal(
+    registry.getOrderByBrokerOrderId({
+      brokerOrderId: "666845",
+      marketId: market.id,
+    }).clientOrderId,
+    "h-ZROUSDT-1",
+  )
   assert.equal(result.unknown, false)
   assert.equal(result.applied, true)
   assert.equal(result.registry.getOrder({ clientOrderId: "h-ZROUSDT-1" }).status, "CANCELED")

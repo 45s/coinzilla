@@ -84,13 +84,16 @@ export function validateOrderOwnerships({ orders, ownerships } = {}) {
     })
   })
   const clientOrderIds = normalizedOwnerships.map((ownership) => ownership.clientOrderId)
-  const brokerOrderIds = normalizedOwnerships
-    .map((ownership) => ownership.brokerOrderId)
-    .filter((id) => id !== undefined)
+  const brokerOrderKeys = normalizedOwnerships
+    .filter((ownership) => ownership.brokerOrderId !== undefined)
+    .map((ownership) => {
+      const order = orders.find((item) => item.clientOrderId === ownership.clientOrderId)
+      return `${order.market.id}:${ownership.brokerOrderId}`
+    })
   if (new Set(clientOrderIds).size !== clientOrderIds.length) {
     throw new TypeError("OrderRegistry cannot contain duplicate ownership clientOrderIds")
   }
-  if (new Set(brokerOrderIds).size !== brokerOrderIds.length) {
+  if (new Set(brokerOrderKeys).size !== brokerOrderKeys.length) {
     throw new TypeError("OrderRegistry cannot contain duplicate ownership brokerOrderIds")
   }
   return Object.freeze(normalizedOwnerships)
@@ -105,7 +108,7 @@ export function validateOrderOwnerships({ orders, ownerships } = {}) {
  * @param {string} [options.brokerOrderId]
  * @returns {object|undefined} Matching immutable ownership record.
  */
-export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId } = {}) {
+function validateOwnershipLookup({ clientOrderId, brokerOrderId }) {
   if (clientOrderId === undefined && brokerOrderId === undefined) {
     throw new TypeError("OrderRegistry.getOwnership requires clientOrderId or brokerOrderId")
   }
@@ -115,13 +118,33 @@ export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId } 
   if (brokerOrderId !== undefined && (typeof brokerOrderId !== "string" || !brokerOrderId.trim())) {
     throw new TypeError("OrderRegistry.getOwnership brokerOrderId must be a non-empty string")
   }
+}
 
-  const byClientOrderId = clientOrderId === undefined
+function findOwnershipByClientId({ ownerships, clientOrderId }) {
+  return clientOrderId === undefined
     ? undefined
     : ownerships.find((ownership) => ownership.clientOrderId === clientOrderId)
-  const byBrokerOrderId = brokerOrderId === undefined
+}
+
+function findOwnershipByBrokerId({ ownerships, brokerOrderId }) {
+  return brokerOrderId === undefined
     ? undefined
     : ownerships.find((ownership) => ownership.brokerOrderId === brokerOrderId)
+}
+
+export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId } = {}) {
+  validateOwnershipLookup({
+    clientOrderId,
+    brokerOrderId,
+  })
+  const byClientOrderId = findOwnershipByClientId({
+    ownerships,
+    clientOrderId,
+  })
+  const byBrokerOrderId = findOwnershipByBrokerId({
+    ownerships,
+    brokerOrderId,
+  })
   if (clientOrderId !== undefined && brokerOrderId !== undefined &&
       byClientOrderId !== byBrokerOrderId) {
     throw new Error("Order ownership clientOrderId and brokerOrderId identify different registered orders")
