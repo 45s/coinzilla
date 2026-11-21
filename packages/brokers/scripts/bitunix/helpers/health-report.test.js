@@ -9,11 +9,6 @@ import {
 const requiredOperations = [
   "diagnostic safety confirmation",
   "diagnostic configuration",
-  "REST private account balances",
-  "WebSocket connection",
-  "ping",
-  "user.account",
-  "user.info",
 ]
 
 test("health evaluation fails when a required read-only operation is missing", () => {
@@ -33,7 +28,7 @@ test("health evaluation fails when a required read-only operation is missing", (
   assert.equal(result.healthy, false)
 })
 
-test("health evaluation fails when any diagnostic operation fails", () => {
+test("health evaluation fails when a required order-gate operation fails", () => {
   const results = requiredOperations.map((operation) => ({
     operation,
     status: "passed",
@@ -45,7 +40,36 @@ test("health evaluation fails when any diagnostic operation fails", () => {
     },
     results,
   }
-  assert.equal(evaluateReadOnlyHealthCheck({ report }).healthy, false)
+  assert.equal(evaluateReadOnlyHealthCheck({ report }).healthy, false, "the operator gate must fail when its explicit safety confirmation fails")
+})
+
+test("optional diagnostic failures do not block the guarded order preflight", () => {
+  const results = [
+    ...requiredOperations.map((operation) => ({
+      operation,
+      status: "passed",
+    })),
+    {
+      operation: "Broker API getOrderHistory",
+      status: "failed",
+    },
+    {
+      operation: "WebSocket connection",
+      status: "failed",
+    },
+    {
+      operation: "market.depth",
+      status: "skipped",
+    },
+  ]
+  const report = {
+    summary: {
+      failed: 2,
+    },
+    results,
+  }
+
+  assert.equal(evaluateReadOnlyHealthCheck({ report }).healthy, true, "unrelated read-only diagnostics must not suppress the separate guarded preflight for the exact order")
 })
 
 test("public health reports copy only allowlisted fields and omit private account payloads", () => {
