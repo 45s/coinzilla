@@ -14,14 +14,35 @@ test("extracts static imports, re-exports, literal dynamic imports, and CommonJS
   ].join("\n")
 
   assert.deepEqual(
-    extractModuleImports({ file: "src/example.js", source }),
+    extractModuleImports({
+      file: "src/example.js",
+      source,
+    }),
     [
-      { specifier: "./default-import.js", kind: "import" },
-      { specifier: "./side-effect-import.js", kind: "import" },
-      { specifier: "./named-re-export.js", kind: "re-export" },
-      { specifier: "./star-re-export.js", kind: "re-export" },
-      { specifier: "./dynamic-import.js", kind: "dynamic-import" },
-      { specifier: "./commonjs-require.js", kind: "require" },
+      {
+        specifier: "./default-import.js",
+        kind: "import",
+      },
+      {
+        specifier: "./side-effect-import.js",
+        kind: "import",
+      },
+      {
+        specifier: "./named-re-export.js",
+        kind: "re-export",
+      },
+      {
+        specifier: "./star-re-export.js",
+        kind: "re-export",
+      },
+      {
+        specifier: "./dynamic-import.js",
+        kind: "dynamic-import",
+      },
+      {
+        specifier: "./commonjs-require.js",
+        kind: "require",
+      },
     ],
     "The import inventory must include each statically resolvable module edge in source order.",
   )
@@ -30,14 +51,17 @@ test("extracts static imports, re-exports, literal dynamic imports, and CommonJS
 test("ignores import-like text in comments and strings and computed module specifiers", () => {
   const source = [
     '// import ignored from "./comment.js"',
-    'const example = "require(\\\"./string.js\\\")"',
+    'const example = "require(\'./string.js\')"',
     'const computedPath = "./computed.js"',
     "import(computedPath)",
     "require(computedPath)",
   ].join("\n")
 
   assert.deepEqual(
-    extractModuleImports({ file: "src/no-static-imports.js", source }),
+    extractModuleImports({
+      file: "src/no-static-imports.js",
+      source,
+    }),
     [],
     "Only actual syntax with a literal module specifier may become a graph edge.",
   )
