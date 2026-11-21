@@ -202,16 +202,16 @@ export async function runGuardedHypeUsdtOrderAttempt({
   createMarker,
   writeLine,
 } = {}) {
-  assertOrderAttemptDependencies({
-    readBroker,
-    createOrderBroker,
-    confirm,
-    createMarker,
-    writeLine,
-  })
   let orderBroker = null
   let dispatchStarted = false
   try {
+    assertOrderAttemptDependencies({
+      readBroker,
+      createOrderBroker,
+      confirm,
+      createMarker,
+      writeLine,
+    })
     const preflight = await readHypeUsdtOperatorPreflight({
       readBroker,
     })
