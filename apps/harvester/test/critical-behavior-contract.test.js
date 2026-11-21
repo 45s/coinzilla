@@ -32,13 +32,25 @@ const validContract = {
     sourceTreeMatchesDevelop: true,
     workflowRunId: 1,
     harvesterJobId: 2,
-    aggregate: { lines: 90, branches: 83, functions: 96 },
+    aggregate: {
+      lines: 90,
+      branches: 83,
+      functions: 96,
+    },
   },
   moduleCoverage: [
     {
       path: "src/domain/orders/order-registry.js",
-      baseline: { lines: 94.05, branches: 89.84, functions: 100 },
-      minimum: { lines: 90, branches: 85, functions: 95 },
+      baseline: {
+        lines: 94.05,
+        branches: 89.84,
+        functions: 100,
+      },
+      minimum: {
+        lines: 90,
+        branches: 85,
+        functions: 95,
+      },
     },
   ],
 }
