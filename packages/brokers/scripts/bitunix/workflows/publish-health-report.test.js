@@ -139,7 +139,7 @@ function assertReportBranchPublished({ result, calls }) {
   assert.equal(result.branch, "diagnostics/bitunix-health-20261119T083000000Z", "the report branch must have a unique UTC timestamped name")
   assert.equal(result.commitSha, "report-commit-sha", "the pushed report commit SHA must be returned for inspection")
   assert.equal(result.exitCode, 0, "a fully successful read-only health check must return a successful exit code")
-  assert.equal(result.healthCheck.healthy, true, "all required authenticated account and WebSocket probes must pass")
+  assert.equal(result.healthCheck.healthy, true, "the explicit safety/configuration prerequisites must pass before the guarded Broker preflight can begin")
   assert.equal(calls.some((args) => args[0] === "fetch" && args[1] === "origin" && args[2] === "refs/heads/develop:refs/remotes/origin/develop"), true, "the report branch must start from the latest fetched origin/develop")
   assert.equal(calls.some((args) => args[0] === "switch" && args[1] === "--create" && args[3] === "--track" && args[4] === "origin/develop"), true, "the script must create a dedicated branch tracking the fetched develop tip")
   assert.deepEqual(calls.find((args) => args[0] === "add"), ["add", "--", result.reportPath], "only the generated sanitized report may be staged")
