@@ -94,6 +94,16 @@ function isValidTestCase(testCase) {
   )
 }
 
+function hasNamedTestCase({ testSource, name }) {
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\function validateTestCase({ behavior, testCase, errors, readFile, testKinds }) {")
+  const pattern = new RegExp(
+    "(?:nodeTest|test|runDogeTradingReplayTest)\\(\\s*[\"'`]" +
+    escapedName +
+    "[\"'`]",
+  )
+  return pattern.test(testSource)
+}
+
 function validateTestCase({ behavior, testCase, errors, readFile, testKinds }) {
   if (!isValidTestCase(testCase)) {
     errors.push(`Critical behavior ${behavior.id} contains an invalid named test mapping.`)
@@ -107,7 +117,10 @@ function validateTestCase({ behavior, testCase, errors, readFile, testKinds }) {
   })
   if (typeof testSource !== "string") {
     errors.push(`Critical behavior ${behavior.id} references missing test file: ${testCase.path}.`)
-  } else if (!testSource.includes(testCase.name)) {
+  } else if (!hasNamedTestCase({
+    testSource,
+    name: testCase.name,
+  })) {
     errors.push(`Critical behavior ${behavior.id} references missing regression test "${testCase.name}" in ${testCase.path}.`)
   }
 }
