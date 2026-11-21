@@ -533,9 +533,9 @@ async function listenServer({ server, host, port } = {}) {
 }
 
 /**
- * Start the versioned HTTP adapter for Harvester's trading-history query facade.
+ * Start the versioned HTTP and optional authenticated WebSocket adapters for trading history.
  *
- * @param {{queries: object, token: string, environment: "testnet"|"live", host?: string, port?: number, logger?: object}} input
+ * @param {{queries: object, token: string, environment: "testnet"|"live", host?: string, port?: number, logger?: object, eventBus?: object}} input
  * @returns {Promise<Readonly<{address: object, close: Function}>>} Bound server and lifecycle handle.
  */
 export async function startTradingHistoryApiServer({
