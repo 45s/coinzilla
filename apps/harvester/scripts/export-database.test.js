@@ -70,7 +70,7 @@ test("exports every user table and row as lossless JSON arrays", () => {
       "An empty table must be represented by an empty array.",
     )
     assert.equal(
-      dump.database["__proto__"][0]["__proto__"],
+      Reflect.get(Reflect.get(dump.database, "__proto__")[0], "__proto__"),
       "preserved",
       "The exporter must preserve a valid __proto__ column instead of treating it as an object prototype setter.",
     )
