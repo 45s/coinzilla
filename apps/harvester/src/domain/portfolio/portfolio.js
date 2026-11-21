@@ -122,7 +122,7 @@ function validateSellAllocationInput({ fill, allocationFingerprint, allocationSi
   }
 }
 
-function resolveSellAllocationPosition({ positions, fill, positionId, strategyId } = {}) {
+function resolveSellAllocationPosition({ positions, fill, positionId, strategyId, allocationSide } = {}) {
   const owner = normalizeStrategyId({
     strategyId,
     errorMessage: "Portfolio operation requires a non-empty strategyId",
@@ -140,7 +140,7 @@ function resolveSellAllocationPosition({ positions, fill, positionId, strategyId
     throw new Error(`Allocated SELL market or strategy owner conflicts with Position ${id}`)
   }
   if (compareDecimal({
-    left: arguments[0].allocationSide.grossBaseQuantity,
+    left: allocationSide.grossBaseQuantity,
     right: fill.quantity.amount,
   }) > 0) {
     throw new RangeError("Allocated SELL quantity exceeds canonical Fill quantity")
