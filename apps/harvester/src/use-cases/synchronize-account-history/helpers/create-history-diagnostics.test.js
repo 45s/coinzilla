@@ -2,8 +2,8 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { createHistoryDiagnostics } from "./create-history-diagnostics.js"
 
-test("returns immutable per-market progress and safe failure details without claiming account-wide completeness", () => {
-  const diagnostics = createHistoryDiagnostics({
+function createDiagnosticsFixture() {
+  return createHistoryDiagnostics({
     state: {
       marketsAttempted: ["BTCUSDT", "ETHUSDT"],
       orderMarketsQueried: ["ETHUSDT"],
@@ -29,18 +29,27 @@ test("returns immutable per-market progress and safe failure details without cla
         lastPersistedOrderId: "10",
         errorName: "Error",
         errorCode: null,
-        message: "simulated persistence failure",
+        message: "Exchange response included https://api.example/?signature=private",
+        stack: "private stack",
       }],
     },
     historyPagesComplete: false,
   })
+}
 
+test("returns immutable per-market progress and safe failure details without claiming account-wide completeness", () => {
+  const diagnostics = createDiagnosticsFixture()
   assert.equal(diagnostics.complete, false, "Exchange retention and configured-market scope must never be reported as complete account history.")
   assert.equal(diagnostics.failureCount, 1, "A failed market scan must produce one actionable diagnostic failure.")
-  assert.deepEqual(diagnostics.marketsAttempted, ["BTCUSDT", "ETHUSDT"])
-  assert.deepEqual(diagnostics.orderMarketsQueried, ["ETHUSDT"])
-  assert.deepEqual(diagnostics.fillMarketsQueried, ["ETHUSDT"])
-  assert.deepEqual(diagnostics.marketsFailed, ["BTCUSDT"])
+  assert.doesNotMatch(
+    JSON.stringify(diagnostics.failures),
+    /api\.example|signature=private|private stack/,
+    "Untrusted failure messages and stacks must not enter immutable history diagnostics.",
+  )
+  assert.deepEqual(diagnostics.marketsAttempted, ["BTCUSDT", "ETHUSDT"], "Diagnostics must retain every configured market in attempt order.")
+  assert.deepEqual(diagnostics.orderMarketsQueried, ["ETHUSDT"], "Diagnostics must identify the market whose order scan completed.")
+  assert.deepEqual(diagnostics.fillMarketsQueried, ["ETHUSDT"], "Diagnostics must identify the market whose fill scan completed.")
+  assert.deepEqual(diagnostics.marketsFailed, ["BTCUSDT"], "Diagnostics must identify the market whose scan failed.")
   assert.deepEqual(
     diagnostics.failures,
     [{
@@ -53,8 +62,6 @@ test("returns immutable per-market progress and safe failure details without cla
       clientOrderId: "second-order",
       lastPersistedOrderId: "10",
       errorName: "Error",
-      errorCode: null,
-      message: "simulated persistence failure",
     }],
     "The diagnostic failure must retain safe, actionable page and record context.",
   )

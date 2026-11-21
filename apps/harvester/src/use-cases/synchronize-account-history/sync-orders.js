@@ -47,9 +47,17 @@ async function persistCanonicalOrder({ order, repositories, providerIdentity, en
   }
   await repositories.orderRepository.upsertHistorical(record)
   state.ordersPersisted += 1
+  state.lastPersistedOrderId = order.brokerOrderId
 }
 
-async function resolveOrderHistoryCursor({ repositories, providerIdentity, environment, symbol }) {
+async function resolveOrderHistoryCursor({ repositories, providerIdentity, environment, symbol, state }) {
+  state.currentHistoryType = "orders"
+  state.currentOperation = "ORDER_CURSOR_READ"
+  state.currentPageCursor = null
+  state.currentRecordIndex = null
+  state.currentBrokerOrderId = null
+  state.currentClientOrderId = null
+  state.currentTradeId = null
   const cursor = await repositories.cursorRepository.get({
     providerIdentity,
     environment,
@@ -85,6 +93,13 @@ async function resolveOrderHistoryCursor({ repositories, providerIdentity, envir
 }
 
 async function requestOrderPage({ broker, symbol, orderId, limit, requestDelayMs, sleep, state }) {
+  state.currentHistoryType = "orders"
+  state.currentOperation = "ORDER_PAGE_FETCH"
+  state.currentPageCursor = String(orderId)
+  state.currentRecordIndex = null
+  state.currentBrokerOrderId = null
+  state.currentClientOrderId = null
+  state.currentTradeId = null
   await waitBeforeRequest({
     state,
     requestDelayMs,
@@ -107,8 +122,15 @@ async function requestOrderPage({ broker, symbol, orderId, limit, requestDelayMs
 }
 
 function validateOrderPage({ page, symbol, lastOrderId, state, providerIdentity }) {
+  state.currentOperation = "ORDER_PAGE_VALIDATE"
+  state.ordersObserved += page.length
   let nextOrderId = lastOrderId
-  const orders = page.map((order) => {
+  const orders = []
+  for (const [index, order] of page.entries()) {
+    state.currentRecordIndex = index + 1
+    state.currentBrokerOrderId = typeof order?.brokerOrderId === "string" ? order.brokerOrderId : null
+    state.currentClientOrderId = typeof order?.clientOrderId === "string" ? order.clientOrderId : null
+    state.currentTradeId = null
     nextOrderId = validateCanonicalOrder({
       order,
       symbol,
@@ -116,9 +138,8 @@ function validateOrderPage({ page, symbol, lastOrderId, state, providerIdentity 
       state,
       providerIdentity,
     })
-    return order
-  })
-  state.ordersObserved += orders.length
+    orders.push(order)
+  }
   return {
     orders,
     lastOrderId: nextOrderId,
@@ -126,7 +147,12 @@ function validateOrderPage({ page, symbol, lastOrderId, state, providerIdentity 
 }
 
 async function persistOrderPage({ orders, repositories, providerIdentity, environment, now, state }) {
-  for (const order of orders) {
+  for (const [index, order] of orders.entries()) {
+    state.currentOperation = "ORDER_RECORD_PERSIST"
+    state.currentRecordIndex = index + 1
+    state.currentBrokerOrderId = order.brokerOrderId
+    state.currentClientOrderId = order.clientOrderId
+    state.currentTradeId = null
     await persistCanonicalOrder({
       order,
       repositories,
@@ -178,6 +204,11 @@ async function persistAndAdvanceOrderPage({
     state,
   })
   const { lastOrderId } = validated
+  state.currentOperation = "ORDER_CURSOR_SAVE"
+  state.currentRecordIndex = null
+  state.currentBrokerOrderId = null
+  state.currentClientOrderId = null
+  state.currentTradeId = null
   await saveOrderPageCursor({
     page,
     lastOrderId,
@@ -207,6 +238,7 @@ async function fetchOrderHistoryForMarket({
     providerIdentity,
     environment,
     symbol,
+    state,
   })
   while (true) {
     const page = await requestOrderPage({
@@ -239,6 +271,7 @@ async function fetchOrderHistoryForMarket({
       return
     }
     if (lastOrderId >= Number.MAX_SAFE_INTEGER) {
+      state.currentOperation = "ORDER_CURSOR_ADVANCE"
       throw new RangeError(`Binance order history cannot advance its cursor for ${symbol}`)
     }
     orderId = lastOrderId + 1

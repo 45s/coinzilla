@@ -279,12 +279,13 @@ test("rejects exchange orders carrying a different provider or account identity"
   })
 
   assert.equal(result.ok, false, "A mismatched exchange account must fail history synchronization.")
-  assert.match(result.errors[0].message, /provider identity conflicts/i, "The failure must identify the provider-identity conflict.")
+  const [error] = result.errors
+  assert.match(error.cause.errors[0].message, /provider identity conflicts/i, "The failure must identify the provider-identity conflict.")
   assert.equal(repositories.orders.length, 0, "A foreign-account order must never be persisted under the configured account.")
   assert.equal(repositories.fills.length, 0, "No fill scan may proceed after an identity-conflicting order page.")
 })
 
-test("replays a page after an order write failure without advancing its durable cursor", async () => {
+function createOrderWriteFailureScenario() {
   const repositories = createRepositories()
   const calls = {
     orders: [],
@@ -312,46 +313,77 @@ test("replays a page after an order write failure without advancing its durable 
     }
     await originalUpsert(record)
   }
-  const input = {
-    broker,
-    symbols: ["BTCUSDT"],
-    providerIdentity: identity,
-    environment: "testnet",
-    orderRepository: repositories.orderRepository,
-    fillRepository: repositories.fillRepository,
-    cursorRepository: repositories.cursorRepository,
-    limit: 2,
-    requestDelayMs: 0,
-    now: () => 300,
+  return {
+    repositories,
+    calls,
+    input: {
+      broker,
+      symbols: ["BTCUSDT"],
+      providerIdentity: identity,
+      environment: "testnet",
+      orderRepository: repositories.orderRepository,
+      fillRepository: repositories.fillRepository,
+      cursorRepository: repositories.cursorRepository,
+      limit: 2,
+      requestDelayMs: 0,
+      now: () => 300,
+    },
+    allowRetry: () => {
+      failSecondOrder = false
+    },
   }
+}
 
-  const failed = await synchronizeAccountHistory(input)
+function assertOrderWriteFailure({ failed, repositories }) {
   assert.equal(failed.ok, false, "A failed record write must fail the current history page.")
-  const diagnostics = failed.errors[0].historyDiagnostics
-  assert.equal(diagnostics.failureCount, 1, "The failed page must be represented in startup diagnostics.")
-  const failure = diagnostics.failures[0]
-  assert.equal(failure.market, "BTCUSDT", "Diagnostics must identify the market whose page failed.")
-  assert.equal(failure.historyType, "orders", "Diagnostics must identify the failed history type.")
-  assert.equal(failure.failureStage, "ORDER_RECORD_PERSIST", "Diagnostics must identify the failed persistence stage.")
-  assert.equal(failure.pageCursor, "0", "Diagnostics must retain the original page cursor.")
-  assert.equal(failure.recordIndex, 2, "Diagnostics must identify the 1-based failing record position.")
-  assert.equal(failure.brokerOrderId, "11", "Diagnostics must retain the failing exchange order ID.")
-  assert.equal(failure.clientOrderId, "second-order", "Diagnostics must retain the failing client order ID.")
-  assert.equal(failure.lastPersistedOrderId, "10", "Diagnostics must retain the last successfully persisted order ID.")
-  assert.equal(diagnostics.orderPagesChecked, 1, "Diagnostics must count the page request before persistence failed.")
-  assert.equal(diagnostics.ordersPersisted, 1, "Diagnostics must report records persisted before the failure.")
-  assert.equal(repositories.cursors.get("BTCUSDT")?.lastOrderId, undefined, "The order cursor must remain unchanged after a partial page write.")
-  assert.equal(repositories.orders.length, 1, "A successfully written record may remain available for idempotent replay.")
+  const [failureResult] = failed.errors
+  const { historyDiagnostics: diagnostics } = failureResult
+  const [failure] = diagnostics.failures
+  assert.equal(diagnostics.failureCount, 1, "The failed order page must produce one market failure.")
+  assert.equal(failure.market, "BTCUSDT", "The failed order page must identify its market.")
+  assert.equal(failure.historyType, "orders", "The failure must identify order history.")
+  assert.equal(failure.failureStage, "ORDER_RECORD_PERSIST", "The failure must identify the record persistence stage.")
+  assert.equal(failure.pageCursor, "0", "The failed order page must retain its original cursor.")
+  assert.equal(failure.recordIndex, 2, "The failure must identify the 1-based second record position.")
+  assert.equal(failure.brokerOrderId, "11", "The failure must retain the exchange order ID.")
+  assert.equal(failure.clientOrderId, "second-order", "The failure must retain the client order ID.")
+  assert.equal(failure.lastPersistedOrderId, "10", "The failure must retain the last successfully persisted order ID.")
+  assert.equal(diagnostics.orderPagesChecked, 1, "The failed page request must count as checked.")
+  assert.equal(diagnostics.ordersPersisted, 1, "The successful first order write must be counted.")
+  assert.equal(repositories.cursors.get("BTCUSDT")?.lastOrderId, undefined, "A partial page write must not advance the order cursor.")
+  assert.equal(repositories.orders.length, 1, "The successful first order must remain available for idempotent replay.")
+}
 
-  failSecondOrder = false
-  const retried = await synchronizeAccountHistory(input)
+function assertOrderWriteReplay({ retried, calls, repositories }) {
   assert.equal(retried.ok, true, "A retried page must complete after persistence recovers.")
-  assert.deepEqual(calls.orders.slice(0, 2).map(({ orderId }) => orderId), [0, 0], "The failed page must be requested again from its original cursor.")
-  assert.equal(repositories.orders.length, 2, "Page replay must leave one relational order per canonical identity.")
-  assert.equal(repositories.cursors.get("BTCUSDT").lastOrderId, "11", "The cursor may advance only after every order in the page is persisted.")
+  assert.deepEqual(
+    calls.orders.slice(0, 2).map(({ orderId }) => orderId),
+    [0, 0],
+    "The failed order page must be requested again from its original cursor.",
+  )
+  assert.equal(repositories.orders.length, 2, "Replay must leave exactly one row for each canonical order.")
+  assert.equal(repositories.cursors.get("BTCUSDT").lastOrderId, "11", "The cursor may advance only after the complete order page is persisted.")
+}
+
+test("replays a page after an order write failure without advancing its durable cursor", async () => {
+  const scenario = createOrderWriteFailureScenario()
+  const failed = await synchronizeAccountHistory(scenario.input)
+  assertOrderWriteFailure({
+    failed,
+    repositories: scenario.repositories,
+  })
+  scenario.allowRetry()
+  const retried = await synchronizeAccountHistory(scenario.input)
+  assertOrderWriteReplay({
+    retried,
+    calls: scenario.calls,
+    repositories: scenario.repositories,
+  })
 })
 
-test("replays a trade page after a fill write failure without advancing its durable cursor", async () => {
+
+
+function createFillWriteFailureScenario() {
   const repositories = createRepositories()
   const calls = {
     orders: [],
@@ -381,42 +413,71 @@ test("replays a trade page after a fill write failure without advancing its dura
     }
     await originalUpsert(input)
   }
-  const input = {
-    broker,
-    symbols: ["BTCUSDT"],
-    providerIdentity: identity,
-    environment: "testnet",
-    orderRepository: repositories.orderRepository,
-    fillRepository: repositories.fillRepository,
-    cursorRepository: repositories.cursorRepository,
-    limit: 2,
-    requestDelayMs: 0,
-    now: () => 300,
+  return {
+    repositories,
+    calls,
+    input: {
+      broker,
+      symbols: ["BTCUSDT"],
+      providerIdentity: identity,
+      environment: "testnet",
+      orderRepository: repositories.orderRepository,
+      fillRepository: repositories.fillRepository,
+      cursorRepository: repositories.cursorRepository,
+      limit: 2,
+      requestDelayMs: 0,
+      now: () => 300,
+    },
+    allowRetry: () => {
+      failSecondFill = false
+    },
   }
+}
 
-  const failed = await synchronizeAccountHistory(input)
+function assertFillWriteFailure({ failed, repositories }) {
   assert.equal(failed.ok, false, "A failed fill write must fail the current trade-history page.")
-  const diagnostics = failed.errors[0].historyDiagnostics
-  assert.equal(diagnostics.failureCount, 1, "A failed trade page must be represented in startup diagnostics.")
-  const failure = diagnostics.failures[0]
-  assert.equal(failure.historyType, "trades", "Diagnostics must identify the failed history type.")
-  assert.equal(failure.failureStage, "FILL_RECORD_PERSIST", "Diagnostics must identify the failed fill persistence stage.")
-  assert.equal(failure.pageCursor, "0", "Diagnostics must retain the original trade page cursor.")
-  assert.equal(failure.recordIndex, 2, "Diagnostics must identify the 1-based failing trade position.")
-  assert.equal(failure.tradeId, "2", "Diagnostics must retain the failing exchange trade ID.")
-  assert.equal(failure.brokerOrderId, "11", "Diagnostics must retain the exchange order ID for the failing fill.")
-  assert.equal(failure.lastPersistedTradeId, "1", "Diagnostics must retain the last successfully persisted trade ID.")
-  assert.equal(diagnostics.fillPagesChecked, 1, "Diagnostics must count the trade page request before persistence failed.")
-  assert.equal(diagnostics.fillsPersisted, 1, "Diagnostics must report fills persisted before the failure.")
-  assert.equal(repositories.cursors.get("BTCUSDT")?.lastTradeId, undefined, "The trade cursor must remain unchanged after a partial page write.")
-  assert.equal(repositories.fills.length, 1, "A successfully written fill may remain available for idempotent replay.")
+  const [failureResult] = failed.errors
+  const { historyDiagnostics: diagnostics } = failureResult
+  const [failure] = diagnostics.failures
+  assert.equal(diagnostics.failureCount, 1, "The failed trade page must produce one market failure.")
+  assert.equal(failure.historyType, "trades", "The failure must identify trade history.")
+  assert.equal(failure.failureStage, "FILL_RECORD_PERSIST", "The failure must identify fill-record persistence.")
+  assert.equal(failure.pageCursor, "0", "The failed trade page must retain its original cursor.")
+  assert.equal(failure.recordIndex, 2, "The failure must identify the 1-based second fill position.")
+  assert.equal(failure.tradeId, "2", "The failure must retain the exchange trade ID.")
+  assert.equal(failure.brokerOrderId, "11", "The failed fill must retain its exchange order ID.")
+  assert.equal(failure.lastPersistedTradeId, "1", "The failure must retain the last successfully persisted trade ID.")
+  assert.equal(diagnostics.fillPagesChecked, 1, "The failed trade page request must count as checked.")
+  assert.equal(diagnostics.fillsPersisted, 1, "The successful first fill write must be counted.")
+  assert.equal(repositories.cursors.get("BTCUSDT")?.lastTradeId, undefined, "A partial fill page write must not advance the trade cursor.")
+  assert.equal(repositories.fills.length, 1, "The successful first fill must remain available for idempotent replay.")
+}
 
-  failSecondFill = false
-  const retried = await synchronizeAccountHistory(input)
+function assertFillWriteReplay({ retried, calls, repositories }) {
   assert.equal(retried.ok, true, "A retried trade page must complete after persistence recovers.")
-  assert.deepEqual(calls.fills.slice(0, 2).map(({ fromId }) => fromId), [0, 0], "The failed trade page must be requested again from its original cursor.")
-  assert.equal(repositories.fills.length, 2, "Idempotent fill upserts must leave one row per execution after replay.")
-  assert.equal(repositories.cursors.get("BTCUSDT").lastTradeId, "2", "The trade cursor may advance only after every fill in the page is persisted.")
+  assert.deepEqual(
+    calls.fills.slice(0, 2).map(({ fromId }) => fromId),
+    [0, 0],
+    "The failed trade page must be requested again from its original cursor.",
+  )
+  assert.equal(repositories.fills.length, 2, "Replay must leave exactly one row for each canonical fill.")
+  assert.equal(repositories.cursors.get("BTCUSDT").lastTradeId, "2", "The cursor may advance only after the complete trade page is persisted.")
+}
+
+test("replays a trade page after a fill write failure without advancing its durable cursor", async () => {
+  const scenario = createFillWriteFailureScenario()
+  const failed = await synchronizeAccountHistory(scenario.input)
+  assertFillWriteFailure({
+    failed,
+    repositories: scenario.repositories,
+  })
+  scenario.allowRetry()
+  const retried = await synchronizeAccountHistory(scenario.input)
+  assertFillWriteReplay({
+    retried,
+    calls: scenario.calls,
+    repositories: scenario.repositories,
+  })
 })
 
 test("rejects a historical fill carrying a different provider or account identity", async () => {
@@ -449,7 +510,8 @@ test("rejects a historical fill carrying a different provider or account identit
   })
 
   assert.equal(result.ok, false, "A foreign-account execution must fail closed.")
-  assert.match(result.errors[0].message, /provider identity conflicts/i, "The failure must identify the provider-identity conflict.")
+  const [error] = result.errors
+  assert.match(error.cause.errors[0].message, /provider identity conflicts/i, "The failure must identify the provider-identity conflict.")
   assert.equal(repositories.fills.length, 0, "A foreign-account fill must never be persisted under the configured account.")
   assert.equal(repositories.cursors.get("BTCUSDT")?.lastTradeId, undefined, "A rejected fill must not advance the trade cursor.")
 })
@@ -488,7 +550,8 @@ test("replays a fully persisted order page when its cursor write fails", async (
 
   const failed = await synchronizeAccountHistory(input)
   assert.equal(failed.ok, false, "A failed cursor write must leave the page retryable.")
-  const failure = failed.errors[0].historyDiagnostics.failures[0]
+  const [failureResult] = failed.errors
+  const [failure] = failureResult.historyDiagnostics.failures
   assert.equal(failure.failureStage, "ORDER_CURSOR_SAVE", "Diagnostics must distinguish cursor persistence from order-record persistence.")
   assert.equal(failure.pageCursor, "0", "Cursor failures must retain the original page start.")
   assert.equal(failure.lastPersistedOrderId, "10", "Cursor failures must report the final persisted order before advancement.")
@@ -539,7 +602,8 @@ test("replays a fully persisted trade page when its cursor write fails", async (
 
   const failed = await synchronizeAccountHistory(input)
   assert.equal(failed.ok, false, "A failed trade cursor write must leave the page retryable.")
-  const failure = failed.errors[0].historyDiagnostics.failures[0]
+  const [failureResult] = failed.errors
+  const [failure] = failureResult.historyDiagnostics.failures
   assert.equal(failure.failureStage, "TRADE_CURSOR_SAVE", "Diagnostics must distinguish cursor persistence from fill-record persistence.")
   assert.equal(failure.pageCursor, "0", "Trade cursor failures must retain the original page start.")
   assert.equal(failure.lastPersistedTradeId, "1", "Trade cursor failures must report the final persisted trade before advancement.")
@@ -586,13 +650,14 @@ test("fails closed when an exchange history cursor does not advance", async () =
     now: () => 300,
   })
 
-  assert.equal(result.ok, false)
-  assert.match(result.errors[0].message, /strictly increasing/)
-  assert.deepEqual(result.errors[0].historyDiagnostics.marketsAttempted, ["BTCUSDT"])
-  assert.equal(result.errors[0].historyDiagnostics.orderPagesChecked, 1)
-  assert.equal(result.errors[0].historyDiagnostics.historyPagesComplete, false)
-  assert.equal(repositories.orders.length, 0)
-  assert.equal(repositories.fills.length, 0)
+  assert.equal(result.ok, false, "A non-advancing exchange cursor must fail history synchronization.")
+  const [error] = result.errors
+  assert.match(error.cause.errors[0].message, /strictly increasing/, "A repeated exchange ID must fail the monotonic cursor guard.")
+  assert.deepEqual(error.historyDiagnostics.marketsAttempted, ["BTCUSDT"], "The failed cursor scan must report the attempted market.")
+  assert.equal(error.historyDiagnostics.orderPagesChecked, 1, "The repeated-ID page request must be counted.")
+  assert.equal(error.historyDiagnostics.historyPagesComplete, false, "A non-advancing page must leave history incomplete.")
+  assert.equal(repositories.orders.length, 0, "A page with non-advancing IDs must not persist records.")
+  assert.equal(repositories.fills.length, 0, "A rejected order page must prevent fill persistence.")
 })
 
 
@@ -791,6 +856,38 @@ test("links later fills to a stored order after its order cursor has advanced", 
 })
 
 
+
+function createMarketFailureBroker({ calls, orderFailure, tradeFailure }) {
+  return {
+    getCanonicalOrderHistory: async ({ symbol, orderId }) => {
+      calls.orders.push({
+        symbol,
+        orderId,
+      })
+      if (orderFailure && symbol === "BTCUSDT") {
+        throw orderFailure
+      }
+      return {
+        ok: true,
+        data: [],
+      }
+    },
+    getFills: async ({ symbol, fromId }) => {
+      calls.fills.push({
+        symbol,
+        fromId,
+      })
+      if (tradeFailure && symbol === "BTCUSDT") {
+        throw tradeFailure
+      }
+      return {
+        ok: true,
+        data: [],
+      }
+    },
+  }
+}
+
 test("continues independent markets after an order-history failure", async () => {
   const repositories = createRepositories()
   const calls = {
@@ -798,19 +895,10 @@ test("continues independent markets after an order-history failure", async () =>
     fills: [],
   }
   const orderFailure = new Error("simulated BTC order-history request failure")
-  const broker = {
-    getCanonicalOrderHistory: async ({ symbol, orderId }) => {
-      calls.orders.push({ symbol, orderId })
-      if (symbol === "BTCUSDT") {
-        throw orderFailure
-      }
-      return { ok: true, data: [] }
-    },
-    getFills: async ({ symbol, fromId }) => {
-      calls.fills.push({ symbol, fromId })
-      return { ok: true, data: [] }
-    },
-  }
+  const broker = createMarketFailureBroker({
+    calls,
+    orderFailure,
+  })
   const result = await synchronizeAccountHistory({
     broker,
     symbols: ["BTCUSDT", "ETHUSDT"],
@@ -823,26 +911,26 @@ test("continues independent markets after an order-history failure", async () =>
     now: () => 300,
   })
 
-  assert.equal(result.ok, false, "Any failed market must keep the overall history result incomplete.")
-  const error = result.errors[0]
-  const diagnostics = error.historyDiagnostics
-  assert.equal(error.code, "HARVESTER_ACCOUNT_HISTORY_SYNC_FAILED", "The use case must expose its stable operation error code.")
-  assert.ok(error.cause instanceof AggregateError, "The operation error must retain all original market failures.")
-  assert.equal(error.cause.errors[0], orderFailure, "The original broker failure identity must be preserved.")
-  assert.deepEqual(calls.orders.map(({ symbol }) => symbol), ["BTCUSDT", "ETHUSDT"], "The order scan must continue with later independent markets.")
-  assert.deepEqual(calls.fills.map(({ symbol }) => symbol), ["ETHUSDT"], "A market with incomplete order history must skip its fill scan, while later markets continue.")
-  assert.deepEqual(diagnostics.marketsAttempted, ["BTCUSDT", "ETHUSDT"])
-  assert.deepEqual(diagnostics.orderMarketsQueried, ["ETHUSDT"])
-  assert.deepEqual(diagnostics.fillMarketsQueried, ["ETHUSDT"])
-  assert.deepEqual(diagnostics.marketsQueried, ["ETHUSDT"])
-  assert.deepEqual(diagnostics.marketsFailed, ["BTCUSDT"])
-  assert.equal(diagnostics.currentMarket, null, "The completed orchestration must not leave a failed market marked active.")
-  assert.equal(diagnostics.failureCount, 1)
-  assert.equal(diagnostics.historyPagesComplete, false)
-  assert.equal(diagnostics.failures[0].historyType, "orders")
-  assert.equal(diagnostics.failures[0].failureStage, "ORDER_PAGE_FETCH")
-  assert.equal(diagnostics.failures[0].pageCursor, "0")
-  assert.equal(repositories.cursors.has("BTCUSDT"), false, "A failed order page must not create or advance its cursor.")
+  assert.equal(result.ok, false, "A failed market must keep the overall history result incomplete.")
+  const [error] = result.errors
+  const { historyDiagnostics: diagnostics } = error
+  assert.equal(error.code, "HARVESTER_ACCOUNT_HISTORY_SYNC_FAILED", "The operation must expose its stable error code.")
+  assert.ok(error.cause instanceof AggregateError, "The aggregate error must retain an AggregateError cause.")
+  assert.equal(error.cause.errors[0], orderFailure, "The original order-history error object must remain the cause.")
+  assert.deepEqual(calls.orders.map(({ symbol }) => symbol), ["BTCUSDT", "ETHUSDT"], "Every configured market must receive an order-history attempt.")
+  assert.deepEqual(calls.fills.map(({ symbol }) => symbol), ["ETHUSDT"], "The failed market must skip fills while the next market continues.")
+  assert.deepEqual(diagnostics.marketsAttempted, ["BTCUSDT", "ETHUSDT"], "Diagnostics must preserve every attempted market in order.")
+  assert.deepEqual(diagnostics.orderMarketsQueried, ["ETHUSDT"], "Only the later market may complete order history.")
+  assert.deepEqual(diagnostics.fillMarketsQueried, ["ETHUSDT"], "The later market must complete fill history.")
+  assert.deepEqual(diagnostics.marketsQueried, ["ETHUSDT"], "Only fully synchronized markets may be marked queried.")
+  assert.deepEqual(diagnostics.marketsFailed, ["BTCUSDT"], "The failed market must remain in diagnostics.")
+  assert.equal(diagnostics.currentMarket, null, "The scan must clear its active-market marker after completion.")
+  assert.equal(diagnostics.failureCount, 1, "The order failure must be counted once.")
+  assert.equal(diagnostics.historyPagesComplete, false, "One failed market must keep the overall history scan incomplete.")
+  assert.equal(diagnostics.failures[0].historyType, "orders", "The failure record must identify order history.")
+  assert.equal(diagnostics.failures[0].failureStage, "ORDER_PAGE_FETCH", "The failure record must identify the order-page fetch stage.")
+  assert.equal(diagnostics.failures[0].pageCursor, "0", "The failure record must preserve the failed order-page cursor.")
+  assert.equal(repositories.cursors.has("BTCUSDT"), false, "A failed market must not persist a cursor.")
 })
 
 test("continues independent markets after a trade-history failure", async () => {
@@ -852,19 +940,10 @@ test("continues independent markets after a trade-history failure", async () => 
     fills: [],
   }
   const tradeFailure = new Error("simulated BTC trade-history request failure")
-  const broker = {
-    getCanonicalOrderHistory: async ({ symbol, orderId }) => {
-      calls.orders.push({ symbol, orderId })
-      return { ok: true, data: [] }
-    },
-    getFills: async ({ symbol, fromId }) => {
-      calls.fills.push({ symbol, fromId })
-      if (symbol === "BTCUSDT") {
-        throw tradeFailure
-      }
-      return { ok: true, data: [] }
-    },
-  }
+  const broker = createMarketFailureBroker({
+    calls,
+    tradeFailure,
+  })
   const result = await synchronizeAccountHistory({
     broker,
     symbols: ["BTCUSDT", "ETHUSDT"],
@@ -877,19 +956,19 @@ test("continues independent markets after a trade-history failure", async () => 
     now: () => 300,
   })
 
-  assert.equal(result.ok, false, "Any failed trade-history page must keep the overall result incomplete.")
-  const error = result.errors[0]
-  const diagnostics = error.historyDiagnostics
-  assert.ok(error.cause instanceof AggregateError, "The use case must preserve the original trade-history failure.")
-  assert.equal(error.cause.errors[0], tradeFailure, "The original trade-history error identity must be retained.")
-  assert.deepEqual(calls.orders.map(({ symbol }) => symbol), ["BTCUSDT", "ETHUSDT"], "Both markets must complete their independent order scans.")
-  assert.deepEqual(calls.fills.map(({ symbol }) => symbol), ["BTCUSDT", "ETHUSDT"], "A trade-history failure must not prevent the next market's fill scan.")
-  assert.deepEqual(diagnostics.orderMarketsQueried, ["BTCUSDT", "ETHUSDT"])
-  assert.deepEqual(diagnostics.fillMarketsQueried, ["ETHUSDT"])
-  assert.deepEqual(diagnostics.marketsQueried, ["ETHUSDT"])
-  assert.deepEqual(diagnostics.marketsFailed, ["BTCUSDT"])
-  assert.equal(diagnostics.failures[0].historyType, "trades")
-  assert.equal(diagnostics.failures[0].failureStage, "TRADE_PAGE_FETCH")
-  assert.equal(diagnostics.failures[0].pageCursor, "0")
-  assert.equal(repositories.cursors.has("BTCUSDT"), false, "The failed trade scan must not create or advance its trade cursor.")
+  assert.equal(result.ok, false, "A failed trade-history page must keep the overall result incomplete.")
+  const [error] = result.errors
+  const { historyDiagnostics: diagnostics } = error
+  assert.ok(error.cause instanceof AggregateError, "The aggregate error must retain an AggregateError cause.")
+  assert.equal(error.cause.errors[0], tradeFailure, "The original trade-history error object must remain the cause.")
+  assert.deepEqual(calls.orders.map(({ symbol }) => symbol), ["BTCUSDT", "ETHUSDT"], "Both configured markets must receive an order-history attempt.")
+  assert.deepEqual(calls.fills.map(({ symbol }) => symbol), ["BTCUSDT", "ETHUSDT"], "The later market must still receive a fill-history attempt.")
+  assert.deepEqual(diagnostics.orderMarketsQueried, ["BTCUSDT", "ETHUSDT"], "Both markets must complete order history before fill scanning.")
+  assert.deepEqual(diagnostics.fillMarketsQueried, ["ETHUSDT"], "Only the later market may complete fill history.")
+  assert.deepEqual(diagnostics.marketsQueried, ["ETHUSDT"], "Only fully synchronized markets may be marked queried.")
+  assert.deepEqual(diagnostics.marketsFailed, ["BTCUSDT"], "The failed market must remain in diagnostics.")
+  assert.equal(diagnostics.failures[0].historyType, "trades", "The failure record must identify trade history.")
+  assert.equal(diagnostics.failures[0].failureStage, "TRADE_PAGE_FETCH", "The failure record must identify the trade-page fetch stage.")
+  assert.equal(diagnostics.failures[0].pageCursor, "0", "The failure record must preserve the failed trade-page cursor.")
+  assert.equal(repositories.cursors.has("BTCUSDT"), false, "A failed market must not persist a cursor.")
 })

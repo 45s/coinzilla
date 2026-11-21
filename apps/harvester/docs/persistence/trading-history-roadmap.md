@@ -73,14 +73,14 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 
 ### Phase 3 — Startup exchange-history synchronization
 
-**Status: Complete — PR #1557 and broker pagination PR #1559.**
+**Status: Base implementation complete — PR #1557 and broker pagination PR #1559; configured-market failure isolation and record-level diagnostics implemented in PR #1659 (pending merge).**
 
 - Runs a read-only Binance order/trade-history scan for each configured execution market during startup, after market metadata initialization and before trading-engine activation. It is not a separately invoked import command.
-- Fetches order history and trade history independently, with provider pagination and durable per-environment/provider-instance/provider-type/account/symbol cursors.
+- For each configured market, completes order-history synchronization before fill-history synchronization. If the order scan fails, that market's fill scan is skipped to preserve the order-linkage prerequisite; later markets are still attempted. A fill-scan failure also leaves later markets eligible for synchronization.
 - Advances each cursor only after every record in its page is persisted. Interrupted pages safely replay through idempotent persistence.
 - Refreshes the oldest stored non-terminal order on subsequent startups so an order that fills while Harvester is offline can still be discovered after the forward cursor advances.
 - Persists unfilled order observations as well as executions, with explicit `exchange_history` provenance. Ambiguous order/fill linkage fails closed.
-- A failed scan reports partial diagnostics and remains best-effort; it does not reverse accounting or change order ownership/readiness authority.
+- A failed scan reports per-market partial diagnostics and remains best-effort; it does not reverse accounting or change order ownership/readiness authority. Failures include the history type/stage, original page cursor, 1-based record position, exchange order/trade identity, underlying error code, and last successfully persisted identity. The existing `runtime_errors` projection stores only allowlisted/redacted fields; the full stack/cause remains in session JSONL logs.
 
 **Coverage limitation:** synchronization covers only configured execution markets and exchange-available history. It does not prove account-wide, delisted/unconfigured-market or exchange-retention completeness. Orders are not adopted, strategy ownership is not inferred, and process-restart restoration is not enabled.
 
@@ -121,6 +121,6 @@ Remaining work:
 
 - Keep each follow-on phase in a focused Harvester-owned issue/PR and update this roadmap when its status changes.
 - Keep generic provider infrastructure in `packages/db`; no Harvester schema, SQL or business repository belongs there.
-- Do not add account snapshots, strategy-cycle tables, PnL, equity/drawdown, `sessions` or `errors` without a separately justified and approved scope.
+- Do not add account snapshots, strategy-cycle tables, PnL, equity/drawdown, a `sessions` table or a trading-authoritative error ledger without a separately justified and approved scope. The existing `runtime_errors` table is a separate diagnostic-only projection.
 - Keep startup history synchronization read-only and best-effort. Do not expand configured-market coverage claims into account-wide completeness.
 - Preserve OrderRegistry, Journal and ADR-0001 authority boundaries. No restart restoration, adoption or Journal replay is authorized by this roadmap.
