@@ -51,6 +51,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
   private manuallyDisconnected = false;
   private refreshPromise: Promise<void> | null = null;
   private refreshPending = false;
+  private activeQueryKey: string | null = null;
 
   readonly currentResource = signal<TradingHistoryResource>('orders');
   readonly tokenInput = signal('');
@@ -328,16 +329,28 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
-  private loadRecords(): Promise<void> {
+  private loadRecords({ force = false }: { readonly force?: boolean } = {}): Promise<void> {
     if (!this.connected()) {
       return Promise.resolve();
     }
+    const queryKey = this.currentQueryKey();
     if (this.refreshPromise) {
-      this.refreshPending = true;
+      if (force || queryKey !== this.activeQueryKey) {
+        this.refreshPending = true;
+      }
       return this.refreshPromise;
     }
+    this.activeQueryKey = queryKey;
     this.refreshPromise = this.drainRecordRefreshes();
     return this.refreshPromise;
+  }
+
+  private currentQueryKey(): string {
+    return JSON.stringify({
+      resource: this.currentResource(),
+      filters: this.filters(),
+      offset: this.page()?.pagination.offset ?? 0,
+    });
   }
 
   private async drainRecordRefreshes(): Promise<void> {
@@ -345,11 +358,16 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     try {
       do {
         this.refreshPending = false;
+        this.activeQueryKey = this.currentQueryKey();
         await this.loadCurrentRecords();
-      } while (this.refreshPending && this.connected());
+      } while (
+        this.connected()
+        && (this.refreshPending || this.currentQueryKey() !== this.activeQueryKey)
+      );
     } finally {
       this.loading.set(false);
       this.refreshPromise = null;
+      this.activeQueryKey = null;
     }
   }
 
@@ -448,7 +466,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
       this.scheduleMetadataRefresh();
       if (message.resources?.includes(this.currentResource())) {
         this.selectedRecord.set(null);
-        void this.loadRecords();
+        void this.loadRecords({ force: true });
       }
     }
   }
