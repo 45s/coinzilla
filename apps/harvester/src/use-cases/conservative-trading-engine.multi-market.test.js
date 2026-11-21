@@ -126,6 +126,10 @@ aggressive: { enabled: false } },
 
 function createHarnessBroker({ orders, cancelledOrderIds, brokerOverrides = {} } = {}) {
   return {
+    getSymbolFilters: async ({ symbol }) => ({
+      ok: true,
+      data: makeMarketMetadata(marketsBySymbol.get(symbol)),
+    }),
     placeOrder: async ({ order }) => {
       orders.push(order)
       const market = marketsBySymbol.get(order.symbol)
