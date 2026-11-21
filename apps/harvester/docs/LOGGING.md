@@ -394,3 +394,13 @@ For state-changing actions, preserve the distinction between `applicationOperati
 Thrown errors are logged once at the appropriate interaction boundary with their original name, code, message, stack, and nested cause details. Non-exception failures use a stable `failureClassification` and safe `errorMessage`; do not manufacture an exception merely to label a failed result. Read-only query failures are distinct from application-operation failures.
 
 Never log full Telegram updates, callback payloads, bot tokens, allowlist IDs, API credentials, or full account/order payloads. Redact the configured bot token from messages and stacks. Do not log the same exception at every layer; preserve it while adding context at the boundary that owns the interaction. See the [Telegram Command Center runbook](operations/telegram-command-center.md) for stage interpretation and operator response.
+
+## Relational runtime-error diagnostics
+
+Harvester captures shared-Logger ERROR records from process logging setup onward. A bounded process-start buffer bridges the period before the environment-specific relational database is ready; after migration v4, a bounded asynchronous observer writes safe summaries to `runtime_errors`, correlated by the existing `runtime_session_id`.
+
+The relational projection is intentionally non-authoritative. It does not control readiness, order ownership, trading decisions, or recovery. Explicit strategy/order facts are stored only when present in the logger entry; unknown or external events remain unattributed. The table has no foreign keys to orders or fills because a useful diagnostic can exist without either row.
+
+The existing per-session DEBUG/TRACE JSONL files remain the complete diagnostic record, including stack and cause details. The relational mapper stores allowlisted fields and selected history-page diagnostics, redacts credential assignments from searchable messages, and excludes raw payloads and stack traces. The pre-database buffer and database writer are bounded; their dropped/failed counters expose when the relational projection is incomplete. Such failures are reported to the session logs and never block trading or broker-event handling.
+
+At shutdown, the error observer stops accepting new relational records and drains its queue before the relational SQLite connection closes. If the database is unavailable or a write fails, inspect the session DEBUG/TRACE logs; absence of a relational row is not proof that no runtime error occurred.

@@ -1,5 +1,9 @@
 # Harvester ordinary persistence
 
+## Session-scoped runtime errors (#1650) — implementation in progress
+
+A separately approved Harvester diagnostics extension adds a versioned `runtime_errors` table. It is a searchable projection of ERROR-level application logs, correlated by the existing `runtime_session_id`; it does not add a `sessions` table or become trading/recovery authority. The complete stack/cause record remains in the session DEBUG/TRACE JSONL logs. The implementation must capture errors emitted before database initialization, expose any bounded-buffer or persistence loss, and drain before closing SQLite.
+
 **Phase 1/2:** [#1554 — Relational trading history and live fill persistence](https://github.com/45s/coinzilla/issues/1554), completed in merged [PR #1555](https://github.com/45s/coinzilla/pull/1555).
 
 **Phase 3 — COMPLETE:** [#1556 — Binance startup order and trade-history synchronization](https://github.com/45s/coinzilla/issues/1556) was delivered in merged [PR #1557](https://github.com/45s/coinzilla/pull/1557), merge commit `c2b0eba34ea2778be8d70212fd5e2e3144067aa5`. The implementation performs read-only, paginated Binance order/trade-history synchronization for each configured execution market before trading-engine activation. Its backwards-compatible broker pagination contract was delivered in merged [#1558](https://github.com/45s/coinzilla/issues/1558) / [PR #1559](https://github.com/45s/coinzilla/pull/1559), merge commit `b06f034daecbd2b6dee9ad68b8426ca3bab106cb`.

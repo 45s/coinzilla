@@ -68,6 +68,11 @@ async function createQueryContext({ t, includeOrder = true } = {}) {
     logger: { error() {} },
   })
   assert.ok(persistence, "A valid temporary TESTNET database must prepare the existing trading-history persistence.")
+  assert.equal(
+    persistence.relationalError,
+    null,
+    `Relational persistence setup must succeed: ${persistence.relationalError?.message ?? "unknown failure"}`,
+  )
   assert.ok(persistence.relationalDatabase, "The query contract test requires the existing relational trading-history database.")
   if (includeOrder) {
     eventBus.publish({

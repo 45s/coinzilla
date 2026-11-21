@@ -230,6 +230,7 @@ async function closeObservability({
         observer: orderHistoryPersistence?.observer,
         relationalOrderObserver: orderHistoryPersistence?.relationalOrderObserver,
         fillObserver: orderHistoryPersistence?.fillObserver,
+        runtimeErrorObserver: orderHistoryPersistence?.runtimeErrorObserver,
         database: orderHistoryPersistence?.database,
         relationalDatabase: orderHistoryPersistence?.relationalDatabase,
         logger,
@@ -339,6 +340,8 @@ async function prepareOrderHistoryPersistenceResources({
   logger,
   eventBus,
   prepareOrderHistoryPersistence,
+  processIdentity,
+  errorBuffer,
 }) {
   try {
     return await prepareOrderHistoryPersistence({
@@ -346,6 +349,8 @@ async function prepareOrderHistoryPersistenceResources({
       env,
       logger,
       eventBus,
+      runtimeSessionId: processIdentity.runtimeSessionId,
+      errorBuffer,
     })
   } catch (error) {
     try {
@@ -638,6 +643,8 @@ async function acquireProcessStartupResources({ options, resources, processStart
     logger,
     eventBus: resources.eventBus,
     prepareOrderHistoryPersistence,
+    processIdentity,
+    errorBuffer: options.errorBuffer,
   })
   resources.processStartedPublication = publishProcessStartedEvidence({
     processStartedDataResult,
@@ -1195,13 +1202,13 @@ const isDirectExecution = process.argv[1]
 
 if (isDirectExecution) {
   const processStartedContext = mapHarvesterProcessStartedData(PROCESS_IDENTITY)
-  if (processStartedContext.ok) {
-    defaultLogger.setContext(processStartedContext.data)
-  }
   const logging = await configureHarvesterLogging({
     logger: defaultLogger,
     processIdentity: PROCESS_IDENTITY,
   })
+  if (processStartedContext.ok) {
+    defaultLogger.setContext(processStartedContext.data)
+  }
   let commandInterface
   try {
     commandInterface = createLogCommandInterface({ logger: defaultLogger })
@@ -1212,6 +1219,7 @@ if (isDirectExecution) {
 
   await main({
     processIdentity: PROCESS_IDENTITY,
+    errorBuffer: logging.errorBuffer,
     closeLogger: async () => {
       commandInterface.close()
       await logging.close()

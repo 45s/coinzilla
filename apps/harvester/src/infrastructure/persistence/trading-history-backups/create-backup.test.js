@@ -27,13 +27,13 @@ test("creates and restore-verifies an environment-scoped backup including commit
     result,
     directory: fixture.directory,
   })
-  assert.equal(manifest.schemaVersion, 3)
+  assert.equal(manifest.schemaVersion, 4)
 
   const restoreResult = await fixture.service.verifyBackup({
     backupFilename: result.backupFilename,
   })
   assert.equal(restoreResult.environment, "testnet")
-  assert.equal(restoreResult.schemaVersion, 3)
+  assert.equal(restoreResult.schemaVersion, 4)
   assert.equal(restoreResult.verified, true)
   await assertBackupContainsRecord({
     backupFilename: result.backupFilename,

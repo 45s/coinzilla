@@ -6,11 +6,13 @@ const REQUIRED_TABLES = Object.freeze([
   "fills",
   "fill_commissions",
   "history_sync_cursors",
+  "runtime_errors",
 ])
 const ENVIRONMENT_TABLES = Object.freeze([
   "orders",
   "fills",
   "history_sync_cursors",
+  "runtime_errors",
 ])
 
 function readAppliedMigrationVersions(database) {

@@ -133,7 +133,7 @@ export async function assertManifest({ result, directory } = {}) {
   assert.equal(manifest.environment, "testnet")
   assert.equal(manifest.createdAt, CREATED_AT.toISOString())
   assert.equal(manifest.filename, path.basename(result.backupFilename))
-  assert.equal(manifest.schemaVersion, 3)
+  assert.equal(manifest.schemaVersion, 4)
   assert.match(manifest.sha256, /^[a-f0-9]{64}$/)
   assert.equal(JSON.stringify(manifest).includes("never-copy-this-secret"), false)
   assert.equal(JSON.stringify(manifest).includes(directory), false)

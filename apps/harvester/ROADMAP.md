@@ -1,5 +1,14 @@
 # Harvester Roadmap
 
+## Session-scoped runtime error persistence (#1650)
+
+- **In progress:** add a Harvester-owned `runtime_errors` table and non-blocking capture of every shared-Logger ERROR record, including failures emitted before relational persistence becomes available.
+- **RED evidence:** the first targeted run failed on the missing table, missing session buffer and missing startup `historyDiagnostics` fields; the cursor-write simulation persisted its order before cursor advancement failed. These are expected regression failures, not production changes.
+- **Lint checkpoint:** the startup cursor-failure scenario is split into fixture/assertion helpers and the regression tests follow strict object-property formatting. Error-buffer unit coverage is isolated in its own colocated test file so legacy logging tests remain untouched.
+- Correlate diagnostic rows to the existing runtime session ID. Keep full stack/cause evidence in per-session DEBUG/TRACE logs; store only safe, allowlisted searchable fields in SQLite.
+- Include partial exchange-history page/cursor diagnostics in startup failure records. Preserve fail-closed unknown/external-order handling and keep the reporting database non-authoritative for trading readiness, ownership, and recovery.
+- No generic `errors` table, no `sessions` table, no `packages/db` changes, and no exchange calls or order operations.
+
 ## Trading-history real-time notifications (#1643)
 
 - **Complete in merged [PR #1641](https://github.com/45s/coinzilla/pull/1641):** add local WebSocket invalidation notifications to the trading-history API. The API is intentionally unauthenticated and fixed to loopback for single-user local development; it shares Harvester's process lifecycle and relational persistence connection.
