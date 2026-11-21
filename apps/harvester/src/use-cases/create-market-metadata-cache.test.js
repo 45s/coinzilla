@@ -5,6 +5,10 @@ import {
   createMarketMetadataCache,
   MARKET_METADATA_FRESHNESS_MAX_AGE_MS,
 } from "./create-market-metadata-cache.js"
+import {
+  MARKET_METADATA_REFRESH_ERROR_CODES,
+  MarketMetadataRefreshError,
+} from "./market-metadata-refresh-error.js"
 
 const test = (...args) => {
   const [name, ...testArgs] = args
