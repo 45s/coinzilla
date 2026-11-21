@@ -919,6 +919,87 @@ test("Bitunix REST client aligns mutation outcome metadata with shared Broker HT
   }
 })
 
+async function assertNonJsonMutationHttpOutcome({ status, outcomeUnknown, retryAfterMs = null }) {
+  let requestCount = 0
+  const client = new BitunixRestClient({
+    apiKey: "api-key",
+    apiSecret: "secret",
+    fetchFn: async () => {
+      requestCount += 1
+      const headers = new Headers({
+        "content-type": "text/plain",
+      })
+      if (retryAfterMs !== null) {
+        headers.set("retry-after", String(retryAfterMs / 1000))
+      }
+      return new Response("Bitunix HTTP gateway failure", {
+        status,
+        headers,
+      })
+    },
+  })
+
+  await assert.rejects(
+    client.request({
+      method: "POST",
+      path: "/api/spot/v1/order/place_order",
+      body: {
+        symbol: "BTCUSDT",
+        side: 2,
+        type: 1,
+        volume: "1",
+        price: "100",
+      },
+      stateChanging: true,
+    }),
+    (error) => {
+      assert.ok(error instanceof BitunixRestError)
+      assert.equal(error.kind, "http")
+      assert.equal(error.status, status)
+      assert.equal(error.outcomeUnknown, outcomeUnknown)
+      if (retryAfterMs !== null) {
+        assert.equal(error.retryAfterMs, retryAfterMs)
+      }
+      return true
+    },
+  )
+  assert.equal(requestCount, 1, "non-JSON HTTP failures must never trigger an automatic retry")
+}
+
+test("Bitunix REST client classifies non-JSON mutation HTTP errors by the shared status contract", async () => {
+  const scenarios = [
+    {
+      status: 400,
+      outcomeUnknown: false,
+    },
+    {
+      status: 408,
+      outcomeUnknown: true,
+    },
+    {
+      status: 409,
+      outcomeUnknown: true,
+    },
+    {
+      status: 429,
+      outcomeUnknown: false,
+      retryAfterMs: 2000,
+    },
+    {
+      status: 500,
+      outcomeUnknown: true,
+    },
+    {
+      status: 502,
+      outcomeUnknown: true,
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    await assertNonJsonMutationHttpOutcome(scenario)
+  }
+})
+
 test("Bitunix REST client keeps read-only HTTP conflicts outside mutation uncertainty", async () => {
   const client = new BitunixRestClient({
     apiKey: "api-key",

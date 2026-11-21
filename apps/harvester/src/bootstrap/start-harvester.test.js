@@ -1262,10 +1262,9 @@ test("synchronizes configured Binance history before activating the trading engi
   }
 })
 
-function createHistoryCursorFailureFixture({ calls } = {}) {
-  const broker = createBroker(calls)
+function createHistoryCursorFailureOrder() {
   const metadata = createMarketMetadata("BTCUSDT")
-  const historicalOrder = new CanonicalOrder({
+  return new CanonicalOrder({
     clientOrderId: "h-history-cursor-failure",
     brokerOrderId: "100",
     market: metadata.market,
@@ -1289,11 +1288,20 @@ function createHistoryCursorFailureFixture({ calls } = {}) {
     updatedAt: 1,
     completedAt: 1,
   })
+}
+
+function createHistoryCursorFailureFixture({ calls } = {}) {
+  const broker = createBroker(calls)
+  configureStartupHistoryBroker({
+    broker,
+    calls,
+  })
+  const historicalOrder = createHistoryCursorFailureOrder()
   broker.getCanonicalOrderHistory = async ({ symbol, orderId }) => {
     calls.push(`history:orders:${symbol}:${orderId}`)
     return {
       ok: true,
-      data: [historicalOrder],
+      data: symbol === "BTCUSDT" ? [historicalOrder] : [],
     }
   }
   const persistedOrders = []
@@ -1304,8 +1312,10 @@ function createHistoryCursorFailureFixture({ calls } = {}) {
   })
   const cursorError = new Error("simulated cursor write failure")
   cursorError.code = "HARVESTER_HISTORY_CURSOR_WRITE_FAILED"
-  orderHistoryPersistence.historySyncCursorRepository.saveOrderCursor = async () => {
-    throw cursorError
+  orderHistoryPersistence.historySyncCursorRepository.saveOrderCursor = async ({ symbol }) => {
+    if (symbol === "BTCUSDT") {
+      throw cursorError
+    }
   }
   return {
     broker,
@@ -1325,21 +1335,32 @@ function assertHistoryCursorFailureDiagnostics({
   const failure = errors.find((entry) =>
     entry.message === "Exchange history synchronization failed; historical coverage is incomplete")
   assert.ok(failure, "A failed startup cursor write must emit an actionable history-sync error.")
-  assert.equal(failure.errorName, "Error")
-  assert.equal(failure.errorCode, "HARVESTER_HISTORY_CURSOR_WRITE_FAILED")
-  assert.equal(failure.errorMessage, "simulated cursor write failure")
-  assert.equal(failure.historyDiagnostics.currentMarket, "BTCUSDT")
-  assert.equal(failure.historyDiagnostics.orderPagesChecked, 1)
-  assert.equal(failure.historyDiagnostics.ordersObserved, 1)
-  assert.equal(failure.historyDiagnostics.ordersPersisted, 1)
-  assert.equal(failure.historyDiagnostics.fillPagesChecked, 0)
-  assert.equal(failure.historyDiagnostics.failureCount, 1)
-  assert.equal(failure.historyDiagnostics.failures[0].market, "BTCUSDT")
-  assert.equal(failure.historyDiagnostics.historyPagesComplete, false)
+  assert.equal(failure.errorName, "AccountHistorySynchronizationError", "The aggregate startup error type must be stable.")
+  assert.equal(failure.errorCode, "HARVESTER_ACCOUNT_HISTORY_SYNC_FAILED", "The aggregate startup error code must be stable.")
+  assert.equal(failure.errorMessage, "Account history synchronization failed for 1 of 2 configured markets", "The failure summary must count failed configured markets.")
+  assert.equal(failure.symbol, "BTCUSDT", "The startup diagnostic must identify the failed market.")
+  assert.equal(failure.failureStage, "ORDER_CURSOR_SAVE", "The startup diagnostic must identify cursor persistence as the failure stage.")
+  assert.equal(failure.historyDiagnostics.currentMarket, null, "The completed scan must not leave a market marked as active.")
+  assert.equal(failure.historyDiagnostics.orderPagesChecked, 2, "Both configured markets must receive an order-history request.")
+  assert.equal(failure.historyDiagnostics.ordersObserved, 1, "The failed market order must be counted as observed.")
+  assert.equal(failure.historyDiagnostics.ordersPersisted, 1, "The persisted order must remain visible after cursor failure.")
+  assert.equal(failure.historyDiagnostics.fillPagesChecked, 1, "Only the independent market may proceed to its fill scan.")
+  assert.equal(failure.historyDiagnostics.failureCount, 1, "The aggregate must contain exactly the failed market.")
+  assert.deepEqual(failure.historyDiagnostics.marketsAttempted, ["BTCUSDT", "ETHUSDT"], "Diagnostics must preserve the configured market attempt order.")
+  assert.deepEqual(failure.historyDiagnostics.orderMarketsQueried, ["ETHUSDT"], "Only the later market may complete order history.")
+  assert.deepEqual(failure.historyDiagnostics.fillMarketsQueried, ["ETHUSDT"], "The later market must complete fill history independently.")
+  assert.deepEqual(failure.historyDiagnostics.marketsQueried, ["ETHUSDT"], "Only fully synchronized markets may be marked queried.")
+  assert.deepEqual(failure.historyDiagnostics.marketsFailed, ["BTCUSDT"], "The cursor failure must remain attributed to BTCUSDT.")
+  assert.equal(failure.historyDiagnostics.failures[0].market, "BTCUSDT", "The record-level failure must identify its market.")
+  assert.equal(failure.historyDiagnostics.failures[0].failureStage, "ORDER_CURSOR_SAVE", "The record-level failure must identify cursor advancement.")
+  assert.equal(failure.historyDiagnostics.failures[0].errorCode, "HARVESTER_HISTORY_CURSOR_WRITE_FAILED", "The original persistence error code must be retained.")
+  assert.equal(failure.historyDiagnostics.failures[0].lastPersistedOrderId, "100", "Diagnostics must retain the last persisted order ID.")
+  assert.equal(failure.historyDiagnostics.historyPagesComplete, false, "Any market failure must keep overall history incomplete.")
   assert.equal(runtime.tradingEnabled, true, "A history-projection failure must remain visible without becoming trading-state authority.")
   assert.equal(persistedOrders.length, 1, "The page's order must remain persisted when only cursor advancement fails.")
   assert.equal(persistedFills.length, 0, "Fill history must not start after the order cursor write fails.")
-  assert.equal(calls.some((call) => call.startsWith("history:fills:")), false, "The failed order cursor must stop the market scan before trade-history requests.")
+  assert.equal(calls.includes("history:fills:BTCUSDT:0"), false, "The failed market must skip its fill scan.")
+  assert.equal(calls.includes("history:fills:ETHUSDT:0"), true, "A later independent market must still scan its fills.")
 }
 
 test("logs partial startup history diagnostics when an order cursor write fails", async () => {

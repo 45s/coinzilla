@@ -40,7 +40,7 @@ function createSuccessfulPlacementResponses() {
   ]
 }
 
-function createSignedPlacementTestBroker({ requests, responses }) {
+function createSignedPlacementTestBroker({ requests, responses, fetchFn, nonceFactory }) {
   return new BitunixSpotBroker({
     apiKey: "test-api-key",
     apiSecret: "test-api-secret",
@@ -50,13 +50,16 @@ function createSignedPlacementTestBroker({ requests, responses }) {
       restClientFactory: (config) => new BitunixRestClient({
         ...config,
         now: () => 1795262400000,
-        nonceFactory: () => `test-nonce-${requests.length}`,
+        nonceFactory: nonceFactory ?? (() => `test-nonce-${requests.length}`),
         fetchFn: async (...requestArgs) => {
           const [url, options] = requestArgs
           requests.push({
             url: new URL(url),
             options,
           })
+          if (fetchFn) {
+            return fetchFn(...requestArgs)
+          }
           return new Response(JSON.stringify(responses.shift()), {
             status: 200,
             headers: {
@@ -523,6 +526,236 @@ test("Bitunix Spot placement reports confirmed acceptance if order-detail reconc
   assert.equal(result.data.orderId, "125")
   assert.equal(result.mutationOutcome, "CONFIRMED")
   assert.match(result.errors[0].message, /order detail unavailable/i)
+})
+
+test("Bitunix Spot createOrder classifies non-JSON HTTP failures through the real REST client", async () => {
+  const scenarios = [
+    {
+      status: 400,
+      mutationOutcome: "REJECTED",
+    },
+    {
+      status: 408,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+    },
+    {
+      status: 409,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+    },
+    {
+      status: 429,
+      mutationOutcome: "REJECTED",
+    },
+    {
+      status: 500,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+    },
+    {
+      status: 502,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+    },
+  ]
+
+  for (const scenario of scenarios) {
+    const requests = []
+    const broker = createSignedPlacementTestBroker({
+      requests,
+      responses: [],
+      fetchFn: async () => new Response("Bitunix HTTP gateway failure", {
+        status: scenario.status,
+        headers: { "content-type": "text/plain" },
+      }),
+    })
+
+    const result = await broker.createOrder({
+      symbol: "BTCUSDT",
+      side: "BUY",
+      type: "LIMIT",
+      quantity: "1",
+      price: "100",
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.mutationOutcome, scenario.mutationOutcome, `HTTP ${scenario.status} must have the correct order outcome`)
+    assert.equal(result.errors[0].kind, "http")
+    assert.equal(result.errors[0].status, scenario.status)
+    assert.equal(requests.length, 1, `HTTP ${scenario.status} must produce exactly one placement request`)
+    assert.equal(requests[0].url.pathname, "/api/spot/v1/order/place_order")
+    assert.equal(requests[0].options.method, "POST")
+  }
+})
+
+async function assertCreateOrderLifecycleScenario({
+  name,
+  mutationOutcome,
+  expectedRequests,
+  expectedPosts,
+  expectedGets,
+  responses = [],
+  fetchFn,
+  nonceFactory,
+}) {
+  const requests = []
+  const broker = createSignedPlacementTestBroker({
+    requests,
+    responses,
+    fetchFn,
+    nonceFactory,
+  })
+  const result = await broker.createOrder({
+    symbol: "BTCUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    quantity: "1",
+    price: "100",
+  })
+
+  assert.equal(result.mutationOutcome, mutationOutcome, name)
+  assert.equal(requests.length, expectedRequests, `${name}: exact transport-call count`)
+  assert.equal(
+    requests.filter(({ options }) => options.method === "POST").length,
+    expectedPosts,
+    `${name}: no duplicate placement POST`,
+  )
+  assert.equal(
+    requests.filter(({ options }) => options.method === "GET").length,
+    expectedGets,
+    `${name}: only the expected detail reconciliation GET`,
+  )
+  assert.equal(result.ok, false, `${name}: incomplete or rejected placement must not report a completed Order`)
+  return {
+    result,
+    requests,
+  }
+}
+
+test("Bitunix Spot createOrder classifies unknown top-level exchange rejections", async () => {
+  await assertCreateOrderLifecycleScenario({
+    name: "unknown top-level exchange rejection",
+    mutationOutcome: "REJECTED",
+    expectedRequests: 1,
+    expectedPosts: 1,
+    expectedGets: 0,
+    responses: [
+      {
+        code: "987654321",
+        msg: "synthetic exchange rejection",
+        data: null,
+      },
+    ],
+  })
+})
+
+test("Bitunix Spot createOrder classifies matching-engine placement rejections", async () => {
+  await assertCreateOrderLifecycleScenario({
+    name: "matching-engine placement rejection",
+    mutationOutcome: "REJECTED",
+    expectedRequests: 1,
+    expectedPosts: 1,
+    expectedGets: 0,
+    responses: [
+      {
+        code: "0",
+        msg: "success",
+        data: {
+          placeStatus: "0",
+          placeCode: "opaque-test-code",
+          placeMsg: "synthetic matching-engine rejection",
+        },
+      },
+    ],
+  })
+})
+
+test("Bitunix Spot createOrder keeps malformed success envelopes unknown", async () => {
+  await assertCreateOrderLifecycleScenario({
+    name: "malformed success envelope",
+    mutationOutcome: "OUTCOME_UNKNOWN",
+    expectedRequests: 1,
+    expectedPosts: 1,
+    expectedGets: 0,
+    fetchFn: async () => new Response(JSON.stringify({
+      code: "0",
+      data: null,
+    }), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    }),
+  })
+})
+
+test("Bitunix Spot createOrder keeps mismatched placement acknowledgements unknown", async () => {
+  const [acceptedPlacement] = createSuccessfulPlacementResponses()
+  await assertCreateOrderLifecycleScenario({
+    name: "mismatched placement acknowledgement",
+    mutationOutcome: "OUTCOME_UNKNOWN",
+    expectedRequests: 1,
+    expectedPosts: 1,
+    expectedGets: 0,
+    responses: [
+      {
+        ...acceptedPlacement,
+        data: {
+          ...acceptedPlacement.data,
+          symbol: "ETHUSDT",
+        },
+      },
+    ],
+  })
+})
+
+test("Bitunix Spot createOrder preserves confirmed acceptance when detail reconciliation fails", async () => {
+  const [acceptedPlacement] = createSuccessfulPlacementResponses()
+  const { result } = await assertCreateOrderLifecycleScenario({
+    name: "accepted placement with failed detail reconciliation",
+    mutationOutcome: "CONFIRMED",
+    expectedRequests: 2,
+    expectedPosts: 1,
+    expectedGets: 1,
+    fetchFn: async (url) => {
+      if (new URL(url).pathname === "/api/spot/v1/order/place_order") {
+        return new Response(JSON.stringify(acceptedPlacement), {
+          status: 200,
+          headers: {
+            "content-type": "application/json",
+          },
+        })
+      }
+      return new Response("detail temporarily unavailable", {
+        status: 503,
+        headers: {
+          "content-type": "text/plain",
+        },
+      })
+    },
+  })
+  assert.equal(result.data.orderId, "12345678901234567890")
+})
+
+test("Bitunix Spot createOrder keeps transport loss after dispatch unknown", async () => {
+  await assertCreateOrderLifecycleScenario({
+    name: "transport loss after placement dispatch",
+    mutationOutcome: "OUTCOME_UNKNOWN",
+    expectedRequests: 1,
+    expectedPosts: 1,
+    expectedGets: 0,
+    fetchFn: async () => {
+      throw new Error("synthetic connection reset")
+    },
+  })
+})
+
+test("Bitunix Spot createOrder classifies local signing failures as not sent", async () => {
+  await assertCreateOrderLifecycleScenario({
+    name: "local signing failure before placement dispatch",
+    mutationOutcome: "NOT_SENT",
+    expectedRequests: 0,
+    expectedPosts: 0,
+    expectedGets: 0,
+    nonceFactory: () => "",
+  })
 })
 
 test("Bitunix Spot canonical placement remains unsupported because client order identity is absent", async () => {

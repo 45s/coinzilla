@@ -118,6 +118,7 @@ When an operator supplies a sanitized observation:
 - Preserve the original cause when wrapping at a meaningful boundary, using the repository structured-error standard.
 - Use stable machine-readable error codes; do not parse human-readable messages as the primary control flow.
 - Keep retryability explicit and conservative. A definitive exchange rejection is not the same as a transport timeout after dispatch.
+- For state-changing HTTP failures, apply the common Broker status contract even when the response body is not JSON: HTTP 400–499 are definitive rejections except 408/409, and 5xx/408/409 remain `OUTCOME_UNKNOWN`. Preserve the HTTP status and any safe `Retry-After` metadata; never blanket-classify a non-JSON HTTP error as unknown and never retry the placement.
 - Never classify an unknown placement outcome as a definitive rejection. Never retry an uncertain order placement.
 - Do not store entire request/response graphs in errors. Include bounded, safe context only.
 - Do not leak secrets or private account data through error messages, logs, fixtures, snapshots, or CI artifacts.

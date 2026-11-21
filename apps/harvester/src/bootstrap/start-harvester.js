@@ -932,6 +932,27 @@ function logHistorySyncSkipped({ startup, identity } = {}) {
   })
 }
 
+function createHistoryFailureIdentity({ error } = {}) {
+  const diagnostics = error?.historyDiagnostics
+  const failure = diagnostics?.failures?.[0]
+  return {
+    symbol: failure?.market ?? diagnostics?.currentMarket,
+    brokerOrderId: failure?.brokerOrderId,
+    clientOrderId: failure?.clientOrderId,
+    executionId: failure?.tradeId,
+    failureCategory: "HISTORY_SYNC",
+    failureStage: failure?.failureStage,
+  }
+}
+
+function createHistoryFailureError({ error } = {}) {
+  return {
+    errorName: error?.name ?? "Error",
+    errorCode: error?.code ?? "HARVESTER_HISTORY_SYNC_FAILED",
+    errorMessage: error?.message ?? "Exchange history synchronization failed",
+  }
+}
+
 function logHistorySyncFailure({ startup, identity, result } = {}) {
   const error = result?.errors?.[0]
   startup.logger.error?.({
@@ -940,10 +961,12 @@ function logHistorySyncFailure({ startup, identity, result } = {}) {
     providerInstanceId: identity.providerInstanceId,
     accountId: identity.accountId,
     environment: startup.tradingMode,
-    symbol: error?.historyDiagnostics?.currentMarket,
-    errorName: error?.name ?? "Error",
-    errorCode: error?.code ?? "HARVESTER_HISTORY_SYNC_FAILED",
-    errorMessage: error?.message ?? "Exchange history synchronization failed",
+    ...createHistoryFailureIdentity({
+      error,
+    }),
+    ...createHistoryFailureError({
+      error,
+    }),
     component: "synchronize-account-history",
     operation: "synchronizeStartupExchangeHistory",
     historyDiagnostics: error?.historyDiagnostics,
