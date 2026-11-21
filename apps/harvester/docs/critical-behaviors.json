@@ -4,6 +4,7 @@
     "src/domain/orders/",
     "src/domain/portfolio/",
     "src/domain/strategies/conservative/",
+    "src/domain/strategies/strategy-ids.js",
     "src/use-cases/conservative-trading-engine.js",
     "src/use-cases/restore-harvester-operational-state.js",
     "src/bootstrap/account/",
@@ -643,6 +644,42 @@
       "latestObserved": {
         "lines": 85.54,
         "branches": 75.65,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/portfolio/position.js",
+      "baseline": {
+        "lines": 90.57,
+        "branches": 68.42,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 65,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 90.57,
+        "branches": 68.42,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/strategies/strategy-ids.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
         "functions": 100
       }
     },
