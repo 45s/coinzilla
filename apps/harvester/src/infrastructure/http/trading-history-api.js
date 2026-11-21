@@ -492,16 +492,11 @@ function createConfiguredServer({ queries, token, environment, logger } = {}) {
 async function listenServer({ server, host, port } = {}) {
   await new Promise((...callbacks) => {
     const [resolve, reject] = callbacks
-    const onListening = () => {
-      server.off("error", onError)
+    server.once("error", reject)
+    server.once("listening", () => {
+      server.off("error", reject)
       resolve()
-    }
-    const onError = (error) => {
-      server.off("listening", onListening)
-      reject(error)
-    }
-    server.once("error", onError)
-    server.once("listening", onListening)
+    })
     server.listen(port, host)
   })
 }
