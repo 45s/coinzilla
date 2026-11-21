@@ -206,7 +206,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('applies market filters through the API and resets the offset', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http);
     request.flush({
       ok: true,
       data: createPage(Array.from({ length: 25 }, (_, index) => createOrder(`order-${index}`)), 26),
@@ -242,7 +242,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('uses bounded server pagination when advancing to the next page', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http);
     request.flush({
       ok: true,
       data: createPage(Array.from({ length: 25 }, (_, index) => createOrder(`order-${index}`)), 26),
@@ -275,7 +275,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('loads persisted order details and preserves null financial values', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http, );
     request.flush({
       ok: true,
       data: createPage([createOrder('order-1')], 1),
@@ -320,7 +320,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('shows an exchange trade reference when a fill has no linked order projection', async () => {
-    const request = await connectToResource(fixture, http, session, 'fills');
+    const request = await connectToResource(fixture, http, 'fills');
     const compositeId = '["testnet","binanceTestnet","binance","binance-primary","binance:ZROUSDT","15507"]';
     const unlinkedFill = {
       ...createFill(compositeId),
@@ -362,7 +362,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('shows persisted commission facts when a fill is opened', async () => {
-    const request = await connectToResource(fixture, http, session, 'fills');
+    const request = await connectToResource(fixture, http, 'fills');
     request.flush({
       ok: true,
       data: createPage([createFill('fill-1')], 1),
@@ -398,7 +398,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('authenticates the WebSocket without placing the token in the URL and resyncs after connection', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http, );
     request.flush({
       ok: true,
       data: createPage([createOrder('order-initial')], 1),
@@ -436,7 +436,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('refreshes the active resource after a persisted-change notification and reconnects with a fresh snapshot', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http, );
     request.flush({
       ok: true,
       data: createPage([createOrder('order-initial')], 1),
@@ -510,7 +510,6 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('shows an API-unavailable state instead of replacing a failed request with sample records', async () => {
-    session.setToken(API_TOKEN);
     fixture.detectChanges();
     http.expectOne((request) => request.url.endsWith('/api/v1/trading/metadata')).error(new ProgressEvent('error'));
     await fixture.whenStable();
@@ -521,7 +520,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('shows API request errors instead of presenting empty or sample records', async () => {
-    const request = await connectToResource(fixture, http, session);
+    const request = await connectToResource(fixture, http, );
     request.flush({
       ok: false,
       error: {
