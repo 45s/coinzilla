@@ -99,7 +99,7 @@ test("CLI identity marks modified or untracked files as a dirty worktree", () =>
     nodeVersion: "v26.13.0",
     runGit: (...gitCall) => {
       const [, args] = gitCall
-      return args[0] === "rev-parse" ? "abc123\\n" : "?? new-file.js\\n"
+      return args[0] === "rev-parse" ? "abc123\n" : "?? new-file.js\n"
     },
   })
 
