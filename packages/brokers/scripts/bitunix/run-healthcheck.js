@@ -1,4 +1,5 @@
 import { loadEnvFile } from "node:process"
+import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { assertInteractiveTerminal } from "./helpers/validate-order-attempt.js"
@@ -6,11 +7,22 @@ import { runOperatorOrderCommand, reportOperatorFailure } from "./operator/run-o
 import { runHealthcheckWorkflow } from "./workflows/run-healthcheck.js"
 import { parseHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
 import { sanitizeDiagnosticError } from "./helpers/sanitize-diagnostic-data.js"
+import { resolveCliIdentity } from "./helpers/cli-identity.js"
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
 const brokersRoot = resolve(scriptDirectory, "../..")
 const repositoryRoot = resolve(brokersRoot, "../..")
 const envPath = resolve(brokersRoot, ".env.development")
+const packageMetadata = JSON.parse(readFileSync(resolve(brokersRoot, "package.json"), "utf8"))
+
+function printCliIdentity({ stdout = process.stdout } = {}) {
+  const identity = resolveCliIdentity({
+    scriptName: "bitunix:healthcheck",
+    packageVersion: packageMetadata.version,
+    repositoryRoot,
+  })
+  stdout.write(`${identity}\\n`)
+}
 
 function printHelp() {
   process.stdout.write([
