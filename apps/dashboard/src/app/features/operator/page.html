@@ -1,0 +1,83 @@
+<section class="operator-page">
+  <header class="page-heading">
+    <div>
+      <div class="eyebrow">HARVESTER / LIVE CONTROL</div>
+      <h1>Operator<span>.</span></h1>
+      <p class="page-description">Live process visibility and explicit trading controls. Commands run through Harvester's existing operator use cases.</p>
+    </div>
+    <button type="button" class="refresh-button" (click)="refresh()" [disabled]="loading()">
+      {{ loading() ? 'Refreshing…' : 'Refresh snapshots' }}
+    </button>
+  </header>
+
+  <div class="operator-connection" [class.online]="connected()">
+    <span class="connection-dot"></span>
+    <strong>{{ connected() ? 'Connected to local Harvester' : 'Harvester unavailable' }}</strong>
+    <span>127.0.0.1:4201</span>
+  </div>
+
+  @if (errorMessage(); as message) {
+    <div class="operator-error" role="alert">{{ message }}</div>
+  }
+  @if (successMessage(); as message) {
+    <div class="operator-success" role="status">{{ message }}</div>
+  }
+
+  <section class="command-panel" aria-labelledby="commands-title">
+    <div class="panel-heading">
+      <div>
+        <div class="eyebrow">TRADING CONTROLS</div>
+        <h2 id="commands-title">Operator commands</h2>
+      </div>
+      <span class="local-only-tag">LOCAL ONLY</span>
+    </div>
+    <label class="symbol-field">
+      <span>Market symbol</span>
+      <input [value]="symbol()" (input)="updateSymbol($event)" placeholder="BTCUSDT" autocomplete="off" spellcheck="false" />
+    </label>
+    <div class="command-actions">
+      <button type="button" class="danger-command" (click)="requestCommand('pause')">Pause market BUYs</button>
+      <button type="button" class="resume-command" (click)="requestCommand('unpause')">Unpause market BUYs</button>
+      <button type="button" class="danger-command" (click)="requestCommand('pauseallbuys')">Pause all BUYs</button>
+      <button type="button" class="resume-command" (click)="requestCommand('resumeallbuys')">Resume all BUYs</button>
+    </div>
+
+    @if (pendingCommand(); as pending) {
+      <div class="confirmation-panel" role="alertdialog" aria-label="Confirm operator command">
+        <div>
+          <strong>Confirm: {{ pending.label }}</strong>
+          <p>This sends a live command to the running Harvester process. It is not a simulation.</p>
+        </div>
+        <div class="confirmation-actions">
+          <button type="button" class="quiet-command" (click)="cancelCommand()" [disabled]="commandRunning()">Cancel</button>
+          <button type="button" class="confirm-command" (click)="confirmCommand()" [disabled]="commandRunning()">
+            {{ commandRunning() ? 'Sending…' : 'Confirm command' }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+
+  <section class="snapshot-grid" aria-label="Live operator snapshots">
+    <article class="snapshot-card">
+      <div class="snapshot-heading"><h2>Runtime status</h2><span>LIVE QUERY</span></div>
+      <pre>{{ formatJson(status()) }}</pre>
+    </article>
+    <article class="snapshot-card">
+      <div class="snapshot-heading"><h2>Markets</h2><span>LIVE QUERY</span></div>
+      <pre>{{ formatJson(markets()) }}</pre>
+    </article>
+    <article class="snapshot-card">
+      <div class="snapshot-heading"><h2>Portfolio / positions</h2><span>LIVE QUERY</span></div>
+      <pre>{{ formatJson(positions()) }}</pre>
+    </article>
+    <article class="snapshot-card">
+      <div class="snapshot-heading"><h2>Open orders</h2><span>LIVE QUERY</span></div>
+      <pre>{{ formatJson(orders()) }}</pre>
+    </article>
+    <article class="snapshot-card">
+      <div class="snapshot-heading"><h2>Balances</h2><span>LIVE QUERY</span></div>
+      <pre>{{ formatJson(balances()) }}</pre>
+    </article>
+  </section>
+</section>
