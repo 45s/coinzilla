@@ -60,7 +60,10 @@ function validatePositionConstructorInput({
   if (!(quoteNetCashFlow instanceof Money) || quoteNetCashFlow.asset.id !== market.quoteAsset.id) {
     throw new TypeError("Position.quoteNetCashFlow must use the market quote Asset")
   }
-  const normalizedSpent = normalizePositionSpent({ spent, market })
+  const normalizedSpent = normalizePositionSpent({
+    spent,
+    market,
+  })
 
   return {
     normalizedStrategyId,
