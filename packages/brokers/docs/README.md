@@ -4,6 +4,7 @@ This folder contains maintained engineering references for the Brokers package.
 
 ## Bitunix Spot
 
+- [Mandatory Bitunix development and operator workflow](./BITUNIX_WORKFLOW.md) — required development process, LIVE investigation boundary and safety invariants.
 - [External implementation reference audit](./BITUNIX_REFERENCE_AUDIT.md) — source-level review of official API contracts, .NET/TypeScript clients, fixtures, defects and implementation evidence.
 - [Private polling and reconciliation](./BITUNIX_SPOT_POLLING.md) — internal read-only observation helper, guarantees and limits.
 - [Production-readiness gap matrix](./bitunix-production-readiness-gap-matrix.md) — capability-by-capability evidence and remaining blockers.

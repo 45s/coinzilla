@@ -4,9 +4,7 @@ import {
   assertSuccessfulBitunixBrokerResult,
   BITUNIX_OPERATOR_ORDER_INTENT,
   createBitunixOperatorOrderPreflight,
-} from "./bitunix-hypeusdt-order-preflight.js"
-
-const BITUNIX_OPERATOR_ORDER_CONFIRMATION = "SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER"
+} from "../helpers/operator-order-preflight.js"
 
 export function assertBitunixOperatorInteractiveTerminal({ stdin, stdout } = {}) {
   if (stdin?.isTTY !== true || stdout?.isTTY !== true) {
@@ -176,7 +174,7 @@ function assertBitunixOperatorAttemptDependencies({
  * @param {object} input
  * @param {object} input.readBroker Broker instance with live mutations disabled.
  * @param {() => object} input.createOrderBroker Factory for the mutation-enabled Broker.
- * @param {(input: object) => Promise<boolean>} input.confirm Exact operator confirmation.
+ * @param {(input: object) => Promise<boolean>} input.confirm Final approval for the exact displayed order.
  * @param {(input: object) => Promise<void>} input.createMarker Exclusive marker writer.
  * @param {(message: string) => void} input.writeLine Local terminal output callback.
  * @returns {Promise<object>} The original Broker placement result or NOT_SENT decline result.
@@ -203,10 +201,10 @@ export async function runBitunixOperatorOrderAttempt({
   }))
   const approved = await confirm({
     preflight,
-    confirmationPhrase: BITUNIX_OPERATOR_ORDER_CONFIRMATION,
+    order: preflight.order,
   })
   if (approved !== true) {
-    writeLine("Operator declined or did not enter the exact confirmation phrase. No order was sent.")
+    writeLine("Operator did not confirm the displayed order. No order was sent.")
     return Object.freeze({
       ok: false,
       mutationOutcome: "NOT_SENT",

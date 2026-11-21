@@ -14,9 +14,7 @@
     "test:integration": "node --env-file-if-exists=.env.development --test \"src/**/*.integration.js\"",
     "test:user-data-integration": "node --env-file-if-exists=.env.development --test ./src/infrastructure/binance/spot/broker-websocket/tests/user-data-session.integration.js",
     "test:websocket": "node --env-file-if-exists=.env.development --test ./src/infrastructure/binance/spot/broker-websocket/broker.integration.js",
-    "diagnose:bitunix": "node --env-file-if-exists=.env.development ./scripts/run-bitunix-diagnostics.js",
-    "diagnose:bitunix:publish": "node ./scripts/bitunix-healthcheck.js",
-    "operator:bitunix:hypeusdt-order-attempt": "node --env-file-if-exists=.env.development ./scripts/bitunix-hypeusdt-order-attempt.js"
+    "bitunix:healthcheck": "node ./scripts/bitunix/run-healthcheck.js"
   },
   "dependencies": {
     "@coinzilla/entities": "workspace:*",

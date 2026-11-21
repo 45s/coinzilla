@@ -5,12 +5,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
-import { createBitunixOperatorOrderPreflight } from "./bitunix-hypeusdt-order-preflight.js"
+import { createBitunixOperatorOrderPreflight } from "../helpers/operator-order-preflight.js"
 import {
   assertBitunixOperatorInteractiveTerminal,
   createOneShotMarker,
   runBitunixOperatorOrderAttempt,
-} from "./bitunix-operator-order-attempt.js"
+} from "./order-attempt.js"
 
 function createValidBitunixOperatorPreflightInput({ overrides = {} } = {}) {
   const market = {
@@ -194,13 +194,13 @@ test("Bitunix operator CLI requires an interactive input and output terminal", (
 })
 
 test("Bitunix operator CLI refuses non-interactive execution before credentials or network", () => {
-  const scriptPath = fileURLToPath(new URL("./bitunix-hypeusdt-order-attempt.js", import.meta.url))
+  const scriptPath = fileURLToPath(new URL("../run-healthcheck.js", import.meta.url))
   const env = {
     ...process.env,
   }
   delete env.BITUNIX_API_KEY
   delete env.BITUNIX_API_SECRET
-  const result = spawnSync(process.execPath, [scriptPath], {
+  const result = spawnSync(process.execPath, [scriptPath, "--place-order"], {
     encoding: "utf8",
     env,
   })

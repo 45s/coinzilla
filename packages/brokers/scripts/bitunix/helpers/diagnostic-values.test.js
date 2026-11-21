@@ -1,13 +1,13 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { BrokerDiagnosticError } from "../diagnostics/diagnostic-error.js"
 import {
-  BrokerDiagnosticError,
   createDiagnosticResult,
   inspectDiagnosticSchema,
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
   summarizePrivatePayload,
-} from "./diagnostics.js"
+} from "./diagnostic-values.js"
 
 test("diagnostic sanitization redacts credentials and sensitive fields recursively", () => {
   const sanitized = sanitizeDiagnosticValue({
