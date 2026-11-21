@@ -120,3 +120,54 @@ test("matches broker order updates by market when IDs collide across markets", (
     "The report must update the canonical order from the matching market.",
   )
 })
+
+test("allows market-scoped ownership for colliding broker order IDs", () => {
+  const dogeOrder = makeOrder({
+    market: dogeMarket,
+    clientOrderId: "h-doge-owned",
+    brokerOrderId: "12345",
+  })
+  const zroOrder = makeOrder({
+    market: zroMarket,
+    clientOrderId: "h-zro-owned",
+    brokerOrderId: "12345",
+  })
+  const registry = new OrderRegistry({
+    orders: [dogeOrder, zroOrder],
+    ownerships: [
+      {
+        clientOrderId: dogeOrder.clientOrderId,
+        brokerOrderId: dogeOrder.brokerOrderId,
+        marketId: dogeMarket.id,
+        strategyId: "conservative",
+        positionId: "doge-position",
+        purpose: "RECOVERY_SELL",
+      },
+      {
+        clientOrderId: zroOrder.clientOrderId,
+        brokerOrderId: zroOrder.brokerOrderId,
+        marketId: zroMarket.id,
+        strategyId: "recovery-seller",
+        positionId: "zro-position",
+        purpose: "RECOVERY_SELL",
+      },
+    ],
+  })
+
+  assert.equal(
+    registry.getOwnership({
+      clientOrderId: dogeOrder.clientOrderId,
+      brokerOrderId: "12345",
+      marketId: dogeMarket.id,
+    }).positionId,
+    "doge-position",
+  )
+  assert.equal(
+    registry.getOwnership({
+      clientOrderId: zroOrder.clientOrderId,
+      brokerOrderId: "12345",
+      marketId: zroMarket.id,
+    }).positionId,
+    "zro-position",
+  )
+})
