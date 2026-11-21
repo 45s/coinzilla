@@ -10,8 +10,8 @@
 
 ## Read-only SQLite JSON export (#1629)
 
-- **In progress in [PR #1630](https://github.com/45s/coinzilla/pull/1630):** add a Harvester package command to export every non-internal SQLite table, row and column into `database-dump.json` for inspection. The exporter uses the explicit TESTNET/LIVE path resolver, opens the source read-only, and adds no dependencies or runtime trading changes.
-- The PR includes script tests and updates the persistence runbook and documentation index. Do not mark complete until exact-head CI passes and the PR is merged.
+- **Exporter delivered:** the read-only all-table JSON export was introduced in merged [PR #1630](https://github.com/45s/coinzilla/pull/1630); explicit positional `testnet` / `live` selection and argument validation were completed in merged [PR #1629](https://github.com/45s/coinzilla/pull/1629). The command exports every non-internal table, including empty tables, preserves decimal text and out-of-safe-range integer values, and makes no exchange calls or trading-runtime changes.
+- **Serialization correction:** [#1646](https://github.com/45s/coinzilla/issues/1646) / [PR #1647](https://github.com/45s/coinzilla/pull/1647) corrects safe-integer JSON typing and preserves valid special SQLite table/column names. Track final verification and completion in that follow-up.
 
 ## Repository-wide source naming audit — Harvester slice (#1582)
 

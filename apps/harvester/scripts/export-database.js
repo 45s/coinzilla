@@ -23,10 +23,13 @@ function escapeIdentifier(identifier) {
 }
 
 function serializeDatabaseRow({ row } = {}) {
-  const serializedRow = {}
+  const serializedRow = Object.create(null)
   for (const [columnName, columnValue] of Object.entries(row)) {
     if (typeof columnValue === "bigint") {
-      serializedRow[columnName] = columnValue.toString()
+      const numericValue = Number(columnValue)
+      serializedRow[columnName] = Number.isSafeInteger(numericValue)
+        ? numericValue
+        : columnValue.toString()
     } else if (columnValue instanceof Uint8Array) {
       serializedRow[columnName] = {
         encoding: "base64",
@@ -62,7 +65,7 @@ export function exportDatabase({ databaseFilename, outputFilename } = {}) {
       ORDER BY name
     `).all()
     const exportedTables = Object.create(null)
-    const tableCounts = {}
+    const tableCounts = Object.create(null)
 
     for (const { name } of tableRows) {
       const statement = database.prepare(`SELECT * FROM ${escapeIdentifier(name)}`)
@@ -91,7 +94,7 @@ export function exportDatabase({ databaseFilename, outputFilename } = {}) {
 
     return {
       tableCount: tableRows.length,
-      tableCounts,
+      tableCounts: Object.fromEntries(Object.entries(tableCounts)),
       outputFilename,
     }
   } finally {
