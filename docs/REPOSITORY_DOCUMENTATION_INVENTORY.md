@@ -353,3 +353,8 @@ These paths are absent from the current recursive tree. Their inbound-reference 
 ### Current maintained/historical classification — develop `0f827ba7551be61a1be58f8dced191fb0a090870`
 
 The complete recursive tree contains 179 Markdown/MDX files. Applying the current `scripts/markdown-path-policy.js` classification yields **150 maintained paths and 29 historical paths**. This supersedes the prior 160-file / 132-maintained / 28-historical checkpoint for current counts only; all older checkpoint rows remain historical evidence. The classification is a path policy, not a claim that every maintained document has passed factual source review.
+
+
+### Current maintained/historical classification — develop `0f827ba7551be61a1be58f8dced191fb0a090870`
+
+The complete recursive tree contains 179 Markdown/MDX files. Applying the current `scripts/markdown-path-policy.js` classification yields **150 maintained paths and 29 historical paths**. This supersedes the prior 160-file / 132-maintained / 28-historical checkpoint for current counts only; all older checkpoint rows remain historical evidence. The classification is a path policy, not a claim that every maintained document has passed factual source review.
