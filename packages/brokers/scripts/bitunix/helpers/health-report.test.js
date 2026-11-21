@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import {
-  createPublishedReport,
-  evaluateHealthCheck,
+  createSanitizedHealthReport,
+  evaluateReadOnlyHealthCheck,
   withholdFreeFormErrorMessages,
 } from "./health-report.js"
 
@@ -28,7 +28,7 @@ test("health evaluation fails when a required read-only operation is missing", (
         status: "passed",
       })),
   }
-  const result = evaluateHealthCheck({ report })
+  const result = evaluateReadOnlyHealthCheck({ report })
   assert.deepEqual(result.missingRequiredOperations, ["user.info"])
   assert.equal(result.healthy, false)
 })
@@ -45,7 +45,7 @@ test("health evaluation fails when any diagnostic operation fails", () => {
     },
     results,
   }
-  assert.equal(evaluateHealthCheck({ report }).healthy, false)
+  assert.equal(evaluateReadOnlyHealthCheck({ report }).healthy, false)
 })
 
 test("public health reports copy only allowlisted fields and omit private account payloads", () => {
@@ -94,7 +94,7 @@ test("public health reports copy only allowlisted fields and omit private accoun
     }],
     events: [{ payload: "private-event" }],
   }
-  const published = createPublishedReport({ report })
+  const published = createSanitizedHealthReport({ report })
   assert.equal(published.results[0].error.code, "BITUNIX_ACCOUNT_READ_FAILED")
   assert.equal(Object.hasOwn(published.results[0], "request"), false)
   assert.equal(Object.hasOwn(published.results[0], "response"), false)
@@ -138,5 +138,5 @@ test("operator order failure does not rewrite the read-only diagnostic health ve
     ],
   }
 
-  assert.equal(evaluateHealthCheck({ report }).healthy, true, "the health verdict must describe read-only diagnostics, not the separate operator mutation outcome")
+  assert.equal(evaluateReadOnlyHealthCheck({ report }).healthy, true, "the health verdict must describe read-only diagnostics, not the separate operator mutation outcome")
 })

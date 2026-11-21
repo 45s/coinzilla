@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createHypeUsdtOrderPreflight } from "./operator-order-preflight.js"
+import { createHypeUsdtOrderPreflight } from "./create-hypeusdt-order-preflight.js"
 
 function createValidBitunixOperatorPreflightInput({ overrides = {} } = {}) {
   const market = {

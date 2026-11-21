@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { appendOrderAttemptResult } from "./operator-attempt-report.js"
+import { appendOrderAttemptResult } from "./append-order-attempt-result.js"
 
 function createReport({ failed = 0 } = {}) {
   return {
