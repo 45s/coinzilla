@@ -177,7 +177,8 @@ function writeHarvesterLogRecord({ entry, streams, streamErrors } = {}) {
   } catch (error) {
     return Promise.reject(error)
   }
-  return Promise.all(Array.from(streams.entries()).map(([index, stream]) => new Promise((resolve, reject) => {
+  return Promise.all(Array.from(streams.entries()).map(([index, stream]) => new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
     stream.write(`${serialized}\n`, (error) => {
       const currentError = error ?? streamErrors.get(index)
       if (currentError) {

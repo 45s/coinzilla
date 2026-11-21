@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto"
 
 const MAX_MESSAGE_LENGTH = 1_000
 const MAX_DETAIL_STRING_LENGTH = 500
-const SECRET_ASSIGNMENT_PATTERN = /\\b(api[_-]?key|secret|token|signature|authorization|password)\\b\\s*[:=]\\s*["']?[^,\\s"'&]+/gi
+const SECRET_ASSIGNMENT_PATTERN = /\b(api[_-]?key|secret|token|signature|authorization|password)\b\s*[:=]\s*["']?[^,\s"'&]+/gi
 const HISTORY_DIAGNOSTIC_FIELDS = Object.freeze([
   "historyScope",
   "marketsAttempted",
@@ -45,7 +45,7 @@ function redactMessage({ value, maximumLength = MAX_MESSAGE_LENGTH } = {}) {
     return null
   }
   return value
-    .replace(/[\\r\\n]+/g, " ")
+    .replace(/[\r\n]+/g, " ")
     .replace(SECRET_ASSIGNMENT_PATTERN, "$1=[REDACTED]")
     .slice(0, maximumLength)
 }
