@@ -1182,13 +1182,13 @@ const isDirectExecution = process.argv[1]
 
 if (isDirectExecution) {
   const processStartedContext = mapHarvesterProcessStartedData(PROCESS_IDENTITY)
-  if (processStartedContext.ok) {
-    defaultLogger.setContext(processStartedContext.data)
-  }
   const logging = await configureHarvesterLogging({
     logger: defaultLogger,
     processIdentity: PROCESS_IDENTITY,
   })
+  if (processStartedContext.ok) {
+    defaultLogger.setContext(processStartedContext.data)
+  }
   let commandInterface
   try {
     commandInterface = createLogCommandInterface({ logger: defaultLogger })

@@ -43,7 +43,10 @@ export function createRuntimeErrorRepository({ database, runtimeSessionId } = {}
   )
   return Object.freeze({
     create({ entry } = {}) {
-      const row = mapRuntimeErrorEntryToRow({ entry, runtimeSessionId })
+      const row = mapRuntimeErrorEntryToRow({
+        entry,
+        runtimeSessionId,
+      })
       statement.run(...RUNTIME_ERROR_COLUMNS.map((column) => row[column]))
       return row
     },

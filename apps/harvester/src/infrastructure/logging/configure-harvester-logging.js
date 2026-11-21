@@ -101,7 +101,7 @@ function formatOrderLifecycleConsoleLine({ timestamp, data } = {}) {
  * The compact console destination remains independently configurable.
  *
  * @param {{ logger?: object, directory?: string, output?: NodeJS.WritableStream, processIdentity?: { startedAt: string, runtimeSessionId: string } }} input
- * @returns {Promise<{ directory: string, cumulativeDirectory: string, sessionPaths: object, close: () => Promise<void> }>}
+ * @returns {Promise<{ directory: string, cumulativeDirectory: string, sessionPaths: object, errorBuffer: object, close: () => Promise<void> }>}
  */
 async function closeHarvesterLogStreams({ streams } = {}) {
   const results = await Promise.allSettled(streams.map(async (stream) => {
@@ -124,14 +124,8 @@ async function closeHarvesterLogStreams({ streams } = {}) {
   }
 }
 
-async function createHarvesterFileTransport({
-  cumulativeDirectory,
-  name,
-  level,
-  filename,
-  sessionFilename,
-} = {}) {
-  const streams = [
+function createHarvesterLogStreams({ cumulativeDirectory, filename, sessionFilename } = {}) {
+  return [
     createWriteStream(path.join(cumulativeDirectory, filename), {
       flags: "a",
       encoding: "utf8",
@@ -141,61 +135,85 @@ async function createHarvesterFileTransport({
       encoding: "utf8",
     }),
   ]
-  const streamErrors = new Map()
+}
+
+function observeHarvesterLogStreamErrors({ streams, streamErrors } = {}) {
   for (const [index, stream] of streams.entries()) {
     stream.on("error", (error) => streamErrors.set(index, error))
   }
+}
 
-  const openResults = await Promise.allSettled(streams.map((stream) => new Promise((...callbacks) => {
-    const [resolve, reject] = callbacks
+async function openHarvesterLogStreams(streams) {
+  const results = await Promise.allSettled(streams.map((stream) => new Promise((resolve, reject) => {
     stream.once("open", resolve)
     stream.once("error", reject)
   })))
-  const openErrors = openResults
+  const errors = results
     .filter((result) => result.status === "rejected")
     .map((result) => result.reason)
-  if (openErrors.length > 0) {
-    const [firstOpenError] = openErrors
-    await Promise.allSettled(streams.map(async (stream) => {
-      if (!stream.destroyed) {
-        stream.destroy()
-      }
-      if (!stream.closed) {
-        await once(stream, "close")
-      }
-    }))
-    throw firstOpenError
+  if (errors.length === 0) {
+    return
   }
+  await Promise.allSettled(streams.map(async (stream) => {
+    if (!stream.destroyed) {
+      stream.destroy()
+    }
+    if (!stream.closed) {
+      await once(stream, "close")
+    }
+  }))
+  throw errors[0]
+}
 
+function writeHarvesterLogRecord({ entry, streams, streamErrors } = {}) {
+  const streamError = streamErrors.values().next().value
+  if (streamError) {
+    return Promise.reject(streamError)
+  }
+  let serialized
+  try {
+    serialized = JSON.stringify(entry)
+  } catch (error) {
+    return Promise.reject(error)
+  }
+  return Promise.all(streams.map((stream, index) => new Promise((resolve, reject) => {
+    stream.write(`${serialized}\\n`, (error) => {
+      const currentError = error ?? streamErrors.get(index)
+      if (currentError) {
+        reject(currentError)
+        return
+      }
+      resolve()
+    })
+  })))
+}
+
+async function createHarvesterFileTransport({
+  cumulativeDirectory,
+  name,
+  level,
+  filename,
+  sessionFilename,
+} = {}) {
+  const streams = createHarvesterLogStreams({
+    cumulativeDirectory,
+    filename,
+    sessionFilename,
+  })
+  const streamErrors = new Map()
+  observeHarvesterLogStreamErrors({
+    streams,
+    streamErrors,
+  })
+  await openHarvesterLogStreams(streams)
   return {
     name,
     level,
-    write(entry) {
-      const [streamError] = [...streamErrors.values()]
-      if (streamError) {
-        return Promise.reject(streamError)
-      }
-      let serialized
-      try {
-        serialized = JSON.stringify(entry)
-      } catch (error) {
-        return Promise.reject(error)
-      }
-      return Promise.all(streams.map((...parameters) => {
-        const [stream, index] = parameters
-        return new Promise((...callbacks) => {
-          const [resolve, reject] = callbacks
-        stream.write(`${serialized}\n`, (error) => {
-          const currentError = error ?? streamErrors.get(index)
-          if (currentError) {
-            reject(currentError)
-            return
-          }
-          resolve()
-        })
-        })
-      }))
-    },
+    write: (entry) => writeHarvesterLogRecord({
+      entry,
+      streams,
+      streamErrors,
+    }),
     close: () => closeHarvesterLogStreams({ streams }),
   }
 }
@@ -463,81 +481,99 @@ function writeSuppressedConsoleRecord({ output, color, timestamp, count } = {}) 
   })  }\n`)
 }
 
+function flushSuppressedConsoleRecords({ output, color, state } = {}) {
+  if (state.suppressedCount === 0) {
+    return
+  }
+  writeSuppressedConsoleRecord({
+    output,
+    color,
+    timestamp: state.previousTimestamp,
+    count: state.suppressedCount,
+  })
+  state.suppressedCount = 0
+}
+
+function writeConsoleTransportEntry({ entry, output, color, state } = {}) {
+  const {
+    timestamp,
+    level,
+    method = level,
+    data,
+  } = entry
+  const presentation = createConsoleRecordPresentation({
+    timestamp,
+    level,
+    method,
+    data,
+  })
+  const strategyFingerprint = `${presentation.fingerprint}:${data?.strategyId ?? "SYSTEM"}`
+  if (strategyFingerprint === state.previousFingerprint) {
+    state.suppressedCount += 1
+    return
+  }
+  flushSuppressedConsoleRecords({
+    output,
+    color,
+    state,
+  })
+  state.previousFingerprint = strategyFingerprint
+  state.previousTimestamp = timestamp
+  if (presentation.shutdownPresentation) {
+    output.write(`${formatConsoleLine({
+      line: presentation.shutdownPresentation.line,
+      level,
+      method,
+      color,
+    })}\\n`)
+    return
+  }
+  if (presentation.isOrderLifecycle) {
+    writeOrderLifecycleRecord({
+      output,
+      color,
+      timestamp,
+      level,
+      method,
+      data,
+    })
+    return
+  }
+  writeStandardConsoleRecord({
+    output,
+    color,
+    timestamp,
+    level,
+    method,
+    summary: presentation.summary,
+    strategyId: data?.strategyId,
+  })
+}
+
 export function createHarvesterConsoleTransport({
   output = process.stdout,
   color = process.env.NO_COLOR === undefined && (
     process.env.COINZILLA_LOG_COLOR === "1" || Boolean(output.isTTY)
   ),
 } = {}) {
-  let previousFingerprint
-  let previousTimestamp
-  let suppressedCount = 0
-
-  const flushSuppressed = () => {
-    if (suppressedCount === 0) {return}
-    writeSuppressedConsoleRecord({
-      output,
-      color,
-      timestamp: previousTimestamp,
-      count: suppressedCount,
-    })
-    suppressedCount = 0
+  const state = {
+    previousFingerprint: null,
+    previousTimestamp: null,
+    suppressedCount: 0,
   }
-
   return {
     name: CONSOLE_TRANSPORT_NAME,
     level: "info",
-    write({ timestamp, level, method = level, data }) {
-      const {
-        isOrderLifecycle,
-        shutdownPresentation,
-        summary,
-        fingerprint,
-      } = createConsoleRecordPresentation({
-        timestamp,
-        level,
-        method,
-        data,
-      })
-      const strategyFingerprint = `${fingerprint}:${data?.strategyId ?? "SYSTEM"}`
-      if (strategyFingerprint === previousFingerprint) {
-        suppressedCount += 1
-        return
-      }
-
-      flushSuppressed()
-      previousFingerprint = strategyFingerprint
-      previousTimestamp = timestamp
-      if (shutdownPresentation) {
-        output.write(`${formatConsoleLine({
-          line: shutdownPresentation.line,
-          level,
-          method,
-          color,
-        })}\n`)
-        return
-      }
-      if (isOrderLifecycle) {
-        writeOrderLifecycleRecord({
-          output,
-          color,
-          timestamp,
-          level,
-          method,
-          data,
-        })
-        return
-      }
-      writeStandardConsoleRecord({
-        output,
-        color,
-        timestamp,
-        level,
-        method,
-        summary,
-        strategyId: data?.strategyId,
-      })
-    },
-    close: flushSuppressed,
+    write: (entry) => writeConsoleTransportEntry({
+      entry,
+      output,
+      color,
+      state,
+    }),
+    close: () => flushSuppressedConsoleRecords({
+      output,
+      color,
+      state,
+    }),
   }
 }

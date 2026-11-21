@@ -454,7 +454,7 @@ async function assertBackupAndRollback({ filename, backupFilename, legacyRecord 
 
 function createInterruptedMigration() {
   return {
-    version: 4,
+    version: 5,
     name: "harvester-relational-interrupted-test",
     up(transaction) {
       transaction.exec("CREATE TABLE interrupted_probe (id TEXT PRIMARY KEY)")
@@ -465,7 +465,7 @@ function createInterruptedMigration() {
 
 function createRetryMigration() {
   return {
-    version: 4,
+    version: 5,
     name: "harvester-relational-interrupted-test",
     up(transaction) {
       transaction.exec("CREATE TABLE retry_probe (id TEXT PRIMARY KEY)")

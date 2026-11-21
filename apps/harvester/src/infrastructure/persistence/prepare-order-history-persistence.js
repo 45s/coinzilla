@@ -161,6 +161,34 @@ function createRelationalHistoryObservers({
   }
 }
 
+function createRelationalHistoryRepositories({ database } = {}) {
+  return {
+    orderRepository: createRelationalOrderHistoryRepository({ database }),
+    fillRepository: createFillHistoryRepository({ database }),
+    historySyncCursorRepository: createHistorySyncCursorRepository({ database }),
+  }
+}
+
+function createRuntimeErrorProjection({
+  database,
+  runtimeSessionId,
+  errorBuffer,
+  logger,
+} = {}) {
+  if (!errorBuffer || !runtimeSessionId) {
+    return null
+  }
+  const repository = createRuntimeErrorRepository({
+    database,
+    runtimeSessionId,
+  })
+  return createRuntimeErrorObserver({
+    repository,
+    errorBuffer,
+    logger,
+  })
+}
+
 async function prepareRelationalResources({
   filename,
   eventBus,
@@ -183,46 +211,29 @@ async function prepareRelationalResources({
       filename,
     })
     await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
-    const orderRepository = createRelationalOrderHistoryRepository({
+    const repositories = createRelationalHistoryRepositories({
       database: relationalDatabase,
     })
-    const fillRepository = createFillHistoryRepository({
-      database: relationalDatabase,
-    })
-    const historySyncCursorRepository = createHistorySyncCursorRepository({
-      database: relationalDatabase,
-    })
-    const {
-      relationalOrderObserver: orderObserver,
-      fillObserver: appliedFillObserver,
-    } = createRelationalHistoryObservers({
+    const observers = createRelationalHistoryObservers({
       eventBus,
-      orderRepository,
-      fillRepository,
+      orderRepository: repositories.orderRepository,
+      fillRepository: repositories.fillRepository,
       environment,
       logger,
     })
-    relationalOrderObserver = orderObserver
-    fillObserver = appliedFillObserver
-    if (errorBuffer && runtimeSessionId) {
-      const runtimeErrorRepository = createRuntimeErrorRepository({
-        database: relationalDatabase,
-        runtimeSessionId,
-      })
-      runtimeErrorObserver = createRuntimeErrorObserver({
-        repository: runtimeErrorRepository,
-        errorBuffer,
-        logger,
-      })
-    }
+    relationalOrderObserver = observers.relationalOrderObserver
+    fillObserver = observers.fillObserver
+    runtimeErrorObserver = createRuntimeErrorProjection({
+      database: relationalDatabase,
+      runtimeSessionId,
+      errorBuffer,
+      logger,
+    })
     return {
       relationalDatabase,
-      relationalOrderObserver,
-      fillObserver,
+      ...observers,
       runtimeErrorObserver,
-      orderRepository,
-      fillRepository,
-      historySyncCursorRepository,
+      ...repositories,
       migrationBackupFilename,
     }
   } catch (error) {
