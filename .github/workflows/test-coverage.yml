@@ -23,6 +23,7 @@ jobs:
       max-parallel: 5
       matrix:
         include:
+          - package: "@coinzilla/dashboard"
           - package: "@coinzilla/harvester"
           - package: "@coinzilla/brokers"
           - package: "@coinzilla/db"
