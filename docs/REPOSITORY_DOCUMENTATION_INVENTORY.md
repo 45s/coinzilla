@@ -336,11 +336,11 @@ A fresh recursive Git tree request returned `truncated: false` and contains **17
 
 These paths are absent from the current recursive tree. Their inbound-reference and Git-history dispositions remain part of #1403; absence alone is not proof that they were safely superseded or that references were updated.
 
-- `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` — removed from current tree; reference/history disposition pending.
-- `packages/brokers/BITUNIX_REFERENCE_AUDIT.md` — removed from current tree; reference/history disposition pending.
-- `packages/market-simulator/AGENTS.md` — removed from current tree; reference/history disposition pending.
-- `packages/market-simulator/README.md` — removed from current tree; reference/history disposition pending.
-- `packages/market-simulator/ROADMAP.md` — removed from current tree; reference/history disposition pending.
+- `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` — **RETIRED** with the interim observer runtime/configuration/adapter in merged [PR #1455](https://github.com/45s/coinzilla/pull/1455); Bitunix remains unregistered until #1185 and the complete-provider gate in ADR-0004. Current Harvester infrastructure indexes point to the general execution-routing contract, not a replacement observer surface.
+- `packages/brokers/BITUNIX_REFERENCE_AUDIT.md` — **MOVED** to `packages/brokers/docs/BITUNIX_REFERENCE_AUDIT.md`; the current Brokers docs index and `docs/brokers-websocket-contract.md` link to the new location. The old path remains here only as historical inventory provenance.
+- `packages/market-simulator/AGENTS.md` — **RETIRED** with the unused Market Simulator workspace package in merged [PR #1482](https://github.com/45s/coinzilla/pull/1482). PR #1482 removed the package and cleaned active workspace documentation, ownership maps, roadmaps and CI matrices; no successor package/document is maintained. Earlier PR #900/#911 inventory rows remain historical provenance.
+- `packages/market-simulator/README.md` — **RETIRED** with the unused Market Simulator workspace package in merged [PR #1482](https://github.com/45s/coinzilla/pull/1482). PR #1482 removed the package and cleaned active workspace documentation, ownership maps, roadmaps and CI matrices; no successor package/document is maintained. Earlier PR #900/#911 inventory rows remain historical provenance.
+- `packages/market-simulator/ROADMAP.md` — **RETIRED** with the unused Market Simulator workspace package in merged [PR #1482](https://github.com/45s/coinzilla/pull/1482). PR #1482 removed the package and cleaned active workspace documentation, ownership maps, roadmaps and CI matrices; no successor package/document is maintained. Earlier PR #900/#911 inventory rows remain historical provenance.
 
 ### Audit boundary
 
