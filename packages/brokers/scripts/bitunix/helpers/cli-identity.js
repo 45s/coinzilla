@@ -56,11 +56,10 @@ export function resolveCliIdentity({
     repositoryRoot,
     runGit,
   })
-  const worktree = worktreeStatus === null
-    ? "unknown"
-    : worktreeStatus.length === 0
-      ? "clean"
-      : "dirty"
+  let worktree = "unknown"
+  if (worktreeStatus !== null) {
+    worktree = worktreeStatus.length === 0 ? "clean" : "dirty"
+  }
   return formatCliIdentity({
     scriptName,
     packageVersion,
