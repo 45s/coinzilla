@@ -3,7 +3,6 @@ import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
 import { startTradingHistoryApi } from "./start-trading-history-api.js"
 
-
 function createDatabase() {
   let closeCalls = 0
   return {
