@@ -119,6 +119,7 @@ function makeMarketMetadataWithMinimumNotional({ market, minimumNotional } = {})
 
 function createRecoverySellTestStrategyPolicy({ onEvaluate } = {}) {
   return {
+    ...conservativeStrategyPolicy,
     evaluate: (input) => {
       onEvaluate?.(input)
       return conservativeStrategyPolicy.evaluate({
