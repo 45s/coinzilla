@@ -131,6 +131,10 @@ function validateBehavior({ behavior, errors, readFile, sourceOwners }) {
 function validateChangedFiles({ criticalPathPrefixes, changedFiles, sourceOwners, errors }) {
   const affectedBehaviorIds = new Set()
   for (const changedPath of changedFiles) {
+    if (!isSafeRelativePath(changedPath)) {
+      errors.push(`Changed critical source path is invalid: ${changedPath}.`)
+      continue
+    }
     if (changedPath.endsWith(".test.js")) {
       continue
     }
@@ -181,16 +185,17 @@ export function validateCriticalBehaviorContract({
 
   const errors = []
   const sourceOwners = new Map()
-  const criticalPathPrefixes = Array.isArray(contract.criticalPathPrefixes)
+  const declaredPrefixes = Array.isArray(contract.criticalPathPrefixes)
     ? contract.criticalPathPrefixes
     : []
+  const criticalPathPrefixes = declaredPrefixes.filter((prefix) =>
+    isSafeRelativePath(prefix) && prefix.startsWith("src/"),
+  )
   if (criticalPathPrefixes.length === 0) {
-    errors.push("Critical behavior inventory must define at least one critical source path prefix.")
+    errors.push("Critical behavior inventory must define at least one valid critical source path prefix.")
   }
-  for (const prefix of criticalPathPrefixes) {
-    if (!isSafeRelativePath(prefix) || !prefix.startsWith("src/")) {
-      errors.push(`Critical behavior inventory contains an invalid critical source path prefix: ${prefix}.`)
-    }
+  if (criticalPathPrefixes.length !== declaredPrefixes.length) {
+    errors.push("Critical behavior inventory contains an invalid critical source path prefix.")
   }
   if (!Array.isArray(changedFiles)) {
     errors.push("Changed critical source paths must be supplied as an array.")
