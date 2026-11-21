@@ -7,12 +7,12 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "dependencies": {
+    "@coinzilla/utils": "workspace:*"
+  },
   "scripts": {
     "test": "node --test",
     "test:watch": "node --test --watch",
     "test:coverage": "node --test --experimental-test-coverage --test-coverage-include=src/**/*.js --test-coverage-exclude=src/**/*.test.js --test-coverage-lines=90 --test-coverage-branches=85 --test-coverage-functions=85"
-  },
-  "dependencies": {
-    "@coinzilla/utils": "workspace:*"
   }
 }
