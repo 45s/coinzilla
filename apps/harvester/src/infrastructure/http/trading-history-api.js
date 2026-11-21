@@ -287,14 +287,14 @@ function handleListRequest({ response, queries, url, route } = {}) {
 }
 
 function resolveDetailRoute(route) {
-  const orderMatch = route.match(/^\\/api\\/v1\\/trading\\/orders\\/([^/]+)$/)
+  const orderMatch = route.match(/^\/api\\/v1\\/trading\\/orders\\/([^/]+)$/)
   if (orderMatch) {
     return {
       method: "getOrder",
       encodedId: orderMatch[1],
     }
   }
-  const fillMatch = route.match(/^\\/api\\/v1\\/trading\\/fills\\/([^/]+)$/)
+  const fillMatch = route.match(/^\/api\\/v1\\/trading\\/fills\\/([^/]+)$/)
   if (fillMatch) {
     return {
       method: "getFill",
