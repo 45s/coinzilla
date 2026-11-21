@@ -161,6 +161,31 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "completes the recovery cycle only after the SELL fill report is received and reconciled",
           "kind": "integration"
+        },
+        {
+          "path": "src/domain/strategies/conservative/recovery-fill-accounting.test.js",
+          "name": "rejects missing market or fill before accounting",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/recovery-fill-accounting.test.js",
+          "name": "rejects a fill from a different market",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/recovery-fill-accounting.test.js",
+          "name": "rejects unsupported fill sides",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/recovery-fill-accounting.test.js",
+          "name": "rejects missing quote notional and mismatched quote assets",
+          "kind": "failure"
+        },
+        {
+          "path": "src/domain/strategies/conservative/recovery-fill-accounting.test.js",
+          "name": "rejects zero and negative quote notionals",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
