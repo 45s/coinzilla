@@ -4,6 +4,7 @@ import { formatCliIdentity, resolveCliIdentity } from "./cli-identity.js"
 
 test("CLI identity prints package version, full source commit, worktree state, and Node version", () => {
   const identity = formatCliIdentity({
+    packageName: "@coinzilla/brokers",
     scriptName: "bitunix:healthcheck",
     packageVersion: "1.0.0",
     commitSha: "d82cf8f0bd7ac2a2db540c17f6283c0b82395fa1",
@@ -13,12 +14,13 @@ test("CLI identity prints package version, full source commit, worktree state, a
 
   assert.equal(
     identity,
-    "bitunix:healthcheck v1.0.0 | commit d82cf8f0bd7ac2a2db540c17f6283c0b82395fa1 | worktree clean | Node v26.13.0",
+    "@coinzilla/brokers bitunix:healthcheck v1.0.0 | commit d82cf8f0bd7ac2a2db540c17f6283c0b82395fa1 | worktree clean | Node v26.13.0",
   )
 })
 
 test("CLI identity reports unavailable Git metadata explicitly", () => {
   const identity = formatCliIdentity({
+    packageName: "@coinzilla/brokers",
     scriptName: "bitunix:healthcheck",
     packageVersion: "1.0.0",
     commitSha: null,
@@ -32,6 +34,7 @@ test("CLI identity reports unavailable Git metadata explicitly", () => {
 
 test("CLI identity marks a dirty worktree", () => {
   const identity = formatCliIdentity({
+    packageName: "@coinzilla/brokers",
     scriptName: "bitunix:healthcheck",
     packageVersion: "1.0.0",
     commitSha: "d82cf8f0bd7ac2a2db540c17f6283c0b82395fa1",
@@ -45,6 +48,7 @@ test("CLI identity marks a dirty worktree", () => {
 test("CLI identity resolves the exact Git HEAD and worktree state without a shell", () => {
   const calls = []
   const identity = resolveCliIdentity({
+    packageName: "@coinzilla/brokers",
     scriptName: "bitunix:healthcheck",
     packageVersion: "1.0.0",
     repositoryRoot: "/repo",
@@ -72,6 +76,7 @@ test("CLI identity resolves the exact Git HEAD and worktree state without a shel
 
 test("CLI identity marks a failed Git lookup as unknown instead of inventing a version", () => {
   const identity = resolveCliIdentity({
+    packageName: "@coinzilla/brokers",
     scriptName: "bitunix:healthcheck",
     packageVersion: "1.0.0",
     repositoryRoot: "/not-a-repository",
@@ -87,6 +92,7 @@ test("CLI identity marks a failed Git lookup as unknown instead of inventing a v
 
 test("CLI identity marks modified or untracked files as a dirty worktree", () => {
   const identity = resolveCliIdentity({
+    packageName: "@coinzilla/brokers",
     scriptName: "bitunix:healthcheck",
     packageVersion: "1.0.0",
     repositoryRoot: "/repo",
