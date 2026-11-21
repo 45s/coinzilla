@@ -35,6 +35,21 @@
       <span>Market symbol</span>
       <input [value]="symbol()" (input)="updateSymbol($event)" placeholder="BTCUSDT" autocomplete="off" spellcheck="false" />
     </label>
+    <div class="command-console">
+      <label>
+        <span>Command</span>
+        <input
+          [value]="commandInput()"
+          (input)="updateCommandInput($event)"
+          (keydown.enter)="runCommandLine()"
+          placeholder="status · portfolio · pause BTCUSDT"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </label>
+      <button type="button" (click)="runCommandLine()">Run command</button>
+      <small>Type <code>help</code> to list available commands. Mutations still require confirmation below.</small>
+    </div>
     <div class="command-actions">
       <button type="button" class="danger-command" (click)="requestCommand('pause')">Pause market BUYs</button>
       <button type="button" class="resume-command" (click)="requestCommand('unpause')">Unpause market BUYs</button>
