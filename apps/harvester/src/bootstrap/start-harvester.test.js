@@ -5,50 +5,6 @@ import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 test("blocks trading after execution accounting failure", async () => {
   const broker = createBroker()
   const result = await startHarvesterForTest({
@@ -67,18 +23,12 @@ test("blocks trading after execution accounting failure", async () => {
     fill: createFill({ tradeId: "trade-2" }),
   })
   await new Promise((resolve) => setImmediate(resolve))
-  assert.equal(result.userDataReady, false)
-  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED")
-  assert.equal(result.placeOrder, undefined)
-  assert.equal(result.broker, undefined)
-  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
+  assert.equal(result.userDataReady, false, "Execution-accounting failure gate: expected result.userDataReady to equal false.")
+  assert.equal(result.userDataStatus, "EXECUTION_ACCOUNTING_FAILED", "Execution-accounting failure gate: expected result.userDataStatus to equal \"EXECUTION_ACCOUNTING_FAILED\".")
+  assert.equal(result.placeOrder, undefined, "Execution-accounting failure gate: expected result.placeOrder to equal undefined.")
+  assert.equal(result.broker, undefined, "Execution-accounting failure gate: expected result.broker to equal undefined.")
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "Execution-accounting failure gate: expected result.stop() to reject or throw with /Harvester shutdown was incomplete/.")
 })
-
-
-
-
-
-
 
 test("fails startup before opening streams when required minimum notional is unavailable", async () => {
   const calls = []
@@ -110,18 +60,10 @@ test("fails startup before opening streams when required minimum notional is una
         error() {}
       },
     }),
-    /Required exchange trading rule is unavailable: MIN_NOTIONAL/,
+    /Required exchange trading rule is unavailable: MIN_NOTIONAL/, "Minimum-notional startup validation: expected startHarvesterForTest({\n      loadConfig: async () => appConfig,\n      env: binanceEnv,\n      brokerAdapterFactory: () => broker,\n      logger: {\n        info() {},\n        error() {}\n      },\n    }) to reject or throw with /Required exchange trading rule is unavailable: MIN_NOTIONAL/."
   )
-  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"])
+  assert.deepEqual(calls, ["connect", "filters:BTCUSDT", "disconnect"], "Minimum-notional startup validation: expected calls to deeply equal [\"connect\", \"filters:BTCUSDT\", \"disconnect\"].")
 })
-
-
-
-
-
-
-
-
 
 class TestnetTradingRecoveryScenario {
   createBrokerPart1() {
@@ -557,7 +499,7 @@ class TestnetTradingRecoveryScenario {
       },
     })
   
-    assert.equal(this.runtime.userDataReady, true)
+    assert.equal(this.runtime.userDataReady, true, "TESTNET conservative recovery-cycle scenario: expected this.runtime.userDataReady to equal true.")
   
     this.readinessTransitions = [this.runtime.userDataReady]
   
@@ -584,7 +526,7 @@ class TestnetTradingRecoveryScenario {
   
     assert.equal(this.submittedOrders.length, 1, "a fresh non-crossing book should release the initial BUY")
   
-    assert.equal(this.submittedOrders[0].side, "BUY")
+    assert.equal(this.submittedOrders[0].side, "BUY", "TESTNET conservative recovery-cycle scenario: expected this.submittedOrders[0].side to equal \"BUY\".")
   
   
     const acknowledgedBuy = new CanonicalOrder({
@@ -626,11 +568,11 @@ class TestnetTradingRecoveryScenario {
       lifecycleStatus === "ACCEPTED" &&
       clientOrderId === acknowledgedBuy.clientOrderId)
   
-    assert.ok(this.acceptedOrderLog)
+    assert.ok(this.acceptedOrderLog, "TESTNET conservative recovery-cycle scenario: expected this.acceptedOrderLog to be truthy.")
   
-    assert.equal(this.acceptedOrderLog.price, this.submittedOrders[0].price)
+    assert.equal(this.acceptedOrderLog.price, this.submittedOrders[0].price, "TESTNET conservative recovery-cycle scenario: expected this.acceptedOrderLog.price to equal this.submittedOrders[0].price.")
   
-    assert.equal(this.acceptedOrderLog.quantity, this.submittedOrders[0].quantity)
+    assert.equal(this.acceptedOrderLog.quantity, this.submittedOrders[0].quantity, "TESTNET conservative recovery-cycle scenario: expected this.acceptedOrderLog.quantity to equal this.submittedOrders[0].quantity.")
   
   
     this.submitted = this.calls.find((call) => typeof call === "object")
@@ -1041,7 +983,7 @@ class TestnetTradingRecoveryScenario {
   
     this.replacementSell = this.submittedOrders.filter((order) => order.side === "SELL").at(-1)
   
-    assert.equal(this.replacementSell.side, "SELL")
+    assert.equal(this.replacementSell.side, "SELL", "TESTNET conservative recovery-cycle scenario: expected this.replacementSell.side to equal \"SELL\".")
   
   }
 
@@ -1127,19 +1069,19 @@ class TestnetTradingRecoveryScenario {
       message,
       tradeId
     }) =>
-      message === "Execution accounted" && tradeId === "testnet-buy-fill"))
+      message === "Execution accounted" && tradeId === "testnet-buy-fill"), "TESTNET conservative recovery-cycle scenario: expected this.runtimeDebug.some(({\n      message,\n      tradeId\n    }) =>\n      message === \"Execution accounted\" && tradeId === \"testnet-buy-fill\") to be truthy.")
   
     assert.ok(this.runtimeDebug.some(({
       message,
       tradeId
     }) =>
-      message === "Execution accounted" && tradeId === "testnet-sell-fill"))
+      message === "Execution accounted" && tradeId === "testnet-sell-fill"), "TESTNET conservative recovery-cycle scenario: expected this.runtimeDebug.some(({\n      message,\n      tradeId\n    }) =>\n      message === \"Execution accounted\" && tradeId === \"testnet-sell-fill\") to be truthy.")
   
     assert.ok(this.runtimeDebug.some(({ message }) =>
-      message === "recovery completion evaluation input"))
+      message === "recovery completion evaluation input"), "TESTNET conservative recovery-cycle scenario: expected this.runtimeDebug.some(({ message }) =>\n      message === \"recovery completion evaluation input\") to be truthy.")
   
     assert.ok(this.runtimeDebug.some(({ message }) =>
-      message === "Recovery cycle completed"))
+      message === "Recovery cycle completed"), "TESTNET conservative recovery-cycle scenario: expected this.runtimeDebug.some(({ message }) =>\n      message === \"Recovery cycle completed\") to be truthy.")
   
     await this.subscriptions.get("BTCUSDT")({
       eventType: "aggTrade",
@@ -1161,13 +1103,13 @@ class TestnetTradingRecoveryScenario {
   
     this.position = this.runtime.portfolio.getPosition({ symbol: "BTCUSDT" })
   
-    assert.equal(this.position.baseQuantity.amount, "0")
+    assert.equal(this.position.baseQuantity.amount, "0", "TESTNET conservative recovery-cycle scenario: expected this.position.baseQuantity.amount to equal \"0\".")
   
-    assert.equal(this.position.freeBaseQuantity.amount, "0.001")
+    assert.equal(this.position.freeBaseQuantity.amount, "0.001", "TESTNET conservative recovery-cycle scenario: expected this.position.freeBaseQuantity.amount to equal \"0.001\".")
   
-    assert.equal(this.runtime.getRecoveryLedger({ marketId: this.marketMetadata.market.id }).buyCost, "0")
+    assert.equal(this.runtime.getRecoveryLedger({ marketId: this.marketMetadata.market.id }).buyCost, "0", "TESTNET conservative recovery-cycle scenario: expected this.runtime.getRecoveryLedger({ marketId: this.marketMetadata.market.id }).buyCost to equal \"0\".")
   
-    assert.deepEqual(this.submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"])
+    assert.deepEqual(this.submittedOrders.map((order) => order.side), ["BUY", "SELL", "BUY", "SELL", "BUY", "BUY"], "TESTNET conservative recovery-cycle scenario: expected this.submittedOrders.map((order) => order.side) to deeply equal [\"BUY\", \"SELL\", \"BUY\", \"SELL\", \"BUY\", \"BUY\"].")
   }
 
   async run() {
@@ -1192,11 +1134,6 @@ test("explicit TESTNET trading drains its first BUY fill once after 254 recovery
   await scenario.run()
 })
 
-
-
-
-
-
 test("emits per-execution debug audit records with commission and before/after accounting", async () => {
   const debugRecords = []
   const result = await startHarvesterForTest({
@@ -1215,127 +1152,39 @@ test("emits per-execution debug audit records with commission and before/after a
   })
   const applied = await result.updateTradingAccounting({ fill })
 
-  assert.equal(applied.ok, true)
+  assert.equal(applied.ok, true, "Execution accounting debug audit: expected applied.ok to equal true.")
   const received = debugRecords.find((record) =>
     record.message === "Execution received")
   const committed = debugRecords.find((record) =>
     record.message === "Execution accounted")
 
-  assert.equal(received.executionId, fill.id)
-  assert.equal(received.tradeId, "audited-trade")
-  assert.equal(received.symbol, "BTCUSDT")
-  assert.equal(received.side, "BUY")
-  assert.equal(received.liquidityRole, "UNKNOWN")
-  assert.equal(received.executedAt, undefined)
-  assert.equal(received.quantity, "0.01")
-  assert.equal(received.quoteQuantity, "650")
-  assert.equal(received.commissionStatus, "COMPLETE")
-  assert.deepEqual(received.commissions, [])
-  assert.equal(received.previousRecoveryLedger.legacyBuyCostMirror, "0")
-  assert.equal(committed.applied, true)
-  assert.equal(committed.duplicate, false)
-  assert.equal(committed.nextRecoveryLedger.legacyBuyCostMirror, "650")
-  assert.equal(committed.nextRecoveryLedger.netSellProceeds, "0")
-  assert.equal(committed.accountingDelta.portfolioActiveBase, "0.01")
-  assert.equal(committed.accountingDelta.positionSpent, "650")
-  assert.equal(committed.accountingDelta.netSellProceeds, "0")
-  assert.equal(committed.accountingDelta.outstandingRecoveryAmount, "650")
-  assert.equal(committed.accountingDelta.realizedNetProfit, "-650")
+  assert.equal(received.executionId, fill.id, "Execution accounting debug audit: expected received.executionId to equal fill.id.")
+  assert.equal(received.tradeId, "audited-trade", "Execution accounting debug audit: expected received.tradeId to equal \"audited-trade\".")
+  assert.equal(received.symbol, "BTCUSDT", "Execution accounting debug audit: expected received.symbol to equal \"BTCUSDT\".")
+  assert.equal(received.side, "BUY", "Execution accounting debug audit: expected received.side to equal \"BUY\".")
+  assert.equal(received.liquidityRole, "UNKNOWN", "Execution accounting debug audit: expected received.liquidityRole to equal \"UNKNOWN\".")
+  assert.equal(received.executedAt, undefined, "Execution accounting debug audit: expected received.executedAt to equal undefined.")
+  assert.equal(received.quantity, "0.01", "Execution accounting debug audit: expected received.quantity to equal \"0.01\".")
+  assert.equal(received.quoteQuantity, "650", "Execution accounting debug audit: expected received.quoteQuantity to equal \"650\".")
+  assert.equal(received.commissionStatus, "COMPLETE", "Execution accounting debug audit: expected received.commissionStatus to equal \"COMPLETE\".")
+  assert.deepEqual(received.commissions, [], "Execution accounting debug audit: expected received.commissions to deeply equal [].")
+  assert.equal(received.previousRecoveryLedger.legacyBuyCostMirror, "0", "Execution accounting debug audit: expected received.previousRecoveryLedger.legacyBuyCostMirror to equal \"0\".")
+  assert.equal(committed.applied, true, "Execution accounting debug audit: expected committed.applied to equal true.")
+  assert.equal(committed.duplicate, false, "Execution accounting debug audit: expected committed.duplicate to equal false.")
+  assert.equal(committed.nextRecoveryLedger.legacyBuyCostMirror, "650", "Execution accounting debug audit: expected committed.nextRecoveryLedger.legacyBuyCostMirror to equal \"650\".")
+  assert.equal(committed.nextRecoveryLedger.netSellProceeds, "0", "Execution accounting debug audit: expected committed.nextRecoveryLedger.netSellProceeds to equal \"0\".")
+  assert.equal(committed.accountingDelta.portfolioActiveBase, "0.01", "Execution accounting debug audit: expected committed.accountingDelta.portfolioActiveBase to equal \"0.01\".")
+  assert.equal(committed.accountingDelta.positionSpent, "650", "Execution accounting debug audit: expected committed.accountingDelta.positionSpent to equal \"650\".")
+  assert.equal(committed.accountingDelta.netSellProceeds, "0", "Execution accounting debug audit: expected committed.accountingDelta.netSellProceeds to equal \"0\".")
+  assert.equal(committed.accountingDelta.outstandingRecoveryAmount, "650", "Execution accounting debug audit: expected committed.accountingDelta.outstandingRecoveryAmount to equal \"650\".")
+  assert.equal(committed.accountingDelta.realizedNetProfit, "-650", "Execution accounting debug audit: expected committed.accountingDelta.realizedNetProfit to equal \"-650\".")
 
-  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/)
-  assert.equal(result.userDataStatus, "SHUTDOWN_INCOMPLETE")
+  await assert.rejects(result.stop(), /Harvester shutdown was incomplete/, "Execution accounting debug audit: expected result.stop() to reject or throw with /Harvester shutdown was incomplete/.")
+  assert.equal(result.userDataStatus, "SHUTDOWN_INCOMPLETE", "Execution accounting debug audit: expected result.userDataStatus to equal \"SHUTDOWN_INCOMPLETE\".")
 })
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
  
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Restored integration regressions retained across the bootstrap decomposition.
 
-
-
-
-
-
-
-
-
 // Preserve both independent TRADING_MODE startup regressions.
-
-
-
-
-
-
-
-
-
-
-
