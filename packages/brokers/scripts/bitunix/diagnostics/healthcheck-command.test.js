@@ -14,11 +14,14 @@ const requiredOperations = [
 ]
 
 function createDiagnosticReport({ failed = 0 } = {}) {
-  const results = requiredOperations.map((operation, index) => ({
+  const results = requiredOperations.map((operation) => ({
     operation,
-    status: index < failed ? "failed" : "passed",
+    status: "passed",
     durationMs: 1,
   }))
+  if (failed > 0) {
+    results[0].status = "failed"
+  }
   return {
     schemaVersion: 1,
     startedAt: "2026-11-21T00:00:00.000Z",
@@ -85,7 +88,10 @@ test("place-order mode runs diagnostics first and executes the order inside repo
       events.push("read-only diagnostics")
       return createDiagnosticReport()
     },
-    publishDiagnostics: createPublisher({ events, publishedReports }),
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
     runOperatorOrder: async () => {
       events.push("operator order")
       orderCalls += 1
@@ -119,7 +125,10 @@ test("place-order mode skips the order when read-only health checks are not heal
     publishDiagnostics: createPublisher({ events, publishedReports }),
     runOperatorOrder: async () => {
       orderCalls += 1
-      return { ok: true, mutationOutcome: "CONFIRMED" }
+      return {
+        ok: true,
+        mutationOutcome: "CONFIRMED",
+      }
     },
   })
 

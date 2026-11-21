@@ -11,8 +11,16 @@ function createReport({ failed = 0 } = {}) {
       skipped: 0,
     },
     results: [
-      { operation: "REST ping", status: "passed", durationMs: 4 },
-      { operation: "user.account", status: "passed", durationMs: 6 },
+      {
+        operation: "REST ping",
+        status: "passed",
+        durationMs: 4,
+      },
+      {
+        operation: "user.account",
+        status: "passed",
+        durationMs: 6,
+      },
     ],
   }
 }

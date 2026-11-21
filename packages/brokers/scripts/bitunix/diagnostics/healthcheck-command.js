@@ -82,6 +82,55 @@ function printPublishedResult({ result, stdout }) {
   ].join("\n"))
 }
 
+async function runDiagnosticsWithOperatorAttempt({
+  env,
+  onProgress,
+  runDiagnostics,
+  runOperatorOrder,
+}) {
+  const report = await runDiagnostics({
+    env,
+    onProgress,
+    brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
+  })
+  if (!runOperatorOrder) {
+    return report
+  }
+  if (!evaluateHealthCheck({ report }).healthy) {
+    return appendOperatorAttemptResult({
+      report,
+      operatorResult: {
+        ok: false,
+        mutationOutcome: "NOT_SENT",
+        skipped: true,
+        skipCode: "HEALTHCHECK_NOT_HEALTHY",
+      },
+      durationMs: 0,
+      secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean),
+    })
+  }
+  onProgress?.({
+    message: "      Read-only health checks passed; starting the guarded HYPEUSDT operator attempt",
+  })
+  const startedAt = Date.now()
+  let operatorResult
+  try {
+    operatorResult = await runOperatorOrder({ env })
+  } catch (error) {
+    operatorResult = {
+      ok: false,
+      mutationOutcome: "OUTCOME_UNKNOWN",
+      errors: [error],
+    }
+  }
+  return appendOperatorAttemptResult({
+    report,
+    operatorResult,
+    durationMs: Date.now() - startedAt,
+    secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean),
+  })
+}
+
 async function runPublishedHealthCheck({
   repositoryRoot,
   env,
@@ -95,49 +144,11 @@ async function runPublishedHealthCheck({
     : "WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n")
   const result = await publishDiagnostics({
     repositoryRoot,
-    runDiagnostics: async ({ env: diagnosticEnv, onProgress }) => {
-      const report = await runDiagnostics({
-        env: diagnosticEnv,
-        onProgress,
-        brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
-      })
-      if (!runOperatorOrder) {
-        return report
-      }
-      if (!evaluateHealthCheck({ report }).healthy) {
-        return appendOperatorAttemptResult({
-          report,
-          operatorResult: {
-            ok: false,
-            mutationOutcome: "NOT_SENT",
-            skipped: true,
-            skipCode: "HEALTHCHECK_NOT_HEALTHY",
-          },
-          durationMs: 0,
-          secrets: [diagnosticEnv.BITUNIX_API_KEY, diagnosticEnv.BITUNIX_API_SECRET].filter(Boolean),
-        })
-      }
-      onProgress?.({ message: "      Read-only health checks passed; starting the guarded HYPEUSDT operator attempt" })
-      const startedAt = Date.now()
-      let operatorResult
-      try {
-        operatorResult = await runOperatorOrder({
-          env: diagnosticEnv,
-        })
-      } catch (error) {
-        operatorResult = {
-          ok: false,
-          mutationOutcome: "OUTCOME_UNKNOWN",
-          errors: [error],
-        }
-      }
-      return appendOperatorAttemptResult({
-        report,
-        operatorResult,
-        durationMs: Date.now() - startedAt,
-        secrets: [diagnosticEnv.BITUNIX_API_KEY, diagnosticEnv.BITUNIX_API_SECRET].filter(Boolean),
-      })
-    },
+    runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
+      ...input,
+      runDiagnostics,
+      runOperatorOrder,
+    }),
     env,
     onProgress: ({ message }) => stdout.write(`${message}\n`),
   })

@@ -34,14 +34,16 @@ test("health evaluation fails when a required read-only operation is missing", (
 })
 
 test("health evaluation fails when any diagnostic operation fails", () => {
+  const results = requiredOperations.map((operation) => ({
+    operation,
+    status: "passed",
+  }))
+  results[0].status = "failed"
   const report = {
     summary: {
       failed: 1,
     },
-    results: requiredOperations.map((operation, index) => ({
-      operation,
-      status: index === 0 ? "failed" : "passed",
-    })),
+    results,
   }
   assert.equal(evaluateHealthCheck({ report }).healthy, false)
 })

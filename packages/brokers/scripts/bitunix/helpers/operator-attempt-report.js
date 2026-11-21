@@ -30,12 +30,12 @@ export function appendOperatorAttemptResult({
   durationMs,
   secrets = [],
 }) {
-  const skipped = operatorResult.declined === true || operatorResult.skipped === true
-  const status = skipped
-    ? "skipped"
-    : operatorResult.ok === true && operatorResult.mutationOutcome === "CONFIRMED"
-      ? "passed"
-      : "failed"
+  let status = "failed"
+  if (operatorResult.declined === true || operatorResult.skipped === true) {
+    status = "skipped"
+  } else if (operatorResult.ok === true && operatorResult.mutationOutcome === "CONFIRMED") {
+    status = "passed"
+  }
   const result = createDiagnosticResult({
     operation: "operator order attempt",
     status,
