@@ -149,6 +149,7 @@ function createWorkflowState({ updateResult, activeOrders, registry } = {}) {
         ...updateResult,
         registry: state.registry,
       }),
+      getOwnership: () => undefined,
       getActiveOrders: () => activeOrders,
     },
     reconciledTerminalOrderClientIds: new Set(),
