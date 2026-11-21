@@ -15,10 +15,11 @@ function readGitOutput({ args, repositoryRoot, runGit }) {
 /**
  * Format a stable, human-readable executable identity.
  *
- * @param {{scriptName: string, packageVersion: string, commitSha: string|null, worktree: string, nodeVersion: string}} input
+ * @param {{packageName: string, scriptName: string, packageVersion: string, commitSha: string|null, worktree: string, nodeVersion: string}} input
  * @returns {string}
  */
 export function formatCliIdentity({
+  packageName,
   scriptName,
   packageVersion,
   commitSha,
@@ -26,7 +27,7 @@ export function formatCliIdentity({
   nodeVersion,
 } = {}) {
   return [
-    `${scriptName} v${packageVersion}`,
+    `${packageName} ${scriptName} v${packageVersion}`,
     `commit ${commitSha || "unknown"}`,
     `worktree ${worktree || "unknown"}`,
     `Node ${nodeVersion}`,
@@ -40,6 +41,7 @@ export function formatCliIdentity({
  * @returns {string}
  */
 export function resolveCliIdentity({
+  packageName,
   scriptName,
   packageVersion,
   repositoryRoot,
@@ -61,6 +63,7 @@ export function resolveCliIdentity({
     worktree = worktreeStatus.length === 0 ? "clean" : "dirty"
   }
   return formatCliIdentity({
+    packageName,
     scriptName,
     packageVersion,
     commitSha,
