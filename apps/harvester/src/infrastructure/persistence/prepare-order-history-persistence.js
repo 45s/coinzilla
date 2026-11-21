@@ -202,6 +202,7 @@ async function prepareRelationalResources({
     timeout: 5000,
   })
   let runtimeErrorObserver
+  let observers
   try {
     await relationalDatabase.connect()
     const migrationBackupFilename = await createVerifiedMigrationBackup({
@@ -212,7 +213,7 @@ async function prepareRelationalResources({
     const repositories = createRelationalHistoryRepositories({
       database: relationalDatabase,
     })
-    const observers = createRelationalHistoryObservers({
+    observers = createRelationalHistoryObservers({
       eventBus,
       orderRepository: repositories.orderRepository,
       fillRepository: repositories.fillRepository,
@@ -237,7 +238,7 @@ async function prepareRelationalResources({
   } catch (error) {
     await closePartialRelationalResources({
       database: relationalDatabase,
-      observers: [runtimeErrorObserver, fillObserver, relationalOrderObserver],
+      observers: [runtimeErrorObserver, observers?.fillObserver, observers?.relationalOrderObserver],
       logger,
     })
     throw error
