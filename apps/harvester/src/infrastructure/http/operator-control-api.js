@@ -107,6 +107,15 @@ export async function handleOperatorControlRequest({ request, response, pathname
     return true
   }
 
+  const origin = request.headers.origin
+  if (origin && origin !== "http://127.0.0.1:4200" && origin !== "http://localhost:4200") {
+    sendJson(response, 403, {
+      ok: false,
+      error: { code: "HARVESTER_OPERATOR_ORIGIN_FORBIDDEN", message: "Operator commands are only accepted from the local Dashboard." },
+    })
+    return true
+  }
+
   try {
     const body = await readJsonBody(request)
     const command = typeof body.command === "string" ? body.command.trim().toLowerCase() : ""
