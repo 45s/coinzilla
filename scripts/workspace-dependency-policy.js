@@ -243,7 +243,7 @@ function findPolicyDeclarationViolations({ packageNames, allowedDependencies }) 
   const policyNames = new Set(Object.keys(allowedDependencies))
   for (const packageName of packageNames) {
     if (!policyNames.has(packageName)) {
-      violations.push(`Workspace package ${packageName} is missing a dependency policy row.`)
+      violations.push(`Workspace package ${packageName} is missing policy row for allowed workspace dependencies.`)
     }
   }
   for (const policyName of policyNames) {
@@ -274,7 +274,7 @@ function buildWorkspaceDependencyGraph({ packagesByName, allowedDependencies }) 
     for (const dependency of workspacePackage.workspaceDependencies) {
       const { name: target, version, section } = dependency
       if (!packagesByName.has(target)) {
-        violations.push(`Workspace package ${packageName} declares ${target} in ${section}, but no matching workspace package manifest exists.`)
+        violations.push(`Workspace package ${packageName} references unknown workspace package ${target} in ${section}; add the missing manifest or correct the dependency.`)
         continue
       }
       if (typeof version !== "string" || !version.startsWith("workspace:")) {
