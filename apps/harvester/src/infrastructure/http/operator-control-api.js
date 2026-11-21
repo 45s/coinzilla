@@ -7,6 +7,7 @@ const READ_OPERATIONS = Object.freeze({
   status: "getStatus",
   markets: "getMarkets",
   positions: "getPositions",
+  portfolio: "getPositions",
   orders: "getOrders",
   balances: "getBalances",
 })
