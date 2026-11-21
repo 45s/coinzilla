@@ -243,3 +243,28 @@ test("rejects a critical-module coverage floor above its measured baseline", () 
     "A coverage floor must not exceed its measured baseline.",
   )
 })
+
+
+test("rejects a critical-module floor lowered below the measured-baseline policy", () => {
+  const contract = structuredClone(validContract)
+  contract.moduleCoverage[0].minimum.branches = 80
+
+  const result = validate({ contract })
+
+  assert.ok(
+    result.errors.some((error) => error.includes("order-registry.js") && error.includes("measured-baseline policy")),
+    "A critical coverage floor must not be lowered below the floor derived from its recorded baseline.",
+  )
+})
+
+test("rejects critical source modules omitted from declared path boundaries", () => {
+  const contract = structuredClone(validContract)
+  contract.criticalPathPrefixes = ["src/use-cases/"]
+
+  const result = validate({ contract })
+
+  assert.ok(
+    result.errors.some((error) => error.includes("order-registry.js") && error.includes("outside declared critical path prefixes")),
+    "A critical source module must remain inside the declared changed-source enforcement boundaries.",
+  )
+})

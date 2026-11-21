@@ -277,6 +277,14 @@ function validateCoverageMetric({ entry, metric, errors }) {
     minimum > baseline
   ) {
     errors.push(`Critical module coverage for ${entry.path} has an invalid ${metric} floor or baseline.`)
+    return
+  }
+
+  const expectedMinimum = Math.min(95, Math.floor(baseline / 5) * 5)
+  if (minimum !== expectedMinimum) {
+    errors.push(
+      `Critical module coverage for ${entry.path} has a ${metric} floor of ${minimum.toFixed(2)}%; the measured-baseline policy requires ${expectedMinimum.toFixed(2)}%.`,
+    )
   }
 }
 
@@ -301,10 +309,19 @@ function validateModuleCoverageEntry({ entry, coveragePaths, sourceOwners, error
   }
 }
 
-function validateModuleCoverageInventory({ contract, sourceOwners, errors }) {
+function validateModuleCoverageInventory({ contract, criticalPathPrefixes, sourceOwners, errors }) {
   if (!Array.isArray(contract.moduleCoverage) || contract.moduleCoverage.length === 0) {
     errors.push("Critical behavior inventory must define measured per-module coverage floors.")
     return
+  }
+
+  for (const sourcePath of sourceOwners.keys()) {
+    const isCoveredByCriticalPrefix = criticalPathPrefixes.some((prefix) =>
+      sourcePath === prefix || (prefix.endsWith("/") && sourcePath.startsWith(prefix)),
+    )
+    if (!isCoveredByCriticalPrefix) {
+      errors.push(`Critical source module ${sourcePath} is outside declared critical path prefixes.`)
+    }
   }
 
   const coveragePaths = new Set()
@@ -403,6 +420,7 @@ export function validateCriticalBehaviorContract({
   })
   validateModuleCoverageInventory({
     contract,
+    criticalPathPrefixes,
     sourceOwners,
     errors,
   })
