@@ -166,6 +166,9 @@ test("Bitunix order adapter correlates placement acknowledgement with requested 
     }),
     /symbol does not match/i,
   )
+})
+
+test("Bitunix order adapter preserves matching-engine rejection metadata", () => {
   assert.throws(
     () => validateSpotOrderPlacementResponse({
       response: {
@@ -186,6 +189,9 @@ test("Bitunix order adapter correlates placement acknowledgement with requested 
       return true
     },
   )
+})
+
+test("Bitunix order adapter treats an invalid placement status as unknown", () => {
   assert.throws(
     () => validateSpotOrderPlacementResponse({
       response: {
