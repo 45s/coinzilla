@@ -1,3 +1,5 @@
+# Harvester Roadmap
+
 ## Critical trading reliability initiative (#1639)
 
 - **In progress — first executable gate in [PR #1642](https://github.com/45s/coinzilla/pull/1642):** add a machine-readable critical behavior inventory mapping production owners to named normal/failure regressions and required replay evidence. The required Unit Tests workflow validates that mappings and rejects unmapped changes under declared critical source boundaries before running the full Harvester package suite.
