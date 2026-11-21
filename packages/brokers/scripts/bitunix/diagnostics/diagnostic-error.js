@@ -1,8 +1,13 @@
 import { SystemCustomError } from "@coinzilla/utils"
 
 function createBrokerDiagnosticErrorOptions({ code, context, cause }) {
-  const options = { code, context }
-  if (cause !== undefined) options.cause = cause
+  const options = {
+    code,
+    context,
+  }
+  if (cause !== undefined) {
+    options.cause = cause
+  }
   return options
 }
 
@@ -19,6 +24,10 @@ export class BrokerDiagnosticError extends SystemCustomError {
    * }} input
    */
   constructor({ code, message, context, cause }) {
-    super(message, createBrokerDiagnosticErrorOptions({ code, context, cause }))
+    super(message, createBrokerDiagnosticErrorOptions({
+      code,
+      context,
+      cause,
+    }))
   }
 }

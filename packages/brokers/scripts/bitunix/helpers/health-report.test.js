@@ -18,9 +18,15 @@ const requiredOperations = [
 
 test("health evaluation fails when a required read-only operation is missing", () => {
   const report = {
-    summary: { failed: 0 },
-    results: requiredOperations.filter((operation) => operation !== "user.info")
-      .map((operation) => ({ operation, status: "passed" })),
+    summary: {
+      failed: 0,
+    },
+    results: requiredOperations
+      .filter((operation) => operation !== "user.info")
+      .map((operation) => ({
+        operation,
+        status: "passed",
+      })),
   }
   const result = evaluateHealthCheck({ report })
   assert.deepEqual(result.missingRequiredOperations, ["user.info"])
@@ -29,8 +35,13 @@ test("health evaluation fails when a required read-only operation is missing", (
 
 test("health evaluation fails when any diagnostic operation fails", () => {
   const report = {
-    summary: { failed: 1 },
-    results: requiredOperations.map((operation) => ({ operation, status: "passed" })),
+    summary: {
+      failed: 1,
+    },
+    results: requiredOperations.map((operation) => ({
+      operation,
+      status: "passed",
+    })),
   }
   assert.equal(evaluateHealthCheck({ report }).healthy, false)
 })
@@ -40,15 +51,33 @@ test("public health reports copy only allowlisted fields and omit private accoun
     schemaVersion: 1,
     startedAt: "2026-11-21T00:00:00.000Z",
     finishedAt: "2026-11-21T00:01:00.000Z",
-    runtime: { node: "v24.0.0", platform: "linux", privateRuntimeField: "private-runtime" },
-    summary: { total: 1, passed: 0, failed: 1, skipped: 0, privateCount: "private-count" },
-    healthCheck: { requiredOperations, missingRequiredOperations: ["user.info"], healthy: false, privateField: "private-health" },
+    runtime: {
+      node: "v24.0.0",
+      platform: "linux",
+      privateRuntimeField: "private-runtime",
+    },
+    summary: {
+      total: 1,
+      passed: 0,
+      failed: 1,
+      skipped: 0,
+      privateCount: "private-count",
+    },
+    healthCheck: {
+      requiredOperations,
+      missingRequiredOperations: ["user.info"],
+      healthy: false,
+      privateField: "private-health",
+    },
     results: [{
       operation: "user.account",
       status: "failed",
       durationMs: 12,
       request: { apiKey: "private-key" },
-      response: { uid: "private-uid", balance: "987.65" },
+      response: {
+        uid: "private-uid",
+        balance: "987.65",
+      },
       error: {
         name: "BitunixError",
         message: "private balance 987.65",
@@ -56,7 +85,9 @@ test("public health reports copy only allowlisted fields and omit private accoun
         kind: "exchange",
         status: 400,
         exchangeCode: "10001",
-        cause: { message: "private nested message" },
+        cause: {
+          message: "private nested message",
+        },
       },
     }],
     events: [{ payload: "private-event" }],
@@ -77,7 +108,10 @@ test("nested free-form error messages are withheld before local report persisten
       error: {
         name: "BitunixError",
         message: "private exchange response",
-        cause: { name: "Error", message: "private nested response" },
+        cause: {
+          name: "Error",
+          message: "private nested response",
+        },
       },
     },
   })

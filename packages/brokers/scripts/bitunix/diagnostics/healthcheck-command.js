@@ -10,7 +10,10 @@ function createLocalReportPath({ brokersRoot, now }) {
 }
 
 async function writeLocalReport({ report, outputPath }) {
-  await mkdir(dirname(outputPath), { recursive: true, mode: 0o700 })
+  await mkdir(dirname(outputPath), {
+    recursive: true,
+    mode: 0o700,
+  })
   await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`, {
     encoding: "utf8",
     mode: 0o600,
@@ -40,9 +43,19 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
     env,
     brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
   })
-  const outputPath = createLocalReportPath({ brokersRoot, now: Date.now })
-  await writeLocalReport({ report, outputPath })
-  printLocalSummary({ report, outputPath, stdout })
+  const outputPath = createLocalReportPath({
+    brokersRoot,
+    now: Date.now,
+  })
+  await writeLocalReport({
+    report,
+    outputPath,
+  })
+  printLocalSummary({
+    report,
+    outputPath,
+    stdout,
+  })
   return report.summary.failed > 0 ? 1 : 0
 }
 
@@ -77,7 +90,10 @@ async function runPublishedHealthCheck({ repositoryRoot, env, stdout }) {
     env,
     onProgress: ({ message }) => stdout.write(`${message}\n`),
   })
-  printPublishedResult({ result, stdout })
+  printPublishedResult({
+    result,
+    stdout,
+  })
   return result.exitCode
 }
 

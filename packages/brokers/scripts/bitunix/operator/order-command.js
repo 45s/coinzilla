@@ -1,7 +1,11 @@
-import { createInterface } from "node:readline/promises"
+import { createInterface } from "node:readline"
 import { resolve } from "node:path"
 import { Broker } from "../../../src/index.js"
-import { createOneShotMarker, runBitunixOperatorOrderAttempt } from "./order-attempt.js"
+import {
+  assertBitunixOperatorInteractiveTerminal,
+  createOneShotMarker,
+  runBitunixOperatorOrderAttempt,
+} from "./order-attempt.js"
 
 function readBitunixApiCredentials({ env }) {
   const apiKey = env.BITUNIX_API_KEY?.trim()
@@ -32,16 +36,27 @@ function redactBitunixApiSecrets({ message, secrets }) {
   return safeMessage
 }
 
-async function askForBitunixOrderConfirmation({ order, stdin, stdout }) {
-  const readline = createInterface({ input: stdin, output: stdout })
-  try {
-    const answer = await readline.question(
+export function askForBitunixOrderConfirmation({ order, stdin, stdout }) {
+  const readline = createInterface({
+    input: stdin,
+    output: stdout,
+  })
+  return new Promise((resolveAnswer) => {
+    let settled = false
+    const finish = (approved) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      readline.close()
+      resolveAnswer(approved)
+    }
+    readline.once("close", () => finish(false))
+    readline.question(
       `Press ENTER to submit this LIVE ${order.side} ${order.type} ${order.symbol} order (${order.quantity} HYPE at ${order.price} USDT; ${order.notional} USDT notional), or type anything to decline: `,
+      (answer) => finish(answer === ""),
     )
-    return answer === ""
-  } finally {
-    readline.close()
-  }
+  })
 }
 
 /**
@@ -56,6 +71,10 @@ export async function runBitunixOperatorOrderCommand({
   stdin = process.stdin,
   stdout = process.stdout,
 } = {}) {
+  assertBitunixOperatorInteractiveTerminal({
+    stdin,
+    stdout,
+  })
   const credentials = readBitunixApiCredentials({ env })
   stdout.write(
     "WARNING: this command can submit one real Bitunix Spot LIVE order. Review every preflight value before pressing ENTER.\n",
@@ -98,7 +117,10 @@ export function reportBitunixOperatorFailure({
 } = {}) {
   const message = redactBitunixApiSecrets({
     message: error?.message ?? error,
-    secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET],
+    secrets: [
+      env.BITUNIX_API_KEY,
+      env.BITUNIX_API_SECRET,
+    ],
   })
   stderr.write(`Bitunix operator order attempt stopped: ${message}\n`)
   stderr.write(
