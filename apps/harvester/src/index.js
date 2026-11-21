@@ -867,6 +867,7 @@ async function startOptionalTradingHistoryApi({ options, resources, runtime } = 
       env: options.env,
       logger: options.logger,
       eventBus: resources.eventBus,
+      operator: runtime.getOperator?.(),
     })
     resources.tradingHistoryApi = service
     if (service?.address) {
