@@ -46,7 +46,7 @@ const normalizeRepositoryPath = ({ file }) => file.replaceAll("\\", "/")
 export function isProductionModulePath({ file }) {
   const normalizedPath = normalizeRepositoryPath({ file })
   const segments = normalizedPath.split("/")
-  const root = segments[0]
+  const [root] = segments
   const filename = segments.at(-1)
   const hasExcludedDirectory = segments.some((segment) => (
     EXCLUDED_DIRECTORY_NAMES.has(segment.toLowerCase())
