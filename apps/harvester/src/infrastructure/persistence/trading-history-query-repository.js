@@ -123,6 +123,7 @@ function mapCommissionRow(row) {
   return Object.freeze({
     id: row.id,
     fillId: row.fill_id,
+    ordinal: row.ordinal,
     amount: row.amount,
     assetId: row.asset_id,
     assetCode: row.asset_code,
