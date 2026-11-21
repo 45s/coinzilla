@@ -1,12 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
-import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { createFillHistoryObserver } from "./create-fill-history-observer.js"
 import { createOrderHistoryObserver } from "./create-order-history-observer.js"
 import { createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
 
-const HISTORY_UPDATED_EVENT = HARVESTER_EVENT_NAMES.TRADING_HISTORY_UPDATED
+const HISTORY_UPDATED_EVENT = "trading-history.updated"
 
 function subscribeToHistoryChanges(eventBus, notifications) {
   const result = eventBus.subscribe({
