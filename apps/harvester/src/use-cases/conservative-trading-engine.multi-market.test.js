@@ -1042,7 +1042,10 @@ function createOperatorPauseRecoveryPosition({ market }) {
     ,
     strategyId: StrategyId.COIN_GRABBER,
   }).ledger
-  return { portfolio, recoveryLedger, fill: recoveryFill }
+  return {
+    portfolio,
+    recoveryLedger,
+  }
 }
 
 function createOperatorPauseStrategyPolicy() {
