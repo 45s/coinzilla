@@ -60,11 +60,10 @@ The [Trading-history API v1](./docs/api/trading-history-api.md) serves persisted
 The API starts automatically with Harvester and binds to `127.0.0.1:4201`. No token or extra environment configuration is required. Start Harvester normally with the intended `TRADING_MODE`:
 
 ```sh
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 pnpm --filter @coinzilla/harvester dev
 ```
 
-When the token is configured and relational history persistence is available, Harvester starts the API at `127.0.0.1:4201` by default. Without a token, Harvester runs normally and the optional API stays disabled. The API shares Harvester's existing database connection and closes before persistence during process shutdown; it has no separate process, script, or launch command. See the API contract for routes, filters, pagination, authentication, remote-access requirements, and exact financial-value semantics.
+The API starts when Harvester has an active runtime and relational history persistence. It shares Harvester's existing database connection and closes before persistence during process shutdown; it has no separate process, script, or launch command. The unauthenticated listener is fixed to loopback for local single-user development and must not be exposed to a LAN or remote host. See the API contract for routes, filters, pagination, local-only boundary, and exact financial-value semantics.
 
 ## Operational State Store (ADR-0001)
 
