@@ -104,3 +104,27 @@ test("reports the behavior owner when a mapped critical source module changes", 
     "A changed critical source module must identify its behavior owner and mapped regression evidence.",
   )
 })
+
+test("requires integration evidence when a critical behavior declares it mandatory", () => {
+  const contract = structuredClone(validContract)
+  contract.behaviors[0].integrationRequired = true
+
+  const result = validate({ contract })
+
+  assert.ok(
+    result.errors.some((error) => error.includes("ORDER-IDENTITY") && error.includes("integration")),
+    "A behavior that requires integration evidence must not pass with unit tests alone.",
+  )
+})
+
+test("requires an explicit limitation when runtime restoration is intentionally disabled", () => {
+  const contract = structuredClone(validContract)
+  contract.behaviors[0].runtimeStatus = "disabled-by-design"
+
+  const result = validate({ contract })
+
+  assert.ok(
+    result.errors.some((error) => error.includes("ORDER-IDENTITY") && error.includes("limitation")),
+    "An intentionally disabled critical capability must state its safety limitation rather than imply runtime support.",
+  )
+})
