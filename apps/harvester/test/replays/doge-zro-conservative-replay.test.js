@@ -665,11 +665,13 @@ async function applyPartialBuyReports({
     assert.equal(position.spent.amount, expected.spent, `Partial BUY execution ${index + 1} must add its exact quote notional once.`)
     assert.equal(recoveryLedger.buyCost, expected.buyCost, `Partial BUY execution ${index + 1} must keep RecoveryLedger cost aligned with Portfolio spent.`)
     assert.equal(recoveryLedger.netSellProceeds, "0", "BUY-only replay evidence must not invent recovery SELL proceeds.")
-    assert.equal(
-      dogeTradingReplay.submittedCanonicalOrders.filter((order) => order.side === "BUY").length,
-      expected.completed ? 2 : 1,
-      "The next standing BUY must not be submitted until the original BUY is completely filled.",
-    )
+    if (!expected.completed) {
+      assert.equal(
+        dogeTradingReplay.submittedCanonicalOrders.filter((order) => order.side === "BUY").length,
+        1,
+        "The next standing BUY must not be submitted while the original BUY remains partially filled.",
+      )
+    }
   }
 }
 
@@ -680,6 +682,11 @@ async function assertPartialBuyRecoveryOrders({
 }) {
   await recoverySellSubmitted
   const nextStandingBuyOrder = await nextStandingBuySubmitted
+  assert.equal(
+    dogeTradingReplay.submittedCanonicalOrders.filter((order) => order.side === "BUY").length,
+    2,
+    "The completed BUY must advance to exactly one next standing BUY.",
+  )
   const recoverySellOrders = dogeTradingReplay.submittedCanonicalOrders
     .filter((order) => order.side === "SELL")
   const recoverySellOrder = recoverySellOrders.at(-1)
