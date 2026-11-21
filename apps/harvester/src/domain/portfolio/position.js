@@ -1,15 +1,17 @@
 import { addDecimal, assertDecimalString, compareDecimal, subtractDecimal } from "@coinzilla/utils"
 import { Fill, Market, Money, Quantity } from "@coinzilla/entities"
 import { calculatePositionFill, calculatePositionSellAllocation } from "./position-accounting.js"
+import { normalizeStrategyId } from "../strategies/strategy-ids.js"
 
 export function createPositionId({ marketId, strategyId } = {}) {
   if (typeof marketId !== "string" || !marketId.trim()) {
     throw new TypeError("createPositionId requires a non-empty marketId")
   }
-  if (typeof strategyId !== "string" || !strategyId.trim()) {
-    throw new TypeError("createPositionId requires a non-empty strategyId")
-  }
-  return JSON.stringify([marketId.trim(), strategyId.trim()])
+  const normalizedStrategyId = normalizeStrategyId({
+    strategyId,
+    errorMessage: "createPositionId requires a non-empty strategyId",
+  })
+  return JSON.stringify([marketId.trim(), normalizedStrategyId])
 }
 
 export class Position {
@@ -33,9 +35,10 @@ export class Position {
     if (!(market instanceof Market)) {
       throw new TypeError("Position.market must be a canonical Market")
     }
-    if (typeof strategyId !== "string" || !strategyId.trim()) {
-      throw new TypeError("Position.strategyId must be a non-empty string")
-    }
+    const normalizedStrategyId = normalizeStrategyId({
+      strategyId,
+      errorMessage: "Position.strategyId must be a non-empty string",
+    })
     if (typeof positionId !== "string" || !positionId.trim()) {
       throw new TypeError("Position.positionId must be a non-empty string")
     }
@@ -65,7 +68,7 @@ asset: market.quoteAsset })
     }
 
     this.#positionId = positionId.trim()
-    this.#strategyId = strategyId.trim()
+    this.#strategyId = normalizedStrategyId
     this.#market = market
     this.#baseQuantity = baseQuantity
     this.#freeBaseQuantity = normalizedFreeBaseQuantity
@@ -238,13 +241,16 @@ right: quantity }) < 0) {
     if (!(market instanceof Market)) {
       throw new TypeError("Position.empty requires a canonical Market")
     }
-    if (typeof strategyId !== "string" || !strategyId.trim()) {
-      throw new TypeError("Position.empty requires a non-empty strategyId")
-    }
-    return new Position({
-      positionId: positionId ?? createPositionId({ marketId: market.id,
-strategyId }),
+    const normalizedStrategyId = normalizeStrategyId({
       strategyId,
+      errorMessage: "Position.empty requires a non-empty strategyId",
+    })
+    return new Position({
+      positionId: positionId ?? createPositionId({
+        marketId: market.id,
+        strategyId: normalizedStrategyId,
+      }),
+      strategyId: normalizedStrategyId,
       market,
       baseQuantity: new Quantity({ amount: "0",
 asset: market.baseAsset }),
