@@ -16,7 +16,7 @@ function validateOwnershipShape({ ownership } = {}) {
   }
 }
 
-function validateOwnershipIdentity({ ownership, clientOrderId, brokerOrderId } = {}) {
+function validateOwnershipIdentity({ ownership, clientOrderId, brokerOrderId, marketId } = {}) {
   if (typeof clientOrderId !== "string" || !clientOrderId.trim()) {
     throw new TypeError("Order ownership requires a non-empty clientOrderId")
   }
@@ -25,6 +25,9 @@ function validateOwnershipIdentity({ ownership, clientOrderId, brokerOrderId } =
   }
   if (ownership.brokerOrderId !== undefined && ownership.brokerOrderId !== brokerOrderId) {
     throw new Error("Order ownership brokerOrderId does not match its canonical order")
+  }
+  if (ownership.marketId !== undefined && ownership.marketId !== marketId) {
+    throw new Error("Order ownership marketId does not match its canonical order")
   }
 }
 
@@ -37,12 +40,13 @@ function validateOwnershipIdentity({ ownership, clientOrderId, brokerOrderId } =
  * @param {string} [options.brokerOrderId] Exchange-assigned order identity, once known.
  * @returns {object} Immutable order ownership record.
  */
-export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId } = {}) {
+export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId, marketId } = {}) {
   validateOwnershipShape({ ownership })
   validateOwnershipIdentity({
     ownership,
     clientOrderId,
     brokerOrderId,
+    marketId,
   })
 
   const normalized = {
@@ -52,6 +56,9 @@ export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId }
   }
   if (brokerOrderId !== undefined) {
     normalized.brokerOrderId = brokerOrderId
+  }
+  if (marketId !== undefined) {
+    normalized.marketId = marketId
   }
   normalized.purpose = ownership.purpose.trim()
   if (typeof ownership.cycleId === "string") {
@@ -81,16 +88,17 @@ export function validateOrderOwnerships({ orders, ownerships } = {}) {
       ownership,
       clientOrderId: order.clientOrderId,
       brokerOrderId: order.brokerOrderId,
+      marketId: order.market.id,
     })
   })
   const clientOrderIds = normalizedOwnerships.map((ownership) => ownership.clientOrderId)
-  const brokerOrderIds = normalizedOwnerships
-    .map((ownership) => ownership.brokerOrderId)
-    .filter((id) => id !== undefined)
+  const brokerOrderKeys = normalizedOwnerships
+    .filter((ownership) => ownership.brokerOrderId !== undefined)
+    .map((ownership) => `${ownership.marketId}:${ownership.brokerOrderId}`)
   if (new Set(clientOrderIds).size !== clientOrderIds.length) {
     throw new TypeError("OrderRegistry cannot contain duplicate ownership clientOrderIds")
   }
-  if (new Set(brokerOrderIds).size !== brokerOrderIds.length) {
+  if (new Set(brokerOrderKeys).size !== brokerOrderKeys.length) {
     throw new TypeError("OrderRegistry cannot contain duplicate ownership brokerOrderIds")
   }
   return Object.freeze(normalizedOwnerships)
@@ -105,7 +113,7 @@ export function validateOrderOwnerships({ orders, ownerships } = {}) {
  * @param {string} [options.brokerOrderId]
  * @returns {object|undefined} Matching immutable ownership record.
  */
-export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId } = {}) {
+export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId, marketId } = {}) {
   if (clientOrderId === undefined && brokerOrderId === undefined) {
     throw new TypeError("OrderRegistry.getOwnership requires clientOrderId or brokerOrderId")
   }
@@ -121,7 +129,10 @@ export function findOrderOwnership({ ownerships, clientOrderId, brokerOrderId } 
     : ownerships.find((ownership) => ownership.clientOrderId === clientOrderId)
   const byBrokerOrderId = brokerOrderId === undefined
     ? undefined
-    : ownerships.find((ownership) => ownership.brokerOrderId === brokerOrderId)
+    : ownerships.find((ownership) =>
+      ownership.brokerOrderId === brokerOrderId &&
+      (marketId === undefined || ownership.marketId === marketId),
+    )
   if (clientOrderId !== undefined && brokerOrderId !== undefined &&
       byClientOrderId !== byBrokerOrderId) {
     throw new Error("Order ownership clientOrderId and brokerOrderId identify different registered orders")
