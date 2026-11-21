@@ -127,6 +127,7 @@ test("loads Bitunix Futures REST fields without deriving missing movement percen
     WebSocketImpl: null,
   })
 
+  assert.equal(Object.isFrozen(client), true, "The public market-data client facade must be immutable.")
   const snapshot = await client.getBitunixFuturesMarkets()
 
   assert.equal(requests.length, 2, "The client must fetch contracts and tickers from the two public REST endpoints.")
