@@ -472,6 +472,100 @@ executedOrder,
 fill }
 }
 
+test("publishes verified ownership with the acknowledged order history event", async () => {
+  const events = []
+  const { engine } = await createHarness({
+    symbols: ["DOGEUSDT"],
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return { ok: true }
+      },
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+    },
+  })
+  await startBothMarkets({
+    engine,
+    symbols: ["DOGEUSDT"],
+  })
+
+  const submittedEvent = events.find(({ name }) => name === "order.submitted")
+  assert.ok(submittedEvent, "An acknowledged order must publish its submitted lifecycle event.")
+  assert.equal(submittedEvent.data.ownership?.strategyId, StrategyId.COIN_GRABBER, "The submitted event must retain the registered strategy.")
+  assert.equal(typeof submittedEvent.data.ownership?.positionId, "string", "The submitted event must retain the registered Position.")
+  assert.equal(typeof submittedEvent.data.ownership?.purpose, "string", "The submitted event must retain the registered order purpose.")
+})
+
+test("publishes verified ownership with a broker-confirmed cancellation event", async () => {
+  const events = []
+  const { engine } = await createHarness({
+    symbols: ["DOGEUSDT"],
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return { ok: true }
+      },
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+    },
+  })
+  await startBothMarkets({
+    engine,
+    symbols: ["DOGEUSDT"],
+  })
+  const cancellation = await engine.cancelOwnedBuyOrdersForShutdown({
+    symbol: "DOGEUSDT",
+  })
+  assert.equal(cancellation.ok, true, "The owned BUY cancellation must be confirmed by the test broker.")
+
+  const cancelledEvent = events.find(({ name }) => name === "order.cancelled")
+  assert.ok(cancelledEvent, "A broker-confirmed cancellation must publish its lifecycle event.")
+  assert.equal(cancelledEvent.data.ownership?.strategyId, StrategyId.COIN_GRABBER, "The cancellation event must retain the registered strategy.")
+  assert.equal(typeof cancelledEvent.data.ownership?.positionId, "string", "The cancellation event must retain the registered Position.")
+  assert.equal(typeof cancelledEvent.data.ownership?.purpose, "string", "The cancellation event must retain the registered order purpose.")
+})
+
+test("publishes verified ownership with an unconfirmed cancellation failure", async () => {
+  const events = []
+  const { engine } = await createHarness({
+    symbols: ["DOGEUSDT"],
+    brokerOverrides: {
+      cancelOrder: async () => {
+        throw new Error("test cancellation transport failure")
+      },
+    },
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return { ok: true }
+      },
+      flush: async () => ({
+        ok: true,
+        durable: true,
+      }),
+    },
+  })
+  await startBothMarkets({
+    engine,
+    symbols: ["DOGEUSDT"],
+  })
+  const cancellation = await engine.cancelOwnedBuyOrdersForShutdown({
+    symbol: "DOGEUSDT",
+  })
+  assert.equal(cancellation.ok, false, "A thrown broker cancellation must remain unconfirmed.")
+
+  const failedEvent = events.find(({ name }) => name === "order.cancel_failed")
+  assert.ok(failedEvent, "An unconfirmed cancellation must publish its lifecycle failure event.")
+  assert.equal(failedEvent.data.ownership?.strategyId, StrategyId.COIN_GRABBER, "The cancellation failure event must retain the registered strategy.")
+  assert.equal(typeof failedEvent.data.ownership?.positionId, "string", "The cancellation failure event must retain the registered Position.")
+  assert.equal(typeof failedEvent.data.ownership?.purpose, "string", "The cancellation failure event must retain the registered order purpose.")
+})
+
 test("shared quote-asset BUY commitments are reserved across markets", async () => {
   const { engine, orders } = await createHarness({ quoteFreeBalance: "150" })
   const [dogeResult, solResult] = await Promise.all([
