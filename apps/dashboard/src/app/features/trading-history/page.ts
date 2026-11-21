@@ -106,6 +106,10 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
         value: value === null ? 'Not recorded' : String(value),
       }));
   });
+  readonly detailJson = computed(() => {
+    const record = this.selectedRecord();
+    return record ? JSON.stringify(record, null, 2) : '';
+  });
   readonly detailCommissions = computed<readonly FillCommission[]>(() => {
     const record = this.selectedRecord();
     return record && 'commissions' in record ? record.commissions : [];
