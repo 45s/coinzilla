@@ -263,7 +263,7 @@ function createClient({ socket, clients, token } = {}) {
   return client
 }
 
-function handleUpgrade({ request, socket, head, clients, token } = {}) {
+function getUpgradeKey({ request, socket, clients } = {}) {
   let url
   try {
     url = new URL(request.url ?? "/", "http://127.0.0.1")
@@ -271,27 +271,27 @@ function handleUpgrade({ request, socket, head, clients, token } = {}) {
     rejectUpgrade({
       socket,
     })
-    return
+    return null
   }
   if (url.pathname !== WEBSOCKET_PATH) {
     rejectUpgrade({
       socket,
       status: 404,
     })
-    return
+    return null
   }
   if (!isUpgradeRequest(request)) {
     rejectUpgrade({
       socket,
     })
-    return
+    return null
   }
   if (clients.size >= MAX_CONNECTIONS) {
     rejectUpgrade({
       socket,
       status: 503,
     })
-    return
+    return null
   }
   const key = request.headers["sec-websocket-key"]
   const decodedKey = typeof key === "string"
@@ -301,8 +301,12 @@ function handleUpgrade({ request, socket, head, clients, token } = {}) {
     rejectUpgrade({
       socket,
     })
-    return
+    return null
   }
+  return key
+}
+
+function writeUpgradeResponse({ socket, key } = {}) {
   const accept = createHash("sha1")
     .update(key + WEBSOCKET_GUID)
     .digest("base64")
@@ -314,6 +318,21 @@ function handleUpgrade({ request, socket, head, clients, token } = {}) {
     "",
     "",
   ].join("\r\n"))
+}
+
+function handleUpgrade({ request, socket, head, clients, token } = {}) {
+  const key = getUpgradeKey({
+    request,
+    socket,
+    clients,
+  })
+  if (!key) {
+    return
+  }
+  writeUpgradeResponse({
+    socket,
+    key,
+  })
   const client = createClient({
     socket,
     clients,
