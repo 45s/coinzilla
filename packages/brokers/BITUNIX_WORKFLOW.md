@@ -92,6 +92,8 @@ This distinction does not weaken Section 4:
 - Capture only the minimum sanitized request/response evidence needed to improve the implementation. Redact API keys, signatures, nonces, account identifiers, personal data, and sensitive balances. Keep local diagnostic artifacts ignored by Git and protected by restrictive file permissions.
 - A successful or rejected LIVE request is one observation, not a substitute for documented lifecycle guarantees, TESTNET, or a production-readiness decision.
 
+The current fixed HYPEUSDT operator command is documented in the [Brokers README](./README.md#one-shot-bitunix-hypeusdt-operator-order-attempt) and tracked in [issue #1608](https://github.com/45s/coinzilla/issues/1608). Its order parameters are fixed; any different order requires a separately reviewed task. This reference does not relax any rule above or resolve issue [#1185](https://github.com/45s/coinzilla/issues/1185).
+
 The local operator tool is separate from the automated test suite. Do not describe its invocation as running tests or add it to `pnpm test`, CI, or a default development command.
 
 ## 6. Turning a real exchange response into durable knowledge

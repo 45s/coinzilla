@@ -8,6 +8,16 @@ owner: brokers
 
 This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may retain consumer-integration context for provenance, but application ports, adapters, routing, and runtime composition remain owned by each consuming application.
 
+## One-shot local Bitunix HYPEUSDT operator attempt — #1608
+
+**Status: In progress** — [issue #1608](https://github.com/45s/coinzilla/issues/1608) · [draft PR #1609](https://github.com/45s/coinzilla/pull/1609).
+
+This is a fixed, human-operated local LIVE investigation, not a general order API, integration test, CI task, AI-agent action, or Harvester execution path. The command uses the common `Broker` facade and attempts only HYPEUSDT BUY LIMIT at 30 USDT for 0.4 HYPE (exact 12 USDT notional). The read-only Broker keeps `allowLiveOrderMutations: false`; a separate mutation-enabled Broker is constructed only after interactive terminal checks, read-only market/balance/open-order preflight, and the exact operator confirmation.
+
+The preflight verifies explicit market-open status and HYPE/USDT identity, exact `minVolume` base quantity and `minPrice` quote notional constraints, the provisional 11 USDT local notional floor, free USDT below 12, and no rows from the symbol-scoped open-order query. It displays that the open-order response completeness is not established, the balance is a point-in-time response without an authoritative source timestamp, tick/step remain UNKNOWN, low free USDT does not guarantee exchange rejection, and the 30 USDT limit may fill immediately if accepted. An exclusive marker under ignored `.diagnostics/` (0600 on POSIX; Windows inherits the directory ACL) is persisted before the single `createOrder()` call. The marker blocks another invocation; no automatic retry, cancellation, transfer, or second mutation is possible. `OUTCOME_UNKNOWN` remains unknown and requires manual reconciliation.
+
+The agent, tests, CI and scheduled jobs must never invoke the command. This task does not change the common Broker contract, capability declarations, default mutation gate, Harvester registration, or any issue [#1185](https://github.com/45s/coinzilla)'s production-readiness blocker. Operator instructions are in the [Brokers README](./README.md#one-shot-bitunix-hypeusdt-operator-order-attempt).
+
 ## User-data session lifecycle test hardening — #1602
 
 **Status: In review** — [issue #1602](https://github.com/45s/coinzilla/issues/1602) · [PR #1606](https://github.com/45s/coinzilla/pull/1606).
