@@ -1,71 +1,28 @@
 # Trading-history API v1
 
-The Harvester trading-history API exposes persisted order, execution, and commission facts through a stable HTTP contract and an local WebSocket invalidation stream. It is an optional HTTP+WebSocket service started and stopped by the existing Harvester process over its already-open environment-specific relational database connection.
+The Harvester trading-history API exposes persisted order, execution, and commission facts through a stable HTTP contract and a local WebSocket invalidation stream. It runs inside the existing Harvester process and reuses its already-open environment-specific relational database connection.
 
-The application query layer is independent of HTTP and client identity. Angular, React, mobile clients, Telegram integrations, and other consumers use the same contract; none of them are dependencies of Harvester's domain or persistence model.
+This API is intentionally for a single-user local development setup. It has no authentication or bearer-token configuration. The listener binds to `127.0.0.1` by default; do not bind it to a LAN or public interface. The Angular Dashboard connects automatically.
 
 ## Start locally
 
-Harvester's normal startup prepares and migrates the environment-specific relational database. The API reuses that already-open connection; it does not open another SQLite connection, create schema, or own database shutdown.
+Harvester prepares and migrates the environment-specific relational database during normal startup. The API reuses that connection; it does not open another SQLite connection, create schema, or own database shutdown.
 
-Generate a local token:
-
-```sh
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-```
-
-Put the generated value in `apps/harvester/.env.development` (or `.env` for the normal start command). Do not commit it:
-
-```dotenv
-TRADING_MODE=testnet
-local-only access="paste-your-generated-token-here"
-HARVESTER_API_HOST="127.0.0.1"
-HARVESTER_API_PORT="4201"
-```
-
-Start Harvester normally; its startup starts the optional API listener in the same process:
+Start Harvester normally:
 
 ```sh
 pnpm --filter @coinzilla/harvester dev
 ```
 
-The default address is `http://127.0.0.1:4201`. The API uses Harvester's selected `TRADING_MODE` and `HARVESTER_DATABASE_DIRECTORY`; TESTNET and LIVE remain separate database files. Do not launch a second API process or script. If `local-only access` is empty or absent, the API stays disabled without preventing Harvester startup. Invalid API configuration or an API bind failure is logged and isolated from trading startup.
+The API starts with Harvester at `http://127.0.0.1:4201`. It uses Harvester's selected `TRADING_MODE` and `HARVESTER_DATABASE_DIRECTORY`; TESTNET and LIVE remain separate database files. No API token or Dashboard credential is needed.
 
-Check the selected environment and local record counts:
+The optional `HARVESTER_API_HOST` and `HARVESTER_API_PORT` settings control the listener address. Keep the host at `127.0.0.1`. The API starts only when the existing runtime and relational history persistence are available. Harvester closes the API listener before closing the shared database connection.
 
-```sh
-curl -H "Authorization: Bearer $local-only access" \
-  http://127.0.0.1:4201/api/v1/trading/metadata
-```
+## Local-only security boundary
 
-On Windows PowerShell, use `$env:local-only access` in place of the shell variable syntax above.
+The HTTP and WebSocket endpoints have no authentication. This is a deliberate local-only tradeoff for a single-user development machine, not a production or remote-host configuration. The default loopback binding prevents other machines from connecting. Do not expose this listener through a reverse proxy, container port mapping, LAN interface, or public host.
 
-Harvester's normal persistence setup owns database creation, migration, and closure. The API is started only when that relational persistence connection is available. Harvester closes the API listener before closing the shared database connection. The API does not change SQLite connection mode or impose a database-level read-only restriction.
-
-## local-only access and network boundary
-
-Every HTTP API resource requires:
-
-```http
-Authorization: Bearer <local-only access>
-```
-
-The WebSocket endpoint uses the same token, but browser WebSocket APIs cannot set an local-only access. After the socket opens, the client must send this first text message:
-
-```json
-{
-  "type": "authenticate",
-  "token": "<local-only access>"
-}
-```
-
-The token is sent in the first WebSocket message, never in the URL, query string, subprotocol, or browser persistent storage. A successful client receives `{"type":"local"}`; invalid credentials or a missing local-only access message receive the stable local-only access error and the socket is closed. local-only access must complete within five seconds. The server accepts at most 32 concurrent sockets and client frames up to 1 KiB; it rejects malformed/fragmented client frames. local sockets use a 30-second ping/pong heartbeat and are closed if a heartbeat is missed. No cookie-based or implicit browser local-only access is used. The default listener binds to loopback. Do not expose the HTTP or WebSocket listener on an untrusted network without TLS termination and network restrictions; the local-only access is sent over the transport and must be protected in transit.
-
-The configured token must contain at least 32 non-whitespace bytes. The token is supplied through the process environment and is never included in responses or logs.
-
-The server binds to `127.0.0.1` by default. `HARVESTER_API_HOST` can explicitly select another host and `HARVESTER_API_PORT` selects the port. Do not expose plain HTTP over an untrusted network. For remote clients, place the service behind a TLS-terminating reverse proxy, restrict network access with a firewall, and manage/rotate the local-only access as a secret.
-
-The API permits browser CORS requests with an local-only access so independent browser clients can use the same contract. It does not use cookies or credentialed cross-origin requests.
+The API remains read-only: it exposes persisted history and does not submit, cancel, or modify exchange orders.
 
 ## Versioned resources
 
