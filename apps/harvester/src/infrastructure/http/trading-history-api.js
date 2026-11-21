@@ -6,6 +6,10 @@ const API_PREFIX = "/api/v1/trading"
 const METADATA_ROUTE = `${API_PREFIX}/metadata`
 const DEFAULT_HOST = "127.0.0.1"
 const DEFAULT_PORT = 4201
+const ALLOWED_BROWSER_ORIGINS = new Set([
+  "http://127.0.0.1:4200",
+  "http://localhost:4200",
+])
 const MAX_HEADER_SIZE = 8_192
 const REQUEST_TIMEOUT_MS = 5_000
 const HEADERS_TIMEOUT_MS = 6_000
@@ -84,9 +88,8 @@ function createRequestError({ message, code, status = 400, cause } = {}) {
   })
 }
 
-function createResponseHeaders() {
-  return {
-    "Access-Control-Allow-Origin": "*",
+function createResponseHeaders({ origin } = {}) {
+  const headers = {
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "600",
@@ -94,13 +97,18 @@ function createResponseHeaders() {
     "Content-Type": "application/json; charset=utf-8",
     "X-Content-Type-Options": "nosniff",
   }
+  if (ALLOWED_BROWSER_ORIGINS.has(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin
+    headers.Vary = "Origin"
+  }
+  return headers
 }
 
 function sendJson({ response, status, body } = {}) {
   if (response.destroyed || response.writableEnded) {
     return
   }
-  response.writeHead(status, createResponseHeaders())
+  response.writeHead(status, createResponseHeaders({ origin: response.tradingHistoryOrigin }))
   response.end(JSON.stringify(body))
 }
 
@@ -235,7 +243,7 @@ function handleOptionsRequest({ request, response } = {}) {
   if (request.method !== "OPTIONS") {
     return false
   }
-  response.writeHead(204, createResponseHeaders())
+  response.writeHead(204, createResponseHeaders({ origin: response.tradingHistoryOrigin }))
   response.end()
   return true
 }
@@ -373,6 +381,9 @@ function handleTradingHistoryRequest({
 function createRequestHandler({ queries, environment, logger } = {}) {
   return (...requestArguments) => {
     const [request, response] = requestArguments
+    response.tradingHistoryOrigin = ALLOWED_BROWSER_ORIGINS.has(request.headers.origin)
+      ? request.headers.origin
+      : undefined
     try {
       handleTradingHistoryRequest({
         request,
