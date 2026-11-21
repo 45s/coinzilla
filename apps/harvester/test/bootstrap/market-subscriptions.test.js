@@ -2,7 +2,7 @@ import nodeTest from "node:test"
 import assert from "node:assert/strict"
 import * as shared from "./start-harvester-test-support.js"
 
-const { appConfig, createBroker, binanceEnv, startHarvesterForTest, waitForTestSignal, Asset, Balance, Quantity, createTwoMarketStartupConfig } = shared
+const { mkdtemp, rm, os, path, Asset, Balance, CanonicalOrder, Money, Quantity, createFileOperationalStateStore, recordConfigurationBaseline, waitForTestSignal, appConfig, withExternalOrdersPolicy, createMarketMetadata, createOpenOrderSnapshot, createBroker, binanceEnv, startHarvesterForTest, createTwoMarketStartupConfig } = shared
 const test = (...args) => nodeTest(`[market-subscriptions.test.js] ${args[0]}`, ...args.slice(1))
 
 function configureDelayedTickerPricePort({ broker, calls, firstTicker, resolveFirstTickerRequested }) {
@@ -109,6 +109,146 @@ async function assertSecondMarketSubscribedBeforeTicker({
   assert.ok(calls.includes("subscribe:book:BTCUSDT"), "The first enabled market must have its book-ticker subscription before the initial ticker wait.")
   assert.ok(calls.includes("subscribe:book:ETHUSDT"), "The second enabled market must also be subscribed before the first market ticker wait.")
 }
+
+function createExternalBuyOrder({ market, clientOrderId, brokerOrderId, price, quantity }) {
+  return new CanonicalOrder({
+    clientOrderId,
+    brokerOrderId,
+    market,
+    side: "BUY",
+    type: "LIMIT_MAKER",
+    limitPrice: new Money({
+      amount: price,
+      asset: market.quoteAsset,
+    }),
+    originalQuantity: new Quantity({
+      amount: quantity,
+      asset: market.baseAsset,
+    }),
+    executedQuantity: new Quantity({
+      amount: "0",
+      asset: market.baseAsset,
+    }),
+    status: "OPEN",
+    createdAt: 1,
+    acknowledgedAt: 1,
+    updatedAt: 1,
+  })
+}
+
+function assertStrategyScopedMarketSubscriptions({ runtime, calls, candleSubscriptions, logs }) {
+  assert.equal(runtime.userDataReady, true, "An external order must not block account/user-data readiness globally.")
+  assert.deepEqual(runtime.subscriptions, ["ETHUSDT"], "Only this strategy's unblocked market should own a price subscription.")
+  assert.ok(calls.includes("subscribe:ETHUSDT"), "The unblocked ETHUSDT market must retain its own price subscription.")
+  assert.equal(calls.includes("subscribe:BTCUSDT"), false, "The strategy-blocked BTCUSDT market must not receive a price subscription.")
+  assert.ok(calls.includes("subscribe:book:ETHUSDT"), "The unblocked ETHUSDT market must retain its book-ticker subscription.")
+  assert.equal(calls.includes("subscribe:book:BTCUSDT"), false, "The strategy-blocked BTCUSDT market must not receive a book-ticker subscription.")
+  assert.deepEqual(candleSubscriptions, ["ETHUSDT"], "Candle subscriptions must be scoped to the strategy unblocked ETHUSDT market.")
+  const audit = logs.find((entry) =>
+    entry.message === "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched")
+  assert.equal(audit?.readiness, "BLOCKED", "The account-wide external-order audit must remain blocked even though ETHUSDT is independently eligible.")
+}
+
+async function createStrategyScopedMarketRuntimeFixture() {
+  const { market } = createMarketMetadata("BTCUSDT")
+  const externalCanonicalOrder = createExternalBuyOrder({
+    market,
+    clientOrderId: "manual-client-order",
+    brokerOrderId: "manual-broker-order",
+    price: "64000",
+    quantity: "0.01",
+  })
+  const { market: ignoredMarket } = createMarketMetadata("ETHUSDT")
+  const ignoredExternalOrder = createExternalBuyOrder({
+    market: ignoredMarket,
+    clientOrderId: "manual-eth-client-order",
+    brokerOrderId: "manual-eth-broker-order",
+    price: "2400",
+    quantity: "0.1",
+  })
+  const config = withExternalOrdersPolicy("BTCUSDT", "block")
+  config.strategies.CG_coinGrabber.pairs.ETHUSDT = {
+    ...appConfig.strategies.CG_coinGrabber.pairs.ETHUSDT,
+    enabled: true,
+    externalOrdersPolicy: "ignore",
+  }
+  const calls = []
+  const broker = createBroker(calls, {
+    externalOpenOrders: [
+      createOpenOrderSnapshot({ order: externalCanonicalOrder }),
+      createOpenOrderSnapshot({ order: ignoredExternalOrder }),
+    ],
+  })
+  const candleSubscriptions = []
+  const { subscribeForCandles } = broker
+  broker.subscribeForCandles = async (input) => {
+    candleSubscriptions.push(input.symbol)
+    return subscribeForCandles(input)
+  }
+  const logs = []
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => config,
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({ action: "NO_ACTION" }),
+    logger: {
+      info: (entry) => logs.push(entry),
+      error: (entry) => logs.push(entry),
+    },
+  })
+  return { runtime,
+    calls,
+    candleSubscriptions,
+    logs }
+}
+
+test("fails closed when the effective configuration has no enabled markets", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-empty-effective-markets-"))
+  t.after(() => rm(directory, {
+    recursive: true,
+    force: true,
+  }))
+  const operationalStateStore = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "empty-effective-markets-test",
+  })
+  await operationalStateStore.initialize()
+  const disabledConfig = {
+    ...appConfig,
+    strategies: {
+      ...appConfig.strategies,
+      CG_coinGrabber: {
+        ...appConfig.strategies.CG_coinGrabber,
+        pairs: Object.fromEntries(Object.entries(appConfig.strategies.CG_coinGrabber.pairs).map(([symbol, pair]) => [
+          symbol,
+          {
+            ...pair,
+            enabled: false,
+          },
+        ])),
+      },
+    },
+  }
+  const baseline = await recordConfigurationBaseline({
+    operationalStateStore,
+    appConfig: disabledConfig,
+  })
+  assert.equal(baseline.ok, false, "A runtime baseline must not accept a configuration with no enabled markets.")
+  assert.match(baseline.errors[0].message, /at least one enabled market/, "The baseline must explain why a configuration without enabled markets is rejected.")
+  const records = await operationalStateStore.readAll()
+  assert.equal(records.ok, true, records.errors?.[0]?.message)
+  assert.equal(records.data.records.some(({ factType }) => factType === "CONFIGURATION_BASELINE"), false,
+    "A failed effective-market check must not persist a misleading configuration baseline.")
+})
+
+test("does not subscribe to a market blocked by this strategy's external-order policy", async () => {
+  const fixture = await createStrategyScopedMarketRuntimeFixture()
+  try {
+    assertStrategyScopedMarketSubscriptions(fixture)
+  } finally {
+    await fixture.runtime.stop()
+  }
+})
 
 test("subscribes only enabled pairs for Binance trading", async () => {
   const calls = []

@@ -1931,3 +1931,4 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 - **Market subscription tests:** A fourth slice isolates four enabled-market subscription/rollback scenarios in `test/bootstrap/market-subscriptions.test.js`; the critical-behavior inventory now points its REST ticker-seed ordering regression to that suite.
 - **Shared market fixture:** the deterministic two-market startup configuration is centralized in `test/bootstrap/start-harvester-test-support.js` because both subscription-ordering and independent market-evaluation suites use it.
 - **Market subscription configuration fixture:** keep `appConfig` available directly to the suite for empty-enabled-market validation; the shared two-market helper remains in the common support module.
+- **Market subscription coverage:** the suite now also proves fail-closed behavior for zero enabled markets and strategy-scoped external-order subscription filtering.
