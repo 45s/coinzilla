@@ -10,6 +10,7 @@ import {
 
 function makeOwnership(overrides = {}) {
   return {
+    clientOrderId: "client-1",
     strategyId: "strategy-1",
     positionId: "position-1",
     purpose: "RECOVERY_SELL",
