@@ -706,6 +706,79 @@ async function publishDogeReplayFullOrderFill({
 }
 
 
+
+function createDogeReplayOrderSnapshot({
+  order,
+  cumulativeExecutedQuantity,
+  timestamp,
+}) {
+  const status = cumulativeExecutedQuantity === order.originalQuantity.amount
+    ? "FILLED"
+    : "PARTIALLY_FILLED"
+  return new CanonicalOrder({
+    clientOrderId: order.clientOrderId,
+    brokerOrderId: order.brokerOrderId,
+    market: order.market,
+    side: order.side,
+    type: order.type,
+    limitPrice: order.limitPrice,
+    originalQuantity: order.originalQuantity,
+    executedQuantity: new Quantity({
+      amount: cumulativeExecutedQuantity,
+      asset: order.market.baseAsset,
+    }),
+    status,
+    createdAt: order.createdAt,
+    acknowledgedAt: order.acknowledgedAt,
+    updatedAt: timestamp,
+    ...(status === "FILLED" ? { completedAt: timestamp } : {}),
+  })
+}
+
+function createDogeReplayOrderExecutionReport({
+  state,
+  order,
+  price,
+  tradeId,
+  fillQuantity,
+  cumulativeExecutedQuantity,
+  quoteQuantity,
+  commission,
+  orderStatus,
+  timestamp,
+}) {
+  return {
+    eventType: "executionReport",
+    executionType: "TRADE",
+    executedOrder: {
+      symbol: state.marketSymbol,
+      id: order.brokerOrderId,
+      clientOrderId: order.clientOrderId,
+      type: order.type,
+      side: order.side,
+      quantity: order.originalQuantity.amount,
+      executedQuantity: cumulativeExecutedQuantity,
+      price: order.limitPrice.amount,
+      status: orderStatus,
+      createdAt: order.createdAt,
+      updatedAt: timestamp,
+    },
+    fill: {
+      symbol: state.marketSymbol,
+      id: tradeId,
+      orderId: order.brokerOrderId,
+      side: order.side,
+      commissionAmount: commission.commissionAmount,
+      commissionAsset: commission.commissionAsset,
+      isMaker: order.type === "LIMIT_MAKER",
+      price,
+      quantity: fillQuantity,
+      quoteQuantity,
+      time: timestamp,
+    },
+  }
+}
+
 async function publishDogeReplayOrderFill({
   state,
   order,
@@ -729,23 +802,10 @@ async function publishDogeReplayOrderFill({
     commissionAmount,
     commissionAsset,
   })
-  const updatedOrder = new CanonicalOrder({
-    clientOrderId: order.clientOrderId,
-    brokerOrderId: order.brokerOrderId,
-    market: order.market,
-    side: order.side,
-    type: order.type,
-    limitPrice: order.limitPrice,
-    originalQuantity: order.originalQuantity,
-    executedQuantity: new Quantity({
-      amount: cumulativeExecutedQuantity,
-      asset: order.market.baseAsset,
-    }),
-    status: orderStatus,
-    createdAt: order.createdAt,
-    acknowledgedAt: order.acknowledgedAt,
-    updatedAt: timestamp,
-    ...(orderStatus === "FILLED" ? { completedAt: timestamp } : {}),
+  const updatedOrder = createDogeReplayOrderSnapshot({
+    order,
+    cumulativeExecutedQuantity,
+    timestamp,
   })
   state.exchangeOrderHistory.set(order.brokerOrderId, updatedOrder)
   if (orderStatus === "FILLED") {
@@ -753,38 +813,19 @@ async function publishDogeReplayOrderFill({
   } else {
     state.exchangeOpenOrders.set(order.clientOrderId, updatedOrder)
   }
-
   return state.publishUserDataEvent({
-    event: {
-      eventType: "executionReport",
-      executionType: "TRADE",
-      executedOrder: {
-        symbol: state.marketSymbol,
-        id: order.brokerOrderId,
-        clientOrderId: order.clientOrderId,
-        type: order.type,
-        side: order.side,
-        quantity: order.originalQuantity.amount,
-        executedQuantity: cumulativeExecutedQuantity,
-        price: order.limitPrice.amount,
-        status: orderStatus,
-        createdAt: order.createdAt,
-        updatedAt: timestamp,
-      },
-      fill: {
-        symbol: state.marketSymbol,
-        id: tradeId,
-        orderId: order.brokerOrderId,
-        side: order.side,
-        commissionAmount: commission.commissionAmount,
-        commissionAsset: commission.commissionAsset,
-        isMaker: order.type === "LIMIT_MAKER",
-        price,
-        quantity: fillQuantity,
-        quoteQuantity,
-        time: timestamp,
-      },
-    },
+    event: createDogeReplayOrderExecutionReport({
+      state,
+      order,
+      price,
+      tradeId,
+      fillQuantity,
+      cumulativeExecutedQuantity,
+      quoteQuantity,
+      commission,
+      orderStatus,
+      timestamp,
+    }),
   })
 }
 
