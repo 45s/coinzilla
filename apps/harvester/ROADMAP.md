@@ -1974,8 +1974,6 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 - **Post-sync CI gate restoration:** retained the critical-behavior ownership validator in Unit Tests, the push-event SHA fallback, and explicit coverage-pipeline `pipefail` after integrating current `develop`.
 - **Snapshot fixture naming:** aligned the moved configured-market fixture with its `createConfiguredMarketSnapshotConfig` helper so the dedicated snapshot-history suite exercises the configured-asset allowlist instead of failing on an undefined legacy helper.
 
-
 - **Test-fixture contract:** the multi-market broker harness preserves explicit `getSymbolFilters` overrides and supplies a deterministic same-market default when none is provided.
-
 
 - **Policy fixture:** current-filter integration tests pass the seeded completed-BUY VWAP to both policy evaluation paths; production VWAP reconciliation behavior remains separately guarded.
