@@ -548,9 +548,7 @@
       "id": "RECOVERY_SELL_MARKET_METADATA_FRESHNESS",
       "title": "Fresh exchange trading rules before Conservative recovery SELL planning",
       "sourceModules": [
-        "src/use-cases/conservative-trading-engine.js",
-        "src/use-cases/create-latest-transition-evaluator.js",
-        "src/use-cases/create-market-metadata-cache.js"
+        "src/use-cases/conservative-trading-engine.js"
       ],
       "integrationRequired": true,
       "tests": [
