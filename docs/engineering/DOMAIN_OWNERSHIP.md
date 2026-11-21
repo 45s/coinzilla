@@ -88,7 +88,7 @@ A package may use a simpler structure when it has no meaningful application/infr
 
 ## Static enforcement and review checklist
 
-The manifest-backed workspace allowlist is deterministic, but the current repository does not have a repository-wide test that compares every manifest edge with this table. Brokers has a regex-based checker for literal relative imports in selected layers; Notifiers has package-local boundary tests. Those checks are useful locally but are not a complete AST/source-import graph and do not prove all packages obey the internal matrix. S-1 adds no broad scanner because a regex-only repository-wide checker would provide misleading assurance.
+The manifest-backed workspace allowlist remains canonical and is not yet compared against all package manifests by a blocking gate. S-9 now runs a report-only AST source graph/cycle baseline over production JavaScript under `apps/`, `packages/`, and repository `scripts/`, including Harvester; test/spec/story/bench/fixture/generated paths are excluded. The graph captures static ESM imports/re-exports, literal dynamic imports and literal CommonJS `require`, and resolves relative JavaScript source paths. It reports isolated modules, relative edges and strongly connected cycle components without failing CI for legacy cycles. It does not yet map `@coinzilla/*` package imports to manifest dependencies, compare the manifest graph with the allowlist, enforce private deep-import/layer directions, or manage exception expiry. Brokers retains a regex-based package-local checker; Notifiers retains package-local boundary tests. The report is a baseline, not proof that all packages obey this matrix.
 
 For every dependency or module-boundary change, review:
 
