@@ -222,7 +222,11 @@ async function handleCommandRequest({ request, response, operator }) {
       ...(parsed.symbol ? { symbol: parsed.symbol } : {}),
     })
     if (result?.ok !== true) {
-      sendJson({ response, status: 422, body: normalizeFailure(result) })
+      sendJson({
+      response,
+      status: 422,
+      body: normalizeFailure(result),
+    })
       return
     }
     sendJson({
