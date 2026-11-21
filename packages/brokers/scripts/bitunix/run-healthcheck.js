@@ -35,11 +35,10 @@ function printCliIdentity({ stdout = process.stdout } = {}) {
   const worktreeStatus = readGitOutput({
     args: ["status", "--porcelain"],
   })
-  const worktree = worktreeStatus === null
-    ? "unknown"
-    : worktreeStatus.length === 0
-      ? "clean"
-      : "dirty"
+  let worktree = "unknown"
+  if (worktreeStatus !== null) {
+    worktree = worktreeStatus.length === 0 ? "clean" : "dirty"
+  }
   const identity = formatCliIdentity({
     packageName: packageMetadata.name,
     scriptName: "bitunix:healthcheck",
