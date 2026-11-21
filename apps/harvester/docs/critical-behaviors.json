@@ -553,17 +553,17 @@
       "integrationRequired": true,
       "tests": [
         {
-          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "path": "src/use-cases/conservative-trading-engine.multi-market.test.js",
           "name": "uses refreshed exchange filters when planning a recovery SELL",
           "kind": "integration"
         },
         {
-          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "path": "src/use-cases/conservative-trading-engine.multi-market.test.js",
           "name": "blocks recovery SELL planning when current exchange filters cannot be retrieved",
           "kind": "failure"
         },
         {
-          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "path": "src/use-cases/conservative-trading-engine.multi-market.test.js",
           "name": "submits a valid recovery SELL when refreshed exchange filters remain valid",
           "kind": "normal"
         },
