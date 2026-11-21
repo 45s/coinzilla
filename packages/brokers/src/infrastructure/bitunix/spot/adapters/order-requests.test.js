@@ -191,6 +191,82 @@ test("Bitunix order adapter preserves matching-engine rejection metadata", () =>
   )
 })
 
+test("Bitunix order adapter rejects a non-zero placeCode even when placeStatus reports success", () => {
+  assert.throws(
+    () => validateSpotOrderPlacementResponse({
+      response: {
+        placeStatus: "1",
+        placeCode: "opaque-engine-rejection",
+        placeMsg: "synthetic matching-engine rejection",
+        symbol: "BTCUSDT",
+        side: 2,
+        type: 1,
+        orderId: "123",
+        volume: "1",
+        price: "100",
+      },
+      symbol: "BTCUSDT",
+      side: 2,
+      type: 1,
+      volume: "1",
+      price: "100",
+    }),
+    (error) => {
+      assert.ok(error instanceof BitunixRestError, "a matching-engine rejection must use the structured Bitunix REST error")
+      assert.equal(error.kind, "exchange", "a non-zero placeCode must be a definitive exchange rejection")
+      assert.equal(error.exchangeCode, "opaque-engine-rejection", "the original matching-engine code must be preserved")
+      assert.equal(error.message, "synthetic matching-engine rejection", "the matching-engine message must be preserved")
+      return true
+    },
+  )
+})
+
+test("Bitunix order adapter accepts a zero placeCode when placeStatus confirms success", () => {
+  const response = validateSpotOrderPlacementResponse({
+    response: {
+      placeStatus: "1",
+      placeCode: 0,
+      symbol: "BTCUSDT",
+      side: 2,
+      type: 1,
+      orderId: "123",
+      volume: "1",
+      price: "100",
+    },
+    symbol: "BTCUSDT",
+    side: 2,
+    type: 1,
+    volume: "1",
+    price: "100",
+  })
+
+  assert.equal(response.orderId, "123", "a zero matching-engine code must not reject a successful placement acknowledgement")
+})
+
+test("Bitunix order adapter rejects malformed placeCode values as unknown responses", () => {
+  for (const placeCode of ["", "   ", true, {}, []]) {
+    assert.throws(
+      () => validateSpotOrderPlacementResponse({
+        response: {
+          placeStatus: "1",
+          placeCode,
+          symbol: "BTCUSDT",
+          side: 2,
+          type: 1,
+          orderId: "123",
+        },
+        symbol: "BTCUSDT",
+        side: 2,
+        type: 1,
+      }),
+      (error) => error instanceof BitunixRestError &&
+        error.kind === "response" &&
+        error.outcomeUnknown === true,
+      `malformed placeCode ${JSON.stringify(placeCode)} must not be accepted as a successful placement`,
+    )
+  }
+})
+
 test("Bitunix order adapter treats an invalid placement status as unknown", () => {
   assert.throws(
     () => validateSpotOrderPlacementResponse({
