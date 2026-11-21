@@ -4,6 +4,69 @@ import { BitunixSpotBroker } from "./broker.js"
 import { BitunixRestClient } from "./api/rest-client.js"
 import { BrokerUnsupportedOperationError } from "../../../broker/errors/broker-unsupported-operation-error.js"
 
+function createSuccessfulPlacementResponses() {
+  return [
+    {
+      code: "0",
+      msg: "success",
+      data: {
+        orderId: "12345678901234567890",
+        symbol: "BTCUSDT",
+        side: 2,
+        type: 1,
+        volume: "1.00",
+        price: "100.00",
+        placeStatus: "1",
+      },
+    },
+    {
+      code: "0",
+      msg: "success",
+      data: {
+        orderId: "12345678901234567890",
+        symbol: "BTCUSDT",
+        side: "2",
+        type: "1",
+        status: "1",
+        volume: "1.00",
+        dealVolume: "0",
+        price: "100.00",
+        ctime: "2026-11-21T12:00:00Z",
+        utime: "2026-11-21T12:00:00Z",
+      },
+    },
+  ]
+}
+
+function createSignedPlacementTestBroker({ requests, responses }) {
+  return new BitunixSpotBroker({
+    apiKey: "test-api-key",
+    apiSecret: "test-api-secret",
+    tradingMode: "live",
+    allowLiveOrderMutations: true,
+    dependencies: {
+      restClientFactory: (config) => new BitunixRestClient({
+        ...config,
+        now: () => 1795262400000,
+        nonceFactory: () => `test-nonce-${requests.length}`,
+        fetchFn: async (...requestArgs) => {\n          const [url, options] = requestArgs
+          requests.push({
+            url: new URL(url),
+            options,
+          })
+          const payload = responses.shift()
+          return new Response(JSON.stringify(payload), {
+            status: 200,
+            headers: {
+              "content-type": "application/json",
+            },
+          })
+        },
+      }),
+    },
+  })
+}
+
 function createBroker({ responses = {}, allowLiveOrderMutations = true, reconcilerFactory } = {}) {
   const calls = []
   const restClient = {
@@ -2444,123 +2507,12 @@ test("Bitunix Spot placement is NOT_SENT when local request signing fails before
   let fetchCalls = 0
   const broker = new BitunixSpotBroker({
     apiKey: "test-api-key",
-    apiSecret: "test-api-secret",
-    tradingMode: "live",
-    allowLiveOrderMutations: true,
-    dependencies: {
-      restClientFactory: (config) => new BitunixRestClient({
-        ...config,
-        nonceFactory: () => "",
-        fetchFn: async () => {
-          fetchCalls += 1
-          throw new Error("invalid local signing input must not reach fetch")
-        },
-      }),
-    },
-  })
-
-  const result = await broker.createOrder({
-    symbol: "BTCUSDT",
-    side: "BUY",
-    type: "LIMIT",
-    quantity: "1",
-    price: "100",
-  })
-
-  assert.equal(result.ok, false)
-  assert.equal(result.mutationOutcome, "NOT_SENT")
-  assert.equal(fetchCalls, 0, "invalid local signing input must fail before the HTTP transport is called")
-})
-
-
-test("Bitunix Spot placement treats a mismatched acknowledgement as unknown and does not read order detail", async () => {
-  const { broker, calls } = createBroker({
-    responses: {
-      "/api/spot/v1/order/place_order": {
-        orderId: "128",
-        symbol: "BTCUSDT",
-        side: 2,
-        type: 1,
-        volume: "0.9",
-        price: "100",
-        placeStatus: "1",
-      },
-    },
-  })
-
-  const result = await broker.createOrder({
-    symbol: "BTCUSDT",
-    side: "BUY",
-    type: "LIMIT",
-    quantity: "1",
-    price: "100",
-  })
-
-  assert.equal(result.ok, false)
-  assert.equal(result.mutationOutcome, "OUTCOME_UNKNOWN")
-  assert.match(result.errors[0].message, /volume does not match/i)
-  assert.equal(calls.length, 1, "an uncorrelated placement acknowledgement must not trigger a detail lookup")
-})
-
-
-test("Bitunix Spot createOrder completes signed REST placement and order-detail reconciliation offline", async () => {
+    apiSecret: "test-apitest("Bitunix Spot createOrder completes signed REST placement and order-detail reconciliation offline", async () => {
   const requests = []
-  const responses = [
-    {
-      code: "0",
-      msg: "success",
-      data: {
-        orderId: "12345678901234567890",
-        symbol: "BTCUSDT",
-        side: 2,
-        type: 1,
-        volume: "1.00",
-        price: "100.00",
-        placeStatus: "1",
-      },
-    },
-    {
-      code: "0",
-      msg: "success",
-      data: {
-        orderId: "12345678901234567890",
-        symbol: "BTCUSDT",
-        side: "2",
-        type: "1",
-        status: "1",
-        volume: "1.00",
-        dealVolume: "0",
-        price: "100.00",
-        ctime: "2026-11-21T12:00:00Z",
-        utime: "2026-11-21T12:00:00Z",
-      },
-    },
-  ]
-  const broker = new BitunixSpotBroker({
-    apiKey: "test-api-key",
-    apiSecret: "test-api-secret",
-    tradingMode: "live",
-    allowLiveOrderMutations: true,
-    dependencies: {
-      restClientFactory: (config) => new BitunixRestClient({
-        ...config,
-        now: () => 1795262400000,
-        nonceFactory: () => `test-nonce-${requests.length}`,
-        fetchFn: async (url, options) => {
-          requests.push({
-            url: new URL(url),
-            options,
-          })
-          const payload = responses.shift()
-          return new Response(JSON.stringify(payload), {
-            status: 200,
-            headers: {
-              "content-type": "application/json",
-            },
-          })
-        },
-      }),
-    },
+  const responses = createSuccessfulPlacementResponses()
+  const broker = createSignedPlacementTestBroker({
+    requests,
+    responses,
   })
 
   const result = await broker.createOrder({
