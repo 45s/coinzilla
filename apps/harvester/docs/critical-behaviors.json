@@ -242,7 +242,7 @@
         },
         {
           "path": "src/bootstrap/account/create-account-snapshot-manager.test.js",
-          "name": "fails closed when an account snapshot omits a configured market asset",
+          "name": "rejects an account snapshot that omits a configured market asset",
           "kind": "failure"
         },
         {
