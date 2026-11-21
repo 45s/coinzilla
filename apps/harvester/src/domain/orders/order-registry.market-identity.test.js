@@ -80,6 +80,21 @@ test("allows broker order IDs to collide across different markets", () => {
     [["DOGEUSDT", "12345"], ["ZROUSDT", "12345"]],
     "The registry must preserve both market-scoped exchange identities without conflating orders.",
   )
+  assert.equal(
+    registry.getOrderByBrokerOrderId({
+      brokerOrderId: "12345",
+      marketId: zroMarket.id,
+    }).clientOrderId,
+    "h-zro-1",
+    "Market-scoped lookup must resolve the correct canonical order.",
+  )
+  assert.throws(
+    () => registry.getOrderByBrokerOrderId({
+      brokerOrderId: "12345",
+    }),
+    /requires marketId when brokerOrderId is ambiguous/,
+    "An unscoped lookup must fail rather than silently select the wrong market.",
+  )
 })
 
 test("matches broker order updates by market when IDs collide across markets", () => {
