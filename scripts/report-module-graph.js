@@ -7,14 +7,13 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const report = createRepositoryModuleGraphReport({
   repositoryRoot,
 })
+const lines = [
+  "Repository source dependency graph baseline (report-only)",
+  `Production JavaScript modules: ${report.moduleCount}`,
+  `Resolved relative dependency edges: ${report.relativeEdgeCount}`,
+  `Cycle components: ${report.cycles.length}`,
+  ...report.cycles.map((component) => `Cycle component: [${component.join(", ")}]`),
+  "Cycle findings are informational; this baseline does not fail CI for existing cycles.",
+]
 
-console.log("Repository source dependency graph baseline (report-only)")
-console.log(`Production JavaScript modules: ${report.moduleCount}`)
-console.log(`Resolved relative dependency edges: ${report.relativeEdgeCount}`)
-console.log(`Cycle components: ${report.cycles.length}`)
-
-for (const component of report.cycles) {
-  console.log(`Cycle component: [${component.join(", ")}]`)
-}
-
-console.log("Cycle findings are informational; this baseline does not fail CI for existing cycles.")
+process.stdout.write(`${lines.join("\n")}\n`)
