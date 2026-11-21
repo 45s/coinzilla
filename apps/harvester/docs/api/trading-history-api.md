@@ -16,7 +16,7 @@ pnpm --filter @coinzilla/harvester dev
 
 The API starts with Harvester at `http://127.0.0.1:4201`. It uses Harvester's selected `TRADING_MODE` and `HARVESTER_DATABASE_DIRECTORY`; TESTNET and LIVE remain separate database files. No API token or Dashboard credential is needed.
 
-The optional `HARVESTER_API_HOST` and `HARVESTER_API_PORT` settings control the listener address. Keep the host at `127.0.0.1`. The API starts only when the existing runtime and relational history persistence are available. Harvester closes the API listener before closing the shared database connection.
+The `HARVESTER_API_PORT` setting can change the listener port. The host is fixed to `127.0.0.1`. The API starts only when the existing runtime and relational history persistence are available. Harvester closes the API listener before closing the shared database connection.
 
 ## Local-only security boundary
 
@@ -99,9 +99,9 @@ Record identifiers are URL path segments and must be percent-encoded by clients 
 
 ## Real-time change notifications
 
-Connect to `ws://127.0.0.1:4201/api/v1/trading/events` on the same host and port as the HTTP API (use `wss://` when deployed behind TLS). The socket is mounted on the existing listener and does not start a second process or database connection.
+Connect to `ws://127.0.0.1:4201/api/v1/trading/events` on the same host and port as the HTTP API (this endpoint is intended for loopback-only local use). The socket is mounted on the existing listener and does not start a second process or database connection.
 
-After local-only access, clients may receive resource-only messages:
+After connecting, clients may receive resource-only messages:
 
 ```json
 {
@@ -117,7 +117,7 @@ These messages are invalidation hints, not a durable event stream:
 - EventBus delivery is in-memory and best-effort. Messages can be missed while disconnected or when a process/socket fails.
 - There are no replay cursors, acknowledgements, exactly-once guarantees, or client-side event offsets.
 - REST list/detail resources remain authoritative.
-- Clients must fetch fresh REST snapshots after initial WebSocket local-only access and every reconnect, and refresh the currently displayed resource when a matching invalidation arrives.
+- Clients must fetch fresh REST snapshots after initial WebSocket connection and every reconnect, and refresh the currently displayed resource when a matching invalidation arrives.
 - A reconnect snapshot reconciles any notifications missed while offline. Do not use WebSocket messages as accounting, audit, or exchange evidence.
 
 The server closes active sockets before the HTTP listener and shared database are shut down. The Dashboard implements bounded reconnect backoff and displays live, reconnecting, and offline states independently from HTTP API connectivity.
@@ -143,7 +143,6 @@ This first contract intentionally covers only existing `orders`, `fills`, and `f
 | HTTP status | Code | Meaning |
 | --- | --- | --- |
 | 400 | `HARVESTER_TRADING_HISTORY_QUERY_INVALID` | Unsupported filter, invalid identifier, or invalid pagination |
-| 401 | `HARVESTER_TRADING_HISTORY_local-only access_REQUIRED` | Missing or invalid local-only access |
 | 404 | `HARVESTER_TRADING_HISTORY_RECORD_NOT_FOUND` | The requested persisted record does not exist |
 | 404 | `HARVESTER_TRADING_HISTORY_ROUTE_NOT_FOUND` | The API resource is not implemented |
 | 405 | `HARVESTER_TRADING_HISTORY_METHOD_NOT_ALLOWED` | The resource does not support the requested method |
@@ -166,10 +165,10 @@ Harvester relational query adapter
 Existing orders / fills / fill_commissions tables
 ```
 
-HTTP local-only access and response serialization stay in the transport adapter. Query validation and application error codes stay in the application layer. SQL and row mapping stay in Harvester infrastructure. The Harvester domain does not depend on the HTTP framework, route names, UI, or consumer identity.
+HTTP request handling and response serialization stay in the transport adapter. Query validation and application error codes stay in the application layer. SQL and row mapping stay in Harvester infrastructure. The Harvester domain does not depend on the HTTP framework, route names, UI, or consumer identity.
 
 The HTTP and WebSocket listener runs inside the existing Harvester process and is owned by the process composition root. HTTP exposes the versioned GET resources listed above. The WebSocket adapter subscribes only to the persisted-history invalidation event; order/fill history observers publish that event after successful relational upserts. It does not subscribe directly to pre-persistence broker/trading events, create schema, change trading readiness, or own the shared database connection.
 
 ## Verification
 
-The API and WebSocket tests use temporary SQLite files, fake application dependencies, an in-memory EventBus, native WebSocket clients, and ephemeral loopback ports. Persistence notification tests verify that events follow successful upserts and are absent after failed writes. Dashboard tests cover token-in-message local-only access, live updates, reconnect backoff, and REST snapshot resynchronization. Tests do not connect to an exchange or require credentials.
+The API and WebSocket tests use temporary SQLite files, fake application dependencies, an in-memory EventBus, native WebSocket clients, and ephemeral loopback ports. Persistence notification tests verify that events follow successful upserts and are absent after failed writes. Dashboard tests cover automatic local connections, live updates, reconnect backoff, and REST snapshot resynchronization. Tests do not connect to an exchange or require credentials.
