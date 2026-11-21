@@ -23,6 +23,45 @@ function isFreshMarketMetadata({
   return matchesMarket && age >= 0 && age < MARKET_METADATA_FRESHNESS_MAX_AGE_MS
 }
 
+async function retrieveValidatedMarketMetadata({
+  symbol,
+  pairConfig,
+  metadata,
+  getSymbolFilters,
+  validateMarketMetadata,
+} = {}) {
+  const result = await getSymbolFilters({ symbol })
+  if (!result?.ok || !result.data) {
+    throw result?.errors?.[0] ?? new Error(`Fresh Binance exchange metadata is unavailable for ${symbol}`)
+  }
+
+  const refreshed = validateMarketMetadata({
+    symbol,
+    pairConfig,
+    marketMetadata: result.data,
+  })
+  if (refreshed?.market?.id !== metadata?.market?.id || refreshed?.market?.symbol !== symbol) {
+    throw new Error(`Fresh exchange metadata does not match the active market ${symbol}`)
+  }
+  return refreshed
+}
+
+function storeRefreshedMarketMetadata({
+  symbol,
+  refreshed,
+  currentTime,
+  refreshedMarketMetadata,
+  refreshedAtBySymbol,
+  now,
+} = {}) {
+  const refreshedAtTimestamp = readMarketMetadataClock({ now })
+  if (refreshedAtTimestamp < currentTime) {
+    throw new Error("Market metadata clock moved backwards during refresh")
+  }
+  refreshedMarketMetadata.set(symbol, refreshed)
+  refreshedAtBySymbol.set(symbol, refreshedAtTimestamp)
+}
+
 function createRefreshMarketMetadata({
   refreshedMarketMetadata,
   refreshedAtBySymbol,
@@ -50,26 +89,21 @@ function createRefreshMarketMetadata({
         return toResult({ data: cachedMetadata })
       }
 
-      const result = await getSymbolFilters({ symbol })
-      if (!result?.ok || !result.data) {
-        throw result?.errors?.[0] ?? new Error(`Fresh Binance exchange metadata is unavailable for ${symbol}`)
-      }
-
-      const refreshed = validateMarketMetadata({
+      const refreshed = await retrieveValidatedMarketMetadata({
         symbol,
         pairConfig,
-        marketMetadata: result.data,
+        metadata,
+        getSymbolFilters,
+        validateMarketMetadata,
       })
-      if (refreshed?.market?.id !== metadata?.market?.id || refreshed?.market?.symbol !== symbol) {
-        throw new Error(`Fresh exchange metadata does not match the active market ${symbol}`)
-      }
-
-      const refreshedAtTimestamp = readMarketMetadataClock({ now })
-      if (refreshedAtTimestamp < currentTime) {
-        throw new Error("Market metadata clock moved backwards during refresh")
-      }
-      refreshedMarketMetadata.set(symbol, refreshed)
-      refreshedAtBySymbol.set(symbol, refreshedAtTimestamp)
+      storeRefreshedMarketMetadata({
+        symbol,
+        refreshed,
+        currentTime,
+        refreshedMarketMetadata,
+        refreshedAtBySymbol,
+        now,
+      })
       return toResult({ data: refreshed })
     } catch (error) {
       return toResult({ error })
