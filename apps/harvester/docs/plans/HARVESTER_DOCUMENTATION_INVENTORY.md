@@ -4,7 +4,7 @@
 - Type: Documentation inventory
 - Owner: Harvester
 - Inventory baseline: `develop` at `cea27e580f9f9bf3d7fa109b9e6353f68aef9ff2`
-- Latest verified checkpoint: `develop` at `543753da5938eba2d95ad19d74c3f98a991e6461`; 89 Harvester Markdown/MDX paths (three additions, zero removals since `ea6110f`)
+- Latest verified checkpoint: `develop` at `0f827ba7551be61a1be58f8dced191fb0a090870`; 94 Harvester Markdown/MDX paths (six additions, one removal since the 89-path checkpoint)
 - Inventory date: 2026-11-09 (baseline); latest verification: 2026-11-18
 - Tracking: [#795](https://github.com/45s/coinzilla/issues/795)
 - Policy: [Documentation Governance](../../../../docs/DOCUMENTATION_GOVERNANCE.md)
@@ -185,9 +185,9 @@ The following maintained documents were added for #1157 and completed in PR #116
 | `apps/harvester/docs/architecture/decisions/0004-startup-open-orders-are-external.md` | Accepted and implemented ownership decision for all orders in the startup snapshot. |
 | `apps/harvester/docs/plans/STARTUP_EXTERNAL_ORDER_BOUNDARY.md` | Completed design, original acceptance criteria, TDD sequence and implementation closeout. |
 
-## Latest recursive additions — develop checkpoint 543753da
+## Historical recursive additions — develop checkpoint 543753da
 
-The complete recursive tree at `543753da5938eba2d95ad19d74c3f98a991e6461` contains **89 Harvester Markdown/MDX paths**. A direct path comparison against the 86-file checkpoint `ea6110fb39c1c86acfbf9673910965e7f698d511` found three additions and zero removals.
+The complete recursive tree at `543753da5938eba2d95ad19d74c3f98a991e6461` contained **89 Harvester Markdown/MDX paths** at that historical checkpoint. A direct path comparison against the 86-file checkpoint `ea6110fb39c1c86acfbf9673910965e7f698d511` found three additions and zero removals.
 
 | Added path | Purpose and disposition |
 | --- | --- |
@@ -196,3 +196,25 @@ The complete recursive tree at `543753da5938eba2d95ad19d74c3f98a991e6461` contai
 | `apps/harvester/docs/persistence/sqlite-integration-blueprint.md` | Source-verified inventory, repository boundaries, environment isolation, operational constraints and phased persistence migration plan; KEEP as the design/audit authority, with implementation status delegated to the persistence README and #1327. |
 
 This path inventory does not imply that all current behavior claims in the 89 files have been source-verified; that remains tracked by #1401. Full-tree Markdown classification and reference tracing remain tracked by #1402 and #1403.
+
+
+## Current recursive inventory checkpoint — develop `0f827ba7551be61a1be58f8dced191fb0a090870` (2026-11-21)
+
+The complete recursive Git tree at this checkpoint contains **94 Harvester Markdown/MDX paths**. A direct path-set comparison with the 89-path checkpoint above found **six additions and one removal** (net +5). The additions below have initial purpose classifications; these are not claims that every behavior statement has passed the #1401 source audit.
+
+| Added path | Initial classification / disposition |
+| --- | --- |
+| `apps/harvester/docs/architecture/decisions/0006-market-pause-cancels-owned-buys.md` | Living decision record; retain as the decision authority and verify current implementation/tests. |
+| `apps/harvester/docs/architecture/strategy-extensibility-audit-roadmap.md` | Audit/roadmap; preserve its evidence and verify current status before any supersession. |
+| `apps/harvester/docs/audits/sessions/AUDIT_SESSION_2026-11-19_02-16-31Z.md` | Historical session evidence; preserve original conclusions, timestamp and provenance. |
+| `apps/harvester/docs/infrastructure/execution-routing.md` | Living Harvester infrastructure contract; verify against provider routing source/tests and ADR-0003. |
+| `apps/harvester/docs/operations/trading-history-backups.md` | Living operational guide; verify commands, paths and backup guarantees against source/config/tests. |
+| `apps/harvester/docs/persistence/trading-history-roadmap.md` | Living persistence roadmap; reconcile with persistence implementation and owning roadmap. |
+
+### Removed Harvester path
+
+| Removed path | Disposition and evidence |
+| --- | --- |
+| `apps/harvester/docs/infrastructure/bitunix-read-only-observer.md` | **RETIRED** with the interim Bitunix observer runtime/configuration/adapter in merged [PR #1455](https://github.com/45s/coinzilla/pull/1455). That PR explicitly removed the observer-only runtime and its documentation; Bitunix remains unregistered until [#1185](https://github.com/45s/coinzilla/issues/1185) and the complete-provider gate in [ADR-0004](../../../../docs/architecture/decisions/ADR-0004-complete-bitunix-provider-integration.md). The current execution-routing guide covers general provider routing, not a replacement observer contract. Preserve this row as migration provenance; do not restore the retired guide as current guidance. |
+
+The current count is a path-completeness result only. Historical audits and session records remain preserved; no historical conclusions or timestamps were rewritten. Factual review of maintained documents and cross-repository reference tracing remain open under #1401 and #1403.
