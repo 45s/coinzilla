@@ -375,7 +375,7 @@ test("rejects missing quote notional and mismatched quote assets", () => {
         side: "BUY",
       },
     }),
-    "A missing executed quote notional must not be interpreted as zero.",
+    "A missing executed quote notional must not be interpreted as zero.", "Recovery-fill accounting regression: expected () => calculateRecoveryFillAccounting({\n      market,\n      fill: {\n        market,\n        side: \"BUY\",\n      },\n    }) to reject or throw with \"A missing executed quote notional must not be interpreted as zero.\"."
   )
   assert.throws(
     () => calculateRecoveryFillAccounting({

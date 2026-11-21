@@ -110,21 +110,21 @@ test("acquires an exclusive lock and releases it idempotently", async () => {
       startedAt: "2026-11-05T00:00:00.000Z",
       token: "owner-token",
     })
-    assert.equal(acquired.ok, true)
+    assert.equal(acquired.ok, true, "Process-lock safety regression: expected acquired.ok to equal true.")
     const owner = JSON.parse(await readFile(acquired.lockPath, "utf8"))
     assert.deepEqual(owner, {
       pid: 101,
       hostname: "test-host",
       startedAt: "2026-11-05T00:00:00.000Z",
       token: "owner-token",
-    })
+    }, "Process-lock safety regression: expected owner to deeply equal {\n      pid: 101,\n      hostname: \"test-host\",\n      startedAt: \"2026-11-05T00:00:00.000Z\",\n      token: \"owner-token\",\n    }.")
 
     assert.deepEqual(await acquired.release(), { ok: true,
-released: true })
+released: true }, "Process-lock safety regression: expected await acquired.release() to deeply equal { ok: true,\nreleased: true }.")
     assert.deepEqual(await acquired.release(), { ok: true,
 released: false,
-alreadyReleased: true })
-    await assert.rejects(readFile(acquired.lockPath, "utf8"), { code: "ENOENT" })
+alreadyReleased: true }, "Process-lock safety regression: expected await acquired.release() to deeply equal { ok: true,\nreleased: false,\nalreadyReleased: true }.")
+    await assert.rejects(readFile(acquired.lockPath, "utf8"), { code: "ENOENT" }, "Process-lock safety regression: expected readFile(acquired.lockPath, \"utf8\") to reject or throw with { code: \"ENOENT\" }.")
   } finally {
     await rm(directory, {
       recursive: true,
@@ -150,12 +150,12 @@ test("rejects a second trading process without reclaiming the existing lock", as
       isProcessAlive: () => true,
     })
 
-    assert.equal(first.ok, true)
-    assert.equal(second.ok, false)
-    assert.equal(second.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
-    assert.equal(second.errors[0].details.existingOwner.pid, 111)
-    assert.equal(JSON.parse(await readFile(first.lockPath, "utf8")).token, "first-token")
-    assert.equal((await first.release()).ok, true)
+    assert.equal(first.ok, true, "Process-lock safety regression: expected first.ok to equal true.")
+    assert.equal(second.ok, false, "Process-lock safety regression: expected second.ok to equal false.")
+    assert.equal(second.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS", "Process-lock safety regression: expected second.errors[0].code to equal \"HARVESTER_PROCESS_LOCK_EXISTS\".")
+    assert.equal(second.errors[0].details.existingOwner.pid, 111, "Process-lock safety regression: expected second.errors[0].details.existingOwner.pid to equal 111.")
+    assert.equal(JSON.parse(await readFile(first.lockPath, "utf8")).token, "first-token", "Process-lock safety regression: expected JSON.parse(await readFile(first.lockPath, \"utf8\")).token to equal \"first-token\".")
+    assert.equal((await first.release()).ok, true, "Process-lock safety regression: expected (await first.release()).ok to equal true.")
   } finally {
     await rm(directory, {
       recursive: true,
@@ -178,9 +178,9 @@ token: "original-token" })
     }))
 
     const released = await acquired.release()
-    assert.equal(released.ok, false)
-    assert.equal(released.errors[0].code, "HARVESTER_PROCESS_LOCK_OWNERSHIP_MISMATCH")
-    assert.equal(JSON.parse(await readFile(acquired.lockPath, "utf8")).token, "replacement-token")
+    assert.equal(released.ok, false, "Process-lock safety regression: expected released.ok to equal false.")
+    assert.equal(released.errors[0].code, "HARVESTER_PROCESS_LOCK_OWNERSHIP_MISMATCH", "Process-lock safety regression: expected released.errors[0].code to equal \"HARVESTER_PROCESS_LOCK_OWNERSHIP_MISMATCH\".")
+    assert.equal(JSON.parse(await readFile(acquired.lockPath, "utf8")).token, "replacement-token", "Process-lock safety regression: expected JSON.parse(await readFile(acquired.lockPath, \"utf8\")).token to equal \"replacement-token\".")
   } finally {
     await rm(directory, {
       recursive: true,
@@ -200,9 +200,9 @@ test("does not reclaim locks owned by another host or unreadable locks", async (
       token: "stale-token",
     }))
     const result = await acquireHarvesterProcessLock({ directory })
-    assert.equal(result.ok, false)
-    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
-    assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "stale-token")
+    assert.equal(result.ok, false, "Process-lock safety regression: expected result.ok to equal false.")
+    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS", "Process-lock safety regression: expected result.errors[0].code to equal \"HARVESTER_PROCESS_LOCK_EXISTS\".")
+    assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "stale-token", "Process-lock safety regression: expected JSON.parse(await readFile(lockPath, \"utf8\")).token to equal \"stale-token\".")
   } finally {
     await rm(directory, {
       recursive: true,
@@ -231,9 +231,9 @@ test("reclaims a same-host lock only when its recorded process is confirmed dead
       isProcessAlive: () => false,
     })
 
-    assert.equal(result.ok, true)
-    assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "new-owner-token")
-    assert.equal((await result.release()).ok, true)
+    assert.equal(result.ok, true, "Process-lock safety regression: expected result.ok to equal true.")
+    assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "new-owner-token", "Process-lock safety regression: expected JSON.parse(await readFile(lockPath, \"utf8\")).token to equal \"new-owner-token\".")
+    assert.equal((await result.release()).ok, true, "Process-lock safety regression: expected (await result.release()).ok to equal true.")
   } finally {
     await rm(directory, {
       recursive: true,
@@ -260,9 +260,9 @@ test("retains a same-host lock when its recorded process may still be alive", as
       isProcessAlive: () => true,
     })
 
-    assert.equal(result.ok, false)
-    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
-    assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "live-owner-token")
+    assert.equal(result.ok, false, "Process-lock safety regression: expected result.ok to equal false.")
+    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS", "Process-lock safety regression: expected result.errors[0].code to equal \"HARVESTER_PROCESS_LOCK_EXISTS\".")
+    assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "live-owner-token", "Process-lock safety regression: expected JSON.parse(await readFile(lockPath, \"utf8\")).token to equal \"live-owner-token\".")
   } finally {
     await rm(directory, {
       recursive: true,
@@ -308,11 +308,11 @@ isProcessAlive: () => true }),
     const owners = results.filter((result) => result.ok)
     const conflicts = results.filter((result) => !result.ok)
 
-    assert.equal(owners.length, 1)
-    assert.equal(conflicts.length, 1)
-    assert.equal(conflicts[0].errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
-    assert.equal(JSON.parse(await readFile(owners[0].lockPath, "utf8")).token, owners[0].owner.token)
-    assert.equal((await owners[0].release()).ok, true)
+    assert.equal(owners.length, 1, "Process-lock safety regression: expected owners.length to equal 1.")
+    assert.equal(conflicts.length, 1, "Process-lock safety regression: expected conflicts.length to equal 1.")
+    assert.equal(conflicts[0].errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS", "Process-lock safety regression: expected conflicts[0].errors[0].code to equal \"HARVESTER_PROCESS_LOCK_EXISTS\".")
+    assert.equal(JSON.parse(await readFile(owners[0].lockPath, "utf8")).token, owners[0].owner.token, "Process-lock safety regression: expected JSON.parse(await readFile(owners[0].lockPath, \"utf8\")).token to equal owners[0].owner.token.")
+    assert.equal((await owners[0].release()).ok, true, "Process-lock safety regression: expected (await owners[0].release()).ok to equal true.")
   } finally {
     await rm(directory, {
       recursive: true,
@@ -336,7 +336,7 @@ test("does not reclaim a malformed lock file", async () => {
     })
 
     assert.equal(result.ok, false, "An unreadable lock must remain a hard ownership conflict.")
-    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
+    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS", "Process-lock safety regression: expected result.errors[0].code to equal \"HARVESTER_PROCESS_LOCK_EXISTS\".")
     assert.equal(await readFile(lockPath, "utf8"), "{malformed", "The unreadable lock must not be deleted or replaced.")
   } finally {
     await rm(directory, {
@@ -403,7 +403,7 @@ test("does not remove a replacement lock after a stale-owner race", async () => 
     })
 
     assert.equal(result.ok, false, "A replacement owner discovered by the pre-unlink re-read must keep the lock.")
-    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
+    assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS", "Process-lock safety regression: expected result.errors[0].code to equal \"HARVESTER_PROCESS_LOCK_EXISTS\".")
     assert.deepEqual(
       JSON.parse(await readFile(lockPath, "utf8")),
       replacementOwner,
