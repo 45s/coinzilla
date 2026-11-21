@@ -46,6 +46,19 @@ describe('OperatorComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
+    // Keep the command UI test independent of the asynchronous initial refresh lifecycle.
+    fixture.componentInstance.markets.set({
+      markets: [{
+        symbol: 'BTCUSDT',
+        enabled: true,
+        operatorBuysPaused: false,
+        readiness: 'READY',
+        blockers: [],
+      }],
+    });
+    fixture.componentInstance.connected.set(true);
+    fixture.detectChanges();
+
     const pauseButton = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'))
       .find((button) => button.textContent?.trim() === 'Pause') as HTMLButtonElement;
     expect(pauseButton).toBeDefined();
