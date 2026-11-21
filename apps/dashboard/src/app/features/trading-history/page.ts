@@ -217,9 +217,9 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     try {
       let detail: TradingHistoryDetail = record as CommissionRecord;
       if (this.currentResource() === 'orders') {
-        detail = await firstValueFrom(this.api.getOrder(record.id));
+        detail = await firstValueFrom(this.api.getOrder(String(record.id)));
       } else if (this.currentResource() === 'fills') {
-        detail = await firstValueFrom(this.api.getFill(record.id));
+        detail = await firstValueFrom(this.api.getFill(String(record.id)));
       }
       this.selectedRecord.set(detail);
     } catch (error) {
@@ -239,7 +239,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     if ('clientOrderId' in record && record.clientOrderId) {
       return `Client ${record.clientOrderId}`;
     }
-    const id = record.id;
+    const id = String(record.id);
     const shortenedId = id.length > 18 ? `${id.slice(0, 10)}…${id.slice(-6)}` : id;
     return `Record ${shortenedId}`;
   }
@@ -308,25 +308,6 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
       return record.exchangeExecutedAt ?? ('localObservedAt' in record ? record.localObservedAt : null) ?? 'Not recorded';
     }
     return 'Not recorded';
-  }
-
-  async connect(): Promise<void> {
-    this.connecting.set(true);
-    this.errorMessage.set(null);
-    try {
-      const metadata = await firstValueFrom(this.api.getMetadata());
-      this.metadata.set(metadata);
-      this.connected.set(true);
-      this.pageIndexReset();
-      await this.loadRecords();
-      this.manuallyDisconnected = false;
-      this.openEventSocket(false);
-    } catch (error) {
-      this.connected.set(false);
-      this.handleRequestError(error);
-    } finally {
-      this.connecting.set(false);
-    }
   }
 
   private loadRecords({ force = false }: { readonly force?: boolean } = {}): Promise<void> {
