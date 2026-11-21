@@ -204,7 +204,8 @@ export class TradingHistoryApi {
   }
 
   createEventSocket(): WebSocket {
-    return new WebSocket('ws://127.0.0.1:4201/api/v1/trading/events');
+    const websocketUrl = this.baseUrl.replace(/^http/, 'ws');
+    return new WebSocket(`${websocketUrl}/events`);
   }
 
   listOrders(query: ListQuery): Observable<TradingHistoryPage<OrderRecord>> {
