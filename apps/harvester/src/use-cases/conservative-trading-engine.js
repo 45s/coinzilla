@@ -474,17 +474,11 @@ function createOrderCancellationEventPublishers({ eventPublisher, logger, state 
         brokerOrderId: order.brokerOrderId,
         marketId: order.market.id,
       })
-      logOrderLifecycle({ logger,
-order,
-ownership,
-status: lifecycleStatus })
+      logOrderLifecycle({ logger, order, ownership, status: lifecycleStatus })
       return publishLifecycleEvent({
         eventPublisher,
         eventName: HARVESTER_EVENT_NAMES.ORDER_CANCEL_FAILED,
-        dataResult: mapOrderCancelFailedData({ order,
-ownership,
-outcome,
-error }),
+        dataResult: mapOrderCancelFailedData({ order, ownership, outcome, error }),
       })
     },
   }
