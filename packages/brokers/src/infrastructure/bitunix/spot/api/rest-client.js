@@ -534,7 +534,7 @@ export class BitunixRestClient {
         message: "Bitunix REST credentials are required for authenticated requests",
         kind: "authentication",
         path,
-        outcomeUnknown: stateChanging ? false : undefined,
+        outcomeUnknown: false,
       })
     }
     let request
