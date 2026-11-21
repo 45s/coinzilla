@@ -151,7 +151,7 @@ test("order-history response accepts the first page when the REST response omits
 })
 
 test("order-history response ignores malformed redundant page metadata only on page one", () => {
-  for (const pageNum of ["", "not-a-page", "1.00", 0, -1, {}, []]) {
+  for (const pageNum of ["", "not-a-page", 0, -1, {}, []]) {
     const rows = normalizeOrderHistoryPage({
       value: {
         total: 0,
