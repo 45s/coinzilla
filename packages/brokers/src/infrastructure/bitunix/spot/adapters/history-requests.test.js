@@ -150,6 +150,33 @@ test("order-history response accepts the first page when the REST response omits
   )
 })
 
+test("order-history response ignores malformed redundant page metadata only on page one", () => {
+  for (const pageNum of ["", "not-a-page", "1.00", 0, -1, {}, []]) {
+    const rows = normalizeOrderHistoryPage({
+      value: { total: 0, pageNum, data: [] },
+      requestedPage: 1,
+    })
+    assert.deepEqual(rows, [], "malformed first-page echoes must not block page one")
+  }
+
+  assert.throws(
+    () => normalizeOrderHistoryPage({
+      value: { total: 0, pageNum: "2", data: [] },
+      requestedPage: 1,
+    }),
+    /does not match the requested page/,
+    "a valid contradictory page echo must still be rejected",
+  )
+  assert.throws(
+    () => normalizeOrderHistoryPage({
+      value: { total: 0, pageNum: "", data: [] },
+      requestedPage: 2,
+    }),
+    /pageNum must be a positive integer/,
+    "later pages must still require valid page identity metadata",
+  )
+})
+
 test("order-history response accepts integer-valued decimal page strings from the live API", () => {
   const rows = normalizeOrderHistoryPage({
     value: {
