@@ -14,7 +14,7 @@
 - The package coverage command includes `src/**/*.js` and excludes `src/**/*.test.js`; the additional test and validation scripts in PR #1642 do not alter production-source coverage.
 - The run completed successfully with **90.35% lines, 83.22% branches, and 96.00% functions** across the Harvester package.
 
-The full measured baseline and per-module minimums are machine-readable in [critical-behaviors.json](./critical-behaviors.json). It currently records 14 critical behaviors and 28 production modules. The floors are rounded down to five-percentage-point increments and capped at 95% where a baseline is 100%; this leaves bounded room for new branches while preventing larger regressions. A floor is never set above its measured baseline.
+The full measured baseline and per-module minimums are machine-readable in [critical-behaviors.json](./critical-behaviors.json). It currently records 14 critical behaviors and 30 production modules. The floors are rounded down to five-percentage-point increments and capped at 95% where a baseline is 100%; this leaves bounded room for new branches while preventing larger regressions. A floor is never set above its measured baseline.
 
 ## Critical coverage gaps
 
