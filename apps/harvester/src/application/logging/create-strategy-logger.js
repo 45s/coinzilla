@@ -1,4 +1,4 @@
-import { strategyLogMarkers } from "./strategy-log-markers.js"
+import { strategyMetadataById } from "./strategy-metadata.js"
 
 const STRATEGY_LOG_METHODS = Object.freeze([
   "trace",
@@ -22,7 +22,7 @@ function createStrategyLogData({ data, strategyId } = {}) {
   if (data && typeof data === "object" && !Array.isArray(data)) {
     return {
       ...data,
-      strategyId: Object.hasOwn(strategyLogMarkers, data.strategyId)
+      strategyId: Object.hasOwn(strategyMetadataById, data.strategyId)
         ? data.strategyId
         : strategyId,
     }
@@ -38,7 +38,7 @@ export function createStrategyLogger({ logger, strategyId } = {}) {
   if (!logger || typeof logger !== "object") {
     throw new TypeError("Strategy logger requires a shared logger")
   }
-  if (!Object.hasOwn(strategyLogMarkers, strategyId)) {
+  if (!Object.hasOwn(strategyMetadataById, strategyId)) {
     throw new TypeError("Strategy logger requires a supported strategy ID")
   }
 
