@@ -39,4 +39,5 @@ export const HARVESTER_EVENT_NAMES = Object.freeze({
   RECOVERY_CYCLE_NOT_COMPLETED: "recovery.cycle_not_completed",
   ACCOUNT_SNAPSHOT_CAPTURED: "account.snapshot_captured",
   ACCOUNT_OPEN_ORDERS_CAPTURED: "account.open_orders_captured",
+  TRADING_HISTORY_UPDATED: "trading-history.updated",
 })
