@@ -265,6 +265,42 @@ function validateCoverageBaseline({ coverageBaseline, errors }) {
   }
 }
 
+function validateCoverageMetric({ entry, metric, errors }) {
+  const baseline = entry.baseline?.[metric]
+  const minimum = entry.minimum?.[metric]
+  if (
+    !Number.isFinite(baseline) ||
+    !Number.isFinite(minimum) ||
+    baseline < 0 ||
+    baseline > 100 ||
+    minimum < 0 ||
+    minimum > baseline
+  ) {
+    errors.push(`Critical module coverage for ${entry.path} has an invalid ${metric} floor or baseline.`)
+  }
+}
+
+function validateModuleCoverageEntry({ entry, coveragePaths, sourceOwners, errors }) {
+  if (!entry || !isSafeRelativePath(entry.path) || !entry.path.startsWith("src/")) {
+    errors.push("Critical module coverage contains an invalid source path.")
+    return
+  }
+  if (coveragePaths.has(entry.path)) {
+    errors.push(`Critical module coverage path ${entry.path} is duplicated.`)
+  }
+  coveragePaths.add(entry.path)
+  if (!sourceOwners.has(entry.path)) {
+    errors.push(`Critical module coverage path ${entry.path} has no behavior owner.`)
+  }
+  for (const metric of ["lines", "branches", "functions"]) {
+    validateCoverageMetric({
+      entry,
+      metric,
+      errors,
+    })
+  }
+}
+
 function validateModuleCoverageInventory({ contract, sourceOwners, errors }) {
   if (!Array.isArray(contract.moduleCoverage) || contract.moduleCoverage.length === 0) {
     errors.push("Critical behavior inventory must define measured per-module coverage floors.")
@@ -272,33 +308,13 @@ function validateModuleCoverageInventory({ contract, sourceOwners, errors }) {
   }
 
   const coveragePaths = new Set()
-  const metrics = ["lines", "branches", "functions"]
   for (const entry of contract.moduleCoverage) {
-    if (!entry || !isSafeRelativePath(entry.path) || !entry.path.startsWith("src/")) {
-      errors.push("Critical module coverage contains an invalid source path.")
-      continue
-    }
-    if (coveragePaths.has(entry.path)) {
-      errors.push(`Critical module coverage path ${entry.path} is duplicated.`)
-    }
-    coveragePaths.add(entry.path)
-    if (!sourceOwners.has(entry.path)) {
-      errors.push(`Critical module coverage path ${entry.path} has no behavior owner.`)
-    }
-    for (const metric of metrics) {
-      const baseline = entry.baseline?.[metric]
-      const minimum = entry.minimum?.[metric]
-      if (
-        !Number.isFinite(baseline) ||
-        !Number.isFinite(minimum) ||
-        baseline < 0 ||
-        baseline > 100 ||
-        minimum < 0 ||
-        minimum > baseline
-      ) {
-        errors.push(`Critical module coverage for ${entry.path} has an invalid ${metric} floor or baseline.`)
-      }
-    }
+    validateModuleCoverageEntry({
+      entry,
+      coveragePaths,
+      sourceOwners,
+      errors,
+    })
   }
 
   for (const sourcePath of sourceOwners.keys()) {
