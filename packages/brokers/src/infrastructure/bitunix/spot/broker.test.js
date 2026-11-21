@@ -40,7 +40,7 @@ function createSuccessfulPlacementResponses() {
   ]
 }
 
-function createSignedPlacementTestBroker({ requests, responses }) {
+function createSignedPlacementTestBroker({ requests, responses, fetchFn }) {
   return new BitunixSpotBroker({
     apiKey: "test-api-key",
     apiSecret: "test-api-secret",
@@ -57,6 +57,9 @@ function createSignedPlacementTestBroker({ requests, responses }) {
             url: new URL(url),
             options,
           })
+          if (fetchFn) {
+            return fetchFn(...requestArgs)
+          }
           return new Response(JSON.stringify(responses.shift()), {
             status: 200,
             headers: {
@@ -523,6 +526,45 @@ test("Bitunix Spot placement reports confirmed acceptance if order-detail reconc
   assert.equal(result.data.orderId, "125")
   assert.equal(result.mutationOutcome, "CONFIRMED")
   assert.match(result.errors[0].message, /order detail unavailable/i)
+})
+
+test("Bitunix Spot createOrder classifies non-JSON HTTP failures through the real REST client", async () => {
+  const scenarios = [
+    { status: 400, mutationOutcome: "REJECTED" },
+    { status: 408, mutationOutcome: "OUTCOME_UNKNOWN" },
+    { status: 409, mutationOutcome: "OUTCOME_UNKNOWN" },
+    { status: 429, mutationOutcome: "REJECTED" },
+    { status: 500, mutationOutcome: "OUTCOME_UNKNOWN" },
+    { status: 502, mutationOutcome: "OUTCOME_UNKNOWN" },
+  ]
+
+  for (const scenario of scenarios) {
+    const requests = []
+    const broker = createSignedPlacementTestBroker({
+      requests,
+      responses: [],
+      fetchFn: async () => new Response("Bitunix HTTP gateway failure", {
+        status: scenario.status,
+        headers: { "content-type": "text/plain" },
+      }),
+    })
+
+    const result = await broker.createOrder({
+      symbol: "BTCUSDT",
+      side: "BUY",
+      type: "LIMIT",
+      quantity: "1",
+      price: "100",
+    })
+
+    assert.equal(result.ok, false)
+    assert.equal(result.mutationOutcome, scenario.mutationOutcome, `HTTP ${scenario.status} must have the correct order outcome`)
+    assert.equal(result.errors[0].kind, "http")
+    assert.equal(result.errors[0].status, scenario.status)
+    assert.equal(requests.length, 1, `HTTP ${scenario.status} must produce exactly one placement request`)
+    assert.equal(requests[0].url.pathname, "/api/spot/v1/order/place_order")
+    assert.equal(requests[0].options.method, "POST")
+  }
 })
 
 test("Bitunix Spot canonical placement remains unsupported because client order identity is absent", async () => {
