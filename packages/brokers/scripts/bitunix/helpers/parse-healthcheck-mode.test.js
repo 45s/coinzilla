@@ -11,6 +11,7 @@ test("explicit CLI arguments select each supported mode", () => {
   assert.equal(parseHealthcheckMode({ args: ["--publish"] }), "publish")
   assert.equal(parseHealthcheckMode({ args: ["--place-order"] }), "place-order")
   assert.equal(parseHealthcheckMode({ args: ["--help"] }), "help")
+  assert.equal(parseHealthcheckMode({ args: ["--version"] }), "version")
 })
 
 test("unknown and conflicting CLI modes fail before a command is run", () => {
