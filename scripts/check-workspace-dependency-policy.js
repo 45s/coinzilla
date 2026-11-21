@@ -17,7 +17,10 @@ const allowedDependencies = parseWorkspaceDependencyPolicy({ markdown: policyMar
 const packages = readWorkspacePackages({ rootDirectory })
 const modules = collectRepositoryJavaScriptModules({ repositoryRoot: rootDirectory })
 const sourceImports = modules.flatMap(({ file, source }) => (
-  extractModuleImports({ file, source }).map(({ specifier }) => ({
+  extractModuleImports({
+    file,
+    source,
+  }).map(({ specifier }) => ({
     file,
     specifier,
   }))
@@ -37,9 +40,6 @@ if (violations.length > 0) {
   process.exitCode = 1
 } else {
   process.stdout.write([
-    "Workspace package dependency and public-import policy passed for " +
-      packages.length + " packages (" +
-      sourceImports.filter(({ specifier }) => specifier.startsWith("@coinzilla/")).length +
-      " static workspace imports).\n",
+    `Workspace package dependency and public-import policy passed for ${packages.length} packages (${sourceImports.filter(({ specifier }) => specifier.startsWith("@coinzilla/")).length} static workspace imports).\n`,
   ].join(""))
 }

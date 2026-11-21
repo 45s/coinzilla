@@ -269,14 +269,14 @@ function findWorkspacePackageImportViolations({ packagesByName, sourceImports })
     const [, packageName, subpath] = match
     const workspacePackage = packagesByName.get(packageName)
     if (!workspacePackage) {
-      violations.push(file + ': imports unknown workspace package "' + packageName + '".')
+      violations.push(`${file}: imports unknown workspace package "${packageName}".`)
       continue
     }
     if (subpath === undefined) {
       continue
     }
 
-    const requestedSubpath = "./" + subpath
+    const requestedSubpath = `./${subpath}`
     const publicSubpaths = workspacePackage.publicSubpaths ?? []
     const isPublicSubpath = publicSubpaths.some((exportedSubpath) => (
       matchesWorkspacePackageExport({
@@ -285,7 +285,7 @@ function findWorkspacePackageImportViolations({ packagesByName, sourceImports })
       })
     ))
     if (!isPublicSubpath) {
-      violations.push(file + ': workspace package import "' + specifier + '" uses an unexported subpath of "' + packageName + '".')
+      violations.push(`${file}: workspace package import "${specifier}" uses an unexported subpath of "${packageName}".`)
     }
   }
 
