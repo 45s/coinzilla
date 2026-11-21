@@ -30,6 +30,8 @@ Follow the canonical [ENGINEERING_STANDARDS.md](../../ENGINEERING_STANDARDS.md) 
 
 Follow the canonical [human-readable test design standard](../../ENGINEERING_STANDARDS.md#human-readable-test-design) and engineering verification requirements. Harvester tests must read as plain-English behavior specifications: precise domain variable names, named-field comparisons instead of opaque tuples, descriptive test names, and a detailed message on every assertion. Keep exchange-order verification deterministic and offline by default; exchange-order verification is opt-in and TESTNET-only.
 
+For any change to a behavior listed in [critical-behaviors.json](./docs/critical-behaviors.json), update its authoritative invariants, owning source modules, named normal/failure tests, required integration evidence, runtime limitation, and measured coverage entry. Run `pnpm --filter @coinzilla/harvester run check:reliability`. The required Test Coverage workflow also enforces per-module floors after the full package coverage run; never lower a floor to hide a regression—remeasure the baseline and document the reason first.
+
 ## Changes and delivery
 
 **Per-commit documentation rule:** every commit that changes Harvester implementation, configuration, tests, or runtime behavior MUST include the corresponding documentation update in that same commit. If behavior is unchanged, state that explicitly in the commit/PR summary.
