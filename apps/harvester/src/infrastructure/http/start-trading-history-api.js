@@ -75,6 +75,7 @@ export async function startTradingHistoryApi({
   environment,
   logger = defaultLogger,
   eventBus,
+  operator,
   startServer = startTradingHistoryApiServer,
 } = {}) {
   const configuration = resolveStartupConfiguration({
@@ -108,6 +109,7 @@ export async function startTradingHistoryApi({
     port: configuration.port,
     logger,
     eventBus,
+    operator,
   })
   return Object.freeze({
     address: server.address,
