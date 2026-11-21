@@ -272,9 +272,9 @@ function broadcastHistoryUpdate({ clients, event } = {}) {
   }
   for (const client of clients) {
     sendJson({
-        client,
-        message,
-      })
+      client,
+      message,
+    })
   }
 }
 
