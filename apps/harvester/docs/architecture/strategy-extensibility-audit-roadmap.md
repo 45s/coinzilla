@@ -39,14 +39,16 @@ The goal is not to add a framework for hypothetical strategies. The goal is to m
 
 ## 3. Roadmap agreed for discussion
 
-The agreed sequence is:
+The roadmap status was reconciled against current source and merged PR #1515 on 2026-11-21:
 
-1. **S-1 — Existing strategy audit.** Map CG, RS, execution routing, Portfolio, accounting, configuration, lifecycle, tests and simulation. Identify duplication and strategy-specific coupling. Deliver source-backed findings and a map of current responsibilities.
-2. **S-2 — Strategy contract design.** Define the minimum common policy/runtime boundary, state ownership, configuration, events and decision format. Discuss and agree on the design before implementation.
-3. **S-3 — Strategy onboarding template.** Document the steps and requirements for adding a strategy, including configuration, domain policy, runtime/lifecycle integration, execution, ownership, accounting, tests, simulation and safety.
-4. **S-4 — Prove the framework with existing CG and RS.** Demonstrate that the design accommodates the existing strategies and their different lifecycle/accounting requirements. No new strategy is introduced.
+1. **S-1 — Existing strategy audit.** Completed as the source-backed architecture review and decisions preserved in this document. No code was moved solely to make strategy folders symmetrical.
+2. **S-2 — Strategy boundary decision.** Completed. CG and RS are co-composed through the account-level Conservative Trading Engine; they are not mutually exclusive runtime selections. The shared boundary is engine coordination, strategy-specific dispatch/evaluation, explicit strategy ownership and common execution/safety capabilities. No generic evaluator contract or registry is justified because the strategies have different inputs, decisions, accounting and lifecycle semantics.
+3. **S-3 — Strategy onboarding template.** Remaining: create a concise, implementation-oriented checklist for onboarding a future strategy. This is documentation work and must be based on the actual current composition and ownership contracts.
+4. **S-4 — Prove the architecture with existing CG and RS.** Completed by merged PR #1515, which composes RS through the shared serialized engine and verifies strategy-specific accounting, ownership, authorization, lifecycle and failure behavior in offline tests.
 
-S-1 source mapping remains necessary to keep implementation evidence-based, but it is not a reason to pause the explicitly approved RS-4 work in PR #1476. The owner has approved the architectural direction in §5.2; derive only the concrete contracts required by the existing CG/RS source and acceptance tests. Do not create generalized interfaces speculatively.
+S-2/S-4 closeout evidence: PR #1515's merged source and tests include the Recovery Seller runtime dispatch and evaluator with their focused tests, the Recovery Seller runtime integration test, Conservative engine order-event composition tests, and startup composition tests. The PR records exact-head Harvester targeted tests, workspace tests/coverage, syntax/lint/policy and dependency-audit verification. These existing tests are the evidence; no redundant runtime abstraction or test-only behavior is being added.
+
+Do not create generalized interfaces speculatively. Future strategy onboarding must demonstrate a concrete common responsibility before extracting a shared contract.
 
 ## 4. Architectural principles
 
