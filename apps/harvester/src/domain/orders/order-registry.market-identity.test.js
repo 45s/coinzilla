@@ -26,7 +26,7 @@ const zroMarket = new Market({
   quoteAsset,
 })
 
-function makeOrder({ market, clientOrderId, brokerOrderId }) {
+function makeOrder({ market, clientOrderId, brokerOrderId, status = "OPEN" }) {
   const { baseAsset } = market
   return new CanonicalOrder({
     clientOrderId,
@@ -46,10 +46,11 @@ function makeOrder({ market, clientOrderId, brokerOrderId }) {
       amount: "0",
       asset: baseAsset,
     }),
-    status: "OPEN",
+    status,
     createdAt: 1,
     acknowledgedAt: 2,
     updatedAt: 2,
+    ...(status === "CANCELED" ? { completedAt: 3 } : {}),
   })
 }
 
@@ -78,5 +79,44 @@ test("allows broker order IDs to collide across different markets", () => {
     registry.orders.map(({ market: orderMarket, brokerOrderId }) => [orderMarket.symbol, brokerOrderId]),
     [["DOGEUSDT", "12345"], ["ZROUSDT", "12345"]],
     "The registry must preserve both market-scoped exchange identities without conflating orders.",
+  )
+})
+
+test("matches broker order updates by market when IDs collide across markets", () => {
+  const dogeOrder = makeOrder({
+    market: dogeMarket,
+    clientOrderId: "h-doge-1",
+    brokerOrderId: "12345",
+  })
+  const zroOrder = makeOrder({
+    market: zroMarket,
+    clientOrderId: "h-zro-1",
+    brokerOrderId: "12345",
+  })
+  const registry = new OrderRegistry({
+    orders: [dogeOrder, zroOrder],
+  })
+  const zroCanceledReport = makeOrder({
+    market: zroMarket,
+    clientOrderId: "exchange-generated-zro-client-id",
+    brokerOrderId: "12345",
+    status: "CANCELED",
+  })
+
+  const result = registry.applyUpdate({
+    order: zroCanceledReport,
+  })
+
+  assert.equal(result.applied, true)
+  assert.equal(result.unknown, false)
+  assert.equal(
+    result.registry.getOrder({ clientOrderId: "h-doge-1" }).status,
+    "OPEN",
+    "A same-ID report from another market must not change the DOGE order.",
+  )
+  assert.equal(
+    result.registry.getOrder({ clientOrderId: "h-zro-1" }).status,
+    "CANCELED",
+    "The report must update the canonical order from the matching market.",
   )
 })
