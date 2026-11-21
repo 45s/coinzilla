@@ -77,6 +77,8 @@ jobs:
         run: pnpm run test:module-dependency-analysis
       - name: Report repository source dependency graph baseline (report-only)
         run: pnpm run report:module-graph
+      - name: Test workspace package dependency policy
+        run: pnpm run test:workspace-dependency-policy
 
       - name: Enforce helper purity and unit-test policy
         run: pnpm run check:helper-policy
