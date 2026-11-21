@@ -37,29 +37,18 @@ Install dependencies from the repository root:
 pnpm install
 ```
 
-Run both applications in development mode:
+### Application commands
 
-```sh
-pnpm run app:dev
-```
+| Command | Behavior |
+| --- | --- |
+| `pnpm run server` | Harvester development mode |
+| `pnpm run client` | Dashboard development server |
+| `pnpm run app` | Both development servers |
+| `pnpm run server:prod` | Harvester production runtime |
+| `pnpm run client:prod` | Dashboard production build |
+| `pnpm run app:prod` | Harvester production runtime + Dashboard build |
 
-The existing individual commands remain available: `pnpm run server` starts Harvester and `pnpm run client` starts Dashboard.
-
-For production, use `pnpm run server:prod` to start Harvester, `pnpm run client:prod` to build Dashboard, or `pnpm run app:prod` to start Harvester while building Dashboard. Serve the Dashboard build output with your production web server.
-
-Start both applications together:
-
-```sh
-pnpm run app:dev
-```
-
-Run the Harvester production runtime and build the Dashboard for production:
-
-```sh
-pnpm run app:prod
-```
-
-The development command runs Harvester's `dev` script and Dashboard's `start` script concurrently. The production command runs Harvester's `start` script and Dashboard's production `build` concurrently; the Dashboard build output is intended to be served by a production web server.
+The production Dashboard build output must be served by your production web server. The `app:prod` command runs the Harvester runtime alongside the Dashboard build; it does not start a Dashboard production web server.
 
 Run the unit tests:
 
