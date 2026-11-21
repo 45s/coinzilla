@@ -1,0 +1,259 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-11-21T02:04:18.463Z",
+  "finishedAt": "2026-11-21T02:04:33.348Z",
+  "runtime": {
+    "node": "v26.13.0",
+    "platform": "win32"
+  },
+  "summary": {
+    "total": 43,
+    "passed": 36,
+    "failed": 4,
+    "skipped": 3
+  },
+  "healthCheck": {
+    "requiredOperations": [
+      "diagnostic safety confirmation",
+      "diagnostic configuration",
+      "REST private account balances",
+      "WebSocket connection",
+      "ping",
+      "user.account",
+      "user.info"
+    ],
+    "missingRequiredOperations": [],
+    "healthy": false
+  },
+  "results": [
+    {
+      "operation": "diagnostic safety confirmation",
+      "status": "passed",
+      "durationMs": 1
+    },
+    {
+      "operation": "diagnostic configuration",
+      "status": "passed",
+      "durationMs": 1
+    },
+    {
+      "operation": "REST public market catalog",
+      "status": "passed",
+      "durationMs": 840
+    },
+    {
+      "operation": "REST public last price",
+      "status": "passed",
+      "durationMs": 288
+    },
+    {
+      "operation": "REST public order book depth",
+      "status": "skipped",
+      "durationMs": 0
+    },
+    {
+      "operation": "REST public K-line",
+      "status": "passed",
+      "durationMs": 302
+    },
+    {
+      "operation": "REST public K-line history",
+      "status": "passed",
+      "durationMs": 296
+    },
+    {
+      "operation": "REST public exchange rates",
+      "status": "passed",
+      "durationMs": 302
+    },
+    {
+      "operation": "REST public token networks",
+      "status": "passed",
+      "durationMs": 505
+    },
+    {
+      "operation": "REST private account balances",
+      "status": "passed",
+      "durationMs": 303
+    },
+    {
+      "operation": "REST private open orders",
+      "status": "passed",
+      "durationMs": 318
+    },
+    {
+      "operation": "Broker API connect",
+      "status": "passed",
+      "durationMs": 0
+    },
+    {
+      "operation": "Broker API getExchangeMarkets",
+      "status": "passed",
+      "durationMs": 448
+    },
+    {
+      "operation": "Broker API schema getExchangeMarkets",
+      "status": "failed",
+      "durationMs": 0,
+      "error": {
+        "name": "DiagnosticError",
+        "code": "BROKER_DIAGNOSTIC_SCHEMA_MISMATCH"
+      }
+    },
+    {
+      "operation": "Broker API getPrices",
+      "status": "passed",
+      "durationMs": 290
+    },
+    {
+      "operation": "Broker API schema getPrices",
+      "status": "passed",
+      "durationMs": 0
+    },
+    {
+      "operation": "Broker API getSymbolFilters",
+      "status": "passed",
+      "durationMs": 418
+    },
+    {
+      "operation": "Broker API schema getSymbolFilters",
+      "status": "failed",
+      "durationMs": 0,
+      "error": {
+        "name": "DiagnosticError",
+        "code": "BROKER_DIAGNOSTIC_SCHEMA_MISMATCH"
+      }
+    },
+    {
+      "operation": "Broker API getBalances",
+      "status": "passed",
+      "durationMs": 296
+    },
+    {
+      "operation": "Broker API schema getBalances",
+      "status": "passed",
+      "durationMs": 0
+    },
+    {
+      "operation": "Broker API getOpenOrders",
+      "status": "passed",
+      "durationMs": 302
+    },
+    {
+      "operation": "Broker API schema getOpenOrders",
+      "status": "passed",
+      "durationMs": 0
+    },
+    {
+      "operation": "Broker API getOrderHistory",
+      "status": "failed",
+      "durationMs": 315,
+      "error": {
+        "name": "TypeError"
+      }
+    },
+    {
+      "operation": "Broker API schema getOrderHistory",
+      "status": "passed",
+      "durationMs": 0
+    },
+    {
+      "operation": "Broker API getDeposits",
+      "status": "passed",
+      "durationMs": 296
+    },
+    {
+      "operation": "Broker API schema getDeposits",
+      "status": "passed",
+      "durationMs": 0
+    },
+    {
+      "operation": "Broker API getWithdrawalHistory",
+      "status": "failed",
+      "durationMs": 302,
+      "error": {
+        "name": "TypeError"
+      }
+    },
+    {
+      "operation": "Broker API schema getWithdrawalHistory",
+      "status": "passed",
+      "durationMs": 0
+    },
+    {
+      "operation": "Broker API disconnect",
+      "status": "passed",
+      "durationMs": 0
+    },
+    {
+      "operation": "WebSocket connection",
+      "status": "passed",
+      "durationMs": 1160
+    },
+    {
+      "operation": "ping",
+      "status": "passed",
+      "durationMs": 297
+    },
+    {
+      "operation": "market.last_price",
+      "status": "passed",
+      "durationMs": 293
+    },
+    {
+      "operation": "market.depth",
+      "status": "skipped",
+      "durationMs": 1
+    },
+    {
+      "operation": "market.kline",
+      "status": "passed",
+      "durationMs": 294
+    },
+    {
+      "operation": "common.coin_pair.list",
+      "status": "passed",
+      "durationMs": 663
+    },
+    {
+      "operation": "common.rate.list",
+      "status": "passed",
+      "durationMs": 324
+    },
+    {
+      "operation": "common.coin.coin_network.list",
+      "status": "passed",
+      "durationMs": 701
+    },
+    {
+      "operation": "user.account",
+      "status": "passed",
+      "durationMs": 305
+    },
+    {
+      "operation": "user.info",
+      "status": "passed",
+      "durationMs": 295
+    },
+    {
+      "operation": "order.pending.list",
+      "status": "passed",
+      "durationMs": 294
+    },
+    {
+      "operation": "order.history.page",
+      "status": "passed",
+      "durationMs": 303
+    },
+    {
+      "operation": "WebSocket reconnect",
+      "status": "passed",
+      "durationMs": 1479
+    },
+    {
+      "operation": "WebSocket subscription restoration",
+      "status": "skipped",
+      "durationMs": 0
+    }
+  ]
+}
