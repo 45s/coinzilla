@@ -55,6 +55,7 @@ describe('MarketScreenerComponent', () => {
     const request = http.expectOne(MARKET_DATA_URL);
     expect(request.request.method).toBe('GET');
     request.flush({ ok: true, data: createSnapshot() });
+    await fixture.whenStable();
     fixture.detectChanges();
 
     const renderedText = (fixture.nativeElement as HTMLElement).textContent ?? '';
@@ -78,6 +79,7 @@ describe('MarketScreenerComponent', () => {
     const fixture = TestBed.createComponent(MarketScreenerComponent);
     fixture.detectChanges();
     http.expectOne(MARKET_DATA_URL).flush({ ok: true, data: createSnapshot() });
+    await fixture.whenStable();
     fixture.detectChanges();
 
     const favoriteButton = fixture.nativeElement.querySelector('.favorite-toggle') as HTMLButtonElement;
@@ -110,5 +112,6 @@ describe('MarketScreenerComponent', () => {
         markets: [],
       },
     });
+    await fixture.whenStable();
   });
 });
