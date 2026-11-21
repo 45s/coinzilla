@@ -37,7 +37,7 @@ const LOCAL_ORIGINS = new Set([
   "http://localhost:4200",
 ])
 
-function sendJson(response, status, body) {
+function sendJson({ response, status, body } = {}) {
   if (response.destroyed || response.writableEnded) {
     return
   }
@@ -93,12 +93,16 @@ function normalizeFailure(result) {
   }
 }
 
-function sendFailure(response, status, code, message) {
-  sendJson(response, status, {
-    ok: false,
-    error: {
-      code,
-      message,
+function sendFailure({ response, status, code, message } = {}) {
+  sendJson({
+    response,
+    status,
+    body: {
+      ok: false,
+      error: {
+        code,
+        message,
+      },
     },
   })
 }
@@ -107,22 +111,26 @@ async function handleReadRequest({ response, pathname, operator }) {
   const key = pathname.slice("/api/v1/trading/operator/".length)
   const method = READ_OPERATIONS[key]
   if (!method || typeof operator[method] !== "function") {
-    sendFailure(
+    sendFailure({
       response,
-      404,
-      "HARVESTER_OPERATOR_QUERY_NOT_FOUND",
-      "The requested operator query is not available.",
-    )
+      status: 404,
+      code: "HARVESTER_OPERATOR_QUERY_NOT_FOUND",
+      message: "The requested operator query is not available.",
+    })
     return
   }
   const result = await operator[method]({ actor: ACTOR })
   if (result?.ok !== true) {
-    sendJson(response, 422, normalizeFailure(result))
+    sendJson({ response, status: 422, body: normalizeFailure(result) })
     return
   }
-  sendJson(response, 200, {
-    ok: true,
-    data: result.data,
+  sendJson({
+    response,
+    status: 200,
+    body: {
+      ok: true,
+      data: result.data,
+    },
   })
 }
 
@@ -172,36 +180,36 @@ function parseCommand({ body } = {}) {
 }
 
 async function handleCommandRequest({ request, response, operator }) {
-  const origin = request.headers.origin
+  const { origin } = request.headers
   if (origin && !LOCAL_ORIGINS.has(origin)) {
-    sendFailure(
+    sendFailure({
       response,
-      403,
-      "HARVESTER_OPERATOR_ORIGIN_FORBIDDEN",
-      "Operator commands are only accepted from the local Dashboard.",
-    )
+      status: 403,
+      code: "HARVESTER_OPERATOR_ORIGIN_FORBIDDEN",
+      message: "Operator commands are only accepted from the local Dashboard.",
+    })
     return
   }
   const contentType = request.headers["content-type"]?.split(";")[0].trim()
   if (contentType !== "application/json") {
-    sendFailure(
+    sendFailure({
       response,
-      415,
-      "HARVESTER_OPERATOR_CONTENT_TYPE_INVALID",
-      "Operator commands require an application/json request body.",
-    )
+      status: 415,
+      code: "HARVESTER_OPERATOR_CONTENT_TYPE_INVALID",
+      message: "Operator commands require an application/json request body.",
+    })
     return
   }
   try {
     const body = await readJsonBody(request)
     const parsed = parseCommand({ body })
     if (parsed.error) {
-      sendFailure(
+      sendFailure({
         response,
-        parsed.error.status,
-        parsed.error.code,
-        parsed.error.message,
-      )
+        status: parsed.error.status,
+        code: parsed.error.code,
+        message: parsed.error.message,
+      })
       return
     }
     const result = await operator[parsed.configuration.method]({
@@ -210,12 +218,16 @@ async function handleCommandRequest({ request, response, operator }) {
       ...(parsed.symbol ? { symbol: parsed.symbol } : {}),
     })
     if (result?.ok !== true) {
-      sendJson(response, 422, normalizeFailure(result))
+      sendJson({ response, status: 422, body: normalizeFailure(result) })
       return
     }
-    sendJson(response, 200, {
-      ok: true,
-      data: result.data ?? result,
+    sendJson({
+      response,
+      status: 200,
+      body: {
+        ok: true,
+        data: result.data ?? result,
+      },
     })
   } catch (error) {
     const status = error.status ?? 500
@@ -225,7 +237,7 @@ async function handleCommandRequest({ request, response, operator }) {
     const message = status === 400 || status === 413
       ? error.message
       : "Operator request failed."
-    sendFailure(response, status, code, message)
+    sendFailure({ response, status, code, message })
   }
 }
 
@@ -238,27 +250,35 @@ export async function handleOperatorControlRequest({ request, response, pathname
     return false
   }
   if (!operator) {
-    sendFailure(
+    sendFailure({
       response,
-      503,
-      "HARVESTER_OPERATOR_UNAVAILABLE",
-      "Operator controls are not available yet.",
-    )
+      status: 503,
+      code: "HARVESTER_OPERATOR_UNAVAILABLE",
+      message: "Operator controls are not available yet.",
+    })
     return true
   }
   if (request.method === "GET") {
-    await handleReadRequest({ response, pathname, operator })
+    await handleReadRequest({
+      response,
+      pathname,
+      operator,
+    })
     return true
   }
   if (request.method === "POST" && pathname === "/api/v1/trading/operator/commands") {
-    await handleCommandRequest({ request, response, operator })
+    await handleCommandRequest({
+      request,
+      response,
+      operator,
+    })
     return true
   }
-  sendFailure(
+  sendFailure({
     response,
-    405,
-    "HARVESTER_OPERATOR_METHOD_NOT_ALLOWED",
-    "Operator commands require POST.",
-  )
+    status: 405,
+    code: "HARVESTER_OPERATOR_METHOD_NOT_ALLOWED",
+    message: "Operator commands require POST.",
+  })
   return true
 }
