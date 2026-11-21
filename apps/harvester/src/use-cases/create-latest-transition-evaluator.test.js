@@ -243,8 +243,8 @@ test("refreshes recovery filters before Conservative strategy evaluation", async
 
   const result = await evaluate({ symbol })
 
-  assert.equal(result.ok, true)
-  assert.deepEqual(calls, [`refresh:${symbol}`, "evaluate"])
+  assert.equal(result.ok, true, "A successful recovery filter refresh must allow Conservative evaluation.")
+  assert.deepEqual(calls, [`refresh:${symbol}`, "evaluate"], "Recovery filters must refresh before the strategy policy is evaluated.")
 })
 
 
@@ -273,7 +273,7 @@ test("stops Conservative evaluation when recovery filter refresh fails", async (
 
   const result = await evaluate({ symbol })
 
-  assert.equal(result.ok, false)
-  assert.equal(result.errors[0], refreshError)
-  assert.equal(strategyEvaluated, false)
+  assert.equal(result.ok, false, "A failed recovery filter refresh must fail the evaluation.")
+  assert.equal(result.errors[0], refreshError, "The evaluator must preserve the original refresh failure.")
+  assert.equal(strategyEvaluated, false, "The strategy policy must not run after a failed filter refresh.")
 })
