@@ -300,34 +300,4 @@ export function createBitunixFuturesMarketDataClient({
       now,
     }),
   })
-} = {}) {
-  if (typeof fetchImpl !== "function") {
-    throw new TypeError("Bitunix market-data client requires a fetch implementation.")
-  }
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) {
-    throw new TypeError("Bitunix market-data timeout must be between 1 and 30000 milliseconds.")
-  }
-  if (!Number.isSafeInteger(websocketTimeoutMs) || websocketTimeoutMs < 1 || websocketTimeoutMs > 10_000) {
-    throw new TypeError("Bitunix ticker WebSocket timeout must be between 1 and 10000 milliseconds.")
-  }
-  const normalizedBaseUrl = new URL(baseUrl)
-  if (normalizedBaseUrl.protocol !== "https:") {
-    throw new TypeError("Bitunix public market-data must use HTTPS.")
-  }
-  const normalizedWebsocketUrl = new URL(websocketUrl)
-  if (normalizedWebsocketUrl.protocol !== "wss:") {
-    throw new TypeError("Bitunix public market-data WebSocket must use WSS.")
-  }
-
-  return Object.freeze({
-    getBitunixFuturesMarkets: () => createBitunixFuturesSnapshot({
-      fetchImpl,
-      WebSocketImpl,
-      baseUrl: normalizedBaseUrl,
-      websocketUrl: normalizedWebsocketUrl.toString(),
-      timeoutMs,
-      websocketTimeoutMs,
-      now,
-    }),
-  })
 }
