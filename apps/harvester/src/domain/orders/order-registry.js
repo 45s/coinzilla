@@ -253,11 +253,15 @@ ownerships })
     return matches[0]
   }
 
-  getOwnership({ clientOrderId, brokerOrderId } = {}) {
+  getOwnership({ clientOrderId, brokerOrderId, marketId } = {}) {
+    const order = clientOrderId === undefined
+      ? this.getOrderByBrokerOrderId({ brokerOrderId, marketId })
+      : this.getOrder({ clientOrderId })
     return findOrderOwnership({
       ownerships: this.#ownerships,
       clientOrderId,
       brokerOrderId,
+      marketId: marketId ?? order?.market.id,
     })
   }
 
@@ -286,6 +290,7 @@ ownerships })
           ownership,
           clientOrderId: order.clientOrderId,
           brokerOrderId: order.brokerOrderId,
+          marketId: order.market.id,
         })
     if (existing) {
       if (!sameOrderState({ current: existing,
@@ -547,6 +552,7 @@ function createAcknowledgedRegistryResult({ orders, ownerships, index, current, 
         ownerships,
         clientOrderId: current.clientOrderId,
         brokerOrderId: order.brokerOrderId,
+        marketId: order.market.id,
       }),
     }),
     applied: true,
