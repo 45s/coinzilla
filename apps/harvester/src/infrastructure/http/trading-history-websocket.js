@@ -186,7 +186,8 @@ function handleSocketData({ client, chunk, token } = {}) {
 }
 
 function rejectUpgrade(socket, status = 400) {
-  const reason = status === 503 ? "Service Unavailable" : status === 404 ? "Not Found" : "Bad Request"
+  const reasons = { 404: "Not Found", 503: "Service Unavailable" }
+  const reason = reasons[status] ?? "Bad Request"
   socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
 }
 
@@ -209,17 +210,18 @@ function createClient({ socket, clients, token } = {}) {
     awaitingPong: false,
     heartbeatTimer: null,
     closed: false,
-    authenticationTimer: setTimeout(() => {
-      sendJson(client, {
-        type: "error",
-        code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
-      })
-      closeClient(client, {
-        code: 1008,
-        reason: "Authentication timeout.",
-      })
-    }, AUTHENTICATION_TIMEOUT_MS),
+    authenticationTimer: null,
   }
+  client.authenticationTimer = setTimeout(() => {
+    sendJson(client, {
+      type: "error",
+      code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
+    })
+    closeClient(client, {
+      code: 1008,
+      reason: "Authentication timeout.",
+    })
+  }, AUTHENTICATION_TIMEOUT_MS)
   client.authenticationTimer.unref?.()
   clients.add(client)
   socket.on("data", (chunk) => handleSocketData({
