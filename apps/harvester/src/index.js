@@ -836,8 +836,8 @@ function publishRuntimeStarted({
   })
 }
 
-function shouldStartTradingHistoryApi({ env, runtime } = {}) {
-  return typeof runtime?.stop === "function" && Boolean(env.HARVESTER_API_TOKEN)
+function shouldStartTradingHistoryApi({ runtime } = {}) {
+  return typeof runtime?.stop === "function"
 }
 
 function logOptionalTradingHistoryApi({ logger, level, details } = {}) {
@@ -848,34 +848,28 @@ function logOptionalTradingHistoryApi({ logger, level, details } = {}) {
   }
 }
 
-async function startOptionalTradingHistoryApi({ options, resources, runtime } = {}) {
-  if (!shouldStartTradingHistoryApi({
+function createTradingHistoryApiStartInput({ options, resources, database, environment, operator } = {}) {
+  return {
+    database,
+    environment,
     env: options.env,
-    runtime,
-  })) {
-    return
+    logger: options.logger,
+    eventBus: resources.eventBus,
+    ...(operator === undefined ? {} : { operator }),
   }
-  const database = resources.orderHistoryPersistence?.relationalDatabase
-  const environment = resources.runtimeConfig?.tradingMode ?? options.env.TRADING_MODE
-  if (!database) {
-    logOptionalTradingHistoryApi({
-      logger: options.logger,
-      level: "warn",
-      details: {
-        message: "Harvester trading-history API is not started because relational history persistence is unavailable.",
-        environment: environment ?? "unknown",
-      },
-    })
-    return
-  }
+}
+
+async function startTradingHistoryApiService({ options, resources, database, environment, operator } = {}) {
   try {
-    const service = await options.startTradingHistoryApi({
-      database,
-      environment,
-      env: options.env,
-      logger: options.logger,
-      eventBus: resources.eventBus,
-    })
+    const service = await options.startTradingHistoryApi(
+      createTradingHistoryApiStartInput({
+        options,
+        resources,
+        database,
+        environment,
+        operator,
+      }),
+    )
     resources.tradingHistoryApi = service
     if (service?.address) {
       logOptionalTradingHistoryApi({
@@ -900,6 +894,32 @@ async function startOptionalTradingHistoryApi({ options, resources, runtime } = 
       },
     })
   }
+}
+
+async function startOptionalTradingHistoryApi({ options, resources, runtime } = {}) {
+  if (!shouldStartTradingHistoryApi({ runtime })) {
+    return
+  }
+  const database = resources.orderHistoryPersistence?.relationalDatabase
+  const environment = resources.runtimeConfig?.tradingMode ?? options.env.TRADING_MODE
+  if (!database) {
+    logOptionalTradingHistoryApi({
+      logger: options.logger,
+      level: "warn",
+      details: {
+        message: "Harvester trading-history API is not started because relational history persistence is unavailable.",
+        environment: environment ?? "unknown",
+      },
+    })
+    return
+  }
+  await startTradingHistoryApiService({
+    options,
+    resources,
+    database,
+    environment,
+    operator: runtime.getOperator?.() ?? runtime.accountRuntimes?.[0]?.getOperator?.(),
+  })
 }
 
 async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } = {}) {

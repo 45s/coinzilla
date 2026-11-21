@@ -19,26 +19,12 @@
     <section class="connection-panel" aria-labelledby="connection-title">
       <div class="connection-icon" aria-hidden="true">↔</div>
       <div class="connection-copy">
-        <div class="eyebrow">SECURE LOCAL CONNECTION</div>
-        <h2 id="connection-title">Connect to Harvester</h2>
-        <p>Enter the bearer token configured in Harvester's local environment file. The token is kept only for this browser session.</p>
-        <form class="connection-form" (submit)="connect($event)">
-          <label for="api-token">Bearer token</label>
-          <div class="connection-controls">
-            <input
-              id="api-token"
-              type="password"
-              autocomplete="off"
-              spellcheck="false"
-              [value]="tokenInput()"
-              (input)="updateToken($event)"
-              placeholder="Paste HARVESTER_API_TOKEN"
-            />
-            <button type="submit" [disabled]="connecting()">
-              {{ connecting() ? 'Connecting…' : 'Connect' }}
-            </button>
-          </div>
-        </form>
+        <div class="eyebrow">LOCAL HARVESTER CONNECTION</div>
+        <h2 id="connection-title">Connecting to Harvester</h2>
+        <p>The Dashboard connects directly to the local read-only API at 127.0.0.1:4201. No token or credential setup is required.</p>
+        <button type="button" (click)="connect()" [disabled]="connecting()">
+          {{ connecting() ? 'Connecting…' : 'Retry connection' }}
+        </button>
         @if (errorMessage(); as message) {
           <p class="inline-error" role="alert">{{ message }}</p>
         }
@@ -52,12 +38,11 @@
         [class.reconnecting]="liveStatus() === 'reconnecting' || liveStatus() === 'connecting'"
         [class.offline]="liveStatus() === 'offline'"
       ></span>
-      <span>Connected to Harvester</span>
+      <span>Connected to local Harvester</span>
       <span class="strip-divider">·</span>
       <span>{{ liveStatusLabel() }}</span>
       <span class="strip-divider">·</span>
       <span>Read-only API</span>
-      <button type="button" class="quiet-button" (click)="disconnect()">Disconnect</button>
     </div>
 
     <section class="filter-panel" aria-label="Trading history filters">
@@ -177,6 +162,10 @@
         <details class="technical-identity">
           <summary>Internal persistence ID</summary>
           <code>{{ detail.id }}</code>
+        </details>
+        <details class="raw-record-details" open>
+          <summary>Raw record · every persisted field</summary>
+          <pre>{{ detailJson() }}</pre>
         </details>
         <dl class="details-grid">
           @for (entry of detailEntries(); track entry.label) {

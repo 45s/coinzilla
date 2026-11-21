@@ -55,6 +55,9 @@
         @if (activePage() === 'overview') {
           <span class="demo-pill"><span></span> MOCK DATA</span>
           <span class="environment-pill">PREVIEW</span>
+        } @else if (activePage() === 'operator') {
+          <span class="demo-pill persisted-pill"><span></span> LIVE CONTROL</span>
+          <span class="environment-pill">HARVESTER</span>
         } @else {
           <span class="demo-pill persisted-pill"><span></span> READ ONLY</span>
           <span class="environment-pill">HARVESTER</span>
@@ -66,6 +69,8 @@
     <section class="page-content">
       @if (activePage() === 'overview') {
         <app-overview />
+      } @else if (activePage() === 'operator') {
+        <app-operator />
       } @else {
         <app-trading-history [resource]="historyResource()" />
       }
@@ -73,8 +78,10 @@
         <span>Coinzilla Dashboard</span>
         @if (activePage() === 'overview') {
           <span>Overview values are fictional demo data</span>
+        } @else if (activePage() === 'operator') {
+          <span>Local operator controls · Commands require confirmation</span>
         } @else {
-          <span>Read-only persisted Harvester records · No trading controls</span>
+          <span>Read-only persisted Harvester records</span>
         }
       </footer>
     </section>

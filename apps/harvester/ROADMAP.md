@@ -11,7 +11,7 @@
 
 ## Trading-history real-time notifications (#1643)
 
-- **In progress in coordinated [PR #1641](https://github.com/45s/coinzilla/pull/1641):** add an authenticated WebSocket endpoint to the existing optional trading-history API listener. The endpoint shares the HTTP listener, bearer-token secret, process lifecycle and environment-specific relational persistence connection.
+- **Complete in merged [PR #1641](https://github.com/45s/coinzilla/pull/1641):** add local WebSocket invalidation notifications to the trading-history API. The API is intentionally unauthenticated and fixed to loopback for single-user local development; it shares Harvester's process lifecycle and relational persistence connection.
 - Order and fill history observers publish resource-only invalidation events only after their respective relational upserts succeed. Fill persistence invalidates both Fills and Commissions. Failed writes never produce a success notification.
 - Notifications are best-effort in-memory EventBus messages, not durable replay, exactly-once delivery or an audit log. REST list/detail resources remain authoritative; browser clients must load fresh snapshots on connection and every reconnect.
 - The transport is read-only and does not call brokers/exchanges, change trading decisions, or introduce database schema/migration changes. The Dashboard is a client and owns its reconnect and UI state.

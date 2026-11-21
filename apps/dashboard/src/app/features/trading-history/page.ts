@@ -15,7 +15,6 @@ import { firstValueFrom } from 'rxjs';
 
 import {
   TradingHistoryApi,
-  TradingHistorySession,
   type CommissionRecord,
   type FillCommission,
   type TradingEnvironment,
@@ -41,7 +40,6 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
   @Input() resource: TradingHistoryResource = 'orders';
 
   private readonly api = inject(TradingHistoryApi);
-  private readonly session = inject(TradingHistorySession);
   private readonly pageSize = 25;
   private readonly reconnectDelays = [1000, 2000, 4000, 8000, 16000, 30000];
   private eventSocket: WebSocket | null = null;
@@ -54,7 +52,6 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
   private activeQueryKey: string | null = null;
 
   readonly currentResource = signal<TradingHistoryResource>('orders');
-  readonly tokenInput = signal('');
   readonly connected = signal(false);
   readonly liveStatus = signal<'connecting' | 'live' | 'reconnecting' | 'offline'>('offline');
   readonly liveStatusLabel = computed(() => {
@@ -109,6 +106,10 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
         value: value === null ? 'Not recorded' : String(value),
       }));
   });
+  readonly detailJson = computed(() => {
+    const record = this.selectedRecord();
+    return record ? JSON.stringify(record, null, 2) : '';
+  });
   readonly detailCommissions = computed<readonly FillCommission[]>(() => {
     const record = this.selectedRecord();
     return record && 'commissions' in record ? record.commissions : [];
@@ -116,11 +117,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnInit(): void {
     this.currentResource.set(this.resource);
-    const token = this.session.getToken();
-    if (token) {
-      this.tokenInput.set(token);
-      void this.connectWithToken(token);
-    }
+    void this.connect();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -136,10 +133,6 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopLiveUpdates();
-  }
-
-  updateToken(event: Event): void {
-    this.tokenInput.set((event.target as HTMLInputElement).value);
   }
 
   updateSymbol(event: Event): void {
@@ -158,15 +151,27 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     this.assetFilter.set((event.target as HTMLInputElement).value);
   }
 
-  async connect(event?: Event): Promise<void> {
-    event?.preventDefault();
-    await this.connectWithToken(this.tokenInput().trim());
+  async connect(): Promise<void> {
+    this.connecting.set(true);
+    this.errorMessage.set(null);
+    try {
+      const metadata = await firstValueFrom(this.api.getMetadata());
+      this.metadata.set(metadata);
+      this.connected.set(true);
+      this.pageIndexReset();
+      await this.loadRecords();
+      this.manuallyDisconnected = false;
+      this.openEventSocket(false);
+    } catch (error) {
+      this.connected.set(false);
+      this.handleRequestError(error);
+    } finally {
+      this.connecting.set(false);
+    }
   }
 
   disconnect(): void {
     this.stopLiveUpdates();
-    this.session.clearToken();
-    this.tokenInput.set('');
     this.connected.set(false);
     this.metadata.set(null);
     this.page.set(null);
@@ -212,9 +217,9 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     try {
       let detail: TradingHistoryDetail = record as CommissionRecord;
       if (this.currentResource() === 'orders') {
-        detail = await firstValueFrom(this.api.getOrder(record.id));
+        detail = await firstValueFrom(this.api.getOrder(String(record.id)));
       } else if (this.currentResource() === 'fills') {
-        detail = await firstValueFrom(this.api.getFill(record.id));
+        detail = await firstValueFrom(this.api.getFill(String(record.id)));
       }
       this.selectedRecord.set(detail);
     } catch (error) {
@@ -234,7 +239,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     if ('clientOrderId' in record && record.clientOrderId) {
       return `Client ${record.clientOrderId}`;
     }
-    const id = record.id;
+    const id = String(record.id);
     const shortenedId = id.length > 18 ? `${id.slice(0, 10)}…${id.slice(-6)}` : id;
     return `Record ${shortenedId}`;
   }
@@ -303,30 +308,6 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
       return record.exchangeExecutedAt ?? ('localObservedAt' in record ? record.localObservedAt : null) ?? 'Not recorded';
     }
     return 'Not recorded';
-  }
-
-  private async connectWithToken(token: string): Promise<void> {
-    if (!token) {
-      this.errorMessage.set('Enter the Harvester bearer token to connect.');
-      return;
-    }
-    this.connecting.set(true);
-    this.errorMessage.set(null);
-    this.session.setToken(token);
-    try {
-      const metadata = await firstValueFrom(this.api.getMetadata());
-      this.metadata.set(metadata);
-      this.connected.set(true);
-      this.pageIndexReset();
-      await this.loadRecords();
-      this.manuallyDisconnected = false;
-      this.openEventSocket(false);
-    } catch (error) {
-      this.connected.set(false);
-      this.handleRequestError(error);
-    } finally {
-      this.connecting.set(false);
-    }
   }
 
   private loadRecords({ force = false }: { readonly force?: boolean } = {}): Promise<void> {
@@ -410,15 +391,11 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
       if (this.eventSocket !== socket) {
         return;
       }
-      const token = this.session.getToken();
-      if (!token) {
-        this.stopLiveUpdates();
-        return;
-      }
-      socket.send(JSON.stringify({
-        type: 'authenticate',
-        token,
-      }));
+      this.reconnectAttempt = 0;
+      this.liveStatus.set('live');
+      this.selectedRecord.set(null);
+      void this.refreshMetadata();
+      void this.loadRecords();
     });
     socket.addEventListener('message', (event) => this.handleEventSocketMessage(socket, event));
     socket.addEventListener('close', () => {
@@ -437,30 +414,12 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     }
     let message: {
       readonly type?: string;
-      readonly code?: string;
       readonly resources?: readonly string[];
     };
     try {
       message = JSON.parse(event.data);
     } catch {
       socket.close();
-      return;
-    }
-    if (message.type === 'authenticated') {
-      this.reconnectAttempt = 0;
-      this.liveStatus.set('live');
-      this.selectedRecord.set(null);
-      void this.refreshMetadata();
-      void this.loadRecords();
-      return;
-    }
-    if (message.type === 'error' && message.code === 'HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED') {
-      this.stopLiveUpdates();
-      this.session.clearToken();
-      this.connected.set(false);
-      this.metadata.set(null);
-      this.tokenInput.set('');
-      this.errorMessage.set('Token was rejected. Check the Harvester bearer token and reconnect.');
       return;
     }
     if (message.type === 'trading-history.updated') {
@@ -555,15 +514,6 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private handleRequestError(error: unknown): void {
-    if (error instanceof HttpErrorResponse && error.status === 401) {
-      this.stopLiveUpdates();
-      this.session.clearToken();
-      this.connected.set(false);
-      this.metadata.set(null);
-      this.tokenInput.set('');
-      this.errorMessage.set('Token was rejected. Check the Harvester bearer token and reconnect.');
-      return;
-    }
     if (error instanceof HttpErrorResponse && error.status === 0) {
       this.errorMessage.set('Harvester API is unavailable. Check that Harvester is running and the local API is enabled.');
       return;

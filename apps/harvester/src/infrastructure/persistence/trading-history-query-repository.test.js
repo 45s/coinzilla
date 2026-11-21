@@ -145,6 +145,8 @@ test("lists exact persisted order, fill and commission values without deriving f
   assert.equal(fillPage.items[0].executedQuoteQuantity, "16250.0000", "The fill query must preserve the exact executed quote quantity string.")
 
   const fill = repository.findFillById({ id: fillPage.items[0].id })
+  assert.equal(fill.commissions[0].fillId, fill.id, "Fill commission details must expose their persisted fill foreign key.")
+  assert.equal(fill.commissions[0].ordinal, 0, "Fill commission details must expose their persisted ordinal.")
   assert.equal(fill.commissions[0].amount, "0.00025000", "Fill details must include the exact persisted commission amount.")
   assert.equal(fill.commissions[0].assetCode, "BNB", "Fill details must preserve the actual commission asset.")
   assert.equal(fill.commissions[0].quoteValueAmount, "0.05000000", "A supplied commission valuation must be preserved without recalculation.")
@@ -159,6 +161,8 @@ test("lists exact persisted order, fill and commission values without deriving f
     },
   })
   assert.equal(commissionPage.pagination.total, 1, "The commission asset filter must return the persisted BNB commission fact.")
+  assert.equal(commissionPage.items[0].ordinal, 0, "Commission list records must expose the persisted ordinal.")
+  assert.equal(typeof commissionPage.items[0].localObservedAt, "string", "Commission records must expose their joined fill observation timestamp.")
   assert.equal(commissionPage.items[0].amount, "0.00025000", "The commission list must preserve the exact stored amount.")
   assert.equal(commissionPage.items[0].quoteValueAmount, "0.05000000", "The commission list must preserve a stored quote valuation.")
 });

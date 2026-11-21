@@ -3,8 +3,6 @@ import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
 import { startTradingHistoryApi } from "./start-trading-history-api.js"
 
-const API_TOKEN = "test-token-with-more-than-thirty-two-characters"
-
 function createDatabase() {
   let closeCalls = 0
   return {
@@ -22,16 +20,28 @@ function createDatabase() {
   }
 }
 
-test("does not start the optional API when no token is configured", async () => {
+test("starts the local API without token configuration", async () => {
+  let serverInput
+  const eventBus = new EventBus()
   const service = await startTradingHistoryApi({
     database: createDatabase(),
-    env: {
-      TRADING_MODE: "testnet",
-      HARVESTER_API_TOKEN: "",
+    eventBus,
+    env: { TRADING_MODE: "testnet" },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
+        close: async () => {},
+      }
     },
   })
-
-  assert.equal(service, null, "Harvester must remain usable without enabling the optional HTTP API.")
+  assert.equal(typeof service.close, "function")
+  assert.equal("token" in serverInput, false)
+  await service.close()
+  await eventBus.close()
 })
 
 test("starts the API over Harvester's already-open relational database without owning that database", async () => {
@@ -44,7 +54,6 @@ test("starts the API over Harvester's already-open relational database without o
     eventBus,
     env: {
       TRADING_MODE: "testnet",
-      HARVESTER_API_TOKEN: API_TOKEN,
       HARVESTER_API_PORT: "0",
     },
     logger: {
@@ -83,29 +92,12 @@ test("rejects invalid API configuration before opening the HTTP listener", async
       name: "environment",
       env: {
         TRADING_MODE: "sandbox",
-        HARVESTER_API_TOKEN: API_TOKEN,
-      },
-    },
-    {
-      name: "token",
-      env: {
-        TRADING_MODE: "testnet",
-        HARVESTER_API_TOKEN: "short",
-      },
-    },
-    {
-      name: "host",
-      env: {
-        TRADING_MODE: "testnet",
-        HARVESTER_API_TOKEN: API_TOKEN,
-        HARVESTER_API_HOST: " ",
       },
     },
     {
       name: "port",
       env: {
         TRADING_MODE: "testnet",
-        HARVESTER_API_TOKEN: API_TOKEN,
         HARVESTER_API_PORT: "65536",
       },
     },
@@ -137,7 +129,6 @@ test("preserves the HTTP startup error without closing Harvester's shared databa
       eventBus,
       env: {
         TRADING_MODE: "testnet",
-        HARVESTER_API_TOKEN: API_TOKEN,
       },
       startServer: async () => {
         throw startupFailure
