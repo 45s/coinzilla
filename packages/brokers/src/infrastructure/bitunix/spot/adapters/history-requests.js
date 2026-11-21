@@ -194,7 +194,9 @@ function normalizeReturnedHistoryPage({ pageNum, requestedPage }) {
   // but never accept a valid echo that identifies a different page.
   // Later pages require an explicit, valid page identity.
   if (!pageNumIsNumber && !pageNumIsString) {
-    if (requestedPage === 1) return
+    if (requestedPage === 1) {
+      return
+    }
     throw new TypeError("Bitunix Spot order history pageNum must be a positive integer string or number")
   }
 
