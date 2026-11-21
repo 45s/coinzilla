@@ -18,6 +18,7 @@ import { createShutdownRecoveryWorkflow } from "./create-shutdown-recovery-workf
 import { createConservativeShutdownSafety } from "./create-conservative-shutdown-safety.js"
 import { createLatestTransitionEvaluator } from "./create-latest-transition-evaluator.js"
 import { createMarketMetadataCache } from "./create-market-metadata-cache.js"
+import { MarketMetadataRefreshError } from "./market-metadata-refresh-error.js"
 import { createFreshMarketPriceWaiter, createMarketPriceTransitionHandler } from "./create-market-price-transition-handler.js"
 import { validateConservativeTradingEngineOptions } from "./validate-conservative-trading-engine-options.js"
 import { failureResult, recoveryFailureError, withFailure } from "./recovery-failure.js"
@@ -3618,11 +3619,16 @@ async function refreshTrailingBuyMarketMetadata({ context, symbol, pairConfig, m
     force: true,
   })
   if (!result.ok) {
+    const refreshError = result.errors?.[0]
+    const error = refreshError instanceof MarketMetadataRefreshError && refreshError.cause !== undefined
+      ? refreshError.cause
+      : refreshError
     await context.pause({
       symbol,
       reason: "TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE",
-      error: result.errors?.[0],
+      error,
     })
+    return toResult({ error })
   }
   return result
 }
