@@ -8,6 +8,93 @@ import { acquireHarvesterProcessLock } from "./acquire-harvester-process-lock.js
 
 const createTempDirectory = () => mkdtemp(path.join(os.tmpdir(), "harvester-process-lock-"))
 
+function createInvalidProcessLockInputs({ directory }) {
+  return [
+    {
+      name: "empty directory",
+      input: {
+        directory: " ",
+      },
+      expectedMessage: /non-empty directory/,
+    },
+    {
+      name: "dot lock file name",
+      input: {
+        directory,
+        lockFileName: ".",
+      },
+      expectedMessage: /file name/,
+    },
+    {
+      name: "dot-dot lock file name",
+      input: {
+        directory,
+        lockFileName: "..",
+      },
+      expectedMessage: /file name/,
+    },
+    {
+      name: "path traversal lock file name",
+      input: {
+        directory,
+        lockFileName: "../outside.lock",
+      },
+      expectedMessage: /file name/,
+    },
+    {
+      name: "invalid process id",
+      input: {
+        directory,
+        pid: 0,
+      },
+      expectedMessage: /positive safe integer/,
+    },
+    {
+      name: "empty hostname",
+      input: {
+        directory,
+        hostname: " ",
+      },
+      expectedMessage: /hostname/,
+    },
+    {
+      name: "empty start time",
+      input: {
+        directory,
+        startedAt: " ",
+      },
+      expectedMessage: /startedAt/,
+    },
+    {
+      name: "empty ownership token",
+      input: {
+        directory,
+        token: " ",
+      },
+      expectedMessage: /token/,
+    },
+    {
+      name: "invalid process liveness probe",
+      input: {
+        directory,
+        isProcessAlive: null,
+      },
+      expectedMessage: /isProcessAlive/,
+    },
+  ]
+}
+
+async function assertInvalidProcessLockInput({ invalidInput }) {
+  const result = await acquireHarvesterProcessLock(invalidInput.input)
+  assert.equal(result.ok, false, `${invalidInput.name} must fail before lock acquisition.`)
+  assert.match(
+    result.errors[0].message,
+    invalidInput.expectedMessage,
+    `${invalidInput.name} must report the specific invalid input.`,
+  )
+}
+
+
 test("acquires an exclusive lock and releases it idempotently", async () => {
   const directory = await createTempDirectory()
   try {
@@ -34,8 +121,10 @@ released: false,
 alreadyReleased: true })
     await assert.rejects(readFile(acquired.lockPath, "utf8"), { code: "ENOENT" })
   } finally {
-    await rm(directory, { recursive: true,
-force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -63,8 +152,10 @@ test("rejects a second trading process without reclaiming the existing lock", as
     assert.equal(JSON.parse(await readFile(first.lockPath, "utf8")).token, "first-token")
     assert.equal((await first.release()).ok, true)
   } finally {
-    await rm(directory, { recursive: true,
-force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -86,8 +177,10 @@ token: "original-token" })
     assert.equal(released.errors[0].code, "HARVESTER_PROCESS_LOCK_OWNERSHIP_MISMATCH")
     assert.equal(JSON.parse(await readFile(acquired.lockPath, "utf8")).token, "replacement-token")
   } finally {
-    await rm(directory, { recursive: true,
-force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -106,8 +199,10 @@ test("does not reclaim locks owned by another host or unreadable locks", async (
     assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
     assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "stale-token")
   } finally {
-    await rm(directory, { recursive: true,
-force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -135,8 +230,10 @@ test("reclaims a same-host lock only when its recorded process is confirmed dead
     assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "new-owner-token")
     assert.equal((await result.release()).ok, true)
   } finally {
-    await rm(directory, { recursive: true,
-force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -162,76 +259,28 @@ test("retains a same-host lock when its recorded process may still be alive", as
     assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
     assert.equal(JSON.parse(await readFile(lockPath, "utf8")).token, "live-owner-token")
   } finally {
-    await rm(directory, { recursive: true,
-force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
 test("rejects invalid process lock inputs", async () => {
   const directory = await createTempDirectory()
-  const invalidInputs = [
-    {
-      name: "empty directory",
-      input: { directory: " " },
-      expectedMessage: /non-empty directory/,
-    },
-    {
-      name: "dot lock file name",
-      input: { directory, lockFileName: "." },
-      expectedMessage: /file name/,
-    },
-    {
-      name: "dot-dot lock file name",
-      input: { directory, lockFileName: ".." },
-      expectedMessage: /file name/,
-    },
-    {
-      name: "path traversal lock file name",
-      input: { directory, lockFileName: "../outside.lock" },
-      expectedMessage: /file name/,
-    },
-    {
-      name: "invalid process id",
-      input: { directory, pid: 0 },
-      expectedMessage: /positive safe integer/,
-    },
-    {
-      name: "empty hostname",
-      input: { directory, hostname: " " },
-      expectedMessage: /hostname/,
-    },
-    {
-      name: "empty start time",
-      input: { directory, startedAt: " " },
-      expectedMessage: /startedAt/,
-    },
-    {
-      name: "empty ownership token",
-      input: { directory, token: " " },
-      expectedMessage: /token/,
-    },
-    {
-      name: "invalid process liveness probe",
-      input: { directory, isProcessAlive: null },
-      expectedMessage: /isProcessAlive/,
-    },
-  ]
-
   try {
-    for (const invalidInput of invalidInputs) {
-      const result = await acquireHarvesterProcessLock(invalidInput.input)
-      assert.equal(result.ok, false, `${invalidInput.name} must fail before lock acquisition.`)
-      assert.match(
-        result.errors[0].message,
-        invalidInput.expectedMessage,
-        `${invalidInput.name} must report the specific invalid input.`,
-      )
+    for (const invalidInput of createInvalidProcessLockInputs({ directory })) {
+      await assertInvalidProcessLockInput({
+        invalidInput,
+      })
     }
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
-
 
 test("allows exactly one owner when two processes race to acquire the same lock", async () => {
   const directory = await createTempDirectory()
@@ -257,8 +306,10 @@ isProcessAlive: () => true }),
     assert.equal(JSON.parse(await readFile(owners[0].lockPath, "utf8")).token, owners[0].owner.token)
     assert.equal((await owners[0].release()).ok, true)
   } finally {
-    await rm(directory, { recursive: true,
-force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 

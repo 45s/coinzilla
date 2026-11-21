@@ -14,18 +14,13 @@ function isProcessAlive(pid) {
   }
 }
 
-function validateProcessLockInput({
-  directory,
-  lockFileName,
-  pid,
-  hostname,
-  startedAt,
-  token,
-  checkProcessAlive,
-}) {
+function validateLockDirectory({ directory }) {
   if (typeof directory !== "string" || !directory.trim()) {
     throw new TypeError("Harvester process lock requires a non-empty directory")
   }
+}
+
+function validateLockFileName({ lockFileName }) {
   if (
     typeof lockFileName !== "string" ||
     !lockFileName.trim() ||
@@ -35,6 +30,9 @@ function validateProcessLockInput({
   ) {
     throw new TypeError("Harvester process lock file name must be a non-empty file name")
   }
+}
+
+function validateProcessIdentity({ pid, hostname, startedAt, token, checkProcessAlive }) {
   if (!Number.isSafeInteger(pid) || pid < 1) {
     throw new TypeError("Harvester process lock pid must be a positive safe integer")
   }
@@ -50,6 +48,12 @@ function validateProcessLockInput({
   if (typeof checkProcessAlive !== "function") {
     throw new TypeError("Harvester process lock isProcessAlive must be a function")
   }
+}
+
+function validateProcessLockInput(input) {
+  validateLockDirectory(input)
+  validateLockFileName(input)
+  validateProcessIdentity(input)
 }
 
 async function readExistingOwner({ lockPath }) {
@@ -96,6 +100,36 @@ alreadyReleased: true })
   }
 }
 
+async function reclaimStaleLockIfUnchanged({
+  lockPath,
+  hostname,
+  existingOwner,
+  attempt,
+  checkProcessAlive,
+}) {
+  if (attempt !== 0) {
+    return false
+  }
+  const sameHost = typeof existingOwner?.hostname === "string" &&
+    existingOwner.hostname.toLowerCase() === hostname.toLowerCase()
+  const validPid = Number.isSafeInteger(existingOwner?.pid) && existingOwner.pid > 0
+  if (!sameHost || !validPid || checkProcessAlive(existingOwner.pid)) {
+    return false
+  }
+
+  // Re-read immediately before unlinking so a replaced lock is not removed.
+  const currentOwnerContents = await readFile(lockPath, "utf8").catch(() => "null")
+  const currentOwner = JSON.parse(currentOwnerContents)
+  if (!isSameLockOwner({
+    currentOwner,
+    existingOwner,
+  })) {
+    return false
+  }
+  await unlink(lockPath)
+  return true
+}
+
 async function acquireLockFile({ lockPath, owner, hostname, checkProcessAlive }) {
   let handle
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -115,18 +149,15 @@ async function acquireLockFile({ lockPath, owner, hostname, checkProcessAlive })
       }
 
       const existingOwner = await readExistingOwner({ lockPath })
-      const sameHost = typeof existingOwner?.hostname === "string" &&
-        existingOwner.hostname.toLowerCase() === hostname.toLowerCase()
-      const validPid = Number.isSafeInteger(existingOwner?.pid) && existingOwner.pid > 0
-      if (attempt === 0 && sameHost && validPid && !checkProcessAlive(existingOwner.pid)) {
-        // Re-read immediately before unlinking so a replaced lock is not removed.
-        const currentOwnerContents = await readFile(lockPath, "utf8").catch(() => "null")
-        const currentOwner = JSON.parse(currentOwnerContents)
-        if (isSameLockOwner({ currentOwner,
-existingOwner })) {
-          await unlink(lockPath)
-          continue
-        }
+      const reclaimed = await reclaimStaleLockIfUnchanged({
+        lockPath,
+        hostname,
+        existingOwner,
+        attempt,
+        checkProcessAlive,
+      })
+      if (reclaimed) {
+        continue
       }
 
       const conflict = new Error("Another Harvester trading process already owns the process lock")
