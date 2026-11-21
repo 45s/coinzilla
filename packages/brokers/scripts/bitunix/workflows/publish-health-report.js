@@ -313,7 +313,7 @@ async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, pat
   return result
 }
 
-export async function publishBitunixDiagnostics({
+export async function publishHealthReport({
   repositoryRoot,
   runDiagnostics,
   runGit = executeGitCommand,

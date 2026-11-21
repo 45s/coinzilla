@@ -10,7 +10,7 @@ import {
   sanitizeDiagnosticValue,
   summarizePrivatePayload,
 } from "../helpers/diagnostic-values.js"
-import { BrokerDiagnosticError } from "./diagnostic-error.js"
+import { DiagnosticError } from "./diagnostic-error.js"
 
 const DIAGNOSTIC_CONFIG = Object.freeze({
   confirmLiveReads: true,
@@ -1472,7 +1472,7 @@ function recordBrokerApiSchemaResult({ method, observation, now, results, secret
   const { schemaValid } = observation
   const error = schemaValid
     ? undefined
-    : new BrokerDiagnosticError({
+    : new DiagnosticError({
       code: "BROKER_DIAGNOSTIC_SCHEMA_MISMATCH",
       message: `Bitunix response schema mismatch for ${observation.path}`,
       context: {
@@ -1676,7 +1676,7 @@ function recordBrokerApiOperationResult({
     recordBrokerApiOperationFailure({
       method: definition.method,
       args: definition.args,
-      error: result?.errors?.[0] ?? new BrokerDiagnosticError({
+      error: result?.errors?.[0] ?? new DiagnosticError({
         code: "BROKER_DIAGNOSTIC_RESULT_INVALID",
         message: "Broker read returned no successful result envelope",
         context: {
@@ -2131,7 +2131,7 @@ async function runConfiguredDiagnostics({
   })
 }
 
-export async function runBitunixDiagnostics({
+export async function runDiagnostics({
   env = process.env,
   now = Date.now,
   restClientFactory = (options) => new BitunixRestClient(options),

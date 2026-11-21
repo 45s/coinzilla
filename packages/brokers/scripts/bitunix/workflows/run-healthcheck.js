@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/rest-client.js"
-import { runBitunixDiagnostics } from "./diagnostic-runner.js"
-import { publishBitunixDiagnostics } from "./health-publisher.js"
+import { runDiagnostics } from "../diagnostics/run-diagnostics.js"
+import { publishHealthReport } from "./publish-health-report.js"
 import { evaluateHealthCheck } from "../helpers/health-report.js"
 import { appendOperatorAttemptResult } from "../helpers/operator-attempt-report.js"
 
@@ -41,7 +41,7 @@ function printLocalSummary({ report, outputPath, stdout }) {
 
 async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
   stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot account using read-only requests.\n")
-  const report = await runBitunixDiagnostics({
+  const report = await runDiagnostics({
     env,
     brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
   })
@@ -165,14 +165,14 @@ async function runPublishedHealthCheck({
  * @param {{mode: "local"|"publish"|"place-order", brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>}} input
  * @returns {Promise<number>} Process exit code.
  */
-export async function runBitunixHealthcheckDiagnostics({
+export async function runHealthcheckWorkflow({
   mode,
   brokersRoot,
   repositoryRoot,
   env,
   stdout = process.stdout,
-  runDiagnostics = runBitunixDiagnostics,
-  publishDiagnostics = publishBitunixDiagnostics,
+  runDiagnostics = runDiagnostics,
+  publishDiagnostics = publishHealthReport,
   runOperatorOrder,
 } = {}) {
   if (mode === "local") {

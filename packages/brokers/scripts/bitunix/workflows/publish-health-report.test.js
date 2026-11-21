@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promisify } from "node:util"
 import test from "node:test"
-import { publishBitunixDiagnostics } from "./health-publisher.js"
+import { publishHealthReport } from "./publish-health-report.js"
 import { createGitEnvironment } from "../helpers/git-environment.js"
 
 const execFileAsync = promisify(execFile)
@@ -181,7 +181,7 @@ test("publishes only a sanitized report from a fresh diagnostics branch and retu
   const repositoryRoot = await createRepositoryDirectory()
   const { calls, runGit } = createFakeGit({ repositoryRoot })
   try {
-    const result = await publishBitunixDiagnostics({
+    const result = await publishHealthReport({
       repositoryRoot,
       runGit,
       runDiagnostics: async () => createDiagnosticReport(),
@@ -219,7 +219,7 @@ test("rejects a dirty worktree before fetching, creating a branch or contacting 
   }
   try {
     await assert.rejects(
-      publishBitunixDiagnostics({
+      publishHealthReport({
         repositoryRoot,
         runGit,
         runDiagnostics: async () => {
@@ -251,7 +251,7 @@ test("rejects a starting branch other than develop before contacting Bitunix", a
   }
   try {
     await assert.rejects(
-      publishBitunixDiagnostics({
+      publishHealthReport({
         repositoryRoot,
         runGit,
         runDiagnostics: async () => {
@@ -278,7 +278,7 @@ test("push failure still switches the local checkout back to develop", async () 
     failPush: true,
   })
   try {
-    const result = await publishBitunixDiagnostics({
+    const result = await publishHealthReport({
       repositoryRoot,
       runGit,
       runDiagnostics: async () => createDiagnosticReport(),
@@ -305,7 +305,7 @@ test("publishes failed API diagnostics and returns a failing exit code after cle
   const repositoryRoot = await createRepositoryDirectory()
   const { calls, runGit } = createFakeGit({ repositoryRoot })
   try {
-    const result = await publishBitunixDiagnostics({
+    const result = await publishHealthReport({
       repositoryRoot,
       runGit,
       runDiagnostics: async () => createDiagnosticReport({ failed: 1 }),
@@ -332,7 +332,7 @@ test("publishes a sanitized failure report when the diagnostic runner throws", a
   const repositoryRoot = await createRepositoryDirectory()
   const { calls, runGit } = createFakeGit({ repositoryRoot })
   try {
-    const result = await publishBitunixDiagnostics({
+    const result = await publishHealthReport({
       repositoryRoot,
       runGit,
       runDiagnostics: async () => {
@@ -364,7 +364,7 @@ test("requires both private API credentials before fetching or contacting Bituni
   const { calls, runGit } = createFakeGit({ repositoryRoot })
   try {
     await assert.rejects(
-      publishBitunixDiagnostics({
+      publishHealthReport({
         repositoryRoot,
         runGit,
         runDiagnostics: async () => {
@@ -390,7 +390,7 @@ test("fails the health check when a required authenticated operation is skipped"
   const repositoryRoot = await createRepositoryDirectory()
   const { calls, runGit } = createFakeGit({ repositoryRoot })
   try {
-    const result = await publishBitunixDiagnostics({
+    const result = await publishHealthReport({
       repositoryRoot,
       runGit,
       runDiagnostics: async () => createDiagnosticReport({ omitOperation: "user.info" }),
@@ -486,7 +486,7 @@ test("runs the real Git branch, report-only commit, push and return workflow", a
   const temporaryDirectory = await mkdtemp(join(tmpdir(), "bitunix-health-git-"))
   try {
     const fixture = await createGitFixture({ temporaryDirectory })
-    const result = await publishBitunixDiagnostics({
+    const result = await publishHealthReport({
       repositoryRoot: fixture.repositoryRoot,
       runDiagnostics: async () => createDiagnosticReport(),
       env: {

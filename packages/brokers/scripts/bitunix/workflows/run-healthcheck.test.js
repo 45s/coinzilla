@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { evaluateHealthCheck } from "../helpers/health-report.js"
-import { runBitunixHealthcheckDiagnostics } from "./healthcheck-command.js"
+import { runHealthcheckWorkflow } from "./run-healthcheck.js"
 
 const requiredOperations = [
   "diagnostic safety confirmation",
@@ -78,7 +78,7 @@ test("place-order mode runs diagnostics first and executes the order inside repo
   const events = []
   const publishedReports = []
   let orderCalls = 0
-  const exitCode = await runBitunixHealthcheckDiagnostics({
+  const exitCode = await runHealthcheckWorkflow({
     mode: "place-order",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
@@ -115,7 +115,7 @@ test("place-order mode skips the order when read-only health checks are not heal
   const events = []
   const publishedReports = []
   let orderCalls = 0
-  const exitCode = await runBitunixHealthcheckDiagnostics({
+  const exitCode = await runHealthcheckWorkflow({
     mode: "place-order",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
@@ -144,7 +144,7 @@ test("place-order mode skips the order when read-only health checks are not heal
 test("operator exceptions are recorded as OUTCOME_UNKNOWN without publishing free-form error text", async () => {
   const events = []
   const publishedReports = []
-  const exitCode = await runBitunixHealthcheckDiagnostics({
+  const exitCode = await runHealthcheckWorkflow({
     mode: "place-order",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
@@ -171,7 +171,7 @@ test("operator exceptions are recorded as OUTCOME_UNKNOWN without publishing fre
 test("ordinary publish mode does not invoke an operator order callback", async () => {
   const events = []
   const publishedReports = []
-  const exitCode = await runBitunixHealthcheckDiagnostics({
+  const exitCode = await runHealthcheckWorkflow({
     mode: "publish",
     brokersRoot: "/repo/packages/brokers",
     repositoryRoot: "/repo",
