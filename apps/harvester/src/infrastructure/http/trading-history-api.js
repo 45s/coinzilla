@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto"
 import { createServer } from "node:http"
 import { SystemCustomError } from "@coinzilla/utils"
+import { attachTradingHistoryWebSocket } from "./trading-history-websocket.js"
 
 const API_PREFIX = "/api/v1/trading"
 const METADATA_ROUTE = `${API_PREFIX}/metadata`
@@ -544,6 +545,7 @@ export async function startTradingHistoryApiServer({
   host = DEFAULT_HOST,
   port = DEFAULT_PORT,
   logger,
+  eventBus,
 } = {}) {
   const configuration = validateApiServerConfiguration({
     queries,
@@ -558,13 +560,28 @@ export async function startTradingHistoryApiServer({
     environment: configuration.environment,
     logger,
   })
-  await listenServer({
-    server,
-    host: configuration.host,
-    port: configuration.port,
-  })
+  const websocket = eventBus
+    ? attachTradingHistoryWebSocket({
+        server,
+        eventBus,
+        token: configuration.token,
+      })
+    : null
+  try {
+    await listenServer({
+      server,
+      host: configuration.host,
+      port: configuration.port,
+    })
+  } catch (error) {
+    await websocket?.close()
+    throw error
+  }
   return Object.freeze({
     address: server.address(),
-    close: () => closeServer(server),
+    close: async () => {
+      await websocket?.close()
+      await closeServer(server)
+    },
   })
 }
