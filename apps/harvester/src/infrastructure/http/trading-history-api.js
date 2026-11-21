@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto"
 import { createServer } from "node:http"
 import { SystemCustomError } from "@coinzilla/utils"
 import { attachTradingHistoryWebSocket } from "./trading-history-websocket.js"
@@ -89,7 +88,7 @@ function createResponseHeaders() {
   return {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type",
     "Access-Control-Max-Age": "600",
     "Cache-Control": "no-store",
     "Content-Type": "application/json; charset=utf-8",
@@ -117,19 +116,6 @@ function sendApiError({ response, status, code, message } = {}) {
       },
     },
   })
-}
-
-function isAuthorized({ authorization, token } = {}) {
-  if (typeof authorization !== "string" || !authorization.startsWith("Bearer ")) {
-    return false
-  }
-  const suppliedToken = authorization.slice("Bearer ".length)
-  if (suppliedToken.length === 0 || suppliedToken.trim() !== suppliedToken) {
-    return false
-  }
-  const expected = Buffer.from(token, "utf8")
-  const actual = Buffer.from(suppliedToken, "utf8")
-  return expected.length === actual.length && timingSafeEqual(expected, actual)
 }
 
 function parseIntegerParameter({ searchParams, name, fallback } = {}) {
@@ -317,7 +303,7 @@ function handleDetailRequest({ response, queries, route } = {}) {
   })
 }
 
-function handleRequestPreconditions({ request, response, token } = {}) {
+function handleRequestPreconditions({ request, response } = {}) {
   if (handleOptionsRequest({
     request,
     response,
@@ -333,18 +319,6 @@ function handleRequestPreconditions({ request, response, token } = {}) {
     })
     return true
   }
-  if (!isAuthorized({
-    authorization: request.headers.authorization,
-    token,
-  })) {
-    sendApiError({
-      response,
-      status: 401,
-      code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
-      message: "A valid bearer token is required.",
-    })
-    return true
-  }
   return false
 }
 
@@ -352,13 +326,11 @@ function handleTradingHistoryRequest({
   request,
   response,
   queries,
-  token,
   environment,
 } = {}) {
   if (handleRequestPreconditions({
     request,
     response,
-    token,
   })) {
     return
   }
@@ -398,7 +370,7 @@ function handleTradingHistoryRequest({
   })
 }
 
-function createRequestHandler({ queries, token, environment, logger } = {}) {
+function createRequestHandler({ queries, environment, logger } = {}) {
   return (...requestArguments) => {
     const [request, response] = requestArguments
     try {
@@ -406,7 +378,6 @@ function createRequestHandler({ queries, token, environment, logger } = {}) {
         request,
         response,
         queries,
-        token,
         environment,
       })
     } catch (error) {
@@ -451,12 +422,6 @@ async function closeServer(server) {
   })
 }
 
-function validateApiToken(token) {
-  if (typeof token !== "string" || token.trim() !== token || Buffer.byteLength(token, "utf8") < 32) {
-    throw new TypeError("HARVESTER_API_TOKEN must contain at least 32 non-whitespace characters.")
-  }
-}
-
 function validateApiEnvironment(environment) {
   if (environment !== "testnet" && environment !== "live") {
     throw new TypeError("Trading-history API environment must be exactly testnet or live.")
@@ -485,31 +450,27 @@ function validateQueryOperations(queries) {
 
 function validateApiServerConfiguration({
   queries,
-  token,
   environment,
   host = DEFAULT_HOST,
   port = DEFAULT_PORT,
 } = {}) {
-  validateApiToken(token)
   validateApiEnvironment(environment)
   validateApiHost(host)
   validateApiPort(port)
   validateQueryOperations(queries)
   return Object.freeze({
     queries,
-    token,
     environment,
     host,
     port,
   })
 }
 
-function createConfiguredServer({ queries, token, environment, logger } = {}) {
+function createConfiguredServer({ queries, environment, logger } = {}) {
   const server = createServer({
     maxHeaderSize: MAX_HEADER_SIZE,
   }, createRequestHandler({
     queries,
-    token,
     environment,
     logger,
   }))
@@ -533,14 +494,13 @@ async function listenServer({ server, host, port } = {}) {
 }
 
 /**
- * Start the versioned HTTP and optional authenticated WebSocket adapters for trading history.
+ * Start the versioned local HTTP and WebSocket adapters for trading history.
  *
- * @param {{queries: object, token: string, environment: "testnet"|"live", host?: string, port?: number, logger?: object, eventBus?: object}} input
+ * @param {{queries: object, environment: "testnet"|"live", host?: string, port?: number, logger?: object, eventBus?: object}} input
  * @returns {Promise<Readonly<{address: object, close: Function}>>} Bound server and lifecycle handle.
  */
 export async function startTradingHistoryApiServer({
   queries,
-  token,
   environment,
   host = DEFAULT_HOST,
   port = DEFAULT_PORT,
@@ -564,7 +524,6 @@ export async function startTradingHistoryApiServer({
     ? attachTradingHistoryWebSocket({
         server,
         eventBus,
-        token: configuration.token,
       })
     : null
   try {
