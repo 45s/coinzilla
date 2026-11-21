@@ -1,0 +1,115 @@
+<section class="screener-page">
+  <header class="page-heading">
+    <div>
+      <div class="eyebrow">PUBLIC MARKET DATA</div>
+      <h1>Market Screener</h1>
+      <p>Browse exchange-listed markets and keep a personal watchlist.</p>
+    </div>
+    <div class="heading-actions">
+      <label class="source-picker">
+        <span>MARKET SOURCE</span>
+        <select aria-label="Market source" [value]="selectedSource()">
+          <option value="bitunix-futures">Bitunix · Futures</option>
+          <option value="bitunix-spot" disabled>Bitunix · Spot — coming later</option>
+          <option value="binance-futures" disabled>Binance · Futures — coming later</option>
+          <option value="binance-spot" disabled>Binance · Spot — coming later</option>
+        </select>
+      </label>
+      <button class="refresh-button" type="button" [disabled]="loading()" (click)="refresh()">
+        {{ loading() ? 'Refreshing…' : '↻ Refresh' }}
+      </button>
+    </div>
+  </header>
+
+  <div class="source-banner">
+    <span class="source-dot"></span>
+    <strong>Bitunix Futures</strong>
+    <span>Public API · Read only</span>
+    <span class="banner-spacer"></span>
+    <span>Updated {{ updatedAt() }}</span>
+  </div>
+
+  @if (errorMessage()) {
+    <div class="error-banner" role="alert">
+      <span>{{ errorMessage() }}</span>
+      <button type="button" (click)="refresh()">Retry</button>
+    </div>
+  }
+
+  <section class="screener-toolbar" aria-label="Market filters">
+    <label class="search-control">
+      <span aria-hidden="true">⌕</span>
+      <input type="search" placeholder="Search pair or asset…" [value]="searchQuery()" (input)="updateSearch($event)" />
+    </label>
+    <label class="favorites-filter">
+      <input type="checkbox" [checked]="favoritesOnly()" (change)="updateFavoritesOnly($event)" />
+      <span>Favourites only</span>
+    </label>
+    <div class="market-count">{{ visibleMarkets().length }} <span>markets</span></div>
+  </section>
+
+  <section class="screener-table-panel" aria-label="Bitunix Futures markets">
+    <div class="table-scroll">
+      <table class="market-table">
+        <thead>
+          <tr>
+            <th class="favorite-column" scope="col" aria-label="Favourite"></th>
+            <th scope="col">Pair</th>
+            <th scope="col">Status</th>
+            <th class="numeric" scope="col">Last price</th>
+            <th class="numeric" scope="col">Mark price</th>
+            <th class="numeric" scope="col">5m</th>
+            <th class="numeric" scope="col">1h</th>
+            <th class="numeric" scope="col">4h</th>
+            <th class="numeric" scope="col">24h</th>
+            <th class="numeric" scope="col">24h volume</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (market of visibleMarkets(); track trackBySymbol($index, market)) {
+            <tr>
+              <td class="favorite-column">
+                <button
+                  class="favorite-toggle"
+                  type="button"
+                  [class.selected]="isFavorite(market.symbol)"
+                  [attr.aria-label]="(isFavorite(market.symbol) ? 'Remove ' : 'Add ') + market.symbol + (isFavorite(market.symbol) ? ' from' : ' to') + ' favourites'"
+                  [attr.aria-pressed]="isFavorite(market.symbol)"
+                  (click)="toggleFavorite(market.symbol)"
+                >{{ isFavorite(market.symbol) ? '★' : '☆' }}</button>
+              </td>
+              <td>
+                <strong class="pair-symbol">{{ market.symbol }}</strong>
+                <small>{{ displayValue(market.base) }} / {{ displayValue(market.quote) }}</small>
+              </td>
+              <td><span class="market-status" [class.open]="market.symbolStatus === 'OPEN'">{{ displayValue(market.symbolStatus) }}</span></td>
+              <td class="numeric price-value">{{ displayValue(market.lastPrice) }}</td>
+              <td class="numeric price-value">{{ displayValue(market.markPrice) }}</td>
+              <td class="numeric movement-na">{{ movementValue(market.change5m) }}</td>
+              <td class="numeric movement-na">{{ movementValue(market.change1h) }}</td>
+              <td class="numeric movement-na">{{ movementValue(market.change4h) }}</td>
+              <td class="numeric movement-value">{{ movementValue(market.change24h) }}</td>
+              <td class="numeric volume-value">{{ displayValue(market.quoteVol) }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td class="empty-state" colspan="10">
+                @if (loading()) {
+                  Loading Bitunix Futures markets…
+                } @else if (favoritesOnly() && favoriteSymbols().size === 0) {
+                  No favourites yet. Star a pair to add it to your watchlist.
+                } @else {
+                  No markets match this search.
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+    <footer class="table-footer">
+      <span>Movement values are shown only when returned by Bitunix. Missing fields are N/A.</span>
+      <span>Favourites are stored in this browser's cookies.</span>
+    </footer>
+  </section>
+</section>

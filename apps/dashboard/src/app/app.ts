@@ -3,14 +3,15 @@ import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/c
 import { OverviewComponent } from './features/overview/overview';
 import { TradingHistoryComponent } from './features/trading-history/page';
 import { OperatorComponent } from './features/operator/page';
+import { MarketScreenerComponent } from './features/market-screener/page';
 import type { TradingHistoryResource } from './features/trading-history/api';
 
-type DashboardPage = 'overview' | 'operator' | TradingHistoryResource;
+type DashboardPage = 'overview' | 'operator' | 'markets' | TradingHistoryResource;
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [OverviewComponent, TradingHistoryComponent, OperatorComponent],
+  imports: [OverviewComponent, TradingHistoryComponent, OperatorComponent, MarketScreenerComponent],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -22,7 +23,7 @@ export class AppComponent {
     { label: 'Orders', icon: '⇄', page: 'orders' as const, enabled: true },
     { label: 'Fills', icon: '⌁', page: 'fills' as const, enabled: true },
     { label: 'Commissions', icon: '◷', page: 'commissions' as const, enabled: true },
-    { label: 'Markets', icon: '⌖', page: null, enabled: false },
+    { label: 'Markets', icon: '⌖', page: 'markets' as const, enabled: true },
     { label: 'Positions', icon: '▤', page: null, enabled: false },
     { label: 'Diagnostics', icon: '⌘', page: null, enabled: false },
   ] as const;
@@ -33,7 +34,7 @@ export class AppComponent {
   );
   readonly historyResource = computed<TradingHistoryResource>(() => {
     const page = this.activePage();
-    return page === 'overview' || page === 'operator' ? 'orders' : page;
+    return page === 'overview' || page === 'operator' || page === 'markets' ? 'orders' : page;
   });
 
   selectPage(page: DashboardPage | null): void {
