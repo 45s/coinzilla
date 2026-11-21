@@ -41,7 +41,7 @@ function createAppliedFillEvent() {
   }
 }
 
-async function createQueryContext({ t } = {}) {
+async function createQueryContext({ t, includeOrder = true } = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-trading-history-query-"))
   const eventBus = new EventBus()
   const filename = resolveHarvesterDatabaseFilename({
@@ -69,13 +69,15 @@ async function createQueryContext({ t } = {}) {
   })
   assert.ok(persistence, "A valid temporary TESTNET database must prepare the existing trading-history persistence.")
   assert.ok(persistence.relationalDatabase, "The query contract test requires the existing relational trading-history database.")
-  eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
-    source: "harvester",
-    data: createOrderHistoryEventData(),
-  })
-  await eventBus.flush()
-  await persistence.relationalOrderObserver.flush()
+  if (includeOrder) {
+    eventBus.publish({
+      name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+      source: "harvester",
+      data: createOrderHistoryEventData(),
+    })
+    await eventBus.flush()
+    await persistence.relationalOrderObserver.flush()
+  }
   eventBus.publish({
     name: HARVESTER_EVENT_NAMES.FILL_APPLIED,
     source: "harvester",
@@ -155,6 +157,33 @@ test("lists exact persisted order, fill and commission values without deriving f
   assert.equal(commissionPage.items[0].amount, "0.00025000", "The commission list must preserve the exact stored amount.")
   assert.equal(commissionPage.items[0].quoteValueAmount, "0.05000000", "The commission list must preserve a stored quote valuation.")
 });
+
+test("returns an applied fill while its matching order projection is not yet available", async (t) => {
+  const { repository } = await createQueryContext({
+    t,
+    includeOrder: false,
+  })
+
+  const page = repository.listFills({
+    filters: {
+      symbol: "BTCUSDT",
+    },
+    pagination: {
+      limit: 10,
+      offset: 0,
+    },
+  })
+  assert.equal(page.pagination.total, 1, "An applied fill must remain queryable before its order projection is observed.")
+  assert.equal(page.items[0].orderId, null, "The API must preserve the missing order relationship instead of fabricating an ID.")
+  assert.equal(page.items[0].clientOrderId, "harvester-BTCUSDT-001", "The fill must retain its available Harvester client-order identity.")
+  assert.equal(page.items[0].exchangeOrderId, "broker-order-001", "The fill must retain its available exchange order identity.")
+
+  const fill = repository.findFillById({
+    id: page.items[0].id,
+  })
+  assert.equal(fill.orderId, null, "Fill details must preserve the nullable order relationship.")
+  assert.equal(fill.clientOrderId, "harvester-BTCUSDT-001", "Fill details must expose the client-order identity for later reconciliation.")
+})
 
 test("returns deterministic pagination metadata and explicit missing-record results", async (t) => {
   const { repository } = await createQueryContext({ t })

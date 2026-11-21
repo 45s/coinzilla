@@ -261,6 +261,63 @@ describe('TradingHistoryComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Not recorded');
   });
 
+  it('labels an order limit price separately from a fill execution price', async () => {
+    const request = await connectToResource(fixture, http, session, 'orders');
+    request.flush({
+      ok: true,
+      data: createPage([createOrder('order-1')], 1),
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const headers = Array.from(fixture.nativeElement.querySelectorAll('thead th'))
+      .map((header: HTMLElement) => header.textContent);
+    expect(headers).toContain('Limit price');
+    expect(headers).not.toContain('Execution price');
+
+    const row = fixture.nativeElement.querySelector('tbody tr') as HTMLTableRowElement;
+    expect(row.textContent).toContain('65000.00000000');
+  });
+
+  it('shows an exchange trade reference when a fill has no linked order projection', async () => {
+    const request = await connectToResource(fixture, http, session, 'fills');
+    const compositeId = '["testnet","binanceTestnet","binance","binance-primary","binance:ZROUSDT","15507"]';
+    const unlinkedFill = {
+      ...createFill(compositeId),
+      exchangeTradeId: '15507',
+      exchangeOrderId: '981545',
+      clientOrderId: 'h-c2fdfb99c955460bb003d6-3',
+      orderId: null,
+    };
+    request.flush({
+      ok: true,
+      data: createPage([unlinkedFill], 1),
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const row = fixture.nativeElement.querySelector('tbody tr') as HTMLTableRowElement;
+    expect(row.textContent).toContain('Trade 15507');
+    expect(row.textContent).not.toContain(compositeId);
+
+    const detailsButton = fixture.nativeElement.querySelector('[data-testid="record-details"]') as HTMLButtonElement;
+    detailsButton.click();
+    fixture.detectChanges();
+    http.expectOne((candidate) => candidate.url.endsWith(`/api/v1/trading/fills/${encodeURIComponent(compositeId)}`)).flush({
+      ok: true,
+      data: {
+        ...unlinkedFill,
+        commissions: [],
+      },
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('h-c2fdfb99c955460bb003d6-3');
+    expect(fixture.nativeElement.textContent).toContain('981545');
+    expect(fixture.nativeElement.textContent).toContain('Internal persistence ID');
+  });
+
   it('shows persisted commission facts when a fill is opened', async () => {
     const request = await connectToResource(fixture, http, session, 'fills');
     request.flush({
