@@ -39,7 +39,7 @@ test("publishes an order-history notification only after the order upsert succee
   })
 
   eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+    name: "order.updated",
     source: "harvester",
     data: createOrderHistoryEventData(),
   })
@@ -75,7 +75,7 @@ test("does not publish an order-history notification when the order upsert fails
   })
 
   eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.ORDER_UPDATED,
+    name: "order.updated",
     source: "harvester",
     data: createOrderHistoryEventData(),
   })
@@ -109,7 +109,7 @@ test("publishes fill and commission notifications only after the fill upsert suc
   })
 
   eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.FILL_APPLIED,
+    name: "execution.fill_applied",
     source: "harvester",
     data: {
       tradeId: "trade-001",
@@ -147,7 +147,7 @@ test("does not publish fill or commission notifications when the fill upsert fai
   })
 
   eventBus.publish({
-    name: HARVESTER_EVENT_NAMES.FILL_APPLIED,
+    name: "execution.fill_applied",
     source: "harvester",
     data: {
       tradeId: "trade-001",
