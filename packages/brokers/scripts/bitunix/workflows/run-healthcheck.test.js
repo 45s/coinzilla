@@ -234,3 +234,34 @@ test("ordinary publish mode does not invoke an operator order callback", async (
   assert.equal(exitCode, 0)
   assert.equal(publishedReports[0].results.some((entry) => entry.operation === "operator order attempt"), false)
 })
+
+
+test("pre-dispatch operator failures are recorded as NOT_SENT, not OUTCOME_UNKNOWN", async () => {
+  const events = []
+  const publishedReports = []
+  const preflightError = Object.assign(new Error("private balance preflight failure"), {
+    mutationOutcome: "NOT_SENT",
+  })
+  const exitCode = await runHealthcheckWorkflow({
+    mode: "place-order",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    runDiagnostics: async () => createDiagnosticReport(),
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
+    runOperatorOrder: async () => {
+      throw preflightError
+    },
+  })
+
+  const operatorResult = publishedReports[0].results.at(-1)
+  assert.equal(exitCode, 1)
+  assert.equal(operatorResult.status, "failed")
+  assert.equal(operatorResult.error.code, "NOT_SENT")
+  assert.equal(operatorResult.error.message, "[error message withheld]")
+  assert.equal(JSON.stringify(publishedReports[0]).includes("private balance preflight failure"), false)
+})

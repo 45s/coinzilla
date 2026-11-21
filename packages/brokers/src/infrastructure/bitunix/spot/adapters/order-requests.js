@@ -65,7 +65,7 @@ function expandOrderNumberExponent({ value }) {
   return negative ? `-${expanded}` : expanded
 }
 
-function normalizeOrderDecimal({ value, field }) {
+function normalizeOrderDecimal({ value, field, allowZero = false }) {
   let normalized = value
   if (typeof value === "number" && Number.isFinite(value)) {
     const numberText = String(value)
@@ -79,11 +79,14 @@ function normalizeOrderDecimal({ value, field }) {
     value: normalized,
     field,
   })
-  if (compareDecimal({
+  const comparison = compareDecimal({
     left: normalized,
     right: "0",
-  }) <= 0) {
-    throw new RangeError(`${field} must be greater than zero`)
+  })
+  if (comparison < 0 || (!allowZero && comparison === 0)) {
+    throw new RangeError(allowZero
+      ? `${field} must be non-negative`
+      : `${field} must be greater than zero`)
   }
   return normalized
 }
@@ -229,7 +232,7 @@ function createInvalidPlacementStatusError() {
   })
 }
 
-export function validateSpotOrderPlacementResponse({ response, symbol, side, type }) {
+export function validateSpotOrderPlacementResponse({ response, symbol, side, type, volume, price }) {
   if (!response || typeof response !== "object" || Array.isArray(response)) {
     throw new TypeError("Bitunix Spot place-order response must be an object")
   }
@@ -244,6 +247,22 @@ export function validateSpotOrderPlacementResponse({ response, symbol, side, typ
   }
   if (String(response.side) !== String(side) || String(response.type) !== String(type)) {
     throw new TypeError("Bitunix Spot place-order response side or type does not match the request")
+  }
+  for (const [field, expected] of [["volume", volume], ["price", price]]) {
+    if (expected === undefined) {
+      continue
+    }
+    const actual = normalizeOrderDecimal({
+      value: response[field],
+      field: `Bitunix Spot placement acknowledgement ${field}`,
+      allowZero: true,
+    })
+    if (compareDecimal({
+      left: actual,
+      right: expected,
+    }) !== 0) {
+      throw new TypeError(`Bitunix Spot place-order response ${field} does not match the request`)
+    }
   }
   return {
     ...response,

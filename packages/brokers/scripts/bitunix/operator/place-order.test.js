@@ -92,10 +92,13 @@ function createMockBitunixReadBroker({ events, input }) {
   }
 }
 
-function createMockBitunixOrderBroker({ events, orderResult, orderDisconnectError }) {
+function createMockBitunixOrderBroker({ events, orderResult, orderConnectError, orderDisconnectError }) {
   return {
     async connect() {
       events.push("order.connect")
+      if (orderConnectError) {
+        throw orderConnectError
+      }
     },
     async createOrder(order) {
       events.push({
@@ -124,6 +127,7 @@ function createBitunixOperatorAttemptDependencies({
     },
     mutationOutcome: "CONFIRMED",
   },
+  orderConnectError,
   orderDisconnectError,
 } = {}) {
   const events = []
@@ -137,6 +141,7 @@ function createBitunixOperatorAttemptDependencies({
   const orderBroker = createMockBitunixOrderBroker({
     events,
     orderResult,
+    orderConnectError,
     orderDisconnectError,
   })
   const run = () => runGuardedHypeUsdtOrderAttempt({
@@ -312,7 +317,11 @@ test("Bitunix operator attempt stops before mutation when the one-shot marker ca
     }),
   })
 
-  await assert.rejects(run(), /marker already exists/)
+  await assert.rejects(
+    run(),
+    (error) => error.message.includes("marker already exists") &&
+      error.mutationOutcome === "NOT_SENT",
+  )
   assert.equal(events.includes("order.construct"), true)
   assert.equal(events.some((event) => event.operation === "createOrder"), false)
 })
@@ -389,7 +398,111 @@ test("Bitunix operator attempt does not ask for confirmation after a failed pref
     },
   })
 
-  await assert.rejects(run(), /account balances failed/)
+  await assert.rejects(
+    run(),
+    (error) => error.message.includes("account balances failed") &&
+      error.mutationOutcome === "NOT_SENT",
+  )
   assert.equal(events.some((event) => event.operation === "confirm"), false)
   assert.equal(events.includes("order.construct"), false)
+})
+
+
+test("Bitunix operator attempt classifies mutation Broker connection failure as NOT_SENT", async () => {
+  const { events, run } = createBitunixOperatorAttemptDependencies({
+    orderConnectError: new Error("mutation Broker connection failed"),
+  })
+
+  await assert.rejects(
+    run(),
+    (error) => error.message.includes("mutation Broker connection failed") &&
+      error.mutationOutcome === "NOT_SENT",
+  )
+  assert.equal(events.includes("marker"), false)
+  assert.equal(events.some((event) => event.operation === "createOrder"), false)
+  assert.equal(events.includes("order.disconnect"), true)
+})
+
+test("Bitunix operator attempt classifies every failed read-only preflight as NOT_SENT", async () => {
+  const failures = [
+    ["market catalog", "marketResult"],
+    ["symbol metadata", "filtersResult"],
+    ["account balances", "balancesResult"],
+    ["symbol-scoped open orders", "openOrdersResult"],
+  ]
+  for (const [operation, field] of failures) {
+    const { events, run } = createBitunixOperatorAttemptDependencies({
+      overrides: {
+        [field]: {
+          ok: false,
+          errors: [new Error(`${operation} unavailable`)],
+        },
+      },
+    })
+    await assert.rejects(
+      run(),
+      (error) => error.message.includes(`${operation} failed`) &&
+        error.mutationOutcome === "NOT_SENT",
+    )
+    assert.equal(events.some((event) => event.operation === "confirm"), false)
+    assert.equal(events.some((event) => event.operation === "createOrder"), false)
+  }
+})
+
+
+test("Bitunix operator attempt persists an explicit exchange rejection after exactly one dispatch", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "bitunix-operator-rejection-"))
+  const markerPath = join(directory, "attempt.json")
+  const events = []
+  const preflightInput = createValidBitunixOperatorPreflightInput()
+  const readBroker = createMockBitunixReadBroker({
+    events,
+    input: preflightInput,
+  })
+  const rejection = Object.assign(new Error("Insufficient available balance"), {
+    code: "BITUNIX_REST_EXCHANGE_REJECTED",
+    exchangeCode: "10005",
+    status: 200,
+    kind: "exchange",
+  })
+  const orderBroker = createMockBitunixOrderBroker({
+    events,
+    orderResult: {
+      ok: false,
+      mutationOutcome: "REJECTED",
+      errors: [rejection],
+    },
+  })
+
+  try {
+    const result = await runGuardedHypeUsdtOrderAttempt({
+      readBroker,
+      createOrderBroker: () => orderBroker,
+      async confirm() {
+        return true
+      },
+      createMarker: ({ preflight }) => createOneShotMarker({
+        markerPath,
+        preflight,
+      }),
+      writeLine() {},
+    })
+    const marker = JSON.parse(await readFile(markerPath, "utf8"))
+
+    assert.equal(result.mutationOutcome, "REJECTED")
+    assert.equal(marker.status, "REJECTED")
+    assert.deepEqual(marker.result, {
+      brokerCode: "BITUNIX_REST_EXCHANGE_REJECTED",
+      exchangeCode: "10005",
+      httpStatus: "200",
+      errorKind: "exchange",
+    })
+    assert.equal(events.filter((event) => event.operation === "createOrder").length, 1)
+    assert.equal(events.includes("order.disconnect"), true)
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
 })
