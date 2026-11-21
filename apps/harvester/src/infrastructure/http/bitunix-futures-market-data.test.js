@@ -151,6 +151,8 @@ test("passes through Bitunix's native rolling 24-hour WebSocket fluctuation unch
 
   assert.equal(snapshot.markets[0].change24h, "-0.7097029863", "The native exchange percentage must be passed through without rounding or calculation.")
   assert.equal(snapshot.markets[0].change5m, null, "A 5-minute movement must remain unavailable when the API does not provide it.")
+  assert.equal(snapshot.markets[0].change1h, null, "A 1-hour movement must remain unavailable when the API does not provide it.")
+  assert.equal(snapshot.markets[0].change4h, null, "A 4-hour movement must remain unavailable when the API does not provide it.")
   assert.equal(socket.url, "wss://fapi.bitunix.com/public/", "The client must use Bitunix's public Futures WebSocket endpoint.")
   assert.deepEqual(socket.subscription, {
     op: "subscribe",
