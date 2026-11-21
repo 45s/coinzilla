@@ -21,7 +21,7 @@ pnpm install
 pnpm --filter @coinzilla/dashboard start
 ```
 
-The development server binds to `127.0.0.1`. Open the URL printed by Angular CLI. To enable trading history, set a strong `HARVESTER_API_TOKEN` in Harvester's local `.env.development` file and run `pnpm --filter @coinzilla/harvester dev` in a separate terminal. The API starts with Harvester at `http://127.0.0.1:4201`; enter the same token in the Dashboard connection panel. The browser stores it only in `sessionStorage`.
+The development server binds to `127.0.0.1`. Open the URL printed by Angular CLI. To enable trading history, set a strong `HARVESTER_API_TOKEN` in Harvester's local `.env.development` file and run `pnpm --filter @coinzilla/harvester dev` in a separate terminal. The API starts with Harvester at `http://127.0.0.1:4201`; enter the same token in the Dashboard connection panel. The browser stores it only in `sessionStorage`. After the REST connection succeeds, the Dashboard opens an authenticated WebSocket at `/api/v1/trading/events` and sends the token in its first message (never in the URL). Persisted-change notifications refresh the active resource and record counts. The client reconnects with bounded backoff and reloads REST snapshots after every successful reconnect; REST remains authoritative because WebSocket notifications are best-effort invalidation hints, not durable replay.
 
 Build and test:
 
