@@ -25,6 +25,7 @@ import { subscribeHarvesterTelegramNotifications } from "./bootstrap/notificatio
 import { prepareProcessOperationalStateStore } from "./bootstrap/operational-state/prepare-process-operational-state-store.js"
 import { prepareOrderHistoryPersistence as prepareOrderHistoryPersistenceDefault } from "./infrastructure/persistence/prepare-order-history-persistence.js"
 import { closeHarvesterPersistence } from "./infrastructure/persistence/close-harvester-persistence.js"
+import { startTradingHistoryApi as startTradingHistoryApiDefault } from "./infrastructure/http/start-trading-history-api.js"
 
 const EVENT_BUS_CLOSE_TIMEOUT_MS = 5000
 const PROCESS_IDENTITY = createHarvesterProcessIdentity()
@@ -137,17 +138,24 @@ async function closeEventBus({ eventBus } = {}) {
   }
 }
 
-async function releaseProcessLock({ processLock, allowProcessLockRelease, journalClosed } = {}) {
+async function releaseProcessLock({
+  processLock,
+  allowProcessLockRelease,
+  journalClosed,
+  tradingHistoryApiClosed,
+} = {}) {
   if (!processLock) {
     return []
   }
 
-  if (!allowProcessLockRelease || !journalClosed) {
-    return [new Error(
-      !allowProcessLockRelease
-        ? "Harvester trading process lock retained because runtime shutdown was not confirmed"
-        : "Harvester trading process lock retained because Journal shutdown was not confirmed",
-    )]
+  if (!allowProcessLockRelease || !journalClosed || !tradingHistoryApiClosed) {
+    let reason = "Harvester trading process lock retained because trading-history API shutdown was not confirmed"
+    if (!allowProcessLockRelease) {
+      reason = "Harvester trading process lock retained because runtime shutdown was not confirmed"
+    } else if (!journalClosed) {
+      reason = "Harvester trading process lock retained because Journal shutdown was not confirmed"
+    }
+    return [new Error(reason)]
   }
 
   try {
@@ -180,32 +188,62 @@ function reportObservabilityCleanupErrors({ errors, logger } = {}) {
   }
 }
 
+async function closeTradingHistoryApi({ service, logger } = {}) {
+  if (typeof service?.close !== "function") {
+    return []
+  }
+  try {
+    await service.close()
+    return []
+  } catch (error) {
+    try {
+      logger?.error?.({
+        message: "Harvester trading-history API shutdown failed.",
+        errorName: error?.name ?? "Error",
+        errorCode: error?.code ?? "HARVESTER_TRADING_HISTORY_API_SHUTDOWN_FAILED",
+      })
+    } catch {
+      // Optional API diagnostics must not interrupt remaining process cleanup.
+    }
+    return [error]
+  }
+}
+
 async function closeObservability({
   journalService,
   eventBus,
   processLock,
   orderHistoryPersistence,
+  tradingHistoryApi,
   allowProcessLockRelease = true,
   logger,
 } = {}) {
   const journalResult = await closeJournalService({ journalService })
   const eventBusErrors = await closeEventBus({ eventBus })
-  const databaseErrors = await closeHarvesterPersistence({
-    observer: orderHistoryPersistence?.observer,
-    relationalOrderObserver: orderHistoryPersistence?.relationalOrderObserver,
-    fillObserver: orderHistoryPersistence?.fillObserver,
-    database: orderHistoryPersistence?.database,
-    relationalDatabase: orderHistoryPersistence?.relationalDatabase,
+  const tradingHistoryApiErrors = await closeTradingHistoryApi({
+    service: tradingHistoryApi,
     logger,
   })
+  const databaseErrors = tradingHistoryApiErrors.length > 0
+    ? [new Error("Harvester persistence was retained because the trading-history API listener did not confirm shutdown.")]
+    : await closeHarvesterPersistence({
+        observer: orderHistoryPersistence?.observer,
+        relationalOrderObserver: orderHistoryPersistence?.relationalOrderObserver,
+        fillObserver: orderHistoryPersistence?.fillObserver,
+        database: orderHistoryPersistence?.database,
+        relationalDatabase: orderHistoryPersistence?.relationalDatabase,
+        logger,
+      })
   const processLockErrors = await releaseProcessLock({
     processLock,
     allowProcessLockRelease,
     journalClosed: journalResult.journalClosed,
+    tradingHistoryApiClosed: tradingHistoryApiErrors.length === 0,
   })
   const errors = [
     ...journalResult.errors,
     ...eventBusErrors,
+    ...tradingHistoryApiErrors,
     ...databaseErrors,
     ...processLockErrors,
   ]
@@ -791,6 +829,71 @@ function publishRuntimeStarted({
   })
 }
 
+function shouldStartTradingHistoryApi({ env, runtime } = {}) {
+  return typeof runtime?.stop === "function" && Boolean(env.HARVESTER_API_TOKEN)
+}
+
+function logOptionalTradingHistoryApi({ logger, level, details } = {}) {
+  try {
+    logger?.[level]?.(details)
+  } catch {
+    // Optional API diagnostics must never block trading startup or shutdown.
+  }
+}
+
+async function startOptionalTradingHistoryApi({ options, resources, runtime } = {}) {
+  if (!shouldStartTradingHistoryApi({
+    env: options.env,
+    runtime,
+  })) {
+    return
+  }
+  const database = resources.orderHistoryPersistence?.relationalDatabase
+  const environment = resources.runtimeConfig?.tradingMode ?? options.env.TRADING_MODE
+  if (!database) {
+    logOptionalTradingHistoryApi({
+      logger: options.logger,
+      level: "warn",
+      details: {
+        message: "Harvester trading-history API is not started because relational history persistence is unavailable.",
+        environment: environment ?? "unknown",
+      },
+    })
+    return
+  }
+  try {
+    const service = await options.startTradingHistoryApi({
+      database,
+      environment,
+      env: options.env,
+      logger: options.logger,
+    })
+    resources.tradingHistoryApi = service
+    if (service?.address) {
+      logOptionalTradingHistoryApi({
+        logger: options.logger,
+        level: "info",
+        details: {
+          message: "Harvester trading-history API started.",
+          environment,
+          host: service.address.address,
+          port: service.address.port,
+        },
+      })
+    }
+  } catch (error) {
+    logOptionalTradingHistoryApi({
+      logger: options.logger,
+      level: "error",
+      details: {
+        message: "Harvester trading-history API startup failed; trading will continue without the optional API.",
+        errorName: error?.name ?? "Error",
+        errorCode: error?.code ?? "HARVESTER_TRADING_HISTORY_API_STARTUP_FAILED",
+      },
+    })
+  }
+}
+
 async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } = {}) {
   const runtime = await startProviderAccounts({
     providers: resources.providerInstances,
@@ -814,6 +917,11 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
     eventPublisher: resources.eventPublisher,
     logger: options.logger,
   })
+  await startOptionalTradingHistoryApi({
+    options,
+    resources,
+    runtime,
+  })
   if (typeof runtime.stop === "function") {
     const shutdown = createRuntimeShutdownHandler({
       runtime,
@@ -827,6 +935,7 @@ async function startHarvesterRuntimeAndRegisterShutdown({ options, resources } =
       closeObservability: (cleanupOptions) => closeObservability({
         ...cleanupOptions,
         orderHistoryPersistence: resources.orderHistoryPersistence,
+        tradingHistoryApi: resources.tradingHistoryApi,
       }),
       logTelegramNotificationSummary,
     })
@@ -920,6 +1029,7 @@ async function cleanupProcessStartupFailure({ error, options, resources } = {}) 
     eventBus: resources.eventBus,
     processLock: resources.processLock,
     orderHistoryPersistence: resources.orderHistoryPersistence,
+    tradingHistoryApi: resources.tradingHistoryApi,
     allowProcessLockRelease: !resources.runtimeStartAttempted,
     logger,
   })
@@ -969,6 +1079,7 @@ function createMainDependencies({ options }) {
     createTelegramNotifier = (notifierOptions) => new TelegramNotifier(notifierOptions),
     createOperationalStateStore,
     prepareOrderHistoryPersistence: prepareOverride,
+    startTradingHistoryApi: startApiOverride,
     processIdentity = PROCESS_IDENTITY,
   } = options
   return {
@@ -989,6 +1100,7 @@ function createMainDependencies({ options }) {
       override: prepareOverride,
       logger,
     }),
+    startTradingHistoryApi: startApiOverride ?? startTradingHistoryApiDefault,
     providerAdapterFactories: {
       binance: createBinanceBrokerAdapter,
       ...(options.providerAdapterFactories ?? {}),
@@ -1005,6 +1117,7 @@ function createInitialProcessResources() {
     }),
     runtimeStartAttempted: false,
     orderHistoryPersistence: null,
+    tradingHistoryApi: null,
   }
 }
 

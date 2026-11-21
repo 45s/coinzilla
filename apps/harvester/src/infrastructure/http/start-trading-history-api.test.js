@@ -1,0 +1,143 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+import { startTradingHistoryApi } from "./start-trading-history-api.js"
+
+const API_TOKEN = "test-token-with-more-than-thirty-two-characters"
+
+function createDatabase() {
+  let closeCalls = 0
+  return {
+    get closeCalls() {
+      return closeCalls
+    },
+    prepare() {
+      return {
+        get: () => ({ total: 0 }),
+      }
+    },
+    async close() {
+      closeCalls += 1
+    },
+  }
+}
+
+test("does not start the optional API when no token is configured", async () => {
+  const service = await startTradingHistoryApi({
+    database: createDatabase(),
+    env: {
+      TRADING_MODE: "testnet",
+      HARVESTER_API_TOKEN: "",
+    },
+  })
+
+  assert.equal(service, null, "Harvester must remain usable without enabling the optional HTTP API.")
+})
+
+test("starts the API over Harvester's already-open relational database without owning that database", async () => {
+  const database = createDatabase()
+  let serverInput
+  let serverCloseCalls = 0
+  const service = await startTradingHistoryApi({
+    database,
+    env: {
+      TRADING_MODE: "testnet",
+      HARVESTER_API_TOKEN: API_TOKEN,
+      HARVESTER_API_PORT: "0",
+    },
+    logger: {
+      info() {},
+    },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
+        close: async () => {
+          serverCloseCalls += 1
+        },
+      }
+    },
+  })
+
+  assert.equal(serverInput.environment, "testnet", "The API must report the environment selected by Harvester.")
+  assert.equal(serverInput.queries.getSummary().ok, true, "The query facade must be composed over the supplied relational connection.")
+  assert.deepEqual(service.address, {
+    address: "127.0.0.1",
+    port: 4201,
+  }, "The service must expose the HTTP listener address for process diagnostics.")
+  await service.close()
+  assert.equal(serverCloseCalls, 1, "The service must close its HTTP listener.")
+  assert.equal(database.closeCalls, 0, "The API lifecycle must not close the database connection owned by Harvester.")
+})
+
+test("rejects invalid API configuration before opening the HTTP listener", async () => {
+  const invalidConfigurations = [
+    {
+      name: "environment",
+      env: {
+        TRADING_MODE: "sandbox",
+        HARVESTER_API_TOKEN: API_TOKEN,
+      },
+    },
+    {
+      name: "token",
+      env: {
+        TRADING_MODE: "testnet",
+        HARVESTER_API_TOKEN: "short",
+      },
+    },
+    {
+      name: "host",
+      env: {
+        TRADING_MODE: "testnet",
+        HARVESTER_API_TOKEN: API_TOKEN,
+        HARVESTER_API_HOST: " ",
+      },
+    },
+    {
+      name: "port",
+      env: {
+        TRADING_MODE: "testnet",
+        HARVESTER_API_TOKEN: API_TOKEN,
+        HARVESTER_API_PORT: "65536",
+      },
+    },
+  ]
+
+  for (const configuration of invalidConfigurations) {
+    await assert.rejects(
+      () => startTradingHistoryApi({
+        database: createDatabase(),
+        env: configuration.env,
+        startServer: async () => {
+          throw new Error("Invalid configuration must be rejected before binding.")
+        },
+      }),
+      (error) => error.code === "HARVESTER_TRADING_HISTORY_API_CONFIGURATION_INVALID",
+      `The API must reject invalid ${configuration.name} configuration.`,
+    )
+  }
+})
+
+test("preserves the HTTP startup error without closing Harvester's shared database", async () => {
+  const database = createDatabase()
+  const startupFailure = new Error("simulated HTTP bind failure")
+
+  await assert.rejects(
+    () => startTradingHistoryApi({
+      database,
+      env: {
+        TRADING_MODE: "testnet",
+        HARVESTER_API_TOKEN: API_TOKEN,
+      },
+      startServer: async () => {
+        throw startupFailure
+      },
+    }),
+    (error) => error === startupFailure,
+    "The original HTTP startup failure must remain available to Harvester diagnostics.",
+  )
+  assert.equal(database.closeCalls, 0, "A failed optional API startup must not close Harvester's database.")
+})
