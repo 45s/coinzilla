@@ -911,7 +911,7 @@ async function startOptionalTradingHistoryApi({ options, resources, runtime } = 
     resources,
     database,
     environment,
-    operator: runtime.getOperator?.(),
+    operator: runtime.getOperator?.() ?? runtime.accountRuntimes?.[0]?.getOperator?.(),
   })
 }
 
