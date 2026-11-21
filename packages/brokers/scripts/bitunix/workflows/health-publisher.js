@@ -9,7 +9,7 @@ import {
   sanitizeDiagnosticValue,
 } from "../helpers/diagnostics.js"
 import {
-  REQUIRED_HEALTH_OPERATIONS, createGitEnvironment, createPublishedReport, createReportPaths,
+  createGitEnvironment, createPublishedReport, createReportPaths,
   createTimestamp, evaluateHealthCheck, getRelativePath, getSecrets, throwWorkflowErrors,
   validateDiagnosticReport, validatePrivateCredentials, withholdFreeFormErrorMessages,
 } from "../helpers/health-report.js"
@@ -17,11 +17,6 @@ export { createGitEnvironment }
 
 const execFileAsync = promisify(execFile)
 const REPORT_COMMIT_MESSAGE = "chore(brokers): publish sanitized Bitunix health report"
-
-
-
-
-
 
 async function executeGitCommand({ repositoryRoot, args }) {
   const gitEnv = createGitEnvironment({ env: process.env })
@@ -102,7 +97,6 @@ async function runDiagnosticsSafely({ runDiagnostics, env, now, onProgress }) {
   }
 }
 
-
 async function writeDiagnosticReport({ path, report }) {
   await mkdir(dirname(path), {
     recursive: true,
@@ -113,8 +107,6 @@ async function writeDiagnosticReport({ path, report }) {
     flag: "wx",
   })
 }
-
-
 
 async function writeReports({ paths, report, env }) {
   const sanitized = withholdFreeFormErrorMessages({
@@ -181,7 +173,6 @@ async function switchBackToDevelop({ repositoryRoot, runGit }) {
   })
 }
 
-
 async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now, onProgress }) {
   onProgress?.({ message: "[3/5] Running Bitunix REST and authenticated WebSocket diagnostics" })
   const report = await runDiagnosticsSafely({
@@ -215,7 +206,6 @@ async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publis
     ...publication,
   }
 }
-
 
 async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, paths, publishedReportPath, runDiagnostics, env, now, onProgress }) {
   let branchCreated = false

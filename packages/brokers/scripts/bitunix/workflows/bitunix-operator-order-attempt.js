@@ -2,12 +2,12 @@ import { open, mkdir } from "node:fs/promises"
 import { dirname } from "node:path"
 import { assertBitunixOperatorAttemptDependencies, assertBitunixMutationBroker, assertBitunixOperatorInteractiveTerminal } from "../helpers/operator-order-validation.js"
 import { formatHypeUsdtMutationResult, formatHypeUsdtPreflightSummary } from "../helpers/operator-order-format.js"
-export { assertBitunixOperatorInteractiveTerminal }
 import {
   assertSuccessfulBitunixBrokerResult,
   BITUNIX_OPERATOR_ORDER_INTENT,
   createBitunixOperatorOrderPreflight,
 } from "../helpers/bitunix-hypeusdt-order-preflight.js"
+export { assertBitunixOperatorInteractiveTerminal }
 
 const BITUNIX_OPERATOR_ORDER_CONFIRMATION = "SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER"
 
@@ -89,9 +89,6 @@ async function readHypeUsdtOperatorPreflight({ readBroker }) {
     await readBroker.disconnect()
   }
 }
-
-
-
 
 ) {
   const requiredReadMethods = [

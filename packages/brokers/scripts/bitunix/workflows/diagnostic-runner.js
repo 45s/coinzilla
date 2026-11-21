@@ -27,7 +27,6 @@ const DIAGNOSTIC_CONFIG = Object.freeze({
   includePublicPayloads: false,
 })
 
-
 const BITUNIX_RESPONSE_SCHEMAS = Object.freeze({
   "/api/spot/v1/common/coin_pair/list": Object.freeze({
     expectedFields: ["id", "base", "quote", "basePrecision", "quotePrecision", "minPrice", "minVolume", "isOpen", "isHot", "isRecommend", "isShow", "tradeArea", "sort", "openTime", "precisions", "symbol"],
@@ -333,10 +332,6 @@ function emitProgress({ onProgress, area, operation, status }) {
   onProgress?.({ message: `      ${area}: ${operation} ... ${status}` })
 }
 
-
-
-
-
 function createObservedConnect({ transport, events, secrets, now }) {
   return async () => {
     events.push({
@@ -393,7 +388,6 @@ function createObservedSend({ transport, events, secrets, now, methodsByRequestI
     transport.send(message)
   }
 }
-
 
 function createObservedMessageHandler({ transport, events, secrets, now, methodsByRequestId, includePublicPayloads }) {
   return (listener) => transport.onMessage((message) => {
@@ -511,7 +505,6 @@ export function createObservedTransportFactory({
   }
 }
 
-
 function createResult({
   operation,
   startedAt,
@@ -536,7 +529,6 @@ function createResult({
     secrets,
   })
 }
-
 
 function recordRestSkipped({ endpoint, startedAt, now, results, secrets, authenticated, reason }) {
   results.push(createResult({
@@ -581,7 +573,6 @@ function recordRestFailure({ endpoint, startedAt, now, results, request, error, 
     secrets,
   }))
 }
-
 
 async function executeRestRequest({
   client,
@@ -1363,9 +1354,6 @@ async function runWebSocketChecks({
   })
 }
 
-
-
-
 function recordBrokerApiSchemaResult({ method, observation, now, results, secrets }) {
   if (!observation || !Object.hasOwn(observation, "schemaValid")) {
     return
@@ -1455,7 +1443,6 @@ function createObservedBrokerRestClientFactory({
   }
 }
 
-
 function recordBrokerApiSuccess({
   method,
   args,
@@ -1504,7 +1491,6 @@ function recordBrokerApiFailure({
   }))
 }
 
-
 function emitBrokerApiProgress({ method, status, onProgress }) {
   emitProgress({
     onProgress,
@@ -1513,7 +1499,6 @@ function emitBrokerApiProgress({ method, status, onProgress }) {
     status,
   })
 }
-
 
 function recordBrokerApiOperationFailure({
   method,
@@ -1541,7 +1526,6 @@ function recordBrokerApiOperationFailure({
   })
 }
 
-
 function recordLatestBrokerApiSchemaResult({ definition, schemaObservations, now, results, secrets }) {
   recordBrokerApiSchemaResult({
     method: definition.method,
@@ -1551,7 +1535,6 @@ function recordLatestBrokerApiSchemaResult({ definition, schemaObservations, now
     secrets,
   })
 }
-
 
 function recordBrokerApiOperationResult({
   definition,
@@ -1679,7 +1662,6 @@ function createBrokerDiagnostic({
     },
   })
 }
-
 
 function recordBrokerLifecycle({ method, status, error, now, results, secrets }) {
   if (status === "failed") {

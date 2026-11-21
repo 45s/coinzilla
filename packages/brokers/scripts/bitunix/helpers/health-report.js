@@ -9,6 +9,7 @@ export const REQUIRED_HEALTH_OPERATIONS = Object.freeze([
   "user.account",
   "user.info",
 ])
+
 export function createTimestamp({ timestamp }) {
   return new Date(timestamp).toISOString().replaceAll(/[-:.]/g, "")
 }
