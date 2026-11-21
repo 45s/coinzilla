@@ -395,7 +395,6 @@ Thrown errors are logged once at the appropriate interaction boundary with their
 
 Never log full Telegram updates, callback payloads, bot tokens, allowlist IDs, API credentials, or full account/order payloads. Redact the configured bot token from messages and stacks. Do not log the same exception at every layer; preserve it while adding context at the boundary that owns the interaction. See the [Telegram Command Center runbook](operations/telegram-command-center.md) for stage interpretation and operator response.
 
-
 ## Relational runtime-error diagnostics
 
 Harvester captures shared-Logger ERROR records from process logging setup onward. A bounded process-start buffer bridges the period before the environment-specific relational database is ready; after migration v4, a bounded asynchronous observer writes safe summaries to `runtime_errors`, correlated by the existing `runtime_session_id`.
