@@ -4,6 +4,7 @@ import { consumeWebSocketFrames } from "./trading-history-websocket-frame.js"
 const WEBSOCKET_PATH = "/api/v1/trading/events"
 const WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 const AUTHENTICATION_TIMEOUT_MS = 5000
+const HEARTBEAT_INTERVAL_MS = 30_000
 const MAX_CONNECTIONS = 32
 const MAX_FRAME_BYTES = 1024
 const MAX_BUFFERED_BYTES = 64 * 1024
@@ -48,6 +49,7 @@ function closeClient(client, { code = 1000, reason = "" } = {}) {
   }
   client.closed = true
   clearTimeout(client.authenticationTimer)
+  clearInterval(client.heartbeatTimer)
   const reasonBytes = Buffer.from(reason, "utf8").subarray(0, 123)
   const payload = Buffer.alloc(2 + reasonBytes.length)
   payload.writeUInt16BE(code, 0)
@@ -100,11 +102,29 @@ function authenticateClient({ client, message, token } = {}) {
     return
   }
   client.authenticated = true
+  startHeartbeat(client)
   clearTimeout(client.authenticationTimer)
   client.authenticationTimer = null
   sendJson(client, {
     type: "authenticated",
   })
+}
+
+function startHeartbeat(client) {
+  client.heartbeatTimer = setInterval(() => {
+    if (client.awaitingPong) {
+      closeClient(client, {
+        code: 1001,
+        reason: "Heartbeat timed out.",
+      })
+      return
+    }
+    client.awaitingPong = true
+    client.socket.write(encodeFrame({
+      opcode: 0x9,
+    }))
+  }, HEARTBEAT_INTERVAL_MS)
+  client.heartbeatTimer.unref?.()
 }
 
 function handleClientFrame({ client, frame, token } = {}) {
@@ -122,6 +142,7 @@ function handleClientFrame({ client, frame, token } = {}) {
     return
   }
   if (frame.opcode === 0xa) {
+    client.awaitingPong = false
     return
   }
   if (client.authenticated) {
@@ -165,7 +186,7 @@ function handleSocketData({ client, chunk, token } = {}) {
 }
 
 function rejectUpgrade(socket, status = 400) {
-  const reason = status === 503 ? "Service Unavailable" : "Bad Request"
+  const reason = status === 503 ? "Service Unavailable" : status === 404 ? "Not Found" : "Bad Request"
   socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
 }
 
@@ -185,6 +206,8 @@ function createClient({ socket, clients, token } = {}) {
     clients,
     buffer: Buffer.alloc(0),
     authenticated: false,
+    awaitingPong: false,
+    heartbeatTimer: null,
     closed: false,
     authenticationTimer: setTimeout(() => {
       sendJson(client, {
@@ -221,6 +244,7 @@ function handleUpgrade({ request, socket, head, clients, token } = {}) {
     return
   }
   if (url.pathname !== WEBSOCKET_PATH) {
+    rejectUpgrade(socket, 404)
     return
   }
   if (!isUpgradeRequest(request)) {
@@ -233,7 +257,7 @@ function handleUpgrade({ request, socket, head, clients, token } = {}) {
   }
   const key = request.headers["sec-websocket-key"]
   const decodedKey = typeof key === "string" ? Buffer.from(key, "base64") : Buffer.alloc(0)
-  if (decodedKey.length !== 16) {
+  if (decodedKey.length !== 16 || decodedKey.toString("base64") !== key) {
     rejectUpgrade(socket)
     return
   }
