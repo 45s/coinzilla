@@ -104,7 +104,11 @@ function handleClientFrame({ client, frame } = {}) {
     client.awaitingPong = false
     return
   }
-  closeClient({ client, code: 1008, reason: "Client messages are not supported." })
+  closeClient({
+    client,
+    code: 1008,
+    reason: "Client messages are not supported.",
+  })
 }
 
 function handleSocketData({ client, chunk } = {}) {
@@ -190,7 +194,10 @@ function getUpgradeKey({ request, socket, clients } = {}) {
     return null
   }
   if (request.headers.origin && !ALLOWED_BROWSER_ORIGINS.has(request.headers.origin)) {
-    rejectUpgrade({ socket, status: 403 })
+    rejectUpgrade({
+      socket,
+      status: 403,
+    })
     return null
   }
   if (url.pathname !== WEBSOCKET_PATH) {
