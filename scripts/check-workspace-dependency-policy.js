@@ -11,8 +11,8 @@ import {
 const rootDirectory = resolve(fileURLToPath(import.meta.url), "../..")
 const policyPath = resolve(rootDirectory, "docs/engineering/DOMAIN_OWNERSHIP.md")
 const policyMarkdown = readFileSync(policyPath, "utf8")
-const allowedDependencies = parseWorkspaceDependencyPolicy(policyMarkdown)
-const packages = readWorkspacePackages(rootDirectory)
+const allowedDependencies = parseWorkspaceDependencyPolicy({ markdown: policyMarkdown })
+const packages = readWorkspacePackages({ rootDirectory })
 const violations = validateWorkspaceDependencyPolicy({
   packages,
   allowedDependencies,
