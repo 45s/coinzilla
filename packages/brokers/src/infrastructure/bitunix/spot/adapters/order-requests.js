@@ -197,37 +197,47 @@ export function createSpotOrderRequest({ input }) {
   }
 }
 
+function isSuccessfulPlacementStatus({ status }) {
+  return status === true || status === 1 || status === "1"
+}
+
+function isRejectedPlacementStatus({ status }) {
+  return status === false || status === 0 || status === "0"
+}
+
+function createPlacementRejectionError({ response }) {
+  const exchangeCode = response.placeCode === undefined || response.placeCode === null
+    ? null
+    : String(response.placeCode)
+  const message = typeof response.placeMsg === "string" && response.placeMsg.trim()
+    ? response.placeMsg
+    : "Bitunix Spot rejected the order placement"
+  return new BitunixRestError({
+    message,
+    kind: "exchange",
+    exchangeCode,
+    path: BITUNIX_SPOT_ORDER_API.placeOrder,
+  })
+}
+
+function createInvalidPlacementStatusError() {
+  return new BitunixRestError({
+    message: "Bitunix Spot place-order response has a missing or invalid placeStatus",
+    kind: "response",
+    path: BITUNIX_SPOT_ORDER_API.placeOrder,
+    outcomeUnknown: true,
+  })
+}
+
 export function validateSpotOrderPlacementResponse({ response, symbol, side, type }) {
   if (!response || typeof response !== "object" || Array.isArray(response)) {
     throw new TypeError("Bitunix Spot place-order response must be an object")
   }
-  const placementSucceeded = response.placeStatus === true ||
-    response.placeStatus === 1 ||
-    response.placeStatus === "1"
-  const placementRejected = response.placeStatus === false ||
-    response.placeStatus === 0 ||
-    response.placeStatus === "0"
-  if (placementRejected) {
-    const exchangeCode = response.placeCode === undefined || response.placeCode === null
-      ? null
-      : String(response.placeCode)
-    const message = typeof response.placeMsg === "string" && response.placeMsg.trim()
-      ? response.placeMsg
-      : "Bitunix Spot rejected the order placement"
-    throw new BitunixRestError({
-      message,
-      kind: "exchange",
-      exchangeCode,
-      path: BITUNIX_SPOT_ORDER_API.placeOrder,
-    })
+  if (isRejectedPlacementStatus({ status: response.placeStatus })) {
+    throw createPlacementRejectionError({ response })
   }
-  if (!placementSucceeded) {
-    throw new BitunixRestError({
-      message: "Bitunix Spot place-order response has a missing or invalid placeStatus",
-      kind: "response",
-      path: BITUNIX_SPOT_ORDER_API.placeOrder,
-      outcomeUnknown: true,
-    })
+  if (!isSuccessfulPlacementStatus({ status: response.placeStatus })) {
+    throw createInvalidPlacementStatusError()
   }
   if (String(response.symbol).toUpperCase() !== symbol) {
     throw new TypeError("Bitunix Spot place-order response symbol does not match the request")
