@@ -105,6 +105,7 @@ export async function startTradingHistoryApi({
   env = process.env,
   environment,
   logger = defaultLogger,
+  eventBus,
   startServer = startTradingHistoryApiServer,
 } = {}) {
   if (!env.HARVESTER_API_TOKEN) {
@@ -134,6 +135,7 @@ export async function startTradingHistoryApi({
     host: configuration.host,
     port: configuration.port,
     logger,
+    eventBus,
   })
   return Object.freeze({
     address: server.address,
