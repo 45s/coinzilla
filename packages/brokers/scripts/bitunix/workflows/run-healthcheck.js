@@ -41,7 +41,7 @@ function printLocalDiagnosticSummary({ report, outputPath, stdout }) {
 
 async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
   stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot account using read-only requests.\n")
-  const report = await runDiagnostics({
+  const report = await runReadOnlyDiagnostics({
     env,
     brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
   })
