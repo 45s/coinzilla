@@ -4,7 +4,7 @@ import { startTradingHistoryApi } from "../src/infrastructure/http/start-trading
 
 async function startApiProcess() {
   const service = await startTradingHistoryApi()
-  const address = service.address
+  const { address } = service
   defaultLogger.info({
     message: "Harvester trading-history API started",
     environment: process.env.TRADING_MODE,
