@@ -1,4 +1,4 @@
-import { createDiagnosticResult } from "./diagnostic-values.js"
+import { createDiagnosticResult } from "./create-diagnostic-report.js"
 
 function createOperatorAttemptError({ result, codeOverride }) {
   const sourceError = result.errors?.[0]
@@ -24,7 +24,7 @@ function createOperatorAttemptError({ result, codeOverride }) {
  * @param {{report: object, operatorResult: object, durationMs: number, secrets?: string[]}} input
  * @returns {object}
  */
-export function appendOperatorAttemptResult({
+export function appendOrderAttemptResult({
   report,
   operatorResult,
   durationMs,

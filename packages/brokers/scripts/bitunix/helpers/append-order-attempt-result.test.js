@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { appendOperatorAttemptResult } from "./operator-attempt-report.js"
+import { appendOrderAttemptResult } from "./operator-attempt-report.js"
 
 function createReport({ failed = 0 } = {}) {
   return {
@@ -26,7 +26,7 @@ function createReport({ failed = 0 } = {}) {
 }
 
 test("confirmed order result adds only a safe passed status to the published report", () => {
-  const report = appendOperatorAttemptResult({
+  const report = appendOrderAttemptResult({
     report: createReport(),
     operatorResult: {
       ok: true,
@@ -45,7 +45,7 @@ test("confirmed order result adds only a safe passed status to the published rep
 })
 
 test("declined order adds a skipped result and does not claim a mutation", () => {
-  const report = appendOperatorAttemptResult({
+  const report = appendOrderAttemptResult({
     report: createReport(),
     operatorResult: {
       ok: false,
@@ -62,7 +62,7 @@ test("declined order adds a skipped result and does not claim a mutation", () =>
 })
 
 test("a failed health check skips the order and publishes only its safe skip code", () => {
-  const report = appendOperatorAttemptResult({
+  const report = appendOrderAttemptResult({
     report: createReport({ failed: 1 }),
     operatorResult: {
       ok: false,
@@ -84,7 +84,7 @@ test("rejected and unknown outcomes expose safe codes but withhold messages and 
   rejectedError.code = "EXCHANGE_REJECTED"
   rejectedError.exchangeCode = "10001"
   rejectedError.status = 400
-  const rejected = appendOperatorAttemptResult({
+  const rejected = appendOrderAttemptResult({
     report: createReport(),
     operatorResult: {
       ok: false,
@@ -102,7 +102,7 @@ test("rejected and unknown outcomes expose safe codes but withhold messages and 
   assert.equal(JSON.stringify(rejected).includes("account balance"), false)
 
   const unknownError = new Error("private dispatch detail")
-  const unknown = appendOperatorAttemptResult({
+  const unknown = appendOrderAttemptResult({
     report: createReport(),
     operatorResult: {
       ok: false,
