@@ -28,7 +28,7 @@ function createOrder(id: string) {
     providerInstanceId: 'binanceTestnet',
     accountId: 'binance-primary',
     symbol: 'BTCUSDT',
-    exchangeOrderId: `exchange-${id}`,
+    exchangeOrderId: `broker-${id.replace(/^order-/, '')}`,
     clientOrderId: null,
     strategyId: null,
     positionId: null,
@@ -203,7 +203,7 @@ describe('TradingHistoryComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('Order exchange-order-filtered');
+    expect(fixture.nativeElement.textContent).toContain('Order broker-filtered');
     expect(fixture.nativeElement.textContent).toContain('BTCUSDT');
   });
 
@@ -234,7 +234,7 @@ describe('TradingHistoryComponent', () => {
     fixture.detectChanges();
 
     expect(fixture.nativeElement.textContent).toContain('Page 2 of 2');
-    expect(fixture.nativeElement.textContent).toContain('Order exchange-order-page-2');
+    expect(fixture.nativeElement.textContent).toContain('Order broker-page-2');
   });
 
   it('loads persisted order details and preserves null financial values', async () => {
@@ -257,7 +257,7 @@ describe('TradingHistoryComponent', () => {
     fixture.detectChanges();
 
     const orderRow = fixture.nativeElement.querySelector('tbody tr') as HTMLTableRowElement;
-    expect(orderRow.textContent).toContain('Order exchange-order-1');
+    expect(orderRow.textContent).toContain('Order broker-1');
     expect(orderRow.textContent).not.toContain('order-1');
     expect(fixture.nativeElement.textContent).toContain('Orders details');
     expect(fixture.nativeElement.textContent).toContain('65000.00000000');
