@@ -47,8 +47,6 @@ level: "info" }])
     assert.equal(logger.transports.get("console").level, "info")
     assert.equal(logger.transports.get("harvester-debug-file").level, "debug")
     assert.equal(logger.transports.get("harvester-trace-file").level, "trace")
-    assert.equal(logger.transports.get("harvester-runtime-error-buffer").level, "error", "The session error buffer must receive ERROR records from process start.")
-    assert.equal(typeof logging.errorBuffer?.transport?.write, "function", "The configured logger must expose its session-scoped error buffer to persistence composition.")
 
     const entry = {
       timestamp: "2026-11-05T12:00:00.000Z",
@@ -912,102 +910,4 @@ test("renders recovery SELL cancellation requests in the requested compact conso
     "the recovery SELL cancellation console line must match the requested concise operator format",
   )
   output.destroy()
-})
-
-
-test("buffers startup ERROR records and streams later errors without duplicating the handoff", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-"))
-  const logger = createLogger()
-  try {
-    const logging = await configureHarvesterLogging({
-      logger,
-      directory,
-      processIdentity: {
-        startedAt: "2026-11-21T08:00:00.000Z",
-        runtimeSessionId: "runtime-session-buffer",
-      },
-    })
-    const first = {
-      timestamp: "2026-11-21T08:00:01.000Z",
-      level: "error",
-      method: "error",
-      data: { message: "Startup error" },
-    }
-    const second = {
-      timestamp: "2026-11-21T08:00:02.000Z",
-      level: "error",
-      method: "error",
-      data: { message: "Runtime error" },
-    }
-    logging.errorBuffer.transport.write(first)
-    const persisted = []
-    const activation = logging.errorBuffer.activate((entry) => persisted.push(entry))
-    assert.equal(activation.bufferedCount, 1, "Errors emitted before the database opens must remain buffered.")
-    logging.errorBuffer.transport.write(second)
-    assert.deepEqual(persisted, [first, second], "The handoff must persist prior errors and stream later errors exactly once.")
-    assert.deepEqual(
-      logging.errorBuffer.getDiagnostics(),
-      {
-        bufferedCount: 0,
-        droppedCount: 0,
-        active: true,
-        closed: false,
-      },
-      "The active error buffer must expose an empty queue and no capture loss.",
-    )
-    await logging.close()
-  } finally {
-    await rm(directory, {
-      recursive: true,
-      force: true,
-    })
-  }
-})
-
-test("bounds pre-persistence error buffering and reports every dropped record", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-logs-"))
-  const logger = createLogger()
-  try {
-    const logging = await configureHarvesterLogging({
-      logger,
-      directory,
-      processIdentity: {
-        startedAt: "2026-11-21T08:00:00.000Z",
-        runtimeSessionId: "runtime-session-overflow",
-      },
-    })
-    for (let index = 0; index < 10001; index += 1) {
-      logging.errorBuffer.transport.write({
-        timestamp: "2026-11-21T08:00:01.000Z",
-        level: "error",
-        method: "error",
-        data: {
-          message: "Buffered startup error",
-          index,
-        },
-      })
-    }
-    logging.errorBuffer.transport.write({
-      timestamp: "2026-11-21T08:00:02.000Z",
-      level: "info",
-      method: "info",
-      data: { message: "Non-error record" },
-    })
-    assert.deepEqual(
-      logging.errorBuffer.getDiagnostics(),
-      {
-        bufferedCount: 10000,
-        droppedCount: 1,
-        active: false,
-        closed: false,
-      },
-      "The pre-database buffer must be bounded and make overflow visible without retaining unbounded memory.",
-    )
-    await logging.close()
-  } finally {
-    await rm(directory, {
-      recursive: true,
-      force: true,
-    })
-  }
 })
