@@ -3,7 +3,7 @@
 ## Public Bitunix Futures market data (#1660)
 
 - **In progress in Dashboard PR [#1661](https://github.com/45s/coinzilla/pull/1661):** expose Bitunix Futures public contract and ticker REST data through the existing loopback-only Harvester API for the Dashboard Market Screener.
-- This is a read-only market-data adapter only. It uses public HTTPS GET endpoints, no API credentials, no order APIs, no execution-provider registration, and no local percentage calculations. Missing native percentage fields remain null/N/A.
+- This is a read-only market-data adapter only. It uses public HTTPS GET endpoints, no API credentials, no order APIs, no execution-provider registration, and no local percentage calculations. The native rolling 24h percentage is passed through from the public ticker WebSocket; unsupported 5m/1h/4h fields remain null/N/A.
 - This work does not satisfy or bypass Bitunix execution-provider admission requirements in [#1185](https://github.com/45s/coinzilla/issues/1185).
 
 ## Session-scoped runtime error persistence (#1650)

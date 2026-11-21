@@ -202,8 +202,9 @@ The response contains `data.provider`, `data.marketType`, `data.observedAt`, and
 
 Movement fields are pass-through only:
 
-- `change5m`, `change1h`, `change4h`, and `change24h` are populated only when those native fields are present in the ticker response.
-- The current documented REST ticker response does not guarantee percentage-change fields. Missing fields are returned as `null` and shown as `N/A` by the Dashboard.
+- `change24h` is passed through from Bitunix's public Futures WebSocket `tickers` channel field `r`, which is the exchange's rolling 24-hour fluctuation. The value is not rounded or recalculated.
+- `change5m`, `change1h`, and `change4h` are populated only if those exact native fields are present in the ticker response. The documented public REST ticker and WebSocket ticker channels do not provide those windows, so they are currently returned as `null` and shown as `N/A`.
+- Harvester subscribes to the public `tickers` channel over `wss://fapi.bitunix.com/public/`, in batches respecting Bitunix's 300-channel-per-connection limit. Each connection is a bounded one-shot snapshot and is closed after the initial ticker data or timeout; a stream failure does not hide the REST market snapshot.
 - No candle history is fetched, and no percentages are calculated or inferred from open/last prices.
 
 The Dashboard's Market Screener uses this Harvester endpoint; it never calls Bitunix from the browser. Favourites are stored in separate source-specific browser cookies and are not persisted by Harvester. This public market-data capability is independent of Bitunix execution-provider admission tracked by [#1185](https://github.com/45s/coinzilla/issues/1185); it does not register a broker, enable order placement, or change trading behavior.
