@@ -1,5 +1,8 @@
 const DEFAULT_BASE_URL = "https://fapi.bitunix.com"
+const DEFAULT_WEBSOCKET_URL = "wss://fapi.bitunix.com/public/"
 const DEFAULT_TIMEOUT_MS = 5_000
+const DEFAULT_WEBSOCKET_TIMEOUT_MS = 3_000
+const MAX_CHANNELS_PER_WEBSOCKET = 300
 
 function readString(value) {
   return typeof value === "string" ? value : null
@@ -28,7 +31,109 @@ async function requestMarketData({ fetchImpl, url, timeoutMs } = {}) {
   return response.json()
 }
 
-function mapTickerFields(ticker) {
+function parseNativeTickerMessage(data) {
+  try {
+    const payload = JSON.parse(String(data))
+    return payload?.ch === "tickers" && Array.isArray(payload.data)
+      ? payload.data
+      : []
+  } catch {
+    return []
+  }
+}
+
+function collectNativeTickerChanges(tickers, changes) {
+  for (const ticker of tickers) {
+    if (typeof ticker?.s === "string" && typeof ticker.r === "string") {
+      changes.set(ticker.s, ticker.r)
+    }
+  }
+}
+
+function closeWebSocket(socket) {
+  try {
+    socket?.close()
+  } catch {
+    // A failed public market-data socket must not prevent REST ticker display.
+  }
+}
+
+function readNativeTickerChunk({ WebSocketImpl, websocketUrl, symbols, timeoutMs } = {}) {
+  return new Promise((resolve) => {
+    const changes = new Map()
+    let settled = false
+    let socket
+    let timeout
+
+    const finish = () => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      closeWebSocket(socket)
+      resolve(changes)
+    }
+
+    try {
+      socket = new WebSocketImpl(websocketUrl)
+      timeout = setTimeout(finish, timeoutMs)
+      socket.addEventListener("open", () => {
+        try {
+          socket.send(JSON.stringify({
+            op: "subscribe",
+            args: symbols.map((symbol) => ({
+              symbol,
+              ch: "tickers",
+            })),
+          }))
+        } catch {
+          finish()
+        }
+      }, { once: true })
+      socket.addEventListener("message", (event) => {
+        collectNativeTickerChanges(parseNativeTickerMessage(event.data), changes)
+        if (changes.size >= symbols.length) {
+          finish()
+        }
+      })
+      socket.addEventListener("error", finish, { once: true })
+      socket.addEventListener("close", finish, { once: true })
+    } catch {
+      finish()
+    }
+  })
+}
+
+function splitSymbolsIntoWebSocketChunks(symbols) {
+  const chunks = []
+  for (let index = 0; index < symbols.length; index += MAX_CHANNELS_PER_WEBSOCKET) {
+    chunks.push(symbols.slice(index, index + MAX_CHANNELS_PER_WEBSOCKET))
+  }
+  return chunks
+}
+
+async function readNative24hChanges({ WebSocketImpl, websocketUrl, symbols, timeoutMs } = {}) {
+  if (typeof WebSocketImpl !== "function" || symbols.length === 0) {
+    return new Map()
+  }
+  const chunks = splitSymbolsIntoWebSocketChunks(symbols)
+  const results = await Promise.all(chunks.map((chunk) => readNativeTickerChunk({
+    WebSocketImpl,
+    websocketUrl,
+    symbols: chunk,
+    timeoutMs,
+  })))
+  const changes = new Map()
+  for (const result of results) {
+    for (const [symbol, value] of result) {
+      changes.set(symbol, value)
+    }
+  }
+  return changes
+}
+
+function mapTickerFields(ticker, native24hChange) {
   return {
     lastPrice: readString(ticker?.lastPrice),
     markPrice: readString(ticker?.markPrice),
@@ -40,11 +145,11 @@ function mapTickerFields(ticker) {
     change5m: readString(ticker?.change5m),
     change1h: readString(ticker?.change1h),
     change4h: readString(ticker?.change4h),
-    change24h: readString(ticker?.r),
+    change24h: readString(native24hChange),
   }
 }
 
-function mapFuturesContract({ contract, ticker } = {}) {
+function mapFuturesContract({ contract, ticker, native24hChange } = {}) {
   return {
     symbol: readString(contract.symbol),
     base: readString(contract.base),
@@ -52,20 +157,23 @@ function mapFuturesContract({ contract, ticker } = {}) {
     symbolStatus: readString(contract.symbolStatus),
     isApiSupported: readBoolean(contract.isApiSupported),
     maxLeverage: typeof contract.maxLeverage === "number" ? contract.maxLeverage : null,
-    ...mapTickerFields(ticker),
+    ...mapTickerFields(ticker, native24hChange),
   }
 }
 
 /**
  * Create a read-only client for Bitunix public Futures market metadata and tickers.
  *
- * @param {{fetchImpl?: Function, baseUrl?: string, timeoutMs?: number, now?: Function}} input
+ * @param {{fetchImpl?: Function, WebSocketImpl?: Function|null, baseUrl?: string, websocketUrl?: string, timeoutMs?: number, websocketTimeoutMs?: number, now?: Function}} input
  * @returns {Readonly<{getBitunixFuturesMarkets: Function}>}
  */
 export function createBitunixFuturesMarketDataClient({
   fetchImpl = globalThis.fetch,
+  WebSocketImpl = globalThis.WebSocket,
   baseUrl = DEFAULT_BASE_URL,
+  websocketUrl = DEFAULT_WEBSOCKET_URL,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  websocketTimeoutMs = DEFAULT_WEBSOCKET_TIMEOUT_MS,
   now = () => new Date(),
 } = {}) {
   if (typeof fetchImpl !== "function") {
@@ -74,9 +182,16 @@ export function createBitunixFuturesMarketDataClient({
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) {
     throw new TypeError("Bitunix market-data timeout must be between 1 and 30000 milliseconds.")
   }
+  if (!Number.isSafeInteger(websocketTimeoutMs) || websocketTimeoutMs < 1 || websocketTimeoutMs > 10_000) {
+    throw new TypeError("Bitunix ticker WebSocket timeout must be between 1 and 10000 milliseconds.")
+  }
   const normalizedBaseUrl = new URL(baseUrl)
   if (normalizedBaseUrl.protocol !== "https:") {
     throw new TypeError("Bitunix public market-data must use HTTPS.")
+  }
+  const normalizedWebsocketUrl = new URL(websocketUrl)
+  if (normalizedWebsocketUrl.protocol !== "wss:") {
+    throw new TypeError("Bitunix public market-data WebSocket must use WSS.")
   }
 
   return Object.freeze({
@@ -98,7 +213,7 @@ export function createBitunixFuturesMarketDataClient({
       const contracts = parseMarketDataPayload({
         payload: contractsPayload,
         endpoint: "trading-pairs",
-      })
+      }).filter((contract) => contract && typeof contract.symbol === "string")
       const tickers = parseMarketDataPayload({
         payload: tickersPayload,
         endpoint: "tickers",
@@ -106,12 +221,17 @@ export function createBitunixFuturesMarketDataClient({
       const tickersBySymbol = new Map(tickers
         .filter((ticker) => ticker && typeof ticker.symbol === "string")
         .map((ticker) => [ticker.symbol, ticker]))
-      const markets = contracts
-        .filter((contract) => typeof contract.symbol === "string")
-        .map((contract) => mapFuturesContract({
-          contract,
-          ticker: tickersBySymbol.get(contract.symbol),
-        }))
+      const native24hChanges = await readNative24hChanges({
+        WebSocketImpl,
+        websocketUrl: normalizedWebsocketUrl.toString(),
+        symbols: contracts.map((contract) => contract.symbol),
+        timeoutMs: websocketTimeoutMs,
+      })
+      const markets = contracts.map((contract) => mapFuturesContract({
+        contract,
+        ticker: tickersBySymbol.get(contract.symbol),
+        native24hChange: native24hChanges.get(contract.symbol),
+      }))
 
       return {
         provider: "bitunix",

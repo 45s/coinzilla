@@ -77,11 +77,53 @@ function createExpectedMarket() {
   }
 }
 
-test("loads Bitunix Futures contracts and ticker fields without deriving movement percentages", async () => {
+class FakeWebSocket {
+  static instances = []
+
+  constructor(url) {
+    this.url = url
+    this.listeners = new Map()
+    FakeWebSocket.instances.push(this)
+    queueMicrotask(() => this.emit("open", {}))
+  }
+
+  addEventListener(...argumentsList) {
+    const [type, listener] = argumentsList
+    const listeners = this.listeners.get(type) ?? []
+    listeners.push(listener)
+    this.listeners.set(type, listeners)
+  }
+
+  send(payload) {
+    this.subscription = JSON.parse(payload)
+    queueMicrotask(() => this.emit("message", {
+      data: JSON.stringify({
+        ch: "tickers",
+        data: [{
+          s: "BTCUSDT",
+          r: "-0.7097029863",
+        }],
+      }),
+    }))
+  }
+
+  close() {
+    this.closed = true
+  }
+
+  emit(type, event) {
+    for (const listener of this.listeners.get(type) ?? []) {
+      listener(event)
+    }
+  }
+}
+
+test("loads Bitunix Futures REST fields without deriving missing movement percentages", async () => {
   const requests = []
   const client = createBitunixFuturesMarketDataClient({
     now: () => new Date("2026-11-21T12:00:00.000Z"),
     fetchImpl: createFetchImpl(requests),
+    WebSocketImpl: null,
   })
 
   const snapshot = await client.getBitunixFuturesMarkets()
@@ -97,29 +139,36 @@ test("loads Bitunix Futures contracts and ticker fields without deriving movemen
   }, "The client must expose only returned exchange fields and keep unavailable percentages null.")
 })
 
-test("passes through a native 24-hour percentage field when the exchange response includes it", async () => {
+test("passes through Bitunix's native rolling 24-hour WebSocket fluctuation unchanged", async () => {
+  FakeWebSocket.instances = []
   const client = createBitunixFuturesMarketDataClient({
-    fetchImpl: async () => createResponse({
-      code: 0,
-      data: [{
-        symbol: "ETHUSDT",
-        r: "-1.25",
-      }],
-    }),
+    fetchImpl: createFetchImpl([]),
+    WebSocketImpl: FakeWebSocket,
   })
 
   const snapshot = await client.getBitunixFuturesMarkets()
+  const socket = FakeWebSocket.instances[0]
 
-  assert.equal(snapshot.markets[0].change24h, "-1.25", "A native percentage value must be passed through unchanged.")
-  assert.equal(snapshot.markets[0].change5m, null, "The client must not infer a 5-minute percentage from other ticker fields.")
+  assert.equal(snapshot.markets[0].change24h, "-0.7097029863", "The native exchange percentage must be passed through without rounding or calculation.")
+  assert.equal(snapshot.markets[0].change5m, null, "A 5-minute movement must remain unavailable when the API does not provide it.")
+  assert.equal(socket.url, "wss://fapi.bitunix.com/public/", "The client must use Bitunix's public Futures WebSocket endpoint.")
+  assert.deepEqual(socket.subscription, {
+    op: "subscribe",
+    args: [{
+      symbol: "BTCUSDT",
+      ch: "tickers",
+    }],
+  }, "The client must subscribe only to the public ticker channel for listed symbols.")
+  assert.equal(socket.closed, true, "The one-shot ticker snapshot connection must be closed after receiving the data.")
 })
 
-test("rejects malformed Bitunix market-data envelopes instead of returning an empty market list", async () => {
+test("rejects malformed Bitunix REST envelopes instead of returning an empty market list", async () => {
   const client = createBitunixFuturesMarketDataClient({
     fetchImpl: async () => createResponse({
       code: 0,
       data: null,
     }),
+    WebSocketImpl: null,
   })
 
   await assert.rejects(
@@ -129,13 +178,20 @@ test("rejects malformed Bitunix market-data envelopes instead of returning an em
   )
 })
 
-test("rejects non-HTTPS Bitunix market-data origins and invalid timeout settings before making requests", () => {
+test("rejects non-HTTPS REST, non-WSS streaming origins, and invalid timeouts", () => {
   assert.throws(
     () => createBitunixFuturesMarketDataClient({
       baseUrl: "http://fapi.bitunix.com",
     }),
     /HTTPS/,
-    "Public exchange market data must never be requested over plaintext HTTP.",
+    "Public exchange REST market data must never use plaintext HTTP.",
+  )
+  assert.throws(
+    () => createBitunixFuturesMarketDataClient({
+      websocketUrl: "ws://fapi.bitunix.com/public/",
+    }),
+    /WSS/,
+    "Public exchange ticker streams must use secure WebSockets.",
   )
   assert.throws(
     () => createBitunixFuturesMarketDataClient({
