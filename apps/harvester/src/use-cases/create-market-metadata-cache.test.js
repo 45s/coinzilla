@@ -204,7 +204,7 @@ test("fails before exchange access when the injected clock is invalid", async ()
     metadata: cache.getCurrentMarketMetadata({ symbol }),
   })
 
-  assert.equal(result.ok, false)
+  assert.equal(result.ok, false, "An invalid clock must fail the refresh operation.")
   assert.match(result.errors[0].message, /clock must return/, "An invalid clock must be rejected before an exchange request.")
   assert.equal(refreshCount, 0, "An invalid clock must prevent exchange metadata retrieval.")
 })
