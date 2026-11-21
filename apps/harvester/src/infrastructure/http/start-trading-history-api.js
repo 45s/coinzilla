@@ -109,7 +109,7 @@ export async function startTradingHistoryApi({
     port: configuration.port,
     logger,
     eventBus,
-    operator,
+    ...(operator === undefined ? {} : { operator }),
   })
   return Object.freeze({
     address: server.address,
