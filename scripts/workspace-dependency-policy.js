@@ -22,7 +22,7 @@ export function parseWorkspaceDependencyPolicy({ markdown }) {
     throw new Error("Workspace package dependency policy section is missing.")
   }
 
-  const section = markdown.slice(headingIndex + heading.length).split(/^## /m)[0]
+  const [section] = markdown.slice(headingIndex + heading.length).split(/^## /m)
   const tableLines = section.split(/\r?\n/).filter((line) => line.trim().startsWith("|"))
   if (tableLines.length < 3) {
     throw new Error("Workspace package dependency policy table is incomplete.")
