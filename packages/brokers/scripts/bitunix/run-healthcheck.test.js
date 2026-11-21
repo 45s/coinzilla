@@ -34,7 +34,7 @@ test("Bitunix --version prints source identity and exits without credentials", (
   assert.equal(result.status, 0, result.stderr)
   assert.match(
     result.stdout,
-    /bitunix:healthcheck v1\\.0\\.0 \\| commit [a-f0-9]{40} \\| worktree (clean|dirty) \\| Node v\\d+/,
+    /bitunix:healthcheck v1\.0\.0 \| commit [a-f0-9]{40} \| worktree (clean|dirty) \| Node v\d+/,
   )
   assert.equal(result.stderr, "")
 })
