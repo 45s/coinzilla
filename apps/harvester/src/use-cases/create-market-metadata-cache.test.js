@@ -158,7 +158,10 @@ test("rejects a refreshed filter snapshot for a different market", async () => {
     now: () => 1000,
     getSymbolFilters: async () => ({
       ok: true,
-      data: makeMetadata({ symbol: "ZROUSDT", version: 2 }),
+      data: makeMetadata({
+        symbol: "ZROUSDT",
+        version: 2,
+      }),
     }),
   })
   const metadata = cache.getCurrentMarketMetadata({ symbol })
