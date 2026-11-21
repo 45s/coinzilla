@@ -14,7 +14,6 @@ import {
   MarketScreenerApi,
   type MarketSource,
   type MarketScreenerRow,
-  type MarketScreenerSnapshot,
 } from './api';
 import { createMarketFavoritesCookie, readMarketFavorites } from './favorites-cookie';
 
