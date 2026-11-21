@@ -73,8 +73,14 @@ test("rejects duplicate normalized source paths", () => {
   assert.throws(
     () => createModuleDependencyGraph({
       modules: [
-        { file: "packages/example/src/index.js", source: "export const first = true\n" },
-        { file: "packages/example/src/index.js", source: "export const second = true\n" },
+        {
+          file: "packages/example/src/index.js",
+          source: "export const first = true\n",
+        },
+        {
+          file: "packages/example/src/index.js",
+          source: "export const second = true\n",
+        },
       ],
     }),
     /Duplicate module source path: packages\/example\/src\/index\.js/,
@@ -86,7 +92,10 @@ test("preserves the source path when a module cannot be parsed", () => {
   assert.throws(
     () => createModuleDependencyGraph({
       modules: [
-        { file: "packages/example/src/broken.js", source: "const invalid = ;\n" },
+        {
+          file: "packages/example/src/broken.js",
+          source: "const invalid = ;\n",
+        },
       ],
     }),
     {
