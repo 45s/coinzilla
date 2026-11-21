@@ -1,6 +1,5 @@
+import { readFileSync } from "node:fs"
 import { loadEnvFile } from "node:process"
-import { readFileSync } from "node:fs"
-import { readFileSync } from "node:fs"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { assertInteractiveTerminal } from "./helpers/validate-order-attempt.js"
@@ -8,7 +7,6 @@ import { runOperatorOrderCommand, reportOperatorFailure } from "./operator/run-o
 import { runHealthcheckWorkflow } from "./workflows/run-healthcheck.js"
 import { parseHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
 import { sanitizeDiagnosticError } from "./helpers/sanitize-diagnostic-data.js"
-import { resolveCliIdentity } from "./helpers/cli-identity.js"
 import { resolveCliIdentity } from "./helpers/cli-identity.js"
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
@@ -25,30 +23,21 @@ function printCliIdentity({ stdout = process.stdout } = {}) {
   })
   stdout.write(`${identity}\\n`)
 }
-const packageMetadata = JSON.parse(readFileSync(resolve(brokersRoot, "package.json"), "utf8"))
-
-function printCliIdentity({ stdout = process.stdout } = {}) {
-  const identity = resolveCliIdentity({
-    scriptName: "bitunix:healthcheck",
-    packageVersion: packageMetadata.version,
-    repositoryRoot,
-  })
-  stdout.write(`${identity}\\n`)
-}
 
 function printHelp() {
   process.stdout.write([
-    "Usage: pnpm --filter @coinzilla/brokers bitunix:healthcheck [--local|--publish|--place-order]",
+    "Usage: pnpm --filter @coinzilla/brokers bitunix:healthcheck [--version|--local|--publish|--place-order]",
     "",
     "Default / --publish: run LIVE read-only diagnostics and publish only an allowlisted sanitized report branch.",
     "--local: run LIVE read-only diagnostics and save a private local report without creating or pushing a branch.",
     "--place-order: run read-only health checks, then (only if healthy) the guarded one-shot LIVE HYPEUSDT BUY LIMIT attempt; publish its sanitized result and return to develop.",
+    "--version: print package version, source commit, worktree state, and Node version without loading credentials or contacting Bitunix.",
     "--help: show this help without loading credentials or contacting Bitunix.",
     "",
     "The default mode never places or cancels orders, transfers funds, or withdraws.",
     "The LIVE order mode is human-only and must never be invoked by AI agents, tests, CI, or scheduled jobs.",
     "",
-  ].join("\n"))
+  ].join("\\n"))
 }
 
 function loadLocalEnvironment({ allowMissing = false } = {}) {
@@ -129,7 +118,7 @@ if (isMainModule) {
       error,
       secrets: [process.env.BITUNIX_API_KEY, process.env.BITUNIX_API_SECRET].filter(Boolean),
     })
-    process.stderr.write(`Bitunix health check failed: ${JSON.stringify(sanitized)}\n`)
+    process.stderr.write(`Bitunix health check failed: ${JSON.stringify(sanitized)}\\n`)
     process.exitCode = 1
   })
 }
