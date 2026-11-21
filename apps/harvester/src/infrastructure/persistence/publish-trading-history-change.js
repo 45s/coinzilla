@@ -1,4 +1,4 @@
-import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
+const TRADING_HISTORY_UPDATED_EVENT = "trading-history.updated"
 
 function reportNotificationFailure({ logger, errorCode, errorName } = {}) {
   try {
@@ -29,7 +29,7 @@ export function publishTradingHistoryChange({ eventBus, resources, logger } = {}
   }
   try {
     const result = eventBus.publish({
-      name: HARVESTER_EVENT_NAMES.TRADING_HISTORY_UPDATED,
+      name: TRADING_HISTORY_UPDATED_EVENT,
       source: "harvester.trading-history-persistence",
       data: {
         resources,
