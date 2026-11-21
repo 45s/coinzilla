@@ -136,3 +136,29 @@ test("does not treat a changed colocated test file as an unowned production modu
   assert.deepEqual(result.errors, [], "Changing a mapped regression test must not be mistaken for an unowned production module.")
   assert.deepEqual(result.affectedBehaviorIds, [], "A test-only file change must not be reported as a production behavior change.")
 })
+
+test("rejects an empty critical behavior inventory", () => {
+  const contract = {
+    ...validContract,
+    behaviors: [],
+  }
+
+  const result = validate({ contract })
+
+  assert.ok(
+    result.errors.some((error) => error.includes("at least one critical behavior")),
+    "An empty inventory must never disable critical behavior ownership checks.",
+  )
+})
+
+test("rejects a non-boolean integration evidence requirement", () => {
+  const contract = structuredClone(validContract)
+  contract.behaviors[0].integrationRequired = "true"
+
+  const result = validate({ contract })
+
+  assert.ok(
+    result.errors.some((error) => error.includes("ORDER-IDENTITY") && error.includes("integrationRequired")),
+    "Integration evidence requirements must be explicit booleans.",
+  )
+})
