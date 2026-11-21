@@ -49,7 +49,6 @@
     "test:module-dependency-analysis": "node --test scripts/module-import-analysis.test.js scripts/module-import-resolution.test.js scripts/module-dependency-graph.test.js scripts/module-dependency-cycles.test.js scripts/repository-module-discovery.test.js scripts/repository-module-graph-report.test.js",
     "report:module-graph": "node scripts/report-module-graph.js",
     "check:workspace-dependency-policy": "node --test scripts/workspace-dependency-policy.test.js && node scripts/check-workspace-dependency-policy.js",
-    "app:dev": "node scripts/run-apps.js app",
     "server:prod": "pnpm --filter @coinzilla/harvester start",
     "client:prod": "pnpm --filter @coinzilla/dashboard build",
     "app:prod": "node scripts/run-apps.js app:prod"
