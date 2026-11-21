@@ -8,7 +8,7 @@ import { acquireHarvesterProcessLock } from "./acquire-harvester-process-lock.js
 
 const createTempDirectory = () => mkdtemp(path.join(os.tmpdir(), "harvester-process-lock-"))
 
-function createInvalidProcessLockInputs({ directory }) {
+function createInvalidPathInputs({ directory }) {
   return [
     {
       name: "empty directory",
@@ -41,6 +41,11 @@ function createInvalidProcessLockInputs({ directory }) {
       },
       expectedMessage: /file name/,
     },
+  ]
+}
+
+function createInvalidOwnerInputs({ directory }) {
+  return [
     {
       name: "invalid process id",
       input: {
@@ -269,7 +274,10 @@ test("retains a same-host lock when its recorded process may still be alive", as
 test("rejects invalid process lock inputs", async () => {
   const directory = await createTempDirectory()
   try {
-    for (const invalidInput of createInvalidProcessLockInputs({ directory })) {
+    for (const invalidInput of [
+      ...createInvalidPathInputs({ directory }),
+      ...createInvalidOwnerInputs({ directory }),
+    ]) {
       await assertInvalidProcessLockInput({
         invalidInput,
       })
@@ -331,7 +339,10 @@ test("does not reclaim a malformed lock file", async () => {
     assert.equal(result.errors[0].code, "HARVESTER_PROCESS_LOCK_EXISTS")
     assert.equal(await readFile(lockPath, "utf8"), "{malformed", "The unreadable lock must not be deleted or replaced.")
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -356,7 +367,10 @@ test("treats a missing lock file as an idempotent release", async () => {
     )
     assert.deepEqual(await acquired.release(), released, "Repeated release after external removal must remain idempotent.")
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -396,6 +410,9 @@ test("does not remove a replacement lock after a stale-owner race", async () => 
       "The lock contents changed by the racing owner must be preserved byte-for-byte as the current owner.",
     )
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
