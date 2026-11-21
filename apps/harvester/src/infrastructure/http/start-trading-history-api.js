@@ -119,33 +119,24 @@ async function closeResources({ server, database } = {}) {
  * @param {{env?: object, logger?: object, createDatabase?: Function, startServer?: Function}} input
  * @returns {Promise<Readonly<{address: object, close: Function}>>} Running service lifecycle handle.
  */
-export async function startTradingHistoryApi({
-  env = process.env,
-  logger = defaultLogger,
-  createDatabase = createSqliteDatabase,
-  startServer = startTradingHistoryApiServer,
-} = {}) {
-  const configuration = validateStartupConfiguration({ env })
-  const filename = await assertHarvesterDatabaseIsolation({
-    tradingMode: configuration.environment,
-    env,
-  })
+async function assertExistingDatabase({ filename, environment } = {}) {
   try {
     await access(filename)
   } catch (cause) {
     throw new TradingHistoryApiStartupError({
       message: "The selected Harvester database does not exist yet; start Harvester once to initialize it.",
       code: "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
-      environment: configuration.environment,
+      environment,
       cause,
     })
   }
+}
 
+async function openQueryDatabase({ filename, environment, createDatabase } = {}) {
   const database = createDatabase({
     filename,
     timeout: 5_000,
   })
-  let server
   try {
     await database.connect()
     database.exec("PRAGMA query_only = ON")
@@ -154,20 +145,43 @@ export async function startTradingHistoryApi({
       throw new TradingHistoryApiStartupError({
         message: "The trading-history API database connection could not enable query-only SQLite mode.",
         code: "HARVESTER_TRADING_HISTORY_API_DATABASE_CONFIGURATION_FAILED",
-        environment: configuration.environment,
+        environment,
       })
     }
     assertTradingHistorySchema({
       database,
-      environment: configuration.environment,
+      environment,
     })
-    const repository = createTradingHistoryQueryRepository({
-      database,
-    })
-    const queries = createTradingHistoryQueries({
-      repository,
-    })
-    server = await startServer({
+    return database
+  } catch (error) {
+    try {
+      await closeDatabase({
+        database,
+      })
+    } catch (cleanupError) {
+      throw new AggregateError([
+        error,
+        cleanupError,
+      ], "Trading-history API database initialization and cleanup failed.")
+    }
+    throw error
+  }
+}
+
+async function startServerWithDatabase({
+  database,
+  configuration,
+  logger,
+  startServer,
+} = {}) {
+  const repository = createTradingHistoryQueryRepository({
+    database,
+  })
+  const queries = createTradingHistoryQueries({
+    repository,
+  })
+  try {
+    return await startServer({
       queries,
       token: configuration.token,
       environment: configuration.environment,
@@ -175,21 +189,63 @@ export async function startTradingHistoryApi({
       port: configuration.port,
       logger,
     })
-    return Object.freeze({
-      address: server.address,
-      close: () => closeResources({
-        server,
-        database,
-      }),
-    })
   } catch (error) {
     try {
-      await closeDatabase({ database })
-    } catch (cleanupError) {
-      throw new AggregateError([error, cleanupError], "Trading-history API startup and database cleanup failed.", {
-        cause: error,
+      await closeDatabase({
+        database,
       })
+    } catch (cleanupError) {
+      throw new AggregateError([
+        error,
+        cleanupError,
+      ], "Trading-history API startup and database cleanup failed.")
     }
     throw error
   }
+}
+
+/**
+ * Compose the standalone Harvester trading-history query service over the selected database.
+ *
+ * The service opens an existing environment-specific database, applies SQLite query_only
+ * mode to its own connection, and exposes the transport-independent application queries.
+ *
+ * @param {{env?: object, logger?: object, createDatabase?: Function, startServer?: Function}} input
+ * @returns {Promise<Readonly<{address: object, close: Function}>>} Running service lifecycle handle.
+ */
+export async function startTradingHistoryApi({
+  env = process.env,
+  logger = defaultLogger,
+  createDatabase = createSqliteDatabase,
+  startServer = startTradingHistoryApiServer,
+} = {}) {
+  const configuration = validateStartupConfiguration({
+    env,
+  })
+  const filename = await assertHarvesterDatabaseIsolation({
+    tradingMode: configuration.environment,
+    env,
+  })
+  await assertExistingDatabase({
+    filename,
+    environment: configuration.environment,
+  })
+  const database = await openQueryDatabase({
+    filename,
+    environment: configuration.environment,
+    createDatabase,
+  })
+  const server = await startServerWithDatabase({
+    database,
+    configuration,
+    logger,
+    startServer,
+  })
+  return Object.freeze({
+    address: server.address,
+    close: () => closeResources({
+      server,
+      database,
+    }),
+  })
 }
