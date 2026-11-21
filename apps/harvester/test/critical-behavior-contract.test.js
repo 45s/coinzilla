@@ -9,6 +9,7 @@ const validContract = {
     {
       id: "ORDER-IDENTITY",
       title: "Canonical order identity and monotonic state",
+      runtimeStatus: "active",
       sourceModules: ["src/domain/orders/order-registry.js"],
       tests: [
         {
