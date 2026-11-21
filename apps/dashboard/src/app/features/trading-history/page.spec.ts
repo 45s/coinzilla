@@ -164,31 +164,14 @@ describe('TradingHistoryComponent', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows an explicit connection form when no session token is available', () => {
+  it('connects automatically to local Harvester without credentials', async () => {
     fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).toContain('Connect to Harvester');
-    expect(fixture.nativeElement.textContent).toContain('Bearer token');
-  });
-
-  it('clears a rejected session token and reports invalid credentials', async () => {
-    fixture.detectChanges();
-
     http.expectOne((request) => request.url.endsWith('/api/v1/trading/metadata')).flush({
-      ok: false,
-      error: {
-        code: 'HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED',
-        message: 'Authentication required.',
-      },
-    }, {
-      status: 401,
-      statusText: 'Unauthorized',
+      ok: true,
+      data: { environment: 'testnet', records: { orders: 0, fills: 0, commissions: 0 } },
     });
     await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(fixture.nativeElement.textContent).toContain('Token was rejected');
-    expect(session.getToken()).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Connected to local Harvester');
   });
 
   it('loads real orders, displays backend environment and renders an honest empty state', async () => {
@@ -397,41 +380,23 @@ describe('TradingHistoryComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('Not recorded');
   });
 
-  it('authenticates the WebSocket without placing the token in the URL and resyncs after connection', async () => {
-    const request = await connectToResource(fixture, http, );
-    request.flush({
-      ok: true,
-      data: createPage([createOrder('order-initial')], 1),
-    });
+  it('opens local WebSocket without authentication and resyncs after connection', async () => {
+    const request = await connectToResource(fixture, http);
+    request.flush({ ok: true, data: createPage([createOrder('order-initial')], 1) });
     await fixture.whenStable();
-
     const socket = FakeWebSocket.instances[0];
     expect(socket.url).toBe('ws://127.0.0.1:4201/api/v1/trading/events');
-    expect(socket.url).not.toContain(API_TOKEN);
     socket.open();
-    expect(JSON.parse(socket.sent[0])).toEqual({
-      type: 'authenticate',
-      token: API_TOKEN,
-    });
-
-    socket.receive({ type: 'authenticated' });
+    expect(socket.sent).toEqual([]);
     http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
-      ok: true,
-      data: {
-        environment: 'testnet',
-        records: { orders: 1, fills: 0, commissions: 0 },
-      },
+      ok: true, data: { environment: 'testnet', records: { orders: 1, fills: 0, commissions: 0 } },
     });
-    const resync = http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders'));
-    resync.flush({
-      ok: true,
-      data: createPage([createOrder('order-resynced')], 1),
+    http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders')).flush({
+      ok: true, data: createPage([createOrder('order-resynced')], 1),
     });
     await fixture.whenStable();
     fixture.detectChanges();
-
     expect(fixture.componentInstance.liveStatus()).toBe('live');
-    expect(fixture.nativeElement.textContent).toContain('Live updates');
     expect(fixture.nativeElement.textContent).toContain('Order broker-resynced');
   });
 
