@@ -76,6 +76,12 @@ describe('AppComponent', () => {
     expect(document.documentElement.dataset['theme']).toBe('light');
     expect(window.localStorage.getItem('coinzilla.dashboard.theme')).toBe('light');
 
+    const reloadedFixture = TestBed.createComponent(AppComponent);
+    reloadedFixture.detectChanges();
+    const reloadedSelect = reloadedFixture.nativeElement.querySelector('select[aria-label="Dashboard theme"]') as HTMLSelectElement;
+    expect(reloadedSelect.value).toBe('light');
+    reloadedFixture.destroy();
+
     select.value = 'current';
     select.dispatchEvent(new Event('change'));
     fixture.detectChanges();
