@@ -584,3 +584,179 @@ function assertOrderMatches(...orderArguments) {
     failureMessage,
   )
 }
+
+
+runDogeTradingReplayTest("accounts streamed partial BUY executions before advancing the completed-BUY lifecycle", async (dogeTradingReplay) => {
+  const initialBuyOrder = await submitInitialBuyOrder(dogeTradingReplay)
+  await dogeTradingReplay.publishMarketPrice(dogeTradingReplay.scenarioExpectations.buyPrice)
+  const recoverySellSubmitted = dogeTradingReplay.waitForSubmittedOrder("SELL")
+  const nextStandingBuySubmitted = dogeTradingReplay.waitForSubmittedOrder("BUY", 2)
+  const firstExecutionTimestamp = Math.max(Date.now(), initialBuyOrder.createdAt + 1)
+  const partialBuyReports = [
+    {
+      tradeId: "6451",
+      fillQuantity: "100",
+      cumulativeExecutedQuantity: "100",
+      quoteQuantity: "7.157",
+      commissionAmount: "0.1",
+      timestamp: firstExecutionTimestamp,
+    },
+    {
+      tradeId: "6452",
+      fillQuantity: "150",
+      cumulativeExecutedQuantity: "250",
+      quoteQuantity: "10.7355",
+      commissionAmount: "0.15",
+      timestamp: firstExecutionTimestamp + 1,
+    },
+    {
+      tradeId: "6453",
+      fillQuantity: "150",
+      cumulativeExecutedQuantity: "400",
+      quoteQuantity: "10.7355",
+      commissionAmount: "0.15",
+      timestamp: firstExecutionTimestamp + 2,
+    },
+  ]
+  const expectedProgress = [
+    {
+      baseQuantity: "99.9",
+      spent: "7.157",
+      buyCost: "7.157",
+      completed: false,
+    },
+    {
+      baseQuantity: "249.75",
+      spent: "17.8925",
+      buyCost: "17.8925",
+      completed: false,
+    },
+    {
+      baseQuantity: "399.6",
+      spent: "28.628",
+      buyCost: "28.628",
+      completed: true,
+    },
+  ]
+
+  for (let index = 0; index < partialBuyReports.length; index += 1) {
+    const report = partialBuyReports[index]
+    const result = await dogeTradingReplay.publishOrderFill({
+      order: initialBuyOrder,
+      price: dogeTradingReplay.scenarioExpectations.buyPrice,
+      ...report,
+      commissionAsset: "DOGE",
+    })
+    const position = dogeTradingReplay.runtime.portfolio.getPosition({
+      symbol: MARKET_SYMBOL,
+    })
+    const recoveryLedger = dogeTradingReplay.runtime.getRecoveryLedger({
+      marketId: position.market.id,
+    })
+    const expected = expectedProgress[index]
+
+    assert.equal(result.ok, true, `Partial BUY execution ${index + 1} must be accepted by the real runtime composition.`)
+    assert.equal(position.baseQuantity.amount, expected.baseQuantity, `Partial BUY execution ${index + 1} must apply gross base less its actual DOGE commission.`)
+    assert.equal(position.spent.amount, expected.spent, `Partial BUY execution ${index + 1} must add its exact quote notional once.`)
+    assert.equal(recoveryLedger.buyCost, expected.buyCost, `Partial BUY execution ${index + 1} must keep RecoveryLedger cost aligned with Portfolio spent.`)
+    assert.equal(recoveryLedger.netSellProceeds, "0", "BUY-only replay evidence must not invent recovery SELL proceeds.")
+    assert.equal(
+      dogeTradingReplay.submittedCanonicalOrders.filter((order) => order.side === "BUY").length,
+      expected.completed ? 2 : 1,
+      "The next standing BUY must not be submitted until the original BUY is completely filled.",
+    )
+    if (!expected.completed) {
+      assert.equal(result.data.waitingForFullFill, true, "A partial cumulative BUY must keep the completed-BUY lifecycle waiting.")
+    } else {
+      assert.equal(result.data.reevaluate, true, "The completed cumulative BUY must release the completed-BUY lifecycle for reevaluation.")
+    }
+  }
+
+  await recoverySellSubmitted
+  const nextStandingBuyOrder = await nextStandingBuySubmitted
+  const recoverySellOrders = dogeTradingReplay.submittedCanonicalOrders
+    .filter((order) => order.side === "SELL")
+  const recoverySellOrder = recoverySellOrders.at(-1)
+  assert.ok(recoverySellOrder, "The fully reconciled BUY must create its required recovery SELL.")
+  assertOrderMatches(
+    recoverySellOrder,
+    {
+      marketSymbol: MARKET_SYMBOL,
+      side: "SELL",
+      price: dogeTradingReplay.scenarioExpectations.sellPrice,
+      quantity: dogeTradingReplay.scenarioExpectations.expectedSellQuantity,
+      orderType: "LIMIT",
+    },
+    "The recovery SELL must use the exact aggregate inventory after all partial BUY executions and actual base commissions.",
+  )
+  assertOrderMatches(
+    nextStandingBuyOrder,
+    {
+      marketSymbol: MARKET_SYMBOL,
+      side: "BUY",
+      price: dogeTradingReplay.scenarioExpectations.nextBuyPrice,
+      quantity: String(dogeTradingReplay.marketConfiguration.orderQuantity),
+      orderType: "LIMIT",
+    },
+    "The next standing BUY must follow the acknowledged recovery SELL after the original BUY is fully reconciled.",
+  )
+  const recoverySellIndex = dogeTradingReplay.submittedCanonicalOrders.indexOf(recoverySellOrder)
+  const nextStandingBuyIndex = dogeTradingReplay.submittedCanonicalOrders.findIndex(
+    (order) => order.clientOrderId === nextStandingBuyOrder.clientOrderId,
+  )
+  assert.ok(
+    recoverySellIndex < nextStandingBuyIndex,
+    "The recovery SELL must be acknowledged before the next standing BUY is submitted.",
+  )
+  const supersededRecoverySellOrders = recoverySellOrders.slice(0, -1)
+  assert.ok(
+    supersededRecoverySellOrders.every((order) =>
+      dogeTradingReplay.confirmedCanceledOrders.some(
+        (canceledOrder) => canceledOrder.clientOrderId === order.clientOrderId,
+      )),
+    "Every recovery SELL superseded by later partial BUY executions must be authoritatively canceled before replacement.",
+  )
+
+  assert.deepEqual(
+    dogeTradingReplay.receivedExecutionReports.map(({ executedOrder, fill }) => ({
+      cumulativeExecutedQuantity: executedOrder.executedQuantity,
+      orderStatus: executedOrder.status,
+      fillQuantity: fill.quantity,
+      quoteQuantity: fill.quoteQuantity,
+      commissionAmount: fill.commissionAmount,
+      commissionAsset: fill.commissionAsset,
+    })),
+    [
+      {
+        cumulativeExecutedQuantity: "100",
+        orderStatus: "PARTIALLY_FILLED",
+        fillQuantity: "100",
+        quoteQuantity: "7.157",
+        commissionAmount: "0.1",
+        commissionAsset: "DOGE",
+      },
+      {
+        cumulativeExecutedQuantity: "250",
+        orderStatus: "PARTIALLY_FILLED",
+        fillQuantity: "150",
+        quoteQuantity: "10.7355",
+        commissionAmount: "0.15",
+        commissionAsset: "DOGE",
+      },
+      {
+        cumulativeExecutedQuantity: "400",
+        orderStatus: "FILLED",
+        fillQuantity: "150",
+        quoteQuantity: "10.7355",
+        commissionAmount: "0.15",
+        commissionAsset: "DOGE",
+      },
+    ],
+    "The runtime replay must preserve incremental fills separately from each cumulative canonical order snapshot.",
+  )
+  assert.equal(
+    dogeTradingReplay.harvesterRuntimeErrors.length,
+    0,
+    "A valid sequence of partial BUY executions must not produce runtime accounting or order-transition errors.",
+  )
+})
