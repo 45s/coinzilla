@@ -49,6 +49,7 @@ function resolveRegisteredOrderOwnership({ fill, orderRegistry }) {
 
   const order = orderRegistry.getOrderByBrokerOrderId({
     brokerOrderId: fill.brokerOrderId,
+    marketId: fill.market.id,
   })
   if (!order) {
     throw new TypeError("Mixed SELL Fill broker order identity does not match a registered canonical order")
