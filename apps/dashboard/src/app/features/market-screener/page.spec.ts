@@ -40,6 +40,8 @@ describe('MarketScreenerComponent', () => {
   afterEach(() => {
     http.verify();
     document.cookie = 'coinzilla_market_favorites_bitunix_futures=; Path=/; Max-Age=0';
+    localStorage.removeItem('coinzilla_market_screener_preferences_v1');
+    localStorage.removeItem('coinzilla_market_screener_presets_v1');
   });
 
   it('defaults to Bitunix Futures and renders absent native movement fields as N/A', async () => {
