@@ -56,7 +56,11 @@ function createPublisher({ events, publishedReports }) {
       reportPath: "packages/brokers/diagnostics/reports/test.json",
       localReportPath: "packages/brokers/.diagnostics/test.json",
       pushError: null,
-      exitCode: healthCheck.healthy ? 0 : 1,
+      exitCode: !healthCheck.healthy ||
+        report.results.some((entry) =>
+          entry.operation === "operator order attempt" && entry.status === "failed")
+        ? 1
+        : 0,
     }
   }
 }

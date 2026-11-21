@@ -364,6 +364,11 @@ export async function publishBitunixDiagnostics({
       path: paths.local,
     }),
     pushError: execution.pushError,
-    exitCode: !execution.healthCheck.healthy || execution.pushError ? 1 : 0,
+    exitCode: !execution.healthCheck.healthy ||
+      execution.report.results.some((entry) =>
+        entry.operation === "operator order attempt" && entry.status === "failed") ||
+      execution.pushError
+      ? 1
+      : 0,
   }
 }

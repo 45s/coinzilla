@@ -71,10 +71,12 @@ export function evaluateHealthCheck({ report }) {
   )
   const missingRequiredOperations = REQUIRED_HEALTH_OPERATIONS.filter((operation) =>
     !passedOperations.has(operation))
+  const failedDiagnosticOperations = report.results.filter((result) =>
+    result.operation !== "operator order attempt" && result.status === "failed")
   return {
     requiredOperations: REQUIRED_HEALTH_OPERATIONS,
     missingRequiredOperations,
-    healthy: report.summary.failed === 0 && missingRequiredOperations.length === 0,
+    healthy: failedDiagnosticOperations.length === 0 && missingRequiredOperations.length === 0,
   }
 }
 

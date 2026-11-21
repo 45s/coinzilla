@@ -38,9 +38,9 @@ test("health evaluation fails when any diagnostic operation fails", () => {
     summary: {
       failed: 1,
     },
-    results: requiredOperations.map((operation) => ({
+    results: requiredOperations.map((operation, index) => ({
       operation,
-      status: "passed",
+      status: index === 0 ? "failed" : "passed",
     })),
   }
   assert.equal(evaluateHealthCheck({ report }).healthy, false)
@@ -117,4 +117,24 @@ test("nested free-form error messages are withheld before local report persisten
   })
   assert.equal(result.error.message, "[error message withheld]")
   assert.equal(result.error.cause.message, "[error message withheld]")
+})
+
+test("operator order failure does not rewrite the read-only diagnostic health verdict", () => {
+  const report = {
+    summary: {
+      failed: 1,
+    },
+    results: [
+      ...requiredOperations.map((operation) => ({
+        operation,
+        status: "passed",
+      })),
+      {
+        operation: "operator order attempt",
+        status: "failed",
+      },
+    ],
+  }
+
+  assert.equal(evaluateHealthCheck({ report }).healthy, true, "the health verdict must describe read-only diagnostics, not the separate operator mutation outcome")
 })
