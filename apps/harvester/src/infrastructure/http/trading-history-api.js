@@ -1,6 +1,7 @@
 import { createServer } from "node:http"
 import { SystemCustomError } from "@coinzilla/utils"
 import { attachTradingHistoryWebSocket } from "./trading-history-websocket.js"
+import { handleOperatorControlRequest } from "./operator-control-api.js"
 
 const API_PREFIX = "/api/v1/trading"
 const METADATA_ROUTE = `${API_PREFIX}/metadata`
@@ -330,19 +331,23 @@ function handleRequestPreconditions({ request, response } = {}) {
   return false
 }
 
-function handleTradingHistoryRequest({
+async function handleTradingHistoryRequest({
   request,
   response,
   queries,
   environment,
+  operator,
 } = {}) {
+  const url = new URL(request.url ?? "/", "http://127.0.0.1")
+  if (await handleOperatorControlRequest({ request, response, pathname: url.pathname, operator })) {
+    return
+  }
   if (handleRequestPreconditions({
     request,
     response,
   })) {
     return
   }
-  const url = new URL(request.url ?? "/", "http://127.0.0.1")
   if (url.pathname === METADATA_ROUTE) {
     handleMetadataRequest({
       response,
@@ -378,18 +383,19 @@ function handleTradingHistoryRequest({
   })
 }
 
-function createRequestHandler({ queries, environment, logger } = {}) {
+function createRequestHandler({ queries, environment, logger, operator } = {}) {
   return (...requestArguments) => {
     const [request, response] = requestArguments
     response.tradingHistoryOrigin = ALLOWED_BROWSER_ORIGINS.has(request.headers.origin)
       ? request.headers.origin
       : undefined
     try {
-      handleTradingHistoryRequest({
+      await handleTradingHistoryRequest({
         request,
         response,
         queries,
         environment,
+        operator,
       })
     } catch (error) {
       if (error instanceof TradingHistoryApiRequestError) {
@@ -477,13 +483,14 @@ function validateApiServerConfiguration({
   })
 }
 
-function createConfiguredServer({ queries, environment, logger } = {}) {
+function createConfiguredServer({ queries, environment, logger, operator } = {}) {
   const server = createServer({
     maxHeaderSize: MAX_HEADER_SIZE,
   }, createRequestHandler({
     queries,
     environment,
     logger,
+    operator,
   }))
   server.requestTimeout = REQUEST_TIMEOUT_MS
   server.headersTimeout = HEADERS_TIMEOUT_MS
@@ -517,6 +524,7 @@ export async function startTradingHistoryApiServer({
   port = DEFAULT_PORT,
   logger,
   eventBus,
+  operator,
 } = {}) {
   const configuration = validateApiServerConfiguration({
     queries,
@@ -528,6 +536,7 @@ export async function startTradingHistoryApiServer({
     queries: configuration.queries,
     environment: configuration.environment,
     logger,
+    operator,
   })
   const websocket = eventBus
     ? attachTradingHistoryWebSocket({
