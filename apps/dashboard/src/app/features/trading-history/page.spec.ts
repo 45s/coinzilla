@@ -281,6 +281,10 @@ describe('TradingHistoryComponent', () => {
     expect(orderRow.textContent).toContain('Order broker-1');
     expect(orderRow.textContent).not.toContain('order-1');
     expect(fixture.nativeElement.textContent).toContain('Orders details');
+    expect(fixture.nativeElement.textContent).toContain('Raw record · every persisted field');
+    const rawRecord = fixture.nativeElement.querySelector('.raw-record-details pre') as HTMLElement;
+    expect(rawRecord.textContent).toContain('"providerType": "binance"');
+    expect(rawRecord.textContent).toContain('"averageExecutionPrice": null');
     expect(fixture.nativeElement.textContent).toContain('65000.00000000');
     expect(fixture.nativeElement.textContent).toContain('Not recorded');
   });
