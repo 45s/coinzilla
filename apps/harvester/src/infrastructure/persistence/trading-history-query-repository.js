@@ -151,19 +151,19 @@ function normalizeFilters({ filters = {}, columns } = {}) {
   for (const [key, value] of Object.entries(filters)) {
     const column = columns[key]
     if (!column) {
-      throw new TypeError("Trading-history filter " + key + " is not supported")
+      throw new TypeError(`Trading-history filter ${key} is not supported`)
     }
     if (value === undefined || value === null || value === "") {
       continue
     }
     if (typeof value !== "string" || value.trim() !== value) {
-      throw new TypeError("Trading-history filter " + key + " must be a trimmed string")
+      throw new TypeError(`Trading-history filter ${key} must be a trimmed string`)
     }
-    clauses.push(column + " = ?")
+    clauses.push(`${column} = ?`)
     parameters.push(value)
   }
   return {
-    where: clauses.length === 0 ? "" : "WHERE " + clauses.join(" AND "),
+    where: clauses.length === 0 ? "" : `WHERE ${clauses.join(" AND ")}`,
     parameters,
   }
 }
@@ -172,23 +172,27 @@ function normalizePagination({ pagination = {} } = {}) {
   const limit = pagination.limit ?? DEFAULT_PAGE_LIMIT
   const offset = pagination.offset ?? 0
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PAGE_LIMIT) {
-    throw new TypeError("Trading-history page limit must be an integer between 1 and " + MAX_PAGE_LIMIT)
+    throw new TypeError(`Trading-history page limit must be an integer between 1 and ${MAX_PAGE_LIMIT}`)
   }
   if (!Number.isSafeInteger(offset) || offset < 0) {
     throw new TypeError("Trading-history page offset must be a non-negative safe integer")
   }
-  return Object.freeze({ limit, offset })
+  return Object.freeze({
+    limit,
+    offset,
+  })
 }
 
 function listRecords({ database, table, mapper, filters, columns, orderBy, pagination } = {}) {
   const normalizedFilters = normalizeFilters({ filters, columns })
   const normalizedPagination = normalizePagination({ pagination })
-  const total = database.prepare(
-    "SELECT COUNT(*) AS total FROM " + table + " " + normalizedFilters.where,
-  ).get(...normalizedFilters.parameters).total
+  const { total } = database.prepare(
+    `SELECT COUNT(*) AS total FROM ${table} ${normalizedFilters.where}`,
+  ).get(...normalizedFilters.parameters)
   const rows = database.prepare(
-    "SELECT * FROM " + table + " " + normalizedFilters.where +
-    " ORDER BY " + orderBy + " LIMIT ? OFFSET ?",
+    `SELECT * FROM ${table} ${normalizedFilters.where}
+     ORDER BY ${orderBy}
+     LIMIT ? OFFSET ?`,
   ).all(
     ...normalizedFilters.parameters,
     normalizedPagination.limit,
@@ -235,9 +239,11 @@ function listFills({ database, filters, pagination } = {}) {
 
 function listFillCommissions({ database, fillId } = {}) {
   const rows = database.prepare(
-    "SELECT id, fill_id, amount, asset_id, asset_code, quote_value_amount, " +
-    "quote_value_asset_id, quote_value_asset_code FROM fill_commissions " +
-    "WHERE fill_id = ? ORDER BY ordinal ASC",
+    `SELECT id, fill_id, amount, asset_id, asset_code, quote_value_amount,
+      quote_value_asset_id, quote_value_asset_code
+    FROM fill_commissions
+    WHERE fill_id = ?
+    ORDER BY ordinal ASC`,
   ).all(fillId)
   return rows.map((row) => Object.freeze({
     id: row.id,
@@ -271,18 +277,19 @@ function listCommissions({ database, filters, pagination } = {}) {
   })
   const normalizedPagination = normalizePagination({ pagination })
   const from = "FROM fill_commissions c INNER JOIN fills f ON f.id = c.fill_id"
-  const total = database.prepare(
-    "SELECT COUNT(*) AS total " + from + " " + normalizedFilters.where,
-  ).get(...normalizedFilters.parameters).total
+  const { total } = database.prepare(
+    `SELECT COUNT(*) AS total ${from} ${normalizedFilters.where}`,
+  ).get(...normalizedFilters.parameters)
   const rows = database.prepare(
-    "SELECT c.id, c.fill_id, c.amount, c.asset_id, c.asset_code, " +
-    "c.quote_value_amount, c.quote_value_asset_id, c.quote_value_asset_code, " +
-    "f.environment, f.provider_type, f.provider_instance_id, f.account_id, " +
-    "f.symbol, f.side, f.exchange_trade_id, f.exchange_order_id, f.strategy_id, " +
-    "f.exchange_executed_at, f.local_observed_at " +
-    from + " " + normalizedFilters.where +
-    " ORDER BY COALESCE(f.exchange_executed_at, f.local_observed_at) DESC, " +
-    "c.fill_id ASC, c.ordinal ASC LIMIT ? OFFSET ?",
+    `SELECT c.id, c.fill_id, c.amount, c.asset_id, c.asset_code,
+      c.quote_value_amount, c.quote_value_asset_id, c.quote_value_asset_code,
+      f.environment, f.provider_type, f.provider_instance_id, f.account_id,
+      f.symbol, f.side, f.exchange_trade_id, f.exchange_order_id, f.strategy_id,
+      f.exchange_executed_at, f.local_observed_at
+    ${from} ${normalizedFilters.where}
+    ORDER BY COALESCE(f.exchange_executed_at, f.local_observed_at) DESC,
+      c.fill_id ASC, c.ordinal ASC
+    LIMIT ? OFFSET ?`,
   ).all(
     ...normalizedFilters.parameters,
     normalizedPagination.limit,
@@ -302,7 +309,11 @@ function getSummary({ database } = {}) {
   const orders = database.prepare("SELECT COUNT(*) AS total FROM orders").get().total
   const fills = database.prepare("SELECT COUNT(*) AS total FROM fills").get().total
   const commissions = database.prepare("SELECT COUNT(*) AS total FROM fill_commissions").get().total
-  return Object.freeze({ orders, fills, commissions })
+  return Object.freeze({
+    orders,
+    fills,
+    commissions,
+  })
 }
 
 /**
@@ -317,10 +328,25 @@ export function createTradingHistoryQueryRepository({ database } = {}) {
   }
   return Object.freeze({
     getSummary: () => getSummary({ database }),
-    listOrders: (input) => listOrders({ database, ...input }),
-    findOrderById: ({ id } = {}) => findOrderById({ database, id }),
-    listFills: (input) => listFills({ database, ...input }),
-    findFillById: ({ id } = {}) => findFillById({ database, id }),
-    listCommissions: (input) => listCommissions({ database, ...input }),
+    listOrders: (input) => listOrders({
+      database,
+      ...input,
+    }),
+    findOrderById: ({ id } = {}) => findOrderById({
+      database,
+      id,
+    }),
+    listFills: (input) => listFills({
+      database,
+      ...input,
+    }),
+    findFillById: ({ id } = {}) => findFillById({
+      database,
+      id,
+    }),
+    listCommissions: (input) => listCommissions({
+      database,
+      ...input,
+    }),
   })
 }
