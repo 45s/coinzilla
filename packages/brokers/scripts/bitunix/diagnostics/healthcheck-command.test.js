@@ -122,7 +122,10 @@ test("place-order mode skips the order when read-only health checks are not heal
     env,
     stdout,
     runDiagnostics: async () => createDiagnosticReport({ failed: 1 }),
-    publishDiagnostics: createPublisher({ events, publishedReports }),
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
     runOperatorOrder: async () => {
       orderCalls += 1
       return {
@@ -148,7 +151,10 @@ test("operator exceptions are recorded as OUTCOME_UNKNOWN without publishing fre
     env,
     stdout,
     runDiagnostics: async () => createDiagnosticReport(),
-    publishDiagnostics: createPublisher({ events, publishedReports }),
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
     runOperatorOrder: async () => {
       throw new Error("private exchange response")
     },
@@ -172,7 +178,10 @@ test("ordinary publish mode does not invoke an operator order callback", async (
     env,
     stdout,
     runDiagnostics: async () => createDiagnosticReport(),
-    publishDiagnostics: createPublisher({ events, publishedReports }),
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
   })
 
   assert.equal(exitCode, 0)
