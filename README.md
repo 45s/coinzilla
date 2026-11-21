@@ -37,6 +37,20 @@ Install dependencies from the repository root:
 pnpm install
 ```
 
+Start both applications together:
+
+```sh
+pnpm run app:dev
+```
+
+Run the Harvester production runtime and build the Dashboard for production:
+
+```sh
+pnpm run app:prod
+```
+
+The development command runs Harvester's `dev` script and Dashboard's `start` script concurrently. The production command runs Harvester's `start` script and Dashboard's production `build` concurrently; the Dashboard build output is intended to be served by a production web server.
+
 Run the unit tests:
 
 ```sh
