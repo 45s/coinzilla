@@ -170,6 +170,7 @@ describe('TradingHistoryComponent', () => {
       ok: true,
       data: { environment: 'testnet', records: { orders: 0, fills: 0, commissions: 0 } },
     });
+    http.expectOne((request) => request.url.endsWith('/api/v1/trading/orders')).flush({ ok: true, data: createPage([], 0) });
     await fixture.whenStable();
     expect(fixture.nativeElement.textContent).toContain('Connected to local Harvester');
   });
@@ -258,7 +259,7 @@ describe('TradingHistoryComponent', () => {
   });
 
   it('loads persisted order details and preserves null financial values', async () => {
-    const request = await connectToResource(fixture, http, );
+    const request = await connectToResource(fixture, http);
     request.flush({
       ok: true,
       data: createPage([createOrder('order-1')], 1),
