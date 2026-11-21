@@ -3,6 +3,7 @@ import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
 import { createFillHistoryObserver } from "./create-fill-history-observer.js"
 import { createOrderHistoryObserver } from "./create-order-history-observer.js"
+import { publishTradingHistoryChange } from "./publish-trading-history-change.js"
 import { createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
 
 const HISTORY_UPDATED_EVENT = "trading-history.updated"
@@ -170,4 +171,42 @@ test("does not publish fill or commission notifications when the fill upsert fai
   await eventBus.flush()
 
   assert.deepEqual(notifications, [], "A failed fill upsert must never produce fill or commission notifications.")
+})
+
+test("keeps persistence isolated when EventBus notification publication throws", () => {
+  const warnings = []
+  const publicationError = Object.assign(new Error("event bus unavailable"), {
+    code: "HARVESTER_EVENT_BUS_CLOSED",
+  })
+
+  assert.doesNotThrow(() => publishTradingHistoryChange({
+    eventBus: {
+      publish() {
+        throw publicationError
+      },
+    },
+    resources: ["orders"],
+    logger: {
+      warn: (warning) => warnings.push(warning),
+    },
+  }))
+  assert.deepEqual(warnings, [{
+    message: "Persisted trading-history change notification was not accepted.",
+    errorCode: "HARVESTER_EVENT_BUS_CLOSED",
+    errorName: "Error",
+  }])
+})
+
+test("does not let a missing EventBus or a failing diagnostic logger affect persistence", () => {
+  let warningLogged = false
+  assert.doesNotThrow(() => publishTradingHistoryChange({
+    resources: ["orders"],
+    logger: {
+      warn() {
+        warningLogged = true
+        throw new Error("logger unavailable")
+      },
+    },
+  }))
+  assert.equal(warningLogged, true, "The helper should attempt diagnostics without propagating logger failures.")
 })
