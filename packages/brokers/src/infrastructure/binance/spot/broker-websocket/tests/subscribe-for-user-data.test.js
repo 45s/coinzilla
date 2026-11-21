@@ -552,7 +552,10 @@ it("warns at the broker boundary when Binance sends an unsupported user-data eve
   })
   rpc.emitEvent({
     subscriptionId: 9,
-    event: { e: "futureEvent", secret: "must-not-be-logged" },
+    event: {
+      e: "futureEvent",
+      secret: "must-not-be-logged",
+    },
   })
 
   assert.deepEqual(received, [{
@@ -560,7 +563,9 @@ it("warns at the broker boundary when Binance sends an unsupported user-data eve
   }])
   assert.deepEqual(warnings, [[
     "Unsupported Binance user-data event",
-    { eventType: "futureEvent" },
+    {
+      eventType: "futureEvent",
+    },
   ]])
   assert.equal(JSON.stringify(warnings).includes("must-not-be-logged"), false)
   await subscription.data.disconnect()
