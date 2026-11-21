@@ -11,8 +11,12 @@ test("exposes the local application operator even when Telegram is disabled", as
 
   await lifecycle.start({
     engine: {
-      pauseBuys() {},
-      resumeBuys() {},
+      pauseBuys() {
+        return undefined
+      },
+      resumeBuys() {
+        return undefined
+      },
     },
   })
   const operator = lifecycle.getOperator()
