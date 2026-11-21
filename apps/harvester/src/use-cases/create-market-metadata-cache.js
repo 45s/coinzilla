@@ -64,12 +64,12 @@ function createRefreshMarketMetadata({
         throw new Error(`Fresh exchange metadata does not match the active market ${symbol}`)
       }
 
-      const refreshedAt = readMarketMetadataClock({ now })
-      if (refreshedAt < currentTime) {
+      const refreshedAtTimestamp = readMarketMetadataClock({ now })
+      if (refreshedAtTimestamp < currentTime) {
         throw new Error("Market metadata clock moved backwards during refresh")
       }
       refreshedMarketMetadata.set(symbol, refreshed)
-      refreshedAtBySymbol.set(symbol, refreshedAt)
+      refreshedAtBySymbol.set(symbol, refreshedAtTimestamp)
       return toResult({ data: refreshed })
     } catch (error) {
       return toResult({ error })
