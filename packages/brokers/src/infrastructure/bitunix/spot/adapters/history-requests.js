@@ -188,7 +188,7 @@ function normalizeReturnedHistoryPage({ pageNum, requestedPage }) {
   const normalizedPageNum = typeof pageNum === "string" ? pageNum.trim() : pageNum
   const pageNumIsNumber = typeof normalizedPageNum === "number" && Number.isSafeInteger(normalizedPageNum)
   const pageNumIsString = typeof normalizedPageNum === "string" &&
-    /^[0-9]+(?:\\.0+)?$/.test(normalizedPageNum)
+    /^[0-9]+(?:\.0+)?$/.test(normalizedPageNum)
 
   // Page 1 is unambiguous: tolerate an absent or malformed redundant echo,
   // but never accept a valid echo that identifies a different page.
