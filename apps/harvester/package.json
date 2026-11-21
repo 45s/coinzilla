@@ -26,7 +26,8 @@
     "persistence:export": "node scripts/export-database.js",
     "persistence:backup": "node scripts/trading-history-backups.js create",
     "persistence:restore-check": "node scripts/trading-history-backups.js verify",
-    "check:reliability": "node scripts/check-critical-behavior-contract.js"
+    "check:reliability": "node scripts/check-critical-behavior-contract.js",
+    "check:critical-coverage": "node scripts/check-critical-module-coverage.js"
   },
   "engines": {
     "node": ">=24"
