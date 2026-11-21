@@ -156,6 +156,17 @@ test("ignores malformed resource notifications without breaking the EventBus sub
   })
 })
 
+test("rejects browser WebSocket upgrades from untrusted origins", async (t) => {
+  const eventBus = new EventBus()
+  const api = await startApi({ t, eventBus })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`, {
+    headers: { Origin: "https://attacker.example" },
+  })
+  t.after(() => socket.close())
+  await new Promise((resolve) => socket.addEventListener("close", resolve, { once: true }))
+  assert.equal(socket.readyState, WebSocket.CLOSED)
+})
+
 test("closes local WebSocket clients before the shared HTTP listener shuts down", async (t) => {
   const eventBus = new EventBus()
   const api = await startApi({
