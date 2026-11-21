@@ -17,23 +17,58 @@ function createQueries() {
     },
   }
   return {
-    getSummary: () => ({ ok: true, data: { orders: 0, fills: 0, commissions: 0 } }),
-    listOrders: () => ({ ok: true, data: emptyPage }),
-    getOrder: () => ({ ok: true, data: null }),
-    listFills: () => ({ ok: true, data: emptyPage }),
-    getFill: () => ({ ok: true, data: null }),
-    listCommissions: () => ({ ok: true, data: emptyPage }),
+    getSummary: () => ({
+      ok: true,
+      data: {
+        orders: 0,
+        fills: 0,
+        commissions: 0,
+      },
+    }),
+    listOrders: () => ({
+      ok: true,
+      data: emptyPage,
+    }),
+    getOrder: () => ({
+      ok: true,
+      data: null,
+    }),
+    listFills: () => ({
+      ok: true,
+      data: emptyPage,
+    }),
+    getFill: () => ({
+      ok: true,
+      data: null,
+    }),
+    listCommissions: () => ({
+      ok: true,
+      data: emptyPage,
+    }),
   }
 }
 
+function waitForSocketOpen(socket) {
+  return new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
+    socket.addEventListener("open", resolve, {
+      once: true,
+    })
+    socket.addEventListener("error", reject, {
+      once: true,
+    })
+  })
+}
+
 function waitForMessage(socket) {
-  return new Promise((resolve, reject) => {
-    const onMessage = (event) => {
+  return new Promise((...callbacks) => {
+    const [resolve, reject] = callbacks
+    function onMessage(event) {
       socket.removeEventListener("message", onMessage)
       socket.removeEventListener("error", onError)
       resolve(JSON.parse(event.data))
     }
-    const onError = () => {
+    function onError() {
       socket.removeEventListener("message", onMessage)
       socket.removeEventListener("error", onError)
       reject(new Error("WebSocket connection failed before receiving a message"))
@@ -51,7 +86,9 @@ async function startApi({ t, eventBus } = {}) {
     host: "127.0.0.1",
     port: 0,
     eventBus,
-    logger: { error() {} },
+    logger: {
+      error() {},
+    },
   })
   t.after(async () => {
     await api.close()
@@ -62,14 +99,14 @@ async function startApi({ t, eventBus } = {}) {
 
 test("authenticates WebSocket clients with a first message and broadcasts only persisted-change notifications", async (t) => {
   const eventBus = new EventBus()
-  const api = await startApi({ t, eventBus })
+  const api = await startApi({
+    t,
+    eventBus,
+  })
   const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
   t.after(() => socket.close())
 
-  await new Promise((resolve, reject) => {
-    socket.addEventListener("open", resolve, { once: true })
-    socket.addEventListener("error", reject, { once: true })
-  })
+  await waitForSocketOpen(socket)
   socket.send(JSON.stringify({
     type: "authenticate",
     token: API_TOKEN,
@@ -96,14 +133,14 @@ test("authenticates WebSocket clients with a first message and broadcasts only p
 
 test("rejects invalid WebSocket credentials and does not send authenticated events", async (t) => {
   const eventBus = new EventBus()
-  const api = await startApi({ t, eventBus })
+  const api = await startApi({
+    t,
+    eventBus,
+  })
   const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
   t.after(() => socket.close())
 
-  await new Promise((resolve, reject) => {
-    socket.addEventListener("open", resolve, { once: true })
-    socket.addEventListener("error", reject, { once: true })
-  })
+  await waitForSocketOpen(socket)
   socket.send(JSON.stringify({
     type: "authenticate",
     token: "incorrect-token",
@@ -117,14 +154,14 @@ test("rejects invalid WebSocket credentials and does not send authenticated even
 
 test("closes authenticated sockets before the shared HTTP listener shuts down", async (t) => {
   const eventBus = new EventBus()
-  const api = await startApi({ t, eventBus })
+  const api = await startApi({
+    t,
+    eventBus,
+  })
   const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
   t.after(() => socket.close())
 
-  await new Promise((resolve, reject) => {
-    socket.addEventListener("open", resolve, { once: true })
-    socket.addEventListener("error", reject, { once: true })
-  })
+  await waitForSocketOpen(socket)
   socket.send(JSON.stringify({
     type: "authenticate",
     token: API_TOKEN,
@@ -132,7 +169,9 @@ test("closes authenticated sockets before the shared HTTP listener shuts down", 
   await waitForMessage(socket)
 
   const closed = new Promise((resolve) => {
-    socket.addEventListener("close", resolve, { once: true })
+    socket.addEventListener("close", resolve, {
+      once: true,
+    })
   })
   await api.close()
   await closed
