@@ -249,7 +249,7 @@ The original 97-file inventory table above is a frozen baseline: its recorded by
 
 1. `docs/ai-agent/repository-engineering-audit.md` is an AI-agent task brief, while `docs/audits/repository-engineering-audit.md` is an actual historical repository assessment. They are distinct documents, not duplicate copies.
 2. Repository policy is now centralized in `docs/DOCUMENTATION_GOVERNANCE.md`; root `AGENTS.md`, `AI_AGENT_WORKFLOW.md` and `ENGINEERING_STANDARDS.md` are mandatory entry points that link to the canonical policy.
-3. `packages/brokers/ARCHITECTURE.md` explicitly describes a target architecture, not a claim that the current source tree already matches it. Its current-snapshot baseline and target dependency rules are useful; KEEP it in place and preserve that distinction.
+3. `packages/brokers/ARCHITECTURE.md` explicitly describes a target architecture, not a claim that the current source tree already matches it. Its former Market Simulator consumer example was removed when that unused package was retired in PR #1482; the current document no longer lists a simulator consumer. KEEP the architecture/target distinction.
 4. `packages/brokers/ROADMAP.md` is intentionally detailed, as stated by its package instructions. Its current priority plan and Section 2 status govern active work; later phases and dated investigation notes are explicitly historical implementation evidence. The 2026-11-08 #702 note records the pre-approval snapshot, not current status. Keep the file in place; do not split its history without a demonstrated navigation/maintenance benefit.
 5. `packages/entities` previously had agent instructions and a roadmap but no README entry point; a package README has now been added.
 6. Package README/AGENTS/ROADMAP files are domain-owned. Root policy should define common standards; package instructions should add only genuinely local constraints.
@@ -264,12 +264,12 @@ The original 97-file inventory table above is a frozen baseline: its recorded by
 - [ ] Continue source/behavior/reference review of KEEP documents; KEEP is a preservation disposition, not proof that every statement in every historical document has been revalidated.
 - [x] Review current package/app README, AGENTS and ROADMAP entry points for the maintained workspace areas; source-level review findings and open defects are recorded above and in their owning package roadmaps.
 - [x] Verify local indexes for substantial documentation subdirectories in root docs and Harvester; preserve any historical index/navigation distinctions.
-- [ ] Trace inbound references from Markdown, source comments, GitHub Issues/PRs and workflows before any future migration.
+- [x] Traced the removed/relocated documentation paths through current Markdown indexes, relevant migration PR diffs, GitHub issue/PR records and package/workflow changes. The GitHub code-search index still returns an older commit (`0439430`), so it is not treated as current evidence; no migration decision relies on those stale search results.
 - [x] Implement safe external-link checking: dependency-free CLI, DNS-pinned HTTP(S) transport, validation of every A/AAAA answer, redirect revalidation, credential redaction, conservative authentication classification, 31 deterministic DNS-injected tests, and a documented reliability policy. External Documentation Links is active as a non-required advisory workflow; #901 is resolved and required CI remains network-free.
-- [ ] Evaluate full-repository Markdown linting and enforcement beyond the current changed-file rules; preserve historical documents and do not mass-reformat without a reviewed baseline.
-- [x] Verify the required policy/link/heading-anchor baseline remains in CI; heading-anchor validation is report-only, not an enforcement gate.
+- [x] Full-tree maintained Markdown style enforcement and local-anchor enforcement are implemented in merged PR #1434; all 14 style metrics and maintained local anchors are blocking, while historical evidence remains excluded/preserved.
+- [x] Required agent-policy, maintained Markdown style and maintained local-anchor gates run in the existing required CI workflow; historical-source anchor findings remain report-only.
 - [x] Record evidence-based dispositions and rationale for all six initial REVIEW entries; no initial Harvester or Brokers REVIEW candidates remain.
-- [ ] Record new REVIEW findings discovered during continued content-level review and update indexes after each approved migration.
+- [x] Recorded and corrected new S-10 findings (configuration scope, stale source paths/statuses, malformed index entries, ADR index, and inventory counts); updated affected indexes and roadmaps in the same review branch.
 
 ## Post-baseline additions — startup open-order boundary
 
@@ -357,6 +357,12 @@ These paths are absent from the current recursive tree. Their inbound-reference 
 The complete recursive tree contains 179 Markdown/MDX files. Applying the current `scripts/markdown-path-policy.js` classification yields **150 maintained paths and 29 historical paths**. This supersedes the prior 160-file / 132-maintained / 28-historical checkpoint for current counts only; all older checkpoint rows remain historical evidence. The classification is a path policy, not a claim that every maintained document has passed factual source review.
 
 
-### Current maintained/historical classification — develop `0f827ba7551be61a1be58f8dced191fb0a090870`
 
-The complete recursive tree contains 179 Markdown/MDX files. Applying the current `scripts/markdown-path-policy.js` classification yields **150 maintained paths and 29 historical paths**. This supersedes the prior 160-file / 132-maintained / 28-historical checkpoint for current counts only; all older checkpoint rows remain historical evidence. The classification is a path policy, not a claim that every maintained document has passed factual source review.
+
+## S-10 factual-review coverage and known unknowns — 2026-11-21
+
+The complete recursive path inventory and dispositions are now recorded for all 179 Markdown/MDX files. The source-verified review table above preserves prior merged audit evidence; the 24 additions since the 160-file checkpoint have individual current dispositions and source/status evidence. The five removed paths have explicit retired/moved dispositions and migration provenance.
+
+**Do not interpret KEEP as factual verification.** Maintained documents without a distinct source-verification record in the source-review table or the S-10 additions table remain **not independently revalidated in this pass**. They are retained pending owner/source review; no full-coverage claim is made for those statements. Historical paths are preserved as evidence, not revalidated as current behavior contracts.
+
+The reference audit verified the relevant Markdown indexes and migration PR diffs for the retired observer guide, retired Market Simulator package, and relocated Brokers audit. Current local link/anchor enforcement is required CI. A full source-comment sweep across unchanged files remains an explicit limitation because repository code-search results are pinned to stale commit `043943051582a8d7bceb5a3a2f642bd886470cc8`; that index cannot prove current absence/presence. No document migration or consolidation is based on stale search results.
