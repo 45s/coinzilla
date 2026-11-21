@@ -367,6 +367,7 @@ export async function publishHealthReport({
     }),
     pushError: execution.pushError,
     exitCode: !execution.healthCheck.healthy ||
+      execution.report.summary.failed > 0 ||
       execution.report.results.some((entry) =>
         entry.operation === "operator order attempt" && entry.status === "failed") ||
       execution.pushError
