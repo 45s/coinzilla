@@ -45,6 +45,8 @@
   },
   "config": {
     "targetedTestFiles": [
+      "test/critical-module-coverage.test.js",
+      "test/critical-behavior-contract.test.js",
       "src/domain/order-history/order-history-record.test.js",
       "src/domain/order-history/order-history-transition.test.js",
       "src/infrastructure/persistence/order-history-repository.test.js",
