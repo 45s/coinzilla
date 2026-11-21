@@ -92,6 +92,16 @@ export function validateCriticalBehaviorContract({
     if (typeof behavior.title !== "string" || behavior.title.length === 0) {
       errors.push(`Critical behavior ${behavior.id} must have a descriptive title.`)
     }
+    const runtimeStatuses = new Set(["active", "offline-only", "disabled-by-design"])
+    if (!runtimeStatuses.has(behavior.runtimeStatus)) {
+      errors.push(`Critical behavior ${behavior.id} must declare its runtimeStatus.`)
+    }
+    if (
+      behavior.runtimeStatus !== "active" &&
+      (typeof behavior.limitation !== "string" || behavior.limitation.length === 0)
+    ) {
+      errors.push(`Critical behavior ${behavior.id} must document its runtime limitation.`)
+    }
     if (!Array.isArray(behavior.sourceModules) || behavior.sourceModules.length === 0) {
       errors.push(`Critical behavior ${behavior.id} must identify at least one production source module.`)
     }
@@ -147,6 +157,9 @@ export function validateCriticalBehaviorContract({
   }
 
   for (const changedPath of changedFiles) {
+    if (changedPath.endsWith(".test.js")) {
+      continue
+    }
     const isCriticalPath = contract.criticalPathPrefixes.some((prefix) =>
       changedPath === prefix || (prefix.endsWith("/") && changedPath.startsWith(prefix)),
     )
