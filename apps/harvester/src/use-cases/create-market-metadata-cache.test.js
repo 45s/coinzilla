@@ -117,9 +117,18 @@ test("retains the last validated snapshot but reports failure when refresh is un
   const refreshError = new Error("exchange filters unavailable")
   const cache = makeCache({
     now: () => currentTime,
-    getSymbolFilters: async ({ symbol }) => unavailable
-      ? { ok: false, errors: [refreshError] }
-      : { ok: true, data: makeMetadata({ symbol, version: 1 }) },
+    getSymbolFilters: async ({ symbol }) => {
+      if (unavailable) {
+        return {
+          ok: false,
+          errors: [refreshError],
+        }
+      }
+      return {
+        ok: true,
+        data: makeMetadata({ symbol, version: 1 }),
+      }
+    },
   })
   const symbol = "DOGEUSDT"
   const metadata = cache.getCurrentMarketMetadata({ symbol })
