@@ -6,7 +6,7 @@ const DEFAULT_PAGE_LIMIT = 50
 const MAX_PAGE_LIMIT = 100
 
 const FILTER_RULES = Object.freeze({
-  listOrders: Object.freeze({
+  LIST_ORDERS: Object.freeze({
     symbol: 32,
     side: Object.freeze(["BUY", "SELL"]),
     status: 48,
@@ -15,7 +15,7 @@ const FILTER_RULES = Object.freeze({
     accountId: 128,
     strategyId: 128,
   }),
-  listFills: Object.freeze({
+  LIST_FILLS: Object.freeze({
     symbol: 32,
     side: Object.freeze(["BUY", "SELL"]),
     providerType: 64,
@@ -24,7 +24,7 @@ const FILTER_RULES = Object.freeze({
     strategyId: 128,
     commissionStatus: 48,
   }),
-  listCommissions: Object.freeze({
+  LIST_COMMISSIONS: Object.freeze({
     symbol: 32,
     side: Object.freeze(["BUY", "SELL"]),
     assetCode: 32,
