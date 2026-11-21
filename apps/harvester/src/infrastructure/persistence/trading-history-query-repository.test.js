@@ -7,6 +7,7 @@ import { EventBus } from "@coinzilla/event-bus"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { closeHarvesterPersistence } from "./close-harvester-persistence.js"
 import { prepareOrderHistoryPersistence } from "./prepare-order-history-persistence.js"
+import { createTradingHistoryQueryRepository } from "./trading-history-query-repository.js"
 import { resolveHarvesterDatabaseFilename } from "./resolve-harvester-database-filename.js"
 import { createOrderHistoryEventData } from "../../../test-support/order-history-fixtures.js"
 
@@ -85,12 +86,14 @@ async function createQueryContext({ t } = {}) {
   return {
     filename,
     persistence,
+    repository: createTradingHistoryQueryRepository({
+      database: persistence.relationalDatabase,
+    }),
   }
 }
 
 test("prepares a query repository for persisted orders, fills and commission facts", async (t) => {
-  const { persistence } = await createQueryContext({ t })
-  const repository = persistence.tradingHistoryQueryRepository
+  const { repository } = await createQueryContext({ t })
 
   assert.ok(repository, "Harvester persistence must compose a query repository over the existing relational tables.")
   assert.equal(typeof repository.getSummary, "function", "The query repository must expose record counts for the API metadata resource.")
@@ -102,8 +105,7 @@ test("prepares a query repository for persisted orders, fills and commission fac
 });
 
 test("lists exact persisted order, fill and commission values without deriving financial facts", async (t) => {
-  const { persistence } = await createQueryContext({ t })
-  const repository = persistence.tradingHistoryQueryRepository
+  const { repository } = await createQueryContext({ t })
   assert.ok(repository, "The relational query repository must be available before record queries can run.")
 
   const orderPage = repository.listOrders({
@@ -139,8 +141,7 @@ test("lists exact persisted order, fill and commission values without deriving f
 });
 
 test("returns deterministic pagination metadata and explicit missing-record results", async (t) => {
-  const { persistence } = await createQueryContext({ t })
-  const repository = persistence.tradingHistoryQueryRepository
+  const { repository } = await createQueryContext({ t })
   assert.ok(repository, "The relational query repository must be available to verify pagination and missing records.")
 
   const page = repository.listOrders({
