@@ -14,9 +14,9 @@ const requiredOperations = [
 ]
 
 function createDiagnosticReport({ failed = 0 } = {}) {
-  const results = requiredOperations.map((operation) => ({
+  const results = requiredOperations.map((operation, index) => ({
     operation,
-    status: "passed",
+    status: index < failed ? "failed" : "passed",
     durationMs: 1,
   }))
   return {
