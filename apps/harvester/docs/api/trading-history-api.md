@@ -23,13 +23,13 @@ HARVESTER_API_HOST="127.0.0.1"
 HARVESTER_API_PORT="4201"
 ```
 
-Start the API in a separate terminal:
+Start Harvester normally; its startup starts the optional API listener in the same process:
 
 ```sh
-pnpm --filter @coinzilla/harvester history:api:dev
+pnpm --filter @coinzilla/harvester dev
 ```
 
-The default address is `http://127.0.0.1:4201`. The API uses Harvester's selected `TRADING_MODE` and `HARVESTER_DATABASE_DIRECTORY`; TESTNET and LIVE remain separate database files. If `HARVESTER_API_TOKEN` is empty or absent, the API stays disabled without preventing Harvester startup. Invalid API configuration or an API bind failure is logged and isolated from trading startup.
+The default address is `http://127.0.0.1:4201`. The API uses Harvester's selected `TRADING_MODE` and `HARVESTER_DATABASE_DIRECTORY`; TESTNET and LIVE remain separate database files. Do not launch a second API process or script. If `HARVESTER_API_TOKEN` is empty or absent, the API stays disabled without preventing Harvester startup. Invalid API configuration or an API bind failure is logged and isolated from trading startup.
 
 Check the selected environment and local record counts:
 
