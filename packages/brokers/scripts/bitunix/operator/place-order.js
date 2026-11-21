@@ -217,7 +217,7 @@ export async function runGuardedHypeUsdtOrderAttempt({
       : "OUTCOME_UNKNOWN"
     try {
       await persistOneShotMarkerOutcome({
-        markerPath: createMarker.markerPath,
+        markerPath,
         outcome,
         error: result?.errors?.[0],
       })
