@@ -1397,6 +1397,7 @@ function createHarvesterRuntimeResult({
     tradingMode: startup.tradingMode,
     tradingEnabled: startup.tradingEnabled === true && marketData.executionSymbols.length > 0,
     strategyMode: "conservative",
+    getOperator: () => startup.operatorControlLifecycle?.getOperator?.(),
     get userDataReady() { return resources.userDataState.ready },
     get userDataStatus() { return resources.userDataState.status },
     processMarketPrice: portfolio.processMarketPrice,
