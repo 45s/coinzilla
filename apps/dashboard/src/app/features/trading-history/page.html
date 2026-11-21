@@ -163,6 +163,10 @@
           <summary>Internal persistence ID</summary>
           <code>{{ detail.id }}</code>
         </details>
+        <details class="raw-record-details">
+          <summary>Raw record · every persisted field</summary>
+          <pre>{{ detailJson() }}</pre>
+        </details>
         <dl class="details-grid">
           @for (entry of detailEntries(); track entry.label) {
             <div>
