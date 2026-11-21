@@ -25,7 +25,8 @@
     "operational-state:init:dev": "node --env-file=.env.development scripts/initialize-operational-state.js",
     "persistence:export": "node scripts/export-database.js",
     "persistence:backup": "node scripts/trading-history-backups.js create",
-    "persistence:restore-check": "node scripts/trading-history-backups.js verify"
+    "persistence:restore-check": "node scripts/trading-history-backups.js verify",
+    "check:reliability": "node scripts/check-critical-behavior-contract.js"
   },
   "engines": {
     "node": ">=24"
