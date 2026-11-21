@@ -348,3 +348,8 @@ These paths are absent from the current recursive tree. Their inbound-reference 
 - The prior 160-path checkpoint and its historical evidence remain unchanged.
 - This checkpoint records path additions/removals only. It does **not** mark the 179 documents as factually verified. #1401 owns the complete maintained-document source audit; #1403 owns reference tracing and migration decisions.
 - Historical session/audit/evidence records remain preserved. No historical conclusion or timestamp was rewritten.
+
+
+### Current maintained/historical classification — develop `0f827ba7551be61a1be58f8dced191fb0a090870`
+
+The complete recursive tree contains 179 Markdown/MDX files. Applying the current `scripts/markdown-path-policy.js` classification yields **150 maintained paths and 29 historical paths**. This supersedes the prior 160-file / 132-maintained / 28-historical checkpoint for current counts only; all older checkpoint rows remain historical evidence. The classification is a path policy, not a claim that every maintained document has passed factual source review.
