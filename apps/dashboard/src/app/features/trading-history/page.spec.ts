@@ -513,6 +513,10 @@ describe('TradingHistoryComponent', () => {
 
     expect(fixture.componentInstance.liveStatus()).toBe('live');
     expect(fixture.nativeElement.textContent).toContain('Order broker-reconnected');
+
+    reconnectSocket.close();
+    await new Promise((resolve) => setTimeout(resolve, 1050));
+    expect(FakeWebSocket.instances[2]).toBeDefined();
   });
 
   it('shows an API-unavailable state instead of replacing a failed request with sample records', async () => {
