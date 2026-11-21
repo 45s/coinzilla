@@ -1,5 +1,9 @@
 import assert from "node:assert/strict"
 import test from "node:test"
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { persistOneShotMarkerOutcome } from "../operator/place-order.js"
 import {
   formatOrderMutationResult,
   formatOrderPreflightSummary,
@@ -62,12 +66,7 @@ test("mutation formatter preserves Bitunix rejection metadata for operator diagn
   assert.match(value, /Broker message: insufficient balance/)
 })
 
-
 test("one-shot marker persists sanitized terminal outcome", async () => {
-  const { mkdtemp, readFile, rm, writeFile } = await import("node:fs/promises")
-  const { tmpdir } = await import("node:os")
-  const { join } = await import("node:path")
-  const { persistOneShotMarkerOutcome } = await import("../operator/place-order.js")
   const directory = await mkdtemp(join(tmpdir(), "bitunix-marker-"))
   const markerPath = join(directory, "attempt.json")
   try {
@@ -102,10 +101,6 @@ test("one-shot marker persists sanitized terminal outcome", async () => {
 })
 
 test("unknown one-shot marker outcomes are normalized fail-closed", async () => {
-  const { mkdtemp, readFile, rm, writeFile } = await import("node:fs/promises")
-  const { tmpdir } = await import("node:os")
-  const { join } = await import("node:path")
-  const { persistOneShotMarkerOutcome } = await import("../operator/place-order.js")
   const directory = await mkdtemp(join(tmpdir(), "bitunix-marker-"))
   const markerPath = join(directory, "attempt.json")
   try {
