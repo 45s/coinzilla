@@ -5,12 +5,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
-import { createBitunixOperatorOrderPreflight } from "./bitunix-hypeusdt-order-preflight.js"
+import { createHypeUsdtOrderPreflight } from "../helpers/create-hypeusdt-order-preflight.js"
 import {
-  assertBitunixOperatorInteractiveTerminal,
   createOneShotMarker,
-  runBitunixOperatorOrderAttempt,
-} from "./bitunix-operator-order-attempt.js"
+  runGuardedHypeUsdtOrderAttempt,
+} from "./place-order.js"
+import { assertInteractiveTerminal } from "../helpers/validate-order-attempt.js"
 
 function createValidBitunixOperatorPreflightInput({ overrides = {} } = {}) {
   const market = {
@@ -139,16 +139,16 @@ function createBitunixOperatorAttemptDependencies({
     orderResult,
     orderDisconnectError,
   })
-  const run = () => runBitunixOperatorOrderAttempt({
+  const run = () => runGuardedHypeUsdtOrderAttempt({
     readBroker,
     createOrderBroker() {
       events.push("order.construct")
       return orderBroker
     },
-    async confirm({ confirmationPhrase }) {
+    async confirm(confirmationInput) {
       events.push({
         operation: "confirm",
-        confirmationPhrase,
+        confirmationInput,
       })
       return confirmation
     },
@@ -173,7 +173,7 @@ function createBitunixOperatorAttemptDependencies({
 
 test("Bitunix operator CLI requires an interactive input and output terminal", () => {
   assert.throws(
-    () => assertBitunixOperatorInteractiveTerminal({
+    () => assertInteractiveTerminal({
       stdin: {
         isTTY: false,
       },
@@ -183,7 +183,7 @@ test("Bitunix operator CLI requires an interactive input and output terminal", (
     }),
     /interactive terminal/i,
   )
-  assert.doesNotThrow(() => assertBitunixOperatorInteractiveTerminal({
+  assert.doesNotThrow(() => assertInteractiveTerminal({
     stdin: {
       isTTY: true,
     },
@@ -194,13 +194,13 @@ test("Bitunix operator CLI requires an interactive input and output terminal", (
 })
 
 test("Bitunix operator CLI refuses non-interactive execution before credentials or network", () => {
-  const scriptPath = fileURLToPath(new URL("./bitunix-hypeusdt-order-attempt.js", import.meta.url))
+  const scriptPath = fileURLToPath(new URL("../run-healthcheck.js", import.meta.url))
   const env = {
     ...process.env,
   }
   delete env.BITUNIX_API_KEY
   delete env.BITUNIX_API_SECRET
-  const result = spawnSync(process.execPath, [scriptPath], {
+  const result = spawnSync(process.execPath, [scriptPath, "--place-order"], {
     encoding: "utf8",
     env,
   })
@@ -213,7 +213,7 @@ test("Bitunix operator CLI refuses non-interactive execution before credentials 
 test("Bitunix operator marker is exclusive, private, and contains no account balances", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-operator-order-"))
   const markerPath = join(directory, "attempt.json")
-  const preflight = createBitunixOperatorOrderPreflight(createValidBitunixOperatorPreflightInput())
+  const preflight = createHypeUsdtOrderPreflight(createValidBitunixOperatorPreflightInput())
 
   try {
     await assert.rejects(
@@ -268,10 +268,16 @@ test("Bitunix operator attempt confirms before creating a mutation-enabled broke
 
   assert.equal(result.ok, true)
   assert.equal(result.mutationOutcome, "CONFIRMED")
-  assert.equal(
-    events.find((event) => event.operation === "confirm").confirmationPhrase,
-    "SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER",
-  )
+  const confirmation = events.find((event) => event.operation === "confirm").confirmationInput
+  assert.deepEqual(confirmation.order, {
+    symbol: "HYPEUSDT",
+    side: "BUY",
+    type: "LIMIT",
+    price: "30",
+    quantity: "0.4",
+    notional: "12",
+  }, "the final approval prompt must identify the exact fixed order being submitted")
+  assert.equal(Object.hasOwn(confirmation, "confirmationPhrase"), false, "operator approval must not require manually typing a long confirmation phrase")
   assert.ok(events.indexOf("read.disconnect") < events.findIndex((event) => event.operation === "confirm"))
   assert.ok(events.findIndex((event) => event.operation === "confirm") < events.indexOf("order.construct"))
   assert.ok(events.indexOf("order.connect") < events.indexOf("marker"))
@@ -319,7 +325,7 @@ test("Bitunix operator attempt validates the mutation Broker before creating its
   })
 
   await assert.rejects(
-    runBitunixOperatorOrderAttempt({
+    runGuardedHypeUsdtOrderAttempt({
       readBroker,
       createOrderBroker: () => ({
         async connect() {},

@@ -17,7 +17,7 @@ const HYPEUSDT_ORDER_NOTIONAL = multiplyDecimal({
  *
  * @type {Readonly<{symbol: string, side: string, type: string, price: string, quantity: string, notional: string}>}
  */
-export const BITUNIX_OPERATOR_ORDER_INTENT = Object.freeze({
+export const HYPEUSDT_ORDER_INTENT = Object.freeze({
   ...HYPEUSDT_ORDER_DETAILS,
   notional: HYPEUSDT_ORDER_NOTIONAL,
 })
@@ -30,7 +30,7 @@ const PROVISIONAL_HYPEUSDT_NOTIONAL_FLOOR = "11"
  * @returns {unknown} The successful Broker result data.
  * @throws {Error} When the Broker result is unsuccessful.
  */
-export function assertSuccessfulBitunixBrokerResult({ result, operation }) {
+export function assertSuccessfulBrokerResult({ result, operation }) {
   if (!result || result.ok !== true) {
     const cause = result?.errors?.[0]
     const reason = cause?.code ?? cause?.message ?? "unsuccessful broker result"
@@ -63,7 +63,7 @@ function requireNonNegativeExactDecimal({ value, field }) {
 }
 
 function validateHypeUsdtActiveMarket({ markets }) {
-  const market = markets.find(({ symbol }) => symbol === BITUNIX_OPERATOR_ORDER_INTENT.symbol)
+  const market = markets.find(({ symbol }) => symbol === HYPEUSDT_ORDER_INTENT.symbol)
   if (!market) {
     throw new Error("Bitunix operator preflight requires HYPEUSDT to be explicitly open in the market catalog")
   }
@@ -76,7 +76,7 @@ function validateHypeUsdtSymbolFilters({ symbolFilters }) {
   if (!symbolFilters || typeof symbolFilters !== "object" || Array.isArray(symbolFilters)) {
     throw new TypeError("Bitunix operator preflight requires HYPEUSDT symbol metadata")
   }
-  if (symbolFilters.symbol !== BITUNIX_OPERATOR_ORDER_INTENT.symbol ||
+  if (symbolFilters.symbol !== HYPEUSDT_ORDER_INTENT.symbol ||
       symbolFilters.base !== "HYPE" ||
       symbolFilters.quote !== "USDT") {
     throw new TypeError("Bitunix HYPEUSDT symbol metadata base and quote identity do not match the requested pair")
@@ -93,19 +93,19 @@ function validateHypeUsdtSymbolFilters({ symbolFilters }) {
     field: "minPrice",
   })
   if (compareDecimal({
-    left: BITUNIX_OPERATOR_ORDER_INTENT.quantity,
+    left: HYPEUSDT_ORDER_INTENT.quantity,
     right: minimumQuantity,
   }) < 0) {
     throw new RangeError("Bitunix HYPEUSDT order quantity is below the documented minimum quantity")
   }
   if (compareDecimal({
-    left: BITUNIX_OPERATOR_ORDER_INTENT.notional,
+    left: HYPEUSDT_ORDER_INTENT.notional,
     right: minimumNotional,
   }) < 0) {
     throw new RangeError("Bitunix HYPEUSDT order notional is below the documented minimum notional")
   }
   if (compareDecimal({
-    left: BITUNIX_OPERATOR_ORDER_INTENT.notional,
+    left: HYPEUSDT_ORDER_INTENT.notional,
     right: PROVISIONAL_HYPEUSDT_NOTIONAL_FLOOR,
   }) < 0) {
     throw new RangeError("Bitunix HYPEUSDT order notional is below the provisional local safety floor")
@@ -131,7 +131,7 @@ function findUsdtQuoteBalance({ balances }) {
   })
   if (compareDecimal({
     left: freeQuoteBalance,
-    right: BITUNIX_OPERATOR_ORDER_INTENT.notional,
+    right: HYPEUSDT_ORDER_INTENT.notional,
   }) >= 0) {
     throw new Error("Bitunix operator preflight stopped: free USDT is at least 12 and could cover the order")
   }
@@ -151,14 +151,14 @@ function findUsdtQuoteBalance({ balances }) {
  * @param {object} input.openOrdersResult Successful symbol-scoped getOpenOrders() result.
  * @returns {object} Validated order intent and sanitized preflight values.
  */
-export function createBitunixOperatorOrderPreflight({
+export function createHypeUsdtOrderPreflight({
   marketResult,
   filtersResult,
   balancesResult,
   openOrdersResult,
 } = {}) {
   const markets = requireBrokerArrayResultData({
-    value: assertSuccessfulBitunixBrokerResult({
+    value: assertSuccessfulBrokerResult({
       result: marketResult,
       operation: "market catalog",
     }),
@@ -167,7 +167,7 @@ export function createBitunixOperatorOrderPreflight({
   validateHypeUsdtActiveMarket({
     markets,
   })
-  const symbolFilters = assertSuccessfulBitunixBrokerResult({
+  const symbolFilters = assertSuccessfulBrokerResult({
     result: filtersResult,
     operation: "symbol metadata",
   })
@@ -175,7 +175,7 @@ export function createBitunixOperatorOrderPreflight({
     symbolFilters,
   })
   const balances = requireBrokerArrayResultData({
-    value: assertSuccessfulBitunixBrokerResult({
+    value: assertSuccessfulBrokerResult({
       result: balancesResult,
       operation: "account balances",
     }),
@@ -185,7 +185,7 @@ export function createBitunixOperatorOrderPreflight({
     balances,
   })
   const openOrders = requireBrokerArrayResultData({
-    value: assertSuccessfulBitunixBrokerResult({
+    value: assertSuccessfulBrokerResult({
       result: openOrdersResult,
       operation: "symbol-scoped open orders",
     }),
@@ -195,8 +195,8 @@ export function createBitunixOperatorOrderPreflight({
     throw new Error("Bitunix operator preflight stopped: an existing HYPEUSDT open order was found")
   }
   return Object.freeze({
-    order: BITUNIX_OPERATOR_ORDER_INTENT,
-    notional: BITUNIX_OPERATOR_ORDER_INTENT.notional,
+    order: HYPEUSDT_ORDER_INTENT,
+    notional: HYPEUSDT_ORDER_INTENT.notional,
     minimumQuantity,
     minimumNotional,
     provisionalNotionalFloor: PROVISIONAL_HYPEUSDT_NOTIONAL_FLOOR,
