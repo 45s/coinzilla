@@ -184,6 +184,44 @@ async function dispatchOrderAndPersistOutcome({ orderBroker, preflight, markerPa
   return result
 }
 
+
+function createNotSentOrderAttemptError({ error }) {
+  const notSentError = new Error(error?.message ?? "Bitunix operator order attempt stopped before dispatch", {
+    cause: error,
+  })
+  notSentError.name = "BitunixOrderNotSentError"
+  notSentError.mutationOutcome = "NOT_SENT"
+  return notSentError
+}
+
+async function disconnectMutationBroker({ orderBroker, writeLine }) {
+  if (!orderBroker) {
+    return
+  }
+  try {
+    await orderBroker.disconnect()
+  } catch (error) {
+    writeLine(`Warning: mutation Broker disconnect failed after the placement attempt: ${error.message}`)
+  }
+}
+
+async function readAndConfirmHypeUsdtOrder({ readBroker, confirm, writeLine }) {
+  const preflight = await readHypeUsdtOperatorPreflight({
+    readBroker,
+  })
+  writeLine(formatOrderPreflightSummary({
+    preflight,
+  }))
+  const approved = await confirm({
+    preflight,
+    order: preflight.order,
+  })
+  return {
+    preflight,
+    approved,
+  }
+}
+
 /**
  * Run read-only preflight, require human approval, then submit exactly one order.
  *
@@ -202,52 +240,55 @@ export async function runGuardedHypeUsdtOrderAttempt({
   createMarker,
   writeLine,
 } = {}) {
-  assertOrderAttemptDependencies({
-    readBroker,
-    createOrderBroker,
-    confirm,
-    createMarker,
-    writeLine,
-  })
-  const preflight = await readHypeUsdtOperatorPreflight({
-    readBroker,
-  })
-  writeLine(formatOrderPreflightSummary({
-    preflight,
-  }))
-  const approved = await confirm({
-    preflight,
-    order: preflight.order,
-  })
-  if (approved !== true) {
-    writeLine("Operator did not confirm the displayed order. No order was sent.")
-    return Object.freeze({
-      ok: false,
-      mutationOutcome: "NOT_SENT",
-      declined: true,
-    })
-  }
-  const orderBroker = createOrderBroker()
-  assertMutationBroker({
-    broker: orderBroker,
-  })
-  await orderBroker.connect()
+  let orderBroker = null
+  let dispatchStarted = false
   try {
+    assertOrderAttemptDependencies({
+      readBroker,
+      createOrderBroker,
+      confirm,
+      createMarker,
+      writeLine,
+    })
+    const { preflight, approved } = await readAndConfirmHypeUsdtOrder({
+      readBroker,
+      confirm,
+      writeLine,
+    })
+    if (approved !== true) {
+      writeLine("Operator did not confirm the displayed order. No order was sent.")
+      return Object.freeze({
+        ok: false,
+        mutationOutcome: "NOT_SENT",
+        declined: true,
+      })
+    }
+    orderBroker = createOrderBroker()
+    assertMutationBroker({
+      broker: orderBroker,
+    })
+    await orderBroker.connect()
     const markerPath = await createMarker({
       preflight,
     })
+    dispatchStarted = true
     return await dispatchOrderAndPersistOutcome({
       orderBroker,
       preflight,
       markerPath,
       writeLine,
     })
-  } finally {
-    try {
-      await orderBroker.disconnect()
-    } catch (error) {
-      writeLine(`Warning: mutation Broker disconnect failed after the placement attempt: ${error.message}`)
+  } catch (error) {
+    if (dispatchStarted) {
+      throw error
     }
+    throw createNotSentOrderAttemptError({
+      error,
+    })
+  } finally {
+    await disconnectMutationBroker({
+      orderBroker,
+      writeLine,
+    })
   }
 }
-

@@ -33,7 +33,7 @@ pnpm --filter @coinzilla/dashboard test:coverage
 
 ## Architecture boundary
 
-The dashboard is a separate client application. Trading-history data access uses a typed local Harvester API client. Browser code must not open Harvester database files, import Harvester internals, or call exchange APIs. Financial decimal values remain strings and missing values remain null. Order entry and operator controls remain deferred until backend endpoints can route through existing application use cases and safety gates.
+The dashboard is a separate client application. Trading-history data access uses a typed local Harvester API client. Browser code must not open Harvester database files, import Harvester internals, or call exchange APIs. Financial decimal values remain strings and missing values remain null. Order entry remains out of scope. The local Operator workspace routes commands through Harvester's existing application facade and safety gates; its runtime/API integration is tracked in [PR #1654](https://github.com/45s/coinzilla/pull/1654).
 
 ## Documentation
 

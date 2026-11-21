@@ -951,3 +951,28 @@ test("Bitunix REST client keeps read-only HTTP conflicts outside mutation uncert
     },
   )
 })
+
+
+test("Bitunix REST client classifies missing credentials on a mutation as NOT_SENT", async () => {
+  let fetchCalls = 0
+  const client = new BitunixRestClient({
+    fetchFn: async () => {
+      fetchCalls += 1
+      throw new Error("missing credentials must fail before fetch")
+    },
+  })
+
+  await assert.rejects(client.request({
+    method: "POST",
+    path: "/api/spot/v1/order/place_order",
+    body: {
+      symbol: "BTCUSDT",
+      side: 2,
+      type: 1,
+      volume: "1",
+      price: "100",
+    },
+    stateChanging: true,
+  }), (error) => error instanceof BitunixRestError && error.outcomeUnknown === false)
+  assert.equal(fetchCalls, 0)
+})

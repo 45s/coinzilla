@@ -280,3 +280,44 @@ test("Bitunix order adapter centralizes detail and cancel request contracts", ()
     },
   )
 })
+
+
+test("Bitunix order adapter rejects placement acknowledgements with mismatched volume or price", () => {
+  const validResponse = {
+    placeStatus: "1",
+    symbol: "BTCUSDT",
+    side: "2",
+    type: "1",
+    orderId: "123",
+    volume: "1",
+    price: "100",
+  }
+  const expected = {
+    symbol: "BTCUSDT",
+    side: 2,
+    type: 1,
+    volume: "1",
+    price: "100",
+  }
+
+  assert.throws(
+    () => validateSpotOrderPlacementResponse({
+      response: {
+        ...validResponse,
+        volume: "0.9",
+      },
+      ...expected,
+    }),
+    /volume does not match/i,
+  )
+  assert.throws(
+    () => validateSpotOrderPlacementResponse({
+      response: {
+        ...validResponse,
+        price: "101",
+      },
+      ...expected,
+    }),
+    /price does not match/i,
+  )
+})
