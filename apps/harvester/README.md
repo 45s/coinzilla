@@ -453,3 +453,7 @@ The Telegram Command Center is a thin authorized interface over Harvester applic
 ## Telegram Command Center
 
 The optional inbound operator interface, its inline navigation and control-confirmation behavior are documented in the [Telegram Command Center operator runbook](docs/operations/telegram-command-center.md). Inbound control is enabled by default and can be disabled with `operatorControl.telegram.enabled=false`; process-lifetime operator pauses are not restored after restart.
+
+## Dashboard operator controls
+
+The local Dashboard Operator workspace reads status, markets, portfolio positions, open orders, and balances from the running Harvester process. It also exposes confirmed BUY pause/resume commands (`pause`, `unpause`, `pauseallbuys`, `resumeallbuys`) through the same operator facade used by Telegram. The local API remains unauthenticated and must not be exposed beyond `127.0.0.1`.
