@@ -114,3 +114,29 @@ test("rejects invalid WebSocket credentials and does not send authenticated even
     code: "HARVESTER_TRADING_HISTORY_AUTHENTICATION_REQUIRED",
   }, "Invalid credentials must receive a stable authentication failure.")
 })
+
+test("closes authenticated sockets before the shared HTTP listener shuts down", async (t) => {
+  const eventBus = new EventBus()
+  const api = await startApi({ t, eventBus })
+  const socket = new WebSocket(`ws://127.0.0.1:${api.address.port}/api/v1/trading/events`)
+  t.after(() => socket.close())
+
+  await new Promise((resolve, reject) => {
+    socket.addEventListener("open", resolve, { once: true })
+    socket.addEventListener("error", reject, { once: true })
+  })
+  socket.send(JSON.stringify({
+    type: "authenticate",
+    token: API_TOKEN,
+  }))
+  await waitForMessage(socket)
+
+  const closed = new Promise((resolve) => {
+    socket.addEventListener("close", resolve, { once: true })
+  })
+  await api.close()
+  await closed
+
+  assert.equal(socket.readyState, WebSocket.CLOSED, "API shutdown must close authenticated WebSocket clients.")
+  assert.equal(eventBus.getDiagnostics().closed, false, "The API must not own or close Harvester's EventBus.")
+})
