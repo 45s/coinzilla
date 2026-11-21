@@ -57,6 +57,7 @@ export async function createOneShotMarker({
   } finally {
     await file.close()
   }
+  return markerPath
 }
 
 /**
@@ -187,7 +188,7 @@ export async function runGuardedHypeUsdtOrderAttempt({
   })
   await orderBroker.connect()
   try {
-    await createMarker({
+    const markerPath = await createMarker({
       preflight,
     })
     let result
@@ -202,7 +203,7 @@ export async function runGuardedHypeUsdtOrderAttempt({
     } catch (error) {
       try {
         await persistOneShotMarkerOutcome({
-          markerPath: createMarker.markerPath,
+          markerPath,
           outcome: "OUTCOME_UNKNOWN",
           error,
         })
