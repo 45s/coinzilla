@@ -23,11 +23,16 @@ const MAX_BODY_BYTES = 8_192
 
 function sendJson(response, status, body) {
   if (response.destroyed || response.writableEnded) return
-  response.writeHead(status, {
+  const headers = {
     "Cache-Control": "no-store",
     "Content-Type": "application/json; charset=utf-8",
     "X-Content-Type-Options": "nosniff",
-  })
+  }
+  if (response.tradingHistoryOrigin) {
+    headers["Access-Control-Allow-Origin"] = response.tradingHistoryOrigin
+    headers.Vary = "Origin"
+  }
+  response.writeHead(status, headers)
   response.end(JSON.stringify(body))
 }
 
