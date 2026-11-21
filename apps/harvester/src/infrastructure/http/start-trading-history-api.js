@@ -92,12 +92,13 @@ function resolveStartupConfiguration({ env, environment } = {}) {
 }
 
 /**
- * Start the optional trading-history HTTP API inside the existing Harvester process.
+ * Start the optional trading-history HTTP and WebSocket API inside the existing Harvester process.
  *
- * The API composes its query facade over Harvester's already-open relational database.
- * Harvester retains ownership of that database and closes the HTTP listener first.
+ * The API composes its query facade over Harvester's already-open relational database and
+ * subscribes to persisted-history invalidation events on the existing EventBus.
+ * Harvester retains ownership of the database and closes the listener before persistence.
  *
- * @param {object} input
+ * @param {{database: object, env?: object, environment?: string, logger?: object, eventBus: object, startServer?: Function}} input
  * @returns {Promise<Readonly<object>|null>} API lifecycle or null when disabled.
  */
 export async function startTradingHistoryApi({
