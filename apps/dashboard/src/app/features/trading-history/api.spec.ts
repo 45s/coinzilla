@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   TradingHistoryApi,
   TradingHistorySession,
-} from './trading-history-api';
+} from './api';
 
 const API_TOKEN = 'a-session-only-token-that-is-long-enough-for-tests';
 

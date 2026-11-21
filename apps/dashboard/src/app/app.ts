@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
 
 import { OverviewComponent } from './features/overview/overview';
-import { TradingHistoryComponent } from './features/trading-history/trading-history';
-import type { TradingHistoryResource } from './features/trading-history/trading-history-api';
+import { TradingHistoryComponent } from './features/trading-history/page';
+import type { TradingHistoryResource } from './features/trading-history/page-api';
 
 type DashboardPage = 'overview' | TradingHistoryResource;
 

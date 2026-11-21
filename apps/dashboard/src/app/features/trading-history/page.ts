@@ -22,7 +22,7 @@ import {
   type TradingHistoryPage,
   type TradingHistoryRecord,
   type TradingHistoryResource,
-} from './trading-history-api';
+} from './api';
 
 interface DetailEntry {
   readonly label: string;
@@ -32,8 +32,8 @@ interface DetailEntry {
 @Component({
   selector: 'app-trading-history',
   standalone: true,
-  templateUrl: './trading-history.html',
-  styleUrl: './trading-history.css',
+  templateUrl: './page.html',
+  styleUrl: './page.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class TradingHistoryComponent implements OnInit, OnChanges {

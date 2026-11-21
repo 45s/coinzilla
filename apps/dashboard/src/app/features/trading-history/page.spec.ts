@@ -3,8 +3,8 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { TradingHistorySession } from './trading-history-api';
-import { TradingHistoryComponent } from './trading-history';
+import { TradingHistorySession } from './api';
+import { TradingHistoryComponent } from './page';
 
 const API_TOKEN = 'a-session-only-token-that-is-long-enough-for-tests';
 
