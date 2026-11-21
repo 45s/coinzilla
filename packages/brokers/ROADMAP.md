@@ -35,9 +35,9 @@ The direct Application suite now characterizes subscriber event filtering/dedupl
 Tracking: [repository standards issue #1568](https://github.com/45s/coinzilla/issues/1568) and [naming audit issue #1582](https://github.com/45s/coinzilla/issues/1582).
 
 - **Merged:** [PR #1591](https://github.com/45s/coinzilla/pull/1591) renamed `adapt-msg.js` / `adaptMsg` to `adapt-binance-websocket-event.js` / `adaptBinanceWebSocketEvent`, and `user.js` / `adaptUser` to `user-data-event-adapters.js` / `userDataEventAdapters`. It updated the production user-data client and all direct tests. Merge commit: `895f3aa4a9ebb93a12dd95168b2e56118cc3173a`.
-- **S-7 closeout in review:** [PR #1593](https://github.com/45s/coinzilla/pull/1593) completes the repository file-tree/naming standard and clarifies the remaining Binance event-map identifiers. These are private implementation names; no public Broker contract, event payload, exchange behavior, or trading lifecycle changes are intended.
+- **S-7 closeout COMPLETE:** [PR #1593](https://github.com/45s/coinzilla/pull/1593) merged as `ff1e86da8c7d41ae431f12cd1beaa7a39dabd071`. Its exact head passed JavaScript Syntax, Test Coverage, Unit Tests, Dependency Audit, Harvester Targeted Tests and External Documentation Links. The file-tree/naming standard and Binance event-map identifiers are reconciled; these are private implementation names with no public Broker contract or trading lifecycle change.
 
-**Status:** the primary module rename is merged; the S-7 policy/documentation closeout is in [PR #1593](https://github.com/45s/coinzilla/pull/1593). Final exact-head verification is recorded in the PR body; mark the S-7 closeout complete after user merge.
+**Status:** S-7 is complete and merged in [PR #1593](https://github.com/45s/coinzilla/pull/1593); exact-head required and advisory workflows passed.
 
 ## Common exchange-neutral Broker API
 
@@ -1395,7 +1395,7 @@ Merge verification: the final PR head was synchronized with `develop`; package t
 - [x] Add the current method/capability matrix and result/error/decimal/timestamp/pagination/lifecycle contract in [BROKER_API.md](./BROKER_API.md).
 - [x] Complete the same-contract Binance/Bitunix implementation and offline conformance suite in [PR #1451](https://github.com/45s/coinzilla/pull/1451), merged into `develop` as `e6d3e60aaaa26ad23705564ffc17f786c995b3dd`.
 - [x] Verify the exact PR head: 688 Brokers tests passed; workspace unit tests and coverage passed; JavaScript Syntax/workspace quality, strict changed-file ESLint, actionlint, Harvester targeted tests, Utils tests, and dependency audit passed. Read-only Binance TESTNET integration was skipped by workflow policy.
-- [~] Advisory external documentation-link workflow remained in progress at merge; it is not a required ruleset check.
+- [x] Advisory External Documentation Links workflow completed successfully on the exact PR #1451 head; it is not a required ruleset check.
 - **Safety:** Bitunix Spot order placement/cancellation/fill support remains blocked by [#1185](https://github.com/45s/coinzilla/issues/1185). No live mutations are authorized.
 
 ## 2026-11-19 — Bitunix Spot WebSocket explicit reconnection (PR #1459)
