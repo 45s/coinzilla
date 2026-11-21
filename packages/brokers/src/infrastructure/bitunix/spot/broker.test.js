@@ -49,7 +49,8 @@ function createSignedPlacementTestBroker({ requests, responses }) {
         ...config,
         now: () => 1795262400000,
         nonceFactory: () => `test-nonce-${requests.length}`,
-        fetchFn: async (...requestArgs) => {\n          const [url, options] = requestArgs
+        fetchFn: async (...requestArgs) => {
+          const [url, options] = requestArgs
           requests.push({
             url: new URL(url),
             options,
