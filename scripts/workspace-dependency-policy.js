@@ -74,7 +74,7 @@ export function parseWorkspaceDependencyPolicy({ markdown }) {
 /**
  * Discover direct-child workspace packages and their declared workspace dependencies.
  * @param {{rootDirectory: string}} options
- * @returns {Array<{name: string, workspaceDependencies: Array<{name: string, version: string, section: string}>}>}
+ * @returns {Array<{name: string, publicSubpaths: string[], workspaceDependencies: Array<{name: string, version: string, section: string}>}>}
  */
 export function readWorkspacePackages({ rootDirectory }) {
   const patterns = readWorkspacePatterns({ rootDirectory })
@@ -86,6 +86,7 @@ export function readWorkspacePackages({ rootDirectory }) {
 
   return manifests.map(({ name, manifest }) => ({
     name,
+    publicSubpaths: readWorkspacePackagePublicSubpaths({ manifest }),
     workspaceDependencies: readWorkspacePackageDependencies({
       manifest,
       packageNames,
@@ -187,6 +188,18 @@ function readWorkspaceManifest({ manifestPath, rootDirectory }) {
   }
 }
 
+function readWorkspacePackagePublicSubpaths({ manifest }) {
+  const { exports } = manifest
+  if (typeof exports !== "object" || exports === null || Array.isArray(exports)) {
+    return []
+  }
+
+  return Object.entries(exports)
+    .filter(([subpath, target]) => subpath.startsWith("./") && target !== null)
+    .map(([subpath]) => subpath)
+    .sort()
+}
+
 function readWorkspacePackageDependencies({ manifest, packageNames, packageName }) {
   const workspaceDependencies = []
   for (const section of DEPENDENCY_SECTIONS) {
@@ -210,10 +223,10 @@ function readWorkspacePackageDependencies({ manifest, packageNames, packageName 
 
 /**
  * Validate workspace package manifests against the canonical allowlist and detect cycles.
- * @param {{packages: Array<{name: string, workspaceDependencies: Array<{name: string, version: string, section: string}>}>, allowedDependencies: Record<string, string[]>}} options
+ * @param {{packages: Array<{name: string, publicSubpaths?: string[], workspaceDependencies: Array<{name: string, version: string, section: string}>}>, allowedDependencies: Record<string, string[]>, sourceImports?: Array<{file: string, specifier: string}>}} options
  * @returns {string[]}
  */
-export function validateWorkspaceDependencyPolicy({ packages, allowedDependencies }) {
+export function validateWorkspaceDependencyPolicy({ packages, allowedDependencies, sourceImports = [] }) {
   const packagesByName = new Map()
   const violations = []
   for (const workspacePackage of packages) {
@@ -235,7 +248,67 @@ export function validateWorkspaceDependencyPolicy({ packages, allowedDependencie
   })
   violations.push(...edgeViolations)
   violations.push(...findWorkspaceDependencyCycles({ dependencyGraph }))
+  violations.push(...findWorkspacePackageImportViolations({
+    packagesByName,
+    sourceImports,
+  }))
   return [...new Set(violations)].sort()
+}
+
+function findWorkspacePackageImportViolations({ packagesByName, sourceImports }) {
+  const violations = []
+
+  for (const { file, specifier } of sourceImports) {
+    const match = typeof specifier === "string"
+      ? specifier.match(/^(@coinzilla\/[a-z0-9-]+)(?:\/(.*))?$/)
+      : null
+    if (!match) {
+      continue
+    }
+
+    const [, packageName, subpath] = match
+    const workspacePackage = packagesByName.get(packageName)
+    if (!workspacePackage) {
+      violations.push(`${file}: imports unknown workspace package "${packageName}".`)
+      continue
+    }
+    if (subpath === undefined) {
+      continue
+    }
+
+    const requestedSubpath = `./${subpath}`
+    const publicSubpaths = workspacePackage.publicSubpaths ?? []
+    const isPublicSubpath = publicSubpaths.some((exportedSubpath) => (
+      matchesWorkspacePackageExport({
+        requestedSubpath,
+        exportedSubpath,
+      })
+    ))
+    if (!isPublicSubpath) {
+      violations.push(`${file}: workspace package import "${specifier}" uses an unexported subpath of "${packageName}".`)
+    }
+  }
+
+  return violations
+}
+
+function matchesWorkspacePackageExport({ requestedSubpath, exportedSubpath }) {
+  const wildcardIndex = exportedSubpath.indexOf("*")
+  if (wildcardIndex < 0) {
+    return requestedSubpath === exportedSubpath
+  }
+  if (exportedSubpath.indexOf("*", wildcardIndex + 1) >= 0) {
+    return false
+  }
+
+  const prefix = exportedSubpath.slice(0, wildcardIndex)
+  const suffix = exportedSubpath.slice(wildcardIndex + 1)
+  if (!requestedSubpath.startsWith(prefix) || !requestedSubpath.endsWith(suffix)) {
+    return false
+  }
+
+  const wildcardValue = requestedSubpath.slice(prefix.length, requestedSubpath.length - suffix.length)
+  return wildcardValue.length > 0
 }
 
 function findPolicyDeclarationViolations({ packageNames, allowedDependencies }) {
