@@ -360,7 +360,7 @@
           "kind": "failure"
         },
         {
-          "path": "test/bootstrap/user-data-recovery.test.js",
+          "path": "test/bootstrap/user-data-event-reconciliation.test.js",
           "name": "reconciles the in-memory order registry before reopening trading after stream recovery",
           "kind": "integration"
         }

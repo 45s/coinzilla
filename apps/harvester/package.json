@@ -72,6 +72,8 @@
       "test/bootstrap/shutdown-lifecycle.test.js",
       "test/bootstrap/external-order-ownership.test.js",
       "test/bootstrap/user-data-recovery.test.js",
+      "test/bootstrap/user-data-stream-safety.test.js",
+      "test/bootstrap/user-data-event-reconciliation.test.js",
       "test/bootstrap/account-preflight.test.js",
       "test/bootstrap/process-lifecycle-recovery.test.js",
       "test/bootstrap/account-snapshot-history.test.js",
