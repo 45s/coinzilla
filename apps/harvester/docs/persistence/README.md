@@ -19,10 +19,11 @@ Use the read-only maintenance command when you need to inspect every stored reco
 From the repository root in Bash:
 
 ```bash
-TRADING_MODE=testnet pnpm db:export
+pnpm run db:export testnet
+pnpm run db:export live
 ```
 
-Use `TRADING_MODE=live` only when you intentionally want to export the LIVE database. The command uses Harvester's existing database-path resolver, including the optional `HARVESTER_DATABASE_DIRECTORY` override. It does not infer the environment from `NODE_ENV`.
+Pass exactly one environment argument: `testnet` or `live`. The command uses Harvester's existing database-path resolver, including the optional `HARVESTER_DATABASE_DIRECTORY` override. It never infers the environment from `NODE_ENV` or silently defaults to either database.
 
 The output is written beside the selected database as `database-dump.json`:
 
@@ -45,7 +46,7 @@ The JSON shape is:
 
 Every non-internal SQLite table is included. Each table is an array so rows are never overwritten by duplicate or composite identifiers. Every row includes all its columns. Empty tables are included as empty arrays. SQLite BLOB values are represented as an object with `encoding: "base64"` and `data`; integer values outside JavaScript's safe range are serialized as decimal strings.
 
-The source database is opened read-only. A missing source file or missing/invalid `TRADING_MODE` fails visibly; the command never creates an empty database. It performs no exchange calls and does not change trading behavior. The JSON dump may contain account and trading history, so keep it private and do not commit it.
+If the argument is missing or is not exactly `testnet` or `live`, the command prints its usage and exits without opening a database. A missing source file also fails without creating a database. The source is opened read-only; the export performs no exchange calls and does not change trading behavior. The JSON dump may contain account and trading history, so keep it private and do not commit it.
 
 The command prints the current Git commit (short hash) as `Exporter commit` before the table counts, so each dump log identifies the exact repository revision running the exporter. If Git metadata is unavailable, the log prints `unavailable`. The command requires the repository's Node.js 24+ runtime and adds no dependency.
 
