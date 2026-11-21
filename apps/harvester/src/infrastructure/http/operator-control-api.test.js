@@ -45,8 +45,14 @@ test("operator read query delegates to the shared application facade with the lo
   })
   assert.equal(handled, true)
   assert.equal(response.status, 200)
-  assert.deepEqual(JSON.parse(response.body), { ok: true, data: { runtimeState: "RUNNING" } })
-  assert.deepEqual(received.actor, { id: "local-dashboard", roles: ["trading-operator"] })
+  assert.deepEqual(JSON.parse(response.body), {
+    ok: true,
+    data: { runtimeState: "RUNNING" },
+  })
+  assert.deepEqual(received.actor, {
+    id: "local-dashboard",
+    roles: ["trading-operator"],
+  })
 })
 
 test("operator pause command delegates the normalized market and request identity", async () => {
@@ -90,7 +96,11 @@ test("operator writes reject non-Dashboard browser origins", async () => {
     }),
     response,
     pathname: "/api/v1/trading/operator/commands",
-    operator: { async pauseAllBuys() { throw new Error("must not execute") } },
+    operator: {
+      async pauseAllBuys() {
+        throw new Error("must not execute")
+      },
+    },
   })
   assert.equal(response.status, 403)
 })
