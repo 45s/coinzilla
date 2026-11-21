@@ -1,11 +1,15 @@
+import { normalizeStrategyId } from "../strategies/strategy-ids.js"
+
 function validateOwnershipShape({ ownership } = {}) {
   if (!ownership || typeof ownership !== "object" || Array.isArray(ownership)) {
     throw new TypeError("Order ownership must be an object")
   }
-  for (const field of ["strategyId", "positionId"]) {
-    if (typeof ownership[field] !== "string" || !ownership[field].trim()) {
-      throw new TypeError(`Order ownership requires a non-empty ${field}`)
-    }
+  const strategyId = normalizeStrategyId({
+    strategyId: ownership.strategyId,
+    errorMessage: "Order ownership requires a non-empty strategyId",
+  })
+  if (typeof ownership.positionId !== "string" || !ownership.positionId.trim()) {
+    throw new TypeError("Order ownership requires a non-empty positionId")
   }
   if (typeof ownership.purpose !== "string" || !ownership.purpose.trim()) {
     throw new TypeError("Order ownership requires a non-empty purpose")
@@ -14,6 +18,7 @@ function validateOwnershipShape({ ownership } = {}) {
       (typeof ownership.cycleId !== "string" || !ownership.cycleId.trim())) {
     throw new TypeError("Order ownership cycleId must be a non-empty string when provided")
   }
+  return strategyId
 }
 
 function validateOwnershipIdentity({ ownership, clientOrderId, brokerOrderId } = {}) {
@@ -38,7 +43,7 @@ function validateOwnershipIdentity({ ownership, clientOrderId, brokerOrderId } =
  * @returns {object} Immutable order ownership record.
  */
 export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId } = {}) {
-  validateOwnershipShape({ ownership })
+  const strategyId = validateOwnershipShape({ ownership })
   validateOwnershipIdentity({
     ownership,
     clientOrderId,
@@ -47,7 +52,7 @@ export function createOrderOwnership({ ownership, clientOrderId, brokerOrderId }
 
   const normalized = {
     clientOrderId,
-    strategyId: ownership.strategyId.trim(),
+    strategyId,
     positionId: ownership.positionId.trim(),
   }
   if (brokerOrderId !== undefined) {
