@@ -38,6 +38,7 @@ function createPackages() {
     },
     {
       name: "@coinzilla/core",
+      publicSubpaths: ["./testing"],
       workspaceDependencies: [],
     },
   ]
@@ -196,6 +197,10 @@ test("discovers workspace packages and dependencies from every manifest dependen
     }))
     writeFileSync(join(root, "packages", "core", "package.json"), JSON.stringify({
       name: "@coinzilla/core",
+      exports: {
+        ".": "./src/index.js",
+        "./testing": "./test-support/provider-conformance.js",
+      },
     }))
     assert.deepEqual(
       readWorkspacePackages({ rootDirectory: root }),
@@ -217,6 +222,7 @@ test("discovers workspace packages and dependencies from every manifest dependen
         },
         {
           name: "@coinzilla/core",
+          publicSubpaths: ["./testing"],
           workspaceDependencies: [],
         },
       ],
@@ -228,4 +234,103 @@ test("discovers workspace packages and dependencies from every manifest dependen
       force: true,
     })
   }
+})
+
+
+test("rejects production imports of private workspace package subpaths", () => {
+  const violations = validateWorkspaceDependencyPolicy({
+    packages: [
+      {
+        name: "@coinzilla/app",
+        workspaceDependencies: [],
+      },
+      {
+        name: "@coinzilla/core",
+        publicSubpaths: [],
+        workspaceDependencies: [],
+      },
+    ],
+    allowedDependencies: {
+      "@coinzilla/app": ["@coinzilla/core"],
+      "@coinzilla/core": [],
+    },
+    sourceImports: [
+      {
+        file: "apps/app/src/index.js",
+        specifier: "@coinzilla/core/src/internal/value.js",
+      },
+    ],
+  })
+
+  assert.deepEqual(
+    violations,
+    [
+      'apps/app/src/index.js: workspace package import "@coinzilla/core/src/internal/value.js" uses an unexported subpath of "@coinzilla/core".',
+    ],
+    "Production consumers must use a package root or an explicitly declared public export.",
+  )
+})
+
+test("allows package roots and explicitly exported workspace subpaths", () => {
+  const violations = validateWorkspaceDependencyPolicy({
+    packages: [
+      {
+        name: "@coinzilla/app",
+        workspaceDependencies: [],
+      },
+      {
+        name: "@coinzilla/core",
+        publicSubpaths: ["./testing"],
+        workspaceDependencies: [],
+      },
+    ],
+    allowedDependencies: {
+      "@coinzilla/app": ["@coinzilla/core"],
+      "@coinzilla/core": [],
+    },
+    sourceImports: [
+      {
+        file: "apps/app/src/index.js",
+        specifier: "@coinzilla/core",
+      },
+      {
+        file: "apps/app/src/test-support.js",
+        specifier: "@coinzilla/core/testing",
+      },
+    ],
+  })
+
+  assert.deepEqual(
+    violations,
+    [],
+    "The root entry point and explicitly exported subpaths must remain importable.",
+  )
+})
+
+test("rejects unknown workspace package specifiers", () => {
+  const violations = validateWorkspaceDependencyPolicy({
+    packages: [
+      {
+        name: "@coinzilla/app",
+        workspaceDependencies: [],
+      },
+    ],
+    allowedDependencies: {
+      "@coinzilla/app": [],
+    },
+    sourceImports: [
+      {
+        file: "apps/app/src/index.js",
+        specifier: "@coinzilla/missing",
+      },
+    ],
+  })
+
+  assert.deepEqual(
+    violations,
+    [
+      'apps/app/src/index.js: imports unknown workspace package "@coinzilla/missing".',
+    ],
+    "Misspelled or undeclared workspace package imports must not pass silently.",
+  )
 })
