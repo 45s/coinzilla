@@ -47,6 +47,18 @@ function readContractFile({ readFile, relativePath }) {
   }
 }
 
+function validateBehaviorInvariants({ behavior, errors }) {
+  if (!Array.isArray(behavior.invariants) || behavior.invariants.length === 0) {
+    errors.push(`Critical behavior ${behavior.id} must document authoritative domain invariants.`)
+    return
+  }
+  for (const invariant of behavior.invariants) {
+    if (typeof invariant !== "string" || invariant.trim().length === 0) {
+      errors.push(`Critical behavior ${behavior.id} contains an invalid domain invariant.`)
+    }
+  }
+}
+
 function validateRuntimeStatus({ behavior, errors }) {
   if (!VALID_RUNTIME_STATUSES.has(behavior.runtimeStatus)) {
     errors.push(`Critical behavior ${behavior.id} must declare its runtimeStatus.`)
@@ -183,6 +195,10 @@ function validateBehavior({ behavior, errors, readFile, sourceOwners }) {
   ) {
     errors.push(`Critical behavior ${behavior.id} must declare integrationRequired as a boolean.`)
   }
+  validateBehaviorInvariants({
+    behavior,
+    errors,
+  })
   validateRuntimeStatus({
     behavior,
     errors,
@@ -232,6 +248,64 @@ function validateCriticalPathPrefixes({ contract, errors }) {
     errors.push("Critical behavior inventory contains an invalid critical source path prefix.")
   }
   return criticalPathPrefixes
+}
+
+function validateCoverageBaseline({ coverageBaseline, errors }) {
+  const hasIdentity = typeof coverageBaseline?.baseDevelopSha === "string" &&
+    typeof coverageBaseline?.measuredPrHeadSha === "string" &&
+    coverageBaseline.sourceTreeMatchesDevelop === true
+  const hasRun = Number.isInteger(coverageBaseline?.workflowRunId) &&
+    Number.isInteger(coverageBaseline?.harvesterJobId)
+  const metrics = ["lines", "branches", "functions"]
+  const hasAggregate = metrics.every((metric) =>
+    Number.isFinite(coverageBaseline?.aggregate?.[metric]),
+  )
+  if (!hasIdentity || !hasRun || !hasAggregate) {
+    errors.push("Critical module coverage baseline must identify the exact develop source, CI run/job and aggregate metrics.")
+  }
+}
+
+function validateModuleCoverageInventory({ contract, sourceOwners, errors }) {
+  if (!Array.isArray(contract.moduleCoverage) || contract.moduleCoverage.length === 0) {
+    errors.push("Critical behavior inventory must define measured per-module coverage floors.")
+    return
+  }
+
+  const coveragePaths = new Set()
+  const metrics = ["lines", "branches", "functions"]
+  for (const entry of contract.moduleCoverage) {
+    if (!entry || !isSafeRelativePath(entry.path) || !entry.path.startsWith("src/")) {
+      errors.push("Critical module coverage contains an invalid source path.")
+      continue
+    }
+    if (coveragePaths.has(entry.path)) {
+      errors.push(`Critical module coverage path ${entry.path} is duplicated.`)
+    }
+    coveragePaths.add(entry.path)
+    if (!sourceOwners.has(entry.path)) {
+      errors.push(`Critical module coverage path ${entry.path} has no behavior owner.`)
+    }
+    for (const metric of metrics) {
+      const baseline = entry.baseline?.[metric]
+      const minimum = entry.minimum?.[metric]
+      if (
+        !Number.isFinite(baseline) ||
+        !Number.isFinite(minimum) ||
+        baseline < 0 ||
+        baseline > 100 ||
+        minimum < 0 ||
+        minimum > baseline
+      ) {
+        errors.push(`Critical module coverage for ${entry.path} has an invalid ${metric} floor or baseline.`)
+      }
+    }
+  }
+
+  for (const sourcePath of sourceOwners.keys()) {
+    if (!coveragePaths.has(sourcePath)) {
+      errors.push(`Critical source module ${sourcePath} has no measured coverage floor.`)
+    }
+  }
 }
 
 function validateChangedFiles({ criticalPathPrefixes, changedFiles, sourceOwners, errors }) {
@@ -306,6 +380,15 @@ export function validateCriticalBehaviorContract({
     errors,
     readFile,
     sourceOwners,
+  })
+  validateCoverageBaseline({
+    coverageBaseline: contract.coverageBaseline,
+    errors,
+  })
+  validateModuleCoverageInventory({
+    contract,
+    sourceOwners,
+    errors,
   })
   const affectedBehaviorIds = validateChangedFiles({
     criticalPathPrefixes,
