@@ -642,7 +642,10 @@ async function applyPartialBuyReports({
   ]
   for (let index = 0; index < partialBuyReports.length; index += 1) {
     const report = partialBuyReports[index]
-    const fillApplied = dogeTradingReplay.waitForLifecycleEvent("execution.fill_applied", index + 1)
+    const fillApplied = dogeTradingReplay.waitForLifecycleEvent({
+      eventName: "execution.fill_applied",
+      occurrence: index + 1,
+    })
     await dogeTradingReplay.publishOrderFill({
       order: initialBuyOrder,
       price: dogeTradingReplay.scenarioExpectations.buyPrice,

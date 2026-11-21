@@ -863,7 +863,7 @@ side,
 occurrence });
     },
     waitForRecoveryCycleCompletion: () => waitForRecoveryCycleCompletion(state),
-    waitForLifecycleEvent: (eventName, occurrence = 1) => waitForLifecycleEvent({
+    waitForLifecycleEvent: ({ eventName, occurrence = 1 } = {}) => waitForLifecycleEvent({
       state,
       eventName,
       occurrence,
