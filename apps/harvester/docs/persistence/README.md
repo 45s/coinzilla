@@ -157,3 +157,9 @@ The maintenance CLI is outside Harvester startup and trading paths. It never cre
 ## Historical design reference
 
 [SQLite integration blueprint](./sqlite-integration-blueprint.md) is a source-verified design/audit snapshot from before PR #1469 and the relational trading-history work. Its target-layout statements and migration recommendations are historical context, not the current implementation contract.
+
+## Trading-history query service
+
+The versioned [Trading-history API v1](../api/trading-history-api.md) exposes the existing `orders`, `fills`, and `fill_commissions` tables through Harvester-owned application queries. It adds no schema or migration. The API service opens the database selected by `TRADING_MODE`, verifies the existing relational schema, and uses a separate SQLite connection with query-only mode enabled.
+
+The API does not change the best-effort persistence observers, trading lifecycle, order ownership, or database authority. Metadata counts describe the selected local database only; they do not establish exchange-history completeness. The API contract documents its versioned routes, exact-value semantics, authentication, and deployment boundary.
