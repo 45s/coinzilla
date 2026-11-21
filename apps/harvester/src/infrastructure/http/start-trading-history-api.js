@@ -3,7 +3,6 @@ import { createTradingHistoryQueryRepository } from "../persistence/trading-hist
 import { createTradingHistoryQueries } from "../../use-cases/trading-history/queries.js"
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
 
-const MINIMUM_API_TOKEN_BYTES = 32
 const DEFAULT_API_HOST = "127.0.0.1"
 const DEFAULT_API_PORT = 4201
 
@@ -29,18 +28,6 @@ function resolveTradingHistoryApiEnvironment({ env, environment } = {}) {
     })
   }
   return selectedEnvironment
-}
-
-function resolveTradingHistoryApiToken({ env, environment } = {}) {
-  const token = env.HARVESTER_API_TOKEN
-  if (typeof token !== "string" || token.trim() !== token || Buffer.byteLength(token, "utf8") < MINIMUM_API_TOKEN_BYTES) {
-    throw new TradingHistoryApiStartupError({
-      message: "HARVESTER_API_TOKEN must contain at least 32 non-whitespace characters.",
-      code: "HARVESTER_TRADING_HISTORY_API_CONFIGURATION_INVALID",
-      environment,
-    })
-  }
-  return token
 }
 
 function resolveTradingHistoryApiHost({ env, environment } = {}) {
@@ -76,10 +63,6 @@ function resolveStartupConfiguration({ env, environment } = {}) {
   })
   return Object.freeze({
     environment: selectedEnvironment,
-    token: resolveTradingHistoryApiToken({
-      env,
-      environment: selectedEnvironment,
-    }),
     host: resolveTradingHistoryApiHost({
       env,
       environment: selectedEnvironment,
@@ -92,14 +75,14 @@ function resolveStartupConfiguration({ env, environment } = {}) {
 }
 
 /**
- * Start the optional trading-history HTTP and WebSocket API inside the existing Harvester process.
+ * Start the local trading-history HTTP and WebSocket API inside the existing Harvester process.
  *
  * The API composes its query facade over Harvester's already-open relational database and
  * subscribes to persisted-history invalidation events on the existing EventBus.
  * Harvester retains ownership of the database and closes the listener before persistence.
  *
  * @param {{database: object, env?: object, environment?: string, logger?: object, eventBus: object, startServer?: Function}} input
- * @returns {Promise<Readonly<object>|null>} API lifecycle or null when disabled.
+ * @returns {Promise<Readonly<object>>} API lifecycle handle.
  */
 export async function startTradingHistoryApi({
   database,
@@ -109,9 +92,6 @@ export async function startTradingHistoryApi({
   eventBus,
   startServer = startTradingHistoryApiServer,
 } = {}) {
-  if (!env.HARVESTER_API_TOKEN) {
-    return null
-  }
   const configuration = resolveStartupConfiguration({
     env,
     environment,
@@ -138,7 +118,6 @@ export async function startTradingHistoryApi({
   })
   const server = await startServer({
     queries,
-    token: configuration.token,
     environment: configuration.environment,
     host: configuration.host,
     port: configuration.port,
