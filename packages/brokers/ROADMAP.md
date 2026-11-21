@@ -10,7 +10,7 @@ This roadmap tracks work owned by `@coinzilla/brokers`. Historical entries may r
 
 ## Bitunix health-check and operator CLI consolidation — #1614
 
-**Status: In progress** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) · [draft PR #1616](https://github.com/45s/coinzilla/pull/1616).
+**Status: IMPLEMENTED and merged** — [issue #1614](https://github.com/45s/coinzilla/issues/1614) / [PR #1616](https://github.com/45s/coinzilla/pull/1616), merge commit `488949b668e1291b5cfc64032250f6d2a4568274`. Exact-head required workflow runs and advisory External Documentation Links passed; issue closeout is recorded separately.
 
 Consolidate every Bitunix script under `scripts/bitunix/` with one CLI entry point, `run-healthcheck.js`. The default remains a read-only health check with sanitized report publishing; `--local` runs local-only diagnostics; `--place-order` runs the read-only health checks first and, only when healthy, performs the already guarded fixed HYPEUSDT attempt inside the same report-branch workflow. The sanitized outcome is published and the checkout returns to `develop`. Pure supporting functions live in `helpers/` with colocated tests. The mandatory workflow document is maintained under `docs/BITUNIX_WORKFLOW.md`. This is a tooling/layout change, not a provider capability or production-readiness change.
 
@@ -26,7 +26,7 @@ The agent, tests, CI and scheduled jobs must never invoke the LIVE operator mode
 
 ## User-data session lifecycle test hardening — #1602
 
-**Status: In review** — [issue #1602](https://github.com/45s/coinzilla/issues/1602) · [PR #1606](https://github.com/45s/coinzilla/pull/1606).
+**Status: COMPLETE and merged** — [issue #1602](https://github.com/45s/coinzilla/issues/1602) / [PR #1606](https://github.com/45s/coinzilla/pull/1606), merge commit `92de48c01f48fa343b12b735b6b2d9fcebc34fda`. Exact-head unit, coverage, syntax, dependency, Harvester targeted and advisory documentation-link workflows passed.
 
 The direct Application suite now characterizes subscriber event filtering/deduplication, callback isolation, RPC error notification, recovery reminders, subscriber removal during recovery, concurrent subscription coalescing, and cleanup when a remote subscription resolves after session shutdown. Supporting port and recovery-policy tests include scenario-specific assertion diagnostics. Tests remain offline and exercise the injected application port; existing Binance composition coverage remains in its infrastructure test suites. No production behavior or public contract changes are intended.
 
