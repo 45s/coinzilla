@@ -166,6 +166,7 @@
 ## Roadmap ownership map
 
 - [Harvester](apps/harvester/ROADMAP.md) — trading safety, recovery, restart reconciliation and session statistics.
+- [Dashboard](apps/dashboard/ROADMAP.md) — Angular web-client foundation and future operational UI; initial scaffold tracked in [#1623](https://github.com/45s/coinzilla/issues/1623).
 - [Brokers](packages/brokers/ROADMAP.md) — native WebSocket protocol, user-data lifecycle and exchange acceptance.
 - [Entities](packages/entities/ROADMAP.md) — exact financial contracts and package-owned quality.
 - [Journal](packages/journal/ROADMAP.md) — record contract, persistence lifecycle and durability.
