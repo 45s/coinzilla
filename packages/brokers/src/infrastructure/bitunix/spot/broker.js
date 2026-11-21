@@ -1249,6 +1249,8 @@ export class BitunixSpotBroker {
         symbol: order.symbol,
         side: order.body.side,
         type: order.body.type,
+        volume: order.volume,
+        price: order.price,
       })
       return reconcileSpotOrderPlacement({
         restClient: this.restClient,
