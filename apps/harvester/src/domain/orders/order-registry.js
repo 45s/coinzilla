@@ -260,6 +260,9 @@ ownerships })
     if (!order) {
       return undefined
     }
+    if (marketId !== undefined && order.market.id !== marketId) {
+      throw new Error("Order ownership marketId does not match the registered canonical order")
+    }
     if (brokerOrderId !== undefined && order.brokerOrderId !== brokerOrderId) {
       throw new Error("Order ownership clientOrderId and brokerOrderId identify different registered orders")
     }
