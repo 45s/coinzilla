@@ -58,7 +58,7 @@ test("starts a standalone API over an existing environment database and closes i
   })
 
   assert.equal(database.prepare("PRAGMA query_only").get().query_only, 1, "The API connection must enable SQLite query-only mode.")
-  const response = await fetch(`http://127.0.0.1:${service.address.port}` + "/api/v1/trading/metadata", {
+  const response = await fetch(`${`http://127.0.0.1:${service.address.port}`}/api/v1/trading/metadata`, {
     headers: {
       Authorization: `Bearer ${API_TOKEN}`,
     },
