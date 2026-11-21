@@ -481,6 +481,7 @@ test("publishes verified ownership with the acknowledged order history event", a
         events.push(event)
         return { ok: true }
       },
+      flush: async () => ({ ok: true }),
     },
   })
   await startBothMarkets({
@@ -504,6 +505,7 @@ test("publishes verified ownership with a broker-confirmed cancellation event", 
         events.push(event)
         return { ok: true }
       },
+      flush: async () => ({ ok: true }),
     },
   })
   await engine.processMarketPrice({
@@ -544,6 +546,7 @@ test("publishes verified ownership with an unconfirmed cancellation failure", as
         events.push(event)
         return { ok: true }
       },
+      flush: async () => ({ ok: true }),
     },
   })
   await engine.processMarketPrice({
