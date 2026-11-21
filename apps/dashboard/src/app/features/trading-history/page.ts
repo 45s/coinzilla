@@ -447,6 +447,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
       return;
     }
     if (message.type === 'authenticated') {
+      this.reconnectAttempt = 0;
       this.liveStatus.set('live');
       this.selectedRecord.set(null);
       void this.refreshMetadata();
