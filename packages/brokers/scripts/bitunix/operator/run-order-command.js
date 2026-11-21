@@ -116,7 +116,7 @@ export function reportOperatorFailure({
     ["Error kind", error?.kind],
   ]) {
     if (value !== undefined && value !== null) {
-      stderr.write(`${label}: ${redactApiSecrets({ message: String(value), secrets })}\n`)
+      stderr.write(`${label}: ${redactApiSecrets({\n        message: String(value),\n        secrets,\n      })}\n`)
     }
   }
   stderr.write(
