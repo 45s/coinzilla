@@ -127,6 +127,7 @@ function createBitunixOperatorAttemptDependencies({
     },
     mutationOutcome: "CONFIRMED",
   },
+  orderConnectError,
   orderDisconnectError,
 } = {}) {
   const events = []
@@ -140,6 +141,7 @@ function createBitunixOperatorAttemptDependencies({
   const orderBroker = createMockBitunixOrderBroker({
     events,
     orderResult,
+    orderConnectError,
     orderDisconnectError,
   })
   const run = () => runGuardedHypeUsdtOrderAttempt({
