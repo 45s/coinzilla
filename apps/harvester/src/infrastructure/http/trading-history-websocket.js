@@ -153,7 +153,6 @@ function createClient({ socket, clients } = {}) {
     socket,
     clients,
     buffer: Buffer.alloc(0),
-    authenticated: true,
     awaitingPong: false,
     heartbeatTimer: null,
     closed: false,
@@ -189,12 +188,6 @@ function getUpgradeKey({ request, socket, clients } = {}) {
     rejectUpgrade({
       socket,
       status: 404,
-    })
-    return null
-  }
-  if (url.searchParams.has("token")) {
-    rejectUpgrade({
-      socket,
     })
     return null
   }
@@ -326,7 +319,6 @@ export function attachTradingHistoryWebSocket({ server, eventBus } = {}) {
       socket,
       head,
       clients,
-      token,
     })
   }
   server.on("upgrade", onUpgrade)
