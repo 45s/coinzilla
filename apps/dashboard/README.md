@@ -41,3 +41,12 @@ The dashboard is a separate client application. Trading-history data access uses
 - [Dashboard roadmap](ROADMAP.md)
 - [Dashboard documentation index](docs/README.md)
 - [Repository documentation index](../../docs/README.md)
+
+## Local operator workspace
+
+The Dashboard includes an **Operator** workspace backed by the same application-level operator facade used by Telegram Command Center. It reads runtime status, markets, portfolio positions, open orders, and balances from Harvester snapshots. Commands include:
+
+- `pause BTCUSDT` and `unpause BTCUSDT` for one market's BUY side.
+- `pauseallbuys` and `resumeallbuys` for the global BUY pause.
+
+Every mutating command requires a second confirmation in the Dashboard. The API is local-only and unauthenticated by design; keep it bound to `127.0.0.1` and do not expose it to a LAN, reverse proxy, container port mapping, or remote host.
