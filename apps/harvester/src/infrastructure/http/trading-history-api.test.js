@@ -152,9 +152,16 @@ test("serves local metadata without bearer authentication", async (t) => {
     queries,
   })
 
-  const response = await fetch(`${baseUrl}/api/v1/trading/metadata`)
+  const response = await fetch(`${baseUrl}/api/v1/trading/metadata`, {
+    headers: { Origin: "http://127.0.0.1:4200" },
+  })
   assert.equal(response.status, 200, "Local API metadata must be available without a bearer token.")
-  assert.equal(response.headers.get("access-control-allow-origin"), "*", "The local API must not require authorization headers.")
+  assert.equal(response.headers.get("access-control-allow-origin"), "http://127.0.0.1:4200", "The local API must allow only the Dashboard browser origin.")
+  const untrustedOrigin = await fetch(`${baseUrl}/api/v1/trading/metadata`, {
+    headers: { Origin: "https://attacker.example" },
+  })
+  assert.equal(untrustedOrigin.headers.get("access-control-allow-origin"), null, "Untrusted websites must not read local trading history.")
+
   assert.deepEqual((await response.json()).data, {
     environment: "testnet",
     records: {
