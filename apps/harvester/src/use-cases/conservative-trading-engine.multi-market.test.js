@@ -2073,7 +2073,7 @@ test("submits a valid recovery SELL when refreshed exchange filters remain valid
     symbols: ["DOGEUSDT"],
     portfolio: seeded.portfolio,
     recoveryLedgersByMarket,
-    strategyPolicy: createRecoverySellTestStrategyPolicy({ lastBuyPrice: seeded.fill.price.amount }),
+    strategyPolicy: createRecoverySellTestStrategyPolicy({ lastBuyPrice: "100" }),
     brokerOverrides: {
       getSymbolFilters: async ({ symbol }) => {
         refreshedRuleReads += 1
