@@ -6,7 +6,7 @@ import { handleOperatorControlRequest } from "./operator-control-api.js"
 function createRequest({ method = "GET", body, origin } = {}) {
   const request = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
   request.method = method
-  request.headers = { ...(origin ? { origin } : {}) }
+  request.headers = origin ? { origin } : {}
   return request
 }
 
@@ -16,8 +16,13 @@ function createResponse() {
     writableEnded: false,
     status: undefined,
     body: undefined,
-    writeHead(status) { this.status = status },
-    end(body) { this.body = body; this.writableEnded = true },
+    writeHead(status) {
+      this.status = status
+    },
+    end(body) {
+      this.body = body
+      this.writableEnded = true
+    },
   }
 }
 
@@ -31,7 +36,10 @@ test("operator read query delegates to the shared application facade with the lo
     operator: {
       async getStatus(input) {
         received = input
-        return { ok: true, data: { runtimeState: "RUNNING" } }
+        return {
+          ok: true,
+          data: { runtimeState: "RUNNING" },
+        }
       },
     },
   })
@@ -48,14 +56,21 @@ test("operator pause command delegates the normalized market and request identit
     request: createRequest({
       method: "POST",
       origin: "http://127.0.0.1:4200",
-      body: { command: "pause", symbol: "btcusdt", requestId: "dashboard-test-1" },
+      body: {
+        command: "pause",
+        symbol: "btcusdt",
+        requestId: "dashboard-test-1",
+      },
     }),
     response,
     pathname: "/api/v1/trading/operator/commands",
     operator: {
       async pauseMarket(input) {
         received = input
-        return { ok: true, data: { paused: true } }
+        return {
+          ok: true,
+          data: { paused: true },
+        }
       },
     },
   })
