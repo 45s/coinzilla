@@ -44,6 +44,8 @@ import {
   VOLATILITY_PROTECTION_MODES,
 } from "../domain/market/volatility-protection-state.js"
 
+const MARKET_METADATA_FRESHNESS_MAX_AGE_MS = 30_000
+
 export function createMarketBook({ bookTicker } = {}) {
   if (!bookTicker || typeof bookTicker !== "object" || Array.isArray(bookTicker)) {
     throw new TypeError("createMarketBook requires a normalized bookTicker object")
@@ -1306,12 +1308,58 @@ function createInitialEngineState({ initialState = {}, pairs, initialRegistry } 
 state }
 }
 
-function createMarketMetadataCache({ getMarketMetadata } = {}) {
+function readMarketMetadataClock({ now } = {}) {
+  const timestamp = now()
+  if (!Number.isSafeInteger(timestamp) || timestamp < 0) {
+    throw new TypeError("Market metadata clock must return a non-negative safe integer timestamp")
+  }
+  return timestamp
+}
+
+function createMarketMetadataCache({ getMarketMetadata, getSymbolFilters, now } = {}) {
   const refreshedMarketMetadata = new Map()
+  const refreshedAtBySymbol = new Map()
+  const refreshMarketMetadata = async ({
+    symbol,
+    pairConfig,
+    metadata,
+    force = false,
+  } = {}) => {
+    try {
+      const currentTime = readMarketMetadataClock({ now })
+      const refreshedAt = refreshedAtBySymbol.get(symbol)
+      const cachedMetadata = refreshedMarketMetadata.get(symbol)
+      const age = refreshedAt === undefined ? undefined : currentTime - refreshedAt
+      const cacheMatchesMarket = cachedMetadata?.market.id === metadata?.market?.id &&
+        cachedMetadata?.market.symbol === symbol
+      if (!force && cacheMatchesMarket && age >= 0 && age < MARKET_METADATA_FRESHNESS_MAX_AGE_MS) {
+        return toResult({ data: cachedMetadata })
+      }
+      const result = await getSymbolFilters({ symbol })
+      if (!result?.ok || !result.data) {
+        throw result?.errors?.[0] ?? new Error(`Fresh Binance exchange metadata is unavailable for ${symbol}`)
+      }
+      const refreshed = validateMarketTradingReadiness({
+        symbol,
+        pairConfig,
+        marketMetadata: result.data,
+      })
+      if (refreshed.market.id !== metadata.market.id || refreshed.market.symbol !== symbol) {
+        throw new Error(`Fresh exchange metadata does not match the active market ${symbol}`)
+      }
+      const refreshedAtTime = readMarketMetadataClock({ now })
+      refreshedMarketMetadata.set(symbol, refreshed)
+      refreshedAtBySymbol.set(symbol, refreshedAtTime)
+      return toResult({ data: refreshed })
+    } catch (error) {
+      return toResult({ error })
+    }
+  }
   return {
     refreshedMarketMetadata,
     getCurrentMarketMetadata: ({ symbol } = {}) =>
       refreshedMarketMetadata.get(symbol) ?? getMarketMetadata({ symbol }),
+    refreshMarketMetadata,
   }
 }
 
@@ -1679,8 +1727,16 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     hasUnownedOpenOrdersForSymbol({ symbol })
   const initialRegistry = validateInitialEngineState({ initialState,
 pairs })
-  const marketMetadataCache = createMarketMetadataCache({ getMarketMetadata })
-  const { refreshedMarketMetadata, getCurrentMarketMetadata } = marketMetadataCache
+  const marketMetadataCache = createMarketMetadataCache({
+    getMarketMetadata,
+    getSymbolFilters: ({ symbol }) => dependencies.broker.getSymbolFilters({ symbol }),
+    now: dependencies.now,
+  })
+  const {
+    refreshedMarketMetadata,
+    getCurrentMarketMetadata,
+    refreshMarketMetadata,
+  } = marketMetadataCache
   const { state } = createInitialEngineState({ initialState,
 pairs,
 initialRegistry })
@@ -1710,6 +1766,7 @@ rememberProcessedFill })
     marketMetadataCache,
     refreshedMarketMetadata,
     getCurrentMarketMetadata,
+    refreshMarketMetadata,
     state,
     runTransition,
     nextEvaluationId: () => ++strategyEvaluationSequence,
@@ -1936,6 +1993,10 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     canTrade: dependencies.canTrade,
     isMarketPriceFresh: dependencies.isMarketPriceFresh,
     getCurrentMarketMetadata: context.getCurrentMarketMetadata,
+    refreshRecoverySellMarketMetadata: (options = {}) => refreshRecoverySellMarketMetadataForEvaluation({
+      context,
+      ...options,
+    }),
     nextEvaluationId: context.nextEvaluationId,
     getPortfolio: dependencies.getPortfolio,
     getRecoveryLedger: dependencies.getRecoveryLedger,
@@ -2331,6 +2392,7 @@ function createConservativeTradingEngineDependencies({ options = {} } = {}) {
     getAdditionalTrackedQuoteCashFlow = () => [],
     hasUnownedOpenOrdersForSymbol = () => false,
     isMarketBookFresh = () => false,
+    now = Date.now,
     logger,
     initialState = {},
   } = options
@@ -2340,6 +2402,7 @@ function createConservativeTradingEngineDependencies({ options = {} } = {}) {
     getAdditionalTrackedQuoteCashFlow,
     hasUnownedOpenOrdersForSymbol,
     isMarketBookFresh,
+    now,
     logger: logger
       ? createStrategyLogger({
         logger,
@@ -3527,37 +3590,56 @@ function evaluateTrailingBuyTrigger({ context, symbol, marketPrice, pairConfig, 
   return trigger
 }
 
+function hasActiveRecoveryPosition({ portfolio, marketId } = {}) {
+  const position = portfolio.getPosition({
+    marketId,
+    strategyId: StrategyId.COIN_GRABBER,
+  })
+  return position && compareDecimal({
+    left: position.baseQuantity.amount,
+    right: "0",
+  }) > 0
+}
+
+async function refreshRecoverySellMarketMetadataForEvaluation({ context, symbol } = {}) {
+  const metadata = context.getCurrentMarketMetadata({ symbol })
+  const portfolio = context.dependencies.getPortfolio()
+  if (!hasActiveRecoveryPosition({
+    portfolio,
+    marketId: metadata.market.id,
+  })) {
+    return toResult({ data: metadata })
+  }
+  const result = await context.refreshMarketMetadata({
+    symbol,
+    pairConfig: context.pairs[symbol],
+    metadata,
+  })
+  if (!result.ok) {
+    await context.pause({
+      symbol,
+      reason: "RECOVERY_SELL_FILTERS_UNAVAILABLE",
+      error: result.errors?.[0],
+    })
+  }
+  return result
+}
+
 async function refreshTrailingBuyMarketMetadata({ context, symbol, pairConfig, metadata }) {
-  try {
-    const result = await context.broker.getSymbolFilters({
-      symbol,
-    })
-    if (!result?.ok || !result.data) {
-      throw result?.errors?.[0] ?? new Error(`Fresh Binance exchange metadata is unavailable for ${  symbol}`)
-    }
-    const refreshed = validateMarketTradingReadiness({
-      symbol,
-      pairConfig,
-      marketMetadata: result.data,
-    })
-    if (refreshed.market.id !== metadata.market.id || refreshed.market.symbol !== symbol) {
-      throw new Error(`Fresh exchange metadata does not match the active market ${  symbol}`)
-    }
-    context.refreshedMarketMetadata.set(symbol, refreshed)
-    return {
-      ok: true,
-      data: refreshed,
-    }
-  } catch (error) {
+  const result = await context.refreshMarketMetadata({
+    symbol,
+    pairConfig,
+    metadata,
+    force: true,
+  })
+  if (!result.ok) {
     await context.pause({
       symbol,
       reason: "TRAILING_BUY_REPLACEMENT_RULES_UNAVAILABLE",
-      error,
-    })
-    return toResult({
-      error,
+      error: result.errors?.[0],
     })
   }
+  return result
 }
 
 async function preflightTrailingBuyReplacement({ context, symbol, activeBuy, marketPrice }) {

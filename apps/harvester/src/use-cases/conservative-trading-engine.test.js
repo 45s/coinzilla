@@ -1907,6 +1907,33 @@ test("blocks recovery evaluation and pauses the market when current exchange fil
 })
 
 
+test("does not refresh recovery filters before a new BUY when no active Position exists", async () => {
+  let filterRefreshCount = 0
+  const harness = await createHarness({
+    getSymbolFilters: async () => {
+      filterRefreshCount += 1
+      return {
+        ok: true,
+        data: marketMetadata,
+      }
+    },
+  })
+
+  const result = await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1000,
+    },
+  })
+
+  assert.equal(result.ok, true)
+  assert.equal(harness.orders.length, 1, "The initial BUY path must remain available without a recovery filter refresh.")
+  assert.equal(filterRefreshCount, 0, "Recovery-only filter refresh must not add exchange calls before a Position exists.")
+})
+
+
 const makeFilledOrder = ({ order }) => new CanonicalOrder({
   clientOrderId: order.clientOrderId,
   brokerOrderId: order.brokerOrderId,
