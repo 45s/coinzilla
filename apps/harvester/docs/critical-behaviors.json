@@ -350,17 +350,17 @@
       "integrationRequired": true,
       "tests": [
         {
-          "path": "src/bootstrap/start-harvester.test.js",
+          "path": "test/bootstrap/user-data-recovery.test.js",
           "name": "starts application reconciliation on transport recovery and acknowledges only after durable audits",
           "kind": "normal"
         },
         {
-          "path": "src/bootstrap/start-harvester.test.js",
+          "path": "test/bootstrap/user-data-recovery.test.js",
           "name": "keeps recovery blocked and does not acknowledge when the fresh account snapshot fails",
           "kind": "failure"
         },
         {
-          "path": "src/bootstrap/start-harvester.test.js",
+          "path": "test/bootstrap/user-data-recovery.test.js",
           "name": "reconciles the in-memory order registry before reopening trading after stream recovery",
           "kind": "integration"
         }
