@@ -6,18 +6,10 @@ import {
   createOneShotMarker,
   runBitunixOperatorOrderAttempt,
 } from "./order-attempt.js"
-
-function readBitunixApiCredentials({ env }) {
-  const apiKey = env.BITUNIX_API_KEY?.trim()
-  const apiSecret = env.BITUNIX_API_SECRET?.trim()
-  if (!apiKey || !apiSecret) {
-    throw new Error("Set BITUNIX_API_KEY and BITUNIX_API_SECRET in packages/brokers/.env.development")
-  }
-  return {
-    apiKey,
-    apiSecret,
-  }
-}
+import {
+  parseApiCredentials,
+  redactApiSecrets,
+} from "../helpers/api-credentials.js"
 
 function createBitunixBroker({ credentials, allowLiveOrderMutations }) {
   return new Broker({
@@ -27,16 +19,6 @@ function createBitunixBroker({ credentials, allowLiveOrderMutations }) {
     tradingMode: "live",
     providerOptions: { allowLiveOrderMutations },
   })
-}
-
-function redactBitunixApiSecrets({ message, secrets }) {
-  let safeMessage = String(message)
-  for (const secret of secrets) {
-    if (secret) {
-      safeMessage = safeMessage.replaceAll(secret, "[REDACTED]")
-    }
-  }
-  return safeMessage
 }
 
 export function askForBitunixOrderConfirmation({ order, stdin, stdout }) {
@@ -78,7 +60,7 @@ export async function runBitunixOperatorOrderCommand({
     stdin,
     stdout,
   })
-  const credentials = readBitunixApiCredentials({ env })
+  const credentials = parseApiCredentials({ env })
   stdout.write(
     "WARNING: this command can submit one real Bitunix Spot LIVE order. Review every preflight value before pressing ENTER.\n",
   )
@@ -101,7 +83,7 @@ export async function runBitunixOperatorOrderCommand({
       markerPath: resolve(brokersRoot, ".diagnostics/bitunix-hypeusdt-buy-limit-attempt.json"),
       preflight,
     }),
-    writeLine: (message) => stdout.write(`${redactBitunixApiSecrets({
+    writeLine: (message) => stdout.write(`${redactApiSecrets({
       message,
       secrets: [credentials.apiKey, credentials.apiSecret],
     })}\n`),
@@ -118,7 +100,7 @@ export function reportBitunixOperatorFailure({
   env,
   stderr = process.stderr,
 } = {}) {
-  const message = redactBitunixApiSecrets({
+  const message = redactApiSecrets({
     message: error?.message ?? error,
     secrets: [
       env.BITUNIX_API_KEY,

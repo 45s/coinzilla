@@ -5,12 +5,15 @@ import {
   BITUNIX_OPERATOR_ORDER_INTENT,
   createBitunixOperatorOrderPreflight,
 } from "../helpers/operator-order-preflight.js"
-
-export function assertBitunixOperatorInteractiveTerminal({ stdin, stdout } = {}) {
-  if (stdin?.isTTY !== true || stdout?.isTTY !== true) {
-    throw new Error("Bitunix LIVE order attempt requires an interactive terminal; non-interactive execution is refused")
-  }
-}
+import {
+  assertInteractiveTerminal,
+  assertMutationBroker,
+  assertOrderAttemptDependencies,
+} from "../helpers/validate-order-attempt.js"
+import {
+  formatOrderMutationResult,
+  formatOrderPreflightSummary,
+} from "../helpers/format-order-attempt.js"
 
 /**
  * Persist an exclusive one-shot marker before dispatching the order request.
@@ -91,83 +94,6 @@ async function readHypeUsdtOperatorPreflight({ readBroker }) {
   }
 }
 
-function formatHypeUsdtPreflightSummary({ preflight }) {
-  const { order } = preflight
-  return [
-    "BITUNIX SPOT — LIVE OPERATOR ORDER ATTEMPT",
-    "Provider: Bitunix Spot",
-    "Endpoint: https://openapi.bitunix.com (LIVE)",
-    `Order: ${order.side} ${order.type} ${order.symbol}`,
-    `Limit price: ${order.price} USDT`,
-    `Base quantity: ${order.quantity} HYPE`,
-    `Order notional: ${order.notional} USDT`,
-    `Exchange minimum quantity (minVolume): ${preflight.minimumQuantity} HYPE`,
-    `Exchange minimum notional (minPrice): ${preflight.minimumNotional} USDT`,
-    `Provisional local notional floor: ${preflight.provisionalNotionalFloor} USDT (not an exchange guarantee)`,
-    `USDT balance: free ${preflight.freeQuoteBalance}; locked ${preflight.lockedQuoteBalance}`,
-    `HYPEUSDT open orders returned by the symbol-scoped query: ${preflight.openOrderCount}`,
-    "Open-order response completeness is not established; an empty result is not proof of account-wide absence.",
-    "Price tick and quantity step remain UNKNOWN; the exchange may reject the submitted price or quantity.",
-    "The balance is a point-in-time response without an authoritative source timestamp and may change before dispatch.",
-    "Bonuses, transfers, other assets, account settings, or exchange behavior may still affect acceptance.",
-    "This balance observation does NOT guarantee an insufficient-balance rejection.",
-    "A successful or rejected LIVE response is one observation, not a production-readiness guarantee.",
-    "If accepted, the 30 USDT limit may be marketable and could fill immediately at the live ask.",
-    "Exactly one placement call will be made. No retry, cancel, transfer, or second mutation will follow.",
-  ].join("\n")
-}
-
-function formatHypeUsdtMutationResult({ result }) {
-  const outcome = result?.mutationOutcome ?? "UNREPORTED"
-  const orderId = result?.data?.id
-  const errorMessage = result?.errors?.[0]?.message
-  return [
-    `Broker result: ${result?.ok === true ? "success" : "not successful"}; mutation outcome: ${outcome}.`,
-    ...(orderId ? [`Exchange order ID: ${orderId}`] : []),
-    ...(errorMessage ? [`Broker message: ${errorMessage}`] : []),
-    ...(outcome === "OUTCOME_UNKNOWN"
-      ? ["WARNING: outcome is unknown. Do not retry; reconcile manually before any further action."]
-      : []),
-  ].join("\n")
-}
-
-function assertBitunixMutationBroker({ broker }) {
-  const requiredMethods = ["connect", "createOrder", "disconnect"]
-  if (!broker || requiredMethods.some((method) => typeof broker[method] !== "function")) {
-    throw new TypeError("Bitunix operator attempt requires a mutation Broker with createOrder()")
-  }
-}
-
-function assertBitunixOperatorAttemptDependencies({
-  readBroker,
-  createOrderBroker,
-  confirm,
-  createMarker,
-  writeLine,
-}) {
-  const requiredReadMethods = [
-    "connect",
-    "getExchangeMarkets",
-    "getSymbolFilters",
-    "getBalances",
-    "getOpenOrders",
-    "disconnect",
-  ]
-  if (!readBroker || requiredReadMethods.some((method) => typeof readBroker[method] !== "function")) {
-    throw new TypeError("Bitunix operator attempt requires a read Broker with market, balance, and open-order queries")
-  }
-  for (const [name, dependency] of [
-    ["createOrderBroker", createOrderBroker],
-    ["confirm", confirm],
-    ["createMarker", createMarker],
-    ["writeLine", writeLine],
-  ]) {
-    if (typeof dependency !== "function") {
-      throw new TypeError(`Bitunix operator attempt requires ${name}()`)
-    }
-  }
-}
-
 /**
  * Run read-only preflight, require human approval, then submit exactly one order.
  *
@@ -186,7 +112,7 @@ export async function runBitunixOperatorOrderAttempt({
   createMarker,
   writeLine,
 } = {}) {
-  assertBitunixOperatorAttemptDependencies({
+  assertOrderAttemptDependencies({
     readBroker,
     createOrderBroker,
     confirm,
@@ -196,7 +122,7 @@ export async function runBitunixOperatorOrderAttempt({
   const preflight = await readHypeUsdtOperatorPreflight({
     readBroker,
   })
-  writeLine(formatHypeUsdtPreflightSummary({
+  writeLine(formatOrderPreflightSummary({
     preflight,
   }))
   const approved = await confirm({
@@ -212,7 +138,7 @@ export async function runBitunixOperatorOrderAttempt({
     })
   }
   const orderBroker = createOrderBroker()
-  assertBitunixMutationBroker({
+  assertMutationBroker({
     broker: orderBroker,
   })
   await orderBroker.connect()
@@ -227,7 +153,7 @@ export async function runBitunixOperatorOrderAttempt({
       quantity: preflight.order.quantity,
       price: preflight.order.price,
     })
-    writeLine(formatHypeUsdtMutationResult({
+    writeLine(formatOrderMutationResult({
       result,
     }))
     return result
