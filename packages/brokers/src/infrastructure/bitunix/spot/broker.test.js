@@ -623,7 +623,10 @@ async function assertCreateOrderLifecycleScenario({
     `${name}: only the expected detail reconciliation GET`,
   )
   assert.equal(result.ok, false, `${name}: incomplete or rejected placement must not report a completed Order`)
-  return { result, requests }
+  return {
+    result,
+    requests,
+  }
 }
 
 test("Bitunix Spot createOrder classifies unknown top-level exchange rejections", async () => {
