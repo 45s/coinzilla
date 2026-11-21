@@ -679,6 +679,7 @@ test("logs partial fills from reconciled order state with immutable strategy own
     strategyId: StrategyId.COIN_GRABBER,
     positionId: "doge-coin-grabber",
     purpose: "CONSERVATIVE_BUY",
+    cycleId: "doge-coin-grabber-cycle-1",
   }
   const registry = createLifecycleRegistry({
     currentOrder: previousOrder,
@@ -704,11 +705,23 @@ test("logs partial fills from reconciled order state with immutable strategy own
   assert.equal(result.ok, true, "A reconciled partial fill must complete its order transition.")
   assert.equal(calls.accounting.length, 1, "The lifecycle log must follow canonical fill accounting.")
   assert.equal(logs.length, 1, "One meaningful partial-fill transition must produce one operator record.")
-  assert.equal(logs[0].lifecycleStatus, "PARTIAL_FILL")
+  assert.equal(logs[0].lifecycleStatus, "PARTIAL_FILL", "A partial execution must retain its canonical lifecycle status.")
   assert.equal(logs[0].strategyId, StrategyId.COIN_GRABBER, "Strategy identity must come from registered immutable ownership.")
-  assert.equal(logs[0].executedQuantity, "0.5")
-  assert.equal(logs[0].remainingQuantity, "0.5")
-  assert.equal(logs[0].detail, "Executed: 0.5 | Remaining: 0.5")
+  assert.equal(logs[0].executedQuantity, "0.5", "The lifecycle log must retain the exact executed quantity.")
+  assert.equal(logs[0].remainingQuantity, "0.5", "The lifecycle log must retain the exact remaining quantity.")
+  assert.equal(logs[0].detail, "Executed: 0.5 | Remaining: 0.5", "The lifecycle log must show exact executed and remaining quantities.")
+  const orderUpdatedEvent = calls.published.find(({ name }) => name === "order.updated")
+  assert.ok(orderUpdatedEvent, "A canonical partial-fill transition must publish the updated order event.")
+  assert.deepEqual(
+    orderUpdatedEvent.data.ownership,
+    {
+      strategyId: StrategyId.COIN_GRABBER,
+      positionId: "doge-coin-grabber",
+      purpose: "CONSERVATIVE_BUY",
+      cycleId: "doge-coin-grabber-cycle-1",
+    },
+    "The order-updated event must carry the exact immutable ownership returned by OrderRegistry.",
+  )
 })
 
 test("reports a stale cancellation after FILLED as an informational ignored event", async () => {

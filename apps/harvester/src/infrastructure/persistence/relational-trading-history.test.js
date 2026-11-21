@@ -329,10 +329,14 @@ async function publishAppliedFill({ eventBus, fill } = {}) {
 
 function assertLinkedFill({ database } = {}) {
   const order = database.prepare(
-    "SELECT id, strategy_id, position_id, cycle_id FROM orders",
+    "SELECT id, strategy_id, position_id, ownership_purpose, cycle_id FROM orders",
   ).get()
   const fill = database.prepare("SELECT * FROM fills").get()
   assert.ok(order, "A later canonical order event must create the relational parent order.")
+  assert.equal(order.strategy_id, "CG_coinGrabber", "The relational order must persist its verified strategy ownership.")
+  assert.equal(order.position_id, "position-001", "The relational order must persist its verified Position identity.")
+  assert.equal(order.ownership_purpose, "INITIAL_BUY", "The relational order must persist its verified ownership purpose.")
+  assert.equal(order.cycle_id, "cycle-001", "The relational order must persist its verified cycle identity.")
   assert.equal(fill.order_id, order.id, "A previously unlinked fill must link to the matching scoped order.")
   assert.equal(fill.strategy_id, order.strategy_id, "Strategy attribution must come only from the verified order relationship.")
   assert.equal(fill.position_id, order.position_id, "Position attribution must come only from the verified order relationship.")

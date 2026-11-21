@@ -1151,6 +1151,44 @@ test("publishes actionable decisions and order submission facts around broker I/
   assert.equal(lifecycleLogs[1].brokerOrderId, `broker-${clientOrderId}`, "ACCEPTED must carry the exchange-assigned broker order identity.")
 })
 
+test("publishes verified ownership with the acknowledged order history event", async () => {
+  const events = []
+  const harness = await createHarness({
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+
+  const submittedEvent = events.find(({ name }) => name === "order.submitted")
+  assert.ok(submittedEvent, "An acknowledged Harvester order must publish its submitted lifecycle event.")
+  assert.equal(
+    submittedEvent.data.ownership?.strategyId,
+    StrategyId.COIN_GRABBER,
+    "The submitted event must carry the exact strategy registered for the acknowledged order.",
+  )
+  assert.equal(
+    typeof submittedEvent.data.ownership?.positionId,
+    "string",
+    "The submitted event must retain the registered Position identity.",
+  )
+  assert.equal(
+    typeof submittedEvent.data.ownership?.purpose,
+    "string",
+    "The submitted event must retain the registered order purpose.",
+  )
+})
+
 test("order intent publication failure prevents a broker order", async () => {
   const {
     engine,
@@ -1356,6 +1394,52 @@ test("publishes broker-confirmed trailing BUY cancellation after registry update
   assert.match(cancelled.data.clientOrderId, /^h-[0-9a-f]{22}-1$/)
   assert.equal(cancelled.data.status, "CANCELED")
   assert.equal(cancelled.data.executedQuantity, "0")
+})
+
+test("publishes verified ownership with a broker-confirmed cancellation event", async () => {
+  const events = []
+  const harness = await createHarness({
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100.06",
+      timestamp: 2,
+    },
+  })
+
+  const cancelledEvent = events.find(({ name }) => name === "order.cancelled")
+  assert.ok(cancelledEvent, "A broker-confirmed cancellation must publish its lifecycle event.")
+  assert.equal(
+    cancelledEvent.data.ownership?.strategyId,
+    StrategyId.COIN_GRABBER,
+    "The cancellation event must preserve the order's registered strategy ownership.",
+  )
+  assert.equal(
+    typeof cancelledEvent.data.ownership?.positionId,
+    "string",
+    "The cancellation event must preserve the registered Position identity.",
+  )
+  assert.equal(
+    typeof cancelledEvent.data.ownership?.purpose,
+    "string",
+    "The cancellation event must preserve the registered order purpose.",
+  )
 })
 
 test("durably brackets a trailing BUY cancellation before broker and registry transitions", async () => {
@@ -1650,6 +1734,53 @@ test("publishes an unconfirmed cancellation and pause without changing the order
   assert.equal(failed.data.status, "UNKNOWN")
   assert.equal(engine.getOrders()[0].status, "UNKNOWN")
   assert.equal(events.filter(({ name }) => name === "strategy.paused").length, 1)
+})
+
+test("publishes verified ownership with an unconfirmed cancellation failure", async () => {
+  const events = []
+  const harness = await createHarness({
+    cancelFailure: true,
+    eventPublisher: {
+      publish: (event) => {
+        events.push(event)
+        return { ok: true }
+      },
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100",
+      timestamp: 1,
+    },
+  })
+  await harness.engine.processMarketPrice({
+    symbol: "DOGEUSDT",
+    priceEvent: {
+      symbol: "DOGEUSDT",
+      price: "100.06",
+      timestamp: 2,
+    },
+  })
+
+  const failedEvent = events.find(({ name }) => name === "order.cancel_failed")
+  assert.ok(failedEvent, "An unconfirmed cancellation must publish its lifecycle failure event.")
+  assert.equal(
+    failedEvent.data.ownership?.strategyId,
+    StrategyId.COIN_GRABBER,
+    "The cancellation failure event must preserve the order's registered strategy ownership.",
+  )
+  assert.equal(
+    typeof failedEvent.data.ownership?.positionId,
+    "string",
+    "The cancellation failure event must preserve the registered Position identity.",
+  )
+  assert.equal(
+    typeof failedEvent.data.ownership?.purpose,
+    "string",
+    "The cancellation failure event must preserve the registered order purpose.",
+  )
 })
 
 test("publishes thrown cancellation outcomes as UNKNOWN and pauses the pair", async () => {
