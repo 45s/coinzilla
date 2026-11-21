@@ -57,7 +57,7 @@ The package scripts are:
 - `pnpm --filter @coinzilla/harvester test:targeted` — configured targeted regression suite.
 - `pnpm --filter @coinzilla/harvester test:coverage` — full suite with package-wide 80% line/branch/function floors.
 - `pnpm --filter @coinzilla/harvester run check:reliability` — behavior/invariant/source/test/runtime/coverage inventory validation.
-- `pnpm --filter @coinzilla/harvester run check:critical-coverage -- <coverage-report>` — per-module floors against a captured Node coverage report.
+- `pnpm --filter @coinzilla/harvester run check:critical-coverage <coverage-report>` — per-module floors against a captured Node coverage report.
 
 The required Unit Tests workflow runs the behavior inventory check before the complete Harvester package suite. The required Test Coverage workflow captures the Harvester coverage output and enforces every module floor. The existing JavaScript Syntax workflow retains strict changed-file ESLint and full-workspace lint; no required status-context name or branch ruleset was renamed or weakened. Harvester Targeted Tests remains an additional focused suite.
 
