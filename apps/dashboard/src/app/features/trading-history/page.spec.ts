@@ -172,6 +172,7 @@ describe('TradingHistoryComponent', () => {
     });
     http.expectOne((request) => request.url.endsWith('/api/v1/trading/orders')).flush({ ok: true, data: createPage([], 0) });
     await fixture.whenStable();
+    fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Connected to local Harvester');
   });
 
