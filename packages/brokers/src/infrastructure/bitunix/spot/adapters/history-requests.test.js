@@ -126,6 +126,17 @@ test("order-history response accepts the first page when the REST response omits
   })
 
   assert.deepEqual(rows, [], "the first page remains usable when the live REST response omits pageNum")
+
+  const nullEchoRows = normalizeOrderHistoryPage({
+    value: {
+      total: 0,
+      pageNum: null,
+      data: [],
+    },
+    requestedPage: 1,
+  })
+  assert.deepEqual(nullEchoRows, [], "a null first-page echo is treated the same as an omitted echo")
+
   assert.throws(
     () => normalizeOrderHistoryPage({
       value: {
