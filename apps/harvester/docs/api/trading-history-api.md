@@ -181,3 +181,29 @@ The same local listener exposes the application-level operator facade under `/ap
 - `POST /commands` accepts `{ "command": "pause", "symbol": "BTCUSDT", "requestId": "..." }` or the global commands `pauseallbuys` / `resumeallbuys`. `unpause` maps to the existing market resume use case.
 
 Commands delegate to the existing operator application facade and never call the exchange from the Dashboard. The Dashboard presents an explicit confirmation step before sending a mutation. These endpoints are available only through the loopback listener; do not expose this unauthenticated development API outside the local machine.
+
+
+## Public Bitunix Futures market data
+
+The same loopback-only Harvester HTTP listener exposes a read-only public market-data snapshot for the Dashboard Market Screener:
+
+| Method | Resource | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/markets/bitunix/futures` | Bitunix Futures contract metadata joined with public ticker fields |
+
+Harvester requests Bitunix's public HTTPS REST endpoints:
+
+- `GET https://fapi.bitunix.com/api/v1/futures/market/trading_pairs`
+- `GET https://fapi.bitunix.com/api/v1/futures/market/tickers`
+
+These requests require no API key and use no authenticated/private endpoints. The adapter applies a bounded request timeout and returns a safe `502 HARVESTER_MARKET_DATA_UPSTREAM_UNAVAILABLE` response when Bitunix is unavailable or returns a malformed response.
+
+The response contains `data.provider`, `data.marketType`, `data.observedAt`, and `data.markets[]`. Each market exposes the exchange's symbol, base/quote assets, contract status, API-trading support, maximum leverage, last/mark/open/high/low prices, and base/quote volumes where returned. Numeric exchange values remain strings.
+
+Movement fields are pass-through only:
+
+- `change5m`, `change1h`, `change4h`, and `change24h` are populated only when those native fields are present in the ticker response.
+- The current documented REST ticker response does not guarantee percentage-change fields. Missing fields are returned as `null` and shown as `N/A` by the Dashboard.
+- No candle history is fetched, and no percentages are calculated or inferred from open/last prices.
+
+The Dashboard's Market Screener uses this Harvester endpoint; it never calls Bitunix from the browser. Favourites are stored in separate source-specific browser cookies and are not persisted by Harvester. This public market-data capability is independent of Bitunix execution-provider admission tracked by [#1185](https://github.com/45s/coinzilla/issues/1185); it does not register a broker, enable order placement, or change trading behavior.

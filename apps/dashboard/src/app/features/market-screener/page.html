@@ -45,6 +45,14 @@
       <input type="checkbox" [checked]="favoritesOnly()" (change)="updateFavoritesOnly($event)" />
       <span>Favourites only</span>
     </label>
+    <label class="movement-filter">
+      <span>24H CHANGE</span>
+      <select aria-label="24-hour movement filter" [value]="movementFilter()" [disabled]="!hasNative24hMovement()" (change)="updateMovementFilter($event)">
+        <option value="all">All</option>
+        <option value="positive">Non-negative</option>
+        <option value="negative">Negative</option>
+      </select>
+    </label>
     <div class="market-count">{{ visibleMarkets().length }} <span>markets</span></div>
   </section>
 

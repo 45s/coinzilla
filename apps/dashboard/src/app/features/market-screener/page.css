@@ -167,6 +167,31 @@
   accent-color: #72d9b4;
 }
 
+.movement-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #8491a5;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+}
+
+.movement-filter select {
+  min-height: 35px;
+  padding: 0 9px;
+  border: 1px solid #303d50;
+  border-radius: 6px;
+  background: #151e2b;
+  color: #cbd5e2;
+  font: inherit;
+  font-size: 9px;
+}
+
+.movement-filter select:disabled {
+  opacity: 0.55;
+}
+
 .market-count {
   margin-left: auto;
   color: #e0e8f2;

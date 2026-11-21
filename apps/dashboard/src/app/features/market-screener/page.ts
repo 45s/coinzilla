@@ -1,5 +1,5 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { DOCUMENT } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -10,8 +10,15 @@ import {
 } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 
-import { MarketScreenerApi, type MarketSource, type MarketScreenerRow, type MarketScreenerSnapshot } from './api';
+import {
+  MarketScreenerApi,
+  type MarketSource,
+  type MarketScreenerRow,
+  type MarketScreenerSnapshot,
+} from './api';
 import { createMarketFavoritesCookie, readMarketFavorites } from './favorites-cookie';
+
+type MarketMovementFilter = 'all' | 'positive' | 'negative';
 
 @Component({
   selector: 'app-market-screener',
@@ -30,19 +37,27 @@ export class MarketScreenerComponent implements OnInit {
   readonly errorMessage = signal<string | null>(null);
   readonly searchQuery = signal('');
   readonly favoritesOnly = signal(false);
+  readonly movementFilter = signal<MarketMovementFilter>('all');
   readonly favoriteSymbols = signal<ReadonlySet<string>>(
     new Set(readMarketFavorites(this.document.cookie, 'bitunix-futures')),
   );
   readonly markets = computed(() => this.snapshot()?.markets ?? []);
+  readonly hasNative24hMovement = computed(() =>
+    this.markets().some((market) => market.change24h !== null),
+  );
   readonly visibleMarkets = computed(() => {
     const query = this.searchQuery().trim().toUpperCase();
     const favorites = this.favoriteSymbols();
+    const movementFilter = this.movementFilter();
     return this.markets().filter((market) => {
       const matchesQuery = !query || market.symbol.includes(query)
         || (market.base ?? '').includes(query)
         || (market.quote ?? '').includes(query);
       const matchesFavorites = !this.favoritesOnly() || favorites.has(market.symbol);
-      return matchesQuery && matchesFavorites;
+      const change24h = market.change24h;
+      const matchesMovement = movementFilter === 'all' || (change24h !== null
+        && (movementFilter === 'negative' ? change24h.startsWith('-') : !change24h.startsWith('-')));
+      return matchesQuery && matchesFavorites && matchesMovement;
     });
   });
   readonly updatedAt = computed(() => {
@@ -80,6 +95,10 @@ export class MarketScreenerComponent implements OnInit {
 
   updateFavoritesOnly(event: Event): void {
     this.favoritesOnly.set((event.target as HTMLInputElement).checked);
+  }
+
+  updateMovementFilter(event: Event): void {
+    this.movementFilter.set((event.target as HTMLSelectElement).value as MarketMovementFilter);
   }
 
   toggleFavorite(symbol: string): void {
