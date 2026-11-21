@@ -24,7 +24,9 @@
     "operational-state:init": "node --env-file=.env scripts/initialize-operational-state.js",
     "operational-state:init:dev": "node --env-file=.env.development scripts/initialize-operational-state.js",
     "persistence:backup": "node scripts/trading-history-backups.js create",
-    "persistence:restore-check": "node scripts/trading-history-backups.js verify"
+    "persistence:restore-check": "node scripts/trading-history-backups.js verify",
+    "history:api": "node --env-file=.env scripts/trading-history-api.js",
+    "history:api:dev": "node --env-file=.env.development scripts/trading-history-api.js"
   },
   "engines": {
     "node": ">=24"
@@ -121,7 +123,11 @@
       "src/use-cases/record-order-submission-outcome.test.js",
       "src/use-cases/record-recovery-seller-mixed-sell-reconciled.test.js",
       "src/use-cases/restore-harvester-operational-state.test.js",
-      "src/bootstrap/recovery-seller-runtime.integration.test.js"
+      "src/bootstrap/recovery-seller-runtime.integration.test.js",
+      "src/infrastructure/persistence/trading-history-query-repository.test.js",
+      "src/use-cases/trading-history-queries.test.js",
+      "src/infrastructure/http/trading-history-api.test.js",
+      "src/infrastructure/http/start-trading-history-api.test.js"
     ]
   }
 }
