@@ -4,7 +4,7 @@ status: active
 type: engineering-audit
 owner: repository engineering
 created: 2026-11-20
-last_verified: 2026-11-20
+last_verified: 2026-11-21
 ---
 
 # Engineering standards and enforcement matrix
@@ -172,3 +172,8 @@ Proceed to S-1 only after this matrix is reviewed in its PR. Keep S-1 narrow: in
 - **Existing boundaries retained:** `AI_TASK_COMPLIANCE_STANDARD.md` remains the sole task-start/readiness gate; `TASK_WORKFLOWS.md` remains the checklist catalog; Harvester and Brokers local instructions add domain-specific requirements and continue to defer merge authority to the user. No local domain instruction was broadened or weakened.
 - **Enforcement decision:** existing `check:agent-policy`, maintained-Markdown style and anchor checks cover structural/link integrity. A semantic contradiction scanner based on phrase matching would be brittle and is not justified; no duplicate checker or CI workflow was added.
 - **Scope:** documentation/policy only. No runtime, package API, test behavior, dependency, workflow YAML, GitHub ruleset or exchange operation changed.
+
+
+## S-9 merged implementation checkpoint — 2026-11-21
+
+[PR #1618](https://github.com/45s/coinzilla/pull/1618) is merged. The exact PR head `039555b76955f7e5f1618ae578befa3ad7deab21` passed all six existing PR workflows. The delivered checks have intentionally different enforcement strengths: the workspace package-manifest allowlist/protocol/cycle guard is blocking; the AST relative-import graph and source-cycle report are report-only. The graph baseline is 523 production modules, 864 resolved relative edges and 0 cycle components. It does not analyze computed imports, non-literal `require`, package-name imports, or semantic layer direction. Remaining S-9 tasks must be evidence-led: review actual graph findings and legitimate exceptions, determine whether a narrow additional source-boundary gate can be made reliable, and disposition partial items in issue #1568. S-10 then coordinates with #1401 and #1403 rather than duplicating their document audit/reference-tracing scopes.
