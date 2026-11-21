@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, signal } from '@angular/core';
 
 import { OverviewComponent } from './features/overview/overview';
 import { TradingHistoryComponent } from './features/trading-history/page';
@@ -7,6 +7,19 @@ import { MarketScreenerComponent } from './features/market-screener/page';
 import type { TradingHistoryResource } from './features/trading-history/api';
 
 type DashboardPage = 'overview' | 'operator' | 'markets' | TradingHistoryResource;
+type DashboardTheme = 'current' | 'midnight' | 'light' | 'oled' | 'green' | 'arctic' | 'warm' | 'system';
+
+const THEME_STORAGE_KEY = 'coinzilla.dashboard.theme';
+const THEMES: readonly { value: DashboardTheme; label: string }[] = [
+  { value: 'current', label: 'Current · Emerald' },
+  { value: 'midnight', label: 'Midnight Terminal' },
+  { value: 'light', label: 'Clean Light' },
+  { value: 'oled', label: 'OLED / Neon' },
+  { value: 'green', label: 'Green Terminal' },
+  { value: 'arctic', label: 'Arctic' },
+  { value: 'warm', label: 'Warm Graphite' },
+  { value: 'system', label: 'System' },
+];
 
 @Component({
   selector: 'app-root',
@@ -28,6 +41,8 @@ export class AppComponent {
     { label: 'Diagnostics', icon: '⌘', page: null, enabled: false },
   ] as const;
 
+  readonly themeOptions = THEMES;
+  readonly theme = signal<DashboardTheme>(this.readSavedTheme());
   readonly activePage = signal<DashboardPage>('overview');
   readonly activeLabel = computed(() =>
     this.navigationItems.find((item) => item.page === this.activePage())?.label ?? 'Overview',
@@ -37,9 +52,45 @@ export class AppComponent {
     return page === 'overview' || page === 'operator' || page === 'markets' ? 'orders' : page;
   });
 
+  constructor() {
+    effect(() => {
+      const selectedTheme = this.theme();
+      if (typeof document !== 'undefined') {
+        document.documentElement.dataset['theme'] = selectedTheme;
+      }
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(THEME_STORAGE_KEY, selectedTheme);
+        } catch {
+          // Keep the theme usable when browser storage is unavailable.
+        }
+      }
+    });
+  }
+
+  setTheme(value: string): void {
+    if (THEMES.some((theme) => theme.value === value)) {
+      this.theme.set(value as DashboardTheme);
+    }
+  }
+
   selectPage(page: DashboardPage | null): void {
     if (page) {
       this.activePage.set(page);
+    }
+  }
+
+  private readSavedTheme(): DashboardTheme {
+    if (typeof window === 'undefined') {
+      return 'current';
+    }
+    try {
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+      return THEMES.some((theme) => theme.value === saved)
+        ? (saved as DashboardTheme)
+        : 'current';
+    } catch {
+      return 'current';
     }
   }
 }
