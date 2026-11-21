@@ -37,7 +37,7 @@ export function formatCliIdentity({
 /**
  * Resolve executable identity from the source checkout without network access.
  *
- * @param {{scriptName: string, packageVersion: string, repositoryRoot: string, nodeVersion?: string, runGit?: typeof execFileSync}} input
+ * @param {{packageName: string, scriptName: string, packageVersion: string, repositoryRoot: string, nodeVersion?: string, runGit?: typeof execFileSync}} input
  * @returns {string}
  */
 export function resolveCliIdentity({
