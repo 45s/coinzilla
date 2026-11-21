@@ -76,7 +76,9 @@ export interface OrderRecord {
 }
 
 export interface FillCommission {
-  readonly id: string;
+  readonly id: number;
+  readonly fillId: string;
+  readonly ordinal: number;
   readonly amount: string;
   readonly assetId: string | null;
   readonly assetCode: string | null;
@@ -125,8 +127,9 @@ export interface FillDetail extends FillRecord {
 }
 
 export interface CommissionRecord {
-  readonly id: string;
+  readonly id: number;
   readonly fillId: string;
+  readonly ordinal: number;
   readonly amount: string;
   readonly assetId: string | null;
   readonly assetCode: string | null;
@@ -143,6 +146,7 @@ export interface CommissionRecord {
   readonly exchangeOrderId: string | null;
   readonly strategyId: string | null;
   readonly exchangeExecutedAt: string | null;
+  readonly localObservedAt: string | null;
 }
 
 export type TradingHistoryRecord = OrderRecord | FillRecord | CommissionRecord;
