@@ -1,5 +1,10 @@
 # Harvester Roadmap
 
+## Read-only SQLite JSON export (#1629)
+
+- **In progress in [PR #1630](https://github.com/45s/coinzilla/pull/1630):** add a Harvester package command to export every non-internal SQLite table, row and column into `database-dump.json` for inspection. The exporter uses the explicit TESTNET/LIVE path resolver, opens the source read-only, and adds no dependencies or runtime trading changes.
+- The PR includes script tests and updates the persistence runbook and documentation index. Do not mark complete until exact-head CI passes and the PR is merged.
+
 ## Repository-wide source naming audit — Harvester slice (#1582)
 
 - **Implemented in PR #1605:** eight private module filenames now describe their responsibilities: Conservative `state-predicates.js`; six script modules for journal reconciliation, account balances, menu inputs, order-history inputs, market-sell quantity, and trade-history inputs; and bootstrap `harvester-runtime-setup.js`. All consumers, colocated tests, and current documentation references are updated.
