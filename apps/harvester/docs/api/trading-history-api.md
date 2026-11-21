@@ -20,7 +20,7 @@ The `HARVESTER_API_PORT` setting can change the listener port. The host is fixed
 
 ## Local-only security boundary
 
-The HTTP and WebSocket endpoints have no authentication. This is a deliberate local-only tradeoff for a single-user development machine, not a production or remote-host configuration. The default loopback binding prevents other machines from connecting. Do not expose this listener through a reverse proxy, container port mapping, LAN interface, or public host.
+The HTTP and WebSocket endpoints have no authentication. This is a deliberate local-only tradeoff for a single-user development machine, not a production or remote-host configuration. The listener is fixed to loopback, HTTP CORS is limited to the local Dashboard origins, and WebSocket upgrades validate the browser Origin. Do not expose this listener through a reverse proxy, container port mapping, LAN interface, or public host.
 
 The API remains read-only: it exposes persisted history and does not submit, cancel, or modify exchange orders.
 
