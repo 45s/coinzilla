@@ -428,7 +428,6 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
       return;
     }
     if (message.type === 'authenticated') {
-      this.reconnectAttempt = 0;
       this.liveStatus.set('live');
       this.selectedRecord.set(null);
       void this.loadRecords();
@@ -441,7 +440,6 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
       this.metadata.set(null);
       this.tokenInput.set('');
       this.errorMessage.set('Token was rejected. Check the Harvester bearer token and reconnect.');
-      this.stopLiveUpdates();
       return;
     }
     if (message.type === 'trading-history.updated'
@@ -473,7 +471,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
     }
     const socket = this.eventSocket;
     this.eventSocket = null;
-    if (socket && socket.readyState < WebSocket.CLOSING) {
+    if (socket && socket.readyState < 2) {
       socket.close();
     }
     this.liveStatus.set('offline');
@@ -503,6 +501,7 @@ export class TradingHistoryComponent implements OnInit, OnChanges, OnDestroy {
 
   private handleRequestError(error: unknown): void {
     if (error instanceof HttpErrorResponse && error.status === 401) {
+      this.stopLiveUpdates();
       this.session.clearToken();
       this.connected.set(false);
       this.metadata.set(null);
