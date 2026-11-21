@@ -20,6 +20,10 @@ const policy = [
   "",
 ].join("\n")
 
+function parsePolicy(markdown) {
+  return parseWorkspaceDependencyPolicy({ markdown })
+}
+
 function createPackages() {
   return [
     {
@@ -41,7 +45,7 @@ function createPackages() {
 
 test("parses the canonical package dependency allowlist", () => {
   assert.deepEqual(
-    parseWorkspaceDependencyPolicy({ markdown: policy }),
+    parsePolicy(policy),
     {
       "@coinzilla/app": ["@coinzilla/core"],
       "@coinzilla/core": [],
@@ -52,15 +56,15 @@ test("parses the canonical package dependency allowlist", () => {
 
 test("rejects a missing policy section and duplicate package rows", () => {
   assert.throws(
-    () => parseWorkspaceDependencyPolicy("# No dependency policy here"),
+    () => parsePolicy("# No dependency policy here"),
     /Workspace package dependency policy section is missing/,
     "A missing canonical policy section must fail closed.",
   )
   assert.throws(
-    () => parseWorkspaceDependencyPolicy({ markdown: policy.replace(
+    () => parsePolicy(policy.replace(
       "| `@coinzilla/core` | None |",
       "| `@coinzilla/app` | None |",
-    ) }),
+    )),
     /Duplicate workspace dependency policy row/,
     "Duplicate consumer rows must not be silently overwritten.",
   )
@@ -68,7 +72,7 @@ test("rejects a missing policy section and duplicate package rows", () => {
 
 test("rejects malformed dependency policy rows", () => {
   assert.throws(
-    () => parseWorkspaceDependencyPolicy(policy.replace(
+    () => parsePolicy(policy.replace(
       "| `@coinzilla/core` | None |",
       "| @coinzilla/core | None |",
     )),
