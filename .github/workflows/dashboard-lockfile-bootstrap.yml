@@ -1,0 +1,46 @@
+name: Bootstrap dashboard lockfile
+
+on:
+  push:
+    branches:
+      - feat/dashboard/angular-foundation-1623
+    paths:
+      - "apps/dashboard/package.json"
+      - ".github/workflows/dashboard-lockfile-bootstrap.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: feat/dashboard/angular-foundation-1623
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.11.2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.x
+
+      - name: Regenerate workspace lockfile
+        run: pnpm install --lockfile-only
+
+      - name: Commit regenerated lockfile
+        run: |
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "Lockfile is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml
+          git commit -m "chore(dashboard): refresh workspace lockfile"
+          git push origin HEAD:feat/dashboard/angular-foundation-1623
