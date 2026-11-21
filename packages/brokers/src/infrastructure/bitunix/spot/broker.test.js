@@ -2441,8 +2441,23 @@ test("Bitunix Spot polling subscription requires explicit symbol scope", async (
 
 
 test("Bitunix Spot placement is NOT_SENT when local request signing fails before fetch", async () => {
-  const { broker, calls } = createBroker()
-  broker.restClient.nonceFactory = () => ""
+  let fetchCalls = 0
+  const broker = new BitunixSpotBroker({
+    apiKey: "test-api-key",
+    apiSecret: "test-api-secret",
+    tradingMode: "live",
+    allowLiveOrderMutations: true,
+    dependencies: {
+      restClientFactory: (config) => new BitunixRestClient({
+        ...config,
+        nonceFactory: () => "",
+        fetchFn: async () => {
+          fetchCalls += 1
+          throw new Error("invalid local signing input must not reach fetch")
+        },
+      }),
+    },
+  })
 
   const result = await broker.createOrder({
     symbol: "BTCUSDT",
@@ -2454,7 +2469,7 @@ test("Bitunix Spot placement is NOT_SENT when local request signing fails before
 
   assert.equal(result.ok, false)
   assert.equal(result.mutationOutcome, "NOT_SENT")
-  assert.equal(calls.length, 0, "invalid local signing input must fail before the HTTP transport is called")
+  assert.equal(fetchCalls, 0, "invalid local signing input must fail before the HTTP transport is called")
 })
 
 
