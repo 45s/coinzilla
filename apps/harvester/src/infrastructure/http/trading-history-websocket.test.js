@@ -141,7 +141,7 @@ test("rejects bearer tokens supplied in the WebSocket URL", async (t) => {
   t.after(() => socket.close())
 
   await new Promise((resolve) => {
-    socket.addEventListener("error", resolve, {
+    socket.addEventListener("close", resolve, {
       once: true,
     })
   })
