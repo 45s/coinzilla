@@ -16,7 +16,7 @@ Consolidate Bitunix operator and diagnostic commands under `scripts/bitunix/`. K
 
 ## One-shot local Bitunix HYPEUSDT operator attempt — #1608
 
-**Status: COMPLETE.** Merged in [PR #1609](https://github.com/45s/coinzilla/pull/1609) as `8d12903d439abcd4a13a844aabb49d60aeaeb6c5`; tracking [issue #1608](https://github.com/45s/coinzilla/issues/1608) is closed.
+**Status: MERGED; local operator verification pending.** Merged in [PR #1609](https://github.com/45s/coinzilla/pull/1609) as `8d12903d439abcd4a13a844aabb49d60aeaeb6c5`; [issue #1608](https://github.com/45s/coinzilla/issues/1608) remains open until the operator verifies the local one-shot command.
 
 This is a fixed, human-operated local LIVE investigation, not a general order API, integration test, CI task, AI-agent action, or Harvester execution path. The command uses the common `Broker` facade and attempts only HYPEUSDT BUY LIMIT at 30 USDT for 0.4 HYPE (exact 12 USDT notional). The read-only Broker keeps `allowLiveOrderMutations: false`; a separate mutation-enabled Broker is constructed only after interactive terminal checks, read-only market/balance/open-order preflight, and the exact operator confirmation.
 
