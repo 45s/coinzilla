@@ -241,7 +241,6 @@ test("pre-dispatch operator failures are recorded as NOT_SENT, not OUTCOME_UNKNO
   const publishedReports = []
   const preflightError = Object.assign(new Error("private balance preflight failure"), {
     mutationOutcome: "NOT_SENT",
-    code: "BITUNIX_ORDER_NOT_SENT",
   })
   const exitCode = await runHealthcheckWorkflow({
     mode: "place-order",
