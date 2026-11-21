@@ -164,4 +164,28 @@ describe('MarketScreenerComponent', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('BTCUSDT');
   });
 
+  it('retains the last market snapshot when navigating away and back', async () => {
+    await TestBed.configureTestingModule({
+      imports: [MarketScreenerComponent],
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    }).compileComponents();
+    http = TestBed.inject(HttpTestingController);
+
+    const firstFixture = TestBed.createComponent(MarketScreenerComponent);
+    firstFixture.detectChanges();
+    http.expectOne(MARKET_DATA_URL).flush({ ok: true, data: createSnapshot() });
+    await firstFixture.whenStable();
+    firstFixture.detectChanges();
+    expect((firstFixture.nativeElement as HTMLElement).textContent).toContain('BTCUSDT');
+
+    firstFixture.destroy();
+
+    const secondFixture = TestBed.createComponent(MarketScreenerComponent);
+    secondFixture.detectChanges();
+    expect((secondFixture.nativeElement as HTMLElement).textContent).toContain('BTCUSDT');
+    http.expectNone(MARKET_DATA_URL);
+    secondFixture.destroy();
+  });
+
+
 });

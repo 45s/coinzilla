@@ -14,7 +14,6 @@ import {
   MarketScreenerApi,
   type MarketSource,
   type MarketScreenerRow,
-  type MarketScreenerSnapshot,
 } from './api';
 import { createMarketFavoritesCookie, readMarketFavorites } from './favorites-cookie';
 
@@ -33,7 +32,7 @@ export class MarketScreenerComponent implements OnInit {
   private readonly document = inject(DOCUMENT);
 
   readonly selectedSource = signal<MarketSource>('bitunix-futures');
-  readonly snapshot = signal<MarketScreenerSnapshot | null>(null);
+  readonly snapshot = this.api.bitunixFuturesSnapshot;
   readonly loading = signal(false);
   readonly errorMessage = signal<string | null>(null);
   readonly searchQuery = signal('');
@@ -76,7 +75,9 @@ export class MarketScreenerComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    void this.refresh();
+    if (this.snapshot() === null) {
+      void this.refresh();
+    }
   }
 
   async refresh(): Promise<void> {
@@ -87,7 +88,7 @@ export class MarketScreenerComponent implements OnInit {
     this.loading.set(true);
     this.errorMessage.set(null);
     try {
-      this.snapshot.set(await firstValueFrom(this.api.getBitunixFuturesMarkets()));
+      this.api.bitunixFuturesSnapshot.set(await firstValueFrom(this.api.getBitunixFuturesMarkets()));
     } catch (error) {
       this.errorMessage.set(this.requestErrorMessage(error));
     } finally {

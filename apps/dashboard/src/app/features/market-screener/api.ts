@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
 import { map, type Observable } from 'rxjs';
 
 import type { MarketSource } from './market-source';
@@ -43,6 +43,8 @@ const MARKET_SCREENER_URL = 'http://127.0.0.1:4201/api/v1/markets/bitunix/future
 @Injectable({ providedIn: 'root' })
 export class MarketScreenerApi {
   private readonly http = inject(HttpClient);
+
+  readonly bitunixFuturesSnapshot = signal<MarketScreenerSnapshot | null>(null);
 
   getBitunixFuturesMarkets(): Observable<MarketScreenerSnapshot> {
     return this.http.get<MarketScreenerResponse>(MARKET_SCREENER_URL).pipe(
