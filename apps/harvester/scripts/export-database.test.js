@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { spawnSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
@@ -122,12 +124,57 @@ test("opens the source read-only and leaves database bytes unchanged", () => {
   }
 })
 
-test("requires an explicit TESTNET or LIVE environment", () => {
+test("requires an explicit TESTNET or LIVE command argument", () => {
   assert.throws(
     () => runDatabaseExport({
       env: {},
     }),
-    /TRADING_MODE must be explicitly set/i,
-    "The export command must not infer TESTNET or LIVE from NODE_ENV or another default.",
+    /Environment must be "testnet" or "live"/i,
+    "The export command must require an explicit environment argument.",
+  )
+})
+
+test("rejects unsupported database environment arguments", () => {
+  assert.throws(
+    () => runDatabaseExport({
+      env: {},
+      tradingMode: "staging",
+    }),
+    /Environment must be "testnet" or "live"/i,
+    "The export command must reject environments other than TESTNET and LIVE.",
+  )
+})
+
+test("prints concise usage when the command argument is missing", () => {
+  const scriptFilename = fileURLToPath(new URL("./export-database.js", import.meta.url))
+  const result = spawnSync(process.execPath, [scriptFilename], {
+    encoding: "utf8",
+  })
+  assert.equal(
+    result.status,
+    1,
+    "The CLI must exit unsuccessfully when no database environment is supplied.",
+  )
+  assert.equal(
+    result.stderr.trim(),
+    "Usage: pnpm run db:export <testnet|live>",
+    "The CLI must show the exact supported command syntax without a stack trace.",
+  )
+})
+
+test("prints concise usage when the command argument is invalid", () => {
+  const scriptFilename = fileURLToPath(new URL("./export-database.js", import.meta.url))
+  const result = spawnSync(process.execPath, [scriptFilename, "staging"], {
+    encoding: "utf8",
+  })
+  assert.equal(
+    result.status,
+    1,
+    "The CLI must exit unsuccessfully when an unsupported database environment is supplied.",
+  )
+  assert.equal(
+    result.stderr.trim(),
+    "Usage: pnpm run db:export <testnet|live>",
+    "The CLI must show usage instead of forwarding an invalid value to database resolution.",
   )
 })

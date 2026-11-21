@@ -2,6 +2,7 @@ import { defaultLogger } from "@coinzilla/utils"
 import { HARVESTER_EVENT_NAMES } from "../../application/events/event-names.js"
 import { assertFillHistoryRepository } from "../../application/ports/fill-history-repository.js"
 import { OrderHistoryPersistenceError } from "./order-history-persistence-error.js"
+import { publishTradingHistoryChange } from "./publish-trading-history-change.js"
 
 const DEFAULT_MAX_PENDING_WRITES = 1000
 const MAX_RETAINED_ERRORS = 20
@@ -91,11 +92,18 @@ function enqueueFill({
   }
   state.pendingCount += 1
   state.queue = state.queue
-    .then(() => repository.upsert({
-      fill: event.data,
-      sourceEvent: event,
-      environment,
-    }))
+    .then(async () => {
+      await repository.upsert({
+        fill: event.data,
+        sourceEvent: event,
+        environment,
+      })
+      publishTradingHistoryChange({
+        eventBus: state.eventBus,
+        resources: ["fills", "commissions"],
+        logger,
+      })
+    })
     .catch((error) => recordFailure({
       state,
       logger,
@@ -199,6 +207,7 @@ export function createFillHistoryObserver({
   }
   const fillRepository = assertFillHistoryRepository({ repository })
   const state = {
+    eventBus,
     pendingCount: 0,
     droppedCount: 0,
     failureCount: 0,

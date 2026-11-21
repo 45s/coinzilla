@@ -968,31 +968,22 @@ test("Bitunix Spot order history rejects missing or invalid total metadata", asy
   }
 })
 
-test("Bitunix Spot order history rejects missing or invalid page numbers", async () => {
-  const cases = [
-    {
-      name: "invalid page number",
-      response: {
-        total: 0,
-        pageNum: "one",
-        data: [],
+test("Bitunix Spot order history tolerates malformed redundant page metadata on page one", async () => {
+  for (const pageNum of ["one", "0"]) {
+    const { broker: spotBroker } = createBroker({
+      responses: {
+        "/api/spot/v1/order/history/page": {
+          total: 0,
+          pageNum,
+          data: [],
+        },
       },
-    },
-    {
-      name: "zero page number",
-      response: {
-        total: 0,
-        pageNum: "0",
-        data: [],
-      },
-    },
-  ]
-
-  for (const entry of cases) {
-    await assertOrderHistoryPageRejected({
-      response: entry.response,
-      message: `history page with ${entry.name} must fail closed`,
     })
+
+    const result = await spotBroker.getOrderHistory({ symbol: "BTCUSDT" })
+
+    assert.equal(result.ok, true, `malformed first-page echo ${pageNum} must not block page one`)
+    assert.deepEqual(result.data, [], "first-page history must preserve the order array contract")
   }
 })
 
