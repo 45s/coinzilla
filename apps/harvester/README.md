@@ -57,14 +57,13 @@ The ADR-0001 Step 7 offline market audit is available through `pnpm --filter @co
 
 The [Trading-history API v1](./docs/api/trading-history-api.md) serves persisted orders, individual fills, and commission facts to independent clients from the existing Harvester process. It uses a transport-independent application query facade and Harvester's already-open relational database connection. It does not add tables, change trading behavior, or connect to a broker/exchange.
 
-Generate a 32-byte token and set `HARVESTER_API_TOKEN` in the local `.env.development` file. Start Harvester normally with the intended `TRADING_MODE`:
+The API starts automatically with Harvester and binds to `127.0.0.1:4201`. No token or extra environment configuration is required. Start Harvester normally with the intended `TRADING_MODE`:
 
 ```sh
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 pnpm --filter @coinzilla/harvester dev
 ```
 
-When the token is configured and relational history persistence is available, Harvester starts the API at `127.0.0.1:4201` by default. Without a token, Harvester runs normally and the optional API stays disabled. The API shares Harvester's existing database connection and closes before persistence during process shutdown; it has no separate process, script, or launch command. See the API contract for routes, filters, pagination, authentication, remote-access requirements, and exact financial-value semantics.
+The API starts when Harvester has an active runtime and relational history persistence. It shares Harvester's existing database connection and closes before persistence during process shutdown; it has no separate process, script, or launch command. The unauthenticated listener is fixed to loopback for local single-user development and must not be exposed to a LAN or remote host. See the API contract for routes, filters, pagination, local-only boundary, and exact financial-value semantics.
 
 ## Operational State Store (ADR-0001)
 
@@ -454,3 +453,7 @@ The Telegram Command Center is a thin authorized interface over Harvester applic
 ## Telegram Command Center
 
 The optional inbound operator interface, its inline navigation and control-confirmation behavior are documented in the [Telegram Command Center operator runbook](docs/operations/telegram-command-center.md). Inbound control is enabled by default and can be disabled with `operatorControl.telegram.enabled=false`; process-lifetime operator pauses are not restored after restart.
+
+## Dashboard operator controls
+
+The local Dashboard Operator workspace reads status, markets, portfolio positions, open orders, and balances from the running Harvester process. It also exposes confirmed BUY pause/resume commands (`pause`, `unpause`, `pauseallbuys`, `resumeallbuys`) through the same operator facade used by Telegram. The local API remains unauthenticated and must not be exposed beyond `127.0.0.1`.
