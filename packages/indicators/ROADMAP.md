@@ -1,6 +1,6 @@
 # Indicators roadmap
 
-- Status: In progress
+- Status: Active — initial capability and Harvester protection are complete; adaptive price-step and additional indicators remain deferred until a concrete consumer contract is approved.
 - Owner: Indicators domain
 - Package: `@coinzilla/indicators`
 - First consumer: [Harvester volatility protection #1016](../../apps/harvester/docs/volatility-protection.md)
