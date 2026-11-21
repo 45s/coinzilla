@@ -417,6 +417,13 @@ describe('TradingHistoryComponent', () => {
     });
 
     socket.receive({ type: 'authenticated' });
+    http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
+      ok: true,
+      data: {
+        environment: 'testnet',
+        records: { orders: 1, fills: 0, commissions: 0 },
+      },
+    });
     const resync = http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders'));
     resync.flush({
       ok: true,
@@ -441,6 +448,13 @@ describe('TradingHistoryComponent', () => {
     const firstSocket = FakeWebSocket.instances[0];
     firstSocket.open();
     firstSocket.receive({ type: 'authenticated' });
+    http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
+      ok: true,
+      data: {
+        environment: 'testnet',
+        records: { orders: 1, fills: 0, commissions: 0 },
+      },
+    });
     http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders')).flush({
       ok: true,
       data: createPage([createOrder('order-connected')], 1),
@@ -457,8 +471,18 @@ describe('TradingHistoryComponent', () => {
       data: createPage([createOrder('order-live')], 1),
     });
     await fixture.whenStable();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
+      ok: true,
+      data: {
+        environment: 'testnet',
+        records: { orders: 2, fills: 1, commissions: 1 },
+      },
+    });
+    await fixture.whenStable();
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('Order broker-live');
+    expect(fixture.nativeElement.textContent).toContain('2 orders');
 
     firstSocket.close();
     expect(fixture.componentInstance.liveStatus()).toBe('reconnecting');
@@ -467,6 +491,13 @@ describe('TradingHistoryComponent', () => {
     expect(reconnectSocket).toBeDefined();
     reconnectSocket.open();
     reconnectSocket.receive({ type: 'authenticated' });
+    http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/metadata')).flush({
+      ok: true,
+      data: {
+        environment: 'testnet',
+        records: { orders: 3, fills: 1, commissions: 1 },
+      },
+    });
     const reconnectSnapshot = http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders'));
     reconnectSnapshot.flush({
       ok: true,
