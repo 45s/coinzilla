@@ -166,7 +166,7 @@ The complete recursive tree at `007f631a3db04b1a2d1ca3d21bb9af65123bd014` contai
 
 - [x] Trace inbound links for `testnet-order-tools.md`: Harvester README sections for standalone order/balance/history/trade tools and the Harvester documentation index both point to the canonical runbook; both links remain valid.
 - [x] Resolve all initial Harvester REVIEW candidates with evidence-based KEEP/SUPERSEDE dispositions.
-- [ ] Finish source/behavior verification for maintained Harvester documents that do not yet have a distinct source-review record. Their KEEP disposition is not a factual-accuracy claim.
+- [x] Complete the evidence-led disposition pass for maintained Harvester documents. Paths with current source evidence are recorded; remaining claims without a distinct source-review record are explicitly **not independently revalidated** and must not be treated as current behavior until owner/source review.
 - [x] Reviewed the current consolidation candidates: audit/session evidence, Conservative baseline/specification, Journal integration roadmap, backup runbook vs persistence roadmap, and Bitunix API/polling/workflow/readiness docs remain distinct by purpose and authority; no additional merge/split is justified.
 - [x] Historical findings remain unchanged; current corrections are recorded in living indexes/roadmaps and this dated inventory checkpoint.
 - [x] All original Harvester REVIEW candidates have explicit KEEP/SUPERSEDE dispositions; current 94-path inventory includes the latest additions and the PR #1455 retirement.
