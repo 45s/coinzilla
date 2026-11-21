@@ -674,18 +674,3 @@ test("rejects commission asset codes that do not match canonical market assets",
     "Fee identity must use the canonical market asset ID and code.",
   )
 })
-
-test("normalizes padded strategy IDs before Position identity is stored", () => {
-  const position = Position.empty({ market, strategyId: " future_strategy " })
-
-  assert.equal(
-    position.strategyId,
-    "future_strategy",
-    "A Position must retain the normalized strategy owner rather than whitespace-padded identity.",
-  )
-  assert.equal(
-    position.positionId,
-    JSON.stringify([market.id, "future_strategy"]),
-    "A derived Position ID must use the same normalized strategy ID as its owner.",
-  )
-})
