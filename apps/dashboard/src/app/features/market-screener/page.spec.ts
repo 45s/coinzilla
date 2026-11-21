@@ -65,6 +65,7 @@ describe('MarketScreenerComponent', () => {
     expect(renderedText).toContain('Movement values are shown only when returned by Bitunix');
     const movementFilter = fixture.nativeElement.querySelector('select[aria-label="24-hour movement filter"]') as HTMLSelectElement;
     expect(movementFilter.disabled).toBe(true);
+    expect(Array.from(movementFilter.options)).toHaveLength(3);
   });
 
   it('persists a favourite in the Bitunix Futures cookie when the star is toggled', async () => {
