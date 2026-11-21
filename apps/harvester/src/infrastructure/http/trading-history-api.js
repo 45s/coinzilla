@@ -339,7 +339,12 @@ async function handleTradingHistoryRequest({
   operator,
 } = {}) {
   const url = new URL(request.url ?? "/", "http://127.0.0.1")
-  if (await handleOperatorControlRequest({ request, response, pathname: url.pathname, operator })) {
+  if (await handleOperatorControlRequest({
+    request,
+    response,
+    pathname: url.pathname,
+    operator,
+  })) {
     return
   }
   if (handleRequestPreconditions({
