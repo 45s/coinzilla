@@ -65,13 +65,18 @@ function printPublishedResult({ result, stdout }) {
   const { passed, failed, skipped, total } = result.report.summary
   const operatorAttempt = result.report.results.find((entry) => entry.operation === "operator order attempt")
   stdout.write([
-    "Bitunix Spot health check completed.",
+    "Bitunix Spot diagnostics completed.",
     `Checks: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
-    `Overall: ${result.exitCode === 0 ? "HEALTHY" : "FAILED"}`,
+    `Diagnostics: ${failed === 0 ? "HEALTHY" : "DEGRADED"}`,
+    `Operator preflight gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+    ...(result.healthCheck.nonBlockingFailedOperations.length > 0
+      ? [`Non-blocking diagnostic failures: ${result.healthCheck.nonBlockingFailedOperations.join(", ")}`]
+      : []),
     ...(operatorAttempt ? [`Operator order attempt: ${operatorAttempt.status.toUpperCase()}`] : []),
     ...(result.healthCheck.missingRequiredOperations.length > 0
-      ? [`Required checks not passed: ${result.healthCheck.missingRequiredOperations.join(", ")}`]
+      ? [`Required gate checks not passed: ${result.healthCheck.missingRequiredOperations.join(", ")}`]
       : []),
+    `Workflow result: ${result.exitCode === 0 ? "SUCCESS" : "FAILED"}`,
     `Report branch: ${result.branch}`,
     `Report commit: ${result.commitSha ?? "not created"}`,
     `Published report: ${result.reportPath}`,

@@ -13,14 +13,23 @@ const requiredOperations = [
   "user.info",
 ]
 
-function createDiagnosticReport({ failed = 0 } = {}) {
+function createDiagnosticReport({ failed = 0, failedOperation = requiredOperations[0] } = {}) {
   const results = requiredOperations.map((operation) => ({
     operation,
     status: "passed",
     durationMs: 1,
   }))
   if (failed > 0) {
-    results[0].status = "failed"
+    const requiredResult = results.find((result) => result.operation === failedOperation)
+    if (requiredResult) {
+      requiredResult.status = "failed"
+    } else {
+      results.push({
+        operation: failedOperation,
+        status: "failed",
+        durationMs: 1,
+      })
+    }
   }
   return {
     schemaVersion: 1,
@@ -49,8 +58,9 @@ function createPublisher({ events, publishedReports }) {
       env,
       onProgress: () => {},
     })
-    publishedReports.push(report)
     const healthCheck = evaluateReadOnlyHealthCheck({ report })
+    report.healthCheck = healthCheck
+    publishedReports.push(report)
     return {
       report,
       healthCheck,
@@ -59,7 +69,7 @@ function createPublisher({ events, publishedReports }) {
       reportPath: "packages/brokers/diagnostics/reports/test.json",
       localReportPath: "packages/brokers/.diagnostics/test.json",
       pushError: null,
-      exitCode: !healthCheck.healthy ||
+      exitCode: !healthCheck.healthy || report.summary.failed > 0 ||
         report.results.some((entry) =>
           entry.operation === "operator order attempt" && entry.status === "failed")
         ? 1
@@ -109,6 +119,43 @@ test("place-order mode runs diagnostics first and executes the order inside repo
   assert.equal(publishedReports[0].results.at(-1).operation, "operator order attempt")
   assert.equal(publishedReports[0].results.at(-1).status, "passed")
   assert.equal(JSON.stringify(publishedReports[0]).includes("private-order-id"), false)
+})
+
+test("place-order mode proceeds to guarded preflight when only optional order history fails", async () => {
+  const events = []
+  const publishedReports = []
+  let orderCalls = 0
+  const exitCode = await runHealthcheckWorkflow({
+    mode: "place-order",
+    brokersRoot: "/repo/packages/brokers",
+    repositoryRoot: "/repo",
+    env,
+    stdout,
+    runDiagnostics: async () => createDiagnosticReport({
+      failed: 1,
+      failedOperation: "Broker API getOrderHistory",
+    }),
+    publishDiagnostics: createPublisher({
+      events,
+      publishedReports,
+    }),
+    runOperatorOrder: async () => {
+      orderCalls += 1
+      events.push("operator order")
+      return {
+        ok: true,
+        mutationOutcome: "TEST_ONLY",
+      }
+    },
+  })
+
+  assert.equal(orderCalls, 1, "the guarded order runner must be reached despite an unrelated history diagnostic failure")
+  assert.equal(publishedReports[0].healthCheck.healthy, true, "the explicit safety/configuration gate must remain ready")
+  assert.deepEqual(publishedReports[0].healthCheck.nonBlockingFailedOperations, [
+    "Broker API getOrderHistory",
+  ], "the optional history failure must remain visible")
+  assert.equal(publishedReports[0].results.at(-1).operation, "operator order attempt")
+  assert.equal(exitCode, 1, "the command must still return a failing diagnostic status even after the order attempt is recorded")
 })
 
 test("place-order mode skips the order when read-only health checks are not healthy", async () => {
