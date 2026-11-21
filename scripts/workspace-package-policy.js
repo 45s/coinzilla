@@ -1,6 +1,6 @@
 const POLICY_TABLE_HEADER = "| Consumer | Allowed direct workspace dependencies |"
-const PACKAGE_NAME_PATTERN = /^\`(@coinzilla\/[a-z0-9-]+)\`$/
-const ALLOWED_PACKAGE_NAME_PATTERN = /\`(@coinzilla\/[a-z0-9-]+)\`/g
+const PACKAGE_NAME_PATTERN = /^`(@coinzilla\/[a-z0-9-]+)`$/
+const ALLOWED_PACKAGE_NAME_PATTERN = /`(@coinzilla\/[a-z0-9-]+)`/g
 
 const parsePolicyPackageName = ({ cell }) => {
   const match = cell.match(PACKAGE_NAME_PATTERN)
