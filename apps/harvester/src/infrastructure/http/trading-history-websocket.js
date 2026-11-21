@@ -7,6 +7,10 @@ const HEARTBEAT_INTERVAL_MS = 30_000
 const MAX_CONNECTIONS = 32
 const MAX_FRAME_BYTES = 1024
 const MAX_BUFFERED_BYTES = 64 * 1024
+const ALLOWED_BROWSER_ORIGINS = new Set([
+  "http://127.0.0.1:4200",
+  "http://localhost:4200",
+])
 const HISTORY_UPDATED_EVENT = "trading-history.updated"
 const ALLOWED_RESOURCES = new Set(["orders", "fills", "commissions"])
 
@@ -131,6 +135,7 @@ function handleSocketData({ client, chunk } = {}) {
 
 function rejectUpgrade({ socket, status = 400 } = {}) {
   const reasons = {
+    403: "Forbidden",
     404: "Not Found",
     503: "Service Unavailable",
   }
@@ -182,6 +187,10 @@ function getUpgradeKey({ request, socket, clients } = {}) {
     rejectUpgrade({
       socket,
     })
+    return null
+  }
+  if (request.headers.origin && !ALLOWED_BROWSER_ORIGINS.has(request.headers.origin)) {
+    rejectUpgrade({ socket, status: 403 })
     return null
   }
   if (url.pathname !== WEBSOCKET_PATH) {
