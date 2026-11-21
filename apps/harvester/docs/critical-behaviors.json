@@ -26,7 +26,8 @@
       "title": "Order submission intent, acknowledgement and unknown outcomes",
       "sourceModules": [
         "src/use-cases/conservative-trading-engine.js",
-        "src/infrastructure/brokers/binance-broker-adapter.js"
+        "src/infrastructure/brokers/binance-broker-adapter.js",
+        "src/domain/orders/recovery-seller-submission-ownership.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -44,6 +45,16 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
           "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
+          "name": "requires complete Position and cycle identity for an RS-owned durable SELL intent",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
+          "name": "preserves the original cause when durable Recovery Seller ownership is invalid",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "active",
@@ -230,7 +241,8 @@
       "title": "Conservative BUY/SELL ordering and active-position trailing gates",
       "sourceModules": [
         "src/domain/strategies/conservative/strategy.js",
-        "src/use-cases/conservative-trading-engine.js"
+        "src/use-cases/conservative-trading-engine.js",
+        "src/domain/strategies/conservative/state-predicates.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -248,6 +260,31 @@
           "path": "test/replays/doge-zro-conservative-replay.test.js",
           "name": "submits the recovery SELL before the next standing BUY after the actual BUY fill",
           "kind": "integration"
+        },
+        {
+          "path": "src/domain/strategies/conservative/state-predicates.test.js",
+          "name": "recognizes only order states that block duplicate intents",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/state-predicates.test.js",
+          "name": "matches active orders by symbol and side",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/state-predicates.test.js",
+          "name": "detects an active strategy position only for positive quantity",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/state-predicates.test.js",
+          "name": "detects only inventory above the exact retained keep quantity as sellable",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/strategies/conservative/state-predicates.test.js",
+          "name": "keeps the full recovery basis outstanding until cumulative net proceeds cover it",
+          "kind": "normal"
         }
       ],
       "runtimeStatus": "active",
@@ -387,7 +424,12 @@
       "sourceModules": [
         "src/infrastructure/operational-state/create-file-operational-state-store.js",
         "src/use-cases/restore-harvester-operational-state.js",
-        "src/infrastructure/operational-state/project-harvester-operational-state.js"
+        "src/infrastructure/operational-state/project-harvester-operational-state.js",
+        "src/infrastructure/operational-state/helpers/operational-state-fact-schema.js",
+        "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.js",
+        "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.js",
+        "src/infrastructure/operational-state/operational-state-fact-validation.js",
+        "src/infrastructure/operational-state/operational-state-record-validation.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -424,6 +466,41 @@
         {
           "path": "src/use-cases/restore-harvester-operational-state.test.js",
           "name": "converts a thrown Operational State projection into a failure result",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/operational-state-fact-schema.test.js",
+          "name": "exports stable schema limits and fact type allowlist",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
+          "name": "accepts canonical order-submission intents and recovery-sell purpose",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.test.js",
+          "name": "rejects malformed order-submission intent identity, fields, classification, and amounts",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.test.js",
+          "name": "accepts an explicit durable terminal mixed-SELL accounting boundary",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.test.js",
+          "name": "rejects non-terminal, uncommitted, ambiguous and malformed mixed-SELL boundaries",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/operational-state/operational-state-record-validation.test.js",
+          "name": "validates genesis envelope, sequence, schema, and digest integrity",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/operational-state-record-validation.test.js",
+          "name": "rejects malformed record envelopes, sequence chains, digests and payloads",
           "kind": "failure"
         }
       ],
@@ -1098,6 +1175,132 @@
       "latestObserved": {
         "lines": 98.08,
         "branches": 83.33,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/orders/recovery-seller-submission-ownership.js",
+      "baseline": {
+        "lines": 97.14,
+        "branches": 95,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 97.14,
+        "branches": 95,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/strategies/conservative/state-predicates.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/helpers/operational-state-fact-schema.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.js",
+      "baseline": {
+        "lines": 96.85,
+        "branches": 90.91,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 96.85,
+        "branches": 90.91,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/operational-state-fact-validation.js",
+      "baseline": {
+        "lines": 97.4,
+        "branches": 85.71,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 85,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 97.4,
+        "branches": 85.71,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/operational-state-record-validation.js",
+      "baseline": {
+        "lines": 99.21,
+        "branches": 96.59,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 99.21,
+        "branches": 96.59,
         "functions": 100
       }
     }
