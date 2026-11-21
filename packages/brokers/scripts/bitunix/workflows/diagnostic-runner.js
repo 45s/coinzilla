@@ -1,7 +1,7 @@
-import { Broker } from "../src/index.js"
-import { BitunixRestClient } from "../src/infrastructure/bitunix/spot/api/rest-client.js"
-import { BitunixSpotWebSocketClient } from "../src/infrastructure/bitunix/spot/api/websocket-client.js"
-import { BitunixWebSocketTransport } from "../src/infrastructure/bitunix/spot/api/websocket-transport.js"
+import { Broker } from "../../../src/index.js"
+import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/rest-client.js"
+import { BitunixSpotWebSocketClient } from "../../../src/infrastructure/bitunix/spot/api/websocket-client.js"
+import { BitunixWebSocketTransport } from "../../../src/infrastructure/bitunix/spot/api/websocket-transport.js"
 import {
   BrokerDiagnosticError,
   createDiagnosticReport,
@@ -10,7 +10,7 @@ import {
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
   summarizePrivatePayload,
-} from "./diagnostics.js"
+} from "../helpers/diagnostics.js"
 
 const DIAGNOSTIC_CONFIG = Object.freeze({
   confirmLiveReads: true,

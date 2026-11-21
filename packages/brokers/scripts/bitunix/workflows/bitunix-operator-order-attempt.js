@@ -4,7 +4,7 @@ import {
   assertSuccessfulBitunixBrokerResult,
   BITUNIX_OPERATOR_ORDER_INTENT,
   createBitunixOperatorOrderPreflight,
-} from "./bitunix-hypeusdt-order-preflight.js"
+} from "../helpers/bitunix-hypeusdt-order-preflight.js"
 
 const BITUNIX_OPERATOR_ORDER_CONFIRMATION = "SUBMIT ONE LIVE HYPEUSDT BUY LIMIT ORDER"
 

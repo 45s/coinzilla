@@ -7,7 +7,7 @@ import {
   createDiagnosticResult,
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
-} from "./diagnostics.js"
+} from "../helpers/diagnostics.js"
 
 const execFileAsync = promisify(execFile)
 const REPORT_COMMIT_MESSAGE = "chore(brokers): publish sanitized Bitunix health report"

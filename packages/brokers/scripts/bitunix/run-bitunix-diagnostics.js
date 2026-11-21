@@ -1,9 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { resolve } from "node:path"
 import { pathToFileURL } from "node:url"
-import { BitunixRestClient } from "../src/infrastructure/bitunix/spot/api/rest-client.js"
-import { runBitunixDiagnostics } from "./diagnostic-runner.js"
-import { sanitizeDiagnosticError } from "./diagnostics.js"
+import { BitunixRestClient } from "../../src/infrastructure/bitunix/spot/api/rest-client.js"
+import { runBitunixDiagnostics } from "./workflows/diagnostic-runner.js"
+import { sanitizeDiagnosticError } from "./helpers/diagnostics.js"
 
 function createOutputPath({ now }) {
   const timestamp = new Date(now()).toISOString().replaceAll(/[:.]/g, "-")

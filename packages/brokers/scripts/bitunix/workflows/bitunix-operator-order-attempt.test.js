@@ -5,7 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
-import { createBitunixOperatorOrderPreflight } from "./bitunix-hypeusdt-order-preflight.js"
+import { createBitunixOperatorOrderPreflight } from "../helpers/bitunix-hypeusdt-order-preflight.js"
 import {
   assertBitunixOperatorInteractiveTerminal,
   createOneShotMarker,
@@ -194,7 +194,7 @@ test("Bitunix operator CLI requires an interactive input and output terminal", (
 })
 
 test("Bitunix operator CLI refuses non-interactive execution before credentials or network", () => {
-  const scriptPath = fileURLToPath(new URL("./bitunix-hypeusdt-order-attempt.js", import.meta.url))
+  const scriptPath = fileURLToPath(new URL("../bitunix-hypeusdt-order-attempt.js", import.meta.url))
   const env = {
     ...process.env,
   }

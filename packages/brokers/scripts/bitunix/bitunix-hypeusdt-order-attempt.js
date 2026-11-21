@@ -1,15 +1,15 @@
 import { createInterface } from "node:readline/promises"
 import { resolve } from "node:path"
 import { pathToFileURL, fileURLToPath } from "node:url"
-import { Broker } from "../src/index.js"
+import { Broker } from "../../src/index.js"
 import {
   assertBitunixOperatorInteractiveTerminal,
   createOneShotMarker,
   runBitunixOperatorOrderAttempt,
-} from "./bitunix-operator-order-attempt.js"
+} from "./workflows/bitunix-operator-order-attempt.js"
 
 const markerPath = fileURLToPath(new URL(
-  "../.diagnostics/bitunix-hypeusdt-buy-limit-attempt.json",
+  "../../.diagnostics/bitunix-hypeusdt-buy-limit-attempt.json",
   import.meta.url,
 ))
 

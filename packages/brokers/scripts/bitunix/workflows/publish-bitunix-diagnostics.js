@@ -1,11 +1,11 @@
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { BitunixRestClient } from "../src/infrastructure/bitunix/api/rest-client.js"
+import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/rest-client.js"
 import { runBitunixDiagnostics } from "./diagnostic-runner.js"
-import { sanitizeDiagnosticError } from "./diagnostics.js"
+import { sanitizeDiagnosticError } from "../helpers/diagnostics.js"
 import { publishBitunixDiagnostics } from "./health-publisher.js"
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..")
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../../..")
 
 function printHelp() {
   process.stdout.write([

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
 
-const scriptPath = fileURLToPath(new URL("./run-bitunix-diagnostics.js", import.meta.url))
+const scriptPath = fileURLToPath(new URL("../run-bitunix-diagnostics.js", import.meta.url))
 
 test("Bitunix diagnostic help describes the current source-constant configuration", () => {
   const result = spawnSync(process.execPath, [scriptPath, "--help"], {
