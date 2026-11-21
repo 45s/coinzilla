@@ -1005,6 +1005,9 @@ test("bounds pre-persistence error buffering and reports every dropped record", 
     )
     await logging.close()
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
