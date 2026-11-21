@@ -491,11 +491,14 @@
       "title": "Cross-market account-level quote/base reservation and inventory allocation",
       "runtimeStatus": "active",
       "sourceModules": [
-        "src/domain/orders/allocate-order-commitments.js"
+        "src/domain/orders/allocate-order-commitments.js",
+        "src/bootstrap/start-harvester.js",
+        "src/use-cases/conservative-trading-engine.js"
       ],
       "invariants": [
         "Allocate pair actions against shared account-level free quote/base after existing commitments, applying only snapshot-relative commitment changes.",
-        "Never double-count balances already reflected in the exchange snapshot; reject aggregate SELL commitments beyond total tracked base inventory."
+        "Never double-count balances already reflected in the exchange snapshot; reject aggregate SELL commitments beyond total tracked base inventory.",
+        "Subscribe every enabled market before waiting for any one market's ticker seed, and route each symbol's market-price events to that market's independent strategy context."
       ],
       "tests": [
         {
@@ -507,8 +510,29 @@
           "path": "src/domain/orders/allocate-order-commitments.test.js",
           "name": "rejects SELL batches that collectively exceed Harvester-owned active inventory",
           "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "subscribes every enabled market before waiting for the first market's REST ticker seed",
+          "kind": "integration"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "delivers market price events independently for every enabled market",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.multi-market.test.js",
+          "name": "shared quote-asset BUY commitments are reserved across markets",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.multi-market.test.js",
+          "name": "the four-market incident fixture reconciles one market without pausing the other three",
+          "kind": "integration"
         }
-      ]
+      ],
+      "integrationRequired": true
     }
   ],
   "coverageBaseline": {

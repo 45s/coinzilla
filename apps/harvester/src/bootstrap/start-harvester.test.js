@@ -6320,3 +6320,90 @@ test("does not expose or construct a partial Bitunix runtime from credentials", 
     await runtime.stop()
   }
 })
+
+
+test("delivers market price events independently for every enabled market", async () => {
+  const calls = []
+  const debugLogs = []
+  const broker = createBroker(calls)
+  const placeOrderCalls = []
+  const placeOrder = broker.placeOrder
+  broker.placeOrder = async (input) => {
+    placeOrderCalls.push(input)
+    return placeOrder(input)
+  }
+
+  const runtime = await startHarvesterForTest({
+    loadConfig: async () => createTwoMarketStartupConfig(),
+    env: binanceEnv,
+    brokerAdapterFactory: () => broker,
+    evaluateStrategy: () => ({
+      action: "NO_ACTION",
+    }),
+    logger: {
+      info() {},
+      warn() {},
+      error() {},
+      system() {},
+      debug: (entry) => debugLogs.push(entry),
+    },
+  })
+
+  try {
+    assert.deepEqual(
+      runtime.subscriptions,
+      ["BTCUSDT", "ETHUSDT"],
+      "The runtime must subscribe both enabled market streams before accepting their price events.",
+    )
+    assert.equal(
+      runtime.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol,
+      "BTCUSDT",
+      "The first enabled market must retain its own canonical market metadata.",
+    )
+    assert.equal(
+      runtime.getMarketMetadata({ symbol: "ETHUSDT" }).market.symbol,
+      "ETHUSDT",
+      "The second enabled market must retain its own canonical market metadata.",
+    )
+
+    await broker.emitPrice("BTCUSDT", {
+      symbol: "BTCUSDT",
+      price: "65000.12",
+      timestamp: Date.now(),
+    })
+    await broker.emitPrice("ETHUSDT", {
+      symbol: "ETHUSDT",
+      price: "3500.12",
+      timestamp: Date.now(),
+    })
+
+    const receivedMarketPrices = new Set(
+      debugLogs
+        .filter(({ message }) => message === "Harvester market price event received")
+        .map(({ symbol, price }) => `${symbol}:${price}`),
+    )
+    assert.deepEqual(
+      receivedMarketPrices,
+      new Set(["BTCUSDT:65000.12", "ETHUSDT:3500.12"]),
+      "Each enabled symbol's price event must reach the runtime through its own subscription.",
+    )
+
+    const evaluatedMarketPrices = new Set(
+      debugLogs
+        .filter(({ message }) => message === "Market price evaluated")
+        .map(({ symbol, price }) => `${symbol}:${price}`),
+    )
+    assert.deepEqual(
+      evaluatedMarketPrices,
+      new Set(["BTCUSDT:65000.12", "ETHUSDT:3500.12"]),
+      "Each enabled market must be evaluated independently after its own price event.",
+    )
+    assert.deepEqual(
+      placeOrderCalls,
+      [],
+      "The deterministic NO_ACTION policy must prevent broker order mutations during this composition test.",
+    )
+  } finally {
+    await runtime.stop()
+  }
+})
