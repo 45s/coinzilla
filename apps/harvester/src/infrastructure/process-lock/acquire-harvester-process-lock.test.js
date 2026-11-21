@@ -291,21 +291,19 @@ test("treats a missing lock file as an idempotent release", async () => {
       directory,
       token: "released-owner-token",
     })
-    await unlink(acquired.data.lockPath)
+    await unlink(acquired.lockPath)
 
-    const released = await acquired.data.release()
+    const released = await acquired.release()
     assert.deepEqual(
       released,
       {
         ok: true,
-        data: {
-          released: false,
-          alreadyReleased: true,
-        },
+        released: false,
+        alreadyReleased: true,
       },
       "A lock already removed by the operating system must be reported as already released.",
     )
-    assert.deepEqual(await acquired.data.release(), released, "Repeated release after external removal must remain idempotent.")
+    assert.deepEqual(await acquired.release(), released, "Repeated release after external removal must remain idempotent.")
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
