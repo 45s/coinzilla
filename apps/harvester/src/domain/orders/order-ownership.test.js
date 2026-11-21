@@ -85,10 +85,11 @@ test("compares ownership and attaches broker identity immutably", () => {
   const changed = createOrderOwnership({ ownership: makeOwnership({ positionId: "position-2" }), clientOrderId: "client-1" })
   assert.equal(hasSameOrderOwnership({ current, next: same }), true, "Equivalent ownership records must compare equal.")
   assert.equal(hasSameOrderOwnership({ current, next: changed }), false, "Different position ownership must compare unequal.")
-  const ownerships = [current, same]
+  const other = createOrderOwnership({ ownership: makeOwnership({ positionId: "position-2" }), clientOrderId: "client-2" })
+  const ownerships = [current, other]
   const attached = attachBrokerOrderIdToOwnership({ ownerships, clientOrderId: "client-1", brokerOrderId: "broker-1" })
   assert.equal(attached[0].brokerOrderId, "broker-1", "Matching client identity must receive broker identity.")
-  assert.equal(attached[1], same, "Unmatched ownership must preserve its record reference.")
+  assert.equal(attached[1], other, "Unmatched ownership must preserve its record reference.")
   assert.equal(Object.isFrozen(attached), true, "Updated ownership collection must be immutable.")
   assert.equal(Object.isFrozen(attached[0]), true, "Updated ownership record must be immutable.")
   const unchanged = attachBrokerOrderIdToOwnership({ ownerships, clientOrderId: "missing", brokerOrderId: "broker-2" })
