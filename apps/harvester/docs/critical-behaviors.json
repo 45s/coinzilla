@@ -543,6 +543,53 @@
         }
       ],
       "integrationRequired": true
+    },
+    {
+      "id": "RECOVERY_SELL_MARKET_METADATA_FRESHNESS",
+      "title": "Fresh exchange trading rules before Conservative recovery SELL planning",
+      "sourceModules": [
+        "src/use-cases/conservative-trading-engine.js",
+        "src/use-cases/create-latest-transition-evaluator.js",
+        "src/use-cases/create-market-metadata-cache.js"
+      ],
+      "integrationRequired": true,
+      "tests": [
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "uses refreshed exchange filters when planning a recovery SELL",
+          "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "blocks recovery SELL planning when current exchange filters cannot be retrieved",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/conservative-trading-engine.test.js",
+          "name": "submits a valid recovery SELL when refreshed exchange filters remain valid",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-market-metadata-cache.test.js",
+          "name": "rejects a refreshed filter snapshot for a different market",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/create-latest-transition-evaluator.test.js",
+          "name": "refreshes recovery filters before Conservative strategy evaluation",
+          "kind": "normal"
+        },
+        {
+          "path": "src/use-cases/create-latest-transition-evaluator.test.js",
+          "name": "stops Conservative evaluation when recovery filter refresh fails",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "active",
+      "invariants": [
+        "Before evaluating an active Conservative recovery position, refresh and validate the exact market's exchange filters; strategy sizing and submission must consume the refreshed metadata rather than the startup snapshot.",
+        "If current filters are unavailable, invalid, stale, or belong to another market, pause the affected market and do not submit a recovery SELL."
+      ]
     }
   ],
   "coverageBaseline": {
