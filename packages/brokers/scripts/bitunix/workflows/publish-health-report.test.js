@@ -119,7 +119,8 @@ function createDiagnosticReport({ failed = 0, omitOperation } = {}) {
 function assertFailedHealthReport({ result, calls }) {
   assert.equal(result.exitCode, 1, "an API diagnostic failure must make the command fail")
   assert.equal(result.report.summary.failed, 1, "the pushed report must preserve the failed Bitunix operation")
-  assert.equal(result.healthCheck.healthy, false, "a failed required Bitunix probe must fail the overall health check")
+  assert.equal(result.healthCheck.healthy, true, "a failed optional WebSocket account probe must not block the separate guarded REST preflight")
+  assert.deepEqual(result.healthCheck.nonBlockingFailedOperations, ["user.account"], "the optional failure must remain visible as a non-blocking diagnostic")
   const publicError = result.report.results.find((item) => item.operation === "user.account").error
   assert.equal(publicError.message, undefined, "the public allowlist must omit free-form private error text")
   assert.equal(publicError.cause, undefined, "the public allowlist must omit nested error details")
@@ -138,7 +139,7 @@ function assertReportBranchPublished({ result, calls }) {
   assert.equal(result.branch, "diagnostics/bitunix-health-20261119T083000000Z", "the report branch must have a unique UTC timestamped name")
   assert.equal(result.commitSha, "report-commit-sha", "the pushed report commit SHA must be returned for inspection")
   assert.equal(result.exitCode, 0, "a fully successful read-only health check must return a successful exit code")
-  assert.equal(result.healthCheck.healthy, true, "all required authenticated account and WebSocket probes must pass")
+  assert.equal(result.healthCheck.healthy, true, "the explicit safety/configuration prerequisites must pass before the guarded Broker preflight can begin")
   assert.equal(calls.some((args) => args[0] === "fetch" && args[1] === "origin" && args[2] === "refs/heads/develop:refs/remotes/origin/develop"), true, "the report branch must start from the latest fetched origin/develop")
   assert.equal(calls.some((args) => args[0] === "switch" && args[1] === "--create" && args[3] === "--track" && args[4] === "origin/develop"), true, "the script must create a dedicated branch tracking the fetched develop tip")
   assert.deepEqual(calls.find((args) => args[0] === "add"), ["add", "--", result.reportPath], "only the generated sanitized report may be staged")
@@ -386,14 +387,14 @@ test("requires both private API credentials before fetching or contacting Bituni
 })
 
 
-test("fails the health check when a required authenticated operation is skipped", async () => {
+test("blocks the operator preflight gate when diagnostic configuration is skipped", async () => {
   const repositoryRoot = await createRepositoryDirectory()
   const { calls, runGit } = createFakeGit({ repositoryRoot })
   try {
     const result = await publishHealthReport({
       repositoryRoot,
       runGit,
-      runDiagnostics: async () => createDiagnosticReport({ omitOperation: "user.info" }),
+      runDiagnostics: async () => createDiagnosticReport({ omitOperation: "diagnostic configuration" }),
       env: {
         BITUNIX_API_KEY: apiKey,
         BITUNIX_API_SECRET: apiSecret,
@@ -402,7 +403,7 @@ test("fails the health check when a required authenticated operation is skipped"
     })
 
     assert.equal(result.exitCode, 1, "skipping a required authenticated operation must not produce a healthy result")
-    assert.deepEqual(result.healthCheck.missingRequiredOperations, ["user.info"], "the report must identify the required operation that did not pass")
+    assert.deepEqual(result.healthCheck.missingRequiredOperations, ["diagnostic configuration"], "the report must identify the exact safety/configuration prerequisite that did not pass")
     assert.equal(calls.some((args) => args[0] === "push"), true, "the incomplete health report must still be pushed for diagnosis")
     assert.deepEqual(calls.at(-1), ["switch", "develop"], "an incomplete health report must still return the checkout to develop")
   } finally {
