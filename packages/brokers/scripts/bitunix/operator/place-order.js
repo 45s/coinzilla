@@ -79,7 +79,9 @@ export async function persistOneShotMarkerOutcome({
     throw new Error("Bitunix one-shot marker is not awaiting an outcome")
   }
   const safeValue = (value) => {
-    if (typeof value !== "string" && typeof value !== "number") return undefined
+    if (typeof value !== "string" && typeof value !== "number") {
+      return undefined
+    }
     const normalized = String(value)
     return /^[A-Za-z0-9_.:-]{1,80}$/.test(normalized) ? normalized : undefined
   }
@@ -91,11 +93,15 @@ export async function persistOneShotMarkerOutcome({
     ["errorKind", error?.kind],
   ]) {
     const safe = safeValue(value)
-    if (safe !== undefined) metadata[key] = safe
+    if (safe !== undefined) {
+      metadata[key] = safe
+    }
   }
   marker.status = finalOutcome
   marker.completedAt = new Date(now()).toISOString()
-  if (Object.keys(metadata).length > 0) marker.result = metadata
+  if (Object.keys(metadata).length > 0) {
+    marker.result = metadata
+  }
   const temporaryPath = `${markerPath}.tmp`
   await writeFile(temporaryPath, `${JSON.stringify(marker, null, 2)}\n`, {
     encoding: "utf8",
@@ -137,6 +143,45 @@ async function readHypeUsdtOperatorPreflight({ readBroker }) {
   } finally {
     await readBroker.disconnect()
   }
+}
+
+async function dispatchOrderAndPersistOutcome({ orderBroker, preflight, markerPath, writeLine }) {
+  let result
+  try {
+    result = await orderBroker.createOrder({
+      symbol: preflight.order.symbol,
+      side: preflight.order.side,
+      type: preflight.order.type,
+      quantity: preflight.order.quantity,
+      price: preflight.order.price,
+    })
+  } catch (error) {
+    try {
+      await persistOneShotMarkerOutcome({
+        markerPath,
+        outcome: "OUTCOME_UNKNOWN",
+        error,
+      })
+    } catch (persistError) {
+      writeLine(`WARNING: could not persist OUTCOME_UNKNOWN to the one-shot marker: ${persistError.message}`)
+    }
+    throw error
+  }
+  const validOutcomes = ["CONFIRMED", "REJECTED", "NOT_SENT", "OUTCOME_UNKNOWN"]
+  const outcome = validOutcomes.includes(result?.mutationOutcome)
+    ? result.mutationOutcome
+    : "OUTCOME_UNKNOWN"
+  try {
+    await persistOneShotMarkerOutcome({
+      markerPath,
+      outcome,
+      error: result?.errors?.[0],
+    })
+  } catch (error) {
+    writeLine(`WARNING: could not persist ${outcome} to the one-shot marker: ${error.message}`)
+  }
+  writeLine(formatOrderMutationResult({ result }))
+  return result
 }
 
 /**
@@ -191,41 +236,12 @@ export async function runGuardedHypeUsdtOrderAttempt({
     const markerPath = await createMarker({
       preflight,
     })
-    let result
-    try {
-      result = await orderBroker.createOrder({
-        symbol: preflight.order.symbol,
-        side: preflight.order.side,
-        type: preflight.order.type,
-        quantity: preflight.order.quantity,
-        price: preflight.order.price,
-      })
-    } catch (error) {
-      try {
-        await persistOneShotMarkerOutcome({
-          markerPath,
-          outcome: "OUTCOME_UNKNOWN",
-          error,
-        })
-      } catch (persistError) {
-        writeLine(`WARNING: could not persist OUTCOME_UNKNOWN to the one-shot marker: ${persistError.message}`)
-      }
-      throw error
-    }
-    const outcome = ["CONFIRMED", "REJECTED", "NOT_SENT", "OUTCOME_UNKNOWN"].includes(result?.mutationOutcome)
-      ? result.mutationOutcome
-      : "OUTCOME_UNKNOWN"
-    try {
-      await persistOneShotMarkerOutcome({
-        markerPath,
-        outcome,
-        error: result?.errors?.[0],
-      })
-    } catch (error) {
-      writeLine(`WARNING: could not persist ${outcome} to the one-shot marker: ${error.message}`)
-    }
-    writeLine(formatOrderMutationResult({ result }))
-    return result
+    return await dispatchOrderAndPersistOutcome({
+      orderBroker,
+      preflight,
+      markerPath,
+      writeLine,
+    })
   } finally {
     try {
       await orderBroker.disconnect()
