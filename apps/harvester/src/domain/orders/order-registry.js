@@ -257,11 +257,15 @@ ownerships })
     const order = clientOrderId === undefined
       ? this.getOrderByBrokerOrderId({ brokerOrderId, marketId })
       : this.getOrder({ clientOrderId })
+    if (!order) {
+      return undefined
+    }
+    if (brokerOrderId !== undefined && order.brokerOrderId !== brokerOrderId) {
+      throw new Error("Order ownership clientOrderId and brokerOrderId identify different registered orders")
+    }
     return findOrderOwnership({
       ownerships: this.#ownerships,
-      clientOrderId,
-      brokerOrderId,
-      marketId: marketId ?? order?.market.id,
+      clientOrderId: order.clientOrderId,
     })
   }
 
@@ -290,7 +294,6 @@ ownerships })
           ownership,
           clientOrderId: order.clientOrderId,
           brokerOrderId: order.brokerOrderId,
-          marketId: order.market.id,
         })
     if (existing) {
       if (!sameOrderState({ current: existing,
@@ -552,7 +555,6 @@ function createAcknowledgedRegistryResult({ orders, ownerships, index, current, 
         ownerships,
         clientOrderId: current.clientOrderId,
         brokerOrderId: order.brokerOrderId,
-        marketId: order.market.id,
       }),
     }),
     applied: true,
