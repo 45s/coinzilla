@@ -12,10 +12,10 @@ const PACKAGE_NAME_PATTERN = /^@coinzilla\/[a-z0-9-]+$/
 
 /**
  * Parse the workspace dependency allowlist from the canonical Domain Ownership document.
- * @param {string} markdown Canonical Domain Ownership Markdown.
+ * @param {{markdown: string}} options
  * @returns {Record<string, string[]>}
  */
-export function parseWorkspaceDependencyPolicy(markdown) {
+export function parseWorkspaceDependencyPolicy({ markdown }) {
   const heading = "## Workspace package dependency policy"
   const headingIndex = markdown.indexOf(heading)
   if (headingIndex < 0) {
@@ -28,7 +28,7 @@ export function parseWorkspaceDependencyPolicy(markdown) {
     throw new Error("Workspace package dependency policy table is incomplete.")
   }
 
-  const headerCells = parseTableCells(tableLines[0])
+  const headerCells = parseTableCells({ line: tableLines[0] })
   if (
     headerCells.length !== 2 ||
     headerCells[0] !== "Consumer" ||
@@ -37,24 +37,27 @@ export function parseWorkspaceDependencyPolicy(markdown) {
     throw new Error("Workspace package dependency policy table has an unexpected header.")
   }
 
-  const separatorCells = parseTableCells(tableLines[1])
+  const separatorCells = parseTableCells({ line: tableLines[1] })
   if (separatorCells.length !== 2 || separatorCells.some((cell) => !/^:?-{3,}:?$/.test(cell))) {
     throw new Error("Workspace package dependency policy table has an invalid separator.")
   }
 
   const allowedDependencies = {}
   for (const line of tableLines.slice(2)) {
-    const cells = parseTableCells(line)
+    const cells = parseTableCells({ line })
     if (cells.length !== 2) {
       throw new Error("Malformed workspace dependency policy row; expected exactly two cells.")
     }
 
-    const consumer = parsePackageNameCell(cells[0], "consumer")
+    const consumer = parsePackageNameCell({
+      cell: cells[0],
+      cellLabel: "consumer",
+    })
     if (Object.hasOwn(allowedDependencies, consumer)) {
       throw new Error(`Duplicate workspace dependency policy row for ${consumer}.`)
     }
 
-    const dependencies = parseAllowedDependencyCell(cells[1])
+    const dependencies = parseAllowedDependencyCell({ cell: cells[1] })
     if (new Set(dependencies).size !== dependencies.length) {
       throw new Error(`Duplicate allowed dependency in workspace dependency policy row for ${consumer}.`)
     }
@@ -70,10 +73,28 @@ export function parseWorkspaceDependencyPolicy(markdown) {
 
 /**
  * Discover direct-child workspace packages and their declared workspace dependencies.
- * @param {string} rootDirectory Repository root.
+ * @param {{rootDirectory: string}} options
  * @returns {Array<{name: string, workspaceDependencies: Array<{name: string, version: string, section: string}>}>}
  */
-export function readWorkspacePackages(rootDirectory) {
+export function readWorkspacePackages({ rootDirectory }) {
+  const patterns = readWorkspacePatterns({ rootDirectory })
+  const manifests = readWorkspaceManifests({
+    rootDirectory,
+    patterns,
+  })
+  const packageNames = new Set(manifests.map((entry) => entry.name))
+
+  return manifests.map(({ name, manifest }) => ({
+    name,
+    workspaceDependencies: readWorkspacePackageDependencies({
+      manifest,
+      packageNames,
+      packageName: name,
+    }),
+  }))
+}
+
+function readWorkspacePatterns({ rootDirectory }) {
   const workspaceFile = resolve(rootDirectory, "pnpm-workspace.yaml")
   const workspaceContent = readFileSync(workspaceFile, "utf8")
   const workspaceLines = workspaceContent.split(/\r?\n/)
@@ -101,7 +122,10 @@ export function readWorkspacePackages(rootDirectory) {
   if (patterns.length === 0) {
     throw new Error("pnpm-workspace.yaml contains no supported workspace package patterns.")
   }
+  return patterns.sort()
+}
 
+function readWorkspaceManifests({ rootDirectory, patterns }) {
   const manifests = []
   for (const pattern of patterns) {
     if (!pattern.endsWith("/*") || pattern.includes("..") || isAbsolute(pattern)) {
@@ -118,32 +142,19 @@ export function readWorkspacePackages(rootDirectory) {
       throw new Error(`Workspace package directory does not exist: ${parentRelativePath}.`)
     }
 
-    const entries = readdirSync(parentDirectory, { withFileTypes: true })
+    const entryNames = readdirSync(parentDirectory, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
-      .sort((left, right) => left.name.localeCompare(right.name))
-
-    for (const entry of entries) {
-      const manifestPath = resolve(parentDirectory, entry.name, "package.json")
+      .map((entry) => entry.name)
+      .sort()
+    for (const entryName of entryNames) {
+      const manifestPath = resolve(parentDirectory, entryName, "package.json")
       if (!existsSync(manifestPath)) {
         continue
       }
-
-      let manifest
-      try {
-        manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
-      } catch (error) {
-        throw new Error(`Could not parse workspace package manifest ${relative(resolve(rootDirectory), manifestPath)}: ${error.message}`, {
-          cause: error,
-        })
-      }
-
-      if (typeof manifest.name !== "string" || manifest.name.trim() === "") {
-        throw new Error(`Workspace package manifest is missing a package name: ${relative(resolve(rootDirectory), manifestPath)}.`)
-      }
-      manifests.push({
-        name: manifest.name,
-        manifest,
-      })
+      manifests.push(readWorkspaceManifest({
+        manifestPath,
+        rootDirectory,
+      }))
     }
   }
 
@@ -154,34 +165,47 @@ export function readWorkspacePackages(rootDirectory) {
     }
     packageNames.add(entry.name)
   }
+  return manifests
+}
 
-  return manifests.map(({ name, manifest }) => {
-    const workspaceDependencies = []
-    for (const section of DEPENDENCY_SECTIONS) {
-      const dependencies = manifest[section] ?? {}
-      if (typeof dependencies !== "object" || dependencies === null || Array.isArray(dependencies)) {
-        throw new Error(`Workspace package ${name} has an invalid ${section} object.`)
-      }
+function readWorkspaceManifest({ manifestPath, rootDirectory }) {
+  let manifest
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
+  } catch (error) {
+    throw new Error(`Could not parse workspace package manifest ${relative(resolve(rootDirectory), manifestPath)}: ${error.message}`, {
+      cause: error,
+    })
+  }
 
-      for (const [dependencyName, version] of Object.entries(dependencies)) {
-        if (packageNames.has(dependencyName) || (typeof version === "string" && version.startsWith("workspace:"))) {
-          workspaceDependencies.push({
-            name: dependencyName,
-            version,
-            section,
-          })
-        }
-      }
+  if (typeof manifest.name !== "string" || manifest.name.trim() === "") {
+    throw new Error(`Workspace package manifest is missing a package name: ${relative(resolve(rootDirectory), manifestPath)}.`)
+  }
+  return {
+    name: manifest.name,
+    manifest,
+  }
+}
+
+function readWorkspacePackageDependencies({ manifest, packageNames, packageName }) {
+  const workspaceDependencies = []
+  for (const section of DEPENDENCY_SECTIONS) {
+    const dependencies = manifest[section] ?? {}
+    if (typeof dependencies !== "object" || dependencies === null || Array.isArray(dependencies)) {
+      throw new Error(`Workspace package ${packageName} has an invalid ${section} object.`)
     }
 
-    workspaceDependencies.sort((left, right) =>
-      left.name.localeCompare(right.name) || left.section.localeCompare(right.section),
-    )
-    return {
-      name,
-      workspaceDependencies,
+    for (const [dependencyName, version] of Object.entries(dependencies)) {
+      if (packageNames.has(dependencyName) || (typeof version === "string" && version.startsWith("workspace:"))) {
+        workspaceDependencies.push({
+          name: dependencyName,
+          version,
+          section,
+        })
+      }
     }
-  }).sort((left, right) => left.name.localeCompare(right.name))
+  }
+  return workspaceDependencies
 }
 
 /**
@@ -190,19 +214,33 @@ export function readWorkspacePackages(rootDirectory) {
  * @returns {string[]}
  */
 export function validateWorkspaceDependencyPolicy({ packages, allowedDependencies }) {
-  const violations = []
   const packagesByName = new Map()
+  const violations = []
   for (const workspacePackage of packages) {
     if (packagesByName.has(workspacePackage.name)) {
       violations.push(`Duplicate workspace package manifest name: ${workspacePackage.name}.`)
-      continue
+    } else {
+      packagesByName.set(workspacePackage.name, workspacePackage)
     }
-    packagesByName.set(workspacePackage.name, workspacePackage)
   }
 
   const packageNames = new Set(packagesByName.keys())
-  const policyNames = new Set(Object.keys(allowedDependencies))
+  violations.push(...findPolicyDeclarationViolations({
+    packageNames,
+    allowedDependencies,
+  }))
+  const { dependencyGraph, edgeViolations } = buildWorkspaceDependencyGraph({
+    packagesByName,
+    allowedDependencies,
+  })
+  violations.push(...edgeViolations)
+  violations.push(...findWorkspaceDependencyCycles({ dependencyGraph }))
+  return [...new Set(violations)].sort()
+}
 
+function findPolicyDeclarationViolations({ packageNames, allowedDependencies }) {
+  const violations = []
+  const policyNames = new Set(Object.keys(allowedDependencies))
   for (const packageName of packageNames) {
     if (!policyNames.has(packageName)) {
       violations.push(`Workspace package ${packageName} is missing a dependency policy row.`)
@@ -213,7 +251,6 @@ export function validateWorkspaceDependencyPolicy({ packages, allowedDependencie
       violations.push(`Dependency policy contains unknown workspace package ${policyName}.`)
     }
   }
-
   for (const [consumer, allowedTargets] of Object.entries(allowedDependencies)) {
     if (!Array.isArray(allowedTargets)) {
       violations.push(`Dependency policy row for ${consumer} must contain an array of allowed packages.`)
@@ -225,47 +262,46 @@ export function validateWorkspaceDependencyPolicy({ packages, allowedDependencie
       }
     }
   }
+  return violations
+}
 
+function buildWorkspaceDependencyGraph({ packagesByName, allowedDependencies }) {
   const dependencyGraph = new Map()
+  const violations = []
   for (const [packageName, workspacePackage] of packagesByName) {
     const allowedTargets = new Set(allowedDependencies[packageName] ?? [])
-    const actualTargets = new Set()
     const graphTargets = new Set()
-
     for (const dependency of workspacePackage.workspaceDependencies) {
       const { name: target, version, section } = dependency
-      if (!packageNames.has(target)) {
+      if (!packagesByName.has(target)) {
         violations.push(`Workspace package ${packageName} declares ${target} in ${section}, but no matching workspace package manifest exists.`)
         continue
       }
-
       if (typeof version !== "string" || !version.startsWith("workspace:")) {
         violations.push(`Workspace dependency ${packageName} -> ${target} in ${section} must use the workspace: protocol.`)
       }
       if (!allowedTargets.has(target)) {
         violations.push(`Forbidden workspace dependency ${packageName} -> ${target} in ${section}; update the dependency policy only after owner approval.`)
       }
-
-      actualTargets.add(target)
       graphTargets.add(target)
-    }
-
-    for (const target of actualTargets) {
-      if (!allowedTargets.has(target)) {
-        continue
-      }
     }
     dependencyGraph.set(packageName, [...graphTargets].sort())
   }
+  return {
+    dependencyGraph,
+    edgeViolations: violations,
+  }
+}
 
+function findWorkspaceDependencyCycles({ dependencyGraph }) {
+  const violations = []
   const visitState = new Map()
   const traversalStack = []
   const reportedCycles = new Set()
 
-  function visitPackage(packageName) {
+  function visitPackage({ packageName }) {
     visitState.set(packageName, "visiting")
     traversalStack.push(packageName)
-
     for (const dependencyName of dependencyGraph.get(packageName) ?? []) {
       if (visitState.get(dependencyName) === "visiting") {
         const cycleStartIndex = traversalStack.indexOf(dependencyName)
@@ -276,24 +312,22 @@ export function validateWorkspaceDependencyPolicy({ packages, allowedDependencie
           reportedCycles.add(cycleDescription)
         }
       } else if (visitState.get(dependencyName) !== "visited") {
-        visitPackage(dependencyName)
+        visitPackage({ packageName: dependencyName })
       }
     }
-
     traversalStack.pop()
     visitState.set(packageName, "visited")
   }
 
-  for (const packageName of [...packageNames].sort()) {
+  for (const packageName of [...dependencyGraph.keys()].sort()) {
     if (!visitState.has(packageName)) {
-      visitPackage(packageName)
+      visitPackage({ packageName })
     }
   }
-
-  return [...new Set(violations)].sort()
+  return violations
 }
 
-function parseTableCells(line) {
+function parseTableCells({ line }) {
   const trimmedLine = line.trim()
   if (!trimmedLine.startsWith("|") || !trimmedLine.endsWith("|")) {
     return []
@@ -301,7 +335,7 @@ function parseTableCells(line) {
   return trimmedLine.slice(1, -1).split("|").map((cell) => cell.trim())
 }
 
-function parsePackageNameCell(cell, cellLabel) {
+function parsePackageNameCell({ cell, cellLabel }) {
   const match = cell.match(/^`(@coinzilla\/[a-z0-9-]+)`$/)
   if (!match || !PACKAGE_NAME_PATTERN.test(match[1])) {
     throw new Error(`Malformed workspace dependency policy ${cellLabel}: ${cell}.`)
@@ -309,11 +343,12 @@ function parsePackageNameCell(cell, cellLabel) {
   return match[1]
 }
 
-function parseAllowedDependencyCell(cell) {
+function parseAllowedDependencyCell({ cell }) {
   if (cell === "None") {
     return []
   }
-
-  const dependencies = cell.split(",").map((value) => parsePackageNameCell(value.trim(), "dependency"))
-  return dependencies
+  return cell.split(",").map((value) => parsePackageNameCell({
+    cell: value.trim(),
+    cellLabel: "dependency",
+  }))
 }

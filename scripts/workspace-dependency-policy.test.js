@@ -41,7 +41,7 @@ function createPackages() {
 
 test("parses the canonical package dependency allowlist", () => {
   assert.deepEqual(
-    parseWorkspaceDependencyPolicy(policy),
+    parseWorkspaceDependencyPolicy({ markdown: policy }),
     {
       "@coinzilla/app": ["@coinzilla/core"],
       "@coinzilla/core": [],
@@ -57,10 +57,10 @@ test("rejects a missing policy section and duplicate package rows", () => {
     "A missing canonical policy section must fail closed.",
   )
   assert.throws(
-    () => parseWorkspaceDependencyPolicy(policy.replace(
+    () => parseWorkspaceDependencyPolicy({ markdown: policy.replace(
       "| `@coinzilla/core` | None |",
       "| `@coinzilla/app` | None |",
-    )),
+    ) }),
     /Duplicate workspace dependency policy row/,
     "Duplicate consumer rows must not be silently overwritten.",
   )
@@ -81,7 +81,7 @@ test("accepts manifests whose workspace dependencies match the canonical allowli
   assert.deepEqual(
     validateWorkspaceDependencyPolicy({
       packages: createPackages(),
-      allowedDependencies: parseWorkspaceDependencyPolicy(policy),
+      allowedDependencies: parseWorkspaceDependencyPolicy({ markdown: policy }),
     }),
     [],
     "A valid acyclic workspace dependency graph must pass.",
@@ -97,7 +97,7 @@ test("reports forbidden workspace dependency directions", () => {
   })
   const violations = validateWorkspaceDependencyPolicy({
     packages,
-    allowedDependencies: parseWorkspaceDependencyPolicy(policy),
+    allowedDependencies: parseWorkspaceDependencyPolicy({ markdown: policy }),
   })
   assert.ok(
     violations.some((violation) => violation.includes("@coinzilla/core") && violation.includes("@coinzilla/app")),
@@ -153,7 +153,7 @@ test("rejects workspace-protocol dependencies that target an unknown package", (
   })
   const violations = validateWorkspaceDependencyPolicy({
     packages,
-    allowedDependencies: parseWorkspaceDependencyPolicy(policy),
+    allowedDependencies: parseWorkspaceDependencyPolicy({ markdown: policy }),
   })
   assert.ok(
     violations.some((violation) => violation.includes("@coinzilla/missing") &&
@@ -167,7 +167,7 @@ test("requires workspace protocol for dependencies that target another workspace
   packages[0].workspaceDependencies[0].version = "^1.0.0"
   const violations = validateWorkspaceDependencyPolicy({
     packages,
-    allowedDependencies: parseWorkspaceDependencyPolicy(policy),
+    allowedDependencies: parseWorkspaceDependencyPolicy({ markdown: policy }),
   })
   assert.ok(
     violations.some((violation) => violation.includes("@coinzilla/app") &&
@@ -194,7 +194,7 @@ test("discovers workspace packages and dependencies from every manifest dependen
       name: "@coinzilla/core",
     }))
     assert.deepEqual(
-      readWorkspacePackages(root),
+      readWorkspacePackages({ rootDirectory: root }),
       [
         {
           name: "@coinzilla/app",
