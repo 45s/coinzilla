@@ -1,9 +1,9 @@
 # Harvester Reliability Baseline — 2026-11-21
 
-**Status:** Baseline established; reliability implementation remains in progress.  
-**Repository:** `45s/coinzilla`  
-**Target:** `develop`  
-**Tracking issue:** [#1639](https://github.com/45s/coinzilla/issues/1639)  
+**Status:** Baseline established; reliability implementation remains in progress.
+**Repository:** `45s/coinzilla`
+**Target:** `develop`
+**Tracking issue:** [#1639](https://github.com/45s/coinzilla/issues/1639)
 **Implementation PR:** [#1642](https://github.com/45s/coinzilla/pull/1642)
 
 ## Measurement provenance
