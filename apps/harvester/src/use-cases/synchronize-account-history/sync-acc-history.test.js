@@ -29,16 +29,6 @@ const market = new Market({
   baseAsset,
   quoteAsset,
 })
-const secondBaseAsset = new Asset({
-  id: "eth",
-  code: "ETH",
-})
-const secondMarket = new Market({
-  venue: "binance",
-  symbol: "ETHUSDT",
-  baseAsset: secondBaseAsset,
-  quoteAsset,
-})
 
 function createOrder({ orderId = "10", executed = "0.1", orderMarket = market, clientOrderId, providerIdentity = identity } = {}) {
   return new CanonicalOrder({
