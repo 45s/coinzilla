@@ -5,7 +5,7 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-21
-**Latest source-verified develop checkpoint:** includes merged S-8 templates PR #1610 and consolidated S-9 implementation PR #1618 (2026-11-21). The S-9 exact-head CI evidence is recorded below; the recursive tree counts remain the last measured baseline, not a fresh post-merge count. The recursive tree contains 1,257 files, including 179 Markdown/MDX files and 1,050 JavaScript files (519 `.test.js` files); 579 JavaScript files are under Harvester. The S-7 naming/tree baseline and later S-8 additions are recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
+**Latest source-verified develop checkpoint:** `c03d77d54370c52c56093543582469e53e53181f` (2026-11-21; merge commit for S-9 PR #1618). The recursive tree counts below remain the last measured baseline, not a fresh post-merge count. The recursive tree contains 1,257 files, including 179 Markdown/MDX files and 1,050 JavaScript files (519 `.test.js` files); 579 JavaScript files are under Harvester. The S-7 naming/tree baseline and later S-8 additions are recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
 
 ## Repository engineering standards initiative — [#1568](https://github.com/45s/coinzilla/issues/1568)
 
