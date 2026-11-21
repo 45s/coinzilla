@@ -143,7 +143,10 @@ asset: market.baseAsset })
     if (!(fill instanceof Fill)) {
       throw new TypeError("Portfolio.applyFill requires a canonical Fill")
     }
-    const owner = normalizeStrategyId({ strategyId })
+    const owner = normalizeStrategyId({
+      strategyId,
+      errorMessage: "Portfolio operation requires a non-empty strategyId",
+    })
     const id = resolvePositionId({
       positionId,
       marketId: fill.market.id,
