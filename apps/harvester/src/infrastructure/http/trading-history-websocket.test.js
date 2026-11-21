@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
-import test from "node:test"
 import { createConnection } from "node:net"
+import test from "node:test"
 import { EventBus } from "@coinzilla/event-bus"
 import { startTradingHistoryApiServer } from "./trading-history-api.js"
 
