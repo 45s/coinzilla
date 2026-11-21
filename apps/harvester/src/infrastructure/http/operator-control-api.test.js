@@ -111,10 +111,17 @@ test("operator writes reject non-Dashboard browser origins", async () => {
 test("unknown operator commands are rejected without invoking the facade", async () => {
   const response = createResponse()
   await handleOperatorControlRequest({
-    request: createRequest({ method: "POST", body: { command: "liquidate" } }),
+    request: createRequest({
+      method: "POST",
+      body: { command: "liquidate" },
+    }),
     response,
     pathname: "/api/v1/trading/operator/commands",
-    operator: { async pauseAllBuys() { throw new Error("must not execute") } },
+    operator: {
+      async pauseAllBuys() {
+        throw new Error("must not execute")
+      },
+    },
   })
   assert.equal(response.status, 400)
   assert.equal(JSON.parse(response.body).error.code, "HARVESTER_OPERATOR_COMMAND_INVALID")
