@@ -10,7 +10,7 @@
 ## Repository engineering standards initiative — [#1568](https://github.com/45s/coinzilla/issues/1568)
 
 - **S-0 through S-8:** completed/merged. S-8 practical templates merged in [PR #1610](https://github.com/45s/coinzilla/pull/1610) as `f2dd1f23fa842c8bac140f7da10ef86cf4cfc9f9`.
-- **S-9:** in progress. First implementation slice is [PR #1615](https://github.com/45s/coinzilla/pull/1615): deterministic workspace package dependency allowlist and cycle guard, based on actual package manifests and the canonical policy in [Domain Ownership](docs/engineering/DOMAIN_OWNERSHIP.md). The parser/manifest discovery, policy validation, cycle detection and regression suite are implemented; final CI wiring/docs are in progress. This validates package manifests only, not internal source imports. No runtime/trading behavior is in scope.
+- **S-9:** in progress. First implementation slice is ready for review in [PR #1615](https://github.com/45s/coinzilla/pull/1615): deterministic workspace package dependency allowlist and cycle guard, based on actual package manifests and the canonical policy in [Domain Ownership](docs/engineering/DOMAIN_OWNERSHIP.md). Parser/manifest discovery, policy validation, cycle detection, regression suite, CI wiring and docs are complete; all six exact-head PR workflows passed. This validates package manifests only, not internal source imports. No runtime/trading behavior is in scope.
 - **S-10:** pending; documentation governance reconciliation follows S-9.
 
 ## Multi-provider Harvester execution and market-data routing — #1339
