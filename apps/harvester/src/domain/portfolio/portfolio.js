@@ -98,7 +98,7 @@ export class Portfolio {
       : normalizeStrategyId({
         strategyId,
         errorMessage: "Portfolio operation requires a non-empty strategyId",
-      }
+      })
     if (positionId === undefined && marketId === undefined && symbol === undefined && owner === undefined) {
       throw new TypeError("Portfolio.getPositions requires a Position, market, symbol, or strategy selector")
     }
