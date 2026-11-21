@@ -14,18 +14,18 @@
 - The package coverage command includes `src/**/*.js` and excludes `src/**/*.test.js`; the additional test and validation scripts in PR #1642 do not alter production-source coverage.
 - The run completed successfully with **90.35% lines, 83.22% branches, and 96.00% functions** across the Harvester package.
 
-The full measured baseline and per-module minimums are machine-readable in [critical-behaviors.json](./critical-behaviors.json). It currently records 14 critical behaviors and 30 production modules. The floors are rounded down to five-percentage-point increments and capped at 95% where a baseline is 100%; this leaves bounded room for new branches while preventing larger regressions. A floor is never set above its measured baseline.
+The full measured baseline, latest PR observation and per-module minimums are machine-readable in [critical-behaviors.json](./critical-behaviors.json). It currently records 14 critical behaviors and 30 production modules. Latest PR measurement: [Test Coverage run #44886211302](https://github.com/45s/coinzilla/actions/runs/44886211302), Harvester job `136791946328`, PR head `d261eed395d8a32263bc274d457117287621e086`: 90.42% lines / 83.40% branches / 96.01% functions; all 30 critical module floors passed. The floors are rounded down to five-percentage-point increments and capped at 95% where a baseline is 100%; this leaves bounded room for new branches while preventing larger regressions. A floor is never set above its measured baseline.
 
 ## Critical coverage gaps
 
-| Critical module | Baseline lines | Baseline branches | Baseline functions | Minimum lines / branches / functions |
-| --- | ---: | ---: | ---: | ---: |
-| `recovery-fill-accounting.js` | 82.61% | **53.85%** | 100.00% | 80 / 50 / 95 |
-| `project-harvester-operational-state.js` | 81.97% | 76.39% | 82.05% | 80 / 75 / 80 |
-| `restore-harvester-operational-state.js` | 92.21% | 73.68% | 100.00% | 90 / 70 / 95 |
-| `acquire-harvester-process-lock.js` | 83.33% | 74.42% | 72.73% | 80 / 70 / 70 |
-| `portfolio.js` | 85.54% | 75.65% | 100.00% | 85 / 75 / 95 |
-| `conservative-trading-engine.js` | 85.51% | 79.60% | 95.65% | 85 / 75 / 95 |
+| Critical module | Develop baseline (lines / branches / functions) | Latest PR observation (lines / branches / functions) | Minimum (lines / branches / functions) |
+| --- | ---: | ---: | ---: |
+| `recovery-fill-accounting.js` | 82.61 / **53.85** / 100.00 | 97.10 / **95.24** / 100.00 | 80 / 50 / 95 |
+| `project-harvester-operational-state.js` | 81.97 / 76.39 / 82.05 | 81.97 / 76.39 / 82.05 | 80 / 75 / 80 |
+| `restore-harvester-operational-state.js` | 92.21 / **73.68** / 100.00 | 100.00 / **100.00** / 100.00 | 90 / 70 / 95 |
+| `acquire-harvester-process-lock.js` | 83.33 / **74.42** / 72.73 | 96.31 / **92.73** / 80.00 | 80 / 70 / 70 |
+| `portfolio.js` | 85.54 / 75.65 / 100.00 | 85.54 / 75.65 / 100.00 | 85 / 75 / 95 |
+| `conservative-trading-engine.js` | 85.51 / 79.60 / 95.65 | 85.51 / 79.60 / 95.65 | 85 / 75 / 95 |
 
 These are coverage measurements, not confirmed defects. The lowest branch baseline is recovery fill accounting. PR #1642 adds five focused validation-boundary regressions for missing market/fill identity, market mismatch, unsupported side, missing or wrong-asset quote notional, and non-positive quote notional; the next coverage run will quantify the branch improvement. The state projection/restoration branches are the next candidates. PR #1642 adds four restore-use-case failure simulations for missing ports, returned read errors, and thrown read/projection failures; the next coverage run will quantify the improvement. PR #1642 also hardens process-lock input validation against dot-path lock names and adds malformed-lock, external-removal, and stale-owner replacement-race regressions. The stale-owner recheck is extracted into a bounded helper without changing its fail-closed re-read-before-unlink behavior. Floors should be raised only after tests add meaningful evidence; they must not be lowered to accommodate a regression.
 
@@ -67,15 +67,15 @@ Recorded baseline-run results: Unit Tests, Test Coverage, and Harvester Targeted
 
 - The stale Binance `FILLED → OPEN` order-report regression (F-054) is already fixed in current `develop`; the OrderRegistry regression test verifies the terminal state and executed quantity remain monotonic. It is not an open defect in this baseline.
 - No new P0 defect is confirmed by this baseline evidence alone. This is not a declaration that the full source reliability audit is complete.
-- Earlier passing test logs contained expected-looking failure-path diagnostics for backwards canonical executed quantity during cancellation and incomplete REST fill reconciliation during shutdown. Their test assertions must be reviewed before classifying these as defects or merely noisy expected-failure evidence.
+- The backwards canonical executed-quantity and incomplete REST-fill-reconciliation diagnostics in passing shutdown tests are confirmed expected failure-path evidence, not defects. `create-conservative-shutdown-participant.test.js` intentionally returns a cancellation snapshot at 0.25 after the canonical executed quantity reached 0.50, followed by REST history that cannot reconcile. It asserts shutdown returns `HARVESTER_SHUTDOWN_RECONCILIATION_BLOCKED`, preserves canonical executed quantity at 0.50, and retains the order/fill blockers. The logs demonstrate the intended fail-closed behavior.
 - The current behavior inventory is the canonical source for critical invariants, source ownership, named regressions, runtime status, and module coverage floors. Update it with every in-scope behavior change.
 
 ## Next audit/implementation priorities
 
-1. Raise recovery-fill-accounting branch coverage with meaningful commission, fee-asset, partial-fill, and invalid-input regressions.
-2. Inspect the untested failure branches in operational-state projection and candidate restoration; keep runtime restoration disabled until the independent acceptance gate is complete.
-3. Review process-lock and shutdown failure paths, including ownership-token changes, unresolved cancellation, CLOSING durability failure, and cleanup retention.
-4. Exercise user-data disconnect/reconnect, missing-event recovery, stale snapshots, incomplete history, and queued-event draining with deterministic runtime-composition tests.
+1. Continue raising the remaining lower branch-coverage modules: Portfolio (75.65%), operational-state projection (76.39%), strategy shutdown coordinator (76.36%), multi-lock orchestration (77.05%), and the conservative engine (79.60%).
+2. Review remaining lifecycle failure paths around unresolved cancellation, CLOSING durability failure, and cleanup retention; the stale cancellation / incomplete REST history shutdown case is now confirmed to fail closed.
+3. Exercise user-data disconnect/reconnect, missing-event recovery, stale snapshots, incomplete history, and queued-event draining with deterministic runtime-composition tests.
+4. Keep runtime restoration disabled until the independent #654 acceptance gate is complete.
 5. Keep actual TESTNET validation separate and paused until the runbook's pair-scope and regional-eligibility blockers are resolved by an explicitly authorized session.
 
 This report is a dated baseline checkpoint, not a completion certificate for issue #1639.

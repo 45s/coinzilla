@@ -538,6 +538,11 @@
         "lines": 90,
         "branches": 85,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 94.05,
+        "branches": 89.84,
+        "functions": 100
       }
     },
     {
@@ -551,6 +556,11 @@
         "lines": 85,
         "branches": 80,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 86.5,
+        "branches": 81.03,
+        "functions": 100
       }
     },
     {
@@ -564,6 +574,11 @@
         "lines": 95,
         "branches": 95,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
       }
     },
     {
@@ -577,6 +592,11 @@
         "lines": 85,
         "branches": 75,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 85.54,
+        "branches": 75.65,
+        "functions": 100
       }
     },
     {
@@ -590,6 +610,11 @@
         "lines": 90,
         "branches": 85,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 94.96,
+        "branches": 85.19,
+        "functions": 100
       }
     },
     {
@@ -603,6 +628,11 @@
         "lines": 95,
         "branches": 90,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 96.08,
+        "branches": 91.67,
+        "functions": 100
       }
     },
     {
@@ -616,6 +646,11 @@
         "lines": 90,
         "branches": 90,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 94.63,
+        "branches": 90.91,
+        "functions": 100
       }
     },
     {
@@ -629,6 +664,11 @@
         "lines": 80,
         "branches": 50,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 97.1,
+        "branches": 95.24,
+        "functions": 100
       }
     },
     {
@@ -642,6 +682,11 @@
         "lines": 90,
         "branches": 80,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 93.07,
+        "branches": 84.78,
+        "functions": 100
       }
     },
     {
@@ -655,6 +700,11 @@
         "lines": 90,
         "branches": 85,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 93.64,
+        "branches": 86.93,
+        "functions": 97.5
       }
     },
     {
@@ -668,6 +718,11 @@
         "lines": 95,
         "branches": 95,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
       }
     },
     {
@@ -681,6 +736,11 @@
         "lines": 85,
         "branches": 75,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 85.51,
+        "branches": 79.6,
+        "functions": 95.65
       }
     },
     {
@@ -694,6 +754,11 @@
         "lines": 80,
         "branches": 85,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 83.9,
+        "branches": 87.41,
+        "functions": 96.67
       }
     },
     {
@@ -707,6 +772,11 @@
         "lines": 85,
         "branches": 90,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 87.44,
+        "branches": 90.53,
+        "functions": 100
       }
     },
     {
@@ -720,6 +790,11 @@
         "lines": 90,
         "branches": 80,
         "functions": 90
+      },
+      "latestObserved": {
+        "lines": 90,
+        "branches": 81.82,
+        "functions": 90.91
       }
     },
     {
@@ -733,6 +808,11 @@
         "lines": 80,
         "branches": 80,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 83.47,
+        "branches": 81.92,
+        "functions": 95.18
       }
     },
     {
@@ -746,6 +826,11 @@
         "lines": 90,
         "branches": 80,
         "functions": 90
+      },
+      "latestObserved": {
+        "lines": 90,
+        "branches": 83.53,
+        "functions": 92.54
       }
     },
     {
@@ -759,6 +844,11 @@
         "lines": 80,
         "branches": 90,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 83.37,
+        "branches": 90.09,
+        "functions": 100
       }
     },
     {
@@ -772,6 +862,11 @@
         "lines": 95,
         "branches": 85,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 96.07,
+        "branches": 89.34,
+        "functions": 98.08
       }
     },
     {
@@ -785,6 +880,11 @@
         "lines": 80,
         "branches": 75,
         "functions": 80
+      },
+      "latestObserved": {
+        "lines": 81.97,
+        "branches": 76.39,
+        "functions": 82.05
       }
     },
     {
@@ -798,6 +898,11 @@
         "lines": 90,
         "branches": 70,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
       }
     },
     {
@@ -811,6 +916,11 @@
         "lines": 80,
         "branches": 80,
         "functions": 90
+      },
+      "latestObserved": {
+        "lines": 84.57,
+        "branches": 81.14,
+        "functions": 93.75
       }
     },
     {
@@ -824,6 +934,11 @@
         "lines": 80,
         "branches": 70,
         "functions": 70
+      },
+      "latestObserved": {
+        "lines": 96.31,
+        "branches": 92.73,
+        "functions": 80
       }
     },
     {
@@ -837,6 +952,11 @@
         "lines": 80,
         "branches": 75,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 84.88,
+        "branches": 77.05,
+        "functions": 100
       }
     },
     {
@@ -849,6 +969,11 @@
       "minimum": {
         "lines": 75,
         "branches": 80,
+        "functions": 90
+      },
+      "latestObserved": {
+        "lines": 76.81,
+        "branches": 81.08,
         "functions": 90
       }
     },
@@ -863,6 +988,11 @@
         "lines": 90,
         "branches": 80,
         "functions": 90
+      },
+      "latestObserved": {
+        "lines": 92.02,
+        "branches": 82.63,
+        "functions": 93.67
       }
     },
     {
@@ -876,6 +1006,11 @@
         "lines": 85,
         "branches": 80,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 88.36,
+        "branches": 83.82,
+        "functions": 98.18
       }
     },
     {
@@ -889,6 +1024,11 @@
         "lines": 85,
         "branches": 75,
         "functions": 80
+      },
+      "latestObserved": {
+        "lines": 86.6,
+        "branches": 76.36,
+        "functions": 84.21
       }
     },
     {
@@ -902,6 +1042,11 @@
         "lines": 85,
         "branches": 85,
         "functions": 90
+      },
+      "latestObserved": {
+        "lines": 88.4,
+        "branches": 85.14,
+        "functions": 94.12
       }
     },
     {
@@ -915,6 +1060,11 @@
         "lines": 95,
         "branches": 80,
         "functions": 95
+      },
+      "latestObserved": {
+        "lines": 98.08,
+        "branches": 83.33,
+        "functions": 100
       }
     }
   ],
@@ -932,5 +1082,19 @@
       "RS_recoverySeller is disabled and its operator pair map is empty; its inactive modules are not represented as active runtime guarantees.",
       "Process-restart restoration remains disabled; the operational-state crash matrix is offline evidence only."
     ]
+  },
+  "latestCoverageMeasurement": {
+    "measuredAt": "2026-11-21T08:44:16Z",
+    "branch": "reliability/harvester-critical-behavior-gates-1639",
+    "prHeadSha": "d261eed395d8a32263bc274d457117287621e086",
+    "workflowRunId": 44886211302,
+    "harvesterJobId": 136791946328,
+    "aggregate": {
+      "lines": 90.42,
+      "branches": 83.4,
+      "functions": 96.01
+    },
+    "checkedCriticalModuleCount": 30,
+    "gatePassed": true
   }
 }
