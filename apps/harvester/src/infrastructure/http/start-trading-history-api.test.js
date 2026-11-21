@@ -7,7 +7,6 @@ import { createSqliteDatabase } from "@coinzilla/db"
 import { EventBus } from "@coinzilla/event-bus"
 import { closeHarvesterPersistence } from "../persistence/close-harvester-persistence.js"
 import { prepareOrderHistoryPersistence } from "../persistence/prepare-order-history-persistence.js"
-import { resolveHarvesterDatabaseFilename } from "../persistence/resolve-harvester-database-filename.js"
 import { startTradingHistoryApi } from "./start-trading-history-api.js"
 
 const API_TOKEN = "test-token-with-more-than-thirty-two-characters"
@@ -41,10 +40,6 @@ async function createExistingTradingHistoryDatabase({ t } = {}) {
   return {
     directory,
     env,
-    filename: resolveHarvesterDatabaseFilename({
-      tradingMode: "testnet",
-      env,
-    }),
   }
 }
 
@@ -94,11 +89,6 @@ test("does not create a database when the selected environment file does not exi
     HARVESTER_DATABASE_DIRECTORY: directory,
     HARVESTER_API_TOKEN: API_TOKEN,
   }
-  const filename = resolveHarvesterDatabaseFilename({
-    tradingMode: "testnet",
-    env,
-  })
-
   await assert.rejects(
     () => startTradingHistoryApi({ env }),
     (error) => error.code === "HARVESTER_TRADING_HISTORY_API_DATABASE_UNAVAILABLE",
