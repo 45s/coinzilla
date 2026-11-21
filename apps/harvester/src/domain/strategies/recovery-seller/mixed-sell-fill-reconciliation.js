@@ -74,6 +74,7 @@ function resolveOrderOwnership({ order, orderRegistry }) {
   }
   const registered = orderRegistry.getOrderByBrokerOrderId({
     brokerOrderId: order.brokerOrderId,
+    marketId: order.market.id,
   })
   if (!registered ||
       registered.clientOrderId !== order.clientOrderId ||
