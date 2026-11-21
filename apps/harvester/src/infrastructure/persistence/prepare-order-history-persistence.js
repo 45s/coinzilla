@@ -187,18 +187,20 @@ async function prepareRelationalResources({
     const historySyncCursorRepository = createHistorySyncCursorRepository({
       database: relationalDatabase,
     })
-    const observers = createRelationalHistoryObservers({
+    ({
+      relationalOrderObserver,
+      fillObserver,
+    } = createRelationalHistoryObservers({
       eventBus,
       orderRepository,
       fillRepository,
       environment,
       logger,
-    })
-    relationalOrderObserver = observers.relationalOrderObserver
-    fillObserver = observers.fillObserver
+    }))
     return {
       relationalDatabase,
-      ...observers,
+      relationalOrderObserver,
+      fillObserver,
       orderRepository,
       fillRepository,
       historySyncCursorRepository,
