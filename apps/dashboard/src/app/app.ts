@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/c
 
 import { OverviewComponent } from './features/overview/overview';
 import { TradingHistoryComponent } from './features/trading-history/page';
-import type { TradingHistoryResource } from './features/trading-history/page-api';
+import type { TradingHistoryResource } from './features/trading-history/api';
 
 type DashboardPage = 'overview' | TradingHistoryResource;
 
