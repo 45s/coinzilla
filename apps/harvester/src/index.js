@@ -829,7 +829,7 @@ function publishRuntimeStarted({
   })
 }
 
-function shouldStartTradingHistoryApi({ env, runtime } = {}) {
+function shouldStartTradingHistoryApi({ runtime } = {}) {
   return typeof runtime?.stop === "function"
 }
 
@@ -843,7 +843,6 @@ function logOptionalTradingHistoryApi({ logger, level, details } = {}) {
 
 async function startOptionalTradingHistoryApi({ options, resources, runtime } = {}) {
   if (!shouldStartTradingHistoryApi({
-    env: options.env,
     runtime,
   })) {
     return
