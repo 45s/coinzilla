@@ -275,7 +275,7 @@ test("treats a prior-process Harvester order as external under IGNORE and evalua
     priceEvent: {
       symbol: "BTCUSDT",
       price: "65000",
-      timestamp: 1_700_000_000_000,
+      timestamp: Date.now(),
     },
   })
   assert.equal(evaluation.ok, true, "A real market-price event must be evaluated when the external-order policy is IGNORE.")
