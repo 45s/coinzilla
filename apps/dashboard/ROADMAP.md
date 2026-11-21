@@ -4,7 +4,7 @@
 **Scope:** `apps/dashboard/`
 **Tracking:** [Issue #1623](https://github.com/45s/coinzilla/issues/1623)
 
-- **Next — full record inspection and local operator console:** show every persisted key/value (including nested data) for Orders, Fills, and Commissions; then add an Operator workspace that reuses Harvester's existing operator-control application commands and safety gates. Do not implement UI-only pause state or call exchange APIs from the browser.
+- **Next — full record inspection and operator-console hardening:** show every persisted key/value (including nested data) for Orders, Fills, and Commissions; harden the existing local Operator workspace and its backend integration. Do not implement UI-only pause state or call exchange APIs from the browser.
 
 ## Current milestone
 
