@@ -18,7 +18,7 @@ function printHelp() {
     "",
     "Default / --publish: run LIVE read-only diagnostics and publish only an allowlisted sanitized report branch.",
     "--local: run LIVE read-only diagnostics and save a private local report without creating or pushing a branch.",
-    "--place-order: run the fixed, one-shot LIVE HYPEUSDT BUY LIMIT operator attempt after all preflight guards and final Enter approval.",
+    "--place-order: run read-only health checks, then (only if healthy) the guarded one-shot LIVE HYPEUSDT BUY LIMIT attempt; publish its sanitized result and return to develop.",
     "--help: show this help without loading credentials or contacting Bitunix.",
     "",
     "The default mode never places or cancels orders, transfers funds, or withdraws.",

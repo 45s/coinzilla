@@ -151,7 +151,7 @@ async function runPublishedHealthCheck({
 /**
  * Run one of the two read-only health-check modes.
  *
- * @param {{mode: "local"|"publish", brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream}} input
+ * @param {{mode: "local"|"publish"|"place-order", brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: Function}} input
  * @returns {Promise<number>} Process exit code.
  */
 export async function runBitunixHealthcheckDiagnostics({
