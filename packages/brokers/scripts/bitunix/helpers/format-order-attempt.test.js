@@ -70,7 +70,9 @@ test("one-shot marker persists sanitized terminal outcome", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-marker-"))
   const markerPath = join(directory, "attempt.json")
   try {
-    await writeFile(markerPath, JSON.stringify({ status: "DISPATCH_STARTED" }))
+    await writeFile(markerPath, JSON.stringify({
+      status: "DISPATCH_STARTED",
+    }))
     await persistOneShotMarkerOutcome({
       markerPath,
       outcome: "REJECTED",
@@ -92,7 +94,10 @@ test("one-shot marker persists sanitized terminal outcome", async () => {
     })
     assert.equal(JSON.stringify(marker).includes("must not be persisted"), false)
     await assert.rejects(
-      persistOneShotMarkerOutcome({ markerPath, outcome: "CONFIRMED" }),
+      persistOneShotMarkerOutcome({
+        markerPath,
+        outcome: "CONFIRMED",
+      }),
       /not awaiting an outcome/,
     )
   } finally {
@@ -105,7 +110,10 @@ test("unknown one-shot marker outcomes are normalized fail-closed", async () => 
   const markerPath = join(directory, "attempt.json")
   try {
     await writeFile(markerPath, JSON.stringify({ status: "DISPATCH_STARTED" }))
-    await persistOneShotMarkerOutcome({ markerPath, outcome: "unexpected" })
+    await persistOneShotMarkerOutcome({
+      markerPath,
+      outcome: "unexpected",
+    })
     assert.equal(JSON.parse(await readFile(markerPath, "utf8")).status, "OUTCOME_UNKNOWN")
   } finally {
     await rm(directory, { recursive: true, force: true })
