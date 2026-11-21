@@ -1,12 +1,47 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TradingHistorySession } from './api';
 import { TradingHistoryComponent } from './page';
 
 const API_TOKEN = 'a-session-only-token-that-is-long-enough-for-tests';
+
+class FakeWebSocket extends EventTarget {
+  static instances: FakeWebSocket[] = [];
+
+  readyState = 0;
+  readonly sent: string[] = [];
+
+  constructor(readonly url: string) {
+    super();
+    FakeWebSocket.instances.push(this);
+  }
+
+  send(data: string): void {
+    this.sent.push(data);
+  }
+
+  open(): void {
+    this.readyState = 1;
+    this.dispatchEvent(new Event('open'));
+  }
+
+  receive(message: Readonly<Record<string, unknown>>): void {
+    this.dispatchEvent(new MessageEvent('message', {
+      data: JSON.stringify(message),
+    }));
+  }
+
+  close(): void {
+    if (this.readyState >= 2) {
+      return;
+    }
+    this.readyState = 3;
+    this.dispatchEvent(new Event('close'));
+  }
+}
 
 function createPage(items: readonly object[], total: number, offset = 0, limit = 25) {
   return {
@@ -114,6 +149,8 @@ describe('TradingHistoryComponent', () => {
   let session: TradingHistorySession;
 
   beforeEach(async () => {
+    FakeWebSocket.instances = [];
+    vi.stubGlobal('WebSocket', FakeWebSocket as unknown as typeof WebSocket);
     await TestBed.configureTestingModule({
       imports: [TradingHistoryComponent],
       providers: [
@@ -128,8 +165,10 @@ describe('TradingHistoryComponent', () => {
   });
 
   afterEach(() => {
+    fixture.destroy();
     http.verify();
     session.clearToken();
+    vi.unstubAllGlobals();
   });
 
   it('shows an explicit connection form when no session token is available', () => {
@@ -358,6 +397,86 @@ describe('TradingHistoryComponent', () => {
     expect(fixture.nativeElement.textContent).toContain('0.00000013');
     expect(fixture.nativeElement.textContent).toContain('BNB');
     expect(fixture.nativeElement.textContent).toContain('Not recorded');
+  });
+
+  it('authenticates the WebSocket without placing the token in the URL and resyncs after connection', async () => {
+    const request = await connectToResource(fixture, http, session);
+    request.flush({
+      ok: true,
+      data: createPage([createOrder('order-initial')], 1),
+    });
+    await fixture.whenStable();
+
+    const socket = FakeWebSocket.instances[0];
+    expect(socket.url).toBe('ws://127.0.0.1:4201/api/v1/trading/events');
+    expect(socket.url).not.toContain(API_TOKEN);
+    socket.open();
+    expect(JSON.parse(socket.sent[0])).toEqual({
+      type: 'authenticate',
+      token: API_TOKEN,
+    });
+
+    socket.receive({ type: 'authenticated' });
+    const resync = http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders'));
+    resync.flush({
+      ok: true,
+      data: createPage([createOrder('order-resynced')], 1),
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.liveStatus()).toBe('live');
+    expect(fixture.nativeElement.textContent).toContain('Live updates');
+    expect(fixture.nativeElement.textContent).toContain('Order broker-resynced');
+  });
+
+  it('refreshes the active resource after a persisted-change notification and reconnects with a fresh snapshot', async () => {
+    const request = await connectToResource(fixture, http, session);
+    request.flush({
+      ok: true,
+      data: createPage([createOrder('order-initial')], 1),
+    });
+    await fixture.whenStable();
+
+    const firstSocket = FakeWebSocket.instances[0];
+    firstSocket.open();
+    firstSocket.receive({ type: 'authenticated' });
+    http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders')).flush({
+      ok: true,
+      data: createPage([createOrder('order-connected')], 1),
+    });
+    await fixture.whenStable();
+
+    firstSocket.receive({
+      type: 'trading-history.updated',
+      resources: ['orders'],
+    });
+    const liveRefresh = http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders'));
+    liveRefresh.flush({
+      ok: true,
+      data: createPage([createOrder('order-live')], 1),
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Order broker-live');
+
+    firstSocket.close();
+    expect(fixture.componentInstance.liveStatus()).toBe('reconnecting');
+    await new Promise((resolve) => setTimeout(resolve, 1050));
+    const reconnectSocket = FakeWebSocket.instances[1];
+    expect(reconnectSocket).toBeDefined();
+    reconnectSocket.open();
+    reconnectSocket.receive({ type: 'authenticated' });
+    const reconnectSnapshot = http.expectOne((candidate) => candidate.url.endsWith('/api/v1/trading/orders'));
+    reconnectSnapshot.flush({
+      ok: true,
+      data: createPage([createOrder('order-reconnected')], 1),
+    });
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.liveStatus()).toBe('live');
+    expect(fixture.nativeElement.textContent).toContain('Order broker-reconnected');
   });
 
   it('shows an API-unavailable state instead of replacing a failed request with sample records', async () => {
