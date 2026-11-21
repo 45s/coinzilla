@@ -75,6 +75,7 @@ The temporary `harvester_processes` process-ID smoke-test row and its obsolete p
 
 1. Filtered account snapshot history only with explicit provenance and completeness semantics.
 2. Offline, idempotent historical imports from verified source evidence.
+3. **Versioned trading-history query API and Dashboard consumer — IN PROGRESS (#1635, #1634; PR #1636).** Expose existing orders, individual fills, and commission facts through Harvester-owned application queries and an authenticated in-process `/api/v1` HTTP listener. The Angular Dashboard consumes the same versioned contract for read-only Orders, Fills, and Commissions pages. Harvester owns the shared database connection and listener lifecycle; no separate API process, schema changes, sessions/errors tables, trading controls, or exchange operations.
 
 **Explicit exclusions from #1554/#1556:** no account-wide or delisted-market history completeness claim, account snapshots as a history source, strategy-cycle lifecycle, PnL/analytics, equity/drawdown snapshots, process-restart restoration/adoption, Journal replay, new providers, `sessions`/`errors` tables, broker order-mutation behavior changes, Journal semantics changes, ADR-0001 rewrite, or exchange operations.
 
