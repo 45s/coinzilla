@@ -169,6 +169,7 @@ describe('TradingHistoryComponent', () => {
       ok: true,
       data: { environment: 'testnet', records: { orders: 0, fills: 0, commissions: 0 } },
     });
+    await fixture.whenStable();
     http.expectOne((request) => request.url.endsWith('/api/v1/trading/orders')).flush({ ok: true, data: createPage([], 0) });
     await fixture.whenStable();
     fixture.detectChanges();
