@@ -1,10 +1,10 @@
 import { loadEnvFile } from "node:process"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import { assertBitunixOperatorInteractiveTerminal } from "./operator/order-attempt.js"
-import { runBitunixOperatorOrderCommand, reportBitunixOperatorFailure } from "./operator/order-command.js"
-import { runBitunixHealthcheckDiagnostics } from "./diagnostics/healthcheck-command.js"
-import { parseBitunixHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
+import { assertInteractiveTerminal } from "./operator/place-order.js"
+import { runOperatorOrderCommand, reportOperatorFailure } from "./operator/run-order-command.js"
+import { runHealthcheckDiagnostics } from "./workflows/run-healthcheck.js"
+import { parseHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
 import { sanitizeDiagnosticError } from "./helpers/diagnostic-values.js"
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url))
@@ -40,31 +40,31 @@ function loadLocalEnvironment({ allowMissing = false } = {}) {
   }
 }
 
-async function runBitunixHealthcheck({ args = process.argv.slice(2) } = {}) {
-  const mode = parseBitunixHealthcheckMode({ args })
+async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
+  const mode = parseHealthcheckMode({ args })
   if (mode === "help") {
     printHelp()
     return
   }
   if (mode === "place-order") {
-    assertBitunixOperatorInteractiveTerminal({
+    assertInteractiveTerminal({
       stdin: process.stdin,
       stdout: process.stdout,
     })
     loadLocalEnvironment()
-    process.exitCode = await runBitunixHealthcheckDiagnostics({
+    process.exitCode = await runHealthcheckDiagnostics({
       mode,
       brokersRoot,
       repositoryRoot,
       env: process.env,
       runOperatorOrder: async ({ env }) => {
         try {
-          return await runBitunixOperatorOrderCommand({
+          return await runOperatorOrderCommand({
             env,
             brokersRoot,
           })
         } catch (error) {
-          reportBitunixOperatorFailure({
+          reportOperatorFailure({
             error,
             env,
           })
@@ -75,7 +75,7 @@ async function runBitunixHealthcheck({ args = process.argv.slice(2) } = {}) {
     return
   }
   loadLocalEnvironment({ allowMissing: mode === "local" })
-  process.exitCode = await runBitunixHealthcheckDiagnostics({
+  process.exitCode = await runHealthcheckDiagnostics({
     mode,
     brokersRoot,
     repositoryRoot,
@@ -88,9 +88,9 @@ const isMainModule = process.argv[1] &&
 
 if (isMainModule) {
   const args = process.argv.slice(2)
-  runBitunixHealthcheck({ args }).catch((error) => {
+  runHealthcheck({ args }).catch((error) => {
     if (args.includes("--place-order")) {
-      reportBitunixOperatorFailure({
+      reportOperatorFailure({
         error,
         env: process.env,
       })

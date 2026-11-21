@@ -1,6 +1,6 @@
 import { SystemCustomError } from "@coinzilla/utils"
 
-function createBrokerDiagnosticErrorOptions({ code, context, cause }) {
+function createDiagnosticErrorOptions({ code, context, cause }) {
   const options = {
     code,
     context,
@@ -14,7 +14,7 @@ function createBrokerDiagnosticErrorOptions({ code, context, cause }) {
 /**
  * Package-owned diagnostic failure with a stable code and safe scalar context.
  */
-export class BrokerDiagnosticError extends SystemCustomError {
+export class DiagnosticError extends SystemCustomError {
   /**
    * @param {{
    *   code: string,
@@ -24,7 +24,7 @@ export class BrokerDiagnosticError extends SystemCustomError {
    * }} input
    */
   constructor({ code, message, context, cause }) {
-    super(message, createBrokerDiagnosticErrorOptions({
+    super(message, createDiagnosticErrorOptions({
       code,
       context,
       cause,

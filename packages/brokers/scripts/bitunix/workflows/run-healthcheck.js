@@ -3,8 +3,8 @@ import { dirname, resolve } from "node:path"
 import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/rest-client.js"
 import { runDiagnostics } from "../diagnostics/run-diagnostics.js"
 import { publishHealthReport } from "./publish-health-report.js"
-import { evaluateHealthCheck } from "../helpers/health-report.js"
-import { appendOperatorAttemptResult } from "../helpers/operator-attempt-report.js"
+import { evaluateReadOnlyHealthCheck } from "../helpers/health-report.js"
+import { appendOrderAttemptResult } from "../helpers/append-order-attempt-result.js"
 
 function createLocalReportPath({ brokersRoot, now }) {
   const timestamp = new Date(now()).toISOString().replaceAll(/[:.]/g, "-")
@@ -96,8 +96,8 @@ async function runDiagnosticsWithOperatorAttempt({
   if (!runOperatorOrder) {
     return report
   }
-  if (!evaluateHealthCheck({ report }).healthy) {
-    return appendOperatorAttemptResult({
+  if (!evaluateReadOnlyHealthCheck({ report }).healthy) {
+    return appendOrderAttemptResult({
       report,
       operatorResult: {
         ok: false,
@@ -123,7 +123,7 @@ async function runDiagnosticsWithOperatorAttempt({
       errors: [error],
     }
   }
-  return appendOperatorAttemptResult({
+  return appendOrderAttemptResult({
     report,
     operatorResult,
     durationMs: Date.now() - startedAt,

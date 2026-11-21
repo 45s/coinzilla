@@ -4,12 +4,14 @@ import { BitunixSpotWebSocketClient } from "../../../src/infrastructure/bitunix/
 import { BitunixWebSocketTransport } from "../../../src/infrastructure/bitunix/spot/api/websocket-transport.js"
 import {
   createDiagnosticReport,
-  inspectDiagnosticSchema,
   createDiagnosticResult,
+} from "../helpers/create-diagnostic-report.js"
+import { inspectDiagnosticSchema } from "../helpers/inspect-diagnostic-schema.js"
+import {
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
   summarizePrivatePayload,
-} from "../helpers/diagnostic-values.js"
+} from "../helpers/sanitize-diagnostic-data.js"
 import { DiagnosticError } from "./diagnostic-error.js"
 
 const DIAGNOSTIC_CONFIG = Object.freeze({

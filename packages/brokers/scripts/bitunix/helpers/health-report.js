@@ -25,7 +25,7 @@ export function withholdFreeFormErrorMessages({ value }) {
   return sanitized
 }
 
-export function createPublishedReport({ report }) {
+export function createSanitizedHealthReport({ report }) {
   // Public reports use an allowlist, not recursive redaction. No request or
   // response payload, arbitrary error text, account identifier, or amount is
   // eligible for publication.
@@ -63,7 +63,7 @@ export function createPublishedReport({ report }) {
   }
 }
 
-export function evaluateHealthCheck({ report }) {
+export function evaluateReadOnlyHealthCheck({ report }) {
   const passedOperations = new Set(
     report.results
       .filter((result) => result.status === "passed")

@@ -5,13 +5,15 @@ import { promisify } from "node:util"
 import {
   createDiagnosticReport,
   createDiagnosticResult,
+} from "../helpers/create-diagnostic-report.js"
+import {
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
-} from "../helpers/diagnostic-values.js"
-import { createGitEnvironment } from "../helpers/git-environment.js"
+} from "../helpers/sanitize-diagnostic-data.js"
+import { createGitEnvironment } from "../helpers/create-git-environment.js"
 import {
-  createPublishedReport,
-  evaluateHealthCheck,
+  createSanitizedHealthReport,
+  evaluateReadOnlyHealthCheck,
   withholdFreeFormErrorMessages,
 } from "../helpers/health-report.js"
 
@@ -151,7 +153,7 @@ async function writeReports({ paths, report, env }) {
       secrets: getSecrets({ env }),
     }),
   })
-  const published = createPublishedReport({
+  const published = createSanitizedHealthReport({
     report: sanitized,
   })
   await writeDiagnosticReport({
@@ -218,7 +220,7 @@ async function runOnReportBranch({ repositoryRoot, runGit, branch, paths, publis
     onProgress,
   })
   validateDiagnosticReport({ report })
-  const healthCheck = evaluateHealthCheck({ report })
+  const healthCheck = evaluateReadOnlyHealthCheck({ report })
   onProgress?.({ message: "[4/5] Writing sanitized local and publishable reports" })
   const reports = await writeReports({
     paths,
