@@ -95,7 +95,27 @@ function isValidTestCase(testCase) {
 }
 
 function hasNamedTestCase({ testSource, name }) {
-  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\function validateTestCase({ behavior, testCase, errors, readFile, testKinds }) {")
+  const expectedTitle = JSON.stringify(name)
+  const callNames = ["nodeTest", "test", "runDogeTradingReplayTest"]
+  for (const callName of callNames) {
+    const callPrefix = `${callName}(`
+    let searchFrom = 0
+    while (searchFrom < testSource.length) {
+      const callIndex = testSource.indexOf(callPrefix, searchFrom)
+      if (callIndex < 0) {
+        break
+      }
+      const actualTitle = testSource.slice(callIndex + callPrefix.length).trimStart()
+      if (actualTitle.startsWith(expectedTitle)) {
+        return true
+      }
+      searchFrom = callIndex + callPrefix.length
+    }
+  }
+  return false
+}
+
+function validateTestCase({ behavior, testCase, errors, readFile, testKinds }) {")
   const pattern = new RegExp(
     "(?:nodeTest|test|runDogeTradingReplayTest)\\(\\s*[\"'`]" +
     escapedName +
