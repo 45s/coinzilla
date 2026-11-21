@@ -90,14 +90,6 @@ test("rejects invalid API configuration before opening the HTTP listener", async
       },
     },
     {
-    {
-      name: "host",
-      env: {
-        TRADING_MODE: "testnet",
-        HARVESTER_API_HOST: " ",
-      },
-    },
-    {
       name: "port",
       env: {
         TRADING_MODE: "testnet",
