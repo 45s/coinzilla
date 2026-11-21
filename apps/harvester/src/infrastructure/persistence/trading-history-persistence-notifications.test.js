@@ -30,7 +30,10 @@ test("publishes an order-history notification only after the order upsert succee
     },
     environment: "testnet",
   })
-  const subscription = subscribeToHistoryChanges({ eventBus, notifications })
+  const subscription = subscribeToHistoryChanges({
+    eventBus,
+    notifications,
+  })
   t.after(async () => {
     finishUpsert()
     subscription.unsubscribe()
