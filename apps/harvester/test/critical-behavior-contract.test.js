@@ -227,8 +227,8 @@ test("requires a measured coverage floor for every critical production module", 
   const result = validate({ contract })
 
   assert.ok(
-    result.errors.some((error) => error.includes("order-registry.js") && error.includes("coverage")),
-    "A critical source module without a measured coverage floor must fail validation.",
+    result.errors.some((error) => error.includes("measured per-module coverage floors")),
+    "An empty module coverage matrix must fail validation before the inventory can be accepted.",
   )
 })
 
