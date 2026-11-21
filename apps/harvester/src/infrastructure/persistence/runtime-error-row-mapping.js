@@ -56,10 +56,16 @@ function mapHistoryFailure(failure) {
   }
   return {
     ...(typeof failure.market === "string" ? {
-      market: redactMessage({ value: failure.market, maximumLength: 100 }),
+      market: redactMessage({
+        value: failure.market,
+        maximumLength: 100,
+      }),
     } : {}),
     ...(typeof failure.message === "string" ? {
-      message: redactMessage({ value: failure.message, maximumLength: MAX_DETAIL_STRING_LENGTH }),
+      message: redactMessage({
+        value: failure.message,
+        maximumLength: MAX_DETAIL_STRING_LENGTH,
+      }),
     } : {}),
   }
 }
@@ -72,7 +78,10 @@ function mapHistoryDiagnostics(diagnostics) {
   for (const field of HISTORY_DIAGNOSTIC_FIELDS) {
     const value = diagnostics[field]
     if (typeof value === "string") {
-      safe[field] = redactMessage({ value, maximumLength: MAX_DETAIL_STRING_LENGTH })
+      safe[field] = redactMessage({
+        value,
+        maximumLength: MAX_DETAIL_STRING_LENGTH,
+      })
     } else if (typeof value === "number" && Number.isFinite(value)) {
       safe[field] = value
     } else if (typeof value === "boolean") {
