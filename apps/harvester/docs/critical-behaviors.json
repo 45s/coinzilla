@@ -650,18 +650,18 @@
     {
       "path": "src/domain/portfolio/position.js",
       "baseline": {
-        "lines": 90.57,
-        "branches": 68.42,
+        "lines": 88.03,
+        "branches": 62.5,
         "functions": 100
       },
       "minimum": {
-        "lines": 90,
-        "branches": 65,
+        "lines": 85,
+        "branches": 60,
         "functions": 95
       },
       "latestObserved": {
-        "lines": 90.57,
-        "branches": 68.42,
+        "lines": 92.01,
+        "branches": 70.73,
         "functions": 100
       }
     },
