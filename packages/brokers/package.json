@@ -7,6 +7,13 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "dependencies": {
+    "@coinzilla/entities": "workspace:*",
+    "@coinzilla/utils": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.23.4"
+  },
   "scripts": {
     "test": "node --test",
     "test:coverage": "node --experimental-test-coverage --test --test-coverage-include=src/domain/**/*.js --test-coverage-include=src/application/**/*.js --test-coverage-include=src/infrastructure/**/*.js --test-coverage-exclude=src/infrastructure/binance/spot/broker-websocket/**/*.integration.js --test-coverage-exclude=src/infrastructure/binance/spot/broker-websocket/test-helpers/**/*.js --test-coverage-exclude=src/domain/**/*.test.js --test-coverage-exclude=src/application/**/*.test.js --test-coverage-exclude=src/infrastructure/**/*.test.js --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=80",
@@ -15,12 +22,5 @@
     "test:user-data-integration": "node --env-file-if-exists=.env.development --test ./src/infrastructure/binance/spot/broker-websocket/tests/user-data-session.integration.js",
     "test:websocket": "node --env-file-if-exists=.env.development --test ./src/infrastructure/binance/spot/broker-websocket/broker.integration.js",
     "bitunix:healthcheck": "node ./scripts/bitunix/run-healthcheck.js"
-  },
-  "dependencies": {
-    "@coinzilla/entities": "workspace:*",
-    "@coinzilla/utils": "workspace:*"
-  },
-  "engines": {
-    "node": ">=22.23.4"
   }
 }

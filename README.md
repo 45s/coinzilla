@@ -37,6 +37,19 @@ Install dependencies from the repository root:
 pnpm install
 ```
 
+### Application commands
+
+| Command | Behavior |
+| --- | --- |
+| `pnpm run server` | Harvester development mode |
+| `pnpm run client` | Dashboard development server |
+| `pnpm run app` | Both development servers |
+| `pnpm run server:prod` | Harvester production runtime |
+| `pnpm run client:prod` | Dashboard production build |
+| `pnpm run app:prod` | Harvester production runtime + Dashboard build |
+
+The production Dashboard build output must be served by your production web server. The `app:prod` command runs the Harvester runtime alongside the Dashboard build; it does not start a Dashboard production web server.
+
 Run the unit tests:
 
 ```sh
