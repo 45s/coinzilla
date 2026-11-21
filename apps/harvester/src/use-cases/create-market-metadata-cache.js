@@ -23,6 +23,10 @@ function isFreshMarketMetadata({
   return matchesMarket && age >= 0 && age < MARKET_METADATA_FRESHNESS_MAX_AGE_MS
 }
 
+function validateRefreshedMarketIdentity({ refreshed, metadata, symbol } = {}) {
+  return validateRefreshedMarketIdentity({ refreshed, metadata, symbol })
+}
+
 async function retrieveValidatedMarketMetadata({
   symbol,
   pairConfig,
