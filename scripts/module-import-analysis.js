@@ -19,7 +19,7 @@ const captureModuleImports = ({ imports }) => ({
         }
       },
       ExportAllDeclaration(node) {
-        recordImport(node.source, "re-export")
+        recordImport({ node: node.source, kind: "re-export" })
       },
       ImportExpression(node) {
         if (node.source.type === "Literal" && typeof node.source.value === "string") {
