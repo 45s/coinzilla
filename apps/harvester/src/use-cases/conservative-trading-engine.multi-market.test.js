@@ -1026,8 +1026,7 @@ function createOperatorPauseRecoveryPosition({ market }) {
     ,
     strategyId: StrategyId.COIN_GRABBER,
   }).ledger
-  return { portfolio, 
-    recoveryLedger }
+  return { portfolio, recoveryLedger, fill: recoveryFill }
 }
 
 function createOperatorPauseStrategyPolicy() {
@@ -2057,6 +2056,10 @@ test("submits a valid recovery SELL when refreshed exchange filters remain valid
     portfolio: seeded.portfolio,
     recoveryLedgersByMarket,
     brokerOverrides: {
+      getFills: async () => ({
+        ok: true,
+        data: [seeded.fill],
+      }),
       getSymbolFilters: async ({ symbol }) => {
         refreshedRuleReads += 1
         assert.equal(symbol, market.symbol, "Recovery planning must refresh the exact active market's filters")
