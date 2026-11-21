@@ -5,12 +5,12 @@
 **Goal:** prioritize demonstrated correctness, unattended-operation safety, operational confidence and maintainability. A task is complete only when its owning roadmap records the merged implementation and required verification.
 
 **Last reviewed:** 2026-11-21
-**Latest source-verified develop checkpoint:** `c6a16b0eca8a2d2700cb3924b56c859a0849cec2` (2026-11-21; includes merged S-7 naming policy/remediation PR #1605). The recursive tree contains 1,247 files, including 174 Markdown/MDX files and 1,045 JavaScript files (517 `.test.js` files); 579 JavaScript files are under Harvester. The detailed S-7 tree evidence is recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
+**Latest source-verified develop checkpoint:** `f2dd1f23fa842c8bac140f7da10ef86cf4cfc9f9` (2026-11-21; includes merged S-8 templates PR #1610). The recursive tree contains 1,257 files, including 179 Markdown/MDX files and 1,050 JavaScript files (519 `.test.js` files); 579 JavaScript files are under Harvester. The S-7 naming/tree baseline and later S-8 additions are recorded in [the engineering standards matrix](docs/engineering/ENGINEERING_STANDARDS_MATRIX.md).
 
 ## Repository engineering standards initiative — [#1568](https://github.com/45s/coinzilla/issues/1568)
 
 - **S-0 through S-8:** completed/merged. S-8 practical templates merged in [PR #1610](https://github.com/45s/coinzilla/pull/1610) as `f2dd1f23fa842c8bac140f7da10ef86cf4cfc9f9`.
-- **S-9:** in progress. First implementation slice is [PR #1615](https://github.com/45s/coinzilla/pull/1615): test-first workspace package dependency allowlist and cycle guard, based on actual package manifests and the canonical policy in [Domain Ownership](docs/engineering/DOMAIN_OWNERSHIP.md). The current checkpoint is intentionally RED until the checker implementation lands. No runtime/trading behavior is in scope.
+- **S-9:** in progress. First implementation slice is [PR #1615](https://github.com/45s/coinzilla/pull/1615): deterministic workspace package dependency allowlist and cycle guard, based on actual package manifests and the canonical policy in [Domain Ownership](docs/engineering/DOMAIN_OWNERSHIP.md). The parser/manifest discovery, policy validation, cycle detection and regression suite are implemented; final CI wiring/docs are in progress. This validates package manifests only, not internal source imports. No runtime/trading behavior is in scope.
 - **S-10:** pending; documentation governance reconciliation follows S-9.
 
 ## Multi-provider Harvester execution and market-data routing — #1339
