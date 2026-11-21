@@ -155,6 +155,12 @@ function validateBehavior({ behavior, errors, readFile, sourceOwners }) {
   if (typeof behavior.title !== "string" || behavior.title.length === 0) {
     errors.push(`Critical behavior ${behavior.id} must have a descriptive title.`)
   }
+  if (
+    behavior.integrationRequired !== undefined &&
+    typeof behavior.integrationRequired !== "boolean"
+  ) {
+    errors.push(`Critical behavior ${behavior.id} must declare integrationRequired as a boolean.`)
+  }
   validateRuntimeStatus({
     behavior,
     errors,
@@ -254,6 +260,9 @@ export function validateCriticalBehaviorContract({
   }
   if (contract?.schemaVersion !== 1 || !Array.isArray(contract.behaviors)) {
     errors.push("Critical behavior inventory must use schemaVersion 1 and define behaviors.")
+  }
+  if (contract.behaviors.length === 0) {
+    errors.push("Critical behavior inventory must define at least one critical behavior.")
   }
   if (errors.length > 0) {
     return {
