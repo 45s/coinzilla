@@ -7,6 +7,9 @@ const HISTORY_DIAGNOSTIC_FIELDS = Object.freeze([
   "historyScope",
   "marketsAttempted",
   "marketsQueried",
+  "orderMarketsQueried",
+  "fillMarketsQueried",
+  "marketsFailed",
   "currentMarket",
   "orderPagesChecked",
   "fillPagesChecked",
@@ -54,20 +57,32 @@ function mapHistoryFailure(failure) {
   if (!failure || typeof failure !== "object" || Array.isArray(failure)) {
     return null
   }
-  return {
-    ...(typeof failure.market === "string" ? {
-      market: redactMessage({
-        value: failure.market,
-        maximumLength: 100,
-      }),
-    } : {}),
-    ...(typeof failure.message === "string" ? {
-      message: redactMessage({
-        value: failure.message,
-        maximumLength: MAX_DETAIL_STRING_LENGTH,
-      }),
-    } : {}),
+  const safe = {}
+  const stringFields = [
+    ["market", 100],
+    ["historyType", 100],
+    ["failureStage", 100],
+    ["pageCursor", 200],
+    ["brokerOrderId", 200],
+    ["clientOrderId", 200],
+    ["tradeId", 200],
+    ["lastPersistedOrderId", 200],
+    ["lastPersistedTradeId", 200],
+    ["errorName", 200],
+    ["errorCode", 200],
+  ]
+  for (const [field, maximumLength] of stringFields) {
+    if (typeof failure[field] === "string") {
+      safe[field] = redactMessage({
+        value: failure[field],
+        maximumLength,
+      })
+    }
   }
+  if (Number.isSafeInteger(failure.recordIndex) && failure.recordIndex > 0) {
+    safe.recordIndex = failure.recordIndex
+  }
+  return Object.keys(safe).length > 0 ? safe : null
 }
 
 function mapHistoryDiagnostics(diagnostics) {

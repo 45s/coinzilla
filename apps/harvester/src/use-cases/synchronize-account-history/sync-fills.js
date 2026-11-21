@@ -60,9 +60,17 @@ async function persistCanonicalFill({ fill, repositories, providerIdentity, envi
     ingestionSource: "exchange_history",
   })
   state.fillsPersisted += 1
+  state.lastPersistedTradeId = fill.tradeId
 }
 
-async function resolveTradeHistoryCursor({ repositories, providerIdentity, environment, symbol }) {
+async function resolveTradeHistoryCursor({ repositories, providerIdentity, environment, symbol, state }) {
+  state.currentHistoryType = "trades"
+  state.currentOperation = "TRADE_CURSOR_READ"
+  state.currentPageCursor = null
+  state.currentRecordIndex = null
+  state.currentBrokerOrderId = null
+  state.currentClientOrderId = null
+  state.currentTradeId = null
   const cursor = await repositories.cursorRepository.get({
     providerIdentity,
     environment,
@@ -85,6 +93,13 @@ async function resolveTradeHistoryCursor({ repositories, providerIdentity, envir
 }
 
 async function requestFillPage({ broker, symbol, fromId, limit, requestDelayMs, sleep, state }) {
+  state.currentHistoryType = "trades"
+  state.currentOperation = "TRADE_PAGE_FETCH"
+  state.currentPageCursor = String(fromId)
+  state.currentRecordIndex = null
+  state.currentBrokerOrderId = null
+  state.currentClientOrderId = null
+  state.currentTradeId = null
   await waitBeforeRequest({
     state,
     requestDelayMs,
@@ -106,17 +121,23 @@ async function requestFillPage({ broker, symbol, fromId, limit, requestDelayMs, 
 }
 
 function validateFillPage({ page, symbol, lastTradeId, state }) {
+  state.currentOperation = "TRADE_PAGE_VALIDATE"
+  state.fillsObserved += page.length
   let nextTradeId = lastTradeId
-  const fills = page.map((fill) => {
+  const fills = []
+  for (const [index, fill] of page.entries()) {
+    state.currentRecordIndex = index + 1
+    state.currentTradeId = typeof fill?.tradeId === "string" ? fill.tradeId : null
+    state.currentBrokerOrderId = typeof fill?.brokerOrderId === "string" ? fill.brokerOrderId : null
+    state.currentClientOrderId = typeof fill?.clientOrderId === "string" ? fill.clientOrderId : null
     nextTradeId = validateCanonicalFill({
       fill,
       symbol,
       lastTradeId: nextTradeId,
       state,
     })
-    return fill
-  })
-  state.fillsObserved += fills.length
+    fills.push(fill)
+  }
   return {
     fills,
     lastTradeId: nextTradeId,
@@ -124,7 +145,12 @@ function validateFillPage({ page, symbol, lastTradeId, state }) {
 }
 
 async function persistFillPage({ fills, repositories, providerIdentity, environment, now, state }) {
-  for (const fill of fills) {
+  for (const [index, fill] of fills.entries()) {
+    state.currentOperation = "FILL_RECORD_PERSIST"
+    state.currentRecordIndex = index + 1
+    state.currentTradeId = fill.tradeId
+    state.currentBrokerOrderId = fill.brokerOrderId
+    state.currentClientOrderId = typeof fill.clientOrderId === "string" ? fill.clientOrderId : null
     await persistCanonicalFill({
       fill,
       repositories,
@@ -176,6 +202,11 @@ async function persistAndAdvanceTradePage({
     state,
   })
   const { lastTradeId } = validated
+  state.currentOperation = "TRADE_CURSOR_SAVE"
+  state.currentRecordIndex = null
+  state.currentBrokerOrderId = null
+  state.currentClientOrderId = null
+  state.currentTradeId = null
   await saveTradePageCursor({
     page,
     lastTradeId,
@@ -205,6 +236,7 @@ async function fetchFillHistoryForMarket({
     providerIdentity,
     environment,
     symbol,
+    state,
   })
   while (true) {
     const page = await requestFillPage({
@@ -236,6 +268,7 @@ async function fetchFillHistoryForMarket({
       return
     }
     if (lastTradeId >= Number.MAX_SAFE_INTEGER) {
+      state.currentOperation = "TRADE_CURSOR_ADVANCE"
       throw new RangeError(`Binance trade history cannot advance its cursor for ${symbol}`)
     }
     fromId = lastTradeId + 1

@@ -74,6 +74,7 @@ function resolveOrderOwnership({ order, orderRegistry }) {
   }
   const registered = orderRegistry.getOrderByBrokerOrderId({
     brokerOrderId: order.brokerOrderId,
+    marketId: order.market.id,
   })
   if (!registered ||
       registered.clientOrderId !== order.clientOrderId ||
@@ -156,7 +157,7 @@ export function createMixedSellFillReconciliation({ order, orderRegistry } = {})
   })
 }
 
-function validateAllocation({ reconciliation, allocation }) {
+function assertStagingAllocationState({ reconciliation }) {
   if (!reconciliation ||
       reconciliation.status !== "STAGING" ||
       !Array.isArray(reconciliation.allocations)) {
@@ -165,24 +166,43 @@ function validateAllocation({ reconciliation, allocation }) {
       message: "Mixed SELL allocation can be staged only into an active STAGING reconciliation.",
     })
   }
-  const matchesOwnership = allocation?.orderOwnership &&
-    allocation.orderOwnership.strategyId === reconciliation.orderOwnership.strategyId &&
-    allocation.orderOwnership.positionId === reconciliation.orderOwnership.positionId &&
-    allocation.orderOwnership.purpose === reconciliation.orderOwnership.purpose &&
-    allocation.orderOwnership.cycleId === reconciliation.orderOwnership.cycleId &&
-    allocation.orderOwnership.clientOrderId === reconciliation.orderOwnership.clientOrderId &&
-    allocation.orderOwnership.brokerOrderId === reconciliation.orderOwnership.brokerOrderId
+}
+
+function hasMatchingOwnership({ allocation, reconciliation }) {
+  const { orderOwnership } = reconciliation
+  const candidate = allocation?.orderOwnership
+  return candidate &&
+    candidate.strategyId === orderOwnership.strategyId &&
+    candidate.positionId === orderOwnership.positionId &&
+    candidate.purpose === orderOwnership.purpose &&
+    candidate.cycleId === orderOwnership.cycleId &&
+    candidate.clientOrderId === orderOwnership.clientOrderId &&
+    candidate.brokerOrderId === orderOwnership.brokerOrderId
+}
+
+function assertAllocationIdentity({ allocation, reconciliation }) {
   if (!allocation ||
       !NON_EMPTY(allocation.fillId) ||
       !NON_EMPTY(allocation.fillFingerprint) ||
       !NON_EMPTY(allocation.allocationFingerprint) ||
       allocation.marketId !== reconciliation.order.marketId ||
-      !matchesOwnership) {
+      !hasMatchingOwnership({
+        allocation,
+        reconciliation,
+      })) {
     fail({
       code: "RS_MIXED_SELL_RECONCILIATION_ORDER_OWNERSHIP_MISMATCH",
       message: "Mixed SELL allocation market or immutable order ownership does not match its staging reconciliation.",
     })
   }
+}
+
+function validateAllocation({ reconciliation, allocation }) {
+  assertStagingAllocationState({ reconciliation })
+  assertAllocationIdentity({
+    allocation,
+    reconciliation,
+  })
   assertDecimal({
     value: allocation.recovery?.grossBaseQuantity,
     field: "allocation.recovery.grossBaseQuantity",
@@ -207,26 +227,27 @@ function validateAllocation({ reconciliation, allocation }) {
  * @param {object} input.allocation Output of createMixedSellFillAllocation().
  * @returns {{ reconciliation: object, applied: boolean, duplicate: boolean }}
  */
-export function stageMixedSellFillAllocation({ reconciliation, allocation } = {}) {
-  const fillQuantity = validateAllocation({
-    reconciliation,
-    allocation,
-  })
+function findDuplicateAllocation({ reconciliation, allocation }) {
   const previous = reconciliation.allocations.find((item) => item.fillId === allocation.fillId)
-  if (previous) {
-    if (previous.fillFingerprint === allocation.fillFingerprint &&
-        previous.allocationFingerprint === allocation.allocationFingerprint) {
-      return Object.freeze({
-        reconciliation,
-        applied: false,
-        duplicate: true,
-      })
-    }
-    fail({
-      code: "RS_MIXED_SELL_RECONCILIATION_ALLOCATION_CONFLICT",
-      message: `Canonical Fill ${allocation.fillId} was replayed with conflicting execution or allocation facts.`,
+  if (!previous) {
+    return null
+  }
+  if (previous.fillFingerprint === allocation.fillFingerprint &&
+      previous.allocationFingerprint === allocation.allocationFingerprint) {
+    return Object.freeze({
+      reconciliation,
+      applied: false,
+      duplicate: true,
     })
   }
+  fail({
+    code: "RS_MIXED_SELL_RECONCILIATION_ALLOCATION_CONFLICT",
+    message: `Canonical Fill ${allocation.fillId} was replayed with conflicting execution or allocation facts.`,
+  })
+  return null
+}
+
+function createStagedAllocation({ reconciliation, allocation, fillQuantity }) {
   const stagedQuantity = addDecimal({
     left: reconciliation.stagedQuantity,
     right: fillQuantity,
@@ -240,14 +261,6 @@ export function stageMixedSellFillAllocation({ reconciliation, allocation } = {}
       message: "Distinct staged SELL fills exceed the registered order original quantity.",
     })
   }
-  const stagedRecoveryQuantity = addDecimal({
-    left: reconciliation.stagedRecoveryQuantity,
-    right: allocation.recovery.grossBaseQuantity,
-  })
-  const stagedLegacyQuantity = addDecimal({
-    left: reconciliation.stagedLegacyQuantity,
-    right: allocation.legacy.grossBaseQuantity,
-  })
   const nextAllocation = Object.freeze({
     fillId: allocation.fillId,
     fillFingerprint: allocation.fillFingerprint,
@@ -262,14 +275,36 @@ export function stageMixedSellFillAllocation({ reconciliation, allocation } = {}
     ...reconciliation,
     allocations: Object.freeze([...reconciliation.allocations, nextAllocation]),
     stagedQuantity,
-    stagedRecoveryQuantity,
-    stagedLegacyQuantity,
+    stagedRecoveryQuantity: addDecimal({
+      left: reconciliation.stagedRecoveryQuantity,
+      right: allocation.recovery.grossBaseQuantity,
+    }),
+    stagedLegacyQuantity: addDecimal({
+      left: reconciliation.stagedLegacyQuantity,
+      right: allocation.legacy.grossBaseQuantity,
+    }),
     stagedFillCount: reconciliation.stagedFillCount + 1,
   })
   return Object.freeze({
     reconciliation: next,
     applied: true,
     duplicate: false,
+  })
+}
+
+export function stageMixedSellFillAllocation({ reconciliation, allocation } = {}) {
+  const fillQuantity = validateAllocation({
+    reconciliation,
+    allocation,
+  })
+  const duplicate = findDuplicateAllocation({
+    reconciliation,
+    allocation,
+  })
+  return duplicate ?? createStagedAllocation({
+    reconciliation,
+    allocation,
+    fillQuantity,
   })
 }
 
@@ -287,14 +322,7 @@ function assertReconciliationState({ reconciliation, alreadyReconciled }) {
   }
 }
 
-function assertTerminalOrder({ reconciliation, terminalOrder, orderRegistry }) {
-  if (!(terminalOrder instanceof CanonicalOrder) ||
-      !TERMINAL_ORDER_STATUSES.has(terminalOrder.status)) {
-    fail({
-      code: "RS_MIXED_SELL_RECONCILIATION_INVALID_TERMINAL_ORDER",
-      message: "Terminal reconciliation requires FILLED, CANCELED, EXPIRED or REJECTED broker status.",
-    })
-  }
+function assertTerminalOrderIdentity({ reconciliation, terminalOrder, orderRegistry }) {
   const terminalOwnership = resolveOrderOwnership({
     order: terminalOrder,
     orderRegistry,
@@ -316,8 +344,12 @@ function assertTerminalOrder({ reconciliation, terminalOrder, orderRegistry }) {
       message: "Terminal order identity or immutable Recovery Seller ownership differs from the staged order.",
     })
   }
+}
+
+function assertRegisteredTerminalOrder({ terminalOrder, orderRegistry }) {
   const registeredOrder = orderRegistry.getOrderByBrokerOrderId({
     brokerOrderId: terminalOrder.brokerOrderId,
+    marketId: terminalOrder.market.id,
   })
   if (!registeredOrder ||
       registeredOrder.status !== terminalOrder.status ||
@@ -327,6 +359,9 @@ function assertTerminalOrder({ reconciliation, terminalOrder, orderRegistry }) {
       message: "Terminal order status and executed quantity must match the canonical OrderRegistry entry.",
     })
   }
+}
+
+function assertTerminalExecutedQuantity({ reconciliation, terminalOrder }) {
   const { amount: executedQuantity } = terminalOrder.executedQuantity
   assertDecimal({
     value: executedQuantity,
@@ -353,6 +388,29 @@ function assertTerminalOrder({ reconciliation, terminalOrder, orderRegistry }) {
       message: "A FILLED SELL must report execution equal to its original order quantity.",
     })
   }
+}
+
+function assertTerminalOrder({ reconciliation, terminalOrder, orderRegistry }) {
+  if (!(terminalOrder instanceof CanonicalOrder) ||
+      !TERMINAL_ORDER_STATUSES.has(terminalOrder.status)) {
+    fail({
+      code: "RS_MIXED_SELL_RECONCILIATION_INVALID_TERMINAL_ORDER",
+      message: "Terminal reconciliation requires FILLED, CANCELED, EXPIRED or REJECTED broker status.",
+    })
+  }
+  assertTerminalOrderIdentity({
+    reconciliation,
+    terminalOrder,
+    orderRegistry,
+  })
+  assertRegisteredTerminalOrder({
+    terminalOrder,
+    orderRegistry,
+  })
+  assertTerminalExecutedQuantity({
+    reconciliation,
+    terminalOrder,
+  })
 }
 
 function validateTerminalFillHistory({ reconciliation, canonicalFillAllocations }) {

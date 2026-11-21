@@ -8,12 +8,20 @@
 
 ## Session-scoped runtime error persistence (#1650)
 
-- **In progress:** add a Harvester-owned `runtime_errors` table and non-blocking capture of every shared-Logger ERROR record, including failures emitted before relational persistence becomes available.
-- **RED evidence:** the first targeted run failed on the missing table, missing session buffer and missing startup `historyDiagnostics` fields; the cursor-write simulation persisted its order before cursor advancement failed. These are expected regression failures, not production changes.
-- **Lint checkpoint:** the startup cursor-failure scenario is split into fixture/assertion helpers and the regression tests follow strict object-property formatting. Error-buffer unit coverage is isolated in its own colocated test file so legacy logging tests remain untouched.
-- Correlate diagnostic rows to the existing runtime session ID. Keep full stack/cause evidence in per-session DEBUG/TRACE logs; store only safe, allowlisted searchable fields in SQLite.
-- Include partial exchange-history page/cursor diagnostics in startup failure records. Preserve fail-closed unknown/external-order handling and keep the reporting database non-authoritative for trading readiness, ownership, and recovery.
-- No generic `errors` table, no `sessions` table, no `packages/db` changes, and no exchange calls or order operations.
+- **Complete in merged [PR #1650](https://github.com/45s/coinzilla/pull/1650):** Harvester-owned versioned `runtime_errors` table, bounded pre-database ERROR buffer, non-blocking observer, allowlisted/redacted searchable fields, and shutdown drain.
+- Correlates diagnostic rows to the existing runtime session ID. Full stack/cause evidence remains in per-session DEBUG/TRACE logs; relational diagnostics remain non-authoritative for trading readiness, ownership, and recovery.
+- No generic `errors` ledger, no `sessions` table, no `packages/db` changes, and no exchange calls or order operations.
+
+## Configured-market exchange-history failure isolation (#1658)
+
+- **Implementation and offline regression coverage complete in PR #1659; required CI gates must pass before merge.**
+- [x] Attempt every configured market independently after an order-history or trade-history failure in another market.
+- [x] Preserve the same-market order-before-fill prerequisite; skip fills only for a market whose order scan failed.
+- [x] Keep each page cursor unchanged until every record in that page is persisted; preserve idempotent replay after partial writes or cursor-write failure.
+- [x] Capture per-market order/fill completion and safe record-level failure context: stage, page cursor, record position, exchange IDs, underlying error code, and last persisted identity.
+- [x] Persist bounded, allowlisted/redacted failure details through the existing `runtime_errors` projection.
+- **Unresolved historical evidence:** the earlier ZROUSDT export proves partial order persistence and a missing ZRO cursor, but does not contain the original exception. The exact historical failing record is not claimed as diagnosed; the new diagnostics will identify it on the next authorized normal startup if the failure recurs.
+- No TESTNET/LIVE API calls, order placement/cancellation, or account mutation were performed for this implementation.
 
 ## Trading-history real-time notifications (#1643)
 

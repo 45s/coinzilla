@@ -2,43 +2,63 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { mapRuntimeErrorEntryToRow } from "./runtime-error-row-mapping.js"
 
+function createRuntimeErrorEntry() {
+  return {
+    timestamp: "2026-11-21T08:44:20.000Z",
+    level: "error",
+    method: "error",
+    data: {
+      message: "History sync failed token=private-token",
+      errorName: "HistorySyncError",
+      errorCode: "HISTORY_SYNC_CURSOR_WRITE_FAILED",
+      errorMessage: "Cursor write failed apiKey=private-key",
+      component: "synchronize-account-history",
+      operation: "saveOrderCursor",
+      providerType: "binance",
+      providerInstanceId: "binanceTestnet",
+      accountId: "binance-primary",
+      environment: "testnet",
+      symbol: "ZROFDUSD",
+      brokerOrderId: "981545",
+      clientOrderId: "h-order-1",
+      executionId: "15507",
+      failureCategory: "PERSISTENCE",
+      failureStage: "ORDER_CURSOR_SAVE",
+      historyDiagnostics: {
+        currentMarket: null,
+        marketsAttempted: ["ZROFDUSD"],
+        orderMarketsQueried: [],
+        fillMarketsQueried: [],
+        marketsFailed: ["ZROFDUSD"],
+        ordersPersisted: 999,
+        complete: false,
+        failures: [{
+          market: "ZROFDUSD",
+          historyType: "orders",
+          failureStage: "ORDER_CURSOR_SAVE",
+          pageCursor: "546984",
+          recordIndex: null,
+          brokerOrderId: null,
+          clientOrderId: null,
+          lastPersistedOrderId: "661725",
+          errorName: "Error",
+          errorCode: "SQLITE_BUSY",
+          message: "Exchange history request failed https://api.example/history?sig=private-signature",
+        }],
+      },
+      strategyId: undefined,
+      errorDetails: {
+        stack: "Error: private-key",
+      },
+      apiKey: "private-key",
+    },
+  }
+}
+
 test("maps explicit runtime error facts and redacts credentials from searchable text", () => {
   const row = mapRuntimeErrorEntryToRow({
     runtimeSessionId: "session-123",
-    entry: {
-      timestamp: "2026-11-21T08:44:20.000Z",
-      level: "error",
-      method: "error",
-      data: {
-        message: "History sync failed token=private-token",
-        errorName: "HistorySyncError",
-        errorCode: "HISTORY_SYNC_CURSOR_WRITE_FAILED",
-        errorMessage: "Cursor write failed apiKey=private-key",
-        component: "synchronize-account-history",
-        operation: "saveOrderCursor",
-        providerType: "binance",
-        providerInstanceId: "binanceTestnet",
-        accountId: "binance-primary",
-        environment: "testnet",
-        symbol: "ZROFDUSD",
-        brokerOrderId: "981545",
-        clientOrderId: "h-order-1",
-        executionId: "15507",
-        failureCategory: "PERSISTENCE",
-        failureStage: "ORDER_CURSOR_SAVE",
-        historyDiagnostics: {
-          currentMarket: "ZROFDUSD",
-          ordersPersisted: 999,
-          complete: false,
-          errorMessage: "secret=must-not-be-copied",
-        },
-        strategyId: undefined,
-        errorDetails: {
-          stack: "Error: private-key",
-        },
-        apiKey: "private-key",
-      },
-    },
+    entry: createRuntimeErrorEntry(),
   })
 
   assert.equal(row.runtime_session_id, "session-123", "Runtime errors must retain the existing process session identity.")
@@ -48,7 +68,17 @@ test("maps explicit runtime error facts and redacts credentials from searchable 
   assert.equal(row.symbol, "ZROFDUSD", "Explicit market identity must be retained.")
   assert.equal(row.strategy_id, null, "Missing strategy attribution must remain SQL NULL.")
   assert.equal(row.execution_id, "15507", "Explicit execution identity must be retained.")
+  assert.equal(row.failure_stage, "ORDER_CURSOR_SAVE", "The operation failure stage must remain searchable.")
   assert.doesNotMatch(row.details_json, /private-key|must-not-be-copied|stack|apiKey/, "Unrestricted details and sensitive fields must not enter relational diagnostics.")
+  assert.doesNotMatch(
+    row.details_json,
+    /Exchange history request failed|api\\.example|private-signature/,
+    "Untrusted provider failure messages must not be copied into relational details.",
+  )
+  assert.match(row.details_json, /ORDER_CURSOR_SAVE/, "The failed synchronization stage must be retained in bounded details.")
+  assert.match(row.details_json, /546984/, "The original history page cursor must be retained.")
+  assert.match(row.details_json, /661725/, "The last successfully persisted exchange order must be retained.")
+  assert.match(row.details_json, /SQLITE_BUSY/, "The underlying safe error code must be retained.")
   assert.match(row.details_json, /ZROFDUSD/, "Allowlisted history diagnostics must remain searchable.")
 })
 
