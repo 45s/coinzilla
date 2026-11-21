@@ -395,6 +395,26 @@
           "path": "test/recovery/operational-state-crash-matrix.test.js",
           "name": "reopens the real append-only ledger after intent, acknowledgement, and fill crash boundaries",
           "kind": "integration"
+        },
+        {
+          "path": "src/use-cases/restore-harvester-operational-state.test.js",
+          "name": "requires an initialized Operational State Store and projector port",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/restore-harvester-operational-state.test.js",
+          "name": "preserves a failed Operational State Store read result",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/restore-harvester-operational-state.test.js",
+          "name": "converts a thrown Operational State Store read into a failure result",
+          "kind": "failure"
+        },
+        {
+          "path": "src/use-cases/restore-harvester-operational-state.test.js",
+          "name": "converts a thrown Operational State projection into a failure result",
+          "kind": "failure"
         }
       ],
       "runtimeStatus": "offline-only",

@@ -688,3 +688,61 @@ test("fails closed on Recovery Seller SELL Journal activity while replay is defe
     /Recovery Seller Journal replay is deferred/,
   )
 })
+
+
+test("requires an initialized Operational State Store and projector port", async () => {
+  const missingStore = await restoreCandidate({
+    operationalStateStore: undefined,
+  })
+  const missingProjector = await restoreCandidate({
+    operationalStateStore: makeStore(records()),
+    projectOperationalState: undefined,
+  })
+
+  assert.equal(missingStore.ok, false, "Candidate restoration must reject a missing durable-fact read port.")
+  assert.match(missingStore.errors[0].message, /initialized durable-fact read port/)
+  assert.equal(missingProjector.ok, false, "Candidate restoration must reject a missing Operational State projector.")
+  assert.match(missingProjector.errors[0].message, /injected Operational State projector/)
+})
+
+test("preserves a failed Operational State Store read result", async () => {
+  const readError = new Error("Injected durable-fact read failure")
+  const result = await restoreCandidate({
+    operationalStateStore: {
+      readAll: async () => ({
+        ok: false,
+        errors: [readError],
+      }),
+    },
+  })
+
+  assert.equal(result.ok, false, "A failed durable-fact read must stop candidate restoration.")
+  assert.strictEqual(result.errors[0], readError, "The original store read error must be preserved.")
+})
+
+test("converts a thrown Operational State Store read into a failure result", async () => {
+  const readError = new Error("Injected thrown durable-fact read")
+  const result = await restoreCandidate({
+    operationalStateStore: {
+      readAll: async () => {
+        throw readError
+      },
+    },
+  })
+
+  assert.equal(result.ok, false, "A thrown store read must not escape or create a partial candidate.")
+  assert.match(result.errors[0].message, /Injected thrown durable-fact read/)
+})
+
+test("converts a thrown Operational State projection into a failure result", async () => {
+  const projectionError = new Error("Injected thrown Operational State projection")
+  const result = await restoreCandidate({
+    operationalStateStore: makeStore(records()),
+    projectOperationalState: () => {
+      throw projectionError
+    },
+  })
+
+  assert.equal(result.ok, false, "A thrown projection must not produce a candidate or reopen trading readiness.")
+  assert.match(result.errors[0].message, /Injected thrown Operational State projection/)
+})
