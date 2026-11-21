@@ -585,14 +585,9 @@ function assertOrderMatches(...orderArguments) {
   )
 }
 
-
-runDogeTradingReplayTest("accounts streamed partial BUY executions before advancing the completed-BUY lifecycle", async (dogeTradingReplay) => {
-  const initialBuyOrder = await submitInitialBuyOrder(dogeTradingReplay)
-  await dogeTradingReplay.publishMarketPrice(dogeTradingReplay.scenarioExpectations.buyPrice)
-  const recoverySellSubmitted = dogeTradingReplay.waitForSubmittedOrder("SELL")
-  const nextStandingBuySubmitted = dogeTradingReplay.waitForSubmittedOrder("BUY", 2)
+function createPartialBuyReports({ initialBuyOrder } = {}) {
   const firstExecutionTimestamp = Math.max(Date.now(), initialBuyOrder.createdAt + 1)
-  const partialBuyReports = [
+  return [
     {
       tradeId: "6451",
       fillQuantity: "100",
@@ -618,6 +613,13 @@ runDogeTradingReplayTest("accounts streamed partial BUY executions before advanc
       timestamp: firstExecutionTimestamp + 2,
     },
   ]
+}
+
+async function applyPartialBuyReports({
+  dogeTradingReplay,
+  initialBuyOrder,
+  partialBuyReports,
+}) {
   const expectedProgress = [
     {
       baseQuantity: "99.9",
@@ -638,7 +640,6 @@ runDogeTradingReplayTest("accounts streamed partial BUY executions before advanc
       completed: true,
     },
   ]
-
   for (let index = 0; index < partialBuyReports.length; index += 1) {
     const report = partialBuyReports[index]
     const result = await dogeTradingReplay.publishOrderFill({
@@ -671,7 +672,13 @@ runDogeTradingReplayTest("accounts streamed partial BUY executions before advanc
       assert.equal(result.data.reevaluate, true, "The completed cumulative BUY must release the completed-BUY lifecycle for reevaluation.")
     }
   }
+}
 
+async function assertPartialBuyRecoveryOrders({
+  dogeTradingReplay,
+  recoverySellSubmitted,
+  nextStandingBuySubmitted,
+}) {
   await recoverySellSubmitted
   const nextStandingBuyOrder = await nextStandingBuySubmitted
   const recoverySellOrders = dogeTradingReplay.submittedCanonicalOrders
@@ -716,7 +723,9 @@ runDogeTradingReplayTest("accounts streamed partial BUY executions before advanc
       )),
     "Every recovery SELL superseded by later partial BUY executions must be authoritatively canceled before replacement.",
   )
+}
 
+function assertPartialBuyExecutionReports({ dogeTradingReplay } = {}) {
   assert.deepEqual(
     dogeTradingReplay.receivedExecutionReports.map(({ executedOrder, fill }) => ({
       cumulativeExecutedQuantity: executedOrder.executedQuantity,
@@ -759,4 +768,22 @@ runDogeTradingReplayTest("accounts streamed partial BUY executions before advanc
     0,
     "A valid sequence of partial BUY executions must not produce runtime accounting or order-transition errors.",
   )
+}
+
+runDogeTradingReplayTest("accounts streamed partial BUY executions before advancing the completed-BUY lifecycle", async (dogeTradingReplay) => {
+  const initialBuyOrder = await submitInitialBuyOrder(dogeTradingReplay)
+  await dogeTradingReplay.publishMarketPrice(dogeTradingReplay.scenarioExpectations.buyPrice)
+  const recoverySellSubmitted = dogeTradingReplay.waitForSubmittedOrder("SELL")
+  const nextStandingBuySubmitted = dogeTradingReplay.waitForSubmittedOrder("BUY", 2)
+  await applyPartialBuyReports({
+    dogeTradingReplay,
+    initialBuyOrder,
+    partialBuyReports: createPartialBuyReports({ initialBuyOrder }),
+  })
+  await assertPartialBuyRecoveryOrders({
+    dogeTradingReplay,
+    recoverySellSubmitted,
+    nextStandingBuySubmitted,
+  })
+  assertPartialBuyExecutionReports({ dogeTradingReplay })
 })
