@@ -29,6 +29,7 @@ export class OperatorComponent {
   readonly errorMessage = signal<string | null>(null);
   readonly successMessage = signal<string | null>(null);
   readonly symbol = signal('');
+  readonly commandInput = signal('');
   readonly status = signal<unknown>(null);
   readonly markets = signal<unknown>(null);
   readonly positions = signal<unknown>(null);
@@ -38,6 +39,40 @@ export class OperatorComponent {
 
   constructor() {
     void this.refresh();
+  }
+
+  updateCommandInput(event: Event): void {
+    this.commandInput.set((event.target as HTMLInputElement).value);
+  }
+
+  async runCommandLine(): Promise<void> {
+    const [command, symbol] = this.commandInput().trim().split(/\\s+/, 2);
+    if (!command) return;
+    const normalized = command.toLowerCase();
+    if (normalized === 'pause' || normalized === 'unpause') {
+      if (!symbol) {
+        this.errorMessage.set(`Usage: ${normalized} SYMBOL`);
+        return;
+      }
+      this.symbol.set(symbol.toUpperCase());
+      this.requestCommand(normalized);
+      return;
+    }
+    if (normalized === 'pauseallbuys' || normalized === 'resumeallbuys') {
+      this.requestCommand(normalized);
+      return;
+    }
+    if (['status', 'markets', 'portfolio', 'orders', 'balances'].includes(normalized)) {
+      await this.refresh();
+      if (this.connected()) this.successMessage.set(`Refreshed ${normalized}.`);
+      return;
+    }
+    if (normalized === 'help') {
+      this.successMessage.set('Commands: status, markets, portfolio, orders, balances, pause SYMBOL, unpause SYMBOL, pauseallbuys, resumeallbuys.');
+      this.errorMessage.set(null);
+      return;
+    }
+    this.errorMessage.set('Unknown command. Type help to see available commands.');
   }
 
   updateSymbol(event: Event): void {
