@@ -3,7 +3,7 @@ import test from "node:test"
 import { StrategyId } from "./strategy-ids.js"
 import { strategyMetadataById } from "../../application/logging/strategy-metadata.js"
 import { strategyLogMarkers } from "../../application/logging/strategy-log-markers.js"
-import { appConfig } from "../../../../config/index.js"
+import { appConfig } from "../../../config/index.js"
 
 const expectedStrategyMetadata = Object.freeze({
   [StrategyId.COIN_GRABBER]: Object.freeze({
