@@ -72,6 +72,55 @@ test("starts the API over Harvester's already-open relational database without o
   assert.equal(database.closeCalls, 0, "The API lifecycle must not close the database connection owned by Harvester.")
 })
 
+test("rejects invalid API configuration before opening the HTTP listener", async () => {
+  const invalidConfigurations = [
+    {
+      name: "environment",
+      env: {
+        TRADING_MODE: "sandbox",
+        HARVESTER_API_TOKEN: API_TOKEN,
+      },
+    },
+    {
+      name: "token",
+      env: {
+        TRADING_MODE: "testnet",
+        HARVESTER_API_TOKEN: "short",
+      },
+    },
+    {
+      name: "host",
+      env: {
+        TRADING_MODE: "testnet",
+        HARVESTER_API_TOKEN: API_TOKEN,
+        HARVESTER_API_HOST: " ",
+      },
+    },
+    {
+      name: "port",
+      env: {
+        TRADING_MODE: "testnet",
+        HARVESTER_API_TOKEN: API_TOKEN,
+        HARVESTER_API_PORT: "65536",
+      },
+    },
+  ]
+
+  for (const configuration of invalidConfigurations) {
+    await assert.rejects(
+      () => startTradingHistoryApi({
+        database: createDatabase(),
+        env: configuration.env,
+        startServer: async () => {
+          throw new Error("Invalid configuration must be rejected before binding.")
+        },
+      }),
+      (error) => error.code === "HARVESTER_TRADING_HISTORY_API_CONFIGURATION_INVALID",
+      `The API must reject invalid ${configuration.name} configuration.`,
+    )
+  }
+})
+
 test("preserves the HTTP startup error without closing Harvester's shared database", async () => {
   const database = createDatabase()
   const startupFailure = new Error("simulated HTTP bind failure")

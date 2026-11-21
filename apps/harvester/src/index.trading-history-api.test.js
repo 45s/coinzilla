@@ -37,7 +37,18 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
       NODE_ENV: "test",
       HARVESTER_API_TOKEN: API_TOKEN,
     },
-    loadConfig: async () => ({}),
+    loadConfig: async () => ({
+      strategies: {
+        CG_coinGrabber: {
+          pairs: {
+            DOGEUSDT: {
+              enabled: true,
+              tradingEnvironment: "testnet",
+            },
+          },
+        },
+      },
+    }),
     createEventBus: () => new EventBus(),
     createJournalService: createDisabledJournalService,
     acquireProcessLock: async () => ({
@@ -88,12 +99,13 @@ test("starts the trading-history API with Harvester and closes it before the sha
       database.state = "closed"
     },
   }
-  await main(createMainOptions({
+  const result = await main(createMainOptions({
     database,
     calls,
     handlers,
   }))
 
+  assert.ok(result?.runtime, "Harvester startup must return its started runtime.")
   assert.equal(typeof handlers.SIGTERM, "function", "Harvester must register its normal process shutdown handler.")
   assert.ok(calls.includes("api-start"), "Harvester process startup must start the API after persistence preparation.")
   await handlers.SIGTERM()
@@ -120,6 +132,7 @@ test("keeps Harvester trading startup successful when the optional API cannot bi
     },
   }))
 
+  assert.ok(result?.runtime, "Optional API startup failure must not prevent Harvester runtime startup.")
   await handlers.SIGTERM()
   assert.ok(calls.includes("runtime-stop"), "Harvester must remain available for normal shutdown.")
   assert.ok(calls.includes("database"), "Normal persistence cleanup must continue after optional API startup failure.")

@@ -270,10 +270,9 @@ describe('TradingHistoryComponent', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const headers = Array.from(fixture.nativeElement.querySelectorAll('thead th'))
-      .map((header) => header.textContent);
-    expect(headers).toContain('Limit price');
-    expect(headers).not.toContain('Execution price');
+    const headerText = fixture.nativeElement.querySelector('thead')?.textContent ?? '';
+    expect(headerText).toContain('Limit price');
+    expect(headerText).not.toContain('Execution price');
 
     const row = fixture.nativeElement.querySelector('tbody tr') as HTMLTableRowElement;
     expect(row.textContent).toContain('65000.00000000');
