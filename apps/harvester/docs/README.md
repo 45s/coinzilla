@@ -40,7 +40,8 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 ## Current architecture and domain contracts
 
 - [Application architecture](architecture.md) and [architecture index](architecture/README.md)
-- [Strategy extensibility architecture roadmap](architecture/strategy-extensibility-audit-roadmap.md) — S-1/S-2 boundary decisions and S-4 CG/RS runtime-composition evidence are complete; S-3 future-strategy onboarding template remains.
+- [Strategy extensibility architecture roadmap](architecture/strategy-extensibility-audit-roadmap.md) — S-1/S-2 boundary decisions and S-4 CG/RS runtime-composition evidence are complete; S-3 onboarding standard is in progress.
+- [Strategy onboarding standard](architecture/strategy-onboarding-standard.md) — practical implementation, safety, TDD, integration, documentation, and acceptance checklist for future strategies.
 - [SQLite integration blueprint](persistence/sqlite-integration-blueprint.md) — historical source-verified design/audit snapshot; current implementation is governed by the Harvester persistence README.
 - [Harvester ordinary persistence](persistence/README.md) — current relational orders/fills, live-fill, startup history-sync, backup and full JSON export commands and safety contract.
 - [Trading-history persistence roadmap](persistence/trading-history-roadmap.md) — completed Phases 1–3 and planned attribution, analytics and remaining operational hardening.
