@@ -33,11 +33,86 @@ function isFreshMarketMetadata({
  * @param {Function} [options.now=Date.now] Injectable millisecond clock.
  * @returns {object} Cached metadata access and refresh operations.
  */
+function createRefreshMarketMetadata({
+  refreshedMarketMetadata,
+  refreshedAtBySymbol,
+  getSymbolFilters,
+  validateMarketMetadata,
+  now,
+} = {}) {
+  return async function refreshMarketMetadata({
+    symbol,
+    pairConfig,
+    metadata,
+    force = false,
+  } = {}) {
+    try {
+      const currentTime = readMarketMetadataClock({ now })
+      const cachedMetadata = refreshedMarketMetadata.get(symbol)
+      const refreshedAt = refreshedAtBySymbol.get(symbol)
+      if (!force && isFreshMarketMetadata({
+        cachedMetadata,
+        metadata,
+        symbol,
+        refreshedAt,
+        currentTime,
+      })) {
+        return toResult({ data: cachedMetadata })
+      }
+      const result = await getSymbolFilters({ symbol })
+      if (!result?.ok || !result.data) {
+        throw result?.errors?.[0] ?? new Error(`Fresh Binance exchange metadata is unavailable for ${symbol}`)
+      }
+      const refreshed = validateMarketMetadata({
+        symbol,
+        pairConfig,
+        marketMetadata: result.data,
+      })
+      if (refreshed?.market?.id !== metadata?.market?.id || refreshed?.market?.symbol !== symbol) {
+        throw new Error(`Fresh exchange metadata does not match the active market ${symbol}`)
+      }
+      const refreshedAt = readMarketMetadataClock({ now })
+      refreshedMarketMetadata.set(symbol, refreshed)
+      refreshedAtBySymbol.set(symbol, refreshedAt)
+      return toResult({ data: refreshed })
+    } catch (error) {
+      return toResult({ error })
+    }
+  }
+}
+
 export function createMarketMetadataCache({
   getMarketMetadata,
   getSymbolFilters,
   validateMarketMetadata,
   now = Date.now,
+} = {}) {
+  for (const [name, callback] of Object.entries({
+    getMarketMetadata,
+    getSymbolFilters,
+    validateMarketMetadata,
+    now,
+  })) {
+    if (typeof callback !== "function") {
+      throw new TypeError(`${name} must be a function`)
+    }
+  }
+  const refreshedMarketMetadata = new Map()
+  const refreshedAtBySymbol = new Map()
+  const getCurrentMarketMetadata = ({ symbol } = {}) =>
+    refreshedMarketMetadata.get(symbol) ?? getMarketMetadata({ symbol })
+  const refreshMarketMetadata = createRefreshMarketMetadata({
+    refreshedMarketMetadata,
+    refreshedAtBySymbol,
+    getSymbolFilters,
+    validateMarketMetadata,
+    now,
+  })
+  return {
+    refreshedMarketMetadata,
+    getCurrentMarketMetadata,
+    refreshMarketMetadata,
+  }
 } = {}) {
   for (const [name, callback] of Object.entries({
     getMarketMetadata,

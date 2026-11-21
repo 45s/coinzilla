@@ -189,3 +189,37 @@ test("fails before exchange access when the injected clock is invalid", async ()
   assert.match(result.errors[0].message, /clock must return/)
   assert.equal(refreshCount, 0)
 })
+
+
+test("refreshes instead of reusing a cache entry when the clock moves backwards", async () => {
+  let currentTime = 1000
+  let refreshCount = 0
+  const cache = makeCache({
+    now: () => currentTime,
+    getSymbolFilters: async ({ symbol }) => ({
+      ok: true,
+      data: makeMetadata({
+        symbol,
+        version: ++refreshCount,
+      }),
+    }),
+  })
+  const symbol = "DOGEUSDT"
+  const metadata = cache.getCurrentMarketMetadata({ symbol })
+  await cache.refreshMarketMetadata({
+    symbol,
+    pairConfig: {},
+    metadata,
+  })
+  currentTime = 999
+
+  const refreshed = await cache.refreshMarketMetadata({
+    symbol,
+    pairConfig: {},
+    metadata,
+  })
+
+  assert.equal(refreshed.ok, true)
+  assert.equal(refreshed.data.version, 2)
+  assert.equal(refreshCount, 2)
+})
