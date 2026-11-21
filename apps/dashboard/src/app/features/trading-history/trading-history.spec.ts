@@ -271,7 +271,7 @@ describe('TradingHistoryComponent', () => {
     fixture.detectChanges();
 
     const headers = Array.from(fixture.nativeElement.querySelectorAll('thead th'))
-      .map((header: HTMLElement) => header.textContent);
+      .map((header) => header.textContent);
     expect(headers).toContain('Limit price');
     expect(headers).not.toContain('Execution price');
 
