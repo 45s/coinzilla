@@ -33,6 +33,250 @@ function makeOrder({
   }
 }
 
+function assertValidOwnershipCollection({ orders } = {}) {
+  const valid = validateOrderOwnerships({
+    orders,
+    ownerships: [
+      makeOwnership(),
+      makeOwnership({
+        positionId: "position-2",
+        clientOrderId: "client-2",
+      }),
+    ],
+  })
+  assert.equal(
+    valid.length,
+    2,
+    "Each registered canonical order must receive one ownership record.",
+  )
+  assert.equal(
+    Object.isFrozen(valid),
+    true,
+    "Validated ownership collection must be immutable.",
+  )
+}
+
+function assertOwnershipWithoutBrokerIdentity() {
+  const ownerships = validateOrderOwnerships({
+    orders: [
+      {
+        clientOrderId: "client-no-broker",
+        market: {
+          id: "DOGEUSDT",
+        },
+      },
+    ],
+    ownerships: [
+      makeOwnership({
+        clientOrderId: "client-no-broker",
+      }),
+    ],
+  })
+  assert.equal(
+    ownerships.length,
+    1,
+    "Canonical orders without broker identity must retain valid ownership.",
+  )
+}
+
+function assertInvalidOwnershipReferences({ orders } = {}) {
+  assert.throws(
+    () => validateOrderOwnerships({
+      orders,
+      ownerships: "invalid",
+    }),
+    /must be an array/,
+    "Non-array ownership data must be rejected.",
+  )
+  assert.throws(
+    () => validateOrderOwnerships({
+      orders,
+      ownerships: [
+        makeOwnership({
+          clientOrderId: "unknown",
+        }),
+      ],
+    }),
+    /registered canonical order/,
+    "Ownership must reference a registered order.",
+  )
+}
+
+function assertDuplicateClientOwnershipRejected({ orders } = {}) {
+  assert.throws(
+    () => validateOrderOwnerships({
+      orders,
+      ownerships: [
+        makeOwnership(),
+        makeOwnership(),
+      ],
+    }),
+    /duplicate ownership clientOrderIds/,
+    "Duplicate client identity must be rejected.",
+  )
+}
+
+function assertDuplicateBrokerOwnershipRejected() {
+  const orders = [
+    makeOrder(),
+    makeOrder({
+      clientOrderId: "client-2",
+      brokerOrderId: "broker-1",
+    }),
+  ]
+  assert.throws(
+    () => validateOrderOwnerships({
+      orders,
+      ownerships: [
+        makeOwnership(),
+        makeOwnership({
+          clientOrderId: "client-2",
+        }),
+      ],
+    }),
+    /duplicate ownership brokerOrderIds/,
+    "Duplicate market-scoped broker identity must be rejected.",
+  )
+}
+
+function assertOwnershipLookupsSucceed({ ownership, ownerships } = {}) {
+  assert.equal(
+    findOrderOwnership({
+      ownerships,
+      clientOrderId: "client-1",
+    }),
+    ownership,
+    "Client identity must resolve ownership.",
+  )
+  assert.equal(
+    findOrderOwnership({
+      ownerships,
+      brokerOrderId: "broker-1",
+    }),
+    ownership,
+    "Broker identity must resolve ownership.",
+  )
+  assert.equal(
+    findOrderOwnership({
+      ownerships,
+      clientOrderId: "client-1",
+      brokerOrderId: "broker-1",
+    }),
+    ownership,
+    "Matching identities must resolve the same record.",
+  )
+  assert.equal(
+    findOrderOwnership({
+      ownerships,
+      clientOrderId: "missing",
+    }),
+    undefined,
+    "Unknown client identity must return no ownership.",
+  )
+}
+
+function assertInvalidOwnershipLookupsFailClosed({ ownerships } = {}) {
+  assert.throws(
+    () => findOrderOwnership({
+      ownerships,
+    }),
+    /requires clientOrderId or brokerOrderId/,
+    "Lookup without identity must be rejected.",
+  )
+  assert.throws(
+    () => findOrderOwnership({
+      ownerships,
+      clientOrderId: " ",
+      brokerOrderId: "broker-1",
+    }),
+    /clientOrderId must be a non-empty string/,
+    "Blank client identity must be rejected.",
+  )
+  assert.throws(
+    () => findOrderOwnership({
+      ownerships,
+      clientOrderId: "client-1",
+      brokerOrderId: " ",
+    }),
+    /brokerOrderId must be a non-empty string/,
+    "Blank broker identity must be rejected.",
+  )
+  assert.throws(
+    () => findOrderOwnership({
+      ownerships,
+      clientOrderId: "client-1",
+      brokerOrderId: "different",
+    }),
+    /identify different registered orders/,
+    "Conflicting identities must not be combined.",
+  )
+}
+
+function assertOwnershipComparisons({ current, same, changed } = {}) {
+  assert.equal(
+    hasSameOrderOwnership({
+      current,
+      next: same,
+    }),
+    true,
+    "Equivalent ownership records must compare equal.",
+  )
+  assert.equal(
+    hasSameOrderOwnership({
+      current,
+      next: changed,
+    }),
+    false,
+    "Different position ownership must compare unequal.",
+  )
+}
+
+function assertBrokerIdentityAttachment({ current } = {}) {
+  const other = createOrderOwnership({
+    ownership: makeOwnership({
+      positionId: "position-2",
+      clientOrderId: "client-2",
+    }),
+    clientOrderId: "client-2",
+  })
+  const ownerships = [current, other]
+  const attached = attachBrokerOrderIdToOwnership({
+    ownerships,
+    clientOrderId: "client-1",
+    brokerOrderId: "broker-1",
+  })
+  assert.equal(
+    attached[0].brokerOrderId,
+    "broker-1",
+    "Matching client identity must receive broker identity.",
+  )
+  assert.equal(
+    attached[1],
+    other,
+    "Unmatched ownership must preserve its record reference.",
+  )
+  assert.equal(
+    Object.isFrozen(attached),
+    true,
+    "Updated ownership collection must be immutable.",
+  )
+  assert.equal(
+    Object.isFrozen(attached[0]),
+    true,
+    "Updated ownership record must be immutable.",
+  )
+  const unchanged = attachBrokerOrderIdToOwnership({
+    ownerships,
+    clientOrderId: "missing",
+    brokerOrderId: "broker-2",
+  })
+  assert.equal(
+    unchanged[0],
+    current,
+    "Unmatched client identity must leave existing records unchanged.",
+  )
+}
+
 test("normalizes and freezes valid ownership while preserving optional broker identity", () => {
   const ownership = createOrderOwnership({
     ownership: makeOwnership({
@@ -150,97 +394,17 @@ test("validates ownership references and rejects duplicate canonical identities"
       brokerOrderId: "broker-2",
     }),
   ]
-  const valid = validateOrderOwnerships({
+  assertValidOwnershipCollection({
     orders,
-    ownerships: [
-      makeOwnership(),
-      makeOwnership({
-        positionId: "position-2",
-        clientOrderId: "client-2",
-      }),
-    ],
   })
-  assert.equal(
-    valid.length,
-    2,
-    "Each registered canonical order must receive one ownership record.",
-  )
-  assert.equal(
-    Object.isFrozen(valid),
-    true,
-    "Validated ownership collection must be immutable.",
-  )
-  const ownershipWithoutBrokerIdentity = validateOrderOwnerships({
-    orders: [
-      {
-        clientOrderId: "client-no-broker",
-        market: {
-          id: "DOGEUSDT",
-        },
-      },
-    ],
-    ownerships: [
-      makeOwnership({
-        clientOrderId: "client-no-broker",
-      }),
-    ],
+  assertOwnershipWithoutBrokerIdentity()
+  assertInvalidOwnershipReferences({
+    orders,
   })
-  assert.equal(
-    ownershipWithoutBrokerIdentity.length,
-    1,
-    "Canonical orders without broker identity must retain valid ownership.",
-  )
-  assert.throws(
-    () => validateOrderOwnerships({
-      orders,
-      ownerships: "invalid",
-    }),
-    /must be an array/,
-    "Non-array ownership data must be rejected.",
-  )
-  assert.throws(
-    () => validateOrderOwnerships({
-      orders,
-      ownerships: [
-        makeOwnership({
-          clientOrderId: "unknown",
-        }),
-      ],
-    }),
-    /registered canonical order/,
-    "Ownership must reference a registered order.",
-  )
-  assert.throws(
-    () => validateOrderOwnerships({
-      orders,
-      ownerships: [
-        makeOwnership(),
-        makeOwnership(),
-      ],
-    }),
-    /duplicate ownership clientOrderIds/,
-    "Duplicate client identity must be rejected.",
-  )
-  const duplicateBrokerOrders = [
-    makeOrder(),
-    makeOrder({
-      clientOrderId: "client-2",
-      brokerOrderId: "broker-1",
-    }),
-  ]
-  assert.throws(
-    () => validateOrderOwnerships({
-      orders: duplicateBrokerOrders,
-      ownerships: [
-        makeOwnership(),
-        makeOwnership({
-          clientOrderId: "client-2",
-        }),
-      ],
-    }),
-    /duplicate ownership brokerOrderIds/,
-    "Duplicate market-scoped broker identity must be rejected.",
-  )
+  assertDuplicateClientOwnershipRejected({
+    orders,
+  })
+  assertDuplicateBrokerOwnershipRejected()
 })
 
 test("finds ownership by client identity, broker identity, or matching pair", () => {
@@ -250,73 +414,13 @@ test("finds ownership by client identity, broker identity, or matching pair", ()
     brokerOrderId: "broker-1",
   })
   const ownerships = [ownership]
-  assert.equal(
-    findOrderOwnership({
-      ownerships,
-      clientOrderId: "client-1",
-    }),
+  assertOwnershipLookupsSucceed({
     ownership,
-    "Client identity must resolve ownership.",
-  )
-  assert.equal(
-    findOrderOwnership({
-      ownerships,
-      brokerOrderId: "broker-1",
-    }),
-    ownership,
-    "Broker identity must resolve ownership.",
-  )
-  assert.equal(
-    findOrderOwnership({
-      ownerships,
-      clientOrderId: "client-1",
-      brokerOrderId: "broker-1",
-    }),
-    ownership,
-    "Matching identities must resolve the same record.",
-  )
-  assert.equal(
-    findOrderOwnership({
-      ownerships,
-      clientOrderId: "missing",
-    }),
-    undefined,
-    "Unknown client identity must return no ownership.",
-  )
-  assert.throws(
-    () => findOrderOwnership({
-      ownerships,
-    }),
-    /requires clientOrderId or brokerOrderId/,
-    "Lookup without identity must be rejected.",
-  )
-  assert.throws(
-    () => findOrderOwnership({
-      ownerships,
-      clientOrderId: " ",
-      brokerOrderId: "broker-1",
-    }),
-    /clientOrderId must be a non-empty string/,
-    "Blank client identity must be rejected.",
-  )
-  assert.throws(
-    () => findOrderOwnership({
-      ownerships,
-      clientOrderId: "client-1",
-      brokerOrderId: " ",
-    }),
-    /brokerOrderId must be a non-empty string/,
-    "Blank broker identity must be rejected.",
-  )
-  assert.throws(
-    () => findOrderOwnership({
-      ownerships,
-      clientOrderId: "client-1",
-      brokerOrderId: "different",
-    }),
-    /identify different registered orders/,
-    "Conflicting identities must not be combined.",
-  )
+    ownerships,
+  })
+  assertInvalidOwnershipLookupsFailClosed({
+    ownerships,
+  })
 })
 
 test("compares ownership and attaches broker identity immutably", () => {
@@ -334,63 +438,12 @@ test("compares ownership and attaches broker identity immutably", () => {
     }),
     clientOrderId: "client-1",
   })
-  assert.equal(
-    hasSameOrderOwnership({
-      current,
-      next: same,
-    }),
-    true,
-    "Equivalent ownership records must compare equal.",
-  )
-  assert.equal(
-    hasSameOrderOwnership({
-      current,
-      next: changed,
-    }),
-    false,
-    "Different position ownership must compare unequal.",
-  )
-  const other = createOrderOwnership({
-    ownership: makeOwnership({
-      positionId: "position-2",
-      clientOrderId: "client-2",
-    }),
-    clientOrderId: "client-2",
-  })
-  const ownerships = [current, other]
-  const attached = attachBrokerOrderIdToOwnership({
-    ownerships,
-    clientOrderId: "client-1",
-    brokerOrderId: "broker-1",
-  })
-  assert.equal(
-    attached[0].brokerOrderId,
-    "broker-1",
-    "Matching client identity must receive broker identity.",
-  )
-  assert.equal(
-    attached[1],
-    other,
-    "Unmatched ownership must preserve its record reference.",
-  )
-  assert.equal(
-    Object.isFrozen(attached),
-    true,
-    "Updated ownership collection must be immutable.",
-  )
-  assert.equal(
-    Object.isFrozen(attached[0]),
-    true,
-    "Updated ownership record must be immutable.",
-  )
-  const unchanged = attachBrokerOrderIdToOwnership({
-    ownerships,
-    clientOrderId: "missing",
-    brokerOrderId: "broker-2",
-  })
-  assert.equal(
-    unchanged[0],
+  assertOwnershipComparisons({
     current,
-    "Unmatched client identity must leave existing records unchanged.",
-  )
+    same,
+    changed,
+  })
+  assertBrokerIdentityAttachment({
+    current,
+  })
 })
