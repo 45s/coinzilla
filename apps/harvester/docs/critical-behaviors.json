@@ -339,7 +339,7 @@
         },
         {
           "path": "src/index.test.js",
-          "name": "retains Journal, EventBus, process lock when strategy shutdown safety is unresolved",
+          "name": "retains Journal, EventBus, process lock and logger when strategy shutdown safety is unresolved",
           "kind": "integration"
         }
       ],
