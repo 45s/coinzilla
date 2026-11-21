@@ -1,10 +1,10 @@
 import { open, mkdir } from "node:fs/promises"
 import { dirname } from "node:path"
 import {
-  assertSuccessfulBitunixBrokerResult,
-  BITUNIX_OPERATOR_ORDER_INTENT,
-  createBitunixOperatorOrderPreflight,
-} from "../helpers/operator-order-preflight.js"
+  assertSuccessfulBrokerResult,
+  HYPEUSDT_ORDER_INTENT,
+  createHypeUsdtOrderPreflight,
+} from "../helpers/create-hypeusdt-order-preflight.js"
 import {
   assertInteractiveTerminal,
   assertMutationBroker,
@@ -33,19 +33,19 @@ export async function createOneShotMarker({
     throw new TypeError("Bitunix operator marker path must be a non-empty string")
   }
   const orderMatchesFixedIntent = preflight?.order &&
-    preflight.order.symbol === BITUNIX_OPERATOR_ORDER_INTENT.symbol &&
-    preflight.order.side === BITUNIX_OPERATOR_ORDER_INTENT.side &&
-    preflight.order.type === BITUNIX_OPERATOR_ORDER_INTENT.type &&
-    preflight.order.price === BITUNIX_OPERATOR_ORDER_INTENT.price &&
-    preflight.order.quantity === BITUNIX_OPERATOR_ORDER_INTENT.quantity &&
-    preflight.order.notional === BITUNIX_OPERATOR_ORDER_INTENT.notional
+    preflight.order.symbol === HYPEUSDT_ORDER_INTENT.symbol &&
+    preflight.order.side === HYPEUSDT_ORDER_INTENT.side &&
+    preflight.order.type === HYPEUSDT_ORDER_INTENT.type &&
+    preflight.order.price === HYPEUSDT_ORDER_INTENT.price &&
+    preflight.order.quantity === HYPEUSDT_ORDER_INTENT.quantity &&
+    preflight.order.notional === HYPEUSDT_ORDER_INTENT.notional
   if (!orderMatchesFixedIntent) {
     throw new TypeError("Bitunix operator marker requires the exact fixed HYPEUSDT order intent")
   }
   const marker = {
     createdAt: new Date(now()).toISOString(),
     status: "DISPATCH_STARTED",
-    order: BITUNIX_OPERATOR_ORDER_INTENT,
+    order: HYPEUSDT_ORDER_INTENT,
   }
   await mkdir(dirname(markerPath), {
     recursive: true,
@@ -64,26 +64,26 @@ async function readHypeUsdtOperatorPreflight({ readBroker }) {
   await readBroker.connect()
   try {
     const marketResult = await readBroker.getExchangeMarkets()
-    assertSuccessfulBitunixBrokerResult({
+    assertSuccessfulBrokerResult({
       result: marketResult,
       operation: "market catalog",
     })
     const filtersResult = await readBroker.getSymbolFilters({
-      symbol: BITUNIX_OPERATOR_ORDER_INTENT.symbol,
+      symbol: HYPEUSDT_ORDER_INTENT.symbol,
     })
-    assertSuccessfulBitunixBrokerResult({
+    assertSuccessfulBrokerResult({
       result: filtersResult,
       operation: "symbol metadata",
     })
     const balancesResult = await readBroker.getBalances()
-    assertSuccessfulBitunixBrokerResult({
+    assertSuccessfulBrokerResult({
       result: balancesResult,
       operation: "account balances",
     })
     const openOrdersResult = await readBroker.getOpenOrders({
-      symbol: BITUNIX_OPERATOR_ORDER_INTENT.symbol,
+      symbol: HYPEUSDT_ORDER_INTENT.symbol,
     })
-    return createBitunixOperatorOrderPreflight({
+    return createHypeUsdtOrderPreflight({
       marketResult,
       filtersResult,
       balancesResult,
@@ -105,7 +105,7 @@ async function readHypeUsdtOperatorPreflight({ readBroker }) {
  * @param {(message: string) => void} input.writeLine Local terminal output callback.
  * @returns {Promise<object>} The original Broker placement result or NOT_SENT decline result.
  */
-export async function runBitunixOperatorOrderAttempt({
+export async function runGuardedHypeUsdtOrderAttempt({
   readBroker,
   createOrderBroker,
   confirm,

@@ -2,16 +2,16 @@ import { createInterface } from "node:readline"
 import { resolve } from "node:path"
 import { Broker } from "../../../src/index.js"
 import {
-  assertBitunixOperatorInteractiveTerminal,
+  assertInteractiveTerminal,
   createOneShotMarker,
-  runBitunixOperatorOrderAttempt,
-} from "./order-attempt.js"
+  runGuardedHypeUsdtOrderAttempt,
+} from "./place-order.js"
 import {
   parseApiCredentials,
   redactApiSecrets,
 } from "../helpers/api-credentials.js"
 
-function createBitunixBroker({ credentials, allowLiveOrderMutations }) {
+function createBroker({ credentials, allowLiveOrderMutations }) {
   return new Broker({
     provider: "bitunix",
     apiKey: credentials.apiKey,
@@ -21,7 +21,7 @@ function createBitunixBroker({ credentials, allowLiveOrderMutations }) {
   })
 }
 
-export function askForBitunixOrderConfirmation({ order, stdin, stdout }) {
+export function askForOrderConfirmation({ order, stdin, stdout }) {
   const readline = createInterface({
     input: stdin,
     output: stdout,
@@ -50,13 +50,13 @@ export function askForBitunixOrderConfirmation({ order, stdin, stdout }) {
  * @param {{env: NodeJS.ProcessEnv, brokersRoot: string, stdin?: NodeJS.ReadStream, stdout?: NodeJS.WriteStream}} input
  * @returns {Promise<object>} Broker result or explicit NOT_SENT decline result.
  */
-export async function runBitunixOperatorOrderCommand({
+export async function runOperatorOrderCommand({
   env,
   brokersRoot,
   stdin = process.stdin,
   stdout = process.stdout,
 } = {}) {
-  assertBitunixOperatorInteractiveTerminal({
+  assertInteractiveTerminal({
     stdin,
     stdout,
   })
@@ -64,17 +64,17 @@ export async function runBitunixOperatorOrderCommand({
   stdout.write(
     "WARNING: this command can submit one real Bitunix Spot LIVE order. Review every preflight value before pressing ENTER.\n",
   )
-  const readBroker = createBitunixBroker({
+  const readBroker = createBroker({
     credentials,
     allowLiveOrderMutations: false,
   })
-  return runBitunixOperatorOrderAttempt({
+  return runGuardedHypeUsdtOrderAttempt({
     readBroker,
-    createOrderBroker: () => createBitunixBroker({
+    createOrderBroker: () => createBroker({
       credentials,
       allowLiveOrderMutations: true,
     }),
-    confirm: ({ order }) => askForBitunixOrderConfirmation({
+    confirm: ({ order }) => askForOrderConfirmation({
       order,
       stdin,
       stdout,
@@ -95,7 +95,7 @@ export async function runBitunixOperatorOrderCommand({
  *
  * @param {{error: unknown, env: NodeJS.ProcessEnv, stderr?: NodeJS.WriteStream}} input
  */
-export function reportBitunixOperatorFailure({
+export function reportOperatorFailure({
   error,
   env,
   stderr = process.stderr,

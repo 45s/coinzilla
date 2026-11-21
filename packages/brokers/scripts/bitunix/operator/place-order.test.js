@@ -5,12 +5,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
-import { createBitunixOperatorOrderPreflight } from "../helpers/operator-order-preflight.js"
+import { createHypeUsdtOrderPreflight } from "../helpers/create-hypeusdt-order-preflight.js"
 import {
-  assertBitunixOperatorInteractiveTerminal,
+  assertInteractiveTerminal,
   createOneShotMarker,
-  runBitunixOperatorOrderAttempt,
-} from "./order-attempt.js"
+  runGuardedHypeUsdtOrderAttempt,
+} from "./place-order.js"
 
 function createValidBitunixOperatorPreflightInput({ overrides = {} } = {}) {
   const market = {
@@ -139,7 +139,7 @@ function createBitunixOperatorAttemptDependencies({
     orderResult,
     orderDisconnectError,
   })
-  const run = () => runBitunixOperatorOrderAttempt({
+  const run = () => runGuardedHypeUsdtOrderAttempt({
     readBroker,
     createOrderBroker() {
       events.push("order.construct")
@@ -173,7 +173,7 @@ function createBitunixOperatorAttemptDependencies({
 
 test("Bitunix operator CLI requires an interactive input and output terminal", () => {
   assert.throws(
-    () => assertBitunixOperatorInteractiveTerminal({
+    () => assertInteractiveTerminal({
       stdin: {
         isTTY: false,
       },
@@ -183,7 +183,7 @@ test("Bitunix operator CLI requires an interactive input and output terminal", (
     }),
     /interactive terminal/i,
   )
-  assert.doesNotThrow(() => assertBitunixOperatorInteractiveTerminal({
+  assert.doesNotThrow(() => assertInteractiveTerminal({
     stdin: {
       isTTY: true,
     },
@@ -213,7 +213,7 @@ test("Bitunix operator CLI refuses non-interactive execution before credentials 
 test("Bitunix operator marker is exclusive, private, and contains no account balances", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-operator-order-"))
   const markerPath = join(directory, "attempt.json")
-  const preflight = createBitunixOperatorOrderPreflight(createValidBitunixOperatorPreflightInput())
+  const preflight = createHypeUsdtOrderPreflight(createValidBitunixOperatorPreflightInput())
 
   try {
     await assert.rejects(
@@ -325,7 +325,7 @@ test("Bitunix operator attempt validates the mutation Broker before creating its
   })
 
   await assert.rejects(
-    runBitunixOperatorOrderAttempt({
+    runGuardedHypeUsdtOrderAttempt({
       readBroker,
       createOrderBroker: () => ({
         async connect() {},

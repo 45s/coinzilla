@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { PassThrough } from "node:stream"
 import test from "node:test"
-import { askForBitunixOrderConfirmation } from "./order-command.js"
+import { askForOrderConfirmation } from "./run-order-command.js"
 
 const order = {
   symbol: "HYPEUSDT",
@@ -17,7 +17,7 @@ test("operator approves the exact displayed order with Enter and no typed phrase
   const stdout = new PassThrough()
   const output = []
   stdout.on("data", (chunk) => output.push(chunk.toString()))
-  const confirmation = askForBitunixOrderConfirmation({
+  const confirmation = askForOrderConfirmation({
     order,
     stdin,
     stdout,
@@ -32,7 +32,7 @@ test("operator approves the exact displayed order with Enter and no typed phrase
 test("any typed response or EOF declines the order", async () => {
   const typedInput = new PassThrough()
   const typedOutput = new PassThrough()
-  const typedConfirmation = askForBitunixOrderConfirmation({
+  const typedConfirmation = askForOrderConfirmation({
     order,
     stdin: typedInput,
     stdout: typedOutput,
@@ -42,7 +42,7 @@ test("any typed response or EOF declines the order", async () => {
 
   const closedInput = new PassThrough()
   const closedOutput = new PassThrough()
-  const closedConfirmation = askForBitunixOrderConfirmation({
+  const closedConfirmation = askForOrderConfirmation({
     order,
     stdin: closedInput,
     stdout: closedOutput,
