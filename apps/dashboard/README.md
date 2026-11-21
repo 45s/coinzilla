@@ -4,7 +4,7 @@ Angular + TypeScript client for the Coinzilla operational dashboard.
 
 ## Current state
 
-The Overview screen remains an explicitly labeled fictional preview. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the unauthenticated loopback-only `/api/v1` HTTP contract. They never use demo fixtures as a fallback. The selected TESTNET/LIVE environment is taken from API metadata.
+The Overview screen remains an explicitly labeled fictional preview. Orders, Fills, and Commissions are separate read-only pages that request actual persisted Harvester records through the unauthenticated loopback-only `/api/v1` HTTP contract. The Market Screener displays Bitunix Futures public REST market data through Harvester; Bitunix Spot and Binance markets are visible future source options but are not enabled. The native rolling 24h percentage is displayed from Bitunix's public WebSocket ticker field; missing 5m, 1h, and 4h fields stay N/A. The Dashboard performs no movement calculations. Favourites are stored in source-specific one-year browser cookies. The screener fetches on page load and explicit refresh only; it does not poll in the background.
 
 ## Requirements
 
@@ -33,7 +33,7 @@ pnpm --filter @coinzilla/dashboard test:coverage
 
 ## Architecture boundary
 
-The dashboard is a separate client application. Trading-history data access uses a typed local Harvester API client. Browser code must not open Harvester database files, import Harvester internals, or call exchange APIs. Financial decimal values remain strings and missing values remain null. Order entry remains out of scope. The local Operator workspace routes commands through Harvester's existing application facade and safety gates; its runtime/API integration is tracked in [PR #1654](https://github.com/45s/coinzilla/pull/1654).
+The dashboard is a separate client application. Trading-history data access uses a typed local Harvester API client. Browser code must not open Harvester database files, import Harvester internals, or call exchange APIs. Financial decimal values remain strings and missing values remain null. Order entry remains out of scope. The local Operator workspace routes commands through Harvester's existing application facade and safety gates; its runtime/API integration is complete in [merged PR #1654](https://github.com/45s/coinzilla/pull/1654). The Market Screener also calls Harvester only; browser code never calls exchange endpoints.
 
 ## Documentation
 

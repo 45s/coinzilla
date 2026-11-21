@@ -58,6 +58,9 @@
         } @else if (activePage() === 'operator') {
           <span class="demo-pill persisted-pill"><span></span> LIVE CONTROL</span>
           <span class="environment-pill">HARVESTER</span>
+        } @else if (activePage() === 'markets') {
+          <span class="demo-pill persisted-pill"><span></span> PUBLIC DATA</span>
+          <span class="environment-pill">BITUNIX FUTURES</span>
         } @else {
           <span class="demo-pill persisted-pill"><span></span> READ ONLY</span>
           <span class="environment-pill">HARVESTER</span>
@@ -71,6 +74,8 @@
         <app-overview />
       } @else if (activePage() === 'operator') {
         <app-operator />
+      } @else if (activePage() === 'markets') {
+        <app-market-screener />
       } @else {
         <app-trading-history [resource]="historyResource()" />
       }
@@ -80,6 +85,8 @@
           <span>Overview values are fictional demo data</span>
         } @else if (activePage() === 'operator') {
           <span>Local operator controls · Commands require confirmation</span>
+        } @else if (activePage() === 'markets') {
+          <span>Public Bitunix Futures market data · No order functionality</span>
         } @else {
           <span>Read-only persisted Harvester records</span>
         }

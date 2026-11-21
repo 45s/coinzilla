@@ -181,3 +181,29 @@ The same local listener exposes the application-level operator facade under `/ap
 - `POST /commands` accepts `{ "command": "pause", "symbol": "BTCUSDT", "requestId": "..." }` or the global commands `pauseallbuys` / `resumeallbuys`. `unpause` maps to the existing market resume use case.
 
 Commands delegate to the existing operator application facade and never call the exchange from the Dashboard. The Dashboard presents an explicit confirmation step before sending a mutation. These endpoints are available only through the loopback listener; do not expose this unauthenticated development API outside the local machine.
+
+## Public Bitunix Futures market data
+
+The same loopback-only Harvester HTTP listener exposes a read-only public market-data snapshot for the Dashboard Market Screener:
+
+| Method | Resource | Purpose |
+| --- | --- | --- |
+| GET | `/api/v1/markets/bitunix/futures` | Bitunix Futures contract metadata joined with public ticker fields |
+
+Harvester requests Bitunix's public HTTPS REST endpoints:
+
+- `GET https://fapi.bitunix.com/api/v1/futures/market/trading_pairs`
+- `GET https://fapi.bitunix.com/api/v1/futures/market/tickers`
+
+These requests require no API key and use no authenticated/private endpoints. The adapter applies a bounded request timeout and returns a safe `502 HARVESTER_MARKET_DATA_UPSTREAM_UNAVAILABLE` response when Bitunix is unavailable or returns a malformed response.
+
+The response contains `data.provider`, `data.marketType`, `data.observedAt`, and `data.markets[]`. Each market exposes the exchange's symbol, base/quote assets, contract status, API-trading support, maximum leverage, last/mark/open/high/low prices, and base/quote volumes where returned. Numeric exchange values remain strings.
+
+Movement fields are pass-through only:
+
+- `change24h` is passed through from Bitunix's public Futures WebSocket `tickers` channel field `r`, which is the exchange's rolling 24-hour fluctuation. The value is not rounded or recalculated.
+- `change5m`, `change1h`, and `change4h` are populated only if those exact native fields are present in the ticker response. The documented public REST ticker and WebSocket ticker channels do not provide those windows, so they are currently returned as `null` and shown as `N/A`.
+- Harvester subscribes to the public `tickers` channel over `wss://fapi.bitunix.com/public/`, in batches respecting Bitunix's 300-channel-per-connection limit. Each connection is a bounded one-shot snapshot and is closed after the initial ticker data or timeout; a stream failure does not hide the REST market snapshot.
+- No candle history is fetched, and no percentages are calculated or inferred from open/last prices.
+
+The Dashboard's Market Screener uses this Harvester endpoint; it never calls Bitunix from the browser. Favourites are stored in separate source-specific browser cookies and are not persisted by Harvester. This public market-data capability is independent of Bitunix execution-provider admission tracked by [#1185](https://github.com/45s/coinzilla/issues/1185); it does not register a broker, enable order placement, or change trading behavior.
