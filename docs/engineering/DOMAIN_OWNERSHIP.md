@@ -93,7 +93,7 @@ A package may use a simpler structure when it has no meaningful application/infr
 
 ## Static enforcement and review checklist
 
-The manifest-backed workspace allowlist is deterministic, but the current repository does not have a repository-wide test that compares every manifest edge with this table. Brokers has a regex-based checker for literal relative imports in selected layers; Notifiers has package-local boundary tests. Those checks are useful locally but are not a complete AST/source-import graph and do not prove all packages obey the internal matrix. S-1 adds no broad scanner because a regex-only repository-wide checker would provide misleading assurance.
+The blocking workspace package policy checks every workspace manifest against this allowlist and validates statically extractable production imports of `@coinzilla/*` packages. Consumers may import a package root or a subpath declared by that package's `exports` map; exact and single-wildcard export keys are supported, while null export targets remain private. Unknown workspace package names and unexported subpaths fail the existing required JavaScript Syntax workflow. This check reuses the repository's ESLint AST import extractor and production-module discovery. It covers literal ESM imports/re-exports, literal dynamic imports, and literal CommonJS `require` specifiers in production `.js` files under `apps/`, `packages/`, and `scripts/`. It does not resolve computed/non-literal imports or enforce internal layer direction. The separate relative-import graph/cycle report remains report-only. Brokers and Notifiers retain their package-specific internal boundary tests; these are not a universal layer policy.
 
 For every dependency or module-boundary change, review:
 
