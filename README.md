@@ -85,7 +85,7 @@ The command must start from a clean `develop` checkout. It creates and pushes a 
 
 ## Workspace layout
 
-- `apps/*` — application workspaces
+- `apps/*` — application workspaces, including the Harvester trading runtime and Angular Dashboard client
 - `packages/*` — shared packages
 - `packages/utils` — shared utility functions and Node.js tests
 - `packages/indicators` — reusable technical indicators over normalized market candles

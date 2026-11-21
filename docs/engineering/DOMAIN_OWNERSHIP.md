@@ -5,6 +5,7 @@ Coinzilla is a monorepo with independently maintained application and package do
 | Domain | Owned path | Responsibility |
 | --- | --- | --- |
 | Harvester | `apps/harvester/` | Portfolio/position workflows, strategies, use cases and application composition |
+| Dashboard | `apps/dashboard/` | Angular web client, presentation state, typed API clients and dashboard documentation; no trading or persistence authority |
 | Entities | `packages/entities/` | Exchange-neutral domain entities, identity, exact value contracts, lifecycle/value semantics |
 | Brokers | `packages/brokers/` | Broker contracts/adapters, exchange API integration, normalization, market/account/order I/O |
 | Indicators | `packages/indicators/` | Exchange-neutral technical-indicator calculations over normalized caller-supplied market data |
@@ -25,6 +26,7 @@ This map records the actual top-level source layout at the S-1 audit baseline. I
 | Domain | Current source layout | Representative production entry/file |
 | --- | --- | --- |
 | Harvester | `apps/harvester/src` | `src/use-cases/execute-strategy-decision.js`; `src/domain/strategies/recovery-seller/evaluate-buy-decision.js` |
+| Dashboard | `apps/dashboard/src` | `src/app/app.ts`; `src/app/features/overview/overview.ts` |
 | Brokers | `packages/brokers/src` plus public facade | `src/application/user-data-session.js`; `src/infrastructure/binance/spot/user-data-client-adapter.js`; `src/index.js` |
 | DB | `packages/db/src` plus provider entrypoints | `src/application/ports/database-provider.js`; `src/infrastructure/` adapters |
 | Entities | Feature folders under `packages/entities/src` (`assets`, `balances`, `canonical-orders`, `fills`, `markets`, `money`, `orders`, `quantity`, `trading-rules`, `values`) | `src/canonical-orders/`, `src/money/`, `src/index.js` |
@@ -43,6 +45,7 @@ The workspace dependency graph is intentionally one-way: the Harvester applicati
 | Consumer | Allowed direct workspace dependencies |
 | --- | --- |
 | `@coinzilla/harvester` | `@coinzilla/brokers`, `@coinzilla/db`, `@coinzilla/entities`, `@coinzilla/event-bus`, `@coinzilla/indicators`, `@coinzilla/journal`, `@coinzilla/notifiers`, `@coinzilla/utils` |
+| `@coinzilla/dashboard` | None |
 | `@coinzilla/brokers` | `@coinzilla/entities`, `@coinzilla/utils` |
 | `@coinzilla/db` | `@coinzilla/utils` |
 | `@coinzilla/entities` | `@coinzilla/utils` |

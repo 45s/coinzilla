@@ -49,7 +49,8 @@ The AI-agent task brief and repository engineering audit are different historica
 
 Each active application/package owns its local README, agent instructions, roadmap and documentation index where applicable:
 
-- [Harvester](../apps/harvester/README.md) — application guide
+- [Harvester](../apps/harvester/README.md) — trading application guide
+- [Dashboard](../apps/dashboard/README.md) — Angular operational dashboard foundation
 - [Harvester documentation index](../apps/harvester/docs/README.md)
 - [Harvester Volatility Protection](../apps/harvester/docs/volatility-protection.md) — runtime protection implemented; historical threshold calibration remains open
 - [Harvester roadmap](../apps/harvester/ROADMAP.md)
