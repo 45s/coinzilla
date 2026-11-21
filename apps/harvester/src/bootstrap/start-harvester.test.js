@@ -6322,6 +6322,18 @@ test("does not expose or construct a partial Bitunix runtime from credentials", 
 })
 
 
+function assertMultiMarketRuntimeMetadata({ runtime } = {}) {
+  assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT"])
+  assert.equal(runtime.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol, "BTCUSDT")
+  assert.equal(runtime.getMarketMetadata({ symbol: "ETHUSDT" }).market.symbol, "ETHUSDT")
+}
+
+async function emitTwoMarketPrices({ broker, debugLogs } = {}) {
+  await broker.emitPrice("BTCUSDT", { symbol: "BTCUSDT", price: "65000.12", timestamp: Date.now() })
+  await broker.emitPrice("ETHUSDT", { symbol: "ETHUSDT", price: "3500.12", timestamp: Date.now() })
+  assertEachEnabledMarketWasEvaluated({ debugLogs })
+}
+
 function assertEachEnabledMarketWasEvaluated({ debugLogs } = {}) {
       const receivedMarketPrices = new Set(
         debugLogs
@@ -6375,46 +6387,9 @@ test("delivers market price events independently for every enabled market", asyn
   })
 
   try {
-    assert.deepEqual(
-      runtime.subscriptions,
-      ["BTCUSDT", "ETHUSDT"],
-      "The runtime must subscribe both enabled market streams before accepting their price events.",
-    )
-    assert.equal(
-      runtime.getMarketMetadata({ symbol: "BTCUSDT" }).market.symbol,
-      "BTCUSDT",
-      "The first enabled market must retain its own canonical market metadata.",
-    )
-    assert.equal(
-      runtime.getMarketMetadata({ symbol: "ETHUSDT" }).market.symbol,
-      "ETHUSDT",
-      "The second enabled market must retain its own canonical market metadata.",
-    )
-
-    await broker.emitPrice("BTCUSDT", {
-      symbol: "BTCUSDT",
-      price: "65000.12",
-      timestamp: Date.now(),
-    })
-    await broker.emitPrice("ETHUSDT", {
-      symbol: "ETHUSDT",
-      price: "3500.12",
-      timestamp: Date.now(),
-    })
-
+    assertMultiMarketRuntimeMetadata({ runtime })
     debugLogs.length = 0
-    await broker.emitPrice("BTCUSDT", {
-      symbol: "BTCUSDT",
-      price: "65000.12",
-      timestamp: Date.now(),
-    })
-    await broker.emitPrice("ETHUSDT", {
-      symbol: "ETHUSDT",
-      price: "3500.12",
-      timestamp: Date.now(),
-    })
-
-    assertEachEnabledMarketWasEvaluated({ debugLogs })
+    await emitTwoMarketPrices({ broker, debugLogs })
     assert.deepEqual(
       placeOrderCalls,
       [],
