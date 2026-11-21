@@ -4,7 +4,10 @@ import os from "node:os"
 import path from "node:path"
 import test from "node:test"
 import { DatabaseSync } from "node:sqlite"
-import { exportDatabase } from "./export-database.js"
+import {
+  exportDatabase,
+  runDatabaseExport,
+} from "./export-database.js"
 
 function createDatabase(directory) {
   const filename = path.join(directory, "harvester.db")
@@ -117,4 +120,14 @@ test("opens the source read-only and leaves database bytes unchanged", () => {
       force: true,
     })
   }
+})
+
+test("requires an explicit TESTNET or LIVE environment", () => {
+  assert.throws(
+    () => runDatabaseExport({
+      env: {},
+    }),
+    /TRADING_MODE must be explicitly set/i,
+    "The export command must not infer TESTNET or LIVE from NODE_ENV or another default.",
+  )
 })
