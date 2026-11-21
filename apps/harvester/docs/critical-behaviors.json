@@ -37,13 +37,17 @@
           "kind": "integration"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "invariants": [
+        "Persist submission intent before broker I/O; a transport-ambiguous submission becomes UNKNOWN and must be reconciled by canonical identity before retry."
+      ]
     },
     {
       "id": "ORDER_IDENTITY_TRANSITIONS",
       "title": "Broker/client order identity and canonical order-state transitions",
       "sourceModules": [
-        "src/domain/orders/order-registry.js"
+        "src/domain/orders/order-registry.js",
+        "src/domain/orders/order-ownership.js"
       ],
       "tests": [
         {
@@ -57,13 +61,20 @@
           "kind": "failure"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "invariants": [
+        "Resolve execution reports through canonical broker/client identity; reject conflicting identities.",
+        "Cumulative executed quantity and terminal order state never move backwards; stale reports cannot reduce canonical commitment."
+      ]
     },
     {
       "id": "BROKER_HISTORY_RECONCILIATION",
       "title": "REST order/fill reconciliation with stream overlap and incomplete-history gates",
       "sourceModules": [
-        "src/use-cases/conservative-trading-engine.js"
+        "src/use-cases/conservative-trading-engine.js",
+        "src/use-cases/collect-owned-order-snapshots.js",
+        "src/use-cases/reconcile-terminal-order-fills.js",
+        "src/use-cases/fetch-account-trade-history.js"
       ],
       "runtimeStatus": "active",
       "tests": [
@@ -77,13 +88,18 @@
           "name": "fails closed without applying partial REST fills when cumulative history is incomplete",
           "kind": "failure"
         }
+      ],
+      "invariants": [
+        "Reconcile exchange cumulative executed quantity against complete REST trade history before applying terminal state; incomplete pages or gaps fail closed.",
+        "Overlapping REST and user-data fills are idempotent by canonical market-scoped execution identity."
       ]
     },
     {
       "id": "FILL_IDENTITY_DEDUPLICATION",
       "title": "Canonical execution identity, duplicate delivery and conflicting replay",
       "sourceModules": [
-        "src/domain/portfolio/portfolio.js"
+        "src/domain/portfolio/portfolio.js",
+        "src/domain/fills/fill-fingerprint.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -103,7 +119,11 @@
           "kind": "integration"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "invariants": [
+        "Apply each canonical fill at most once per market and strategy owner; duplicate delivery is an immutable no-op.",
+        "Reject a reused fill identity with changed immutable execution facts without mutating accounting."
+      ]
     },
     {
       "id": "EXACT_FINANCIAL_ACCOUNTING",
@@ -111,7 +131,9 @@
       "sourceModules": [
         "src/domain/strategies/conservative/recovery-fill-accounting.js",
         "src/domain/strategies/conservative/recovery-ledger.js",
-        "src/domain/portfolio/portfolio.js"
+        "src/domain/portfolio/portfolio.js",
+        "src/domain/fills/validate-fill-commissions.js",
+        "src/domain/portfolio/position-accounting.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -131,14 +153,19 @@
           "kind": "integration"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "invariants": [
+        "Use exact decimal arithmetic and actual per-fill commissions: quote fees affect quote cash flow, base fees affect net base, and third-asset fees require trusted quote valuation.",
+        "Never silently treat incomplete or unvalued commission evidence as zero."
+      ]
     },
     {
       "id": "PORTFOLIO_RECOVERY_LEDGER_ALIGNMENT",
       "title": "Portfolio and RecoveryLedger consistency across canonical fills and cycles",
       "sourceModules": [
         "src/domain/portfolio/portfolio.js",
-        "src/domain/strategies/conservative/recovery-ledger.js"
+        "src/domain/strategies/conservative/recovery-ledger.js",
+        "src/domain/portfolio/position-accounting.js"
       ],
       "tests": [
         {
@@ -152,7 +179,11 @@
           "kind": "failure"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "invariants": [
+        "Portfolio and RecoveryLedger consume the same canonical fill exactly once and preserve consistent quote basis/proceeds.",
+        "Reset cycle basis only after verified profitable SELL completion and retained-inventory allocation."
+      ]
     },
     {
       "id": "STRATEGY_BUY_SELL_SAFETY_GATES",
@@ -179,7 +210,11 @@
           "kind": "integration"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "invariants": [
+        "While recovery capital or an active Position exists, prohibit new/trailing BUY; recovery SELL must be submitted and reconciled first.",
+        "An unresolved order or failed recovery SELL path keeps the market paused and blocks subsequent BUY submission."
+      ]
     },
     {
       "id": "RECOVERY_SELL_ECONOMICS",
@@ -205,7 +240,11 @@
           "kind": "integration"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "invariants": [
+        "Exclude permanently retained keepQuantity, respect exchange increments/filters, and cover outstanding quote basis plus minimum profit and fee reserve.",
+        "Confirm SELL quantity and net proceeds from actual fills, not submission acknowledgements."
+      ]
     },
     {
       "id": "CANCELLATION_UNKNOWN_OUTCOMES",
@@ -225,14 +264,20 @@
           "kind": "failure"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "invariants": [
+        "Treat cancel timeout/transport ambiguity as UNKNOWN until authoritative reconciliation proves terminal state; never assume canceled or replace while ambiguous.",
+        "Apply cancellation-racing fills exactly once before recomputing recovery obligation."
+      ]
     },
     {
       "id": "STARTUP_ACCOUNT_RECONCILIATION",
       "title": "Startup PREFLIGHT balances, account-wide open orders and ownership gates",
       "sourceModules": [
         "src/bootstrap/account/create-account-snapshot-manager.js",
-        "src/bootstrap/start-harvester.js"
+        "src/bootstrap/start-harvester.js",
+        "src/use-cases/collect-owned-order-snapshots.js",
+        "src/use-cases/fetch-account-trade-history.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -252,13 +297,18 @@
           "kind": "integration"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "invariants": [
+        "Gate trading until configured-asset balances and account-wide open orders are captured and durably recorded; startup-snapshot orders are external to the current process and are never adopted.",
+        "Incomplete snapshots, ownership uncertainty, or balance/order discrepancies fail closed."
+      ]
     },
     {
       "id": "USER_DATA_DISCONNECT_RECOVERY",
       "title": "User-data disconnect, reconnect, event draining and readiness recovery",
       "sourceModules": [
-        "src/bootstrap/start-harvester.js"
+        "src/bootstrap/start-harvester.js",
+        "src/use-cases/create-user-data-event-transition.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -278,14 +328,19 @@
           "kind": "integration"
         }
       ],
-      "runtimeStatus": "active"
+      "runtimeStatus": "active",
+      "invariants": [
+        "A user-data disconnect closes trading readiness; reconnect alone is insufficient—fresh account/open-order and owned-order/fill reconciliation plus durable evidence are required before reopening.",
+        "Drain and reconcile queued events without losing execution identities or acknowledging incomplete recovery."
+      ]
     },
     {
       "id": "PERSISTENCE_RESTART_SAFETY_BOUNDARY",
       "title": "Operational State Store integrity and offline crash/restart projection",
       "sourceModules": [
         "src/infrastructure/operational-state/create-file-operational-state-store.js",
-        "src/use-cases/restore-harvester-operational-state.js"
+        "src/use-cases/restore-harvester-operational-state.js",
+        "src/infrastructure/operational-state/project-harvester-operational-state.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -306,7 +361,11 @@
         }
       ],
       "runtimeStatus": "offline-only",
-      "limitation": "The durable-fact store and crash matrix are verified offline; default runtime restoration and Journal replay remain disabled pending the separate #654 acceptance gates. This inventory does not authorize or claim runtime state restoration."
+      "limitation": "The durable-fact store and crash matrix are verified offline; default runtime restoration and Journal replay remain disabled pending the separate #654 acceptance gates. This inventory does not authorize or claim runtime state restoration.",
+      "invariants": [
+        "Verify append-only fact sequence, committed-head and digest integrity; corruption or incomplete history is a blocker.",
+        "The offline candidate remains candidateOnly with restorationEnabled=false and requires exchange reconciliation; runtime restoration and Journal replay are disabled."
+      ]
     },
     {
       "id": "SHUTDOWN_PROCESS_OWNERSHIP",
@@ -314,7 +373,11 @@
       "sourceModules": [
         "src/index.js",
         "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
-        "src/infrastructure/process-lock/acquire-harvester-process-lock.js"
+        "src/infrastructure/process-lock/acquire-harvester-process-lock.js",
+        "src/infrastructure/process/harvester-process-shutdown.js",
+        "src/bootstrap/shutdown/create-shutdown-handler.js",
+        "src/bootstrap/shutdown/create-conservative-shutdown-participant.js",
+        "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js"
       ],
       "tests": [
         {
@@ -344,7 +407,416 @@
         }
       ],
       "runtimeStatus": "active",
-      "integrationRequired": true
+      "integrationRequired": true,
+      "invariants": [
+        "Acquire process ownership before starting Journal/runtime; release it only after shutdown and cleanup are confirmed.",
+        "Gate BUY, cancel only current-process owned BUYs, reconcile fills/cancellations and prove recovery SELL coverage; if proof or CLOSING durability fails, retain required services and fail closed."
+      ]
+    },
+    {
+      "id": "ACCOUNT_COMMITMENT_ALLOCATION",
+      "title": "Cross-market account-level quote/base reservation and inventory allocation",
+      "runtimeStatus": "active",
+      "sourceModules": [
+        "src/domain/orders/allocate-order-commitments.js"
+      ],
+      "invariants": [
+        "Allocate pair actions against shared account-level free quote/base after existing commitments, applying only snapshot-relative commitment changes.",
+        "Never double-count balances already reflected in the exchange snapshot; reject aggregate SELL commitments beyond total tracked base inventory."
+      ],
+      "tests": [
+        {
+          "path": "src/domain/orders/allocate-order-commitments.test.js",
+          "name": "allocates BUY actions sequentially against remaining pair investment",
+          "kind": "normal"
+        },
+        {
+          "path": "src/domain/orders/allocate-order-commitments.test.js",
+          "name": "rejects SELL batches that collectively exceed Harvester-owned active inventory",
+          "kind": "failure"
+        }
+      ]
+    }
+  ],
+  "coverageBaseline": {
+    "measuredAt": "2026-11-21T08:10:25Z",
+    "targetBranch": "develop",
+    "baseDevelopSha": "7767ea8ce871b658a4bd68a03cc4c4999f582b49",
+    "measuredPrHeadSha": "23e5aa3211ef324866f305eaf7bdef2c0f0fdc50",
+    "sourceTreeMatchesDevelop": true,
+    "workflowRunId": 44883479973,
+    "harvesterJobId": 136783705310,
+    "aggregate": {
+      "lines": 90.35,
+      "branches": 83.22,
+      "functions": 96
+    },
+    "note": "The measured PR changed no apps/harvester/src files; test coverage includes src/**/*.js and excludes src/**/*.test.js, so these module measurements are the exact develop production-source baseline."
+  },
+  "moduleCoverage": [
+    {
+      "path": "src/domain/orders/order-registry.js",
+      "baseline": {
+        "lines": 94.05,
+        "branches": 89.84,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 85,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/domain/orders/order-ownership.js",
+      "baseline": {
+        "lines": 86.5,
+        "branches": 81.03,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 80,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/domain/orders/allocate-order-commitments.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/domain/portfolio/portfolio.js",
+      "baseline": {
+        "lines": 85.54,
+        "branches": 75.65,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 75,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/domain/portfolio/position-accounting.js",
+      "baseline": {
+        "lines": 94.96,
+        "branches": 85.19,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 85,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/domain/fills/fill-fingerprint.js",
+      "baseline": {
+        "lines": 96.08,
+        "branches": 91.67,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 90,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/domain/fills/validate-fill-commissions.js",
+      "baseline": {
+        "lines": 94.63,
+        "branches": 90.91,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 90,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/domain/strategies/conservative/recovery-fill-accounting.js",
+      "baseline": {
+        "lines": 82.61,
+        "branches": 53.85,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 50,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/domain/strategies/conservative/recovery-ledger.js",
+      "baseline": {
+        "lines": 93.07,
+        "branches": 84.78,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 80,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/domain/strategies/conservative/strategy.js",
+      "baseline": {
+        "lines": 93.64,
+        "branches": 86.93,
+        "functions": 97.5
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 85,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/domain/strategies/conservative/recovery-sell-plan.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/use-cases/conservative-trading-engine.js",
+      "baseline": {
+        "lines": 85.51,
+        "branches": 79.6,
+        "functions": 95.65
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 75,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/use-cases/collect-owned-order-snapshots.js",
+      "baseline": {
+        "lines": 83.9,
+        "branches": 87.41,
+        "functions": 96.67
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 85,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/use-cases/reconcile-terminal-order-fills.js",
+      "baseline": {
+        "lines": 87.44,
+        "branches": 90.53,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 90,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/use-cases/fetch-account-trade-history.js",
+      "baseline": {
+        "lines": 90,
+        "branches": 81.82,
+        "functions": 90.91
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 80,
+        "functions": 90
+      }
+    },
+    {
+      "path": "src/bootstrap/account/create-account-snapshot-manager.js",
+      "baseline": {
+        "lines": 83.47,
+        "branches": 81.92,
+        "functions": 95.18
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 80,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/bootstrap/start-harvester.js",
+      "baseline": {
+        "lines": 90,
+        "branches": 83.53,
+        "functions": 92.54
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 80,
+        "functions": 90
+      }
+    },
+    {
+      "path": "src/use-cases/create-user-data-event-transition.js",
+      "baseline": {
+        "lines": 83.37,
+        "branches": 90.09,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 90,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/create-file-operational-state-store.js",
+      "baseline": {
+        "lines": 96.07,
+        "branches": 89.34,
+        "functions": 98.08
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 85,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/project-harvester-operational-state.js",
+      "baseline": {
+        "lines": 81.97,
+        "branches": 76.39,
+        "functions": 82.05
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 75,
+        "functions": 80
+      }
+    },
+    {
+      "path": "src/use-cases/restore-harvester-operational-state.js",
+      "baseline": {
+        "lines": 92.21,
+        "branches": 73.68,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 70,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/index.js",
+      "baseline": {
+        "lines": 84.57,
+        "branches": 81.14,
+        "functions": 93.75
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 80,
+        "functions": 90
+      }
+    },
+    {
+      "path": "src/infrastructure/process-lock/acquire-harvester-process-lock.js",
+      "baseline": {
+        "lines": 83.33,
+        "branches": 74.42,
+        "functions": 72.73
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 70,
+        "functions": 70
+      }
+    },
+    {
+      "path": "src/infrastructure/process-lock/acquire-harvester-process-locks.js",
+      "baseline": {
+        "lines": 84.88,
+        "branches": 77.05,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 80,
+        "branches": 75,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/infrastructure/process/harvester-process-shutdown.js",
+      "baseline": {
+        "lines": 76.81,
+        "branches": 81.08,
+        "functions": 90
+      },
+      "minimum": {
+        "lines": 75,
+        "branches": 80,
+        "functions": 90
+      }
+    },
+    {
+      "path": "src/bootstrap/shutdown/create-shutdown-handler.js",
+      "baseline": {
+        "lines": 92.02,
+        "branches": 82.63,
+        "functions": 93.67
+      },
+      "minimum": {
+        "lines": 90,
+        "branches": 80,
+        "functions": 90
+      }
+    },
+    {
+      "path": "src/bootstrap/shutdown/create-conservative-shutdown-participant.js",
+      "baseline": {
+        "lines": 88.36,
+        "branches": 83.82,
+        "functions": 98.18
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 80,
+        "functions": 95
+      }
+    },
+    {
+      "path": "src/bootstrap/shutdown/create-strategy-shutdown-coordinator.js",
+      "baseline": {
+        "lines": 86.6,
+        "branches": 76.36,
+        "functions": 84.21
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 75,
+        "functions": 80
+      }
     }
   ]
 }
