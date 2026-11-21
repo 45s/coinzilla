@@ -22,16 +22,42 @@ function createDatabase() {
   }
 }
 
-test("does not start the optional API when no token is configured", async () => {
+test("starts the local API without requiring bearer-token configuration", async () => {
+  const database = createDatabase()
+  const eventBus = new EventBus()
+  let serverInput
+  let serverCloseCalls = 0
   const service = await startTradingHistoryApi({
-    database: createDatabase(),
+    database,
+    eventBus,
     env: {
       TRADING_MODE: "testnet",
-      HARVESTER_API_TOKEN: "",
+    },
+    logger: {
+      info() {},
+    },
+    startServer: async (input) => {
+      serverInput = input
+      return {
+        address: {
+          address: "127.0.0.1",
+          port: 4201,
+        },
+        close: async () => {
+          serverCloseCalls += 1
+        },
+      }
     },
   })
 
-  assert.equal(service, null, "Harvester must remain usable without enabling the optional HTTP API.")
+  assert.equal(serverInput.environment, "testnet", "The local API must use Harvester's selected environment.")
+  assert.equal(serverInput.host, "127.0.0.1", "The unauthenticated local API must bind only to loopback.")
+  assert.equal(serverInput.port, 4201, "The API must use its documented default local port.")
+  assert.equal(serverInput.eventBus, eventBus, "The WebSocket endpoint must share Harvester's EventBus.")
+  await service.close()
+  assert.equal(serverCloseCalls, 1, "The optional API lifecycle must close its listener.")
+  assert.equal(database.closeCalls, 0, "The API must not close Harvester's shared database.")
+  await eventBus.close()
 })
 
 test("starts the API over Harvester's already-open relational database without owning that database", async () => {
@@ -83,46 +109,35 @@ test("rejects invalid API configuration before opening the HTTP listener", async
       name: "environment",
       env: {
         TRADING_MODE: "sandbox",
-        HARVESTER_API_TOKEN: API_TOKEN,
-      },
-    },
-    {
-      name: "token",
-      env: {
-        TRADING_MODE: "testnet",
-        HARVESTER_API_TOKEN: "short",
-      },
-    },
-    {
-      name: "host",
-      env: {
-        TRADING_MODE: "testnet",
-        HARVESTER_API_TOKEN: API_TOKEN,
-        HARVESTER_API_HOST: " ",
       },
     },
     {
       name: "port",
       env: {
         TRADING_MODE: "testnet",
-        HARVESTER_API_TOKEN: API_TOKEN,
         HARVESTER_API_PORT: "65536",
       },
     },
   ]
+  const eventBus = new EventBus()
 
-  for (const configuration of invalidConfigurations) {
-    await assert.rejects(
-      () => startTradingHistoryApi({
-        database: createDatabase(),
-        env: configuration.env,
-        startServer: async () => {
-          throw new Error("Invalid configuration must be rejected before binding.")
-        },
-      }),
-      (error) => error.code === "HARVESTER_TRADING_HISTORY_API_CONFIGURATION_INVALID",
-      `The API must reject invalid ${configuration.name} configuration.`,
-    )
+  try {
+    for (const configuration of invalidConfigurations) {
+      await assert.rejects(
+        () => startTradingHistoryApi({
+          database: createDatabase(),
+          eventBus,
+          env: configuration.env,
+          startServer: async () => {
+            throw new Error("Invalid configuration must be rejected before binding.")
+          },
+        }),
+        (error) => error.code === "HARVESTER_TRADING_HISTORY_API_CONFIGURATION_INVALID",
+        `The API must reject invalid ${configuration.name} configuration.`,
+      )
+    }
+  } finally {
+    await eventBus.close()
   }
 })
 
