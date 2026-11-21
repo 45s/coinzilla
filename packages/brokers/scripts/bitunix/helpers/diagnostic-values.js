@@ -1,7 +1,7 @@
 const REDACTED = "[REDACTED]"
 const MAX_DEPTH = 6
 const MAX_ITEMS = 50
-const SENSITIVE_FIELDS = new Set([
+const SENSITIVE_FIELDS = Object.freeze([
   "apikey",
   "apisecret",
   "secret",
@@ -61,7 +61,7 @@ function sanitizeObject({ value, depth, secrets }) {
   }
   const entries = Object.entries(value).slice(0, MAX_ITEMS)
   return Object.fromEntries(entries.map(([key, entryValue]) => {
-    if (SENSITIVE_FIELDS.has(normalizeFieldName({ value: key }))) {
+    if (SENSITIVE_FIELDS.includes(normalizeFieldName({ value: key }))) {
       return [key, REDACTED]
     }
     return [key, sanitizeValue({
