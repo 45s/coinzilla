@@ -73,7 +73,7 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 
 ### Phase 3 — Startup exchange-history synchronization
 
-**Status: Base implementation complete — PR #1557 and broker pagination PR #1559; configured-market failure isolation and record-level diagnostics implemented in PR #1659 (pending merge).**
+**Status: Complete — base implementation in merged PR #1557, broker pagination in merged PR #1559, and configured-market failure isolation/record-level diagnostics in merged PR #1659 (merge commit `524d76905e06135269784bec1fdf2a03e779a583`).**
 
 - Runs a read-only Binance order/trade-history scan for each configured execution market during startup, after market metadata initialization and before trading-engine activation. It is not a separately invoked import command.
 - For each configured market, completes order-history synchronization before fill-history synchronization. If the order scan fails, that market's fill scan is skipped to preserve the order-linkage prerequisite; later markets are still attempted. A fill-scan failure also leaves later markets eligible for synchronization.
@@ -87,6 +87,11 @@ Financial values are stored as exact decimal text. Missing values remain SQL `NU
 ## Planned phases
 
 ### Phase 4 — Strategy-cycle attribution
+
+**Status: In progress — verified live-order ownership propagation is tracked by [#1669 / PR #1669](https://github.com/45s/coinzilla/pull/1669).**
+
+- The current slice passes immutable OrderRegistry ownership through `order.submitted`, `order.updated`, `order.cancelled`, and `order.cancel_failed`; relational fills inherit attribution only through the existing verified scoped client-order relationship.
+- This does not infer or backfill ownership for legacy, exchange-history-only, external, or unknown records. It does not introduce a strategy-cycle entity or lifecycle; that remains separate work.
 
 - Define a Harvester-owned strategy-cycle identity and lifecycle only when the actual domain model and event sequence support it.
 - Attribute orders/fills only from immutable strategy ownership captured at order creation/registration, not current configuration, symbol or timestamp inference.

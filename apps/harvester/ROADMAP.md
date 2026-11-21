@@ -14,7 +14,7 @@
 
 ## Configured-market exchange-history failure isolation (#1658)
 
-- **Implementation and offline regression coverage complete in PR #1659; required CI gates must pass before merge.**
+- **Complete in merged [PR #1659](https://github.com/45s/coinzilla/pull/1659)** (merge commit `524d76905e06135269784bec1fdf2a03e779a583`); configured-market failure isolation, record-level diagnostics, and replay-safe cursor behavior are delivered. The original ZROUSDT failure remains historically unproven because its source exception was not present in the supplied database export.
 - [x] Attempt every configured market independently after an order-history or trade-history failure in another market.
 - [x] Preserve the same-market order-before-fill prerequisite; skip fills only for a market whose order scan failed.
 - [x] Keep each page cursor unchanged until every record in that page is persisted; preserve idempotent replay after partial writes or cursor-write failure.
@@ -22,6 +22,11 @@
 - [x] Persist bounded, allowlisted/redacted failure details through the existing `runtime_errors` projection.
 - **Unresolved historical evidence:** the earlier ZROUSDT export proves partial order persistence and a missing ZRO cursor, but does not contain the original exception. The exact historical failing record is not claimed as diagnosed; the new diagnostics will identify it on the next authorized normal startup if the failure recurs.
 - No TESTNET/LIVE API calls, order placement/cancellation, or account mutation were performed for this implementation.
+
+## Verified live order ownership in trading history (#1669)
+
+- **In progress in [PR #1669](https://github.com/45s/coinzilla/pull/1669):** pass exact OrderRegistry ownership through submitted, updated, cancelled, and cancellation-failed lifecycle events so relational orders and verified linked fills retain strategy/position attribution.
+- Ownership is resolved by client-order, broker-order, and market identity. No attribution is inferred for legacy, exchange-history-only, external, or unknown orders. This is the first Phase 4 projection slice, not a strategy-cycle lifecycle or historical backfill.
 
 ## Trading-history real-time notifications (#1643)
 

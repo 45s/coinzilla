@@ -60,7 +60,7 @@ An **order** is an exchange instruction with a lifecycle. It may be partially ex
 
 A **fill** is one actual exchange execution. One order can produce zero, one, or many fills. The fill ledger must never be reconstructed from an order's cumulative executed quantity.
 
-A **strategy cycle** is a future business-level grouping of one or more orders and fills. It is not an exchange order or execution and is not implemented by this task. Strategy/cycle attribution remains nullable until a verified owner relationship is available.
+A **strategy cycle** is a future business-level grouping of one or more orders and fills. It is not an exchange order or execution, and its full lifecycle is not implemented by this task. Order strategy/position/purpose/optional cycle attribution is populated only from verified OrderRegistry ownership on live order lifecycle events. Legacy, exchange-history-only, external, and unknown ownership remains SQL `NULL`; an optional verified `cycleId` projection does not implement the strategy-cycle lifecycle.
 
 ### Physical tables
 
@@ -77,7 +77,7 @@ The canonical `Fill.id` is `market.id:tradeId`; it is not globally unique. The r
 
 `ingestion_source` and `last_ingestion_source` distinguish `live_event`, `exchange_history`, and (for migrated orders) `legacy_migration`. The older `source_kind` columns remain compatible with the Phase 1/2 event-projection contract; the separate ingestion fields record whether the row was observed from a live event or an exchange-history scan.
 
-A fill's `order_id` is a nullable foreign key to `orders.id`. It is linked only through the canonical scoped client-order identity, with market and any available exchange-order facts checked for consistency. Exchange order IDs are retained but are not used alone to infer a relationship because provider reuse semantics vary. A fill can be persisted before its order projection is visible; a later order write links it when the client-order identity is present. Strategy, position, and cycle attribution are copied only from that verified relationship. Missing ownership remains SQL `NULL`, never a fabricated identifier.
+A fill's `order_id` is a nullable foreign key to `orders.id`. It is linked only through the canonical scoped client-order identity, with market and any available exchange-order facts checked for consistency. Exchange order IDs are retained but are not used alone to infer a relationship because provider reuse semantics vary. A fill can be persisted before its order projection is visible; a later order write links it when the client-order identity is present. Strategy, position, and cycle attribution are copied only from that verified relationship. Missing ownership remains SQL `NULL`, never a fabricated identifier. Live `order.submitted`, `order.updated`, `order.cancelled`, and `order.cancel_failed` publishers resolve ownership from the current OrderRegistry record using the exact client-order, broker-order, and market identities, then pass the allowlisted ownership DTO to the existing order-history observer. The relational order row stores strategy, position, purpose, and optional cycle facts; a previously persisted fill inherits strategy, position, and cycle only when the later order write establishes the verified client-order link.
 
 ## 2. Exact financial and timestamp semantics
 

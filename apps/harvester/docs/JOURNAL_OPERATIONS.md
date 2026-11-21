@@ -100,12 +100,13 @@ Every mapper must follow the temporary payload constraint in [Journal Evidence C
 | `strategy.decision` | `strategy`, `symbol`, `referencePrice`, actionable `actions` (side/type/price/quantity/optional reason) |
 | `order.submission_requested` | client order ID, symbol, side, type, exact price/quantity, status; durably flushed before the broker placement call |
 | `order.submission_deferred` | original client order ID and order facts plus a bounded local reason; best-effort terminal evidence when a registered request is deferred before broker I/O |
-| `order.submitted` | submission facts plus broker order ID and acknowledged status |
+| `order.submitted` | submission facts plus broker order ID and acknowledged status; optional verified OrderRegistry strategy/Position/purpose/cycle ownership |
+| `order.updated` | canonical order facts and optional verified OrderRegistry strategy/Position/purpose/cycle ownership after an applied registry transition |
 | `order.submission_failed` | client order ID, symbol, side, outcome, optional sanitized error |
 | `strategy.paused` | `symbol`, `reason`, optional sanitized `error` |
 | `order.cancel_requested` | full owned order intent, broker order ID, executed quantity, current status, cancellation reason; durably flushed before the broker cancellation call |
-| `order.cancelled` | order facts, broker order ID, executed quantity, canceled status |
-| `order.cancel_failed` | client order ID, symbol, side, optional broker order ID, current order status (including UNKNOWN), outcome, optional sanitized error |
+| `order.cancelled` | order facts, broker order ID, executed quantity, canceled status, and optional verified OrderRegistry strategy/Position/purpose/cycle ownership |
+| `order.cancel_failed` | client order ID, symbol, side, optional broker order ID, current order status (including UNKNOWN), outcome, optional sanitized error, and optional verified OrderRegistry strategy/Position/purpose/cycle ownership |
 | `execution.fill_applied` | fill/trade/order IDs, symbol, side, exact price/quantity/quote quantity, liquidity role, optional execution time, exact commission amounts and asset IDs/codes, optional exact historical `quoteValue` (amount plus quote-asset ID/code) for third-asset commissions, commission status |
 | `execution.unowned_order` | client/broker order IDs, symbol, side, order status, reason |
 | `execution.invalid_fill` | order facts, reason, optional Fill identity facts, sanitized error |
@@ -129,6 +130,8 @@ The broker status `recovered` means the remote user-data subscription has return
 For `account.open_orders_captured`, `readiness: BLOCKED` with `UNOWNED_OPEN_ORDERS` is an ownership-audit classification, not a global trading-startup rejection. Every pair defaults to `externalOrdersPolicy: "ignore"`: manual/external orders remain unowned and untouched, and their unmatched execution reports are diagnostic-only rather than accounting failures. A pair can opt into same-symbol blocking with `externalOrdersPolicy: "block"`; this applies uniformly to every unmatched startup order, regardless of its client-order ID prefix. An unmatched execution report for a reserved `h-` client ID remains fail-closed and is never attributed to the current process. No external fill is added to Harvester Portfolio or RecoveryLedger. Manual balance changes can still affect exchange free-balance checks and cause normal exchange rejections. A transport reconnect alone does not clear an existing Harvester accounting/reconciliation latch. See [issue #667](https://github.com/45s/coinzilla/issues/667#issuecomment-6717086777).
 
 A broker `rpcError` explicitly marked `recoveryRequired: false` and carrying no contradictory reconciliation flag is diagnostic-only and does not itself invalidate the application recovery generation. Missing or malformed recovery metadata remains fail-closed. An actual `connectionClosed` status, including code `1006`, starts recovery; that abnormal close code does not identify the underlying network cause.
+
+For `order.submitted`, `order.updated`, `order.cancelled`, and `order.cancel_failed`, the publisher adds ownership only when the exact current OrderRegistry entry matches the client-order ID, broker-order ID, and market ID. The DTO carries only registered strategy/Position/purpose and optional cycle identifiers; unowned or unmatched orders omit the ownership object.
 
 ## Startup and capture gaps
 
