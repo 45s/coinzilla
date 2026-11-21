@@ -207,6 +207,7 @@ test("discovers workspace packages and dependencies from every manifest dependen
       [
         {
           name: "@coinzilla/app",
+          publicSubpaths: [],
           workspaceDependencies: [
             {
               name: "@coinzilla/core",
@@ -237,11 +238,46 @@ test("discovers workspace packages and dependencies from every manifest dependen
 })
 
 
+
+test("allows workspace subpaths matched by a declared wildcard export", () => {
+  const violations = validateWorkspaceDependencyPolicy({
+    packages: [
+      {
+        name: "@coinzilla/app",
+        publicSubpaths: [],
+        workspaceDependencies: [],
+      },
+      {
+        name: "@coinzilla/core",
+        publicSubpaths: ["./features/*"],
+        workspaceDependencies: [],
+      },
+    ],
+    allowedDependencies: {
+      "@coinzilla/app": ["@coinzilla/core"],
+      "@coinzilla/core": [],
+    },
+    sourceImports: [
+      {
+        file: "apps/app/src/feature.js",
+        specifier: "@coinzilla/core/features/example",
+      },
+    ],
+  })
+
+  assert.deepEqual(
+    violations,
+    [],
+    "Wildcard package exports must preserve their declared public subpath contract.",
+  )
+})
+
 test("rejects production imports of private workspace package subpaths", () => {
   const violations = validateWorkspaceDependencyPolicy({
     packages: [
       {
         name: "@coinzilla/app",
+        publicSubpaths: [],
         workspaceDependencies: [],
       },
       {
@@ -280,7 +316,7 @@ test("allows package roots and explicitly exported workspace subpaths", () => {
       },
       {
         name: "@coinzilla/core",
-        publicSubpaths: ["./testing"],
+        publicSubpaths: ["./testing", "./features/*"],
         workspaceDependencies: [],
       },
     ],
@@ -296,6 +332,18 @@ test("allows package roots and explicitly exported workspace subpaths", () => {
       {
         file: "apps/app/src/test-support.js",
         specifier: "@coinzilla/core/testing",
+      },
+      {
+        file: "apps/app/src/feature.js",
+        specifier: "@coinzilla/core/features/example",
+      },
+      {
+        file: "apps/app/src/node-path.js",
+        specifier: "node:path",
+      },
+      {
+        file: "apps/app/src/external.js",
+        specifier: "external-package",
       },
     ],
   })
