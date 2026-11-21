@@ -1678,9 +1678,14 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
   const hasBlockingOpenOrdersForSymbol = ({ symbol } = {}) =>
     pairs[symbol]?.externalOrdersPolicy === EXTERNAL_ORDERS_POLICIES.BLOCK &&
     hasUnownedOpenOrdersForSymbol({ symbol })
-  const initialRegistry = validateInitialEngineState({ initialState,
-pairs })
-  const marketMetadataCache = createConservativeMarketMetadataCache({ dependencies, getMarketMetadata })
+  const initialRegistry = validateInitialEngineState({
+    initialState,
+    pairs,
+  })
+  const marketMetadataCache = createConservativeMarketMetadataCache({
+    dependencies,
+    getMarketMetadata,
+  })
   const { state } = createInitialEngineState({ initialState,
 pairs,
 initialRegistry })
@@ -1936,7 +1941,10 @@ function createConservativeEngineEvaluationContext({ context } = {}) {
     canTrade: dependencies.canTrade,
     isMarketPriceFresh: dependencies.isMarketPriceFresh,
     getCurrentMarketMetadata: context.getCurrentMarketMetadata,
-    refreshRecoverySellMarketMetadata: (options = {}) => refreshRecoverySellMarketMetadataForEvaluation({ context, ...options }),
+    refreshRecoverySellMarketMetadata: (options = {}) => refreshRecoverySellMarketMetadataForEvaluation({
+      context,
+      ...options,
+    }),
     nextEvaluationId: context.nextEvaluationId,
     getPortfolio: dependencies.getPortfolio,
     getRecoveryLedger: dependencies.getRecoveryLedger,
