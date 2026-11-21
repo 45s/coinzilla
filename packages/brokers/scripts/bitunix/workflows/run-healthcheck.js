@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/rest-client.js"
-import { runDiagnostics } from "../diagnostics/run-diagnostics.js"
+import { runDiagnostics as runReadOnlyDiagnostics } from "../diagnostics/run-diagnostics.js"
 import { publishHealthReport } from "./publish-health-report.js"
 import { evaluateReadOnlyHealthCheck } from "../helpers/health-report.js"
 import { appendOrderAttemptResult } from "../helpers/append-order-attempt-result.js"
@@ -171,7 +171,7 @@ export async function runHealthcheckWorkflow({
   repositoryRoot,
   env,
   stdout = process.stdout,
-  runDiagnostics = runDiagnostics,
+  runDiagnostics = runReadOnlyDiagnostics,
   publishDiagnostics = publishHealthReport,
   runOperatorOrder,
 } = {}) {

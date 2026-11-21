@@ -6,7 +6,7 @@ import { join } from "node:path"
 import { promisify } from "node:util"
 import test from "node:test"
 import { publishHealthReport } from "./publish-health-report.js"
-import { createGitEnvironment } from "../helpers/git-environment.js"
+import { createGitEnvironment } from "../helpers/create-git-environment.js"
 
 const execFileAsync = promisify(execFile)
 const fixedTimestamp = Date.parse("2026-11-19T08:30:00.000Z")

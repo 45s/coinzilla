@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createGitEnvironment } from "./git-environment.js"
+import { createGitEnvironment } from "./create-git-environment.js"
 
 test("Git child environment excludes Bitunix credentials but preserves GitHub authentication", () => {
   const gitEnvironment = createGitEnvironment({

@@ -10,7 +10,6 @@ import { getDiagnosticSchemaIssueCodes, inspectDiagnosticSchema } from "../helpe
 import {
   sanitizeDiagnosticError,
   sanitizeDiagnosticValue,
-  summarizePrivatePayload,
 } from "../helpers/sanitize-diagnostic-data.js"
 import { DiagnosticError } from "./diagnostic-error.js"
 import {
