@@ -99,10 +99,18 @@ export function exportDatabase({ databaseFilename, outputFilename } = {}) {
   }
 }
 
-export function runDatabaseExport({ env = process.env } = {}) {
-  const tradingMode = env.TRADING_MODE
+/**
+ * Export the selected Harvester database without modifying its SQLite source.
+ *
+ * @param {object} options
+ * @param {NodeJS.ProcessEnv} [options.env=process.env] - Environment used by the database path resolver.
+ * @param {"testnet"|"live"} options.tradingMode - Explicit database environment.
+ * @returns {{tableCount: number, tableCounts: Record<string, number>, outputFilename: string}}
+ * @throws {TypeError} When the requested environment is not exactly "testnet" or "live".
+ */
+export function runDatabaseExport({ env = process.env, tradingMode } = {}) {
   if (tradingMode !== "testnet" && tradingMode !== "live") {
-    throw new TypeError("TRADING_MODE must be explicitly set to testnet or live.")
+    throw new TypeError('Environment must be "testnet" or "live".')
   }
   const databaseFilename = resolveHarvesterDatabaseFilename({
     tradingMode,
@@ -123,10 +131,21 @@ export function runDatabaseExport({ env = process.env } = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try {
-    runDatabaseExport()
-  } catch (error) {
-    process.stderr.write(`Database export failed: ${error.message}\n`)
+  const [tradingMode, ...unexpectedArguments] = process.argv.slice(2)
+  if (
+    (tradingMode !== "testnet" && tradingMode !== "live")
+    || unexpectedArguments.length > 0
+  ) {
+    process.stderr.write("Usage: pnpm run db:export <testnet|live>\n")
     process.exitCode = 1
+  } else {
+    try {
+      runDatabaseExport({
+        tradingMode,
+      })
+    } catch (error) {
+      process.stderr.write(`Database export failed: ${error.message}\n`)
+      process.exitCode = 1
+    }
   }
 }
