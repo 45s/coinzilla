@@ -12,6 +12,8 @@ import { createRelationalOrderHistoryRepository } from "./relational-order-repos
 import { createFillHistoryRepository } from "./fill-history-repository.js"
 import { createFillHistoryObserver } from "./create-fill-history-observer.js"
 import { createHistorySyncCursorRepository } from "./history-sync-cursor-repository.js"
+import { createRuntimeErrorRepository } from "./runtime-error-repository.js"
+import { createRuntimeErrorObserver } from "./create-runtime-error-observer.js"
 import { HARVESTER_RELATIONAL_MIGRATIONS } from "./relational-migrations.js"
 import { assertHarvesterDatabaseIsolation } from "./resolve-harvester-database-filename.js"
 
@@ -159,18 +161,48 @@ function createRelationalHistoryObservers({
   }
 }
 
+function createRelationalHistoryRepositories({ database } = {}) {
+  return {
+    orderRepository: createRelationalOrderHistoryRepository({ database }),
+    fillRepository: createFillHistoryRepository({ database }),
+    historySyncCursorRepository: createHistorySyncCursorRepository({ database }),
+  }
+}
+
+function createRuntimeErrorProjection({
+  database,
+  runtimeSessionId,
+  errorBuffer,
+  logger,
+} = {}) {
+  if (!errorBuffer || !runtimeSessionId) {
+    return null
+  }
+  const repository = createRuntimeErrorRepository({
+    database,
+    runtimeSessionId,
+  })
+  return createRuntimeErrorObserver({
+    repository,
+    errorBuffer,
+    logger,
+  })
+}
+
 async function prepareRelationalResources({
   filename,
   eventBus,
   environment,
   logger,
+  runtimeSessionId,
+  errorBuffer,
 } = {}) {
   const relationalDatabase = createSqliteDatabase({
     filename,
     timeout: 5000,
   })
-  let relationalOrderObserver
-  let fillObserver
+  let runtimeErrorObserver
+  let observers
   try {
     await relationalDatabase.connect()
     const migrationBackupFilename = await createVerifiedMigrationBackup({
@@ -178,40 +210,35 @@ async function prepareRelationalResources({
       filename,
     })
     await relationalDatabase.migrate(HARVESTER_RELATIONAL_MIGRATIONS)
-    const orderRepository = createRelationalOrderHistoryRepository({
+    const repositories = createRelationalHistoryRepositories({
       database: relationalDatabase,
     })
-    const fillRepository = createFillHistoryRepository({
-      database: relationalDatabase,
-    })
-    const historySyncCursorRepository = createHistorySyncCursorRepository({
-      database: relationalDatabase,
-    })
-    const {
-      relationalOrderObserver: orderObserver,
-      fillObserver: appliedFillObserver,
-    } = createRelationalHistoryObservers({
+    observers = createRelationalHistoryObservers({
       eventBus,
-      orderRepository,
-      fillRepository,
+      orderRepository: repositories.orderRepository,
+      fillRepository: repositories.fillRepository,
       environment,
       logger,
     })
-    relationalOrderObserver = orderObserver
-    fillObserver = appliedFillObserver
+    const { relationalOrderObserver, fillObserver } = observers
+    runtimeErrorObserver = createRuntimeErrorProjection({
+      database: relationalDatabase,
+      runtimeSessionId,
+      errorBuffer,
+      logger,
+    })
     return {
       relationalDatabase,
       relationalOrderObserver,
       fillObserver,
-      orderRepository,
-      fillRepository,
-      historySyncCursorRepository,
+      runtimeErrorObserver,
+      ...repositories,
       migrationBackupFilename,
     }
   } catch (error) {
     await closePartialRelationalResources({
       database: relationalDatabase,
-      observers: [fillObserver, relationalOrderObserver],
+      observers: [runtimeErrorObserver, observers?.fillObserver, observers?.relationalOrderObserver],
       logger,
     })
     throw error
@@ -263,6 +290,8 @@ async function preparePersistenceWithRelationalFallback({
   eventBus,
   environment,
   logger,
+  runtimeSessionId,
+  errorBuffer,
 } = {}) {
   try {
     const relational = await prepareRelationalResources({
@@ -270,6 +299,8 @@ async function preparePersistenceWithRelationalFallback({
       eventBus,
       environment,
       logger,
+      runtimeSessionId,
+      errorBuffer,
     })
     return Object.freeze({
       ...legacyPersistence,
@@ -287,6 +318,7 @@ async function preparePersistenceWithRelationalFallback({
       relationalDatabase: null,
       relationalOrderObserver: null,
       fillObserver: null,
+      runtimeErrorObserver: null,
       orderRepository: null,
       fillRepository: null,
       historySyncCursorRepository: null,
@@ -308,6 +340,8 @@ export async function prepareOrderHistoryPersistence({
   env = process.env,
   eventBus,
   logger = defaultLogger,
+  runtimeSessionId,
+  errorBuffer,
 } = {}) {
   try {
     const filename = await assertHarvesterDatabaseIsolation({
@@ -326,6 +360,8 @@ export async function prepareOrderHistoryPersistence({
       eventBus,
       environment: tradingMode,
       logger,
+      runtimeSessionId,
+      errorBuffer,
     })
   } catch (error) {
     logPreparationFailure({

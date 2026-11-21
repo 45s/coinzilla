@@ -60,13 +60,14 @@ async function closeDatabase({ database, logger, stage } = {}) {
 /**
  * Drain every projection observer before closing either SQLite connection.
  *
- * @param {{observer?: object, relationalOrderObserver?: object, fillObserver?: object, database?: object, relationalDatabase?: object, logger?: object}} input
+ * @param {{observer?: object, relationalOrderObserver?: object, fillObserver?: object, runtimeErrorObserver?: object, database?: object, relationalDatabase?: object, logger?: object}} input
  * @returns {Promise<Error[]>} Cleanup failures for process shutdown diagnostics.
  */
 export async function closeHarvesterPersistence({
   observer,
   relationalOrderObserver,
   fillObserver,
+  runtimeErrorObserver,
   database,
   relationalDatabase,
   logger,
@@ -86,6 +87,11 @@ export async function closeHarvesterPersistence({
     observer: fillObserver,
     logger,
     stage: "fill-observer-close",
+  }))
+  errors.push(...await closeObserver({
+    observer: runtimeErrorObserver,
+    logger,
+    stage: "runtime-error-observer-close",
   }))
   errors.push(...await closeDatabase({
     database,

@@ -101,7 +101,7 @@ test("restores a verified backup to an independent candidate and validates it", 
   })
   const afterDigest = await calculateSha256(fixture.backupFilename)
   assert.equal(result.verified, true)
-  assert.equal(result.schemaVersion, 3)
+  assert.equal(result.schemaVersion, 4)
   assert.equal(result.rowCounts.orders, 0)
   assert.equal(beforeDigest, afterDigest)
 })
