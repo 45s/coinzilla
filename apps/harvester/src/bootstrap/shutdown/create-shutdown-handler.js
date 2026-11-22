@@ -276,6 +276,10 @@ function createFailureRecorder({ context, phaseRunner }) {
   }
 }
 
+function createInitialShutdownAuditReasons(preShutdownErrors) {
+  return preShutdownErrors.length > 0 ? ["OPERATOR_CONTROL_SHUTDOWN_FAILED"] : []
+}
+
 function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
   const {
     state,
@@ -323,9 +327,7 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     beforeSharedServicesStop: stopOptions.beforeSharedServicesStop,
     shutdownStartedFromStatus: stopOptions.shutdownStartedFromStatus ?? state.status,
     preShutdownErrors: stopOptions.preShutdownErrors ?? [],
-    auditReasons: (stopOptions.preShutdownErrors ?? []).length > 0
-      ? ["OPERATOR_CONTROL_SHUTDOWN_FAILED"]
-      : [],
+    auditReasons: createInitialShutdownAuditReasons(stopOptions.preShutdownErrors ?? []),
     stageFailures: [],
     unresolvedOrders: [],
     recoverySellFindings: [],
