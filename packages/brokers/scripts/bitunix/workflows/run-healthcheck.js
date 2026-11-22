@@ -42,7 +42,7 @@ function printLocalDiagnosticSummary({ report, outputPath, stdout }) {
   ].join("\n"))
 }
 
-async function runBitunixOrderReadScan({ env, report, stdout }) {
+async function runBitunixOrderReadScan({ env, report, stdout, brokerFactory = (options) => new Broker(options) }) {
   const secrets = [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
   const record = (operation, result, extra = {}) => {
     const entry = { operation, status: result?.ok === true ? "passed" : "failed",
@@ -88,13 +88,13 @@ async function runBitunixOrderReadScan({ env, report, stdout }) {
   }
 }
 
-async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
+async function runLocalDiagnostics({ brokersRoot, env, stdout, brokerFactory }) {
   stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot account using read-only requests.\n")
   const report = await runReadOnlyDiagnostics({
     env,
     brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
   })
-  await runBitunixOrderReadScan({ env, report, stdout })
+  await runBitunixOrderReadScan({ env, report, stdout, brokerFactory })
   const outputPath = createLocalDiagnosticReportPath({
     brokersRoot,
     now: Date.now,
@@ -249,7 +249,7 @@ async function runDiagnosticsWithOperatorAttempt({
       onProgress,
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
-  if (!runOperatorProbe) {\n    await runBitunixOrderReadScan({ env, report, stdout: { write: (message) => onProgress?.({ message: message.trim() }) } })\n  }\n  if (!runOperatorOrder && !runOperatorProbe) {
+  if (!runOperatorProbe) {\n    await runBitunixOrderReadScan({ env, report, stdout: { write: (message) => onProgress?.({ message: message.trim() }) }, brokerFactory })\n  }\n  if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
   if (runOperatorOrder && !evaluateReadOnlyHealthCheck({ report }).healthy) {
