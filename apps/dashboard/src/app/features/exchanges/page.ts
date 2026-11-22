@@ -75,6 +75,7 @@ function readOpenOrders(account: ExchangeAccountData): readonly OpenOrderRow[] {
   });
 }
 
+/** Return browser storage when available without making restricted environments fatal. */
 function getBrowserStorage(): Storage | undefined {
   if (typeof window === 'undefined') return undefined;
   try {
