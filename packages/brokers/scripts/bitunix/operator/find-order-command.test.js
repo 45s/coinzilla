@@ -29,65 +29,75 @@ function createOrder({ id, symbol }) {
   }
 }
 
+function createAccountWideResult({ logger }) {
+  logger.debug({
+    provider: "bitunix",
+    product: "spot",
+    layer: "broker-api",
+    event: "getOpenOrders.accountWide.completed",
+    marketCount: 3,
+    orderCount: 3,
+  })
+  return {
+    ok: false,
+    data: [
+      createOrder({
+        id: "1001",
+        symbol: "BTCUSDT",
+      }),
+      {
+        ...createOrder({
+          id: ORDER_ID,
+          symbol: "HYPEUSDT",
+        }),
+        side: "BUY",
+        type: "LIMIT",
+        originalPrice: "30",
+        originalQuantity: "0.366",
+      },
+      createOrder({
+        id: "1002",
+        symbol: "HYPEUSDT",
+      }),
+    ],
+    errors: [Object.assign(new Error("synthetic ETH pending failure"), {
+      code: "E_PENDING",
+    })],
+  }
+}
+
 function createAccountWideBroker({ calls, logger }) {
   return {
     connect: async () => calls.push("connect"),
     getOpenOrders: async () => {
       calls.push("pending:account-wide")
-      logger.debug({
-        provider: "bitunix",
-        product: "spot",
-        layer: "broker-api",
-        event: "getOpenOrders.accountWide.completed",
-        marketCount: 3,
-        orderCount: 3,
-      })
-      return {
-        ok: false,
-        data: [
-          createOrder({
-            id: "1001",
-            symbol: "BTCUSDT",
-          }),
-          {
-            ...createOrder({
-              id: ORDER_ID,
-              symbol: "HYPEUSDT",
-            }),
-            side: "BUY",
-            type: "LIMIT",
-            originalPrice: "30",
-            originalQuantity: "0.366",
-          },
-          createOrder({
-            id: "1002",
-            symbol: "HYPEUSDT",
-          }),
-        ],
-        errors: [Object.assign(new Error("synthetic ETH pending failure"), {
-          code: "E_PENDING",
-        })],
-      }
+      return createAccountWideResult({ logger })
     },
-    getOrder: async ({ symbol, orderId }) => {
-      calls.push(`detail:${symbol}:${orderId}`)
-      if (orderId === "1001") {
-        return {
-          ok: false,
-          errors: [Object.assign(new Error("synthetic detail failure"), {
-            code: "E_DETAIL",
-          })],
-        }
-      }
-      return {
-        ok: true,
-        data: createOrder({
-          id: orderId,
-          symbol,
-        }),
-      }
-    },
+    getOrder: async ({ symbol, orderId }) => getOrderDetail({
+      calls,
+      symbol,
+      orderId,
+    }),
     disconnect: async () => calls.push("disconnect"),
+  }
+}
+
+function getOrderDetail({ calls, symbol, orderId }) {
+  calls.push(`detail:${symbol}:${orderId}`)
+  if (orderId === "1001") {
+    return {
+      ok: false,
+      errors: [Object.assign(new Error("synthetic detail failure"), {
+        code: "E_DETAIL",
+      })],
+    }
+  }
+  return {
+    ok: true,
+    data: createOrder({
+      id: orderId,
+      symbol,
+    }),
   }
 }
 
