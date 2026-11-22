@@ -73,7 +73,7 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 - [Submission deferrals and missing-order diagnostics](operations/submission-deferrals.md) — stable reasons for withheld broker submissions and safe LIMIT_MAKER diagnosis.
 - [Relational trading-history backup runbook](operations/trading-history-backups.md) — routine online backups, explicit TESTNET/LIVE selection, restore checks and retention.
 - [Controlled TESTNET validation runbook](TESTNET_VALIDATION_RUNBOOK.md) — CLOSED / PAUSED; its earlier two-pair DOGEUSDT/ZROUSDT plan is superseded: the committed CG configuration enables four TESTNET markets (LINKUSDT, ZROUSDT, DOGEUSDT and ADAUSDT) and three LIVE markets (LINKFDUSD, ZROFDUSD and WLDFDUSD). The runbook remains CLOSED / PAUSED; no replacement session scope is approved.
-- [Journal operations](JOURNAL_OPERATIONS.md)
+- [Journal operations](JOURNAL_OPERATIONS.md) — includes the read-only `operational-state:diagnose` command for separating store-integrity failures from recovery-projection failures.
 - [Error vocabulary](error-vocabulary.md) — stable operator-facing diagnostic identifiers and recovery procedures.
 - [Journal evidence contract](JOURNAL_EVIDENCE_CONTRACT.md)
 - [Journal integration roadmap](JOURNAL_INTEGRATION_ROADMAP.md)

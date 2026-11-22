@@ -1,5 +1,31 @@
 # Harvester Journal Operations
 
+## Read-only Operational State diagnostics
+
+When startup reports that the existing Operational State Store cannot be projected, run the diagnostic before attempting another startup:
+
+```bash
+cd apps/harvester
+pnpm run operational-state:diagnose
+```
+
+From the repository root, the equivalent command is:
+
+```bash
+pnpm --filter @coinzilla/harvester operational-state:diagnose
+```
+
+The command uses the same `OPERATIONAL_STATE_DIRECTORY` resolution and production `readAll()` integrity verifier as Harvester startup. It reports two independent outcomes:
+
+- `storeIntegrity`: whether the existing facts and committed-head manifest pass the production JSONL, sequence, digest-chain, checkpoint, and filesystem-safety checks.
+- `projection`: whether those verified facts can be converted into the offline recovery candidate.
+
+A projection failure does not mean the files are corrupt. It means the verified records currently violate a projection invariant; the report preserves the specific error message. The command prints only fact-type counts and candidate counts, never fact payloads, order IDs, or credentials.
+
+Exit codes: `0` integrity and projection both succeed; `1` CLI/configuration error; `2` store integrity failure (projection skipped); `3` store integrity succeeds but projection fails.
+
+The command is strictly diagnostic: it does not initialize, append, repair, truncate, or delete the store; connect to Binance; read exchange credentials; start Harvester; or submit/cancel orders. It does not enable recovery or restore trading state. Do not use the initialization command as a repair mechanism. Preserve the original files and investigate the reported failure.
+
 ## Purpose and limits
 
 Harvester uses one in-process EventBus to publish selected operational and trading-lifecycle facts. The Journal subscribes to that bus and appends event records to local JSONL files. Journal persistence is optional in configuration-only/no-broker mode; it is a required startup dependency for every broker-connected mode because the account PREFLIGHT audit must be durably recorded before market subscriptions.

@@ -477,20 +477,43 @@ async function reconcileSpotOrderPlacement({ restClient, symbol, placementData }
       symbol,
       orderId: placementData.orderId,
     })
-    return toResult({
-      data: order,
-      mutationOutcome: "CONFIRMED",
-    })
+    return {
+      ...toResult({
+        data: order,
+        mutationOutcome: "CONFIRMED",
+      }),
+      reconciliation: {
+        status: "VERIFIED",
+        source: "ORDER_DETAIL",
+        endpoint: API.orderDetail,
+      },
+    }
   } catch (error) {
     handleErr({
       where: "BitunixSpotBroker.createOrder() detail reconciliation",
       error,
     })
-    return toResult({
-      data: placementData,
-      errors: [error],
-      mutationOutcome: "CONFIRMED",
-    })
+    // Placement is confirmed, but no normalized Order was returned.
+    // Preserve the accepted acknowledgement and failed read separately so
+    // callers cannot mistake this for a rejected placement or retry it.
+    return {
+      ...toResult({
+        data: placementData,
+        errors: [error],
+        mutationOutcome: "CONFIRMED",
+      }),
+      reconciliation: {
+        status: "UNAVAILABLE",
+        source: "PLACEMENT_ACKNOWLEDGEMENT",
+        endpoint: API.orderDetail,
+        error: {
+          code: error?.code ?? null,
+          exchangeCode: error?.exchangeCode ?? null,
+          kind: error?.kind ?? null,
+          status: error?.status ?? null,
+        },
+      },
+    }
   }
 }
 

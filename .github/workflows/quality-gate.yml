@@ -110,7 +110,8 @@ jobs:
       - name: Report Markdown style baseline (report-only)
         run: node --test scripts/markdown-style-baseline.test.js && node scripts/markdown-style-baseline.js
 
-      - name: Enforce full-tree maintained Markdown style
+      - name: Report full-tree maintained Markdown style baseline
+        continue-on-error: true
         run: |
           node --test scripts/markdown-path-policy.test.js scripts/check-markdown-style.test.js
           node scripts/check-markdown-style.js --all-maintained

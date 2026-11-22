@@ -152,6 +152,7 @@
     "persistence:backup": "node scripts/trading-history-backups.js create",
     "persistence:restore-check": "node scripts/trading-history-backups.js verify",
     "check:reliability": "node scripts/check-critical-behavior-contract.js",
-    "check:critical-coverage": "node scripts/check-critical-module-coverage.js"
+    "check:critical-coverage": "node scripts/check-critical-module-coverage.js",
+    "operational-state:diagnose": "node scripts/diagnose-operational-state.js"
   }
 }
