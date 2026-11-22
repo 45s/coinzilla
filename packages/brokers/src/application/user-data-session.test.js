@@ -2,18 +2,18 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { UserDataSession } from "./user-data-session.js"
 
-function shouldFailReconnect({
-        isReconnectClient,
-        failReconnect,
-      }) {
+function shouldFailReconnect({ isReconnectClient, failReconnect }) {
   return isReconnectClient && (typeof failReconnect === "function" ? failReconnect() : failReconnect)
 }
 
-function shouldFailReconnectCleanup({
-        isReconnectClient,
-        failDisconnect,
-      }) {
+function shouldFailReconnectCleanup({ isReconnectClient, failDisconnect }) {
   return isReconnectClient && (typeof failDisconnect === "function" ? failDisconnect() : failDisconnect)
+}
+
+function createRecoveryPortListeners({ listeners }) {
+  return {
+    ...createRecoveryPortListeners({ listeners }),
+  }
 }
 
 function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, failDisconnect, calls = [], subscribe }) {
