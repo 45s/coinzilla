@@ -355,11 +355,15 @@ function notifyMonitoringObserver({ event, onMonitoringEvent, logger }) {
   try {
     onMonitoringEvent({ event })
   } catch (error) {
-    logger.warn?.({
-      message: "exchange account monitoring observer failed",
-      eventType: event.eventType ?? "UNKNOWN",
-      errorName: error?.name ?? "Error",
-    })
+    try {
+      logger?.warn?.({
+        message: "exchange account monitoring observer failed",
+        eventType: event.eventType ?? "UNKNOWN",
+        errorName: error?.name ?? "Error",
+      })
+    } catch {
+      // Monitoring diagnostics must not affect user-data processing.
+    }
   }
 }
 
