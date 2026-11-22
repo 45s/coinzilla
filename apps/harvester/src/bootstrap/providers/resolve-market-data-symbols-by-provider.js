@@ -110,25 +110,55 @@ function getEnabledStrategyPairs(appConfig) {
   return pairsByStrategy
 }
 
+function resolveSharedMarketEnvironment({ existing, incoming, symbol }) {
+  const existingEnvironment = existing.tradingEnvironment
+  const incomingEnvironment = incoming.tradingEnvironment
+  if (existingEnvironment === incomingEnvironment) {
+    return existingEnvironment
+  }
+  if (existingEnvironment === undefined) {
+    return incomingEnvironment
+  }
+  if (incomingEnvironment === undefined) {
+    return existingEnvironment
+  }
+  if (existingEnvironment === "both") {
+    return incomingEnvironment
+  }
+  if (incomingEnvironment === "both") {
+    return existingEnvironment
+  }
+  throw new TypeError(`Enabled strategies configure conflicting trading environments for market-data symbol ${symbol}`)
+}
+
+function mergeConfiguredMarketPair({ pairs, symbol, pair }) {
+  const existing = pairs[symbol]
+  if (!existing || (existing.enabled !== true && pair.enabled === true)) {
+    pairs[symbol] = pair
+    return
+  }
+  if (existing.enabled !== true || pair.enabled !== true) {
+    return
+  }
+  pairs[symbol] = {
+    ...existing,
+    tradingEnvironment: resolveSharedMarketEnvironment({
+      existing,
+      incoming: pair,
+      symbol,
+    }),
+  }
+}
+
 function createEnabledMarketMap(pairsByStrategy) {
   const pairs = {}
   for (const [, strategyPairs] of pairsByStrategy) {
     for (const [symbol, pair] of Object.entries(strategyPairs)) {
-      if (pair?.enabled !== true) {
-        continue
-      }
-      const existing = pairs[symbol]
-      if (existing && existing.tradingEnvironment !== pair.tradingEnvironment) {
-        const environments = new Set([existing.tradingEnvironment, pair.tradingEnvironment])
-        if (environments.has("both")) {
-          pairs[symbol] = { ...existing, tradingEnvironment: [...environments].find((value) => value !== "both") }
-          continue
-        }
-        if (environments.size > 1) {
-          throw new TypeError(`Enabled strategies configure conflicting trading environments for market-data symbol ${symbol}`)
-        }
-      }
-      pairs[symbol] = pair
+      mergeConfiguredMarketPair({
+        pairs,
+        symbol,
+        pair,
+      })
     }
   }
   return pairs
