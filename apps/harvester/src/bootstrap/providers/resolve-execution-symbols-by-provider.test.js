@@ -142,6 +142,26 @@ test("rejects an RS route unless RS is explicitly enabled and the market is enab
   )
 })
 
+test("infers the enabled RS-only route in legacy single-provider TESTNET mode", () => {
+  const result = resolveExecutionRoutesByProvider({
+    appConfig: {
+      strategies: {
+        RS_recoverySeller: {
+          enabled: true,
+          pairs: {
+            LINEAUSDT: { enabled: true, tradingEnvironment: "testnet" },
+          },
+        },
+      },
+    },
+    providers: [providers[0]],
+  })
+  assert.deepEqual([...result], [[
+    "binance-testnet-primary",
+    [{ strategyId: StrategyId.RECOVERY_SELLER, symbol: "LINEAUSDT" }],
+  ]], "RS-only legacy mode must infer the single configured TESTNET provider without requiring explicit routing")
+})
+
 test("rejects multi-provider configuration without an explicit execution route table", () => {
   assert.throws(
     () => resolveExecutionSymbolsByProvider({
