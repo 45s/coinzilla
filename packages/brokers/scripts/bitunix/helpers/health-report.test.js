@@ -196,6 +196,6 @@ test("sanitized health report retains only the safe selected probe identifier", 
     },
   })
 
-  assert.equal(published.results[0].probeId, "limit-buy-1")
+  assert.equal(published.results[0].probeId, "limit-buy-1")\n  assert.equal(published.results[0].mutationOutcome, "REJECTED")
   assert.equal(JSON.stringify(published).includes("must-not-publish"), false)
 })
