@@ -1,255 +1,83 @@
-# Local Harvester DEV archive — decisions and implementation record
+# Harvester local development archive
 
-> Status: `archive:push` retains the final 5% of each cumulative log, includes only the newest timestamp-named session directory, copies `data/` and `recovery-facts/` completely, derives `data_commit_hash` from the last committed recovery-facts checkpoint, streams checksums, verifies the selected evidence, and publishes to the private archive repository. Focused tests and local publication still require operator execution.
-> Tracking issue: [#1742](https://github.com/45s/coinzilla/issues/1742).
-> Task branch: `feat/harvester-local-dev-reset-archive`.
-> Private destination: `45s/coinzilla-archive` (private repository).
+> **Status: complete and operator-verified (2026-11-22).** The existing `pnpm run archive:push` command created a compact evidence snapshot, verified it locally, published it to the private `45s/coinzilla-archive` repository, and verified all 14 remote files.
+>
+> Tracking issue: [#1742](https://github.com/45s/coinzilla/issues/1742)  
+> Implementation branch: `feat/harvester-local-dev-reset-archive`  
+> Private destination: `https://github.com/45s/coinzilla-archive.git`
 
-This document is the durable handoff for this work. A future contributor must continue from this record and the linked issue, not rediscover decisions from chat history.
+## Current archive contract
 
-## 1. Confirmed scope (current operator decision, 2026-11-22)
-
-The existing `pnpm run archive:push` command creates one uniquely named archive directory with this evidence selection:
-
-1. `logs/cumulative/`: retain only the final 5% of each regular file (tail bytes).
-2. `logs/sessions/`: retain only the lexicographically newest session directory; session directory names use sortable timestamps. Keep every file in that selected session, gzip-compressed as `.gz` so large logs fit GitHub file limits. Decompress with standard gzip tools to recover original bytes.
-3. Other top-level log entries: copy unchanged.
-4. Complete `data/` directory, including database files and SQLite WAL/SHM sidecars.
-5. Complete `recovery-facts/` directory, preserving `facts.jsonl` and `manifest.jsonl`.
-6. Root-level `data_commit_hash`, derived from the final committed recovery-facts manifest/fact records.
-
-The remote layout is:
-
-```text
-archives/<archive-id>/
-├── data_commit_hash
-├── logs/
-├── data/
-├── recovery-facts/
-└── manifest.json
-```
-
-The command does not require process identity/completion markers and does not start a new Harvester process. Log selection is intentionally lossy: older sessions are excluded and cumulative files are byte-trimmed. The source `logs/`, `data/`, and `recovery-facts/` directories are never modified. The complete `data/` and `recovery-facts/` trees are retained. The archive is not a transactional SQLite backup.
-
-Progress output shows the total file count and byte size before copying, per-file copy and checksum counts/bytes, local verification, remote clone/staging/push/verification phases, and Git's own transfer percentage during clone and push. The command remains `pnpm run archive:push`; no additional script or arguments are required.
-
-Safety boundaries:
-- Require `TRADING_MODE=testnet` for invoking the archive command and restrict publication to the private `45s/coinzilla-archive` repository.
-- Do not follow symlinks or archive special filesystem entries.
-- Do not serialize environment variables or credentials into the archive manifest.
-- Do not make exchange API calls, mutate trading configuration, or start/stop a process.
-- Keep the local snapshot if publication fails; never force-push or overwrite a different existing archive.
-- The entire `data/` tree is included as requested. The command-mode guard does not certify that every file in that tree belongs to TESTNET.
-
-## 2. Original process-identity contract (historical; superseded by section 1)
-
-The archive must identify the Harvester process that produced the data.
-
-- Timestamp: UTC process-start timestamp, captured once by the dev launcher.
-- Source revision: full Coinzilla Git commit SHA captured for that process at startup.
-- Worktree state: capture clean/dirty state at process startup when available.
-- Archive directory name: `<UTC-process-start-timestamp>_<short-commit-sha>`, for example `2026-11-22T14-43-00Z_a1b2c3d`. The full commit SHA remains in the manifest.
-- The archive command must read the persisted process identity. It must **not** run `git rev-parse HEAD` at archive time and substitute the current checkout's commit.
-- If the process-start timestamp or source commit is unavailable/invalid, fail closed. Never silently fall back to current time or current HEAD.
-
-### Existing source facts inspected
-
-`apps/harvester/scripts/run-dev-with-log.js` currently captures `sessionStartedAt` and `runtimeSessionId` before spawning `src/index.js`, and passes them as `COINZILLA_PROCESS_STARTED_AT` and `COINZILLA_RUNTIME_SESSION_ID`. It creates the per-process session directory using those values.
-
-The Journal process-start event schema already records allowlisted Git source metadata (branch, full/short commit, subject/date, working-tree state and metadata source). Reuse the canonical process identity/provenance path; do not create a competing provenance format.
-
-**Implemented startup identity slice:**
-
-- `run-dev-with-log.js` captures `captureBuildMetadata()` once before spawning Harvester and stores the allowlisted source snapshot with the process-start timestamp, runtime session UUID and `TRADING_MODE`.
-- The launcher writes `logs/sessions/<timestamp>-<runtime-session-id>/process-identity.json` using exclusive creation (`wx`) and restrictive file mode (`0600`). An existing identity is never overwritten.
-- After the child exits and session log streams are closed, the runner writes a matching `process-completed.json` marker using exclusive creation. The archive command requires and validates this marker before copying session evidence.
-- The child receives the exact captured source snapshot through the internal `COINZILLA_PROCESS_SOURCE_METADATA` environment value. `createHarvesterProcessIdentity()` reuses that snapshot for the Journal process-start event and does not perform a second Git lookup.
-- If startup Git provenance is unavailable, the identity records explicit null/unknown values. The later archive command must reject missing/invalid commit provenance; it must not substitute the current checkout's HEAD.
-- The persisted identity contains only allowlisted build metadata and process facts. It does not serialize the environment or credentials.
-
-The original process-scoped archive implementation selected the newest eligible TESTNET session (or accepted `--session <runtime-session-id>`), used persisted process identity, created a verified snapshot through the SQLite backup service, and copied only that session and backup pair. This contract is historical and is no longer used by the current folder-snapshot implementation. The dev runner writes `process-completed.json` only after the child exits and the session log streams are closed. The archive command requires this matching completion marker, so it refuses to copy a session that is still running or did not close through the runner. Run it after the Harvester process has stopped.
-
-## 3. Original process-scoped data selection (historical; superseded by section 1)
-
-### Database
-
-- Include only the TESTNET database resolved by the existing database resolver: `data/testnet/harvester.db` under the configured database root.
-- Require `TRADING_MODE=testnet`; reject missing, invalid, or LIVE mode.
-- Use the existing SQLite WAL-aware online backup service/API. Do not copy a live SQLite main file directly while ignoring WAL/SHM state.
-- Verify SQLite integrity and the backup checksum before packaging/publishing.
-- Never read or include `data/production/` or a LIVE database.
-
-### Logs
-
-- Include the per-process session directory associated with the captured runtime session ID and process-start timestamp. It contains structured diagnostic output and terminal evidence; the Journal file is colocated with that session.
-- Preserve source files. Archiving is copy-only.
-- The current `logs/cumulative/terminal.log` is shared/append-only across runs and may mix DEV and PROD. Exclude it until environment ownership can be proven; do not archive the entire shared `logs/` tree.
-- Do not guess that a legacy/root-level log or Journal session belongs to DEV.
-
-### Facts and Journal
-
-The Journal file inside the selected process session is included as part of that session's logs/evidence. The separate Operational State Store facts (`facts.jsonl` and `manifest.jsonl`) are excluded in this narrowed milestone. Do not modify or migrate them.
-
-## 4. Local artifact and remote publication
-
-- Produce one uniquely named archive artifact per process/session.
-- Keep archive storage flat: no nested archive folders per session.
-- Include a manifest inside the artifact recording format version, environment, process-start timestamp, full source commit, worktree state, runtime session ID, source paths, file sizes and checksums.
-- Verify the completed artifact and manifest before any remote write.
-- Publish only to the configured private remote `https://github.com/45s/coinzilla-archive.git`, branch `main`, under its `archives/` directory.
-- Do not force-push, rewrite history, overwrite an existing artifact, or commit operational data to the source repository.
-- Remote publication must verify the exact artifact bytes were committed. A failed push must leave the local artifact intact for retry.
-- The existing `archive:repo:init` command only initializes the private repository and creates its README plus `archives/.gitkeep`; it does not archive or upload operational data.
-
-The private remote was initialized successfully by the operator with:
-
-```bash
-pnpm run archive:repo:init
-```
-
-After stopping the Harvester DEV process, publish its TESTNET database snapshot and matching session evidence with:
+Run the existing command from `apps/harvester`:
 
 ```bash
 pnpm run archive:push
 ```
 
-To select a specific prior TESTNET session rather than the newest eligible TESTNET session:
+The command requires `TRADING_MODE=testnet` and publishes only to the configured private archive repository. It does not start or stop Harvester, call exchange APIs, change trading configuration, or reset/clean operational state.
+
+Each uniquely named `archives/<archive-id>/` snapshot contains:
+
+- `logs/cumulative/**`: final 5% of each regular file, retained as tail bytes.
+- `logs/sessions/**`: only the lexicographically newest timestamp-named session directory; every regular file in that session is gzip-compressed with a `.gz` suffix.
+- Other top-level entries under `logs/`: copied unchanged.
+- `data/**`: copied completely, including database files and any SQLite WAL/SHM sidecars present.
+- `recovery-facts/**`: copied completely.
+- `data_commit_hash`: derived from and validated against the latest committed recovery-facts checkpoint.
+- `manifest.json`: archive metadata and file inventory, sizes, and SHA-256 checksums.
+
+The archive is intentionally selective for logs: older session directories are excluded, and cumulative logs are truncated to their final 5% in the archive copy. The original source directories are not modified. The local archive is written under `apps/harvester/archive-output/`, outside the source trees.
+
+The snapshot is a raw folder copy, not a transactional SQLite backup. File checksums establish the bytes copied; they do not establish SQLite transactional consistency or classify every file under `data/` as TESTNET. Run against a stopped process where practical.
+
+## Safety and publication behavior
+
+- Reject symlinks and unsupported filesystem entries; do not follow them.
+- Never serialize environment variables or credentials into the manifest.
+- Never write operational data to the source `45s/coinzilla` repository.
+- Publish a unique archive directory without force-push or overwrite.
+- Verify local inventory and checksums before publishing.
+- Verify the remote commit and each archived file blob after pushing.
+- Preserve the local snapshot if publication fails; do not delete or rewrite source evidence.
+- No reset, source cleanup, migration, process control, exchange request, or order/account mutation is part of this workflow.
+
+## Verified operator run — 2026-11-22
+
+Focused test command, run from `apps/harvester`:
 
 ```bash
-pnpm run archive:push -- --session <runtime-session-id>
+node --test scripts/archive-testnet-session.test.js
 ```
 
-The local archive is retained under `apps/harvester/data/archives/<timestamp>_<short-commit>/`. The private remote receives the same directory under `archives/`. A failed push leaves the local directory in place. A complete local archive can be retried; a partial or mismatched local directory is never overwritten.
+Result: **5 passed, 0 failed**.
 
-Configured local environment value:
+Archive command:
 
-```env
-HARVESTER_ARCHIVE_REMOTE=https://github.com/45s/coinzilla-archive.git
+```bash
+pnpm run archive:push
 ```
 
-The bootstrap success verifies the operator's local HTTPS Git push access. It does not constitute a completed operational archive upload.
+Result: **published and remotely verified**.
 
-## 5. Safety invariants
+| Item | Verified result |
+|---|---|
+| Archive path | `archives/2026-11-22T17-35-17Z_77213df6` |
+| Local copy | `apps/harvester/archive-output/2026-11-22T17-35-17Z_77213df6` |
+| Remote commit | `f283c90db9143c74683ae5bf9c7bb52e09590d56` |
+| Files verified remotely | 14 |
+| Evidence copied | 189.4 MB |
+| Cumulative logs | Final 5% retained |
+| Session logs | Newest session only, gzip-compressed |
+| Data and recovery facts | Complete |
+| Local checksum verification | Passed |
+| Remote commit/blob verification | Passed |
 
-- Copy only; never reset or delete source files.
-- Require explicit TESTNET mode.
-- Refuse if the process/session identity cannot be established.
-- Refuse symlinks, path aliases, missing files, partial sessions, corrupt SQLite backups, checksum mismatch, archive-name collision, or incomplete artifact.
-- Do not terminate Harvester or bypass its process lock.
-- Do not read or alter PROD data.
-- Do not expose credentials, API keys, environment-file contents, or secrets in archive metadata.
-- Keep the local archive if remote publication fails.
-- No exchange requests or order/account mutations.
+GitHub emitted its recommended-size warning for two cumulative log files (approximately 91.85 MB and 92.56 MB). Both are below GitHub's 100 MB ordinary Git file limit; the push succeeded and remote verification passed.
 
-## 6. Implementation sequence
+The earlier failed 7.3 GB local archive was not reused, overwritten, or deleted. It remains at its original local path. The successful compact snapshot is a separate archive.
 
-1. Inspect and reuse the existing startup process identity and Git provenance implementation.
-2. Capture the immutable full source commit and worktree state in the dev launcher at process start; pass it to the child using explicit, non-secret process metadata.
-3. Use the persisted process identity to select the exact session; the command defaults to the newest eligible TESTNET session and supports an explicit runtime session ID.
-4. Create the TESTNET SQLite snapshot through the existing online backup service.
-5. Copy the snapshot/backup manifest and exact session directory, including colocated Journal evidence.
-6. Build the timestamp/short-commit directory with an internal manifest and SHA-256 checksums.
-7. Verify all local files and SQLite backup before publication.
-8. Push a new, non-overwriting directory to the private remote and verify remote blob IDs.
-9. Run the focused archive tests and full package tests locally; perform the first real archive push only under the operator's local control.
+## Historical decisions
 
-Do not add reset behavior as an incidental extension. Any later reset request requires a separately scoped, explicitly reviewed change.
+The initial design explored process identity/completion markers, exact-process session selection, and a WAL-aware SQLite backup. The operator later explicitly changed scope to archive the already-existing local folders without starting another Harvester process. Those earlier process-scoped requirements are superseded by the current contract above.
 
-## 7. Existing implementation inspected
-
-- `scripts/initialize-private-archive-repository.js`: validates an HTTPS/SSH remote, refuses a non-empty remote, creates an initial `main` commit and pushes it without force. This is bootstrap only.
-- `scripts/run-dev-with-log.js`: captures process start time and runtime session ID before child spawn; writes per-session terminal output and a shared cumulative terminal log.
-- `src/infrastructure/logging/create-harvester-log-session-paths.js`: canonical per-session path resolver.
-- `src/infrastructure/persistence/trading-history-backups/create-backup.js`: existing WAL-aware SQLite backup, checksum manifest, integrity verification and retention service. Reuse its online backup/verification primitives; do not make a raw DB copy.
-- `src/infrastructure/persistence/resolve-harvester-database-filename.js`: explicit isolated TESTNET/LIVE database path resolver.
-
-## 8. Current completion status
-
-Completed:
-- Task branch exists: `feat/harvester-local-dev-reset-archive`.
-- Private archive repository exists and was initialized by the operator.
-- `HARVESTER_ARCHIVE_REMOTE` configuration is documented in the Harvester environment template.
-- `archive:repo:init` bootstrap script and its tests were committed.
-- Existing process-session logging, Journal co-location, database isolation and online SQLite backup implementations were inspected.
-- Operator narrowed the milestone to copy + push logs/database only, explicitly without encryption and without reset.
-
-Not yet verified:
-- The new archive script and focused tests have not been executed in a local workspace or by a branch CI run in this task.
-- The operator has not yet run `pnpm run archive:push`; no operational data has been copied or uploaded by the assistant.
-- The first local archive and private-remote publication must be confirmed by the operator after pulling the branch.
-
-## 9. Resume checklist
-
-A new contributor should:
-
-- Read repository `AGENTS.md`, `ENGINEERING_STANDARDS.md`, `AI_AGENT_WORKFLOW.md`, Harvester `AGENTS.md`, `TRADING_FIRST.md`, `ROADMAP.md`, and the Harvester persistence/logging/Journal operations docs.
-- Read issue [#1742](https://github.com/45s/coinzilla/issues/1742) and this document.
-- Pull `feat/harvester-local-dev-reset-archive` and run the focused archive test plus package checks before the first local archive.
-- Run `pnpm run archive:push` only after the Harvester DEV process has exited cleanly and the completion marker exists.
-- Record the first local/remote archive result and any operator-discovered issue here and in #1742. Do not reopen settled scope decisions unless the operator changes them.
-- Record every implementation decision, command, test/CI result, commit, PR and remaining limitation in this document and the issue so the work is never dependent on chat history.
-
-
-## 10. First operator archive attempt — legacy session diagnosis (2026-11-22)
-
-The operator ran `pnpm run archive:push`; it failed closed with:
-
-```text
-Harvester archive publication failed: No eligible TESTNET process session was found under logs/sessions.
-```
-
-Inspection of the newest existing session, `2026-11-22_11-10-47-403b10b2-17aa-4760-a6e9-c36453cd73e2`, showed only its structured JSONL, `harvester.log`, `terminal.log`, and `trace.log`. It did not contain `process-identity.json` or `process-completed.json`. This session was created without the new archive identity/completion markers, so it is not eligible for safe archival.
-
-Do not weaken the resolver to accept legacy sessions. Do not synthesize metadata, infer startup commit from current Git HEAD, or retrofit a completion marker. Preserve the old session unchanged.
-
-### Next diagnostic / acceptance sequence
-
-1. Confirm the operator has pulled the latest task branch and that `pnpm run dev` invokes `scripts/run-dev-with-log.js` (not `pnpm start` or direct `src/index.js`).
-2. Before starting another process, confirm a controlled TESTNET validation run is intended and that configured symbols/investment limits are safe. Never start trading automatically.
-3. Start and stop one controlled TESTNET process through `pnpm run dev`.
-4. Inspect the new session directory. `process-identity.json` must exist at startup and contain the immutable process-start timestamp, runtime session ID, TESTNET environment and full startup commit. After clean shutdown, `process-completed.json` must match the runtime session ID and report `logStreamsComplete: true`.
-5. Only after those checks, run `pnpm run archive:push`; verify the local archive and private-remote publication.
-
-**Current status:** the operator reports the focused archive tests passed (5/5). The first archive attempt created/published nothing. No legacy session was modified and no operational data was uploaded. End-to-end validation remains pending a session created by the updated launcher.
-
-## 11. Operator scope change — complete local folder snapshot (2026-11-22)
-
-The operator explicitly changed the archive requirement after the first command rejected the legacy run. This section supersedes the earlier process-marker, exact-session-only, shared-log exclusion, facts exclusion and per-process provenance requirements for the current archive command.
-
-- Keep and use the existing `pnpm run archive:push` command. Do not add a second command or ask the operator to start another Harvester process.
-- Under `logs/cumulative/`, keep only the final 5% of each regular file by byte length.
-- Under `logs/sessions/`, keep only the lexicographically newest timestamp-named session directory, including all files gzip-compressed with a `.gz` suffix. Fail closed if no session directory exists.
-- Copy other top-level log entries unchanged.
-- Copy the complete `data/` and `recovery-facts/` trees, including database files, SQLite `-wal` / `-shm` sidecars, Journal evidence and Operational State Store facts when present.
-- Do not select a process session, synthesize identity markers, call the SQLite backup service, or claim SQLite integrity verification. The manifest verifies copied file inventory, sizes and SHA-256 checksums only.
-- Keep the explicit `TRADING_MODE=testnet` command guard and exact private remote restriction. The mode describes the command invocation; it does not classify every file inside the complete `data/` tree.
-- Write the local archive outside the source trees under `apps/harvester/archive-output/` to prevent the archive from copying itself. Publish a unique directory under the private remote's `archives/` path without overwriting an existing destination.
-- Never mutate, reset, delete or clean the source `logs/` or `data/` folders. Do not start, stop or control a Harvester process. Do not make exchange API calls.
-- The latest operator selection explicitly supersedes the earlier complete-logs requirement: cumulative logs are tailed to 5%, and only the newest session directory is retained (gzip-compressed). Data and recovery facts remain complete.
-
-The command's archive timestamp is the time the snapshot is created, not a claim about the archived process start time. The archive is a raw evidence copy; if Harvester is still writing to the database during the copy, the checksums prove only the bytes copied, not transactional SQLite consistency. Run it against the already-stopped process when possible. No new process is needed.
-
-The first archive attempt remains a historical observation: the legacy session was not changed and no archive was uploaded. The new command is intended to make that existing evidence eligible without fabricating process metadata.
-
-
-## 12. Recovery checkpoint and archive layout (2026-11-22)
-
-Each archive directory contains the complete \`logs/\`, \`data/\`, and \`recovery-facts/\` trees plus a root-level \`data_commit_hash\` file:
-
-\`\`\`text
-archives/<archive-id>/
-├── data_commit_hash
-├── logs/
-├── data/
-├── recovery-facts/
-└── manifest.json
-\`\`\`
-
-The archive command reads the final JSONL record from \`recovery-facts/manifest.jsonl\` and the final record from \`recovery-facts/facts.jsonl\`. It requires the manifest \`lastCommittedDigest\` to equal the final fact \`digest\`, requires their sequence values to match, verifies \`recordCount\` against the facts line count, and validates the final fact's \`runtimeSessionId\`. The root \`data_commit_hash\` file contains that committed digest. The archive manifest records the digest, runtime session ID and fact sequence. No hash is inferred from the current Git HEAD or archive creation commit.
-
-For the existing last session identified during the 2026-11-22 recovery-facts inspection:
-- Runtime session: \`ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c\`
-- Final committed fact sequence: \`48\`
-- \`data_commit_hash\`: \`154720ef4b575e5a189fc6aa78fd9575917537d02e808403593ab4c09c8dd4b8\`
-
-The command derives these values from the local copied JSONL ledgers at runtime; the values above document the previously inspected last session and are not hard-coded into the archive implementation.
+The issue title originally mentioned resetting local operational state. **Reset is explicitly out of scope**: this workflow archives evidence only and never deletes or resets local state.
