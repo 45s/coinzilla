@@ -275,6 +275,29 @@ test("rejects LIVE mode before reading or copying local evidence", async (t) => 
   )
 })
 
+
+test("rejects database archive paths that overlap logs or archive output", async (t) => {
+  const fixture = await createArchiveFixture()
+  t.after(() => rm(fixture.packageDirectory, {
+    recursive: true,
+    force: true,
+  }))
+
+  await assert.rejects(
+    runHarvesterArchivePush(createArchiveDependencies({
+      packageDirectory: fixture.packageDirectory,
+      envOverrides: {
+        HARVESTER_DATABASE_DIRECTORY: fixture.packageDirectory,
+      },
+    })),
+    /must not overlap/i,
+  )
+  await assert.rejects(
+    readdir(path.join(fixture.packageDirectory, "archive-output")),
+    { code: "ENOENT" },
+  )
+})
+
 test("retains the verified local snapshot when remote publication fails", async (t) => {
   const fixture = await createArchiveFixture()
   t.after(() => rm(fixture.packageDirectory, {
