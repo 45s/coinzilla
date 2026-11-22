@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path"
 import { BitunixRestClient } from "../../../src/infrastructure/bitunix/spot/api/rest-client.js"
 import { runDiagnostics as runReadOnlyDiagnostics } from "../diagnostics/run-diagnostics.js"
 import { publishHealthReport } from "./publish-health-report.js"
-import { evaluateReadOnlyHealthCheck } from "../helpers/health-report.js"
+import { evaluateReadOnlyHealthCheck, evaluateOperatorOrderProbeHealthCheck } from "../helpers/health-report.js"
 import { appendOrderAttemptResult } from "../helpers/append-order-attempt-result.js"
 import { createDiagnosticReport, createDiagnosticResult } from "../helpers/create-diagnostic-report.js"
 
@@ -64,18 +64,18 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
 
 function printPublishedResult({ result, stdout, probeMode = false }) {
   const { passed, failed, skipped, total } = result.report.summary
-  const operatorAttempt = result.report.results.find((entry) => entry.operation === "operator order attempt")
+  const operatorAttempt = result.report.results.find((entry) =>\n    entry.operation === "operator order attempt" || entry.operation === "operator order probe")
   stdout.write([
     "Bitunix Spot diagnostics completed.",
     `Checks: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
     `Diagnostics: ${failed === 0 ? "HEALTHY" : "DEGRADED"}`,
-    `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+    probeMode\n      ? `Operator probe gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`\n      : `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
     ...(probeMode ? ["The selected probe uses its own fresh Broker preflight; generic diagnostics do not gate dispatch."] : []),
     ...(result.healthCheck.nonBlockingFailedOperations.length > 0
       ? [`Non-blocking diagnostic failures: ${result.healthCheck.nonBlockingFailedOperations.join(", ")}`]
       : []),
     ...(operatorAttempt?.probeId ? [`Order probe: ${operatorAttempt.probeId}`] : []),
-    ...(operatorAttempt ? [`Operator order attempt: ${operatorAttempt.status.toUpperCase()}`] : []),
+    ...(operatorAttempt ? [`${probeMode ? "Operator order probe" : "Operator order attempt"}: ${operatorAttempt.status.toUpperCase()}`] : []),
     ...(result.healthCheck.missingRequiredOperations.length > 0
       ? [`Required gate checks not passed: ${result.healthCheck.missingRequiredOperations.join(", ")}`]
       : []),
@@ -98,18 +98,10 @@ async function runDiagnosticsWithOperatorAttempt({
   runOperatorProbe,
   probeId,
 }) {
+  const startedAt = Date.now()
   let report
-  try {
-    report = await runDiagnostics({
-      env,
-      onProgress,
-      brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
-    })
-  } catch (error) {
-    if (!runOperatorProbe) {
-      throw error
-    }
-    const timestamp = new Date().toISOString()
+  if (runOperatorProbe) {
+    const timestamp = new Date(startedAt).toISOString()
     report = createDiagnosticReport({
       startedAt: timestamp,
       finishedAt: timestamp,
@@ -117,12 +109,14 @@ async function runDiagnosticsWithOperatorAttempt({
         node: process.version,
         platform: process.platform,
       },
-      results: [createDiagnosticResult({
-        operation: "diagnostic runner",
-        status: "failed",
-        error,
-        secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean),
-      })],
+      results: [],
+      events: [],
+    })
+  } else {
+    report = await runDiagnostics({
+      env,
+      onProgress,
+      brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
   }
   if (!runOperatorOrder && !runOperatorProbe) {
@@ -143,10 +137,9 @@ async function runDiagnosticsWithOperatorAttempt({
   }
   onProgress?.({
     message: runOperatorProbe
-      ? `      Read-only diagnostics completed; starting the separately guarded ${probeId} probe`
+      ? `      General diagnostics skipped; running focused HYPEUSDT preflight for ${probeId}`
       : "      Read-only health checks passed; starting the guarded HYPEUSDT operator attempt",
   })
-  const startedAt = Date.now()
   let operatorResult
   try {
     operatorResult = runOperatorProbe
@@ -161,13 +154,20 @@ async function runDiagnosticsWithOperatorAttempt({
       errors: [error],
     }
   }
-  return appendOrderAttemptResult({
+  const appendedReport = appendOrderAttemptResult({
     report,
     operatorResult,
     durationMs: Date.now() - startedAt,
     probeId: runOperatorProbe ? probeId : undefined,
+    probeMode: Boolean(runOperatorProbe),
     secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean),
   })
+  return runOperatorProbe
+    ? {
+      ...appendedReport,
+      finishedAt: new Date().toISOString(),
+    }
+    : appendedReport
 }
 
 function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId }) {
@@ -197,7 +197,7 @@ async function runPublishedHealthCheck({
   }))
   const result = await publishDiagnostics({
     repositoryRoot,
-    runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
+    healthCheckEvaluator: runOperatorProbe\n      ? evaluateOperatorOrderProbeHealthCheck\n      : evaluateReadOnlyHealthCheck,\n    runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
       ...input,
       runDiagnostics,
       runOperatorOrder,
