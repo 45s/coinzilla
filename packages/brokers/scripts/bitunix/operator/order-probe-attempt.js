@@ -251,12 +251,13 @@ function formatProbeStopLines({ mutationOutcome }) {
 
 function formatOrderProbeResult({ result, capture, secrets = [] }) {
   const reconciliationUnavailable = result?.reconciliation?.status === "UNAVAILABLE"
-  return [
-    `Broker result: ${result?.ok === true
+  const brokerResultLabel = reconciliationUnavailable && result?.mutationOutcome === "CONFIRMED"
+    ? "not successful (placement confirmed; reconciliation unavailable)"
+    : result?.ok === true
       ? "success"
-      : reconciliationUnavailable && result?.mutationOutcome === "CONFIRMED"
-        ? "not successful (placement confirmed; reconciliation unavailable)"
-        : "not successful"}`,
+      : "not successful"
+  return [
+    `Broker result: ${brokerResultLabel}`,
     `Mutation outcome: ${result?.mutationOutcome ?? "OUTCOME_UNKNOWN"}`,
     ...(result?.reconciliation
       ? [`Reconciliation: ${result.reconciliation.status} (${result.reconciliation.source})`]
