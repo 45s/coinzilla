@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { DEFAULT_OPERATIONAL_STATE_DIRECTORY, resolveOperationalStateDirectory } from "../infrastructure/operational-state/resolve-operational-state-directory.js"
+import { DEFAULT_OPERATIONAL_STATE_DIRECTORY, resolveOperationalStateDirectory } from "../infrastructure/operational-state/resolve-directory.js"
 import { runInitializeOperationalState } from "./initialize-operational-state-cli.js"
 
 const runWithDefaultDirectory = (options) => runInitializeOperationalState({

@@ -1989,3 +1989,7 @@ The current rationale, filter mapping, deliberately excluded order-type-specific
 - **Test-fixture contract:** the multi-market broker harness preserves explicit `getSymbolFilters` overrides and supplies a deterministic same-market default when none is provided.
 
 - **Policy fixture:** current-filter integration tests pass the seeded completed-BUY VWAP to both policy evaluation paths; production VWAP reconciliation behavior remains separately guarded.
+
+## 2026-11-22 — RS first-start Operational State Store wiring
+
+Enabled RS startup exposed that the process entrypoint prepared the ADR-0001 Operational State Store only for Conservative restart recovery, despite RS requiring the store for its durable STOP latch and process-boundary facts. The focused fix and offline regression coverage are in [PR #1718](https://github.com/45s/coinzilla/pull/1718), tracked under [issue #1713](https://github.com/45s/coinzilla/issues/1713). The fix creates genesis automatically only when the ledger directory is missing or empty, verifies a complete existing ledger, and refuses partial, unexpected, or corrupt contents without repair. No manual genesis command is required for ordinary first startup. Automatic restart restoration remains disabled. Controlled TESTNET acceptance remains a separate paused operational gate.

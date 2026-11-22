@@ -7,7 +7,7 @@ import { prepareHarvesterStartupState, startHarvester } from "../../src/bootstra
 import { createBroker } from "./broker-test-support.js"
 import { resolveHarvesterOptions } from "../../src/bootstrap/config/resolve-harvester-options.js"
 import { createRecoverySellerStopWorkflow } from "../../src/use-cases/create-recovery-seller-stop-workflow.js"
-import { createFileOperationalStateStore } from "../../src/infrastructure/operational-state/create-file-operational-state-store.js"
+import { createFileOperationalStateStore } from "../../src/infrastructure/operational-state/create-file-store.js"
 import { recordConfigurationBaseline } from "../../src/use-cases/record-configuration-baseline.js"
 import { recordProcessStarted } from "../../src/use-cases/record-process-started.js"
 import { recordProcessStopped } from "../../src/use-cases/record-process-stopped.js"

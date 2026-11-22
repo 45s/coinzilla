@@ -282,7 +282,7 @@ Relevant source:
 - `apps/harvester/src/use-cases/record-order-submission-outcome.js` — persists acknowledgement outcome and exchange order ID; no provider/account.
 - `apps/harvester/src/use-cases/record-order-cancellation-intent.js` and `record-order-cancellation-outcome.js` — persist order/market IDs and cancellation state; no provider/account.
 - `apps/harvester/src/use-cases/record-execution-fill.js` — persists trade/order/client IDs, market, exact quantities, commissions and execution time; no provider/account.
-- `apps/harvester/src/infrastructure/operational-state/create-file-operational-state-store.js` — strict fact field allowlists reject unrecognized provenance fields.
+- `apps/harvester/src/infrastructure/operational-state/create-file-store.js` — strict fact field allowlists reject unrecognized provenance fields.
 
 The current `Market.venue` identifies an exchange, not an instance/account. Strategy ownership exists in the in-memory OrderRegistry but is not fully persisted with order lifecycle facts.
 
@@ -302,7 +302,7 @@ The current Harvester order-fact path uses the append-only Operational State Sto
 
 Source facts:
 
-- `apps/harvester/src/infrastructure/operational-state/create-file-operational-state-store.js` has `FORMAT_VERSION = 1`, `DEFAULT_SCHEMA_VERSION = 1` and strict per-fact allowlists.
+- `apps/harvester/src/infrastructure/operational-state/create-file-store.js` has `FORMAT_VERSION = 1`, `DEFAULT_SCHEMA_VERSION = 1` and strict per-fact allowlists.
 - Submission/cancellation/fill producers and Journal DTOs are separate contracts and must evolve together.
 - Existing JSONL records are hash-chained/immutable evidence. Historical facts must not be rewritten or assigned guessed account identities.
 

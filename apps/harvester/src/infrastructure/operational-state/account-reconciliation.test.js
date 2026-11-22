@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 import test from "node:test"
-import { createFileOperationalStateStore } from "./create-file-operational-state-store.js"
+import { createFileOperationalStateStore } from "./create-file-store.js"
 
 const createStore = async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-account-facts-"))
@@ -84,9 +84,8 @@ test("accepts complete exact-decimal balance and account-wide open-order snapsho
   )
 })
 
-test("rejects balance snapshots with incomplete or contradictory exact accounting", async (t) => {
-  const store = await createStore(t)
-  const invalidFacts = [
+function createInvalidBalanceSnapshotFacts() {
+  return [
     balanceSnapshot({ factId: "account-snapshot:bad-total",
 data: {
       ...balanceSnapshot().data,
@@ -142,6 +141,11 @@ total: "125" },
       ],
     } }),
   ]
+}
+
+test("rejects balance snapshots with incomplete or contradictory exact accounting", async (t) => {
+  const store = await createStore(t)
+  const invalidFacts = createInvalidBalanceSnapshotFacts()
 
   for (const fact of invalidFacts) {
     const result = await store.append(fact)
@@ -233,12 +237,9 @@ test("accepts an explicitly blocked open-order snapshot without treating it as a
 })
 
 
-test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one asset", async (t) => {
-  const store = await createStore(t)
-  const baseline = (...parameters) => {
+function createCommissionBaselineFact(...parameters) {
   const [factId, balances, auditStatus = "COMPLETE", auditReasons = []] = parameters
-  return ({
-
+  return {
     factId,
     factType: "ACCOUNT_SNAPSHOT_CAPTURED",
     data: {
@@ -249,9 +250,12 @@ test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one as
       balances,
       auditReasons,
     },
-    })
   }
-  const valid = await store.append(baseline(
+}
+
+test("requires a targeted COMMISSION_BASELINE snapshot to contain exactly one asset", async (t) => {
+  const store = await createStore(t)
+  const valid = await store.append(createCommissionBaselineFact(
     "account-snapshot:COMMISSION_BASELINE:single-asset",
     [{ asset: "BNB",
 free: "1.0000",
@@ -264,7 +268,7 @@ total: "1.2500" }],
     "A targeted commission baseline with the one required fee asset must be accepted.",
   )
 
-  const empty = await store.append(baseline(
+  const empty = await store.append(createCommissionBaselineFact(
     "account-snapshot:COMMISSION_BASELINE:empty",
     [],
   ))
@@ -274,7 +278,7 @@ total: "1.2500" }],
     "A targeted commission baseline without its fee asset must be rejected.",
   )
 
-  const incomplete = await store.append(baseline(
+  const incomplete = await store.append(createCommissionBaselineFact(
     "account-snapshot:COMMISSION_BASELINE:incomplete",
     [{ asset: "BNB",
 free: "1.0000",
@@ -289,7 +293,7 @@ total: "1.2500" }],
     "A targeted commission baseline must be a complete original-balance observation.",
   )
 
-  const multiple = await store.append(baseline(
+  const multiple = await store.append(createCommissionBaselineFact(
     "account-snapshot:COMMISSION_BASELINE:multiple-assets",
     [
       { asset: "BNB",
