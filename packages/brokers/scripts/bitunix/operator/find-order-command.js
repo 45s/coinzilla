@@ -418,6 +418,50 @@ async function saveReport({ report, reportDirectory, stdout, stderr, secrets }) 
   }
 }
 
+async function scanAvailableMarkets({ context }) {
+  const {
+    broker,
+    report,
+    stdout,
+    secrets,
+    orderId,
+  } = context
+  const markets = await fetchMarkets({
+    broker,
+    report,
+    stdout,
+    secrets,
+  })
+  if (markets === null) {
+    throw new Error("Bitunix Broker API getExchangeMarkets() failed; see diagnostic report")
+  }
+  report.summary.marketCount = markets.length
+  const symbols = getUniqueSymbols({ markets })
+  recordStage({
+    report,
+    stdout,
+    secrets,
+    stage: {
+      operation: "market.enumeration",
+      ok: symbols.length > 0,
+      activeMarketCount: markets.length,
+      uniqueSymbolCount: symbols.length,
+      symbols,
+    },
+  })
+  if (symbols.length === 0) {
+    throw new Error("Bitunix Broker API returned no active Spot symbols")
+  }
+  await scanMarkets({
+    broker,
+    symbols,
+    orderId,
+    report,
+    stdout,
+    secrets,
+  })
+}
+
 async function executeScan({ context }) {
   const {
     broker,
@@ -425,7 +469,6 @@ async function executeScan({ context }) {
     stdout,
     stderr,
     secrets,
-    orderId,
   } = context
   try {
     context.connected = await connectBroker({
@@ -434,40 +477,7 @@ async function executeScan({ context }) {
       stdout,
       secrets,
     })
-    const markets = await fetchMarkets({
-      broker,
-      report,
-      stdout,
-      secrets,
-    })
-    if (markets === null) {
-      throw new Error("Bitunix Broker API getExchangeMarkets() failed; see diagnostic report")
-    }
-    report.summary.marketCount = markets.length
-    const symbols = getUniqueSymbols({ markets })
-    recordStage({
-      report,
-      stdout,
-      secrets,
-      stage: {
-        operation: "market.enumeration",
-        ok: symbols.length > 0,
-        activeMarketCount: markets.length,
-        uniqueSymbolCount: symbols.length,
-        symbols,
-      },
-    })
-    if (symbols.length === 0) {
-      throw new Error("Bitunix Broker API returned no active Spot symbols")
-    }
-    await scanMarkets({
-      broker,
-      symbols,
-      orderId,
-      report,
-      stdout,
-      secrets,
-    })
+    await scanAvailableMarkets({ context })
   } catch (error) {
     report.fatalError = serializeError({
       error,
