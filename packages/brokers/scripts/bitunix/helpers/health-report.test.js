@@ -403,15 +403,32 @@ test("published order-read evidence includes symbol and orderId but keeps other 
 
 
 test("published cancellation evidence retains the exact order identity and structured outcome", () => {
-  const report = createSanitizedOrderReadFixture({ orderId: "2124329325141426176", symbol: "HYPEUSDT" })
+  const report = createSanitizedOrderReadFixture({
+    orderId: "2124329325141426176",
+    symbol: "HYPEUSDT",
+  })
   report.results.push({
     operation: "Broker API cancelOrder",
     status: "passed",
-    request: { method: "cancelOrder", arguments: [{ symbol: "HYPEUSDT", orderId: "2124329325141426176" }] },
-    response: { ok: true, mutationOutcome: "CONFIRMED", cancellationOutcome: "CONFIRMED", data: { status: "CANCELED" } },
+    request: {
+      method: "cancelOrder",
+      arguments: [{
+        symbol: "HYPEUSDT",
+        orderId: "2124329325141426176",
+      }],
+    },
+    response: {
+      ok: true,
+      mutationOutcome: "CONFIRMED",
+      cancellationOutcome: "CONFIRMED",
+      data: {
+        status: "CANCELED",
+      },
+    },
   })
   const published = createSanitizedHealthReport({ report })
-  const cancellation = published.results.find((result) => result.operation === "Broker API cancelOrder")
+  const cancellation = published.results.find((result) =>
+    result.operation === "Broker API cancelOrder")
   assert.equal(cancellation.request.arguments[0].symbol, "HYPEUSDT")
   assert.equal(cancellation.request.arguments[0].orderId, "2124329325141426176")
   assert.equal(cancellation.response.cancellationOutcome, "CONFIRMED")
