@@ -11,9 +11,10 @@ function printHelp() {
   process.stdout.write([
     "Usage: pnpm --filter @coinzilla/brokers bitunix:find-order --order-id=<exact-order-id>",
     "",
-    "Fetches current HYPEUSDT pending orders and matches one exact string order ID.",
+    "Enumerates every active Bitunix Spot market, fetches pending orders, and reads each order detail.",
+    "Records every Broker API and REST diagnostic event plus complete sanitized results in .diagnostics/.",
     "This command is read-only. It cannot place or cancel orders.",
-    "An order missing from the pending list may have filled or otherwise left the pending set.",
+    "An order missing from all pending lists may have filled or otherwise left the pending set.",
     "",
   ].join("\n"))
 }
@@ -36,7 +37,7 @@ async function main() {
     process.stderr.write("ERROR: create packages/brokers/.env.development with BITUNIX_API_KEY and BITUNIX_API_SECRET.\n")
     return 1
   }
-  process.stdout.write("WARNING: making one read-only request to the configured LIVE Bitunix Spot account. No order mutation will be performed.\n")
+  process.stdout.write("WARNING: scanning all active markets on the configured LIVE Bitunix Spot account. This makes multiple sequential read-only requests. No order mutation will be performed.\n")
   const result = await runFindBitunixSpotOrder({
     env: process.env,
     orderId,
