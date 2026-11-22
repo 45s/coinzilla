@@ -1,4 +1,3 @@
-import { DatePipe } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -90,7 +89,6 @@ function getBrowserStorage(): Storage | undefined {
   standalone: true,
   templateUrl: './page.html',
   styleUrl: './page.css',
-  imports: [DatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ExchangesComponent implements OnInit, OnDestroy {

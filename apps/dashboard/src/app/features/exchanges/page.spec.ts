@@ -101,12 +101,13 @@ describe('ExchangesComponent', () => {
     const cards = Array.from(fixture.nativeElement.querySelectorAll('.exchange-card')) as HTMLElement[];
     expect(cards[0].getAttribute('data-provider-id')).toBe('bitunix-live');
 
-    const removeFavorite = fixture.nativeElement.querySelector('[aria-label="Remove from favourites"]') as HTMLButtonElement;
+    const bitunixCard = fixture.nativeElement.querySelector('[data-provider-id="bitunix-live"]') as HTMLElement;
+    const removeFavorite = bitunixCard.querySelector('[aria-label="Remove from favourites"]') as HTMLButtonElement;
     removeFavorite.click();
     fixture.detectChanges();
     expect(window.localStorage.getItem('coinzilla.dashboard.exchange-favorites')).toBe('[]');
 
-    const addFavorite = fixture.nativeElement.querySelector('[aria-label="Add to favourites"]') as HTMLButtonElement;
+    const addFavorite = bitunixCard.querySelector('[aria-label="Add to favourites"]') as HTMLButtonElement;
     addFavorite.click();
     fixture.detectChanges();
     expect(window.localStorage.getItem('coinzilla.dashboard.exchange-favorites')).toContain('bitunix-live');
