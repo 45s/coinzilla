@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-11-22T09:24:39.487Z",
+  "finishedAt": "2026-11-22T09:24:39.487Z",
+  "runtime": {
+    "node": "v26.13.0",
+    "platform": "win32"
+  },
+  "summary": {
+    "total": 3,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+  },
+  "healthCheck": {
+    "scope": "bitunix-order-read",
+    "requiredOperations": [
+      "Broker API getOpenOrders",
+      "Broker API getOrder for every discovered order"
+    ],
+    "missingRequiredOperations": [],
+    "nonBlockingFailedOperations": [],
+    "healthy": true
+  },
+  "results": [
+    {
+      "operation": "Broker API cancelOrder",
+      "status": "passed",
+      "durationMs": 961,
+      "request": {
+        "method": "cancelOrder",
+        "arguments": [
+          {
+            "symbol": "HYPEUSDT",
+            "orderId": "2124329325141426176"
+          }
+        ]
+      },
+      "response": {
+        "data": {
+          "originalPrice": "30",
+          "originalQuantity": "0.366",
+          "executedQuantity": "0",
+          "remainingQuantity": "0.366",
+          "status": "CANCELED",
+          "createdAt": "2026-11-22T02:29:13.901998Z",
+          "updatedAt": "2026-11-22T09:24:40.240125Z"
+        },
+        "mutationOutcome": "CONFIRMED",
+        "cancellationOutcome": "CONFIRMED",
+        "ok": true
+      }
+    },
+    {
+      "operation": "Broker API getOpenOrders",
+      "status": "passed",
+      "durationMs": 39843,
+      "request": {
+        "method": "getOpenOrders",
+        "arguments": []
+      },
+      "response": {
+        "data": [],
+        "ok": true
+      }
+    },
+    {
+      "operation": "Broker API getOrder after cancellation",
+      "status": "passed",
+      "durationMs": 293,
+      "request": {
+        "method": "getOrder",
+        "arguments": [
+          {
+            "symbol": "HYPEUSDT",
+            "orderId": "2124329325141426176"
+          }
+        ]
+      },
+      "response": {
+        "data": {
+          "originalPrice": "30",
+          "originalQuantity": "0.366",
+          "executedQuantity": "0",
+          "remainingQuantity": "0.366",
+          "status": "CANCELED",
+          "createdAt": "2026-11-22T02:29:13.901998Z",
+          "updatedAt": "2026-11-22T09:25:20.379994Z"
+        },
+        "ok": true
+      }
+    }
+  ]
+}
