@@ -7,79 +7,114 @@ import { sanitizeDiagnosticValue } from "../helpers/sanitize-diagnostic-data.js"
 import { createBitunixOrderProbePreflight } from "./order-probe-preflight.js"
 import { getBitunixOrderProbe } from "./order-probe-matrix.js"
 
+function isCapturedOrderPath({ path }) {
+  return path === BITUNIX_SPOT_ORDER_API.placeOrder ||
+    path === BITUNIX_SPOT_ORDER_API.orderDetail
+}
+
+function createCapturedRequest({ path, options, isPlacement }) {
+  return {
+    method: options.method,
+    path,
+    ...(isPlacement ? { body: options.body ?? null } : {}),
+  }
+}
+
+function recordTransportError({ capture, error, path, isPlacement }) {
+  const transportError = {
+    name: error?.name ?? "Error",
+    message: String(error?.message ?? error).slice(0, 500),
+    path,
+  }
+  capture.transportErrors ??= []
+  capture.transportErrors.push(transportError)
+  if (isPlacement) {
+    capture.transportError = transportError
+  }
+}
+
+async function recordCapturedResponse({ capture, response, path, isPlacement }) {
+  const responseText = await response.clone().text()
+  const responseRecord = {
+    path,
+    httpStatus: response.status,
+    httpOk: response.ok,
+  }
+  if (isPlacement) {
+    responseRecord.body = responseText
+    capture.response = responseRecord
+    return
+  }
+  try {
+    responseRecord.body = sanitizeDiagnosticValue({
+      value: JSON.parse(responseText),
+    })
+  } catch {
+    responseRecord.body = "[non-JSON order-detail response withheld]"
+    responseRecord.bodyLength = responseText.length
+  }
+  capture.followUpResponses ??= []
+  capture.followUpResponses.push(responseRecord)
+}
+
+async function captureFetch({ url, options, capture, fetchFn }) {
+  const path = new URL(url).pathname
+  if (!isCapturedOrderPath({ path })) {
+    return fetchFn(url, options)
+  }
+  const isPlacement = path === BITUNIX_SPOT_ORDER_API.placeOrder
+  const request = createCapturedRequest({
+    path,
+    options,
+    isPlacement,
+  })
+  capture.requests ??= []
+  capture.requests.push(request)
+  if (isPlacement) {
+    capture.request = request
+  }
+  let response
+  try {
+    response = await fetchFn(url, options)
+  } catch (error) {
+    recordTransportError({
+      capture,
+      error,
+      path,
+      isPlacement,
+    })
+    throw error
+  }
+  try {
+    await recordCapturedResponse({
+      capture,
+      response,
+      path,
+      isPlacement,
+    })
+  } catch (error) {
+    capture.responseReadErrors ??= []
+    capture.responseReadErrors.push({
+      name: error?.name ?? "Error",
+      message: String(error?.message ?? error).slice(0, 500),
+      path,
+    })
+  }
+  return response
+}
+
 function createCaptureRestClientFactory({ capture, fetchFn = fetch }) {
   return (config) => new BitunixRestClient({
     apiKey: config.apiKey,
     apiSecret: config.apiSecret,
     baseUrl: config.baseUrl,
     requestTimeout: config.requestTimeout,
-    fetchFn: async (url, options) => {
-      const parsedUrl = new URL(url)
-      const path = parsedUrl.pathname
-      const isPlacement = path === BITUNIX_SPOT_ORDER_API.placeOrder
-      const isOrderDetail = path === BITUNIX_SPOT_ORDER_API.orderDetail
-      if (!isPlacement && !isOrderDetail) {
-        return fetchFn(url, options)
-      }
-      const request = {
-        method: options.method,
-        path,
-        ...(isPlacement ? { body: options.body ?? null } : {}),
-      }
-      capture.requests ??= []
-      capture.requests.push(request)
-      if (isPlacement) {
-        capture.request = request
-      }
-      let response
-      try {
-        response = await fetchFn(url, options)
-      } catch (error) {
-        const transportError = {
-          name: error?.name ?? "Error",
-          message: String(error?.message ?? error).slice(0, 500),
-          path,
-        }
-        capture.transportErrors ??= []
-        capture.transportErrors.push(transportError)
-        if (isPlacement) {
-          capture.transportError = transportError
-        }
-        throw error
-      }
-      try {
-        const responseText = await response.clone().text()
-        const responseRecord = {
-          path,
-          httpStatus: response.status,
-          httpOk: response.ok,
-        }
-        if (isPlacement) {
-          responseRecord.body = responseText
-          capture.response = responseRecord
-        } else {
-          try {
-            responseRecord.body = sanitizeDiagnosticValue({
-              value: JSON.parse(responseText),
-            })
-          } catch {
-            responseRecord.body = "[non-JSON order-detail response withheld]"
-            responseRecord.bodyLength = responseText.length
-          }
-          capture.followUpResponses ??= []
-          capture.followUpResponses.push(responseRecord)
-        }
-      } catch (error) {
-        const responseReadError = {
-          name: error?.name ?? "Error",
-          message: String(error?.message ?? error).slice(0, 500),
-          path,
-        }
-        capture.responseReadErrors ??= []
-        capture.responseReadErrors.push(responseReadError)
-      }
-      return response
-    },
+    fetchFn: (...args) => captureFetch({
+      url: args[0],
+      options: args[1],
+      capture,
+      fetchFn,
+    }),
   })
 }
 
@@ -160,34 +195,64 @@ function formatOrderProbePreflight({ preflight }) {
   ].join("\n")
 }
 
+function formatProbeErrorLines({ error, secrets }) {
+  return [
+    error?.code ? `Broker error code: ${error.code}` : null,
+    error?.exchangeCode ? `Bitunix exchange code: ${error.exchangeCode}` : null,
+    error?.status ? `Broker error HTTP status: ${error.status}` : null,
+    error?.message ? `Message: ${redactApiSecrets({
+      message: error.message,
+      secrets,
+    })}` : null,
+  ].filter(Boolean)
+}
+
+function formatProbeCaptureLines({ capture, secrets }) {
+  return [
+    capture.response?.httpStatus ? `Placement HTTP status: ${capture.response.httpStatus}` : null,
+    capture.transportError?.message ? `Transport error: ${redactApiSecrets({
+      message: capture.transportError.message,
+      secrets,
+    })}` : null,
+    capture.responseReadErrors?.length
+      ? `Response capture warnings: ${capture.responseReadErrors.length}`
+      : null,
+    capture.followUpResponses?.length
+      ? `Order-detail follow-up responses captured: ${capture.followUpResponses.length}`
+      : null,
+    capture.response?.body ? `Raw place-order response: ${redactApiSecrets({
+      message: capture.response.body,
+      secrets,
+    })}` : null,
+  ].filter(Boolean)
+}
+
+function formatProbeStopLines({ mutationOutcome }) {
+  if (mutationOutcome === "OUTCOME_UNKNOWN") {
+    return ["STOP: outcome unknown. Do not run another probe until manually investigated."]
+  }
+  if (mutationOutcome === "CONFIRMED") {
+    return ["STOP: Bitunix accepted the order. Do not run another probe."]
+  }
+  return []
+}
+
 function formatOrderProbeResult({ result, capture, secrets = [] }) {
-  const error = result?.errors?.[0]
-  const lines = [
+  return [
     `Broker result: ${result?.ok === true ? "success" : "not successful"}`,
     `Mutation outcome: ${result?.mutationOutcome ?? "OUTCOME_UNKNOWN"}`,
-    ...(error?.code ? [`Broker error code: ${error.code}`] : []),
-    ...(error?.exchangeCode ? [`Bitunix exchange code: ${error.exchangeCode}`] : []),
-    ...(capture.response?.httpStatus ? [`Placement HTTP status: ${capture.response.httpStatus}`] : []),
-    ...(error?.status ? [`Broker error HTTP status: ${error.status}`] : []),
-    ...(error?.message ? [`Message: ${redactApiSecrets({ message: error.message, secrets })}`] : []),
-    ...(capture.transportError?.message
-      ? [`Transport error: ${redactApiSecrets({ message: capture.transportError.message, secrets })}`]
-      : []),
-    ...(capture.responseReadErrors?.length
-      ? [`Response capture warnings: ${capture.responseReadErrors.length}`]
-      : []),
-    ...(capture.followUpResponses?.length
-      ? [`Order-detail follow-up responses captured: ${capture.followUpResponses.length}`]
-      : []),
-    ...(capture.response?.body ? [`Raw place-order response: ${redactApiSecrets({ message: capture.response.body, secrets })}`] : []),
-    ...(result?.mutationOutcome === "OUTCOME_UNKNOWN"
-      ? ["STOP: outcome unknown. Do not run another probe until manually investigated."]
-      : []),
-    ...(result?.mutationOutcome === "CONFIRMED"
-      ? ["STOP: Bitunix accepted the order. Do not run another probe."]
-      : []),
-  ]
-  return lines.join("\n")
+    ...formatProbeErrorLines({
+      error: result?.errors?.[0],
+      secrets,
+    }),
+    ...formatProbeCaptureLines({
+      capture,
+      secrets,
+    }),
+    ...formatProbeStopLines({
+      mutationOutcome: result?.mutationOutcome,
+    }),
+  ].join("\n")
 }
 
 async function createProbeMarker({ markerPath, preflight, now = Date.now }) {
@@ -211,58 +276,58 @@ async function createProbeMarker({ markerPath, preflight, now = Date.now }) {
   return markerPath
 }
 
-async function persistProbeOutcome({ markerPath, outcome, capture, result, error, secrets = [], now = Date.now }) {
-  const marker = JSON.parse(await readFile(markerPath, "utf8"))
-  if (marker.status !== "DISPATCH_STARTED") {
-    throw new Error("Bitunix order probe marker is not awaiting a result")
+function normalizeProbeOutcome({ outcome }) {
+  const knownOutcomes = ["CONFIRMED", "REJECTED", "NOT_SENT", "OUTCOME_UNKNOWN"]
+  return knownOutcomes.includes(outcome) ? outcome : "OUTCOME_UNKNOWN"
+}
+
+function createBrokerResultEvidence({ result, markerStatus, secrets }) {
+  if (!result) {
+    return null
   }
-  marker.status = ["CONFIRMED", "REJECTED", "NOT_SENT", "OUTCOME_UNKNOWN"].includes(outcome)
-    ? outcome
-    : "OUTCOME_UNKNOWN"
-  marker.completedAt = new Date(now()).toISOString()
-  marker.capture = sanitizeDiagnosticValue({
-    value: capture,
-    secrets,
-  })
-  if (result) {
-    marker.brokerResult = {
-      ok: result.ok === true,
-      mutationOutcome: result.mutationOutcome ?? marker.status,
-      ...(result.data === undefined ? {} : {
-        data: sanitizeDiagnosticValue({
-          value: result.data,
-          secrets,
-        }),
-      }),
-      errors: Array.isArray(result.errors)
-        ? result.errors.map((item) => ({
-          name: item?.name ?? "Error",
-          message: redactApiSecrets({
-            message: String(item?.message ?? item).slice(0, 500),
-            secrets,
-          }),
-          code: item?.code ?? null,
-          exchangeCode: item?.exchangeCode ?? null,
-          status: item?.status ?? null,
-          kind: item?.kind ?? null,
-        }))
-        : [],
-    }
-  }
-  const sourceError = error ?? result?.errors?.[0]
-  if (sourceError) {
-    marker.error = {
-      name: sourceError.name ?? "Error",
-      message: redactApiSecrets({
-        message: String(sourceError.message ?? sourceError).slice(0, 500),
+  return {
+    ok: result.ok === true,
+    mutationOutcome: result.mutationOutcome ?? markerStatus,
+    ...(result.data === undefined ? {} : {
+      data: sanitizeDiagnosticValue({
+        value: result.data,
         secrets,
       }),
-      code: sourceError.code ?? null,
-      exchangeCode: sourceError.exchangeCode ?? null,
-      status: sourceError.status ?? null,
-      kind: sourceError.kind ?? null,
-    }
+    }),
+    errors: Array.isArray(result.errors)
+      ? result.errors.map((item) => ({
+        name: item?.name ?? "Error",
+        message: redactApiSecrets({
+          message: String(item?.message ?? item).slice(0, 500),
+          secrets,
+        }),
+        code: item?.code ?? null,
+        exchangeCode: item?.exchangeCode ?? null,
+        status: item?.status ?? null,
+        kind: item?.kind ?? null,
+      }))
+      : [],
   }
+}
+
+function createProbeErrorEvidence({ sourceError, secrets }) {
+  if (!sourceError) {
+    return null
+  }
+  return {
+    name: sourceError.name ?? "Error",
+    message: redactApiSecrets({
+      message: String(sourceError.message ?? sourceError).slice(0, 500),
+      secrets,
+    }),
+    code: sourceError.code ?? null,
+    exchangeCode: sourceError.exchangeCode ?? null,
+    status: sourceError.status ?? null,
+    kind: sourceError.kind ?? null,
+  }
+}
+
+async function writeProbeMarkerAtomically({ markerPath, marker }) {
   const temporaryPath = `${markerPath}.tmp`
   await writeFile(temporaryPath, `${JSON.stringify(marker, null, 2)}\n`, {
     encoding: "utf8",
@@ -272,12 +337,34 @@ async function persistProbeOutcome({ markerPath, outcome, capture, result, error
   await rename(temporaryPath, markerPath)
 }
 
-/**
- * Run exactly one human-confirmed Bitunix Spot order probe.
- *
- * @param {object} input Dependencies and the reviewed probe identifier.
- * @returns {Promise<object>} Broker mutation result or explicit NOT_SENT decline.
- */
+async function persistProbeOutcome({ markerPath, outcome, capture, result, error, secrets = [], now = Date.now }) {
+  const marker = JSON.parse(await readFile(markerPath, "utf8"))
+  if (marker.status !== "DISPATCH_STARTED") {
+    throw new Error("Bitunix order probe marker is not awaiting a result")
+  }
+  marker.status = normalizeProbeOutcome({
+    outcome,
+  })
+  marker.completedAt = new Date(now()).toISOString()
+  marker.capture = sanitizeDiagnosticValue({
+    value: capture,
+    secrets,
+  })
+  marker.brokerResult = createBrokerResultEvidence({
+    result,
+    markerStatus: marker.status,
+    secrets,
+  })
+  marker.error = createProbeErrorEvidence({
+    sourceError: error ?? result?.errors?.[0],
+    secrets,
+  })
+  await writeProbeMarkerAtomically({
+    markerPath,
+    marker,
+  })
+}
+
 function createNotSentProbeError({ error }) {
   const notSentError = new Error(
     error?.message ?? "Bitunix order probe stopped before dispatch",
@@ -291,6 +378,60 @@ function createNotSentProbeError({ error }) {
     }
   }
   return notSentError
+}
+
+async function runConfirmedProbeMutation({
+  orderBroker,
+  preflight,
+  createMarker,
+  capture,
+  secrets,
+  writeLine,
+}) {
+  const markerPath = await createMarker({
+    preflight,
+  })
+  let result
+  try {
+    result = await orderBroker.createOrder(preflight.orderInput)
+    await persistProbeOutcome({
+      markerPath,
+      outcome: result?.mutationOutcome ?? "OUTCOME_UNKNOWN",
+      capture,
+      result,
+      secrets,
+    })
+    writeLine(formatOrderProbeResult({
+      result,
+      capture,
+      secrets,
+    }))
+    writeLine(`Private probe evidence: ${markerPath}`)
+    return result
+  } catch (error) {
+    try {
+      await persistProbeOutcome({
+        markerPath,
+        outcome: "OUTCOME_UNKNOWN",
+        capture,
+        result,
+        error,
+        secrets,
+      })
+    } catch {
+      // The exclusive DISPATCH_STARTED marker remains the fail-closed record.
+    }
+    error.mutationOutcome = "OUTCOME_UNKNOWN"
+    throw error
+  }
+}
+
+async function disconnectMutationBroker({ orderBroker, writeLine }) {
+  try {
+    await orderBroker.disconnect()
+  } catch (error) {
+    writeLine(`Warning: mutation Broker disconnect failed after probe: ${error.message}`)
+  }
 }
 
 /**
@@ -319,11 +460,8 @@ export async function runBitunixOrderProbeAttempt({
     assertMatrixCanContinue,
     writeLine,
   })
-  let orderBroker = null
+  let orderBroker
   let connected = false
-  let markerPath
-  let dispatchStarted = false
-  let result
   try {
     await assertMatrixCanContinue({ probeId })
     const preflight = await readOrderProbePreflight({
@@ -352,54 +490,27 @@ export async function runBitunixOrderProbeAttempt({
     })
     await orderBroker.connect()
     connected = true
-    markerPath = await createMarker({
+    return await runConfirmedProbeMutation({
+      orderBroker,
       preflight,
-    })
-    dispatchStarted = true
-    result = await orderBroker.createOrder(preflight.orderInput)
-    const outcome = result?.mutationOutcome ?? "OUTCOME_UNKNOWN"
-    await persistProbeOutcome({
-      markerPath,
-      outcome,
-      capture,
-      result,
-      secrets,
-    })
-    writeLine(formatOrderProbeResult({
-      result,
+      createMarker,
       capture,
       secrets,
-    }))
-    writeLine(`Private probe evidence: ${markerPath}`)
-    return result
+      writeLine,
+    })
   } catch (error) {
-    if (!dispatchStarted) {
-      throw createNotSentProbeError({
-        error,
-      })
+    if (error?.mutationOutcome === "OUTCOME_UNKNOWN") {
+      throw error
     }
-    if (markerPath) {
-      try {
-        await persistProbeOutcome({
-          markerPath,
-          outcome: "OUTCOME_UNKNOWN",
-          capture,
-          result,
-          error,
-          secrets,
-        })
-      } catch {
-        // The exclusive DISPATCH_STARTED marker remains the fail-closed record.
-      }
-    }
-    throw error
+    throw createNotSentProbeError({
+      error,
+    })
   } finally {
     if (connected) {
-      try {
-        await orderBroker.disconnect()
-      } catch (error) {
-        writeLine(`Warning: mutation Broker disconnect failed after probe: ${error.message}`)
-      }
+      await disconnectMutationBroker({
+        orderBroker,
+        writeLine,
+      })
     }
   }
 }
