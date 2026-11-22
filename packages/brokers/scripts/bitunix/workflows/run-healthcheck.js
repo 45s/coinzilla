@@ -43,7 +43,7 @@ function printLocalDiagnosticSummary({ report, outputPath, stdout }) {
 }
 
 function getOrderIdentityLabel({ request }) {
-  const orderArguments = request?.method === "getOrder" ? request.arguments?.[0] : null
+  const orderArguments = ["getOrder", "cancelOrder"].includes(request?.method) ? request.arguments?.[0] : null
   if (!orderArguments?.symbol || !orderArguments?.orderId) {
     return ""
   }
@@ -233,6 +233,61 @@ async function disconnectOrderReadBroker({ broker, connected, report, stdout, se
         errors: [error],
       },
     })
+  }
+}
+
+const CANCELLATION_TARGET = Object.freeze({
+  symbol: "HYPEUSDT",
+  orderId: "2124329325141426176",
+})
+
+async function runBitunixExistingOrderCancellation({ env, report, stdout, brokerFactory = (options) => new Broker(options) }) {
+  const secrets = [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
+  const request = {
+    method: "cancelOrder",
+    arguments: [{ ...CANCELLATION_TARGET }],
+  }
+  const broker = brokerFactory({
+    provider: "bitunix",
+    apiKey: env.BITUNIX_API_KEY,
+    apiSecret: env.BITUNIX_API_SECRET,
+    tradingMode: "live",
+    logger: createOrderReadLogger({ report, secrets }),
+    providerOptions: { allowLiveOrderMutations: true },
+  })
+  let connected = false
+  try {
+    await broker.connect()
+    connected = true
+    const started = Date.now()
+    let result
+    try {
+      result = await broker.cancelOrder({ ...CANCELLATION_TARGET })
+    } catch (error) {
+      result = { ok: false, mutationOutcome: "OUTCOME_UNKNOWN", cancellationOutcome: "OUTCOME_UNKNOWN", errors: [error] }
+    }
+    recordOrderReadResult({
+      report,
+      stdout,
+      secrets,
+      operation: "Broker API cancelOrder",
+      result,
+      durationMs: Date.now() - started,
+      request,
+    })
+    return result
+  } catch (error) {
+    recordOrderReadResult({
+      report,
+      stdout,
+      secrets,
+      operation: "Broker API cancelOrder",
+      result: { ok: false, mutationOutcome: "NOT_SENT", cancellationOutcome: "NOT_SENT", errors: [error] },
+      request,
+    })
+    return null
+  } finally {
+    await disconnectOrderReadBroker({ broker, connected, report, stdout, secrets })
   }
 }
 
@@ -430,7 +485,10 @@ function createHealthCheckSkippedResult({ report, env }) {
 
 async function runSelectedOperator({ runOperatorOrder, runOperatorProbe, env, probeId }) {
   try {
-    if (runOperatorProbe) {
+    if (cancelExistingOrder) {
+    return `WARNING: this mode sends ONE LIVE cancellation request for ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId}, records its response, then runs the existing read-only order scan. No retry.\\n`
+  }
+  if (runOperatorProbe) {
       return await runOperatorProbe({
         env,
         probeId,
@@ -514,6 +572,7 @@ async function runDiagnosticsWithOperatorAttempt({
   probeId,
   brokerFactory,
   includeGeneralDiagnostics,
+  cancelExistingOrder = false,
 }) {
   const startedAt = Date.now()
   const shouldRunGeneralDiagnostics = includeGeneralDiagnostics || Boolean(runOperatorOrder)
@@ -524,6 +583,10 @@ async function runDiagnosticsWithOperatorAttempt({
       onProgress,
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
+  if (cancelExistingOrder) {
+    onProgress?.({ message: `      Cancelling existing order ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId} before order reads` })
+    await runBitunixExistingOrderCancellation({ env, report, stdout: { write: (message) => onProgress?.({ message: message.trim() }) }, brokerFactory })
+  }
   if (!runOperatorProbe) {
     await runGeneralOrderReadScan({
       env,
@@ -565,7 +628,7 @@ async function runDiagnosticsWithOperatorAttempt({
     : appendedReport
 }
 
-function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId }) {
+function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId, cancelExistingOrder }) {
   if (runOperatorProbe) {
     return `WARNING: this mode runs a targeted LIVE read-only HYPEUSDT preflight, then may submit exactly one separately confirmed ${probeId} order probe.\n`
   }
@@ -596,8 +659,10 @@ async function runPublishedHealthCheck({
   probeId,
   brokerFactory,
   includeGeneralDiagnostics,
+  cancelExistingOrder = false,
 }) {
   stdout.write(createOperatorWarning({
+    cancelExistingOrder,
     runOperatorOrder,
     runOperatorProbe,
     probeId,
@@ -617,6 +682,7 @@ async function runPublishedHealthCheck({
       probeId,
       brokerFactory,
       includeGeneralDiagnostics,
+      cancelExistingOrder,
     }),
     env,
     onProgress: ({ message }) => {
@@ -673,7 +739,7 @@ export async function runHealthcheckWorkflow({
       includeGeneralDiagnostics,
     })
   }
-  if (!["publish", "place-order", "probe-order"].includes(mode)) {
+  if (!["publish", "place-order", "probe-order", "cancel-existing-order"].includes(mode)) {
     throw new TypeError(`Unsupported Bitunix health-check mode: ${mode}`)
   }
   validatePublishedHealthcheckMode({
@@ -693,5 +759,6 @@ export async function runHealthcheckWorkflow({
     probeId,
     brokerFactory,
     includeGeneralDiagnostics,
+    cancelExistingOrder: mode === "cancel-existing-order",
   })
 }
