@@ -110,7 +110,7 @@ Other strategy-owned pair fields remain under `tradingPairs.<SYMBOL>`: `enabled`
 
 ### Recovery Seller configuration
 
-**RS runtime activation — 2026-11-22:** `RS_RECOVERY_SELLER_CONFIG.enabled` is explicitly `true`, and the only configured RS pair is LINEAUSDT on Binance Spot TESTNET. The pair retains the operator-approved 400 USDT / 25,000 LINEA legacy basis and configured cycle values below. This enables RS in the application configuration; it does not authorize starting Harvester or placing exchange orders. The controlled TESTNET runbook remains CLOSED / PAUSED until a separate bounded LINEAUSDT session is agreed and explicitly started by the operator and assistant.
+**RS activation status — 2026-11-22:** LINEAUSDT is configured for Binance Spot TESTNET, but `RS_RECOVERY_SELLER_CONFIG.enabled` remains `false`. An activation attempt exposed a routing prerequisite: enabled RS requires explicit `executionRouting.routes`, while the current default single-Binance configuration has no route table. The RS-only LINEAUSDT market must also be included in market-data routing without enabling Conservative on LINEA. Implement and test that routing before enabling RS. The controlled TESTNET runbook remains CLOSED / PAUSED until a separate bounded LINEAUSDT session is agreed and explicitly started.
 
 An enabled RS market requires the following fields:
 
