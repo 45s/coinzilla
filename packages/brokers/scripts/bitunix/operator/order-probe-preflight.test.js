@@ -22,6 +22,8 @@ function createPreflightInput({ probeId = "limit-buy-1", overrides = {} } = {}) 
         isOpen: "1",
         minVolume: "0.1",
         minPrice: "10",
+        basePrecision: "4",
+        quotePrecision: "2",
       },
     },
     balancesResult: {
@@ -369,4 +371,42 @@ test("Bitunix MARKET probes require both balances while volume denomination is u
     () => createBitunixOrderProbePreflight(input),
     /explicit HYPE balance row/i,
   )
+})
+
+
+test("funded HYPE BUY calculates base quantity from live precision and confirms the quote budget", () => {
+  const input = createPreflightInput({
+    probeId: "limit-buy-11-usdt",
+    overrides: {
+      balancesResult: {
+        ok: true,
+        data: [{
+          free: { amount: "11.24", asset: { code: "USDT" } },
+          locked: { amount: "0", asset: { code: "USDT" } },
+        }],
+      },
+    },
+  })
+  const preflight = createBitunixOrderProbePreflight(input)
+  assert.equal(preflight.probe.quantity, "0.3666")
+  assert.equal(preflight.probe.quoteNotional, "10.998")
+  assert.equal(preflight.orderInput.quantity, "0.3666")
+  assert.equal(preflight.wireRequest.volume, "0.3666")
+  assert.equal(preflight.freeQuoteBalance, "11.24")
+})
+
+test("funded HYPE BUY refuses to dispatch when the 11 USDT budget plus reserve is unavailable", () => {
+  const input = createPreflightInput({
+    probeId: "limit-buy-11-usdt",
+    overrides: {
+      balancesResult: {
+        ok: true,
+        data: [{
+          free: { amount: "11.23", asset: { code: "USDT" } },
+          locked: { amount: "0", asset: { code: "USDT" } },
+        }],
+      },
+    },
+  })
+  assert.throws(() => createBitunixOrderProbePreflight(input), /11\.24 USDT/i)
 })
