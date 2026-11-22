@@ -118,6 +118,72 @@ function printPublishedResult({ result, stdout, probeMode = false }) {
   stdout.write(lines.join("\n"))
 }
 
+function createEmptyProbeReport({ startedAt }) {
+  const timestamp = new Date(startedAt).toISOString()
+  return createDiagnosticReport({
+    startedAt: timestamp,
+    finishedAt: timestamp,
+    runtime: {
+      node: process.version,
+      platform: process.platform,
+    },
+    results: [],
+    events: [],
+  })
+}
+
+function createHealthCheckSkippedResult({ report, env }) {
+  return appendOrderAttemptResult({
+    report,
+    operatorResult: {
+      ok: false,
+      mutationOutcome: "NOT_SENT",
+      skipped: true,
+      skipCode: "HEALTHCHECK_NOT_HEALTHY",
+    },
+    durationMs: 0,
+    secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean),
+  })
+}
+
+async function runSelectedOperator({ runOperatorOrder, runOperatorProbe, env, probeId }) {
+  try {
+    if (runOperatorProbe) {
+      return await runOperatorProbe({
+        env,
+        probeId,
+      })
+    }
+    return await runOperatorOrder({ env })
+  } catch (error) {
+    return {
+      ok: false,
+      mutationOutcome: error?.mutationOutcome === "NOT_SENT"
+        ? "NOT_SENT"
+        : "OUTCOME_UNKNOWN",
+      errors: [error],
+    }
+  }
+}
+
+function appendSelectedOperatorResult({
+  report,
+  operatorResult,
+  startedAt,
+  env,
+  runOperatorProbe,
+  probeId,
+}) {
+  return appendOrderAttemptResult({
+    report,
+    operatorResult,
+    durationMs: Date.now() - startedAt,
+    probeId: runOperatorProbe ? probeId : undefined,
+    probeMode: Boolean(runOperatorProbe),
+    secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean),
+  })
+}
+
 async function runDiagnosticsWithOperatorAttempt({
   env,
   onProgress,
@@ -127,40 +193,20 @@ async function runDiagnosticsWithOperatorAttempt({
   probeId,
 }) {
   const startedAt = Date.now()
-  let report
-  if (runOperatorProbe) {
-    const timestamp = new Date(startedAt).toISOString()
-    report = createDiagnosticReport({
-      startedAt: timestamp,
-      finishedAt: timestamp,
-      runtime: {
-        node: process.version,
-        platform: process.platform,
-      },
-      results: [],
-      events: [],
-    })
-  } else {
-    report = await runDiagnostics({
+  const report = runOperatorProbe
+    ? createEmptyProbeReport({ startedAt })
+    : await runDiagnostics({
       env,
       onProgress,
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
-  }
   if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
   if (runOperatorOrder && !evaluateReadOnlyHealthCheck({ report }).healthy) {
-    return appendOrderAttemptResult({
+    return createHealthCheckSkippedResult({
       report,
-      operatorResult: {
-        ok: false,
-        mutationOutcome: "NOT_SENT",
-        skipped: true,
-        skipCode: "HEALTHCHECK_NOT_HEALTHY",
-      },
-      durationMs: 0,
-      secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean),
+      env,
     })
   }
   onProgress?.({
@@ -168,27 +214,19 @@ async function runDiagnosticsWithOperatorAttempt({
       ? `      General diagnostics skipped; running focused HYPEUSDT preflight for ${probeId}`
       : "      Read-only health checks passed; starting the guarded HYPEUSDT operator attempt",
   })
-  let operatorResult
-  try {
-    operatorResult = runOperatorProbe
-      ? await runOperatorProbe({ env, probeId })
-      : await runOperatorOrder({ env })
-  } catch (error) {
-    operatorResult = {
-      ok: false,
-      mutationOutcome: error?.mutationOutcome === "NOT_SENT"
-        ? "NOT_SENT"
-        : "OUTCOME_UNKNOWN",
-      errors: [error],
-    }
-  }
-  const appendedReport = appendOrderAttemptResult({
+  const operatorResult = await runSelectedOperator({
+    runOperatorOrder,
+    runOperatorProbe,
+    env,
+    probeId,
+  })
+  const appendedReport = appendSelectedOperatorResult({
     report,
     operatorResult,
-    durationMs: Date.now() - startedAt,
-    probeId: runOperatorProbe ? probeId : undefined,
-    probeMode: Boolean(runOperatorProbe),
-    secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean),
+    startedAt,
+    env,
+    runOperatorProbe,
+    probeId,
   })
   return runOperatorProbe
     ? {
