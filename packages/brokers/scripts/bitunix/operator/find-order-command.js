@@ -85,18 +85,21 @@ function serializeResult({ result, secrets }) {
   })
 }
 
-function createLogger({ stdout, secrets }) {
+function createLogger({ stdout, secrets, report }) {
   const levels = ["debug", "info", "warn", "error"]
   return Object.fromEntries(levels.map((level) => [
     level,
-    (event) => writeEvent({
-      stdout,
-      secrets,
-      event: {
-        level,
-        ...event,
-      },
-    }),
+    (event) => {
+      const safeEvent = safeValue({
+        value: {
+          level,
+          ...event,
+        },
+        secrets,
+      })
+      report.diagnostics.push(safeEvent)
+      stdout.write(`${JSON.stringify(safeEvent)}\n`)
+    },
   ]))
 }
 
@@ -166,60 +169,16 @@ async function connectBroker({ broker, report, stdout, secrets }) {
   }
 }
 
-async function fetchMarkets({ broker, report, stdout, secrets }) {
+async function fetchPendingOrders({ broker, report, stdout, secrets }) {
   try {
-    const result = await broker.getExchangeMarkets()
-    recordStage({
-      report,
-      stdout,
-      secrets,
-      stage: {
-        operation: "broker.getExchangeMarkets",
-        ok: result?.ok === true,
-        result: serializeResult({
-          result,
-          secrets,
-        }),
-      },
-    })
-    if (result?.ok !== true || !Array.isArray(result.data)) {
-      return null
-    }
-    return result.data
-  } catch (error) {
-    recordStage({
-      report,
-      stdout,
-      secrets,
-      stage: {
-        ...createFailure({
-          operation: "broker.getExchangeMarkets",
-          error,
-          secrets,
-        }),
-        thrown: true,
-      },
-    })
-    return null
-  }
-}
-
-function getUniqueSymbols({ markets }) {
-  return [...new Set(markets.map((market) => market?.symbol).filter(
-    (symbol) => typeof symbol === "string" && symbol.length > 0,
-  ))]
-}
-
-async function fetchPendingOrders({ broker, symbol, report, stdout, secrets }) {
-  try {
-    const result = await broker.getOpenOrders({ symbol })
+    const result = await broker.getOpenOrders()
     recordStage({
       report,
       stdout,
       secrets,
       stage: {
         operation: "broker.getOpenOrders",
-        symbol,
+        scope: "ALL_ACTIVE_SPOT_SYMBOLS",
         ok: result?.ok === true,
         result: serializeResult({
           result,
@@ -227,9 +186,7 @@ async function fetchPendingOrders({ broker, symbol, report, stdout, secrets }) {
         }),
       },
     })
-    return result?.ok === true && Array.isArray(result.data)
-      ? result.data
-      : null
+    return Array.isArray(result?.data) ? result.data : null
   } catch (error) {
     recordStage({
       report,
@@ -241,7 +198,7 @@ async function fetchPendingOrders({ broker, symbol, report, stdout, secrets }) {
           error,
           secrets,
         }),
-        symbol,
+        scope: "ALL_ACTIVE_SPOT_SYMBOLS",
         thrown: true,
       },
     })
@@ -303,18 +260,16 @@ async function fetchOrderDetail({ broker, order, fallbackSymbol, report, stdout,
   report.summary.detailReadCount += 1
 }
 
-async function scanSymbol({ broker, symbol, orderId, report, stdout, secrets }) {
+async function scanOpenOrders({ broker, orderId, report, stdout, secrets }) {
   writeEvent({
     stdout,
     secrets,
     event: {
-      event: "pending-orders.fetch.started",
-      symbol,
+      event: "pending-orders.account-wide.fetch.started",
     },
   })
   const orders = await fetchPendingOrders({
     broker,
-    symbol,
     report,
     stdout,
     secrets,
@@ -322,31 +277,18 @@ async function scanSymbol({ broker, symbol, orderId, report, stdout, secrets }) 
   if (orders === null) {
     return
   }
-  report.summary.pendingOrderCount += orders.length
+  report.summary.pendingOrderCount = orders.length
   for (const order of orders) {
     recordTargetMatch({
       order,
-      symbol: order?.symbol ?? symbol,
+      symbol: order?.symbol ?? null,
       orderId,
       report,
     })
     await fetchOrderDetail({
       broker,
       order,
-      fallbackSymbol: symbol,
-      report,
-      stdout,
-      secrets,
-    })
-  }
-}
-
-async function scanMarkets({ broker, symbols, orderId, report, stdout, secrets }) {
-  for (const symbol of symbols) {
-    await scanSymbol({
-      broker,
-      symbol,
-      orderId,
+      fallbackSymbol: order?.symbol,
       report,
       stdout,
       secrets,
@@ -418,49 +360,6 @@ async function saveReport({ report, reportDirectory, stdout, stderr, secrets }) 
   }
 }
 
-async function scanAvailableMarkets({ context }) {
-  const {
-    broker,
-    report,
-    stdout,
-    secrets,
-    orderId,
-  } = context
-  const markets = await fetchMarkets({
-    broker,
-    report,
-    stdout,
-    secrets,
-  })
-  if (markets === null) {
-    throw new Error("Bitunix Broker API getExchangeMarkets() failed; see diagnostic report")
-  }
-  report.summary.marketCount = markets.length
-  const symbols = getUniqueSymbols({ markets })
-  recordStage({
-    report,
-    stdout,
-    secrets,
-    stage: {
-      operation: "market.enumeration",
-      ok: symbols.length > 0,
-      activeMarketCount: markets.length,
-      uniqueSymbolCount: symbols.length,
-      symbols,
-    },
-  })
-  if (symbols.length === 0) {
-    throw new Error("Bitunix Broker API returned no active Spot symbols")
-  }
-  await scanMarkets({
-    broker,
-    symbols,
-    orderId,
-    report,
-    stdout,
-    secrets,
-  })
-}
 
 async function executeScan({ context }) {
   const {
@@ -480,7 +379,13 @@ async function executeScan({ context }) {
       stdout,
       secrets,
     })
-    await scanAvailableMarkets({ context })
+    await scanOpenOrders({
+      broker: context.broker,
+      orderId: context.orderId,
+      report,
+      stdout,
+      secrets,
+    })
   } catch (error) {
     report.fatalError = serializeError({
       error,
@@ -507,6 +412,10 @@ async function finalizeScan({ context }) {
     stderr,
     secrets,
   } = context
+  const marketScan = report.diagnostics.find((event) =>
+    event.event === "getOpenOrders.accountWide.completed",
+  )
+  report.summary.marketCount = marketScan?.marketCount ?? 0
   report.summary.targetMatchCount = report.summary.targetMatches.length
   report.completedAt = new Date().toISOString()
   const reportPath = await saveReport({
@@ -568,9 +477,11 @@ export async function runFindBitunixSpotOrder({
   const normalizedOrderId = validateOrderId({ orderId })
   const credentials = parseApiCredentials({ env })
   const secrets = [credentials.apiKey, credentials.apiSecret]
+  const report = createScanReport({ orderId: normalizedOrderId })
   const logger = createLogger({
     stdout,
     secrets,
+    report,
   })
   const context = {
     broker: null,
@@ -583,7 +494,7 @@ export async function runFindBitunixSpotOrder({
     secrets,
     reportDirectory,
     connected: false,
-    report: createScanReport({ orderId: normalizedOrderId }),
+    report,
   }
   await executeScan({ context })
   return finalizeScan({ context })
@@ -600,6 +511,7 @@ function createScanReport({ orderId }) {
     },
     readOnly: true,
     stages: [],
+    diagnostics: [],
     summary: {
       marketCount: 0,
       pendingOrderCount: 0,
