@@ -178,6 +178,8 @@ test("Bitunix order probe dispatches one reviewed createOrder request after fres
     assert.ok(events.indexOf("mutation.connect") < events.findIndex((event) => event.operation === "createOrder"))
     assert.equal(events.filter((event) => event.operation === "createOrder").length, 1)
     assert.equal(marker.status, "REJECTED")
+    assert.equal(marker.brokerResult.mutationOutcome, "REJECTED")
+    assert.equal(marker.brokerResult.errors[0].exchangeCode, "10005")
     assert.equal(marker.probe.id, "limit-sell-2")
     assert.equal(events.includes("mutation.disconnect"), true)
   } finally {
