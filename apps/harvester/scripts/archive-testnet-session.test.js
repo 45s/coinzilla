@@ -18,8 +18,9 @@ const RUNTIME_SESSION_ID = "ebe7c1d3-ff7d-47db-b2fe-2e5ec9594c1c"
 async function createArchiveFixture() {
   const packageDirectory = await mkdtemp(path.join(os.tmpdir(), "harvester-archive-test-"))
   const files = {
-    "logs/sessions/legacy/terminal.log": "legacy run without process markers",
-    "logs/cumulative/terminal.log": "cumulative terminal evidence",
+    "logs/sessions/2026-11-20_old/terminal.log": "older session must be excluded",
+    "logs/sessions/2026-11-22_latest/terminal.log": "latest session evidence",
+    "logs/cumulative/terminal.log": "x".repeat(100),
     "data/testnet/harvester.db": "sqlite main file",
     "data/testnet/harvester.db-wal": "sqlite wal evidence",
     "data/testnet/harvester.db-shm": "sqlite shm evidence",
@@ -83,11 +84,26 @@ test("archives complete logs and data trees without requiring process markers", 
       assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "the archive manifest must identify the last committed recovery-facts digest")
       assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID, "the archive manifest must identify the session owning the last committed fact")
       assert.equal(await readFile(path.join(directory, "data_commit_hash"), "utf8"), DATA_COMMIT_HASH + "\n", "the archive must contain the standalone data_commit_hash file")
-      for (const [relativePath, content] of Object.entries(fixture.files)) {
+      assert.equal(
+        await readFile(path.join(directory, "logs/cumulative/terminal.log"), "utf8"),
+        "x".repeat(5),
+        "cumulative logs must retain only their final five percent",
+      )
+      assert.equal(
+        await readFile(path.join(directory, "logs/sessions/2026-11-22_latest/terminal.log"), "utf8"),
+        "latest session evidence",
+        "the newest session must be retained in full",
+      )
+      await assert.rejects(
+        readFile(path.join(directory, "logs/sessions/2026-11-20_old/terminal.log")),
+        "older session directories must be excluded",
+      )
+      for (const [relativePath, expected] of Object.entries(fixture.files)) {
+        if (relativePath.startsWith("logs/")) continue
         assert.equal(
           await readFile(path.join(directory, relativePath), "utf8"),
-          content,
-          "every nested source file, including legacy logs, recovery facts and SQLite sidecars, must be copied unchanged",
+          expected,
+          "data and recovery facts must be copied unchanged",
         )
       }
       return { commit: REMOTE_COMMIT, fileCount: manifest.files.length + 1 }
@@ -122,9 +138,9 @@ test("keeps the completed local snapshot when remote publication fails", async (
     "the complete local snapshot must retain the last committed data hash",
   )
   assert.equal(
-    await readFile(path.join(attemptedDirectory, "logs/sessions/legacy/terminal.log"), "utf8"),
-    fixture.files["logs/sessions/legacy/terminal.log"],
-    "the complete local snapshot must remain available after a failed push",
+    await readFile(path.join(attemptedDirectory, "logs/sessions/2026-11-22_latest/terminal.log"), "utf8"),
+    fixture.files["logs/sessions/2026-11-22_latest/terminal.log"],
+    "the selected latest session must remain available after a failed push",
   )
 })
 
