@@ -1598,3 +1598,17 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Offline tests cover the exact live placement fields, exact string order ID, signed GET query construction, exchange code/message, one placement POST plus one read-only GET, no retries, and successful versus unavailable reconciliation metadata. Operator-probe tests also verify the accepted order ID, mutation outcome, reconciliation metadata, and read error are persisted in the private marker, and the console output explicitly says placement was confirmed while reconciliation was unavailable. CI must pass before merge; no live order probe is part of CI.
 - Do not repeat the live probe. Keep the order-detail signature investigation separate from placement in [issue #1704](https://github.com/45s/coinzilla/issues/1704); compare canonical query signing and use existing signed POST pending/history reads only as read-only reconciliation paths.
 - Historical failures are intentional evidence: unfunded BUY and SELL LIMIT attempts returned nested `placeStatus: 0` / `placeCode: 10034` (expected insufficient-balance rejections); the funded attempt succeeded at placement but the detail GET failed with `100005`. Do not repeat these probes or misclassify the detail failure as a rejected order.
+
+
+## 2026-11-22 — Bitunix Spot existing HYPE order readback (#1704)
+
+**Status: Phase 1 code audit complete; live exact-order verification pending.**
+
+- Audited `BitunixSpotBroker.getOpenOrders({ symbol })`: it uses the documented authenticated, read-only `POST /api/spot/v1/order/pending/list` endpoint with the required normalized symbol in the request body.
+- Confirmed the REST client defaults requests to authenticated; the pending-list POST explicitly sets `stateChanging: false`.
+- The adapter accepts an array or the supported single-object response, rejects missing/null/malformed rows, validates each row's symbol, and preserves exchange order IDs as strings.
+- The official pending-list contract is symbol-scoped and does not document pagination or account-wide enumeration. Do not invent either behavior.
+- Added `pnpm --filter @coinzilla/brokers bitunix:verify-existing-order`, a dedicated read-only operator command that fetches HYPEUSDT pending orders and matches exact order ID `2124329325141426176`. It does not call placement or cancellation.
+- Added offline tests for exact 64-bit string-ID matching, symbol scope, a non-matching order, and the no-mutation boundary.
+- **Phase 1 is not complete** until the operator runs the command against the configured LIVE account and the existing order is found by exact ID and symbol. A miss from the pending list is not proof that the order never existed; status/history reconciliation belongs to Phase 2.
+- Phases 2 (specific-order detail) and 3 (cancellation) remain blocked until Phase 1 acceptance criteria pass. The existing HYPE order must remain untouched.
