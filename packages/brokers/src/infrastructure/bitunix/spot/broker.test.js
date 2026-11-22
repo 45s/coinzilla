@@ -260,6 +260,8 @@ test("Bitunix Spot account-wide open-order scan bounds concurrency and preserves
           volume: "0.5",
           dealVolume: "0",
           price: "100",
+          ctime: "2026-11-22T00:00:00Z",
+          utime: "2026-11-22T00:00:00Z",
         }]
       },
     },
