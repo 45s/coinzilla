@@ -214,6 +214,31 @@ async function persistProbeOutcome({ markerPath, outcome, capture, result, error
     value: capture,
     secrets,
   })
+  if (result) {
+    marker.brokerResult = {
+      ok: result.ok === true,
+      mutationOutcome: result.mutationOutcome ?? marker.status,
+      ...(result.data === undefined ? {} : {
+        data: sanitizeDiagnosticValue({
+          value: result.data,
+          secrets,
+        }),
+      }),
+      errors: Array.isArray(result.errors)
+        ? result.errors.map((item) => ({
+          name: item?.name ?? "Error",
+          message: redactApiSecrets({
+            message: String(item?.message ?? item).slice(0, 500),
+            secrets,
+          }),
+          code: item?.code ?? null,
+          exchangeCode: item?.exchangeCode ?? null,
+          status: item?.status ?? null,
+          kind: item?.kind ?? null,
+        }))
+        : [],
+    }
+  }
   const sourceError = error ?? result?.errors?.[0]
   if (sourceError) {
     marker.error = {
