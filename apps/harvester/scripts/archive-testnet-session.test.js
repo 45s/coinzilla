@@ -84,6 +84,7 @@ test("archives the final cumulative tails and newest session with complete data 
       const manifest = JSON.parse(await readFile(path.join(directory, "manifest.json"), "utf8"))
       assert.equal(manifest.snapshotType, "selected-log-evidence", "the manifest must identify this as a selected-log evidence snapshot")
       assert.deepEqual(manifest.includedDirectories, ["logs", "data", "recovery-facts"], "the manifest must declare all included source trees")
+      assert.deepEqual(manifest.excludedPaths, ["data/production"], "the manifest must explicitly record that production data is excluded")
       assert.deepEqual(manifest.logSelection, { cumulative: "final-5-percent-of-each-file", sessions: "newest-session-directory-only; gzip-compressed" }, "the manifest must describe the reduced log selection")
       assert.equal(manifest.dataCommitHash, DATA_COMMIT_HASH, "the archive manifest must identify the last committed recovery-facts digest")
       assert.equal(manifest.recoveryRuntimeSessionId, RUNTIME_SESSION_ID, "the archive manifest must identify the session owning the last committed fact")
