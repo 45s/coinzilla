@@ -646,6 +646,7 @@ function createHarvesterAccountSnapshotRuntime({ startup,
   const {
     refreshAccountSnapshot,
     publishOpenOrdersSnapshot,
+    publishClosingOpenOrdersSnapshot,
     publishAccountSnapshot,
   } = startup.accountSnapshotManagerRef.current
   const resumeDeferredStrategyEvaluations = () => resumeHarvesterDeferredStrategyEvaluations({
@@ -662,6 +663,7 @@ function createHarvesterAccountSnapshotRuntime({ startup,
     getOperatorRuntimeSnapshot,
     refreshAccountSnapshot,
     publishOpenOrdersSnapshot,
+    publishClosingOpenOrdersSnapshot,
     publishAccountSnapshot,
     resumeDeferredStrategyEvaluations,
     cancelOwnedBuysAfterAccountingFailure,
