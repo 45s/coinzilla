@@ -1673,7 +1673,9 @@ function createMarketVolatilityRuntime({ dependencies, pairs } = {}) {
     volatilityProtectionEnabled,
   })
   return {
-    ...volatilityRuntime,
+    volatilityPairs,
+    volatilityProtectionEnabled,
+    isVolatilityProtectionEnabledForSymbol,
   }
 }
 
@@ -1739,9 +1741,7 @@ function createConservativeEngineBaseContext({ dependencies } = {}) {
     dependencies,
     settings,
     pairs,
-    volatilityPairs,
-    volatilityProtectionEnabled,
-    isVolatilityProtectionEnabledForSymbol,
+    ...volatilityRuntime,
     hasBlockingOpenOrdersForSymbol,
     marketMetadataCache,
     ...marketMetadataCache,
