@@ -74,17 +74,20 @@ const LOSSLESS_NUMERIC_FIELDS = Object.freeze({
   "/api/spot/v1/user/info": Object.freeze(["uid"]),
 })
 
-function redactDiagnosticValue(value, key = "") {
+function redactDiagnosticValue({ value, key = "" }) {
   if (/api.?key|secret|sign|nonce|email|phone|address|user.?id|uid/i.test(key)) {
     return "[REDACTED]"
   }
   if (Array.isArray(value)) {
-    return value.map((item) => redactDiagnosticValue(item))
+    return value.map((item) => redactDiagnosticValue({ value: item }))
   }
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.entries(value).map(([childKey, childValue]) => [
       childKey,
-      redactDiagnosticValue(childValue, childKey),
+      redactDiagnosticValue({
+        value: childValue,
+        key: childKey,
+      }),
     ]))
   }
   return value
@@ -546,6 +549,105 @@ function createPreparedRequest({ client, method, path, queryParams, body, authen
   }
 }
 
+async function dispatchRestRequest({ client, requestInput }) {
+  const {
+    method,
+    path,
+    queryParams,
+    body,
+    stateChanging,
+    authenticated,
+  } = requestInput
+  const request = createPreparedRequest({
+    client,
+    method,
+    path,
+    queryParams,
+    body,
+    authenticated,
+    stateChanging,
+  })
+  const response = await sendRequest({
+    client,
+    request,
+    path,
+    stateChanging,
+  })
+  const payload = await readResponsePayload({
+    response,
+    path,
+    stateChanging,
+  })
+  logRestDiagnostic({
+    logger: client.logger,
+    level: response.ok ? "debug" : "warn",
+    event: {
+      event: "response.received",
+      method,
+      path,
+      status: response.status,
+      ok: response.ok,
+      exchangeCode: payload?.code === undefined ? null : String(payload.code),
+      message: typeof payload?.msg === "string" ? payload.msg : null,
+      data: redactDiagnosticValue({ value: payload?.data }),
+    },
+  })
+  return validateResponse({
+    response,
+    payload,
+    path,
+    stateChanging,
+  })
+}
+
+async function executeRestRequest({ client, requestInput }) {
+  const {
+    method,
+    path,
+    queryParams,
+    body,
+    stateChanging,
+    authenticated,
+  } = requestInput
+  logRestDiagnostic({
+    logger: client.logger,
+    event: {
+      event: "request.started",
+      method,
+      path,
+      queryParams: redactDiagnosticValue({ value: queryParams }),
+      body: redactDiagnosticValue({ value: body }),
+      authenticated,
+      stateChanging,
+    },
+  })
+  try {
+    return await dispatchRestRequest({
+      client,
+      requestInput,
+    })
+  } catch (error) {
+    logRestDiagnostic({
+      logger: client.logger,
+      level: "error",
+      event: {
+        event: "request.failed",
+        method,
+        path,
+        error: {
+          name: error?.name ?? "Error",
+          code: error?.code ?? null,
+          kind: error?.kind ?? null,
+          exchangeCode: error?.exchangeCode ?? null,
+          status: error?.status ?? null,
+          message: error?.message ?? String(error),
+        },
+      },
+    })
+    throw error
+  }
+}
+
 export class BitunixRestClient {
   /**
    * @param {{apiKey?: string, apiSecret?: string, baseUrl?: string, requestTimeout?: number, fetchFn?: typeof fetch, now?: () => number, nonceFactory?: () => string, logger?: object}} options
@@ -588,95 +690,19 @@ export class BitunixRestClient {
    * @returns {Promise<{data: unknown}>}
    */
   async request(input = {}) {
-    const {
-      method,
-      path,
-      queryParams = {},
-      body,
-      stateChanging = false,
-      authenticated = true,
-    } = validateRequest(input)
-    if (authenticated && (!this.apiKey || !this.apiSecret)) {
+    const requestInput = validateRequest(input)
+    if (requestInput.authenticated && (!this.apiKey || !this.apiSecret)) {
       throw new BitunixRestError({
         message: "Bitunix REST credentials are required for authenticated requests",
         kind: "authentication",
-        path,
+        path: requestInput.path,
         outcomeUnknown: false,
       })
     }
-    logRestDiagnostic({
-      logger: this.logger,
-      event: {
-        event: "request.started",
-        method,
-        path,
-        queryParams: redactDiagnosticValue(queryParams),
-        body: redactDiagnosticValue(body),
-        authenticated,
-        stateChanging,
-      },
+    return executeRestRequest({
+      client: this,
+      requestInput,
     })
-    try {
-      const request = createPreparedRequest({
-        client: this,
-        method,
-        path,
-        queryParams,
-        body,
-        authenticated,
-        stateChanging,
-      })
-      const response = await sendRequest({
-        client: this,
-        request,
-        path,
-        stateChanging,
-      })
-      const payload = await readResponsePayload({
-        response,
-        path,
-        stateChanging,
-      })
-      logRestDiagnostic({
-        logger: this.logger,
-        level: response.ok ? "debug" : "warn",
-        event: {
-          event: "response.received",
-          method,
-          path,
-          status: response.status,
-          ok: response.ok,
-          exchangeCode: payload?.code === undefined ? null : String(payload.code),
-          message: typeof payload?.msg === "string" ? payload.msg : null,
-          data: redactDiagnosticValue(payload?.data),
-        },
-      })
-      return validateResponse({
-        response,
-        payload,
-        path,
-        stateChanging,
-      })
-    } catch (error) {
-      logRestDiagnostic({
-        logger: this.logger,
-        level: "error",
-        event: {
-          event: "request.failed",
-          method,
-          path,
-          error: {
-            name: error?.name ?? "Error",
-            code: error?.code ?? null,
-            kind: error?.kind ?? null,
-            exchangeCode: error?.exchangeCode ?? null,
-            status: error?.status ?? null,
-            message: error?.message ?? String(error),
-          },
-        },
-      })
-      throw error
-    }
   }
 }
 
