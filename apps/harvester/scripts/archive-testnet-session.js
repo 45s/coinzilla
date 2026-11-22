@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url"
 import { captureBuildMetadata } from "@coinzilla/utils"
 import packageMetadata from "../package.json" with { type: "json" }
 import { validateArchiveRemote } from "./initialize-private-archive-repository.js"
+import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
 
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const SOURCE_DIRECTORIES = Object.freeze(["logs", "data", "recovery-facts"])
@@ -738,11 +739,17 @@ export async function runHarvesterArchivePush({
   await assertHarvesterProcessStopped({ lockDirectory })
 
   const dataDirectory = resolveArchiveDataDirectory({ packageDirectory, env })
+  const recoveryFactsDirectory = resolveOperationalStateDirectory({ env })
+  if (path.basename(recoveryFactsDirectory) !== "recovery-facts") {
+    throw new Error("Operational State Store archive path must end in recovery-facts.")
+  }
   const sourcePaths = SOURCE_DIRECTORIES.map((directoryName) => ({
     directoryName,
     sourceDirectory: directoryName === "data"
       ? dataDirectory
-      : path.join(packageDirectory, directoryName),
+      : directoryName === "recovery-facts"
+        ? recoveryFactsDirectory
+        : path.join(packageDirectory, directoryName),
   }))
   for (const source of sourcePaths) {
     await assertRealDirectory(source.sourceDirectory)
