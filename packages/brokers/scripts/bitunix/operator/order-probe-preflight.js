@@ -28,10 +28,16 @@ function requireExactNonNegativeAmount({ value, field }) {
   return amount
 }
 
-function findAssetBalance({ balances, asset }) {
+function findAssetBalance({ balances, asset, required }) {
   const row = balances.find(({ free }) => free?.asset?.code === asset)
   if (!row) {
-    throw new Error(`Bitunix order probe requires an explicit ${asset} balance row; missing is not assumed to mean zero`)
+    if (required) {
+      throw new Error(`Bitunix order probe requires an explicit ${asset} balance row; missing is not assumed to mean zero`)
+    }
+    return {
+      free: null,
+      locked: null,
+    }
   }
   return {
     free: requireExactNonNegativeAmount({
@@ -98,14 +104,20 @@ function assertProbeBalanceIsInsufficient({ probe, freeBase, freeQuote }) {
   }
 }
 
-function createBalanceSummary({ balances }) {
+function createBalanceSummary({ balances, probe }) {
+  const baseRequired = probe.type === "MARKET" ||
+    (probe.type === "LIMIT" && probe.side === "SELL")
+  const quoteRequired = probe.type === "MARKET" ||
+    (probe.type === "LIMIT" && probe.side === "BUY")
   const base = findAssetBalance({
     balances,
     asset: "HYPE",
+    required: baseRequired,
   })
   const quote = findAssetBalance({
     balances,
     asset: "USDT",
+    required: quoteRequired,
   })
   return {
     freeBaseBalance: base.free,
