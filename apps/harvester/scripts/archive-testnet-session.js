@@ -809,11 +809,33 @@ async function publishArchive({
   }
 }
 
+function isPathWithin(parent, candidate) {
+  const relative = path.relative(parent, candidate)
+  return relative === ""
+    || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
+}
+
+function assertPathsDoNotOverlap(firstPath, secondPath) {
+  const first = path.resolve(firstPath)
+  const second = path.resolve(secondPath)
+  if (isPathWithin(first, second) || isPathWithin(second, first)) {
+    throw new Error(`Archive source directories must not overlap: ${first} and ${second}`)
+  }
+}
+
 function resolveArchiveSourcePaths({ packageDirectory, env } = {}) {
   const dataDirectory = resolveArchiveDataDirectory({ packageDirectory, env })
   const recoveryFactsDirectory = resolveOperationalStateDirectory({ env })
   if (path.basename(recoveryFactsDirectory) !== "recovery-facts") {
     throw new Error("Operational State Store archive path must end in recovery-facts.")
+  }
+  const logsDirectory = path.join(packageDirectory, "logs")
+  const archiveOutputDirectory = path.join(packageDirectory, "archive-output")
+  for (const protectedDirectory of [logsDirectory, recoveryFactsDirectory, archiveOutputDirectory]) {
+    assertPathsDoNotOverlap(dataDirectory, protectedDirectory)
+  }
+  for (const protectedDirectory of [logsDirectory, dataDirectory, archiveOutputDirectory]) {
+    assertPathsDoNotOverlap(recoveryFactsDirectory, protectedDirectory)
   }
   return SOURCE_DIRECTORIES.map((directoryName) => {
     let sourceDirectory = path.join(packageDirectory, directoryName)
