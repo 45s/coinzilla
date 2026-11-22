@@ -10,23 +10,31 @@ async function createResetFixture() {
   const recoveryFactsDirectory = path.join(root, "recovery-facts")
   const logsDirectory = path.join(root, "logs")
   const dataDirectory = path.join(root, "data")
+  const journalFile = path.join(logsDirectory, "sessions", "session-1", "journal.jsonl")
+  const archiveFile = path.join(root, "archive-output", "published", "manifest.json")
   const lockDirectory = path.join(root, "process-locks")
   await Promise.all([
     mkdir(recoveryFactsDirectory, { recursive: true }),
     mkdir(logsDirectory, { recursive: true }),
     mkdir(dataDirectory, { recursive: true }),
+    mkdir(path.dirname(journalFile), { recursive: true }),
+    mkdir(path.dirname(archiveFile), { recursive: true }),
     mkdir(lockDirectory, { recursive: true }),
   ])
   await Promise.all([
     writeFile(path.join(recoveryFactsDirectory, "facts.jsonl"), "old facts"),
     writeFile(path.join(logsDirectory, "terminal.log"), "keep logs"),
     writeFile(path.join(dataDirectory, "harvester.db"), "keep database"),
+    writeFile(journalFile, "keep journal"),
+    writeFile(archiveFile, "keep archive"),
   ])
   return {
     root,
     recoveryFactsDirectory,
     logsDirectory,
     dataDirectory,
+    journalFile,
+    archiveFile,
     lockDirectory,
   }
 }
