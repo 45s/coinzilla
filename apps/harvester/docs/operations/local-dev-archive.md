@@ -1,9 +1,9 @@
 # Local Harvester DEV archive — decisions and implementation record
 
-> Status: scope and operator decisions recorded; copy-and-push implementation is not yet complete.
+> Status: startup process identity capture and persistence implemented; database snapshot, archive packaging, verification and publication remain incomplete.
 > Tracking issue: [#1742](https://github.com/45s/coinzilla/issues/1742).
 > Task branch: `feat/harvester-local-dev-reset-archive`.
-> Private destination: [`45s/coinzilla-archive`](https://github.com/45s/coinzilla-archive).
+> Private destination: `45s/coinzilla-archive` (private repository).
 
 This document is the durable handoff for this work. A future contributor must continue from this record and the linked issue, not rediscover decisions from chat history.
 
@@ -42,7 +42,17 @@ The archive must identify the Harvester process that produced the data.
 
 `apps/harvester/scripts/run-dev-with-log.js` currently captures `sessionStartedAt` and `runtimeSessionId` before spawning `src/index.js`, and passes them as `COINZILLA_PROCESS_STARTED_AT` and `COINZILLA_RUNTIME_SESSION_ID`. It creates the per-process session directory using those values.
 
-The Journal process-start event schema already records allowlisted Git source metadata (branch, full/short commit, subject/date, working-tree state and metadata source). Reuse the canonical process identity/provenance path; do not create a competing provenance format. The remaining implementation task is to ensure the archive workflow can reliably read the immutable process-start identity and that the commit/worktree snapshot is captured at launcher startup rather than looked up later.
+The Journal process-start event schema already records allowlisted Git source metadata (branch, full/short commit, subject/date, working-tree state and metadata source). Reuse the canonical process identity/provenance path; do not create a competing provenance format.
+
+**Implemented startup identity slice:**
+
+- `run-dev-with-log.js` captures `captureBuildMetadata()` once before spawning Harvester and stores the allowlisted source snapshot with the process-start timestamp, runtime session UUID and `TRADING_MODE`.
+- The launcher writes `logs/sessions/<timestamp>-<runtime-session-id>/process-identity.json` using exclusive creation (`wx`) and restrictive file mode (`0600`). An existing identity is never overwritten.
+- The child receives the exact captured source snapshot through the internal `COINZILLA_PROCESS_SOURCE_METADATA` environment value. `createHarvesterProcessIdentity()` reuses that snapshot for the Journal process-start event and does not perform a second Git lookup.
+- If startup Git provenance is unavailable, the identity records explicit null/unknown values. The later archive command must reject missing/invalid commit provenance; it must not substitute the current checkout's HEAD.
+- The persisted identity contains only allowlisted build metadata and process facts. It does not serialize the environment or credentials.
+
+The remaining implementation task is the archive command, TESTNET SQLite online backup, exact-session evidence collection, manifest/checksum verification, and private-repository publication.
 
 ## 3. Data selection
 
