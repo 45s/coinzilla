@@ -260,6 +260,7 @@ For user data:
 8. The legacy `acknowledgeRecovery()` method remains callable with no arguments and preserves its boolean behavior: it returns `true` only when this call completes shared recovery, and `false` while other subscribers are pending or when the acknowledgement is not accepted. Because the legacy signature carries no generation token, consumers needing stale-work fencing must migrate to `acknowledgeRecoveryResult(recoveryGeneration)`.
 9. If application reconciliation or a required durability barrier fails, the consumer must not acknowledge. The broker keeps recovery required, continues its bounded reminders, and keeps state-changing RPCs blocked until all active subscribers acknowledge the current generation.
 10. A `reconciled` status indicates that all active subscribers acknowledged the same current generation; local acceptance alone is not global readiness. Consumers must also correlate the terminal status to the token and subscription identity they reconciled.
+11. If a reconnect client's `connect()` fails, the session detaches that client's listeners and attempts to disconnect the failed client before scheduling another retry. Cleanup failure is logged separately and does not replace the original connection error. A retry must not leave callbacks from the failed client attached to the active session.
 
 The recommended reconciliation inputs are:
 
