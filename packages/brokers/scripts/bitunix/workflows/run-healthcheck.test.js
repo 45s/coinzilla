@@ -537,8 +537,14 @@ test("focused order-read health gate requires every discovered order detail to s
     report: {
       results: [
         openOrders,
-        detail({ orderId: "order-1", status: "passed" }),
-        detail({ orderId: "order-2", status: "passed" }),
+        detail({
+          orderId: "order-1",
+          status: "passed",
+        }),
+        detail({
+          orderId: "order-2",
+          status: "passed",
+        }),
       ],
     },
   })
@@ -549,8 +555,14 @@ test("focused order-read health gate requires every discovered order detail to s
     report: {
       results: [
         openOrders,
-        detail({ orderId: "order-1", status: "passed" }),
-        detail({ orderId: "order-2", status: "failed" }),
+        detail({
+          orderId: "order-1",
+          status: "passed",
+        }),
+        detail({
+          orderId: "order-2",
+          status: "failed",
+        }),
       ],
     },
   })
@@ -563,7 +575,10 @@ test("focused order-read health gate requires every discovered order detail to s
     report: {
       results: [
         openOrders,
-        detail({ orderId: "order-1", status: "passed" }),
+        detail({
+          orderId: "order-1",
+          status: "passed",
+        }),
       ],
     },
   })
