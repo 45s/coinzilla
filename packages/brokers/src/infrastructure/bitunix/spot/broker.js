@@ -120,44 +120,39 @@ function adaptSymbolOrderRows({ rows, symbol, operation }) {
   })
 }
 
-async function fetchAllOpenOrders({ broker }) {
-  logBrokerDiagnostic({
-    logger: broker.logger,
-    event: {
-      event: "getOpenOrders.accountWide.started",
-    },
-  })
-  const marketsResult = await broker.getExchangeMarkets()
-  if (marketsResult?.ok !== true || !Array.isArray(marketsResult.data)) {
-    const errors = marketsResult?.errors ?? [
-      new Error("Bitunix Spot market catalog returned no valid market list"),
-    ]
-    logBrokerDiagnostic({
-      logger: broker.logger,
-      level: "error",
-      event: {
-        event: "getOpenOrders.accountWide.marketCatalogFailed",
-        errorCount: errors.length,
-      },
-    })
-    return toResult({ errors })
+async function getActiveSpotSymbols({ broker }) {
+  try {
+    const result = await broker.getExchangeMarkets()
+    if (result?.ok !== true || !Array.isArray(result.data)) {
+      return {
+        symbols: [],
+        errors: result?.errors ?? [
+          new Error("Bitunix Spot market catalog returned no valid market list"),
+        ],
+      }
+    }
+    const symbols = [...new Set(result.data.map((market) => market.symbol).filter(
+      (symbol) => typeof symbol === "string" && symbol.length > 0,
+    ))]
+    if (symbols.length === 0) {
+      return {
+        symbols: [],
+        errors: [new Error("Bitunix Spot market catalog contains no active symbols")],
+      }
+    }
+    return {
+      symbols,
+      errors: [],
+    }
+  } catch (error) {
+    return {
+      symbols: [],
+      errors: [error],
+    }
   }
+}
 
-  const symbols = [...new Set(marketsResult.data.map((market) => market.symbol).filter(
-    (symbol) => typeof symbol === "string" && symbol.length > 0,
-  ))]
-  if (symbols.length === 0) {
-    const error = new Error("Bitunix Spot market catalog contains no active symbols")
-    logBrokerDiagnostic({
-      logger: broker.logger,
-      level: "error",
-      event: {
-        event: "getOpenOrders.accountWide.emptyMarketCatalog",
-      },
-    })
-    return toResult({ errors: [error] })
-  }
-
+async function collectOpenOrdersForSymbols({ broker, symbols }) {
   const orders = []
   const errors = []
   for (const symbol of symbols) {
@@ -177,16 +172,47 @@ async function fetchAllOpenOrders({ broker }) {
       errors.push(error)
     }
   }
+  return {
+    orders,
+    errors,
+  }
+}
 
+async function fetchAllOpenOrders({ broker }) {
+  logBrokerDiagnostic({
+    logger: broker.logger,
+    event: {
+      event: "getOpenOrders.accountWide.started",
+    },
+  })
+  const marketResult = await getActiveSpotSymbols({ broker })
+  if (marketResult.errors.length > 0) {
+    logBrokerDiagnostic({
+      logger: broker.logger,
+      level: "error",
+      event: {
+        event: "getOpenOrders.accountWide.marketCatalogFailed",
+        errorCount: marketResult.errors.length,
+      },
+    })
+    return toResult({
+      errors: marketResult.errors,
+    })
+  }
+
+  const { orders, errors } = await collectOpenOrdersForSymbols({
+    broker,
+    symbols: marketResult.symbols,
+  })
   logBrokerDiagnostic({
     logger: broker.logger,
     level: errors.length === 0 ? "debug" : "warn",
     event: {
       event: "getOpenOrders.accountWide.completed",
-      marketCount: symbols.length,
+      marketCount: marketResult.symbols.length,
       orderCount: orders.length,
       errorCount: errors.length,
-      symbols,
+      symbols: marketResult.symbols,
     },
   })
   return toResult({
