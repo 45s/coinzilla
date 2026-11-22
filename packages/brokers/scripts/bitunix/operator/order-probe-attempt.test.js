@@ -9,6 +9,56 @@ import {
   runBitunixOrderProbeAttempt,
 } from "./order-probe-attempt.js"
 
+function createMarketResult() {
+  return {
+    ok: true,
+    data: [{
+      symbol: "HYPEUSDT",
+      baseAsset: { code: "HYPE" },
+      quoteAsset: { code: "USDT" },
+    }],
+  }
+}
+
+function createFiltersResult() {
+  return {
+    ok: true,
+    data: {
+      symbol: "HYPEUSDT",
+      base: "HYPE",
+      quote: "USDT",
+      isOpen: "1",
+      minVolume: "0.1",
+      minPrice: "10",
+    },
+  }
+}
+
+function createDefaultBalances() {
+  return [
+    {
+      free: {
+        amount: "0.01",
+        asset: { code: "HYPE" },
+      },
+      locked: {
+        amount: "0",
+        asset: { code: "HYPE" },
+      },
+    },
+    {
+      free: {
+        amount: "0.01",
+        asset: { code: "USDT" },
+      },
+      locked: {
+        amount: "0",
+        asset: { code: "USDT" },
+      },
+    },
+  ]
+}
+
 function createReadBroker({ events, balances = null, openOrders = [] }) {
   return {
     async connect() {
@@ -16,55 +66,17 @@ function createReadBroker({ events, balances = null, openOrders = [] }) {
     },
     async getExchangeMarkets() {
       events.push("read.markets")
-      return {
-        ok: true,
-        data: [{
-          symbol: "HYPEUSDT",
-          baseAsset: { code: "HYPE" },
-          quoteAsset: { code: "USDT" },
-        }],
-      }
+      return createMarketResult()
     },
     async getSymbolFilters() {
       events.push("read.filters")
-      return {
-        ok: true,
-        data: {
-          symbol: "HYPEUSDT",
-          base: "HYPE",
-          quote: "USDT",
-          isOpen: "1",
-          minVolume: "0.1",
-          minPrice: "10",
-        },
-      }
+      return createFiltersResult()
     },
     async getBalances() {
       events.push("read.balances")
       return {
         ok: true,
-        data: balances ?? [
-          {
-            free: {
-              amount: "0.01",
-              asset: { code: "HYPE" },
-            },
-            locked: {
-              amount: "0",
-              asset: { code: "HYPE" },
-            },
-          },
-          {
-            free: {
-              amount: "0.01",
-              asset: { code: "USDT" },
-            },
-            locked: {
-              amount: "0",
-              asset: { code: "USDT" },
-            },
-          },
-        ],
+        data: balances ?? createDefaultBalances(),
       }
     },
     async getOpenOrders() {
