@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import { assertInteractiveTerminal } from "./helpers/validate-order-attempt.js"
 import { runOperatorOrderCommand, reportOperatorFailure } from "./operator/run-order-command.js"
 import { runOperatorOrderProbeCommand, reportOrderProbeFailure } from "./operator/run-order-probe-command.js"
+import { getBitunixOrderProbe } from "./operator/order-probe-matrix.js"
 import { runHealthcheckWorkflow } from "./workflows/run-healthcheck.js"
 import { parseHealthcheckMode } from "./helpers/parse-healthcheck-mode.js"
 import { sanitizeDiagnosticError } from "./helpers/sanitize-diagnostic-data.js"
@@ -92,12 +93,13 @@ async function runHealthcheck({ args = process.argv.slice(2) } = {}) {
     return
   }
   if (mode === "probe-order") {
+    const probeId = args[0].slice("--probe-order=".length)
+    getBitunixOrderProbe({ probeId })
     assertInteractiveTerminal({
       stdin: process.stdin,
       stdout: process.stdout,
     })
     loadLocalEnvironment()
-    const probeId = args[0].slice("--probe-order=".length)
     process.exitCode = await runHealthcheckWorkflow({
       mode,
       probeId,
