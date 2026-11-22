@@ -163,6 +163,7 @@ async function runDiagnosticsWithOperatorAttempt({
     report,
     operatorResult,
     durationMs: Date.now() - startedAt,
+    probeId: runOperatorProbe ? probeId : undefined,
     secrets: [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean),
   })
 }
