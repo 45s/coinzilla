@@ -218,6 +218,22 @@ async function persistProbeOutcome({ markerPath, outcome, capture, result, error
  * @param {object} input Dependencies and the reviewed probe identifier.
  * @returns {Promise<object>} Broker mutation result or explicit NOT_SENT decline.
  */
+function createNotSentProbeError({ error }) {
+  const notSentError = new Error(
+    error?.message ?? "Bitunix order probe stopped before dispatch",
+    { cause: error },
+  )
+  notSentError.name = "BitunixOrderProbeNotSentError"
+  notSentError.mutationOutcome = "NOT_SENT"
+  return notSentError
+}
+
+/**
+ * Run exactly one human-confirmed Bitunix Spot order probe.
+ *
+ * @param {object} input Dependencies and the reviewed probe identifier.
+ * @returns {Promise<object>} Broker mutation result or explicit NOT_SENT decline.
+ */
 export async function runBitunixOrderProbeAttempt({
   probeId,
   readBroker,
@@ -236,39 +252,42 @@ export async function runBitunixOrderProbeAttempt({
     createMarker,
     writeLine,
   })
-  const preflight = await readOrderProbePreflight({
-    readBroker,
-    probeId,
-  })
-  writeLine(formatOrderProbePreflight({
-    preflight,
-  }))
-  const approved = await confirm({
-    preflight,
-  })
-  if (approved !== true) {
-    writeLine("Operator declined. No order was sent.")
-    return Object.freeze({
-      ok: false,
-      mutationOutcome: "NOT_SENT",
-      declined: true,
-    })
-  }
-  const orderBroker = createOrderBroker({
-    capture,
-  })
-  assertOrderMutationBroker({
-    broker: orderBroker,
-  })
+  let orderBroker = null
   let connected = false
   let markerPath
+  let dispatchStarted = false
   let result
   try {
+    const preflight = await readOrderProbePreflight({
+      readBroker,
+      probeId,
+    })
+    writeLine(formatOrderProbePreflight({
+      preflight,
+    }))
+    const approved = await confirm({
+      preflight,
+    })
+    if (approved !== true) {
+      writeLine("Operator declined. No order was sent.")
+      return Object.freeze({
+        ok: false,
+        mutationOutcome: "NOT_SENT",
+        declined: true,
+      })
+    }
+    orderBroker = createOrderBroker({
+      capture,
+    })
+    assertOrderMutationBroker({
+      broker: orderBroker,
+    })
     await orderBroker.connect()
     connected = true
     markerPath = await createMarker({
       preflight,
     })
+    dispatchStarted = true
     result = await orderBroker.createOrder(preflight.orderInput)
     const outcome = result?.mutationOutcome ?? "OUTCOME_UNKNOWN"
     await persistProbeOutcome({
@@ -286,6 +305,11 @@ export async function runBitunixOrderProbeAttempt({
     writeLine(`Private probe evidence: ${markerPath}`)
     return result
   } catch (error) {
+    if (!dispatchStarted) {
+      throw createNotSentProbeError({
+        error,
+      })
+    }
     if (markerPath) {
       try {
         await persistProbeOutcome({
