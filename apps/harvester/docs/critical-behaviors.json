@@ -1457,28 +1457,28 @@
     }
   ],
   "runtimeScope": {
-    "activeStrategy": "CG_coinGrabber",
+    "activeStrategy": "RS_recoverySeller",
     "active": true,
     "conservativeEnabled": true,
     "aggressiveEnabled": false,
     "recoveryRestorationEnabled": false,
-    "recoverySellerStrategyEnabled": false,
-    "recoverySellerConfiguredPairCount": 0,
+    "recoverySellerStrategyEnabled": true,
+    "recoverySellerConfiguredPairCount": 1,
     "notes": [
-      "The inventory covers the active CG_coinGrabber Conservative execution path.",
-      "CG_coinGrabber Aggressive mode is disabled in the current configuration.",
-      "RS_recoverySeller is disabled and its operator pair map is empty; its inactive modules are not represented as active runtime guarantees.",
+      "The current default configuration enables Recovery Seller with LINEAUSDT routed to TESTNET.",
+      "Conservative remains enabled independently; Conservative restart restoration remains disabled.",
+      "The contract includes 40 critical modules shared with safety/recovery runtime responsibilities; coverage is measured and gated independently from strategy activation.",
       "Process-restart restoration remains disabled; the operational-state crash matrix is offline evidence only."
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-22T08:05:50Z",
+    "measuredAt": "2026-11-22T08:21:10Z",
     "branch": "fix/harvester/rs-operational-state-bootstrap",
-    "prHeadSha": "441ea5defb4e09a7324a594ef146bea55813ca1a",
-    "workflowRunId": 45001154681,
-    "harvesterJobId": 137142750672,
+    "prHeadSha": "52ff824b6c0bfe1318e0dea5126c3ca10adf8789",
+    "workflowRunId": 45002232384,
+    "harvesterJobId": 137146078765,
     "aggregate": {
-      "lines": 90.46,
+      "lines": 90.45,
       "branches": 83.45,
       "functions": 95.95
     },
