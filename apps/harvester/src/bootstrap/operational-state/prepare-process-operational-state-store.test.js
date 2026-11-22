@@ -25,7 +25,10 @@ const config = ({
 const store = () => ({
   verify: async () => ({
     ok: true,
-    data: { valid: true, durableWriteSupported: true },
+    data: {
+      valid: true,
+      durableWriteSupported: true,
+    },
   }),
 })
 
@@ -151,7 +154,12 @@ test("fails closed when recovery ledger verification fails or throws", async () 
     prepareProcessOperationalStateStore({
       appConfig: config({ recovery: true }),
       runtimeSessionId: "session",
-      createOperationalStateStore: () => ({ verify: async () => ({ ok: false, errors: [invalid] }) }),
+      createOperationalStateStore: () => ({
+        verify: async () => ({
+          ok: false,
+          errors: [invalid],
+        }),
+      }),
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED" && error.cause === invalid,
   )
@@ -168,7 +176,10 @@ test("fails closed when recovery ledger verification fails or throws", async () 
 
 test("reports invalid session identity and factory dependencies", async () => {
   await assert.rejects(
-    prepareProcessOperationalStateStore({ appConfig: config({ recovery: true }), runtimeSessionId: "" }),
+    prepareProcessOperationalStateStore({
+      appConfig: config({ recovery: true }),
+      runtimeSessionId: "",
+    }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_SESSION_ID_INVALID",
   )
   await assert.rejects(
