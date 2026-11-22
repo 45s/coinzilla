@@ -133,7 +133,7 @@ test("rejects conflicting volatility settings for a market routed to CG and RS",
         },
       ],
     }),
-    /conflicting volatility protection settings for BTCUSDT/i,
+    /conflicting volatility protection settings for CG and RS/i,
   )
 })
 
