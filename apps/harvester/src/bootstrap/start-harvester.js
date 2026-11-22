@@ -785,6 +785,8 @@ function createHarvesterTradingEngineActivator({ startup,
       getAdditionalTrackedBaseQuantity: portfolio.getAdditionalTrackedBaseQuantity,
       getAdditionalTrackedQuoteCashFlow: portfolio.getAdditionalTrackedQuoteCashFlow,
       recoverySellerPairs: startup.recoverySellerPairs,
+      volatilityPairs: startup.pairs,
+      volatilityLogger: startup.logger,
       recoverySellerWorkflow: portfolio.recoverySellerWorkflow,
       recoverySellerStopWorkflow: startup.recoverySellerStopWorkflow,
       evaluateRecoverySellerTransition: startup.evaluateRecoverySellerTransition,
@@ -1107,11 +1109,7 @@ async function startHarvesterMarketServices({ startup,
     marketPriceIntake: resources.marketPriceIntake,
   })
   await resources.candleHistoryService.start({
-    pairs: resolveStrategyMarketDataPairs({
-      pairs: marketDataPairs,
-      strategyPolicy: conservativeStrategyPolicy,
-      hasUnownedOpenOrdersForSymbol: startup.accountSnapshotManagerRef.current.hasUnownedOpenOrdersForSymbol,
-    }),
+    pairs: marketDataPairs,
     subscriptions: resources.subscriptions,
   })
 }
@@ -1463,6 +1461,7 @@ function createHarvesterRuntimeResult({
       return [...new Set(resources.subscriptions.map(({ symbol }) => symbol))]
     },
     getVolatilityData: ({ symbol } = {}) => resources.candleHistoryService.getSnapshot({ symbol }),
+    getVolatilityProtectionState: ({ symbol } = {}) => resources.tradingEngine?.getVolatilityProtectionState({ symbol }),
     startMarketData: marketDataLifecycle.start,
     stopMarketData: marketDataLifecycle.stop,
     connected: true,

@@ -145,6 +145,7 @@ function createHarnessAppConfig({
 aggressive: { enabled: false } },
         pairs: Object.fromEntries(markets.filter((market) => symbols.includes(market.symbol)).map((market) => [market.symbol, {
           enabled: true,
+          enableVolatilityProtection: true,
           ...(externalOrdersPolicyBySymbol[market.symbol] === undefined
             ? {}
             : { externalOrdersPolicy: externalOrdersPolicyBySymbol[market.symbol] }),

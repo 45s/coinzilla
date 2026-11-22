@@ -370,6 +370,18 @@ The Command Center roadmap is complete; this section is intentionally a pointer 
 
 ---
 
+## Market-owned volatility protection — issue #1728
+
+**Status: IN PROGRESS in [PR #1744](https://github.com/45s/coinzilla/pull/1744).** The original RS-only LINEA symptom was narrowed by merged PR #1730, but volatility eligibility and initial state remained tied to the CG pair map. The follow-up makes the effective market configuration the sole eligibility source.
+
+- [x] Test-first RS-only LINEA startup regression for enabled volatility markets and neutral volatility diagnostics.
+- [x] Pass the effective market-pair union to candle-history startup independently of strategy/external-order market-data filtering.
+- [x] Use market-owned volatility eligibility and initial state; CG and RS share the central volatility submission gate.
+- [x] Reject conflicting explicit volatility settings when the same market is configured for both CG and RS.
+- [x] Label volatility diagnostics with `component: market-volatility-protection` and no strategy ID.
+- [ ] Verify all tests and exact-head CI. No local test execution or GitHub Actions results are available through the current tool session.
+- No exchange operations are authorized or required.
+
 ## Submission deferral diagnostics — issue #1025
 
 **Status: IMPLEMENTED AND MERGED IN PR #1026 (2026-11-12).** The Conservative submission gate now preserves stable reasons and safe context when it intentionally withholds broker I/O. The operational reason catalogue and missing-order investigation procedure are maintained in [Submission deferrals and missing-order diagnostics](./docs/operations/submission-deferrals.md).

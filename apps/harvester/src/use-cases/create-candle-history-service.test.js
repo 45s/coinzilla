@@ -14,9 +14,18 @@ const test = (...[name, ...args]) => nodeTest(`[create-candle-history-service.te
 test("subscribes every enabled market before requesting approximately 100 completed candles", async () => {
   const fixture = createFixture({
     pairs: {
-      BTCUSDT: { enabled: true },
-      DOGEUSDT: { enabled: true },
-      ZROUSDT: { enabled: false },
+      BTCUSDT: {
+        enabled: true,
+        enableVolatilityProtection: true,
+      },
+      DOGEUSDT: {
+        enabled: true,
+        enableVolatilityProtection: true,
+      },
+      ZROUSDT: {
+        enabled: false,
+        enableVolatilityProtection: true,
+      },
     },
   })
 
@@ -36,26 +45,46 @@ test("subscribes every enabled market before requesting approximately 100 comple
     "All live candle streams must be established before any history request so events during warm-up can be buffered.",
   )
   assert.deepEqual(
-    fixture.calls.filter((call) => call.method === "getCandles").map(({ symbol, interval, limit }) => ({ symbol,
-interval,
-limit })),
+    fixture.calls
+      .filter((call) => call.method === "getCandles")
+      .map(({ symbol, interval, limit }) => ({
+        symbol,
+        interval,
+        limit,
+      })),
     [
-      { symbol: "BTCUSDT",
-interval: "1m",
-limit: 101 },
-      { symbol: "DOGEUSDT",
-interval: "1m",
-limit: 101 },
+      {
+        symbol: "BTCUSDT",
+        interval: "1m",
+        limit: 101,
+      },
+      {
+        symbol: "DOGEUSDT",
+        interval: "1m",
+        limit: 101,
+      },
     ],
     "Harvester must request 101 one-minute candles to retain approximately 100 completed candles when the final bar is still forming.",
   )
 })
 
 test("does not subscribe to or warm candle history for an enabled pair with volatility protection disabled", async () => {
-  const fixture = createFixture({ pairs: { BTCUSDT: { enabled: true },
-DOGEUSDT: { enabled: true,
-enableVolatilityProtection: false },
-ZROUSDT: { enabled: false } } })
+  const fixture = createFixture({
+    pairs: {
+      BTCUSDT: {
+        enabled: true,
+        enableVolatilityProtection: true,
+      },
+      DOGEUSDT: {
+        enabled: true,
+        enableVolatilityProtection: false,
+      },
+      ZROUSDT: {
+        enabled: false,
+        enableVolatilityProtection: true,
+      },
+    },
+  })
   await fixture.start()
   assert.deepEqual(fixture.calls.filter((call) => call.method === "subscribeForCandles").map(({ symbol }) => symbol), ["BTCUSDT"], "Only enabled pairs that retain volatility protection may receive Kline subscriptions.")
   assert.deepEqual(fixture.calls.filter((call) => call.method === "getCandles").map(({ symbol }) => symbol), ["BTCUSDT"], "Opted-out pairs must not incur historical candle requests or warm-up work.")
@@ -110,8 +139,16 @@ test("keeps markets with fewer than 74 completed candles unavailable for the 60-
 
 test("keeps readiness isolated per market when one symbol has insufficient history", async () => {
   const fixture = createFixture({
-    pairs: { BTCUSDT: { enabled: true },
-DOGEUSDT: { enabled: true } },
+    pairs: {
+      BTCUSDT: {
+        enabled: true,
+        enableVolatilityProtection: true,
+      },
+      DOGEUSDT: {
+        enabled: true,
+        enableVolatilityProtection: true,
+      },
+    },
     historyBySymbol: {
       BTCUSDT: createHistory("BTCUSDT", 100),
       DOGEUSDT: createHistory("DOGEUSDT", 73),

@@ -179,6 +179,30 @@ function resolveEffectivePairs({ strategyConfig, tradingMode, executionSymbols }
   return pairs
 }
 
+function hasMarketVolatilityConfigurationConflict({ conservativePair, recoverySellerPair } = {}) {
+  return conservativePair?.enabled === true &&
+    recoverySellerPair?.enabled === true &&
+    typeof conservativePair.enableVolatilityProtection === "boolean" &&
+    typeof recoverySellerPair.enableVolatilityProtection === "boolean" &&
+    conservativePair.enableVolatilityProtection !== recoverySellerPair.enableVolatilityProtection
+}
+
+function assertConsistentMarketVolatilityConfiguration({
+  strategyConfig,
+  recoverySellerStrategyConfig,
+} = {}) {
+  const conservativePairs = strategyConfig?.pairs ?? {}
+  const recoverySellerPairs = recoverySellerStrategyConfig?.pairs ?? {}
+  for (const [symbol, conservativePair] of Object.entries(conservativePairs)) {
+    if (hasMarketVolatilityConfigurationConflict({
+      conservativePair,
+      recoverySellerPair: recoverySellerPairs[symbol],
+    })) {
+      throw new TypeError(`Market ${symbol} has conflicting volatility protection settings for CG and RS`)
+    }
+  }
+}
+
 function resolveConservativeRuntimePairs({
   strategyConfig,
   recoverySellerStrategyConfig,
@@ -186,6 +210,10 @@ function resolveConservativeRuntimePairs({
   executionSymbols,
   executionRoutes,
 } = {}) {
+  assertConsistentMarketVolatilityConfiguration({
+    strategyConfig,
+    recoverySellerStrategyConfig,
+  })
   const routes = resolveExecutionRouteSymbols({
     executionRoutes,
     executionSymbols,
