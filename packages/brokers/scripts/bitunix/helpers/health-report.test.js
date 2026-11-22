@@ -343,8 +343,14 @@ function createSanitizedOrderReadFixture({ orderId, symbol }) {
       healthy: true,
     },
     results: [
-      createSanitizedOpenOrdersResult({ orderId, symbol }),
-      createSanitizedOrderDetailResult({ orderId, symbol }),
+      createSanitizedOpenOrdersResult({
+        orderId,
+        symbol,
+      }),
+      createSanitizedOrderDetailResult({
+        orderId,
+        symbol,
+      }),
       {
         operation: "user.account",
         status: "passed",
