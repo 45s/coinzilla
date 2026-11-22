@@ -195,6 +195,7 @@ test("Bitunix Spot getOpenOrders() enumerates markets and preserves partial symb
           dealVolume: "0",
           price: "100",
           ctime: "2026-11-22T00:00:00Z",
+          utime: "2026-11-22T00:00:00Z",
         }]
       },
     },
@@ -3060,6 +3061,7 @@ test("Bitunix Spot Broker API emits structured order-read diagnostics", async ()
         dealVolume: "0",
         price: "30",
         ctime: "2026-11-22T00:00:00Z",
+        utime: "2026-11-22T00:00:00Z",
       }],
       "/api/spot/v1/order/detail": new Error("synthetic detail lookup failure"),
     },
