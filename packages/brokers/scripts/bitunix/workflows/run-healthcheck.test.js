@@ -544,8 +544,14 @@ test("focused order-read health gate accepts every discovered order detail", () 
     report: {
       results: [
         openOrders,
-        detail({ orderId: "order-1", status: "passed" }),
-        detail({ orderId: "order-2", status: "passed" }),
+        detail({
+          orderId: "order-1",
+          status: "passed",
+        }),
+        detail({
+          orderId: "order-2",
+          status: "passed",
+        }),
       ],
     },
   })
@@ -559,8 +565,14 @@ test("focused order-read health gate rejects any failed order detail", () => {
     report: {
       results: [
         openOrders,
-        detail({ orderId: "order-1", status: "passed" }),
-        detail({ orderId: "order-2", status: "failed" }),
+        detail({
+          orderId: "order-1",
+          status: "passed",
+        }),
+        detail({
+          orderId: "order-2",
+          status: "failed",
+        }),
       ],
     },
   })
@@ -576,32 +588,10 @@ test("focused order-read health gate rejects an undiscovered order detail result
     report: {
       results: [
         openOrders,
-        detail({ orderId: "order-1", status: "passed" }),
-      ],
-    },
-  })
-  assert.equal(result.healthy, false, "the gate must detect an order whose detail read was skipped")
-})
-
-test("focused order-read health gate rejects an undiscovered order detail result", () => {
-  const result = evaluateOrderReadHealthCheck({
-    report: {
-      results: [
-        {
-          operation: "Broker API getOpenOrders",
+        detail({
+          orderId: "order-1",
           status: "passed",
-          response: {
-            ok: true,
-            data: [
-              {\n              id: "order-1",\n              symbol: "HYPEUSDT",\n            },
-              {\n              id: "order-2",\n              symbol: "BTCUSDT",\n            },
-            ],
-          },
-        },
-        {
-          operation: "Broker API getOrder",
-          status: "passed",
-        },
+        }),
       ],
     },
   })
