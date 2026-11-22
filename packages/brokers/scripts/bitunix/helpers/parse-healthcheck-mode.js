@@ -2,7 +2,7 @@ const MODE_BY_ARGUMENT = Object.freeze({
   "--help": "help",
   "--version": "version",
   "--local": "local",
-  "--publish": "publish",
+  "--publish": "publish",\n  "--full-diagnostics": "full-diagnostics",
   "--place-order": "place-order",
 })
 
