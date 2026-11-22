@@ -73,7 +73,11 @@ function recordOrderReadResult({
   report.summary.total += 1
   report.summary[entry.status] += 1
   const duration = Number.isFinite(durationMs) ? ` (${durationMs} ms)` : ""
-  stdout.write(`      ${operation}: ${entry.status.toUpperCase()}${duration}\n`)
+  const orderArguments = request?.method === "getOrder" ? request.arguments?.[0] : null
+  const identity = orderArguments?.symbol && orderArguments?.orderId
+    ? ` [${orderArguments.symbol} / ${orderArguments.orderId}]`
+    : ""
+  stdout.write(`      ${operation}${identity}: ${entry.status.toUpperCase()}${duration}\n`)
 }
 
 async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
@@ -93,6 +97,11 @@ async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
       durationMs: Date.now() - started,
       request,
     })
+    if (Array.isArray(result?.data)) {
+      for (const order of result.data) {
+        stdout.write(`      Discovered open order: ${order.symbol} / ${order.id}\n`)
+      }
+    }
     return result
   } catch (error) {
     recordOrderReadResult({
