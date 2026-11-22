@@ -305,7 +305,14 @@ function broadcastExchangeAccountUpdate({ clients } = {}) {
   }
 }
 
-function subscribeToExchangeAccountUpdates({ eventBus, clients } = {}) {
+function subscribeToExchangeAccountUpdates({ eventBus, clients, subscribeExchangeAccountUpdates } = {}) {
+  if (typeof subscribeExchangeAccountUpdates === "function") {
+    const unsubscribe = subscribeExchangeAccountUpdates(() => broadcastExchangeAccountUpdate({ clients }))
+    if (typeof unsubscribe !== "function") {
+      throw new TypeError("Trading-history WebSocket requires an exchange-account update unsubscribe function.")
+    }
+    return [{ unsubscribe }]
+  }
   const subscriptions = []
   try {
     for (const name of ACCOUNT_UPDATE_EVENTS) {
@@ -352,7 +359,7 @@ function subscribeToHistoryUpdates({ eventBus, clients } = {}) {
  * @param {{server: object, eventBus: object}} input
  * @returns {Readonly<{close: () => Promise<void>}>}
  */
-export function attachTradingHistoryWebSocket({ server, eventBus } = {}) {
+export function attachTradingHistoryWebSocket({ server, eventBus, subscribeExchangeAccountUpdates } = {}) {
   if (!server || typeof server.on !== "function" || typeof server.off !== "function") {
     throw new TypeError("Trading-history WebSocket requires the existing HTTP server.")
   }
@@ -366,6 +373,7 @@ export function attachTradingHistoryWebSocket({ server, eventBus } = {}) {
     accountSubscriptions = subscribeToExchangeAccountUpdates({
       eventBus,
       clients,
+      subscribeExchangeAccountUpdates,
     })
   } catch (error) {
     subscription.unsubscribe()
