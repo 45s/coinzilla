@@ -235,6 +235,66 @@ test("Bitunix order probe dispatches one reviewed createOrder request after fres
   }
 })
 
+test("Bitunix order probe persists confirmed placement and failed reconciliation separately", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-reconciliation-"))
+  try {
+    const resultFixture = {
+      ok: false,
+      mutationOutcome: "CONFIRMED",
+      data: {
+        orderId: "2124329325141426176",
+        symbol: "HYPEUSDT",
+        side: 2,
+        type: 1,
+        volume: "0.366",
+        price: "30",
+        placeStatus: 1,
+        placeCode: 0,
+        placeMsg: "成功",
+      },
+      reconciliation: {
+        status: "UNAVAILABLE",
+        source: "PLACEMENT_ACKNOWLEDGEMENT",
+        endpoint: "/api/spot/v1/order/detail",
+        error: {
+          code: "BITUNIX_REST_EXCHANGE_REJECTED",
+          exchangeCode: "100005",
+          kind: "exchange",
+          status: 200,
+        },
+      },
+      errors: [Object.assign(new Error("result.api.parameter.sign.illegal"), {
+        code: "BITUNIX_REST_EXCHANGE_REJECTED",
+        exchangeCode: "100005",
+        status: 200,
+        kind: "exchange",
+      })],
+    }
+    const { events, run, markerPath } = createDependencies({
+      directory,
+      result: resultFixture,
+    })
+    const result = await run("limit-buy-11-usdt")
+    const marker = JSON.parse(await readFile(markerPath, "utf8"))
+    const output = events.filter((event) => event.operation === "output").map((event) => event.message).join("\\n")
+
+    assert.equal(result.ok, false, "an un-reconciled acknowledgement is not a normalized Order result")
+    assert.equal(result.mutationOutcome, "CONFIRMED", "the marker must retain the accepted exchange mutation outcome")
+    assert.equal(marker.status, "CONFIRMED", "the one-shot marker must never invite a duplicate placement")
+    assert.equal(marker.brokerResult.data.orderId, "2124329325141426176", "the accepted order ID must be preserved as a string")
+    assert.deepEqual(marker.brokerResult.reconciliation, resultFixture.reconciliation, "the reconciliation state and error metadata must be persisted")
+    assert.equal(marker.brokerResult.errors[0].exchangeCode, "100005", "the failed detail lookup must remain in the evidence")
+    assert.match(output, /placement confirmed; reconciliation unavailable/i, "operator output must not mislabel the accepted placement as rejected")
+    assert.match(output, /Reconciliation: UNAVAILABLE \\(PLACEMENT_ACKNOWLEDGEMENT\\)/i)
+    assert.equal(events.filter((event) => event.operation === "createOrder").length, 1, "the operator path must dispatch exactly one mutation")
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
 test("Bitunix order probe decline creates no marker and constructs no mutation Broker", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-decline-"))
   try {
