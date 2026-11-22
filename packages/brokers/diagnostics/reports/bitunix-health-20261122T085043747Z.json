@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-11-22T08:50:44.724Z",
+  "finishedAt": "2026-11-22T08:50:44.724Z",
+  "runtime": {
+    "node": "v26.13.0",
+    "platform": "win32"
+  },
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0
+  },
+  "healthCheck": {
+    "scope": "bitunix-order-read",
+    "requiredOperations": [
+      "Broker API getOpenOrders",
+      "Broker API getOrder for every discovered order"
+    ],
+    "missingRequiredOperations": [],
+    "nonBlockingFailedOperations": [],
+    "healthy": true
+  },
+  "results": [
+    {
+      "operation": "Broker API getOpenOrders",
+      "status": "passed",
+      "durationMs": 40531,
+      "request": {
+        "method": "getOpenOrders",
+        "arguments": []
+      },
+      "response": {
+        "data": [
+          {
+            "originalPrice": "30",
+            "originalQuantity": "0.366",
+            "executedQuantity": "0",
+            "remainingQuantity": "0.366",
+            "status": "OPEN",
+            "createdAt": "2026-11-22T02:29:13.901998Z",
+            "updatedAt": "2026-11-22T02:29:14.224997Z"
+          }
+        ],
+        "ok": true
+      }
+    },
+    {
+      "operation": "Broker API getOrder",
+      "status": "passed",
+      "durationMs": 299,
+      "request": {
+        "method": "getOrder",
+        "arguments": [
+          {
+            "symbol": "HYPEUSDT",
+            "orderId": "2124329325141426176"
+          }
+        ]
+      },
+      "response": {
+        "data": {
+          "originalPrice": "30",
+          "originalQuantity": "0.366",
+          "executedQuantity": "0",
+          "remainingQuantity": "0.366",
+          "status": "OPEN",
+          "createdAt": "2026-11-22T02:29:13.901998Z",
+          "updatedAt": "2026-11-22T08:51:25.352344Z"
+        },
+        "ok": true
+      }
+    }
+  ]
+}
