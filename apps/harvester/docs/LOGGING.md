@@ -300,8 +300,11 @@ of startup or shutdown.
 ## Strategy log markers
 
 Every strategy-owned diagnostic carries its canonical `strategyId` in its
-structured data. The Harvester console formatter resolves that ID through the
-single immutable `strategyLogMarkers` mapping:
+structured data. The application-owned `strategyMetadataById` registry in
+`src/application/logging/strategy-metadata.js` associates each canonical ID
+with its display name and terminal marker. The immutable
+`strategyLogMarkers` mapping is derived from that registry for the console
+formatter:
 
 | Strategy ID | Terminal marker |
 | --- | --- |

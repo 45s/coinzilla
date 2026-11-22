@@ -232,12 +232,60 @@ function createInvalidPlacementStatusError() {
   })
 }
 
+function createInvalidPlacementCodeError() {
+  return new BitunixRestError({
+    message: "Bitunix Spot place-order response has an invalid placeCode",
+    kind: "response",
+    path: BITUNIX_SPOT_ORDER_API.placeOrder,
+    outcomeUnknown: true,
+  })
+}
+
+function createAmbiguousPlacementCodeError({ response, placeCode }) {
+  const placeMessage = typeof response.placeMsg === "string"
+    ? response.placeMsg.slice(0, 200)
+    : ""
+  const message = [
+    `Bitunix Spot placement response has non-zero placeCode ${placeCode} without a definitive rejected placeStatus`,
+    ...(placeMessage ? [placeMessage] : []),
+  ].join(": ")
+  return new BitunixRestError({
+    message,
+    kind: "response",
+    exchangeCode: placeCode,
+    path: BITUNIX_SPOT_ORDER_API.placeOrder,
+    outcomeUnknown: true,
+  })
+}
+
+function normalizePlacementCode({ code }) {
+  if (code === undefined || code === null) {
+    return null
+  }
+  if (typeof code === "string" && code.trim()) {
+    return code.trim()
+  }
+  if (typeof code === "number" && Number.isSafeInteger(code)) {
+    return String(code)
+  }
+  throw createInvalidPlacementCodeError()
+}
+
 export function validateSpotOrderPlacementResponse({ response, symbol, side, type, volume, price }) {
   if (!response || typeof response !== "object" || Array.isArray(response)) {
     throw new TypeError("Bitunix Spot place-order response must be an object")
   }
   if (isRejectedPlacementStatus({ status: response.placeStatus })) {
     throw createPlacementRejectionError({ response })
+  }
+  const placeCode = normalizePlacementCode({
+    code: response.placeCode,
+  })
+  if (placeCode !== null && placeCode !== "0") {
+    throw createAmbiguousPlacementCodeError({
+      response,
+      placeCode,
+    })
   }
   if (!isSuccessfulPlacementStatus({ status: response.placeStatus })) {
     throw createInvalidPlacementStatusError()
