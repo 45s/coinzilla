@@ -168,6 +168,7 @@ export function createBitunixOrderProbePreflight({
   })
   const balanceSummary = createBalanceSummary({
     balances,
+    probe,
   })
   assertProbeBalanceIsInsufficient({
     probe,
