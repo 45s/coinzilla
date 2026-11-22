@@ -201,3 +201,49 @@ test("sanitized health report retains only safe selected probe identity and outc
   assert.equal(published.results[0].mutationOutcome, "REJECTED")
   assert.equal(JSON.stringify(published).includes("must-not-publish"), false)
 })
+
+
+test("operator probe health gate accepts deterministic rejection and confirmation, but blocks unknown outcomes", () => {
+  for (const mutationOutcome of ["REJECTED", "CONFIRMED"]) {
+    const result = evaluateOperatorOrderProbeHealthCheck({
+      report: {
+        results: [{
+          operation: "operator order probe",
+          status: "passed",
+          mutationOutcome,
+        }],
+      },
+    })
+    assert.equal(result.healthy, true, mutationOutcome)
+    assert.equal(result.scope, "operator-order-probe")
+  }
+
+  for (const mutationOutcome of ["OUTCOME_UNKNOWN", "NOT_SENT"]) {
+    const result = evaluateOperatorOrderProbeHealthCheck({
+      report: {
+        results: [{
+          operation: "operator order probe",
+          status: "failed",
+          mutationOutcome,
+        }],
+      },
+    })
+    assert.equal(result.healthy, false, mutationOutcome)
+    assert.deepEqual(result.missingRequiredOperations, ["operator order probe"])
+  }
+})
+
+test("operator probe health gate treats an explicit operator decline as a safe skip", () => {
+  const result = evaluateOperatorOrderProbeHealthCheck({
+    report: {
+      results: [{
+        operation: "operator order probe",
+        status: "skipped",
+        mutationOutcome: "NOT_SENT",
+      }],
+    },
+  })
+
+  assert.equal(result.healthy, true)
+  assert.deepEqual(result.missingRequiredOperations, [])
+})
