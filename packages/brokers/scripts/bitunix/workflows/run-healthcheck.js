@@ -42,38 +42,117 @@ function printLocalDiagnosticSummary({ report, outputPath, stdout }) {
   ].join("\n"))
 }
 
-async function runBitunixOrderReadScan({
-  env,
+function recordOrderReadResult({
   report,
   stdout,
-  brokerFactory = (options) => new Broker(options),
+  secrets,
+  operation,
+  result,
+  durationMs = null,
+  request = null,
 }) {
-  const secrets = [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
-  const record = (operation, result, extra = {}) => {
-    const entry = {
-      operation,
-      status: result?.ok === true ? "passed" : "failed",
-      durationMs: extra.durationMs ?? null,
-      request: extra.request ?? null,
-      response: sanitizeDiagnosticValue({
-        value: result,
-        secrets,
-      }),
-      ...(result?.errors?.length
-        ? {
-          errors: result.errors.map((error) => sanitizeDiagnosticError({
-            error,
-            secrets,
-          })),
-        }
-        : {}),
-    }
-    report.results.push(entry)
-    report.summary.total += 1
-    report.summary[entry.status] += 1
-    stdout.write(`      ${operation}: ${entry.status.toUpperCase()}\n`)
+  const entry = {
+    operation,
+    status: result?.ok === true ? "passed" : "failed",
+    durationMs,
+    request,
+    response: sanitizeDiagnosticValue({
+      value: result,
+      secrets,
+    }),
+    ...(result?.errors?.length
+      ? {
+        errors: result.errors.map((error) => sanitizeDiagnosticError({
+          error,
+          secrets,
+        })),
+      }
+      : {}),
   }
-  const logger = Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [
+  report.results.push(entry)
+  report.summary.total += 1
+  report.summary[entry.status] += 1
+  stdout.write(`      ${operation}: ${entry.status.toUpperCase()}\\n`)
+}
+
+async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
+  const started = Date.now()
+  const request = {
+    method: "getOpenOrders",
+    arguments: [],
+  }
+  try {
+    const result = await broker.getOpenOrders()
+    recordOrderReadResult({
+      report,
+      stdout,
+      secrets,
+      operation: "Broker API getOpenOrders",
+      result,
+      durationMs: Date.now() - started,
+      request,
+    })
+    return result
+  } catch (error) {
+    recordOrderReadResult({
+      report,
+      stdout,
+      secrets,
+      operation: "Broker API getOpenOrders",
+      result: {
+        ok: false,
+        errors: [error],
+      },
+      durationMs: Date.now() - started,
+      request,
+    })
+    return null
+  }
+}
+
+async function fetchAndRecordOrderDetails({ broker, orders, report, stdout, secrets }) {
+  for (const order of orders) {
+    const started = Date.now()
+    const request = {
+      method: "getOrder",
+      arguments: [{
+        symbol: order.symbol,
+        orderId: order.id,
+      }],
+    }
+    try {
+      const result = await broker.getOrder({
+        symbol: order.symbol,
+        orderId: order.id,
+      })
+      recordOrderReadResult({
+        report,
+        stdout,
+        secrets,
+        operation: "Broker API getOrder",
+        result,
+        durationMs: Date.now() - started,
+        request,
+      })
+    } catch (error) {
+      recordOrderReadResult({
+        report,
+        stdout,
+        secrets,
+        operation: "Broker API getOrder",
+        result: {
+          ok: false,
+          errors: [error],
+        },
+        durationMs: Date.now() - started,
+        request,
+      })
+    }
+  }
+}
+
+function createOrderReadLogger({ report, secrets }) {
+  return Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [
     level,
     (event) => report.events.push(sanitizeDiagnosticValue({
       value: {
@@ -84,12 +163,24 @@ async function runBitunixOrderReadScan({
       secrets,
     })),
   ]))
+}
+
+async function runBitunixOrderReadScan({
+  env,
+  report,
+  stdout,
+  brokerFactory = (options) => new Broker(options),
+}) {
+  const secrets = [env.BITUNIX_API_KEY, env.BITUNIX_API_SECRET].filter(Boolean)
   const broker = brokerFactory({
     provider: "bitunix",
     apiKey: env.BITUNIX_API_KEY,
     apiSecret: env.BITUNIX_API_SECRET,
     tradingMode: "live",
-    logger,
+    logger: createOrderReadLogger({
+      report,
+      secrets,
+    }),
     providerOptions: {
       allowLiveOrderMutations: false,
     },
@@ -98,66 +189,31 @@ async function runBitunixOrderReadScan({
   try {
     await broker.connect()
     connected = true
-    const started = Date.now()
-    let openOrdersResult
-    try {
-      openOrdersResult = await broker.getOpenOrders()
-      record("Broker API getOpenOrders", openOrdersResult, {
-        durationMs: Date.now() - started,
-        request: {
-          method: "getOpenOrders",
-          arguments: [],
-        },
+    const openOrdersResult = await fetchAndRecordOpenOrders({
+      broker,
+      report,
+      stdout,
+      secrets,
+    })
+    if (openOrdersResult?.ok) {
+      await fetchAndRecordOrderDetails({
+        broker,
+        orders: openOrdersResult.data ?? [],
+        report,
+        stdout,
+        secrets,
       })
-    } catch (error) {
-      record("Broker API getOpenOrders", {
-        ok: false,
-        errors: [error],
-      }, {
-        durationMs: Date.now() - started,
-        request: {
-          method: "getOpenOrders",
-          arguments: [],
-        },
-      })
-      return
-    }
-    if (!openOrdersResult?.ok) {
-      return
-    }
-    for (const order of openOrdersResult.data ?? []) {
-      const detailStarted = Date.now()
-      const request = {
-        method: "getOrder",
-        arguments: [{
-          symbol: order.symbol,
-          orderId: order.id,
-        }],
-      }
-      try {
-        const detailResult = await broker.getOrder({
-          symbol: order.symbol,
-          orderId: order.id,
-        })
-        record("Broker API getOrder", detailResult, {
-          durationMs: Date.now() - detailStarted,
-          request,
-        })
-      } catch (error) {
-        record("Broker API getOrder", {
-          ok: false,
-          errors: [error],
-        }, {
-          durationMs: Date.now() - detailStarted,
-          request,
-        })
-      }
     }
   } catch (error) {
-    record("Broker API order-read scan", {
-      ok: false,
-      errors: [error],
-    }, {
+    recordOrderReadResult({
+      report,
+      stdout,
+      secrets,
+      operation: "Broker API order-read scan",
+      result: {
+        ok: false,
+        errors: [error],
+      },
       request: {
         method: "Broker.connect",
       },
@@ -167,9 +223,15 @@ async function runBitunixOrderReadScan({
       try {
         await broker.disconnect()
       } catch (error) {
-        record("Broker API disconnect", {
-          ok: false,
-          errors: [error],
+        recordOrderReadResult({
+          report,
+          stdout,
+          secrets,
+          operation: "Broker API disconnect",
+          result: {
+            ok: false,
+            errors: [error],
+          },
         })
       }
     }
@@ -182,7 +244,7 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout, brokerFactory }) 
     env,
     brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
   })
-  await runBitunixOrderReadScan({ env, report, stdout, brokerFactory })
+  await runBitunixOrderReadScan({\n    env,\n    report,\n    stdout,\n    brokerFactory,\n  })
   const outputPath = createLocalDiagnosticReportPath({
     brokersRoot,
     now: Date.now,
