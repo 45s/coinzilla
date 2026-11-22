@@ -20,10 +20,20 @@ export function withholdFreeFormErrorMessages({ value }) {
   return sanitized
 }
 
+function createPublishedOrderReadResult({ result }) {
+  // These two operations are explicitly approved for publication by the
+  // account owner. Their payloads have already passed sanitizeDiagnosticValue;
+  // keep the rest of the report on the strict metadata-only allowlist.
+  return {
+    ...(result.request ? { request: result.request } : {}),
+    ...(result.response ? { response: result.response } : {}),
+    ...(Array.isArray(result.errors) ? { errors: result.errors } : {}),
+  }
+}
+
 export function createSanitizedHealthReport({ report }) {
-  // Public reports use an allowlist, not recursive redaction. No request or
-  // response payload, arbitrary error text, account identifier, or amount is
-  // eligible for publication.
+  // General diagnostics remain metadata-only. The operator explicitly opted
+  // to publish order identity and order-read payloads for these two operations.
   return {
     schemaVersion: report.schemaVersion,
     startedAt: report.startedAt,
@@ -51,6 +61,9 @@ export function createSanitizedHealthReport({ report }) {
       durationMs: result.durationMs ?? null,
       ...(typeof result.probeId === "string" ? { probeId: result.probeId } : {}),
       ...(typeof result.mutationOutcome === "string" ? { mutationOutcome: result.mutationOutcome } : {}),
+      ...(result.operation === "Broker API getOpenOrders" || result.operation === "Broker API getOrder"
+        ? createPublishedOrderReadResult({ result })
+        : {}),
       ...(result.error ? {
         error: Object.fromEntries(
           ["name", "code", "kind", "status", "exchangeCode"]
