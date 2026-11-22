@@ -370,12 +370,15 @@ test("keeps Binance connected when the CLOSING snapshot durability barrier fails
     },
     brokerAdapterFactory: () => broker,
     eventPublisher: {
-      publish: (event) => { events.push(event); return { ok: true } },
+      publish: (event) => {
+        events.push(event)
+        return { ok: true }
+      },
       flush: async () => {
         flushCount += 1
         calls.push(`journal:flush:${  flushCount}`)
-        // Two startup audit barriers and one per-market safety barrier precede CLOSING.
-        return flushCount < 4
+        // Startup and per-market safety barriers precede the paired CLOSING order/balance barriers.
+        return flushCount < 5
           ? {
             ok: true,
             durable: true
@@ -401,7 +404,7 @@ test("keeps Binance connected when the CLOSING snapshot durability barrier fails
   }, "Expected runtime.stop() to reject under the specified failure condition in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
 
   const snapshots = events.filter((event) => event.name === "account.snapshot_captured")
-  assert.equal(flushCount, 4, "Expected flushCount to equal 4 in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
+  assert.equal(flushCount, 5, "Expected flushCount to equal 4 in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
   assert.equal(snapshots.length, 2, "Expected snapshots.length to equal 2 in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
   assert.equal(snapshots[0].data.phase, "PREFLIGHT", "Expected snapshots[0].data.phase to equal \"PREFLIGHT\" in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")
   assert.equal(snapshots[1].data.phase, "CLOSING", "Expected snapshots[1].data.phase to equal \"CLOSING\" in \"keeps Binance connected when the CLOSING snapshot durability barrier fails\".")

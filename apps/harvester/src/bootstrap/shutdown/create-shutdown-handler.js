@@ -276,6 +276,10 @@ function createFailureRecorder({ context, phaseRunner }) {
   }
 }
 
+function createInitialShutdownAuditReasons(preShutdownErrors) {
+  return preShutdownErrors.length > 0 ? ["OPERATOR_CONTROL_SHUTDOWN_FAILED"] : []
+}
+
 function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
   const {
     state,
@@ -290,6 +294,7 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     brokerName,
     eventPublisher,
     publishAccountSnapshot,
+    publishClosingOpenOrdersSnapshot,
     stopMarketIntake = stopMarketIntakeDefault,
     stopUserDataIntake = stopUserDataIntakeDefault,
     disconnectBroker: disconnectBrokerOperation = disconnectBrokerDefault,
@@ -311,6 +316,7 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     brokerName,
     eventPublisher,
     publishAccountSnapshot,
+    publishClosingOpenOrdersSnapshot,
     stopMarketIntake,
     stopUserDataIntake,
     disconnectBroker: disconnectBrokerOperation,
@@ -321,9 +327,7 @@ function createShutdownContext({ options, stopOptions, shutdownRequestedAt }) {
     beforeSharedServicesStop: stopOptions.beforeSharedServicesStop,
     shutdownStartedFromStatus: stopOptions.shutdownStartedFromStatus ?? state.status,
     preShutdownErrors: stopOptions.preShutdownErrors ?? [],
-    auditReasons: (stopOptions.preShutdownErrors ?? []).length > 0
-      ? ["OPERATOR_CONTROL_SHUTDOWN_FAILED"]
-      : [],
+    auditReasons: createInitialShutdownAuditReasons(stopOptions.preShutdownErrors ?? []),
     stageFailures: [],
     unresolvedOrders: [],
     recoverySellFindings: [],
@@ -497,6 +501,21 @@ async function publishClosingAudit(context) {
   if (!context.tradingEnabled) {
     return
   }
+  const openOrdersResult = await context.failureRecorder.runPhaseSafely({
+    phase: "CLOSING_OPEN_ORDERS_AUDIT",
+    operation: () => context.publishClosingOpenOrdersSnapshot({
+      ownershipReconciled: context.strategyShutdownCoordinator.isSafeToShutdown(),
+    }),
+    stage: "CLOSING_OPEN_ORDERS_AUDIT",
+    message: "Closing account-wide open-orders snapshot failed",
+    auditReason: "CLOSING_OPEN_ORDERS_SNAPSHOT_FAILED",
+    isFailure: (snapshotResult) => snapshotResult?.ok === false,
+  })
+  if (openOrdersResult?.ok === false) {
+    context.snapshotError ??= openOrdersResult.errors?.[0] ??
+      new Error("Closing account-wide open-orders snapshot durability was not proven")
+  }
+
   const result = await context.failureRecorder.runPhaseSafely({
     phase: "CLOSING_AUDIT",
     operation: () => context.publishAccountSnapshot({
@@ -510,7 +529,7 @@ async function publishClosingAudit(context) {
     isFailure: (snapshotResult) => snapshotResult?.ok === false,
   })
   if (result?.ok === false) {
-    context.snapshotError = result?.errors?.[0] ?? new Error("Closing account snapshot durability was not proven")
+    context.snapshotError ??= result?.errors?.[0] ?? new Error("Closing account snapshot durability was not proven")
   }
 }
 

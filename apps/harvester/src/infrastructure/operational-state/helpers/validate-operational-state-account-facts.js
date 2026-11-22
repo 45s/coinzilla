@@ -123,7 +123,7 @@ function validateAccountOpenOrdersMetadata({ canonicalData }) {
   if (Object.keys(canonicalData).some((key) => !allowedFields.has(key))) {
     throw new TypeError("Account open-order snapshot contains unsupported fields")
   }
-  if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(canonicalData.phase)) {
+  if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY"].includes(canonicalData.phase)) {
     throw new TypeError("Account open-order snapshot phase is unsupported")
   }
   if (!Number.isSafeInteger(canonicalData.observedAt) || canonicalData.observedAt < 0) {

@@ -1532,8 +1532,8 @@ export const mapAccountOpenOrdersCapturedData = (input = {}) =>
     input,
     operation: "Account-open-orders-captured event mapping",
     mapper: ({ phase, observedAt, orders, readiness, blockReasons = [] }) => {
-      if (!["OPENING", "PREFLIGHT", "RECOVERY"].includes(phase)) {
-        throw new TypeError("phase must be OPENING, PREFLIGHT, or RECOVERY")
+      if (!["OPENING", "CLOSING", "PREFLIGHT", "RECOVERY"].includes(phase)) {
+        throw new TypeError("phase must be OPENING, CLOSING, PREFLIGHT, or RECOVERY")
       }
       const normalizedObservedAt = requireNonNegativeSafeInteger({
         value: observedAt,

@@ -503,8 +503,8 @@ function assertOrdinaryTradeShutdown({ context, state, market } = {}) {
   )
   assert.equal(
     state.openOrderSnapshotCalls,
-    4,
-    "the ordinary TRADE scenario must audit open orders at startup, reconcile before BUY cancellation, reconcile after user-data draining, and verify after recovery SELL replanning",
+    5,
+    "the ordinary TRADE scenario must audit open orders at startup, reconcile before BUY cancellation, reconcile after user-data draining, verify after recovery SELL replanning, and capture the final CLOSING order set",
   )
   assert.equal(context.portfolio.getPosition({ marketId: market.id }).baseQuantity.amount, '10')
 }

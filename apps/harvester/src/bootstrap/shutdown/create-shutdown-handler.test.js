@@ -48,6 +48,7 @@ function createShutdownPorts({
   calls,
   eventPublisher,
   publishAccountSnapshot,
+  publishClosingOpenOrdersSnapshot,
   stopUserDataIntake,
   stopMarketIntake,
   disconnectBroker,
@@ -64,6 +65,7 @@ function createShutdownPorts({
       calls.push(`closing-audit:${options.auditStatus}`)
       return publishAccountSnapshot(options)
     },
+    publishClosingOpenOrdersSnapshot: async (options) => publishClosingOpenOrdersSnapshot(options),
     stopUserDataIntake: async (options) => {
       calls.push("user-data-stop")
       return stopUserDataIntake(options)
@@ -92,6 +94,7 @@ function createShutdownDefaults() {
       }),
     },
     publishAccountSnapshot: async () => ({ ok: true }),
+    publishClosingOpenOrdersSnapshot: async () => [],
     stopUserDataIntake: async () => [],
     stopMarketIntake: async () => [],
     disconnectBroker: async () => [],
@@ -112,6 +115,7 @@ function createShutdown(input = {}) {
     participants,
     eventPublisher,
     publishAccountSnapshot,
+    publishClosingOpenOrdersSnapshot,
     stopUserDataIntake,
     stopMarketIntake,
     disconnectBroker,
@@ -129,6 +133,7 @@ function createShutdown(input = {}) {
     calls,
     eventPublisher,
     publishAccountSnapshot,
+    publishClosingOpenOrdersSnapshot,
     stopUserDataIntake,
     stopMarketIntake,
     disconnectBroker,
@@ -219,6 +224,97 @@ test("activates every strategy gate before any shared service can stop", async (
   assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("user-data-stop"))
   assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("operator-control-stop"))
   assert.equal(fixture.state.status, "STOPPED")
+})
+
+test("captures the account-wide CLOSING open-order snapshot after safety proof and before stopping services", async () => {
+  const calls = []
+  let ownershipReconciled
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    publishClosingOpenOrdersSnapshot: async ({ ownershipReconciled: snapshotOwnershipReconciled }) => {
+      calls.push("closing-open-orders")
+      ownershipReconciled = snapshotOwnershipReconciled
+      return []
+    },
+  })
+
+  await fixture.stop()
+
+  assert.equal(ownershipReconciled, true, "The snapshot may classify current-process orders as reconciled only after every strategy safety proof.")
+  assert.ok(calls.indexOf("wait:CONSERVATIVE") < calls.indexOf("closing-open-orders"))
+  assert.ok(calls.indexOf("closing-open-orders") < calls.indexOf("closing-audit:COMPLETE"))
+  assert.ok(calls.indexOf("closing-audit:COMPLETE") < calls.indexOf("market-intake-stop"))
+  assert.ok(calls.indexOf("market-intake-stop") < calls.indexOf("user-data-stop"))
+  assert.ok(calls.indexOf("user-data-stop") < calls.indexOf("broker-disconnect"))
+  assert.equal(fixture.state.status, "STOPPED")
+})
+
+test("fails closed and marks the CLOSING balance audit incomplete when open-order capture fails", async () => {
+  const calls = []
+  const failure = new Error("account-wide open-orders query failed")
+  const accountAudits = []
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    publishClosingOpenOrdersSnapshot: async () => {
+      calls.push("closing-open-orders")
+      throw failure
+    },
+    publishAccountSnapshot: async (options) => {
+      accountAudits.push(options)
+      return { ok: true }
+    },
+  })
+
+  await assert.rejects(fixture.stop(), (error) => error === failure)
+
+  const [accountAudit] = accountAudits
+  assert.equal(accountAudits.length, 1, "Balance evidence must still be attempted after the order snapshot fails.")
+  assert.equal(accountAudit.auditStatus, "INCOMPLETE")
+  assert.ok(accountAudit.auditReasons.includes("CLOSING_OPEN_ORDERS_SNAPSHOT_FAILED"))
+  assert.equal(calls.includes("market-intake-stop"), false, "Market feeds must remain connected when CLOSING evidence is incomplete.")
+  assert.equal(calls.includes("user-data-stop"), false, "User-data intake must remain connected when CLOSING evidence is incomplete.")
+  assert.equal(calls.includes("broker-disconnect"), false, "The broker must remain connected when CLOSING evidence is incomplete.")
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
+})
+
+test("refreshes the CLOSING open-order snapshot after a partial market-unsubscribe failure", async () => {
+  const calls = []
+  let snapshotCount = 0
+  const participant = createSafeParticipant({
+    strategyId: "CONSERVATIVE",
+    calls,
+  })
+  const fixture = createShutdown({
+    participants: [participant],
+    calls,
+    publishClosingOpenOrdersSnapshot: async () => {
+      snapshotCount += 1
+      calls.push(`closing-open-orders:${snapshotCount}`)
+      return []
+    },
+    stopMarketIntake: async () => {
+      calls.push("market-intake-stop")
+      return [new Error("partial market unsubscribe")]
+    },
+  })
+
+  await assert.rejects(fixture.stop(), /Market intake could not be stopped/)
+
+  assert.equal(snapshotCount, 2, "Every refreshed CLOSING balance audit must be paired with a fresh account-wide open-order snapshot.")
+  assert.ok(calls.indexOf("market-intake-stop") < calls.lastIndexOf("closing-open-orders:2"))
+  assert.equal(calls.includes("user-data-stop"), false)
+  assert.equal(calls.includes("broker-disconnect"), false)
+  assert.equal(fixture.state.status, "SHUTDOWN_INCOMPLETE")
 })
 
 test("a safe strategy cannot release shared services while another strategy is unsafe", async () => {

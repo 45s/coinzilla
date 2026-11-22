@@ -16,6 +16,8 @@ created: 2026-11-11
 
 **Startup open-order clarification (2026-11-15):** [ADR-0004](0004-startup-open-orders-are-external.md), implemented in PR #1166, is the specific decision for orders present in the account-wide startup snapshot. Those orders remain external to the new process and follow the configured per-pair policy; they are not restored into its `OrderRegistry`. This does not decide historical fill/Portfolio reconstruction, which remains separately tracked by #654.
 
+**CLOSING open-order clarification (2026-11-22):** The existing `ACCOUNT_OPEN_ORDERS_CAPTURED` fact and `account.open_orders_captured` Journal event also carry the account-wide CLOSING snapshot after strategy safety proof and before shared-service teardown. CLOSING uses a monotonic local `observedAt` value because the broker's account-wide open-order query does not expose an authoritative exchange source timestamp. A failed, partial, or malformed read is persisted as `BLOCKED` with `CLOSING_OPEN_ORDERS_CAPTURE_FAILED`; the paired CLOSING balance audit is `INCOMPLETE`. This evidence is audit-only and does not enable process-restart restoration, adopt external orders, or authorize order mutation.
+
 **Owner:** Harvester
 
 **Tracking:** [#654](https://github.com/45s/coinzilla/issues/654), umbrella [#626](https://github.com/45s/coinzilla/issues/626)

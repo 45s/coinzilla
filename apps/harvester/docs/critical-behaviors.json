@@ -496,7 +496,8 @@
         "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.js",
         "src/infrastructure/operational-state/fact-validation.js",
         "src/infrastructure/operational-state/record-validation.js",
-        "src/infrastructure/operational-state/resolve-directory.js"
+        "src/infrastructure/operational-state/resolve-directory.js",
+        "src/infrastructure/operational-state/helpers/validate-operational-state-account-facts.js"
       ],
       "integrationRequired": true,
       "tests": [
@@ -716,6 +717,102 @@
       "invariants": [
         "Before an evaluation can plan a new recovery SELL or classify recovery dust for an active Conservative Position, require a validated same-market filter snapshot no older than 30,000 milliseconds. An owned active recovery SELL suppresses duplicate intents and remains untouched, so no refresh is required until it becomes terminal or is reconciled.",
         "If current filters are unavailable, invalid, stale, or belong to another market, pause the affected market and do not submit a recovery SELL."
+      ]
+    },
+    {
+      "id": "CLOSING_ACCOUNT_OPEN_ORDER_AUDIT",
+      "title": "Durable CLOSING account-wide open-order evidence",
+      "sourceModules": [
+        "src/bootstrap/account/create-account-snapshot-manager.js",
+        "src/bootstrap/shutdown/create-shutdown-handler.js",
+        "src/bootstrap/start-harvester.js"
+      ],
+      "tests": [
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
+          "name": "publishes a durable CLOSING account-wide snapshot without adopting an external recovery SELL",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
+          "name": "uses a unique monotonic observation identity for repeated CLOSING snapshots in one clock tick",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
+          "name": "records a BLOCKED CLOSING open-order snapshot when the broker read fails with partial data",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
+          "name": "records a BLOCKED CLOSING open-order snapshot when the broker payload is malformed",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
+          "name": "preserves both capture and durability failures when a BLOCKED CLOSING snapshot cannot be persisted",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "captures the account-wide CLOSING open-order snapshot after safety proof and before stopping services",
+          "kind": "normal"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "fails closed and marks the CLOSING balance audit incomplete when open-order capture fails",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/shutdown/create-shutdown-handler.test.js",
+          "name": "refreshes the CLOSING open-order snapshot after a partial market-unsubscribe failure",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/start-harvester.test.js",
+          "name": "captures the CLOSING account-wide open-order set before broker disconnect without mutating external SELLs",
+          "kind": "integration"
+        },
+        {
+          "path": "src/infrastructure/journal/project-harvester-journal-closing-open-orders.test.js",
+          "name": "projects a CLOSING open-order snapshot in an active started Journal session",
+          "kind": "normal"
+        },
+        {
+          "path": "src/application/events/lifecycle-event-dtos.test.js",
+          "name": "maps a BLOCKED CLOSING open-order snapshot without implying an empty account",
+          "kind": "normal"
+        },
+        {
+          "path": "src/infrastructure/operational-state/helpers/validate-operational-state-account-facts.test.js",
+          "name": "validates a BLOCKED CLOSING open-order snapshot as explicit incomplete evidence",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/journal/project-harvester-journal-closing-open-orders.test.js",
+          "name": "rejects a CLOSING open-order snapshot before the Journal session starts",
+          "kind": "failure"
+        },
+        {
+          "path": "src/infrastructure/journal/project-harvester-journal-closing-open-orders.test.js",
+          "name": "rejects a CLOSING open-order snapshot after the Journal session has stopped",
+          "kind": "failure"
+        },
+        {
+          "path": "src/bootstrap/account/create-account-snapshot-manager.closing.test.js",
+          "name": "fails the CLOSING open-order audit when its Journal flush is not durable",
+          "kind": "failure"
+        }
+      ],
+      "runtimeStatus": "active",
+      "integrationRequired": true,
+      "invariants": [
+        "After every strategy safety proof, capture the complete account-wide open-order set while the broker remains connected and before CLOSING balance publication and shared-service teardown.",
+        "Persist ACCOUNT_OPEN_ORDERS_CAPTURED before publishing account.open_orders_captured and crossing the Journal durability barrier; observedAt is a monotonic local capture timestamp, not an exchange source timestamp.",
+        "Unmatched/external orders remain BLOCKED, unowned and untouched; their presence alone does not make the CLOSING balance audit incomplete or prevent shutdown.",
+        "A failed, partial or malformed CLOSING read must durably record BLOCKED evidence with CLOSING_OPEN_ORDERS_CAPTURE_FAILED, never an empty/READY snapshot, and must mark the following CLOSING balance audit INCOMPLETE.",
+        "If the blocked evidence cannot be durably recorded, preserve both capture and durability failures and fail shutdown closed; never publish STOPPED or release required process resources.",
+        "CLOSING open-order evidence is an audit fact only; it does not adopt orders, mutate orders, restore prior process state or enable process-restart recovery."
       ]
     }
   ],
@@ -1454,6 +1551,24 @@
         "branches": 100,
         "functions": 100
       }
+    },
+    {
+      "path": "src/infrastructure/operational-state/helpers/validate-operational-state-account-facts.js",
+      "baseline": {
+        "lines": 87.06,
+        "branches": 79.17,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 85,
+        "branches": 75,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 87.06,
+        "branches": 79.17,
+        "functions": 100
+      }
     }
   ],
   "runtimeScope": {
@@ -1467,22 +1582,22 @@
     "notes": [
       "The current default configuration enables Recovery Seller with LINEAUSDT routed to TESTNET.",
       "Conservative remains enabled independently; Conservative restart restoration remains disabled.",
-      "The contract includes 40 critical modules shared with safety/recovery runtime responsibilities; coverage is measured and gated independently from strategy activation.",
+      "The contract includes 41 critical modules shared with safety/recovery runtime responsibilities; coverage is measured and gated independently from strategy activation.",
       "Process-restart restoration remains disabled; the operational-state crash matrix is offline evidence only."
     ]
   },
   "latestCoverageMeasurement": {
-    "measuredAt": "2026-11-22T08:21:10Z",
-    "branch": "fix/harvester/rs-operational-state-bootstrap",
-    "prHeadSha": "52ff824b6c0bfe1318e0dea5126c3ca10adf8789",
-    "workflowRunId": 45002232384,
-    "harvesterJobId": 137146078765,
+    "measuredAt": "2026-11-22T10:35:16Z",
+    "branch": "fix/harvester/closing-open-orders-audit-764-replay",
+    "prHeadSha": "410986aa99ba81601efc85231854fca1ad88e84f",
+    "workflowRunId": 45012989393,
+    "harvesterJobId": 137179167498,
     "aggregate": {
-      "lines": 90.45,
-      "branches": 83.45,
-      "functions": 95.95
+      "lines": 90.48,
+      "branches": 83.5,
+      "functions": 95.97
     },
-    "checkedCriticalModuleCount": 40,
+    "checkedCriticalModuleCount": 41,
     "gatePassed": true
   }
 }
