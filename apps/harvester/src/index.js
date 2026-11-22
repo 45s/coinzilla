@@ -848,7 +848,30 @@ function logOptionalTradingHistoryApi({ logger, level, details } = {}) {
   }
 }
 
-function createTradingHistoryApiStartInput({ options, resources, database, environment, operator } = {}) {
+function createExchangeAccountReaders({ runtime } = {}) {
+  const runtimes = Array.isArray(runtime?.accountRuntimes)
+    ? runtime.accountRuntimes
+    : [runtime]
+  return Object.freeze(runtimes.flatMap((accountRuntime) => {
+    if (
+      typeof accountRuntime?.getExchangeAccountSnapshot !== "function" ||
+      typeof accountRuntime?.getExchangeOpenOrders !== "function"
+    ) {
+      return []
+    }
+    return [Object.freeze({
+      providerInstanceId: accountRuntime.providerInstanceId,
+      providerType: accountRuntime.providerType,
+      accountId: accountRuntime.accountId,
+      environment: accountRuntime.environment ?? accountRuntime.tradingMode,
+      connected: accountRuntime.connected === true,
+      readAccountSnapshot: () => accountRuntime.getExchangeAccountSnapshot(),
+      readOpenOrders: () => accountRuntime.getExchangeOpenOrders(),
+    })]
+  }))
+}
+
+function createTradingHistoryApiStartInput({ options, resources, database, environment, operator, exchangeAccounts } = {}) {
   return {
     database,
     environment,
@@ -856,10 +879,11 @@ function createTradingHistoryApiStartInput({ options, resources, database, envir
     logger: options.logger,
     eventBus: resources.eventBus,
     ...(operator === undefined ? {} : { operator }),
+    exchangeAccounts,
   }
 }
 
-async function startTradingHistoryApiService({ options, resources, database, environment, operator } = {}) {
+async function startTradingHistoryApiService({ options, resources, database, environment, operator, exchangeAccounts } = {}) {
   try {
     const service = await options.startTradingHistoryApi(
       createTradingHistoryApiStartInput({
@@ -868,6 +892,7 @@ async function startTradingHistoryApiService({ options, resources, database, env
         database,
         environment,
         operator,
+        exchangeAccounts,
       }),
     )
     resources.tradingHistoryApi = service
@@ -919,6 +944,7 @@ async function startOptionalTradingHistoryApi({ options, resources, runtime } = 
     database,
     environment,
     operator: runtime.getOperator?.() ?? runtime.accountRuntimes?.[0]?.getOperator?.(),
+    exchangeAccounts: createExchangeAccountReaders({ runtime }),
   })
 }
 
