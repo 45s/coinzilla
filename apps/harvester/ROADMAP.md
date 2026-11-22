@@ -2,11 +2,11 @@
 
 ## Recovery Seller activation — 2026-11-22
 
-- The global `RS_RECOVERY_SELLER_CONFIG.enabled` switch is explicitly enabled; LINEAUSDT is the only configured RS pair and is restricted to Binance Spot TESTNET.
-- RS-1 through RS-5 offline runtime acceptance is complete in merged PR #1515. This configuration change activates the RS route at application startup, but does not authorize starting Harvester or submitting exchange orders.
+- LINEAUSDT is configured for TESTNET, but `RS_RECOVERY_SELLER_CONFIG.enabled` remains `false`.
+- RS-1 through RS-5 offline runtime acceptance is complete in merged PR #1515. A test activation exposed that the default single-Binance runtime requires explicit `executionRouting.routes` for enabled RS; the RS-only LINEAUSDT market also needs to be included in market-data routing without enabling Conservative on LINEA.
+- Implement and test that route composition before enabling the global RS switch. Do not weaken explicit routing or add LINEA to Conservative merely to obtain market data.
 - The controlled TESTNET runbook remains CLOSED / PAUSED. A separate bounded LINEAUSDT session plan, authoritative account/open-order baseline, fee verification and explicit joint session start are required before any exchange write.
 - Restart/replay and third-asset commission valuation remain deferred; durable STOP remains terminal and cannot be cleared through CC-operator.
-
 
 ## Public Bitunix Futures market data (#1660)
 
