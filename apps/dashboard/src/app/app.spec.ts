@@ -76,16 +76,18 @@ describe('AppComponent', () => {
     expect(document.documentElement.dataset['theme']).toBe('light');
     expect(window.localStorage.getItem('coinzilla.dashboard.theme')).toBe('light');
 
+    fixture.destroy();
+
     const reloadedFixture = TestBed.createComponent(AppComponent);
     reloadedFixture.detectChanges();
     const reloadedSelect = reloadedFixture.nativeElement.querySelector('select[aria-label="Dashboard theme"]') as HTMLSelectElement;
     expect(reloadedSelect.value).toBe('light');
     reloadedFixture.destroy();
 
-    select.value = 'current';
-    select.dispatchEvent(new Event('change'));
-    fixture.detectChanges();
+    reloadedSelect.value = 'current';
+    reloadedSelect.dispatchEvent(new Event('change'));
+    reloadedFixture.detectChanges();
+    expect(window.localStorage.getItem('coinzilla.dashboard.theme')).toBe('current');
     window.localStorage.removeItem('coinzilla.dashboard.theme');
-    fixture.destroy();
   });
 });
