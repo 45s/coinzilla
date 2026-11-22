@@ -90,8 +90,17 @@ function createMainOptions({ database, calls, handlers, startTradingHistoryApi }
       environment: "testnet",
       tradingMode: "testnet",
       connected: true,
-      getExchangeAccountSnapshot: async () => ({ ok: true, data: { sourceTime: 1, balances: [] } }),
-      getExchangeOpenOrders: async () => ({ ok: true, data: [] }),
+      getExchangeAccountSnapshot: async () => ({
+        ok: true,
+        data: {
+          sourceTime: 1,
+          balances: [],
+        },
+      }),
+      getExchangeOpenOrders: async () => ({
+        ok: true,
+        data: [],
+      }),
       getOperator: () => ({ facade: "shared-harvester-operator" }),
       stop: async () => { calls.push("runtime-stop") },
     }),
