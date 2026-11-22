@@ -180,7 +180,7 @@ function formatOrderProbePreflight({ preflight }) {
   if (probe.spendingAmount !== undefined) {
     return [
       "LIVE ORDER SNAPSHOT",
-      "{ " + probe.symbol + ", " + probe.side + ", price: " + probe.price + ", spending: " + probe.spendingAmount + " USDT, quantity: " + probe.quantity + " HYPE }",
+      `{ ${probe.symbol}, ${probe.side}, price: ${probe.price}, spending: ${probe.spendingAmount} USDT, quantity: ${probe.quantity} HYPE }`,
       `Estimated order value: ${probe.quoteNotional} USDT | Fee reserve: ${probe.feeReserve} USDT`,
       `Available USDT: ${preflight.freeQuoteBalance} | Open HYPEUSDT orders: ${preflight.openOrderCount}`,
     ].join("\n")
