@@ -143,7 +143,7 @@ function assertStrategyScopedMarketSubscriptions({ runtime, calls, candleSubscri
   assert.equal(calls.includes("subscribe:BTCUSDT"), false, "The strategy-blocked BTCUSDT market must not receive a price subscription.")
   assert.ok(calls.includes("subscribe:book:ETHUSDT"), "The unblocked ETHUSDT market must retain its book-ticker subscription.")
   assert.equal(calls.includes("subscribe:book:BTCUSDT"), false, "The strategy-blocked BTCUSDT market must not receive a book-ticker subscription.")
-  assert.deepEqual(candleSubscriptions, ["ETHUSDT"], "Candle subscriptions must be scoped to the strategy unblocked ETHUSDT market.")
+  assert.deepEqual(candleSubscriptions, ["BTCUSDT", "ETHUSDT"], "Volatility candle subscriptions follow market configuration, independently of strategy external-order policy.")
   const audit = logs.find((entry) =>
     entry.message === "Account-wide open-orders snapshot recorded; unowned orders remain external and untouched")
   assert.equal(audit?.readiness, "BLOCKED", "The account-wide external-order audit must remain blocked even though ETHUSDT is independently eligible.")
