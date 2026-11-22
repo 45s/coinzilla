@@ -187,7 +187,7 @@ function assertConsistentMarketVolatilityConfiguration({
   const recoverySellerPairs = recoverySellerStrategyConfig?.pairs ?? {}
   for (const [symbol, conservativePair] of Object.entries(conservativePairs)) {
     const recoverySellerPair = recoverySellerPairs[symbol]
-    if (!recoverySellerPair) {
+    if (conservativePair?.enabled !== true || recoverySellerPair?.enabled !== true) {
       continue
     }
     const conservativeEnabled = conservativePair?.enableVolatilityProtection
