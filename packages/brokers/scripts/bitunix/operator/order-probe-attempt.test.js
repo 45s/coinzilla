@@ -45,12 +45,24 @@ function createReadBroker({ events, balances = null, openOrders = [] }) {
         ok: true,
         data: balances ?? [
           {
-            free: { amount: "0.01", asset: { code: "HYPE" } },
-            locked: { amount: "0", asset: { code: "HYPE" } },
+            free: {
+              amount: "0.01",
+              asset: { code: "HYPE" },
+            },
+            locked: {
+              amount: "0",
+              asset: { code: "HYPE" },
+            },
           },
           {
-            free: { amount: "0.01", asset: { code: "USDT" } },
-            locked: { amount: "0", asset: { code: "USDT" } },
+            free: {
+              amount: "0.01",
+              asset: { code: "USDT" },
+            },
+            locked: {
+              amount: "0",
+              asset: { code: "USDT" },
+            },
           },
         ],
       }
@@ -183,7 +195,10 @@ test("Bitunix order probe dispatches one reviewed createOrder request after fres
     assert.equal(marker.probe.id, "limit-sell-2")
     assert.equal(events.includes("mutation.disconnect"), true)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -201,7 +216,10 @@ test("Bitunix order probe decline creates no marker and constructs no mutation B
     assert.equal(events.some((event) => event.operation === "createOrder"), false)
     await assert.rejects(readFile(markerPath, "utf8"), { code: "ENOENT" })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -209,8 +227,8 @@ test("Bitunix order probe marker is exclusive and private", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-marker-"))
   const markerPath = join(directory, "probe.json")
   const preflight = {
-    probe: { id: "limit-buy-1", symbol: "HYPEUSDT" },
-    wireRequest: { symbol: "HYPEUSDT", side: 2, type: 1, volume: "1", price: "30" },
+    probe: {\n      id: "limit-buy-1",\n      symbol: "HYPEUSDT",\n    },
+    wireRequest: {\n      symbol: "HYPEUSDT",\n      side: 2,\n      type: 1,\n      volume: "1",\n      price: "30",\n    },
   }
   try {
     await createProbeMarker({
@@ -233,7 +251,10 @@ test("Bitunix order probe marker is exclusive and private", async () => {
       { code: "EEXIST" },
     )
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -243,15 +264,24 @@ test("Bitunix order probe refuses missing balance evidence before confirmation",
     const { events, run } = createDependencies({
       directory,
       balances: [{
-        free: { amount: "0", asset: { code: "USDT" } },
-        locked: { amount: "0", asset: { code: "USDT" } },
+        free: {
+              amount: "0",
+              asset: { code: "USDT" },
+            },
+        locked: {
+              amount: "0",
+              asset: { code: "USDT" },
+            },
       }],
     })
     await assert.rejects(run(), /explicit HYPE balance row/i)
     assert.equal(events.some((event) => event.operation === "confirm"), false)
     assert.equal(events.includes("mutation.construct"), false)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -266,7 +296,10 @@ test("Bitunix order probe refuses an existing HYPEUSDT open order before confirm
     assert.equal(events.some((event) => event.operation === "confirm"), false)
     assert.equal(events.includes("mutation.construct"), false)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -289,7 +322,10 @@ test("Bitunix order probe stops with the explicit unknown outcome and does not r
     const marker = JSON.parse(await readFile(join(directory, "probe.json"), "utf8"))
     assert.equal(marker.status, "OUTCOME_UNKNOWN")
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -361,8 +397,14 @@ test("Bitunix order probe classifies preflight failure as NOT_SENT", async () =>
     const { events, run } = createDependencies({
       directory,
       balances: [{
-        free: { amount: "0", asset: { code: "USDT" } },
-        locked: { amount: "0", asset: { code: "USDT" } },
+        free: {
+              amount: "0",
+              asset: { code: "USDT" },
+            },
+        locked: {
+              amount: "0",
+              asset: { code: "USDT" },
+            },
       }],
     })
     await assert.rejects(
@@ -373,7 +415,10 @@ test("Bitunix order probe classifies preflight failure as NOT_SENT", async () =>
     assert.equal(events.some((event) => event.operation === "confirm"), false)
     assert.equal(events.includes("mutation.construct"), false)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -399,7 +444,10 @@ test("Bitunix order probe classifies an existing one-shot marker as NOT_SENT", a
     )
     assert.equal(events.some((event) => event.operation === "createOrder"), false)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -474,6 +522,9 @@ test("Bitunix order probe blocks before reads when an earlier probe has an unkno
     assert.equal(events.includes("read.connect"), false)
     assert.equal(events.includes("mutation.construct"), false)
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
