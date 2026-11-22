@@ -526,8 +526,11 @@ recoveryRequired: true })
 
     const generation = this.#generation
     const attempt = ++this.#reconnectAttempts
-    this.#reconnectPromise = this.#performRecovery({ generation, attempt })
-    let retryDelay = null
+    this.#reconnectPromise = this.#performRecovery({
+      generation,
+      attempt,
+    })
+    let retryDelay
     try {
       retryDelay = await this.#reconnectPromise
     } finally {
@@ -552,7 +555,10 @@ recoveryRequired: true })
       return null
     } catch (error) {
       if (this.#stopped || generation !== this.#generation) {return null}
-      return this.#handleRecoveryFailure({ error, attempt })
+      return this.#handleRecoveryFailure({
+        error,
+        attempt,
+      })
     }
   }
 
@@ -598,7 +604,10 @@ recoveryRequired: true })
     logSafely({
       logger: this.logger,
       level: "error",
-      args: ["Binance user-data recovery attempt failed", { attempt, error }],
+      args: [
+        "Binance user-data recovery attempt failed",
+        { attempt, error },
+      ],
     })
     this.#notify({
       type: "recovering",
