@@ -64,16 +64,18 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
 
 function printPublishedResult({ result, stdout, probeMode = false }) {
   const { passed, failed, skipped, total } = result.report.summary
-  const operatorAttempt = result.report.results.find((entry) =>\n    entry.operation === "operator order attempt" || entry.operation === "operator order probe")
+  const operatorAttempt = result.report.results.find((entry) =>
+    entry.operation === "operator order attempt" || entry.operation === "operator order probe")
   stdout.write([
-    "Bitunix Spot diagnostics completed.",
-    `Checks: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
-    `Diagnostics: ${failed === 0 ? "HEALTHY" : "DEGRADED"}`,
-    probeMode\n      ? `Operator probe gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`\n      : `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
-    ...(probeMode ? ["The selected probe uses its own fresh Broker preflight; generic diagnostics do not gate dispatch."] : []),
-    ...(result.healthCheck.nonBlockingFailedOperations.length > 0
-      ? [`Non-blocking diagnostic failures: ${result.healthCheck.nonBlockingFailedOperations.join(", ")}`]
-      : []),
+    "Bitunix Spot workflow completed.",
+    `Results: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
+    probeMode
+      ? "General diagnostics: SKIPPED (focused order-probe mode)"
+      : `Diagnostics: ${failed === 0 ? "HEALTHY" : "DEGRADED"}`,
+    probeMode
+      ? `Operator probe gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`
+      : `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+    ...(probeMode ? ["The selected probe uses its own fresh Broker preflight; general diagnostics do not gate dispatch."] : []),
     ...(operatorAttempt?.probeId ? [`Order probe: ${operatorAttempt.probeId}`] : []),
     ...(operatorAttempt ? [`${probeMode ? "Operator order probe" : "Operator order attempt"}: ${operatorAttempt.status.toUpperCase()}`] : []),
     ...(result.healthCheck.missingRequiredOperations.length > 0
@@ -172,7 +174,7 @@ async function runDiagnosticsWithOperatorAttempt({
 
 function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId }) {
   if (runOperatorProbe) {
-    return `WARNING: this mode runs LIVE read-only diagnostics, then may submit exactly one separately confirmed LIVE HYPEUSDT ${probeId} order probe.\n`
+    return `WARNING: this mode runs a targeted LIVE read-only HYPEUSDT preflight, then may submit exactly one separately confirmed ${probeId} order probe.\n`
   }
   if (runOperatorOrder) {
     return "WARNING: this mode runs LIVE read-only diagnostics, then may submit one fixed LIVE HYPEUSDT order after the health check and operator preflight pass.\n"
@@ -197,7 +199,10 @@ async function runPublishedHealthCheck({
   }))
   const result = await publishDiagnostics({
     repositoryRoot,
-    healthCheckEvaluator: runOperatorProbe\n      ? evaluateOperatorOrderProbeHealthCheck\n      : evaluateReadOnlyHealthCheck,\n    runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
+    healthCheckEvaluator: runOperatorProbe
+      ? evaluateOperatorOrderProbeHealthCheck
+      : evaluateReadOnlyHealthCheck,
+    runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
       ...input,
       runDiagnostics,
       runOperatorOrder,
