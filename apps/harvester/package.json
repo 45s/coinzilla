@@ -19,6 +19,12 @@
   },
   "config": {
     "targetedTestFiles": [
+      "scripts/archive-testnet-session.test.js",
+      "scripts/capture-harvester-archive-process-identity.test.js",
+      "scripts/initialize-private-archive-repository.test.js",
+      "scripts/reset-operational-state.test.js",
+      "src/infrastructure/logging/configure-harvester-logging.test.js",
+      "src/infrastructure/persistence/harvester-database-isolation.test.js",
       "config/strategies/rs-recovery-seller.test.js",
       "test/critical-module-coverage.test.js",
       "test/critical-behavior-contract.test.js",
