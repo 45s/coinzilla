@@ -36,15 +36,15 @@ Every enabled executable strategy/market must have one execution route and one m
 
 ## Strategy route identity at the runtime boundary
 
-Execution routing is defined per `(strategyId, symbol)`. The provider's market-data subscription list is a separate, deduplicated set of symbols and must not replace the strategy route records. When multiple strategies share a market, the runtime startup contract must retain both strategy identities even though the provider subscribes to that symbol once. The runtime integration tracked by [#1475](https://github.com/45s/coinzilla/issues/1475) must preserve these records through provider startup before strategy dispatch is enabled. Until that integration and offline lifecycle proof are complete, RS remains non-executable.
+Execution routing is defined per `(strategyId, symbol)`. The provider's market-data subscription list is a separate, deduplicated set of symbols and must not replace the strategy route records. When multiple strategies share a market, the runtime startup contract must retain both strategy identities even though the provider subscribes to that symbol once. Merged [PR #1696](https://github.com/45s/coinzilla/pull/1696) preserves these records through provider startup and completes the offline RS-only startup proof. Enabled RS routes are now supported by the shared runtime; the global RS switch remains disabled by default and configuration alone does not authorize exchange operations.
 
 ## Strategy route identity at provider startup
 
-The provider-account startup input carries the immutable `executionRoutes` array separately from the deduplicated `executionSymbols` list. The same-market regression verifies that CG and RS both reach the provider boundary while only one market subscription is requested. PR #1476 now consumes these records for disabled-by-default RS configuration, shared account composition and RS BUY fill ownership dispatch. Production RS policy/order lifecycle, terminal mixed-SELL integration, shared reservations and offline lifecycle proof remain incomplete; route metadata does not authorize RS execution.
+The provider-account startup input carries the immutable `executionRoutes` array separately from the deduplicated `executionSymbols` list. The same-market regression verifies that CG and RS both reach the provider boundary while only one market subscription is requested. PR #1515 completed production RS policy/order lifecycle, terminal mixed-SELL integration, shared reservations and offline lifecycle proof. PR #1696 completed legacy single-provider routing and RS-only startup. RS remains disabled by default; route metadata does not authorize exchange operations.
 
 ## Strategy route identity through runtime metadata
 
-Provider startup receives and returns the immutable strategy-owned `executionRoutes` separately from deduplicated `executionSymbols`. Multi-account runtime metadata preserves each provider's route assignments as well. PR #1476 consumes this metadata for RS route resolution and shared accounting composition, but the concrete RS policy/lifecycle evaluator and order/fill management are still incomplete. Route metadata does not enable RS execution.
+Provider startup receives and returns immutable strategy-owned `executionRoutes` separately from deduplicated `executionSymbols`; multi-account metadata preserves each provider's assignments. PR #1515 completed RS policy/lifecycle evaluation and order/fill management through the shared engine. PR #1696 completed legacy single-provider route inference and RS-only startup. RS remains disabled by default.
 
 ## Account and provider failure policy
 
@@ -64,7 +64,7 @@ When brokers.instances, executionRouting, and marketDataRouting are absent, the 
 
 ## Deferred boundaries
 
-Process-restart restoration remains disabled under issue #654. Recovery Seller remains non-executable while RS-4/RS-5 are incomplete; implementation is tracked in [issue #1475](https://github.com/45s/coinzilla/issues/1475). This Phase 6 contract does not enable live or TESTNET order mutations during engineering verification; integrated tests use deterministic in-memory BrokerPort fakes.
+Process-restart restoration remains disabled under issue #654. RS-4/RS-5 offline runtime acceptance and the PR #1696 routing/startup acceptance are complete, but `RS_RECOVERY_SELLER_CONFIG.enabled` remains false by default. The controlled TESTNET runbook remains CLOSED / PAUSED; no live or TESTNET order mutations are authorized by engineering verification.
 
 ## Recovery Seller account routes
 
