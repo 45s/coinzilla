@@ -19,6 +19,7 @@
   },
   "config": {
     "targetedTestFiles": [
+      "test/use-cases/conservative-trading-engine.test.js",
       "cg-coin-grabber.test.js",
       "config/operator-control.test.js",
       "config/strategies/rs-recovery-seller.test.js",
@@ -322,8 +323,7 @@
       "test/replays/ada-conservative-recovery-replay.test.js",
       "test/replays/doge-zro-conservative-replay.test.js",
       "test/telegram-notification-journal.test.js",
-      "test/telegram-notifications.test.js",
-      "test/use-cases/conservative-trading-engine.test.js"
+      "test/telegram-notifications.test.js"
     ]
   },
   "scripts": {
