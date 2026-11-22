@@ -25,10 +25,21 @@ For any refactoring or code-audit task, use the canonical [AI Refactoring and Co
 3. Create a short-lived task branch from the latest `develop`.
 4. Change only files owned by that domain, unless a coordinated cross-domain task explicitly authorizes otherwise.
 5. Add tests and follow the [documentation-impact policy](ENGINEERING_STANDARDS.md#documentation-impact).
-6. Commit the implementation, strong regression tests, and documentation, then open a PR targeting `develop`. GitHub Actions is the required verification runner; run local checks when a working local environment is available, but local execution is not a prerequisite for implementation or PR creation.
+6. Commit the implementation, strong regression tests, and documentation, then open a PR targeting `develop`. GitHub Actions is the required verification runner; run local checks when a working local environment is available, but local execution is not a prerequisite for implementation or PR creation. **A missing local checkout, unavailable local dependencies, or inability to run commands locally is not by itself a blocker or a reason to stop implementation.** Use the supported remote GitHub workflow (repository file reads, Git-data commits, PR updates, and GitHub Actions) to continue whenever repository permissions and APIs allow it.
 7. The responsible agent synchronizes, verifies, and prepares the task PR for review. The user reviews and merges every task PR; agents must never merge or enable auto-merge.
 8. Never merge any task or release PR on the user's behalf. Never merge task work directly into `main`.
 9. When the agreed milestone is ready, prepare one release PR from `develop` to `main`. The user reviews and approves that release PR.
+
+### Local execution is optional — remote implementation remains mandatory
+
+Local tooling is a convenience, not an authorization or execution gate. When a task can be implemented and reviewed through the GitHub repository APIs, an agent MUST continue using remote file inspection and Git-data operations even if it has no local checkout, shell, package manager, dependencies, or runnable local environment. Do not report any of those missing local facilities as a task blocker, and do not ask the user to provide a checkout merely to avoid using the supported remote workflow.
+
+- Read the exact branch/base files and current head before editing; preserve unrelated changes and use expected-head checks when updating refs.
+- Make focused, reviewable commits containing implementation, regression tests, and required documentation. Preserve RED → GREEN evidence where the workflow supports separate test-first commits.
+- Use GitHub Actions on the exact pushed head as the required verification evidence. Inspect workflow results and logs, fix failures, and re-run checks on the resulting head.
+- If a particular check genuinely cannot run in GitHub Actions, identify that exact check and why; use another supported verification method or record the limitation. Do not generalize it into a local-environment blocker.
+- A genuine blocker is a concrete missing permission, inaccessible required source, conflicting requirement, unavailable remote API, or an acceptance criterion that cannot safely be verified. State the exact evidence and the smallest required resolution.
+- Never claim local tests passed when they were not run. Report remote CI and skipped local checks separately and truthfully.
 
 ## 1.1 Incremental commits and resumable task handoffs — mandatory
 

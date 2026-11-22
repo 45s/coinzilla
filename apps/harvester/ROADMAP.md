@@ -1,5 +1,17 @@
 # Harvester Roadmap
 
+## Recovery Seller activation — 2026-11-22
+
+- LINEAUSDT is configured for TESTNET, but `RS_RECOVERY_SELLER_CONFIG.enabled` remains `false`.
+- RS-1 through RS-5 offline runtime acceptance is complete in merged PR #1515. This PR restores legacy single-provider route inference for enabled RS strategies and includes RS markets in the deduplicated market-data subscription union, without enabling Conservative on LINEA.
+- [x] Infer `(strategyId, symbol)` execution ownership for each enabled strategy in legacy single-provider mode, preserving separate CG/RS pair maps.
+- [x] Subscribe once per symbol to the union of enabled strategy markets in legacy single-provider mode; retain strict provider-environment checks.
+- [x] Keep explicit execution and market-data routes mandatory in multi-provider mode.
+- [x] Prove RS-only provider startup and LINEAUSDT market-data subscription without creating a Conservative route.
+- [ ] Keep the global RS switch disabled until the separate bounded TESTNET runbook, account/open-order baseline, fee verification and explicit joint session start are approved.
+- The controlled TESTNET runbook remains CLOSED / PAUSED. A separate bounded LINEAUSDT session plan, authoritative account/open-order baseline, fee verification and explicit joint session start are required before any exchange write.
+- Restart/replay and third-asset commission valuation remain deferred; durable STOP remains terminal and cannot be cleared through CC-operator.
+
 ## Public Bitunix Futures market data (#1660)
 
 - **In progress in Dashboard PR [#1661](https://github.com/45s/coinzilla/pull/1661):** expose Bitunix Futures public contract and ticker REST data through the existing loopback-only Harvester API for the Dashboard Market Screener.
@@ -224,7 +236,7 @@ Remaining safety and observability follow-up #1105 remains open; #1103 is comple
 
 ## Proposed strategy — Recovery Seller (RS)
 
-**Status: RS-1 through RS-5 offline acceptance COMPLETE in PR #1515.** RS-4 production runtime dispatch, engine-owned order submission, account-wide quote/base authorization, RS BUY ownership and terminal mixed-SELL reconciliation are composed through the shared serialized Trading Engine. The scoped RS-5 offline matrix covers BUY-to-SELL lifecycle composition, sole-cycle reservation, duplicate suppression, terminal reconciliation, atomic recovery/legacy accounting, next-cycle gating, same-/different-market CG/RS accounting concurrency, Spot/EARN custody, fixed legacy basis, exchange filters, unknown outcomes and fail-closed failures. `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is now `true`; the RS strategy configuration remains `enabled: false` by default, so merging does not enable RS trading. Restart/replay and third-asset commission valuation are deferred. STOP is terminal; CC-operator exposes authorized read-only status only and cannot clear, reset, unpause or resume it. No TESTNET/LIVE exchange operations were performed.
+**Status: RS-1 through RS-5 offline acceptance COMPLETE in PR #1515.** RS-4 production runtime dispatch, engine-owned order submission, account-wide quote/base authorization, RS BUY ownership and terminal mixed-SELL reconciliation are composed through the shared serialized Trading Engine. The scoped RS-5 offline matrix covers BUY-to-SELL lifecycle composition, sole-cycle reservation, duplicate suppression, terminal reconciliation, atomic recovery/legacy accounting, next-cycle gating, same-/different-market CG/RS accounting concurrency, Spot/EARN custody, fixed legacy basis, exchange filters, unknown outcomes and fail-closed failures. `RECOVERY_SELLER_RUNTIME_ACCEPTANCE_COMPLETE` is now `true`; the operator pair map declares the approved LINEAUSDT TESTNET configuration, while the RS strategy configuration remains globally `enabled: false`, so this configuration alone does not enable RS trading. Restart/replay and third-asset commission valuation are deferred. STOP is terminal; CC-operator exposes authorized read-only status only and cannot clear, reset, unpause or resume it. No TESTNET/LIVE exchange operations were performed.
 
 - **Goal:** progressively reduce explicitly authorized legacy Spot inventory through recovery cycles. Each cycle acquires recovery inventory and may sell it with the eligible configured legacy slice only when the independent recovery, applicable legacy and combined-cycle profitability gates all pass.
 - **Accepted input direction:** per-pair `sellQuantity` plus `legacyPosition.invested` and `legacyPosition.quantity`; RS calculates average historical cost itself. Example: 100 USDT / 50 ZRO = 2 USDT/ZRO. The full logical legacy quantity need not remain in Spot; EARN-held inventory is unavailable for Spot SELL until returned and authoritatively reconciled.

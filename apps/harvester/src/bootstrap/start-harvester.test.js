@@ -3,7 +3,118 @@ import assert from "node:assert/strict"
 import * as shared from "../../test/bootstrap/start-harvester-test-support.js"
 
 const { Balance, CanonicalOrder, Fill, Money, Quantity, TradingRules, multiplyDecimal, waitForTestSignal, appConfig, createMarketMetadata, createOpenOrderSnapshot, createBinanceCapabilities, createBroker, makeVolatilityReadyBroker, binanceEnv, startHarvesterForTest, createFill } = shared
+const { mkdtemp, rm, os, path, createFileOperationalStateStore } = shared
 const test = (...args) => nodeTest(`[start-harvester.test.js] ${args[0]}`, ...args.slice(1))
+
+async function createRsOnlyOperationalStateStore() {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harvester-rs-only-startup-"))
+  const store = createFileOperationalStateStore({
+    directory,
+    runtimeSessionId: "rs-only-startup-session",
+  })
+  const initialized = await store.initialize()
+  assert.equal(initialized.ok, true, "RS-only startup requires an initialized durable operational-state store")
+  return {
+    directory,
+    store,
+  }
+}
+
+function createRsOnlyStartupBroker({ calls }) {
+  const broker = createBroker(calls)
+  const { baseAsset, quoteAsset } = createMarketMetadata("LINEAUSDT").market
+  broker.getAccountSnapshot = async () => ({
+    ok: true,
+    data: {
+      sourceTime: 1,
+      balances: [baseAsset, quoteAsset].map((asset) => new Balance({
+        free: new Quantity({
+          amount: "100000",
+          asset,
+        }),
+        locked: new Quantity({
+          amount: "0",
+          asset,
+        }),
+      })),
+    },
+  })
+  return broker
+}
+
+function createRsOnlyStartupConfig() {
+  const recoverySellerPair = {
+    enabled: true,
+    tradingEnvironment: "testnet",
+    enableVolatilityProtection: false,
+    legacyPosition: {
+      invested: 400,
+      quantity: 25000,
+    },
+    sellQuantity: 10,
+    investment: 100,
+    orderQuantity: 7000,
+    minProfit: 0.01,
+    priceStepPercent: 0.5,
+    makerPercent: 0.1,
+    takerPercent: 0.1,
+  }
+  return {
+    ...appConfig,
+    strategies: {
+      ...appConfig.strategies,
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: {
+          LINEAUSDT: recoverySellerPair,
+        },
+      },
+    },
+  }
+}
+
+test("starts an RS-only provider account without a Conservative execution route", async () => {
+  const { directory, store } = await createRsOnlyOperationalStateStore()
+  const calls = []
+  const broker = createRsOnlyStartupBroker({ calls })
+  try {
+    const result = await startHarvesterForTest({
+      loadConfig: async () => createRsOnlyStartupConfig(),
+      env: binanceEnv,
+      brokerAdapterFactory: () => broker,
+      operationalStateStore: store,
+      executionSymbols: ["LINEAUSDT"],
+      executionRoutes: [{
+        strategyId: "RS_recoverySeller",
+        symbol: "LINEAUSDT",
+      }],
+      marketDataSymbols: ["LINEAUSDT"],
+      evaluateRecoverySellerTransition: async () => ({
+        ok: true,
+        data: {
+          skipped: true,
+        },
+      }),
+      logger: {
+        info() {},
+        error() {},
+      },
+    })
+
+    assert.equal(result.tradingEnabled, true, "The RS-only account must enable its routed strategy execution.")
+    assert.deepEqual(result.executionRoutes, [{
+      strategyId: "RS_recoverySeller",
+      symbol: "LINEAUSDT",
+    }], "The account must retain RS ownership without inventing a Conservative route.")
+    assert.ok(calls.includes("subscribe:LINEAUSDT"), "The RS-only market must receive its market-data subscription.")
+    await result.stop()
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
 
 test("blocks trading after execution accounting failure", async () => {
   const broker = createBroker()
