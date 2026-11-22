@@ -19,6 +19,8 @@
   },
   "config": {
     "targetedTestFiles": [
+      "scripts/capture-harvester-archive-process-identity.test.js",
+      "src/infrastructure/process/create-harvester-process-identity.test.js",
       "config/strategies/rs-recovery-seller.test.js",
       "test/critical-module-coverage.test.js",
       "test/critical-behavior-contract.test.js",
