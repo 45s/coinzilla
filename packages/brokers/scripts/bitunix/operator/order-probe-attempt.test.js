@@ -235,6 +235,76 @@ test("Bitunix order probe dispatches one reviewed createOrder request after fres
   }
 })
 
+test("Bitunix order probe persists confirmed placement and failed reconciliation separately", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-reconciliation-"))
+  try {
+    const resultFixture = {
+      ok: false,
+      mutationOutcome: "CONFIRMED",
+      data: {
+        orderId: "2124329325141426176",
+        symbol: "HYPEUSDT",
+        side: 2,
+        type: 1,
+        volume: "0.366",
+        price: "30",
+        placeStatus: 1,
+        placeCode: 0,
+        placeMsg: "成功",
+      },
+      reconciliation: {
+        status: "UNAVAILABLE",
+        source: "PLACEMENT_ACKNOWLEDGEMENT",
+        endpoint: "/api/spot/v1/order/detail",
+        error: {
+          code: "BITUNIX_REST_EXCHANGE_REJECTED",
+          exchangeCode: "100005",
+          kind: "exchange",
+          status: 200,
+        },
+      },
+      errors: [Object.assign(new Error("result.api.parameter.sign.illegal"), {
+        code: "BITUNIX_REST_EXCHANGE_REJECTED",
+        exchangeCode: "100005",
+        status: 200,
+        kind: "exchange",
+      })],
+    }
+    const { events, run, markerPath } = createDependencies({
+      directory,
+      result: resultFixture,
+      balances: [
+        {
+          free: { amount: "0.01", asset: { code: "HYPE" } },
+          locked: { amount: "0", asset: { code: "HYPE" } },
+        },
+        {
+          free: { amount: "11.3", asset: { code: "USDT" } },
+          locked: { amount: "0", asset: { code: "USDT" } },
+        },
+      ],
+    })
+    const result = await run("limit-buy-11-usdt")
+    const marker = JSON.parse(await readFile(markerPath, "utf8"))
+    const output = events.filter((event) => event.operation === "output").map((event) => event.message).join("\n")
+
+    assert.equal(result.ok, false)
+    assert.equal(result.mutationOutcome, "CONFIRMED")
+    assert.equal(marker.status, "CONFIRMED")
+    assert.equal(marker.brokerResult.data.orderId, "2124329325141426176")
+    assert.deepEqual(marker.brokerResult.reconciliation, resultFixture.reconciliation)
+    assert.equal(marker.brokerResult.errors[0].exchangeCode, "100005")
+    assert.match(output, /placement confirmed; reconciliation unavailable/i)
+    assert.match(output, /Reconciliation: UNAVAILABLE \(PLACEMENT_ACKNOWLEDGEMENT\)/i)
+    assert.equal(events.filter((event) => event.operation === "createOrder").length, 1)
+  } finally {
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
+  }
+})
+
 test("Bitunix order probe decline creates no marker and constructs no mutation Broker", async () => {
   const directory = await mkdtemp(join(tmpdir(), "bitunix-order-probe-decline-"))
   try {
