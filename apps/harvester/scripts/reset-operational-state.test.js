@@ -131,6 +131,32 @@ test("requires explicit confirmation and TESTNET mode before deleting anything",
 })
 
 
+
+test("refuses a configured path other than recovery-facts", async (t) => {
+  const fixture = await createResetFixture()
+  t.after(() => rm(fixture.root, {
+    recursive: true,
+    force: true,
+  }))
+
+  await assert.rejects(
+    runHarvesterOperationalStateReset(createResetArguments({
+      fixture,
+      overrides: {
+        env: {
+          ...createResetArguments({ fixture }).env,
+          OPERATIONAL_STATE_DIRECTORY: fixture.dataDirectory,
+        },
+      },
+    })),
+    /restricted to a directory named recovery-facts/i,
+  )
+  assert.equal(
+    await readFile(path.join(fixture.dataDirectory, "harvester.db"), "utf8"),
+    "keep database",
+  )
+})
+
 test("refuses to reset when the configured recovery-facts directory is missing", async (t) => {
   const fixture = await createResetFixture()
   t.after(() => rm(fixture.root, {
