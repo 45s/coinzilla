@@ -144,6 +144,16 @@ async function runDiagnosticsWithOperatorAttempt({
   })
 }
 
+function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId }) {
+  if (runOperatorProbe) {
+    return `WARNING: this mode runs LIVE read-only diagnostics, then may submit exactly one separately confirmed LIVE HYPEUSDT ${probeId} order probe.\n`
+  }
+  if (runOperatorOrder) {
+    return "WARNING: this mode runs LIVE read-only diagnostics, then may submit one fixed LIVE HYPEUSDT order after the health check and operator preflight pass.\n"
+  }
+  return "WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n"
+}
+
 async function runPublishedHealthCheck({
   repositoryRoot,
   env,
@@ -154,12 +164,7 @@ async function runPublishedHealthCheck({
   runOperatorProbe,
   probeId,
 }) {
-  stdout.write(runOperatorProbe
-    ? `WARNING: this mode runs LIVE read-only diagnostics, then may submit exactly one separately confirmed LIVE HYPEUSDT ${probeId} order probe.\n`
-    : runOperatorOrder
-      ? "WARNING: this mode runs LIVE read-only diagnostics, then may submit one fixed LIVE HYPEUSDT order after the health check and operator preflight pass.\n"
-      : "WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n")
-  const result = await publishDiagnostics({
+  stdout.write(createOperatorWarning({\n    runOperatorOrder,\n    runOperatorProbe,\n    probeId,\n  }))\n  const result = await publishDiagnostics({
     repositoryRoot,
     runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
       ...input,
