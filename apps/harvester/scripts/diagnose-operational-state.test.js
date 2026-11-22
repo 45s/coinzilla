@@ -12,29 +12,60 @@ const identity = {
   },
 }
 
-const createDependencies = ({
-  readAll = async () => ({
-    ok: true,
-    data: {
-      records: [
-        { sequence: "0", factType: "LEDGER_INITIALIZED", data: { secret: "must-not-print" } },
-        { sequence: "1", factType: "PROCESS_STARTED", data: { tradingEnabled: true } },
-      ],
-      lastCommittedSequence: "1",
-      lastCommittedDigest: "b".repeat(64),
-    },
-  }),
-  project = () => ({
-    ok: true,
-    data: {
-      candidateOnly: true,
-      restorationEnabled: false,
-      requiresExchangeReconciliation: true,
-      sessions: [{ sessionId: "private-session-id" }],
-      orders: [{ clientOrderId: "private-client-order-id" }],
-      recoveryCycles: [],
-    },
-  }),
+const validStoreResult = () => ({
+  ok: true,
+  data: {
+    records: [
+      {
+        sequence: "0",
+        factType: "LEDGER_INITIALIZED",
+        data: { secret: "must-not-print" },
+      },
+      {
+        sequence: "1",
+        factType: "PROCESS_STARTED",
+        data: { tradingEnabled: true },
+      },
+    ],
+    lastCommittedSequence: "1",
+    lastCommittedDigest: "b".repeat(64),
+  },
+})
+
+const validProjection = () => ({
+  ok: true,
+  data: {
+    candidateOnly: true,
+    restorationEnabled: false,
+    requiresExchangeReconciliation: true,
+    sessions: [{ sessionId: "private-session-id" }],
+    orders: [{ clientOrderId: "private-client-order-id" }],
+    recoveryCycles: [],
+  },
+})
+
+const createFakeStore = ({ readAll, calls }) => ({
+  readAll: async () => {
+    calls.readAll += 1
+    return readAll()
+  },
+  initialize: async () => {
+    calls.mutate += 1
+    throw new Error("Diagnostic must never initialize the store")
+  },
+  initializeIfEmpty: async () => {
+    calls.mutate += 1
+    throw new Error("Diagnostic must never initialize the store")
+  },
+  append: async () => {
+    calls.mutate += 1
+    throw new Error("Diagnostic must never append to the store")
+  },
+})
+
+const createHarness = ({
+  readAll = validStoreResult,
+  project = validProjection,
 } = {}) => {
   const output = []
   const errors = []
@@ -44,49 +75,28 @@ const createDependencies = ({
     project: 0,
     mutate: 0,
   }
-  const store = {
-    readAll: async () => {
-      calls.readAll += 1
-      return readAll()
+  const store = createFakeStore({ readAll, calls })
+  const dependencies = {
+    args: [],
+    env: {},
+    cwd: "/repo/apps/harvester",
+    captureMetadata: () => identity,
+    createStore: () => {
+      calls.createStore += 1
+      return store
     },
-    initialize: async () => {
-      calls.mutate += 1
-      throw new Error("Diagnostic must never initialize the store")
+    project: (options) => {
+      calls.project += 1
+      return project(options)
     },
-    initializeIfEmpty: async () => {
-      calls.mutate += 1
-      throw new Error("Diagnostic must never initialize the store")
-    },
-    append: async () => {
-      calls.mutate += 1
-      throw new Error("Diagnostic must never append to the store")
-    },
+    writeOutput: (value) => output.push(value),
+    writeError: (value) => errors.push(value),
   }
-  return {
-    dependencies: {
-      args: [],
-      env: {},
-      cwd: "/repo/apps/harvester",
-      captureMetadata: () => identity,
-      createStore: () => {
-        calls.createStore += 1
-        return store
-      },
-      project: (options) => {
-        calls.project += 1
-        return project(options)
-      },
-      writeOutput: (value) => output.push(value),
-      writeError: (value) => errors.push(value),
-    },
-    output,
-    errors,
-    calls,
-  }
+  return { dependencies, output, errors, calls }
 }
 
 test("diagnostic verifies the existing store and reports only safe projection summaries", async () => {
-  const harness = createDependencies()
+  const harness = createHarness()
   const exitCode = await runOperationalStateDiagnostic(harness.dependencies)
   const report = JSON.parse(harness.output[0])
 
@@ -105,7 +115,7 @@ test("diagnostic verifies the existing store and reports only safe projection su
 })
 
 test("diagnostic skips projection and reports integrity failure when readAll rejects the store", async () => {
-  const harness = createDependencies({
+  const harness = createHarness({
     readAll: async () => ({
       ok: false,
       errors: [Object.assign(new Error("Manifest checkpoint does not match the fact stream"), {
@@ -124,7 +134,7 @@ test("diagnostic skips projection and reports integrity failure when readAll rej
 })
 
 test("diagnostic reports a projector failure separately from verified store integrity", async () => {
-  const harness = createDependencies({
+  const harness = createHarness({
     project: () => ({
       ok: false,
       errors: [new Error("Execution fill has no preceding submission intent")],
@@ -141,7 +151,7 @@ test("diagnostic reports a projector failure separately from verified store inte
 })
 
 test("diagnostic version mode prints source identity without opening the store", async () => {
-  const harness = createDependencies()
+  const harness = createHarness()
   harness.dependencies.args = ["--version"]
   const exitCode = await runOperationalStateDiagnostic(harness.dependencies)
 
