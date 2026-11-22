@@ -12,7 +12,28 @@ function shouldFailReconnectCleanup({ isReconnectClient, failDisconnect }) {
 
 function createRecoveryPortListeners({ listeners }) {
   return {
-    ...createRecoveryPortListeners({ listeners }),
+    onEvent(listener) {
+      listeners.event.add(listener)
+      return () => listeners.event.delete(listener)
+    },
+    onError(listener) {
+      listeners.error.add(listener)
+      return () => listeners.error.delete(listener)
+    },
+    onClose(listener) {
+      listeners.close.add(listener)
+      return () => listeners.close.delete(listener)
+    },
+    emitEvent(message) {
+      for (const listener of [...listeners.event]) {listener(message)}
+    },
+    emitError(error) {
+      for (const listener of [...listeners.error]) {listener(error)}
+    },
+    close() {
+      this.state = "closed"
+      for (const listener of [...listeners.close]) {listener({ code: 1006 })}
+    },
   }
 }
 
@@ -57,28 +78,7 @@ function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, 
     async unsubscribe(id) {
       calls.push(["unsubscribe", id])
     },
-    onEvent(listener) {
-      listeners.event.add(listener)
-      return () => listeners.event.delete(listener)
-    },
-    onError(listener) {
-      listeners.error.add(listener)
-      return () => listeners.error.delete(listener)
-    },
-    onClose(listener) {
-      listeners.close.add(listener)
-      return () => listeners.close.delete(listener)
-    },
-    emitEvent(message) {
-      for (const listener of [...listeners.event]) {listener(message)}
-    },
-    emitError(error) {
-      for (const listener of [...listeners.error]) {listener(error)}
-    },
-    close() {
-      this.state = "closed"
-      for (const listener of [...listeners.close]) {listener({ code: 1006 })}
-    },
+    ...createRecoveryPortListeners({ listeners }),
   }
 }
 
