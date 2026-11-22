@@ -80,7 +80,10 @@ export async function runHarvesterOperationalStateReset({
     directoryStats = await lstat(directory)
   } catch (error) {
     if (error?.code === "ENOENT") {
-      return { directory, removed: false }
+      return {
+        directory,
+        removed: false,
+      }
     }
     throw error
   }
@@ -88,14 +91,20 @@ export async function runHarvesterOperationalStateReset({
     throw new Error("The recovery-facts reset target must be a real directory, not a symbolic link or file.")
   }
 
-  await rm(directory, { recursive: true, force: false })
-  return { directory, removed: true }
+  await rm(directory, {
+    recursive: true,
+    force: false,
+  })
+  return {
+    directory,
+    removed: true,
+  }
 }
 
 async function main() {
   const args = process.argv.slice(2)
   if (args.length === 1 && args[0] === "--version") {
-    process.stdout.write(createResetIdentity() + "\n")
+    process.stdout.write(`${createResetIdentity()}\n`)
     return
   }
   process.stdout.write(createResetIdentity() + "\n")
