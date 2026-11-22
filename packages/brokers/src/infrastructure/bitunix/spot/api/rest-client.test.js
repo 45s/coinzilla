@@ -52,8 +52,12 @@ test("Bitunix REST client signs the Spot order-detail GET exactly like the refer
     apiSecret: "secret",
     now: () => 1700000000000,
     nonceFactory: () => "nonce",
-    fetchFn: async (url, options) => {
-      captured = { url, options }
+    fetchFn: async (...request) => {
+      const [url, options] = request
+      captured = {
+        url,
+        options,
+      }
       return {
         ok: true,
         status: 200,
