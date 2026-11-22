@@ -140,10 +140,11 @@ id: "different-id" },
 })
 
 test("accepts CRLF session lines while preserving the original record position", () => {
-  const serialized = serializeJournalRecord({
+  const serializedRecord = serializeJournalRecord({
     event: { id: "event-crlf",
 name: "order.created" },
-  }).replace("\n", "\r\n")
+  })
+  const serialized = `${serializedRecord.slice(0, -1)}\r\n`
 
   const [recovered] = parseJournalSession({
     content: serialized,
