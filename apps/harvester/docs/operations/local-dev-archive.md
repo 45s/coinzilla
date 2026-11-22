@@ -1,6 +1,6 @@
 # Local Harvester DEV archive — decisions and implementation record
 
-> Status: startup process identity capture and persistence implemented; database snapshot, archive packaging, verification and publication remain incomplete.
+> Status: archive command implemented on the task branch; local execution and end-to-end private-remote verification remain pending.
 > Tracking issue: [#1742](https://github.com/45s/coinzilla/issues/1742).
 > Task branch: `feat/harvester-local-dev-reset-archive`.
 > Private destination: `45s/coinzilla-archive` (private repository).
@@ -34,7 +34,7 @@ The archive must identify the Harvester process that produced the data.
 - Timestamp: UTC process-start timestamp, captured once by the dev launcher.
 - Source revision: full Coinzilla Git commit SHA captured for that process at startup.
 - Worktree state: capture clean/dirty state at process startup when available.
-- Archive folder/artifact name: include the process-start timestamp and source commit short SHA, for example `2026-11-22T21-45-12Z_abc1234`.
+- Archive directory name: `<UTC-process-start-timestamp>_<short-commit-sha>`, for example `2026-11-22T14-43-00Z_a1b2c3d`. The full commit SHA remains in the manifest.
 - The archive command must read the persisted process identity. It must **not** run `git rev-parse HEAD` at archive time and substitute the current checkout's commit.
 - If the process-start timestamp or source commit is unavailable/invalid, fail closed. Never silently fall back to current time or current HEAD.
 
@@ -52,7 +52,7 @@ The Journal process-start event schema already records allowlisted Git source me
 - If startup Git provenance is unavailable, the identity records explicit null/unknown values. The later archive command must reject missing/invalid commit provenance; it must not substitute the current checkout's HEAD.
 - The persisted identity contains only allowlisted build metadata and process facts. It does not serialize the environment or credentials.
 
-The remaining implementation task is the archive command, TESTNET SQLite online backup, exact-session evidence collection, manifest/checksum verification, and private-repository publication.
+The archive command is implemented as `pnpm run archive:push`. It selects the newest eligible TESTNET session (or accepts `--session <runtime-session-id>`), uses the persisted process identity, creates a verified snapshot through the existing SQLite backup service, copies only that session directory and the backup pair, writes a SHA-256 manifest, and pushes a non-overwriting directory to the private remote. The operator must run it after the Harvester process has stopped so session files are stable.
 
 ## 3. Data selection
 
@@ -90,6 +90,20 @@ The private remote was initialized successfully by the operator with:
 
 ```bash
 pnpm run archive:repo:init
+
+After stopping the Harvester DEV process, publish its TESTNET DB snapshot and matching session evidence with:
+
+```bash
+pnpm run archive:push
+```
+
+To select a specific prior TESTNET session rather than the newest one:
+
+```bash
+pnpm run archive:push -- --session <runtime-session-id>
+```
+
+The local archive is retained under `apps/harvester/data/archives/<timestamp>_<short-commit>/`. The remote receives the same directory under `archives/`. A failed push leaves the local directory in place; retry is safe only after confirming the remote directory was not created.
 ```
 
 Configured local environment value:
@@ -116,14 +130,13 @@ This bootstrap success verifies the operator's local HTTPS Git push access. It d
 
 1. Inspect and reuse the existing startup process identity and Git provenance implementation.
 2. Capture the immutable full source commit and worktree state in the dev launcher at process start; pass it to the child using explicit, non-secret process metadata.
-3. Make that process identity available to the archive command after the Harvester process exits (the archive command must not infer it from current Git state).
-4. Resolve the TESTNET database path using the existing database resolver and create its snapshot through the existing online backup service.
-5. Resolve exactly one process session from its captured timestamp/runtime session ID; copy that session's logs and colocated Journal file.
-6. Build a flat archive with an internal manifest and SHA-256 checksums.
-7. Verify the SQLite snapshot and complete archive before publication.
-8. Push a new, non-overwriting artifact to the private remote; verify the remote committed bytes.
-9. Add deterministic offline tests for identity selection, environment guard, source selection, checksums, collision handling, failed push retry, and PROD exclusion.
-10. Update the README, operations documentation, documentation index, and issue status with exact implementation and CI evidence.
+3. Use the persisted process identity to select the exact session; the command defaults to the newest eligible TESTNET session and supports an explicit runtime session ID.
+4. Create the TESTNET SQLite snapshot through the existing online backup service.
+5. Copy the snapshot/backup manifest and exact session directory, including colocated Journal evidence.
+6. Build the timestamp/short-commit directory with an internal manifest and SHA-256 checksums.
+7. Verify all local files and SQLite backup before publication.
+8. Push a new, non-overwriting directory to the private remote and verify remote blob IDs.
+9. Run the focused archive tests and full package tests locally; perform the first real archive push only under the operator's local control.
 
 Do not add reset behavior as an incidental extension. Any later reset request requires a separately scoped, explicitly reviewed change.
 
@@ -147,11 +160,10 @@ Completed:
 
 Not completed:
 - Startup commit/worktree snapshot is not yet captured by the launcher as an immutable archive identity.
-- No archive-copy/package command exists.
-- No session-scoped log + TESTNET database artifact is created.
-- No private remote publication command exists.
-- No archive workflow regression tests or CI evidence exist.
-- No claim of successful end-to-end archive/push is made.
+- `archive:push` now implements TESTNET-only session selection, WAL-aware DB snapshot, session-log/Journal copy, manifest/checksum verification, non-overwriting remote push and remote blob verification.
+- Archive naming uses the persisted process-start timestamp and startup source commit; missing provenance fails closed.
+- Regression tests cover archive naming and fail-closed identity validation.
+- End-to-end execution, package tests and a real private-remote publication have not been run from this assistant environment. The operator must run the command locally after pulling the branch.
 
 ## 9. Resume checklist
 
