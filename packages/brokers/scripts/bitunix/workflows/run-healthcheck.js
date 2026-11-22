@@ -430,6 +430,10 @@ async function runGeneralOrderReadScan({ env, report, onProgress, brokerFactory 
   })
 }
 
+function shouldSkipOperatorOrder({ report, runOperatorOrder }) {
+  return runOperatorOrder && !evaluateReadOnlyHealthCheck({ report }).healthy
+}
+
 async function runDiagnosticsWithOperatorAttempt({
   env,
   onProgress,
@@ -447,11 +451,18 @@ async function runDiagnosticsWithOperatorAttempt({
       onProgress,
       brokerApiRestClientFactory: (options) => new BitunixRestClient(options),
     })
-  if (!runOperatorProbe) await runGeneralOrderReadScan({ env, report, onProgress, brokerFactory })
+  if (!runOperatorProbe) {
+    await runGeneralOrderReadScan({
+      env,
+      report,
+      onProgress,
+      brokerFactory,
+    })
+  }
   if (!runOperatorOrder && !runOperatorProbe) {
     return report
   }
-  if (runOperatorOrder && !evaluateReadOnlyHealthCheck({ report }).healthy) {
+  if (shouldSkipOperatorOrder({ report, runOperatorOrder })) {
     return createHealthCheckSkippedResult({
       report,
       env,
