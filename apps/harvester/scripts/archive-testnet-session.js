@@ -21,6 +21,7 @@ import { fileURLToPath } from "node:url"
 import { captureBuildMetadata } from "@coinzilla/utils"
 import packageMetadata from "../package.json" with { type: "json" }
 import { resolveOperationalStateDirectory } from "../src/infrastructure/operational-state/resolve-directory.js"
+import { assertHarvesterProcessStopped } from "./assert-harvester-process-stopped.js"
 
 const PACKAGE_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 const SOURCE_DIRECTORIES = Object.freeze(["logs", "data", "recovery-facts"])
@@ -135,25 +136,6 @@ function resolveArchiveDataDirectory({ packageDirectory, env } = {}) {
     throw new TypeError("HARVESTER_DATABASE_DIRECTORY must not be a filesystem root before archiving.")
   }
   return resolvedDirectory
-}
-
-async function assertHarvesterProcessStopped({ lockDirectory } = {}) {
-  let directoryStats
-  try {
-    directoryStats = await lstat(lockDirectory)
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return
-    }
-    throw error
-  }
-  if (directoryStats.isSymbolicLink() || !directoryStats.isDirectory()) {
-    throw new Error("Harvester process-lock directory is not a regular directory; refusing to archive operational data.")
-  }
-  const entries = await readdir(lockDirectory, { withFileTypes: true })
-  if (entries.some((entry) => entry.name.endsWith(".lock"))) {
-    throw new Error("A Harvester process lock exists; stop Harvester before archiving local operational data.")
-  }
 }
 
 async function assertRealDirectory(directory) {
