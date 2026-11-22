@@ -6,7 +6,7 @@ test("createRestSignature signs sorted query parameters and compact JSON body", 
   const signature = createRestSignature({
     nonce: "nonce",
     timestamp: "1700000000000",
-      apiKey: "api-key",
+    apiKey: "api-key",
     secretKey: "secret",
     queryParams: {
       symbol: "BTCUSDT",
@@ -25,7 +25,7 @@ test("createRestSignature treats absent query parameters and body as empty strin
   const signature = createRestSignature({
     nonce: "nonce",
     timestamp: "1700000000000",
-      apiKey: "api-key",
+    apiKey: "api-key",
     secretKey: "secret",
   })
   assert.equal(signature, "06018b5b73be8baaa8133f410616ed07f0b98d7da4dd2ac552b1e8f948701353")
@@ -37,7 +37,7 @@ test("createRestSignature rejects missing credentials and invalid input", () => 
     () => createRestSignature({
       nonce: "",
       timestamp: "1700000000000",
-        apiKey: "api-key",
+      apiKey: "api-key",
       secretKey: "secret",
     }),
     /nonce/i,
@@ -46,7 +46,7 @@ test("createRestSignature rejects missing credentials and invalid input", () => 
     () => createRestSignature({
       nonce: "nonce",
       timestamp: "1700000000000",
-        apiKey: "api-key",
+      apiKey: "api-key",
       secretKey: "",
     }),
     /secret/i,
@@ -57,7 +57,7 @@ test("createRestSignature preserves whitespace inside JSON string values", () =>
   const options = {
     nonce: "nonce",
     timestamp: "1700000000000",
-      apiKey: "api-key",
+    apiKey: "api-key",
     secretKey: "secret",
   }
   assert.equal(
@@ -76,7 +76,7 @@ test("createRestSignature signs the exact serialized JSON body when requested", 
   const options = {
     nonce: "nonce",
     timestamp: "1700000000000",
-      apiKey: "api-key",
+    apiKey: "api-key",
     secretKey: "secret",
   }
   const body = '{"toUid":9223372036854775807,"amount":"1.000"}'
