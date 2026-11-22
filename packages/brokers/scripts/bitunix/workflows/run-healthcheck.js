@@ -125,7 +125,7 @@ async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
   }
 }
 
-async function fetchAndRecordOrderDetails({ broker, orders, report, stdout, secrets }) {
+async function fetchAndRecordOrderDetails({ broker, orders, report, stdout, secrets, operation = "Broker API getOrder" }) {
   for (const order of orders) {
     const started = Date.now()
     const request = {
@@ -144,7 +144,7 @@ async function fetchAndRecordOrderDetails({ broker, orders, report, stdout, secr
         report,
         stdout,
         secrets,
-        operation: "Broker API getOrder",
+        operation,
         result,
         durationMs: Date.now() - started,
         request,
@@ -154,7 +154,7 @@ async function fetchAndRecordOrderDetails({ broker, orders, report, stdout, secr
         report,
         stdout,
         secrets,
-        operation: "Broker API getOrder",
+        operation,
         result: {
           ok: false,
           errors: [error],
@@ -297,6 +297,7 @@ async function runBitunixOrderReadScan({
   report,
   stdout,
   brokerFactory = (options) => new Broker(options),
+  additionalOrders = [],
 }) {
   const { broker, secrets } = createOrderReadBroker({
     env,
@@ -320,6 +321,18 @@ async function runBitunixOrderReadScan({
         report,
         stdout,
         secrets,
+      })
+    }
+    const discoveredKeys = new Set((openOrdersResult?.data ?? []).map((order) => `${order.symbol}:${order.id}`))
+    const pendingAdditionalOrders = additionalOrders.filter((order) => !discoveredKeys.has(`${order.symbol}:${order.orderId ?? order.id}`))
+    if (pendingAdditionalOrders.length > 0) {
+      await fetchAndRecordOrderDetails({
+        broker,
+        orders: pendingAdditionalOrders.map((order) => ({ ...order, id: order.orderId ?? order.id })),
+        report,
+        stdout,
+        secrets,
+        operation: "Broker API getOrder after cancellation",
       })
     }
   } catch (error) {
@@ -439,6 +452,7 @@ function isWorkflowProgressMessage({ message }) {
     message.startsWith("Broker API getOpenOrders:") ||
     message.startsWith("Broker API getOrder:") ||
     message.startsWith("Broker API getOrder [") ||
+    message.startsWith("Broker API getOrder after cancellation") ||
     message.startsWith("Discovered open order:") ||
     message.startsWith("Broker API cancelOrder") ||
     message.startsWith("Cancelling existing order")
@@ -535,7 +549,7 @@ function appendSelectedOperatorResult({
   })
 }
 
-async function runGeneralOrderReadScan({ env, report, onProgress, brokerFactory }) {
+async function runGeneralOrderReadScan({ env, report, onProgress, brokerFactory, additionalOrders = [] }) {
   await runBitunixOrderReadScan({
     env,
     report,
@@ -543,6 +557,7 @@ async function runGeneralOrderReadScan({ env, report, onProgress, brokerFactory 
       write: (message) => onProgress?.({ message: message.trim() }),
     },
     brokerFactory,
+    additionalOrders,
   })
 }
 
@@ -604,6 +619,7 @@ async function runDiagnosticsWithOperatorAttempt({
       report,
       onProgress,
       brokerFactory,
+      additionalOrders: cancelExistingOrder ? [CANCELLATION_TARGET] : [],
     })
   }
   if (!runOperatorOrder && !runOperatorProbe) {
