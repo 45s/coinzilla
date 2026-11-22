@@ -21,6 +21,7 @@
     "test:integration": "node --env-file-if-exists=.env.development --test \"src/**/*.integration.js\"",
     "test:user-data-integration": "node --env-file-if-exists=.env.development --test ./src/infrastructure/binance/spot/broker-websocket/tests/user-data-session.integration.js",
     "test:websocket": "node --env-file-if-exists=.env.development --test ./src/infrastructure/binance/spot/broker-websocket/broker.integration.js",
-    "bitunix:healthcheck": "node ./scripts/bitunix/run-healthcheck.js"
+    "bitunix:healthcheck": "node ./scripts/bitunix/run-healthcheck.js",
+    "bitunix:verify-existing-order": "node ./scripts/bitunix/operator/verify-existing-hype-order.js"
   }
 }
