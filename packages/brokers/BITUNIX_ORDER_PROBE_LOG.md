@@ -70,5 +70,7 @@ This log records operator-authorized LIVE order-placement probes against Bitunix
 - This is a **symbol-scoped** query, not an account-wide order enumeration. Querying HYPEUSDT is the correct supported route; do not claim that one response covers other symbols.
 - The existing tests covered empty results, a generic order ID, single-row normalization, and symbol mismatch, but did not prove exact preservation of the accepted 19-digit HYPE order ID.
 - Added an offline regression fixture for order ID `"2124329325141426176"`. It asserts exact string identity, HYPEUSDT/BUY/OPEN fields, quantity and price normalization, one POST only, and the signature over the exact serialized `{"symbol":"HYPEUSDT"}` body.
+
+- Added a dedicated read-only operator command, `pnpm --filter @coinzilla/brokers bitunix:find-order --order-id=2124329325141426176`, which queries only HYPEUSDT pending orders and matches the exact string ID. It cannot place or cancel orders. It reports a missing pending row as inconclusive rather than proof of absence. Offline command tests cover exact matching, the empty-pending case, and rejection of numeric IDs.
 - **Not yet live-verified:** the fixture proves the local adapter contract only. Phase 1 remains open until the operator runs the read-only HYPEUSDT pending-order query and the returned rows contain the exact order ID and matching symbol. No placement or cancellation is part of this check.
 
