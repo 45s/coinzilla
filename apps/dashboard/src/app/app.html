@@ -64,6 +64,9 @@
         } @else if (activePage() === 'exchanges') {
           <span class="demo-pill persisted-pill"><span></span> LIVE READ ONLY</span>
           <span class="environment-pill">HARVESTER</span>
+        } @else if (activePage() === 'open-orders') {
+          <span class="demo-pill persisted-pill"><span></span> LIVE READ ONLY</span>
+          <span class="environment-pill">HARVESTER WS</span>
         } @else {
           <span class="demo-pill persisted-pill"><span></span> READ ONLY</span>
           <span class="environment-pill">HARVESTER</span>
@@ -89,6 +92,8 @@
         <app-market-screener />
       } @else if (activePage() === 'exchanges') {
         <app-exchanges />
+      } @else if (activePage() === 'open-orders') {
+        <app-open-orders />
       } @else {
         <app-trading-history [resource]="historyResource()" />
       }
@@ -101,7 +106,9 @@
         } @else if (activePage() === 'markets') {
           <span>Public Bitunix Futures market data · No order functionality</span>
         } @else if (activePage() === 'exchanges') {
-          <span>Live read-only account data · Sourced only from Harvester</span>
+          <span>Live read-only account data · Harvester WebSocket only</span>
+        } @else if (activePage() === 'open-orders') {
+          <span>Live open orders · Harvester WebSocket only · No order controls</span>
         } @else {
           <span>Read-only persisted Harvester records</span>
         }
