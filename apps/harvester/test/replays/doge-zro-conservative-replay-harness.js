@@ -10,7 +10,7 @@ import {
   Quantity,
 } from "@coinzilla/entities";
 import { BinanceWebSocketBroker } from "@coinzilla/brokers";
-import { multiplyDecimal, percentageToRate } from "@coinzilla/utils";
+import { compareDecimal, multiplyDecimal, percentageToRate } from "@coinzilla/utils";
 import { createBinanceBrokerAdapter } from "../../src/infrastructure/brokers/binance-broker-adapter.js";
 import { startHarvester } from "../../src/bootstrap/start-harvester.js";
 
@@ -298,8 +298,7 @@ function createDogeReplayUserDataSubscription(state) {
             : order.market.quoteAsset;
           const commissions = executionFill.commissionAmount && executionFill.commissionAmount !== "0"
             ? [new Commission({
-              amount: new Money({ amount: executionFill.commissionAmount,
-asset: commissionAsset }),
+              amount: new Money({ amount: executionFill.commissionAmount, asset: commissionAsset }),
             })]
             : [];
           const canonicalFill = new Fill({
@@ -307,19 +306,18 @@ asset: commissionAsset }),
             brokerOrderId,
             market: order.market,
             side: executionFill.side,
-            price: new Money({ amount: executionFill.price,
-asset: order.market.quoteAsset }),
-            quantity: new Quantity({ amount: executionFill.quantity,
-asset: order.market.baseAsset }),
-            quoteQuantity: new Money({ amount: executionFill.quoteQuantity,
-asset: order.market.quoteAsset }),
+            price: new Money({ amount: executionFill.price, asset: order.market.quoteAsset }),
+            quantity: new Quantity({ amount: executionFill.quantity, asset: order.market.baseAsset }),
+            quoteQuantity: new Money({ amount: executionFill.quoteQuantity, asset: order.market.quoteAsset }),
             liquidityRole: executionFill.isMaker ? "MAKER" : "TAKER",
             executedAt: executionFill.time,
             commissions,
             commissionStatus: "COMPLETE",
           });
           const canonicalFills = state.exchangeCanonicalFills.get(brokerOrderId) ?? [];
-          canonicalFills.push(canonicalFill);
+          if (!canonicalFills.some(({ id }) => id === canonicalFill.id)) {
+            canonicalFills.push(canonicalFill);
+          }
           state.exchangeCanonicalFills.set(brokerOrderId, canonicalFills);
         }
       }
@@ -785,6 +783,23 @@ function createDogeReplayOrderExecutionReport({
   }
 }
 
+function shouldReplaceDogeReplayOrderSnapshot({ currentOrder, nextOrder }) {
+  if (!currentOrder) {
+    return true;
+  }
+  const executionProgress = compareDecimal({
+    left: nextOrder.executedQuantity.amount,
+    right: currentOrder.executedQuantity.amount,
+  });
+  if (executionProgress !== 0) {
+    return executionProgress > 0;
+  }
+  if (currentOrder.status === "FILLED" && nextOrder.status !== "FILLED") {
+    return false;
+  }
+  return nextOrder.updatedAt >= currentOrder.updatedAt;
+}
+
 async function publishDogeReplayOrderFill({
   state,
   order,
@@ -799,7 +814,7 @@ async function publishDogeReplayOrderFill({
 }) {
   const orderStatus = cumulativeExecutedQuantity === order.originalQuantity.amount
     ? "FILLED"
-    : "PARTIALLY_FILLED"
+    : "PARTIALLY_FILLED";
   const commission = createDogeReplayCommission({
     state,
     order,
@@ -807,17 +822,24 @@ async function publishDogeReplayOrderFill({
     executedQuoteQuantity: quoteQuantity,
     commissionAmount,
     commissionAsset,
-  })
+  });
   const updatedOrder = createDogeReplayOrderSnapshot({
     order,
     cumulativeExecutedQuantity,
     timestamp,
-  })
-  state.exchangeOrderHistory.set(order.brokerOrderId, updatedOrder)
-  if (orderStatus === "FILLED") {
-    state.exchangeOpenOrders.delete(order.clientOrderId)
+  });
+  const currentOrder = state.exchangeOrderHistory.get(order.brokerOrderId);
+  if (shouldReplaceDogeReplayOrderSnapshot({
+    currentOrder,
+    nextOrder: updatedOrder,
+  })) {
+    state.exchangeOrderHistory.set(order.brokerOrderId, updatedOrder);
+  }
+  const authoritativeOrder = state.exchangeOrderHistory.get(order.brokerOrderId);
+  if (authoritativeOrder.status === "FILLED") {
+    state.exchangeOpenOrders.delete(order.clientOrderId);
   } else {
-    state.exchangeOpenOrders.set(order.clientOrderId, updatedOrder)
+    state.exchangeOpenOrders.set(order.clientOrderId, authoritativeOrder);
   }
   return state.publishUserDataEvent({
     event: createDogeReplayOrderExecutionReport({
@@ -832,7 +854,7 @@ async function publishDogeReplayOrderFill({
       orderStatus,
       timestamp,
     }),
-  })
+  });
 }
 
 export async function createDogeTradingReplay({ marketSymbol, appConfig, exchangeFilters, scenarioExpectations }) {

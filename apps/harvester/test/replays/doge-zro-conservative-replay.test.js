@@ -854,6 +854,146 @@ function assertPartialRecoverySellExecutionReports({ dogeTradingReplay }) {
   ], "The recovery SELL replay must preserve incremental fills, cumulative order quantities, and actual quote-asset commissions.");
 }
 
+
+
+async function publishBuyExecution({ dogeTradingReplay, initialBuyOrder, execution }) {
+  const { occurrence, ...fill } = execution;
+  const fillApplied = dogeTradingReplay.waitForLifecycleEvent({
+    eventName: "execution.fill_applied",
+    occurrence,
+  });
+  await dogeTradingReplay.publishOrderFill({
+    order: initialBuyOrder,
+    price: dogeTradingReplay.scenarioExpectations.buyPrice,
+    ...fill,
+    commissionAsset: "DOGE",
+  });
+  await fillApplied;
+}
+
+function assertPartialBuyAccountingAfterOutOfOrderExecutions({ dogeTradingReplay }) {
+  const position = dogeTradingReplay.runtime.portfolio.getPosition({ symbol: MARKET_SYMBOL });
+  const recoveryLedger = dogeTradingReplay.runtime.getRecoveryLedger({ marketId: position.market.id });
+  assert.equal(position.baseQuantity.amount, "299.7", "Both distinct BUY fills must be reflected immediately even though the earlier execution report carries a stale cumulative order snapshot.");
+  assert.equal(position.spent.amount, "21.471", "Portfolio cost basis must include the exact quote notional from both distinct BUY executions.");
+  assert.equal(position.quoteNetCashFlow.amount, "-21.471", "Portfolio quote cash flow must include both BUY executions without treating a stale order snapshot as a reversal.");
+  assert.equal(recoveryLedger.buyCost, "21.471", "RecoveryLedger must include both distinct BUY executions while the exchange order remains partially filled.");
+  assert.equal(recoveryLedger.netSellProceeds, "0", "Out-of-order BUY execution delivery must not invent SELL proceeds before a recovery SELL exists.");
+  assert.equal(dogeTradingReplay.submittedCanonicalOrders.filter(({ side }) => side === "SELL").length, 0, "A partial BUY order must not create a recovery SELL before its terminal execution is reconciled.");
+  assert.equal(dogeTradingReplay.submittedCanonicalOrders.filter(({ side }) => side === "BUY").length, 1, "A partial BUY order must not advance the strategy or submit a second standing BUY.");
+  const buyOrderUpdates = dogeTradingReplay.receivedLifecycleEvents
+    .filter(({ name, data }) => name === "order.updated" && data.clientOrderId === dogeTradingReplay.receivedExecutionReports[0].executedOrder.clientOrderId)
+    .map(({ data }) => data.executedQuantity);
+  assert.deepEqual(buyOrderUpdates, ["300"], "The stale earlier order snapshot must not publish or install a backwards canonical executed quantity.");
+}
+
+function assertFinalOutOfOrderBuyAccounting({ dogeTradingReplay }) {
+  const position = dogeTradingReplay.runtime.portfolio.getPosition({ symbol: MARKET_SYMBOL });
+  const recoveryLedger = dogeTradingReplay.runtime.getRecoveryLedger({ marketId: position.market.id });
+  assert.equal(position.baseQuantity.amount, "399.6", "Terminal reconciliation must retain all three distinct BUY fills less their actual DOGE commissions.");
+  assert.equal(position.spent.amount, "28.628", "Final Portfolio cost basis must equal the sum of all three actual BUY quote notionals.");
+  assert.equal(recoveryLedger.buyCost, "28.628", "Final RecoveryLedger cost basis must match Portfolio after the out-of-order executions are reconciled.");
+  assert.equal(dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "execution.fill_applied").length, 3, "Each of the three distinct BUY execution identities must publish exactly one applied-fill event.");
+  assert.equal(dogeTradingReplay.harvesterRuntimeErrors.length, 0, "A valid out-of-order execution sequence must not produce a Harvester accounting or lifecycle error.");
+}
+
+runDogeTradingReplayTest("accounts an identical duplicate partial BUY execution only once", async (dogeTradingReplay) => {
+  const initialBuyOrder = await submitInitialBuyOrder(dogeTradingReplay);
+  const firstExecutionTimestamp = Math.max(Date.now(), initialBuyOrder.createdAt + 1);
+  const duplicateExecution = {
+    occurrence: 1,
+    tradeId: "6521",
+    fillQuantity: "200",
+    cumulativeExecutedQuantity: "200",
+    quoteQuantity: "14.314",
+    commissionAmount: "0.2",
+    timestamp: firstExecutionTimestamp,
+  };
+  await publishBuyExecution({
+    dogeTradingReplay,
+    initialBuyOrder,
+    execution: duplicateExecution,
+  });
+  await dogeTradingReplay.publishOrderFill({
+    order: initialBuyOrder,
+    price: dogeTradingReplay.scenarioExpectations.buyPrice,
+    ...duplicateExecution,
+    commissionAsset: "DOGE",
+  });
+
+  const position = dogeTradingReplay.runtime.portfolio.getPosition({ symbol: MARKET_SYMBOL });
+  const recoveryLedger = dogeTradingReplay.runtime.getRecoveryLedger({ marketId: position.market.id });
+  assert.equal(position.baseQuantity.amount, "199.8", "Delivering the same DOGE execution report twice must debit its 0.2 DOGE commission and gross fill only once.");
+  assert.equal(position.spent.amount, "14.314", "The duplicate partial BUY report must not double the Portfolio quote cost.");
+  assert.equal(recoveryLedger.buyCost, "14.314", "The duplicate partial BUY report must not double the RecoveryLedger cost basis.");
+  assert.equal(dogeTradingReplay.receivedLifecycleEvents.filter(({ name }) => name === "execution.fill_applied").length, 1, "An identical duplicate stream execution must publish exactly one applied-fill event.");
+  assert.equal(dogeTradingReplay.receivedExecutionReports.length, 2, "The runtime replay must prove the same raw execution report was delivered twice.");
+  assert.equal(dogeTradingReplay.harvesterRuntimeErrors.length, 0, "An identical duplicate execution report must be ignored without a runtime accounting error.");
+});
+
+runDogeTradingReplayTest("accounts distinct partial BUY fills when their cumulative order reports arrive out of order", async (dogeTradingReplay) => {
+  const initialBuyOrder = await submitInitialBuyOrder(dogeTradingReplay);
+  const firstExecutionTimestamp = Math.max(Date.now(), initialBuyOrder.createdAt + 1);
+  await publishBuyExecution({
+    dogeTradingReplay,
+    initialBuyOrder,
+    execution: {
+      occurrence: 1,
+      tradeId: "6523",
+      fillQuantity: "100",
+      cumulativeExecutedQuantity: "300",
+      quoteQuantity: "7.157",
+      commissionAmount: "0.1",
+      timestamp: firstExecutionTimestamp + 1,
+    },
+  });
+  await publishBuyExecution({
+    dogeTradingReplay,
+    initialBuyOrder,
+    execution: {
+      occurrence: 2,
+      tradeId: "6522",
+      fillQuantity: "200",
+      cumulativeExecutedQuantity: "200",
+      quoteQuantity: "14.314",
+      commissionAmount: "0.2",
+      timestamp: firstExecutionTimestamp,
+    },
+  });
+  assertPartialBuyAccountingAfterOutOfOrderExecutions({ dogeTradingReplay });
+
+  const recoverySellSubmitted = dogeTradingReplay.waitForSubmittedOrder("SELL");
+  const nextStandingBuySubmitted = dogeTradingReplay.waitForSubmittedOrder("BUY", 2);
+  await publishBuyExecution({
+    dogeTradingReplay,
+    initialBuyOrder,
+    execution: {
+      occurrence: 3,
+      tradeId: "6524",
+      fillQuantity: "100",
+      cumulativeExecutedQuantity: "400",
+      quoteQuantity: "7.157",
+      commissionAmount: "0.1",
+      timestamp: firstExecutionTimestamp + 2,
+    },
+  });
+  const [recoverySellOrder, nextStandingBuyOrder] = await Promise.all([
+    recoverySellSubmitted,
+    nextStandingBuySubmitted,
+  ]);
+  assertRecoveryOrders({
+    dogeTradingReplay,
+    recoverySellOrder,
+    nextStandingBuyOrder,
+  });
+  assertFinalOutOfOrderBuyAccounting({ dogeTradingReplay });
+  assert.deepEqual(
+    dogeTradingReplay.receivedExecutionReports.map(({ executedOrder }) => executedOrder.executedQuantity),
+    ["300", "200", "400"],
+    "The stream must deliver the later cumulative snapshot before the earlier one, then the final terminal snapshot.",
+  );
+});
+
 runDogeTradingReplayTest("accounts partial recovery SELL executions and completes only after the terminal fill", async (dogeTradingReplay) => {
   const { recoverySellOrder } = await submitFirstBuyAndWaitForRecoveryOrders(dogeTradingReplay);
   const firstExecutionTimestamp = Math.max(Date.now(), recoverySellOrder.createdAt + 1);
