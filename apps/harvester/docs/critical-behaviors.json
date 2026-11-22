@@ -1192,6 +1192,132 @@
         "branches": 100,
         "functions": 100
       }
+    },
+    {
+      "path": "src/domain/orders/recovery-seller-submission-ownership.js",
+      "baseline": {
+        "lines": 97.14,
+        "branches": 95,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 97.14,
+        "branches": 95,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/domain/strategies/conservative/state-predicates.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/helpers/operational-state-fact-schema.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/helpers/validate-operational-state-order-facts.js",
+      "baseline": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 100,
+        "branches": 100,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/helpers/validate-operational-state-recovery-seller-facts.js",
+      "baseline": {
+        "lines": 96.85,
+        "branches": 90.91,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 90,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 96.85,
+        "branches": 90.91,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/operational-state-fact-validation.js",
+      "baseline": {
+        "lines": 97.4,
+        "branches": 85.71,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 85,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 97.4,
+        "branches": 85.71,
+        "functions": 100
+      }
+    },
+    {
+      "path": "src/infrastructure/operational-state/operational-state-record-validation.js",
+      "baseline": {
+        "lines": 99.21,
+        "branches": 96.59,
+        "functions": 100
+      },
+      "minimum": {
+        "lines": 95,
+        "branches": 95,
+        "functions": 95
+      },
+      "latestObserved": {
+        "lines": 99.21,
+        "branches": 96.59,
+        "functions": 100
+      }
     }
   ],
   "runtimeScope": {
