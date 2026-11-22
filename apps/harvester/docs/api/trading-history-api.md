@@ -1,6 +1,6 @@
 # Trading-history API v1
 
-The Harvester trading-history API exposes persisted order, execution, and commission facts through a stable HTTP contract and a local WebSocket invalidation stream. It runs inside the existing Harvester process and reuses its already-open environment-specific relational database connection.
+The Harvester local API exposes persisted order, execution, and commission facts through a stable HTTP contract and streams live exchange-account snapshots over its local WebSocket. It runs inside the existing Harvester process and reuses its already-open environment-specific relational database connection and provider-account readers.
 
 This API is intentionally for a single-user local development setup. It has no authentication or bearer-token configuration. The listener binds to `127.0.0.1` by default; do not bind it to a LAN or public interface. The Angular Dashboard connects automatically.
 
@@ -55,7 +55,7 @@ Errors use a stable code and a safe message:
 | GET | `/api/v1/trading/fills` | Paginated individual execution records |
 | GET | `/api/v1/trading/fills/:id` | One execution with its persisted commission facts |
 | GET | `/api/v1/trading/commissions` | Paginated commission facts joined to their execution context |
-| WS upgrade | `/api/v1/trading/events` | local resource invalidation notifications after persisted history changes |
+| WS upgrade | `/api/v1/trading/events` | live provider account/order snapshots and persisted-history invalidation notifications |
 
 List resources return `data.items` and `data.pagination`:
 
@@ -97,11 +97,40 @@ GET /api/v1/trading/commissions?assetCode=BNB&limit=50&offset=0
 
 Record identifiers are URL path segments and must be percent-encoded by clients when they contain reserved characters.
 
-## Real-time change notifications
+## Real-time WebSocket messages
 
-Connect to `ws://127.0.0.1:4201/api/v1/trading/events` on the same host and port as the HTTP API (this endpoint is intended for loopback-only local use). The socket is mounted on the existing listener and does not start a second process or database connection.
+Connect to `ws://127.0.0.1:4201/api/v1/trading/events` on the same host and port as the local API. The socket is mounted on the existing loopback listener and does not start a second process, database connection, or broker connection.
 
-After connecting, clients may receive resource-only messages:
+### Live exchange-account snapshots
+
+Every new WebSocket client receives an initial `exchange-accounts.snapshot` message. Harvester reads only the account readers composed from provider runtimes that are already running; it never constructs a broker or opens a new exchange connection for Dashboard clients.
+
+```json
+{
+  "type": "exchange-accounts.snapshot",
+  "observedAt": "2026-11-22T10:00:00.000Z",
+  "accounts": [{
+    "providerInstanceId": "binanceTestnet",
+    "providerType": "binance",
+    "accountId": "binance-primary",
+    "environment": "testnet",
+    "connected": true,
+    "accountSnapshot": { "sourceTime": "2026-11-22T09:59:59.000Z", "balances": [] },
+    "openOrders": [],
+    "errors": {}
+  }]
+}
+```
+
+Each account includes provider/account identity, environment and connection state, the current balance snapshot, the current account-wide open-order list, and an `errors` object. Financial values are passed through without binary floating-point conversion. A successful empty `balances` or `openOrders` array means the reader successfully reported no rows. If a read fails or returns a malformed result, its corresponding snapshot is `null` and `errors.accountSnapshot` or `errors.openOrders` contains a safe explanation; Harvester never turns a failed read into an empty list. One provider's read failure does not hide successful snapshots from other providers.
+
+After `account.snapshot_captured` or `account.open_orders_captured`, connected clients receive an `exchange-accounts.updated` message containing a fresh snapshot of every configured account reader. The initial snapshot is also sent when the provider list is empty, allowing clients to show an honest no-provider state. Every successful reconnect receives a new initial snapshot; clients do not need to send a request frame.
+
+These are current runtime observations, not persisted history, accounting evidence, or durable replay. Messages can be missed while disconnected; the next connection's initial snapshot reconciles the current account view. No account/order mutation command is accepted over this socket.
+
+### Persisted-history invalidations
+
+The same socket may receive resource-only `trading-history.updated` messages:
 
 ```json
 {
@@ -110,17 +139,17 @@ After connecting, clients may receive resource-only messages:
 }
 ```
 
-The `resources` array contains one or more of `orders`, `fills`, and `commissions`. Order notifications are published only after an order-history repository upsert succeeds. Fill notifications are published only after the fill and its commission facts have been persisted successfully; they invalidate both `fills` and `commissions`. Failed persistence writes never produce success notifications. The WebSocket does not include financial record values or account identifiers.
+The `resources` array contains one or more of `orders`, `fills`, and `commissions`. Order notifications are published only after an order-history repository upsert succeeds. Fill notifications are published only after the fill and its commission facts have been persisted successfully; they invalidate both `fills` and `commissions`. Failed persistence writes never produce success notifications.
 
 These messages are invalidation hints, not a durable event stream:
 
 - EventBus delivery is in-memory and best-effort. Messages can be missed while disconnected or when a process/socket fails.
 - There are no replay cursors, acknowledgements, exactly-once guarantees, or client-side event offsets.
-- REST list/detail resources remain authoritative.
-- Clients must fetch fresh REST snapshots after initial WebSocket connection and every reconnect, and refresh the currently displayed resource when a matching invalidation arrives.
-- A reconnect snapshot reconciles any notifications missed while offline. Do not use WebSocket messages as accounting, audit, or exchange evidence.
+- HTTP trading-history list/detail resources remain authoritative for persisted Orders, Fills, and Commissions.
+- Clients of persisted-history resources must fetch fresh HTTP snapshots after initial WebSocket connection and every reconnect, and refresh the currently displayed resource when a matching invalidation arrives.
+- Do not use invalidation messages as accounting, audit, or exchange evidence.
 
-The server closes active sockets before the HTTP listener and shared database are shut down. The Dashboard implements bounded reconnect backoff and displays live, reconnecting, and offline states independently from HTTP API connectivity.
+The Exchanges and Open Orders Dashboard pages consume full account snapshots over WebSocket only and make no HTTP requests. Other persisted-history and Operator pages retain their existing HTTP contracts. The server closes active sockets before the HTTP listener and shared database are shut down. Dashboard WebSocket clients use bounded reconnect backoff and display live, reconnecting, and offline states.
 
 ## Data semantics
 
@@ -136,7 +165,7 @@ The server closes active sockets before the HTTP listener and shared database ar
 - Strategy, position, and cycle attribution is returned only when the persisted relationship is verified. Missing attribution stays `null`.
 - Metadata counts describe rows in the selected local database only. They do not certify exchange-history completeness, account-wide coverage, or delisted-market history.
 
-This first contract intentionally covers only existing `orders`, `fills`, and `fill_commissions` records. It does not introduce `sessions` or `errors` tables, PnL/analytics, account snapshots, order controls, broker calls, or exchange operations.
+This persisted-history contract intentionally covers only existing `orders`, `fills`, and `fill_commissions` records. It does not persist account snapshots, introduce `sessions` or `errors` tables, add order controls, or perform broker/exchange operations. Current account and open-order snapshots are runtime-only WebSocket observations.
 
 ## Stable error codes
 
@@ -167,11 +196,11 @@ Existing orders / fills / fill_commissions tables
 
 HTTP request handling and response serialization stay in the transport adapter. Query validation and application error codes stay in the application layer. SQL and row mapping stay in Harvester infrastructure. The Harvester domain does not depend on the HTTP framework, route names, UI, or consumer identity.
 
-The HTTP and WebSocket listener runs inside the existing Harvester process and is owned by the process composition root. HTTP exposes the versioned GET resources listed above. The WebSocket adapter subscribes only to the persisted-history invalidation event; order/fill history observers publish that event after successful relational upserts. It does not subscribe directly to pre-persistence broker/trading events, create schema, change trading readiness, or own the shared database connection.
+The HTTP and WebSocket listener runs inside the existing Harvester process and is owned by the process composition root. HTTP exposes the versioned GET resources listed above. The WebSocket adapter subscribes to persisted-history invalidations and account-monitor update notifications. It reads account snapshots only through the already-composed provider-account reader functions; it does not create schema, change trading readiness, construct brokers, or own the shared database connection.
 
 ## Verification
 
-The API and WebSocket tests use temporary SQLite files, fake application dependencies, an in-memory EventBus, native WebSocket clients, and ephemeral loopback ports. Persistence notification tests verify that events follow successful upserts and are absent after failed writes. Dashboard tests cover automatic local connections, live updates, reconnect backoff, and REST snapshot resynchronization. Tests do not connect to an exchange or require credentials.
+The API and WebSocket tests use temporary SQLite files, fake application dependencies, account-reader stubs, an in-memory EventBus, native WebSocket clients, and ephemeral loopback ports. Tests verify initial account snapshots, per-provider read-failure isolation, refreshed snapshots after account-monitor notifications, persisted-history invalidation ordering, and socket lifecycle. Dashboard Exchanges/Open Orders tests prove WebSocket-only snapshot consumption, filters, favourites, details, and reconnect refresh. Tests do not connect to an exchange or require credentials.
 
 ## Operator API
 

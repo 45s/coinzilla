@@ -1,0 +1,148 @@
+<section class="open-orders-page">
+  <header class="page-heading">
+    <div>
+      <div class="eyebrow">HARVESTER / LIVE ACCOUNT SNAPSHOTS</div>
+      <h1>Open Orders<span>.</span></h1>
+      <p class="page-description">Current open orders across every provider account connected to Harvester.</p>
+    </div>
+    <button type="button" class="refresh-button" (click)="refresh()">Reconnect / refresh</button>
+  </header>
+
+  <div class="summary-strip">
+    <div>
+      <span class="summary-value">{{ totalOpenOrders() }}</span>
+      <span class="summary-label">Open orders</span>
+    </div>
+    <div>
+      <span class="summary-value">{{ accounts().length }}</span>
+      <span class="summary-label">Provider accounts</span>
+    </div>
+    <div class="stream-status">
+      <span class="connection-indicator" [class.live]="liveStatus() === 'live'" [class.reconnecting]="liveStatus() === 'connecting' || liveStatus() === 'reconnecting'" [class.offline]="liveStatus() === 'offline'"></span>
+      <span class="summary-label">{{ liveStatus() === 'live' ? 'Live' : liveStatus() === 'reconnecting' ? 'Reconnecting' : liveStatus() === 'offline' ? 'Offline' : 'Connecting' }}</span>
+      <span class="summary-time">{{ updatedAt() }}</span>
+    </div>
+  </div>
+
+  @if (errorMessage(); as message) {
+    <div class="request-error" role="alert">{{ message }}</div>
+  }
+
+  <section class="filter-panel" aria-label="Open order filters">
+    <label class="search-field">
+      <span>Search orders</span>
+      <input data-testid="order-search" [value]="searchQuery()" (input)="updateSearch($event)" placeholder="Symbol, order ID or status" />
+    </label>
+    <label>
+      <span>Exchange / account</span>
+      <select data-testid="provider-filter" [value]="providerFilter()" (change)="updateProvider($event)">
+        <option value="all">All connected exchanges</option>
+        @for (provider of providerOptions(); track provider.value) {
+          <option [value]="provider.value">{{ provider.label }}</option>
+        }
+      </select>
+    </label>
+    <label>
+      <span>Side</span>
+      <select [value]="sideFilter()" (change)="updateSide($event)">
+        <option value="all">BUY and SELL</option>
+        <option value="BUY">BUY only</option>
+        <option value="SELL">SELL only</option>
+      </select>
+    </label>
+    <label>
+      <span>Status</span>
+      <select [value]="statusFilter()" (change)="updateStatus($event)">
+        <option value="all">All statuses</option>
+        @for (status of statusOptions(); track status) {
+          <option [value]="status">{{ status.replace('_', ' ') }}</option>
+        }
+      </select>
+    </label>
+  </section>
+
+  @if (loading() && accounts().length === 0) {
+    <div class="state-panel" role="status">
+      <span class="loading-mark"></span>
+      <strong>Waiting for open-order snapshots…</strong>
+      <p>Harvester sends the initial snapshot as soon as this WebSocket connects.</p>
+    </div>
+  } @else if (visibleOrderCount() === 0 && orderGroups().length === 0) {
+    <div class="state-panel empty-state">
+      <span class="empty-mark">↔</span>
+      <strong>{{ accounts().length === 0 ? 'No connected provider accounts.' : 'No open orders match these filters.' }}</strong>
+      <p>{{ accounts().length === 0 ? 'Start Harvester with a supported exchange account to see its live orders.' : 'There are no matching open orders in the latest Harvester snapshot.' }}</p>
+    </div>
+  } @else {
+    <div class="results-heading">
+      <strong>{{ visibleOrderCount() }} matching orders</strong>
+      <span>Grouped by exchange account</span>
+    </div>
+    @for (group of orderGroups(); track group.account.providerInstanceId) {
+      <section class="provider-group">
+        <header class="group-heading">
+          <div>
+            <div class="eyebrow">{{ group.account.environment.toUpperCase() }} · {{ group.account.accountId }}</div>
+            <h2>{{ group.account.providerType }}</h2>
+            <p>{{ group.account.providerInstanceId }}</p>
+          </div>
+          <span class="group-state" [class.offline]="!group.account.connected">{{ group.account.connected ? 'CONNECTED' : 'DISCONNECTED' }}</span>
+          <span class="count-label">{{ group.orders.length }} orders</span>
+        </header>
+        @if (group.account.errors.openOrders; as message) {
+          <div class="request-error" role="alert">{{ message }}</div>
+        } @else if (group.orders.length === 0) {
+          <div class="empty-inline">No matching open orders for this account.</div>
+        } @else {
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Market</th><th>Side</th><th>Type</th><th>Limit price</th><th>Original qty</th><th>Filled</th><th>Remaining</th><th>Status</th><th></th></tr></thead>
+              <tbody>
+                @for (order of group.orders; track order.key) {
+                  <tr>
+                    <td><strong>{{ order.symbol }}</strong></td>
+                    <td><span class="side-tag" [class.sell]="order.side === 'SELL'">{{ order.side }}</span></td>
+                    <td>{{ order.type }}</td>
+                    <td class="numeric">{{ order.price }}</td>
+                    <td class="numeric">{{ order.quantity }}</td>
+                    <td class="numeric">{{ order.executed }}</td>
+                    <td class="numeric">{{ order.remaining }}</td>
+                    <td><span class="status-tag">{{ order.status.replace('_', ' ') }}</span></td>
+                    <td><button type="button" class="details-button" (click)="selectOrder(order)">Details</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    }
+  }
+
+  @if (selectedOrder(); as selected) {
+    <aside class="details-panel" aria-labelledby="order-details-title">
+      <header class="details-heading">
+        <div>
+          <div class="eyebrow">{{ selected.account.providerType }} · {{ selected.account.accountId }}</div>
+          <h2 id="order-details-title">{{ selected.symbol }} · {{ selected.side }}</h2>
+          <p>Full order payload received from Harvester</p>
+        </div>
+        <button type="button" class="quiet-button" (click)="selectedOrder.set(null)">Close</button>
+      </header>
+      <dl class="details-grid">
+        <div><dt>Order type</dt><dd>{{ selected.type }}</dd></div>
+        <div><dt>Limit price</dt><dd>{{ selected.price }}</dd></div>
+        <div><dt>Original quantity</dt><dd>{{ selected.quantity }}</dd></div>
+        <div><dt>Executed quantity</dt><dd>{{ selected.executed }}</dd></div>
+        <div><dt>Remaining quantity</dt><dd>{{ selected.remaining }}</dd></div>
+        <div><dt>Status</dt><dd>{{ selected.status }}</dd></div>
+      </dl>
+      <details class="raw-order-details" open>
+        <summary>All available order fields</summary>
+        <pre>{{ orderDetailsJson() }}</pre>
+      </details>
+    </aside>
+  }
+
+  <footer class="page-note">Read-only account-wide open orders from Harvester WebSocket snapshots. No exchange API calls or order mutations.</footer>
+</section>
