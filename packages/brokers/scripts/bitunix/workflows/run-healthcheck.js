@@ -62,25 +62,32 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout }) {
   return report.summary.failed > 0 ? 1 : 0
 }
 
-function printPublishedResult({ result, stdout, probeMode = false }) {
-  const { passed, failed, skipped, total } = result.report.summary
-  const operatorAttempt = result.report.results.find((entry) =>
-    entry.operation === "operator order attempt" || entry.operation === "operator order probe")
-  stdout.write([
-    "Bitunix Spot workflow completed.",
-    `Results: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
+function createPublishedStatusLines({ result, operatorAttempt, probeMode }) {
+  const lines = [
     probeMode
       ? "General diagnostics: SKIPPED (focused order-probe mode)"
-      : `Diagnostics: ${failed === 0 ? "HEALTHY" : "DEGRADED"}`,
+      : `Diagnostics: ${result.report.summary.failed === 0 ? "HEALTHY" : "DEGRADED"}`,
     probeMode
       ? `Operator probe gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`
       : `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
-    ...(probeMode ? ["The selected probe uses its own fresh Broker preflight; general diagnostics do not gate dispatch."] : []),
-    ...(operatorAttempt?.probeId ? [`Order probe: ${operatorAttempt.probeId}`] : []),
-    ...(operatorAttempt ? [`${probeMode ? "Operator order probe" : "Operator order attempt"}: ${operatorAttempt.status.toUpperCase()}`] : []),
-    ...(result.healthCheck.missingRequiredOperations.length > 0
-      ? [`Required gate checks not passed: ${result.healthCheck.missingRequiredOperations.join(", ")}`]
-      : []),
+  ]
+  if (probeMode) {
+    lines.push("The selected probe uses its own fresh Broker preflight; general diagnostics do not gate dispatch.")
+  }
+  if (operatorAttempt?.probeId) {
+    lines.push(`Order probe: ${operatorAttempt.probeId}`)
+  }
+  if (operatorAttempt) {
+    lines.push(`${probeMode ? "Operator order probe" : "Operator order attempt"}: ${operatorAttempt.status.toUpperCase()}`)
+  }
+  if (result.healthCheck.missingRequiredOperations.length > 0) {
+    lines.push(`Required gate checks not passed: ${result.healthCheck.missingRequiredOperations.join(", ")}`)
+  }
+  return lines
+}
+
+function createPublishedReportLines({ result }) {
+  return [
     `Workflow result: ${result.exitCode === 0 ? "SUCCESS" : "FAILED"}`,
     `Report branch: ${result.branch}`,
     `Report commit: ${result.commitSha ?? "not created"}`,
@@ -88,8 +95,27 @@ function printPublishedResult({ result, stdout, probeMode = false }) {
     `Local report: ${result.localReportPath}`,
     "Returned to develop.",
     ...(result.pushError ? [`Push failed: ${result.pushError}`] : []),
+  ]
+}
+
+function printPublishedResult({ result, stdout, probeMode = false }) {
+  const { passed, failed, skipped, total } = result.report.summary
+  const operatorAttempt = result.report.results.find((entry) =>
+    entry.operation === "operator order attempt" || entry.operation === "operator order probe")
+  const lines = [
+    "Bitunix Spot workflow completed.",
+    `Results: ${passed} passed, ${failed} failed, ${skipped} skipped (${total} total).`,
+    ...createPublishedStatusLines({
+      result,
+      operatorAttempt,
+      probeMode,
+    }),
+    ...createPublishedReportLines({
+      result,
+    }),
     "",
-  ].join("\n"))
+  ]
+  stdout.write(lines.join("\n"))
 }
 
 async function runDiagnosticsWithOperatorAttempt({
