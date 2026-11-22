@@ -45,16 +45,24 @@ test("subscribes every enabled market before requesting approximately 100 comple
     "All live candle streams must be established before any history request so events during warm-up can be buffered.",
   )
   assert.deepEqual(
-    fixture.calls.filter((call) => call.method === "getCandles").map(({ symbol, interval, limit }) => ({ symbol,
-interval,
-limit })),
+    fixture.calls
+      .filter((call) => call.method === "getCandles")
+      .map(({ symbol, interval, limit }) => ({
+        symbol,
+        interval,
+        limit,
+      })),
     [
-      { symbol: "BTCUSDT",
-interval: "1m",
-limit: 101 },
-      { symbol: "DOGEUSDT",
-interval: "1m",
-limit: 101 },
+      {
+        symbol: "BTCUSDT",
+        interval: "1m",
+        limit: 101,
+      },
+      {
+        symbol: "DOGEUSDT",
+        interval: "1m",
+        limit: 101,
+      },
     ],
     "Harvester must request 101 one-minute candles to retain approximately 100 completed candles when the final bar is still forming.",
   )
