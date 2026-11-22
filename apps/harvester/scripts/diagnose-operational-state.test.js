@@ -106,9 +106,10 @@ const createHarness = ({
 test("diagnostic verifies the existing store and reports only safe projection summaries", async () => {
   const harness = createHarness()
   const exitCode = await runOperationalStateDiagnostic(harness.dependencies)
-  const report = JSON.parse(harness.output[0])
+  const report = JSON.parse(harness.output[1])
 
   assert.equal(exitCode, 0, "A verified store with a valid offline candidate projection must return success.")
+  assert.equal(harness.output[0].includes("commit="), true, "The source identity banner must be printed before diagnostic results.")
   assert.equal(report.storeIntegrity.status, "VERIFIED", "A successful readAll verification must be reported as verified.")
   assert.equal(report.storeIntegrity.recordCount, 2, "The report must include the number of verified durable facts.")
   assert.deepEqual(report.storeIntegrity.factTypes, {
@@ -118,8 +119,8 @@ test("diagnostic verifies the existing store and reports only safe projection su
   assert.equal(report.projection.status, "CANDIDATE_ONLY", "The report must describe the projector output as a non-restoring candidate.")
   assert.equal(report.projection.restorationEnabled, false, "Diagnostics must never claim automatic restoration is enabled.")
   assert.equal(harness.calls.mutate, 0, "Diagnostics must not call any Operational State Store mutation method.")
-  assert.equal(harness.output[0].includes("must-not-print"), false, "The report must never serialize durable fact payloads.")
-  assert.equal(harness.output[0].includes("private-client-order-id"), false, "The report must not expose order identifiers from the projection.")
+  assert.equal(harness.output[1].includes("must-not-print"), false, "The report must never serialize durable fact payloads.")
+  assert.equal(harness.output[1].includes("private-client-order-id"), false, "The report must not expose order identifiers from the projection.")
 })
 
 test("diagnostic skips projection and reports integrity failure when readAll rejects the store", async () => {
@@ -132,7 +133,7 @@ test("diagnostic skips projection and reports integrity failure when readAll rej
     }),
   })
   const exitCode = await runOperationalStateDiagnostic(harness.dependencies)
-  const report = JSON.parse(harness.output[0])
+  const report = JSON.parse(harness.output[1])
 
   assert.equal(exitCode, 2, "An Operational State Store integrity failure must use the integrity-failure exit code.")
   assert.equal(report.storeIntegrity.status, "FAILED", "The report must identify the store integrity failure.")
@@ -149,7 +150,7 @@ test("diagnostic reports a projector failure separately from verified store inte
     }),
   })
   const exitCode = await runOperationalStateDiagnostic(harness.dependencies)
-  const report = JSON.parse(harness.output[0])
+  const report = JSON.parse(harness.output[1])
 
   assert.equal(exitCode, 3, "A projection failure after successful integrity verification must have its own exit code.")
   assert.equal(report.storeIntegrity.status, "VERIFIED", "A projector failure must not be misreported as a corrupt store.")
