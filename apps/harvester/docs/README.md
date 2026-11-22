@@ -69,6 +69,8 @@ Shared deterministic broker/runtime fixtures live in `test/bootstrap/start-harve
 
 ## Operations and safety
 
+- [Local DEV archive workflow](operations/local-dev-archive.md) — durable scope decisions, process-start commit identity, TESTNET database/session-log copy, private remote publication contract, safety invariants and implementation handoff for #1742.
+
 - [Operations index](operations/README.md) — Journal, logging, TESTNET procedures and safety boundaries
 - [Submission deferrals and missing-order diagnostics](operations/submission-deferrals.md) — stable reasons for withheld broker submissions and safe LIMIT_MAKER diagnosis.
 - [Relational trading-history backup runbook](operations/trading-history-backups.md) — routine online backups, explicit TESTNET/LIVE selection, restore checks and retention.
