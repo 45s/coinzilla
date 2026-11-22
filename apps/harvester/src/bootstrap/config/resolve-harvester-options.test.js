@@ -373,3 +373,36 @@ test("rejects invalid strategy flags", async () => {
   })
   await assert.rejects(resolveHarvesterOptions(conservative.input), /Conservative strategy must remain enabled/)
 })
+
+
+test("resolves RS-only provider routes when Conservative has no configured markets", async () => {
+  const cfg = {
+    ...config({ enabledSymbols: [] }),
+    strategies: {
+      ...config({ enabledSymbols: [] }).strategies,
+      RS_recoverySeller: {
+        enabled: true,
+        pairs: {
+          ETHUSDT: recoverySellerPair(),
+        },
+      },
+    },
+  }
+  const fixture = createFixture({
+    cfg,
+    env: { TRADING_MODE: TRADING_ENVIRONMENTS.TESTNET },
+  })
+  const result = await resolveHarvesterOptions({
+    ...fixture.input,
+    executionSymbols: ["ETHUSDT"],
+    executionRoutes: [{
+      strategyId: "RS_recoverySeller",
+      symbol: "ETHUSDT",
+    }],
+  })
+
+  assert.deepEqual(result.conservativePairs, {})
+  assert.deepEqual(result.recoverySellerPairs, { ETHUSDT: Object.fromEntries(Object.entries(recoverySellerPair()).filter(([key]) => key !== "tradingEnvironment")) })
+  assert.deepEqual(result.pairs, result.recoverySellerPairs)
+  assert.equal(result.tradingEnabled, true)
+})
