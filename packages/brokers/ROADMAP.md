@@ -1592,7 +1592,7 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - [x] Published sanitized reports: [BUY report](https://github.com/45s/coinzilla/blob/25eb7e57aa9f1ae79338997897d0d4f189d37bee/packages/brokers/diagnostics/reports/bitunix-health-20261122T011615067Z.json) (commit `25eb7e57aa9f1ae79338997897d0d4f189d37bee`) and [SELL report](https://github.com/45s/coinzilla/blob/32362a40ec2f29b2ae895d0dbede78b3b157f907/packages/brokers/diagnostics/reports/bitunix-health-20261122T013708002Z.json) (commit `32362a40ec2f29b2ae895d0dbede78b3b157f907`).
 - [x] Added the cumulative [Bitunix live order-probe evidence log](./BITUNIX_ORDER_PROBE_LOG.md), including the proven behavior, unresolved protocol questions, and next investigation steps.
 
-**Finding:** Spot LIMIT BUY/SELL dispatch and nested rejection parsing are empirically exercised. The operator confirmed the account lacked the required Spot assets, so both `10034` insufficient-balance rejections were expected. No accepted order or fill has yet been observed. A funded `limit-buy-11-usdt` probe is added: BUY `HYPEUSDT` LIMIT at `30 USDT`, spending up to `11 USDT`; quantity is calculated from live `basePrecision`, with `0.24 USDT` reserved. The script displays the exact order snapshot and accepts only `y/N`. This will test actual acceptance after merge and funding. Broader lifecycle/Harvester blockers remain.
+**Finding:** Spot LIMIT BUY/SELL dispatch and nested rejection parsing are empirically exercised. The unfunded BUY/SELL attempts returned expected `10034` insufficient-balance rejections. A separately operator-confirmed funded LIMIT BUY was accepted: `HYPEUSDT`, `0.366 HYPE` at `30 USDT`, notional `10.98 USDT`, with exact string order ID `2124329325141426176`. The operator confirmed it remained waiting/open; no fill is claimed. Its subsequent read-only order-detail GET returned exchange code `100005` (`result.api.parameter.sign.illegal`). Do not repeat the placement. Preserve confirmed mutation outcome separately from failed reconciliation, and investigate readback/signature behavior under issue #1704. Broader Spot lifecycle/Harvester blockers remain.
 
 ## 2026-11-22 — Publish Bitunix order-read identity evidence
 
@@ -1604,3 +1604,15 @@ See [the private polling contract](./docs/BITUNIX_SPOT_POLLING.md) and [the Bitu
 - Print each discovered `symbol / orderId` and its matching `getOrder` status in the operator's terminal output.
 - Add regression coverage for sanitizer boundaries, published report payloads, exact order identity preservation, and terminal output.
 - No live exchange calls, order placement, cancellation, or other mutations are part of this implementation.
+
+
+## 2026-11-22 — Bitunix accepted-placement reconciliation
+
+**Status: reconciliation contract and offline regression coverage carried forward from PR #1703; exact-head CI is the merge gate.**
+
+- Preserve `mutationOutcome: "CONFIRMED"` when Bitunix explicitly accepts placement even if the subsequent read-only order-detail request fails.
+- Keep the overall Broker result `ok: false` until a normalized Order is returned; retain the raw placement acknowledgement, original read error, and structured `reconciliation` metadata.
+- Successful detail reads report `reconciliation.status: "VERIFIED"`; failed detail reads report `"UNAVAILABLE"`, with source, endpoint, and sanitized error classification.
+- The operator probe prints placement confirmation separately from reconciliation health and persists reconciliation metadata in its private one-shot marker. A confirmed placement must never be retried because a later read failed.
+- Tests cover verified/unavailable reconciliation metadata, the exact signed order-detail query, and persistence of confirmed placement evidence when readback fails.
+- No live exchange mutation is part of CI. The existing HYPE order's later cancellation and independent status verification are documented under [PR #1727](https://github.com/45s/coinzilla/pull/1727).
