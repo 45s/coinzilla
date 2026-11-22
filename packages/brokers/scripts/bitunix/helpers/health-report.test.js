@@ -308,6 +308,12 @@ function createSanitizedOrderDetailResult({ orderId, symbol }) {
         errors: [],
       },
     }),
+    errors: [{
+      name: "BitunixRestError",
+      code: "E_DETAIL",
+      exchangeCode: "100005",
+      message: "[error message withheld]",
+    }],
   }
 }
 
@@ -380,6 +386,8 @@ test("published order-read evidence includes symbol and orderId but keeps other 
   assert.equal(detail.response.data.volume, "0.366")
   assert.equal(detail.response.data.balance, "[REDACTED]")
   assert.equal(detail.response.data.uid, "[REDACTED]")
+  assert.equal(detail.errors[0].code, "E_DETAIL")
+  assert.equal(detail.errors[0].exchangeCode, "100005")
   const publicJson = JSON.stringify(published)
   assert.equal(publicJson.includes("must-not-publish"), false)
   assert.equal(Object.hasOwn(published.results[2], "request"), false)
