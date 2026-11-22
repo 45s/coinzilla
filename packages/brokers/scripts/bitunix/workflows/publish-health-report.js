@@ -316,6 +316,34 @@ async function executeReportBranchWorkflow({ repositoryRoot, runGit, branch, pat
   return result
 }
 
+function getPublishExitCode({ execution }) {
+  const operatorResult = execution.report.results.find((entry) =>
+    entry.operation === "operator order attempt" || entry.operation === "operator order probe")
+  const failed = !execution.healthCheck.healthy ||
+    execution.report.summary.failed > 0 ||
+    operatorResult?.status === "failed" ||
+    Boolean(execution.pushError)
+  return failed ? 1 : 0
+}
+
+function createPublishedWorkflowResult({ root, branch, paths, execution, publishedReportPath }) {
+  return {
+    branch,
+    commitSha: execution.commitSha,
+    report: execution.report,
+    healthCheck: execution.healthCheck,
+    reportPath: publishedReportPath,
+    localReportPath: getRelativePath({
+      repositoryRoot: root,
+      path: paths.local,
+    }),
+    pushError: execution.pushError,
+    exitCode: getPublishExitCode({
+      execution,
+    }),
+  }
+}
+
 export async function publishHealthReport({
   repositoryRoot,
   runDiagnostics,
@@ -358,23 +386,11 @@ export async function publishHealthReport({
     now,
     onProgress,
   })
-  return {
+  return createPublishedWorkflowResult({
+    root,
     branch,
-    commitSha: execution.commitSha,
-    report: execution.report,
-    healthCheck: execution.healthCheck,
-    reportPath: publishedReportPath,
-    localReportPath: getRelativePath({
-      repositoryRoot: root,
-      path: paths.local,
-    }),
-    pushError: execution.pushError,
-    exitCode: !execution.healthCheck.healthy ||
-      execution.report.summary.failed > 0 ||
-      execution.report.results.some((entry) =>
-        (entry.operation === "operator order attempt" || entry.operation === "operator order probe") && entry.status === "failed") ||
-      execution.pushError
-      ? 1
-      : 0,
-  }
+    paths,
+    execution,
+    publishedReportPath,
+  })
 }
