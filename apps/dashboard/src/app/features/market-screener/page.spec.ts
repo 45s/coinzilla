@@ -261,7 +261,7 @@ describe('MarketScreenerComponent', () => {
     clearFilters.click();
     fixture.detectChanges();
     expect(rows()).toHaveLength(2);
-    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain(' filters');
+    expect(fixture.nativeElement.querySelector('.active-filter-count')).toBeNull();
   });
 
 });
