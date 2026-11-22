@@ -86,7 +86,7 @@ function createMutationBroker({ events, result }) {
   }
 }
 
-function createDependencies({ directory, result, confirmation = true, balances, openOrders } = {}) {
+function createDependencies({ directory, result, confirmation = true, balances, openOrders, matrixGuard } = {}) {
   const events = []
   const capture = {}
   const readBroker = createReadBroker({
