@@ -236,9 +236,9 @@ test("captures the account-wide CLOSING open-order snapshot after safety proof a
   const fixture = createShutdown({
     participants: [participant],
     calls,
-    publishClosingOpenOrdersSnapshot: async (options) => {
+    publishClosingOpenOrdersSnapshot: async ({ ownershipReconciled: snapshotOwnershipReconciled }) => {
       calls.push("closing-open-orders")
-      ownershipReconciled = options.ownershipReconciled
+      ownershipReconciled = snapshotOwnershipReconciled
       return []
     },
   })
