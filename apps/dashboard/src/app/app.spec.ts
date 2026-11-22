@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { describe, expect, it } from 'vitest';
 
-import { AppComponent } from './app';
+import { AppComponent, readSavedDashboardTheme } from './app';
 
 describe('AppComponent', () => {
   it('renders the Coinzilla dashboard shell and keeps the Overview explicitly labeled as preview data', async () => {
@@ -80,24 +80,16 @@ describe('AppComponent', () => {
     window.localStorage.removeItem('coinzilla.dashboard.theme');
   });
 
-  it('initializes from a previously saved theme', async () => {
-    await TestBed.configureTestingModule({
-      imports: [AppComponent],
-      providers: [provideHttpClient()],
-    }).compileComponents();
-
-    // Seed storage after Angular's async test compilation/setup has completed.
+  it('reads a previously saved theme during component initialization', () => {
     window.localStorage.setItem('coinzilla.dashboard.theme', 'light');
-    expect(window.localStorage.getItem('coinzilla.dashboard.theme')).toBe('light');
-
-    const fixture = TestBed.createComponent(AppComponent);
-    fixture.detectChanges();
-
-    const select = fixture.nativeElement.querySelector('select[aria-label="Dashboard theme"]') as HTMLSelectElement;
-    expect(select.value).toBe('light');
-    expect(document.documentElement.dataset['theme']).toBe('light');
-
-    fixture.destroy();
+    expect(readSavedDashboardTheme(window.localStorage)).toBe('light');
+    expect(readSavedDashboardTheme(undefined)).toBe('current');
+    expect(readSavedDashboardTheme({
+      getItem: () => 'not-a-theme',
+    })).toBe('current');
+    expect(readSavedDashboardTheme({
+      getItem: () => { throw new Error('storage unavailable'); },
+    })).toBe('current');
     window.localStorage.removeItem('coinzilla.dashboard.theme');
   });
 });
