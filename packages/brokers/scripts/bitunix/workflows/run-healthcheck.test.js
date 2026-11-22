@@ -504,6 +504,7 @@ test("healthcheck records failed getOpenOrders response and skips detail reads",
   assert.equal(exitCode, 1)
 })
 
+
 test("focused order-read health gate requires every discovered order detail to succeed", () => {
   const openOrders = {
     operation: "Broker API getOpenOrders",
@@ -511,20 +512,34 @@ test("focused order-read health gate requires every discovered order detail to s
     response: {
       ok: true,
       data: [
-        {\n          id: "order-1",\n          symbol: "HYPEUSDT",\n        },
-        {\n          id: "order-2",\n          symbol: "BTCUSDT",\n        },
+        {
+          id: "order-1",
+          symbol: "HYPEUSDT",
+        },
+        {
+          id: "order-2",
+          symbol: "BTCUSDT",
+        },
       ],
     },
   }
-  const detail = (orderId, status) => ({
+  const detail = ({ orderId, status }) => ({
     operation: "Broker API getOrder",
     status,
-    request: { arguments: [{ orderId }] },
+    request: {
+      arguments: [{
+        orderId,
+      }],
+    },
   })
 
   const healthy = evaluateOrderReadHealthCheck({
     report: {
-      results: [openOrders, detail({ orderId: "order-1", status: "passed" }), detail({ orderId: "order-2", status: "passed" })],
+      results: [
+        openOrders,
+        detail({ orderId: "order-1", status: "passed" }),
+        detail({ orderId: "order-2", status: "passed" }),
+      ],
     },
   })
   assert.equal(healthy.healthy, true)
@@ -532,7 +547,11 @@ test("focused order-read health gate requires every discovered order detail to s
 
   const failedDetail = evaluateOrderReadHealthCheck({
     report: {
-      results: [openOrders, detail({ orderId: "order-1", status: "passed" }), detail({ orderId: "order-2", status: "failed" })],
+      results: [
+        openOrders,
+        detail({ orderId: "order-1", status: "passed" }),
+        detail({ orderId: "order-2", status: "failed" }),
+      ],
     },
   })
   assert.equal(failedDetail.healthy, false)
@@ -542,7 +561,10 @@ test("focused order-read health gate requires every discovered order detail to s
 
   const missingDetail = evaluateOrderReadHealthCheck({
     report: {
-      results: [openOrders, detail("order-1", "passed")],
+      results: [
+        openOrders,
+        detail({ orderId: "order-1", status: "passed" }),
+      ],
     },
   })
   assert.equal(missingDetail.healthy, false, "the gate must detect an order whose detail read was skipped")
