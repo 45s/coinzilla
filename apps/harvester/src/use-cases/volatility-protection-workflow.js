@@ -68,7 +68,6 @@ function logVolatilityTransition({ logger, symbol, current, transition, data, me
       logger,
       data: {
         message: "Harvester volatility protection state changed",
-        component: "market-volatility-protection",
         symbol,
         previousState: current.mode,
         state: transition.state.mode,
@@ -86,7 +85,6 @@ function logVolatilityTransition({ logger, symbol, current, transition, data, me
       transition.state.mode === VOLATILITY_PROTECTION_MODES.NORMAL) {
     logger?.warn?.({
       message: "Harvester market volatility warning threshold reached",
-        component: "market-volatility-protection",
       symbol,
       volatilityRatio: transition.state.volatilityRatio,
       warningThreshold: VOLATILITY_PROTECTION_THRESHOLDS.warningRatio,
@@ -178,7 +176,6 @@ async function cancelVolatilityBuyOrders({ cancelOwnedBuyOrders, logger, symbol 
   if (!cancellation?.ok) {
     logger?.warn?.({
       message: "Harvester volatility protection BUY cancellation remains unresolved",
-        component: "market-volatility-protection",
       symbol,
       errors: cancellation?.errors,
       error: cancellation?.error,
@@ -214,7 +211,6 @@ async function completeVolatilityRecovery({ logger, evaluateLatest, symbol, upda
     logger,
     data: {
       message: "Harvester volatility protection recovered",
-        component: "market-volatility-protection",
       symbol,
       stableCandleCount: update.recovered
         ? update.stableCandleCount
