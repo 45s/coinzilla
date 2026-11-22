@@ -20,7 +20,10 @@ test("Bitunix probe matrix allows the first probe and another probe only after R
       probeId: "limit-buy-2",
     })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -38,7 +41,10 @@ test("Bitunix probe matrix blocks reuse of a probe ID even after REJECTED", asyn
       /already has a one-shot marker/i,
     )
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -58,7 +64,10 @@ test("Bitunix probe matrix blocks after DISPATCH_STARTED, CONFIRMED, OUTCOME_UNK
       await rm(markerPath)
     }
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -74,7 +83,10 @@ test("Bitunix probe matrix blocks on malformed or unknown prior marker state", a
       /cannot verify prior marker/i,
     )
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
 
@@ -89,6 +101,9 @@ test("Bitunix probe matrix ignores unrelated diagnostics artifacts", async () =>
       probeId: "limit-buy-1",
     })
   } finally {
-    await rm(directory, { recursive: true, force: true })
+    await rm(directory, {
+      recursive: true,
+      force: true,
+    })
   }
 })
