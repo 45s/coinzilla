@@ -301,23 +301,33 @@ async function runLocalDiagnostics({ brokersRoot, env, stdout, brokerFactory, in
   return report.summary.failed > 0 ? 1 : 0
 }
 
-function createPublishedStatusLines({ result, operatorAttempt, probeMode, includeGeneralDiagnostics }) {
-  const orderReadMode = !probeMode && !includeGeneralDiagnostics
-  const lines = [
-    probeMode || orderReadMode
-      ? `General diagnostics: SKIPPED (${probeMode ? "focused order-probe mode" : "focused order-read mode"})`
-      : `Diagnostics: ${result.report.summary.failed === 0 ? "HEALTHY" : "DEGRADED"}`,
-    probeMode
-      ? `Operator probe gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`
-      : orderReadMode
-        ? `Order-read gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`
-        : `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
-  ]
+function createModeStatusLines({ result, probeMode, includeGeneralDiagnostics }) {
   if (probeMode) {
-    lines.push("The selected probe uses its own fresh Broker preflight; general diagnostics do not gate dispatch.")
-  } else if (orderReadMode) {
-    lines.push("Only getOpenOrders() and the corresponding getOrder() reads were run; other diagnostics remain available with --full-diagnostics.")
+    return [
+      "General diagnostics: SKIPPED (focused order-probe mode)",
+      `Operator probe gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+      "The selected probe uses its own fresh Broker preflight; general diagnostics do not gate dispatch.",
+    ]
   }
+  if (!includeGeneralDiagnostics) {
+    return [
+      "General diagnostics: SKIPPED (focused order-read mode)",
+      `Order-read gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+      "Only getOpenOrders() and the corresponding getOrder() reads were run; other diagnostics remain available with --full-diagnostics.",
+    ]
+  }
+  return [
+    `Diagnostics: ${result.report.summary.failed === 0 ? "HEALTHY" : "DEGRADED"}`,
+    `Diagnostic safety/configuration gate: ${result.healthCheck.healthy ? "READY" : "BLOCKED"}`,
+  ]
+}
+
+function createPublishedStatusLines({ result, operatorAttempt, probeMode, includeGeneralDiagnostics }) {
+  const lines = createModeStatusLines({
+    result,
+    probeMode,
+    includeGeneralDiagnostics,
+  })
   if (operatorAttempt?.probeId) {
     lines.push(`Order probe: ${operatorAttempt.probeId}`)
   }
@@ -546,6 +556,16 @@ function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId }) 
   return "WARNING: this contacts the configured LIVE Bitunix Spot API using read-only requests.\n"
 }
 
+function selectHealthCheckEvaluator({ runOperatorProbe, includeGeneralDiagnostics, runOperatorOrder }) {
+  if (runOperatorProbe) {
+    return evaluateOperatorOrderProbeHealthCheck
+  }
+  if (includeGeneralDiagnostics || runOperatorOrder) {
+    return evaluateReadOnlyHealthCheck
+  }
+  return evaluateOrderReadHealthCheck
+}
+
 async function runPublishedHealthCheck({
   repositoryRoot,
   env,
@@ -565,11 +585,7 @@ async function runPublishedHealthCheck({
   }))
   const result = await publishDiagnostics({
     repositoryRoot,
-    healthCheckEvaluator: runOperatorProbe
-      ? evaluateOperatorOrderProbeHealthCheck
-      : includeGeneralDiagnostics || runOperatorOrder
-        ? evaluateReadOnlyHealthCheck
-        : evaluateOrderReadHealthCheck,
+    healthCheckEvaluator: selectHealthCheckEvaluator({\n      runOperatorProbe,\n      includeGeneralDiagnostics,\n      runOperatorOrder,\n    }),
     runDiagnostics: (input) => runDiagnosticsWithOperatorAttempt({
       ...input,
       runDiagnostics,
@@ -601,6 +617,16 @@ async function runPublishedHealthCheck({
  * @param {{mode: "local"|"publish"|"place-order"|"probe-order", includeGeneralDiagnostics?: boolean, probeId?: string, brokersRoot: string, repositoryRoot: string, env: NodeJS.ProcessEnv, stdout?: NodeJS.WriteStream, runOperatorOrder?: (input: {env: NodeJS.ProcessEnv}) => Promise<object>, runOperatorProbe?: (input: {env: NodeJS.ProcessEnv, probeId: string}) => Promise<object>}} input
  * @returns {Promise<number>} Process exit code.
  */
+function validatePublishedHealthcheckMode({ mode, runOperatorOrder, runOperatorProbe, probeId }) {
+  if (mode === "place-order" && typeof runOperatorOrder !== "function") {
+    throw new TypeError("The Bitunix place-order mode requires an operator order runner")
+  }
+  if (mode === "probe-order" &&
+      (typeof runOperatorProbe !== "function" || typeof probeId !== "string" || !probeId.trim())) {
+    throw new TypeError("The Bitunix probe-order mode requires a probe id and operator probe runner")
+  }
+}
+
 export async function runHealthcheckWorkflow({
   mode,
   probeId,
@@ -614,6 +640,37 @@ export async function runHealthcheckWorkflow({
   runOperatorOrder,
   runOperatorProbe,
   brokerFactory,
+} = {}) {
+  if (mode === "local") {
+    return runLocalDiagnostics({
+      brokersRoot,
+      env,
+      stdout,
+      brokerFactory,
+      includeGeneralDiagnostics,
+    })
+  }
+  if (!["publish", "place-order", "probe-order"].includes(mode)) {
+    throw new TypeError(`Unsupported Bitunix health-check mode: ${mode}`)
+  }
+  validatePublishedHealthcheckMode({
+    mode,
+    runOperatorOrder,
+    runOperatorProbe,
+    probeId,
+  })
+  return runPublishedHealthCheck({
+    repositoryRoot,
+    env,
+    stdout,
+    runDiagnostics,
+    publishDiagnostics,
+    runOperatorOrder,
+    runOperatorProbe,
+    probeId,
+    brokerFactory,
+    includeGeneralDiagnostics,
+  })
 } = {}) {
   if (mode === "local") {
     return runLocalDiagnostics({
