@@ -13,6 +13,7 @@ import {
 import { spawn } from "node:child_process"
 import { createReadStream, createWriteStream } from "node:fs"
 import { pipeline } from "node:stream/promises"
+import { createGzip } from "node:zlib"
 import path from "node:path"
 import os from "node:os"
 import { fileURLToPath } from "node:url"
@@ -144,6 +145,37 @@ async function copyTailFile(source, destination, fraction = 0.05) {
   return bytesToKeep
 }
 
+async function copyCompressedTree({ sourceDirectory, destinationDirectory, relative = "", onFileCopied } = {}) {
+  const source = relative ? path.join(sourceDirectory, relative) : sourceDirectory
+  const destination = relative ? path.join(destinationDirectory, relative) : destinationDirectory
+  await mkdir(destination, { recursive: true, mode: 0o700 })
+  for (const entry of await readdir(source, { withFileTypes: true })) {
+    const childRelative = relative ? path.join(relative, entry.name) : entry.name
+    const sourcePath = path.join(sourceDirectory, childRelative)
+    const sourceStats = await lstat(sourcePath)
+    if (sourceStats.isSymbolicLink()) {
+      throw new Error(`Refusing to archive a symbolic link: ${sourcePath}`)
+    }
+    if (sourceStats.isDirectory()) {
+      await copyCompressedTree({ sourceDirectory, destinationDirectory, relative: childRelative, onFileCopied })
+    } else if (sourceStats.isFile()) {
+      const compressedRelative = childRelative + ".gz"
+      const destinationPath = path.join(destinationDirectory, compressedRelative)
+      await pipeline(
+        createReadStream(sourcePath),
+        createGzip({ level: 6 }),
+        createWriteStream(destinationPath, { flags: "w", mode: 0o600 }),
+      )
+      await onFileCopied?.({
+        relativePath: compressedRelative.split(path.sep).join("/"),
+        size: (await stat(destinationPath)).size,
+      })
+    } else {
+      throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
+    }
+  }
+}
+
 async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileCopied } = {}) {
   await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
   const entries = await readdir(sourceDirectory, { withFileTypes: true })
@@ -171,7 +203,7 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileC
       throw new Error(`Refusing to archive a symbolic link: ${sourcePath}`)
     }
     if (entry.name === "sessions" && sourceStats.isDirectory()) {
-      await copyRegularTree({
+      await copyCompressedTree({
         sourceDirectory,
         destinationDirectory,
         relative: path.join("sessions", latestSessionName),
