@@ -385,7 +385,7 @@ test("Bitunix order probe classifies an existing one-shot marker as NOT_SENT", a
     }))
     await assert.rejects(
       run(),
-      (error) => error.mutationOutcome === "NOT_SENT" && error.code === "EEXIST",
+      (error) => error.mutationOutcome === "NOT_SENT" && /already has a one-shot marker/i.test(error.message),
     )
     assert.equal(events.some((event) => event.operation === "createOrder"), false)
   } finally {
