@@ -72,7 +72,7 @@ function recordOrderReadResult({
   report.results.push(entry)
   report.summary.total += 1
   report.summary[entry.status] += 1
-  stdout.write(`      ${operation}: ${entry.status.toUpperCase()}\\n`)
+  stdout.write(`      ${operation}: ${entry.status.toUpperCase()}\n`)
 }
 
 async function fetchAndRecordOpenOrders({ broker, report, stdout, secrets }) {
