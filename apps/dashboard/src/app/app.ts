@@ -21,6 +21,20 @@ const THEMES: readonly { value: DashboardTheme; label: string }[] = [
   { value: 'system', label: 'System' },
 ];
 
+export function readSavedDashboardTheme(
+  storage: Pick<Storage, 'getItem'> | null | undefined,
+): DashboardTheme {
+  if (!storage) return 'current';
+  try {
+    const saved = storage.getItem(THEME_STORAGE_KEY);
+    return THEMES.some((theme) => theme.value === saved)
+      ? (saved as DashboardTheme)
+      : 'current';
+  } catch {
+    return 'current';
+  }
+}
+
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -53,7 +67,9 @@ export class AppComponent {
   });
 
   constructor() {
-    this.theme.set(this.readSavedTheme());
+    this.theme.set(readSavedDashboardTheme(
+      typeof window === 'undefined' ? undefined : window.localStorage,
+    ));
 
     effect(() => {
       const selectedTheme = this.theme();
@@ -64,9 +80,7 @@ export class AppComponent {
   }
 
   setTheme(value: string): void {
-    if (!THEMES.some((theme) => theme.value === value)) {
-      return;
-    }
+    if (!THEMES.some((theme) => theme.value === value)) return;
 
     const selectedTheme = value as DashboardTheme;
     this.theme.set(selectedTheme);
@@ -85,22 +99,6 @@ export class AppComponent {
   }
 
   selectPage(page: DashboardPage | null): void {
-    if (page) {
-      this.activePage.set(page);
-    }
-  }
-
-  private readSavedTheme(): DashboardTheme {
-    if (typeof window === 'undefined') {
-      return 'current';
-    }
-    try {
-      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-      return THEMES.some((theme) => theme.value === saved)
-        ? (saved as DashboardTheme)
-        : 'current';
-    } catch {
-      return 'current';
-    }
+    if (page) this.activePage.set(page);
   }
 }
