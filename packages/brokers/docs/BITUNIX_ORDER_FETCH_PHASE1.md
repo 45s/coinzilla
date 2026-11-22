@@ -2,76 +2,63 @@
 
 Issue: [#1704](https://github.com/45s/coinzilla/issues/1704)
 
-This phase verifies order discovery and specific-order reads using only the public Coinzilla Broker API. It does not place, modify, or cancel orders.
-
-## Known order identity
-
-The operator's one-shot Spot LIMIT BUY was accepted by Bitunix on 2026-11-22:
-
-- Symbol: HYPEUSDT
-- Side/type: BUY LIMIT
-- Quantity: 0.366 HYPE
-- Price: 30 USDT
-- Exchange order ID: "2124329325141426176" (must remain a string)
-
-See [PR #1703](https://github.com/45s/coinzilla/pull/1703) for the exact placement acknowledgement and failed post-placement detail read.
-
-## Verified API contract and Broker behavior
-
-Bitunix's official Spot documentation marks symbol as required for POST /api/spot/v1/order/pending/list. The Futures pending-orders endpoint is different: its symbol parameter is optional. Do not apply Futures behavior to Spot.
-
-The Broker API now hides this Spot limitation:
-
-- getOpenOrders() with no symbol calls getExchangeMarkets(), enumerates every unique active Spot market, and calls the existing symbol-scoped getOpenOrders({ symbol }) method sequentially.
-- getOpenOrders({ symbol }) remains available for callers that want one market only.
-- Successful market results are aggregated. If one symbol fails, the other symbols are still queried and their orders are retained; the returned Result contains both partial data and errors.
-- The operator command calls getOpenOrders() once, then calls getOrder({ symbol, orderId }) for every returned order.
-
-You do not need to know or supply the symbols. No undocumented account-wide REST parameter is assumed; the account-wide behavior is implemented by the Broker API over the documented market catalog and symbol-scoped pending-orders endpoint.
-
-## Diagnostics
-
-The command records every Broker API and REST diagnostic event in the JSON report and streams structured logs to stdout.
-
-Diagnostics include:
-
-- Broker API operation starts, successes, failures, active symbols, order IDs, order counts, and statuses.
-- Each symbol-scoped pending-orders result inside the account-wide Broker method, including failures.
-- Bitunix Spot REST request method/path, redacted query/body metadata, HTTP status, exchange code/message, response data, and errors.
-- Every per-order getOrder() result, including failed Result values and thrown exceptions.
-- Final market/order/detail counts, target match count, and report path.
-
-A complete JSON report is saved under packages/brokers/.diagnostics/. API keys, secrets, signatures, nonces, user IDs, email addresses, phone numbers, and addresses are redacted. Diagnostic logging is best-effort and must never change request behavior.
-
-The scan is sequential and never automatically retries. A failed symbol does not prevent scanning later symbols. A failed detail lookup does not prevent checking later orders.
-
-## Lossless order IDs
-
-The REST response parser converts numeric JSON tokens named orderId to strings before JSON.parse can round a 64-bit value. This guard applies to pending-order, history, detail, and placement responses. IDs must remain exact strings throughout the Broker API and report.
+This phase verifies Spot pending-order discovery and specific-order reads through the existing LIVE read-only healthcheck. It does not place, modify, or cancel orders.
 
 ## Operator command
 
-Run from the repository root after configuring packages/brokers/.env.development:
+Run the existing healthcheck; no order ID or extra command is required:
 
 ```bash
-pnpm --filter @coinzilla/brokers bitunix:find-order --order-id=2124329325141426176
+pnpm --filter @coinzilla/brokers bitunix:healthcheck
 ```
 
-The command calls Broker.getOpenOrders() without a symbol, reads every returned order detail, and writes a report. It constructs the Broker with live order mutations disabled. It never calls createOrder, cancelOrder, or cancelAllOpenOrders.
+For a private local report instead of publishing the sanitized report branch:
 
-Exit codes:
+```bash
+pnpm --filter @coinzilla/brokers bitunix:healthcheck --local
+```
 
-- 0: the exact target order appears exactly once and every scan request completed without errors.
-- 2: the full scan completed without request errors, but the exact order was not found in any pending list. It may have filled or otherwise left the pending set; this does not prove the order is absent.
-- 1: one or more requests failed, the scan could not complete, or the diagnostic report could not be saved. Inspect the report; a target match may still have been found during a partial scan.
+## Order-read sequence
+
+The healthcheck connects through the public Coinzilla Broker API and runs:
+
+```js
+const openOrdersResult = await broker.getOpenOrders()
+
+// Record the complete sanitized result, including errors.
+
+if (openOrdersResult.ok) {
+  for (const order of openOrdersResult.data) {
+    const detailResult = await broker.getOrder({
+      symbol: order.symbol,
+      orderId: order.id,
+    })
+
+    // Record every request and response:
+    // order ID, symbol, success, normalized data, errors.
+  }
+}
+```
+
+Order IDs are discovered from `getOpenOrders().data`; they are never passed as CLI arguments. The complete `getOpenOrdersResult` is recorded before checking `ok`. Every `getOrder` result is recorded, and a failed detail read does not stop later orders from being checked.
+
+## Bitunix Spot API behavior
+
+Bitunix documents `POST /api/spot/v1/order/pending/list` with a required symbol. The Broker API's no-argument `getOpenOrders()` enumerates active Spot markets and sequentially aggregates symbol-scoped reads. Per-symbol errors and partial data remain visible. The specific-order detail endpoint is `GET /api/spot/v1/order/detail`.
+
+## Diagnostics and safety
+
+- The report stores the complete sanitized Broker Result for `getOpenOrders` and each `getOrder`, including normalized data and errors.
+- Broker API and Bitunix REST logger events are retained in report events.
+- Request arguments, order IDs, symbols, success states, normalized data and error details are recorded.
+- Credentials, signatures, nonces and private user fields are redacted.
+- Requests are sequential and never automatically retried.
+- Live order mutations are disabled in the scan Broker. No placement, cancellation, transfer or withdrawal methods are called.
+
+## Known accepted order
+
+The operator's accepted HYPEUSDT BUY LIMIT from 2026-11-22 has exchange order ID `2124329325141426176`, quantity `0.366`, price `30` USDT. The healthcheck discovers this ID from pending-order results; it is not supplied to the script.
 
 ## Acceptance gate
 
-Phase 1 passes only when the report contains exactly one pending-order match with:
-
-- symbol === "HYPEUSDT"
-- orderId === "2124329325141426176"
-
-It must also contain a recorded getOrder() result for that exact identity. If detail lookup fails, that failure is evidence for Phase 2, not permission to cancel or retry.
-
-Do not proceed to cancellation until the order-discovery and specific-order-read behavior has been analyzed and the next phase is approved. No live mutation is part of this command.
+Review the healthcheck report for the HYPEUSDT order and its corresponding detail-read result. A failed `getOrder` is evidence for the next investigation phase, not permission to retry or cancel. Do not proceed to cancellation until order-read findings are reviewed and that phase is explicitly approved.
