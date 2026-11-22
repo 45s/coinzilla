@@ -156,6 +156,7 @@ async function createProbeMarker({ markerPath, preflight, now = Date.now }) {
   } finally {
     await file.close()
   }
+  return markerPath
 }
 
 async function persistProbeOutcome({ markerPath, outcome, capture, result, error, secrets = [], now = Date.now }) {
@@ -192,7 +193,10 @@ async function persistProbeOutcome({ markerPath, outcome, capture, result, error
   if (sourceError) {
     marker.error = {
       name: sourceError.name ?? "Error",
-      message: redactApiSecrets({\n        message: String(sourceError.message ?? sourceError).slice(0, 500),\n        secrets,\n      }),
+      message: redactApiSecrets({
+        message: String(sourceError.message ?? sourceError).slice(0, 500),
+        secrets,
+      }),
       code: sourceError.code ?? null,
       exchangeCode: sourceError.exchangeCode ?? null,
       status: sourceError.status ?? null,
@@ -222,6 +226,7 @@ export async function runBitunixOrderProbeAttempt({
   createMarker,
   writeLine,
   capture = {},
+  secrets = [],
 } = {}) {
   getBitunixOrderProbe({ probeId })
   assertProbeAttemptDependencies({
@@ -271,10 +276,12 @@ export async function runBitunixOrderProbeAttempt({
       outcome,
       capture,
       result,
+      secrets,
     })
     writeLine(formatOrderProbeResult({
       result,
       capture,
+      secrets,
     }))
     return result
   } catch (error) {
@@ -286,6 +293,7 @@ export async function runBitunixOrderProbeAttempt({
           capture,
           result,
           error,
+          secrets,
         })
       } catch {
         // The exclusive DISPATCH_STARTED marker remains the fail-closed record.
