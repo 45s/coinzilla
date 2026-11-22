@@ -909,6 +909,17 @@ test("Bitunix Spot createOrder preserves confirmed acceptance when detail reconc
     },
   })
   assert.equal(result.data.orderId, "12345678901234567890")
+  assert.deepEqual(result.reconciliation, {
+    status: "UNAVAILABLE",
+    source: "PLACEMENT_ACKNOWLEDGEMENT",
+    endpoint: "/api/spot/v1/order/detail",
+    error: {
+      code: result.errors[0].code ?? null,
+      exchangeCode: result.errors[0].exchangeCode ?? null,
+      kind: result.errors[0].kind ?? null,
+      status: result.errors[0].status ?? null,
+    },
+  })
 })
 
 test("Bitunix Spot createOrder keeps transport loss after dispatch unknown", async () => {
@@ -3071,6 +3082,11 @@ test("Bitunix Spot createOrder completes signed REST placement and order-detail 
   assert.equal(result.mutationOutcome, "CONFIRMED")
   assert.equal(result.data.id, "12345678901234567890")
   assert.equal(result.data.status, "OPEN")
+  assert.deepEqual(result.reconciliation, {
+    status: "VERIFIED",
+    source: "ORDER_DETAIL",
+    endpoint: "/api/spot/v1/order/detail",
+  })
   assert.equal(requests.length, 2)
   assert.equal(requests[0].url.pathname, "/api/spot/v1/order/place_order")
   assert.equal(requests[0].options.method, "POST")
@@ -3090,6 +3106,18 @@ test("Bitunix Spot createOrder completes signed REST placement and order-detail 
   assert.equal(requests[1].url.pathname, "/api/spot/v1/order/detail")
   assert.equal(requests[1].url.searchParams.get("orderId"), "12345678901234567890")
   assert.equal(requests[1].options.method, "GET")
+  assert.equal(requests[1].options.headers["api-key"], "test-api-key")
+  assert.equal(
+    requests[1].options.headers.sign,
+    createRestSignature({
+      nonce: "test-nonce-1",
+      timestamp: "1795262400000",
+      apiKey: "test-api-key",
+      secretKey: "test-api-secret",
+      queryParams: { orderId: "12345678901234567890" },
+    }),
+    "GET order-detail signature must cover the exact string orderId query parameter",
+  )
 })
 
 
