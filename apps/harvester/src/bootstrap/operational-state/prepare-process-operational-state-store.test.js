@@ -1,25 +1,72 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import path from "node:path"
+import { StrategyId } from "../../domain/strategies/strategy-ids.js"
 import { DEFAULT_OPERATIONAL_STATE_DIRECTORY } from "../../infrastructure/operational-state/resolve-operational-state-directory.js"
 import { prepareProcessOperationalStateStore } from "./prepare-process-operational-state-store.js"
 
-const config = ({ recovery = false, operator = false } = {}) => ({
-  strategies: { CG_coinGrabber: { settings: { recovery: { enabled: recovery } } } },
+const config = ({
+  recovery = false,
+  operator = false,
+  recoverySeller = false,
+  recoverySellerPairEnabled = recoverySeller,
+} = {}) => ({
+  strategies: {
+    [StrategyId.COIN_GRABBER]: { settings: { recovery: { enabled: recovery } } },
+    [StrategyId.RECOVERY_SELLER]: {
+      enabled: recoverySeller,
+      pairs: {
+        LINEAUSDT: { enabled: recoverySellerPairEnabled },
+      },
+    },
+  },
   operatorControl: { telegram: { enabled: operator } },
 })
-const store = () => ({ verify: async () => ({ ok: true,
-data: { valid: true,
-durableWriteSupported: true } }) })
+const store = () => ({
+  verify: async () => ({
+    ok: true,
+    data: { valid: true, durableWriteSupported: true },
+  }),
+})
 
-test("skips store creation for Telegram CC while restart recovery is disabled", async () => {
+test("skips store creation when neither strategy requires durable operational state", async () => {
   let calls = 0
   assert.equal(await prepareProcessOperationalStateStore({
     appConfig: config({ operator: true }),
-runtimeSessionId: "session",
-createOperationalStateStore: () => { calls += 1 },
+    runtimeSessionId: "session",
+    createOperationalStateStore: () => { calls += 1 },
   }), undefined)
-  assert.equal(calls, 0)
+  assert.equal(calls, 0, "Telegram-only operator control must not create the Operational State Store")
+})
+
+test("prepares the verified store for enabled RS markets without enabling CG restart recovery", async () => {
+  let options
+  const expected = store()
+  const actual = await prepareProcessOperationalStateStore({
+    appConfig: config({ recoverySeller: true }),
+    env: {},
+    runtimeSessionId: "session",
+    createOperationalStateStore: (value) => { options = value; return expected },
+  })
+  assert.strictEqual(actual, expected, "enabled RS must receive its verified durable STOP store")
+  assert.equal(options.directory, DEFAULT_OPERATIONAL_STATE_DIRECTORY, "RS must use the canonical package-local ledger")
+  assert.equal(options.runtimeSessionId, "session", "the store must be bound to the current process session")
+})
+
+test("does not prepare the store for globally disabled RS or RS without enabled markets", async () => {
+  let calls = 0
+  const createOperationalStateStore = () => { calls += 1; return store() }
+  assert.equal(await prepareProcessOperationalStateStore({
+    appConfig: config({ recoverySeller: false }),
+    runtimeSessionId: "session",
+    createOperationalStateStore,
+  }), undefined, "globally disabled RS must not require the store")
+  assert.equal(await prepareProcessOperationalStateStore({
+    appConfig: config({ recoverySeller: true, recoverySellerPairEnabled: false }),
+    runtimeSessionId: "session",
+    createOperationalStateStore,
+  }), undefined, "RS without enabled markets must not require the store")
+  assert.equal(calls, 0, "inactive RS configuration must not construct the store")
 })
 
 test("uses the documented default directory when restart recovery is enabled", async () => {
@@ -27,8 +74,8 @@ test("uses the documented default directory when restart recovery is enabled", a
   const expected = store()
   const actual = await prepareProcessOperationalStateStore({
     appConfig: config({ recovery: true }),
-env: {},
-runtimeSessionId: "session",
+    env: {},
+    runtimeSessionId: "session",
     createOperationalStateStore: (value) => { options = value; return expected },
   })
   assert.strictEqual(actual, expected)
@@ -42,9 +89,9 @@ test("honors a valid absolute OPERATIONAL_STATE_DIRECTORY", async () => {
   let options
   await prepareProcessOperationalStateStore({
     appConfig: config({ recovery: true }),
-env: { OPERATIONAL_STATE_DIRECTORY: path.resolve("ledger") },
+    env: { OPERATIONAL_STATE_DIRECTORY: path.resolve("ledger") },
     runtimeSessionId: "session",
-createOperationalStateStore: (value) => { options = value; return store() },
+    createOperationalStateStore: (value) => { options = value; return store() },
   })
   assert.equal(options.directory, path.resolve("ledger"))
 })
@@ -54,11 +101,12 @@ test("rejects malformed OPERATIONAL_STATE_DIRECTORY before calling the factory",
   await assert.rejects(
     prepareProcessOperationalStateStore({
       appConfig: config({ recovery: true }),
-env: { OPERATIONAL_STATE_DIRECTORY: "relative/path" },
+      env: { OPERATIONAL_STATE_DIRECTORY: "relative/path" },
       runtimeSessionId: "session",
-createOperationalStateStore: () => { calls += 1 },
+      createOperationalStateStore: () => { calls += 1 },
     }),
-    (error) => error.code === "PROCESS_OPERATIONAL_STATE_DIRECTORY_INVALID" && error.message.includes("OPERATIONAL_STATE_DIRECTORY"),
+    (error) => error.code === "PROCESS_OPERATIONAL_STATE_DIRECTORY_INVALID" &&
+      error.message.includes("OPERATIONAL_STATE_DIRECTORY"),
   )
   assert.equal(calls, 0)
 })
@@ -68,12 +116,13 @@ test("wraps store factory failures with stage, path and original cause", async (
   await assert.rejects(
     prepareProcessOperationalStateStore({
       appConfig: config({ recovery: true }),
-env: {},
-runtimeSessionId: "session",
+      env: {},
+      runtimeSessionId: "session",
       createOperationalStateStore: () => { throw cause },
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_STORE_CREATE_FAILED" &&
-      error.cause === cause && error.message.includes("recovery-facts"),
+      error.cause === cause &&
+      error.message.includes("recovery-facts"),
   )
 })
 
@@ -101,9 +150,8 @@ test("fails closed when recovery ledger verification fails or throws", async () 
   await assert.rejects(
     prepareProcessOperationalStateStore({
       appConfig: config({ recovery: true }),
-runtimeSessionId: "session",
-      createOperationalStateStore: () => ({ verify: async () => ({ ok: false,
-errors: [invalid] }) }),
+      runtimeSessionId: "session",
+      createOperationalStateStore: () => ({ verify: async () => ({ ok: false, errors: [invalid] }) }),
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED" && error.cause === invalid,
   )
@@ -111,7 +159,7 @@ errors: [invalid] }) }),
   await assert.rejects(
     prepareProcessOperationalStateStore({
       appConfig: config({ recovery: true }),
-runtimeSessionId: "session",
+      runtimeSessionId: "session",
       createOperationalStateStore: () => ({ verify: async () => { throw thrown } }),
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_VERIFICATION_FAILED" && error.cause === thrown,
@@ -120,15 +168,14 @@ runtimeSessionId: "session",
 
 test("reports invalid session identity and factory dependencies", async () => {
   await assert.rejects(
-    prepareProcessOperationalStateStore({ appConfig: config({ recovery: true }),
-runtimeSessionId: "" }),
+    prepareProcessOperationalStateStore({ appConfig: config({ recovery: true }), runtimeSessionId: "" }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_SESSION_ID_INVALID",
   )
   await assert.rejects(
     prepareProcessOperationalStateStore({
       appConfig: config({ recovery: true }),
-runtimeSessionId: "session",
-createOperationalStateStore: null,
+      runtimeSessionId: "session",
+      createOperationalStateStore: null,
     }),
     (error) => error.code === "PROCESS_OPERATIONAL_STATE_FACTORY_INVALID",
   )
