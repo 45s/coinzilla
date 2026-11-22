@@ -19,6 +19,7 @@
   },
   "config": {
     "targetedTestFiles": [
+      "config/strategies/rs-recovery-seller.test.js",
       "test/critical-module-coverage.test.js",
       "test/critical-behavior-contract.test.js",
       "src/domain/order-history/order-history-record.test.js",
