@@ -223,24 +223,36 @@ test("Bitunix Spot getOpenOrders() enumerates markets and preserves partial symb
 
 
 test("Bitunix Spot account-wide open-order scan bounds concurrency and preserves catalog order", async () => {
-  const symbols = Array.from({ length: 9 }, (_, index) => `COIN${index}USDT`)
+  const symbols = [
+    "BTCUSDT",
+    "ETHUSDT",
+    "LTCUSDT",
+    "ADAUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+    "SOLUSDT",
+    "BNBUSDT",
+    "TRXUSDT",
+  ]
   let activeRequests = 0
   let maximumActiveRequests = 0
   const { broker, calls } = createBroker({
     responses: {
       "/api/spot/v1/common/coin_pair/list": symbols.map((symbol) => ({
-        base: symbol.replace("USDT", ""),
+        base: symbol.slice(0, -4),
         quote: "USDT",
         isOpen: "1",
       })),
       "/api/spot/v1/order/pending/list": async ({ body }) => {
         activeRequests += 1
         maximumActiveRequests = Math.max(maximumActiveRequests, activeRequests)
-        const symbolIndex = symbols.indexOf(body.symbol)
-        await new Promise((resolve) => setTimeout(resolve, (symbols.length - symbolIndex) * 2))
+        await new Promise((resolve) => setTimeout(
+          resolve,
+          (symbols.length - symbols.indexOf(body.symbol)) * 2,
+        ))
         activeRequests -= 1
         return [{
-          orderId: `order-${symbolIndex}`,
+          orderId: `order-${symbols.indexOf(body.symbol)}`,
           symbol: body.symbol,
           side: "2",
           type: "1",
