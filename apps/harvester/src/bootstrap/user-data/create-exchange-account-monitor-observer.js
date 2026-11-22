@@ -1,3 +1,14 @@
+function reportExchangeAccountListenerFailure({ logger, error } = {}) {
+  try {
+    logger?.warn?.({
+      message: "exchange account update listener failed",
+      errorName: error?.name ?? "Error",
+    })
+  } catch {
+    // Optional monitoring diagnostics must not affect Harvester.
+  }
+}
+
 export function createExchangeAccountMonitorObserver({
   onUserDataEvent,
   listeners = new Set(),
@@ -11,14 +22,10 @@ export function createExchangeAccountMonitorObserver({
         try {
           listener()
         } catch (error) {
-          try {
-            logger?.warn?.({
-              message: "exchange account update listener failed",
-              errorName: error?.name ?? "Error",
-            })
-          } catch {
-            // Optional monitoring diagnostics must not affect Harvester.
-          }
+          reportExchangeAccountListenerFailure({
+            logger,
+            error,
+          })
         }
       }
     }
