@@ -118,6 +118,8 @@ test("diagnostic verifies the existing store and reports only safe projection su
   }, "The report must summarize fact types without exposing fact payloads.")
   assert.equal(report.projection.status, "CANDIDATE_ONLY", "The report must describe the projector output as a non-restoring candidate.")
   assert.equal(report.projection.restorationEnabled, false, "Diagnostics must never claim automatic restoration is enabled.")
+  assert.equal(harness.calls.readAll, 1, "Diagnostics must verify the existing store exactly once.")
+  assert.equal(harness.calls.project, 1, "Diagnostics must project the verified record stream exactly once.")
   assert.equal(harness.calls.mutate, 0, "Diagnostics must not call any Operational State Store mutation method.")
   assert.equal(harness.output[1].includes("must-not-print"), false, "The report must never serialize durable fact payloads.")
   assert.equal(harness.output[1].includes("private-client-order-id"), false, "The report must not expose order identifiers from the projection.")
@@ -168,4 +170,44 @@ test("diagnostic version mode prints source identity without opening the store",
   assert.equal(harness.calls.createStore, 0, "Version output must not open or inspect the Operational State Store.")
   assert.match(harness.output[0], new RegExp(identity.source.commit), "Version output must identify the exact source commit.")
   assert.match(harness.output[0], /workingTree=clean/, "Version output must expose the source worktree state.")
+})
+
+test("diagnostic help mode prints usage without opening the store", async () => {
+  const harness = createHarness()
+  harness.dependencies.args = ["--help"]
+  const exitCode = await runOperationalStateDiagnostic(harness.dependencies)
+
+  assert.equal(exitCode, 0, "The side-effect-free help command must exit successfully.")
+  assert.equal(harness.calls.createStore, 0, "Help output must not open or inspect the Operational State Store.")
+  assert.match(harness.output[1], /Usage:/, "Help output must show the supported diagnostic command.")
+})
+
+test("diagnostic converts an unexpected projector exception into a projection failure", async () => {
+  const harness = createHarness({
+    project: () => {
+      throw new Error("Unexpected projector exception")
+    },
+  })
+  const exitCode = await runOperationalStateDiagnostic(harness.dependencies)
+  const report = JSON.parse(harness.output[1])
+
+  assert.equal(exitCode, 3, "An unexpected projector exception must use the projection-failure exit code.")
+  assert.equal(report.storeIntegrity.status, "VERIFIED", "A projector exception must preserve the verified store result.")
+  assert.equal(report.projection.status, "FAILED", "An unexpected projector exception must be reported as a projection failure.")
+  assert.match(report.projection.errors[0].message, /Unexpected projector exception/, "The original projector exception must remain actionable.")
+})
+
+test("diagnostic reports a thrown store read error without attempting projection", async () => {
+  const harness = createHarness({
+    readAll: async () => {
+      throw new Error("Unable to synchronize existing record streams")
+    },
+  })
+  const exitCode = await runOperationalStateDiagnostic(harness.dependencies)
+  const report = JSON.parse(harness.output[1])
+
+  assert.equal(exitCode, 2, "A thrown store read error must use the integrity-failure exit code.")
+  assert.equal(report.storeIntegrity.status, "FAILED", "A thrown store read error must be classified as an integrity failure.")
+  assert.equal(report.projection.status, "SKIPPED", "A thrown store read error must prevent recovery projection.")
+  assert.equal(harness.calls.project, 0, "The projector must never run after a thrown store read error.")
 })
