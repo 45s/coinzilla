@@ -138,7 +138,7 @@ function createExternalBuyOrder({ market, clientOrderId, brokerOrderId, price, q
 
 function assertStrategyScopedMarketSubscriptions({ runtime, calls, candleSubscriptions, logs }) {
   assert.equal(runtime.userDataReady, true, "An external order must not block account/user-data readiness globally.")
-  assert.deepEqual(runtime.subscriptions, ["ETHUSDT"], "Only this strategy's unblocked market should own a price subscription.")
+  assert.deepEqual(runtime.subscriptions, ["BTCUSDT", "ETHUSDT"], "The runtime reports strategy price subscriptions plus independently configured volatility candle subscriptions.")
   assert.ok(calls.includes("subscribe:ETHUSDT"), "The unblocked ETHUSDT market must retain its own price subscription.")
   assert.equal(calls.includes("subscribe:BTCUSDT"), false, "The strategy-blocked BTCUSDT market must not receive a price subscription.")
   assert.ok(calls.includes("subscribe:book:ETHUSDT"), "The unblocked ETHUSDT market must retain its book-ticker subscription.")
