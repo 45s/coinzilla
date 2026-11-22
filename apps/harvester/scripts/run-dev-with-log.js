@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { once } from "node:events"
 import { finished } from "node:stream/promises"
 import { createWriteStream, mkdirSync } from "node:fs"
+import { writeFile } from "node:fs/promises"
 import { dirname, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { spawn } from "node:child_process"
@@ -71,6 +72,7 @@ const [, sessionLogStream] = logStreams
 const childProcess = { current: undefined }
 let childClosed = false
 let logStreamFailed = false
+let outputForwardingFailed = false
 const onLogStreamError = (error) => {
   if (logStreamFailed) {return}
   logStreamFailed = true
@@ -206,7 +208,7 @@ childProcess.current.on("close", async (...closeArguments) => {
         endedAt: new Date().toISOString(),
         exitCode: code,
         signal,
-        logStreamsComplete: !logStreamFailed && logStreamsClosed,
+        logStreamsComplete: !logStreamFailed && !outputForwardingFailed && logStreamsClosed,
       }, null, 2)}\\n`,
       { encoding: "utf8", flag: "wx", mode: 0o600 },
     )
