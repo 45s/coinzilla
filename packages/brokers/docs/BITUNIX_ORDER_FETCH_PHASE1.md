@@ -48,12 +48,6 @@ The read-only command tests cover exact matching, an empty pending list, and rej
 Run from the repository root after configuring `packages/brokers/.env.development`:
 
 ```bash
-pnpm --filter @coinzilla brokers:find-order --order-id=2124329325141426176
-```
-
-Use the actual package command name:
-
-```bash
 pnpm --filter @coinzilla/brokers bitunix:find-order --order-id=2124329325141426176
 ```
 
