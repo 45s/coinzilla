@@ -876,14 +876,21 @@ function createExchangeAccountUpdateSubscription({ runtime } = {}) {
     ? runtime.accountRuntimes
     : [runtime]
   return (listener) => {
-    const unsubscribe = runtimes.flatMap((accountRuntime) => {
-      if (typeof accountRuntime?.subscribeExchangeAccountUpdates !== "function") {
-        return []
+    const unsubscribe = []
+    try {
+      for (const accountRuntime of runtimes) {
+        if (typeof accountRuntime?.subscribeExchangeAccountUpdates === "function") {
+          unsubscribe.push(accountRuntime.subscribeExchangeAccountUpdates(listener))
+        }
       }
-      return [accountRuntime.subscribeExchangeAccountUpdates(listener)]
-    })
+    } catch (error) {
+      for (const dispose of unsubscribe.reverse()) {
+        if (typeof dispose === "function") dispose()
+      }
+      throw error
+    }
     return () => {
-      for (const dispose of unsubscribe) {
+      for (const dispose of unsubscribe.reverse()) {
         if (typeof dispose === "function") dispose()
       }
     }
