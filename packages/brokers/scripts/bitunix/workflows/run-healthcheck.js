@@ -270,7 +270,7 @@ async function runBitunixOrderReadScan({
 }
 
 async function runLocalDiagnostics({ brokersRoot, env, stdout, brokerFactory, includeGeneralDiagnostics = false }) {
-  stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot account using read-only requests.\\n")
+  stdout.write("WARNING: this contacts the configured LIVE Bitunix Spot account using read-only requests.\n")
   const report = includeGeneralDiagnostics
     ? await runReadOnlyDiagnostics({
       env,
