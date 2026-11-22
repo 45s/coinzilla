@@ -117,6 +117,30 @@ snapshot: makeSnapshot() })
   assert.equal(state.volatilityCancellationAttemptBySymbol.get(symbol).candleKey, 9_000, "The retry marker must remain scoped to the observed candle.")
 })
 
+test("volatility transition diagnostics identify the market component without strategy ownership", async () => {
+  const { workflow, calls } = makeWorkflow({
+    transition: ({ state: current }) => ({
+      state: {
+        ...current,
+        mode: "PROTECTED",
+        reason: "HIGH_VOLATILITY",
+        volatilityRatio: "2",
+        stableCandleCount: 0,
+      },
+      changed: true,
+      recovered: false,
+      warning: false,
+    }),
+  })
+
+  await workflow.processVolatilitySnapshot({ symbol, snapshot: makeSnapshot() })
+
+  const transitionLog = calls.logs.find(({ message }) => message === "Harvester volatility protection state changed")
+  assert.ok(transitionLog, "The state transition must produce one diagnostic.")
+  assert.equal(transitionLog.component, "market-volatility-protection", "Volatility diagnostics must identify their market-owned component.")
+  assert.equal(transitionLog.strategyId, undefined, "Volatility diagnostics must not inherit CG or RS strategy ownership.")
+})
+
 test("skips an identical volatility snapshot without repeating the domain transition", async () => {
   const { workflow, calls } = makeWorkflow({
     transition: ({ state: current }) => ({
