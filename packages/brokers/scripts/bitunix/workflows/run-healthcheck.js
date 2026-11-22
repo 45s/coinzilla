@@ -247,16 +247,17 @@ async function runBitunixExistingOrderCancellation({ env, report, stdout, broker
     method: "cancelOrder",
     arguments: [{ ...CANCELLATION_TARGET }],
   }
-  const broker = brokerFactory({
+  let broker
+  let connected = false
+  try {
+    broker = brokerFactory({
     provider: "bitunix",
     apiKey: env.BITUNIX_API_KEY,
     apiSecret: env.BITUNIX_API_SECRET,
     tradingMode: "live",
     logger: createOrderReadLogger({ report, secrets }),
     providerOptions: { allowLiveOrderMutations: true },
-  })
-  let connected = false
-  try {
+    })
     await broker.connect()
     connected = true
     const started = Date.now()
@@ -632,7 +633,7 @@ async function runDiagnosticsWithOperatorAttempt({
 
 function createOperatorWarning({ runOperatorOrder, runOperatorProbe, probeId, cancelExistingOrder }) {
   if (cancelExistingOrder) {
-    return `WARNING: this mode sends ONE LIVE cancellation request for ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId}, records its response, then runs the existing read-only order scan. No retry.\\n`
+    return `WARNING: this mode sends ONE LIVE cancellation request for ${CANCELLATION_TARGET.symbol} / ${CANCELLATION_TARGET.orderId}, records its response, then runs the existing read-only order scan. No retry.\n`
   }
   if (runOperatorProbe) {
     return `WARNING: this mode runs a targeted LIVE read-only HYPEUSDT preflight, then may submit exactly one separately confirmed ${probeId} order probe.\n`
