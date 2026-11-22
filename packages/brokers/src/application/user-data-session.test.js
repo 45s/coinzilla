@@ -27,14 +27,20 @@ function createRecoveryPort({ subscriptionId, isReconnectClient, failReconnect, 
     state: "open",
     async connect() {
       calls.push("connect")
-      if (shouldFailReconnect({ isReconnectClient, failReconnect })) {
+      if (shouldFailReconnect({
+        isReconnectClient,
+        failReconnect,
+      })) {
         throw new Error("reconnect unavailable")
       }
       this.state = "open"
     },
     async disconnect() {
       calls.push("disconnect")
-      if (shouldFailReconnectCleanup({ isReconnectClient, failDisconnect })) {
+      if (shouldFailReconnectCleanup({
+        isReconnectClient,
+        failDisconnect,
+      })) {
         throw new Error("reconnect cleanup unavailable")
       }
       this.state = "closed"
