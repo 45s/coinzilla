@@ -12,7 +12,8 @@ import {
 } from "node:fs/promises"
 import { spawn } from "node:child_process"
 import { createReadStream, createWriteStream } from "node:fs"
-import { pipeline } from "node:stream/promises"
+import { finished, pipeline } from "node:stream/promises"
+import { createInterface } from "node:readline"
 import { createGzip } from "node:zlib"
 import path from "node:path"
 import os from "node:os"
@@ -177,23 +178,66 @@ async function copyCompressedTree({ sourceDirectory, destinationDirectory, relat
   }
 }
 
+async function readCompletedTestnetSession(sessionDirectory) {
+  try {
+    const identityFilename = path.join(sessionDirectory, "process-identity.json")
+    const completionFilename = path.join(sessionDirectory, "process-completed.json")
+    const [identityStats, completionStats] = await Promise.all([
+      lstat(identityFilename),
+      lstat(completionFilename),
+    ])
+    if (
+      identityStats.isSymbolicLink() || !identityStats.isFile()
+      || completionStats.isSymbolicLink() || !completionStats.isFile()
+    ) {
+      return null
+    }
+    const [identityContent, completionContent] = await Promise.all([
+      readFile(identityFilename, "utf8"),
+      readFile(completionFilename, "utf8"),
+    ])
+    const identity = JSON.parse(identityContent)
+    const completion = JSON.parse(completionContent)
+    if (
+      identity?.application !== "harvester"
+      || identity?.formatVersion !== 1
+      || identity?.environment !== "testnet"
+      || !UUID_PATTERN.test(identity?.runtimeSessionId ?? "")
+      || completion?.runtimeSessionId !== identity.runtimeSessionId
+      || completion?.logStreamsComplete !== true
+    ) {
+      return null
+    }
+    return identity
+  } catch {
+    return null
+  }
+}
+
 async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileCopied } = {}) {
   await mkdir(destinationDirectory, { recursive: true, mode: 0o700 })
   const entries = await readdir(sourceDirectory, { withFileTypes: true })
   const sessionsEntry = entries.find((entry) => entry.name === "sessions" && entry.isDirectory())
-  let latestSessionName
-  if (sessionsEntry) {
-    const sessionsDirectory = path.join(sourceDirectory, "sessions")
-    const sessions = (await readdir(sessionsDirectory, { withFileTypes: true }))
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort()
-    latestSessionName = sessions.at(-1)
-    if (!latestSessionName) {
-      throw new Error("No session directory was found under logs/sessions; refusing to publish an archive without session evidence.")
-    }
-  } else {
+  if (!sessionsEntry) {
     throw new Error("The logs/sessions directory is missing; refusing to publish an archive without session evidence.")
+  }
+  const sessionsDirectory = path.join(sourceDirectory, "sessions")
+  const sessions = (await readdir(sessionsDirectory, { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+  let selectedSession
+  let selectedIdentity
+  for (const sessionName of sessions.toReversed()) {
+    const identity = await readCompletedTestnetSession(path.join(sessionsDirectory, sessionName))
+    if (identity) {
+      selectedSession = sessionName
+      selectedIdentity = identity
+      break
+    }
+  }
+  if (!selectedSession || !selectedIdentity) {
+    throw new Error("No completed TESTNET DEV session with valid process identity was found under logs/sessions; run pnpm dev and stop it gracefully before archiving.")
   }
 
   for (const entry of entries) {
@@ -207,7 +251,7 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileC
       await copyCompressedTree({
         sourceDirectory,
         destinationDirectory,
-        relative: path.join("sessions", latestSessionName),
+        relative: path.join("sessions", selectedSession),
         onFileCopied,
       })
       continue
@@ -217,6 +261,7 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileC
         sourceDirectory,
         destinationDirectory,
         relative: "cumulative",
+        runtimeSessionId: selectedIdentity.runtimeSessionId,
         onFileCopied,
       })
       continue
@@ -235,12 +280,81 @@ async function copySelectedLogs({ sourceDirectory, destinationDirectory, onFileC
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
     }
   }
+  return selectedIdentity
+}
+
+async function visitSessionLogRecords({ filename, runtimeSessionId, visit } = {}) {
+  const lines = createInterface({
+    input: createReadStream(filename),
+    crlfDelay: Infinity,
+  })
+  for await (const line of lines) {
+    let record
+    try {
+      record = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (record?.context?.runtimeSessionId === runtimeSessionId) {
+      await visit(line)
+    }
+  }
+}
+
+async function copySessionFilteredTailFile({ source, destination, runtimeSessionId } = {}) {
+  let totalBytes = 0
+  await visitSessionLogRecords({
+    filename: source,
+    runtimeSessionId,
+    visit: (line) => {
+      totalBytes += Buffer.byteLength(line) + 1
+    },
+  })
+  if (totalBytes === 0) {
+    await writeFile(destination, "", { encoding: "utf8", mode: 0o600 })
+    return 0
+  }
+  const bytesToKeep = Math.max(1, Math.ceil(totalBytes * 0.05))
+  const startOffset = totalBytes - bytesToKeep
+  let currentOffset = 0
+  const output = createWriteStream(destination, { flags: "w", mode: 0o600 })
+  try {
+    await visitSessionLogRecords({
+      filename: source,
+      runtimeSessionId,
+      visit: async (line) => {
+        const recordBytes = Buffer.from(line + "\n")
+        const recordStart = currentOffset
+        currentOffset += recordBytes.length
+        if (currentOffset <= startOffset) {
+          return
+        }
+        const selectedBytes = recordBytes.subarray(Math.max(0, startOffset - recordStart))
+        await new Promise((resolve, reject) => {
+          output.write(selectedBytes, (error) => {
+            if (error) {
+              reject(error)
+              return
+            }
+            resolve()
+          })
+        })
+      },
+    })
+    output.end()
+    await finished(output)
+  } catch (error) {
+    output.destroy()
+    throw error
+  }
+  return bytesToKeep
 }
 
 async function copyCumulativeTailTree({
   sourceDirectory,
   destinationDirectory,
   relative,
+  runtimeSessionId,
   onFileCopied,
 } = {}) {
   const source = path.join(sourceDirectory, relative)
@@ -255,9 +369,21 @@ async function copyCumulativeTailTree({
       throw new Error(`Refusing to archive a symbolic link: ${sourcePath}`)
     }
     if (sourceStats.isDirectory()) {
-      await copyCumulativeTailTree({ sourceDirectory, destinationDirectory, relative: childRelative, onFileCopied })
+      await copyCumulativeTailTree({
+        sourceDirectory,
+        destinationDirectory,
+        relative: childRelative,
+        runtimeSessionId,
+        onFileCopied,
+      })
     } else if (sourceStats.isFile()) {
-      const size = await copyTailFile(sourcePath, destinationPath)
+      const size = path.basename(sourcePath) === "terminal.log"
+        ? await copyTailFile(sourcePath, destinationPath)
+        : await copySessionFilteredTailFile({
+          source: sourcePath,
+          destination: destinationPath,
+          runtimeSessionId,
+        })
       await onFileCopied?.({ relativePath: childRelative.split(path.sep).join("/"), size })
     } else {
       throw new Error(`Refusing to archive a non-regular session entry: ${sourcePath}`)
@@ -389,7 +515,7 @@ async function readLatestRecoveryCheckpoint(recoveryFactsDirectory) {
   }
 }
 
-async function createArchiveManifest({ directory, createdAt, onFileHashed } = {}) {
+async function createArchiveManifest({ directory, createdAt, logRuntimeSessionId, onFileHashed } = {}) {
   const files = await listRegularFiles(directory)
   const entries = []
   let completedBytes = 0
@@ -423,9 +549,10 @@ async function createArchiveManifest({ directory, createdAt, onFileHashed } = {}
     excludedPaths: [...EXCLUDED_ARCHIVE_PATHS],
     logSelection: {
       cumulative: "final-5-percent-of-each-file",
-      sessions: "newest-session-directory-only; gzip-compressed",
+      sessions: "newest-completed-TESTNET-session-only; gzip-compressed",
     },
     dataCommitHash,
+    logRuntimeSessionId,
     recoveryRuntimeSessionId: recoveryCheckpoint.runtimeSessionId,
     recoveryFactSequence: recoveryCheckpoint.sequence,
     files: entries,
@@ -601,7 +728,7 @@ export async function runHarvesterArchivePush({
       reportProgress(onProgress, `  retained/copied ${retainedFiles} files — ${formatBytes(copiedBytes)}`)
     }
     reportProgress(onProgress, "Archive: selecting log evidence (last 5% of cumulative logs; newest session only)...")
-    await copySelectedLogs({
+    const logSessionIdentity = await copySelectedLogs({
       sourceDirectory: path.join(packageDirectory, "logs"),
       destinationDirectory: path.join(localArchive, "logs"),
       onFileCopied,
@@ -638,6 +765,7 @@ export async function runHarvesterArchivePush({
     const manifest = await createArchiveManifest({
       directory: localArchive,
       createdAt,
+      logRuntimeSessionId: logSessionIdentity.runtimeSessionId,
       onFileHashed: ({ completedFiles, totalFiles: hashTotal, completedBytes: hashBytes, totalBytes: hashTotalBytes }) => {
         reportProgress(onProgress, `  hashed ${completedFiles}/${hashTotal} files — ${formatBytes(hashBytes)} / ${formatBytes(hashTotalBytes)}`)
       },
