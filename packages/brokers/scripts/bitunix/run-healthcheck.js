@@ -70,7 +70,7 @@ function printHelp() {
     "The broader diagnostics remain implemented and tested; they are not deleted, only skipped by default.",
     "LIVE order modes are human-only and must never be invoked by AI agents, tests, CI, or scheduled jobs.",
     "",
-  ].join("\\n"))
+  ].join("\n"))
 }
 
 function loadLocalEnvironment({ allowMissing = false } = {}) {
